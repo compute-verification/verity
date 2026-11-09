@@ -1,0 +1,169 @@
+# Stage 2 of the period move: the names under a container stage 1 renames (rename.py renames a container and a
+# name under it only in two moves). Run it on stage 1's commit.
+
+# The period family in the Glossary's words: what `tools/move/rename.py --map tools/move/period_map.toml` renames, in
+    # one move (a draft for the Lean lane's review; not yet run, and not yet resolved against the build's `.ilean`
+    # references). Each renamed declaration keeps the rest of its name; the word becomes the Glossary's for what it
+    # denotes:
+    # - "window" for an execution phase (PoUW's, PoUB's, the network certifier's link-window) -> "execution phase"
+    #   (`ExecutionPhase`, `executionPhase`); for SPOT's served span with its audit -> "run"; for a span of ticks -> "period"
+    #   (its one definition is Core's `Verity.TickSpan`); for a location's gates over a cut of ticks (the dampener's, the
+    #   actual circuit's `Windows`/`WindowsAt`) -> "server block". A numeric, bit, index or concurrency window keeps the word.
+    # - "period" for the stretch a bound is about -> "monitoring period"; a certification period (`NetworkCheck.Period`,
+    #   LMS's and the period records'), a joint audit's period and Dither's noise period keep it.
+    # - "session" for PoUB's run over its execution phases and the memory challenger's -> "run"; for the live challenger's
+    #   gate session -> "challenge phase"; for a certifier's 32-byte id -> "attachment"; for Nci's prompt-sized blocks ->
+    #   "inference block". Flock's session (its own and the ZK server's) waits for a Glossary ruling and is not here.
+    # - "run" is already the Glossary's word wherever it means a run; its other senses (a contiguous range, a result,
+    #   `Compiler.run`) keep it.
+    # Format constants (`WINDOW_*`, `*_SESSION`, the `Domains` tags) and the code's record fields keep the word until a
+    # format version. Duplicates are merged by a refactor, not by this move: `Accounting.Window` becomes a use of
+    # `Verity.TickSpan`, `NetTiming.WindowCharge`'s `Window` and `Carry` uses of `NetworkCertifier.WindowCharge`'s, and
+    # `Verity.Sampled.Device.RunSetup` a use of `Properties.Challenger.Run`; `Accounting.Compose.PeriodRun` is deleted.
+    # Declarations keep their place in the locks' records: `rename.py --moves` prints the renames `check.py --update
+    # --moved` takes.
+    
+[words]
+# Module paths and namespaces named for the word alone, longest first.
+# Declarations whose name holds the word with other parts, each renamed wherever it stands (no other declaration
+# holds it).
+"H1J10RCheckedCreditPeriodStrata" = "H1J10RCheckedCreditMonitoringPeriodStrata"
+"h1J10RCheckedCreditPeriodStrata" = "h1J10RCheckedCreditMonitoringPeriodStrata"
+"H1J10RCheckedCreditPeriod" = "H1J10RCheckedCreditMonitoringPeriod"
+"h1J10RCheckedCreditPeriod" = "h1J10RCheckedCreditMonitoringPeriod"
+"pr_samples_window_le_map" = "pr_samples_executionPhase_le_map"
+"trustedSessionOf_ok_spec" = "trustedChallengePhaseOf_ok_spec"
+"H1CheckedCreditPeriod" = "H1CheckedCreditMonitoringPeriod"
+"h1CheckedCreditPeriod" = "h1CheckedCreditMonitoringPeriod"
+"WindowBoundOfService" = "ExecutionPhaseBoundOfService"
+"pr_samples_window_le" = "pr_samples_executionPhase_le"
+"CheckedCreditPeriod" = "CheckedCreditMonitoringPeriod"
+"checkedCreditPeriod" = "checkedCreditMonitoringPeriod"
+"periodPositions_mem" = "monitoringPeriodPositions_mem"
+"strata_meets_period" = "strata_meets_monitoringPeriod"
+"acceptsUpTo_period" = "acceptsUpTo_monitoringPeriod"
+"creditBound_window" = "creditBound_executionPhase"
+"strataBound_window" = "strataBound_executionPhase"
+"CheckedWorkPeriod" = "CheckedWorkMonitoringPeriod"
+"checkedWorkPeriod" = "checkedWorkMonitoringPeriod"
+"drawCoins_session" = "drawCoins_challengePhase"
+"pr_paid_of_window" = "pr_paid_of_executionPhase"
+"sessionOf_ok_spec" = "challengePhaseOf_ok_spec"
+"window_served_le" = "executionPhase_served_le"
+"sessionOf_bound" = "challengePhaseOf_bound"
+"onePeriod_cont" = "oneMonitoringPeriod_cont"
+"sessionOf_read" = "challengePhaseOf_read"
+"CreditWindows" = "CreditExecutionPhases"
+"WindowAccepts" = "ExecutionPhaseAccepts"
+"WindowSummary" = "ExecutionPhaseSummary"
+"liveAt_period" = "liveAt_monitoringPeriod"
+"onePeriod_pos" = "oneMonitoringPeriod_pos"
+"sessionOf_run" = "challengePhaseOf_run"
+"widen_session" = "widen_run"
+"windowSession" = "executionPhaseSession"
+"period_every" = "monitoringPeriod_every"
+"pr_window_le" = "pr_executionPhase_le"
+"EveryWindow" = "EveryExecutionPhase"
+"WindowBound" = "ExecutionPhaseBound"
+"WindowDelta" = "ExecutionPhaseDelta"
+"windowForm" = "executionPhaseForm"
+"windowAt" = "executionPhaseAt"
+
+[[words_in]]
+# `window_le` names another sense in other files (its own group there), so it is
+# renamed only in these; the files that read it are to be added from the build's references.
+files = [
+    "Security/Definitions/Accounting/JointBridge/CommOfMonitoringPeriodLeakAccepted.lean",
+]
+words = { "window_le" = "period_le" }
+
+[[words_in]]
+# `window_le` names another sense in other files (its own group there), so it is
+# renamed only in these; the files that read it are to be added from the build's references.
+files = [
+    "Security/Proofs/Accounting/Actual/ServerBlocks.lean",
+]
+words = { "window_le" = "serverBlock_le" }
+
+[[words_in]]
+# `window_le` names another sense in other files (its own group there), so it is
+# renamed only in these; the files that read it are to be added from the build's references.
+files = [
+    "Security/Proofs/Accounting/RateAudit/Deployed.lean",
+    "Security/Proofs/Accounting/RemoteHeld/Binding.lean",
+    "Security/Proofs/Pouw/RelativeSecurity.lean",
+]
+words = { "window_le" = "executionPhase_le" }
+
+[[words_in]]
+# Another declaration holds `sessionNamed_ok`, `session_size`, `trustedSessionOf_ok` (`Verity.Sampled.sessionNamed_ok`; `#senses`; `Verity.Sampled.trustedSessionOf_ok`), so it is renamed only in its own files;
+# the files that read it are to be added from the build's references.
+files = [
+    "Security/Proofs/Properties/Challenger/ChallengePhase.lean",
+]
+words = { "sessionNamed_ok" = "challengePhaseNamed_ok", "session_size" = "challengePhase_size", "trustedSessionOf_ok" = "trustedChallengePhaseOf_ok" }
+
+[[words_in]]
+# `session_size` names another sense in other files (its own group there), so it is
+# renamed only in these; the files that read it are to be added from the build's references.
+files = [
+    "Security/Proofs/Properties/NetworkCertifier/Check/Instance.lean",
+]
+words = { "session_size" = "attachment_size" }
+
+[[words_in]]
+# Lowercase names other code also uses with another meaning (a Python helper's, a test's), renamed only in Lean.
+files = ["**/*.lean"]
+words = {  }
+
+[rewrite]
+    # Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+    # files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+    exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+               "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
+
+    [keep]
+    # Format ids, notes, art ids, branches and lanes; the record keys and domain tags that keep the word until a format
+    # version ("window", "session", "period" as JSON keys and tag strings).
+    patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
+                '"(?:window|windows|session|sessions|period|periods)"']
+    strings = []
+    
+# For the review: these [words] also reach code outside Lean (a Python mirror, a benchmark, a test), which this move
+# renames with them unless a [keep_in] holds them:
+# - `DampenerRemotePeriod`: benchmarks/rho/rho/theorem.py
+# - `EncardAccSeqsLeConstantRateWindows`: verity/core/protocols/certifier/tests/test_network_certifier_capacity.py
+# - `EndToEndWindow`: benchmarks/pouw/served_zk/served_commit.py, benchmarks/pouw/tests/test_served_zk.py
+# - `H1J10RCheckedCreditPeriod`: benchmarks/rho/data/envelopes.toml
+# - `IntegrityPeriod`: benchmarks/sampling_plan/transformer.py, benchmarks/sampling_plan/h200.py, tests/test_retired_terms.py
+# - `IntegrityPeriodLog`: benchmarks/sampling_plan/h200.py, benchmarks/sampling_plan/cpu_budget.py, benchmarks/sampling_plan/tests/test_h200.py
+# - `LinkWindow`: verity/core/protocols/certifier/service.py, benchmarks/network_traces/chain_record.py
+# - `PeriodCredit`: benchmarks/one_stage/served_shares.py
+# - `RateAuditWindows`: verity/core/protocols/bandwidth/openings.py
+# - `RateSessionSample`: verity/core/protocols/remote_bandwidth/audit.py, verity/core/protocols/remote_bandwidth/tests/test_remote_bandwidth.py
+# - `SessionCommitment`: verity/core/protocols/pous/memory_challenger.py, verity/core/devices/memory_challenger/lean/tests/mc_cases.py, verity/core/devices/memory_challenger/lean/verdict.py
+# - `SignedSession`: verity/core/protocols/pous/memory_challenger.py, benchmarks/pous/memory_challenger/live.py, verity/core/devices/memory_challenger/lean/tests/mc_cases.py
+# - `SketchBoundSession`: verity/core/protocols/remote_bandwidth/p2.py
+# - `WindowsAt`: benchmarks/rho/rho/envelopes.py
+# - `WorkOfH1CheckedCreditPeriod`: tools/verity/lean/tests/test_merge.py
+# - `audit_window`: verity/core/protocols/pouw/tests/test_circuit_plan.py, verity/ml/protocols/pouw/circuit/__init__.py, verity/ml/protocols/pouw/circuit/plan.py
+# - `audit_window_split_of_record`: verity/core/protocols/pouw/tests/test_circuit_plan.py, verity/ml/protocols/pouw/circuit/__init__.py, verity/ml/protocols/pouw/circuit/plan.py
+# - `checkWindow`: verity/core/protocols/remote_bandwidth/session/verifier.py
+# - `checkWindowChunked`: verity/core/protocols/remote_bandwidth/session/verifier.py
+# - `covers_window`: verity/core/protocols/pouw/tests/test_circuit_plan.py, verity/ml/protocols/pouw/circuit/plan.py
+# - `p2SessionFn`: verity/core/protocols/remote_bandwidth/lean/tests/test_p2.py
+# - `periodCredit`: verity/core/protocols/pouw/credit.py
+# - `rowsWindowCheck`: verity/core/protocols/network/tests/period_case.py
+# - `sessionFn`: verity/core/protocols/remote_bandwidth/lean/tests/ra_cases.py
+# - `windowForm`: verity/core/protocols/pouw/period_check.py
+# - `windowOpenRoot`: verity/core/protocols/pouw/salt.py
+# - `windowRecords`: verity/core/protocols/composition/tests/reference.py
+# Held for the review, not renamed by this draft:
+# - `period`: a bare lowercase word; prose shares it, so it waits for the build's references (monitoringPeriod)
+# - `session`: two senses here give it two names (attachment, run), in shared files
+# - `sessions`: a bare lowercase word; prose shares it, so it waits for the build's references (runs)
+# - `window`: two senses here give it two names (executionPhase, period), in shared files
+# - `windows`: two senses here give it two names (executionPhases, serverBlocks), in shared files
+# - `MemoryChallenger.Properties.sessionStrings`: its proposed name is already declared
+# - `MemoryChallenger.Properties.wipeSessionStrings`: its proposed name is already declared
+# - `Spot.SecondStage.exWindow`: its proposed name is already declared

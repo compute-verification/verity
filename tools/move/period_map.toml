@@ -1,0 +1,581 @@
+# The period family in the Glossary's words: what `tools/move/rename.py --map tools/move/period_map.toml` renames, in
+    # one move (a draft for the Lean lane's review; not yet run, and not yet resolved against the build's `.ilean`
+    # references). Each renamed declaration keeps the rest of its name; the word becomes the Glossary's for what it
+    # denotes:
+    # - "window" for an execution phase (PoUW's, PoUB's, the network certifier's link-window) -> "execution phase"
+    #   (`ExecutionPhase`, `executionPhase`); for SPOT's served span with its audit -> "run"; for a span of ticks -> "period"
+    #   (its one definition is Core's `Verity.TickSpan`); for a location's gates over a cut of ticks (the dampener's, the
+    #   actual circuit's `Windows`/`WindowsAt`) -> "server block". A numeric, bit, index or concurrency window keeps the word.
+    # - "period" for the stretch a bound is about -> "monitoring period"; a certification period (`NetworkCheck.Period`,
+    #   LMS's and the period records'), a joint audit's period and Dither's noise period keep it.
+    # - "session" for PoUB's run over its execution phases and the memory challenger's -> "run"; for the live challenger's
+    #   gate session -> "challenge phase"; for a certifier's 32-byte id -> "attachment"; for Nci's prompt-sized blocks ->
+    #   "inference block". Flock's session (its own and the ZK server's) waits for a Glossary ruling and is not here.
+    # - "run" is already the Glossary's word wherever it means a run; its other senses (a contiguous range, a result,
+    #   `Compiler.run`) keep it.
+    # Format constants (`WINDOW_*`, `*_SESSION`, the `Domains` tags) and the code's record fields keep the word until a
+    # format version. Duplicates are merged by a refactor, not by this move: `Accounting.Window` becomes a use of
+    # `Verity.TickSpan`, `NetTiming.WindowCharge`'s `Window` and `Carry` uses of `NetworkCertifier.WindowCharge`'s, and
+    # `Verity.Sampled.Device.RunSetup` a use of `Properties.Challenger.Run`; `Accounting.Compose.PeriodRun` is deleted.
+    # Declarations keep their place in the locks' records: `rename.py --moves` prints the renames `check.py --update
+    # --moved` takes.
+    
+[words]
+# Module paths and namespaces named for the word alone, longest first.
+"Definitions/NetworkCertifier/Period" = "Definitions/NetworkCertifier/MonitoringPeriod"
+"Definitions.NetworkCertifier.Period" = "Definitions.NetworkCertifier.MonitoringPeriod"
+"NetworkCertifier/Guarantees/Period" = "NetworkCertifier/Guarantees/MonitoringPeriod"
+"NetworkCertifier.Guarantees.Period" = "NetworkCertifier.Guarantees.MonitoringPeriod"
+"Proofs/NetworkCertifier/Period" = "Proofs/NetworkCertifier/MonitoringPeriod"
+"Proofs.NetworkCertifier.Period" = "Proofs.NetworkCertifier.MonitoringPeriod"
+"RegisteredCircuit/Session" = "RegisteredCircuit/Run"
+"RegisteredCircuit.Session" = "RegisteredCircuit.Run"
+"Accounting/Remote/Session" = "Accounting/Remote/Run"
+"Accounting.Remote.Session" = "Accounting.Remote.Run"
+"Accounting/Remote/Window" = "Accounting/Remote/ExecutionPhase"
+"Accounting.Remote.Window" = "Accounting.Remote.ExecutionPhase"
+"Pouw/Guarantees/Window" = "Pouw/Guarantees/ExecutionPhase"
+"Pouw.Guarantees.Window" = "Pouw.Guarantees.ExecutionPhase"
+"Soundness/Audit/Window" = "Soundness/Audit/ExecutionPhase"
+"Soundness.Audit.Window" = "Soundness.Audit.ExecutionPhase"
+"RemoteAudit/Session" = "RemoteAudit/Run"
+"RemoteAudit.Session" = "RemoteAudit.Run"
+"RemoteAudit/Window" = "RemoteAudit/ExecutionPhase"
+"RemoteAudit.Window" = "RemoteAudit.ExecutionPhase"
+"Challenger/Session" = "Challenger/ChallengePhase"
+"Challenger.Session" = "Challenger.ChallengePhase"
+"RateAudit/Session" = "RateAudit/Run"
+"RateAudit.Session" = "RateAudit.Run"
+"RateAudit/Windows" = "RateAudit/ExecutionPhases"
+"RateAudit.Windows" = "RateAudit.ExecutionPhases"
+"RemoteHeld/Window" = "RemoteHeld/ExecutionPhase"
+"RemoteHeld.Window" = "RemoteHeld.ExecutionPhase"
+"PouwCheck/Period" = "PouwCheck/MonitoringPeriod"
+"PouwCheck.Period" = "PouwCheck.MonitoringPeriod"
+"EndToEnd/Period" = "EndToEnd/MonitoringPeriod"
+"EndToEnd.Period" = "EndToEnd.MonitoringPeriod"
+"Actual/Windows" = "Actual/ServerBlocks"
+"Actual.Windows" = "Actual.ServerBlocks"
+"Pouw/Window" = "Pouw/ExecutionPhase"
+"Pouw.Window" = "Pouw.ExecutionPhase"
+"Pouw/Period" = "Pouw/MonitoringPeriod"
+"Pouw.Period" = "Pouw.MonitoringPeriod"
+# Declarations whose name holds the word with other parts, each renamed wherever it stands (no other declaration
+# holds it).
+"extraction_audit_window_split_of_record_of_le_slack" = "extraction_audit_executionPhase_split_of_record_of_le_slack"
+"encard_ingress_obsDecodable_le_contents_perWindow" = "encard_ingress_obsDecodable_le_contents_perExecutionPhase"
+"RemoteSessionConservationSketchDeployedProduct" = "RemoteRunConservationSketchDeployedProduct"
+"EncardIngressObsDecodableLeContentsPerWindow" = "EncardIngressObsDecodableLeContentsPerExecutionPhase"
+"WorkOfH1CheckedCreditPeriodH200_nontrivial" = "WorkOfH1CheckedCreditMonitoringPeriodH200_nontrivial"
+"encard_decodable_le_constantRate_perWindow" = "encard_decodable_le_constantRate_perExecutionPhase"
+"keyedWindowReg_extraction_audit_of_record" = "keyedExecutionPhaseReg_extraction_audit_of_record"
+"StackedSessionConservationSketchDeployed" = "StackedRunConservationSketchDeployed"
+"audit_window_split_of_record_of_le_slack" = "audit_executionPhase_split_of_record_of_le_slack"
+"encard_accSeqs_le_constantRate_perWindow" = "encard_accSeqs_le_constantRate_perExecutionPhase"
+"encard_ingress_obsDecodable_le_perWindow" = "encard_ingress_obsDecodable_le_perExecutionPhase"
+"RemoteSessionConservationSketchDeployed" = "RemoteRunConservationSketchDeployed"
+"EncardDecodableLeConstantRatePerWindow" = "EncardDecodableLeConstantRatePerExecutionPhase"
+"WorkOfH1CheckedCreditPeriodH200_honest" = "WorkOfH1CheckedCreditMonitoringPeriodH200_honest"
+"encard_accSeqs_le_constantRate_windows" = "encard_accSeqs_le_constantRate_executionPhases"
+"keyedWindow_extraction_audit_of_record" = "keyedExecutionPhase_extraction_audit_of_record"
+"linkWindowAcceptMeans_honest_certifier" = "transferBlocksAcceptMeans_honest_certifier"
+"EncardAccSeqsLeConstantRatePerWindow" = "EncardAccSeqsLeConstantRatePerExecutionPhase"
+"EncardIngressObsDecodableLePerWindow" = "EncardIngressObsDecodableLePerExecutionPhase"
+"extraction_audit_window_of_le_slack" = "extraction_audit_executionPhase_of_le_slack"
+"EncardAccSeqsLeConstantRateWindows" = "EncardAccSeqsLeConstantRateExecutionPhases"
+"RealizesIntegrityOfIntegrityPeriod" = "RealizesIntegrityOfIntegrityMonitoringPeriod"
+"RemoteSessionConservationSketchSum" = "RemoteRunConservationSketchSum"
+"PeriodBindingPerProver_nontrivial" = "MonitoringPeriodBindingPerProver_nontrivial"
+"RemoteSessionConservationDeployed" = "RemoteRunConservationDeployed"
+"RemoteSessionRunConservationRelay" = "RemoteRunRunConservationRelay"
+"RealizesCommOfPeriodLeakAccepted" = "RealizesCommOfMonitoringPeriodLeakAccepted"
+"RemoteWindowRunConservationRelay" = "RemoteExecutionPhaseRunConservationRelay"
+"linkWindowAcceptMeans_nontrivial" = "transferBlocksAcceptMeans_nontrivial"
+"mem_accSeqsSampled_of_windowGood" = "mem_accSeqsSampled_of_executionPhaseGood"
+"workOfH1CheckedCreditPeriodAt_of" = "workOfH1CheckedCreditMonitoringPeriodAt_of"
+"DampenerRemotePeriod_nontrivial" = "DampenerRemoteMonitoringPeriod_nontrivial"
+"RemoteSessionConservationSketch" = "RemoteRunConservationSketch"
+"StackedSessionConservationRelay" = "StackedRunConservationRelay"
+"WorkOfH1CheckedCreditPeriodH200" = "WorkOfH1CheckedCreditMonitoringPeriodH200"
+"RemoteSessionConservationRelay" = "RemoteRunConservationRelay"
+"accepts_of_linkWindowsAccepted" = "accepts_of_transferBlocksAccepted"
+"closure_escape_le_window_slack" = "closure_escape_le_executionPhase_slack"
+"keyedWindowReg_audit_of_record" = "keyedExecutionPhaseReg_audit_of_record"
+"keyedWindow_escape_le_of_names" = "keyedExecutionPhase_escape_le_of_names"
+"PeriodBindingPerProver_honest" = "MonitoringPeriodBindingPerProver_honest"
+"WorkOfH1CheckedCreditPeriodAt" = "WorkOfH1CheckedCreditMonitoringPeriodAt"
+"circuitCreditPeriod_of_covers" = "circuitCreditMonitoringPeriod_of_covers"
+"outsourcePeriod_of_perProgram" = "outsourceMonitoringPeriod_of_perProgram"
+"RemoteSessionRunConservation" = "RemoteRunRunConservation"
+"audit_window_split_of_record" = "audit_executionPhase_split_of_record"
+"instFintypeSketchWindowCoins" = "instFintypeSketchExecutionPhaseCoins"
+"linkWindowAcceptMeans_honest" = "transferBlocksAcceptMeans_honest"
+"linkWindowsAccepted_instance" = "transferBlocksAccepted_instance"
+"DampenerRemotePeriod_honest" = "DampenerRemoteMonitoringPeriod_honest"
+"OutsourceWithinEgressPeriod" = "OutsourceWithinEgressMonitoringPeriod"
+"RemoteWindowRunConservation" = "RemoteExecutionPhaseRunConservation"
+"WorkOfH1CheckedCreditPeriod" = "WorkOfH1CheckedCreditMonitoringPeriod"
+"keyedWindow_audit_of_record" = "keyedExecutionPhase_audit_of_record"
+"ofDeployedWindow_paid_relay" = "ofDeployedExecutionPhase_paid_relay"
+"ofDeployedWindow_paid_route" = "ofDeployedExecutionPhase_paid_route"
+"IntegrityOfIntegrityPeriod" = "IntegrityOfIntegrityMonitoringPeriod"
+"exfiltration_bound_windows" = "exfiltration_bound_executionPhases"
+"ingress_bound_eq_perWindow" = "ingress_bound_eq_perExecutionPhase"
+"windows_bound_le_perWindow" = "executionPhases_bound_le_perExecutionPhase"
+"RateSessionSampledNamedRO" = "RateRunSampledNamedRO"
+"RemoteSessionConservation" = "RemoteRunConservation"
+"deficiencyUpTo_periodGame" = "deficiencyUpTo_monitoringPeriodGame"
+"CommOfPeriodLeakAccepted" = "CommOfMonitoringPeriodLeakAccepted"
+"audit_window_of_le_slack" = "audit_executionPhase_of_le_slack"
+"closure_escape_le_window" = "closure_escape_le_executionPhase"
+"linkWindowAcceptMeans_by" = "transferBlocksAcceptMeans_by"
+"ofDeployedWindow_sampled" = "ofDeployedExecutionPhase_sampled"
+"LinkWindowAcceptMeansBy" = "TransferBlocksAcceptMeansBy"
+"SlowdownWindowsCapSlots" = "SlowdownServerBlocksCapSlots"
+"extraction_audit_window" = "extraction_audit_executionPhase"
+"oneWindow_not_pouwSound" = "oneServerBlock_not_pouwSound"
+"oneWindow_withinCompute" = "oneServerBlock_withinCompute"
+"periodLayer_writerReads" = "monitoringPeriodLayer_writerReads"
+"session_relay_of_unpaid" = "run_relay_of_unpaid"
+"PeriodBindingPerProver" = "MonitoringPeriodBindingPerProver"
+"acceptsUpTo_periodGame" = "acceptsUpTo_monitoringPeriodGame"
+"audit_window_of_record" = "audit_executionPhase_of_record"
+"instFintypeWindowCoins" = "instFintypeExecutionPhaseCoins"
+"ofDeployedWindow_reads" = "ofDeployedExecutionPhase_reads"
+"LinkWindowAcceptMeans" = "TransferBlocksAcceptMeans"
+"SessionSamplesRecords" = "RunSamplesRecords"
+"SketchDeployedSession" = "SketchDeployedRun"
+"keyedWindow_escape_le" = "keyedExecutionPhase_escape_le"
+"linkWindowAcceptMeans" = "transferBlocksAcceptMeans"
+"ofDeployedWindow_paid" = "ofDeployedExecutionPhase_paid"
+"sessionOf_record_spec" = "challengePhaseOf_record_spec"
+"sessionSamplesRecords" = "runSamplesRecords"
+"trustedSession_record" = "trustedChallengePhase_record"
+"DampenerRemotePeriod" = "DampenerRemoteMonitoringPeriod"
+"SketchDeployedWindow" = "SketchDeployedExecutionPhase"
+"SketchSummarySession" = "SketchSummaryRun"
+"drawSession_withheld" = "drawChallengePhase_withheld"
+"encard_periodGood_le" = "encard_monitoringPeriodGood_le"
+"exists_charge_window" = "exists_charge_serverBlock"
+"sessionHashed_length" = "challengePhaseHashed_length"
+"toySessionCommitment" = "toyRunCommitment"
+"window_quadratic_any" = "serverBlock_quadratic_any"
+"CircuitCreditPeriod" = "CircuitCreditMonitoringPeriod"
+"LinkWindowsAccepted" = "TransferBlocksAccepted"
+"PooledCoversSession" = "PooledCoversRun"
+"RemoteSessionRoutes" = "RemoteRunRoutes"
+"acceptsUpTo_periodR" = "acceptsUpTo_monitoringPeriodR"
+"checkWindow_extract" = "checkExecutionPhase_extract"
+"ksLin_of_periodLeak" = "ksLin_of_monitoringPeriodLeak"
+"oneWindow_pouwSound" = "oneServerBlock_pouwSound"
+"periodGood_of_plays" = "monitoringPeriodGood_of_plays"
+"periodR_perLiveTile" = "monitoringPeriodR_perLiveTile"
+"pooledCoversSession" = "pooledCoversRun"
+"roErr_toReal_window" = "roErr_toReal_executionPhase"
+"sessionNamed_record" = "challengePhaseNamed_record"
+"stateWindow_skipped" = "stateExecutionPhase_skipped"
+"tiedWindow_unstated" = "tiedExecutionPhase_unstated"
+"verifyWindow_accept" = "verifyExecutionPhase_accept"
+"windows_of_accepted" = "executionPhases_of_accepted"
+"windows_of_verified" = "executionPhases_of_verified"
+"AcceptsLinkWindows" = "AcceptsTransferBlocks"
+"IntegrityPeriodLog" = "IntegrityMonitoringPeriodLog"
+"PeriodLeakAccepted" = "MonitoringPeriodLeakAccepted"
+"PeriodLeaksChecked" = "MonitoringPeriodLeaksChecked"
+"SketchBoundSession" = "SketchBoundRun"
+"SlowdownWindowsCap" = "SlowdownServerBlocksCap"
+"acceptsLinkWindows" = "acceptsTransferBlocks"
+"audit_window_of_le" = "audit_executionPhase_of_le"
+"checkWindowChunked" = "checkExecutionPhaseChunked"
+"checkWindow_accept" = "checkExecutionPhase_accept"
+"comm_of_periodLeak" = "comm_of_monitoringPeriodLeak"
+"drawSession_honest" = "drawChallengePhase_honest"
+"not_windowsHold_T0" = "not_serverBlocksHold_T0"
+"prover_cost_window" = "prover_cost_serverBlock"
+"tiedWindow_unwired" = "tiedExecutionPhase_unwired"
+"LineCoversSession" = "LineCoversRun"
+"RateSessionSample" = "RateRunSample"
+"SessionCommitment" = "RunCommitment"
+"SketchWindowCoins" = "SketchExecutionPhaseCoins"
+"WindowCertificate" = "ExecutionPhaseCertificate"
+"cutWindow_eq_some" = "cutServerBlock_eq_some"
+"heldOverWindow_of" = "heldOverExecutionPhase_of"
+"isReservedSession" = "isReservedChallengePhase"
+"lineCoversSession" = "lineCoversRun"
+"liveAt_skipPeriod" = "liveAt_skipMonitoringPeriod"
+"sampleWindows_one" = "sampleExecutionPhases_one"
+"sessionNamed_root" = "challengePhaseNamed_root"
+"sessionTreesPiece" = "challengePhaseTreesPiece"
+"stages_skipPeriod" = "stages_skipMonitoringPeriod"
+"window_linear_any" = "serverBlock_linear_any"
+"PeriodCoversStmt" = "MonitoringPeriodCoversStmt"
+"RateAuditWindows" = "RateAuditExecutionPhases"
+"RateWindowSample" = "RateExecutionPhaseSample"
+"SampledPerWindow" = "SampledPerExecutionPhase"
+"checkWindow_grow" = "checkExecutionPhase_grow"
+"ofDeployedWindow" = "ofDeployedExecutionPhase"
+"periodE_const_le" = "monitoringPeriodE_const_le"
+"periodLayer_cone" = "monitoringPeriodLayer_cone"
+"pinnedSession_ok" = "pinnedChallengePhase_ok"
+"saltSession_spec" = "saltChallengePhase_spec"
+"sessionNamed_sid" = "challengePhaseNamed_sid"
+"sessionOf_record" = "challengePhaseOf_record"
+"sum_windows_le_T" = "sum_periods_le_T"
+"windowSaltReason" = "executionPhaseSaltReason"
+"window_quadratic" = "serverBlock_quadratic"
+"window_responder" = "period_responder"
+"windowsOn_append" = "executionPhasesOn_append"
+"DampenerWindows" = "DampenerServerBlocks"
+"DeployedSession" = "DeployedRun"
+"IntegrityPeriod" = "IntegrityMonitoringPeriod"
+"LiWindowUnbound" = "LiExecutionPhaseUnbound"
+"PeriodInventory" = "MonitoringPeriodInventory"
+"WindowCertified" = "ExecutionPhaseCertified"
+"WindowPoolReset" = "RunPoolReset"
+"WindowVerdictBy" = "ExecutionPhaseVerdictBy"
+"creditedSession" = "creditedChallengePhase"
+"linkWindowOrder" = "transferBlocksOrder"
+"measuredSession" = "measuredRun"
+"ne_period_stage" = "ne_monitoringPeriod_stage"
+"periodE_errX_le" = "monitoringPeriodE_errX_le"
+"periodGood_mono" = "monitoringPeriodGood_mono"
+"periodGood_true" = "monitoringPeriodGood_true"
+"periodLayer_src" = "monitoringPeriodLayer_src"
+"periodPositions" = "monitoringPeriodPositions"
+"rowsWindowCheck" = "rowsExecutionPhaseCheck"
+"summary_windows" = "summary_executionPhases"
+"tiedWindow_ties" = "tiedExecutionPhase_ties"
+"windowDomainTag" = "executionPhaseDomainTag"
+"windowSaltCheck" = "executionPhaseSaltCheck"
+"window_deployed" = "executionPhase_deployed"
+"window_relay_le" = "executionPhase_relay_le"
+"B2WindowP2Ring" = "B2PeriodP2Ring"
+"DeployedWindow" = "DeployedExecutionPhase"
+"EndToEndWindow" = "EndToEndExecutionPhase"
+"PeriodAdaptive" = "MonitoringPeriodAdaptive"
+"WindowAccepted" = "ExecutionPhaseAccepted"
+"WindowSeedSalt" = "RunSeedSalt"
+"auditedSession" = "auditedChallengePhase"
+"checkWindow_eq" = "checkExecutionPhase_eq"
+"credit_session" = "credit_run"
+"doFault_window" = "doFault_executionPhase"
+"enqueue_window" = "enqueue_executionPhase"
+"everyWindow_at" = "everyExecutionPhase_at"
+"linkWindowJson" = "transferBlocksJson"
+"periodE_nonneg" = "monitoringPeriodE_nonneg"
+"period_horizon" = "monitoringPeriod_horizon"
+"saltSession_ok" = "saltChallengePhase_ok"
+"sessionEntries" = "challengePhaseEntries"
+"sessionMessage" = "runMessage"
+"sum_periodE_le" = "sum_monitoringPeriodE_le"
+"sum_windows_le" = "sum_periods_le"
+"windowOpenRoot" = "executionPhaseOpenRoot"
+"windowPrograms" = "executionPhasePrograms"
+"window_step_le" = "executionPhase_step_le"
+"windowsHold_T1" = "serverBlocksHold_T1"
+"B2WindowAudit" = "B2PeriodAudit"
+"PeriodChannel" = "MonitoringPeriodChannel"
+"PeriodEscapes" = "MonitoringPeriodEscapes"
+"PeriodTailMax" = "MonitoringPeriodTailMax"
+"PouwPerWindow" = "PouwPerExecutionPhase"
+"SampledWindow" = "SampledExecutionPhase"
+"SessionBlocks" = "InferenceBlocks"
+"SignedSession" = "SignedRun"
+"WindowDesigns" = "ExecutionPhaseDesigns"
+"WindowVerdict" = "ExecutionPhaseVerdict"
+"budget_period" = "budget_monitoringPeriod"
+"budget_window" = "budget_executionPhase"
+"covers_window" = "covers_executionPhase"
+"credit_window" = "credit_executionPhase"
+"decodeSession" = "decodeRun"
+"honestSession" = "honestRun"
+"nodup_windows" = "nodup_executionPhases"
+"periodR_every" = "monitoringPeriodR_every"
+"periodWeights" = "monitoringPeriodWeights"
+"period_unionE" = "monitoringPeriod_unionE"
+"pinnedSession" = "pinnedChallengePhase"
+"pr_session_le" = "pr_run_le"
+"sampleWindows" = "sampleExecutionPhases"
+"sessionBlocks" = "inferenceBlocks"
+"sessionHashed" = "challengePhaseHashed"
+"windowAnchors" = "executionPhaseAnchors"
+"windowDomain?" = "executionPhaseDomain?"
+"windowDrawnOf" = "executionPhaseDrawnOf"
+"windowIdx_inj" = "executionPhaseIdx_inj"
+"windowProblem" = "executionPhaseProblem"
+"windowRecords" = "executionPhaseRecords"
+"windowStreams" = "executionPhaseStreams"
+"windowUnbound" = "executionPhaseUnbound"
+"window_le_exp" = "executionPhase_le_exp"
+"window_linear" = "serverBlock_linear"
+"windows_small" = "serverBlocks_small"
+"PeriodBudget" = "MonitoringPeriodBudget"
+"PeriodCredit" = "MonitoringPeriodCredit"
+"WindowDesign" = "ExecutionPhaseDesign"
+"WindowLength" = "ServerBlockLength"
+"WindowOpened" = "ExecutionPhaseOpened"
+"WindowProved" = "ExecutionPhaseProved"
+"WindowSynced" = "ExecutionPhaseSynced"
+"audit_window" = "audit_executionPhase"
+"linkWindowFn" = "transferBlocksFn"
+"periodCovers" = "monitoringPeriodCovers"
+"periodCredit" = "monitoringPeriodCredit"
+"periodE_mono" = "monitoringPeriodE_mono"
+"periodE_zero" = "monitoringPeriodE_zero"
+"periodNaming" = "monitoringPeriodNaming"
+"period_union" = "monitoringPeriod_union"
+"sessionBytes" = "attachmentBytes"
+"sessionPiece" = "challengePhasePiece"
+"verifyWindow" = "verifyExecutionPhase"
+"windowLayout" = "executionPhaseLayout"
+"window_fixed" = "executionPhase_fixed"
+"windowsOn_eq" = "executionPhasesOn_eq"
+"windowsOn_ne" = "executionPhasesOn_ne"
+"windows_tied" = "executionPhases_tied"
+"world_window" = "world_period"
+"PeriodPlays" = "MonitoringPeriodPlays"
+"SessionFits" = "AttachmentFits"
+"StageWindow" = "StageExecutionPhase"
+"WindowCoins" = "ExecutionPhaseCoins"
+"WindowsHold" = "ServerBlocksHold"
+"checkWindow" = "checkExecutionPhase"
+"closeWindow" = "closeExecutionPhase"
+"code_window" = "code_executionPhase"
+"cost_window" = "cost_serverBlock"
+"drawSession" = "drawChallengePhase"
+"isSessionId" = "isChallengePhaseId"
+"keyedWindow" = "keyedExecutionPhase"
+"p2SessionFn" = "p2RunFn"
+"periodE_add" = "monitoringPeriodE_add"
+"periodE_mul" = "monitoringPeriodE_mul"
+"periodE_sum" = "monitoringPeriodE_sum"
+"periodLayer" = "monitoringPeriodLayer"
+"period_prod" = "monitoringPeriod_prod"
+"saltSession" = "saltChallengePhase"
+"sessionFits" = "attachmentFits"
+"session_mem" = "run_mem"
+"stateWindow" = "stateExecutionPhase"
+"windowCheck" = "executionPhaseCheck"
+"windowDrawn" = "executionPhaseDrawn"
+"windowTicks" = "executionPhaseTicks"
+"window_fold" = "executionPhase_fold"
+"window_ineq" = "serverBlock_ineq"
+"windows_cap" = "serverBlocks_cap"
+"LinkWindow" = "TransferBlocks"
+"PeriodGood" = "MonitoringPeriodGood"
+"WindowGood" = "ExecutionPhaseGood"
+"WindowPlay" = "ExecutionPhasePlay"
+"isV1Window" = "isV1ExecutionPhase"
+"periodBody" = "monitoringPeriodBody"
+"periodGame" = "monitoringPeriodGame"
+"periodMode" = "monitoringPeriodMode"
+"rootWindow" = "rootExecutionPhase"
+"sameWindow" = "sameExecutionPhase"
+"sessionId?" = "challengePhaseId?"
+"skipPeriod" = "skipMonitoringPeriod"
+"tiedWindow" = "tiedExecutionPhase"
+"toySession" = "toyRun"
+"windowCoin" = "executionPhaseCoin"
+"windowJson" = "periodJson"
+"windowK_le" = "executionPhaseK_le"
+"windowMode" = "executionPhaseMode"
+"windowSalt" = "runSalt"
+"windowTest" = "executionPhaseTest"
+"window_pos" = "executionPhase_pos"
+"WindowLaw" = "ExecutionPhaseLaw"
+"WindowRec" = "ExecutionPhaseRec"
+"WindowsAt" = "ServerBlocksAt"
+"cutWindow" = "cutServerBlock"
+"id_period" = "id_monitoringPeriod"
+"sessionFn" = "runFn"
+"windowIds" = "executionPhaseIds"
+"windowIdx" = "executionPhaseIdx"
+"windowRef" = "executionPhaseRef"
+"window_lt" = "executionPhase_lt"
+"windowsOf" = "executionPhasesOf"
+"windowsOn" = "executionPhasesOn"
+"B2Window" = "B2Period"
+"isWindow" = "isExecutionPhase"
+"periodOf" = "monitoringPeriodOf"
+"periodOn" = "monitoringPeriodOn"
+"windowOf" = "executionPhaseOf"
+"windowOn" = "executionPhaseOn"
+"periodE" = "monitoringPeriodE"
+"periodG" = "monitoringPeriodG"
+"periodR" = "monitoringPeriodR"
+"windowA" = "executionPhaseA"
+
+[[words_in]]
+# A name the word alone makes, renamed in its declaring files; the files that read it are to be added from the
+# build's references.
+files = [
+    "Security/Definitions/Accounting/Guarantees/Actual.lean",
+    "Security/Proofs/Accounting/Actual/Windows.lean",
+]
+words = { "Windows" = "ServerBlocks" }
+
+[[words_in]]
+# Another declaration holds `onePeriod` (`Verity.Structure.Family.onePeriod`), so it is renamed only in its own files;
+# the files that read it are to be added from the build's references.
+files = [
+    "Security/Definitions/Accounting/PeriodBinding.lean",
+]
+words = { "onePeriod" = "oneMonitoringPeriod" }
+
+[[words_in]]
+# A name the word alone makes, renamed in its declaring files; the files that read it are to be added from the
+# build's references.
+files = [
+    "Security/Definitions/Accounting/RateAuditHorizon.lean",
+    "Security/Definitions/Accounting/Remote/Draw.lean",
+    "Security/Definitions/Accounting/Remote/Sketch.lean",
+]
+words = { "Session" = "Run" }
+
+[[words_in]]
+# A name the word alone makes, renamed in its declaring files; the files that read it are to be added from the
+# build's references.
+files = [
+    "Security/Definitions/Nci/Assumptions.lean",
+]
+words = { "Sessions" = "InferenceBlocks" }
+
+[[words_in]]
+# A name the word alone makes, renamed in its declaring files; the files that read it are to be added from the
+# build's references.
+files = [
+    "Security/Definitions/Pouw/Dither.lean",
+]
+words = { "Period" = "MonitoringPeriod" }
+
+[[words_in]]
+# Another declaration holds `periodRun` (`Pous.Period.SecurityProofs.held_periodRun`; `Pous.Period.periodRun`), so it is renamed only in its own files;
+# the files that read it are to be added from the build's references.
+files = [
+    "Security/Proofs/Flock/EndToEnd/Period/Run.lean",
+]
+words = { "periodRun" = "monitoringPeriodRun" }
+
+[[words_in]]
+# Another declaration holds `code_session` (`SamplingDeploy.code_session`), so it is renamed only in its own files;
+# the files that read it are to be added from the build's references.
+files = [
+    "Security/Proofs/NetworkCertifier/Code.lean",
+]
+words = { "code_session" = "code_attachment" }
+
+[[words_in]]
+# Another declaration holds `idx_session`, `sessionOf_spec` (`Claims.ZKServer.Loop.idx_session`; `Verity.Sampled.sessionOf_spec`), so it is renamed only in its own files;
+# the files that read it are to be added from the build's references.
+files = [
+    "Security/Proofs/Properties/Pouw/LiveSalt/Ledger.lean",
+]
+words = { "idx_session" = "idx_challengePhase", "sessionOf_spec" = "challengePhaseOf_spec" }
+
+[[words_in]]
+# `Window` names another sense in other files (its own group there), so it is
+# renamed only in these; the files that read it are to be added from the build's references.
+files = [
+    "verity/core/primitives/requirement/CircuitRequirement/Difftest.lean",
+]
+words = { "Window" = "Period" }
+
+[[words_in]]
+# `Window` names another sense in other files (its own group there), so it is
+# renamed only in these; the files that read it are to be added from the build's references.
+files = [
+    "verity/core/protocols/certifier/lean/NetworkCertifier/WindowCharge.lean",
+    "verity/core/protocols/network/lean/NetworkCheck/Period.lean",
+    "verity/core/protocols/pouw/lean/check/PouwCheck/Inputs.lean",
+]
+words = { "Window" = "ExecutionPhase" }
+
+[[words_in]]
+# `sessionOf` names another sense in other files (its own group there), so it is
+# renamed only in these; the files that read it are to be added from the build's references.
+files = [
+    "verity/core/protocols/remote_bandwidth/lean/RemoteAudit/Difftest.lean",
+    "verity/core/protocols/remote_bandwidth/lean/RemoteAudit/Protocol.lean",
+]
+words = { "sessionOf" = "runOf" }
+
+[[words_in]]
+# Another declaration holds `WindowRecord` (`Flock.WindowRecord.FORMAT`; `Flock.WindowRecord.FORMATS`), so it is renamed only in its own files;
+# the files that read it are to be added from the build's references.
+files = [
+    "verity/core/protocols/remote_bandwidth/lean/RemoteAudit/Window.lean",
+]
+words = { "WindowRecord" = "ExecutionPhaseRecord" }
+
+[[words_in]]
+# Another declaration holds `sessionNamed`, `sessionOf`, `trustedSessionOf` (`Verity.Sampled.sessionNamed_ok`; `#senses`; `Verity.Sampled.trustedSessionOf_ok`; `Verity.Sampled.trustedSessionOf_spec`), so it is renamed only in its own files;
+# the files that read it are to be added from the build's references.
+files = [
+    "verity/core/service/spot/Spot/ChallengerSession.lean",
+]
+words = { "sessionNamed" = "challengePhaseNamed", "sessionOf" = "challengePhaseOf", "trustedSessionOf" = "trustedChallengePhaseOf" }
+
+[[words_in]]
+# Another declaration holds `sessionTreeReason`, `sessionsTreeReason` (`Verity.Sampled.sessionTreeReason_link`; `Verity.Sampled.sessionsTreeReason_one`), so it is renamed only in its own files;
+# the files that read it are to be added from the build's references.
+files = [
+    "verity/core/service/spot/Spot/ChallengerTrees.lean",
+]
+words = { "sessionTreeReason" = "challengePhaseTreeReason", "sessionsTreeReason" = "challengePhasesTreeReason" }
+
+[[words_in]]
+# Lowercase names other code also uses with another meaning (a Python helper's, a test's), renamed only in Lean.
+files = ["**/*.lean"]
+words = { "periodLeak" = "monitoringPeriodLeak", "periodLeak_le_sum" = "monitoringPeriodLeak_le_sum", "same_session" = "same_run", "session_split" = "run_split", "window0" = "serverBlock0", "windowK" = "executionPhaseK", "window_hands" = "executionPhase_hands", "window_opens" = "executionPhase_opens" }
+
+[rewrite]
+    # Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+    # files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+    exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+               "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
+
+    [keep]
+    # Format ids, notes, art ids, branches and lanes; the record keys and domain tags that keep the word until a format
+    # version ("window", "session", "period" as JSON keys and tag strings).
+    patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
+                '"(?:window|windows|session|sessions|period|periods)"']
+    strings = []
+    
+# For the review: these [words] also reach code outside Lean (a Python mirror, a benchmark, a test), which this move
+# renames with them unless a [keep_in] holds them:
+# - `DampenerRemotePeriod`: benchmarks/rho/rho/theorem.py
+# - `EncardAccSeqsLeConstantRateWindows`: verity/core/protocols/certifier/tests/test_network_certifier_capacity.py
+# - `EndToEndWindow`: benchmarks/pouw/served_zk/served_commit.py, benchmarks/pouw/tests/test_served_zk.py
+# - `H1J10RCheckedCreditPeriod`: benchmarks/rho/data/envelopes.toml
+# - `IntegrityPeriod`: benchmarks/sampling_plan/transformer.py, benchmarks/sampling_plan/h200.py, tests/test_retired_terms.py
+# - `IntegrityPeriodLog`: benchmarks/sampling_plan/h200.py, benchmarks/sampling_plan/cpu_budget.py, benchmarks/sampling_plan/tests/test_h200.py
+# - `LinkWindow`: verity/core/protocols/certifier/service.py, benchmarks/network_traces/chain_record.py
+# - `PeriodCredit`: benchmarks/one_stage/served_shares.py
+# - `RateAuditWindows`: verity/core/protocols/bandwidth/openings.py
+# - `RateSessionSample`: verity/core/protocols/remote_bandwidth/audit.py, verity/core/protocols/remote_bandwidth/tests/test_remote_bandwidth.py
+# - `SessionCommitment`: verity/core/protocols/pous/memory_challenger.py, verity/core/devices/memory_challenger/lean/tests/mc_cases.py, verity/core/devices/memory_challenger/lean/verdict.py
+# - `SignedSession`: verity/core/protocols/pous/memory_challenger.py, benchmarks/pous/memory_challenger/live.py, verity/core/devices/memory_challenger/lean/tests/mc_cases.py
+# - `SketchBoundSession`: verity/core/protocols/remote_bandwidth/p2.py
+# - `WindowsAt`: benchmarks/rho/rho/envelopes.py
+# - `WorkOfH1CheckedCreditPeriod`: tools/verity/lean/tests/test_merge.py
+# - `audit_window`: verity/core/protocols/pouw/tests/test_circuit_plan.py, verity/ml/protocols/pouw/circuit/__init__.py, verity/ml/protocols/pouw/circuit/plan.py
+# - `audit_window_split_of_record`: verity/core/protocols/pouw/tests/test_circuit_plan.py, verity/ml/protocols/pouw/circuit/__init__.py, verity/ml/protocols/pouw/circuit/plan.py
+# - `checkWindow`: verity/core/protocols/remote_bandwidth/session/verifier.py
+# - `checkWindowChunked`: verity/core/protocols/remote_bandwidth/session/verifier.py
+# - `covers_window`: verity/core/protocols/pouw/tests/test_circuit_plan.py, verity/ml/protocols/pouw/circuit/plan.py
+# - `p2SessionFn`: verity/core/protocols/remote_bandwidth/lean/tests/test_p2.py
+# - `periodCredit`: verity/core/protocols/pouw/credit.py
+# - `rowsWindowCheck`: verity/core/protocols/network/tests/period_case.py
+# - `sessionFn`: verity/core/protocols/remote_bandwidth/lean/tests/ra_cases.py
+# - `windowForm`: verity/core/protocols/pouw/period_check.py
+# - `windowOpenRoot`: verity/core/protocols/pouw/salt.py
+# - `windowRecords`: verity/core/protocols/composition/tests/reference.py
+# Held for the review, not renamed by this draft:
+# - `period`: a bare lowercase word; prose shares it, so it waits for the build's references (monitoringPeriod)
+# - `session`: two senses here give it two names (attachment, run), in shared files
+# - `sessions`: a bare lowercase word; prose shares it, so it waits for the build's references (runs)
+# - `window`: two senses here give it two names (executionPhase, period), in shared files
+# - `windows`: two senses here give it two names (executionPhases, serverBlocks), in shared files
+# - `MemoryChallenger.Properties.sessionStrings`: its proposed name is already declared
+# - `MemoryChallenger.Properties.wipeSessionStrings`: its proposed name is already declared
+# - `Spot.SecondStage.exWindow`: its proposed name is already declared
