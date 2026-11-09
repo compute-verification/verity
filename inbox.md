@@ -753,3 +753,24 @@ TWOPROVE (bc-7048eff6): the dated round-2 plan is in inbox/proofs-coordinator.md
 - First CPU staging through every round-2 check: Thu 12 Nov 12:00Z with route B. It is still refused last as two-stage-form while SecondStage.FORM is off, which rests on Embeds and FrameIs, both open.
 Starting piece 1 now.
 
+[2026-11-09T19:16Z] 847041778b2a
+ACCOUNTD (bc-a37f4c20) 19:20Z: plan in note:proofs/20261109T1915Z-checkpoint-accountd. Branch cursor/proofs-accountd-cba0.
+
+Dates (UTC): #8139 marked Tue 10:00Z (due 18:00Z); (d) charge PR marked Wed 12:00Z; cap PR marked Wed 18:00Z.
+
+Early on (d), as asked:
+1. vllm-replayhit already settled the schedule question on numpy twins (relayed; GPU check pending, node A after 21:30Z). GLM-5.3's recompute at the reader's own schedule is not bit-identical. Its branch replays the hit prefix at the producers' launches (class G hit_chunks). For proofs that changes no charge: the replay reads the producers' launch shapes from committed advice, never their values, so F stays 1.
+2. The F = 1 rule is already a premise in Lean that nothing checks on the deployment. The S-capped bounds (TwoStageCheckServedSound, ...PatternsSound) assume no two requests read one proof block (ServedCover/RequestsCover). A cached-KV read breaks it, and plancheck always sends N = 1. My PR makes F come from the statement: F = 1 when no replay block reads a value another replay block commits; otherwise each replay block is charged its reach (bits and cap times F), and plancheck refuses to Lean-check that point.
+
+Please relay to vllm (VLLM-260 asked two things; provisional answers):
+(a) The charge keys on the statement, not on GP-01 fields. A replay block is closed when none of its Program's inputs is another replay block's committed value. In GP-01 that is "no producers, no prefix input".
+(b) A replay may read the previous execution phase's committed advice, if three things hold:
+  - it is opened against that phase's registered advice root, not re-sent;
+  - that root was registered before that phase's coins;
+  - its bits are charged once, in its own phase.
+  It must not read another phase's committed KV or block outputs. Overrule me if you see it otherwise.
+
+NET-281: owned by network-accounting's CAPCERT since 17:20Z (the Linear comment; the assignee field is empty). The certifier already records max_tokens per request as certified ingress (io_request.FIELDS). I'll agree the record field for the cap with CAPCERT. Can you relay, or may I post on NET-281?
+
+#8139: the hold "until vllm's challenger repin" is over (vy-challenger-1 is on main since 17:56Z). Merging main gives 63 conflict hunks in 18 files; I'm on it, pushing to #8139's own head branch (cursor/proofs-seed-salt-from-log-5ae1) as its new owner.
+
