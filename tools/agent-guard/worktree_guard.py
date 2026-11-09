@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One agent per checkout (INF-59; the rule is AGENTS.md's, #2416): the shell hook's judgment of `git checkout`, `git switch` and
+"""One agent per checkout (the rule is AGENTS.md's): the shell hook's judgment of `git checkout`, `git switch` and
 `git push`, and the branch registry it keeps.
 
     python3 tools/agent-guard/worktree_guard.py hand BRANCH AGENT_ID   give a branch you created to another agent (its new owner)
@@ -12,10 +12,12 @@ branch it had then is registered to it. The hook then refuses, from any other ag
     (the `research` CLI) follows the switch; checking out files (`git checkout -- PATH`, `git checkout REF -- PATH`) passes;
   - pushing a branch registered to another agent: one it created (`checkout -b`, `switch -c`, `worktree add -b`) or the one its
     worktree had when it claimed it, until that agent hands it over (`hand`). An unregistered branch passes.
-For every agent, whatever it owns, it also refuses a push that would update `main` or `next` (only drive and the lander move
-them; INF-110), and a `git config` that prints values, since the checkout's http.*.extraheader carries a GitHub token (INF-105).
+For every agent, whatever it owns, it also refuses a push that would update `main`, `checked` or `next` (only drive and the lander move
+them), and a `git config` that prints values, since the checkout's http.*.extraheader carries a GitHub token.
 A lander's hand repair of `next` under the queue lock names its reason on the push itself (`AGENT_GUARD_PUSH_NEXT_OK='REASON'
 git push ...`), and is logged to `$AGENT_GUARD_STATE/push-next-ok.jsonl`. Nothing lets a push to `main` through.
+It refuses, too, a push, branch switch or worktree add with `$` or a backquote in its words, whose branch the shell names only
+after the hook has read it.
 The registry is `$AGENT_GUARD_STATE/branches.json` (default /tmp/agent-guard), one VM's: an agent on a VM of its own is never
 judged. Where a command names no directory (`git -C DIR`, or a `cd DIR` before it in the same command) the hook judges the
 event's cwd, else the workspace root, since the shell's remembered directory never reaches it.
@@ -75,6 +77,18 @@ def owner(gitdir: str, agent: str, directory: str) -> str:
         return agent
     register(git(directory, "symbolic-ref", "--short", "-q", "HEAD") or "", agent)
     return agent
+
+
+def hand_reason(commands: list[list[str]], agent: str) -> str | None:
+    """A `worktree_guard.py hand BRANCH AGENT_ID` from an agent other than the one BRANCH is registered to: only its owner gives
+    a branch away, or any agent could take another's branch by handing it to itself."""
+    reg = registry()
+    for words in commands:
+        for i, w in enumerate(words[:-2]):
+            if w.endswith("worktree_guard.py") and words[i + 1] == "hand" and reg.get(b := words[i + 2], agent) != agent:
+                return (f"branch {b} belongs to agent {reg[b]}, so only that agent can hand it on: ask it to run `python3 "
+                        f"tools/agent-guard/worktree_guard.py hand {b} <agent-id>`. If it is gone, push a branch of your own.")
+    return None
 
 
 def invocations(commands: list[list[str]], cwd: str) -> list[tuple[str, list[str]]]:
@@ -139,17 +153,19 @@ def push_targets(directory: str, args: list[str]) -> list[str]:
     return out
 
 
-#: Branches only drive and the lander push, from their own processes rather than an agent's shell (INF-110)
-PROTECTED = {"main", "next"}
+#: Branches only drive and the lander push, from their own processes rather than an agent's shell
+PROTECTED = {"main", "checked", "next"}
 
-#: `git config` forms that print values, where an installation token sits (http.*.extraheader, url.*.insteadof): INF-105
+#: `git config` forms that list keys: an installation token sits in http.*.extraheader's value and in url.*.insteadof's name,
+#: so even `--name-only` prints it
 CONFIG_DUMPS = {"--list", "-l", "--get-regexp", "--show-origin", "--get-all", "--get-urlmatch"}
 CREDENTIAL_KEYS = ("extraheader", "insteadof", "token", "password", "credential")
 
 
 def main_or_config_reason(invocations_: list[tuple[int, str, list[str]]], next_ok: list[str], agent: str) -> str | None:
-    """Whatever agent runs it: a push that would update `main` or `next` (INF-110: a worker whose VM came back from a snapshot
-    reset to `main` pushed onto it, and drive rebuilt every queued PR), or a `git config` that prints credential-bearing values."""
+    """Whatever agent runs it: a push that would update `main` or `next` (a worker whose VM comes back from a snapshot reset
+    to `main` would push onto it, and drive would rebuild every queued PR), or a `git config` that prints credential-bearing
+    values."""
     for i, d, args in invocations_:
         sub, ok = args[0], next_ok[i] if i < len(next_ok) else ""
         if sub == "push":
@@ -161,16 +177,33 @@ def main_or_config_reason(invocations_: list[tuple[int, str, list[str]]], next_o
                     f.write(json.dumps({"agent": agent, "dir": d, "args": args, "reason": ok}) + "\n")
                 continue
             if opts & {"--all", "--mirror"} or targets:
-                return ("this push would update `main` or `next`, which only drive and the lander move (AGENTS.md). Push "
+                return ("this push would update `main`, `checked` or `next`, which only drive and the lander move (AGENTS.md). Push "
                         "your own branch instead: `git push origin HEAD:refs/heads/<your-branch>` (create it first with "
                         "`git switch -c <your-branch>` if this checkout is on main).")
         if sub == "config":
             rest = args[1:]
             names = [a for a in rest if not a.startswith("-")]
-            if "--name-only" not in rest and (set(rest) & CONFIG_DUMPS
-                                              or (len(names) == 1 and any(k in names[0].lower() for k in CREDENTIAL_KEYS))):
-                return ("this `git config` would print values, and the checkout's http.*.extraheader carries a GitHub token "
-                        "(INF-105). List names only: `git config --name-only --list`.")
+            if set(rest) & CONFIG_DUMPS or (len(names) == 1 and any(k in names[0].lower() for k in CREDENTIAL_KEYS)):
+                return ("this `git config` would print a GitHub token: it sits in http.*.extraheader's value and in "
+                        "url.*.insteadof's name, so `--name-only` lists it too (INF-105, INF-297). Read the one key you need: "
+                        "`git config --get user.name`.")
+    return None
+
+
+#: what the shell expands after the hook has read the command: a branch or directory named through one can't be judged
+UNEXPANDED = ("$", "`")
+
+
+def unexpanded_reason(commands: list[list[str]], indexed: list[tuple[int, str, list[str]]]) -> str | None:
+    """Whatever agent runs it: a push, branch switch or worktree add whose words the shell has yet to expand. The hook sees
+    `refs/heads/$B`, not the branch it becomes, so it can't hold that branch to its owner or to `main`, `checked` and `next`."""
+    for i, _, args in indexed:
+        sub = args[0]
+        if sub not in ("push", "checkout", "switch", "worktree") or (sub == "checkout" and "--" in args):
+            continue
+        if words := [w for w in commands[i][1:] if any(c in w for c in UNEXPANDED)]:
+            return (f"this `git {sub}` names `{words[0]}`, which the shell expands only after the guard has read it, so the guard "
+                    f"can't check which branch or checkout it is. Name it literally (`git push origin HEAD:refs/heads/<your-branch>`).")
     return None
 
 
@@ -178,11 +211,13 @@ def reason(commands: list[list[str]], agent: str, cwd: str, next_ok: list[str] |
     """Why the agent may not run these git commands here, or None. Registers the branches an allowed command creates.
     `next_ok[i]` is the AGENT_GUARD_PUSH_NEXT_OK reason `commands[i]` was given, if any."""
     indexed = indexed_invocations(commands, cwd)
-    if why := main_or_config_reason(indexed, next_ok or [], agent):
+    if why := unexpanded_reason(commands, indexed) or main_or_config_reason(indexed, next_ok or [], agent):
         return why
     found = [(d, args) for _, d, args in indexed]
     if not agent:
         return None
+    if why := hand_reason(commands, agent):
+        return why
     for d, args in found:
         gitdir = git(d, "rev-parse", "--absolute-git-dir")
         if gitdir is None:
