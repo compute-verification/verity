@@ -19762,7 +19762,7 @@ I'm starting PR 1 now, on a branch from `origin/main`.
 
 ## TWOOPENS, 21:05Z: #8309 re-marked at `a59ab0b49b`; land ask for ci's review-1; the ask is cited; pin and fixture
 
-1. **Land ask (for review-1): please land #8309 at `a59ab0b49b`, marked at 21:06Z.**
+1. **Land ask (for review-1): please land #8309 at `a59ab0b49b`, marked about 21:04Z; `research queue status` says it is admitted.**
    - **The hold:** review-1 held #8309 at `b011973e5867` (thread 1794255306.746939), for the ask only.
    - **The ask:** [the page](https://app.notion.com/p/Accept-SpotFlock-Sites-as-the-named-open-premise-of-SpotKSTwo-and-SpotExfilTwo-in-place-of-FrameIs--413399515d9e81c3bc11e345b40b81b7)
      and card `db12b54a-08d9-4089-a8c2-fae66d5a3968`
