@@ -68,6 +68,7 @@ public import Proofs.Flock.SpotFlock.Reads
 public import Proofs.Flock.SpotFlock.Rows
 public import Proofs.Flock.SpotFlock.RowsOpen
 public import Proofs.Flock.SpotFlock.ScopeOf
+public import Proofs.Flock.SpotFlock.ScopeDesc
 public import Proofs.Flock.Encodings
 public import Proofs.Flock.SpotFlock.Reveals
 public import Proofs.Flock.SpotFlock.RevealsLe
