@@ -5698,7 +5698,7 @@
     {"file": "verity/ml/flock/python/verity_flock/rec_sparse.py", "count": 22},
     {"file": "verity/ml/flock/python/verity_flock/rec_vstage.py", "count": 66},
     {"file": "verity/ml/flock/python/verity_flock/rec_vstar.py", "count": 26},
-    {"file": "verity/ml/flock/python/verity_flock/struct_lower.py", "count": 19},
+    {"file": "verity/ml/flock/python/verity_flock/struct_lower.py", "count": 12},
     {"file": "verity/ml/flock/python/verity_flock/subcircuit_templates.py", "count": 42},
     {"file": "verity/ml/flock/python/verity_flock/templates/attention_head.py", "count": 7},
     {"file": "verity/ml/flock/python/verity_flock/templates/attention_head_v18.py", "count": 3},
