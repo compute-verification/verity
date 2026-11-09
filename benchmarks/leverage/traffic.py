@@ -1,11 +1,110 @@
 """Honest traffic for calibrating the range clamps' boxes, and a held-out set for checking them.
 
-Each set mixes prose, code, structured data, mathematics, several languages, chat transcripts in ChatML and documents
-separated by <|endoftext|>, so that attention sinks and massive activations at delimiters and special tokens show up in
-both. The held-out set also holds the prompts the fault experiments decode from (`prompts.PROMPTS[:8]`), and the
-calibration set the other prompts, so no box is fitted to a text it is checked on.
+Each hand-written set mixes prose, code, structured data, mathematics, several languages, chat transcripts in ChatML
+and documents separated by <|endoftext|>, so that attention sinks and massive activations at delimiters and special
+tokens show up in both. The held-out set also holds the prompts the fault experiments decode from
+(`prompts.PROMPTS[:8]`), and the calibration set the other prompts, so no box is fitted to a text it is checked on.
+
+`mixed(split, n)` draws more traffic from three public datasets pinned by revision (`SOURCES`): chats in ChatML from
+OpenAssistant's conversation trees (23 languages), documents from a 10,000-document sample of the Pile (web, code,
+law, papers, mail, mathematics, subtitles), and passages from Belebele in 20 scripts. Each source is in a fixed
+order, its languages or subsets taken in turn; "heldout" is the first 40% / 40% / 20% of n from each, and
+"calibration" the items after the largest held-out set (`HELDOUT_MAX`), so the two never share a text.
 """
+import gzip
+import json
+import urllib.request
+
+from lm import cache_dir
 from prompts import PROMPTS
+
+SOURCES = {
+    "oasst1": ("OpenAssistant/oasst1", "fdf72ae0827c1cda404aff25b6603abec9e3399b", "2023-04-12_oasst_ready.trees.jsonl.gz"),
+    "pile": ("NeelNanda/pile-10k", "127bfedcd5047750df5ccf3a12979a47bfa0bafa",
+             "data/train-00000-of-00001-4746b8785c874cc7.parquet"),
+    "belebele": ("facebook/belebele", "7899cdfa4e1e0d733fd77c848e2c273cb1d32be2", "data/{}.jsonl"),
+}
+BELEBELE_LANGS = ("jpn_Jpan", "kor_Hang", "rus_Cyrl", "ukr_Cyrl", "arb_Arab", "heb_Hebr", "hin_Deva", "ben_Beng",
+                  "tha_Thai", "ell_Grek", "zho_Hans", "zho_Hant", "vie_Latn", "tur_Latn", "amh_Ethi", "kat_Geor",
+                  "hye_Armn", "tam_Taml", "khm_Khmr", "pes_Arab")
+SHARES = (("oasst1", 0.4), ("pile", 0.4), ("belebele", 0.2))
+HELDOUT_MAX = 400
+CHARS = 6000
+
+
+def fetch_dataset(name: str, file: str):
+    repo, rev, _ = SOURCES[name]
+    p = cache_dir() / "datasets" / repo / rev / file
+    if not p.exists():
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_suffix(p.suffix + ".part")
+        with urllib.request.urlopen(f"https://huggingface.co/datasets/{repo}/resolve/{rev}/{file}", timeout=600) as r:
+            tmp.write_bytes(r.read())
+        tmp.rename(p)
+    return p
+
+
+def round_robin(groups: dict[str, list[str]]) -> list[tuple[str, str]]:
+    """Each group's items in order, taking the groups in turn (largest first), as (group, item)."""
+    keys = sorted(groups, key=lambda k: (-len(groups[k]), k))
+    out, i = [], 0
+    while any(i < len(groups[k]) for k in keys):
+        out.extend((k, groups[k][i]) for k in keys if i < len(groups[k]))
+        i += 1
+    return out
+
+
+def chat_texts() -> list[tuple[str, str]]:
+    """Each conversation tree's prompt and its best-ranked replies, up to two exchanges, in ChatML."""
+    by_lang: dict[str, list[str]] = {}
+    with gzip.open(fetch_dataset("oasst1", SOURCES["oasst1"][2]), "rt") as f:
+        for line in f:
+            m = json.loads(line)["prompt"]
+            lang, turns = m["lang"], []
+            while m is not None and len(turns) < 4:
+                turns.append(("user" if m["role"] == "prompter" else "assistant", m["text"]))
+                replies = sorted(m.get("replies") or [], key=lambda r: (r.get("rank") is None, r.get("rank") or 0))
+                m = replies[0] if replies else None
+            text = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n" + "".join(
+                f"<|im_start|>{role}\n{t}<|im_end|>\n" for role, t in turns)
+            by_lang.setdefault(lang, []).append(text[:CHARS])
+    return round_robin(by_lang)
+
+
+def pile_texts() -> list[tuple[str, str]]:
+    import pyarrow.parquet as pq
+    t = pq.read_table(fetch_dataset("pile", SOURCES["pile"][2])).to_pylist()
+    by_set: dict[str, list[str]] = {}
+    for row in t:
+        meta = row["meta"] if isinstance(row["meta"], dict) else json.loads(row["meta"])
+        by_set.setdefault(meta["pile_set_name"], []).append(row["text"][:CHARS])
+    return round_robin(by_set)
+
+
+def belebele_texts() -> list[tuple[str, str]]:
+    """Each language's distinct passages in order, three to a text."""
+    by_lang = {}
+    for lang in BELEBELE_LANGS:
+        seen: list[str] = []
+        for line in fetch_dataset("belebele", SOURCES["belebele"][2].format(lang)).read_text().splitlines():
+            p = json.loads(line)["flores_passage"]
+            if p not in seen:
+                seen.append(p)
+        by_lang[lang] = ["\n\n".join(seen[i:i + 3]) for i in range(0, len(seen) - 2, 3)]
+    return round_robin(by_lang)
+
+
+def mixed(split: str, n: int) -> list[tuple[str, str]]:
+    """n texts of `split` ("heldout" or "calibration") as (source:group, text)."""
+    if split == "heldout" and n > HELDOUT_MAX:
+        raise ValueError(f"at most {HELDOUT_MAX} held-out texts")
+    out = []
+    for name, share in SHARES:
+        items = {"oasst1": chat_texts, "pile": pile_texts, "belebele": belebele_texts}[name]()
+        k = round(n * share)
+        start = 0 if split == "heldout" else round(HELDOUT_MAX * share)
+        out.extend((f"{name}:{g}", t) for g, t in items[start:start + k])
+    return out
 
 CALIBRATION_TEXTS = (
     "WASHINGTON (Reuters) - The Senate on Thursday passed a sweeping infrastructure bill that would spend $550 billion "

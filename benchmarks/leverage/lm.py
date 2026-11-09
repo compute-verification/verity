@@ -23,7 +23,8 @@ group of coordinates (a joint fault). Values are rounded to bf16 first: a fault 
 `LM.boxes` (a `Boxes`) clamps every site where it is read, the way a reader clamps what it reads from another proof
 block to a box fixed before the period: `GROUP_SITES`, a linear's input, by FP8 per-token-group scale (a group of
 `GROUP` coordinates whose scale would exceed its box is scaled down to it by a power of two); every other site per
-element, a BF16 read. Each box depends on the position's class (`position_class`). A fault is applied before the clamp.
+element, a BF16 read. Each box depends on the position's class (`position_class`: the first positions, a special
+token, any other), read from positions and token ids alone. A fault is applied before the clamp.
 """
 from __future__ import annotations
 
@@ -51,9 +52,16 @@ E4M3_MAX = 448.0
 ST_DTYPES = {"F32": torch.float32, "BF16": torch.bfloat16, "F16": torch.float16}
 
 
-def position_class(pos: torch.Tensor) -> torch.Tensor:
-    """0 for position 0 (where attention sinks put their massive activations), 1 for every other position."""
-    return (pos > 0).long()
+def position_class(pos: torch.Tensor, ids: torch.Tensor | None = None, special: torch.Tensor | None = None,
+                   window: int = 1) -> torch.Tensor:
+    """0 for the first `window` positions (where attention sinks put their massive activations: position 0, or the
+    first delimiter after a first token that hosts none), 2 for a special token (`special`, the tokenizer's control
+    tokens: document separators and chat delimiters, which act as sinks too) after them, and 1 for every other
+    position. A class reads only positions and token ids, both fixed inputs, never a value."""
+    c = (pos >= window).long()
+    if ids is not None and special is not None and len(special):
+        c = torch.where((c == 1) & torch.isin(ids, special), 2, c)
+    return c
 
 
 def ue8m0_scale(amax: torch.Tensor) -> torch.Tensor:
@@ -68,16 +76,25 @@ class Boxes:
     `cut` counts, per (site, layer), the values the clamps changed (a group site: its groups' coordinates), and `worst`
     the largest |value| / box among them: an honest value cut is a completeness failure."""
 
-    def __init__(self, hi: dict[tuple[str, int], torch.Tensor]):
+    def __init__(self, hi: dict[tuple[str, int], torch.Tensor], special: list[int] | None = None, window: int = 1):
         self.hi = hi
+        self.special = torch.tensor(sorted(special or []), dtype=torch.long)
+        self.window = window
         self.cut: dict[tuple[str, int], int] = {}
         self.worst: dict[tuple[str, int], float] = {}
 
-    def apply(self, key: tuple[str, int], x: torch.Tensor, pos0: int) -> torch.Tensor:
+    def classes(self, pos0: int, t: int, ids: torch.Tensor | None) -> torch.Tensor:
+        """(B or 1, t): the class of each position pos0.. of each row, from its token ids where given."""
+        pos = (pos0 + torch.arange(t))[None]
+        return position_class(pos, ids, self.special if ids is not None else None, self.window)
+
+    def apply(self, key: tuple[str, int], x: torch.Tensor, pos0: int, cls: torch.Tensor | None = None) -> torch.Tensor:
         h = self.hi.get(key)
         if h is None:
             return x
-        hb = h[position_class(pos0 + torch.arange(x.shape[1]))].to(x.dtype)[None]
+        if cls is None:
+            cls = self.classes(pos0, x.shape[1], None)
+        hb = h[cls].to(x.dtype)
         if key[0] in GROUP_SITES:
             b, t, w = x.shape
             g = x.reshape(b, t, w // GROUP, GROUP)
@@ -99,12 +116,14 @@ class Boxes:
         self.worst[key] = max(self.worst.get(key, 0.0), worst)
 
     def save(self, path: Path, **meta) -> None:
-        torch.save({"hi": {f"{s}:{l}": h for (s, l), h in self.hi.items()}, **meta}, path)
+        torch.save({"hi": {f"{s}:{l}": h for (s, l), h in self.hi.items()}, "special": self.special.tolist(),
+                    "window": self.window, **meta}, path)
 
     @classmethod
     def load(cls, path: Path) -> "Boxes":
         raw = torch.load(path)
-        return cls({(k.split(":")[0], int(k.split(":")[1])): h for k, h in raw["hi"].items()})
+        return cls({(k.split(":")[0], int(k.split(":")[1])): h for k, h in raw["hi"].items()}, raw.get("special"),
+                   raw.get("window", 1))
 
 
 def cache_dir() -> Path:
@@ -245,6 +264,7 @@ class LM:
             self.inv_freq = 1.0 / (s.rope_theta ** (torch.arange(0, s.head_dim, 2, dtype=torch.int64).float() / s.head_dim))
         self.tokenizer_path = d / "tokenizer.json"
         self.boxes: Boxes | None = None
+        self._cls: torch.Tensor | None = None
 
     def width(self, site: str) -> int:
         s = self.spec
@@ -266,6 +286,11 @@ class LM:
         from tokenizers import Tokenizer
         return Tokenizer.from_file(str(self.tokenizer_path))
 
+    def special_ids(self) -> list[int]:
+        """The tokenizer's special tokens (its document separator and chat delimiters), a registered input."""
+        added = json.loads(self.tokenizer_path.read_text()).get("added_tokens", [])
+        return sorted(t["id"] for t in added if t.get("special"))
+
     # -- sites -------------------------------------------------------------------------------------------------------
     def _site(self, name: str, layer: int, x: torch.Tensor, pos0: int, fault: Fault | None, taps: dict | None):
         if fault is not None and (name, layer) in fault.rows and pos0 <= fault.pos < pos0 + x.shape[1]:
@@ -273,7 +298,7 @@ class LM:
             x = x.clone()
             x[r, fault.pos - pos0, c] = v.to(x.dtype)
         if self.boxes is not None:
-            x = self.boxes.apply((name, layer), x, pos0)
+            x = self.boxes.apply((name, layer), x, pos0, self._cls)
         if taps is not None and (name, layer) in taps:
             taps[(name, layer)] = x
         return x
@@ -374,7 +399,8 @@ class LM:
         receive each named site's activation (after the fault and the clamp: what its readers read).
 
         With x_in, the residual stream into layer `first_layer` at positions pos0.. (B, T, d) replaces the ids, and the
-        layers before it are skipped (their cache entries are neither read nor appended)."""
+        layers before it are skipped (their cache entries are neither read nor appended); ids, if given too, then only
+        set the box classes."""
         s = self.spec
         layer = self._gpt2_layer if s.arch == "gpt2" else self._qwen2_layer
         if x_in is None:
@@ -383,16 +409,20 @@ class LM:
                 x = self.W["wte.weight"][ids] + self.W["wpe.weight"][pos0:pos0 + ids.shape[1]]
             else:
                 x = self.E[ids]
-            x = self._site("emb", -1, x, pos0, fault, taps)
         else:
             x = x_in
             if pos0 is None:
                 pos0 = cache.kv[first_layer][0].shape[2] if first_layer in cache.kv else 0
+        self._cls = None if self.boxes is None else self.boxes.classes(pos0, x.shape[1], ids)
+        if x_in is None:
+            x = self._site("emb", -1, x, pos0, fault, taps)
         for l in range(first_layer, s.layers):
             x = layer(l, x, pos0, cache, fault, taps, edit)
         if last_only:
             pos0 = pos0 + x.shape[1] - 1
             x = x[:, -1:]
+            if self._cls is not None:
+                self._cls = self._cls[:, -1:]
         h = self._site("final", s.layers, self.final_norm(x), pos0, fault, taps)
         return h @ self.E.T
 
