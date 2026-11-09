@@ -35,6 +35,7 @@ untraced = [
     "tests/test_cache_redteam.py",
     "tests/test_circuit_check.py",
     "tests/test_metadata_listings.py",
+    "tests/test_named_targets.py",
     "tests/test_shard.py",
     "tests/test_units.py",
 ]
@@ -203,13 +204,26 @@ tests = ["tests/test_cache_redteam.py", "tests/test_cache_imports_and_moves.py",
 paths = ["tools/verity/circuit_check/src/circuit_check"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_attention_split.py", "tests/test_metadata_files.py"]
+tests = ["tests/test_attention_split.py", "tests/test_attention_split_digests_*.py", "tests/test_metadata_files.py"]
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "tools/verity/circuit_check/src/circuit_check",
     "verity/core/protocols/certifier",
     "verity/core/protocols/pous",
     "verity/ml",
+]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_attention_split_digests_*.py", "tests/test_bodies.py", "tests/test_declared_tables.py",
+         "tests/test_named_targets.py", "tests/test_pinned_targets.py", "tests/test_ranges.py", "tests/test_structural.py",
+         "tests/test_targets.py"]
+paths = [
+    "integrations/vllm/verity_vllm/engine/served_seed.py",
+    "integrations/vllm/verity_vllm/pipeline/boundary_rows.circuit-check.py",
+    "integrations/vllm/verity_vllm/pipeline/boundary_rows.py",
+    "integrations/vllm/verity_vllm/program/frontend/seed_rule.circuit-check.py",
+    "integrations/vllm/verity_vllm/program/frontend/seed_rule.py",
+    "integrations/vllm/verity_vllm/records/boundary_commit.py",
 ]
 
 [[tool.verity.tests.reads]]
