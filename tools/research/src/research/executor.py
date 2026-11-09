@@ -47,6 +47,7 @@ run, once one of them failed or is blocked.  Drive judges the results (`drive.Dr
 from __future__ import annotations
 
 import hashlib
+import heapq
 import json
 import re
 import subprocess
@@ -233,36 +234,71 @@ class Executor:
         """{task id: (its state, its result)} of graph/v2 ``graph``.  A task with a key in the graph is pass, fail or pending by
         its `result` labels (`fold_results`).  A task that reads others is blocked once one of them failed, is blocked, or
         passed without the output it reads; pending while one is; and once each passed, keyed by `task_key` from their
-        results' `outputs` and read as the others are.  Read in rounds, each of the keys the last one made known; a task whose
-        reads never settle (a task the graph lacks) stays pending."""
+        results' `outputs` and read as the others are.  Read in rounds, each of the keys the last one made known, a round
+        taking the graph's tasks in its order, so one settled there is seen by those after it; a task whose reads never settle
+        (a task the graph lacks) stays pending.  A task is looked at only once what it reads can settle it, so the cost is the
+        graph's reads, not its reads times its rounds: a Lean graph reads each module's transitive imports, millions of reads
+        over hundreds of rounds."""
         tasks = {t["id"]: t for t in graph["tasks"]}
+        ids = list(tasks)
+        order = {i: n for n, i in enumerate(ids)}
         files, envs = graph.get("files") or {}, graph.get("envs") or {}
         out: dict[str, tuple[str, dict | None]] = {}
         keys = {i: t["key"] for i, t in tasks.items() if t.get("key")}
+        #: of each task that settles by what it reads: how many of its reads haven't settled, and whether a settled one
+        #: blocks it or leaves it pending
+        unread = {i: len(t["reads"]) for i, t in tasks.items() if i not in keys}
+        blocked: set[str] = set()
+        pending: set[str] = set()
+        readers: dict[str, list[tuple[str, dict]]] = {}
+        for i in unread:
+            for r in tasks[i]["reads"]:
+                readers.setdefault(r["task"], []).append((i, r))
         fetch = dict(keys)
-        while True:
+        later = {i for i, n in unread.items() if not n}
+        now: list[int] = []
+        at = -1
+
+        def settled(j: str) -> None:
+            """``j`` settled: each task that reads it and can now settle is looked at this round if it comes after ``j``,
+            else in the next."""
+            s = out[j]
+            for i, r in readers.get(j, ()):
+                if i in out or i in keys:
+                    continue
+                unread[i] -= 1
+                if s[0] in (FAIL, BLOCKED) or s[0] == PASS and r["output"] not in (s[1].get("outputs") or {}):
+                    blocked.add(i)
+                elif s[0] == PENDING:
+                    pending.add(i)
+                if i in blocked or i in pending or not unread[i]:
+                    if order[i] > at:
+                        heapq.heappush(now, order[i])
+                    else:
+                        later.add(i)
+
+        while fetch or later:
             if fetch:
                 got = self.transport.results(list(dict.fromkeys(fetch.values())))
                 out.update({i: fold_results(got.get(k) or (), k) for i, k in fetch.items()})
+                for i in fetch:
+                    settled(i)
                 fetch = {}
-            moved = False
-            for i, t in tasks.items():
+            for i in later:
+                heapq.heappush(now, order[i])
+            later = set()
+            while now:
+                i = ids[at := heapq.heappop(now)]
                 if i in out or i in keys:
                     continue
-                reads = [(r, out.get(r["task"])) for r in t["reads"]]
-                if any(s and (s[0] in (FAIL, BLOCKED) or s[0] == PASS and r["output"] not in (s[1].get("outputs") or {}))
-                       for r, s in reads):
-                    out[i] = (BLOCKED, None)
-                elif any(s and s[0] == PENDING for _, s in reads):
-                    out[i] = (PENDING, None)
-                elif all(s for _, s in reads):
-                    keys[i] = fetch[i] = task_key(t, files, envs[t["env"]]["digest"],
-                                                  {r["task"]: s[1]["outputs"] for r, s in reads})
+                if i in blocked or i in pending:
+                    out[i] = (BLOCKED if i in blocked else PENDING, None)
+                    settled(i)
                 else:
-                    continue
-                moved = True
-            if not moved and not fetch:
-                break
+                    t = tasks[i]
+                    keys[i] = fetch[i] = task_key(t, files, envs[t["env"]]["digest"],
+                                                  {r["task"]: out[r["task"]][1]["outputs"] for r in t["reads"]})
+            at = -1
         return {i: out.get(i, (PENDING, None)) for i in tasks}
 
 
