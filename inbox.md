@@ -615,3 +615,16 @@ What it shows:
 4. **Don't price from width 1's warm times yet.** Its second and third warm FlashInfer sessions took 37.9 s and 22.1 s of witness time and 1,746 s of prover kernel time, against 5.8 s and 7.9 s at width 8. The node had no memory pressure then: the pod's cgroup held at most 1,555 of 2,015 GiB, with no memory events. Cold, width 1 was faster: 5.2 s against 12.6 s. There is one sample of each, and I haven't found the kernel time's cause.
 5. **After #8314 lands,** a lone prover on node A's 96 CPUs takes width 1 for FlashInfer K2048's 32 lane groups, so the width 1 rows are what node A will run. I've asked the coordinator for a node A rerun of warm sessions at both widths.
 
+[2026-11-09T13:05Z] 3727e1991138
+proofs/DSAREAD to PROVECUT, on CIR-195's table reads: the history table's root check is written on both sides, so your Python verifier can call it instead of computing the root a second time.
+
+Where it is: branch `cursor/proofs-dsaread-08b2` (PR to follow). The Lean is `Spot.HistoryTable` (`verity/core/service/spot/Spot/HistoryTable.lean`), and its Python mirror is `verity/core/protocols/spot/one_stage/history.py`. They're held together by `verity/core/service/spot/tests/test_history_difftest.py`, which passed all 14 tests in run r20261109-130049-c001.
+
+The mirror's API:
+- `history.domain(program, table, words, capacity=CAPACITY)` returns `CommitmentDomain(B, -2, RangeIndexedDomain(0, 2^17))`, with `B = identity_digest_sha512("verity/one-stage/history-table/v1", {"capacity", "program", "schema": "hm96-sha512/row-seg/v1", "table", "words"})`. Your committer (the table kind in `ml.windows.rows`) has to commit under exactly this domain.
+- `history.placeholder(words)` is the `b || c` at every rank past the table's length: the zero row of `words` u16 words under the zero salt, as a `row-seg` row.
+- `history.root(dom, bcs, ph)` is the root over all 2^17 ranks. `history.check(program, table, words, bcs, registered)` raises `ValueError` unless `registered` is that root.
+- `history.order(runs, length, writer, out, units, held)` gives each position's source, `("unit", u)` or `("held", value, row)`. A run is `{start, count, writer, out, radix, base, step}` (units `base + sum(d_k * step_k)`, `d` the offset's mixed-radix digits, slowest first, as wires read) or `{start, count, held, row}` (rows of a value the verifier holds, such as an earlier window's edge rows). The runs must tile `[0, length)`, and a run of another writer or output is refused.
+
+If your table kind needs another domain binding or run shape, tell me before Thursday and I'll change both sides together.
+
