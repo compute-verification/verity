@@ -142,8 +142,9 @@ class Env:
                                    **({"detail": detail} if detail else {})})
 
     def graph2_script(self, loop: Loop, verdict: dict | None = None) -> Path:
-        """A graph2 with `verdict`, `cancel` and `rerun` for ``loop``: its verdict ``verdict`` (default a fail), and each cancel
-        and rerun appended to `<script>.cancel` and `<script>.rerun`."""
+        """A graph2 with `verdict`, `cancel` and `rerun` for ``loop``: its verdict on a check `<script>.verdict.<check>`'s,
+        else ``verdict`` (default a fail), each check asked appended to `<script>.asked`, and each cancel and rerun to
+        `<script>.cancel` and `<script>.rerun`."""
         (script := self.tmp / "graph2.py").write_text(GRAPH2)
         if verdict is not None:
             Path(f"{script}.verdict").write_text(json.dumps(verdict))
@@ -360,7 +361,7 @@ def test_the_policy_itself_ejects_the_member_a_failure_meets_rebuilds_the_rest_a
     two = env.put(2, {"b.txt": "2\n"})
     loop = env.loop(vqueue.decide)
     (built,) = loop.tick()
-    assert (built["action"], built["members"], built["base"], built["priority"]) == ("build", [1, 2], main, 2), built
+    assert (built["action"], built["members"], built["base"], built["priority"]) == ("build", [1, 2], main, L.DEPTH), built
     assert loop.tick() == []                                    # not listed yet: pending
     keys = env.listed(built["sha"], {"pytest:a": ["a.txt"], "pytest:b": ["b.txt"]})
     env.result(keys["pytest:a"], "pytest:a", "pass")
@@ -456,7 +457,8 @@ def test_an_action_that_fails_stops_the_tick_with_its_error_logged_and_a_torn_li
 
 @pytest.mark.parametrize("slim", [False, True])
 def test_a_build_whose_enqueue_failed_is_logged_stops_the_tick_and_is_enqueued_by_the_next(env, slim):
-    """With the run beside each check too, which doesn't start for it, so it is list-failed and not pending."""
+    """With the run beside each check too, which the build's tick, stopped, didn't start: the next starts it, and the check
+    stays list-failed beside it, not pending."""
     env.put(1, {"a.txt": "1\n"})
     env.put(2, {"b.txt": "2\n"})
     loop = env.loop(lambda s: policy(s) + ([] if s.candidates else [Build((2,), s.main, 0)]), slim=Slim() if slim else None)
@@ -473,7 +475,8 @@ def test_a_build_whose_enqueue_failed_is_logged_stops_the_tick_and_is_enqueued_b
     (built,) = loop.tick()                                      # the second build waits
     assert (built["action"], built["enqueued"], built["error"]) == ("build", False, "graph2 is down"), built
     assert env.queued() == {branch(built["sha"]): built["sha"]} and env.graph2.enqueued() == []
-    (retry,) = loop.tick()
+    *started, retry = loop.tick()
+    assert [(r["action"], r["sha"], r["why"]) for r in started] == ([("slim", built["sha"], "started")] if slim else [])
     assert (retry["action"], retry["enqueued"], retry["mark"], retry["priority"]) == ("retry", True, "not enqueued", 5)
     assert [e["check"] for e in env.graph2.enqueued()] == [f"ready:{built['sha']}"] and loop.tick() == []
 
@@ -487,9 +490,12 @@ for c in ("verdict", "cancel", "rerun"):
     p.add_argument("--check")
     p.add_argument("--keys", nargs="*", default=[])
 a = ap.parse_args()
-said = sys.argv[0] + ".verdict"
+said, own = sys.argv[0] + ".verdict", f"{sys.argv[0]}.verdict.{a.check}"
 if a.cmd == "verdict":
-    print(open(said).read() if os.path.exists(said) else json.dumps({"state": "fail", "check": a.check}))
+    with open(sys.argv[0] + ".asked", "a") as f:
+        f.write(a.check + "\\n")
+    print(open(own).read() if os.path.exists(own) else open(said).read() if os.path.exists(said)
+          else json.dumps({"state": "fail", "check": a.check}))
 else:
     with open(f"{sys.argv[0]}.{a.cmd}", "a") as f:
         f.write(" ".join([a.check, *a.keys]) + "\\n")
@@ -621,6 +627,49 @@ def test_a_failure_s_tests_are_read_beside_its_base_s_and_one_whose_tests_the_ba
     (f,) = w.verdict(two["sha"], sha).verdict.failed
     assert (f.tests, f.base_tests) == (frozenset({"test_t.py::a", "test_t.py::c"}), frozenset({"test_t.py::a"}))
     assert _acts(loop.tick()) == ["rerun"]                          # one test more fails: its own failure
+
+
+def test_the_failing_tests_graph2_s_verdict_names_count_beside_its_result_s_for_a_candidate_and_for_its_base(env):
+    """A `lean-suites` result's detail names no failing test (`exit`, `failed`, `suites`): graph2's verdict names them, a
+    test id of that task's, so a failure whose tests the base fails too, by graph2's verdict on the base, is inherited."""
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(vqueue.decide)
+    script = env.graph2_script(loop, {"state": PENDING})
+    (built,) = loop.tick()
+    sha = built["sha"]
+    t, node, more = "lean-suites:verity-flock:6/6", "tests/test_rec_full_draw.py::test_draw", "tests/test_x.py::test_y"
+    env.listed(main, {t: ["f.py"]}, keys={t: "sha512:base-f"})
+    keys = env.listed(sha, {"pytest:a": ["a.txt"], t: ["f.py"]})
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    for at, key, tests in ((main, "sha512:base-f", [node, more]), (sha, keys[t], [node])):
+        env.graph2.finish_result({"key": key, "task": t, "status": FAIL, "outputs": {"out": "sha512:o"},
+                                  "detail": {"exit": 1, "failed": 1, "suites": ["verity-flock"]}})
+        Path(f"{script}.verdict.ready:{at}").write_text(json.dumps({"state": FAIL, "failed": [
+            {"task": t, "key": key, "tests": tests, "inputs": ["f.py"], "reads": []},
+            {"task": "pytest:q", "key": "sha512:q", "tests": [], "inputs": [], "reads": [], "why": "a race"}]}))
+    (f,) = loop.world.verdict(sha, main).verdict.failed
+    assert (f.task, f.tests, f.base_key, f.base_tests) == (t, frozenset({node}), "sha512:base-f", frozenset({node, more}))
+    assert L._named({"labelled": "2026-01-01T00:00:00Z", "failed": [{"task": t, "key": keys[t], "tests": [node]}]}) == {}
+    assert _acts(loop.tick()) == ["red", "advance", "on_main", "drop"] and env.main() == sha    # not rerun: inherited
+
+
+def test_graph2_s_verdict_on_a_base_is_read_once_a_tick_and_afresh_the_next(env):
+    """Its `verdict` is a subprocess, and a base's is read for each candidate on it that failed: the base's own judging and
+    the candidate above it share one read a tick."""
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"b.txt": "2\n"})
+    loop = env.loop(vqueue.decide, batch=1)
+    script = env.graph2_script(loop, {"state": PENDING})
+    (one,) = loop.tick()
+    (two,) = loop.tick()
+    keys = env.listed(two["sha"], {"pytest:b": ["b.txt"]})
+    env.listed(one["sha"], {"pytest:a": ["a.txt"], "pytest:b": ["b.txt"]}, keys={"pytest:b": "sha512:b1"})
+    env.result(keys["pytest:b"], "pytest:b", "fail")                # the candidate above fails: its base's verdict is read
+    asked = Path(f"{script}.asked")
+    for _ in range(2):
+        asked.unlink()
+        assert loop.tick() == [] and sorted(asked.read_text().splitlines()) == sorted(f"ready:{c['sha']}" for c in (one, two))
 
 
 @pytest.mark.parametrize("again", ["pass", "fail", "no rerun"])
@@ -811,7 +860,7 @@ def test_a_failure_on_a_base_graph2_hasnt_listed_waits_for_its_listing_which_the
     env.result("sha512:red", "pytest:r", "fail")
     (base,) = loop.tick()
     assert (base["action"], base["sha"], base["candidate"], base["enqueued"], base["done"]) == ("base", main, sha, True, True)
-    assert env.graph2.enqueued()[-1] == {"check": f"ready:{main}", "priority": 2, "graph": None, "schema": GRAPH_V2}
+    assert env.graph2.enqueued()[-1] == {"check": f"ready:{main}", "priority": L.DEPTH, "graph": None, "schema": GRAPH_V2}
     j = w.verdict(sha, main)
     assert (j.verdict, j.unlisted, j.note) == (Verdict(PENDING), main, "waiting for the base's listing: its check isn't listed yet")
     assert loop.tick() == [] and len(env.graph2.enqueued()) == 2 and env.withdrawn == []       # once a base
@@ -961,19 +1010,18 @@ class Slim:
         return Verdict(state, graph.failed + slim.failed, graph.infra + slim.infra)
 
 
-def test_the_run_beside_a_check_starts_once_its_check_passed_its_record_is_kept_and_both_must_pass(env):
+def test_the_run_beside_a_check_starts_with_its_build_its_record_is_kept_and_both_must_pass(env):
     main = env.main()
     env.put(1, {"a.txt": "1\n"})
     slim = Slim()
     loop = env.loop(vqueue.decide, slim=slim)
     loop.world.slim_driver = lambda: "drive"
-    (built,) = loop.tick()
+    built, started = loop.tick()
     sha = built["sha"]
-    keys = env.listed(sha, {"pytest:a": ["a.txt"]})
-    env.result(keys["pytest:a"], "pytest:a", "pass")
-    (started,) = loop.tick()
     assert (started["action"], started["sha"], started["why"], started["record"]) == (
         "slim", sha, "started", {"ids": ["run-1"], "tip": sha, "base": main})
+    keys = env.listed(sha, {"pytest:a": ["a.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", "pass")
     assert loop.tick() == [] and slim.started == [("drive", sha, main)]      # graph2's passed, the run beside still runs
     slim.verdicts["run-1"] = INFRA
     judged, retry, again = loop.tick()
@@ -990,30 +1038,70 @@ def test_the_run_beside_a_check_starts_once_its_check_passed_its_record_is_kept_
     assert started_again.tick() == [] and len(slim.started) == 2
 
 
-def test_the_run_beside_starts_for_no_candidate_above_another_or_whose_check_runs_and_a_dry_run_neither_starts_nor_judges(env):
+def test_the_run_beside_starts_with_each_candidate_s_build_up_to_depth_once_across_a_restart_and_a_dry_run_starts_none(env):
     main = env.main()
+    for n in range(1, 5):
+        env.put(n, {f"{n}.txt": f"{n}\n"})
+    slim = Slim()
+    dry = env.loop(vqueue.decide, slim=slim, batch=1, depth=3, dry_run=True)    # its world has no Driver: a start raises
+    assert dry.tick() == [] and slim.started == [] and any(x.startswith("would build") for x in env.out)
+    loop = env.loop(vqueue.decide, slim=slim, batch=1, depth=3)
+    loop.world.slim_driver = lambda: "drive"
+    built = []
+    for _ in range(3):                                              # each with its check pending, the one below's too
+        build, started = loop.tick()
+        assert (build["action"], started["action"], started["sha"], started["why"]) == ("build", "slim", build["sha"],
+                                                                                         "started")
+        built.append(build)
+    assert [b["base"] for b in built] == [main, built[0]["sha"], built[1]["sha"]]
+    assert loop.tick() == [] and slim.started == [("drive", b["sha"], b["base"]) for b in built]     # three at depth 3
+    again = env.loop(vqueue.decide, clone="again", slim=slim, batch=1, depth=3)   # a restart reads their records from the log
+    again.world.slim_driver = lambda: "drive"
+    assert again.tick() == [] and len(slim.started) == 3
+
+
+def test_a_candidate_on_main_s_chain_the_log_holds_no_start_of_starts_its_run_beside_once_and_one_off_it_none(env):
+    """A build whose tick stopped before the start, or one by a loop without slim, leaves a candidate with no run beside its
+    check: one on `main`'s chain starts it once, and one off it, which the policy drops, none."""
     env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"b.txt": "2\n"})
+    slim = Slim()
+    plain, loop = env.loop(vqueue.decide, batch=1), env.loop(vqueue.decide, slim=slim, batch=1)
+    loop.world.slim_driver = lambda: "drive"
+    (old,) = plain.tick()
+    _git(env.o.origin, "update-ref", "refs/heads/main", env.o.change({"m.txt": "m\n"}))     # `main` moved past its base
+    main = env.main()
+    drop, one, started = loop.tick()
+    assert (drop["action"], drop["sha"], one["action"], one["base"], started["sha"]) == ("drop", old["sha"], "build", main,
+                                                                                           one["sha"])
+    assert slim.started == [("drive", one["sha"], main)] and env.cancelled == []
+    (two,) = plain.tick()                                           # on `one`, with no run beside its check
+    assert two["base"] == one["sha"]
+    judged = len(slim.judged)
+    dry = env.loop(vqueue.decide, slim=slim, batch=1, dry_run=True)        # its world has no Driver: a start or judge raises
+    assert dry.tick() == [] and len(slim.started) == 1 and len(slim.judged) == judged
+    assert "beside: pending" in "\n".join(env.out)
+    (started,) = loop.tick()
+    assert (started["action"], started["sha"], started["why"]) == ("slim", two["sha"], "started")
+    assert slim.started[-1] == ("drive", two["sha"], one["sha"]) and loop.tick() == [] and len(slim.started) == 2
+
+
+def test_a_failed_candidate_s_run_beside_and_those_of_the_candidates_above_it_are_cancelled_with_their_drops(env):
+    one_head = env.put(1, {"a.txt": "1\n"})
     env.put(2, {"b.txt": "2\n"})
     slim = Slim()
     loop = env.loop(vqueue.decide, slim=slim, batch=1)
     loop.world.slim_driver = lambda: "drive"
-    (one,) = loop.tick()
-    (two,) = loop.tick()
-    assert (one["members"], two["members"], two["base"]) == ([1], [2], one["sha"])
-    keys = env.listed(two["sha"], {"pytest:b": ["b.txt"]})
-    env.result(keys["pytest:b"], "pytest:b", "pass")                # above a candidate
-    keys = env.listed(one["sha"], {"pytest:a": ["a.txt"], "pytest:z": ["z.txt"]})
-    env.result(keys["pytest:a"], "pytest:a", "pass")                # its check still runs
-    assert loop.tick() == [] and slim.started == [] and slim.judged == []
-    env.result(keys["pytest:z"], "pytest:z", "pass")
-    dry = env.loop(vqueue.decide, slim=slim, batch=1, dry_run=True)        # its world has no Driver: a start or judge raises
-    assert dry.tick() == [] and slim.started == [] and slim.judged == [] and "beside: pending" in "\n".join(env.out)
-    (started,) = loop.tick()
-    assert (started["action"], started["sha"], slim.started) == ("slim", one["sha"], [("drive", one["sha"], main)])
-    slim.verdicts["run-1"] = PASS
-    assert _acts(loop.tick()) == ["slim", "advance", "on_main", "drop"]
-    (above,) = loop.tick()                                          # the lowest now, its check passed
-    assert (above["action"], above["sha"], slim.started[-1]) == ("slim", two["sha"], ("drive", two["sha"], one["sha"]))
+    one, _ = loop.tick()
+    two, _ = loop.tick()
+    keys = env.listed(one["sha"], {"pytest:a": ["a.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", "fail")                # #1's own: ejected, and the candidate above dropped
+    eject, drop1, drop2, *rebuilt = loop.tick()
+    assert (eject["action"], eject["number"], env.withdrawn) == ("eject", 1, [(1, one_head)])
+    assert [(d["action"], d["sha"], d["beside_cancelled"]) for d in (drop1, drop2)] == [("drop", one["sha"], ["run-1"]),
+                                                                                        ("drop", two["sha"], ["run-2"])]
+    assert [ids for ids, _ in env.cancelled] == [["run-1"], ["run-2"]]
+    assert _acts(rebuilt) == ["build", "slim"] and rebuilt[0]["members"] == [2] and rebuilt[1]["record"]["ids"] == ["run-3"]
 
 
 def test_a_dropped_candidate_s_run_beside_its_check_is_cancelled_while_it_runs_and_one_that_ended_is_left(env):
@@ -1021,19 +1109,16 @@ def test_a_dropped_candidate_s_run_beside_its_check_is_cancelled_while_it_runs_a
     slim = Slim()
     loop = env.loop(vqueue.decide, slim=slim)
     loop.world.slim_driver = lambda: "drive"
-    (built,) = loop.tick()
-    keys = env.listed(built["sha"], {"pytest:a": ["a.txt"]})
-    env.result(keys["pytest:a"], "pytest:a", "pass")
-    (started,) = loop.tick()
+    built, started = loop.tick()
     env.o.gh.ready.discard((1, built["heads"][0]))                  # its ready mark withdrawn: dropped
     (drop,) = loop.tick()
     assert (started["action"], drop["action"], drop["beside_cancelled"]) == ("slim", "drop", ["run-1"])
     assert env.cancelled == [(["run-1"], f"vqueue: candidate {built['sha'][:12]} was dropped: #1's ready mark was withdrawn")]
     env.put(2, {"b.txt": "2\n"})
-    (two,) = loop.tick()
+    two, _ = loop.tick()
     keys = env.listed(two["sha"], {"pytest:b": ["b.txt"]})
     env.result(keys["pytest:b"], "pytest:b", "pass")
-    assert _acts(loop.tick()) == ["slim"]
+    assert loop.tick() == []
     slim.verdicts["run-2"] = FAIL
     env.o.gh.ready.discard((2, two["heads"][0]))
     judged, drop = loop.tick()
@@ -1045,18 +1130,16 @@ def test_a_candidate_older_than_the_log_s_window_keeps_its_tries_first_enqueue_r
     slim, seen = Slim(), []
     loop = env.loop(lambda s: seen.append(s) or vqueue.decide(s), slim=slim, pending_s=200 * 3600)
     loop.world.slim_driver = lambda: "drive"
-    (built,) = loop.tick()
+    built, started = loop.tick()
     keys = env.listed(sha := built["sha"], {"pytest:a": ["a.txt"]})
     env.result(keys["pytest:a"], "pytest:a", "error", infra=True)
-    (retry,) = loop.tick()
+    (retry,) = loop.tick()                                          # the run beside still runs: not started again
     assert (retry["action"], retry["counts"], retry["priority"]) == ("retry", {keys["pytest:a"]: 1}, built["priority"])
-    env.clock += 49 * 3600                                          # its build and its retry: past the window
-    assert loop.tick() == [] and slim.started == []
+    env.clock += 49 * 3600                                          # its build, the run beside it and its retry: past the window
+    assert loop.tick() == [] and len(slim.started) == 1 and slim.judged[-1] == started["record"]
     c = seen[-1].candidates[0]
     assert (c.sha, c.verdict.state, c.tries, c.enqueued) == (sha, PENDING, 2, T0)
     env.result(keys["pytest:a"], "pytest:a", "pass")
-    assert _acts(loop.tick()) == ["slim"]
-    env.clock += 49 * 3600                                          # its run beside too
     assert loop.tick() == [] and len(slim.started) == 1
     c = seen[-1].candidates[0]
     assert (c.verdict.state, c.tries, c.enqueued) == (PENDING, 2, T0)
@@ -1084,15 +1167,14 @@ def test_a_fail_whose_every_failure_is_inherited_lands_once_the_run_beside_it_pa
     slim.combine = vqueue_slim.combine                              # it keeps no `ended`: the loop carries it
     loop = env.loop(vqueue.decide, slim=slim)
     loop.world.slim_driver = lambda: "drive"
-    (built,) = loop.tick()
+    built, _ = loop.tick()
     red = {"pytest:r": "sha512:red"}
     env.listed(main, {"pytest:r": ["red.txt"]}, keys=red)
     keys = env.listed(built["sha"], {"pytest:a": ["a.txt"], "pytest:r": ["red.txt"]}, keys=red)
     env.result("sha512:red", "pytest:r", "fail")
-    assert loop.tick() == [] and slim.started == []                 # `pytest:a` still runs: the fail hasn't ended
+    assert loop.tick() == []                                        # `pytest:a` still runs: the fail hasn't ended
     env.result(keys["pytest:a"], "pytest:a", "pass")
-    assert _acts(loop.tick()) == ["slim"]                           # it reads as a pass: the run beside starts
-    assert loop.tick() == []                                        # and still runs: the fail hasn't ended
+    assert loop.tick() == []                                        # the run beside still runs: the fail hasn't ended
     slim.verdicts["run-1"] = PASS
     assert _acts(loop.tick()) == ["slim", "red", "advance", "on_main", "drop"] and env.main() == built["sha"]
 
@@ -1128,9 +1210,18 @@ def test_research_queue_vqueue_is_its_own_command_and_runs_the_run_beside_each_c
 
     with pytest.raises(SystemExit) as e:
         Q.main(["vqueue", "--help"])
-    said = capsys.readouterr().out
+    said = " ".join(capsys.readouterr().out.split())
     assert e.value.code == 0 and all(o in said for o in ("--shadow", "--lean", "--pending-hours", "--no-slim"))
     assert vqueue_loop._slim() is vqueue_slim
+
+
+def test_the_loop_s_batch_depth_and_lean_default_to_16_3_and_3_on_the_command_and_in_the_loop(capsys, tmp_path):
+    with pytest.raises(SystemExit):
+        Q.main(["vqueue", "--help"])
+    said = " ".join(capsys.readouterr().out.split())
+    assert all(f"{o} (default {n})" in said for o, n in (("holds", 16), ("its check", 3), ("or a spec", 3))), said
+    loop = Loop(None, tmp_path / "log")
+    assert (loop.batch, loop.depth, loop.lean) == (L.BATCH, L.DEPTH, L.LEAN) == (16, 3, 3)
 
 
 def _under(tasks: dict[str, dict], i: str, seen: set[str]) -> list[str]:
