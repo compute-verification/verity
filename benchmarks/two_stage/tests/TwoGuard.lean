@@ -1,4 +1,5 @@
 import Proofs.Flock.SpotFlock.Code
+import Proofs.Flock.SamplingGeneric.TwoAt
 
 /-!
 # SPOT[Flock]'s two-stage model on a run of the two-stage toy
@@ -200,7 +201,6 @@ def main (args : List String) : IO UInt32 := do
   let m₂ ← readMsg (rest.head?.map (System.FilePath.mk ·) |>.getD (dir / "m2.bin"))
   let s₀ ← coinBytes (dir / "c0.bin")
   let s₁ ← coinBytes (dir / "c1.bin")
-  let mut refs := #[]
   let mut refs : Array Claims.Msg := #[]
   for t in [0:4] do
     if (← (dir / s!"ref-{t}.bin").pathExists) then refs := refs.push (← readMsg (dir / s!"ref-{t}.bin"))

@@ -5,7 +5,7 @@
     ... -- python3 benchmarks/two_stage/tests/guard_node.py --pytest [PYTEST ARGS]
 
 It holds the node's `build` Lean slot and its tree as `lean_changed.py --try` does (the slot, the tree's lock, the sync of
-`Security/Proofs`' closure from this checkout, the tree's kept dependencies), builds `Proofs.Flock.SpotFlock.Code` there,
+`Security/Proofs`' closure from this checkout, the tree's kept dependencies), builds the two modules the script imports there,
 and then, still holding them, runs `lake env lean --run TwoGuard.lean` on its arguments in the tree's `Security/Proofs`,
 or with ``--pytest`` the guard's test (`test_guard.py`) with ``VERITY_TWO_STAGE_GUARD`` naming that directory. Exit:
 the run's status, 2 when it got no slot, tree or dependencies."""
@@ -22,7 +22,8 @@ ROOT = HERE.parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "verity" / "lean"))
 import lean_changed as LC  # noqa: E402
 
-PKG, MODULE = "Security/Proofs", "Proofs.Flock.SpotFlock.Code"
+PKG = "Security/Proofs"
+MODULES = ("Proofs.Flock.SpotFlock.Code", "Proofs.Flock.SamplingGeneric.TwoAt")
 
 
 def main(argv: list[str]) -> int:
@@ -56,8 +57,8 @@ def main(argv: list[str]) -> int:
                 return 2
             LC.write_links(tree, links)
             LC.mark(tree, package=PKG, phase="build")
-            print(f"guard-node: {tree} ({n} files changed there): lake build +{MODULE}", flush=True)
-            rc, _ = LC.build(PKG, tree, lake, [f"+{MODULE}"], LC.sandboxed())
+            print(f"guard-node: {tree} ({n} files changed there): lake build {' '.join(MODULES)}", flush=True)
+            rc, _ = LC.build(PKG, tree, lake, [f"+{m}" for m in MODULES], LC.sandboxed())
             if rc == 0:
                 if argv[:1] == ["--pytest"]:
                     env = {**os.environ, "VERITY_TWO_STAGE_GUARD": str(tree / PKG)}
