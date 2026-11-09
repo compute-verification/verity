@@ -3,9 +3,10 @@
 [--no-lock] [--no-rerun] [--no-fetch] [--keep]`: stage a move on a base as one certified commit per map, for its lander.
 
 For each map in order, on BASE (default `origin/main`, fetched first) or on the commit the map before it made:
-1. read the map (`tools/move/NAME.toml`) as that commit has it: one with `[words]` runs `rename.py`, one with `[paths]`
-   `layout.py` (`--no-lock` passes on); a map with both or neither is refused, and so is a map the commit lacks, since
-   `move_check.py` reads a word map at the move's base and anyone reruns the move from there;
+1. read the map (`tools/move/NAME.toml`) as that commit has it: one with `[words]` or `[[words_in]]` runs
+   `rename.py` (its `[words]` may be empty, never absent), one with `[paths]` `layout.py` (`--no-lock` passes on); a
+   map with both or neither is refused, and so is a map the commit lacks, since `move_check.py` reads a word map at the
+   move's base and anyone reruns the move from there;
 2. run that script at the root of a fresh worktree of the commit, as BASE has it (`tools/move/*.py`, `move_check.py` and
    the pins list they read, written out as drive's `move_scripts` does), so the move is the one drive regenerates and the
    lander checks, whatever this checkout holds;
@@ -49,6 +50,8 @@ MAP = re.compile(r"^tools/move/[\w.-]+\.toml$")
 #: each kind of map's move line, which names its script (`restack.LINE_SCRIPT`) for whoever reruns the move
 LINE = {"words": "Move", "paths": "Layout-move"}
 SCRIPT = {kind: RS.LINE_SCRIPT[line] for kind, line in LINE.items()}
+#: the tables that make a map each kind: a word map's words may all be scoped to files (`[[words_in]]`)
+TABLES = {"words": ("words", "words_in"), "paths": ("paths",)}
 SHOWN = 20
 
 
@@ -78,10 +81,14 @@ def kind_of(path: str, text: str) -> str:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as e:
         raise Refused(f"{path} doesn't parse: {e}") from e
-    kinds = [k for k in SCRIPT if data.get(k)]
+    kinds = [k for k, tables in TABLES.items() if any(data.get(t) for t in tables)]
     if len(kinds) != 1:
-        raise Refused(f"{path} has {'both [words] and [paths]' if kinds else 'neither [words] nor [paths]'}: a map is a word "
-                      "map (rename.py) or a path map (layout.py), and a move that needs both stages two maps in order")
+        has = "both [words] and [paths]" if kinds else "neither [words], [[words_in]] nor [paths]"
+        raise Refused(f"{path} has {has}: a map is a word map (rename.py) or a path map (layout.py), and a move that "
+                      "needs both stages two maps in order")
+    if kinds == ["words"] and "words" not in data:
+        raise Refused(f"{path} has [[words_in]] but no [words]: give it an empty [words], which rename.py and "
+                      "move_check.py read")
     return kinds[0]
 
 

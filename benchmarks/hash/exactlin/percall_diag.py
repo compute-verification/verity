@@ -25,8 +25,15 @@ import multiprocessing as mp
 import os
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from multiprocessing.connection import Connection
+
+    import torch
+    from torch._inductor.runtime.triton_heuristics import CachingAutotuner
 
 HERE = Path(__file__).resolve().parent
 PIN = "/workspace/hf/hub/models--verity-int8--Llama-3.1-8B-INT8/snapshots/723d342ac443b040931242c768df342b0f6f15a7"
@@ -74,14 +81,14 @@ def stock_checkpoint(scratch: Path) -> Path:
 class Recorder:
     """Per int8 GEMM call while `on`: (K, N, M) and M s_a bits, M xq checksums, M y checksums (int64, exact)."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.on = False
         self.kn: list[tuple[int, int, int]] = []
         self.data: list[np.ndarray] = []
         self.short = 0
         self.wv = None
 
-    def take(self, xq, s_a, y) -> None:
+    def take(self, xq: torch.Tensor, s_a: torch.Tensor, y: torch.Tensor) -> None:
         import torch
         m, k = xq.shape
         n = y.shape[1]
@@ -100,7 +107,7 @@ class Recorder:
         from torch._inductor.runtime import triton_heuristics as th
         orig, rec = th.CachingAutotuner.run, self
 
-        def run(self_, *args, **kw):
+        def run(self_: CachingAutotuner, *args: object, **kw: object) -> object:
             out = orig(self_, *args, **kw)
             if rec.on and "scaled_mm_kernel" in getattr(self_.fn, "__name__", ""):
                 import torch
@@ -117,7 +124,8 @@ class Recorder:
         from vllm.model_executor.layers.quantization.compressed_tensors import triton_scaled_mm as M
         orig, rec = M.triton_scaled_mm, self
 
-        def wrapped(x_q, w_q, scale_a, scale_b, out_dtype, *a, **kw):
+        def wrapped(x_q: torch.Tensor, w_q: torch.Tensor, scale_a: torch.Tensor, scale_b: torch.Tensor,
+                    out_dtype: torch.dtype, *a: object, **kw: object) -> torch.Tensor:
             y = orig(x_q, w_q, scale_a, scale_b, out_dtype, *a, **kw)
             if rec.on:
                 rec.take(x_q, scale_a, y)
@@ -141,7 +149,7 @@ def install_tuning_log(pick: str | None) -> list[dict]:
     seen: dict[int, tuple] = {}   # id -> (autotuner, entry): the autotuner kept, so its id is never reused
     orig_run, orig_bench = th.CachingAutotuner.run, th.CachingAutotuner.benchmark_all_configs
 
-    def entry(self_) -> dict:
+    def entry(self_: CachingAutotuner) -> dict:
         got = seen.get(id(self_))
         if got is None:
             try:
@@ -155,7 +163,7 @@ def install_tuning_log(pick: str | None) -> list[dict]:
             log.append(e)
         return got[1]
 
-    def bench(self_, *args, **kw):
+    def bench(self_: CachingAutotuner, *args: object, **kw: object) -> dict:
         launchers = list(getattr(self_, "launchers", None) or ())
         if pick in ("first", "last") and launchers:
             n = len(launchers)
@@ -168,7 +176,7 @@ def install_tuning_log(pick: str | None) -> list[dict]:
             entry(self_)["error"] = repr(x)
         return t
 
-    def run(self_, *args, **kw):
+    def run(self_: CachingAutotuner, *args: object, **kw: object) -> object:
         out = orig_run(self_, *args, **kw)
         try:
             e = entry(self_)
@@ -184,7 +192,7 @@ def install_tuning_log(pick: str | None) -> list[dict]:
     return log
 
 
-def worker(spec: dict, conn) -> None:
+def worker(spec: dict, conn: Connection) -> None:
     """One engine: SPEC's env set before torch is imported, built, then served on the parent's `go`."""
     os.environ.update(spec["env"])
     os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
@@ -217,7 +225,7 @@ def worker(spec: dict, conn) -> None:
         assert conn.recv() == "go"
         ps = prompts(B)
 
-        def gen(reqs, n):
+        def gen(reqs: list[str], n: int) -> list[list[int]]:
             sp = SamplingParams(temperature=0.0, max_tokens=n, ignore_eos=True, seed=0)
             return [list(o.outputs[0].token_ids) for o in llm.generate(reqs, sp, use_tqdm=False)]
 
@@ -290,7 +298,7 @@ def compare_records(pa: Path, pb: Path) -> dict:
         if inputs:
             out["calls_inputs_differ"] += 1
             if out["first_inputs"] is None:
-                def f32(v):
+                def f32(v: int) -> float:
                     return float(np.array([v], np.int64).astype(np.int32).view(np.float32)[0])
                 out["first_inputs"] = {**where(i), "m": m, "rows_s_a": sa.tolist()[:32], "rows_xq": xq.tolist()[:32],
                                        "s_a": [[f32(da[r]), f32(db[r])] for r in sa.tolist()[:4]]}
@@ -303,7 +311,7 @@ def compare_records(pa: Path, pb: Path) -> dict:
     return out
 
 
-def run_scenario(name: str, a, out: Path, scratch: Path) -> dict:
+def run_scenario(name: str, a: argparse.Namespace, out: Path, scratch: Path) -> dict:
     """NAME's engines up one at a time and resident together, then served in order; each's rc-like status."""
     graphs, caches, engines = SCENARIOS[name]
     ctx = mp.get_context("spawn")
@@ -344,7 +352,7 @@ def run_scenario(name: str, a, out: Path, scratch: Path) -> dict:
     return status
 
 
-def _recv(conn) -> dict:
+def _recv(conn: Connection) -> dict:
     try:
         return conn.recv()
     except EOFError:

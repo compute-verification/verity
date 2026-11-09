@@ -7,12 +7,12 @@ import Mathlib.Tactic.Finiteness.Attr
 # Advice v1's whole window charged (`ChargeCount_v2`): decisions, hits and order entries, as `code_v1` codes them
 
 Definitions only. They mirror `verity/ml/protocols/certifier/window_charge.py`'s `reference_window` one for one, with
-each Python name in its docstring: `ChargeCount_v2{N, H, O}`'s charge, the length of `code_v1._window`'s segment for
+each Python name in its docstring: `ChargeCount_v2{N, H, O}`'s charge, the length of `window_code.code_window`'s segment for
 the whole window, counted by advice v1's counting encoder (`AdviceV1.countStep` and `AdviceV1.finish`, from
 `arith_encode.py`'s references).
 
 A window sends its decisions, its hits (v1's sent shortfalls, in hit units) and its order entries (each deviating
-arrival's position and rank). Its symbols, in `code_v1._window`'s order, all in one segment with one finish:
+arrival's position and rank). Its symbols, in `window_code.code_window`'s order, all in one segment with one finish:
 1. n_arrived, then each decision at the book's KT estimate for its context `min(run, 2)`, as in v1;
 2. n_hits, then each hit's value;
 3. n_resumes, 0;
@@ -100,7 +100,7 @@ def countHi (S : ℕ) : ℕ := 2 ^ S.size - 1
 def zigzag (r rank : ℕ) : ℕ := if rank ≤ r then 2 * (r - rank) else 2 * (rank - r) - 1
 
 /-- **What the whole window's charge reads of the registered book** (`WindowBook`, and `first_carry`): each of
-`code_v1._window`'s integer symbols' table (`SYMBOLS`: n_arrived, n_hits, hit, n_resumes, n_order, order_gap,
+`window_code.code_window`'s integer symbols' table (`SYMBOLS`: n_arrived, n_hits, hit, n_resumes, n_order, order_gap,
 order_index, n_lag), and `priors`, the decisions' contexts' first KT counts. -/
 structure Book where
   arrived : Table
@@ -156,7 +156,7 @@ def entrySyms (bk : Book) : ℕ → ℕ → List (ℕ × ℕ) → Option (List S
         (binned bk.gap GAP_CAP (e.1 - pos) ++ (binned bk.index ZIG_CAP (zigzag e.2 rank) ++ q.1), q.2)
     else none
 
-/-- **The window's symbols** (`reference_window`), in `code_v1._window`'s order, and the carry after them: n_arrived,
+/-- **The window's symbols** (`reference_window`), in `window_code.code_window`'s order, and the carry after them: n_arrived,
 the decisions, n_hits, the hits, n_resumes (0), n_order, the entries, n_lag (0). A count over `S` slots has
 `hi = 2^bitlen(S) − 1`. -/
 def syms (bk : Book) (N H O : ℕ) (cy : Carry) (x : Window) : Option (List Sym × Carry) :=
