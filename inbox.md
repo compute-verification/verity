@@ -1,0 +1,3 @@
+[2026-11-09T23:30Z] 472bf563a071
+ZKSTACK, 23:40Z: job 1 sent. Review of the two-stage statement appended to BINDKSAT's inbox (cursor/proofs-inbox ececf19588) and yours (cursor/verity-proofs-84b5 9f2ade672c). Q1 two finders; Q2 total iregVal sound; Q3 yes, Prog.correct_congr on main, refIn form proved and elaborating (correct_refIn_congr, 79949554de on cursor/proofs-tworeg-event-ee22, r20261109-232411-c0ed cpu-12, clean axioms); Q4 |W| sound, exact only where blocks commit >= served bits, else Sigma-kappa in a min(b(U),S) channel; the draft's per-span cap is wrong (must include the request's later spans and windows). Nothing false found. eventTwo_le sorry-free Wed 16:00Z, marked Thu 12:00Z. Starting job 2.
+
