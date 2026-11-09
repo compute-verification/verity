@@ -21,6 +21,10 @@ block escapes with probability at most `1 − r₂`, since a cell with one incor
 * `Design.Two.firstRate_subsetInputs`: that first stage catches each replay block at rate `Q/N`, the `FirstRate` the
   cap reads.
 * `footprint_le_card`: a footprint counts at most its cell, as the cap reads it.
+* `wrongAtBoundary`: the replay blocks wrong at their boundary, which hold an incorrect proof block at every interior.
+  They read only the boundary trace, which serving commits before any coin. Every interior's `wrongBlocks` holds them
+  (`wrongAtBoundary_subset`), and some interior's are exactly them (`exists_wrongBlocks_eq`), so they are the fewest
+  replay blocks any interior marks incorrect.
 -/
 
 @[expose] public section
@@ -157,6 +161,51 @@ theorem Design.Two.firstRate_subsetInputs (d : Design.Two) {Q : ℕ} (hd : Subse
   · simp
   · exact le_rfl
   · simpa using hr
+
+open Classical in
+/-- **The replay blocks wrong at their boundary** under the boundary trace `w`: each holds an incorrect proof block at
+every interior, so an interior committed after the first stage's coins can't hide it from the second stage. It reads
+only `w`'s boundary values. -/
+noncomputable def wrongAtBoundary (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)
+    (w : Wit) : Finset ℕ :=
+  (range Pρ.blocks.length).filter fun ρ =>
+    ∀ i : ℕ → Bool, ∃ t < Pt.strata.length, (wrongIn H Cm s Pt Pρ w ρ t i).Nonempty
+
+/-- **Every interior marks the replay blocks wrong at their boundary**: at any interior values, each is among the
+footprint's `wrongBlocks`. -/
+theorem wrongAtBoundary_subset (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt : Partition)
+    (d : Design.Two) (w : Wit) (ι : ℕ → ℕ → Bool) :
+    wrongAtBoundary H Cm s Pt d.part w ⊆ d.wrongBlocks Pt (footprint H Cm s Pt d.part w ι) := by
+  intro ρ hρ
+  simp only [wrongAtBoundary, mem_filter] at hρ
+  obtain ⟨t, ht, hne⟩ := hρ.2 (ι ρ)
+  simp only [Design.Two.wrongBlocks, mem_filter]
+  exact ⟨hρ.1, t, ht, card_pos.2 hne⟩
+
+/-- **Some interior marks only them**: at each replay block not wrong at its boundary, an interior with no incorrect
+proof block makes the footprint's `wrongBlocks` exactly the replay blocks wrong at their boundary. -/
+theorem exists_wrongBlocks_eq (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt : Partition)
+    (d : Design.Two) (w : Wit) :
+    ∃ ι : ℕ → ℕ → Bool, d.wrongBlocks Pt (footprint H Cm s Pt d.part w ι) = wrongAtBoundary H Cm s Pt d.part w := by
+  have key : ∀ ρ, ∃ i : ℕ → Bool, ρ ∉ wrongAtBoundary H Cm s Pt d.part w → ρ < d.part.blocks.length →
+      ∀ t < Pt.strata.length, ¬ (wrongIn H Cm s Pt d.part w ρ t i).Nonempty := by
+    intro ρ
+    by_cases h : ∃ i : ℕ → Bool, ∀ t < Pt.strata.length, ¬ (wrongIn H Cm s Pt d.part w ρ t i).Nonempty
+    · obtain ⟨i, hi⟩ := h
+      exact ⟨i, fun _ _ => hi⟩
+    · refine ⟨fun _ => false, fun hn hlt => absurd ?_ hn⟩
+      simp only [wrongAtBoundary, mem_filter, mem_range]
+      refine ⟨hlt, fun i => ?_⟩
+      by_contra hc
+      exact h ⟨i, fun t ht hne => hc ⟨t, ht, hne⟩⟩
+  choose ι hι using key
+  refine ⟨ι, ?_⟩
+  ext ρ
+  refine ⟨fun hρ => ?_, fun hρ => wrongAtBoundary_subset H Cm s Pt d w ι hρ⟩
+  by_contra hn
+  simp only [Design.Two.wrongBlocks, mem_filter, mem_range] at hρ
+  obtain ⟨hlt, t, ht, hpos⟩ := hρ
+  exact hι ρ hn hlt t ht (card_pos.1 hpos)
 
 end Claims.Sampling
 
