@@ -34,7 +34,7 @@ from typing import Any
 import numpy as np
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ZERO, add, and_reduce, compress_columns, const_bits, sub
+from verity.ml.circuits.boolean.forms import NOT, ZERO, add, and_reduce, compress_columns, const_bits, or_reduce, sub
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.refs import Coll, strided_view
@@ -46,9 +46,11 @@ from verity.ml.definitions.registry.dsa_topk import check_statics
 BIT = BL.BIT
 F32 = I32 = Array(32, BIT)
 
-#: keys a block: a count or mask unit reads its block's scores, 16,384 x 32 bits, about a third of the block in their hashes
+#: keys a block: a count unit is then 2^26 bits of Flock's 2^27 (9.6M ANDs, its scores' hashes 174 sha512x3 slots), a mask
+#: unit 2^26 and a pick at most 2^24
 BLOCK = 16384
-#: the largest N the Call is checked and proved whole at; past it, `cut`
+#: the largest N the Call is checked and proved whole at: `DsaTopKMaskCounted_v2` is 133,431,296 of the block's 134,217,728
+#: bits at 40,960 keys and 139,198,464 at 43,008; past it, `cut`
 WHOLE_MAX = 40960
 DIGIT, ROUNDS = 8, 4
 BINS = 1 << DIGIT
@@ -181,11 +183,11 @@ DsaTopKDigitPick = EW.specialized("DsaTopKDigitPick", 1, ["M", "K", "TOPK"], _pi
 
 
 def _compare(S):
-    """`DsaTopKKeyCompare_v1`: (valid AND key == theta, valid AND key > theta), key = `DsaTopKKey_v2` of s."""
+    """`DsaTopKKeyCompare_v1`: (valid AND key == theta, valid AND key > theta), key = `DsaTopKKey_v2` of s, both off theta - key:
+    zero, or a borrow."""
     def build(C, s, valid, theta):
-        k = key(list(s))
-        eq = and_reduce(C, [NOT(a ^ b) for a, b in zip(k, theta)])
-        return [[C.AND(valid[0], eq), C.AND(valid[0], sub(C, list(theta), k, 32)[1])]]
+        d, borrow = sub(C, list(theta), key(list(s)), 32)
+        return [[C.AND(valid[0], NOT(or_reduce(C, d))), C.AND(valid[0], borrow)]]
     return build
 
 
