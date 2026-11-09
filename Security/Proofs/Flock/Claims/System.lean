@@ -1,6 +1,8 @@
-import Proofs.Core.ProofSystem
-import Proofs.Flock.Claims.ERep
-import Proofs.Flock.Claims.Recursion.Wald
+module
+
+public import Proofs.Core.ProofSystem
+public import Proofs.Flock.Claims.ERep
+public import Proofs.Flock.Claims.Recursion.Wald
 
 /-!
 # Flock as a proof system
@@ -12,6 +14,8 @@ Flock's record as the interface's proof system (`system`, at a decoder) and its 
 relation (`system_selfChecking`). The shape bounds its errors (`zkSystem_byShape`), and its zero knowledge is `Flock.ZK`
 at each attempt budget's simulator (`zkSystem_zk_iff`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

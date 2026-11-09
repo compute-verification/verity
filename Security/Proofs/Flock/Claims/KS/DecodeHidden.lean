@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.DecodeDeploy
+module
+
+public import Proofs.Flock.Claims.KS.DecodeDeploy
 
 /-!
 # The deployed plain decoders at hidden outputs
@@ -19,6 +21,8 @@ the decoders read only the table's committed rows.
 * `plain_hdecH`: so at the draw `d` and no drawn unit, `decodesTable_wrP_scH` is the decoders' fact `PlainLiveAccAt`
   asks, at `plainTab`.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.DecodePlain
 

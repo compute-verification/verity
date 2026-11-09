@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Headline
-import Proofs.Flock.Soundness.Discharge.Composed.Custody
-import Proofs.Flock.Soundness.Discharge.Composed.CustodyJJson
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
-import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Headline
+public import Proofs.Flock.Soundness.Discharge.Composed.Custody
+public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJJson
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
 
 /-!
 # The public-output `--zk` headlines, over what flock-verify accepts
@@ -20,6 +22,8 @@ one table (`hn`); `zk_session_soundJ` covers every number of tables. Zero knowle
 (`DrawSetupZK.avoidsMask`): `verify --zk` refuses a statement whose Δ or regions meet the mask slot (`Zk.maskFree`, D12).
 The `Composed` headlines remain, as lemmas.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.FailClosed
 

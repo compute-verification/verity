@@ -1,4 +1,6 @@
-import Definitions.Pous.Model.StreamedWipe
+module
+
+public import Definitions.Pous.Model.StreamedWipe
 
 /-!
 # The streamed-label wipe at any number of reads, and the H200 at 5 GB
@@ -14,6 +16,8 @@ most 5 GB in all. The game is `Security/Definitions/Pous/Model/StreamedWipe.lean
 and every tier counted, C5 and C6 are the game's shape, which the challenger's deployment must make true. **What they
 cover:** the sequential reveal (batch size 1), the only one the verdict accepts.
 -/
+
+@[expose] public section
 
 namespace Pous.Guarantees
 

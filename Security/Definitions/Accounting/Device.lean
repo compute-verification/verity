@@ -1,5 +1,7 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Order.Interval.Finset.Nat
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Order.Interval.Finset.Nat
 
 /-!
 # The device model (trusted)
@@ -25,6 +27,8 @@ for a tick) is charged once, to one account, and no two accounts can both claim 
 bit-ticks: one bit held for one tick is one bit-tick, so `Schedule.held` over a window of `len` ticks is `len` times the
 account's average in bits.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

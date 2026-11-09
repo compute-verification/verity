@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.ZK.RealLeaves
+module
+
+public import Proofs.Flock.Soundness.ZK.RealLeaves
 
 /-!
 # Zero knowledge of one session of `J` masked tables
@@ -27,6 +29,8 @@ equal distributions of the tuples (`SameDist.pi`), and closeness adds up (`prCoi
 * `Session.session_prefinal_indep`: Lemma A at a non-degenerate coin vector, for the session.
 * `Session.session_shvzk_hm96`: Lemma B with real hm96 leaves, within `Σ_j 2·|Hid_j|·δ₁`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 

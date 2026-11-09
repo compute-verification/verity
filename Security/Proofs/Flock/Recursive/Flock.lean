@@ -1,11 +1,13 @@
-import Proofs.Flock.Recursive.Sound
-import Proofs.Flock.Recursive.Multi
-import Proofs.Flock.Soundness.Discharge.ZkReg.Sound
-import Proofs.Flock.Recursive.ZkReg.Vals
-import Proofs.Flock.Recursive.ZkReg.Off
-import Proofs.Flock.Recursive.Finds
-import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
-import Proofs.Flock.Soundness.Assumptions.CustodyZk
+module
+
+public import Proofs.Flock.Recursive.Sound
+public import Proofs.Flock.Recursive.Multi
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Sound
+public import Proofs.Flock.Recursive.ZkReg.Vals
+public import Proofs.Flock.Recursive.ZkReg.Off
+public import Proofs.Flock.Recursive.Finds
+public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
+public import Proofs.Flock.Soundness.Assumptions.CustodyZk
 
 /-!
 # Recursion: the outer proof, `--zk --registered` sessions of fixed public verifiers V*
@@ -45,6 +47,8 @@ session accepts (`Accepts`), and the decoded witness is each session's value lay
   SHA-512 collision; with none, `CR` holds at budget `0` (`ZkOuter.cr_of_not_fork`) and `boundIf` there is at most
   `ZkOuter.boundCR`, the miss and the drawn units' statistical errors (`ZkOuter.boundIf_le`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

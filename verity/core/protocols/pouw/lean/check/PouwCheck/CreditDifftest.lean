@@ -1,5 +1,7 @@
-import PouwCheck.Credit
-import PouwCheck.Difftest
+module
+
+public import PouwCheck.Credit
+public import PouwCheck.Difftest
 
 /-!
 # The difftest's functions for a served window's credit (`PouwCheck.Credit`)
@@ -31,6 +33,8 @@ Beside `PouwCheck.Difftest`'s, behind the same `pouw-check-difftest` (`PouwCheck
   `{"file": …, "partition": …}`, `Credit.registeredFile` and `Credit.partitionOf` over the `layoutOf` and `shapeOf` of
   the descriptor's Program (`credit.registered_file` and `credit.partition_of`), or `{"refused": [code, why]}`.
 -/
+
+@[expose] public section
 
 namespace PouwCheck.CreditDifftest
 

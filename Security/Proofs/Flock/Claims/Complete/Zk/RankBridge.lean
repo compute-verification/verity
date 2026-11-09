@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Zk.Coins
-import Proofs.Flock.Claims.KS.Range
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Coins
+public import Proofs.Flock.Claims.KS.Range
 
 /-!
 # The rank bound at the verifier's coins
@@ -20,6 +22,8 @@ rounds from `k_log − 3` on, a `c` claim round `1`), and the pinned ones are th
 (`claimPoints_c`), so at uniform coins the ten are `DeployedRankBound`'s distribution (`Pr_coins_inj`):
 `4·(m − 17)·2^-128 + 2^-122 ≤ 4·m·2^-128` (`rankBoundAt_of_deployed`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.MaskRank
 

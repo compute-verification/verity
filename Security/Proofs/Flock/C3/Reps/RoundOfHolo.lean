@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Compose.HoloStreamSizes
-import Proofs.Flock.C3.Reps.RoundReads
+module
+
+public import Proofs.Flock.C3.Compose.HoloStreamSizes
+public import Proofs.Flock.C3.Reps.RoundReads
 
 /-!
 # A rep's message rounds along `holoRepShape`
@@ -18,6 +20,8 @@ top and absorbs elements is two messages there.
 * `roundOf_holoRepShape`: `hm`'s equation at each of those messages, at any Ligerito schedule (`roundOfB_append`: a
   message of the head is placed by the head alone).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps.RoundOfHolo
 

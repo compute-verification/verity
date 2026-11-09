@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.Release
-import Proofs.Flock.Claims.ZK.CoinOpen
-import Proofs.Flock.Claims.ZK.HelloLean
+module
+
+public import Proofs.Flock.Claims.ZK.Release
+public import Proofs.Flock.Claims.ZK.CoinOpen
+public import Proofs.Flock.Claims.ZK.HelloLean
 
 /-!
 # Toward the item-stream refinement at the reference session
@@ -76,6 +78,8 @@ opening that fails (`strat_eval_cons`).
   and first opening the check passes (`LeanRelease.opens_coinPass`), so the premises leave the frame rounds a history
   to be live at.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

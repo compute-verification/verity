@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Unrolled
-import Proofs.Flock.Soundness.Discharge.Aliased.KeysP
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Unrolled
+public import Proofs.Flock.Soundness.Discharge.Aliased.KeysP
 
 /-!
 # The committed circuit's public inputs from the statement circuit's
@@ -14,6 +16,8 @@ nothing else of the unit, so:
 * `srcKeyP_eq_commit`: inputs with one statement key with public inputs have one committed key (`srcKey_eq_commit` off a
   public leaf), and `srcKeyP_pub_commit`: a public word's bit is the same key at either.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hidden
 

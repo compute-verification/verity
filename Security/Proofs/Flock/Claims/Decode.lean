@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Counted
-import ArkLib.Data.CodingTheory.GuruswamiSudan.GuruswamiSudan
+module
+
+public import Proofs.Flock.Claims.Counted
+public import ArkLib.Data.CodingTheory.GuruswamiSudan.GuruswamiSudan
 
 /-!
 # A list decoder for interleaved Reed–Solomon codes, from Guruswami–Sudan
@@ -34,6 +36,8 @@ In its first form `ListComplete` had no `nMin`, which is `nMin = 0`: it put ever
 empty input (`Flock.ListComplete.mem_nil`), so a `DecoderComplexity` whose step count is at least its output's length
 had `|T| ≤ p(size [])` (`Flock.ListComplete.card_le_eval`).
 -/
+
+@[expose] public section
 
 namespace Claims
 

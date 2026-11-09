@@ -1,29 +1,31 @@
-import Proofs.Flock.SessionLoop.Statement
-import Proofs.Flock.Claims.ZK.FrameUnrefused
-import Proofs.Flock.SessionLoop.Link
-import Proofs.Flock.Claims.ZK.FinishSwFrame
-import Proofs.Flock.Claims.ZK.FinishSwRep
-import Proofs.Flock.SessionLoop.FinishParts
-import Proofs.Flock.SessionLoop.FinCommits
-import Proofs.Flock.SessionLoop.FinPoints
-import Proofs.Flock.SessionLoop.FinRounds
-import Proofs.Flock.Claims.ZK.FinishBridge
-import Proofs.Flock.Claims.ZK.FinishTrunc
-import Proofs.Flock.SessionLoop.FinRounds
-import Proofs.Flock.Claims.ZK.FinHmkLive
-import Proofs.Flock.Claims.ZK.FinishFwRep
-import Proofs.Flock.Claims.ZK.FinTau
-import Proofs.Flock.Claims.ZK.L0PinLoop
-import Proofs.Flock.Claims.ZK.L0PinCut
-import Proofs.Flock.Claims.ZK.SimCommit
-import Proofs.Flock.Claims.ZK.FinishSwVals
-import Proofs.Flock.Claims.ZK.FinishClaimsX
-import Proofs.Flock.Claims.ZK.FrameFree
-import Proofs.Flock.Claims.ZK.PiopFree
-import Proofs.Flock.Claims.ZK.FinishLigEnd
-import Proofs.Flock.Claims.ZK.RepCutFw
-import Proofs.Flock.Claims.ZK.FinishSwMkAny
-import Proofs.Flock.Claims.ZK.FinishFwL0
+module
+
+public import Proofs.Flock.SessionLoop.Statement
+public import Proofs.Flock.Claims.ZK.FrameUnrefused
+public import Proofs.Flock.SessionLoop.Link
+public import Proofs.Flock.Claims.ZK.FinishSwFrame
+public import Proofs.Flock.Claims.ZK.FinishSwRep
+public import Proofs.Flock.SessionLoop.FinishParts
+public import Proofs.Flock.SessionLoop.FinCommits
+public import Proofs.Flock.SessionLoop.FinPoints
+public import Proofs.Flock.SessionLoop.FinRounds
+public import Proofs.Flock.Claims.ZK.FinishBridge
+public import Proofs.Flock.Claims.ZK.FinishTrunc
+public import Proofs.Flock.SessionLoop.FinRounds
+public import Proofs.Flock.Claims.ZK.FinHmkLive
+public import Proofs.Flock.Claims.ZK.FinishFwRep
+public import Proofs.Flock.Claims.ZK.FinTau
+public import Proofs.Flock.Claims.ZK.L0PinLoop
+public import Proofs.Flock.Claims.ZK.L0PinCut
+public import Proofs.Flock.Claims.ZK.SimCommit
+public import Proofs.Flock.Claims.ZK.FinishSwVals
+public import Proofs.Flock.Claims.ZK.FinishClaimsX
+public import Proofs.Flock.Claims.ZK.FrameFree
+public import Proofs.Flock.Claims.ZK.PiopFree
+public import Proofs.Flock.Claims.ZK.FinishLigEnd
+public import Proofs.Flock.Claims.ZK.RepCutFw
+public import Proofs.Flock.Claims.ZK.FinishSwMkAny
+public import Proofs.Flock.Claims.ZK.FinishFwL0
 
 /-!
 # Proof of C-Flock's zero knowledge at the session loop's own frames
@@ -38,6 +40,8 @@ which admit unrefused coins (`LeanRelease.tablesAdmitUnrefused_dataE`), at the l
 whose `LinkRoundEq` holds in the masked scope where the loop draws the tape's level 0
 (`LeanRelease.linkRoundEq_ofLoopLink`, from `Loop.Src`'s level-0 half, `Loop.Level0Src.linkLevel0`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Loop
 

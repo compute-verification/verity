@@ -1,4 +1,6 @@
-import Proofs.Flock.Recursive.HoloSched
+module
+
+public import Proofs.Flock.Recursive.HoloSched
 
 /-!
 # The reps' coin rounds at the hidden-unit schedule
@@ -12,6 +14,8 @@ each of `repRounds`' rounds draws a positive constant, `m - 13`, the claims, the
 (`n - k0 + 1`, `ext + 1`), a level's queries or `bitLength (q - 1)`. `holoRounds` puts a round drawing nothing at
 `zpRound` and moves the rest one round on.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees.HoloRepCoins
 

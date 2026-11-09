@@ -1,5 +1,7 @@
-import Proofs.Properties.RemoteAudit.Sort
-import Proofs.Properties.Nci.Desc
+module
+
+public import Proofs.Properties.RemoteAudit.Sort
+public import Proofs.Properties.Nci.Desc
 
 /-!
 # `Desc.novelWidth` is the width of its segments' gates
@@ -25,6 +27,8 @@ is the total width of the distinct gates its segments name, wherever no gate is 
 * `pisExact`: each case of `Piece.pis` is its piece's elements, one row's progression from its smallest element (`ap`), a
   grid whose rows (or columns) are runs as one periodic interval (`grid`), else row by row (`one_spec`).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.Width
 

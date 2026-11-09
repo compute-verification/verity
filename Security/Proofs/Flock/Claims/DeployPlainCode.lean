@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.DecodeFlock
-import Proofs.Flock.Claims.ZkDecodeFlock
+module
+
+public import Proofs.Flock.Claims.DecodeFlock
+public import Proofs.Flock.Claims.ZkDecodeFlock
 
 /-!
 # The deployed plain verifier's level-0 code at each `m`
@@ -10,6 +12,8 @@ over every `m` (`IRS.famEnc`), it is the plain record's (`FlockDeploy.deployPlai
 trace's codeword length `2^d` and radius `1 − √ρ − 1/200` at its `m` (`plainLenD`, `plainThetaD`), and its read step
 (`plainReadD`). The radius decoder at it (`GS.plainDecodeRD`) reads only this file, so the record can name it.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

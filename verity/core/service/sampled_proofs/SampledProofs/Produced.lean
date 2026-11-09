@@ -23,8 +23,12 @@ the one root the record names. They are never outputs. H1's drawn leaf is proved
 The verifier's own entries and every read are the protocol's, in Python (`produced.entry`, `pouw.leaf_lanes.reads`);
 Flock's `--registered` opens them (`Flock.Registered`).
 -/
-import Flock.Registered
-import SampledProofs.Registered
+module
+
+public import Flock.Registered
+public import SampledProofs.Registered
+
+@[expose] public section
 
 namespace SampledProofs.Produced
 

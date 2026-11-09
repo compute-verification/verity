@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Game.Seq
+module
+
+public import Proofs.Flock.Soundness.Game.Seq
 
 /-!
 # Zero knowledge: programs on finitely many uniform coins
@@ -15,6 +17,8 @@ expectation of `f` at its output.
 * `avgR`, `avgR_ind_eq_prCoin`: one coin's average, and its link to `prCoin`;
 * `avgR_le_of_events`: a bound on every event's probability bounds every test with values in `[0, 1]`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK.GK
 

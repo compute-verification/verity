@@ -1,6 +1,8 @@
-import Mathlib.Algebra.Order.Archimedean.Real.Basic
-import Definitions.Pouw.Basic.Prob
-import Definitions.Pouw.Lead.Model
+module
+
+public import Mathlib.Algebra.Order.Archimedean.Real.Basic
+public import Definitions.Pouw.Basic.Prob
+public import Definitions.Pouw.Lead.Model
 
 /-!
 # The lead's honest work and its gap, as functions of the layout (trusted definitions)
@@ -31,6 +33,8 @@ Every quantity is in registers; the W1 work is 32 a register (`H32`'s floor).
   `GapAtDecode` at decode; `gapBound` is a closed form of it at every admitted call (`GapAll`).
 * **The tail form** (`G_tail`) splits the gap into a fixed part (`gapFixed`) and a probability (`etaLead`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Lead
 

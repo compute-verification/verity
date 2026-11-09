@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg.BindH
-import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
-import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
-import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindH
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+public import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
 
 /-!
 # The registered check at an accepted hidden-output `--zk --registered` outcome
@@ -13,6 +15,8 @@ record's draw `d` (`HiddenExec.setupTables_okH`), over `HmOut.drawn c pub d` (`H
 the drawn instance at `u`'s rank holds the population's row of `u` (`Hidden.drawn_digestW`, from
 `Hidden.loadPublic_nil`), whose leaf is the hidden layout's registered leaf at `(u, q)`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 

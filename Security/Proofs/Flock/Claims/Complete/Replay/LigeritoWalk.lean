@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
 
 /-!
 # Ligerito's walk premises, and the goals on them
@@ -17,6 +19,8 @@ walk and the widths (`lgMerkle_of_walk`), and `LgAt` and `LgCount` from the walk
 `lgCount_of_walk`). So `Ligerito` and `Consumed` rest on the walk, the widths and the final identity `LgFinal`, beside
 the earlier phases' premises (`ligerito_goal_walk`, `consumed_goal_walk`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

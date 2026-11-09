@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FrameShape
+module
+
+public import Proofs.Flock.Claims.ZK.FrameShape
 
 /-!
 # The frame takes the firewall's own rounds of the inner proof
@@ -12,6 +14,8 @@ stop that reads the draws. So:
 * **`innerOwn_ownRound`**: at every configuration and state, so at the rep's draws and at any other draws alike, the
   frame's check of the inner proof takes it.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

@@ -1,8 +1,10 @@
-import Definitions.Pouw.PearlC.DeviceKernelWref
-import Proofs.Pouw.PearlC.FormingP
-import Proofs.Pouw.PearlC.AccumProofs
-import Proofs.Pouw.PearlC.FreezeP
-import Proofs.Pouw.PearlC.FreezePPure
+module
+
+public import Definitions.Pouw.PearlC.DeviceKernelWref
+public import Proofs.Pouw.PearlC.FormingP
+public import Proofs.Pouw.PearlC.AccumProofs
+public import Proofs.Pouw.PearlC.FreezeP
+public import Proofs.Pouw.PearlC.FreezePPure
 
 /-!
 # The honest words are FP32 words
@@ -19,6 +21,8 @@ sm_120 v1 included, on every row of at most `2^24 − 1` atoms (the domain's `k 
   is at most `2^23` per atom (`groupWord_abs_le`) and the total at most `2^23` per atom of the row
   (`foldl_promote_bound`, `chainP_word`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.HonestWords
 

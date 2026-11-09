@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Audit.Pooled
-import Proofs.Flock.Claims.Sampling.Draws
+module
+
+public import Proofs.Flock.Soundness.Audit.Pooled
+public import Proofs.Flock.Claims.Sampling.Draws
 
 /-!
 # The pooled escape in `Claims.Pr`
@@ -14,6 +16,8 @@ spec, the interaction model and itself (`Soundness/DESIGN.md` §12).
 * `pooled_escape_log_adapted`: the same for a wrong-set map on whole runs that doesn't look ahead
   (`Periods.Predictable`), which is a `Pooled` (`Pooled.ofAdapted`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

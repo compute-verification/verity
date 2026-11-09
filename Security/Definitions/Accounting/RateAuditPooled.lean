@@ -1,5 +1,7 @@
-import Definitions.Accounting.RateAuditRemote
-import Definitions.Core.Period
+module
+
+public import Definitions.Accounting.RateAuditRemote
+public import Definitions.Core.Period
 
 /-!
 # The monitoring period's causal rounds: good sets that precede their samples (trusted)
@@ -20,6 +22,8 @@ one store, window `w`'s prover any function of the earlier windows' coins, their
 window's passes and a session's windows may be one prover or many, sharing whatever the earlier coins allow. The
 guarantees over these games conserve the words read, rebuilt or held, whoever reads, rebuilds or holds them.
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 

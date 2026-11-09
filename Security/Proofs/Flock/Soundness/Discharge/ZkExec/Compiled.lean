@@ -1,10 +1,12 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.Refines
-import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
-import Proofs.Flock.Soundness.Discharge.ZkLink.Inh
-import Proofs.Flock.Soundness.Discharge.ZkLink.M1
-import Proofs.Flock.Soundness.Discharge.ZkLink.One
-import Proofs.Flock.Soundness.Discharge.ZkLink.Public
-import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Refines
+public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Inh
+public import Proofs.Flock.Soundness.Discharge.ZkLink.M1
+public import Proofs.Flock.Soundness.Discharge.ZkLink.One
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
 
 /-!
 # flock-verify `--zk`'s headline at the compiled `--zk` table
@@ -28,6 +30,8 @@ named in the hypotheses: `hdec : DecodesZK …` (the per-transcript refinement, 
 prover outside A2 (`linkBoundZC`). Open and not a hypothesis: the coin tree (the live audit draws each round's coins
 fresh; `Discharge/ZkCoins`), and `J > 1` (the plan has one table).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

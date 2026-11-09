@@ -1,4 +1,6 @@
-import Definitions.Accounting.RateAudit
+module
+
+public import Definitions.Accounting.RateAudit
 
 /-!
 # Receipts bound to the matmul: the generic-mix game on two locations (trusted)
@@ -35,6 +37,8 @@ answer relayed across the link and used inside a location's computation is outsi
 that is the PoUW tile's unpredictability below its work (`Accounting.Guarantees.TileUnpredictable`, from PoUW's
 named assumptions), read in the generic model.
 -/
+
+@[expose] public section
 
 namespace Accounting.BoundReceipt
 

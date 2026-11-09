@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.Analysis
-import Proofs.Flock.Soundness.Discharge.ZkLink.Link
-import Proofs.Flock.Soundness.LinkCarry
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Analysis
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Link
+public import Proofs.Flock.Soundness.LinkCarry
 
 /-!
 # `δ_link` for the compiled `--zk` session, under expected-time collision resistance
@@ -32,6 +34,8 @@ $$\delta_{\rm link}\le\frac{Q_s}{1-\rho}\Big(\frac{2(1+k)\,t'}{2^{256}}+\frac{1}
 \frac{k}{eR_w}\Big),\qquad Q_s=\sum_c\pi_c,$$
 with `ρ ≥ N₀/(ek)` for every table, `N₀` its level-0 positions.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

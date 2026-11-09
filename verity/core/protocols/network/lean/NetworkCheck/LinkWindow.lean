@@ -1,9 +1,11 @@
-import NetworkCheck.Check
-import Lms.Verify
-import Flock.Hm96
-import Flock.Canon
-import Flock.FV3
-import Identity.Tagged
+module
+
+public import NetworkCheck.Check
+public import Lms.Verify
+public import Flock.Hm96
+public import Flock.Canon
+public import Flock.FV3
+public import Identity.Tagged
 
 /-!
 # N2's execution phase verdict of record
@@ -41,6 +43,10 @@ verify it with its one LMS check (`Check.Certificate.signs`). Code: it imports o
 (`Flock.Hash`, `Flock.Bytes`, `Flock.Canon`, `Flock.Hm96`, `Flock.FV3`), the identity hash, the LMS port and v4's
 certificate and its encodings (`NetworkCheck.Check`).
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace NetworkCheck.LinkWindow
 

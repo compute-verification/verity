@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.KS.Rounds
-import Proofs.Flock.Claims.Bridge.LivePlain
-import Proofs.Flock.Claims.Bridge.Dead
-import Proofs.Flock.Claims.Bridge.Live
+module
+
+public import Proofs.Flock.Claims.KS.Rounds
+public import Proofs.Flock.Claims.Bridge.LivePlain
+public import Proofs.Flock.Claims.Bridge.Dead
+public import Proofs.Flock.Claims.Bridge.Live
 
 /-!
 # One table's salted session after `Commit`, under a live strategy
@@ -21,6 +23,8 @@ sending empty openings (`nulOp`, `Claims.Bridge.Sim.mapDead`). The simulated `Co
 decode to (`simSessG_fst`), so over a mixture of live strategies whose roots agree, the strategies after `Commit` share
 one cap (`simAt`, `live_le_simAt`, `mean_live_le_simAt`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

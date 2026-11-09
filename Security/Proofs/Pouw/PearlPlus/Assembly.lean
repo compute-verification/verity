@@ -1,7 +1,9 @@
-import Properties.Pouw.PearlPlus
-import Definitions.Pouw.PearlC.TileCheck
-import Proofs.Properties.Pouw.PearlPlus.Open
-import Proofs.Pouw.PearlPlus.Semantics
+module
+
+public import Properties.Pouw.PearlPlus
+public import Definitions.Pouw.PearlC.TileCheck
+public import Proofs.Properties.Pouw.PearlPlus.Open
+public import Proofs.Pouw.PearlPlus.Semantics
 
 /-!
 # Pearl+'s bridge, part (d): a passed tile is good in the game
@@ -14,6 +16,8 @@ the tile (the leaf binds the tile's words through `sha512/row-seg/v1`). The chec
 scheme's domain, `k ≤ K_MAX` among its bounds, which `WordsAreTheSemantics` reads. `TileGood` adds the cap and every weight row's rules, which wait on
 the restated credit set and acceptance event (`Rules.lean`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlPlus.Bridge
 

@@ -1,6 +1,8 @@
-import Definitions.Pous.Model.Audit
-import Proofs.Pous.Sanity
-import Proofs.Pous.Thm1.Theorem1iTimed
+module
+
+public import Definitions.Pous.Model.Audit
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Thm1.Theorem1iTimed
 
 /-!
 # One more round never helps: the sequential audit's acceptance is monotone in `k`
@@ -10,6 +12,8 @@ of a `(k + 1)`-round run are those of the `k`-round run on the first `k` indices
 restricts to an accepted `k`-round one, and the extra index is uniform and independent. `pr_seqAccepts_le` iterates it.
 `Pous.SecurityProofs.P2RingAuditSecureOfReduces` uses it to carry the `m1p` row at `k = 104` to `k = 105`.
 -/
+
+@[expose] public section
 
 namespace PousP2Bridge
 

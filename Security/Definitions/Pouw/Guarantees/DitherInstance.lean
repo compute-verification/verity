@@ -1,7 +1,9 @@
-import Definitions.Pouw.DitherInstance
-import Definitions.Pouw.Assumptions.DitherInstance
-import Definitions.Pouw.Guarantees.Dither
-import Definitions.Core.Assumptions.Accel
+module
+
+public import Definitions.Pouw.DitherInstance
+public import Definitions.Pouw.Assumptions.DitherInstance
+public import Definitions.Pouw.Guarantees.Dither
+public import Definitions.Core.Assumptions.Accel
 
 /-!
 # The headline on the H200 and the RTX PRO 6000 at θ (trusted)
@@ -18,6 +20,8 @@ public compression (`CallsAtPub`), with the network certifier's counts and the a
 
 `WorkSound` gives each (`Proofs.Pouw.DitherInstance`).
 -/
+
+@[expose] public section
 
 open scoped NNRat
 

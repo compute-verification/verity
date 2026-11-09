@@ -1,5 +1,7 @@
-import Definitions.Accounting.Guarantees.FillerLuck
-import Proofs.Accounting.TS.Rounds
+module
+
+public import Definitions.Accounting.Guarantees.FillerLuck
+public import Proofs.Accounting.TS.Rounds
 
 /-!
 # The filler's per-check luck
@@ -12,6 +14,8 @@ equality is read mod 2 through `φ`. A tile's cell is the cell lemma at each set
 A pinned receipt's draw passes with probability at most one less its wrong share at every setting of the live coins
 (`prob_le_one_sub_not`, `sum_pinned_le`), so its windows are the same inductions at `p = 0`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.FillerLuck
 

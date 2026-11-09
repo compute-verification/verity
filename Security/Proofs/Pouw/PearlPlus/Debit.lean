@@ -1,8 +1,10 @@
-import Proofs.Pouw.PearlPlus.Rules
-import Proofs.Pouw.PearlPlus.Keys
-import Proofs.Pouw.PearlPlus.Semantics
-import Proofs.Pouw.PearlC.Freeze
-import Proofs.Pouw.PearlC.AccumProofs
+module
+
+public import Proofs.Pouw.PearlPlus.Rules
+public import Proofs.Pouw.PearlPlus.Keys
+public import Proofs.Pouw.PearlPlus.Semantics
+public import Proofs.Pouw.PearlC.Freeze
+public import Proofs.Pouw.PearlC.AccumProofs
 
 /-!
 # Pearl+'s bridge, part (c), the inert-work replay: `word_debit` counts the game's flags and later +0 promotions
@@ -21,6 +23,8 @@ rules, the check's A′ and B̃ rows are `pc8Sem`'s codes at the H100 atom bit f
 a −0 word as +0 and its atom never steps to −0), and these are `unitChain`'s at `semH3`'s noise. Elsewhere `word_debit`
 refuses both words alike.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlPlus.Bridge
 

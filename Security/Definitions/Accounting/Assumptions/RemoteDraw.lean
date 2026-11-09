@@ -1,5 +1,7 @@
-import Definitions.Accounting.Remote.Draw
-import Definitions.Accounting.Remote.Held
+module
+
+public import Definitions.Accounting.Remote.Draw
+public import Definitions.Accounting.Remote.Held
 
 /-!
 # What the remote audit's opening draw assumes (trusted)
@@ -29,6 +31,8 @@ The draw is the deployed one, not a premise: each window's openings are `Key.sub
 (`Session.opened`), the sampler exact on each draw's first word and the rest free. The openings coins are uniform and
 independent of the other coins, as the challenger draws them (the trace's uniform measure on `DrawCoins`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Remote.Draw.Assumptions
 

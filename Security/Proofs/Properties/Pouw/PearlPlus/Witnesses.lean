@@ -1,8 +1,10 @@
-import Properties.Pouw.PearlPlus
-import Properties.Pouw.PearlPlus.Witnesses
-import Proofs.Properties.Pouw.Commit
-import Proofs.Properties.Pouw.PearlPlus.Noise
-import Std.Data.String.ToNat
+module
+
+public import Properties.Pouw.PearlPlus
+public import Properties.Pouw.PearlPlus.Witnesses
+public import Proofs.Properties.Pouw.Commit
+public import Proofs.Properties.Pouw.PearlPlus.Noise
+public import Std.Data.String.ToNat
 
 /-!
 # Pearl+'s properties say something
@@ -26,6 +28,8 @@ instance (`testPass`, k = 128, 1 × 1 tiles, its run `testRun`): `check` loads t
 noise and on the noise `check` derives for it (`tileAcceptMeans_derived`). `WorkIsTheCredit`'s are the credit both runs
 publish: the honest pass's at no draws, and the test pass's at one, a test instance's, crediting nothing.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.PearlPlus
 

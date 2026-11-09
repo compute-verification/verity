@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditSketch
-import Proofs.Accounting.RateAudit.Sketch
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.RateAuditSketch
+public import Proofs.Accounting.RateAudit.Sketch
 
 /-!
 # The sketch rate audit with interactive side sources that ignore the oracle
@@ -10,6 +12,8 @@ the link the sector at the address the side sources would pick from them (`IChip
 link sectors and queries are the interactive device's (`IChip.toChip_eq`), so `RateAuditSketch`'s bound is the
 interactive device's (`Accounting.SecurityProofs.RateAuditSketchInteractiveRO`).
 -/
+
+@[expose] public section
 
 namespace Accounting.RateSketch
 

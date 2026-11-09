@@ -1,5 +1,7 @@
-import Mathlib.Analysis.SpecialFunctions.Log.Basic
-import Proofs.Population.ExfiltrationBound
+module
+
+public import Mathlib.Analysis.SpecialFunctions.Log.Basic
+public import Proofs.Population.ExfiltrationBound
 
 /-!
 # One draw for several claims: the max rule and the union bound
@@ -25,6 +27,8 @@ reads that one escape set and that one halt, each with its own leak.
   units with probability `C(N - b, k) / C(N, k) ≤ (1 - k/N)^b`, so a stratum drawn as a uniform `k`-subset meets
   `pressure_of_draw`'s escape premise with `a u = k / N`.
 -/
+
+@[expose] public section
 
 namespace Population.Exfil
 

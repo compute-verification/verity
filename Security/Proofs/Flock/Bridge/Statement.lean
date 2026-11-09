@@ -1,6 +1,8 @@
-import Proofs.Flock.EndToEndHidden.Statement
-import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
-import Proofs.Flock.Bridge.Deployed
+module
+
+public import Proofs.Flock.EndToEndHidden.Statement
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
+public import Proofs.Flock.Bridge.Deployed
 
 /-!
 # The sampled audit's knowledge soundness, live (stated, not proved)
@@ -26,6 +28,8 @@ partition.
 `min K₀ (n − kd + 1)` by `Bridge.TransportsLive`, `Bridge.FaultyRightTarget` and `Bridge.CountTarget`
 (`Bridge.AssemblyTarget`).
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

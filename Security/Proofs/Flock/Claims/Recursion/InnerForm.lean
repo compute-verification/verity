@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.DeployScope
-import Proofs.Flock.Claims.Recursion.VStarCross
-import Proofs.Flock.Soundness.Discharge.Hidden.Spec
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployScope
+public import Proofs.Flock.Claims.Recursion.VStarCross
+public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 
 /-!
 # Flock's plain verifier sets the inner statement up as its files do
@@ -25,6 +27,8 @@ statement up as one table at the `m`, `k_log` and region count, and with the poi
 * `drawn_full`: a full draw keeps `n`, so `m`, and the regions, whose count is the circuit's ports
   (`regions_size`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

@@ -1,7 +1,9 @@
-import CoreProtocol.Live
-import SampledProofs.ChallengerDraw
-import SampledProofs.OneStage
-import SampledProofs.OneStageZk
+module
+
+public import CoreProtocol.Live
+public import SampledProofs.ChallengerDraw
+public import SampledProofs.OneStage
+public import SampledProofs.OneStageZk
 
 /-!
 # Coins from the device's log: what a draw's coins are, stated against the code that reads them
@@ -50,6 +52,8 @@ Nothing is assumed of SHA-512 or LMS here. What the device releases when, and th
 device's behaviour on `trusted-host`, which these properties don't take: a soundness argument reads them off the device
 model.
 -/
+
+@[expose] public section
 
 namespace Properties.Challenger
 

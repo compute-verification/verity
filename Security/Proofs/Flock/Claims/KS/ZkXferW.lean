@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.JointR
-import Proofs.Flock.Claims.KS.ZkDecodeW
+module
+
+public import Proofs.Flock.Claims.KS.JointR
+public import Proofs.Flock.Claims.KS.ZkDecodeW
 
 /-!
 # The masked live sessions' bound at the deployed decoders, off the table on a witness lane
@@ -14,6 +16,8 @@ decoders right at `OkOffWJ` (`decodesTableW_deploy`) give `ZkLiveAccWJ`'s verdic
 (`zk_KS_of_xferWJ`), and table 0's bound with escapes on accepted runs counted per round from it alone
 (`zk_tableBoundθAccAtR_of_xferWJ`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

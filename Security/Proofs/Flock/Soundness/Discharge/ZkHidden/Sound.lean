@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundRuns
-import Proofs.Flock.Soundness.Discharge.Composed.Defs
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundRuns
+public import Proofs.Flock.Soundness.Discharge.Composed.Defs
 
 /-!
 # The soundness of one hidden-output `--zk` sampled session
@@ -25,6 +27,8 @@ returning the outputs comes from `scopeOk`. flock-verify refuses a statement fai
 `tagsOkH_circuit`: the citation of its tag hypotheses. Under the default `--statement` (`verity/flock-circuit`,
 `Tags.circuit`) with one table, `TagsOkH I` and `I.tags.typed = false` hold by `decide`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 

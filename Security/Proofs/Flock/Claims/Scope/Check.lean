@@ -1,4 +1,6 @@
-import Flock.ProvedScope
+module
+
+public import Flock.ProvedScope
 
 /-!
 # `ProvedScope.check`, both ways
@@ -10,6 +12,8 @@ the unit or the outputs (`wiresFeed`, `wiresAcyclic`) and `scopeOk` (`scopeOkI` 
 with public outputs the wire condition holds of every circuit `scopeOk` passes. `check_wires`: an accepted flat circuit's
 wires, where they feed the unit or the outputs, are acyclic.
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 

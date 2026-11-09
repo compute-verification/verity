@@ -1,4 +1,6 @@
-import Proofs.Flock.VBridge.Family.Rep
+module
+
+public import Proofs.Flock.VBridge.Family.Rep
 
 /-!
 # VBridge G at V*'s family: the openings' rows, `α` and `rec-acc`'s running sums
@@ -26,6 +28,8 @@ whenever a level climbs (`H ≥ 1`). This file reads the openings from the layer
   registration's `rec-acc` (`HAccRows`). `hReads_of`: `HReads`, from `HAccRows` and the algebra reading `V` at the reps'
   ends (`HEnds`, which `readsEnds_of_regBits` gives).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

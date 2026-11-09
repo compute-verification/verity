@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysStatements
-import Proofs.Flock.Soundness.Discharge.ZkExec.Coin
-import Proofs.Flock.Soundness.Discharge.Exec.Verdict
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysStatements
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Coin
+public import Proofs.Flock.Soundness.Discharge.Exec.Verdict
 
 /-!
 # `RunsZC`'s verdict half: the compiled `--zk` table accepts at the two reps' results (statements)
@@ -27,6 +29,8 @@ The statements:
   that are those constraints in their order (`LinRel`), every result of `innerGameC` is a check that holds on the
   proof's openings.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

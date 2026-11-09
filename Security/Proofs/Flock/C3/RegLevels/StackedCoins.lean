@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.RegLevels.TopHold
-import Batteries.Recycling.MonadSatisfying.Array
+module
+
+public import Proofs.Flock.C3.RegLevels.TopHold
+public import Batteries.Recycling.MonadSatisfying.Array
 
 /-!
 # R's held stream has a round of coins for each round of R's schedule
@@ -10,6 +12,8 @@ two claims, and as many rounds as `stackedRounds` at it), and keeps each of the 
 (`candidate3_held`), at the shape `RecVStar.innerCommits` was given (`innerCommits_held`). The walks are
 `TopHold.candidate3_top`'s and `TopHold.innerCommits_top`'s.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels.StackedCoins
 

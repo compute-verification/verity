@@ -1,6 +1,8 @@
-import PouwPearlPlus
-import Definitions.Pouw.PearlC.Unscale
-import Properties.Pouw.Commit
+module
+
+public import PouwPearlPlus
+public import Definitions.Pouw.PearlC.Unscale
+public import Properties.Pouw.Commit
 
 /-!
 # Pearl+'s run verdict: what its Lean code (`PouwCheck.PearlPlus.check`) does
@@ -52,6 +54,8 @@ that record the premise reads is the H200's, so the properties are stated at it 
 * W1's `sha` and `fetch` prices are not the record's but the cost model's parameters, taken at the H200's measured ones
   (they differ from the H100's in its memory, which W1 does not otherwise price, and the bound only weakens as they grow).
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.PearlPlus
 

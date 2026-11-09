@@ -1,19 +1,21 @@
-import Proofs.Flock.Claims.ZK.Sent
-import Proofs.Flock.Claims.ZK.Split
-import Proofs.Flock.Claims.ZK.SimCommit
-import Proofs.Flock.Claims.ZK.PrefixLive
-import Proofs.Flock.Claims.ZK.SimSession
-import Proofs.Flock.Claims.ZK.SplitInner
-import Proofs.Flock.Claims.ZK.SimPiop
-import Proofs.Flock.Claims.ZK.InnerSlotTriple
-import Proofs.Flock.Claims.ZK.InnerLeaf
-import Proofs.Flock.Claims.ZK.InnerY
-import Proofs.Flock.Claims.ZK.InnerBatched
-import Proofs.Flock.Claims.ZK.SimLig
-import Proofs.Flock.Claims.ZK.LiveEnd
-import Proofs.Flock.Claims.ZK.InnerTauLig
-import Proofs.Flock.Claims.ZK.FinInner
-import Proofs.Flock.Claims.ZK.CausalExe
+module
+
+public import Proofs.Flock.Claims.ZK.Sent
+public import Proofs.Flock.Claims.ZK.Split
+public import Proofs.Flock.Claims.ZK.SimCommit
+public import Proofs.Flock.Claims.ZK.PrefixLive
+public import Proofs.Flock.Claims.ZK.SimSession
+public import Proofs.Flock.Claims.ZK.SplitInner
+public import Proofs.Flock.Claims.ZK.SimPiop
+public import Proofs.Flock.Claims.ZK.InnerSlotTriple
+public import Proofs.Flock.Claims.ZK.InnerLeaf
+public import Proofs.Flock.Claims.ZK.InnerY
+public import Proofs.Flock.Claims.ZK.InnerBatched
+public import Proofs.Flock.Claims.ZK.SimLig
+public import Proofs.Flock.Claims.ZK.LiveEnd
+public import Proofs.Flock.Claims.ZK.InnerTauLig
+public import Proofs.Flock.Claims.ZK.FinInner
+public import Proofs.Flock.Claims.ZK.CausalExe
 
 /-!
 # The deployed masked session's zero knowledge
@@ -32,6 +34,8 @@ and `FinExe` from `liveEnd`, `simCommit`, the hybrids and `innerTauVal` (`finExe
 * `Flock.zk_deployZk_masked_exe_split`: Flock's zero knowledge at the deployed masked session, given only that `H` is
   SHA-512 and `0 < t`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

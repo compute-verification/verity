@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.Serve
+module
+
+public import Proofs.Flock.Claims.Recursion.Serve
 
 /-!
 # `E^rep`'s weighted reruns: Wald's identity
@@ -11,6 +13,8 @@ its expected reruns (`waitCost_exp`, Wald's identity, by induction on the draws 
 coins) has expected weighted reruns at most `(1 + m·k) · 𝔼[w]` (`erepProg_cost_exp`), and at most `1 + m·K` reruns on
 every draw (`erepProg_runs_le`), against every run.
 -/
+
+@[expose] public section
 
 namespace Claims
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Deployed
-import Proofs.Flock.Claims.ZK.Worker
+module
+
+public import Proofs.Flock.Claims.ZK.Deployed
+public import Proofs.Flock.Claims.ZK.Worker
 
 /-!
 # The switched prover at the session's tables
@@ -28,6 +30,8 @@ the form the session's models read (`Deployed`):
   prover's messages are the switched prover's at values the workers supply, which read the mask slot and the extra
   lanes and never the pads.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

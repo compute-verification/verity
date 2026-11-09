@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
-import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Defs
-import Proofs.Flock.Soundness.CROnly.Hiding
-import Proofs.Flock.Soundness.ZK.RealLeaves
-import Proofs.Flock.Soundness.ExecDraw
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
+public import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Defs
+public import Proofs.Flock.Soundness.CROnly.Hiding
+public import Proofs.Flock.Soundness.ZK.RealLeaves
+public import Proofs.Flock.Soundness.ExecDraw
 
 /-!
 # Salts from the operating system (A3)
@@ -33,6 +35,8 @@ No computational property of SHA-512 enters. hm96's hiding is the leftover hash 
 (`CROnly.sum_hidingGap_le`), which reads of the salt hash `c(y) = SHA-512(sp ‖ y)` only that it takes at most `2^512`
 values; SHA-512's collision resistance (`cr/sha-512`) enters binding, not hiding.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkView
 

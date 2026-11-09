@@ -1,5 +1,7 @@
-import Mathlib.Probability.Distributions.Uniform
-import Definitions.Accounting.Tag.PolyHash
+module
+
+public import Mathlib.Probability.Distributions.Uniform
+public import Definitions.Accounting.Tag.PolyHash
 
 /-!
 # The block tags' statements (trusted)
@@ -27,6 +29,8 @@ bound.
 Each takes no hypothesis: a condition on its inputs (the blocks differ, the lists differ) is part of the event it
 bounds. The proofs are in `Security/Proofs/Accounting/Tag/`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.Tag
 

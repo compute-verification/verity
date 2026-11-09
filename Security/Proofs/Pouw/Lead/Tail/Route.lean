@@ -1,6 +1,8 @@
-import Mathlib.Analysis.SpecialFunctions.Stirling
-import Mathlib.Analysis.Complex.ExponentialBounds
-import Proofs.Pouw.Lead.Tail.Blocks
+module
+
+public import Mathlib.Analysis.SpecialFunctions.Stirling
+public import Mathlib.Analysis.Complex.ExponentialBounds
+public import Proofs.Pouw.Lead.Tail.Blocks
 
 /-!
 # The coin-branch tail's route at the three points and decode
@@ -23,6 +25,8 @@ constraint allows serve throughout.
 `across_term_le` bounds the first term by `2^−70` throughout; `cut_le_pow` (`λ^r / r! ≤ q^{r₀}` once `e λ ≤ q r`, from
 `pow_div_factorial_le` and `Stirling.le_factorial_stirling`) and `lt_tailCount` are the pieces each regime reads.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Tail
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Refine.Basis
-import Flock.Verify
+module
+
+public import Proofs.Flock.Soundness.Refine.Basis
+public import Flock.Verify
 
 /-!
 # One rep refines the model's (`Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle`)
@@ -15,6 +17,8 @@ It composes the four phases: `zerocheck_refines`, `lincheck_refines`, `opening_r
 The statement's own facts enter as `Realizes`-style hypotheses: `FoldRealizes` for the circuit fold, `ExtraRealizes`
 for the extra claims.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

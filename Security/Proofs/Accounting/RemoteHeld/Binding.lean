@@ -1,6 +1,8 @@
-import Definitions.Accounting.Guarantees.RemoteBinding
-import Proofs.Accounting.TS.Drawn
-import Proofs.Hash.RowBinding
+module
+
+public import Definitions.Accounting.Guarantees.RemoteBinding
+public import Proofs.Accounting.TS.Drawn
+public import Proofs.Hash.RowBinding
 
 /-!
 # The receipts' binding bound: the proof
@@ -26,6 +28,8 @@ earlier windows' openings coins kept, window `t`'s and the later ones fresh), wh
 * **Fixed roots** (`Binding.binding_le_of_fixed`). Where the window's cut fixes its receipts' roots, ranks and
   verifiers, `split_t = 0`, and `√(|L_t|·s_t·q_t²/2^513) = √(|L_t|·s_t)·q_t/2^256.5`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Remote
 

@@ -1,5 +1,7 @@
-import Definitions.Accounting.Assumptions.TS
-import Properties.Pouw.Period
+module
+
+public import Definitions.Accounting.Assumptions.TS
+public import Properties.Pouw.Period
 
 /-!
 # PoUW's proof system soundness from its proof layer
@@ -22,6 +24,8 @@ the step between the two:
 * `CheckProofSystemSoundHonest`, `CheckProofSystemSoundNontrivial`: some period of the deployed check meets the
   premise with the check accepting on every path, and some period breaks the conclusion at `0`.
 -/
+
+@[expose] public section
 
 namespace Properties.Accounting.JointBridge
 

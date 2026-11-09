@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.Rep
+module
+
+public import Proofs.Flock.Soundness.Refine.Rep
 
 /-!
 # Tactics that walk an executable computation
@@ -9,6 +11,8 @@ head: a bind is split into its halves (`ebind_ok`), an `if` or `dite` is split o
 rather than trying each and backtracking, keeps Lean from unfolding the executable to look for a bind that isn't there.
 The kernel checks every proof it builds, as it does every other proof in the package.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

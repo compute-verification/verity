@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Audit.FlockBatched
-import Proofs.Flock.Soundness.Refine.Salted
+module
+
+public import Proofs.Flock.Soundness.Audit.FlockBatched
+public import Proofs.Flock.Soundness.Refine.Salted
 
 /-!
 # The batched session under a leaf scheme (`Flock.Record`, `Flock.Merkle`)
@@ -15,6 +17,8 @@ message also carries the salts (`Opens F D × Salts Sl`), and whose paths verify
 salts (`OpensOKL`). Its one table is `Model.tableCL` (`tableCL_eq`), and at `Leaf.plain` it is the unsalted session
 (`opensOKL_plain_pair`, up to the salts' `Unit` message). `batchedSessionL` is `batchedSession` over it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

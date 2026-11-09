@@ -1,12 +1,14 @@
-import Proofs.NetworkCertifier.Witnesses
-import Proofs.NetworkCertifier.SampledLeak
-import Proofs.NetworkCertifier.Counting
-import Proofs.NetworkCertifier.RecordRows
-import Definitions.NetworkCertifier.PooledLeak
-import Definitions.NetworkCertifier.TapRows
-import Definitions.NetworkCertifier.Schedule
-import Definitions.NetworkCertifier.Ingress
-import Definitions.NetworkCertifier.Assumptions
+module
+
+public import Proofs.NetworkCertifier.Witnesses
+public import Proofs.NetworkCertifier.SampledLeak
+public import Proofs.NetworkCertifier.Counting
+public import Proofs.NetworkCertifier.RecordRows
+public import Definitions.NetworkCertifier.PooledLeak
+public import Definitions.NetworkCertifier.TapRows
+public import Definitions.NetworkCertifier.Schedule
+public import Definitions.NetworkCertifier.Ingress
+public import Definitions.NetworkCertifier.Assumptions
 
 /-!
 # The instances the network certifier's count and period witnesses are stated at
@@ -39,6 +41,8 @@ witnesses; `Witnesses` has the negation `notStmt` and its accepting verifier `le
 * `fxRows`: a rows format of the Python network certifier's fixture `fxQueue` (three connections, `fixtureAgrees`
   checks its egress record), one window of ten buckets of four slots, which `fxQueueSched` fits (`fxQueue_fits`).
 -/
+
+@[expose] public section
 
 namespace NetTiming.Witness
 

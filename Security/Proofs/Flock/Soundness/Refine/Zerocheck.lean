@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.Arith
+module
+
+public import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # The zerocheck refines the model's (`Flock.Piop`)
@@ -11,6 +13,8 @@ The residual rounds (Z6) are a loop in the executable and a recursion in the mod
 executable computes it; `residual_plays` runs the model's rounds on the fold of `zStep`, and `forIn_rounds` shows the
 executable's loop is that fold.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

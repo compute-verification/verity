@@ -1,8 +1,10 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditPooled
-import Definitions.Accounting.Guarantees.RateAuditNamed
-import Proofs.Accounting.RateAudit.Pooled
-import Proofs.Accounting.RateAudit.Named
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.RateAuditPooled
+public import Definitions.Accounting.Guarantees.RateAuditNamed
+public import Proofs.Accounting.RateAudit.Pooled
+public import Proofs.Accounting.RateAudit.Named
 
 /-!
 # The pooled draw: windows and sessions, the proof
@@ -24,6 +26,8 @@ with no union over the windows (`Pooled.pr_floor_le`).
 short of those receipts' words leaves some window short (`Session.pr_unpaid_le`), and that window some pass, which
 `RatePaidNamedRO` bounds at the devices the earlier coins pick (`Session.pr_window_le`, then `Chain.pr_unpaid_le`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 

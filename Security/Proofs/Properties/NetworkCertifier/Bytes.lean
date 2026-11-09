@@ -1,6 +1,8 @@
-import Properties.NetworkCertifier
-import Proofs.Properties.Identity
-import Mathlib.Data.Set.Card
+module
+
+public import Properties.NetworkCertifier
+public import Proofs.Properties.Identity
+public import Mathlib.Data.Set.Card
 
 /-!
 # The record's encodings are injective
@@ -11,6 +13,8 @@ digest (`messageInput_inj`), a leaf's input its frame (`leafInput_inj`), a node'
 (`nodeInput_inj`); and a payload's bytes its bits, for whole bytes of bits (`bitsOfBytes_bytesOfBits`). Byte strings are read as their
 lists of bytes (`bs`), and an encoding is parsed field by field, each of a width it fixes.
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check

@@ -1,4 +1,6 @@
-import Proofs.Pouw.Lead.CoinBranch.GrindProofs
+module
+
+public import Proofs.Pouw.Lead.CoinBranch.GrindProofs
 
 /-!
 # Coin branch: a program chosen from the coins, in `MH100w`, cell by cell (proofs; draft semantics, pending review)
@@ -21,6 +23,8 @@ of a step into the step before on half the points, so `lost_le`'s `M` is at leas
 (`l4_cell_loss`): on that cell every set of words distinct and non-free is at least `n` short of the layout's
 `m·n·S`, so the floor there credits at most `c·(m·n·S − n)`.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.CoinBranch
 

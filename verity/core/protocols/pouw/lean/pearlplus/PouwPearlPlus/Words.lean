@@ -1,9 +1,11 @@
-import Evaluate.Fp32
-import Evaluate.Casts
-import Evaluate.TC.Dots
-import Flock.Hash
-import Flock.HmRow
-import PouwPearlPlus.Records
+module
+
+public import Evaluate.Fp32
+public import Evaluate.Casts
+public import Evaluate.TC.Dots
+public import Flock.Hash
+public import Flock.HmRow
+public import PouwPearlPlus.Records
 
 /-!
 # A tile's words under Pearl-C v1 -h3 on the H100 (`pearl_c.PearlC.encode`, `checked`, `leaf`)
@@ -26,6 +28,8 @@ FP32 steps `verity.ml.circuits.silicon.fp32`, here `Evaluate.Fp32`'s; the FP8 at
 
 `Reject` is Pearl's verifier's rejection (a non-finite value): the tile's inputs are inadmissible.
 -/
+
+@[expose] public section
 
 namespace PouwCheck.PearlPlus.Words
 

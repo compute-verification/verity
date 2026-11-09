@@ -9,7 +9,11 @@ Level 3, L3-A: the statement's level-0 matrices `A_0`, `B_0` over GF(2), as the 
 - Δ's pairs `(i, c)` add at row `i`, column `c`, counted mod 2.
 Where no range covers `j` the matrices are Δ alone. No layout hypothesis is used.
 -/
-import Proofs.Flock.Level3.FoldStmt
+module
+
+public import Proofs.Flock.Level3.FoldStmt
+
+@[expose] public section
 
 open Flock Lookup
 

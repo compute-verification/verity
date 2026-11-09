@@ -1,11 +1,13 @@
-import Definitions.Pouw.Assumptions.GameStatements
-import Definitions.Pouw.Assumptions.Deadline
-import Definitions.Pouw.PearlC.Deadline
-import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
-import Definitions.Pouw.Assumptions.PearlC.TTOutW1
-import Definitions.Pouw.PearlC.DeviceKernelWref
-import Definitions.Pouw.PearlC.DevicePricesLoop
-import Definitions.Pouw.PearlC.Tile
+module
+
+public import Definitions.Pouw.Assumptions.GameStatements
+public import Definitions.Pouw.Assumptions.Deadline
+public import Definitions.Pouw.PearlC.Deadline
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+public import Definitions.Pouw.PearlC.DeviceKernelWref
+public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Definitions.Pouw.PearlC.Tile
 
 /-!
 # Work between the salt and the deadline (trusted)
@@ -26,6 +28,8 @@ timed run and verifier's rule, and time meets the cost model through one named a
   hypotheses are TT_OUT rev1 per audit tile at 1/1,000 at W1 (`TTOutTilePearlCDevRev1W1`) and the honest clock at that
   cost model. `sha`, `fetch`, the salt's bytes `salt` and `sem` are parameters.
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees
 

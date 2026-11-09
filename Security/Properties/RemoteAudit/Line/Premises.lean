@@ -1,4 +1,6 @@
-import Properties.RemoteAudit.Line.Record
+module
+
+public import Properties.RemoteAudit.Line.Record
 
 /-!
 # What the line of record reads of its record (`Properties.RemoteAudit.Line`)
@@ -28,3 +30,5 @@ one group for each of the session's windows: an accepted session has its paramet
 windows (`RemoteAudit.Line.ofSummaryAt`). The record's clock is the trace's: that each credited pass ran inside its
 group's window on the record's clock is the model's own `Paced` premise read at `recordPace`.
 -/
+
+@[expose] public section

@@ -1,7 +1,9 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditNamed
-import Proofs.Accounting.RateAudit.Conservation
-import Proofs.Accounting.RateAudit.Pooled
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.RateAuditNamed
+public import Proofs.Accounting.RateAudit.Conservation
+public import Proofs.Accounting.RateAudit.Pooled
 
 /-!
 # Conservation over tiers with named words: the proof
@@ -21,6 +23,8 @@ At every count at once (`RatePaidNamedRO`), the compression is taken at each `k 
 (`RelayDevice.pr_compress_any_named_le`); the route `Sampled` with it (`RateChainSampledNamedRO`) is `RatePooled` and
 that bound at each pass (`Chain.pr_unpaid_le`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 

@@ -1,4 +1,6 @@
-import Mathlib.Probability.ProbabilityMassFunction.Basic
+module
+
+public import Mathlib.Probability.ProbabilityMassFunction.Basic
 
 /-!
 # Probability of an event under a distribution (trusted)
@@ -8,6 +10,8 @@ The tag statements draw a key, a seed matrix or the words a prover did not read 
 Mathlib's outer measure of `{x | E x}` under `μ`. A randomized adversary is an average of deterministic ones, so every
 statement quantifies over deterministic guesses only.
 -/
+
+@[expose] public section
 
 namespace Accounting.Tag
 

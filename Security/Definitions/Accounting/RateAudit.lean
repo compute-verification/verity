@@ -1,5 +1,7 @@
-import Definitions.Pous.Game.Prob
-import Definitions.Core.Draw
+module
+
+public import Definitions.Pous.Game.Prob
+public import Definitions.Core.Draw
 
 /-!
 # The rate audit in the random-oracle model (trusted)
@@ -58,6 +60,8 @@ with; the claims registry names the measurement that falsifies each for a deploy
 device (`Devices`). Window `i`'s device, its layout included, may be any function of the other windows' coins, earlier
 or later, and never of its own.
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 

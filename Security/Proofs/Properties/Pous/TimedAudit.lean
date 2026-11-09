@@ -1,5 +1,7 @@
-import Properties.Pous.TimedAudit
-import Proofs.Properties.NetworkCertifier.Bytes
+module
+
+public import Properties.Pous.TimedAudit
+public import Proofs.Properties.NetworkCertifier.Bytes
 
 /-!
 # The timed audit's property, proved
@@ -9,6 +11,8 @@ import Proofs.Properties.NetworkCertifier.Bytes
 audit (`verdictOf_accepted`, `audit_ok`). Two trees over leaves of 64 bytes with one root have the same leaves unless
 two of their inner nodes' inputs collide (`mth_binds`), which ties each answer's leaf to `C*`'s.
 -/
+
+@[expose] public section
 
 namespace PousCheck.Properties.SecurityProofs
 

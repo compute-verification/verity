@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Audit.OneStage
+module
+
+public import Proofs.Flock.Soundness.Audit.OneStage
 
 /-!
 # Audits whose draw depends on the registration
@@ -12,6 +14,8 @@ is that game: registration `R`, then the coin of `L R`, then the session on `L R
   fixed before the coin. So every guarantee about `audit L_c` applies to `auditReg L`, strategy by strategy, at
   `c := R`, with its hypotheses taken for every `R`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

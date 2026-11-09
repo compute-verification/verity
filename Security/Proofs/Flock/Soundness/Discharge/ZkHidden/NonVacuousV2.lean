@@ -1,6 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousJ
-import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
-import Proofs.Flock.Soundness.ExecSetup
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousJ
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
+public import Proofs.Flock.Soundness.ExecSetup
+
+@[expose] public section
 
 set_option Elab.async false
 

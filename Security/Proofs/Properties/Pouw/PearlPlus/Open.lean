@@ -1,5 +1,7 @@
-import Properties.Pouw.PearlPlus
-import Proofs.Properties.Pouw.Commit
+module
+
+public import Properties.Pouw.PearlPlus
+public import Proofs.Properties.Pouw.Commit
 
 /-!
 # An accepted opening binds its position's value (`Properties.Pouw.PearlPlus.OpeningBinds`)
@@ -14,6 +16,8 @@ message, whose first block fixes the row's length, then a segment where two diff
 It is on Lean core, as the properties are, so the row-seg steps are stated here on byte arrays rather than read from
 C-Flock's binding proof (`FlockSoundness.Binding.RowSeg`), which is on Mathlib.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.PearlPlus
 

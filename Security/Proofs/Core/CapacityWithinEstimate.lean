@@ -1,5 +1,7 @@
-import Definitions.Core.Guarantees.DeviceFigures
-import Proofs.Core.DeviceFigures
+module
+
+public import Definitions.Core.Guarantees.DeviceFigures
+public import Proofs.Core.DeviceFigures
 
 /-!
 # A registered device's capacity is within its estimate's tolerance
@@ -8,6 +10,8 @@ import Proofs.Core.DeviceFigures
 bound's are themselves accepted against the estimate (`DeviceFigures.Accepted.bounding`), so within its tolerance from
 above.
 -/
+
+@[expose] public section
 
 namespace Verity.SecurityProofs
 

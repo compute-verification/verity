@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Fit
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegRowBc
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegTgt
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegV2
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Fit
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegRowBc
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegTgt
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegV2
 
 /-!
 # Output rows unsegmented or `sha512/row-seg/v1`, beside input rows of any kind
@@ -17,6 +19,8 @@ bits; at a row-seg row the bit is a row bit, `Any.seg_msgBit`), so `outPairs` co
 and a satisfying witness of the hidden statement satisfies its flat twin (`Any.sat_flatF`) and holds each output row's
 message bit's copy (`Any.msg_copyF`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

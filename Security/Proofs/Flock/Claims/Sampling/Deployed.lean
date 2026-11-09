@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.NumbersDeploy
-import Proofs.Flock.Claims.Sampling.Assembled
-import Proofs.Flock.Level3.RowV2
-import Proofs.Flock.Claims.Sampling.Reference.Prover
+module
+
+public import Proofs.Flock.Claims.NumbersDeploy
+public import Proofs.Flock.Claims.Sampling.Assembled
+public import Proofs.Flock.Level3.RowV2
+public import Proofs.Flock.Claims.Sampling.Reference.Prover
 
 /-!
 # The deployed sampling record
@@ -45,6 +47,8 @@ those discharged, reading of `F` its KS and its decoder's `ListWithin` and step 
 * `sampling_deployed_plain` at `deployPlain`: the inner numbers from `SessionsInPlain` (`innerNumbers_deployPlain`,
   each session in Flock's plain scope), the decoder's facts `sampling_assembled_plain`'s.
 -/
+
+@[expose] public section
 
 namespace SamplingDeploy
 

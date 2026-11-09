@@ -1,5 +1,7 @@
-import Proofs.Pouw.Lead.Tail.G
-import Proofs.Pouw.Lead.Tail.Gap
+module
+
+public import Proofs.Pouw.Lead.Tail.G
+public import Proofs.Pouw.Lead.Tail.Gap
 
 /-!
 # The tail form's nontrivial lemma
@@ -7,6 +9,8 @@ import Proofs.Pouw.Lead.Tail.Gap
 `nontrivialTail`: at the three points the fixed gap is at most 0.127% of served stock (`gapFixedAt`), below the honest
 work, which is at least the words, `m n S ≥ m n K / 28`; and at most `2^30` tiles `etaLead ≤ 2^−34` (`tailAt`).
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Tail
 

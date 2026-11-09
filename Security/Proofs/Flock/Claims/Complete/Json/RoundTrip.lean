@@ -1,10 +1,12 @@
-import Flock.JsonParse
-import Flock.Canon
-import Proofs.Flock.Claims.Complete.Json.Value
-import Proofs.Flock.Claims.Complete.Prover.Print
-import Std.Data.TreeMap.Raw.Lemmas
-import Std.Data.TreeMap.Raw.WF
-import Batteries.Tactic.OpenPrivate
+module
+
+public import Flock.JsonParse
+public import Flock.Canon
+public import Proofs.Flock.Claims.Complete.Json.Value
+public import Proofs.Flock.Claims.Complete.Prover.Print
+public import Std.Data.TreeMap.Raw.Lemmas
+public import Std.Data.TreeMap.Raw.WF
+public import Batteries.Tactic.OpenPrivate
 
 /-!
 # The verifier's parser reads back what the printers print
@@ -19,6 +21,8 @@ induction on `Pr`. A string's text is a run of escapes `str` reads back one char
 number's is `Int.repr` (`num_int`); an object's fields are `Flock.canon`'s keys in `Array.qsort`'s order, a permutation
 of the tree's own (`qsort_perm`), and `object` inserts them into a tree alike at every key (`Inv`, `obj_loop`).
 -/
+
+@[expose] public section
 
 open private Flock.hex4 from Flock.Canon
 open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic

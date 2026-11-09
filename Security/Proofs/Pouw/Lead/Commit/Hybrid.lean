@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkView.OsSalts
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkView.OsSalts
 
 /-!
 # hm96 leaves salted from one committed key hide their roots
@@ -13,6 +15,8 @@ through `F₁`; then `k_w` uniform (`adv₁`); then the salts uniform (`adv₂`)
 `hides_derived` composes them at `x` and `x'`. `hides_derived_os` reads `(ks, y₀)` from the OS's bytes (A3), and
 `hides_derived_os_sym` is its bound at one PRF advantage and one OS slack.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Commit
 

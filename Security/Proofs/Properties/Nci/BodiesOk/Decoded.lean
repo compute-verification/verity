@@ -1,4 +1,6 @@
-import Proofs.Properties.Nci.BodiesOk.Composite
+module
+
+public import Proofs.Properties.Nci.BodiesOk.Composite
 
 /-!
 # What `decode` returns
@@ -7,6 +9,8 @@ import Proofs.Properties.Nci.BodiesOk.Composite
 (`specs`, from the empty state through `go`), and its root is a composite (`decode`'s own check). `decode_root`: the
 root is one of them (`getDef`'s index), a composite without parameters (`decode`'s check, `CalleeOk`).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program

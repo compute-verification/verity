@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FramePlan
+module
+
+public import Proofs.Flock.Claims.ZK.FramePlan
 
 /-!
 # The rep's own table against the placeholder's
@@ -12,6 +14,8 @@ placeholder's shape.
 * `ofDraws_gsize`: `ofDraws` takes a packed witness of exactly level 0's size.
 * `real_tabAlike`: at `RealTabs`, the rep's own table is `TabAlike` the placeholder's (`Sched.tabOfLevel0_alike`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Count
 

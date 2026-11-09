@@ -1,15 +1,17 @@
-import Properties.Remote
-import Proofs.Properties.Composition
-import Proofs.Properties.Nci.DescVerdict
-import Proofs.Properties.Nci.Baseline
-import Proofs.Properties.Nci.BaselineSteps
-import Proofs.Properties.Nci
-import Proofs.Properties.Nci.Agrees
-import Proofs.Nci.FitWitness
-import Proofs.Properties.SampledProofs
-import Proofs.Nci.CompliesCK
-import Proofs.Core.Expand
-import Std.Data.TreeMap.Raw.Lemmas
+module
+
+public import Properties.Remote
+public import Proofs.Properties.Composition
+public import Proofs.Properties.Nci.DescVerdict
+public import Proofs.Properties.Nci.Baseline
+public import Proofs.Properties.Nci.BaselineSteps
+public import Proofs.Properties.Nci
+public import Proofs.Properties.Nci.Agrees
+public import Proofs.Nci.FitWitness
+public import Proofs.Properties.SampledProofs
+public import Proofs.Nci.CompliesCK
+public import Proofs.Core.Expand
+public import Std.Data.TreeMap.Raw.Lemmas
 
 /-!
 # Remote's acceptance and the inference-only policy, proved
@@ -38,6 +40,8 @@ conclusions fail at the cases a check that accepts every input accepts, `ev = []
 The digests' tie and the cases' decoding are proved over three components left abstract (`accepted_three`,
 `strays_two`), then read at remote's, so that no subprotocol's decoder or digest is unfolded by `simp`.
 -/
+
+@[expose] public section
 
 namespace Properties.Remote.SecurityProofs
 

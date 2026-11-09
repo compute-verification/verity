@@ -1,6 +1,8 @@
-import Properties.Accounting.JointBridge.SpaceOfPeriodHeld
-import Proofs.Pous.Period
-import Proofs.Pouw.Prob
+module
+
+public import Properties.Accounting.JointBridge.SpaceOfPeriodHeld
+public import Proofs.Pous.Period
+public import Proofs.Pouw.Prob
 
 /-!
 # PoUS's per-period guarantee is the coins model's `.pous` input
@@ -10,6 +12,8 @@ fewer than `S · len` bit-ticks) maps, through `RealizesSpaceOfPeriodHeld`'s coi
 at the other coins `other ξ`, whose probability `Pous.Period.SecurityProofs.periodHeld` bounds by `δ + ε_max`. The
 bound holds at the challenge times PoUS grades (`Definitions.Accounting.JointBridge.SpaceOfPeriodHeld`'s header).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Bridge
 

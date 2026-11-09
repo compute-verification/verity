@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.DecodeSame
-import Proofs.Flock.Claims.Recursion.NextR
-import Proofs.Flock.Claims.Recursion.NextShaDec
+module
+
+public import Proofs.Flock.Claims.Recursion.DecodeSame
+public import Proofs.Flock.Claims.Recursion.NextR
+public import Proofs.Flock.Claims.Recursion.NextShaDec
 
 /-!
 # The record the verdict reads is alike an honest record
@@ -15,6 +17,8 @@ record (`fill_of_live`): an erased round's coins are no list.
   the substitutions make of it, by `same_mkObj`.
 * **The offsets don't read the proof digests** (`streamOffset_shaSubJ`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.DecodeAt
 

@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditRemote
-import Proofs.Accounting.RateAudit.Interactive
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.RateAuditRemote
+public import Proofs.Accounting.RateAudit.Interactive
 
 /-!
 # Conservation over tiers: the proof
@@ -20,6 +22,8 @@ No sample is drawn: these are `RateAudit`'s and `RateAuditInteractive`'s argumen
 At every count at once (`RatePaidRO`, `RatePaid`), the compression is taken at each `k ≤ q`, the most the run can have
 queried, and `∑ₖ C(q, k) = 2^q` (`RelayDevice.pr_compress_any_le`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 

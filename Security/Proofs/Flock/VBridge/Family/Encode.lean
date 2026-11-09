@@ -1,7 +1,9 @@
-import Proofs.Flock.VBridge.Family.Files
-import Proofs.Flock.VBridge.Family.Rep
-import Proofs.Flock.VBridge.Algebra.Schedule
-import Proofs.Flock.Soundness.Discharge.ZkView.Decode
+module
+
+public import Proofs.Flock.VBridge.Family.Files
+public import Proofs.Flock.VBridge.Family.Rep
+public import Proofs.Flock.VBridge.Algebra.Schedule
+public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 
 /-!
 # The inner proof file's bytes: `encodeProof`, and `TableSrc.Encodes`
@@ -26,6 +28,8 @@ with.
   `LigShaped`), and fewer than `2^48` regions (`RegionsFit`). `hEnc_of` is it at the family; `hdec_filesAt` is
   `hdec` at the table files.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

@@ -1,10 +1,12 @@
-import Flock.Canon
-import Std.Data.TreeMap.Raw.Lemmas
-import Proofs.Flock.Claims.Complete.Json.Value
-import Definitions.Claims
-import Proofs.Flock.Claims.JsonEq
-import Proofs.Flock.Claims.Complete.Prover.Print
-import Proofs.Flock.Claims.Complete.Json.RoundTrip
+module
+
+public import Flock.Canon
+public import Std.Data.TreeMap.Raw.Lemmas
+public import Proofs.Flock.Claims.Complete.Json.Value
+public import Definitions.Claims
+public import Proofs.Flock.Claims.JsonEq
+public import Proofs.Flock.Claims.Complete.Prover.Print
+public import Proofs.Flock.Claims.Complete.Json.RoundTrip
 
 /-!
 # What the record's round trip needs from the JSON library
@@ -20,6 +22,8 @@ leaves are equal, and alike objects have alike values at each key (`Same.getObjV
 (`Same.getObjVal_none`), and alike values have one form (`Same.jsonEquiv`), so the verifier's draw check (`drawEq`)
 passes on them. The record's numbers are all `Lean.toJson` of naturals, so printable.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

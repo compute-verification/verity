@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Names
-import Proofs.Flock.Claims.Complete.Zk.Json.Decode
-import Proofs.Flock.Claims.JsonNorm
-import Proofs.Flock.Claims.Complete.Json.Canon
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Names
+public import Proofs.Flock.Claims.Complete.Zk.Json.Decode
+public import Proofs.Flock.Claims.JsonNorm
+public import Proofs.Flock.Claims.Complete.Json.Canon
 
 /-!
 # The honest masked record decodes and reads live, at any number of tables
@@ -12,6 +14,8 @@ import Proofs.Flock.Claims.Complete.Json.Canon
 its name, `find?_name`), and `liveOf` reads it (`liveZk_ofFieldsJ`); so the masked record decodes
 (`decode_recordObjZkJ`), reads live (`live_recordObjZkJ`) and carries the draw (`recordDraw_recordObjZkJ`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.Property
-import Proofs.Flock.Recursive.Private
+module
+
+public import Proofs.Flock.Recursive.Property
+public import Proofs.Flock.Recursive.Private
 
 /-!
 # The recursive audit at C-Flock's compiled inner protocol
@@ -24,6 +26,8 @@ proofs, `Flock.SecurityProofs.RecursiveSoundExec` and `Flock.SecurityProofs.Recu
 (`Recursion.zk_sessions_recursive_fork_inner`) at the compile premise of an accepted statement's class
 (`Recursion.compiledForkSound_execClassAt`, `Recursion.classOk_of_accepts`).
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

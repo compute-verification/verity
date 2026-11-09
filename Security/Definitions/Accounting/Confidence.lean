@@ -1,8 +1,10 @@
-import Definitions.Accounting.Actual
-import Mathlib.Data.ENat.Lattice
-import Mathlib.Basic.Real.Basic
-import Mathlib.Data.Set.Card
-import Mathlib.Data.Finset.Sort
+module
+
+public import Definitions.Accounting.Actual
+public import Mathlib.Data.ENat.Lattice
+public import Mathlib.Basic.Real.Basic
+public import Mathlib.Data.Set.Card
+public import Mathlib.Data.Finset.Sort
 
 /-!
 # Runs, strategies and the confidence set (trusted)
@@ -36,6 +38,8 @@ of the coins, uniform over a finite `Ω`. For a quantity `μ` of a run: `req μ 
 that implements `P`, `Additive` says every run of a set that implements `P` has `μ ≥ cert + req`, and the residual is
 `min(cap, obs) − cert`.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

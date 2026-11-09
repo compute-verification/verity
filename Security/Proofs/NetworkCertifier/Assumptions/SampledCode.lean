@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Sampling.Deployed
+module
+
+public import Proofs.Flock.Claims.Sampling.Deployed
 
 /-!
 # The sampled verifier's code
@@ -13,6 +15,8 @@ no Lean port, so these are facts about it no proof here can reach. The record's 
 hm96 leaves under the registered path check) and its sessions' Flock record (`FlockDeploy.deployZk`) are `deploy`'s, not
 assumed.
 -/
+
+@[expose] public section
 
 namespace NetTiming.Assumptions
 

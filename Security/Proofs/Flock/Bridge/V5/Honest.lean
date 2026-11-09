@@ -1,9 +1,11 @@
-import Proofs.Flock.Bridge.Assumptions.ServedV5
-import Proofs.Flock.Bridge.V5.Statement
-import Proofs.Flock.Bridge.Deployed
-import Proofs.Flock.C3.VStarList.Parse
-import Proofs.Flock.Soundness.Discharge.Hidden.Facts
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+module
+
+public import Proofs.Flock.Bridge.Assumptions.ServedV5
+public import Proofs.Flock.Bridge.V5.Statement
+public import Proofs.Flock.Bridge.Deployed
+public import Proofs.Flock.C3.VStarList.Parse
+public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 
 /-!
 # `SampledKSLiveV5`'s file hypotheses hold at the served registered session
@@ -18,6 +20,8 @@ and the tags are the ones the statement takes (`TagsOkZHJ`). The registration's 
 population (`PopMatches`) are statements about the registration, not the files, and are no conjunct here; the finders'
 collision resistance is no hypothesis either: the statement takes it as `TableCRZ` and `LinkCRZC`.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

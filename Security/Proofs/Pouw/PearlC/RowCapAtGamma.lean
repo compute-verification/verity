@@ -1,7 +1,9 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeedK
-import Proofs.Pouw.PearlC.RowSeedCode
-import Proofs.Pouw.PearlC.DeviceGamma
-import Proofs.Pouw.PearlC.TileDrawGamma
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeedK
+public import Proofs.Pouw.PearlC.RowSeedCode
+public import Proofs.Pouw.PearlC.DeviceGamma
+public import Proofs.Pouw.PearlC.TileDrawGamma
 
 /-!
 # Per-row seeds at a census k: the tile cap `ρ` and a wider row cap `ρr` (compute accounting's file)
@@ -29,6 +31,8 @@ TT_OUT per tile at `ρr`, through (C2) at `ρr`:
   `γ = 32437/2521000` (1.28667%), with the error at the `m·N` rows; the forms without `Tol` are the audit that accepts
   only checked tiles (`gammaSampledDraw_of_threshold`). C0 is `devAt_rowLocal`, by `rfl`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

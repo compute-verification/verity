@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.ExecSetup
-import Proofs.Flock.Soundness.E2E
-import Properties.Flock.Circuit.Keyed
+module
+
+public import Proofs.Flock.Soundness.ExecSetup
+public import Proofs.Flock.Soundness.E2E
+public import Properties.Flock.Circuit.Keyed
 
 /-!
 # `ProgPlaces` from `Stmt.setupH`'s accept
@@ -21,6 +23,8 @@ executable's accept step on the untyped path (`tags.typed = false`, the statemen
 On this path W6 holds by definition: setupH's placed rows depend only on the parsed circuit (`unitRows_eq`), and the
 program is built from them. That a unit's rows compute its template's Definition is not checked by the untyped verifier.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

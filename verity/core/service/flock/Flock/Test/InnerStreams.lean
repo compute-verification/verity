@@ -2,7 +2,12 @@
 `RecVStar.fixedRow` on an inner session of two reps of two message rounds each and R's stream (one message round, a level-0
 top of two nodes and a level-1 top of one): what row `x` of each value the inner transcript fixes is.
 -/
-import Flock.RecSetup
+module
+
+public import Flock.RecSetup
+meta import Flock.RecSetup
+
+@[expose] public section
 
 namespace Flock.Test.InnerStreams
 

@@ -1,5 +1,7 @@
-import Definitions.Core.TC.Spec
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+module
+
+public import Definitions.Core.TC.Spec
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
 /-!
 # The ACCEL ops (trusted)
@@ -24,6 +26,8 @@ of its accumulator and its pairs' products (P2, `ProductForm`).
 The hash oracle has no instruction: a program reaches it only through the accelerator's priced calls
 (`Pouw.Dither.Accel.G3`, `Pouw.Dither.CallsAtPub`).
 -/
+
+@[expose] public section
 
 namespace Verity.Accel
 

@@ -1,8 +1,10 @@
-import Mathlib.Algebra.Field.ZMod
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.Ring
-import Mathlib.Tactic.LinearCombination
+module
+
+public import Mathlib.Algebra.Field.ZMod
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.Ring
+public import Mathlib.Tactic.LinearCombination
 
 /-!
 # The affine coin expansion: two steps' offsets are uniform on a prime modulus (proofs)
@@ -20,6 +22,8 @@ A column's step offsets `w_t = u + t·v` expand two coins `u, v ∈ ℤ/q` drawn
   each, the hit count `C` has `E[C] ≤ S·p*` and, on a prime modulus, `E[C(C − 1)] ≤ S(S − 1)·p*²` with `p* = P/q`.
   These are what a second-moment tail over a column's step events reads; the tail itself isn't proved here.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.Expansion
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Sampling.Committed
-import Proofs.Flock.Claims.ZK.Deployed
+module
+
+public import Proofs.Flock.Claims.Sampling.Committed
+public import Proofs.Flock.Claims.ZK.Deployed
 
 /-!
 # Sampling's zero knowledge at the sessions' tables
@@ -31,6 +33,8 @@ cut views. So `TMsgLink` can hold at `Sampled.leaky` only where every checked se
 run's last coin. Where the sessions run one after another, each earlier session's final message is in the prefix, and
 `PrefixHides` needs instead each earlier session's whole view hidden against coins chosen after its commitments.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

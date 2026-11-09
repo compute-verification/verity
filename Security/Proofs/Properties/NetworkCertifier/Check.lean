@@ -1,4 +1,6 @@
-import Proofs.Properties.NetworkCertifier.Grid
+module
+
+public import Proofs.Properties.NetworkCertifier.Grid
 
 /-!
 # What the check decides
@@ -9,6 +11,8 @@ is `no-verdict` and there is one, and rejected otherwise (`check_accept`, `check
 violation exactly when it is accepted (`egress_none`, `ingress_none`), and `no-verdict` exactly when it is `Pending`
 (`egress_noVerdict`, `ingress_noVerdict`).
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check

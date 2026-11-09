@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.CutSession
-import Proofs.Flock.Claims.Complete.Zk.PiopGo
+module
+
+public import Proofs.Flock.Claims.ZK.CutSession
+public import Proofs.Flock.Claims.Complete.Zk.PiopGo
 
 /-!
 # A rep's zerocheck from the cut, against the session's (`SimPiop`'s first phase)
@@ -19,6 +21,8 @@ same transcript and bodies, values related by `R`.
   sends and returns the session's proof, both at the `z`, `ρ` and `r` of those coins (`ZcOutAt`; the cut's `v_A`,
   `v_B`, `v_C` are zeros).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

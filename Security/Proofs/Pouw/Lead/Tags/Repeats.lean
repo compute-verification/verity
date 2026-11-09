@@ -1,5 +1,7 @@
-import Definitions.Pouw.Lead.Gap
-import Proofs.Pouw.Lead.Tags.Tile
+module
+
+public import Definitions.Pouw.Lead.Gap
+public import Proofs.Pouw.Lead.Tags.Tile
 
 /-!
 # The lead's repeated tiles, by pairs
@@ -16,6 +18,8 @@ each pair agrees on a share of the coins bounded by the coins that separate it (
 averaged over the coins are at most `coinBranchGap`; `repeats_le_caps` for at most `2^15` rows, `2^20` columns and an
 inner dimension of at most `2^16`.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Tags
 

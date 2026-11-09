@@ -1,12 +1,14 @@
-import Proofs.Flock.Recursive.Compile
-import Proofs.Flock.Recursive.Statements
-import Proofs.Flock.Recursive.Premises
-import Proofs.Flock.Recursive.ExecClass
-import Proofs.Flock.Recursive.Firewall
-import Proofs.Flock.Recursive.Description
-import Proofs.Flock.Recursive.VStarCheck
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
-import Flock.RecResiduals
+module
+
+public import Proofs.Flock.Recursive.Compile
+public import Proofs.Flock.Recursive.Statements
+public import Proofs.Flock.Recursive.Premises
+public import Proofs.Flock.Recursive.ExecClass
+public import Proofs.Flock.Recursive.Firewall
+public import Proofs.Flock.Recursive.Description
+public import Proofs.Flock.Recursive.VStarCheck
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+public import Flock.RecResiduals
 
 /-!
 # The recursive audit's property (trusted)
@@ -50,6 +52,8 @@ case: at a statement Lean's verifier refuses, (i)'s event is empty.
 C-Flock's definitions and the recursion's model are still in the proofs package, so the statement is here rather than
 in `Security/Properties/`.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

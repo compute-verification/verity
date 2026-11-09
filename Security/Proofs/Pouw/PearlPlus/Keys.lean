@@ -1,6 +1,8 @@
-import PouwPearlPlus.Rule
-import Proofs.Pouw.PearlC.CoreOps
-import Proofs.Pouw.PearlC.TileValues
+module
+
+public import PouwPearlPlus.Rule
+public import Proofs.Pouw.PearlC.CoreOps
+public import Proofs.Pouw.PearlC.TileValues
 
 /-!
 # Pearl+'s bridge, part (c), the debit's keys: `key` is the value order, `least` a threshold, `carried` the rounded add
@@ -10,6 +12,8 @@ an integer in [−TOP, TOP] in value order (±0 one key), `Rule.least` bisects f
 holds, and `Rule.carried x w` is the key of RN(x's value + w's value). `keyVal` is a key's value; the three statements
 here are what the debit's replay (`Debit`) reads of them.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlPlus.Bridge
 

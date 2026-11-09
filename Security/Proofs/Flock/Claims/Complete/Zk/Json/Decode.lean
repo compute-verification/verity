@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.Json.Live
-import Proofs.Flock.Claims.Complete.Zk.Json.Record
-import Proofs.Flock.Claims.JsonNorm
-import Proofs.Flock.Claims.Complete.Json.Canon
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Live
+public import Proofs.Flock.Claims.Complete.Zk.Json.Record
+public import Proofs.Flock.Claims.JsonNorm
+public import Proofs.Flock.Claims.Complete.Json.Canon
 
 /-!
 # The honest masked record decodes, reads live and carries the draw
@@ -12,6 +14,8 @@ fields, so they hold of any printable object with `recordList`'s fields (`decode
 added). The masked decoder's S2 passes on it (`checkHello_ok`, `checkRecord_ok`), after which it decodes as the plain
 record of `specZ` (`decodeWith_specZ`): `decode_recordObjZk`, `live_recordObjZk`, `recordDraw_recordObjZk`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

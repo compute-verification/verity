@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.L0PinFrame
-import Proofs.Flock.Claims.ZK.FinishSwPts
+module
+
+public import Proofs.Flock.Claims.ZK.L0PinFrame
+public import Proofs.Flock.Claims.ZK.FinishSwPts
 
 /-!
 # A rep's PIOP on its recorded coins
@@ -16,6 +18,8 @@ points are the coins':
 * **The points' reads** (`ptsAt_congr`, `ptsAt_claims_x`, `sws_coins_congr`): the claims' points and the switched claims
   read only their rounds' first words.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.LigLock.Fed
 

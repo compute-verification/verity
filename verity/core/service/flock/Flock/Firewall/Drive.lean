@@ -14,7 +14,11 @@ this fixes:
   scheduled round with the device's round in its place and its coins, each of the inner proof's rounds (the firewall's
   own) with its coins, then `finish`.
 -/
-import Flock.Firewall.Skeleton
+module
+
+public import Flock.Firewall.Skeleton
+
+@[expose] public section
 
 namespace Flock.Firewall.Drive
 

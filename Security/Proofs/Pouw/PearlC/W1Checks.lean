@@ -1,5 +1,7 @@
-import Definitions.Pouw.PearlC.W1
-import Definitions.Pouw.PearlC.NoiseSha512
+module
+
+public import Definitions.Pouw.PearlC.W1
+public import Definitions.Pouw.PearlC.NoiseSha512
 
 /-!
 # Checks of W1's cost model and SHA-512's noise
@@ -17,6 +19,8 @@ import Definitions.Pouw.PearlC.NoiseSha512
   workload, activations, state and salt.
 - `w1_queries`: `w1` meets `CostModel.Queries` (it makes no oracle call).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.W1Checks
 

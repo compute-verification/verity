@@ -1,4 +1,6 @@
-import Properties.Verity.Game
+module
+
+public import Properties.Verity.Game
 
 /-!
 # An idle deployment: two instances of the names the subprotocols define, built by hand
@@ -17,6 +19,8 @@ holds. At `exact` (`δ = 0`, `W = 1`) every error is `0` while PoUW's claim fail
 commitment: at onsite a gate computed, at remote a credit Pearl+'s check published, which needs a commitment that binds
 the components' digests, and the empty one doesn't.
 -/
+
+@[expose] public section
 
 namespace Verity.Idle
 

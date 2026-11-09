@@ -1,4 +1,6 @@
-import Definitions.Core.Transport
+module
+
+public import Definitions.Core.Transport
 
 /-!
 # The transport's named assumptions
@@ -8,6 +10,8 @@ premises say who can read a channel's bytes in transit, and nothing proves them;
 key schedule and the record layer give, and are theorem targets from the claims their docstrings name. They sit apart
 from `Assumptions` so that the other named assumptions elaborate without the transport's vocabulary.
 -/
+
+@[expose] public section
 
 namespace Verity.Assumptions
 

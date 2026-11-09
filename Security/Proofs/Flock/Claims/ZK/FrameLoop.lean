@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.SessionLean
-import Proofs.Flock.Claims.ZK.FrameOwn
+module
+
+public import Proofs.Flock.Claims.ZK.SessionLean
+public import Proofs.Flock.Claims.ZK.FrameOwn
 
 /-!
 # The release at the session loop's own frames
@@ -25,6 +27,8 @@ placeholder draws, and the release whose transport state it is:
   now `ProgChecks` at `ofLoop`: that the deployed frame's state is this one's but for `stopped`, the frame reading a
   round's shape alone (`roundFree_alike`, `passes_frames`, `innerOwn_ownRound`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

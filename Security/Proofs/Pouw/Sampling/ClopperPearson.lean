@@ -1,12 +1,14 @@
-import Proofs.Pouw.Sampling
-import Definitions.Pouw.Game.ClopperPearson
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Algebra.BigOperators.Field
-import Mathlib.Algebra.Order.Field.Basic
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.Ring
+module
+
+public import Proofs.Pouw.Sampling
+public import Definitions.Pouw.Game.ClopperPearson
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Algebra.BigOperators.Field
+public import Mathlib.Algebra.Order.Field.Basic
+public import Mathlib.Tactic.NormNum
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.Ring
 
 /-!
 # Clopper–Pearson's upper bound is a miss-bound table (`missBound_cpUpper`)
@@ -18,6 +20,8 @@ at most the largest `x ≤ t` whose bound is below `p`, and `Pr_p[X ≤ x] ≤ �
 `cpUpper` takes the infimum of, and `p` lies between `r` and `1`. So Clopper–Pearson's table at `δ` is a miss bound at
 `δ`, for every `δ ≥ 0` (`missBound_cpUpper`), and at no `δ < 0` (`missBound_cpUpper_nontrivial`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Proofs
 

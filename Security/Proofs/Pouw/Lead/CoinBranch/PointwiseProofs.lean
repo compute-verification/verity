@@ -1,4 +1,6 @@
-import Definitions.Pouw.Dimension.Pointwise
+module
+
+public import Definitions.Pouw.Dimension.Pointwise
 
 /-!
 # What a run at fixed coins must write, whatever program produced it: proofs
@@ -19,6 +21,8 @@ import Definitions.Pouw.Dimension.Pointwise
 * **Branching on the coins** (`adaptive_pairs_le`). Each bound reads only the targets a coin outcome realizes, so it
   holds outcome by outcome for a program chosen from the coins, and sums over the outcomes.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.Pointwise
 

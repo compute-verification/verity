@@ -1,4 +1,6 @@
-import Properties.Challenger
+module
+
+public import Properties.Challenger
 
 /-!
 # Proofs of `Properties.Challenger`
@@ -10,6 +12,8 @@ the same decoders. `coinsFromLog`: the coins' target from `liveAnswer` and the r
 proved about `check` (`acceptMeans_iff`) hold of what it accepts. `oneStageZk_source`: v2's coins read only under a
 challenger and a window its parameters name, so `oneStageZk_drawn`, `coinsFromLog` for v2, is never vacuous.
 -/
+
+@[expose] public section
 
 namespace Properties.Challenger
 

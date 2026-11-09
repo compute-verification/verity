@@ -1,6 +1,8 @@
-import Definitions.Pouw.PearlC.TileCheck8
-import Proofs.Pouw.PearlC.WholeCircuit
-import Proofs.Pouw.PearlC.RowCircuit
+module
+
+public import Definitions.Pouw.PearlC.TileCheck8
+public import Proofs.Pouw.PearlC.WholeCircuit
+public import Proofs.Pouw.PearlC.RowCircuit
 
 /-!
 # `pc8`'s tile check: its units are its templates (proofs)
@@ -18,6 +20,8 @@ chained along the ports, so the unit lemmas proved of each template's own table 
   cut's `A′` and `B̃` rows and `P_A` and `P_B` rows are the row cuts' codes and words (`chain8_A`, `chain8_B`,
   `chain8_PA`, `chain8_PB`), each gate a tile reads being committed (`Whole.port_committed`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.WholeCircuit
 

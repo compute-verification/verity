@@ -1,6 +1,8 @@
-import Definitions.Pouw.Lead.Gap
-import Proofs.Pouw.Lead.Tags.Exact
-import Proofs.Pouw.Lead.Tags.Repeats
+module
+
+public import Definitions.Pouw.Lead.Gap
+public import Proofs.Pouw.Lead.Tags.Exact
+public import Proofs.Pouw.Lead.Tags.Repeats
 
 /-!
 # Tag distinctness at tile grain, and the words' exactness
@@ -12,6 +14,8 @@ served layout's completeness; `G` doesn't read it).
 `not_repeats_le`: without the cap the bound is false at `K = 0`, where stock and so `coinBranchGap` are zero while a
 32 × 8 call's two step-0 tiles agree at some coins. So `Accepted` refuses such calls (`Layout.Admits`).
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Tags
 

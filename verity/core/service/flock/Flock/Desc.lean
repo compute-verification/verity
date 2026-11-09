@@ -1,4 +1,6 @@
-import Flock.HmRow
+module
+
+public import Flock.HmRow
 
 /-!
 # A circuit's descriptor
@@ -17,6 +19,8 @@ A descriptor takes one of two forms:
 `Desc.parse` reads flat files alone; `Desc.parseStmt` reads both forms, and agrees with `HmOut.parseStmt` on the circuit
 (`parseStmt_stmt`) and with `Desc.parse` on every flat file (`parseStmt_of_parse`).
 -/
+
+@[expose] public section
 
 namespace Flock
 

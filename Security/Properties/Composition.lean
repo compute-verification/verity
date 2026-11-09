@@ -1,4 +1,6 @@
-import CoreComposition.Tie
+module
+
+public import CoreComposition.Tie
 
 /-!
 # The composition of core protocols: what its Lean code (`CoreComposition.Product`, `Same`, `Tie`) does
@@ -18,6 +20,8 @@ components `ss` also committed to one record (`AcceptSame`), and under `holdTies
 tie's components named one value (`AcceptTied`). The predicates below say what the cases and digests are, in the
 components' own terms; none restates the composition's check.
 -/
+
+@[expose] public section
 
 namespace Properties.Composition
 

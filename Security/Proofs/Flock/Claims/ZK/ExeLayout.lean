@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.Round0
+module
+
+public import Proofs.Flock.Claims.ZK.Round0
 
 /-!
 # The masked session's tape at the executable's indices
@@ -24,6 +26,8 @@ sizes give.
   (`honestPreOn_exe_of_pos`).
 * `Flock.zk_deployZk_masked_exe_gap`: `Flock.zk_deployZk_masked_layout_gap` at this layout, round `0` discharged.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

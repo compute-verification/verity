@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Zk.RingSwitch
-import Proofs.Flock.Claims.Complete.Zk.Replay
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.RingSwitch
+public import Proofs.Flock.Claims.Complete.Zk.Replay
 
 /-!
 # A returning masked rep, stage by stage
@@ -12,6 +14,8 @@ batched basis; then, on the transcript the Ligerito left, the verifier's own rep
 constraints of the Ligerito's record, and its inner proof on every constraint, which returned the rep's inner proof
 and its final transcript and bodies. The rep's proof is the stages' outputs.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

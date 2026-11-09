@@ -1,16 +1,18 @@
-import CoreComposites
-import Properties.Composition
-import Properties.Pouw.PearlPlus
-import Properties.Flock.Circuit.CircuitOf
-import Definitions.Accounting.JointLive
-import Definitions.Core.Blocks
-import Definitions.Core.Game
-import Definitions.Core.Site
-import Definitions.Hash.Assumptions
-import Definitions.Hash.RowLeaf
-import Definitions.Nci
-import Flock.Hash
-import Lms.Verify
+module
+
+public import CoreComposites
+public import Properties.Composition
+public import Properties.Pouw.PearlPlus
+public import Properties.Flock.Circuit.CircuitOf
+public import Definitions.Accounting.JointLive
+public import Definitions.Core.Blocks
+public import Definitions.Core.Game
+public import Definitions.Core.Site
+public import Definitions.Hash.Assumptions
+public import Definitions.Hash.RowLeaf
+public import Definitions.Nci
+public import Flock.Hash
+public import Lms.Verify
 
 /-!
 # Soundness as a causal game at a composite's compiled verifier, and each subprotocol's target
@@ -96,6 +98,8 @@ PoUB-P2 and the network certifier realize), the declaration's registered inputs 
 period's boundary and the run read as its game, and `certOf`, `foreignBits`, `signatures`, `delta`, `epsForge` and
 `loss` (what the composite publishes, functions of the parameters alone).
 -/
+
+@[expose] public section
 
 namespace Verity
 

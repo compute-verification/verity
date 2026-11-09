@@ -1,4 +1,6 @@
-import Definitions.Accounting.Remote.Held
+module
+
+public import Definitions.Accounting.Remote.Held
 
 /-!
 # What devices outside the node compute for it, and what enters it, over a remote audit session (trusted)
@@ -25,6 +27,8 @@ the network certifiers on its uplinks sign as entering it then. `Quiet T n ω` s
 credited pass of `T` at `ω`: at `n = counted` it is the event the certifiers observe (`auditor_line.py`'s boundary
 check: each uplink's certified ingress over the span is the verifier's own frames).
 -/
+
+@[expose] public section
 
 namespace Accounting.Remote.Held
 

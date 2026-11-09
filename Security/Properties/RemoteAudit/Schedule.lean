@@ -1,6 +1,8 @@
-import Definitions.Accounting.Schedule
-import RemoteAudit.Schedule
-import Properties.RemoteAudit
+module
+
+public import Definitions.Accounting.Schedule
+public import RemoteAudit.Schedule
+public import Properties.RemoteAudit
 
 /-!
 # The schedule check fixes each credited pass's plan (`RemoteAudit.Schedule`)
@@ -36,6 +38,8 @@ Each property's premises hold at the deployed shape (`planBlocks_honest`, `codeL
 would take (`planBlocks_nontrivial`, `codeLayoutTiles_nontrivial`, `opensAtPosition_nontrivial`,
 `steered_of_checked_nontrivial`), in `Proofs.Properties.RemoteAudit.Schedule`.
 -/
+
+@[expose] public section
 
 open RemoteAudit
 

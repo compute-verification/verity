@@ -1,5 +1,7 @@
-import Proofs.Properties.Remote
-import Proofs.Flock.Claims.Complete.Json.Hex
+module
+
+public import Proofs.Properties.Remote
+public import Proofs.Flock.Claims.Complete.Json.Hex
 
 /-!
 # Remote's tie on an honest run: one record, one digest
@@ -13,6 +15,8 @@ The record may name any registered circuit, a tiny one among them: the commitmen
 The lemma takes the decoders' acceptance of the bytes as its hypotheses rather than exhibiting concrete bytes: the
 decoders read their bytes through `Lean.Json.parse`, which is `partial`, so no proof evaluates them on a literal.
 -/
+
+@[expose] public section
 
 namespace Properties.Remote.SecurityProofs
 

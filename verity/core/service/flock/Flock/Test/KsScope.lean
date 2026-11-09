@@ -9,8 +9,14 @@ public input ports do not parse, one that does not load and a per-instance file 
 passes `drawWhy`; at more, a subset draw whose `k` the tables divide passes, and a draw of `k` they don't divide, a draw
 that does not parse and no draw are refused.
 -/
-import Flock.KsScope
-import Flock.Test.Wires
+module
+
+public import Flock.KsScope
+public import Flock.Test.Wires
+meta import Flock.KsScope
+meta import Flock.Test.Wires
+
+@[expose] public section
 
 namespace Flock.Test.KsScope
 

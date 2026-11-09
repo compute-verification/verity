@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Encode
-import Proofs.Flock.Claims.Complete.Prover.Session
+module
+
+public import Proofs.Flock.Claims.Complete.Encode
+public import Proofs.Flock.Claims.Complete.Prover.Session
 
 /-!
 # The plain verdict accepts when each of its checks passes
@@ -19,6 +21,8 @@ names, one goal each.
   (`liveOf`) and its custody (`root_B`, the public words, the link points, the rounds' count and each round's bytes and
   coins), the scope, and a drawn session.
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy Transcript
 

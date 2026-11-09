@@ -1,7 +1,9 @@
-import Definitions.Accounting.Guarantees.PerRun
-import Proofs.Accounting.Device
-import Proofs.Accounting.PerRunTruncation
-import Proofs.Pouw.Game
+module
+
+public import Definitions.Accounting.Guarantees.PerRun
+public import Proofs.Accounting.Device
+public import Proofs.Accounting.PerRunTruncation
+public import Proofs.Pouw.Game
 
 /-!
 # PoUW's guarantee per run, by truncation
@@ -13,6 +15,8 @@ wherever `A` costs at most `b` (`Accounting.Adversary.abort`). Truncation (`Acco
 `Pouw.SecurityProofs.EndToEnd` into its per-run form, and a run that realizes PoUW's game has the compute audit's
 per-run guarantee, because the compute account's work covers the adversary's cost at every coin.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

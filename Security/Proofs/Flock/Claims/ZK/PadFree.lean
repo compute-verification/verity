@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Zk.ConsRingSwitch
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
-import Proofs.Flock.Claims.ZK.Worker
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.ConsRingSwitch
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
+public import Proofs.Flock.Claims.ZK.Worker
 
 /-!
 # The inner constraint at a worker's values reads no pad
@@ -15,6 +17,8 @@ alone (`resid_padFree`), and the constraint holds at the drawn pads exactly wher
 (`rowsAt_iff_pass`): the firewall's own check of the drawn pads decides `Table.RowsAt`, and its stop reveals
 `1[¬RowsAt (w, v)]`, a function of the witness and the worker's values, `0` for the honest prover's (`innerOf_holds`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

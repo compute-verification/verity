@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
-import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
+public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
 
 /-!
 # `zk_session_soundHJ_custody` from the printed draw file
@@ -8,6 +10,8 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
 and, for `DrawFileZK`, that each draw file is the JSON value `flock-verify draw` printed for the verifier's own draw
 under `subset kd` (`drawFileZK_of_toJson_subset`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 

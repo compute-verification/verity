@@ -1,4 +1,6 @@
-import Definitions.Core.DeviceFigures
+module
+
+public import Definitions.Core.DeviceFigures
 
 /-!
 # A device performs within its registered figures
@@ -8,6 +10,8 @@ The premise that carries a device's registered figures (`Definitions/Core/Device
 (`DeviceFigures.Accepted`); nothing checks the device against either, and the device and its vendor are untrusted, so
 what the device can do is assumed, not attested.
 -/
+
+@[expose] public section
 
 namespace Verity.Assumptions
 

@@ -1,7 +1,9 @@
-import Properties.Pous.PeriodGame
-import Proofs.Pous.PeriodAt
-import Proofs.Pous.PeriodDeployed
-import Proofs.Accounting.Prob
+module
+
+public import Properties.Pous.PeriodGame
+public import Proofs.Pous.PeriodAt
+public import Proofs.Pous.PeriodDeployed
+public import Proofs.Accounting.Prob
 
 /-!
 # Proof of PoUS's per-period guarantee in the shared coin game
@@ -20,6 +22,8 @@ bytes (`keyOf_eq'`); block `c` of stream `j` is SHA-512 keyed by that key after 
 streams' test it replaces the blocks by uniform digests, which lay out as uniform streams (`blocksEquiv`). Each step adds
 its `ε` (`prCoin_challenger_le`), on top of the bound at uniform streams.
 -/
+
+@[expose] public section
 
 namespace Pous.Period.SecurityProofs
 

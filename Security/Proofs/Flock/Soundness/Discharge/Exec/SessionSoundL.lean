@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Exec.CompiledTableL
-import Proofs.Flock.Soundness.Discharge.Exec.SessionL
-import Proofs.Flock.Soundness.Session
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.CompiledTableL
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionL
+public import Proofs.Flock.Soundness.Session
 
 /-!
 # A salted table inside a batched session
@@ -15,6 +17,8 @@ and the reps' locksteps are unchanged.
 * `session_knowledge_soundL`: the table accepts while the extraction from `K ≥ 1` reruns after `Commit`
   (`extractTableSL`) fails with probability at most `ε_c⁻ + K·adv₀ + N₀/(eK)` (`adv₀SL`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

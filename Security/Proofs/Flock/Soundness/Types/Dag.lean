@@ -1,5 +1,7 @@
-import Flock.DeriveCheck
-import Proofs.Flock.Soundness.Types.Flat
+module
+
+public import Flock.DeriveCheck
+public import Proofs.Flock.Soundness.Types.Flat
 
 /-!
 # Derived rows compute their circuit type, over the type DAG
@@ -26,6 +28,8 @@ the table) and placed: a placed read's segment embeds a generated `table/v2` lay
 coordinates, and **`genOk_sound`** gives that its output columns carry the table's bits at the index its input columns
 spell.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Types.Dag
 

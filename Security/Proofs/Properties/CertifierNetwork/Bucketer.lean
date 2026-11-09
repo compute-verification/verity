@@ -1,5 +1,7 @@
-import Proofs.Properties.CertifierNetwork.Defs
-import Proofs.Properties.CertifierDevice.Trace
+module
+
+public import Proofs.Properties.CertifierNetwork.Defs
+public import Proofs.Properties.CertifierDevice.Trace
 
 /-!
 # The ingress bucketer over a step
@@ -10,6 +12,8 @@ at the same tick (`step_egress_bucketer`); any other step does that and publishe
 of the ingress grid's shape (`BuGood`) keeps it through a tick, and a tick at a window's last bucket returns the window's
 record: its `T` rows, each packed (`bucketerTick_spec`).
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierNetwork.Proofs
 

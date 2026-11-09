@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Binding.Rows
-import Proofs.Flock.Soundness.Discharge.Layout.Readers
+module
+
+public import Proofs.Flock.Soundness.Binding.Rows
+public import Proofs.Flock.Soundness.Discharge.Layout.Readers
 
 /-!
 # A layout and its rows from three pinning facts
@@ -22,6 +24,8 @@ auditor's `matches_public`, not by anything here), and `SHA-512(enc v)` of the r
 value elsewhere. That the serving roots commit to these leaves is the serving roots' rewinding (`StrictCR.TreeRewind`),
 paid once in the headline as `δ_tree`; nothing here is cryptographic.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Layout
 

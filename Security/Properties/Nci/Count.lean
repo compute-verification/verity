@@ -1,6 +1,8 @@
-import Definitions.Nci
-import NciCheck.Count
-import Properties.Nci
+module
+
+public import Definitions.Nci
+public import NciCheck.Count
+public import Properties.Nci
 
 /-!
 # The count of `(c, k)`-inference blocks: what an accepted count means
@@ -25,6 +27,8 @@ It also needs `NciCheck.Desc`'s summaries to cover the parameter leaves a Defini
 `NciCheck.DescFuzz` decides on generated Programs), and the decoder's widths (`E_REINTERPRET`): a leaf a block reads is
 as wide as the gate it names.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Bridge.Defs
-import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
+module
+
+public import Proofs.Flock.Bridge.Defs
+public import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
 
 /-!
 # The registration's population is the game's units, in order (`Bridge.PopMatches`)
@@ -21,6 +23,8 @@ unit `u`'s lowered gates needs the descriptor-to-circuit-file lowering, which is
 * `popCount_regMatches`: where `RegMatches` names a statement's registration and `PopMatches` holds at the statement's
   descriptor and the registration's query, the statement's partition has `popCount (partOf P κ)` population slots.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

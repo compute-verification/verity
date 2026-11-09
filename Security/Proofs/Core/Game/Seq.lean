@@ -1,5 +1,7 @@
-import Proofs.Core.Game.Runs
-import Definitions.Core.Game.Seq
+module
+
+public import Proofs.Core.Game.Runs
+public import Definitions.Core.Game.Seq
 
 /-!
 # Sequencing strategies, and runs as a game
@@ -12,6 +14,8 @@ over `g` against `s` (`expect_bind`). `runsG g n` plays `g` `n` times in a row; 
 
 The definitions are in `Definitions.Core.Game.Seq`.
 -/
+
+@[expose] public section
 
 namespace Verity
 

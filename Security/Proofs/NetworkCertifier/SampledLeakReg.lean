@@ -1,8 +1,10 @@
-import Definitions.NetworkCertifier.SampledReg
-import Proofs.NetworkCertifier.SampledLeak
-import Proofs.NetworkCertifier.SampledAuditAccepted
-import Proofs.Flock.Claims.Sampling.KS
-import Proofs.Flock.Claims.Finder
+module
+
+public import Definitions.NetworkCertifier.SampledReg
+public import Proofs.NetworkCertifier.SampledLeak
+public import Proofs.NetworkCertifier.SampledAuditAccepted
+public import Proofs.Flock.Claims.Sampling.KS
+public import Proofs.Flock.Claims.Finder
 
 /-!
 # The leak bound at the registration's values
@@ -23,6 +25,8 @@ the registration's opening collide, and `B_reg` finds the collision (`regColl_of
 `sampledLeak_registered` is the bound: `Pr[acc ∧ ¬RLeak] ≤ δ + ε_ks + ε_bind + Pr[B_reg]`, with the leak relation at the
 registration's values, and the count `2^#(freeInputs \ reg) · #faultySets · 2^β · Dj^k` there.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

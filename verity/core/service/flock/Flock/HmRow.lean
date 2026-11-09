@@ -15,20 +15,26 @@ its slot's forced-zero row.
 The verifier evaluates no part of the computation: it recomputes the rows' constants, the wiring and Δ from the pinned
 circuit, the frame-v3-sha512 roots from the public `b ‖ c` and outputs, and the pinned dummy `b ‖ c` from the zero row.
 -/
-import Flock.Statement
-import Flock.TemplateQuery
-import Flock.Typed
-import Flock.Extract
-import Flock.Qcall
-import Flock.HmNets
-import Flock.RecOpen
-import Flock.RecResiduals
-import Flock.RecSparse
-import Flock.RecOpening
-import Flock.SplitNL
-import Flock.Norm
-import Flock.JsonParse
-import Flock.LinkUnits
+module
+
+public import Flock.Statement
+public import Flock.TemplateQuery
+public import Flock.Typed
+public import Flock.Extract
+public import Flock.Qcall
+public import Flock.HmNets
+public import Flock.RecOpen
+public import Flock.RecResiduals
+public import Flock.RecSparse
+public import Flock.RecOpening
+public import Flock.SplitNL
+public import Flock.Norm
+public import Flock.JsonParse
+public import Flock.LinkUnits
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 

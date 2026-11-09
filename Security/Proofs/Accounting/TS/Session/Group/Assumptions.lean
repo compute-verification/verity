@@ -1,5 +1,7 @@
-import Proofs.Accounting.TS.Session.Group.Layer
-import Proofs.Accounting.TS.Session.Lanes.Partials
+module
+
+public import Proofs.Accounting.TS.Session.Group.Layer
+public import Proofs.Accounting.TS.Session.Lanes.Partials
 
 /-!
 # The named premise a leaf's group of linked sessions takes
@@ -16,6 +18,8 @@ a lane, it is proved from the circuits computing their pieces' compositions
 `h1zy`'s tests. Like `Accounting.Assumptions.TS`'s other session premises it reads `RowsSession`, in the proofs package,
 so it sits here until C-Flock's spec is extracted.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions.TS
 

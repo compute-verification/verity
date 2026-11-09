@@ -17,9 +17,13 @@ exclude each other.
   and `Finish` leave, and the auditor's verdict is its release or its stop.
 * An admitted session cut before its `Finish` was decided, or a fault of the loop's, is its stop.
 -/
-import Firewall.Release
-import Flock.Firewall.Session
-import Std.Time
+module
+
+public import Firewall.Release
+public import Flock.Firewall.Session
+public import Std.Time
+
+@[expose] public section
 
 namespace Core.Firewall.Loop
 

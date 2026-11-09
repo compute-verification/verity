@@ -1,4 +1,6 @@
-import Definitions.Pouw.OnsiteFreed
+module
+
+public import Definitions.Pouw.OnsiteFreed
 
 /-!
 # The onsite PoUW protocol's freed compute: its named premises (trusted)
@@ -19,6 +21,8 @@ writes it prices register reductions, so the four Russians' method pays at least
 as written still fails at a dual price that leaves those pipes cheap, and `SAKResidual` is not adopted. Whether
 `RemoteWorkFloor` holds on 𝓜 at a useful `F` is open.
 -/
+
+@[expose] public section
 
 namespace Pouw.Assumptions
 

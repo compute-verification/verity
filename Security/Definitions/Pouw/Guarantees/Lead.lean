@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.Lead
-import Definitions.Pouw.Lead.Deployed
+module
+
+public import Definitions.Pouw.Assumptions.Lead
+public import Definitions.Pouw.Lead.Deployed
 
 /-!
 # The lead's work guarantee (trusted statements)
@@ -44,6 +46,8 @@ The lead is `tag-blc4a-t64-rot/served/s8/k32/w/l1w/l1a/min` (`Pouw.Lead.lead`). 
 * `NontrivialTail`: the same for `G_tail`: at the three points the honest work exceeds the fixed gap, and
   `etaLead < 1` at calls of at most `2^30` tiles.
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.Lead
 

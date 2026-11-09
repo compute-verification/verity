@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.SeqSession
-import Proofs.Flock.Soundness.ZK.HidingAdaptive
-import Proofs.Flock.Soundness.ZK.RealLeaves
-import Proofs.Flock.Claims.ZK.Rewind
+module
+
+public import Proofs.Flock.Claims.Recursion.SeqSession
+public import Proofs.Flock.Soundness.ZK.HidingAdaptive
+public import Proofs.Flock.Soundness.ZK.RealLeaves
+public import Proofs.Flock.Claims.ZK.Rewind
 
 /-!
 # The masked recursion's first part, from `Hm96Hiding`
@@ -31,6 +33,8 @@ statement's own first-part tape (`preTape`: the other randomness, one salt per i
 which reads as the inner prover's tape and the staging salts with the zero salt past them (`preOf`;
 `preCommits_commit`). On one tape for every statement, it would bound the inner rounds and the commit strings.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

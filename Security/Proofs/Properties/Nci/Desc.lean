@@ -1,5 +1,7 @@
-import NciCheck.Desc
-import Mathlib.Tactic
+module
+
+public import NciCheck.Desc
+public import Mathlib.Tactic
 
 /-!
 # The description-sized NCI check against the unrolled one
@@ -22,6 +24,8 @@ through §7's resolution), `Novel.ReadsExact`, proved in `Proofs.Properties.Nci.
 holds the description-sized check against the unrolled one too (`runs` `NciCheck.DescDifftestMain` in the package's
 `lean-audit.json`: 4,009 declarations).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.Desc
 

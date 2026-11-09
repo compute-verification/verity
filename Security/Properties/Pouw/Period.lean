@@ -1,6 +1,8 @@
-import Definitions.Accounting.ComposePeriod
-import Definitions.Accounting.Assumptions.Compose
-import PouwCheck
+module
+
+public import Definitions.Accounting.ComposePeriod
+public import Definitions.Accounting.Assumptions.Compose
+public import PouwCheck
 
 /-!
 # A period's work over the windows PoUW's deployed check accepts (`PouwCheck.protocol.check`)
@@ -131,6 +133,8 @@ at its numbers with `SplitRateClosed` for `SplitRate` and `Pins` from `SaltIsLiv
 accepted window), and `Proofs.Pouw.Period.Honest` is a live-salt period of those windows meeting every premise of
 `H1CheckedCreditPeriod`.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Period
 

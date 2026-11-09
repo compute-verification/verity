@@ -1,6 +1,8 @@
-import Mathlib
-import Proofs.Accounting.RateAudit.Conservation
-import Proofs.Accounting.RateAudit.DeployedRun
+module
+
+public import Mathlib
+public import Proofs.Accounting.RateAudit.Conservation
+public import Proofs.Accounting.RateAudit.DeployedRun
 
 /-!
 # The remote bandwidth audit as deployed, with side sources that may relay receipts: the proof
@@ -17,6 +19,8 @@ and the tier reads are the device's plus its completed bits.
 are its passes' at each candidate (`GrindChain.pr_unpaid_le`), with the completed bits, at most `X`, paid from the
 slack; the session is `DeployedSession.pr_paid_of_window` and the draws, as in `Deployed.lean`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 

@@ -1,6 +1,8 @@
-import Definitions.Pouw.Guarantees.PearlCFlockTile
-import Proofs.Pouw.PearlC.FlockTile.Audit
-import Proofs.Pouw.PearlC.HiddenTileGame
+module
+
+public import Definitions.Pouw.Guarantees.PearlCFlockTile
+public import Proofs.Pouw.PearlC.FlockTile.Audit
+public import Proofs.Pouw.PearlC.HiddenTileGame
 
 /-!
 # Pearl-C's γ under C-Flock's hidden audit, conditional on T3 and the binding
@@ -21,6 +23,8 @@ parameter (`TileReadSession`). A γ under this audit is cited only beside the th
 every strategy the honest batch prover induces on a tile's proof game meets the session's `Cls` at every tile whose
 proof game it is. It needs the honest TileRead prover, which is not in Lean yet either.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.FlockTile
 

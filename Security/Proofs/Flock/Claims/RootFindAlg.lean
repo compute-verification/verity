@@ -1,10 +1,14 @@
-import Proofs.Flock.Claims.RootFindPoly
+module
+
+public import Proofs.Flock.Claims.RootFindPoly
 
 /-!
 # Berlekamp's trace root finder: the algorithm
 
 The definitions whose correctness and step count `Proofs.Flock.Claims.RootFindCorrect` states.
 -/
+
+@[expose] public section
 
 namespace Claims.RootFind
 

@@ -19,9 +19,15 @@ table pins (`Pinned.tableSha`), `row_key_sha512` (`Pinned.rowKey`), the zero row
 a registered scheme through the oracle, `MerkleScheme.opsWith`). No digest of these depends on the session: the flock lock's
 `verifier.stop` names each.
 -/
-import Flock.With.Hashes
-import Flock.HmRow
-import Flock.JsonParse
+module
+
+public import Flock.With.Hashes
+public import Flock.HmRow
+public import Flock.JsonParse
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 

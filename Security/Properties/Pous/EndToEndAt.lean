@@ -1,4 +1,6 @@
-import Properties.Pous.EndToEnd
+module
+
+public import Properties.Pous.EndToEnd
 
 /-!
 # PoUS end to end at any point: the composed check and the ring game
@@ -29,6 +31,8 @@ or `N` as an argument. This module states both at every point and block count, f
 The claims that carry the game to the deployed system are `Pous.EndToEnd`'s four (`pous-ring-device`,
 `pous-ring-speed`, `pous-ring-instantiation`, `prf/sha-512`), read at `N`; none of them names a block count.
 -/
+
+@[expose] public section
 
 open MemoryChallenger MemoryChallenger.Properties
 open PousCheck PousCheck.Properties

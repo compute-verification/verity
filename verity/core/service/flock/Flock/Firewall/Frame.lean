@@ -43,10 +43,14 @@ request's bytes, runs the host's hooks and writes the answer. Rust's `zk_veil::M
 and `zk_veil::Pads` are its speed references: the firewall holds Rust's masked rounds to this release byte for byte, and
 Rust's tree over these draws to `padsRoot`.
 -/
-import Flock.Zk
-import Flock.ZkLigerito
-import Flock.Firewall.Coins
-import Flock.JsonParse
+module
+
+public import Flock.Zk
+public import Flock.ZkLigerito
+public import Flock.Firewall.Coins
+public import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock.Firewall.Frame
 

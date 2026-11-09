@@ -1,7 +1,9 @@
-import Definitions.NetworkCertifier.Assumptions
-import Mathlib.Data.Set.Card
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Algebra.BigOperators.Fin
+module
+
+public import Definitions.NetworkCertifier.Assumptions
+public import Mathlib.Data.Set.Card
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Algebra.BigOperators.Fin
 
 /-!
 # Theorem 1(b): the counting bound on accepted runs
@@ -10,6 +12,8 @@ import Mathlib.Algebra.BigOperators.Fin
 knows the secret and everything observed. The bound is on the observation sequences of runs accepted up to the
 horizon; nothing is said about runs with a violation (decision 1 stays abstract).
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

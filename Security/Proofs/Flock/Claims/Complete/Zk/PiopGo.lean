@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Replay.RingSwitch
-import Proofs.Flock.Claims.Complete.Zk.Piop
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.RingSwitch
+public import Proofs.Flock.Claims.Complete.Zk.Piop
 
 /-!
 # The masked prover's zerocheck and lincheck in closed form
@@ -9,6 +11,8 @@ the pure session, at the coins of the replies to its sends. Each message is the 
 plus its pad, the outputs are the plain prover's (`Zc.out`, `Lc.out`), and the transcripts absorb the padded messages,
 zerocheck's binding the pads' root after its label (`ZcZ.tEnd`, `LcZ.tEnd`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

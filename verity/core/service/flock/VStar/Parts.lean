@@ -1,5 +1,7 @@
-import VStar.Algebra
-import VStar.Compose
+module
+
+public import VStar.Algebra
+public import VStar.Compose
 
 /-!
 # V*'s algebra cut into statements (`verity_flock.rec_residuals.parts`)
@@ -10,6 +12,8 @@ no part, not even alone, is a part of its own if it reads at most `MAX_LONE_SLOT
 S's order) and the v elements they touch (in v's order), w and v renumbered. `parts` reads S's terms through their ports
 without checking them, so its domain is a checked S (`checkS`): past it, Python's slices and lookups fail.
 -/
+
+@[expose] public section
 
 namespace VStar
 

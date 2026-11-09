@@ -1,4 +1,6 @@
-import PouwCheck.Verified
+module
+
+public import PouwCheck.Verified
 
 /-!
 # A served window's live statements verified (`credit._live_verified`)
@@ -29,6 +31,8 @@ Before any run: the circuit files' form (`FILES_FORM`), a committed live circuit
 form (`LIVE_STATEMENTS_FORM`), and one statement a round of the window's (a retry never reproves). Every refusal is
 (code, why), the first rule the input breaks, with Python's words.
 -/
+
+@[expose] public section
 
 namespace PouwCheck.LiveVerified
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.VStarTopsOk
-import Proofs.Flock.Claims.Recursion.SideCapPos
-import Proofs.Flock.Claims.Complete.Honest
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarTopsOk
+public import Proofs.Flock.Claims.Recursion.SideCapPos
+public import Proofs.Flock.Claims.Complete.Honest
 
 /-!
 # The deployed reference inner prover (`IrDep`) and its openings' shape (`irShaped_dep`)
@@ -30,6 +32,8 @@ both reps open level 0's queries (`q_ne_zero`), level `l`'s openings are its `2q
 (`posAt_lt`), so past its `d - cap` siblings below `2^cap`, the level's nodes a rep, and the level's tops are both
 reps' one tree at level 0 (`topsAt0_fit`) and rep 0's nodes then rep 1's above (`topsAtL_fit`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 

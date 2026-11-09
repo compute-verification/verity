@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Complete.Shaped.Walk
-import Proofs.Flock.Claims.Complete.Shaped.Piop
-import Proofs.Flock.Claims.Complete.Json.Stmt
-import Proofs.Flock.VBridge.Family.Lig
-import Proofs.Flock.Soundness.Refine.Regions
+module
+
+public import Proofs.Flock.Claims.Complete.Shaped.Walk
+public import Proofs.Flock.Claims.Complete.Shaped.Piop
+public import Proofs.Flock.Claims.Complete.Json.Stmt
+public import Proofs.Flock.VBridge.Family.Lig
+public import Proofs.Flock.Soundness.Refine.Regions
 
 /-!
 # The honest rep's proof fits its shape
@@ -17,6 +19,8 @@ is `fileBound_lt`: the file of a statement of `m ≤ 35` with at most 2,050 clai
 `extraClaims_size`, at most 1,024 regions by `Case.scheme`) is under `2^64` bytes, since a registered scheme's digests
 and salts are within SHA-512's (`scheme_sizes`, `schedPart_mono`) and `fast100`'s file part at those is under `2^32`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

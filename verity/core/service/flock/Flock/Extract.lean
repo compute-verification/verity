@@ -8,9 +8,15 @@ the Definition's own gates follow at `lo`. In a graph, an operand outside the Ca
 the graph is exported (`full`), or else named by its gate, which gives the same recompute tokens (equal exactly when the
 inputs are one) without a table of inputs.
 -/
-import Std.Data.HashMap
-import Flock.Program
-import Flock.Qword
+module
+
+public import Std.Data.HashMap
+public import Flock.Program
+public import Flock.Qword
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock.Extract
 

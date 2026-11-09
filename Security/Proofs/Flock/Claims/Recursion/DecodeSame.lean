@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Json.Canon
-import Proofs.Flock.Claims.Complete.Json.Decode
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Canon
+public import Proofs.Flock.Claims.Complete.Json.Decode
 
 /-!
 # The honest record's checks at a value alike it
@@ -14,6 +16,8 @@ no JSON premise: S3 reads `require_link` by a match, and U1's `canon` is total (
   each of that object's keys looks up a value alike its own and no other key looks up anything.
 * **A printable value is alike itself** (`same_of_good`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

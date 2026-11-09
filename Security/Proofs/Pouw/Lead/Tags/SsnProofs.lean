@@ -1,5 +1,7 @@
-import Definitions.Pouw.Dimension.Ssn
-import Proofs.Pouw.Dimension.H100FloorProofs
+module
+
+public import Definitions.Pouw.Dimension.Ssn
+public import Proofs.Pouw.Dimension.H100FloorProofs
 
 /-!
 # Served sparse noise in the bit model: distinctness and shift separation (proofs)
@@ -19,6 +21,8 @@ before the coins and right on every coin value.
   words are distinct (`ssn1lServed_full`, `ssn1l5Served_full`), charged (`ssn1lServedB_charged`,
   `ssn1l5Served_charged`) and shift-separated (`ssn1lServed_shift`, `ssn1l5Served_shift`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.Ssn
 

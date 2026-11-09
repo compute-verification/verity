@@ -1,5 +1,7 @@
-import NetworkCheck.Check
-import Properties.Identity
+module
+
+public import NetworkCheck.Check
+public import Properties.Identity
 
 /-!
 # The network certificate check: what its Lean code (`NetworkCheck.Check`) does
@@ -16,6 +18,8 @@ these conclusions describe) and the honest transcript's acceptance are completen
 The predicates below say what a link-window's records, certificate and digests are, in the check's own terms; none
 restates the check. A link-window is a direction, a link of the unit in that direction and a window `w < W`.
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.Seq
+module
+
+public import Proofs.Flock.Claims.Recursion.Seq
 
 /-!
 # The composed simulator is the claim's `Sim`
@@ -18,6 +20,8 @@ inner protocol's rounds are the inner verifier's (`I.V.k = IV.k` at the inner st
 * `Claims.ZKMal.ZKmalAt.of_sim`: `ZKmalAt` carries over to a simulator with the same transcripts on coins in
   bijection.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

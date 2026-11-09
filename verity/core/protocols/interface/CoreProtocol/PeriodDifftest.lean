@@ -1,5 +1,7 @@
-import Difftest
-import CoreProtocol.Period
+module
+
+public import Difftest
+public import CoreProtocol.Period
 
 /-!
 # The periods difftest: `CoreProtocol.Period`'s functions behind `Difftest.serve`
@@ -13,6 +15,10 @@ import CoreProtocol.Period
 * `monitoring`: a monitoring period read from its JSON (refused unless valid), its execution blocks' spans and each
   execution block's sampling blocks' spans.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core.PeriodDifftest
 

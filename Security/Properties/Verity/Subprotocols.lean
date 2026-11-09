@@ -1,4 +1,6 @@
-import Properties.Verity.Game
+module
+
+public import Properties.Verity.Game
 
 /-!
 # Each subprotocol's bound at its compiled component
@@ -15,6 +17,8 @@ the commit phase's file check and `k`'s acceptance as a `same` composition, so e
 is `TargetFor (Verdict k a) k a`), so the nontrivial checks can state that the target fails for a verifier that accepts
 everything.
 -/
+
+@[expose] public section
 
 namespace Verity
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.DeployCode
+module
+
+public import Proofs.Flock.Claims.DeployCode
 
 /-!
 # Flock's numbers at the deployed instances
@@ -25,6 +27,8 @@ default); `PlainIn` and `ZkIn` collect these, with `n ≤ 200`:
 `ε_table` and `N₀` here are the session's sums over its tables, so the spec's per-table `2^{−205}` costs `log₂ n` bits
 of `λ` at `n` tables.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock.Numbers
 

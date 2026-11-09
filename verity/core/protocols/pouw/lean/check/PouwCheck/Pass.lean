@@ -1,11 +1,13 @@
-import Flock.Draw
-import PouwCommit.Bindings
-import PouwCommit.Draws
-import PouwWindow.Rounds
-import PouwCheck.Inputs
-import SampledProofs.ChallengerRecord
-import SampledProofs.ChallengerSession
-import Identity.Domains
+module
+
+public import Flock.Draw
+public import PouwCommit.Bindings
+public import PouwCommit.Draws
+public import PouwWindow.Rounds
+public import PouwCheck.Inputs
+public import SampledProofs.ChallengerRecord
+public import SampledProofs.ChallengerSession
+public import Identity.Domains
 
 /-!
 # The pass's epoch and the window's draw (`core_check.py`, "the pass's epoch and the window's draw")
@@ -38,6 +40,8 @@ SHA-512, and, only in a replay of a recorded pass, the e2e-service passes', whic
 recorded draw also reads the e2e-service's first coin commitments, named as the current one but on SHA-256 as core was
 then: bound by `taggedSha256`, after the current binding, and drawn by `deriveV1` and `streamV1`.
 -/
+
+@[expose] public section
 
 namespace PouwCheck
 

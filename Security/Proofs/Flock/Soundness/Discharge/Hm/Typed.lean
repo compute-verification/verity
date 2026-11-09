@@ -6,7 +6,11 @@ filters); the constant bits read the pin (`pin_bitT`) and the root's first slot'
 because `HmRow.checkTyped` refuses a root that fills its slot). The rows are `sha512/row/v1`'s because `HmRow.rowPorts`
 refuses a typed statement's bit rows (`ParseFactsT.v1`).
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Copy
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Copy
+
+@[expose] public section
 
 open Flock FlockLevel3
 

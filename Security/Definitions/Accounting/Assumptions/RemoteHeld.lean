@@ -1,4 +1,6 @@
-import Definitions.Accounting.Remote.Held
+module
+
+public import Definitions.Accounting.Remote.Held
 
 /-!
 # What the memory line held under the remote audit assumes (trusted)
@@ -43,6 +45,8 @@ completing.
   advantage plus the receipts' binding term (`Accounting.Remote.Draw.Receipts.binding`: an opened receipt moved off
   the row its root holds, a SHA-512 collision between its held and presented openings).
 -/
+
+@[expose] public section
 
 namespace Accounting.Remote.Held.Assumptions
 

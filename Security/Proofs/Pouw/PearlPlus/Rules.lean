@@ -1,6 +1,8 @@
-import PouwPearlPlus.Rule
-import Proofs.Pouw.PearlC.CoreOps
-import Proofs.Pouw.PearlPlus.Words
+module
+
+public import PouwPearlPlus.Rule
+public import Proofs.Pouw.PearlC.CoreOps
+public import Proofs.Pouw.PearlPlus.Words
 
 /-!
 # Pearl+'s bridge, part (c): the check's per-row rules and inert-work replay are the game's
@@ -21,6 +23,8 @@ The tile's cap is not stated here: the check's cap leaves out the game's forming
 columns, where `TileGood` reads every column and `passRows`, so the cap's statement waits on the restated credit set and
 acceptance event.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlPlus.Bridge
 

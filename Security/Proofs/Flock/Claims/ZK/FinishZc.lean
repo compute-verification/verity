@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FrameRounds
+module
+
+public import Proofs.Flock.Claims.ZK.FrameRounds
 
 /-!
 # The masked zerocheck's and lincheck's proofs, answered by `asksCut`
@@ -10,6 +12,8 @@ room for their asks before round `n`, the run returns, and the proof it returns 
 * **`zerocheckCut_proof`**: `round1_ab`, `round1_c`, the `m − 6` residual rounds and the three finals.
 * **`lincheckCut_proof`**: the `k_log − 6` rounds and `z_partial`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

@@ -1,12 +1,14 @@
-import PouwPearlPlus.Words
-import Definitions.Pouw.PearlC.DeviceRev1
-import Definitions.Pouw.PearlC.RowSem
-import Definitions.Pouw.PearlC.NoiseSha512
-import Proofs.Pouw.PearlPlus.Noise
-import Proofs.Pouw.PearlPlus.Numerics
-import Proofs.Pouw.PearlPlus.Atom
-import Proofs.Pouw.PearlC.TileValues
-import Proofs.Pouw.PearlC.TileCheckWords
+module
+
+public import PouwPearlPlus.Words
+public import Definitions.Pouw.PearlC.DeviceRev1
+public import Definitions.Pouw.PearlC.RowSem
+public import Definitions.Pouw.PearlC.NoiseSha512
+public import Proofs.Pouw.PearlPlus.Noise
+public import Proofs.Pouw.PearlPlus.Numerics
+public import Proofs.Pouw.PearlPlus.Atom
+public import Proofs.Pouw.PearlC.TileValues
+public import Proofs.Pouw.PearlC.TileCheckWords
 
 /-!
 # Pearl+'s bridge, part (b): a tile's words under -h3's noise are the semantics'
@@ -23,6 +25,8 @@ It composes the noise (`Noise.lean`), the row statistics (`StatsAreTheRow`), the
 (`wordsVal`, `encRow`), so a `−0` word and an A′ or B̃ code `0x80` agree with the semantics' `+0` in value only; every
 statement here is on values (`wordQ`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlPlus.Bridge
 

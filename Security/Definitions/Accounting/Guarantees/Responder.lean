@@ -1,8 +1,10 @@
-import Definitions.Accounting.Responder
-import Definitions.Accounting.Window
-import Definitions.Pous.P2.Cost
-import Definitions.Pous.Model.SampledAudit
-import Definitions.Pous.Assumptions.P2
+module
+
+public import Definitions.Accounting.Responder
+public import Definitions.Accounting.Window
+public import Definitions.Pous.P2.Cost
+public import Definitions.Pous.Model.SampledAudit
+public import Definitions.Pous.Assumptions.P2
 
 /-!
 # B2: a location as PoUS's responder (trusted)
@@ -65,6 +67,8 @@ their ticks (the model's `e = 0` across the audit), what the rest sends `X` duri
 the number of values it takes. The proofs are in `Security/Proofs/Accounting/Responder.lean`, `B2Window`'s in
 `Security/Proofs/Accounting/Responder/Latency.lean`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

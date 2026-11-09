@@ -58,13 +58,17 @@ session's `Ping`s are answered here until its first other request, which the hol
 reaches the auditor, and its `Finish`, with the proofs that leave before it, is held until the hold lets them go.
 `flock-firewall session` has no hold.
 -/
-import Flock.Firewall.SessionPlan
-import Flock.Firewall.Frames
-import Flock.Firewall.Level0
-import Flock.Firewall.Finish
-import Std.Async.TCP
-import Std.Async.DNS
-import Flock.JsonParse
+module
+
+public import Flock.Firewall.SessionPlan
+public import Flock.Firewall.Frames
+public import Flock.Firewall.Level0
+public import Flock.Firewall.Finish
+public import Std.Async.TCP
+public import Std.Async.DNS
+public import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock.Firewall.Session
 

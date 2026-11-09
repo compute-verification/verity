@@ -1,4 +1,6 @@
-import Proofs.Pouw.PearlPlus.Factors
+module
+
+public import Proofs.Pouw.PearlPlus.Factors
 
 /-!
 # Pearl+'s bridge, part (b): a tile's words are the semantics' (the proof)
@@ -15,6 +17,8 @@ import Proofs.Pouw.PearlPlus.Factors
 * `wordsAreTheSemantics_of`: at -h3's noise (`Noise.lean`) those are the protocol's ticket and useful words.
 * `wordsAreTheSemantics`: with the peel factor rows proved (`peelARow`, `peelBRow`, `Factors.lean`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlPlus.Bridge
 

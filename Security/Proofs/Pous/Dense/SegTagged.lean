@@ -1,5 +1,7 @@
-import Proofs.Pous.Dense.DenseReCert
-import Definitions.Pous.Model.SegLift
+module
+
+public import Proofs.Pous.Dense.DenseReCert
+public import Definitions.Pous.Model.SegLift
 
 /-!
 # The 14 GB theorem for the implementation's tagged keying
@@ -23,6 +25,8 @@ statement about the two oracle games, proved here (`segTag_auditSecure`):
 So every tagged adversary's acceptance probability is a global adversary's, and `segTag_meets_14` follows from
 `seg_meets_14`, for every salt.
 -/
+
+@[expose] public section
 
 namespace PousDenseReCert
 

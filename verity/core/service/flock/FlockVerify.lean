@@ -1,7 +1,13 @@
-import Flock
-import Flock.CircuitType
-import Flock.Layout
-import Flock.JsonParse
+module
+
+public import Flock
+public import Flock.CircuitType
+public import Flock.Layout
+public import Flock.JsonParse
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 open Flock
 

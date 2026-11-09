@@ -1,10 +1,12 @@
-import Definitions.Accounting.Device
-import Definitions.Core.DeviceFigures
-import Definitions.Core.Period
-import Mathlib.Data.Finset.Lattice.Fold
-import Mathlib.Data.List.Perm.Basic
-import Mathlib.Data.List.Nodup
-import Mathlib.Data.NNRat.Floor
+module
+
+public import Definitions.Accounting.Device
+public import Definitions.Core.DeviceFigures
+public import Definitions.Core.Period
+public import Mathlib.Data.Finset.Lattice.Fold
+public import Mathlib.Data.List.Perm.Basic
+public import Mathlib.Data.List.Nodup
+public import Mathlib.Data.NNRat.Floor
 
 /-!
 # The Site and its registration
@@ -62,6 +64,8 @@ The digests are parameters (`Registration.Digests`), SHA-512 in the deployed che
 and looked up by SKU, its tolerance around their figures and its keys are the check's own (`Registration.Auditor`). At
 every choice of them the check is decidable.
 -/
+
+@[expose] public section
 
 namespace Verity
 

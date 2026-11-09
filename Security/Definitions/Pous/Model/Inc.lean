@@ -1,5 +1,7 @@
-import Mathlib.Basic.ENNReal.Real
-import Definitions.Pous.Model.Audit
+module
+
+public import Mathlib.Basic.ENNReal.Real
+public import Definitions.Pous.Model.Audit
 
 /-!
 # `INC(β, π)` and product-form responders
@@ -13,6 +15,8 @@ A product-form responder (the report's `A2'`) answers every challenged index by 
 same state, and `p₀ = 1 − (β − S − B)/(B·ℓ)` is the per-block success above which that responder yields a
 compressor to `β` bits (report Theorem 1(ii)).
 -/
+
+@[expose] public section
 
 namespace Pous
 

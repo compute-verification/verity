@@ -7,8 +7,12 @@ computed rows hold, and the constant column is 1 (its row is `pin · pin`, or th
 template instance `g`'s `sha512x3` and `hm96` slots hold the verifier's layouts past their 8192 and 4096 input rows
 (`shaSlot_of_sat`, `hmSlot_of_sat`), `port_commit_rows`'s `hsha` and `hhm`.
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Nets
-import Proofs.Flock.Soundness.ExecTemplatePlace
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Nets
+public import Proofs.Flock.Soundness.ExecTemplatePlace
+
+@[expose] public section
 
 open Flock FlockLevel3
 

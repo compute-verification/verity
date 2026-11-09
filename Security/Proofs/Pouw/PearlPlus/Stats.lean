@@ -1,5 +1,7 @@
-import Proofs.Pouw.PearlPlus.Words
-import Proofs.Pouw.PearlPlus.Rho
+module
+
+public import Proofs.Pouw.PearlPlus.Words
+public import Proofs.Pouw.PearlPlus.Rho
 
 /-!
 # Pearl+'s bridge, part (b), the row statistics: `s5_stats` is `pc8`'s
@@ -15,6 +17,8 @@ divide and FMA as they are. Every word stays sign-clear (`Pos`), so the check's 
 is the row's `I32Le`/`SelectI32` max; `ofInt n` is `f32Word n` up to `n = 2^24`. A raw word and its re-encoding differ
 only at `−0`, which none of the formulas tells from `+0` (`WholeCircuit.alpha8_zeroSign`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlPlus.Bridge
 

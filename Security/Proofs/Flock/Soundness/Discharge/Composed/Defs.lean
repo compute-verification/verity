@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.ZkBind.BindX
-import Proofs.Flock.Soundness.Discharge.ZkBind.Rate
-import Proofs.Flock.Soundness.Discharge.ZkView.Decode
-import Proofs.Flock.Soundness.Discharge.ZkView.Fixed
-import Proofs.Flock.Soundness.Discharge.ZkView.Prefinal
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkBind.BindX
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Rate
+public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
+public import Proofs.Flock.Soundness.Discharge.ZkView.Fixed
+public import Proofs.Flock.Soundness.Discharge.ZkView.Prefinal
 
 /-!
 # One `--zk` sampled session: the pieces the soundness half reads
@@ -12,6 +14,8 @@ import Proofs.Flock.Soundness.Discharge.ZkView.Prefinal
 * `DecodesOnZK`, `simZ`, `execRefinesZK_on`: `DecodesZK`, `simAuditZK` and `execRefinesZK_one` at the law's draws only
   (as `Tables.DecodesOnJ` is on the public path), the simulated strategy carried into the compiled batched session.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

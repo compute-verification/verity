@@ -4,8 +4,12 @@ column of low minterm `l` exactly when bit `j` of table word `h·2^lo + l` is se
 with a subset-sum table per byte of the word. `foldB_get`: entry `loTop + l` gains `Σ_h Σ_{j : bit j of word(h, l)} e(j, h)`,
 and no other entry changes.
 -/
-import Proofs.Flock.Level3.Fold
-import Flock.Lookup
+module
+
+public import Proofs.Flock.Level3.Fold
+public import Flock.Lookup
+
+@[expose] public section
 
 open Flock Lookup
 

@@ -1,6 +1,8 @@
-import Batteries.Tactic.OpenPrivate
-import Properties.Pouw.LiveSalt
-import Std.Tactic.Do
+module
+
+public import Batteries.Tactic.OpenPrivate
+public import Properties.Pouw.LiveSalt
+public import Std.Tactic.Do
 
 /-!
 # The challenger's ledger, for `Properties.Pouw.LiveSalt.LedgerShows`
@@ -21,6 +23,8 @@ holds of the whole ledger (`verifyLedger_inv`).
 The challenger's functions are monadic. Each fact about one is a Hoare triple proved by `mvcgen`, and `of_triple` reads
 it back at an `.ok` result.
 -/
+
+@[expose] public section
 
 set_option mvcgen.warning false
 

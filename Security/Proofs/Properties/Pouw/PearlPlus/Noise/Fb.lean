@@ -1,8 +1,12 @@
-import Proofs.Properties.Pouw.PearlPlus.Noise.LineKey
+module
+
+public import Proofs.Properties.Pouw.PearlPlus.Noise.LineKey
 
 /-! Noise lines 0 to 127 of the test noise's F_B, sixteen to a kernel computation (`Witness.test_fb0` to
 `Witness.test_fb7`), checked one after another, so that a build holds one chunk's kernel state for the module at a
 time. -/
+
+@[expose] public section
 
 set_option Elab.async false
 

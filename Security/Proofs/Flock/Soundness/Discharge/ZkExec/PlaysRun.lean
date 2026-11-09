@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsCut
-import Proofs.Flock.Soundness.Discharge.ZkExec.Inner
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsCut
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Inner
 
 /-!
 # A `--zk` rep's `RepRun`
@@ -9,6 +11,8 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Inner
 size hypotheses come from the run itself (`repProg_sizes`: `Zk.ligerito`'s shape check on `ybar`, `verifyInner`'s
 on `τ`'s commitment and `Y`), and `repShapeZ` is `shapeZE` at the executable's dimensions (`ZkTabSeam`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

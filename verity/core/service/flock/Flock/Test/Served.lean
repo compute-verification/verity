@@ -4,7 +4,12 @@
 and the selftest builds' `+seed-injection` ones among them) and a plain session on seed coins are refused, each with its
 reason; a version before hm96 rows, or typed, is refused earlier by `ProvedScope.check`, and the version is named first.
 -/
-import Flock.ProvedScope
+module
+
+public import Flock.ProvedScope
+meta import Flock.ProvedScope
+
+@[expose] public section
 
 namespace Flock.Test.Served
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.Rep
+module
+
+public import Proofs.Flock.Soundness.Refine.Rep
 
 /-!
 # Level 0's request in an accepted Ligerito run
@@ -8,6 +10,8 @@ their positions. Here the same run also says which request comes first: level 0'
 round Ligerito draws them from, `k0 + 6` rounds in (`ligerito_refines_req0`, `ligerito_accepts_req0`,
 `ligerito_accepts_opening_req0`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

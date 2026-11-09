@@ -1,6 +1,8 @@
-import Properties.Composition
-import Proofs.Properties.Pouw.LiveSalt.Canon
-import Proofs.Flock.Claims.Complete.Json.Hex
+module
+
+public import Properties.Composition
+public import Proofs.Properties.Pouw.LiveSalt.Canon
+public import Proofs.Flock.Claims.Complete.Json.Hex
 
 /-!
 # The composition's properties, proved
@@ -16,6 +18,8 @@ and the zero byte, its JSON reads back entry by entry, each escaped string endin
 `acceptSame_nontrivial` and `acceptTied_nontrivial` their nontrivial ones, an input whose conclusion fails, which a
 verifier that accepts everything accepts.
 -/
+
+@[expose] public section
 
 open private hex4 from Flock.Canon
 

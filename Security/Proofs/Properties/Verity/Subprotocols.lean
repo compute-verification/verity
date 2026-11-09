@@ -1,12 +1,14 @@
-import Properties.Verity.Subprotocols
-import Proofs.Properties.Verity.Soundness
-import Proofs.Core.Game.Prob
-import Proofs.Core.UnionBound
-import Proofs.Pouw.Prob
-import Proofs.Accounting.JointBridge.WorkOfCreditedWords
-import Proofs.Accounting.JointBridge.SpaceOfPeriodHeld
-import Proofs.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
-import Proofs.Accounting.JointBridge.CommOfPeriodLeakAccepted
+module
+
+public import Properties.Verity.Subprotocols
+public import Proofs.Properties.Verity.Soundness
+public import Proofs.Core.Game.Prob
+public import Proofs.Core.UnionBound
+public import Proofs.Pouw.Prob
+public import Proofs.Accounting.JointBridge.WorkOfCreditedWords
+public import Proofs.Accounting.JointBridge.SpaceOfPeriodHeld
+public import Proofs.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
+public import Proofs.Accounting.JointBridge.CommOfPeriodLeakAccepted
 
 /-!
 # PoUW's, PoUS's, PoUB-P2's and the network certifier's targets from their period guarantees
@@ -64,6 +66,8 @@ Two shapes of bridge:
   rebuilt at `atCode` (`RealizesSpaceOfPeriodHeld.atCode`, `RealizesCommOfPeriodLeakAccepted.atCode`) with that field
   replaced by the refinement; the realization's own verdict field is not read.
 -/
+
+@[expose] public section
 
 namespace Verity
 

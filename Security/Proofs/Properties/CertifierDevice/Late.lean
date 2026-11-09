@@ -1,4 +1,6 @@
-import Proofs.Properties.CertifierDevice.Fifo
+module
+
+public import Proofs.Properties.CertifierDevice.Fifo
 
 /-!
 # The certifier device, proved: handing buckets and late frames
@@ -10,6 +12,8 @@ after its `h` leaves the certifier faulted: the tick that hands it is not clean 
 certifier is unfaulted its `queued` count is the Program's queue of those `h`s: the Program releases no later than the
 device (`released_mono`), and a window whose start is unfaulted has caught up.
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierDevice.Proofs
 

@@ -1,5 +1,7 @@
-import Definitions.Accounting.TS.Fold
-import Definitions.Pouw.Receipt.Li
+module
+
+public import Definitions.Accounting.TS.Fold
+public import Definitions.Pouw.Receipt.Li
 
 /-!
 # A one-register fold's low bit (trusted)
@@ -18,6 +20,8 @@ on bit 0) is a bound on XOR. A tree of `f`-input nodes computes that XOR with `â
 more than `FoldFanIn` gives. A residue argument beats the fan-in floor only on a fold whose state has more than one
 register.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.ZK.Session
-import Proofs.Flock.Claims.Scope.Split
-import Proofs.Flock.Claims.Scope.StmtOf
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
+module
+
+public import Proofs.Flock.Claims.ZK.Session
+public import Proofs.Flock.Claims.Scope.Split
+public import Proofs.Flock.Claims.Scope.StmtOf
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
 
 /-!
 # The deployed masked session's tables: `Tables`, `DummyReg` and `Complete`
@@ -27,6 +29,8 @@ draw, `DrawSetupZHJ.table`), so every table is a table the session sets up (`set
   (`dummyReg_tabC`, `coinedOf_reg_of`) hold at every statement, and `Complete` (`complete_tabC`) at every statement with
   a witness.
 -/
+
+@[expose] public section
 
 /-! ## A `--zk` table from its statement alone -/
 

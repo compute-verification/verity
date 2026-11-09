@@ -1,7 +1,9 @@
-import Definitions.Flock.Arith
-import Mathlib.Data.Matrix.Mul
-import Mathlib.Basic.Real.Basic
-import Mathlib.Data.Fintype.Card
+module
+
+public import Definitions.Flock.Arith
+public import Mathlib.Data.Matrix.Mul
+public import Mathlib.Basic.Real.Basic
+public import Mathlib.Data.Fintype.Card
 
 /-!
 # Statements, witnesses, claims and the committed values
@@ -18,6 +20,8 @@ so the commitment binds to that short list, not to one witness. `CommittedSatisf
 some message whose encoding is within the level-0 proximity radius of `C₀` unpacks to a witness
 satisfying the statement. This is the claim soundness certifies.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Model
 

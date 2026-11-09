@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.ZK.Reference
-import Flock.Hm96
-import Flock.Canon
-import Flock.Firewall.SessionPlan
+module
+
+public import Proofs.Flock.Claims.ZK.Reference
+public import Flock.Hm96
+public import Flock.Canon
+public import Flock.Firewall.SessionPlan
 
 /-!
 # The deployed coin layer of `flock-circuit --zk`
@@ -34,6 +36,8 @@ requests, not the statement's, so the record takes them as a parameter, and the 
 `Claims.Witness.Flock.ZK_meets` states the record's coin layer; `ZK_coins_fails` that the degenerate coin layer (an
 opening check that passes everything, a coin that is the opening) is not it.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

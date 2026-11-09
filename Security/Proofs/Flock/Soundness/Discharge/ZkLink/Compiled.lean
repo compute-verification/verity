@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkSession.Session
-import Proofs.Flock.Soundness.CompiledSound
-import Proofs.Flock.Soundness.ExtractAcc
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Session
+public import Proofs.Flock.Soundness.CompiledSound
+public import Proofs.Flock.Soundness.ExtractAcc
 
 /-!
 # The compiled `--zk` table and session (live/PROTOCOL.md §1, §3, §5, §7; PROTOCOL.md §5, §14)
@@ -32,6 +34,8 @@ compiled session `sessionZC` its instance at `tabAfterZC`. `batchedSessionZC` is
 level-0 openings of `k` reruns of everything after `Commit` in which the session accepts (`extractTableZ`), and
 `extractProbAccZ` is the probability of an event of that oracle over those reruns.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

@@ -1,6 +1,8 @@
-import PouwPearlPlus.Rule
-import PouwPearlPlus.Run
-import PouwCommit.Rows
+module
+
+public import PouwPearlPlus.Rule
+public import PouwPearlPlus.Run
+public import PouwCommit.Rows
 
 /-!
 # One drawn tile (`clear_audit.Verifier.check_tile`, `clear_work.check_opened`, `verify_run.check_y`)
@@ -25,6 +27,8 @@ import PouwCommit.Rows
 `wn` is the fixed operand's noise (`Words.fixedNoise`), once per pass and weight; its failure is the tile's
 `inadmissible inputs`, where Python's `encode` meets it.
 -/
+
+@[expose] public section
 
 namespace PouwCheck.PearlPlus
 

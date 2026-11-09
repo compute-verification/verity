@@ -1,5 +1,7 @@
-import Proofs.Flock.Bridge.LeafMap
-import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJP
+module
+
+public import Proofs.Flock.Bridge.LeafMap
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJP
 
 /-!
 # `SampledKSLiveV5`: the sampled audit's knowledge soundness at the verifier's public inputs (stated)
@@ -25,6 +27,8 @@ The targets V5's assembly takes (`Bridge.AssemblyTargetV5`): `TransportsLiveV5` 
 `EndToEndHiddenV5` (`EndToEndHiddenC` at these, from `OpeningsCanonTargetV5`), and `FaultyRightTargetC`,
 `PartBlocksTarget` and `CountTarget` as V2 takes them.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

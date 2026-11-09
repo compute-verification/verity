@@ -1,5 +1,7 @@
-import Definitions.Accounting.RateAudit
-import Definitions.Accounting.RateAuditJoint
+module
+
+public import Definitions.Accounting.RateAudit
+public import Definitions.Accounting.RateAuditJoint
 
 /-!
 # The rate audit with interactive side sources (trusted)
@@ -18,6 +20,8 @@ codec's inverse at `c_enc` a word, and the sample is still drawn after the outpu
 `RealizesRateInteractive` is `RealizesRate` (`RateAuditJoint.lean`) for a joint run whose bandwidth audit such a device
 plays.
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 

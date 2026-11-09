@@ -1,5 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden
-import Proofs.Flock.Soundness.Discharge.HiddenDec.Assemble
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden
+public import Proofs.Flock.Soundness.Discharge.HiddenDec.Assemble
+
+@[expose] public section
 
 set_option Elab.async false
 

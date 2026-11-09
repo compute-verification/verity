@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.VStarPartsHolo
-import Proofs.Flock.Claims.Recursion.VStarPartsSparse
-import Proofs.Flock.Claims.Recursion.VStarCross
-import Proofs.Flock.Recursive.VStarCheck
-import Proofs.Flock.Claims.Recursion.DeployLayout
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarPartsHolo
+public import Proofs.Flock.Claims.Recursion.VStarPartsSparse
+public import Proofs.Flock.Claims.Recursion.VStarCross
+public import Proofs.Flock.Recursive.VStarCheck
+public import Proofs.Flock.Claims.Recursion.DeployLayout
 
 /-!
 # V*'s part links, shared across the shapes
@@ -73,6 +75,8 @@ that link once for every kind and every shape, with what is the circuit's own pr
   call is a copy's climb call and that the layout records the copies' gadgets (`LevelLogReads`,
   `stmtReadsTo_levelLogs`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 

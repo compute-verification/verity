@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundJ
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
-import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundJ
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
 
 /-!
 # `zk_session_soundHJ` at the coin server's custody
@@ -20,6 +22,8 @@ flock-verify's own arithmetic:
 * `zk_session_soundHJ_custody`: `zk_session_soundHJ` with `RecordCustodyZKJ` (`live-verifier`) for `hRec` and `hDraw`,
   at `mPtsOf c.g (kd / nTab I)` link points and `nTab I ∣ kd`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 

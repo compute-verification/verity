@@ -1,5 +1,7 @@
-import Flock.RecVStar
-import Batteries.Tactic.OpenPrivate
+module
+
+public import Flock.RecVStar
+public import Batteries.Tactic.OpenPrivate
 
 /-!
 # R's stream's first top makes R's registered entry
@@ -10,6 +12,8 @@ rounds sorted by `k` (`Array.qsort`), so round 0, R's binding round, comes first
 and the session refuses a binding round whose first top does not make `regR` (`Made`). So R's stream's first top makes
 `regR` (`candidate3_top`), which `RecVStar.innerCommits` takes from the registration (`innerCommits_top`).
 -/
+
+@[expose] public section
 
 open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic
 

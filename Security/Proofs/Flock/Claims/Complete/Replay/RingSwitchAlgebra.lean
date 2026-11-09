@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
-import Proofs.Flock.Claims.Complete.Replay.RingSwitch
-import Proofs.Flock.Soundness.LinkSound
-import Proofs.Flock.Soundness.Discharge.Layout.Region
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.RingSwitch
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.LincheckReplay
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckGlue
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
+public import Proofs.Flock.Claims.Complete.Replay.RingSwitch
+public import Proofs.Flock.Soundness.LinkSound
+public import Proofs.Flock.Soundness.Discharge.Layout.Region
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.RingSwitch
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.LincheckReplay
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckGlue
 
 /-!
 # The ring switch's algebra at the deployed relation
@@ -24,6 +26,8 @@ evaluation, `claim_eval_eq` and `fOf_claimCheck`, with `s[v]` the honest `ŝ[v]`
   (`regionClaim_rel'`) at link points of `m_pts` coordinates, which `Record.decodeWith` checks (S9,
   `decodeWith_points`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay.Region
 

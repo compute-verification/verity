@@ -1,4 +1,6 @@
-import NetworkCheck.Records
+module
+
+public import NetworkCheck.Records
 
 /-!
 # `Records.expectedGrids` is `Check.expectedGrid`, window by window
@@ -8,6 +10,8 @@ pass, linear in the frames and the buckets, where `Check.expectedGrid` (and `Net
 `Security` reads) recomputes the hand times, the queue and the offsets for every bucket. `expectedGrids_eq`: for each
 window `w < W`, the two are equal, so every egress verdict of the records check reads the Program `Security` reasons about.
 -/
+
+@[expose] public section
 
 namespace NetworkCheck.RecordsGrid
 

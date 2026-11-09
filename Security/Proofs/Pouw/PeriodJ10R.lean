@@ -1,7 +1,9 @@
-import Properties.Pouw.PeriodJ10R
-import Proofs.Accounting.ComposePeriod
-import Proofs.Accounting.Compose.SplitRateClosed
-import Proofs.Pouw.RelativeSecurity
+module
+
+public import Properties.Pouw.PeriodJ10R
+public import Proofs.Accounting.ComposePeriod
+public import Proofs.Accounting.Compose.SplitRateClosed
+public import Proofs.Pouw.RelativeSecurity
 
 /-!
 # Proof of `H1J10RCheckedCreditPeriod`
@@ -14,6 +16,8 @@ monotonicity (`jointSound_tile`). The rate is `SplitRateClosed`'s at H1's lucks 
 `8(1 + Kρ)/(ρK)`), and `Pins` comes from the window's salt being its live coin (`pins_j10r`): the relation is
 `j10r_reference`'s at the unit's place, one description.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.PeriodJ10R.SecurityProofs
 

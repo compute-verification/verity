@@ -1,4 +1,6 @@
-import Proofs.Pouw.PearlPlus.Stats
+module
+
+public import Proofs.Pouw.PearlPlus.Stats
 
 /-!
 # Pearl+'s bridge, part (b), the peel and a row's forming
@@ -14,6 +16,8 @@ the row's (`statsAreTheRow`), each `E′` code is `eTilde8`'s and so `lineCodes`
 is `form8`'s at the row's words, which reads a `−0` word as `+0` (`form8_zeroSign`), and is finite, so its cast is
 `e4m3`'s.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlPlus.Bridge
 

@@ -1,17 +1,19 @@
-import Proofs.Flock.Claims.Recursion.SameJAt
-import Proofs.Flock.Claims.Recursion.VerdictFramed
-import Proofs.Flock.Claims.Recursion.VerdictFramedJson
-import Proofs.Flock.Claims.Recursion.VerdictPublics
-import Proofs.Flock.Claims.Recursion.VerdictRowG
-import Proofs.Flock.Claims.Recursion.VerdictParts
-import Proofs.Flock.Claims.Recursion.InnerForm
-import Proofs.Flock.Claims.Recursion.SchedDense
-import Proofs.Flock.Claims.Recursion.SchedCount
-import Proofs.Flock.Claims.Complete.Json.Stmt
-import Proofs.Flock.Recursive.HoloRepCoins
-import Proofs.Flock.C3.Compose.HoloStreamSizes
-import Proofs.Flock.VBridge.Family.Lig
-import Proofs.Flock.VBridge.Family.Encode
+module
+
+public import Proofs.Flock.Claims.Recursion.SameJAt
+public import Proofs.Flock.Claims.Recursion.VerdictFramed
+public import Proofs.Flock.Claims.Recursion.VerdictFramedJson
+public import Proofs.Flock.Claims.Recursion.VerdictPublics
+public import Proofs.Flock.Claims.Recursion.VerdictRowG
+public import Proofs.Flock.Claims.Recursion.VerdictParts
+public import Proofs.Flock.Claims.Recursion.InnerForm
+public import Proofs.Flock.Claims.Recursion.SchedDense
+public import Proofs.Flock.Claims.Recursion.SchedCount
+public import Proofs.Flock.Claims.Complete.Json.Stmt
+public import Proofs.Flock.Recursive.HoloRepCoins
+public import Proofs.Flock.C3.Compose.HoloStreamSizes
+public import Proofs.Flock.VBridge.Family.Lig
+public import Proofs.Flock.VBridge.Family.Encode
 
 /-!
 # The record the verdict reads decodes, at a decision of `nextR`
@@ -31,6 +33,8 @@ a coin wherever `liveOf` reads, `fill_of_live`), and an honest record of a one-t
 * **The streams** (`repSchedAt_bounds`): rep `k`'s rounds are its schedule's, which has a round, each of between 1
   and 65536 coins.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.DecodeAt
 

@@ -1,4 +1,6 @@
-import Definitions.Accounting.JointPeriod
+module
+
+public import Definitions.Accounting.JointPeriod
 
 /-!
 # A period whose PoUS audit is a joint run's capacity audit (trusted)
@@ -16,6 +18,8 @@ certificate it gives a window of `len` ticks is `S · len ≤ S₀ − S_chip �
 round boundary over a longer window is `Pous.Guarantees.ContinuousAudit`'s, which is not yet tied to the deployed
 check; until it is, this bridge's guarantee holds at the challenge times only.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

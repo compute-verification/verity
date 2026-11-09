@@ -1,9 +1,11 @@
-import Proofs.Flock.SessionLoop.FinishParts
-import Proofs.Flock.Claims.ZK.FrameTaken
-import Proofs.Flock.Claims.ZK.RepLog
-import Proofs.Flock.Claims.ZK.CutPrefix
-import Proofs.Flock.Claims.ZK.FrameUnrefused
-import Proofs.Flock.Claims.ZK.FrameInner
+module
+
+public import Proofs.Flock.SessionLoop.FinishParts
+public import Proofs.Flock.Claims.ZK.FrameTaken
+public import Proofs.Flock.Claims.ZK.RepLog
+public import Proofs.Flock.Claims.ZK.CutPrefix
+public import Proofs.Flock.Claims.ZK.FrameUnrefused
+public import Proofs.Flock.Claims.ZK.FrameInner
 
 /-!
 # (d) `FinRepRounds`: the reps' rounds
@@ -20,6 +22,8 @@ import Proofs.Flock.Claims.ZK.FrameInner
 * **`Loop.viewRep_rounds`**, **`Loop.finRepRounds_of`**: the view rep's rounds are the auditor's (`streamOf`), so (d)
   holds wherever (a) to (c) do; **`Loop.finishIs_of_abc`**: (a) to (c) give `FinishIs`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.CutPrefix
 

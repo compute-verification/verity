@@ -1,7 +1,9 @@
-import Definitions.Pouw.Lead.Layout
-import Definitions.Pouw.Assumptions.Dimension.H100
-import Definitions.Pouw.Dimension.Pointwise
-import Definitions.Hash.Basic
+module
+
+public import Definitions.Pouw.Lead.Layout
+public import Definitions.Pouw.Assumptions.Dimension.H100
+public import Definitions.Pouw.Dimension.Pointwise
+public import Definitions.Hash.Basic
 
 /-!
 # A prover's strategy on one call of the lead, in model W at tile grain (trusted definitions)
@@ -32,6 +34,8 @@ takes).
   model's premise (`Pouw.Assumptions.Lead.TileGrain`).
 * **The break** (`Break`): a SHA-512 collision among what the execution hashed and what the honest commitment hashes.
 -/
+
+@[expose] public section
 
 namespace Pouw.Lead
 

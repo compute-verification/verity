@@ -1,6 +1,8 @@
-import Properties.Pous.PeriodDeployed
-import Properties.Pous.PeriodGame
-import Mathlib.Analysis.SpecialFunctions.Log.Basic
+module
+
+public import Properties.Pous.PeriodDeployed
+public import Properties.Pous.PeriodGame
+public import Mathlib.Analysis.SpecialFunctions.Log.Basic
 
 /-!
 # PoUS pooled over a monitoring period's windows: how many can be accepted short
@@ -26,6 +28,8 @@ any one under the device model, so `PeriodHeld` bounds each window whatever came
 window's capacity coins only after that window's commitment is in. `δ'` is `δ_PoUS`, the failure probability of PoUS
 over a monitoring period, a public deployment parameter that no component publishes.
 -/
+
+@[expose] public section
 
 namespace Pous.Period
 

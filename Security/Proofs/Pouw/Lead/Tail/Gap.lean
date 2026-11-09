@@ -1,4 +1,6 @@
-import Proofs.Pouw.Lead.Statement.Gap
+module
+
+public import Proofs.Pouw.Lead.Statement.Gap
 
 /-!
 # The tail's fixed gap at the three points and decode
@@ -8,6 +10,8 @@ variables (`fixedVars`, `Statement.leadVars` with `gapFixed` in place of `gapReg
 `gapFixedExpr`, linear in `p K`, `p S`, `p`, `K` and the chunks once the point fixes `q`, and `linarith` bounds it by
 served stock from `fixedProducts`.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Tail
 

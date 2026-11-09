@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
 
 /-!
 # A `--zk` rep's requested rows verify
@@ -15,6 +17,8 @@ executable passed (`ReqOKZ`): level 0's on the `2^k₀ + 4`-lane rows against th
 later level's as the non-ZK session's `ReqOK`. `zk_rep_reqs` carries that to the rep, and a run has one result
 (`plays_det`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

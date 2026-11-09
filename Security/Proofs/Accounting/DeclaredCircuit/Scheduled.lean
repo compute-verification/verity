@@ -1,6 +1,8 @@
-import Proofs.Accounting.DeclaredCircuit.Requirement
-import Properties.Accounting.DeclaredCircuit
-import Proofs.Properties.RemoteAudit.Schedule
+module
+
+public import Proofs.Accounting.DeclaredCircuit.Requirement
+public import Properties.Accounting.DeclaredCircuit
+public import Proofs.Properties.RemoteAudit.Schedule
 
 /-!
 # A declared circuit's space and bandwidth at the committed steering cap, proved
@@ -19,6 +21,8 @@ T = 1 s, at 792 bits; the rest of its premises are `G`'s, whose honest lemma is 
 `Properties.RemoteAudit.steered_of_checked_nontrivial`: without the check's acceptance, a layout that follows a
 three-way coin is the verifier's and is the slot of no one-bit summary.
 -/
+
+@[expose] public section
 
 namespace Accounting.RateSketch.SketchSummarySession
 

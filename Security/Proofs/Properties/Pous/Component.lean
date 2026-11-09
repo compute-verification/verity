@@ -1,9 +1,11 @@
-import Properties.Pous.Component
-import Proofs.Properties.Pous.RunAt
-import Proofs.Properties.Pous.MemoryChallenger
-import Proofs.Properties.CertifierDevice.Lms
-import Mathlib.Tactic.SplitIfs
-import Batteries.Tactic.OpenPrivate
+module
+
+public import Properties.Pous.Component
+public import Proofs.Properties.Pous.RunAt
+public import Proofs.Properties.Pous.MemoryChallenger
+public import Proofs.Properties.CertifierDevice.Lms
+public import Mathlib.Tactic.SplitIfs
+public import Batteries.Tactic.OpenPrivate
 
 /-!
 # Proofs of PoUS's and the wipe's component statements (`Properties.Pous.Component`)
@@ -30,6 +32,10 @@ Each acceptance statement's two lemmas:
   evaluates (`decide +kernel`) once `Flock.canonUtf8`'s sort is shown to leave the manifest's sorted keys as they are
   (`qsort_sorted`); `runBinds_meets`, that run twice; and `wipeAccepts_meets`, an honest wipe.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic
 

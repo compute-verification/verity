@@ -1,11 +1,13 @@
-import Properties.Pous.WipeSigned
-import Properties.Pous.Component
-import Proofs.Properties.Pous.WipeSigned.Header
-import Proofs.Properties.Pous.WipeSigned.Inputs
-import Proofs.Properties.Pous.WipeSigned.Run
-import Proofs.Properties.Pous.MemoryChallenger
-import Proofs.Properties.CertifierDevice.Lms
-import Mathlib.Tactic.SplitIfs
+module
+
+public import Properties.Pous.WipeSigned
+public import Properties.Pous.Component
+public import Proofs.Properties.Pous.WipeSigned.Header
+public import Proofs.Properties.Pous.WipeSigned.Inputs
+public import Proofs.Properties.Pous.WipeSigned.Run
+public import Proofs.Properties.Pous.MemoryChallenger
+public import Proofs.Properties.CertifierDevice.Lms
+public import Mathlib.Tactic.SplitIfs
 
 /-!
 # Proof of `WipeSigned` (`Properties.Pous.WipeSigned`)
@@ -33,6 +35,10 @@ there, since the run hashes nothing and the signature signs nothing; so a check 
 accepts everything (`Pous.Component.AcceptsAll`) does (`wipeSigned_acceptAll`), does not have `WipeSigned`'s
 conclusion.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace MemoryChallenger.Properties.SecurityProofs
 

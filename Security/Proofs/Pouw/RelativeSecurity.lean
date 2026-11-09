@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Pouw.RelativeSecurity
-import Proofs.Pouw.SteinerRigidity
+module
+
+public import Mathlib
+public import Definitions.Pouw.RelativeSecurity
+public import Proofs.Pouw.SteinerRigidity
 
 /-!
 # Relative security for matmul PoUW: the definition, the masking algebra, the reduction's shape
@@ -154,6 +156,8 @@ proof workers' results land here as theorems or as named hypotheses. The definit
   `F₀ = κ L n n' B` (`roundsHyp_of_H`, `certifiedFraction120θ_H`; over ℚ at `h = 32`,
   `certifiedFraction120θ_reEncodedExact_40`).
 -/
+
+@[expose] public section
 
 namespace Pouw.RelativeSecurity
 

@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Recursion.CallsR
-import Proofs.Flock.Claims.Recursion.VerdictFramedJson
-import Proofs.Flock.Claims.Recursion.NextRRows
-import Proofs.Flock.Claims.NumbersDeploy
-import Proofs.Flock.Claims.Recursion.InnerSetupCount
-import Proofs.Flock.Claims.Recursion.AcceptedScope
+module
+
+public import Proofs.Flock.Claims.Recursion.CallsR
+public import Proofs.Flock.Claims.Recursion.VerdictFramedJson
+public import Proofs.Flock.Claims.Recursion.NextRRows
+public import Proofs.Flock.Claims.NumbersDeploy
+public import Proofs.Flock.Claims.Recursion.InnerSetupCount
+public import Proofs.Flock.Claims.Recursion.AcceptedScope
 
 /-!
 # `c_V = 2^24` at a plain session in scope
@@ -17,6 +19,8 @@ decision calls SHA-512 at most `2^24` times on every run (`decisionAtS_calls_in`
 scope (`plainIn_of_run_acc`), all read from an accepted run, `λ₂ ≥ 100` holds at KS's deployed record with no count
 premise (`lamLin2_R_ge_in`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

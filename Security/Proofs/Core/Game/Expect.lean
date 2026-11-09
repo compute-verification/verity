@@ -1,6 +1,8 @@
-import Proofs.Core.Game.Basic
-import Proofs.Core.Game.Rewinding
-import Definitions.Core.Game.Expect
+module
+
+public import Proofs.Core.Game.Basic
+public import Proofs.Core.Game.Rewinding
+public import Definitions.Core.Game.Expect
 
 /-!
 # Expectations against a strategy, and the rewinding lemma for any run distribution
@@ -19,6 +21,8 @@ positions.
 
 The definitions are in `Definitions.Core.Game.Expect`.
 -/
+
+@[expose] public section
 
 namespace Verity
 

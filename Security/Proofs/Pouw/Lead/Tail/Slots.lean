@@ -1,5 +1,7 @@
-import Proofs.Pouw.Lead.Tail.Words
-import Proofs.Pouw.Lead.Tail.Fiber
+module
+
+public import Proofs.Pouw.Lead.Tail.Words
+public import Proofs.Pouw.Lead.Tail.Fiber
 
 /-!
 # One column block's slots with a tile repeated within a block
@@ -22,6 +24,8 @@ tile; `bitsEquiv`). `count_tail_equiv` then needs:
   values: `2^−16` a pair of tiles, over `pairs` pairs.
 * **The sum**: `S · tiles · pairs / 2^16 = lamB`.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Tail
 

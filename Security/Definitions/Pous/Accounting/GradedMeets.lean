@@ -1,5 +1,7 @@
-import Definitions.Pous.Model.Graded
-import Definitions.Pous.Accounting.Params
+module
+
+public import Definitions.Pous.Model.Graded
+public import Definitions.Pous.Accounting.Params
 
 /-!
 # The requirement with grace `t`
@@ -7,6 +9,8 @@ import Definitions.Pous.Accounting.Params
 `GradedMeets`: `Meets`'s clauses with the graded audit (`Security/Definitions/Pous/Model/Graded.lean`) in place
 of the sequential one. It is the requirement of `Pous.Guarantees.BandGradedMeetsFamily`.
 -/
+
+@[expose] public section
 
 namespace Pous
 

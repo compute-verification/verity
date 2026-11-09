@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FinishPiop
+module
+
+public import Proofs.Flock.Claims.ZK.FinishPiop
 
 /-!
 # The firewall's Ligerito is the masked prover's
@@ -17,6 +19,8 @@ reads the port's state as the analysis's and writes it back:
   the analysis's; at SHA-512 and `hm96-sha512/v1` with `commitFw` (`ligeritoPZk_fw`), as `flock-firewall finish` runs
   it.
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 

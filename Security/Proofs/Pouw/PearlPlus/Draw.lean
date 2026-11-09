@@ -1,7 +1,9 @@
-import Proofs.Pouw.PearlPlus.Assembly
-import Proofs.Pouw.PearlPlus.Rules
-import Proofs.Properties.Pouw.PearlPlus.Verdict
-import Definitions.Pouw.PearlC.TileDraw
+module
+
+public import Proofs.Pouw.PearlPlus.Assembly
+public import Proofs.Pouw.PearlPlus.Rules
+public import Proofs.Properties.Pouw.PearlPlus.Verdict
+public import Definitions.Pouw.PearlC.TileDraw
 
 /-!
 # Pearl+'s bridge, the draw: the run's tickets and acceptance as the game's draw reads them
@@ -32,6 +34,8 @@ set another tile), each record is a unit of the workload that the transcript com
 weight, and no two records share a call index. `passesDistinct` keys call indices per salt, so a run whose passes of
 different salts share an index is not one game's run.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlPlus.Draw
 

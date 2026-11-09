@@ -1,11 +1,13 @@
-import Flock.Witness
-import Proofs.Flock.Recursive.ExecClass
-import Proofs.Flock.Recursive.Description
-import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Rate
-import Proofs.Flock.Recursive.PublicAudit
+module
+
+public import Flock.Witness
+public import Proofs.Flock.Recursive.ExecClass
+public import Proofs.Flock.Recursive.Description
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Rate
+public import Proofs.Flock.Recursive.PublicAudit
 
 /-!
 # `flock-witness`'s checks are the recursive audit's predicates
@@ -33,6 +35,8 @@ On `test_lean_witness.py`'s run the checks pass with V*'s sessions verified as `
 verifier of record's `--zk` identity with the OS's masks in it, which the gate's sessions were proved with. So
 the gate is witnessed under today's identity.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.Witness
 

@@ -1,4 +1,6 @@
-import Proofs.Properties.Nci.Novel
+module
+
+public import Proofs.Properties.Nci.Novel
 
 /-!
 # Toward `Novel.ReadsExact`: what `Desc.analyze`'s pieces and segments name
@@ -106,6 +108,8 @@ by `carriesRead_shape`), so each read is `SegGood` (`segGood_of`). `RootGates` h
 segment is `SegNodes`, its gates of their widths, each piece's in one root node and a shifting segment's copies' in
 one (`RootNodes`, `rootGates_of`).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.ReadsExact
 

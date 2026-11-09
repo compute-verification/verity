@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Prob
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
+module
+
+public import Proofs.Flock.Claims.Prob
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
 # The period sum: per-window leak bounds summed over a period
@@ -13,6 +15,8 @@ with probability `Σ_w ε w`, when every window's audit is accepted, the period'
 is bounded by the period-level terms `a` (`log2 #Ss + Σ_c log2 (cap_c + 1)` and whatever else the period charges once)
 plus each window's own bits (`htotal`).
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

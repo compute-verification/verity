@@ -1,9 +1,11 @@
-import Flock.RecVStar
-import Proofs.Flock.Recursive.Raw
-import Proofs.Flock.Soundness.Discharge.FailClosed.One
-import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
-import Proofs.Flock.Soundness.Refine.Rep
+module
+
+public import Flock.RecVStar
+public import Proofs.Flock.Recursive.Raw
+public import Proofs.Flock.Soundness.Discharge.FailClosed.One
+public import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+public import Proofs.Flock.Soundness.Refine.Rep
 
 /-!
 # Recursion: the verifier's check that a session is one of V*'s (gap 8, check 1 in the model)
@@ -43,6 +45,8 @@ to `VStmt.Loads` (`loads_of_verifiesV`), and `RecursiveAudit`'s (i) reads it in 
   statement check, the inputs' circuit file is `circuitFile s f i.holo` for V*'s statement `s` at index `j` at `i`, named as the
   session's unit; `(pubZ I).n` is `s`'s instance count, and the verifier's reads hold `s`'s message-round ports.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

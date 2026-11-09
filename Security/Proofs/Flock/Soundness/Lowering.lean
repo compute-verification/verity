@@ -1,5 +1,7 @@
-import Definitions.Flock.Lowering
-import Proofs.Flock.Soundness.Audit.Circuit
+module
+
+public import Definitions.Flock.Lowering
+public import Proofs.Flock.Soundness.Audit.Circuit
 
 /-!
 # The compiled lowering: a satisfied table makes every placed unit correct
@@ -27,6 +29,8 @@ not a hypothesis.
 columns, where every satisfying witness carries one value on the unit's inputs that share a gate.
 `UnitPlace.correct` is the compiled lowering for that unit.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

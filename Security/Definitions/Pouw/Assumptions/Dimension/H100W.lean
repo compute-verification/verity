@@ -1,4 +1,6 @@
-import Definitions.Pouw.Assumptions.Dimension.H100
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100
 
 /-!
 # `MH100w`: W1's free operations only, and the distinct-writes bound (trusted statements)
@@ -127,6 +129,8 @@ The verdicts:
   computes a word in memory (`other`) at a price not yet measured.
 - `Embed.lean`'s `M4090`, a 4090 model. Of it `MH100w` reads only `fpVal`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FrameInner
+module
+
+public import Proofs.Flock.Claims.ZK.FrameInner
 
 /-!
 # The release at the loop's frames is live past the link
@@ -19,6 +21,8 @@ and no history past `Hello` was live. This file pins that the corrected release 
 * `ofLoop_live_three`: so the history of `Hello`, the link and rep 0's first round is live at the honest worker, through
   rep 0's second round, wherever the deployed frame's check passes rep 0's first two device rounds at those states.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

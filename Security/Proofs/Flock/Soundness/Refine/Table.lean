@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Refine.Paths
-import Proofs.Flock.Soundness.Refine.Seam
-import Proofs.Flock.Soundness.Session
+module
+
+public import Proofs.Flock.Soundness.Refine.Paths
+public import Proofs.Flock.Soundness.Refine.Seam
+public import Proofs.Flock.Soundness.Session
 
 /-!
 # The verifier refines the model's table (`Flock.Verify`, `Flock.Record`)
@@ -11,6 +13,8 @@ compiled game `repC`, played with its proof's messages and its stream's coins, a
 against the one level-0 cap. That is `tableAfter`'s verdict. `verify_tableAfter` states it as an accepting run of
 `tableAfter`, with existential messages and rep 0 first.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

@@ -1,6 +1,8 @@
-import Proofs.Properties.Verity.Subprotocols
-import Proofs.Properties.Pous.Wipe
-import Proofs.Core.Blocks
+module
+
+public import Proofs.Properties.Verity.Subprotocols
+public import Proofs.Properties.Pous.Wipe
+public import Proofs.Core.Blocks
 
 /-!
 # The wipe's target from its survivor bound
@@ -31,6 +33,8 @@ as the wipe's game (`Vocab.wipeRun`), keeps foreign content past the survivor th
 Beside them, rule 3's checks at `.wipe` (`Vocab.wipeSound_of_honest`, `Vocab.wipeSound_of_nontrivial`), from the generic
 `Vocab.sound_of_honest` and `Vocab.sound_of_nontrivial`.
 -/
+
+@[expose] public section
 
 namespace Verity
 

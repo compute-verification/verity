@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FrameInner
-import Flock.Firewall.Session
+module
+
+public import Proofs.Flock.Claims.ZK.FrameInner
+public import Flock.Firewall.Session
 
 /-!
 # `Flock.zk_server_lean` at the session loop's own frames
@@ -24,6 +26,8 @@ This file states the bound there with `ProgChecks` as a conclusion, its premises
   level 0 `Level0.ofDraws` drew) and `L₀`'s round at the inner proof's round 0 being the firewall's own at some
   `final_c'` (`hL0`: Rust's firewall sends that round, `check_self`, at the inner proof's label).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

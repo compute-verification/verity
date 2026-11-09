@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Model.Compiled
-import Proofs.Flock.Soundness.Game.Lock
-import Proofs.Flock.Soundness.LigeritoMid
+module
+
+public import Proofs.Flock.Soundness.Model.Compiled
+public import Proofs.Flock.Soundness.Game.Lock
+public import Proofs.Flock.Soundness.LigeritoMid
 
 /-!
 # The compiled Flock verifier runs in lockstep with the oracle verifier
@@ -12,6 +14,8 @@ that agree with the fixed tables at every requested position equals the oracle c
 
 Slots: `0` is the level-0 cap; rep `r`'s level-`ℓ` cap (`ℓ ≥ 1`) is `slotOf r ℓ = 2ℓ + r`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

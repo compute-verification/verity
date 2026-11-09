@@ -1,6 +1,8 @@
-import Definitions.Pouw.Guarantees.KeyedLeaf
-import Proofs.Pouw.Prob
-import Proofs.Hash.RowBinding
+module
+
+public import Definitions.Pouw.Guarantees.KeyedLeaf
+public import Proofs.Pouw.Prob
+public import Proofs.Hash.RowBinding
 
 /-!
 # `Pouw.Salt.keyed_leaf_hides : Pouw.Guarantees.KeyedLeaf.Hides` and `Pouw.Salt.keyed_leaf_binds`
@@ -19,6 +21,8 @@ are equal, or they collide. Two climbs of one length to one top message start fr
 they hashed collide (`keyed_climb_bind`, by induction up the path as `climb_bind`), and two frame leaves at one rank of one
 domain under one schema have the same value (`leafMsg_value`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Salt
 

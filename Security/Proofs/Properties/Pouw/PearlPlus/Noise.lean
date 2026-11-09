@@ -1,6 +1,8 @@
-import Proofs.Properties.Pouw.PearlPlus.Noise.Fa
-import Proofs.Properties.Pouw.PearlPlus.Noise.Fb
-import Proofs.Properties.Pouw.PearlPlus.Noise.Gram
+module
+
+public import Proofs.Properties.Pouw.PearlPlus.Noise.Fa
+public import Proofs.Properties.Pouw.PearlPlus.Noise.Fb
+public import Proofs.Properties.Pouw.PearlPlus.Noise.Gram
 
 /-!
 # The test noise, chunk by chunk
@@ -12,3 +14,5 @@ the three in parallel and each module checks its eight one after another, so a b
 chunks' kernel state at a time, where one module would check all 24 one after another and 24 modules would hold all 24
 at once.
 -/
+
+@[expose] public section

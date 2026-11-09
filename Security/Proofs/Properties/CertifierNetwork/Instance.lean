@@ -1,5 +1,7 @@
-import Proofs.Properties.CertifierNetwork.Accepted
-import Properties.CertifierNetwork.Runs
+module
+
+public import Proofs.Properties.CertifierNetwork.Accepted
+public import Properties.CertifierNetwork.Runs
 
 /-!
 # The completeness statements' honest cases, instantiated
@@ -14,6 +16,8 @@ run's hypotheses are `step` evaluated by the kernel (`decide +kernel`); the key'
 `Digested` is the one hypothesis left as one: `parameters` reads `Flock.canonUtf8`, well-founded recursion the kernel does
 not evaluate, so no proof evaluates it on a configuration (`DeviceOutputAccepted`'s module docstring).
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierNetwork.Instance
 

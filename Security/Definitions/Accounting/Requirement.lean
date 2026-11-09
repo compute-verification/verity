@@ -1,6 +1,8 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Definitions.Accounting.Device
-import Definitions.Core.Requirement
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Definitions.Accounting.Device
+public import Definitions.Core.Requirement
 
 /-!
 # A declared circuit's requirement (trusted)
@@ -69,6 +71,8 @@ The execution, its placement and the store (`Execution`, `Placement`, `Store`) a
 Bits, as `Device.lean` counts them: a value's bytes are its bits / 8, and the deployed store's block is `b = 32768` bits
 (4,096 bytes).
 -/
+
+@[expose] public section
 
 namespace Accounting
 

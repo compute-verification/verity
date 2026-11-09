@@ -1,4 +1,6 @@
-import Flock.With.Verify
+module
+
+public import Flock.With.Verify
 
 /-!
 # The honest prover's transcript
@@ -14,6 +16,8 @@ The prover runs in any verdict monad `M` with the two sends (`Asks`): the link m
 a round's framed bytes, answered by the round's. A coin is its elements (`Nat → F128`); a round of `n` coins reads the
 first `n`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

@@ -26,12 +26,18 @@ audit record as the text of Python's `canonical_json`.
 `Stream.outcome` holds its own outcome to this run (`verifier.run`). A run whose proof came after the proof deadline is
 the clock's (`late`).
 -/
-import SampledProofs.OneStage
-import SampledProofs.Select
-import SampledProofs.Slots
-import SampledProofs.PopOrder
-import SampledProofs.Service
-import SampledProofs.ChallengerCoins
+module
+
+public import SampledProofs.OneStage
+public import SampledProofs.Select
+public import SampledProofs.Slots
+public import SampledProofs.PopOrder
+public import SampledProofs.Service
+public import SampledProofs.ChallengerCoins
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Run
 

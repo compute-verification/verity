@@ -6,7 +6,11 @@ reject, components of a tie that didn't all name one value reject whatever the c
 `same`'s, a component's, the record's or the cases' misfit, stands. Its parameters, commitment and evidence are
 `same`'s.
 -/
-import CoreComposition.Blobs
+module
+
+public import CoreComposition.Blobs
+
+@[expose] public section
 
 namespace Core.Composition
 

@@ -1,9 +1,11 @@
-import Definitions.Core.Guarantees.TC
-import Proofs.Core.TC.Gadgets
-import Proofs.Core.TC.Sound
-import Proofs.Core.TC.AmpereSound
-import Proofs.Core.TC.Boundary
-import Proofs.Core.TC.Vectors
+module
+
+public import Definitions.Core.Guarantees.TC
+public import Proofs.Core.TC.Gadgets
+public import Proofs.Core.TC.Sound
+public import Proofs.Core.TC.AmpereSound
+public import Proofs.Core.TC.Boundary
+public import Proofs.Core.TC.Vectors
 
 /-!
 # Proofs of the tensor-core guarantees
@@ -11,6 +13,8 @@ import Proofs.Core.TC.Vectors
 Each guarantee of `Verity.Guarantees.TC` is the theorem of the same statement in `Verity.TC` (`Sound`, `AmpereSound`,
 `Boundary`) or `Verity.TC.Gadgets`.
 -/
+
+@[expose] public section
 
 namespace Verity.SecurityProofs
 

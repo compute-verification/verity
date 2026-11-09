@@ -1,5 +1,7 @@
-import Lms.Hss
-import Flock.FV3
+module
+
+public import Lms.Hss
+public import Flock.FV3
 
 /-!
 # A party's signed period root and its liveness records: the checks a period's proof and the verifier run
@@ -16,6 +18,8 @@ verification), and each record it reads opens to the root at its position (`Floc
 is both, the verifier's acceptance of a period. `checkLiveness` is the verifier's check, in the clear, of the party's one
 public liveness record per sampling block (`Lms.verifyLiveness`).
 -/
+
+@[expose] public section
 
 namespace Attest
 

@@ -1,11 +1,13 @@
-import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
-import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
-import Proofs.Flock.Soundness.Discharge.ZkSession.Session
-import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
-import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Block
-import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
+module
+
+public import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Session
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Block
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 
 /-!
 # The `--zk` table at each draw, from flock-verify's setup (statements)
@@ -32,6 +34,8 @@ witness satisfies (as `tableAt`'s `refusedC`).
   the m check (`schedule_zk`), the inner code's length (`innerN_pow`) and its query positions' uniformity
   (`prCoin_innerPos_le`), and the table the same at every `DrawSetupZK` of a draw (`tableZK_eq`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
 
 /-!
 # The lengths of a decoded proof
@@ -11,6 +13,8 @@ The reader program is stepped through in the logic of `Post x Q`: every value th
 and `post_bind_caps` step over a `vecExact`, a vector of digests, the ring switches and the recursive caps' loop, with
 their lengths.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.DecodeZL
 

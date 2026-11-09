@@ -1,7 +1,9 @@
-import Properties.Pous.PeriodAt
-import Proofs.Pous.Period
-import Proofs.Pous.EndToEndAt
-import Proofs.Properties.Pous.RunAt
+module
+
+public import Properties.Pous.PeriodAt
+public import Proofs.Pous.Period
+public import Proofs.Pous.EndToEndAt
+public import Proofs.Properties.Pous.RunAt
 
 /-!
 # Proof of PoUS's per-period guarantee at any point and block count
@@ -11,6 +13,8 @@ import Proofs.Properties.Pous.RunAt
 (`Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecureWide`) in place of the deployed ones. `periodHeldDemo` is its
 instance at Demo B's `N`, with the state bound `Pous.SecurityProofs.stateBound_p2ring_demo` gives.
 -/
+
+@[expose] public section
 
 namespace Pous.Period.SecurityProofs
 

@@ -1,5 +1,7 @@
-import Definitions.Core.Game.Prob
-import Definitions.Flock.Game.Interleave
+module
+
+public import Definitions.Core.Game.Prob
+public import Definitions.Flock.Game.Interleave
 
 /-!
 # C-Flock's game vocabulary is Core's: `Prob`
@@ -7,6 +9,8 @@ import Definitions.Flock.Game.Interleave
 Every name here is an alias (`export`) of Core's definition in `Definitions.Core.Game.Prob`, so C-Flock's spec and every
 other protocol's read one game library.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game.Strategy
 

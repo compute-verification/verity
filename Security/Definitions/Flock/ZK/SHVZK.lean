@@ -1,5 +1,7 @@
-import Definitions.Flock.ZK.Table
-import Mathlib.Tactic.FieldSimp
+module
+
+public import Definitions.Flock.ZK.Table
+public import Mathlib.Tactic.FieldSimp
 
 /-!
 # Zero knowledge of one masked table: the view as a function of four masked components
@@ -18,6 +20,8 @@ blocks plus a surjective image of a fresh block:
 The lemmas about them (the identity (★), the masks' surjectivity, `table_shvzk` and Lemma A's `table_prefinal_indep`)
 are `Proofs/Flock/Soundness/ZK/SHVZK.lean`'s.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 

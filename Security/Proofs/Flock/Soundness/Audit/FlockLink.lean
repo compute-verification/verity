@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Audit.FlockBatchedAcc
-import Proofs.Flock.Soundness.LinkFinder
+module
+
+public import Proofs.Flock.Soundness.Audit.FlockBatchedAcc
+public import Proofs.Flock.Soundness.LinkFinder
 
 /-!
 # The link theorem: `δ_link` under expected-time collision resistance (DESIGN.md §3)
@@ -38,6 +40,8 @@ with `ρ ≥ N₀/(ek)` for every table. `Q_s` is the expected number of commit 
 read, at most the `N_s` leaves under the serving roots. At `k = ⌈2N₀/e⌉`, `ρ = 1/2`, this is the
 record's `t·N_s(8N₀/e)/2^256` with `Q_s` in place of `N_s`, up to lower-order terms.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

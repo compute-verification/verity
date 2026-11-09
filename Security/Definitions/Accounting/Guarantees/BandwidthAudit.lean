@@ -1,5 +1,7 @@
-import Definitions.Accounting.BandwidthAudit
-import Definitions.Accounting.PerRun
+module
+
+public import Definitions.Accounting.BandwidthAudit
+public import Definitions.Accounting.PerRun
 
 /-!
 # The bandwidth audit's guarantee as a joint run's bandwidth guarantee (trusted)
@@ -18,6 +20,8 @@ Proved by `Accounting.SecurityProofs.BandwidthOfAudit : Accounting.Guarantees.Ba
 `Accounting.SecurityProofs.BandwidthOfAuditPerRun : Accounting.Guarantees.BandwidthOfAuditPerRun`
 (`Proofs.Accounting.BandwidthAudit`), from `Accounting.SecurityProofs.Remote.AuditRO`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

@@ -1,5 +1,7 @@
-import Definitions.Pous.Model.FreeBlocks
-import Proofs.Pous.TrackA.A3Prime
+module
+
+public import Definitions.Pous.Model.FreeBlocks
+public import Proofs.Pous.TrackA.A3Prime
 
 /-!
 # A3′ with free blocks
@@ -9,6 +11,8 @@ event `E` is unchanged (it counts right answers only), and off `E` a round's pas
 right ones and the at most `F` free ones, so the chain rule gives `((g − 1 + F)/B)^k`. The free set needs no advice:
 the responder is not told it, and the bound holds for every free set the setup determines.
 -/
+
+@[expose] public section
 
 namespace Pous.FreeBlocks
 

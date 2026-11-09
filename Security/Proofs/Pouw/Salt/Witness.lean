@@ -1,5 +1,7 @@
-import Definitions.Pouw.Guarantees.KeyedLeaf
-import Definitions.Pouw.PearlC.Sha512
+module
+
+public import Definitions.Pouw.Guarantees.KeyedLeaf
+public import Definitions.Pouw.PearlC.Sha512
 
 /-!
 # `keyed_leaf_binds` says something
@@ -16,6 +18,8 @@ a two-leaf frame-v3 subtree whose public digest is the keyed hash of its root no
   of one instance, under one key and with no siblings, are opened, and none of the messages those openings hashed
   collide under SHA-512, so `Binds`' conclusion fails there.
 -/
+
+@[expose] public section
 
 namespace Pouw.Salt
 

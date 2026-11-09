@@ -1,6 +1,8 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeedK
-import Proofs.Pouw.PearlC.RowSeedCode
-import Proofs.Pouw.PearlC.HiddenGamma
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeedK
+public import Proofs.Pouw.PearlC.RowSeedCode
+public import Proofs.Pouw.PearlC.HiddenGamma
 
 /-!
 # Per-row seeds on the served line: rev1 against the honest kernel's `W_ref` (compute accounting's file)
@@ -25,6 +27,8 @@ with the cap checked per row and the error at the row count:
   `pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192` and its code form
   `pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

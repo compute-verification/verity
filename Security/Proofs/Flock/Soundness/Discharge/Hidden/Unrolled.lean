@@ -1,9 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.Aliased.Keys
-import Proofs.Flock.Soundness.Discharge.Zero.Stack
-import Proofs.Flock.Soundness.Discharge.Layout.OutShape
-import Proofs.Flock.Soundness.Discharge.Hidden.Commit
-import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
-import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
+module
+
+public import Proofs.Flock.Soundness.Discharge.Aliased.Keys
+public import Proofs.Flock.Soundness.Discharge.Zero.Stack
+public import Proofs.Flock.Soundness.Discharge.Layout.OutShape
+public import Proofs.Flock.Soundness.Discharge.Hidden.Commit
+public import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+public import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
 
 /-!
 # The committed circuit's keys from the statement circuit's
@@ -19,6 +21,8 @@ So Δ's source key in the committed circuit is the statement circuit's with a un
 reads the zero in one exactly when it does in the other (`zeroIn_commit`). A flat circuit is its own statement circuit,
 at `upos = id`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hidden
 

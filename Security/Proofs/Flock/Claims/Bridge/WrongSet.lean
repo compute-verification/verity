@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.Public
-import Definitions.Claims.Sampling
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+public import Definitions.Claims.Sampling
 
 /-!
 # The claims' faulty set inside the game's wrong set
@@ -19,6 +21,8 @@ block `b u`, each a hypothesis here:
 
 So a unit right on the registration has its slot not faulty (`not_faulty_of_rightRegZ`), at the interior that is the
 circuit's evaluation. -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink.WrongSet
 

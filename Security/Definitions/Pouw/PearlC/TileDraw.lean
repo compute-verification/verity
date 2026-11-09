@@ -1,5 +1,7 @@
-import Definitions.Pouw.PearlC.DeviceRev1
-import Definitions.Core.Interaction
+module
+
+public import Definitions.Pouw.PearlC.DeviceRev1
+public import Definitions.Core.Interaction
 
 /-!
 # The sampled audit drawn as the run draws: tickets from the records (trusted; definitions only)
@@ -32,6 +34,8 @@ the transcript. This file states γ for that draw.
 
 The bound `q ≤ 2^64` is written as its numeral, so that it is a plain range.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

@@ -25,6 +25,10 @@ statement's rows, and the recursion's knowledge soundness at the linked relation
 through the links' binding `Flock.Guarantees.LinksBindDeployed`) covers a statement carrying it.
 -/
 
+module
+
+@[expose] public section
+
 namespace Flock
 namespace RecLinks
 

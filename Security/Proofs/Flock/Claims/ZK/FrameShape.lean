@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FrameParse
+module
+
+public import Proofs.Flock.Claims.ZK.FrameParse
 
 /-!
 # The frame reads a round's shape alone
@@ -22,6 +24,8 @@ a bytes frame's size, an observe's length and the configuration's layout, and no
   for `stopped` and the same free offsets, or the same error; **`roundFree_alike_ok`**: where both rounds are taken,
   inside the inner proof too (whose `innerOwn` reads the round's values), the same state and offsets.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

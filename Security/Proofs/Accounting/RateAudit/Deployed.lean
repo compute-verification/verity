@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditDeployed
-import Proofs.Accounting.RateAudit.Session
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.RateAuditDeployed
+public import Proofs.Accounting.RateAudit.Session
 
 /-!
 # The remote bandwidth audit as deployed: the proof
@@ -20,6 +22,8 @@ draws are causal over the monitoring period (`Pooled.pr_causal_le'`, `Pooled.pr_
 
 **The readings.** `K = ⌊(1 − d̄)·n·P·N⌋` and `K_w = ⌊(1 − d_w)·P·N⌋` turn the counts into the fractions of `γ`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 

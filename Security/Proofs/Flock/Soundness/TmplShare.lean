@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.TmplUnit
-import Proofs.Flock.Soundness.TmplUnrollAt
+module
+
+public import Proofs.Flock.Soundness.TmplUnit
+public import Proofs.Flock.Soundness.TmplUnrollAt
 
 /-!
 # The templated unit's share is the flat slot's
@@ -9,6 +11,8 @@ instead of projecting the slot's `2^sl` base. Its entries are the projection's (
 on the template's own facts, `TmplUnit`), and the slot-type cache only spares work, so `partialRangesT` is `partialRanges`
 on any two caches of `slotBase`'s values (`partialRangesT_eq`).
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128
 

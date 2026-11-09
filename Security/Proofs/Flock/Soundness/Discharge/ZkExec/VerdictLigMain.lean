@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigRun
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigRun
 
 /-!
 # The hiding Ligerito accepts
@@ -10,6 +12,8 @@ non-ZK session's (`LigeritoRun.lean`), with an invariant that drops the non-ZK s
 level 0's request is on `2^k₀ + 4` wide rows, which the non-ZK session's `ReqOK` does not describe, and the verdict
 reads neither.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Assemble
-import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
-import Proofs.Flock.Soundness.Discharge.DecodeZL.OP
-import Proofs.Flock.Soundness.Discharge.Tables.Statements
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Assemble
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.OP
+public import Proofs.Flock.Soundness.Discharge.Tables.Statements
 
 /-!
 # The decoder at `J` tables: statements
@@ -23,6 +25,8 @@ sets up at `count > 1` (`accepts_tables`), with dec-zl's one-table decoder run o
 * `DecodesOnJExec`: `DecodesOnJ` at `planJ`, for every fallback `T₀`, with the decoder `decJ`, single coins as field
   elements, no final messages, table `j`'s cap from `root_B[j]` and its openings `opnJ`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.DecodeZLJ
 

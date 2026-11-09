@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FrameRankFault
+module
+
+public import Proofs.Flock.Claims.ZK.FrameRankFault
 
 /-!
 # The frames refuse dependent `ρ₀, ρ₁` (`FrameUnrefused`'s `ρ` fault)
@@ -22,6 +24,8 @@ switch's:
 * **`LeanRelease.rho_unrefused`**: the fault. At the rep's inner round 2 (`betaSlot`) its schedule so far is complete,
   so its coins at `rhoSlot` and the next, the opened ones (`wordsAt_slot`), are independent.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Count
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Types.Dag
-import Flock.TmplComputes
+module
+
+public import Proofs.Flock.Soundness.Types.Dag
+public import Flock.TmplComputes
 
 /-!
 # A template Definition whose rows are a typed layout's computes its type
@@ -11,6 +13,8 @@ Definition whose rows, in its own references, are a checked layout's, with the l
 constant reference, its inputs at the Definition's inputs and its outputs among the Definition's columns, computes its
 type's `evalT` on those outputs (`defComputes_of_layout`). No verifier path reads this file.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl Flock.DeriveAll FlockSoundness.Types.Dag
 

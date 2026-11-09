@@ -1,4 +1,6 @@
-import Properties.RemoteAudit.Component
+module
+
+public import Properties.RemoteAudit.Component
 
 /-!
 # The bandwidth component accepts only what `Shared.run g` accepts, proved (`Properties.RemoteAudit.Component`)
@@ -9,6 +11,8 @@ that ended accepted with a record, publishing `certify` of it at the session's p
 record's at the node, at the node's windows a draw. `publishedEps` reads `certify`'s `eps` at the node's parameters
 and g: `ratio` of a nonnegative rational is that rational (`ratio_val`), and `openingsCoins` is `Node.draws`.
 -/
+
+@[expose] public section
 
 namespace Properties.RemoteAudit.Component
 

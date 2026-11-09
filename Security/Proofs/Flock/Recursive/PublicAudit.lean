@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.Property
-import Proofs.Flock.Recursive.Firewall
+module
+
+public import Proofs.Flock.Recursive.Property
+public import Proofs.Flock.Recursive.Firewall
 
 /-!
 # The recursive audit at public units (trusted)
@@ -37,6 +39,8 @@ What it takes, against `RecursiveAudit`:
 Its proof is `Flock.SecurityProofs.PublicAudit` (`Proofs.Flock.Recursive.PublicAuditProof`). Its non-vacuity is to be
 shown at one recorded recursive run with a public inner unit (`test_lean_witness.py`).
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

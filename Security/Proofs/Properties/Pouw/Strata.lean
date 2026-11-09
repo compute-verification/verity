@@ -1,5 +1,7 @@
-import Properties.Pouw.Strata
-import Std.Data.String.ToNat
+module
+
+public import Properties.Pouw.Strata
+public import Std.Data.String.ToNat
 
 /-!
 # Proofs: a served window's work strata tile its units, and what `law`, `epsAt` and `established` answer
@@ -12,6 +14,8 @@ the calls' `(K, units)` items (`stepOf`, `itemOf`), and reads `callWork` as the 
 true call by call (`inv_step`): every range ends by the units so far, the strata's sizes and work add up, their
 templates are distinct and name their K, and each unit so far is held, only by strata of its call's work.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Strata
 

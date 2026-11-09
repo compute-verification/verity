@@ -1,4 +1,6 @@
-import Proofs.Flock.SamplingBoundary
+module
+
+public import Proofs.Flock.SamplingBoundary
 
 /-!
 # Input slots
@@ -18,6 +20,8 @@ through a drawn unit that reads it.
   where `P` covers every other gate but the constants, `withInputs P C` covers every gate but the constants
   (`covers_withInputs`), `Partitions`' covering clause.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling.InputSlot
 

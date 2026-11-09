@@ -1,5 +1,7 @@
-import Proofs.Pouw.PearlPlus.Numerics
-import Proofs.Pouw.PearlPlus.Rules
+module
+
+public import Proofs.Pouw.PearlPlus.Numerics
+public import Proofs.Pouw.PearlPlus.Rules
 
 /-!
 # Pearl+'s bridge, part (c): `s5_stats`' ρ is a finite word
@@ -9,6 +11,8 @@ value, `t` is finite, so both of its addends are (`fp32AddIsTheSpec`), among the
 any word with a NaN or an infinity is `F32_NAN_PTX` or an infinity, so ρ decodes finite, and a word that decodes finite
 is `wordQ`-finite.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlPlus.Bridge
 

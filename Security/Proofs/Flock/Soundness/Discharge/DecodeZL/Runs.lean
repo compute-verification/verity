@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
-import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
 
 /-!
 # A rep's run, from its rounds' frames (R11b)
@@ -14,6 +16,8 @@ coins, are the decoder's groups of the rounds. This file gives it from the execu
   run `accepts_verdict_hm96` gives, on rounds that retained `repFrames`' chunks (`accepts_rep_rounds`), is a `RepRun`
   for the decoder `wZL ++ (wOP ++ wLIG)`, given the opening's and Ligerito's chunk lemmas.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.DecodeZL
 

@@ -1,22 +1,24 @@
-import Std.Data.HashMap
-import Flock.FV3
-import Flock.Bytes
-import Flock.Hash
-import Flock.Program
-import Flock.RegKnown
-import PouwCommit.Frame
-import PouwCheck.Chunks
-import PouwCheck.Json
-import PouwCheck.Opening
-import PouwCheck.Pass
-import PouwCheck.Rounds
-import PouwWindow.Draw
-import PouwWindow.Rounds
-import SampledProofs.ChallengerCoins
-import SampledProofs.ChallengerSession
-import SampledProofs.PyJson
-import SampledProofs.Registered
-import Identity.Domains
+module
+
+public import Std.Data.HashMap
+public import Flock.FV3
+public import Flock.Bytes
+public import Flock.Hash
+public import Flock.Program
+public import Flock.RegKnown
+public import PouwCommit.Frame
+public import PouwCheck.Chunks
+public import PouwCheck.Json
+public import PouwCheck.Opening
+public import PouwCheck.Pass
+public import PouwCheck.Rounds
+public import PouwWindow.Draw
+public import PouwWindow.Rounds
+public import SampledProofs.ChallengerCoins
+public import SampledProofs.ChallengerSession
+public import SampledProofs.PyJson
+public import SampledProofs.Registered
+public import Identity.Domains
 
 /-!
 # A served window's credited set, its drawn units and their outcome, its A rows and its period (`credit.py`)
@@ -115,6 +117,10 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
 
 Every refusal is (code, why), the first rule the input breaks, with Python's words.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PouwCheck.Credit
 

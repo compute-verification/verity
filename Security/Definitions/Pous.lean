@@ -1,34 +1,38 @@
-import Definitions.Pous.Accounting.GradedMeets
-import Definitions.Pous.Accounting.LemmaA
-import Definitions.Pous.Accounting.Params
-import Definitions.Pous.Accounting.PubMeets
-import Definitions.Pous.Accounting.Rebuild
-import Definitions.Pous.Game.Oracle
-import Definitions.Pous.Game.Prob
-import Definitions.Pous.Model.Audit
-import Definitions.Pous.Model.BandChain
-import Definitions.Pous.Model.BandGraph
-import Definitions.Pous.Model.ColumnGame
-import Definitions.Pous.Model.Continuous
-import Definitions.Pous.Model.Dense
-import Definitions.Pous.Model.FreeBlocks
-import Definitions.Pous.Model.Graded
-import Definitions.Pous.Model.HashChain
-import Definitions.Pous.Model.Inc
-import Definitions.Pous.Model.Invertible
-import Definitions.Pous.Model.Labelling
-import Definitions.Pous.Model.M1
-import Definitions.Pous.Model.M1p
-import Definitions.Pous.Model.P3Chain
-import Definitions.Pous.Model.Pebbling
-import Definitions.Pous.Model.PubEncoder
-import Definitions.Pous.Model.SampledAudit
-import Definitions.Pous.Model.Scheme
-import Definitions.Pous.Model.SegLift
-import Definitions.Pous.Model.StreamedWipe
-import Definitions.Pous.P2.Clip
-import Definitions.Pous.P2.Cost
-import Definitions.Pous.P2.Mutable
-import Definitions.Pous.P2.Rounds
+module
+
+public import Definitions.Pous.Accounting.GradedMeets
+public import Definitions.Pous.Accounting.LemmaA
+public import Definitions.Pous.Accounting.Params
+public import Definitions.Pous.Accounting.PubMeets
+public import Definitions.Pous.Accounting.Rebuild
+public import Definitions.Pous.Game.Oracle
+public import Definitions.Pous.Game.Prob
+public import Definitions.Pous.Model.Audit
+public import Definitions.Pous.Model.BandChain
+public import Definitions.Pous.Model.BandGraph
+public import Definitions.Pous.Model.ColumnGame
+public import Definitions.Pous.Model.Continuous
+public import Definitions.Pous.Model.Dense
+public import Definitions.Pous.Model.FreeBlocks
+public import Definitions.Pous.Model.Graded
+public import Definitions.Pous.Model.HashChain
+public import Definitions.Pous.Model.Inc
+public import Definitions.Pous.Model.Invertible
+public import Definitions.Pous.Model.Labelling
+public import Definitions.Pous.Model.M1
+public import Definitions.Pous.Model.M1p
+public import Definitions.Pous.Model.P3Chain
+public import Definitions.Pous.Model.Pebbling
+public import Definitions.Pous.Model.PubEncoder
+public import Definitions.Pous.Model.SampledAudit
+public import Definitions.Pous.Model.Scheme
+public import Definitions.Pous.Model.SegLift
+public import Definitions.Pous.Model.StreamedWipe
+public import Definitions.Pous.P2.Clip
+public import Definitions.Pous.P2.Cost
+public import Definitions.Pous.P2.Mutable
+public import Definitions.Pous.P2.Rounds
 
 /-! `Definitions.Pous`: every module of PoUS's definitions, the protocol's definitions (trusted). -/
+
+@[expose] public section

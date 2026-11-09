@@ -1,4 +1,6 @@
-import Proofs.Pouw.Lead.Statement.Gap
+module
+
+public import Proofs.Pouw.Lead.Statement.Gap
 
 /-!
 # The lead's statement lemmas
@@ -9,3 +11,5 @@ import Proofs.Pouw.Lead.Statement.Gap
 Its proofs go in `Lead/Statement/`, its declarations in `Pouw.SecurityProofs.Lead.Statement`, and each file is imported
 here.
 -/
+
+@[expose] public section

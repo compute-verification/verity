@@ -1,10 +1,12 @@
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Ring
-import Proofs.Pouw.PearlC.Freeze
-import Definitions.Pouw.PearlC.SkipP
-import Definitions.Pouw.PearlC.Sm120
+module
+
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.NormNum
+public import Mathlib.Tactic.Ring
+public import Proofs.Pouw.PearlC.Freeze
+public import Definitions.Pouw.PearlC.SkipP
+public import Definitions.Pouw.PearlC.Sm120
 
 /-!
 # P1 over any accumulator model, and on sm_120 (staging)
@@ -32,6 +34,8 @@ import Definitions.Pouw.PearlC.Sm120
   `joint_flagsCompleteP`): `Freeze`'s proofs, which read the atom only through the fold, over any `p` and promotion
   depth `G > 0`. At `hopperE4m3K32` and `G = 4` they are `Freeze`'s theorems (`joint_flagsComplete_hopper`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.FreezeP
 

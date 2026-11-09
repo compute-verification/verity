@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.RemoteSketch
-import Proofs.Accounting.RateAudit.DeployedSketchSum
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.RemoteSketch
+public import Proofs.Accounting.RateAudit.DeployedSketchSum
 
 /-!
 # The receipts' sketch bound, derived: the proof
@@ -27,6 +29,8 @@ One pass's candidates cost `G_j·(ε + N/2^h) + qtot_j/2^(8r)` (`pr_pass_le`), a
 pass `j`'s keys and the store are a uniform fiber of the session's coins (`Session.pr_pass_le`). Summed over the passes,
 `SketchBoundSession`; at the deployed receipts, `SketchBoundDeployed`.
 -/
+
+@[expose] public section
 
 namespace Accounting.RateSketch.Device
 

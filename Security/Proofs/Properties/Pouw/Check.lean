@@ -1,6 +1,8 @@
-import Properties.Pouw
-import Properties.Pouw.Check
-import Proofs.Properties.Pouw.Grid
+module
+
+public import Properties.Pouw
+public import Properties.Pouw.Check
+public import Proofs.Properties.Pouw.Grid
 
 /-!
 # Proofs of PoUW's check properties (`Properties.Pouw.Check`)
@@ -11,6 +13,8 @@ composes them; the rest follow. `acceptedInRange_of_grid` proves `AcceptedInRang
 converse of `AcceptMeans`, and `serviceReject_rejects` what `AcceptedIsTheService's` and `UndecidedOnlyFromService`
 leave: the service's reject is the check's.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Check
 

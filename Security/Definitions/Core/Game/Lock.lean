@@ -1,4 +1,6 @@
-import Definitions.Core.Game.Expect
+module
+
+public import Definitions.Core.Game.Expect
 
 /-!
 # Lockstep coupling of an oracle game with its compiled game
@@ -19,6 +21,8 @@ pair index (`getPair`) when their slots are disjoint; the `getPair_*` facts here
 the embeddings carry. The lemmas (`expect_le_coupled`, `leafE_off_le` and the rest) are in
 `Proofs.Core.Game.Lock`.
 -/
+
+@[expose] public section
 
 namespace Verity
 

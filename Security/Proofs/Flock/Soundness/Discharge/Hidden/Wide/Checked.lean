@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Defs
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Defs
 
 /-!
 # The widened statements, with flock-verify's own count of units
@@ -9,6 +11,8 @@ two only when the unit returns the outputs, so nothing else refuses a tail with 
 statements without that hypothesis, each the conclusion of its `Wide/Defs.lean` statement under the same remaining
 conditions.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

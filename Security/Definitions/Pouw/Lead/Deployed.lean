@@ -1,6 +1,8 @@
-import Definitions.Pouw.Lead.Gap
-import Definitions.Hash.Tree
-import Definitions.Hash.Hm96
+module
+
+public import Definitions.Pouw.Lead.Gap
+public import Definitions.Hash.Tree
+public import Definitions.Hash.Hm96
 
 /-!
 # The lead's deployed commitment and coin stream (trusted definitions)
@@ -39,6 +41,8 @@ difftest names them yet.
   one coin a word, so `certStream`'s word `w` holds the coin starting at the feed's bit `w`, 128 a tile, within the
   node's storage.
 -/
+
+@[expose] public section
 
 namespace Pouw.Lead
 

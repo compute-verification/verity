@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.Refine
-import Flock.Firewall.SessionPlan
-import Flock.Firewall.Frames
+module
+
+public import Proofs.Flock.Claims.ZK.Refine
+public import Flock.Firewall.SessionPlan
+public import Flock.Firewall.Frames
 
 /-!
 # The release at the session loop (`flock-firewall session`)
@@ -28,6 +30,8 @@ statement `x`'s setup (`FlockDeploy.setupOf`), and here the transport's trusts o
 runs at `x`'s setup: the loop sets up from the auditor's draw (`Hello.Setup.setup`), which is `x`'s where `x` reads
 (`FlockDeploy.Ins.setup`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FrameOuter
-import Proofs.Flock.Claims.ZK.FramePoints
+module
+
+public import Proofs.Flock.Claims.ZK.FrameOuter
+public import Proofs.Flock.Claims.ZK.FramePoints
 
 /-!
 # The frame's rank check along a rep's requests (`FrameUnrefused`'s rank fault, at the frame)
@@ -17,6 +19,8 @@ answered them, after the earlier rep's claim points. Along the loop's requests f
 * **`Ranked.ownReqs_rank`**: so where a rep's requests up to an inner proof's round (`ownReqs`) run on into the inner
   proof, the rank check held at the rounds' coins, after the earlier rep's claim points (`run_prior_eq`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

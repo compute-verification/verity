@@ -46,15 +46,30 @@ A stated exception: the policy's v0 publishes the declared division and each inf
 fresh-input bits) in the clear. Remote composes it as an exception to everything-zero-knowledge, for the demos' runs,
 until v1's private form (the division committed under hiding leaves, compliance proved, a padded profile) replaces it.
 -/
-import CoreComposition.Blobs
-import CoreComposition.Cases
-import CoreComposition.Tie
-import NciCheck.Protocol
-import PouwCheck.Period
-import PouwPearlPlus.Protocol
-import SampledProofs.OneStage
-import SampledProofs.OneStageZk
-import VStarRecursive.Sampled
+module
+
+public import CoreComposition.Blobs
+public import CoreComposition.Cases
+public import CoreComposition.Tie
+public import NciCheck.Protocol
+public import PouwCheck.Period
+public import PouwPearlPlus.Protocol
+public import SampledProofs.OneStage
+public import SampledProofs.OneStageZk
+public import VStarRecursive.Sampled
+meta import CoreComposition.Blobs
+meta import CoreComposition.Cases
+meta import CoreComposition.Tie
+meta import NciCheck.Protocol
+meta import PouwCheck.Period
+meta import PouwPearlPlus.Protocol
+meta import SampledProofs.OneStage
+meta import SampledProofs.OneStageZk
+meta import VStarRecursive.Sampled
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core.Remote
 

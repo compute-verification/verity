@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.SeqSim
-import Proofs.Flock.Claims.ZK.Deployed
+module
+
+public import Proofs.Flock.Claims.Recursion.SeqSim
+public import Proofs.Flock.Claims.ZK.Deployed
 
 /-!
 # The V\* sessions of the masked recursion, from Flock's zero knowledge
@@ -23,6 +25,8 @@ masked record whose rounds with `Hello` are the protocol's (`Flock.zkAt_of_table
 assembles the two: `ZKBoundM` at `DF = deployZkRec relO` from the first part, the witness, the models at the recursive
 setup, the leaf counts within the record's (`Brings.zl`), and the record's hiding bound giving the pinned key's.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

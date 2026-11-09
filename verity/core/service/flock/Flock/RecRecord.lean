@@ -1,4 +1,6 @@
-import Flock.Field
+module
+
+public import Flock.Field
 
 /-!
 # The coin server's record, in its own format
@@ -17,6 +19,8 @@ A round's stream name is written as `json.dumps` writes an ASCII string (`"` and
 its tops, commit strings and coins in lowercase hex, a coin as `rec_live.f128_hex` writes it (`hi` then `lo`, 16 digits
 each).
 -/
+
+@[expose] public section
 
 namespace Flock.RecRecord
 

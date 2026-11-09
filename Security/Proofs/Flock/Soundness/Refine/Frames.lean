@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Refine.Paths
-import Proofs.Flock.Soundness.Refine.Exec
-import Proofs.Flock.Verifier.Transcript
+module
+
+public import Proofs.Flock.Soundness.Refine.Paths
+public import Proofs.Flock.Soundness.Refine.Exec
+public import Proofs.Flock.Verifier.Transcript
 
 /-!
 # The transcript's frames (R11b, framing)
@@ -17,6 +19,8 @@ bytes, and the replay compares them exactly. This file models those bytes.
 * `squeeze_bindA`, `sample_bindA`, `sampleVec_bindA`, `sampleK_bindA`, `forIn_answers`: a squeeze, or a loop of them,
   consumes rounds that retained the pending bytes and the squeeze's header.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

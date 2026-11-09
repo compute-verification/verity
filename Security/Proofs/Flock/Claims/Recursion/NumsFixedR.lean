@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Recursion.DeployHonest
-import Proofs.Flock.Claims.Recursion.ResLowerDeployed
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.VStarLinks
-import Proofs.Flock.Recursive.VStarCheck
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployHonest
+public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+public import Proofs.Flock.Claims.Recursion.VStarLinks
+public import Proofs.Flock.Recursive.VStarCheck
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 
 /-!
 # A staged part's numbers do not depend on the inner rounds (`numsFixed`)
@@ -23,6 +25,8 @@ reads those off the circuit (`HmOut.parseCommit`, the same file) and the stateme
 instance count, which `RecVStar.checkCircuit` holds to the instances of V*'s statement `s` at the verifier's own inner
 shape (`staged_pop`); with one, the draw's proved units (`Layout.drawn_spec`), the same draw.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.NumsFix
 

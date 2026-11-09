@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Defs
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Defs
 
 /-!
 # `OutputsCommitted` and `OutputsBinding`, widened: the frozen statements
@@ -15,6 +17,8 @@ unit, or a tail's last stage):
   is partial and so in its `hm96` slot, is not covered);
 * `…Wide`: a population file with shared rows too (header `shared_rows`, `pop.tables ≠ none`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

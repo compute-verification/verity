@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Zk.Inner
-import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Inner
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
 
 /-!
 # The pads' commitment opens at every column
@@ -10,6 +12,8 @@ layer `h`'s pairs, and the root layer `log₂ n`'s entry. So each column's sibli
 its leaf to the root, which is the Merkle check `Zk.verifyInnerWith` makes at each query (`inner_column_opens`, from
 the plain Ligerito's `climb_ok`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

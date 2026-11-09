@@ -1,5 +1,7 @@
-import Lean.Data.Json
-import Flock.RecLinks
+module
+
+public import Lean.Data.Json
+public import Flock.RecLinks
 
 /-!
 `flock-rec-links`'s command: `Flock.RecLinks.check` on each case of a vectors file (`verity/rec-links-vectors/v1`, written
@@ -10,6 +12,8 @@ by `verity_flock.rec_links.vectors`), which `test_rec_links` holds to the Python
 A case holds the shape (`units`, `ins`, `outs`), every unit's input and output rows' words (`in_rows`, `out_rows`, by unit
 then row) and the table's rows in hex (`rows`). The code is the refusal's text before its first colon.
 -/
+
+@[expose] public section
 
 namespace Flock.RecLinksCmd
 

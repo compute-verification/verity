@@ -1,8 +1,10 @@
-import Proofs.Flock.SessionLoop.FinishParts
-import Proofs.Flock.Claims.ZK.FrameRankFault
-import Proofs.Flock.Claims.ZK.FrameLinks
-import Proofs.Flock.VBridge.Family.Structure
-import Proofs.Flock.Claims.ZK.PrefixLive
+module
+
+public import Proofs.Flock.SessionLoop.FinishParts
+public import Proofs.Flock.Claims.ZK.FrameRankFault
+public import Proofs.Flock.Claims.ZK.FrameLinks
+public import Proofs.Flock.VBridge.Family.Structure
+public import Proofs.Flock.Claims.ZK.PrefixLive
 
 /-!
 # (b) `FinPoints`: the link points at the opened coins
@@ -19,6 +21,8 @@ import Proofs.Flock.Claims.ZK.PrefixLive
   `Stmt.setupHidden` refuse a region of any other size (`checkRegionBytes`, `setupH_regionBytes`,
   `setupHidden_regionBytes`). So **`Loop.finPoints`**: (b) at every statement in the masked scope with a witness.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal.Masked
 

@@ -21,7 +21,11 @@ table is one `Level0`, from which everything of level 0 that leaves is read: the
 
 The prover gets the draws back (`drawsOf`) to run its own commitment over the same codeword; what leaves is the loop's.
 -/
-import Flock.Firewall.Link
+module
+
+public import Flock.Firewall.Link
+
+@[expose] public section
 
 namespace Flock.Firewall.Level0
 

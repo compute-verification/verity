@@ -1,8 +1,10 @@
-import Definitions.Pouw.Lead.Layout
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Tactic.FinCases
-import Proofs.Pouw.Lead.PStar.Marginal
-import Proofs.Pouw.Lead.PStar.Tile
+module
+
+public import Definitions.Pouw.Lead.Layout
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Tactic.FinCases
+public import Proofs.Pouw.Lead.PStar.Marginal
+public import Proofs.Pouw.Lead.PStar.Tile
 
 /-!
 # An MMA tile's coin lanes over a call's coins (proofs)
@@ -16,6 +18,8 @@ the term is injective, and by `part_fiber_le`:
 * **A tile against a fixed value** (`call_tile_pstar`): whatever the data, a value fixed before the coins is the tile's
   words at step `t` on at most a `2^−168` share of the call's coin values.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.PStar
 

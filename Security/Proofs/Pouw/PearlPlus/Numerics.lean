@@ -1,8 +1,10 @@
-import Evaluate.Fp32
-import Evaluate.TC.Dots
-import Definitions.Pouw.PearlC.RowPrims
-import Proofs.Pouw.PearlC.CoreOps
-import Proofs.Properties.Evaluate
+module
+
+public import Evaluate.Fp32
+public import Evaluate.TC.Dots
+public import Definitions.Pouw.PearlC.RowPrims
+public import Proofs.Pouw.PearlC.CoreOps
+public import Proofs.Properties.Evaluate
 
 /-!
 # Pearl+'s bridge, the numerics: the check's FP32 add, square root and BF16 step are the semantics'
@@ -13,6 +15,8 @@ for the peel's four K16 steps. The semantics reads `TileCircuit.f32Add` (with `P
 words), `RowCircuit.sqrtWord` and `PeelExact.k16Step`. Each statement says the two agree wherever the check reads the
 result, which it refuses when it is not finite.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlPlus.Bridge
 

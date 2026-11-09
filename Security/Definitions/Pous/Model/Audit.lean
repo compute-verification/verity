@@ -1,4 +1,6 @@
-import Definitions.Pous.Model.Scheme
+module
+
+public import Definitions.Pous.Model.Scheme
 
 /-!
 # The timed audit game, perfect isolation
@@ -21,6 +23,8 @@ The two responders are `SimResponderBy` and `SeqResponderBy`, over a cost bound 
 (and, sequentially, a state size `Sz j` at each round boundary `j`). `SimResponder` and `SeqResponder` are them at
 `OracleAlgorithm.Bounded D Q` and a constant `S`; each other cost model's responders are them at its own bound.
 -/
+
+@[expose] public section
 
 namespace Pous
 

@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
-import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
-import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 
 /-!
 # The challenger's draw at every draw of the live law, at hidden-output `--zk`
@@ -18,6 +20,8 @@ first half is custody (`DrawFileZK`) and the second is flock-verify's own arithm
   `Law.execOS`, at `mPtsOf c.g (∑ s, ks s)`: `ZkLink.drawOkZK_of_exec`'s proof at setupHidden. `drawOkZKH_of_execG` is
   it at any `g` every session has, and `drawOkZKH_of_execSt` at the statement circuit's.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 

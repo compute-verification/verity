@@ -1,5 +1,7 @@
-import Proofs.Flock.Bridge.V5.Statement
-import Proofs.Flock.Bridge.EndToEndHiddenC
+module
+
+public import Proofs.Flock.Bridge.V5.Statement
+public import Proofs.Flock.Bridge.EndToEndHiddenC
 
 /-!
 # `EndToEndHiddenV5`, from `OpeningsCanonTargetV5`
@@ -13,6 +15,8 @@ import Proofs.Flock.Bridge.EndToEndHiddenC
 * `Flock.Bridge.endToEndHiddenV5_of`: `OpeningsCanonTargetV5` gives `EndToEndHiddenV5`, with its first and last terms
   in closed form as `endToEndHiddenC_of`'s.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Layout
 

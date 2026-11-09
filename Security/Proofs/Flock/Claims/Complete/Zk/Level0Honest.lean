@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.Zk.Level0Model
-import Proofs.Flock.Claims.Complete.Zk.Level0Premises
-import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
-import Proofs.Flock.Claims.Complete.Replay.LigeritoHonestRun
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Level0Model
+public import Proofs.Flock.Claims.Complete.Zk.Level0Premises
+public import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoHonestRun
 
 /-!
 # The honest masked Ligerito meets the masked model's final identity
@@ -14,6 +16,8 @@ import Proofs.Flock.Claims.Complete.Replay.LigeritoHonestRun
   (`Sync.closeZk`, the padding cancelled by `ybar`) then keeps it as plain's close does.
 * **The last level** (`goal_lastZ`): plain's `goal_last` at the masked model's level loop.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.L0
 

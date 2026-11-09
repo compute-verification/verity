@@ -1,9 +1,11 @@
-import Definitions.Population.Necessity
-import Proofs.Population.Leakage
-import Mathlib.Algebra.Order.BigOperators.Ring.Finset
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Abel
+module
+
+public import Definitions.Population.Necessity
+public import Proofs.Population.Leakage
+public import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.NormNum
+public import Mathlib.Tactic.Abel
 
 /-!
 # The skeleton theorem: tier 1 gives the sampling certificate, and each tier-1 item is needed
@@ -38,6 +40,8 @@ transcript; (ii) local checks; (iii) robust determinacy, which for opaque units 
   exactly one all-correct assignment in which one incorrect unit, writing one slot with no egress in its cone
   (`gate_coneEgress`), makes `k` egress bits arbitrary (`gate_egress`).
 -/
+
+@[expose] public section
 
 namespace Population.Iop
 

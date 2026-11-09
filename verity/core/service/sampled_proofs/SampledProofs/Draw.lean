@@ -4,8 +4,14 @@ registration and to that law (`checkDraw`), and the proved statement's units hel
 their rules, the law object and the samplers are C-Flock's (`Flock.Draw`). The check samples nothing: the draw comes from
 the challenger's coins, raw bytes with no derivation, which `drawFirst` reads as `coins.draw_first` does.
 -/
-import Flock.Draw
-import SampledProofs.Partition
+module
+
+public import Flock.Draw
+public import SampledProofs.Partition
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Draw
 

@@ -1,5 +1,7 @@
-import Batteries.Tactic.OpenPrivate
-import Proofs.Properties.RemoteAudit.Sort
+module
+
+public import Batteries.Tactic.OpenPrivate
+public import Proofs.Properties.RemoteAudit.Sort
 
 /-!
 # `Array.qsort` sorts strings
@@ -10,6 +12,8 @@ the proof of `Proofs.Properties.Nci.ReadsExact.qsort_sorted` (a sort by a `Nat` 
 `qsort_perm` it gives `qsort_eq_of_perm`, that the sort of a list depends only on its elements, and
 `qsort_of_sorted`, that it leaves a sorted list as it is.
 -/
+
+@[expose] public section
 
 open private Array.qpartition.loop Array.qsort.sort from Init.Data.Array.QSort.Basic
 

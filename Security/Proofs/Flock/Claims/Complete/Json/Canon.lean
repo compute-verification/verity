@@ -1,7 +1,9 @@
-import Batteries.Tactic.OpenPrivate
-import Proofs.Flock.Claims.CanonEq
-import Proofs.Flock.Soundness.ExecDraw
-import Proofs.Flock.Claims.Complete.Json.Spec
+module
+
+public import Batteries.Tactic.OpenPrivate
+public import Proofs.Flock.Claims.CanonEq
+public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Claims.Complete.Json.Spec
 
 /-!
 # What completeness reads of `canon`, proved
@@ -13,6 +15,8 @@ integer, so the one refusal never fires, and `canon_ascii`: `canonStr` writes ev
 as a `\u` escape, `escU`). The round trips through the verifier's parser `Flock.JsonParse.parse` (the printer's and
 `canon`'s) are proved too (`RoundTrip.lean`), and the parser's trees are well formed (`Parse.lean`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

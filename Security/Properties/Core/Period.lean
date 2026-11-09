@@ -1,5 +1,7 @@
-import CoreProtocol.Period
-import Definitions.Core.Period
+module
+
+public import CoreProtocol.Period
+public import Definitions.Core.Period
 
 /-!
 # The code's periods are the spec's
@@ -15,6 +17,8 @@ ticks, spans and the monitoring period without requiring `security`. These say t
 
 `Proofs.Properties.Core.Period` proves both.
 -/
+
+@[expose] public section
 
 namespace Properties.Period
 

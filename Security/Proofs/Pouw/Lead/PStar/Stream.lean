@@ -1,5 +1,7 @@
-import Definitions.Pouw.Lead.Model
-import Proofs.Pouw.Lead.PStar.Call
+module
+
+public import Definitions.Pouw.Lead.Model
+public import Proofs.Pouw.Lead.PStar.Call
 
 /-!
 # An MMA tile against the certifier's coin stream (proofs)
@@ -14,6 +16,8 @@ whose fibers have at most `(2^21)^3` values (`gapTerm_fiber_le`), and by `part_f
 * **A tile against a streamed tile** (`call_tile_stream`): whatever the data and the stream's arrangement, at any step
   the tile's words are the stream's tile `c` on at most a `2^−105` share of the call's coin values.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.PStar
 

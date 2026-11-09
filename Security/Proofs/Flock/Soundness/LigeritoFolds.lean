@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.LigeritoOOD
+module
+
+public import Proofs.Flock.Soundness.LigeritoOOD
 
 /-!
 # A level's folds against a list (`Flock.Ligerito` step 4)
@@ -11,6 +13,8 @@ of them stays false for every one after `k` rounds, except with probability `k·
 verifier's, which sums to the claim by construction (`Flock.Ligerito`). Together with the rounds' MCA events
 (`value_foldRounds_mca_le`) this is the accounting's `Level.foldError`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

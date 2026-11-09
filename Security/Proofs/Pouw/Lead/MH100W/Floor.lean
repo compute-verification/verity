@@ -1,6 +1,8 @@
-import Definitions.Pouw.Lead.Model
-import Definitions.Pouw.Assumptions.Dimension.H100W
-import Proofs.Pouw.Dimension.H100WProofs
+module
+
+public import Definitions.Pouw.Lead.Model
+public import Definitions.Pouw.Assumptions.Dimension.H100W
+public import Proofs.Pouw.Dimension.H100WProofs
 
 /-!
 # The register floor of W1's priced work
@@ -9,6 +11,8 @@ Under `H32`, a well-formed `MH100w` trace with no free operand costs at least 32
 writes are those the distinct-writes proof splits into `hiP` and `loP` (`regCount_hi_lo`), and `cost_hi_lo` prices
 both at 32 under `H32`, which is `FloorTc 32 32`.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.MH100W
 

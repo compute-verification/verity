@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.Joint
-import Proofs.Flock.Soundness.Refine.Seam
-import Proofs.Flock.Soundness.LigeritoPadLevel0
+module
+
+public import Proofs.Flock.Claims.KS.Joint
+public import Proofs.Flock.Soundness.Refine.Seam
+public import Proofs.Flock.Soundness.LigeritoPadLevel0
 
 /-!
 # The old table at the filled word
@@ -24,6 +26,8 @@ the other.
   whose oracle is `CommittedPad` at the deployed masked schedule and padding extracts (`good_of_committed_zk`), its
   rows taken back to a masked message (`zkOfRows`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

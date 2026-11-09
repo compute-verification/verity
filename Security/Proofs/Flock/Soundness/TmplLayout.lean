@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.ExecSetup
-import Proofs.Flock.Soundness.TmplUnitAt
-import Proofs.Flock.Soundness.TmplNetOK
+module
+
+public import Proofs.Flock.Soundness.ExecSetup
+public import Proofs.Flock.Soundness.TmplUnitAt
+public import Proofs.Flock.Soundness.TmplNetOK
 
 /-!
 # A templated statement has the layout the placement reads
@@ -10,6 +12,8 @@ templated unit's logical net placed at `posMap` (`UnitAt.tmpl`). Every other fac
 `HmRow.parse` accepted with the unit's committed net first (`TmplValue.parseTmpl_facts`), which only `Circuit.tmpl`
 tells apart from the statement's.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

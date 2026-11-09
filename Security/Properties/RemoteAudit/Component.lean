@@ -1,5 +1,7 @@
-import RemoteAudit.Protocol
-import Properties.RemoteAudit.Line
+module
+
+public import RemoteAudit.Protocol
+public import Properties.RemoteAudit.Line
 
 /-!
 # The bandwidth component accepts only what the memory line is stated on (`RemoteAudit.Protocol`)
@@ -44,6 +46,8 @@ whole store in memory throughout (`honestTrace`), with no outside device (`noOut
 messages entering it, as its certifiers count (`quietIngress`), on a schedule that runs each pass inside its window
 (`HonestSchedule`).
 -/
+
+@[expose] public section
 
 namespace Properties.RemoteAudit.Component
 

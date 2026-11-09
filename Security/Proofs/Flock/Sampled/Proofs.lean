@@ -1,6 +1,8 @@
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Data.Fintype.BigOperators
-import Proofs.Flock.Sampled.Statements
+module
+
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Data.Fintype.BigOperators
+public import Proofs.Flock.Sampled.Statements
 
 /-!
 # The sampled audit's statements, proved
@@ -21,6 +23,8 @@ import Proofs.Flock.Sampled.Statements
   held slots with the trace's values (`fillValues`); so it aborts only where the draw doesn't fit; and at every other
   draw its audit's view is `zeroKnowledge_holds`'s.
 -/
+
+@[expose] public section
 
 namespace FlockSampled
 

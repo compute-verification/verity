@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkSession.Numbers
-import Proofs.Flock.Soundness.Audit.FlockLink
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Numbers
+public import Proofs.Flock.Soundness.Audit.FlockLink
 
 /-!
 # `δ_link` for `--zk` sessions under expected-time collision resistance (interactive-oracle layer)
@@ -36,6 +38,8 @@ adds `k/(eR_w)` and the factor `1/(1 − ρ)`; here extraction is the oracle its
 cap, and the oracle is what extraction from the cap's openings recovers. The compiled counterpart, whose finder runs the
 compiled prover and extracts, is `Discharge/ZkLink/Compiled.lean`'s open guarantee.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

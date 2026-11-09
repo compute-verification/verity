@@ -1,5 +1,7 @@
-import PouwPearlPlus.Rule
-import PouwPearlPlus.Run
+module
+
+public import PouwPearlPlus.Rule
+public import PouwPearlPlus.Run
 
 /-!
 # The run's credit at Pearl's assumption (`verify_run.credit_at_assumption`)
@@ -18,6 +20,8 @@ most MACs that weight can hold, filled from the units with the most MACs a ticke
 Every quantity is exact (`Rat`), as the Python's `Fraction`s are, ε among them: one more than the least k with
 Σ_{i ≤ X_O} C(t, i) (k/10⁹)^i (1 − k/10⁹)^(t − i) ≤ δ, over 10⁹.
 -/
+
+@[expose] public section
 
 namespace PouwCheck.PearlPlus
 

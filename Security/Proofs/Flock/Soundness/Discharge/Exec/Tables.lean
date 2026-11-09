@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
-import Proofs.Flock.Soundness.Discharge.Exec.SessionL
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionL
 
 /-!
 # flock-verify refines each table of a session, under `hm96-sha512/v1` (`Flock.Record`, `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle`, `Stmt.setupTables`)
@@ -14,6 +16,8 @@ import Proofs.Flock.Soundness.Discharge.Exec.SessionL
 * `table_tableAfterL`: the same as one run of the salted session's table game `tableAfterL` (`SessionL.lean`), played
   on the two streams' coins, which accepts.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

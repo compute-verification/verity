@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Sim
-import Proofs.Flock.VBridge.Algebra.ZerocheckConverse
+module
+
+public import Proofs.Flock.Claims.Complete.Sim
+public import Proofs.Flock.VBridge.Algebra.ZerocheckConverse
 
 /-!
 # Replaying the honest rep, one step at a time
@@ -17,6 +19,8 @@ that round back and compares its retained bytes exactly (`squeezeWith`), which c
 * **The rounds agree** (`Agrees R P k₀`): from index `k₀` on, the verifier's rounds `R` carry the prover's rounds `P`
   (count, coins and retained bytes; the digest is not compared, as a retained round's squeeze never reads it).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

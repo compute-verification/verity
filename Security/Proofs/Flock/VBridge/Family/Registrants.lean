@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Registered.ReadsX
-import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
-import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
-import Proofs.Flock.Level3.RowV2
-import Proofs.Flock.VBridge.Family.Registered
+module
+
+public import Proofs.Flock.Soundness.Registered.ReadsX
+public import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
+public import Proofs.Flock.Level3.RowV2
+public import Proofs.Flock.VBridge.Family.Registered
 
 /-!
 # Two registrants' records at one registered root and position
@@ -26,6 +28,8 @@ a SHA-512 collision, in a pair fixed by the two records rather than by a run:
   both collisions are `RegColl`'s (`Recursive/Registrants.lean`), which `Accepted` excludes and the recursive audit
   prices once.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

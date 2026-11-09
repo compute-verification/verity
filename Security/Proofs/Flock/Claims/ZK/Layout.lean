@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Compose
-import Proofs.Flock.Claims.ZK.Congr
+module
+
+public import Proofs.Flock.Claims.ZK.Compose
+public import Proofs.Flock.Claims.ZK.Congr
 
 /-!
 # A run in parts, as sessions in turn
@@ -26,6 +28,8 @@ and `(c + m)·g`.
 * `progOf`: a session simulator's program on a slot's own coin type, through a bijection with its coins at the
   slot's statement (`progOf_of`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

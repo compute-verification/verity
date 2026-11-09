@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Wire
-import Proofs.Flock.Soundness.Discharge.Exec.Rounds
-import Proofs.Flock.Soundness.Discharge.Exec.Verdict
-import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
-import Proofs.Flock.Soundness.Discharge.Integrate.Headline
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Wire
+public import Proofs.Flock.Soundness.Discharge.Exec.Rounds
+public import Proofs.Flock.Soundness.Discharge.Exec.Verdict
+public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
+public import Proofs.Flock.Soundness.Discharge.Integrate.Headline
 
 /-!
 # The message half of R11b, and the decoder at the headline: statements
@@ -23,6 +25,8 @@ verdict accepts. The statements here:
 * `DecodesOnExec`: `DecodesOn` at the plain headline's tables, the decoder `decAt`, `one := true`, no final messages,
   `capOfRoot`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.DecodeZL
 

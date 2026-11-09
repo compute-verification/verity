@@ -1,4 +1,6 @@
-import Proofs.Pouw.Lead.PStar.Table
+module
+
+public import Proofs.Pouw.Lead.PStar.Table
 
 /-!
 # The tables' tail
@@ -10,6 +12,8 @@ pre-coin tables and zero on at most `2^−168` of the coins each (`PStar.call_ti
 tiles on at most `2^−105` each (`PStar.call_tile_stream`). A coin value with a table hit has at least one, so the
 share is at most the hits' mean (`PStar.sum_tableHits`).
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Tail
 

@@ -1,8 +1,10 @@
-import Proofs.Flock.Recursive.AuditC3
-import Proofs.Flock.Recursive.ForkInnerC
-import Proofs.Flock.C3.Fork.Sound
-import Proofs.Flock.C3.Fork.Extract
-import Proofs.Flock.Recursive.ValueBridge
+module
+
+public import Proofs.Flock.Recursive.AuditC3
+public import Proofs.Flock.Recursive.ForkInnerC
+public import Proofs.Flock.C3.Fork.Sound
+public import Proofs.Flock.C3.Fork.Extract
+public import Proofs.Flock.Recursive.ValueBridge
 
 /-!
 # Recursion: gap 2 at the word the prover's runs open (the knowledge form)
@@ -24,6 +26,8 @@ draw are the inner fork at round 0 (`forkG pick 0`, `StrictCR.twoRuns`).
   `RegClash`es at `regWord` is a run of the transported prover at that draw, as is the run `regWord` reads at the
   position (`RunOpensReg`), so the two are an `InnerForkRec` at round 0.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

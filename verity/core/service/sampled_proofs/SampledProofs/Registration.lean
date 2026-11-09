@@ -49,12 +49,18 @@ law the draw runs on, over the draws that end, give different link points, a law
 which ends (`link-points`, `linkRefused`): some draw ends, a draw that ends gives each member one count, and one that
 runs out of coins fails the window (`OneStageZk.RAN_OUT`).
 -/
-import Flock.WindowRecord
-import SampledProofs.Draw
-import SampledProofs.LinkPoints
-import SampledProofs.Registered
-import SampledProofs.Supplied
-import Std.Data.HashMap
+module
+
+public import Flock.WindowRecord
+public import SampledProofs.Draw
+public import SampledProofs.LinkPoints
+public import SampledProofs.Registered
+public import SampledProofs.Supplied
+public import Std.Data.HashMap
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Registration
 

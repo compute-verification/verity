@@ -1,3 +1,5 @@
+module
+
 /-!
 # What the window makes public (`window.py`, "Public items")
 
@@ -5,6 +7,8 @@
 a registration carries, `LEGACY_REGISTERED`, what one made before the fixed-length rule carries, and `KINDS`, the kinds
 of an entry.
 -/
+
+@[expose] public section
 
 namespace PouwWindow
 

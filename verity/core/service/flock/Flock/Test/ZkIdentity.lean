@@ -5,7 +5,12 @@ the digest as its bytes `c2 a7`. Canonical JSON's escape (`canon`) would give an
 `Hello` would fail R7. `HOOKS` is upstream's `zk_identity` at `mask_log` 14 (`flock-circuit.rs`), as `serde_json`
 writes it.
 -/
-import Flock.Zk
+module
+
+public import Flock.Zk
+meta import Flock.Zk
+
+@[expose] public section
 
 namespace Flock.Test.ZkIdentity
 

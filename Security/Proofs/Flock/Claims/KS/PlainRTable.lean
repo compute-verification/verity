@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainKSLinR
-import Proofs.Flock.Claims.KS.PlainRConflict
+module
+
+public import Proofs.Flock.Claims.KS.PlainKSLinR
+public import Proofs.Flock.Claims.KS.PlainRConflict
 
 /-!
 # The table bound and `KSFlockLin` at the plain record at the deployed reader `VR rd`
@@ -9,6 +11,8 @@ import Proofs.Flock.Claims.KS.PlainRConflict
 the table bound's premises (`plainR_tableBoundAbortLin`); with conflicts tied to collisions (`plainR_conflictTied`)
 they give `KSFlockLin` at the trimmed record (`plainR_KSFlockLin_of_reader`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

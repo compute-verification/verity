@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.Opening
+module
+
+public import Proofs.Flock.Soundness.Refine.Opening
 
 /-!
 # Ring switching's checks make the executable's ring-switch stage return (`Flock.Opening`)
@@ -16,6 +18,8 @@ a passing check changes nothing, a squeeze of `n ≠ 0` coins consumes the next 
 answers the framed bytes (Transcript.lean:75–90), and a loop whose every step yields returns the fold of its steps
 (`forIn_range_run`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

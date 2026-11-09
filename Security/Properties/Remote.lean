@@ -1,9 +1,11 @@
-import CoreRemote
-import Definitions.Core
-import Properties.Composition
-import Properties.NciDesc
-import Properties.Nci.Baseline
-import Properties.SampledProofs
+module
+
+public import CoreRemote
+public import Definitions.Core
+public import Properties.Composition
+public import Properties.NciDesc
+public import Properties.Nci.Baseline
+public import Properties.SampledProofs
 
 /-!
 # Remote's acceptance and the inference-only policy
@@ -51,6 +53,8 @@ committed values), is not stated: v0 of the policy and remote read neither the l
 
 Proved as `Properties.Remote.SecurityProofs.X : Properties.Remote.X` in `Proofs.Properties.Remote`.
 -/
+
+@[expose] public section
 
 namespace Properties.Remote
 

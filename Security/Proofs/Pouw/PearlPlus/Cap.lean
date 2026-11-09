@@ -1,6 +1,8 @@
-import Proofs.Pouw.PearlPlus.Draw
-import Proofs.Pouw.PearlPlus.Debit
-import Proofs.Pouw.PearlC.Cap.SaltDead
+module
+
+public import Proofs.Pouw.PearlPlus.Draw
+public import Proofs.Pouw.PearlPlus.Debit
+public import Proofs.Pouw.PearlC.Cap.SaltDead
 
 /-!
 # Pearl+'s bridge, part (c): a passed tile is within the game's inert-work bound
@@ -30,6 +32,8 @@ filler rows are zero and fail the rules, and its excluded rows fail them, so the
   `creditOf(1, kKept, n)`, is at most `creditDevRev1`'s (`credit_le`), with equality at `kKept = k`.
 * `tilePassGivesTheChainCap`: the chain's part of the game's inert work (`tileChainDebit`) is within the bound.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlPlus.Bridge
 

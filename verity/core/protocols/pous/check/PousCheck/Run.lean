@@ -1,6 +1,8 @@
-import MemoryChallenger.Judge
-import PousCheck.SetupProtocol
-import PousCheck.Merkle
+module
+
+public import MemoryChallenger.Judge
+public import PousCheck.SetupProtocol
+public import PousCheck.Merkle
 
 /-!
 # A PoUS run, composed
@@ -30,6 +32,10 @@ difftest.
 `SETUP.json` the setup's public outputs (`Public.toJson`) and `SESSION.json` `{"commitment", "openings", "signed"}`,
 each exactly the canonical JSON of what it decodes to, and `SESSION_ID` the designated id in lowercase hex.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PousCheck.Run
 

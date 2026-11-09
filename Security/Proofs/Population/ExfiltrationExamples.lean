@@ -1,5 +1,7 @@
-import Proofs.Population.Exfiltration
-import Proofs.Population.Determinacy
+module
+
+public import Proofs.Population.Exfiltration
+public import Proofs.Population.Determinacy
 
 /-!
 # Exfiltration before detection: tightness, and what fails without each assumption
@@ -16,6 +18,8 @@ import Proofs.Population.Determinacy
 * `not_trustedModel_of_reveal`: **without a trusted model**, an honest model whose outputs determine the target gives it
   to any guesser.
 -/
+
+@[expose] public section
 
 namespace Population.Exfil
 

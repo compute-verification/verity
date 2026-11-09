@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Witnesses.Recursion
-import Proofs.Flock.Claims.DeployEfficient
-import Proofs.Flock.Claims.Recursion.DeployComplete
-import Proofs.Flock.Claims.Recursion.DeployStop
-import Proofs.Flock.Claims.Recursion.DeployChecked
-import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
+module
+
+public import Proofs.Flock.Claims.Witnesses.Recursion
+public import Proofs.Flock.Claims.DeployEfficient
+public import Proofs.Flock.Claims.Recursion.DeployComplete
+public import Proofs.Flock.Claims.Recursion.DeployStop
+public import Proofs.Flock.Claims.Recursion.DeployChecked
+public import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
 
 /-!
 # Antecedent witnesses: the ZK-recursion compiler's claims at the deployed record
@@ -52,6 +54,8 @@ read:
   (`FlockDeploy.PlainIn`), whose V* statements are of tables at `m ≤ 35`, at most `2^64` of them
   (`RecDeploy.δcRec_lt_one`).
 -/
+
+@[expose] public section
 
 namespace Claims.Witness.Recursion
 

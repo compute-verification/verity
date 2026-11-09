@@ -1,9 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.Exec.Merkle
-import Proofs.Flock.Soundness.Discharge.Hidden.Facts
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Flock.RecVStar
-import Flock.ProvedScope
-import Proofs.Flock.Claims.Scope.Check
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Flock.RecVStar
+public import Flock.ProvedScope
+public import Proofs.Flock.Claims.Scope.Check
 
 /-!
 # The recursion's inner statement and Flock's statement check read one leaf scheme off the circuit file
@@ -24,6 +26,8 @@ cannot both pass.
 * `check_of_innerOf`: so where `ProvedScope.check` passes a circuit file `RecVStar.innerOf` sets up, it ran in the
   plain-leaves form: without `--zk`, at hidden outputs and plain SHA-512 leaves.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.InnerLeaf
 

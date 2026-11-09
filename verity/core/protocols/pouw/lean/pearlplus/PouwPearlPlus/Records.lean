@@ -1,6 +1,8 @@
-import PouwCommit.Rows
-import PouwCommit.Draws
-import Identity.Domains
+module
+
+public import PouwCommit.Rows
+public import PouwCommit.Draws
+public import Identity.Domains
 
 /-!
 # A pass's records and give-up (`pearl_c_work`, `clear_work.check_records`)
@@ -21,6 +23,8 @@ The scheme is Pearl-C v1 -h3 on the H100's record (`pearl-c-h100-v1-h3`), the de
 (`PearlC.check`), its grid (`PearlC.tiles`, row-major tiles of `tileM` × `tileN`, the last row block narrower) and its
 `wref`. A test instance (the manifest's `instance`) sets `k_min` and the tile.
 -/
+
+@[expose] public section
 
 namespace PouwCheck.PearlPlus
 

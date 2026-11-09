@@ -1,5 +1,9 @@
-import NciCheck.Baseline
-import CoreProtocol.Protocol
+module
+
+public import NciCheck.Baseline
+public import CoreProtocol.Protocol
+meta import NciCheck.Baseline
+meta import CoreProtocol.Protocol
 
 /-!
 # The inference-only policy as a core protocol: `verity/inference-only/v0`
@@ -40,6 +44,10 @@ Its case splits the check's instance and trusted input as sampled proofs' one-st
   the params), and the **profile** is the check's report, `{"blocks", "gates"}`: per inference block
   `[gates, fresh-input bits]`, and the declared circuit's gates.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace NciCheck.Protocol
 

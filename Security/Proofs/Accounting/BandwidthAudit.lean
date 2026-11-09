@@ -1,6 +1,8 @@
-import Definitions.Accounting.Guarantees.BandwidthAudit
-import Proofs.Accounting.Prob
-import Proofs.Accounting.Bandwidth.AuditRO
+module
+
+public import Definitions.Accounting.Guarantees.BandwidthAudit
+public import Proofs.Accounting.Prob
+public import Proofs.Accounting.Bandwidth.AuditRO
 
 /-!
 # Proof that the bandwidth audit's guarantee is a joint run's bandwidth guarantee
@@ -11,6 +13,8 @@ the game's device is accepted with its ingress, plus `S_chip + c + G·b + λ`, s
 event in `ℝ≥0∞`, and with `N > 0` its bound is finite and is the certificate's error as a real number
 (`pr_short_le_error`). The sure bound gives `BandwidthOfAudit`, the reads at the coins drawn `BandwidthOfAuditPerRun`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs
 

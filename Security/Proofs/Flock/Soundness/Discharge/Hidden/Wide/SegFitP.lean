@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegFit
-import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
-import Proofs.Flock.Soundness.Discharge.Hm.Flat
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegFit
+public import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
+public import Proofs.Flock.Soundness.Discharge.Hm.Flat
 
 /-!
 # Unsegmented or row-seg output rows at public inputs
@@ -14,6 +16,8 @@ public leaf's bits (`HmIn.delta`). Every row it drops is a public leaf's bit, in
 * `Any.sat_flatFP`: a satisfying witness of the statement satisfies its flat twin off the unit input rows. At a public
   leaf the twin copies the zero, which the statement leaves out.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

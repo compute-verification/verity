@@ -1,6 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Inst
-import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
-import Proofs.Flock.Soundness.Discharge.Inst.KeysRow
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Inst
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
+public import Proofs.Flock.Soundness.Discharge.Inst.KeysRow
+
+@[expose] public section
 
 set_option Elab.async false
 

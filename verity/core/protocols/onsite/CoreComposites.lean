@@ -10,9 +10,18 @@ no composite here: `ofIds` refuses its subprotocols, and it runs only as its own
 
 The command after `IDS` is the core CLI's (`CoreProtocol.Cli`), of the composite `ofIds IDS`.
 -/
-import CoreProtocol.Cli
-import CoreOnsite
-import CoreRemote
+module
+
+public import CoreProtocol.Cli
+public import CoreOnsite
+public import CoreRemote
+meta import CoreProtocol.Cli
+meta import CoreOnsite
+meta import CoreRemote
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core.Composites
 

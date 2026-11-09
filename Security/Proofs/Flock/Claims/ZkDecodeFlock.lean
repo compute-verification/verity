@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.ZkDecode
-import Proofs.Flock.Claims.DecodeFamily
-import Proofs.Flock.Soundness.Instance
-import Flock.Zk
+module
+
+public import Proofs.Flock.Claims.ZkDecode
+public import Proofs.Flock.Claims.DecodeFamily
+public import Proofs.Flock.Soundness.Instance
+public import Flock.Zk
 
 /-!
 # The deployed masked level-0 code, its decoder and read step
@@ -27,6 +29,8 @@ statement's `m` and a masked message (`ZkTrace`), a column a list of GF(2^128) s
 level-0 columns than that (`zkQueries_lt_zkNMinD`). Its read step (`zkReadD`) is `zkRead` at the candidate's `m`: the
 witness lanes' trace, `2^m` bits (`zkReadD_hid_length`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

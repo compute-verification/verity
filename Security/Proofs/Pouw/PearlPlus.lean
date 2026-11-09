@@ -1,17 +1,19 @@
-import Proofs.Pouw.PearlPlus.Atom
-import Proofs.Pouw.PearlPlus.Noise
-import Proofs.Pouw.PearlPlus.Words
-import Proofs.Pouw.PearlPlus.Rules
-import Proofs.Pouw.PearlPlus.Stats
-import Proofs.Pouw.PearlPlus.Keys
-import Proofs.Pouw.PearlPlus.Rho
-import Proofs.Pouw.PearlPlus.Peel
-import Proofs.Pouw.PearlPlus.Factors
-import Proofs.Pouw.PearlPlus.Semantics
-import Proofs.Pouw.PearlPlus.Assembly
-import Proofs.Pouw.PearlPlus.Draw
-import Proofs.Pouw.PearlPlus.Debit
-import Proofs.Pouw.PearlPlus.Cap
+module
+
+public import Proofs.Pouw.PearlPlus.Atom
+public import Proofs.Pouw.PearlPlus.Noise
+public import Proofs.Pouw.PearlPlus.Words
+public import Proofs.Pouw.PearlPlus.Rules
+public import Proofs.Pouw.PearlPlus.Stats
+public import Proofs.Pouw.PearlPlus.Keys
+public import Proofs.Pouw.PearlPlus.Rho
+public import Proofs.Pouw.PearlPlus.Peel
+public import Proofs.Pouw.PearlPlus.Factors
+public import Proofs.Pouw.PearlPlus.Semantics
+public import Proofs.Pouw.PearlPlus.Assembly
+public import Proofs.Pouw.PearlPlus.Draw
+public import Proofs.Pouw.PearlPlus.Debit
+public import Proofs.Pouw.PearlPlus.Cap
 
 /-!
 # Pearl+'s bridge: the Lean check's verdict on a tile, read in the Models game
@@ -31,3 +33,5 @@ premise `TTOutTilePearlCH100Rev1` reads. Four parts:
 consistent (`declOK`), the code's tickets are `drawTickets`, and an accepted run's samples are accepted by the tolerant
 audit over `goodDeclTiles ∪ blankTiles`, or SHA-512 collides.
 -/
+
+@[expose] public section

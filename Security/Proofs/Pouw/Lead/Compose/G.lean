@@ -1,10 +1,12 @@
-import Definitions.Pouw.Guarantees.Lead
-import Proofs.Pouw.Lead.MH100W.Floor
-import Proofs.Pouw.Lead.CoinBranch.Writes
-import Proofs.Pouw.Lead.Tags.Distinct
-import Proofs.Pouw.Lead.PStar.Table
-import Proofs.Pouw.Lead.Commit.Credit
-import Proofs.Pouw.Lead.Network.Term
+module
+
+public import Definitions.Pouw.Guarantees.Lead
+public import Proofs.Pouw.Lead.MH100W.Floor
+public import Proofs.Pouw.Lead.CoinBranch.Writes
+public import Proofs.Pouw.Lead.Tags.Distinct
+public import Proofs.Pouw.Lead.PStar.Table
+public import Proofs.Pouw.Lead.Commit.Credit
+public import Proofs.Pouw.Lead.Network.Term
 
 /-!
 # The lead's guarantee from its pieces
@@ -28,6 +30,8 @@ That is `G_coins`, over the coin values. `G` is `G_coins` at the coins the certi
 `CertifierCoins` they are `coinsOf` of its entropy, an equivalence, so a set of entropy values maps one to one onto a
 set of coin values of the same size and sum.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Compose
 

@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Deploy
-import Proofs.Flock.Soundness.Assumptions.Zk
-import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
-import Proofs.Flock.Soundness.Refine.Walk
-import Proofs.Flock.Soundness.Refine.Table
+module
+
+public import Proofs.Flock.Claims.Deploy
+public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
+public import Proofs.Flock.Soundness.Refine.Walk
+public import Proofs.Flock.Soundness.Refine.Table
 
 /-!
 # `Deploy.V`'s custody checks, as the old theorems' `RecordsLiveZKJ`
@@ -37,6 +39,8 @@ the record's roots, link points and rounds are the run's link message, first coi
   `LiveZk.Pr_acc_zk_le`'s `hdec`) on untyped inputs under `TagsOkZJ` where every draw sets each table up at `mPts`
   link points (`DrawOkZKJ`), as the draw file half of `RecordCustodyZKJ` gives.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.Custody
 

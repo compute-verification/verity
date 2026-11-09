@@ -1,5 +1,7 @@
-import Definitions.Flock.Circuit
-import Definitions.Flock.Statement
+module
+
+public import Definitions.Flock.Circuit
+public import Definitions.Flock.Statement
 
 /-!
 # The compiled lowering: templates' rows, their placement in a statement, and programs of units
@@ -26,6 +28,8 @@ reading earlier columns and the constant. In the circuit it is one gate, `Op.row
 The theorem, for every template, is `lowering_sound` in `Proofs/Flock/Soundness/Lowering.lean`: a satisfied table
 makes every placed unit correct.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

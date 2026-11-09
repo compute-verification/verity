@@ -10,7 +10,12 @@ opened for it), a part with no session opened, an opened session that is not the
 part V* lacks, a staging after the first Hello or a second one, other rows or another shared set staged, a record not
 closed or going on past its close, and a record that is not one or holds an event out of its form are refused.
 -/
-import Flock.RecCompose
+module
+
+public import Flock.RecCompose
+meta import Flock.RecCompose
+
+@[expose] public section
 
 namespace Flock.Test.RecCompose
 

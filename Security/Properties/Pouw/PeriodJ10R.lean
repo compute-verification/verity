@@ -1,8 +1,10 @@
-import Definitions.Accounting.ComposePeriod
-import Definitions.Accounting.Assumptions.Compose
-import Definitions.Accounting.TS.J10R
-import PouwCheck
-import Properties.Pouw.Period
+module
+
+public import Definitions.Accounting.ComposePeriod
+public import Definitions.Accounting.Assumptions.Compose
+public import Definitions.Accounting.TS.J10R
+public import PouwCheck
+public import Properties.Pouw.Period
 
 /-!
 # A period's credit over the windows served H1's verdict credits (`PouwCheck.Credit.window`), J10-R
@@ -102,6 +104,8 @@ three facts of `Credit.window` on honest windows that its compiled verifier's di
 one, `Proofs.Pouw.PeriodJ10R.Nontrivial`'s `j10r_nontrivial` (the conclusion fails at the verifier that accepts every
 window, against the prover that fixes no word).
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.PeriodJ10R
 

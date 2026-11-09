@@ -41,11 +41,17 @@ Boolean Definition its own cut applies.
 What this does not check: that σ(f) computes f. That stays a Python conformance fact (each Boolean version is tested against
 its word Definition, completeness under Boolean-first), because credited work reads Boolean gate counts only.
 -/
-import Lean.Data.Json
-import Std.Data.HashMap
-import Std.Data.HashSet
-import Flock.Program
-import Flock.JsonParse
+module
+
+public import Lean.Data.Json
+public import Std.Data.HashMap
+public import Std.Data.HashSet
+public import Flock.Program
+public import Flock.JsonParse
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock.Sigma
 

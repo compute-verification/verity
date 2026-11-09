@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.KS.PlainDrawJCols
-import Proofs.Flock.Claims.KS.Width
-import Proofs.Flock.Claims.Recursion.NextR
-import Proofs.Flock.Claims.KS.PlainDrawJRun
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawJCols
+public import Proofs.Flock.Claims.KS.Width
+public import Proofs.Flock.Claims.Recursion.NextR
+public import Proofs.Flock.Claims.KS.PlainDrawJRun
 
 /-!
 # The plain verdict at the draw from an accepting `nextR` step, at its reader's columns
@@ -27,6 +29,8 @@ that value and those files unchanged (`checksAtJ_ok`, `decodeJWithK_live`, `live
   `plainVerdictAtJK_of_nextJ_cols` there.
 * `VR`, `plainVerdictAtJK_of_runR`: the run-level form, at the rounds of `V false` with the steps `nextR rd`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

@@ -1,16 +1,18 @@
-import Proofs.Flock.Soundness.Discharge.FailClosed.Composed
-import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHidden
-import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered
-import Proofs.Flock.Soundness.Discharge.FailClosed.Exec
-import Proofs.Flock.Soundness.Discharge.FailClosed.General
-import Proofs.Flock.Soundness.ExecStrataOf
-import Proofs.Flock.Soundness.Discharge.FailClosed.PlainRegistered
-import Proofs.Flock.Soundness.Assumptions.Custody
-import Proofs.Flock.Soundness.Discharge.FailClosed.Design
-import Proofs.Flock.Soundness.Assumptions.CustodyZk
-import Proofs.Flock.Soundness.Assumptions.Finders
-import Proofs.Flock.Soundness.Discharge.PlainHJ.Sound
-import Proofs.Flock.Soundness.Discharge.PlainJ.Sound
+module
+
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Composed
+public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHidden
+public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Exec
+public import Proofs.Flock.Soundness.Discharge.FailClosed.General
+public import Proofs.Flock.Soundness.ExecStrataOf
+public import Proofs.Flock.Soundness.Discharge.FailClosed.PlainRegistered
+public import Proofs.Flock.Soundness.Assumptions.Custody
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Design
+public import Proofs.Flock.Soundness.Assumptions.CustodyZk
+public import Proofs.Flock.Soundness.Assumptions.Finders
+public import Proofs.Flock.Soundness.Discharge.PlainHJ.Sound
+public import Proofs.Flock.Soundness.Discharge.PlainJ.Sound
 
 /-!
 # Soundness: one theorem over everything flock-verify accepts
@@ -71,6 +73,8 @@ assumption too: without `--zk` `Assumptions.RecordCustodyExec` (`RecordCustodyEx
 `Assumptions.Zk.RecordCustodyZKLaw` (`RecordCustodyZKHLaw` at hidden outputs, `RecordCustodyZKJLaw` and
 `RecordCustodyZKHJLaw` at `J` tables).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.FailClosed
 

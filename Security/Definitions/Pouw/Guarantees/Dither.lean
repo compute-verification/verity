@@ -1,6 +1,8 @@
-import Definitions.Pouw.Dither
-import Definitions.Pouw.Assumptions.Dither
-import Definitions.Pouw.Assumptions.ShaRealize
+module
+
+public import Definitions.Pouw.Dither
+public import Definitions.Pouw.Assumptions.Dither
+public import Definitions.Pouw.Assumptions.ShaRealize
 
 /-!
 # The no-fold Dither protocol's work-soundness over a monitoring period (trusted)
@@ -24,6 +26,8 @@ The ACCEL program's headline, on the accelerator model of `Definitions.Pouw.Dith
 * `FreedOfFloor`: the rounds' floor at the period's dual price bounds freed compute by `ε C` (weak duality); the step
   from the floor to `WorkSound`'s conclusion.
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.Dither
 

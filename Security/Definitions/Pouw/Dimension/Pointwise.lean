@@ -1,5 +1,7 @@
-import Mathlib.InformationTheory.Hamming
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+module
+
+public import Mathlib.InformationTheory.Hamming
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
 /-!
 # The chunk model: what one run at fixed coins writes (trusted definitions)
@@ -16,6 +18,8 @@ program at every coin value, so this model prices one run at a time.
 * `Held m₀ P Y`: the run holds each chunk value of `Y` at some point. `Far m₀ Y r` and `Apart Y r`: each `y` is further
   than `r y` in Hamming distance from every initial chunk, and any two are further apart than the sum of their radii.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.Pointwise
 

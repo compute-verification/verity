@@ -1,4 +1,6 @@
-import PouwPearlPlus.Words
+module
+
+public import PouwPearlPlus.Words
 
 /-!
 # The tile rule on an opened tile (`clear_work.check_opened`, `pearl_c_debit`, `verify_run.check_y`)
@@ -23,6 +25,8 @@ After a tile's openings and digest pass, the record decides it, in `check_opened
 A debit replay that leaves the finite range raises in the Python (`P.Reject`, uncaught by `verify_passes`); here it refuses
 the tile, `the debit replay: …`.
 -/
+
+@[expose] public section
 
 namespace PouwCheck.PearlPlus.Rule
 

@@ -1,7 +1,9 @@
-import Definitions.Flock.ZK.Cut
-import Proofs.Flock.Soundness.ZK.Blocks
-import Proofs.Flock.Soundness.ZK.Dist
-import Proofs.Flock.Soundness.ZK.Session
+module
+
+public import Definitions.Flock.ZK.Cut
+public import Proofs.Flock.Soundness.ZK.Blocks
+public import Proofs.Flock.Soundness.ZK.Dist
+public import Proofs.Flock.Soundness.ZK.Session
 
 /-!
 # Zero knowledge: Lemma A at every coin vector, up to and including a refusal
@@ -23,6 +25,8 @@ every coin vector, for what the prover sends before it stops (`Cut`):
 * `Session.session_prefinal_indep_cut`: **Lemma A at every coin vector, for a session of `J` tables**: the pre-final
   views on two tuples of witnesses carrying the public region data, cut where the session stops, are equally distributed.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 

@@ -1,6 +1,8 @@
-import Proofs.Pouw.PearlC.FlockTile.Bridge
-import Proofs.Pouw.PearlC.FlockTile.Audit
-import Proofs.Pouw.PearlC.FlockTile.Gamma
+module
+
+public import Proofs.Pouw.PearlC.FlockTile.Bridge
+public import Proofs.Pouw.PearlC.FlockTile.Audit
+public import Proofs.Pouw.PearlC.FlockTile.Gamma
 
 /-!
 # Pearl-C under C-Flock's hidden audit
@@ -11,3 +13,5 @@ PoUW's side of C-Flock's hidden audit, the lemmas: the bridge from C-Flock's gam
 the guarantee `Pouw.Guarantees.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192`. The definitions are
 `Definitions.Pouw.PearlC.FlockTile`'s, and the statement is `Definitions.Pouw.Guarantees.PearlCFlockTile`'s.
 -/
+
+@[expose] public section

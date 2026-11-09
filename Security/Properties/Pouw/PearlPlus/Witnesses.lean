@@ -1,4 +1,6 @@
-import PouwPearlPlus
+module
+
+public import PouwPearlPlus
 
 /-!
 # The instances Pearl+'s witnesses are stated at
@@ -6,6 +8,8 @@ import PouwPearlPlus
 `Proofs.Properties.Pouw.PearlPlus.Witnesses` proves each Pearl+ property's `honest` and `nontrivial` witnesses
 (`lean-audit.json`'s `witnesses`); the instances they read are here, so their statements read only this tree and the code.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.PearlPlus
 

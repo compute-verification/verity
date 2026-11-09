@@ -1,9 +1,11 @@
-import Mathlib.Data.Finset.Sort
-import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Game.Prob
-import Flock.Statement
-import Proofs.Flock.Verifier.Registered
-import VStar.Stage
+module
+
+public import Mathlib.Data.Finset.Sort
+public import Proofs.Flock.Soundness.Audit.Law
+public import Proofs.Flock.Soundness.Game.Prob
+public import Flock.Statement
+public import Proofs.Flock.Verifier.Registered
+public import VStar.Stage
 
 /-!
 # Sampling with prover-chosen batching, the partition hidden: the model
@@ -37,6 +39,8 @@ slot is bound to its unit's committed record by its opening of the root.
   audit's; and the recursion's conclusion as the sampled audit uses it, an interface, its soundness and its zero
   knowledge.
 -/
+
+@[expose] public section
 
 namespace FlockSampled
 

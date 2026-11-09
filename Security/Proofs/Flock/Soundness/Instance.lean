@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Soundness
-import Proofs.Flock.Level3
+module
+
+public import Proofs.Flock.Soundness.Soundness
+public import Proofs.Flock.Level3
 
 /-!
 # The executable's arithmetic satisfies `Arith.Correct`
@@ -12,6 +14,8 @@ univariate-skip nodes, the pinned zerocheck coordinates, the packing basis `x^v`
 the soundness theorems hold for the executable's arithmetic with no arithmetic hypothesis
 (`table_sound_exec`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

@@ -3,8 +3,16 @@ A toy `BlobProtocol` whose `#guard`s pin `Blobs` and `BlobProtocol.answer` and `
 commitment, and evidence `{"drawn": n, "passed": m, "report": digest}`, where the blob with that SHA-512 must be the bytes
 `passed` (else the check rejects). It isn't a protocol of Verity's.
 -/
-import CoreProtocol.Blobs
-import CoreProtocol.Example
+module
+
+public import CoreProtocol.Blobs
+public import CoreProtocol.Example
+meta import CoreProtocol.Blobs
+meta import CoreProtocol.Example
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core.BlobsExample
 

@@ -1,4 +1,6 @@
-import PouwPearlPlus.Open
+module
+
+public import PouwPearlPlus.Open
 
 /-!
 # `pouw-pearlplus`: the run verdict from a served run's retained passes
@@ -19,6 +21,8 @@ draw, and its ``rounds`` and ``dropped`` place the passes for the tie; one that 
 commitment, the given source and the node's draw. `--tie W.json` holds the passes to the window record W (`Tie.tieOf`),
 and `--of-record` takes only a challenger draw on live coins (`Coins.ofRecordReason`).
 -/
+
+@[expose] public section
 
 open Lean PouwCommit PouwCheck.PearlPlus
 

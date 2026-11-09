@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.DeployRoundsZk
-import Proofs.Flock.Claims.DeployCode
-import Proofs.Flock.Soundness.Discharge.Exec.Tables
-import Flock.With.VerifyE
+module
+
+public import Proofs.Flock.Claims.DeployRoundsZk
+public import Proofs.Flock.Claims.DeployCode
+public import Proofs.Flock.Soundness.Discharge.Exec.Tables
+public import Flock.With.VerifyE
 
 /-!
 # `Deploy.V`'s round count is the rounds the shipped verifier reads
@@ -10,6 +12,8 @@ The plain verdict's facts are stated at `verifyWithMK keep` (the shipped text wi
 through `keep`) wherever their proofs read none of those digests, so they hold at the element-level verdict
 (`keep := fun _ => true`) too. The shipped verdict's (`verifyWithM`, `keep := id`) follow by `rfl`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Refine
-import Proofs.Flock.Claims.ZK.Coins
+module
+
+public import Proofs.Flock.Claims.ZK.Refine
+public import Proofs.Flock.Claims.ZK.Coins
 
 /-!
 # A history the release's coin check passes, at every tape
@@ -25,6 +27,8 @@ Whether the frame round there is live reads nothing more of the check: it is the
 (`frameAnswer`) and the round (`Frame.round`). `HelloParses` and `ReqsFollow` are hypotheses here, as
 `Flock.zk_server_lean_coinLayer` takes them; at the session loop both are theorems (`Claims/ZK/SessionLean.lean`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal.CoinPass
 

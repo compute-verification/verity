@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 
 /-!
 # The opening's rounds carry its messages (R11b)
@@ -8,6 +10,8 @@ import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 switch's round closes at its `sq 2 7` and carries the switch's 128 values (`carries_switch`; the batch label rides in
 front of the first), the rest by induction (`carries_switches`), and the batching coin's round carries nothing.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.DecodeZL
 

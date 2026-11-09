@@ -3,10 +3,14 @@ The proof's own Merkle trees, as a parameter. A scheme fixes the digest size (th
 and sibling in the proof), the node hash, the leaf of an opened row, and the `merkle_hash` index the proof's `PcsParams`
 must carry. The recorded statements use unsalted SHA-256; the target statement uses SHA-512 on every commitment path.
 -/
-import Flock.Field
-import Flock.Hash
-import Flock.Bytes
-import Flock.Hm96
+module
+
+public import Flock.Field
+public import Flock.Hash
+public import Flock.Bytes
+public import Flock.Hm96
+
+@[expose] public section
 
 namespace Flock
 

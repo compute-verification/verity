@@ -1,4 +1,6 @@
-import Definitions.Core.Circuit
+module
+
+public import Definitions.Core.Circuit
 
 /-!
 # Partitions, committed wires, and the correctness of a unit
@@ -13,6 +15,8 @@ it reads from outside, in(R) (`Correct`): recompute `u`'s gates in order, readin
 (`localEval`), and compare with `X` on `u`'s committed gates. Only committed values are bound, and `wrong X` is the set
 of units that are not correct.
 -/
+
+@[expose] public section
 
 namespace Verity
 

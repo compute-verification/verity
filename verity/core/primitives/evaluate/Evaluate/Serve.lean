@@ -1,7 +1,9 @@
-import Evaluate.Walk
-import Flock.Gate
-import Flock.Evaluated
-import Difftest
+module
+
+public import Evaluate.Walk
+public import Flock.Gate
+public import Flock.Evaluated
+public import Difftest
 
 /-!
 # The difftest function
@@ -16,6 +18,10 @@ a table of 2^28 words out of the request (`Evaluate.evaluate`). An `input` not o
 It also serves two readings of the decoded Program, each the Lean declaration a Python class of `verity.ml.circuits` mirrors:
 `gate` (`Flock.Program.Gate`, `layout.Gate`) and `partition` (`Flock.Extract.Partition`, `partition_object.Partition`).
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Evaluate
 

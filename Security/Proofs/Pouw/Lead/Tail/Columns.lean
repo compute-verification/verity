@@ -1,5 +1,7 @@
-import Proofs.Pouw.Lead.Tail.Words
-import Proofs.Pouw.Lead.Tail.Fiber
+module
+
+public import Proofs.Pouw.Lead.Tail.Words
+public import Proofs.Pouw.Lead.Tail.Fiber
 
 /-!
 # Column blocks with a tile repeated within a block
@@ -19,6 +21,8 @@ the coin lanes), drawn first, and a product over the column blocks (`gEquiv`). `
   each of the `S · tiles` slots.
 * **The sum**: `colBlocks · pairs · S · tiles / 7^8 = lamG`.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Tail
 

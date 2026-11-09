@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Replay.LigeritoRep
-import Proofs.Flock.Soundness.CompiledLock
-import Proofs.Flock.Soundness.Refine.Ligerito
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoRep
+public import Proofs.Flock.Soundness.CompiledLock
+public import Proofs.Flock.Soundness.Refine.Ligerito
 
 /-!
 # Every level's Merkle opening passes at every honest rep
@@ -19,6 +21,8 @@ Merkle check passes at its query coins (`MerkleOk`), given that the table's sche
   `j`'s commitment at the positions of round `k + qOff sch j`'s coins, which is where the verifier draws them; the
   rounds are counted by `KRuns`, every run of a step from round `k` ending `d` rounds on.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

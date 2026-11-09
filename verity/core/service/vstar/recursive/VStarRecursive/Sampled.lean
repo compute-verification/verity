@@ -12,7 +12,14 @@ v1 is refused (`V1_REFUSED`): its verdicts are the evidence's, and this audit's 
   refused;
 * **check**: that form's check on the blobs; evidence of the other form rejects.
 -/
-import VStarRecursive.Protocol
+module
+
+public import VStarRecursive.Protocol
+meta import VStarRecursive.Protocol
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace VStar.Recursive.Sampled
 

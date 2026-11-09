@@ -3,12 +3,16 @@ The `Model.Arith.Correct` facts, each in the shape of its field,
 for the executable's functions: `F = GF128`, `K = GF256`, and the concrete `pack`, `unpack`, `pinned`, `omega` and `lo`
 below. The instance itself lives in the soundness package.
 -/
-import Proofs.Flock.Level3.Seam
-import Flock.Piop
-import Mathlib.Data.Fintype.Card
-import Mathlib.Data.Fintype.Prod
-import Mathlib.Algebra.Polynomial.Degree.Operations
-import Mathlib.Algebra.Polynomial.Degree.Support
+module
+
+public import Proofs.Flock.Level3.Seam
+public import Flock.Piop
+public import Mathlib.Data.Fintype.Card
+public import Mathlib.Data.Fintype.Prod
+public import Mathlib.Algebra.Polynomial.Degree.Operations
+public import Mathlib.Algebra.Polynomial.Degree.Support
+
+@[expose] public section
 
 open Polynomial Flock
 

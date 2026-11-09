@@ -1,4 +1,6 @@
-import Proofs.Flock.Bridge.Public
+module
+
+public import Proofs.Flock.Bridge.Public
 
 /-!
 # `deltaPub` is below 1 at the deployment's parameters
@@ -15,6 +17,8 @@ parameters ONE-19 deploys, `ρ = 1/2`, `k = ⌈2^24/e⌉` (`kDep`) and `M = R_w 
   ones), the miss is at most `1/e`, so `deltaPub < 1` at `SampledKSLivePub`'s budgets `q_F = 2(t' + v)`, `q_S = t' + v`
   for `t', v ≤ 2^80`.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

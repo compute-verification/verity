@@ -31,10 +31,14 @@ the last event (`checkRun`). `OneRun` states it, and `check_oneRun` proves it of
 each session's coins are its own keyed coin tree's, drawn fresh at its `Hello`, never committed before the run. The
 record is read once, in comparisons quadratic in V*'s statement count (at most 4096, `RecBudget`), never per gate.
 -/
-import Lean.Data.Json
-import Flock.JsonParse
-import Flock.Bytes
-import Flock.Hash
+module
+
+public import Lean.Data.Json
+public import Flock.JsonParse
+public import Flock.Bytes
+public import Flock.Hash
+
+@[expose] public section
 
 namespace Flock
 namespace RecCompose

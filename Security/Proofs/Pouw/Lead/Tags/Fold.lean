@@ -1,6 +1,8 @@
-import Definitions.Core.Fp32
-import Proofs.Core.Fp32.Round
-import Mathlib.Data.Int.ModEq
+module
+
+public import Definitions.Core.Fp32
+public import Proofs.Core.Fp32.Round
+public import Mathlib.Data.Int.ModEq
 
 /-!
 # The epilogue's fold is exact while `|p| ≤ 2^22`
@@ -19,6 +21,8 @@ is exact (`exists_int_word`): `roundRn` takes a magnitude `M · 2^k` with `M < 2
 Magnitudes are `Verity.Fp32.decode`'s, in units of `2^-149`: the FP32 word of an integer `p` decodes to the sign
 `p < 0` and the magnitude `|p| · 2^149`.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Tags
 

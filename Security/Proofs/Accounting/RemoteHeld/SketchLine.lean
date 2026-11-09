@@ -1,5 +1,7 @@
-import Definitions.Accounting.Guarantees.RemoteSketchLine
-import Proofs.Pouw.Prob
+module
+
+public import Definitions.Accounting.Guarantees.RemoteSketchLine
+public import Proofs.Pouw.Prob
 
 /-!
 # The receipts' sketch bound on the memory line's coins: the proof
@@ -9,6 +11,8 @@ coins are one uniform space read two ways (`lineCoinsEquiv`, whose forward map i
 probability on both (`Pouw.pr_equiv`). On the sketch outcomes the line's trace `T.sketch O` counts a block computed on
 outside the node with the chips', so its sketch bound's event is `SketchBoundAt T O`'s read through `lineCoins`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Remote
 

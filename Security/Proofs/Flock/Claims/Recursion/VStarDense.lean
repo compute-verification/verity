@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.VStarAccept
-import Proofs.Flock.Claims.Recursion.VStarFitHeld
-import Proofs.Flock.Claims.Recursion.SchedDense
-import Proofs.Flock.C3.Reps.AtList
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarAccept
+public import Proofs.Flock.Claims.Recursion.VStarFitHeld
+public import Proofs.Flock.Claims.Recursion.SchedDense
+public import Proofs.Flock.C3.Reps.AtList
 
 /-!
 # V\*'s parts at the dense form are levels, algebra parts, caps and the link table's part (`partAt_dense`)
@@ -21,6 +23,8 @@ top node is among the level's tops wherever they are read. It holds at the deplo
 `irShaped_dep`). `hok_shaped` is the stager accepting every part of a dense statement from it, given the
 level tops being read (`topsAt`), each algebra port being `acc0`, `acc1` or a schedule's `m<i>`, and each cap's `capIn`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 

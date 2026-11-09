@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.Prefix
+module
+
+public import Proofs.Flock.Claims.ZK.Prefix
 
 /-!
 # Special honest-verifier zero knowledge at every coin vector: `SHVZK` from Lemmas B and C
@@ -29,6 +31,8 @@ each of the ten constraints being affine in `h`: at the tables `verify --zk` set
 is a hypothesis. Where the prover refuses, the inner proof is not sent and nothing reads it; Lemma A needs no witness
 property but the public region data (`hreg`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

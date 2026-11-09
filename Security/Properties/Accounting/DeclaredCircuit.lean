@@ -1,5 +1,7 @@
-import Definitions.Accounting.Guarantees.DeclaredCircuit
-import Properties.RemoteAudit.Schedule
+module
+
+public import Definitions.Accounting.Guarantees.DeclaredCircuit
+public import Properties.RemoteAudit.Schedule
 
 /-!
 # A declared circuit's space and bandwidth at the committed steering cap
@@ -15,6 +17,8 @@ which the spec doesn't; its theorem, `Properties.DeclaredCircuit.SecurityProofs.
 layout steered there by `Properties.RemoteAudit.steered_of_checked` (`ScheduleLayoutGap` holding of the verifier's
 layout, `Properties.RemoteAudit.scheduleLayoutGap_code`).
 -/
+
+@[expose] public section
 
 namespace Properties.DeclaredCircuit
 

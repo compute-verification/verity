@@ -1,5 +1,7 @@
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Data.Rat.Cast.Order
+module
+
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Data.Rat.Cast.Order
 
 /-!
 # Served sparse noise in the bit model: the committed words and the served layouts (trusted definitions)
@@ -23,6 +25,8 @@ import Mathlib.Data.Rat.Cast.Order
   start at word 0's other 27 bits. Its weights `w5` put the balanced base-13 code `code5` of
   `z_j = 185,646 ± (⌊j/2⌋ + 1)` on step 0; `l5Words` are its committed words.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.Ssn
 

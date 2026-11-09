@@ -1,5 +1,7 @@
-import Definitions.Pouw.Lead.Model
-import Proofs.Pouw.Lead.CoinBranch.Kept
+module
+
+public import Definitions.Pouw.Lead.Model
+public import Proofs.Pouw.Lead.CoinBranch.Kept
 
 /-!
 # Coin branching at tile grain
@@ -13,6 +15,8 @@ write for every distinct committed tile its memory didn't start with; revisits (
 * `distinct_le_writes`: the copy argument. If every committed tile is a write step's value or an initial tile
   (`TileGrain`), the distinct committed tiles number at most the write steps plus the table hits (`Kept.image_card_le`).
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.CoinBranch
 

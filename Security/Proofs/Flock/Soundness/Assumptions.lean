@@ -1,8 +1,10 @@
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Proofs.Flock.Soundness.Game.Expect
-import Randomness
-import Definitions.Flock.Arith
-import Definitions.Claims.Hm96
+module
+
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
+public import Proofs.Flock.Soundness.Game.Expect
+public import Randomness
+public import Definitions.Flock.Arith
+public import Definitions.Claims.Hm96
 
 /-!
 # Named assumptions
@@ -34,6 +36,8 @@ Assumption 1, BCHKS25's mutual correlated agreement up to the Johnson bound, is 
 Merkle binding is proved too (VCVio's binding theorem, `Merkle`): a conflict of two verifying openings is a collision, which
 is what lets each finder's success be read as a collision of SHA-512.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Assumptions
 

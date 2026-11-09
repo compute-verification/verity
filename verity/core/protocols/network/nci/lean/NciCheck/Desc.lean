@@ -1,4 +1,6 @@
-import NciCheck.Check
+module
+
+public import NciCheck.Check
 
 /-!
 # The NCI check at the size of the description
@@ -73,6 +75,8 @@ node; node by node `owner-entry`, `input-in-iu`, `gate-in-no-iu`), then
 `empty-iu`. `NciCheck.evaluate` checks the order gate by gate, so it gives a verdict on a program in which a node reads
 an earlier member of itself, which this check refuses.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Desc
 

@@ -11,7 +11,11 @@ family `label`, and its openings exactly the coins that session's signed log sho
 coins through this (`Core.Live`) takes its draw from the challenger's record, and
 `Properties.Challenger.DrawnByDevice` says what that record shows: the coins the device drew, or a break.
 -/
-import SampledProofs.ChallengerCoins
+module
+
+public import SampledProofs.ChallengerCoins
+
+@[expose] public section
 
 namespace SampledProofs.Challenger
 

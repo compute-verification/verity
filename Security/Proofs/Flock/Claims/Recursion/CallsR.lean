@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.IVStarCalls
-import Proofs.Flock.Claims.Recursion.CallsDecision
+module
+
+public import Proofs.Flock.Claims.Recursion.IVStarCalls
+public import Proofs.Flock.Claims.Recursion.CallsDecision
 
 /-!
 # `c_V` at the decisions the deployed reader makes
@@ -9,6 +11,8 @@ need hold only there (`nextR_calls_le'`, `innerCalls_R_le_acc'`, `lamLin2_R_ge_a
 `decisionAtS`: it digests one file per proof. The session against `H` need not be the decision's own (`setupOf` is at
 SHA-512), so `hV` takes it apart from the decision's.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

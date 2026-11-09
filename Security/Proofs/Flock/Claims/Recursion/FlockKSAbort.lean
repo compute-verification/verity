@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.KS.Joint
-import Proofs.Flock.Claims.KS.Flock
-import Proofs.Flock.Claims.Recursion.AbortWait
-import Proofs.Flock.Claims.Recursion.AbortFork
-import Proofs.Flock.Claims.Recursion.InnerAbort
+module
+
+public import Proofs.Flock.Claims.KS.Joint
+public import Proofs.Flock.Claims.KS.Flock
+public import Proofs.Flock.Claims.Recursion.AbortWait
+public import Proofs.Flock.Claims.Recursion.AbortFork
+public import Proofs.Flock.Claims.Recursion.InnerAbort
 
 /-!
 # Flock meets `Inner.KSAbort` from the fixed-table bound at the abort law
@@ -29,6 +31,8 @@ they abort:
   `γ`; so `Inner.KSAbort` at `Inner.ofFlock` rests on `TableBoundθKept`, `ColsOk` and `ConflictTied` at the inner
   deployment (`KSAbort_of_tableBoundKept`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

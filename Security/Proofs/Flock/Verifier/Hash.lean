@@ -2,7 +2,11 @@
 Level 3: the digests' widths and the `hm96-sha512/v1` leaf's binding. SHA-256 and SHA-512 return 32 and 64 bytes on every
 input; two different (inner digest, salt) pairs with one `hm96-sha512/v1` leaf give a SHA-512 collision.
 -/
-import Flock.Hm96
+module
+
+public import Flock.Hm96
+
+@[expose] public section
 
 namespace Flock
 

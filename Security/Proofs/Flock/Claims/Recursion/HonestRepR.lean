@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Recursion.RowDLevels
-import Proofs.Flock.Claims.Recursion.RoundCounts
-import Proofs.Flock.Claims.Recursion.VerdictLoop
-import Proofs.Flock.Claims.Recursion.NextRCoins
-import Proofs.Flock.Claims.Recursion.NextRFits
-import Proofs.Flock.Claims.Recursion.HonestVerdictR
+module
+
+public import Proofs.Flock.Claims.Recursion.RowDLevels
+public import Proofs.Flock.Claims.Recursion.RoundCounts
+public import Proofs.Flock.Claims.Recursion.VerdictLoop
+public import Proofs.Flock.Claims.Recursion.NextRCoins
+public import Proofs.Flock.Claims.Recursion.NextRFits
+public import Proofs.Flock.Claims.Recursion.HonestVerdictR
 
 /-!
 # Row D's `hlev` at the honest recursive prover
@@ -24,6 +26,8 @@ coins' bytes, at a decision on its honest messages (`honestFileMsgs`).
 * **Row D's `hlev` at the honest run** (`DecAt.hlev_honest`): all of it, with the widths `hn` and `hlf` from the table's
   registered scheme (`opsWith_sizes`); only `hops` stays.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

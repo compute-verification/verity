@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
 
 /-!
 # The `--zk` schedule's dimensions
@@ -6,6 +8,8 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
 `zk_schedule_seams`: `Zk.schedule m` gives fast100's dimensions with level 0 restratified at `q_0` queries. The kernel
 checks every `m < 40`; above 35 `Zk.queries0` refuses.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

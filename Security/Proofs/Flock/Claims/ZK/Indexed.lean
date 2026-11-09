@@ -1,4 +1,6 @@
-import Definitions.Claims.IndexedTapes
+module
+
+public import Definitions.Claims.IndexedTapes
 
 /-!
 # `ZKmalRx` at one tape
@@ -7,6 +9,8 @@ The spec's zero knowledge on statement-indexed tapes (`ZKmalRx`) at one tape at 
 (`zkmalRx_const`), also at a prover that takes the statement and is the same at each (`zkmalRx_const_of`); at one
 statement it is `ZKmalR` on that statement's tape, at the relation there (`ZKmalRx.at`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

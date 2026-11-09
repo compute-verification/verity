@@ -1,4 +1,6 @@
-import PouwWindow.Json
+module
+
+public import PouwWindow.Json
 
 /-!
 # The fixed length (`window.py`, "the fixed length")
@@ -8,6 +10,8 @@ record serves its slot's public max_tokens whatever it samples (vLLM's `ignore_e
 the `length` item of a window whose slots serve `maxTokens`, and `lengthProblem` is why a registered one is not, the first
 rule it breaks, with `length_problem`'s reason.
 -/
+
+@[expose] public section
 
 namespace PouwWindow
 

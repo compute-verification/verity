@@ -1,6 +1,8 @@
-import Proofs.Properties.CertifierNetwork.Runs
-import Proofs.NetworkCertifier.Code
-import Proofs.NetworkCertifier.Schedule
+module
+
+public import Proofs.Properties.CertifierNetwork.Runs
+public import Proofs.NetworkCertifier.Code
+public import Proofs.NetworkCertifier.Schedule
 
 /-!
 # An accepted run is a run of the certifier program (5b)
@@ -18,6 +20,8 @@ the `W` windows are complete.
 Program, so they number at most `#Ac · |Σ_sync|^W · D^(W·T)` (`NetTiming.encard_accSeqs_le_constantRate`), unless some
 accepted run yields a collision or a forgery.
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check

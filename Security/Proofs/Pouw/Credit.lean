@@ -1,13 +1,15 @@
-import Properties.Pouw.Credit
-import Proofs.Properties.Pouw
-import Proofs.Properties.Pouw.Strata
-import Proofs.Flock.Soundness.ExecStratified
-import Proofs.Flock.Soundness.Audit.Work
-import Proofs.Flock.VBridge.Full
-import Proofs.Flock.Claims.Sampling.Draws
-import Proofs.Flock.Claims.Sampling.Select.Misses
-import Proofs.Accounting.Served
-import Proofs.Pouw.Period.Accept
+module
+
+public import Properties.Pouw.Credit
+public import Proofs.Properties.Pouw
+public import Proofs.Properties.Pouw.Strata
+public import Proofs.Flock.Soundness.ExecStratified
+public import Proofs.Flock.Soundness.Audit.Work
+public import Proofs.Flock.VBridge.Full
+public import Proofs.Flock.Claims.Sampling.Draws
+public import Proofs.Flock.Claims.Sampling.Select.Misses
+public import Proofs.Accounting.Served
+public import Proofs.Pouw.Period.Accept
 
 /-!
 # Proofs: the ε a served window's credit reports (`WorkDrawMisses`, `EpsAtSound`, `EstablishedSound`)
@@ -21,6 +23,8 @@ that may be zero), and `B`'s work (`unitWork`) is at most `Σ_s w_s m_s` (`unitW
 escapes with at most `(1 − εC/W)^K ≤ (1 − εC/W)^K′ ≤ δ` (`kPrimeLeast`) when `K′ < W`; at `K′ = W ≤ K` every stratum
 doing work draws all its units, and a set of positive work escapes never.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Credit.SecurityProofs
 

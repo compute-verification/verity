@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Refine.StmtOf
-import Proofs.Flock.Soundness.Refine.Table
+module
+
+public import Proofs.Flock.Soundness.Refine.StmtOf
+public import Proofs.Flock.Soundness.Refine.Table
 
 /-!
 # The statement decoding, part 2: the regions are the model's (`Flock.Piop`, `Flock.Statement`)
@@ -14,6 +16,8 @@ distinct in-block bits, at most `PT_LOCAL` of them.
 `Setup.ofCircuit st`, its conclusion holds for `stmtOf st`, with nothing assumed of the fold or the extra claims. The
 record's link points have the configured shape because `Record.decode` checks it (S9, `decode_points`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

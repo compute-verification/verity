@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
+module
+
+public import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
 
 /-!
 # A draw flock-verify accepts sets up
@@ -19,6 +21,8 @@ draw `D`, and a `DrawSetup` whenever `D` proves `S` and the statement's link poi
 then `tableAt`'s table at `S` is `stmtOf` of the statement flock-verify accepted. The link points are setupH's
 `PT_LOCAL + nbl`, a function of `|D.proved|` and `c.g` (e2e-exec's `Exec.setupH_mPts_drawn`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Integrate
 

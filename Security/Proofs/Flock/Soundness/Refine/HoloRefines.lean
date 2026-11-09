@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.HoloRep
+module
+
+public import Proofs.Flock.Soundness.Refine.HoloRep
 
 /-!
 # One rep with hidden units refines the model's `holoRepC` (`Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle`, L4′)
@@ -8,6 +10,8 @@ messages and `h` (`holoLcMsgs`) and the coins of the rounds consumed but `z_part
 executable's `ab` claim and `h`. `holoRep_refines` composes it with `zerocheck_refines`, `opening_refines` and
 `ligerito_accepts_opening` into `holoRepC`, as `rep_refines` composes `repC`, on a run of `holoRepProg`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

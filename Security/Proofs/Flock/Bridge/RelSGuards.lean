@@ -1,5 +1,7 @@
-import Proofs.Flock.Bridge.CircuitOf
-import Proofs.Flock.Bridge.FaultyRightC
+module
+
+public import Proofs.Flock.Bridge.CircuitOf
+public import Proofs.Flock.Bridge.FaultyRightC
 
 /-!
 # `card_wrong_lt_of_relS` is neither vacuous nor trivial
@@ -14,6 +16,8 @@ The two guards a bound gets beside it (one adversary form):
   input and its negation, the output, one unit), the witness that opens nothing leaves its one unit wrong, so "fewer
   than `1` wrong unit" fails there, and `RelS` refuses it.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

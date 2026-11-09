@@ -1,6 +1,8 @@
-import Proofs.Accounting.RemoteHeld.Component
-import Proofs.Accounting.RemoteHeld.Draw
-import Proofs.Pouw.Prob
+module
+
+public import Proofs.Accounting.RemoteHeld.Component
+public import Proofs.Accounting.RemoteHeld.Draw
+public import Proofs.Pouw.Prob
 
 /-!
 # The bandwidth component's properties hold at the honest node and fail at a verifier that accepts everything
@@ -40,6 +42,8 @@ The toy instance (`Toy`) is a node whose parameters have no window (`Node.window
 draw (`Node.draws` 0), one block of one byte, whose recorded summary has four windows of one block each, one pass a
 group, and a line that reads no wrong receipt, so it credits `8 · 1 · (4 · 1 − 0) = 32` bits read.
 -/
+
+@[expose] public section
 
 deriving instance DecidableEq for RemoteAudit.Line.Group
 

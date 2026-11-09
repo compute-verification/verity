@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
 
 /-!
 # `verify --registered F` without `--zk`, as an event of the audit
@@ -11,6 +13,8 @@ every table's statement to the verifier's own registered reads `own` (F's ports,
 What its registered check reads at a hidden-output drawn statement is what it reads under `--zk`: `ZkReg.OwnReadsH` and
 `ZkReg.regPathsH`, which read the circuit, the population's public file and the record, and no `--zk` input.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PlainReg
 

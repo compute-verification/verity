@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigMain
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigMain
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 
 /-!
 # `ZkRepAccepts`'s Ligerito half: a `--zk` rep's Ligerito verdict accepts the proof's rows
@@ -20,6 +22,8 @@ Ligerito (`Model.recursiveRoundsC`, `Model.finalCheck`) at levels ≥ 1; at leve
 it through the rep as `zk_rep_plays` builds the rep's run, at the opening's batched values (`OpenRel`: the executable's
 `basis` is the model's `bHat` at the opening's `b`), and a run has one result (`plays_det`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

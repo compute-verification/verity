@@ -6,8 +6,12 @@ two (`sha_ne_hm`). So the block row at `x` is `[src]`, and the block holds the c
 row prefix's midstate, each later `cv` the previous output, the `hm96` slot's `cv` the last output and its `pad` the
 padding block (`row_copies_of_sat`), the constant bits read from the pin and the forced-zero row.
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Copies
-import Proofs.Flock.Soundness.Discharge.Hm.SatEx
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Copies
+public import Proofs.Flock.Soundness.Discharge.Hm.SatEx
+
+@[expose] public section
 
 open Flock FlockLevel3
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.GS.RadiusDeploy
-import Proofs.Flock.Claims.ERepCost
-import Proofs.Flock.Claims.DeployCode
+module
+
+public import Proofs.Flock.Claims.GS.RadiusDeploy
+public import Proofs.Flock.Claims.ERepCost
+public import Proofs.Flock.Claims.DeployCode
 
 /-!
 # Flock's efficiency claim at both deployed records
@@ -27,6 +29,8 @@ At the deployed numbers (`erepRuns_plain`, `erepRuns_zk`), `E^rep` makes `Number
 `Numbers.cap = 2^256` draws, so it reruns the prover at most `1 + 210·2^256` times, and `1 + 210·k` times in
 expectation, `k = ⌈4·N₀/e⌉` with `N₀` the tables' level-0 codeword lengths summed (`2^d` at one table).
 -/
+
+@[expose] public section
 
 namespace Claims
 

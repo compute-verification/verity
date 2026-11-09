@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.PadFree
-import Proofs.Flock.Claims.ZK.FinishRep
+module
+
+public import Proofs.Flock.Claims.ZK.PadFree
+public import Proofs.Flock.Claims.ZK.FinishRep
 
 /-!
 # The firewall's stop at a worker's values
@@ -19,6 +21,8 @@ worker's rows hold (`Table.RowsAt`), so the switched view is the worker's own (`
   `1[some row fails at v]`, a function of the witness, the worker's values, the mask slot and the extra lanes, never of
   the pads.
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 

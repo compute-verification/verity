@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Coins
-import Proofs.Flock.Soundness.Discharge.Composed.Pads
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Coins
+public import Proofs.Flock.Soundness.Discharge.Composed.Pads
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
 
 /-!
 # `coinedOf_setup`, from the refinement's three facts
@@ -16,6 +18,8 @@ What is left reads `bodyOf`, the refinement, and is stated here as three named f
 * `innerOf_holds` (`Composed/Inner/Holds.lean`, the inner lane's): the honest prover's pads satisfy the inner proof's constraint at every valid witness whose registered
   values are the public ones (`Table.InnerHolds`; `innerOf`'s `lam`, `theta`, `vals`, `lanes`, `lig`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

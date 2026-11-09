@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Copies
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
-import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
-import Proofs.Flock.Soundness.Discharge.Hidden.Unrolled
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Copies
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+public import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
+public import Proofs.Flock.Soundness.Discharge.Hidden.Unrolled
 
 /-!
 # `ProgPlaces`, `hConst` and `hZero` from a hidden-output session's accept
@@ -21,6 +23,8 @@ hidden-output statements:
   committed keys are the statement keys with unit output columns at `upos` (`Hidden.srcKey_eq_commit`,
   `Hidden.zeroIn_commit`). `constCols_keyProgH` and `zeroCols_keyProgH` are its `hConst` and `hZero`.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

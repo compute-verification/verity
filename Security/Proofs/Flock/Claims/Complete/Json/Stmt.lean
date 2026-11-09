@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Complete.Json.Session
-import Proofs.Flock.Soundness.Discharge.Hidden.Spec
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
-import Proofs.Flock.Claims.Complete.Json.Parse
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Session
+public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Proofs.Flock.Claims.Complete.Json.Parse
 
 /-!
 # What the record needs of the statement, from its setup
@@ -25,6 +27,8 @@ tree its coins name.
   the keys it reads, each a string, a natural number or an array of them (`good_stratified`, `good_subset`), so it is
   printable.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

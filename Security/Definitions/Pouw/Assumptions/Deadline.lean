@@ -1,4 +1,6 @@
-import Definitions.Pouw.Game.Deadline
+module
+
+public import Definitions.Pouw.Game.Deadline
 
 /-!
 # The deadline's named assumption (trusted; a `Prop` taken as a hypothesis, never an `axiom`)
@@ -11,6 +13,8 @@ clock is honest. The salt's unpredictability before its release is not restated:
 It is stated once, over what the deadline reads of a game's adversaries (`Pouw.Adversaries`), and both PoUW games read
 it: the integer game at `Pouw.CostModel.adversaries` and Pearl-C's at `Pouw.PearlC.CostModel.adversaries`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Assumptions
 

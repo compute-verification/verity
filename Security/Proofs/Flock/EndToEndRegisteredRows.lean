@@ -1,8 +1,12 @@
-import Proofs.Flock.EndToEndRegisteredRows.Statement
-import Proofs.Flock.EndToEndRegisteredRows.Reduce
+module
+
+public import Proofs.Flock.EndToEndRegisteredRows.Statement
+public import Proofs.Flock.EndToEndRegisteredRows.Reduce
 
 /-! `Flock.SecurityProofs.EndToEndRegisteredRows : Flock.Guarantees.EndToEndRegisteredRows`: the reduction
 `EndToEndRegisteredRows_of_rowsLink` at the rows' extraction bound `rowsLinkLe`. -/
+
+@[expose] public section
 
 /-- **C-Flock's one-stage audit, end to end, with the rows link, at the drawn units**
 (`Flock.Guarantees.EndToEndRegisteredRows`). -/

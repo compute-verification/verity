@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.RunsJP
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
-import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
-import Proofs.Flock.Soundness.Assumptions.ZkP
-import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.RunsJP
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
+public import Proofs.Flock.Soundness.Assumptions.ZkP
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 
 /-!
 # The coin server's draws and the decoder at the verifier's public inputs, under the record's custody
@@ -19,6 +21,8 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 * `decodesZCJH_custodyP`: `decodesZCJH_liveIP` with `hRec` and `hDraw` read off `RecordCustodyZKJP` (`live-verifier` at
   `own`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 

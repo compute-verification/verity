@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ZkEvent
-import Proofs.Flock.Claims.KS.PlainFirst
+module
+
+public import Proofs.Flock.Claims.KS.ZkEvent
+public import Proofs.Flock.Claims.KS.PlainFirst
 
 /-!
 # The masked mixture's first and third bounds, from a simulation
@@ -14,6 +16,8 @@ takes a live coin's first entries and the rest from the tape, the law holds (`zk
 asks only for `ZkSimRun`, deterministic; and at those coins a deployed event that a live event implies bounds the
 mixture, the third bound's form (`zkMix_le_of_run`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

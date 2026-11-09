@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Model.Compiled
-import Flock.Schedule
+module
+
+public import Proofs.Flock.Soundness.Model.Compiled
+public import Flock.Schedule
 
 /-!
 # The executable's schedule, read as the model's
@@ -10,6 +12,8 @@ relies on and the model states differently: the stratified queries (`Flock.Liger
 the consistency-coin count, and the dimensions of the rounds (`Flock.Ligerito`). `Refine.Seam` proves them for every `fast100`
 schedule.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

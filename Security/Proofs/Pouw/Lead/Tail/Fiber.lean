@@ -1,4 +1,6 @@
-import Proofs.Pouw.Lead.Tail.Chernoff
+module
+
+public import Proofs.Pouw.Lead.Tail.Chernoff
 
 /-!
 # Sequentially dominated events, one coordinate at a time
@@ -12,6 +14,8 @@ cylinder's points where it holds are, over each value of the coordinates `> i`, 
 `i`'s values: `count_tail`'s `hdom`. The lead's three counts (`Tail.across_tail`, `Tail.columns_tail`,
 `Tail.slots_tail`) read it, each with its own fiber count.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Tail
 

@@ -1,4 +1,6 @@
-import PouwPearlPlus.Coins
+module
+
+public import PouwPearlPlus.Coins
 
 /-!
 # Reading a retained pass (`verify_run.load`, `credit.passes_distinct`, `pearl_c.manifest_epoch`)
@@ -22,6 +24,8 @@ salt (`repeated-call`), or one that is not a manifest with a string salt and a l
 Out of this port's scope, each refused by name: the sm_120 records' schemes and a manifest's `instance` other than `k_min`
 and `tile`.
 -/
+
+@[expose] public section
 
 namespace PouwCheck.PearlPlus
 

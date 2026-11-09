@@ -1,7 +1,9 @@
-import Std.Data.String.ToNat
-import Proofs.Flock.C3.Compose.RsFacts
-import Proofs.Flock.C3.Compose.HoloEncoded
-import Proofs.Flock.C3.Reps.SentKeys
+module
+
+public import Std.Data.String.ToNat
+public import Proofs.Flock.C3.Compose.RsFacts
+public import Proofs.Flock.C3.Compose.HoloEncoded
+public import Proofs.Flock.C3.Reps.SentKeys
 
 /-!
 # The round reads' links
@@ -24,6 +26,8 @@ import Proofs.Flock.C3.Reps.SentKeys
 
 `roundRead_opening` and `wRoundRead_inner` compose them, at the port.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

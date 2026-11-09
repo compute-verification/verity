@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditPooled
-import Proofs.Accounting.RateAudit.Chain
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.RateAuditPooled
+public import Proofs.Accounting.RateAudit.Chain
 
 /-!
 # The causal bound over the monitoring period: the proof
@@ -18,6 +20,8 @@ correct receipts, which the store, the earlier passes' coins and its own stream 
 (`Chain.pr_pooled_le`). With `RateChainPaidRO`'s conservation at every count, the window's reads pay for the correct
 receipts the sample certifies (`RateChainSampledRO`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 

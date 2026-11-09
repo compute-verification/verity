@@ -1,4 +1,6 @@
-import Proofs.Pous.B5.ExPostFacto
+module
+
+public import Proofs.Pous.B5.ExPostFacto
 
 /-!
 # Chain work: a hash-chain receipt takes one oracle query a label
@@ -16,6 +18,8 @@ the oracle before the data exist is not this lemma's to exclude; the receipt's d
 What turns a query into time is not here: that is a price floor on the oracle's implementation, a named assumption the
 note proposes and no guarantee states.
 -/
+
+@[expose] public section
 
 namespace Accounting.ChainWork
 

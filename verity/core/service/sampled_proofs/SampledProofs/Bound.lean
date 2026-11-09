@@ -9,7 +9,14 @@ accepted transcript has at most that many wrong units. `densityBound` is the har
 (`optimize.density_bound`, which `certify` reports), in rationals, and `maxHarmCheck` brackets the exact supremum of that
 harm, `Flock.Guarantees.JointStratified`'s `StratifiedBlock.maxHarm`, from a certificate (`optimize.max_harm`).
 -/
-import CoreProtocol.Profile
+module
+
+public import CoreProtocol.Profile
+meta import CoreProtocol.Profile
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Bound
 

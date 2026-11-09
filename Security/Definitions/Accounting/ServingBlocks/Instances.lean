@@ -1,6 +1,8 @@
-import Definitions.Accounting.ServingBlocks
-import Mathlib.Data.Fin.VecNotation
-import Mathlib.Tactic.FinCases
+module
+
+public import Definitions.Accounting.ServingBlocks
+public import Mathlib.Data.Fin.VecNotation
+public import Mathlib.Tactic.FinCases
 
 /-!
 # Serving-block layouts: the honest instance and the counter-examples (trusted)
@@ -29,6 +31,8 @@ The counter-examples, each on one server:
   `ω_max μ k_S` covers it.
 * `Detached`: `Straddle` with gate 2 reading gate 0, so the operation takes in gate 1, which no gate of it reads.
 -/
+
+@[expose] public section
 
 namespace Accounting.ServingBlocks
 

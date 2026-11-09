@@ -1,9 +1,11 @@
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Data.Int.Interval
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Ring
+module
+
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Data.Int.Interval
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Ring
 
 /-!
 # Two drawn digits combined per entry: how often a value fixed before the draw is hit (proofs)
@@ -34,6 +36,8 @@ largest share of the digit pairs that `op` sends to one value.
 The targets are fixed before the draw. A target chosen after it is a branch on the coins, which the adaptive bounds
 treat (`Lead.CoinBranch`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.Alphabet
 

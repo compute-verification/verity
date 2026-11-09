@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
-import Std.Data.TreeMap.Raw.Lemmas
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
+public import Std.Data.TreeMap.Raw.Lemmas
 
 /-!
 # The draw file `flock-verify draw` prints decodes to the draw it printed
@@ -17,6 +19,10 @@ That equality is of Lean `Json` values, whose objects are trees shaped by the or
 `Flock.JsonParse.parse` of the keys in sorted order, as `compress` prints them, gives `toJson`'s trees, and other orders give other
 trees that `ofJson` reads alike.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace FlockSoundness.Discharge.ZkLink
 

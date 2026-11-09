@@ -1,10 +1,12 @@
-import Proofs.Flock.Recursive.PublicAudit
-import Proofs.Flock.Recursive.HoloExec
-import Proofs.Flock.Recursive.HoloCoins
-import Proofs.Flock.Recursive.HoloMap
-import Proofs.Flock.Recursive.TopFinder
-import Proofs.Flock.Recursive.ValueSrc
-import Proofs.Flock.Recursive.LeafFinder
+module
+
+public import Proofs.Flock.Recursive.PublicAudit
+public import Proofs.Flock.Recursive.HoloExec
+public import Proofs.Flock.Recursive.HoloCoins
+public import Proofs.Flock.Recursive.HoloMap
+public import Proofs.Flock.Recursive.TopFinder
+public import Proofs.Flock.Recursive.ValueSrc
+public import Proofs.Flock.Recursive.LeafFinder
 
 /-!
 # The recursive audit at candidate 3 (trusted)
@@ -86,6 +88,8 @@ non-vacuity needs VBridgeCOff at candidate 3 (piece (b), `FlockC3.Compose`) and
 V*'s statements over the verifier's list (piece (h)), which at candidate 3's inner shape is circuits' gap 2's eleven:
 `rec-open`, `rec-residuals`, `rec-sparse`, R's levels (`rec-open-stacked`) and `rec-opening` at META's `stacked`.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

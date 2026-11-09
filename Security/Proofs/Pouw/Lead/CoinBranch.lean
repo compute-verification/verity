@@ -1,8 +1,10 @@
-import Proofs.Pouw.Lead.CoinBranch.Cells
-import Proofs.Pouw.Lead.CoinBranch.Kept
-import Proofs.Pouw.Lead.CoinBranch.Registers
-import Proofs.Pouw.Lead.CoinBranch.Revisit
-import Proofs.Pouw.Lead.CoinBranch.Writes
+module
+
+public import Proofs.Pouw.Lead.CoinBranch.Cells
+public import Proofs.Pouw.Lead.CoinBranch.Kept
+public import Proofs.Pouw.Lead.CoinBranch.Registers
+public import Proofs.Pouw.Lead.CoinBranch.Revisit
+public import Proofs.Pouw.Lead.CoinBranch.Writes
 
 /-!
 # The lead's coin-branch bound (proofs)
@@ -23,3 +25,5 @@ A program that branches on the coins skips only the words it can predict equal o
 * `GrindProofs` (imported by `Cells`): target words lost on a success set of the coins.
 * `PointwiseProofs` (imported by `Registers`): the chunk model's bounds for every run.
 -/
+
+@[expose] public section

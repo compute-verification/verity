@@ -1,5 +1,7 @@
-import Definitions.Pouw.Game.Defs
-import Definitions.Pouw.PearlC.Instance
+module
+
+public import Definitions.Pouw.Game.Defs
+public import Definitions.Pouw.PearlC.Instance
 
 /-!
 # The per-tile cap and the sampled audit (trusted)
@@ -31,6 +33,8 @@ file states both; `TileGamma` proves γ from them.
   layout's, exceeds `T/(1 − γ)` is at most `(1 − ε_s)^t + η(q, N)`. The draw is independent of the oracle and the salt,
   so its source must be fixed only after the transcript's commitment.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

@@ -5,10 +5,20 @@ every way the cases can fail to fit the composition. Then three stubs `a`, `b` a
 to one record (`same`): a pair that didn't refused whatever the subprotocols answer. Then the same three with `a` and `b`
 also on one store (`tiedSame`): two stores refused unless `same` rejects already.
 -/
-import CoreComposition.Cases
-import CoreComposition.Same
-import CoreComposition.Tie
-import CoreComposition.Stubs
+module
+
+public import CoreComposition.Cases
+public import CoreComposition.Same
+public import CoreComposition.Tie
+public import CoreComposition.Stubs
+meta import CoreComposition.Cases
+meta import CoreComposition.Same
+meta import CoreComposition.Tie
+meta import CoreComposition.Stubs
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core.Composition.Guards
 

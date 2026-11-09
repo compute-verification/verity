@@ -1,20 +1,22 @@
-import PouwPearlPlus.Words
-import Definitions.Pouw.PearlC.NoiseSha512
-import Proofs.Flock.Soundness.Discharge.Hm.Hash
-import Mathlib.Data.List.GetD
-import Mathlib.Data.List.Basic
-import Mathlib.Tactic.Ring
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.Zify
-import Mathlib.Data.Nat.Sqrt
-import Mathlib.Data.List.Monad
-import Mathlib.Algebra.Order.BigOperators.Group.List
-import Proofs.Pouw.PearlC.CoreOps
-import Proofs.Pouw.PearlC.Peel
-import Proofs.Pouw.PearlC.PeelExactProofs
-import Proofs.Properties.Evaluate
+module
+
+public import PouwPearlPlus.Words
+public import Definitions.Pouw.PearlC.NoiseSha512
+public import Proofs.Flock.Soundness.Discharge.Hm.Hash
+public import Mathlib.Data.List.GetD
+public import Mathlib.Data.List.Basic
+public import Mathlib.Tactic.Ring
+public import Mathlib.Tactic.NormNum
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.Zify
+public import Mathlib.Data.Nat.Sqrt
+public import Mathlib.Data.List.Monad
+public import Mathlib.Algebra.Order.BigOperators.Group.List
+public import Proofs.Pouw.PearlC.CoreOps
+public import Proofs.Pouw.PearlC.Peel
+public import Proofs.Pouw.PearlC.PeelExactProofs
+public import Proofs.Properties.Evaluate
 
 /-!
 # Pearl+'s bridge, part (b), the noise: the check's -h3 noise is `NoiseSha512`'s
@@ -24,6 +26,8 @@ The check hashes with the compiled SHA-512 every tree reads (`Flock.Sha512.hash`
 spec's SHA-512 (`Pouw.PearlC.Sha512.digest`) and row digest (`NoiseSha512.rowDigest`). Each statement here says the
 check's value is the spec's on the same bytes, and where the check returns a value, the spec's line or seed is it.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlPlus.Bridge
 

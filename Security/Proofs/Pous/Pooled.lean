@@ -1,8 +1,10 @@
-import Properties.Pous.Pooled
-import Proofs.Pous.PeriodDeployed
-import Proofs.Flock.Soundness.Audit.Periods
-import Proofs.Flock.Claims.Sampling.Draws
-import Mathlib.Analysis.Complex.ExponentialBounds
+module
+
+public import Properties.Pous.Pooled
+public import Proofs.Pous.PeriodDeployed
+public import Proofs.Flock.Soundness.Audit.Periods
+public import Proofs.Flock.Claims.Sampling.Draws
+public import Mathlib.Analysis.Complex.ExponentialBounds
 
 /-!
 # PoUS pooled over `U` windows: how many windows can be accepted short
@@ -32,6 +34,8 @@ window's capacity coins, where it is accepted, and full on the rest meets `Perio
 every window and is short in a binomial `(U, p)` number of them. So at least `M` short accepted windows out of `U` is
 unlikely only for `M` above `p · U`, and `p^M` bounds only the windows short whatever their capacity coins.
 -/
+
+@[expose] public section
 
 namespace Pous.Period.SecurityProofs
 

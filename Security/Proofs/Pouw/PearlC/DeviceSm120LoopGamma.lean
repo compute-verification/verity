@@ -1,7 +1,9 @@
-import Proofs.Pouw.PearlC.DeviceSm120Gamma
-import Proofs.Pouw.PearlC.CapLoopGamma
-import Proofs.Pouw.PearlC.ChainCapLoopGamma
-import Proofs.Pouw.PearlC.UOnlyLoopGamma
+module
+
+public import Proofs.Pouw.PearlC.DeviceSm120Gamma
+public import Proofs.Pouw.PearlC.CapLoopGamma
+public import Proofs.Pouw.PearlC.ChainCapLoopGamma
+public import Proofs.Pouw.PearlC.UOnlyLoopGamma
 
 /-!
 # γ at the RTX PRO 6000 (sm_120) records at the in-loop prices (staged)
@@ -23,6 +25,8 @@ rule publishes these. `Prices.sm120Loop` rounds the A-only forming up to a whole
 Every γ here is an upper bound on the in-loop γ: `Prices.sm120Loop` rounds the A-only forming (1.047) up to 2. The
 exact in-loop values for v1 under rev1 and v2 at the cap are `DeviceSm120KernelGamma`'s `…LoopCast8…` pins.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

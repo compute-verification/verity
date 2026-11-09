@@ -1,6 +1,8 @@
-import Definitions.Accounting.Assumptions.RemoteOutside
-import Definitions.Accounting.Assumptions.RemoteSketch
-import Proofs.Accounting.RemoteHeld
+module
+
+public import Definitions.Accounting.Assumptions.RemoteOutside
+public import Definitions.Accounting.Assumptions.RemoteSketch
+public import Proofs.Accounting.RemoteHeld
 
 /-!
 # The certifiers' observation against the receipts' sketch bound and its derivation
@@ -15,6 +17,8 @@ the node or computed on outside it for the node at a tick of a pass was on the n
 * the sketch model's `Present` is `PresentAt`, the same with outside computation allowed, under `Covered` where nothing
   else entered over the model's passes (`present_of_covered`, `presentAt_of_present`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Remote
 

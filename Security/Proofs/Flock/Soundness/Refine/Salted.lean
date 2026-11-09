@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.Regions
+module
+
+public import Proofs.Flock.Soundness.Refine.Regions
 
 /-!
 # The salted scheme `hm96-sha512/v1` refines the model's salted leaves (R7 and R8 for hm96; `Flock.Merkle`)
@@ -15,6 +17,8 @@ SHA-512 of the pair, as the unsalted scheme's are. The compiled model's `Merkle.
 * **R9:** `verify_refines_ofCircuit_hm96`, for the verifier's own statements. For `Stmt.setupH`'s, `setupH_wf` gives its
   layout and region hypotheses.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

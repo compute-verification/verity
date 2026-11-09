@@ -1,5 +1,7 @@
-import Flock.Firewall
-import Flock.Firewall.Contract
+module
+
+public import Flock.Firewall
+public import Flock.Firewall.Contract
 
 /-!
 # The firewall's salts reach what it sends only as commit strings
@@ -14,6 +16,8 @@ What a message says but its commit strings is `blank`; its commit strings, in th
 `holes`; `fillAll` puts commit strings back into blanked messages. The proof follows `run`'s loop, `step`'s cases and the
 salting `mapM`s at once at the two salt lists (`Rel`, a relational reading of the firewall's state monad).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.FirewallRun
 

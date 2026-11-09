@@ -1,7 +1,9 @@
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Fintype.Card
-import Mathlib.Tactic.Abel
-import Mathlib.Tactic.Ring
+module
+
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Data.Fintype.Card
+public import Mathlib.Tactic.Abel
+public import Mathlib.Tactic.Ring
 
 /-!
 # A part of the draw caps the whole (proofs)
@@ -12,6 +14,8 @@ part and the rest, `|Ω| = |D|·|rest|`. So if a value `F ω` moves with the par
 that `g` hits it on (`part_fiber_le`): no more than `P/|D|` when no value has more than `P` preimages under `g`. The
 coin lanes' per-word `p*` over the whole of a call's coins is this with `D` one step's row bit and coin lanes.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.PStar
 

@@ -1,5 +1,7 @@
-import Proofs.NetworkCertifier.Counting
-import Proofs.NetworkCertifier.Occupancy
+module
+
+public import Proofs.NetworkCertifier.Counting
+public import Proofs.NetworkCertifier.Occupancy
 
 /-!
 # Theorem 3: the advice caps
@@ -8,6 +10,8 @@ import Proofs.NetworkCertifier.Occupancy
 at every step equal the Program's rows for one declared advice string, every status is complete, and the jitter classes
 are below `D`.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

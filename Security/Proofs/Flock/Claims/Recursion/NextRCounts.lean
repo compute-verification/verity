@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.NextRFits
-import Proofs.Flock.VBridge.Family.Runs
-import Proofs.Flock.VBridge.Algebra.RingSwitch
-import Proofs.Flock.C3.Reps.LigNames
+module
+
+public import Proofs.Flock.Claims.Recursion.NextRFits
+public import Proofs.Flock.VBridge.Family.Runs
+public import Proofs.Flock.VBridge.Algebra.RingSwitch
+public import Proofs.Flock.C3.Reps.LigNames
 
 /-!
 # A rep's rounds squeeze as its schedule's: `chunksOf_counts`
@@ -20,6 +22,8 @@ for the counts:
 * **`T`'s slot** (`valOf_T`): the witness a rep's chunks' values start reads its `T` slot (`wi_T`, right after the
   prefix rounds and the claims' ring-switch blocks) at the `T` its frames were built at, given the proof's sizes.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

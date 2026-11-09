@@ -60,9 +60,15 @@ The difftest's pieces: `challenger_close` (`ChallengerClose.from_json` and `clos
 `challenger_session` (`trusted_session_of`), `challenger_credited` (`credited_session`) and `challenger_pinned`
 (`pinned_session`), each `{"refused": why}` where Python refuses.
 -/
-import CoreProtocol.Record
-import SampledProofs.ChallengerRecord
-import SampledProofs.PyJson
+module
+
+public import CoreProtocol.Record
+public import SampledProofs.ChallengerRecord
+public import SampledProofs.PyJson
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Challenger
 

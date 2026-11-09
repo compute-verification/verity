@@ -1,5 +1,7 @@
-import Properties.Pouw.Lead.Commit
-import Proofs.Properties.Pouw.Commit
+module
+
+public import Properties.Pouw.Lead.Commit
+public import Proofs.Properties.Pouw.Commit
 
 /-!
 # g-private's order: a window's round coins open after their roots
@@ -9,6 +11,8 @@ to `orderReason`'s loop over the openings. The loop keeps, while it yields, that
 accepted after their root (`forIn_zipIdx_ok_or_done`, `orderReason_none`), and an opening `liveReason` accepts is the coin
 it asks for, opened after what it was given (`liveReason_none`).
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Commit
 

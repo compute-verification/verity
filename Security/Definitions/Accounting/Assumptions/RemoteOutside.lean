@@ -1,4 +1,6 @@
-import Definitions.Accounting.Remote.Outside
+module
+
+public import Definitions.Accounting.Remote.Outside
 
 /-!
 # No device outside the node computes for it, as the network certifiers observe it (trusted)
@@ -44,6 +46,8 @@ model's premises, under which `SketchBound` is derived (`Accounting.Guarantees.R
   `Σ qtot` is within the compressions the prover makes on the node or off it (`Q = F·C`, `timing.sketch_failure`'s
   `outside`), so it holds wherever the grinding ran.
 -/
+
+@[expose] public section
 
 namespace Accounting.Remote.Held.Assumptions
 

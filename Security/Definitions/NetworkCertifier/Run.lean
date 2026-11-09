@@ -1,5 +1,7 @@
-import Definitions.NetworkCertifier.Grid
-import Mathlib.Data.List.Basic
+module
+
+public import Definitions.NetworkCertifier.Grid
+public import Mathlib.Data.List.Basic
 
 /-!
 # The interaction, the Program, and acceptance
@@ -18,6 +20,8 @@ happens. The verifier's `Accepted` is a predicate on an observation prefix and a
 only the rows and the statuses (W5's record). No violation policy is modelled: every theorem is about runs accepted up to
 the horizon.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

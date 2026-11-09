@@ -1,5 +1,9 @@
-import CoreProtocol.Blobs
-import PouwPearlPlus.Open
+module
+
+public import CoreProtocol.Blobs
+public import PouwPearlPlus.Open
+meta import CoreProtocol.Blobs
+meta import PouwPearlPlus.Open
 
 /-!
 # Pearl+'s run verdict as a `Core.BlobProtocol`: `verity/pouw/pearl-plus/v1`
@@ -48,6 +52,10 @@ that digest, held to its manifest entry (`held`); a path the object doesn't name
 
 **Profile**: the draws asked for, the tiles drawn and the passes.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PouwCheck.PearlPlus.Protocol
 

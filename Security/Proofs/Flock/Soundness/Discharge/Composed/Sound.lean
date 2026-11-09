@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Defs
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Defs
 
 /-!
 # The soundness half of one `--zk` sampled session
@@ -25,6 +27,8 @@ flock-verify refuses every statement failing one of its hypotheses on the statem
 parse and load, `pub.tables = none`, `scopeOk`, retained rounds and `hm96-sha512/v1` leaves: `Flock.ProvedScope`), so
 `FailClosed.zk_session_sound` states this bound over what it accepts (`LiveVerifiesZK`) without them.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

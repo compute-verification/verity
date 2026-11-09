@@ -1,6 +1,8 @@
-import Proofs.Pouw.Lead.Network.Rot
-import Proofs.Pouw.Lead.Network.Cells
-import Proofs.Pouw.Lead.Network.Term
+module
+
+public import Proofs.Pouw.Lead.Network.Rot
+public import Proofs.Pouw.Lead.Network.Cells
+public import Proofs.Pouw.Lead.Network.Term
 
 /-!
 # The lead's network term (`Pouw.SecurityProofs.Lead.Network`)
@@ -16,3 +18,5 @@ import Proofs.Pouw.Lead.Network.Term
 Its proofs go in `Lead/Network/`, its declarations in `Pouw.SecurityProofs.Lead.Network`, and each file is imported
 here.
 -/
+
+@[expose] public section

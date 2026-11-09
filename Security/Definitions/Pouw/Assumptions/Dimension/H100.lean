@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.Dimension.H100Assumptions
-import Definitions.Pouw.Assumptions.Dimension.Embed
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100Assumptions
+public import Definitions.Pouw.Assumptions.Dimension.Embed
 
 /-!
 # `MH100`, the H100 analogue of `M4090`, and its per-word bound (trusted statements)
@@ -66,6 +68,8 @@ review lists the measurements.
   statements at `h100Nominal`. Their hardware caveat holds on the H200: `wgmma` costs 32.003 a register at
   `N ≥ 64`, and C-2's m64n8k32 costs 144. `MH100WordsConsistent` and `H32Sat` read no price the hardware sets.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

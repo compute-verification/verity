@@ -1,5 +1,7 @@
-import Definitions.Core.Game.Batch
-import Definitions.Flock.Game.Lock
+module
+
+public import Definitions.Core.Game.Batch
+public import Definitions.Flock.Game.Lock
 
 /-!
 # C-Flock's game vocabulary is Core's: `Batch`
@@ -7,6 +9,8 @@ import Definitions.Flock.Game.Lock
 Every name here is an alias (`export`) of Core's definition in `Definitions.Core.Game.Batch`, so C-Flock's spec and
 every other protocol's read one game library.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

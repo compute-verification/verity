@@ -22,17 +22,34 @@ everything-zero-knowledge, by Daniel's ruling: "Let's run it in the clear tonigh
 private form (the division committed under hiding leaves, compliance proved, a padded profile) replaces it after
 15:00Z on 28 Oct.
 -/
-import CoreComposition.Blobs
-import CoreComposition.Cases
-import CoreComposition.Tie
-import MemoryChallenger.WipeProtocol
-import NciCheck.Protocol
-import NetworkCheck.Period
-import PousCheck.RunProtocol
-import PouwCheck.Period
-import RemoteAudit.P2Protocol
-import SampledProofs.OneStage
-import SampledProofs.OneStageZk
+module
+
+public import CoreComposition.Blobs
+public import CoreComposition.Cases
+public import CoreComposition.Tie
+public import MemoryChallenger.WipeProtocol
+public import NciCheck.Protocol
+public import NetworkCheck.Period
+public import PousCheck.RunProtocol
+public import PouwCheck.Period
+public import RemoteAudit.P2Protocol
+public import SampledProofs.OneStage
+public import SampledProofs.OneStageZk
+meta import CoreComposition.Blobs
+meta import CoreComposition.Cases
+meta import CoreComposition.Tie
+meta import MemoryChallenger.WipeProtocol
+meta import NciCheck.Protocol
+meta import NetworkCheck.Period
+meta import PousCheck.RunProtocol
+meta import PouwCheck.Period
+meta import RemoteAudit.P2Protocol
+meta import SampledProofs.OneStage
+meta import SampledProofs.OneStageZk
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core.Onsite
 

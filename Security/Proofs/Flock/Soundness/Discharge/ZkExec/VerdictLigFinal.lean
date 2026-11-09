@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
-import Proofs.Flock.Soundness.Refine.Final
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
+public import Proofs.Flock.Soundness.Refine.Final
 
 /-!
 # `--zk` Ligerito's final check is the model's
@@ -8,6 +10,8 @@ import Proofs.Flock.Soundness.Refine.Final
 succeeds establishes `finalProg_ok`'s facts (`finalProgZ_facts`), so the model's final check holds on its state
 (`final_refinesZ`, as the non-ZK session's `final_refines`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

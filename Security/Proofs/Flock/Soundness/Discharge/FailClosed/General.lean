@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.General.Hidden
-import Proofs.Flock.Soundness.Discharge.ZkReg
-import Proofs.Flock.Soundness.Discharge.FailClosed.Exec
-import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHidden
-import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered
+module
+
+public import Proofs.Flock.Soundness.Discharge.General.Hidden
+public import Proofs.Flock.Soundness.Discharge.ZkReg
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Exec
+public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHidden
+public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered
 
 /-!
 # The hidden-output headlines at the general form, over what flock-verify accepts
@@ -21,6 +23,8 @@ in the general form (`Checks.scopeGen`: `Layout.scopeGenH`), and the headline th
 Each takes the circuit, the public file and the conditions `scopeGenH` gives from the check at each statement it passes
 (`hs`), and at a statement the check refuses the event is empty.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.FailClosed
 

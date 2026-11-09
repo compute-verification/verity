@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.FinishStopAt
-import Proofs.Flock.Claims.ZK.FinishTau
-import Proofs.Flock.Claims.ZK.FinishSwRows
+module
+
+public import Proofs.Flock.Claims.ZK.FinishStopAt
+public import Proofs.Flock.Claims.ZK.FinishTau
+public import Proofs.Flock.Claims.ZK.FinishSwRows
 
 /-!
 # A worker's rows from the firewall's own run
@@ -17,6 +19,8 @@ values that are the worker's clear values plus `h`, the worker's rows hold (`row
 * **`rowsAt_of_fw`**: where, at each rep, constraints on the layout's length that are the first seven rows on the
   clear values plus pads `h` (`h_ab = h_a·h_b`, `h_w = h_x·h_y`) don't fail on `h`, the rows hold.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal.Masked
 

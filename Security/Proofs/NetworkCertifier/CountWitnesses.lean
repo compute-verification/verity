@@ -1,4 +1,6 @@
-import Proofs.NetworkCertifier.WitnessToys
+module
+
+public import Proofs.NetworkCertifier.WitnessToys
 
 /-!
 # The egress and ingress counts' honest and nontrivial lemmas
@@ -30,6 +32,8 @@ no claim or verifier reads, so their entries name their kind. Their honest lemma
 bucket on its one link, with W2, W4 at allocation `1` below the link's two slots, and J; their nontrivial lemmas decode
 every message of `fxLeakI` from its records or its wire, against two content assignments where the bound has them.
 -/
+
+@[expose] public section
 
 namespace NetTiming.Witness
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.HonestHalf
-import Proofs.Flock.Claims.Recursion.IrDep
+module
+
+public import Proofs.Flock.Claims.Recursion.HonestHalf
+public import Proofs.Flock.Claims.Recursion.IrDep
 
 /-!
 # The honest deployed recursive run (`HonestFixture`)
@@ -11,6 +13,8 @@ unchanged where they are stated (`HonestRunAccepted` and `NoCollAt` in `HonestHa
 `HonestWitR`), and the tape exception, named here (`TopsAt`). That the inner prover's openings fit V\*'s levels
 (`IrShaped`) is proved at `IrDep` (`irShaped_dep`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

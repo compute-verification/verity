@@ -1,5 +1,7 @@
-import Proofs.Properties.Nci
-import Properties.NciDesc
+module
+
+public import Proofs.Properties.Nci
+public import Properties.NciDesc
 
 /-!
 # `NciCheck.Desc.evaluate` agrees with `NciCheck.evaluate`
@@ -20,6 +22,8 @@ when it is an input node (`gate_input`, through `Prog.gate`'s walk and `inputsAt
 expansion, and that on each the unrolled check accepts θ and the owners, counts the same IUs, and the same sizes
 (`sizes_eq_tally`).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.DescAgree
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Count
-import Proofs.Flock.Claims.Complete.Zk.Link
+module
+
+public import Proofs.Flock.Claims.Complete.Count
+public import Proofs.Flock.Claims.Complete.Zk.Link
 
 /-!
 # The honest masked session's sends fit the masked verifier's rounds
@@ -14,6 +16,8 @@ import Proofs.Flock.Claims.Complete.Zk.Link
   (`innerCommitP_quiet`); the table's `--zk` schedule keeps fast100's at least one lane round and two levels
   (`zkSchedule_shape`), so that is `repRounds true`, and `sendCountZk_goal` is the goal `SendCountZk`.
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy
 

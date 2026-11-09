@@ -1,6 +1,8 @@
-import Definitions.Pouw.Game.Defs
-import Mathlib.Algebra.Order.Archimedean.Real.Basic
-import Mathlib.Data.Nat.Choose.Basic
+module
+
+public import Definitions.Pouw.Game.Defs
+public import Mathlib.Algebra.Order.Archimedean.Real.Basic
+public import Mathlib.Data.Nat.Choose.Basic
 
 /-!
 # Clopper–Pearson's one-sided upper bound (trusted)
@@ -11,6 +13,8 @@ than `x` times except with probability `δ`. It is `MissBound`'s table (`Pouw.Pr
 set, the bound at the samples it drew falls below its share with probability at most `δ`. At `x = 0` it is
 `1 − δ^(1/t)`, the ε of the audit that accepts only checked units (`(1 − ε)^t = δ`), and at `x = t` it is `1`.
 -/
+
+@[expose] public section
 
 namespace Pouw
 

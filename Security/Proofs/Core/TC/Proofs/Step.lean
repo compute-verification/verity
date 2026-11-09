@@ -1,4 +1,6 @@
-import Proofs.Core.TC.Proofs.SemGroup
+module
+
+public import Proofs.Core.TC.Proofs.SemGroup
 
 /-!
 # One group, both sides: `group_sound`
@@ -6,6 +8,8 @@ import Proofs.Core.TC.Proofs.SemGroup
 The relation's special-value flags are the semantics' (`ind_sum`, `contains_infSign`), its finite path is `group_sum`
 (`groupSum_eq`), and its output state is the canonical state of `group_step_total`'s value.
 -/
+
+@[expose] public section
 
 namespace Verity.TC.Proofs
 

@@ -1,4 +1,6 @@
-import Definitions.Pouw.Assumptions.Lead
+module
+
+public import Definitions.Pouw.Assumptions.Lead
 
 /-!
 # The commitment's hashing credit
@@ -6,6 +8,8 @@ import Definitions.Pouw.Assumptions.Lead
 Without a collision, an execution that reaches each of the honest commitment's digests hashed each of its messages,
 so its ShaWrites credit is at least the honest commitment's distinct messages'.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Commit
 

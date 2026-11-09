@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.BoundReceipt
-import Proofs.Accounting.RateAudit.Audit
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.BoundReceipt
+public import Proofs.Accounting.RateAudit.Audit
 
 /-!
 # Receipts bound to the matmul: the proofs
@@ -17,6 +19,8 @@ An accepted node whose blocks were made at fewer than `k` places is the sample's
 `m + 1` (`RateAudit`'s compression of the tile outputs, at `C(q_z, m + 1)/2^λ`) or the GPU made `k − m` (its
 compression of the store, at `C(q, k − m)/2^λ`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate.Chip
 

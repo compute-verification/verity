@@ -1,9 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.Layout.Scope
-import Proofs.Flock.Soundness.Discharge.ZkExec.Event
-import Proofs.Flock.Soundness.Discharge.Hidden.Facts
-import Proofs.Flock.Soundness.Discharge.FailClosed.TmplStmt
-import Proofs.Flock.Soundness.ExecSetup
-import Flock.ProvedScope
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.Scope
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
+public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+public import Proofs.Flock.Soundness.Discharge.FailClosed.TmplStmt
+public import Proofs.Flock.Soundness.ExecSetup
+public import Flock.ProvedScope
 
 /-!
 # What the verifier accepts: `Accepts` and its statement check
@@ -48,6 +50,8 @@ registered check), a coin-tree
 key an earlier session of the run used, and a session file it cannot read. Each drawn session of a run is set up at its own draw,
 and the draw-less setup, one statement, once.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.FailClosed
 

@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Complete.Replay.Ligerito
-import Proofs.Flock.Claims.Complete.Replay.LigeritoRun
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
-import Proofs.Flock.Soundness.Refine.Seam
-import Proofs.Flock.VBridge.Algebra.Sizes
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.Ligerito
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoRun
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+public import Proofs.Flock.Soundness.Refine.Seam
+public import Proofs.Flock.VBridge.Algebra.Sizes
 
 /-!
 # Ligerito replays at every honest run, and every recorded round is consumed
@@ -18,6 +20,8 @@ first send on (`Run.lgCf`), the decoded proof's list sizes (`decodeProof_sizes`)
 * **The two premises at every rep**: each level's Merkle check passes at its query coins (`LgMerkle`), and the final
   identity holds at the model's values (`LgFinal`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

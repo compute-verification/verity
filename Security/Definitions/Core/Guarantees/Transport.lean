@@ -1,4 +1,6 @@
-import Definitions.Core.Assumptions.Transport
+module
+
+public import Definitions.Core.Assumptions.Transport
 
 /-!
 # What the transport establishes
@@ -8,6 +10,8 @@ what a simulator makes from the public record (`TransportPassiveZk`); the imprin
 of the root it derives (`ImprintRootHidden`); and a receiver delivers only what its peer sent, in order
 (`TransportDelivers`).
 -/
+
+@[expose] public section
 
 namespace Verity.Guarantees
 

@@ -1,5 +1,7 @@
-import Mathlib.Data.List.Basic
-import Mathlib.Tactic.DeriveFintype
+module
+
+public import Mathlib.Data.List.Basic
+public import Mathlib.Tactic.DeriveFintype
 
 /-!
 # The `fast100` schedule (`Flock.Schedule`)
@@ -12,6 +14,8 @@ rows; the verifier makes `queries` consistency queries on it. The analysis slack
 `η = 1/200` at every level (Johnson regime); the `Flock.Schedule` value `0.02` is a diagnostic the verifier never
 reads.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Accounting
 

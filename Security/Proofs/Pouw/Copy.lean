@@ -1,9 +1,13 @@
-import Definitions.Pouw.Assumptions.GameStatements
-import Proofs.Pouw.Prob
+module
+
+public import Definitions.Pouw.Assumptions.GameStatements
+public import Proofs.Pouw.Prob
 
 /-!
 # R_copy (tt-attacks §6): the bound under Nz, and Nz for independent uniform bits
 -/
+
+@[expose] public section
 
 namespace Pouw.Proofs
 

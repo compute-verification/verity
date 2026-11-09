@@ -73,23 +73,29 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 `check_proved`, `record`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its outcome to it), `hello`,
 `stream` (each of `service.Stream`'s ops) and `fleet` (each of `service.Fleet`'s).
 -/
-import SampledProofs.OneStage
-import SampledProofs.Slots
-import SampledProofs.Service
-import SampledProofs.Run
-import SampledProofs.Stream
-import SampledProofs.Fleet
-import SampledProofs.Hello
-import SampledProofs.ChallengerRecord
-import SampledProofs.ChallengerSession
-import SampledProofs.ChallengerCoins
-import SampledProofs.ChallengerTrees
-import SampledProofs.Produced
-import SampledProofs.HiddenDraw
-import SampledProofs.PartitionRef
-import SampledProofs.WiresDrawn
-import SampledProofs.PublicUnits
-import SampledProofs.LinkPoints
+module
+
+public import SampledProofs.OneStage
+public import SampledProofs.Slots
+public import SampledProofs.Service
+public import SampledProofs.Run
+public import SampledProofs.Stream
+public import SampledProofs.Fleet
+public import SampledProofs.Hello
+public import SampledProofs.ChallengerRecord
+public import SampledProofs.ChallengerSession
+public import SampledProofs.ChallengerCoins
+public import SampledProofs.ChallengerTrees
+public import SampledProofs.Produced
+public import SampledProofs.HiddenDraw
+public import SampledProofs.PartitionRef
+public import SampledProofs.WiresDrawn
+public import SampledProofs.PublicUnits
+public import SampledProofs.LinkPoints
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Pieces
 

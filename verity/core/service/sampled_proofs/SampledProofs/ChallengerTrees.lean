@@ -26,7 +26,14 @@ The difftest's pieces: `challenger_coin_trees` (`coin_trees_of`), `challenger_se
 over the log's trees), each `{"refused": why}` where Python refuses, and `challenger_sample_link_first`
 (`sample_link_first`).
 -/
-import SampledProofs.ChallengerDraw
+module
+
+public import SampledProofs.ChallengerDraw
+meta import SampledProofs.ChallengerDraw
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Challenger
 

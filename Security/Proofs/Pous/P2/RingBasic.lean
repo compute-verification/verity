@@ -1,6 +1,8 @@
-import Mathlib.NumberTheory.LegendreSymbol.Basic
-import Definitions.Pous.P2.Cost
-import Proofs.Pous.P2.Domain
+module
+
+public import Mathlib.NumberTheory.LegendreSymbol.Basic
+public import Definitions.Pous.P2.Cost
+public import Proofs.Pous.P2.Domain
 
 /-!
 # P2 in the ring model: the cost bound, the labels, and correctness
@@ -15,6 +17,8 @@ The cost model is `Security/Definitions/Pous/P2/Cost.lean`. This file proves:
 * `complete`: `p2ring` is correct, holds `W`, is within the space bound, decodes a block with two multiplication
   rounds, two key queries and three ring queries, and storing `C` whole passes the audit with no query.
 -/
+
+@[expose] public section
 
 namespace PousP2Ring
 

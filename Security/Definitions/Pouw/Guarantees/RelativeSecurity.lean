@@ -1,6 +1,8 @@
-import Definitions.Pouw.RelativeSecurity
-import Definitions.Pouw.RelativeSecurityFork
-import Definitions.Pouw.Assumptions.RelativeSecurity
+module
+
+public import Definitions.Pouw.RelativeSecurity
+public import Definitions.Pouw.RelativeSecurityFork
+public import Definitions.Pouw.Assumptions.RelativeSecurity
 
 /-!
 # Relative security's guarantees for the staged window (trusted)
@@ -30,6 +32,8 @@ answer accepted and a wrong one refused: `StagedFloorPerProverHonest`, `OverlapF
 `StagedFloorJ10RPerProverHonest`, `OverlapFloorJ10RPerProverHonest`) and a nontrivial one (its conclusion fails at a
 verifier that accepts everything: `FloorPerProverNontrivial`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.RelativeSecurity
 

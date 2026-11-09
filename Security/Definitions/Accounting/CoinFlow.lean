@@ -1,4 +1,6 @@
-import Definitions.Accounting.HMu
+module
+
+public import Definitions.Accounting.HMu
 
 /-!
 # A Program's coin flow: the Build's two coin rules, on a graph (trusted)
@@ -25,6 +27,8 @@ dataflow, at the granularity the Build sees: one node per primitive instance of 
 * `View k`: what a view of `k`'s fresh coins may hold: every value outside `k`'s forward cone, and every other coin.
   `view k σ` is that view under `σ`.
 -/
+
+@[expose] public section
 
 namespace Accounting.CoinFlow
 

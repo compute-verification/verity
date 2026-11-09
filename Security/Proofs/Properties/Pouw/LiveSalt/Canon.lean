@@ -1,6 +1,8 @@
-import Batteries.Tactic.OpenPrivate
-import Properties.Pouw.LiveSalt
-import Std.Data.String.ToNat
+module
+
+public import Batteries.Tactic.OpenPrivate
+public import Properties.Pouw.LiveSalt
+public import Std.Data.String.ToNat
 
 /-!
 # The coins' binding has one canonical form per layout
@@ -11,6 +13,8 @@ import Std.Data.String.ToNat
 (`digits_split`), an escaped string at its first unescaped quote, each escape decoding to one character (`unesc_esc`,
 `canonStr_split`), and the families' list item by item, each a string and a numeral (`fam_split`).
 -/
+
+@[expose] public section
 
 open private hex4 from Flock.Canon
 open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic

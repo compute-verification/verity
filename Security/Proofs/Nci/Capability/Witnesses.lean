@@ -1,8 +1,10 @@
-import Definitions.Nci.Guarantees.Capability.Witnesses
-import Proofs.Nci.Capability.Items
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Mathlib.Probability.Distributions.Uniform
-import Mathlib.Tactic.Linarith
+module
+
+public import Definitions.Nci.Guarantees.Capability.Witnesses
+public import Proofs.Nci.Capability.Items
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
+public import Mathlib.Probability.Distributions.Uniform
+public import Mathlib.Tactic.Linarith
 
 /-!
 # Local bounds: proofs of their witnesses
@@ -11,6 +13,8 @@ Each witness of `Definitions.Nci.Guarantees.Capability.Witnesses`, at the toy in
 facts about the toy they share come first: its `(2, 1)`-partition, a block program's bits, what the block recomputes,
 the decoder's description lengths, and the budgets of items priced one bit each.
 -/
+
+@[expose] public section
 
 namespace Nci.Capability.Toy
 

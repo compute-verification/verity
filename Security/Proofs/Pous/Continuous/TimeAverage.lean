@@ -1,5 +1,7 @@
-import Mathlib.Data.Fintype.Fin
-import Proofs.Pous.Continuous.PerAnswer
+module
+
+public import Mathlib.Data.Fintype.Fin
+public import Proofs.Pous.Continuous.PerAnswer
 
 /-!
 # The continuous audit's time-averaged bound: `Pous.Guarantees.ContinuousTimeAverage`
@@ -26,6 +28,8 @@ index per slot, and a challenge arrives at slot `t` iff its coin is below `a`.
    read back as a schedule by `pad`. The stopped union over the `T` slots costs `T·(β + 1)·π`
    (`continuous_time_average`).
 -/
+
+@[expose] public section
 
 namespace PousContinuous
 

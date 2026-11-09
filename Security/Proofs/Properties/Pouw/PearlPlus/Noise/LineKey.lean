@@ -1,6 +1,10 @@
-import Properties.Pouw.PearlPlus.Witnesses
+module
+
+public import Properties.Pouw.PearlPlus.Witnesses
 
 /-! The key the test noise's F_A and F_B lines are sampled under (`Words.lineKey` of the test pass's seed_B). -/
+
+@[expose] public section
 
 namespace Properties.Pouw.PearlPlus
 

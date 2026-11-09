@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.RegSetup
-import Proofs.Flock.Claims.Recursion.OpensReads
-import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+module
+
+public import Proofs.Flock.Claims.Recursion.RegSetup
+public import Proofs.Flock.Claims.Recursion.OpensReads
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
 /-!
 # The setup's registered openings open (`regOpenings_opens`)
@@ -11,6 +13,8 @@ the row each instance's ref names opens the registered root at its position thro
 opening `regOpenings` lists opens (`regOpenings_opens`), and `bc_eq_of_setup` is `bc_eq_of_regOpenings` with nothing
 about the openings assumed.
 -/
+
+@[expose] public section
 
 namespace Flock.Registered
 

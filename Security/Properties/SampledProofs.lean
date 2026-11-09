@@ -1,4 +1,6 @@
-import SampledProofs.OneStage
+module
+
+public import SampledProofs.OneStage
 
 /-!
 # Sampled proofs' one-stage audit: what its Lean verdict means (`SampledProofs.OneStage.check`)
@@ -32,6 +34,8 @@ as the window record's digest of the record it decodes (`Flock.WindowRecord.dige
 it: its draw is checked as any other, its profile's draw is `bernoulli p`, and it publishes the largest `M` of the
 profile's units with `(1 − p)^M ≥ δ` (`BernoulliBounds`, `Bound.bernoulliBound`).
 -/
+
+@[expose] public section
 
 open Lean (Json)
 open SampledProofs

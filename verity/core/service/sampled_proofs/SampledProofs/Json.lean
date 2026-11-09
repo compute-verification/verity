@@ -2,9 +2,15 @@
 JSON as the Python reference reads it, over canonical JSON (integers only): Python's `==`, `bool(x)`, `x.get(k)` and its
 integer tests. The one difference is deliberate: `jeq` tells `true` from `1`, which Python's `==` doesn't.
 -/
-import Lean.Data.Json
-import Flock.Canon
-import Flock.Hash
+module
+
+public import Lean.Data.Json
+public import Flock.Canon
+public import Flock.Hash
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs
 

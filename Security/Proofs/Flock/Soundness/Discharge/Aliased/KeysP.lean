@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Aliased.Keys
+module
+
+public import Proofs.Flock.Soundness.Discharge.Aliased.Keys
 
 /-!
 # Δ's source keys with public inputs
@@ -10,6 +12,8 @@ With public input ports (`Flock.HmRow`, `HmIn`), a public leaf is a zero leaf of
 public file fixes. Off a public leaf it is `srcKey`'s, and with no public leaf map (`HmIn.parse` at a circuit without
 public inputs) `keyIdxP` is `keyIdx` (`keyIdxP_empty`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

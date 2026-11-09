@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Audit.Law
-import Flock.Draw
+module
+
+public import Proofs.Flock.Soundness.Audit.Law
+public import Flock.Draw
 
 /-!
 # The executable draw escapes no more often than the model's
@@ -17,6 +19,8 @@ bytes, it returns a draw that misses `B` with probability at most `(Law.subset n
 * `loopL_le`: step `i` draws uniformly over the pool `π '' [i, n)`, which holds all of `B` while the earlier values miss
   it, so the loop escapes `B` with probability at most `C(n − i − |B|, c)/C(n − i, c)`.
 -/
+
+@[expose] public section
 
 open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic
 

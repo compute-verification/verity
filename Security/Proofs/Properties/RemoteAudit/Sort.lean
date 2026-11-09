@@ -1,4 +1,6 @@
-import Batteries.Tactic.OpenPrivate
+module
+
+public import Batteries.Tactic.OpenPrivate
 
 /-!
 # `Array.qsort` permutes its input
@@ -8,6 +10,8 @@ is a swap of two elements of a vector (`qpartition`'s three pivot swaps and its 
 parts), and a swap permutes, so the result is a permutation of the input (`qsort_perm`): it holds the same elements,
 each as often.
 -/
+
+@[expose] public section
 
 open private Array.qpartition.loop Array.qsort.sort from Init.Data.Array.QSort.Basic
 

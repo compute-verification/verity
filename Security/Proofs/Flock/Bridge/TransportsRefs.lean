@@ -1,7 +1,11 @@
-import Proofs.Flock.Bridge.LeafMap
-import Proofs.Flock.Bridge.Transports
-import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
-import Proofs.Flock.Soundness.Discharge.Hidden.Public
+module
+
+public import Proofs.Flock.Bridge.LeafMap
+public import Proofs.Flock.Bridge.Transports
+public import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+public import Proofs.Flock.Soundness.Discharge.Hidden.Public
+
+@[expose] public section
 
 set_option Elab.async false
 

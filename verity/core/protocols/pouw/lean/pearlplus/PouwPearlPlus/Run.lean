@@ -1,4 +1,6 @@
-import PouwPearlPlus.Records
+module
+
+public import PouwPearlPlus.Records
 
 /-!
 # The run: its commitment, the verifier's coin record, and the tiles it opens (`verify_passes`)
@@ -19,6 +21,8 @@ import PouwPearlPlus.Records
 * **The exclusion tiles**: each pass opens one tile per excluded row, an A row's in its first column block and a B row's in
   the first row block of its weight's first unit (`clear_work.exclusion_tiles`).
 -/
+
+@[expose] public section
 
 namespace PouwCheck.PearlPlus
 

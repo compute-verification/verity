@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZkCols
+module
+
+public import Proofs.Flock.Claims.ZkCols
 
 /-!
 The masked reader `zkRunCols` (`Proofs.Flock.Claims.ZkCols`) on a recorded `flock-circuit --zk` session, held to the
@@ -21,6 +23,8 @@ sessions (the `zk-sessions` fixture `fixtures/artifacts.json` declares, at
 with table `circuit`, `sessions/j2/*` at m 25 with tables `circuit-00 circuit-01`, `sessions/m26/*` at m 26 with table
 `circuit`.
 -/
+
+@[expose] public section
 
 open Lean Flock
 

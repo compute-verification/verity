@@ -1,6 +1,8 @@
-import PouwPearlPlus.Run
-import PouwCommit.Py
-import PouwWindow.Rounds
+module
+
+public import PouwPearlPlus.Run
+public import PouwCommit.Py
+public import PouwWindow.Rounds
 
 /-!
 # The run's coins: the epoch's salt coin and the verifier's draw (`verify_run`, "The run's draw" and "The coin record")
@@ -22,6 +24,8 @@ import PouwWindow.Rounds
 
 Every JSON comparison here is by a match (`PouwCommit.fieldIs`), never `Lean.Json`'s `==`.
 -/
+
+@[expose] public section
 
 namespace PouwCheck.PearlPlus
 

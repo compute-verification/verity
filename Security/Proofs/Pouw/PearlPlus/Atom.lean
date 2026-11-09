@@ -1,5 +1,7 @@
-import Evaluate.TC.Dots
-import Definitions.Pouw.PearlC.TileCircuit
+module
+
+public import Evaluate.TC.Dots
+public import Definitions.Pouw.PearlC.TileCircuit
 
 /-!
 # Pearl+'s bridge, part (a): the check's FP8 atom is the Definitions' step
@@ -10,6 +12,8 @@ import Definitions.Pouw.PearlC.TileCircuit
 two packages; the bridge is one commuting map per definition, as `Proofs.Properties.Evaluate` does for the BF16
 tensor-core spec.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlPlus.Bridge
 

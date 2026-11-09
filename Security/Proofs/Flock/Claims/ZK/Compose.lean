@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.Interact
-import Proofs.Flock.Claims.ZK.Rewind
-import Proofs.Flock.Claims.ZK.Indexed
+module
+
+public import Proofs.Flock.Claims.ZK.Interact
+public import Proofs.Flock.Claims.ZK.Rewind
+public import Proofs.Flock.Claims.ZK.Indexed
 
 /-!
 # Sequential composition of `ZKmalR`
@@ -34,6 +36,8 @@ bijections of the nonces and of the rests (`ZKmalAt.of_equiv`). `ZKmalRx` is the
 transcripts (as a claim's own test may), and `B`'s zero knowledge is read only at the units `A`'s honest runs select
 (`Seq.Reach`), so a session's rounds need be fixed only there.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

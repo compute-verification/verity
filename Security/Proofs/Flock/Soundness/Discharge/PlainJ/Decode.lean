@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.PlainJ.Defs
+module
+
+public import Proofs.Flock.Soundness.Discharge.PlainJ.Defs
 
 /-!
 # The decoder is right at a plain session of `J` tables
@@ -14,6 +16,8 @@ outcome flock-verify accepts, at table `j`:
 * `accepts_reps_at` gives each rep's run and rounds and the salted verdict; `repRun_at` makes each run a `RepRun` for
   `decJ`, and `playsT_of_repRun` a run on its tape.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PlainJ
 

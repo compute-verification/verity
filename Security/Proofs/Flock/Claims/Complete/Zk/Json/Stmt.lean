@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Json.Stmt
-import Proofs.Flock.Claims.Complete.Zk.Json.Goals
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Stmt
+public import Proofs.Flock.Claims.Complete.Zk.Json.Goals
 
 /-!
 # What the masked record needs of the statement, from its setup
@@ -17,6 +19,8 @@ object, printable with the prover's nonce put in: `StmtOkZk`, from the case's se
   (`FlockComplete.JsonRT.parse_canon`), printable as the printed one is (`Same.good`), and so after the prover's nonce is put in
   (`good_setObjVal`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

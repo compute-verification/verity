@@ -1,4 +1,6 @@
-import Proofs.Pouw.PearlPlus.Peel
+module
+
+public import Proofs.Pouw.PearlPlus.Peel
 
 /-!
 # Pearl+'s bridge, part (b), the peel factor rows
@@ -11,6 +13,8 @@ are `PeelExact.paRow?` and `pbRow?` on the same words: a code's `bf16(E′)` wor
 FMA of finite words whose word is finite is `fmaWord?` (`fmaWord_of`: `CoreOps.coreOps_fma`, and where the spec's rounding
 overflows `coreOps_fmaOvf`, which makes the check's word that overflow).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlPlus.Bridge
 

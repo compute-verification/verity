@@ -1,5 +1,7 @@
-import Proofs.Accounting.RemoteHeld.Line
-import Proofs.Properties.RemoteAudit.Component
+module
+
+public import Proofs.Accounting.RemoteHeld.Line
+public import Proofs.Properties.RemoteAudit.Component
 
 /-!
 # The memory line of record at the bandwidth component, proved (`Properties.RemoteAudit.Component.LineHeldAtComponent`)
@@ -8,6 +10,8 @@ Where the component accepts bytes that play the record (`Plays`), the Lean verif
 (`plays_verified`, from `acceptIsVerified`), so the event is inside `LineHeld`'s (`Pouw.pr_mono`), whose bound
 `lineHeld` gives.
 -/
+
+@[expose] public section
 
 namespace Properties.RemoteAudit.Component.SecurityProofs
 

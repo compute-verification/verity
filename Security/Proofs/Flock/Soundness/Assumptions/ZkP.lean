@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Assumptions.Zk
-import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJP
+module
+
+public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJP
 
 /-!
 # The `--zk` session's custody at the verifier's public inputs
@@ -9,6 +11,8 @@ and whose session sets up at `setupOfP (zkInputs I) own`. `RecordCustodyZKJ` is 
 refuses a circuit with public input ports (`HmIn.checkOwn` at `none`), so a session at public inputs needs this form.
 At `own = none` it is `RecordCustodyZKJ` (`recordCustodyZKJP_none`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Assumptions.Zk
 

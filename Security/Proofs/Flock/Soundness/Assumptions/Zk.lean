@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Coined
-import Proofs.Flock.Soundness.ZK.Complete
-import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
-import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Coined
+public import Proofs.Flock.Soundness.ZK.Complete
+public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
+public import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
 
 /-!
 # The `--zk` session's assumptions
@@ -10,6 +12,8 @@ The instances of `HashDerivedKey` and `PadNonvanishing` that `--zk` headlines ta
 audit names them, and the record's custody (`live-verifier`) that `--zk`'s soundness takes: `RecordCustodyZK` at one
 table, `RecordCustodyZKJ` at `J` under the subset draw, `RecordCustodyZKJS` at `J` under a stratified draw.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Assumptions.Zk
 

@@ -1,6 +1,8 @@
-import Definitions.Pouw.PearlC.TileDraw
-import Proofs.Flock.Claims.Prob
-import Proofs.Pouw.PearlC.TileGammaTol
+module
+
+public import Definitions.Pouw.PearlC.TileDraw
+public import Proofs.Flock.Claims.Prob
+public import Proofs.Pouw.PearlC.TileGammaTol
 
 /-!
 # γ under the sampled audit drawn as the run draws, from TT_OUT per tile
@@ -22,6 +24,8 @@ transcript's draw probability (`GγSampledDrawTol`).
   (`missBound_strict`), it is `GγSampledDrawTolThreshold`. `gammaSampledDraw_of_threshold`: the audit that accepts only
   checked tiles is that table's case (`gammaSampledDraw_of_tol`, the two composed).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

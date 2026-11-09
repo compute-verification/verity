@@ -1,4 +1,6 @@
-import Definitions.Flock.Game
+module
+
+public import Definitions.Flock.Game
 
 /-!
 # C-Flock's game vocabulary is Core's: `Interleave`
@@ -6,6 +8,8 @@ import Definitions.Flock.Game
 Every name here is an alias (`export`) of Core's definition in `Definitions.Core.Game`, so C-Flock's spec and every
 other protocol's read one game library.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

@@ -1,5 +1,7 @@
-import Flock.Derive
-import Proofs.Flock.Soundness.Audit.Circuit
+module
+
+public import Flock.Derive
+public import Proofs.Flock.Soundness.Audit.Circuit
 
 /-!
 # Derived rows compute their circuit type (flat types)
@@ -16,6 +18,8 @@ import Proofs.Flock.Soundness.Audit.Circuit
 Both are about the executed `derive`. The layout's geometry comes from `derive`'s own check (`geoOk`), so nothing here is
 about how `place` arranges groups. Calls, exported inputs and reads come later.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Types
 

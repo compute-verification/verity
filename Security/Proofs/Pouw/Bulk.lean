@@ -1,4 +1,6 @@
-import Definitions.Pouw.Fp8Atom.Fp32
+module
+
+public import Definitions.Pouw.Fp8Atom.Fp32
 
 /-!
 # The bulk conformance test (compiled evaluation: a test, not a proof)
@@ -12,6 +14,8 @@ for the adds. It fails unless every line parses and holds and the line counts ar
 not check this evaluation. The kernel-pinned subsets are `Pouw.Fp8Atom.Proofs.conformance` and `addConformance`. The
 file is not part of the `Pouw` library and is exempt in `lean-audit.json`.
 -/
+
+@[expose] public section
 
 open Pouw.Fp8Atom
 

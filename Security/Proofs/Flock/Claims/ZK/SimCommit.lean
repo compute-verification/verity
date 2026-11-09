@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.Split
+module
+
+public import Proofs.Flock.Claims.ZK.Split
 
 /-!
 # The commitments from the cut's leaves (`Masked.SimCommit`)
@@ -15,6 +17,10 @@ commitment from the cut's pads leaves (`padsTreeCut`) is the masked prover's (`i
   and their lemmas) are private copies of the Round1 pads modules' (`Round1Pads`, `Round1Root`), which `Split`'s
   closure doesn't hold; once it does, import them and delete the copies.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace FlockComplete
 

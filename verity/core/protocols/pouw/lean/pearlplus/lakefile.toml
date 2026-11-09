@@ -14,6 +14,7 @@ defaultTargets = ["PouwPearlPlus", "pouw-pearlplus"]
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[require]]
 name = "pouw_commit"

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.BoundMerged
-import Proofs.Flock.Claims.Recursion.KSLin
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundMerged
+public import Proofs.Flock.Claims.Recursion.KSLin
 
 /-!
 # Route 2B, linearly: `KSLin` from (P1) at `DE` through one plurality
@@ -21,6 +23,8 @@ So `Pr[BadO] ≤ k_I·(Pr[Fdev] + 1/(M+1))` (`Bound.Pr_badO_le_PrFdev`), and the
 `Bound.KSLin_of_plainKSAbort_binds` is `KSLin` at the bound record from it, on `Bound.KS_of_plainKSAbort_binds`'
 premises: no bridge and no `WeightCovers`.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

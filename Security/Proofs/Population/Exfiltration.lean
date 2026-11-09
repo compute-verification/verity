@@ -1,4 +1,6 @@
-import Definitions.Population.Exfiltration
+module
+
+public import Definitions.Population.Exfiltration
 
 /-!
 # Exfiltration before detection: the stopping-time bounds
@@ -17,6 +19,8 @@ leaking what its incorrect units' cones carry, and the deployment halting at the
   incorrect set `B` escape with probability at most `exp (-Σ_{u ∈ B} a u)`; with `a u ≥ κ E(u)` that is detection
   pressure for the leak `Σ_{u ∈ B} E(u)`.
 -/
+
+@[expose] public section
 
 namespace Population.Exfil
 

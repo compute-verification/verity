@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.VStarBuild
-import Proofs.Flock.C3.RegLevels.TopHold
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarBuild
+public import Proofs.Flock.C3.RegLevels.TopHold
 
 /-!
 # When the stager accepts a part (`VStar.In.partIn`)
@@ -19,6 +21,8 @@ inputs `src`, written out, and `partIn_ok` is that `partIn` accepts wherever it 
 At the honest source (`srcOf`) the message rounds are `msgsOf`'s, each of two rows, so an algebra part's `m<i>` fits
 wherever `i` is one of the schedule's message rounds (`algFits_srcOf`). The openings are the inner prover's `rest`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 

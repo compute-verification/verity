@@ -1,6 +1,8 @@
-import Proofs.Core.Game.Prob
-import Definitions.Flock.Game.Prob
-import Proofs.Flock.Soundness.Game.Union
+module
+
+public import Proofs.Core.Game.Prob
+public import Definitions.Flock.Game.Prob
+public import Proofs.Flock.Soundness.Game.Union
 
 /-!
 # C-Flock's game library is Core's: `Prob`
@@ -8,6 +10,8 @@ import Proofs.Flock.Soundness.Game.Union
 Every name here is an alias (`export`) of Core's declaration in `Proofs.Core.Game.Prob`, so C-Flock's soundness proofs
 and every other protocol's read one game library.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

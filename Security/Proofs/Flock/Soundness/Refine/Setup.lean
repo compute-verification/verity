@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Refine.Regions
-import Proofs.Flock.Soundness.Refine.Walk
-import Flock.HmRow
+module
+
+public import Proofs.Flock.Soundness.Refine.Regions
+public import Proofs.Flock.Soundness.Refine.Walk
+public import Flock.HmRow
 
 /-!
 # The statement decoding, part 3: the setup's statements are well formed (`Flock.Statement`)
@@ -15,6 +17,8 @@ import Flock.HmRow
 
 `stmtOf_linkLayout` gives `stmtOf st`'s `LinkLayout`, which the table-soundness theorems take.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

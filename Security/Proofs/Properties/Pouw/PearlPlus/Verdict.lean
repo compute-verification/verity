@@ -1,6 +1,8 @@
-import Properties.Pouw.PearlPlus
-import Proofs.Properties.Evaluate
-import Proofs.Properties.Pouw.Commit
+module
+
+public import Properties.Pouw.PearlPlus
+public import Proofs.Properties.Evaluate
+public import Proofs.Properties.Pouw.Commit
 
 /-!
 # What Pearl+'s run verdict establishes (`Properties.Pouw.PearlPlus`)
@@ -12,6 +14,8 @@ pure model (a task's `get` is its function's value). The unscale is the Definiti
 `checkOpened` passes keeps the inert-work bound (`TileKeepsTheCap`); one over it is `checkTile`'s `overCap`, which the
 run accepts only when it credits such a tile nothing (`AcceptMeans`).
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.PearlPlus
 

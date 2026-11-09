@@ -1,6 +1,8 @@
-import Definitions.NetworkCertifier.Warden
-import Mathlib.Data.Finset.Option
-import Mathlib.Data.Fintype.BigOperators
+module
+
+public import Definitions.NetworkCertifier.Warden
+public import Mathlib.Data.Finset.Option
+public import Mathlib.Data.Fintype.BigOperators
 
 /-!
 # The warden's code is the client view
@@ -10,6 +12,8 @@ The warden's code on a lane emits, cell by cell, what the client view gives for 
 client view of the schedule, the data and the fail cells (`wardenCode_eq`), which `Tap` reads the network certifier's
 cells from.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

@@ -1,6 +1,8 @@
-import Definitions.Nci.Support
-import Definitions.Nci.Assumptions.Baseline
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
+module
+
+public import Definitions.Nci.Support
+public import Definitions.Nci.Assumptions.Baseline
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
 # NCI's named assumptions
@@ -34,6 +36,8 @@ Every bound through a containment, total or partial (`PartialContainment`), also
 (`Definitions/Nci/Assumptions/Baseline.lean`), a premise about what the protocol lets the baseline `θ` hold rather than about
 any circuit.
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 

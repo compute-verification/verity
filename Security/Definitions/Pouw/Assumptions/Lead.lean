@@ -1,6 +1,8 @@
-import Definitions.Pouw.Lead.Forward
-import Definitions.Pouw.Assumptions.Dimension.H100W
-import Definitions.Core.Assumptions
+module
+
+public import Definitions.Pouw.Lead.Forward
+public import Definitions.Pouw.Assumptions.Dimension.H100W
+public import Definitions.Core.Assumptions
 
 /-!
 # The lead's named premises (trusted statements)
@@ -35,6 +37,8 @@ The device premises:
 * `SerialForwards` (`trusted-host` at the network certifier, with the verifier's refusal of overlapping forwards): the
   bits a forward's calls exchange are at most what the certifier counted for the forward, its release included.
 -/
+
+@[expose] public section
 
 namespace Pouw.Assumptions.Lead
 

@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.VStarParts
-import Proofs.Flock.Claims.Recursion.DeployReg
-import Proofs.Flock.VBridge.OpeningUnit
-import Proofs.Flock.VBridge.Sparse.Laid
-import Proofs.Flock.VBridge.Sparse.Unit
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarParts
+public import Proofs.Flock.Claims.Recursion.DeployReg
+public import Proofs.Flock.VBridge.OpeningUnit
+public import Proofs.Flock.VBridge.Sparse.Laid
+public import Proofs.Flock.VBridge.Sparse.Unit
 
 /-!
 # V*'s parts at the holo shape
@@ -58,6 +60,8 @@ lemma. Which template each part uses:
   `vstarPartsStaging_holo_deployRec`), the outer record parses at `parseOf relation readOfO` by definition, and
   `deployRec` at the layout's readers reads through them (`RecDeploy.readsThrough_deployRec`).
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 

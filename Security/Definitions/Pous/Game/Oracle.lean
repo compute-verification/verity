@@ -1,4 +1,6 @@
-import Definitions.Pous.Game.Prob
+module
+
+public import Definitions.Pous.Game.Prob
 
 /-!
 # The idealized computational model
@@ -14,6 +16,8 @@ rounds and at most `Q` queries in total, on every primitive: the problem stateme
 step is one round of parallel queries and work counts queries. `RoundBounded D q` bounds each round by `q` queries
 instead (the parallel-query model of depth-robust-graph proofs).
 -/
+
+@[expose] public section
 
 namespace Pous
 

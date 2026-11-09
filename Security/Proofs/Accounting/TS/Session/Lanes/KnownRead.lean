@@ -1,10 +1,12 @@
-import Proofs.Accounting.TS.Session.Lanes.KnownFields
-import Proofs.Flock.C3.Reps.ReadWhole
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
-import Proofs.Flock.Soundness.TmplReads
-import Proofs.Flock.VBridge.Unit
-import Proofs.Flock.Verifier.Registered
-import Flock.KnownRead
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.KnownFields
+public import Proofs.Flock.C3.Reps.ReadWhole
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+public import Proofs.Flock.Soundness.TmplReads
+public import Proofs.Flock.VBridge.Unit
+public import Proofs.Flock.Verifier.Registered
+public import Flock.KnownRead
 
 /-!
 # Every bit of a known port is on a wire of the unit, from flock-verify's check
@@ -32,6 +34,8 @@ beside the complete check). `readsOk` checks the input bits at columns every one
   circuit names each port once, and `admit`, `pub` and `o0` are its ports, known values' rows of 32, 1616 and 16 bits
   (`knownRows`' words), each bit on a wire of unit 0.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Lanes
 

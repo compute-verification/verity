@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.Opening
+module
+
+public import Proofs.Flock.Soundness.Refine.Opening
 
 /-!
 # Element seams over `K = GF(2^256)` (`Flock.Field`, `Flock.Ligerito`)
@@ -12,6 +14,8 @@ level 3's `ofLimbs`:
 * both equality tables are the model's `eqList`: `eqTable` over `F` (`eqTable_eqList`), `eqTableK` over `K`
   (`eqTableK_eqList`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

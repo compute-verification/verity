@@ -1,6 +1,8 @@
-import Mathlib.Data.FinEnum
-import Definitions.Core.Game
-import Definitions.Hash.Basic
+module
+
+public import Mathlib.Data.FinEnum
+public import Definitions.Core.Game
+public import Definitions.Hash.Basic
 
 /-!
 # The hash area's named assumption: keyed SHA-512 is a pseudorandom function
@@ -10,6 +12,8 @@ prefix of another, passes a test as a random function does, up to `ε_prf(t, Q)`
 statement that carries a bound from a model in which SHA-512's keyed outputs are uniform to the deployed SHA-512 takes
 it and adds its `ε_prf`.
 -/
+
+@[expose] public section
 
 namespace Hash.Assumptions
 

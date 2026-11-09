@@ -1,4 +1,8 @@
-import Proofs.Properties.CertifierNetwork.Encode
+module
+
+public import Proofs.Properties.CertifierNetwork.Encode
+
+@[expose] public section
 
 set_option maxRecDepth 20000
 

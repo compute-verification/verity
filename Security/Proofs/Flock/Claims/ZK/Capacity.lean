@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.CoinLayer
+module
+
+public import Proofs.Flock.Claims.ZK.CoinLayer
 
 /-!
 # Zero knowledge at the reference session on a class of statements
@@ -28,6 +30,8 @@ probabilities meets:
   same at the deployed masked record `zkDeployed`, with `TapeOKOn A` from the tables' tape read with fibers of one size
   on `A`, where `Flock.zk_deployZk_ref` asks `TapeOK`, which no tables with statements of every table count meet.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

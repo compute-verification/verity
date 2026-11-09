@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.FrameReal
-import Proofs.Flock.Claims.ZK.FrameSched
-import Proofs.Flock.Claims.ZK.FrameState
+module
+
+public import Proofs.Flock.Claims.ZK.FrameReal
+public import Proofs.Flock.Claims.ZK.FrameSched
+public import Proofs.Flock.Claims.ZK.FrameState
 
 /-!
 # The loop's frame state is the deployed frame's check's (`ProgChecks`)
@@ -14,6 +16,8 @@ of any device round, at the tape's draws and its scheduled round, leaves the sam
   releases a round, the check at an alike configuration `c'` of a scheduled round of alike frames `fs'` against itself
   releases one too, from the same state, its state the same but for `stopped`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

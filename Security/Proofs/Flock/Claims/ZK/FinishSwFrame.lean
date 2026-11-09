@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.FinishSwMk
-import Proofs.Flock.Claims.ZK.FrameTape
-import Flock.Firewall.Finish
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwMk
+public import Proofs.Flock.Claims.ZK.FrameTape
+public import Flock.Firewall.Finish
 
 /-!
 # `hmk` at the firewall's own request
@@ -18,6 +20,8 @@ tape (`LeanRelease.drawsAt`), and the session's tape has, at that rep, the pads 
   masked values are `q.vals[k]! + (Finish.padsOf q.draws).h[k]!`.
 * **`Masked.swSrcE_l0_frame`**: from `zp 64` to `h_ab` they are level 0's opening's values plus the request's pads.
 -/
+
+@[expose] public section
 
 /-- A request's pads are its draws' `h`. -/
 theorem Flock.Firewall.Finish.padsOf_h (d : _root_.Flock.Firewall.Frame.Draws) :

@@ -1,7 +1,11 @@
-import Properties.Pouw.PearlPlus.Witnesses
+module
+
+public import Properties.Pouw.PearlPlus.Witnesses
 
 /-! Rows 0 to 31 of the test noise's G, four to a kernel computation (`Witness.test_gram0` to `Witness.test_gram7`),
 checked one after another, so that a build holds one chunk's kernel state for the module at a time. -/
+
+@[expose] public section
 
 set_option Elab.async false
 

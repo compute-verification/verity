@@ -1,9 +1,11 @@
-import Definitions.Pouw.Guarantees.Deadline
-import Proofs.Pouw.Game
-import Proofs.Pouw.Prob
-import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
-import Proofs.Pouw.PearlC.ServedMixedRev1Gamma
-import Proofs.Pouw.PearlC.TTOutW1
+module
+
+public import Definitions.Pouw.Guarantees.Deadline
+public import Proofs.Pouw.Game
+public import Proofs.Pouw.Prob
+public import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
+public import Proofs.Pouw.PearlC.ServedMixedRev1Gamma
+public import Proofs.Pouw.PearlC.TTOutW1
 
 /-!
 # Proofs of the deadline's guarantees
@@ -19,6 +21,8 @@ sampled γ from the old reduction at that cost model (`Proofs.Pouw.PearlC.TTOutW
 The honest clock is stated once over `Adversaries`; at each game's `CostModel.adversaries` it unfolds, by `Iff.rfl`, to
 that game's own reading (`CostModel.honestClock_iff`, `PearlC.CostModel.honestClock_iff`).
 -/
+
+@[expose] public section
 
 namespace Pouw
 

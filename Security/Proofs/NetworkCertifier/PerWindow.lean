@@ -1,5 +1,7 @@
-import Proofs.NetworkCertifier.Schedule
-import Proofs.NetworkCertifier.Ingress
+module
+
+public import Proofs.NetworkCertifier.Schedule
+public import Proofs.NetworkCertifier.Ingress
 
 /-!
 # Per window: the blocks the accounting charges
@@ -14,6 +16,8 @@ and the jitter classes after the prefix. That code fixes the sequence: before bl
 each step's rows read only its own block's advice (`constantRate_rows_causal`), with the FIFO empty at the block's
 first bucket.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

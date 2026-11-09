@@ -1,6 +1,8 @@
-import Definitions.Pouw.Guarantees.Lead
-import Proofs.Pouw.Dimension.H100Proofs
-import Proofs.Hash.Bytes
+module
+
+public import Definitions.Pouw.Guarantees.Lead
+public import Proofs.Pouw.Dimension.H100Proofs
+public import Proofs.Hash.Bytes
 
 /-!
 # The lead's honest lemma
@@ -18,6 +20,8 @@ repeat, and its header puts one more compression on its value's (`blocks_leafMsg
 that runs `certCode` with the coins as its entropy. `Compose/Deployed.lean` has the honest lemma at the deployed
 instance (`honestL1w`) and the guarantee (`honest`).
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Compose
 

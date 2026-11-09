@@ -1,6 +1,8 @@
-import Definitions.Core.ProofSystem
-import Definitions.Claims.Recursion
-import Proofs.Flock.Claims.Prob
+module
+
+public import Definitions.Core.ProofSystem
+public import Definitions.Claims.Recursion
+public import Proofs.Flock.Claims.Prob
 
 /-!
 # Proof systems: the interface at the interaction model's forms
@@ -16,6 +18,8 @@ at terms an abort doesn't shrink (`ProofSystem.ksAbort_of_viewOnly`). At `B`'s t
 makes no calls, so `B`'s term at an aborting prover can be `0` where its plain prover's is not, and a prover that aborts
 exactly where `B` would find its collisions keeps its accepted runs.
 -/
+
+@[expose] public section
 
 namespace Verity
 

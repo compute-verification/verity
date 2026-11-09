@@ -1,6 +1,8 @@
-import Definitions.Pouw.Lead.Gap
-import Proofs.Pouw.Lead.PStar.Lanes
-import Proofs.Pouw.Lead.PStar.Stream
+module
+
+public import Definitions.Pouw.Lead.Gap
+public import Proofs.Pouw.Lead.PStar.Lanes
+public import Proofs.Pouw.Lead.PStar.Stream
 
 /-!
 # The coin lanes' guess, and tables against the committed tiles
@@ -9,6 +11,8 @@ import Proofs.Pouw.Lead.PStar.Stream
 of `2 · 128³`, so `65 / 2^21`. `table_le`: a memory fixed before the coins, or a coin stream of raw coins, holds a
 committed tile rarely: at most `tableGap` in words averaged over the coins.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.PStar
 

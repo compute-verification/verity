@@ -1,4 +1,6 @@
-import Definitions.Core.Fp32
+module
+
+public import Definitions.Core.Fp32
 
 /-!
 # The served y: Pearl-C's unscale (`PearlCUnscale_v1`)
@@ -16,6 +18,8 @@ the check, `PouwCheck.PearlPlus.Rule.yOf`). The committed y (`served_y`, y's rea
 torch's bias add (`BIAS`, `Bf16Add_v1`) comes after it and is not committed. α is `pearl_c.s5_stats`' of the rows' FP32
 words. The H200's stored y is this on every real cell of a served decode tile (`test_pouw_pearl_c_u.H200_Y`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

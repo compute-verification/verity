@@ -15,8 +15,14 @@ population, or of each stratum, first; the most is `k`, or each stratum's `k_s`,
 law no draw of which ends gives no counts, and the registration refuses it (`ends`, `NEVER_ENDS`), so one it passes
 has a draw that ends. O(members × strata × ranges), the descriptor's size, never the units'.
 -/
-import Flock.Net
-import SampledProofs.Draw
+module
+
+public import Flock.Net
+public import SampledProofs.Draw
+meta import Flock.Net
+meta import SampledProofs.Draw
+
+@[expose] public section
 
 namespace SampledProofs.LinkPoints
 

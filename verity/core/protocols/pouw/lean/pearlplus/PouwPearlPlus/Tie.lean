@@ -1,6 +1,8 @@
-import PouwPearlPlus.Tile
-import PouwPearlPlus.Load
-import Flock.WindowRecord
+module
+
+public import PouwPearlPlus.Tile
+public import PouwPearlPlus.Load
+public import Flock.WindowRecord
 
 /-!
 # The window record's tie (`verify_run.tie`, `verify_run.tie_entries`)
@@ -28,6 +30,10 @@ An entry that names no ``word_bits`` is at `registered.WORD_BITS` (16). The answ
 `weights` for a version-1 W; the first mismatch is Python's `ValueError`, in its words. Every JSON comparison is by a
 match (`Want.holds`).
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PouwCheck.PearlPlus
 

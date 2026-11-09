@@ -1,8 +1,10 @@
-import Proofs.Flock.C3.Compose.SparseEnds
-import Proofs.Flock.C3.Reps.IoCols
-import Proofs.Flock.C3.Opening.Session
-import Proofs.Flock.C3.PubRows.Shape
-import Proofs.Flock.Recursive.Loads
+module
+
+public import Proofs.Flock.C3.Compose.SparseEnds
+public import Proofs.Flock.C3.Reps.IoCols
+public import Proofs.Flock.C3.Opening.Session
+public import Proofs.Flock.C3.PubRows.Shape
+public import Proofs.Flock.Recursive.Loads
 
 /-!
 # RsRead's facts
@@ -28,6 +30,8 @@ pass (`sessStmt_of_accepted`, from `ChecksAccepted`), and at the checked family 
 (`sessStmt_checked`: the checked sessions carry the prover's inputs, `tagsFound_checked`); `rsRead_of_accepted`
 composes them, and `rsRead_checked` is it at the checked family.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

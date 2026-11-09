@@ -8,9 +8,16 @@ is never bound, and nor is a port the window's registered interface declares reg
 output `o1` as an opening's verdict: bound or left out, it is refused, and a file binding ports without the interface is
 refused.
 -/
-import Flock.Test.RegComplete
-import Flock.Test.RegCover
-import Flock.RegBound
+module
+
+public import Flock.Test.RegComplete
+public import Flock.Test.RegCover
+public import Flock.RegBound
+meta import Flock.Test.RegComplete
+meta import Flock.Test.RegCover
+meta import Flock.RegBound
+
+@[expose] public section
 
 namespace Flock.Test.RegBound
 

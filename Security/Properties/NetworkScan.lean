@@ -1,4 +1,6 @@
-import Properties.NetworkScan.Assumptions
+module
+
+public import Properties.NetworkScan.Assumptions
 
 /-!
 # The rows form's scan fits its layout: what `NetworkCheck.Period.scanOf`'s acceptance gives the sampled audit's scope
@@ -28,6 +30,8 @@ statement the deployment parses, and `ScopeMatches` that its scope check is its 
 
 `Proofs.Properties.NetworkScan` proves both (`scanFits`, and `scanScopeAcc` from it).
 -/
+
+@[expose] public section
 
 namespace Properties.NetworkScan
 

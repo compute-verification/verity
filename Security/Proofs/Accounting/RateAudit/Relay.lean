@@ -1,5 +1,7 @@
-import Mathlib
-import Proofs.Accounting.RateAudit.Audit
+module
+
+public import Mathlib
+public import Proofs.Accounting.RateAudit.Audit
 
 /-!
 # The rate audit with relayed tags: the proof
@@ -16,6 +18,8 @@ them whose contents the chip never queried under the stream:
 - otherwise at least `k − m` queried: `RateAudit`'s compression at `k − m` words (`card_compress_le`), which never
   reads the side sources.
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 

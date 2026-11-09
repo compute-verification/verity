@@ -1,6 +1,8 @@
-import Mathlib
-import Proofs.Accounting.Device
-import Proofs.Accounting.RateAudit.Partial
+module
+
+public import Mathlib
+public import Proofs.Accounting.Device
+public import Proofs.Accounting.RateAudit.Partial
 
 /-!
 # Proof that the rate audit with partial completion is a joint run's bandwidth guarantee, and its rebuild term in passes
@@ -15,6 +17,8 @@ In the device model W holds whenever the game's compute is charged to the accoun
 (`computeAdditive_of_othersWork`, `RealizesRate`'s `compute_le`), and `WorkHardness` holds for a game whose every
 completion costs a whole word (`workHardness_whole`), `RateAudit`'s all-or-nothing rebuild.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs
 

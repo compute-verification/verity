@@ -1,4 +1,6 @@
-import NciCheck.Desc
+module
+
+public import NciCheck.Desc
 
 /-!
 # The count of `(c, k)`-inference blocks
@@ -53,6 +55,8 @@ from the summaries), then θ entry by entry as `NciCheck.Desc` reads it (`theta-
 reaches, `block-root`, `block-input`: an input primitive, `block-duplicate`), then `gate-in-no-block`, then `gate-table`
 (a primitive a block Definition computes, with a member, that the table lacks).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Count
 

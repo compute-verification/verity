@@ -6,8 +6,12 @@ every slot's rows hold and the slots' inputs carry what Δ copies into them (`Hm
 block from the constants, the data bytes at `msgCol`, `HmRow.rowWires`' chain), the hm96 slot outputs the row's commit
 string (`row_commit`).
 -/
-import Flock.HmRow
-import Proofs.Flock.Soundness.Discharge.Hm.Commit
+module
+
+public import Flock.HmRow
+public import Proofs.Flock.Soundness.Discharge.Hm.Commit
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hm
 

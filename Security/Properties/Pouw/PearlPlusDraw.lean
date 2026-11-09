@@ -1,7 +1,9 @@
-import Definitions.Pouw.Game.Defs
-import Properties.SampledProofs.Draw
-import PouwPearlPlus
-import Mathlib.Algebra.BigOperators.Fin
+module
+
+public import Definitions.Pouw.Game.Defs
+public import Properties.SampledProofs.Draw
+public import PouwPearlPlus
+public import Mathlib.Algebra.BigOperators.Fin
 
 /-!
 # Pearl+'s run draw is `t` uniform work-weighted tickets (`PouwCheck.PearlPlus.draw`)
@@ -26,6 +28,8 @@ is that derivation in the random-oracle model. They add no named assumption: the
 bytes. The key is `derive(source, "verity/pouw/pearl-plus-run-draw/v1", {run})` on the run's commitment, fixed before
 the coin (`after-coin`).
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.PearlPlus
 

@@ -1,4 +1,6 @@
-import Properties.Pouw.Commit
+module
+
+public import Properties.Pouw.Commit
 
 /-!
 # Proofs of PoUW's commitment properties (`Properties.Pouw.Commit`)
@@ -8,6 +10,8 @@ port's definitions case by case, and the draws' shape from `Flock.Draw.uniform`'
 The binding statements from the frame's injectivity (its lengths are big-endian, so a frame parses back to its tag and
 parts) and, down an accepted coin's path, one step per hash: each pair of hashed messages is equal, or it is the collision.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Commit
 

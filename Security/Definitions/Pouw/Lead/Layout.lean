@@ -1,5 +1,7 @@
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Data.Rat.Cast.Order
+module
+
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Data.Rat.Cast.Order
 
 /-!
 # The lead's layout, coins and committed words (trusted definitions)
@@ -31,6 +33,8 @@ hiding L1 + (a).
   The words are integers. That the served 32-bit register holds each one exactly is the tags piece's exactness proof
   (`Proofs.Pouw.Lead.Tags`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Lead
 

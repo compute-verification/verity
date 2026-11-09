@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.Round1
-import Proofs.Flock.Claims.Complete.ZkTables.Round1
-import Proofs.Flock.Claims.ZK.Sent
+module
+
+public import Proofs.Flock.Claims.ZK.Round1
+public import Proofs.Flock.Claims.Complete.ZkTables.Round1
+public import Proofs.Flock.Claims.ZK.Sent
 
 /-!
 # Round `1` of the masked session: the pads trees by tree position
@@ -19,6 +21,8 @@ rep's pads leaf at tree position `p` commits `colPAt w b r p`. Here, at every co
 
 `treeEquiv` is irreducible here: unfolding it decides its `∃ e, …` over the tree's size.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

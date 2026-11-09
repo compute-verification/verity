@@ -1,6 +1,8 @@
-import Properties.CertifierNetwork
-import Definitions.NetworkCertifier
-import Mathlib.Data.Set.Card
+module
+
+public import Properties.CertifierNetwork
+public import Definitions.NetworkCertifier
+public import Mathlib.Data.Set.Card
 
 /-!
 # What an accepted run of the certifier device is
@@ -38,6 +40,8 @@ runs.
 count it gives, `EncardAcceptedObservationsLe`; `Proofs.NetworkCertifier.Causal` proves `ExpectedGridCausal` and the
 count over the first `m` windows, `EncardProgramRunsLeWindows`.
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check
