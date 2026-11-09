@@ -63,7 +63,7 @@ def arm_fn(arm: str, x: torch.Tensor, ws: list[tuple[torch.Tensor, torch.Tensor]
     """The arm's linear over every weight copy, or None where it doesn't apply to this M."""
     from verity_vllm.engine import int8_exact as E
     if arm == "exact":
-        def f():
+        def f() -> None:
             for w, sw in ws:
                 q, sa = E.quantize_rows(x)
                 E.dequantize(E.int_mm(q, w), sa, sw)
@@ -73,14 +73,14 @@ def arm_fn(arm: str, x: torch.Tensor, ws: list[tuple[torch.Tensor, torch.Tensor]
             triton_scaled_mm,
         )
 
-        def f():
+        def f() -> None:
             for w, sw in ws:
                 q, sa, _ = ops.scaled_int8_quant(x)
                 triton_scaled_mm(q, w.t(), sa, sw, torch.bfloat16)
     elif arm == "stock_cutlass":
         from vllm import _custom_ops as ops
 
-        def f():
+        def f() -> None:
             for w, sw in ws:
                 q, sa, _ = ops.scaled_int8_quant(x)
                 ops.cutlass_scaled_mm(q, w.t(), scale_a=sa, scale_b=sw, out_dtype=torch.bfloat16)
@@ -90,7 +90,7 @@ def arm_fn(arm: str, x: torch.Tensor, ws: list[tuple[torch.Tensor, torch.Tensor]
             return None
         X.quant_rows(x, xq, s)
 
-        def f():
+        def f() -> None:
             for w, sw in ws:
                 if arm == "cutlass_swap":
                     X.quant_rows(x, xq, s)
@@ -99,7 +99,7 @@ def arm_fn(arm: str, x: torch.Tensor, ws: list[tuple[torch.Tensor, torch.Tensor]
         m, k = x.shape
         cfg = X.pick(m, ws[0][0].shape[0], k) if arm == "fused" else X.default_cfg(m, ws[0][0].shape[0], k)
 
-        def f():
+        def f() -> None:
             for w, sw in ws:
                 X.quant_rows(x, xq, s)
                 X.scaled_mm(xq, s, w, sw, y, cfg, WORK)
@@ -111,7 +111,7 @@ def arm_fn(arm: str, x: torch.Tensor, ws: list[tuple[torch.Tensor, torch.Tensor]
         q0, s0, _ = ops.scaled_int8_quant(x)
         td = {"stock_mm": None, "stock_mm_notd": False, "stock_mm_td": True}.get(arm)
 
-        def f():
+        def f() -> None:
             for w, sw in ws:
                 if arm == "stock_quant":
                     ops.scaled_int8_quant(x)
@@ -122,7 +122,7 @@ def arm_fn(arm: str, x: torch.Tensor, ws: list[tuple[torch.Tensor, torch.Tensor]
         m, k = x.shape
         cfg = X.pick(m, ws[0][0].shape[0], k)
 
-        def f():
+        def f() -> None:
             for w, sw in ws:
                 if arm == "fused_quant":
                     X.quant_rows(x, xq, s)

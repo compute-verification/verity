@@ -90,15 +90,15 @@ def arm_fn(arm: str, xq: torch.Tensor, s: torch.Tensor, ws: list[tuple[torch.Ten
     m, k = xq.shape
     cfg = F.pick(m, ws[0][0].shape[0], k)
     if arm == "scaled_mm":
-        def f():
+        def f() -> None:
             for w, sw in ws:
                 F.scaled_mm(xq, s, w, sw, y, cfg, WORK)
     elif arm == "scaled_mm_zy":
-        def f():
+        def f() -> None:
             for (w, sw), zy in zip(ws, zys):
                 F.scaled_mm_zy(xq, s, w, sw, y, zy, rows, cfg, WORK)
     else:
-        def f():
+        def f() -> None:
             for w, sw in ws:
                 F.scaled_mm(xq, s, w, sw, y, cfg, WORK)
                 E.int_mm(xq, w)
