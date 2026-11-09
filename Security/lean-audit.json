@@ -307,7 +307,7 @@
   },
   "Population.Dataflow.FanOut": {
    "owner": "@proofs",
-   "why": "The fan-out F the bound is stated at: each unit's cone writes the egress of at most F charge units, which the public wiring alone determines; the honest witness meets it at the toy population (TheftServedTiedHonest)."
+   "why": "The fan-out F the bound is stated at: each unit's reach (coneEgress) holds the egress of at most F charge units, which the public wiring alone determines; the honest witness meets it at the toy population (TheftServedTiedHonest)."
   },
   "Pouw.NCP.Params.InstanceU": {
    "owner": "@compute-research",

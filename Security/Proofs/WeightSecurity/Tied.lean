@@ -10,9 +10,9 @@ release and so no view (`Served.Traced.view_counted`), so `TheftServedReq` at th
 theft, with the probability that the releases aren't isolated. A checked population has one honest run at each inputs
 (`determinate_of_checked`), whose values on the egress are the population's function (`outOf_eq`). Where a window's
 release is its trace's outputs and its trace holds its inputs, the trace and the honest run hold the same inputs, so
-they agree outside the cones of the trace's wrong units (`eq_off_cone`): the release changes only the charge units those
-cones reach, at most `F` per wrong unit (`Served.Traced.card_changed_counted`), and the run counted at its traces is
-isolated (`Served.Traced.isolated_counted`). So that probability is at most `ηe + ηa`.
+they agree outside the cones of the trace's incorrect proof blocks (`eq_off_cone`): the release changes only the charge
+units in their reaches, at most `F` per incorrect proof block (`Served.Traced.card_changed_counted`), and the run
+counted at its traces is isolated (`Served.Traced.isolated_counted`). So that probability is at most `ηe + ηa`.
 
 The witnesses are proved at the toy deployment as a population. -/
 
@@ -84,12 +84,12 @@ theorem view_counted [Fintype U] (P : Population.Dataflow U S) (f : P.Fns V)
     view Ou L r (l.map (counted P f)) n = view Ou L r (l.map toServed) n := by
   simp only [view, reply_counted]
 
-/-- **A tied and covered window changes at most `F` charge units per wrong unit of its trace.** The trace and the
-honest run at the window's inputs hold the same inputs, and the honest run makes every unit correct, so they agree
-outside the cones of the trace's wrong units (`eq_off_cone`). A changed charge unit has an egress slot in one of those
-cones, and each reaches at most `F` charge units. -/
-theorem card_changed_counted [Fintype U] [Fintype O] (P : Population.Dataflow U S) (h : P.Checked) (f : P.Fns V)
-    (eg : O × I → S) (inp : Θ → Q × Adv → S → V) (F : ℕ) (hF : P.FanOut eg F)
+/-- **A tied and covered window changes at most `F` charge units per incorrect proof block of its trace.** The trace
+and the honest run at the window's inputs hold the same inputs, and the honest run makes every proof block correct, so
+they agree outside the cones of the trace's incorrect proof blocks (`eq_off_cone`). A changed charge unit has an egress
+slot in one of those cones, and each block's reach holds at most `F` charge units. -/
+theorem card_changed_counted [Fintype U] [Fintype O] [Fintype I] (P : Population.Dataflow U S) (h : P.Checked)
+    (f : P.Fns V) (eg : O × I → S) (inp : Θ → Q × Adv → S → V) (F : ℕ) (hF : P.FanOut eg F)
     (Ou : Outsider R (Q × Adv) (Option ((O → I → V) × Tick)) Θ') (L : ℕ) (θ : Θ) (r : R)
     (l : List (Traced O (I → V) Tick Adv S V)) (ht : Tied eg L l) (hc : Covered P inp Ou L θ r l) (n : ℕ)
     (hn : n < count L (l.map toServed)) (w : Traced O (I → V) Tick Adv S V) (hw : l[n]? = some w)
@@ -102,7 +102,7 @@ theorem card_changed_counted [Fintype U] [Fintype O] (P : Population.Dataflow U 
     rw [List.getElem?_map, hw]
     rfl
   have hsub : changed (popServed P f eg inp) Ou L θ r (l.map (counted P f)) n ⊆
-      (P.wrong f w.trace).biUnion (P.reach eg) := by
+      (P.wrong f w.trace).biUnion (P.unitsInReach eg) := by
     intro o ho
     simp only [changed, hw', mem_filter, mem_univ, true_and] at ho
     rw [view_counted] at ho
@@ -120,18 +120,18 @@ theorem card_changed_counted [Fintype U] [Fintype O] (P : Population.Dataflow U 
         (fun t ht' => (hc n hn w hw ha t ht').trans (hin t ht').symm) subset_rfl
         (fun u hu => absurd (hcor u) (mem_filter.1 hu).2) hs)
     obtain ⟨u, hu, hui⟩ := P.mem_writesOf_down hmem
-    exact mem_biUnion.2 ⟨u, hu, mem_filter.2 ⟨mem_univ _, i, hui⟩⟩
+    exact mem_biUnion.2 ⟨u, hu, mem_filter.2 ⟨mem_univ _, i, mem_inter.2 ⟨mem_image_of_mem eg (mem_univ _), hui⟩⟩⟩
   calc (changed (popServed P f eg inp) Ou L θ r (l.map (counted P f)) n).card
-      ≤ ((P.wrong f w.trace).biUnion (P.reach eg)).card := card_le_card hsub
-    _ ≤ ∑ u ∈ P.wrong f w.trace, (P.reach eg u).card := card_biUnion_le
+      ≤ ((P.wrong f w.trace).biUnion (P.unitsInReach eg)).card := card_le_card hsub
+    _ ≤ ∑ u ∈ P.wrong f w.trace, (P.unitsInReach eg u).card := card_biUnion_le
     _ ≤ ∑ _u ∈ P.wrong f w.trace, F := sum_le_sum fun u _ => hF u
     _ = F * (P.wrong f w.trace).card := by rw [sum_const, smul_eq_mul, mul_comm]
 
-/-- **Tied and covered releases are isolated.** At a checked population whose units each reach at most `F` charge
-units, a run whose releases are their traces' outputs and whose traces hold the windows' inputs is, counted at its
-traces, `Served.Isolated` at `F`: each window accepted before the first rejection changes at most `F` charge units per
-wrong unit of its trace (`card_changed_counted`). -/
-theorem isolated_counted [Fintype U] [Fintype O] (P : Population.Dataflow U S) (h : P.Checked) (f : P.Fns V)
+/-- **Tied and covered releases are isolated.** At a checked population whose units' reaches each hold at most `F`
+charge units, a run whose releases are their traces' outputs and whose traces hold the windows' inputs is, counted at
+its traces, `Served.Isolated` at `F`: each window accepted before the first rejection changes at most `F` charge units
+per incorrect proof block of its trace (`card_changed_counted`). -/
+theorem isolated_counted [Fintype U] [Fintype O] [Fintype I] (P : Population.Dataflow U S) (h : P.Checked) (f : P.Fns V)
     (eg : O × I → S) (inp : Θ → Q × Adv → S → V) (F : ℕ) (hF : P.FanOut eg F)
     (Ou : Outsider R (Q × Adv) (Option ((O → I → V) × Tick)) Θ') (L : ℕ) (θ : Θ) (r : R)
     (l : List (Traced O (I → V) Tick Adv S V)) (ht : Tied eg L l) (hc : Covered P inp Ou L θ r l) :

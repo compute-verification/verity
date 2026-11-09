@@ -10,11 +10,12 @@ The served circuit is a population (`Population.Dataflow`) with unit functions `
 and a query served with an advice `x`, and egress slots `eg (o, i)`, by charge unit `o` and position `i` in its output.
 Its served function (`popServed`) is the population's function (`Population.Dataflow.outOf`) read unit by unit. A run
 records, of each window, what `Served` records and the trace the audit extracts from the window's commitments
-(`Served.Traced`): an assignment of the population, whose wrong units are the window's incorrect proof blocks.
+(`Served.Traced`): an assignment of the population, whose incorrect proof blocks (`Population.Dataflow.wrong`) are the
+window's.
 
-* `Population.Dataflow.FanOut P eg F`: each unit's cone writes the egress of at most `F` charge units (`reach`), so a
-  wrong unit changes at most `F` of them;
-* `Served.Traced.counted P f w`: the window's record with its trace's wrong units as its incorrect proof blocks, and
+* `Population.Dataflow.FanOut P eg F`: each proof block's reach (`coneEgress`) holds the egress of at most `F` charge
+  units (`unitsInReach`), so an incorrect proof block changes at most `F` of them;
+* `Served.Traced.counted P f w`: the window's record with its incorrect proof blocks counted at its trace, and
   `Served.Traced.countRun P f run` the run of such records, the run the audit's undetected bound is about;
 * `Served.Traced.Tied eg L l`: each accepted window that releases released its trace's values on the egress slots
   (the network certifier's egress tie: the released bytes are the trace's outputs);
@@ -22,8 +23,8 @@ records, of each window, what `Served` records and the trace the audit extracts 
   the inputs of the weights and of the outsider's query served with the window's advice (advice coverage: whatever
   else the prover chose is in the advice, which is charged).
 
-On a run where both hold, an accepted release differs from the served function's answer only on the charge units its
-trace's wrong units reach, so the run counted at its traces is `Served.Isolated` at `F`.
+On a run where both hold, an accepted release differs from the served function's answer only on the charge units in
+the reaches of its trace's incorrect proof blocks, so the run counted at its traces is `Served.Isolated` at `F`.
 -/
 
 @[expose] public section
@@ -41,14 +42,17 @@ noncomputable def outOf {V : Type} (f : P.Fns V) {O : Type} (eg : O → S) (a : 
     else a (eg o)
 
 open Classical in
-/-- **The charge units a unit reaches**: those with an egress slot `eg (o, i)` that a unit downstream of `u` writes.
-A wrong `u` changes no other's output. -/
-noncomputable def reach [Fintype U] {O I : Type} [Fintype O] (eg : O × I → S) (u : U) : Finset O :=
-  Finset.univ.filter fun o => ∃ i, eg (o, i) ∈ P.writesOf (P.down {u})
+/-- **The charge units in `u`'s reach**: those with an egress slot `eg (o, i)` in it (`coneEgress`, over the slots `eg`
+names). A wrong `u` changes no other's output. -/
+noncomputable def unitsInReach [Fintype U] {O I : Type} [Fintype O] [Fintype I] (eg : O × I → S) (u : U) : Finset O :=
+  Finset.univ.filter fun o => ∃ i, eg (o, i) ∈ P.coneEgress (Finset.univ.image eg) {u}
 
-/-- **Each unit reaches at most `F` charge units.** With each request's units writing only its own rows and no request
-reading another's, each unit reaches one: its own request. -/
-def FanOut [Fintype U] {O I : Type} [Fintype O] (eg : O × I → S) (F : ℕ) : Prop := ∀ u, (P.reach eg u).card ≤ F
+/-- **Each unit's reach holds at most `F` charge units.** With each request's units writing only its own rows and no
+request reading another's, each unit's holds one: its own request. A request whose cached prefix is another's rows is in
+the reach of the units that wrote them, so with requests as the charge units, `F` is then the most requests one
+request's rows reach: itself and every request that reads them, directly or through another's. -/
+def FanOut [Fintype U] {O I : Type} [Fintype O] [Fintype I] (eg : O × I → S) (F : ℕ) : Prop :=
+  ∀ u, (P.unitsInReach eg u).card ≤ F
 
 end Population.Dataflow
 
@@ -69,8 +73,8 @@ namespace Served.Traced
 
 variable {O I V Tick Adv S U R Q Θ Θ' : Type}
 
-/-- **The window counted at its trace**: its record, with its trace's wrong units under the population `P`'s unit
-functions `f` as its incorrect proof blocks. -/
+/-- **The window counted at its trace**: its record, with its incorrect proof blocks those of its trace under the
+population `P`'s unit functions `f`. -/
 noncomputable def counted [Fintype U] (P : Population.Dataflow U S) (f : P.Fns V) (w : Traced O (I → V) Tick Adv S V) :
     Served O (I → V) Tick Adv :=
   { w.toServed with incorrect := (P.wrong f w.trace).card }

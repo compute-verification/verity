@@ -36,7 +36,7 @@ leaves the weights `K` bits of min-entropy: `2^(B - K)`. `TheftServedHonest` is 
 `TheftServedMinEntropyHonest` the second's, and each has a nontrivial witness at the leaking toy deployment.
 
 `TheftServedTied` is `TheftServedReq` at a served circuit that is a checked population, its egress named by charge unit
-and each unit's cone reaching at most `F` charge units, its run recording each window's extracted trace
+and each unit's reach holding at most `F` charge units, its run recording each window's extracted trace
 (`Definitions.WeightSecurity.Tied`). The probability that the releases aren't isolated gives way to the failure
 probabilities of the two premises that make them so: the releases are their traces' outputs (`EgressTied`) and the
 traces hold the windows' inputs (`AdviceCovered`). Its witnesses `TheftServedTiedHonest` and
@@ -238,14 +238,14 @@ def TheftServedMinEntropyNontrivial : Prop :=
 open scoped ENNReal in
 /-- **Model weight security at a served population whose releases are tied to their traces.** `TheftServedReq` at a
 served circuit that is a checked population `P` with unit functions `f` and inputs `inp`, whose egress slot `eg (o, i)`
-is charge unit `o`'s output at position `i` and whose units' cones each reach at most `F` charge units
+is charge unit `o`'s output at position `i` and whose units' reaches each hold at most `F` charge units
 (`Population.Dataflow.FanOut`). The served function is the population's (`popServed`), and the run `run θ r` records each
 window's extracted trace (`Served.Traced`). The probability that the releases aren't isolated gives way to `ηe`, that a
 release isn't its trace's outputs (`EgressTied`), and `ηa`, that a trace holds inputs other than the weights', the
 query's and the advice's (`AdviceCovered`): where neither fails, an accepted release differs from the served function's
-answer only on the charge units its trace's wrong units reach, at most `F` each, since the trace and the honest run hold
-the same inputs and differ only in the wrong units' cones. The audit's `δ` is at the run counted at its traces
-(`Served.Traced.countRun`), whose incorrect proof blocks are each trace's wrong units. -/
+answer only on the charge units in the reaches of its trace's incorrect proof blocks, at most `F` each, since the trace
+and the honest run hold the same inputs and differ only in those blocks' cones. The audit's `δ` is at the run counted at
+its traces (`Served.Traced.countRun`), whose incorrect proof blocks are each trace's. -/
 def TheftServedTied : Prop :=
   ∀ {Ω R Θ Q Adv O I V Tick Θ' U S : Type} [Fintype Ω] [Fintype R] [Fintype Adv] [Inhabited Adv] [Fintype O]
     [DecidableEq O] [Fintype I] [DecidableEq I] [Fintype V] [Nonempty V] [Fintype Tick] [Inhabited Tick] [Fintype U]
