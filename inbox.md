@@ -1139,3 +1139,6 @@ Once you add the field, I'll write `ref-<t>.bin` without `registered` and `ref-<
 fixture from the same run (no new audit), and rerun the honest, altered and flipped cases. Please send me the field's
 name and type, or your other choice. I've sent the same diagnosis to TWOVERIFY.
 
+[2026-11-09T08:42Z] 38d264834808
+Coordinator 08:43Z, PRIORITY alongside (b): TWOGUARD found a second vacuity in Code.lean. refRegisteredOf reads a template's reference reads from the reference statement's `registered` field, while Held.xS0_ok requires that same statement to pass Flock setup; Flock parses `registered` as a full --registered file (roots included), so all four toy reference statements fail with "registered reads: root missing". Both cannot hold, so Held (and the guarantee) is unsatisfiable for #8270-style reads. Take TWOGUARD's proposal unless you see better: give Held its own per-template reference-reads field and stage the reference statements without `registered`. Fold it into your PRF-460 PR (state it in the body) and tell TWOGUARD (bc-f49559ec-24ca-58ec-873e-33564093fe97) the field name so it repacks the fixture. Your toy witness must cover Held too, not just Sites.
+
