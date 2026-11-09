@@ -22389,7 +22389,7 @@
    }
   },
   "Properties.Verity.Game": {
-   "digest": "94484846a0527babf3ceb993e6b07a07dbd2261c8280d431e01215b9f052678c",
+   "digest": "dc421c1fddf8338f4ad85aa43e3a1d69a0d8506a9bf40a1e68d3bfccd8d40ec8",
    "definitions": {
     "Verity.Accepts": "6c0663c3c95468dc13caa2e322143cfcb5ed525dca7ac3344068832b989b44fc",
     "Verity.CaseAccepts": "d574aee73191736a313149fad36c27733d05c003e2fa4edfabedc5b64a00d4ae",
@@ -22545,7 +22545,6 @@
     "Verity.play": "b187f6b62030777141ef88fafd554b2a3e447a027da49376df0d0d14feda91c2",
     "Verity.releases": "8869b0edf60abb125cfaa3d452dc6dafba8bc54a8d3d355ea88108b1972b476e",
     "Verity.requestThen": "b70d7a5e2bcc5092f4bee27d3538e501e3c1ae4f47c74d9bec8d615eecf9b496",
-    "Verity.sha512": "aac9eb889860f01a7e5881dc563b6d8c9f6a60eaffcd2c1696324596e2003275",
     "Verity.sha512Msg": "3fb17014d068a5ee9446e95057ecee922f7236ff6db8a8a8167135c2f044a07b",
     "Verity.subprotocols": "166b3e753488aa75de4e0365502275fa91b6a6ee7697a77723db7610f6bfe09b",
     "Verity.takeCoin": "5193fdb4beb57e000e16d5feab7919fb8585ac4950f6701c8eae9bd8102edc79",
@@ -22581,6 +22580,12 @@
     "Verity.Idle.vocab": "211657d5a4ff4b83bb32d19c5707396d5ce8c6fdf605bb880f54b1bb3ff5ca4c",
     "Verity.Idle.wipe": "b9a8631533e1d657520f239e0895202ded8108d1aad9aea210a31bd3ebf6c5a7",
     "Verity.Idle.world": "6518042e9261acab95d8699c13317744c700812b1e2cedcb2a2376552c600139"
+   }
+  },
+  "Properties.Verity.Sha512": {
+   "digest": "7d16db3d723f55257481c743ac5662bb56dfe5d47d661533802ebab9ce8e5b45",
+   "definitions": {
+    "Verity.sha512": "aac9eb889860f01a7e5881dc563b6d8c9f6a60eaffcd2c1696324596e2003275"
    }
   },
   "Properties.Verity.Soundness": {
