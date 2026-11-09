@@ -175,6 +175,57 @@ def test_every_fetching_package_has_a_pinned_bundle():
     assert not missing, f"Lake packages whose dependencies {audit.PIN} pins no bundle for: {missing}"
 
 
+#: a fresh pin of PKG's bundle: an audit of this tree bundles the dependencies its build left, then `--pin` pins that run's
+REPIN = ("research run --on auto --mem-gb 32 --project verity --source . --cwd clone -- bash -c 'python3 "
+         "tools/verity/lean/lean_audit.py --out \"$OUT/audit\" --export \"$OUT/lean-deps\" --package PKG', then "
+         "`python3 tools/verity/lean/lean_audit.py --pin RUN`")
+
+
+def unbundled(imports: dict[str, list[str]], listed: dict[str, dict[str, list[str]]], local: set[str]) -> list[str]:
+    """`FILE: MODULE (PACKAGE)` for each import of ``imports`` ({file: the modules it imports}) from a fetched package of
+    ``listed`` (a pin's `modules`) that its bundle doesn't hold built. A root the tree's own modules have (``local``) is the
+    tree's, whatever a fetched package's checkout has at its top."""
+    owner = {r: n for n, m in listed.items() for r in m["roots"] if r not in local}
+    built = {m for v in listed.values() for m in v["built"]}
+    return sorted(f"{f}: {m} ({owner[m.split('.')[0]]})" for f, ms in imports.items() for m in ms
+                  if m.split(".")[0] in owner and m not in built)
+
+
+def test_every_import_from_a_fetched_package_is_in_its_pinned_bundle():
+    """A bundle holds a fetched package outside Mathlib's cache built only as far as the tree imported it when it was
+    exported (Lake builds only what a build imports), and a node without a warm copy has the bundle alone: the Lean check's
+    module runner mounts it read-only, so an import beyond it is an error there, not a build. Each import of a package's
+    sources, and of those of the packages it requires by path, from such a package is one its pin lists built (`modules`,
+    from `lean_audit.py --export`). Direct imports suffice: Lake built each one's own imports with it."""
+    audit = _load("lean_audit", ROOT / "tools" / "verity" / "lean" / "lean_audit.py")
+    headers = _load("lean_headers", ROOT / "tools" / "verity" / "lean" / "headers.py")
+    pinned = json.loads((ROOT / audit.PIN).read_text())["deps"]
+    files = _lean_files()
+    local = {headers.components(r)[0] for p in lake_packages() for _, r in _module_roots(p)}
+    imports = {f: [headers.name(i.module) for i in h.imports] if (h := headers.header(_text(f))) else [] for f in files}
+    bad = []
+    for pkg in lake_packages():
+        if (k := audit.deps_key(pkg)) is None or k not in pinned:
+            continue
+        if "modules" not in pinned[k]:
+            bad.append(f"{_rel(pkg)}: its bundle {k[:12]} lists no modules")
+            continue
+        builds = {pkg, *(ROOT / d for d in audit.path_deps(_rel(pkg)))}
+        bad += [f"{_rel(pkg)}: {u}" for u in unbundled({_rel(f): ms for f, ms in imports.items() if files[f] in builds},
+                                                     pinned[k]["modules"], local)]
+    assert not bad, (f"imports that {audit.PIN}'s bundles don't hold built, which a node without a warm copy can't build; "
+                     f"re-pin each PACKAGE named: {REPIN}:\n  " + "\n  ".join(bad))
+
+
+def test_an_import_its_bundle_does_not_hold_built_is_named():
+    """`unbundled` on a toy pin: an import of a fetched package's module that isn't built is named with its package, also
+    of a package nothing was built of; a built one, a module of Mathlib's cache (no listed root) and a root the tree's own
+    modules have are not."""
+    listed = {"Arklib": {"roots": ["ArkLib"], "built": ["ArkLib.A"]}, "VCVio": {"roots": ["VCVio", "Proofs"], "built": []}}
+    imports = {"P/X.lean": ["ArkLib.A", "ArkLib.B", "Mathlib.Data.Nat", "Proofs.Y"], "P/Z.lean": ["VCVio.C"]}
+    assert unbundled(imports, listed, {"Proofs"}) == ["P/X.lean: ArkLib.B (Arklib)", "P/Z.lean: VCVio.C (VCVio)"]
+
+
 SECURITY = ROOT / "Security"
 PROOFS = SECURITY / "Proofs"
 
