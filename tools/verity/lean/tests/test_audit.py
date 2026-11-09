@@ -4967,10 +4967,10 @@ def test_the_sampled_recompile_follows_the_build_and_its_failure_fails_the_audit
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_a_planted_olean_among_the_restored_modules_fails_once_the_draw_takes_it(tmp_path, monkeypatch):
+def test_a_planted_olean_among_the_restored_modules_fails_once_it_is_sampled(tmp_path, monkeypatch):
     """An index entry of the node's artifact cache that names another version's `.olean`, digest and all, passes every
     check `stage` makes, and Lake restores it with the rest of the build, compiling nothing. Once the sampled recompile
-    draws it, it fails naming the module and the file; a draw that misses it passes, and leaves the build as it was. `P.M5`
+    takes it, it fails naming the module and the file; a sample that misses it passes, and leaves the build as it was. `P.M5`
     logs a warning, which keeps its source's path, so restored from another tree it is equal only as an object graph."""
     import random
     spec = importlib.util.spec_from_file_location("lean_audit_for_sampled", HERE.parent / "lean_audit.py")
@@ -5022,24 +5022,24 @@ def test_a_planted_olean_among_the_restored_modules_fails_once_the_draw_takes_it
     build = b / ".lake" / "build"
     before = {p: p.read_bytes() for p in build.rglob("*") if p.is_file()}
     mods = sorted(["P", *(f"P.M{i}" for i in range(10))])
-    draws = {s: random.Random(s).sample(mods, A.SAMPLE_MIN) for s in range(100)}
-    miss = next(s for s, d in draws.items() if "P.M2" not in d and "P.M5" in d)
-    hit = next(s for s, d in draws.items() if "P.M2" in d)
+    samples = {s: random.Random(s).sample(mods, A.SAMPLE_MIN) for s in range(100)}
+    miss = next(s for s, d in samples.items() if "P.M2" not in d and "P.M5" in d)
+    hit = next(s for s, d in samples.items() if "P.M2" in d)
 
     monkeypatch.setattr(A, "SAMPLE_RNG", random.Random(miss))
     fails, rep = A.sampled_recompile(b, ["P"], tmp_path / "w1", set(), [], log=lambda s: None)
-    assert fails == [] and rep["population"] == 11 and rep["modules"] == sorted(draws[miss]), rep
+    assert fails == [] and rep["population"] == 11 and rep["modules"] == sorted(samples[miss]), rep
     assert rep["by_graph"] == ["P.M5"]
     assert {p: p.read_bytes() for p in build.rglob("*") if p.is_file()} == before, "the build's outputs are put back"
 
     monkeypatch.setattr(A, "SAMPLE_RNG", random.Random(hit))
     fails, rep = A.sampled_recompile(b, ["P"], tmp_path / "w2", set(), [], log=lambda s: None)
-    assert rep["modules"] == sorted(draws[hit]) and [(x.code, x.entry) for x in fails] == [("sampled", "P.M2")], fails
+    assert rep["modules"] == sorted(samples[hit]) and [(x.code, x.entry) for x in fails] == [("sampled", "P.M2")], fails
     assert ".lake/build/lib/lean/P/M2.olean differs from what its source compiles to (olean differ)" in fails[0]
     assert (tmp_path / "w2" / "sampled" / "p" / "lib/lean/P/M2.olean").read_bytes() == before[lib / "P/M2.olean"]
 
     fails, rep = A.sampled_recompile(b, ["P"], tmp_path / "w3", set(mods), [], log=lambda s: None)
-    assert fails == [] and rep == {"population": 0, "modules": [], "seconds": rep["seconds"]}, "a module it compiled isn't drawn"
+    assert fails == [] and rep == {"population": 0, "modules": [], "seconds": rep["seconds"]}, "a module it compiled is never sampled"
 
 
 def test_a_guarantee_is_proved_by_exactly_one_package():
