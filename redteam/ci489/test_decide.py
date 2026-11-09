@@ -1,14 +1,21 @@
-"""`research.vqueue.decide` (ci's W3a) on crafted snapshots and in a small world that applies its actions as the loop does.
+"""`research.vqueue.decide` (ci's W3a) before core2, on crafted snapshots and in a small world that applies its actions as the
+loop does: the findings as they stood at f694fc7ec6 and 2fe8e8f19c (10 pass at 2fe8e8f19c; at f694fc7ec6 the two tests of
+the base_key extension skip). From core2 on (`Rerun`, top's red-main rule), `test_decide2.py` holds them, each marked fixed
+or open, and this file skips.
 
-Run against ci's branch: `VQRED_VQUEUE=<checkout of cursor/ci-vqueue-w3>/tools/research/src/research/vqueue.py pytest
-redteam/ci489/test_decide.py` (10 pass at 2fe8e8f19c, which has the base_key extension; at f694fc7ec6 the two tests of the
-extension skip). The world gives each candidate a verdict from a scripted oracle over the PRs its tree holds.
+    VQRED_VQUEUE=<checkout at 2fe8e8f19c>/tools/research/src/research/vqueue.py pytest redteam/ci489/test_decide.py
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _contract(vq):
+    if hasattr(vq, "Rerun"):
+        pytest.skip("core2 or later: test_decide2.py")
 
 MAIN = "m0"
 

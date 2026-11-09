@@ -131,25 +131,24 @@ def test_a_cached_fail_answers_a_retest_of_the_same_key_without_running(g2, db):
 
 # --- liveness ----------------------------------------------------------------------------------------------------------------
 
-def test_an_error_the_tree_causes_ends_infra_and_requeues_on_every_enqueue(g2, db):
-    """FINDING (liveness, blocks): an undeclared read is the runner's `error` (README rule 1), as are an untraced program, a
-    hang past timeout_s, an OOM kill and fixtures that don't fetch. graph2 retries an error on other slots and, after
-    `ATTEMPTS`, the verdict is `infra`; each enqueue reruns it (`requeued N`) with fresh attempts. Under ci's W3 an infra
-    verdict blames no PR and re-enqueues, so a PR that adds an undeclared read (a red today: suites.py's guard fails the
-    suite) holds its batch, and every candidate above it, forever. FIX: an error that repeats on a second slot, or whose detail
-    is the tree's (undeclared or untraced reads, timeouts on two slots), is a result that blames by inputs; W3 bisects a
-    candidate whose infra verdict repeats after one re-enqueue."""
+def test_an_undeclared_read_is_a_failure_and_every_exhausted_error_is_marked_the_trees(g2, db):
+    """FIXED at 40e08bd3556 (at ffa125a3756 an error a PR causes was infra forever): an undeclared read or a race is the
+    task's own fault, `faulted`, a failed entry W3 blames by inputs.
+    FINDING (innocent ejects, fix before the cut-over): an exhausted error is `tree: true` when it errored on two nodes, and
+    graph2 runs each retry on another node, so an outage's errors (a full disk, the CAS refusing an artifact, each a
+    different why) are as much the tree's as a PR's timeout; core3 bisects on `tree` and ejects lone members for them. FIX:
+    `tree` only when the same error repeated on two nodes on which other tasks passed in the meantime."""
     c, ev = db
     check = f"ready:{A}"
-    sid = listed(g2, c, ev, check, doc(g2, A, [{"id": "test-file:reads_undeclared.py"}]))
-    for cycle in range(2):
-        for slot in ("s1", "s2", "s3"):
-            assert end(g2, c, ev, sid, "test-file:reads_undeclared.py", "error", slot=slot,
-                       undeclared_reads=["src/y.py"], error="an undeclared read") in ("queued", "errored")
-        v = g2.verdict(c, check)
-        assert v["state"] == "infra" and v["failed"] == []
-        assert g2.request(c, check, 5) == "requeued 1"
-        assert g2.verdict(c, check)["state"] == "pending"
+    sid = listed(g2, c, ev, check, doc(g2, A, [{"id": "test-file:reads_undeclared.py"}, {"id": "test-file:t2.py"}]))
+    assert end(g2, c, ev, sid, "test-file:reads_undeclared.py", "error", undeclared_reads=["src/y.py"],
+               error="an undeclared read") == "faulted"
+    for slot, why in (("c4x0", "the CAS refused an artifact"), ("n2x0", "No space left on device"),
+                      ("c4x1", "the store timed out")):
+        end(g2, c, ev, sid, "test-file:t2.py", "error", slot=slot, error=why)
+    v = g2.verdict(c, check)
+    assert [(f["task"], f["tests"]) for f in v["failed"]] == [("test-file:reads_undeclared.py", [])]
+    assert [(f["task"], f["tree"]) for f in v["infra"]] == [("test-file:t2.py", True)]
 
 
 def test_a_listing_submit_refuses_wedges_the_check_in_listing(g2, db):

@@ -1,8 +1,8 @@
 """`research.vqueue_loop` (ci's W3b) with `research.vqueue.decide` (W3a) on ci's own harness: a throwaway origin, a fake
 GitHub, graph2 as files (`test_vqueue_loop.Env`).
 
-It runs inside ci's tests directory, whose conftest isolates the store and git: in a checkout of `cursor/ci-vqueue-loop` at
-7c2e6589f1 or later (which merges W3a's `decide`; at 32e8a92f5e, put `cursor/ci-vqueue-core`'s vqueue.py in place first),
+It runs inside ci's tests directory, whose conftest isolates the store and git: in a checkout of `cursor/ci-vqueue-w3` at
+3b9df5d6dc or later (earlier heads: `cursor/ci-vqueue-loop` at 7c2e6589f1, which merges W3a's `decide`),
 
     cp redteam/ci489/test_loop.py tools/research/tests/test_vqred_loop.py
     PYTHONPATH=tools/research/src:tools/research/tests pytest tools/research/tests/test_vqred_loop.py
@@ -84,16 +84,12 @@ def forge(env, like: str, parents: list[str], extra: dict[str, str]) -> str:
     return sha
 
 
-def test_a_queue_ref_the_loop_didnt_build_displaces_its_candidate_and_lands_what_no_pr_has(env):
-    """FINDING (soundness, fix before the cut-over): the loop takes every `queue/*` branch on origin as a candidate whose
-    first-parent commits parse as `Queue: #N` merges (`queue_commit` reads only the message's trailers: not that the second
-    parent is `Head`, nor the tree). A ref pushed by anyone (an agent, a stale clone, a test against the real origin) that
-    claims a better-ranked member displaces the loop's own candidate ("a second candidate on main"). Since 702a8b73ac the
-    loop enqueues it itself (a candidate the log holds no enqueue of is retried); before, it stalled the queue until anyone
-    enqueued `ready:<sha>` on the pod. Once its check passes, `main` fast-forwards to a tree holding a file no PR has.
-    FIX: adopt only candidates with the loop's own build record (sha, base, members, heads), else drop them; check that each
-    `Queue: #N` merge's second parent is its `Head` and its tree is `merge-tree`'s; a ruleset gives `refs/heads/queue/*` to
-    drive's App alone."""
+def test_a_queue_ref_the_loop_didnt_build_is_ignored_and_never_lands(env):
+    """FIXED at 3b9df5d6dc; a finding (soundness) at 702a8b73ac and before: the loop took every `queue/*` branch whose
+    first-parent commits parse as `Queue: #N` merges as a candidate, so a ref pushed by anyone that claimed a better-ranked
+    member displaced the loop's own candidate, was enqueued by the loop, and once its check passed `main` fast-forwarded to a
+    tree holding a file no PR has. Now a ref without the loop's own build record is logged `ignore`, and its own candidate
+    stays."""
     one = env.put(1, {"a.txt": "1\n"})
     env.put(2, {"b.txt": "2\n"})
     main = env.main()
@@ -101,23 +97,24 @@ def test_a_queue_ref_the_loop_didnt_build_displaces_its_candidate_and_lands_what
     (built,) = loop.tick()
     assert built["members"] == [1, 2]
     forged = forge(env, f"{built['sha']}^1", [main, one], {"evil.txt": "no PR adds this\n"})
-    acts = loop.tick()
-    assert ("drop", built["sha"]) in [(r["action"], r["sha"]) for r in acts]
-    assert [r["sha"] for r in acts if r["action"] == "build"] != [forged]
+    acts = [(r["action"], r["sha"]) for r in loop.tick()]
+    assert ("ignore", forged) in acts and ("drop", built["sha"]) not in acts
     keys = env.listed(forged, {"pytest:a": ["a.txt"]})
     env.result(keys["pytest:a"], "pytest:a", "pass")
-    assert "advance" in _acts(loop.tick())
-    assert env.main() == forged and "evil.txt" in _git(env.o.origin, "ls-tree", "--name-only", forged).split()
-    assert f"ready:{forged}" in [e["check"] for e in env.graph2.enqueued()]
+    for _ in range(3):
+        loop.tick()
+    assert env.main() != forged
+    assert f"ready:{forged}" not in [e["check"] for e in env.graph2.enqueued()]
 
 
 def test_a_failing_lean_agreement_task_doesnt_hold_a_candidate(env):
-    """FINDING (coverage, blocks the cut-over): the loop leaves out of the gate every task of a `drive.SLIM_STEPS` job
-    (lean-agreement, ratchet-gate), as drive's `executor = "on"` path does, but it doesn't start the slim train.sh run that
-    path judges them and the preflights by (`Driver._start_slim`/`_follow_slim`; nothing in vqueue_loop.py). So a candidate
-    whose lean-agreement task fails against upstream's Rust verifier advances, and `uv lock --check` and fixture fetchability
-    run nowhere before `main`. FIX: start the slim run at each candidate's sha and fold its steps into the verdict (pass only
-    when both pass), as ci's 07:08Z comment says; or list lean-agreement and the preflights as graph tasks that gate."""
+    """FINDING (coverage, blocks the cut-over; still open at 3b9df5d6dc, where W3b's slim run beside each candidate is due):
+    the loop leaves out of the gate every task of a `drive.SLIM_STEPS` job (lean-agreement, ratchet-gate), as drive's
+    `executor = "on"` path does, but it doesn't fold in the slim train.sh run that path judges them and the preflights by
+    (`Driver._start_slim`/`_follow_slim`). So a candidate whose lean-agreement task fails against upstream's Rust verifier
+    advances, and `uv lock --check`, fixture fetchability and the landing gates run nowhere before `main`. FIX: start the
+    slim run at each candidate's sha and fold its steps into the verdict (pass only when both pass); or list lean-agreement
+    and the preflights as graph tasks that gate. This test then fails: rewrite it as the regression check."""
     env.put(1, {"verity/ml/flock/verifier/check.py": "1\n"})
     loop = env.loop(decide)
     (built,) = loop.tick()
@@ -132,7 +129,7 @@ def test_a_failing_lean_agreement_task_doesnt_hold_a_candidate(env):
     env.result("sha512:a", "test-file:t/test_a.py", "pass")
     env.result("sha512:agree", "lean-agreement:verity/ml/flock/verifier", "fail")
     assert loop.world.verdict(sha).verdict.state == "pass"
-    assert _acts(loop.tick()) == ["advance", "drop"] and env.main() == sha
+    assert "advance" in _acts(loop.tick()) and env.main() == sha
 
 
 def test_a_result_label_anyone_writes_counts_as_the_tasks_pass(tmp_path):
