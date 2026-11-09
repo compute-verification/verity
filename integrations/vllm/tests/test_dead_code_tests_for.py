@@ -12,7 +12,7 @@ import pytest
 
 from tests import dead_code_census as census
 
-A, B, C = "verity_vllm.a", "verity_vllm.b", "verity_vllm.c"
+A, B, C = "lib.a", "lib.b", "lib.c"
 
 
 def plan(targets: dict[str, set[str]], helpers: dict[str, set[str]], deleted: set[str]) -> dict:
@@ -47,12 +47,12 @@ def test_a_test_that_reaches_nothing_stays():
 
 
 @pytest.mark.parametrize(("rel", "expected"), [
-    ("tests/x/test_seed_rule.py", "verity_vllm.x.seed_rule"),
-    ("tests/x/test_seed_rule_negative.py", "verity_vllm.x.seed_rule"),
+    ("tests/x/test_seed_rule.py", "lib.x.seed_rule"),
+    ("tests/x/test_seed_rule_negative.py", "lib.x.seed_rule"),
     ("tests/x/test_seed.py", None),
 ])
 def test_named_for_matches_the_module_a_file_is_named_after(rel, expected):
-    assert census.named_for(rel, {"verity_vllm.x.seed_rule", "verity_vllm.x.other"}) == expected
+    assert census.named_for(rel, {"lib.x.seed_rule", "lib.x.other"}) == expected
 
 
 @functools.lru_cache(maxsize=1)
@@ -94,7 +94,7 @@ def test_the_map_counts_only_library_modules():
 def test_an_item_that_names_no_library_module_is_refused():
     g, _, _ = _tree()
     with pytest.raises(SystemExit, match="names no module of verity_vllm"):
-        census.deleted_set(g, ["verity_vllm.no_such_module"])
+        census.deleted_set(g, ["verity_vllm/no_such_module.py"])
     m = "verity_vllm.pipeline.cli"
     assert census.deleted_set(g, [g.file_of[m]]) == {m}
     assert m in census.deleted_set(g, ["verity_vllm/pipeline/"])

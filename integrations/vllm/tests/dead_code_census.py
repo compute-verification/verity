@@ -32,9 +32,9 @@ modules import, other lanes' protected paths, next-candidate clusters), otherwis
 module, directly or through another deleted test (fixpoint); the harness dir never goes.  Artifacts: an unreferenced file (no tracked
 file of the whole repo names it or an ancestor directory) is deleted only inside ARTIFACT_DELETE_SCOPES, and never a `.sh`.
 
-TESTS FOR A SET (`--tests-for D`, the tests that go with a deletion): each test-tree file reaches the production modules it names
+TESTS FOR A SET (`--tests-for D`, the tests that go with a deletion): each test-tree file reaches the library modules it names
 itself (an import, a string naming a module or its path, a `verity-vllm` command's name in a file that runs the CLI) and those
-of the test-tree files it names (helpers, fixture modules), followed through them; never what a production module imports in
+of the test-tree files it names (helpers, fixture modules), followed through them; never what a library module imports in
 turn, so a test's targets are what it tests.  A test file whose every target is in D goes, one that reaches others too is
 edited to drop D's cases, and the rest stay; a helper goes when every test reaching it goes.  After deleting, collection
 passes and this census finds no new dead helper.
@@ -471,7 +471,7 @@ def artifact_plan(arts: dict[str, dict], deleted_files: set[str]) -> dict:
 
 # ---------------------------------------------------------------------------------------------------------------------------- tests of a set
 CLI_MODULE = "verity_vllm.pipeline.cli"
-#: a string that names a module, maybe with a name in it: "verity_vllm.pipeline.commit.TL", "verity_vllm.check.verdict:main"
+#: a string that names a module, maybe with a name in it (`module.attr`, `module:attr`)
 NAMED_RE = re.compile(rf"^((?:{_TOPS}|verity\.ml\.definitions)(?:\.[A-Za-z_][A-Za-z0-9_]*)+)(?::[A-Za-z_][A-Za-z0-9_.]*)?$")
 
 
