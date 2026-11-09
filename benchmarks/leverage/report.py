@@ -127,8 +127,9 @@ def growth(qs: list[int], bs: list[float]) -> tuple[str, dict]:
     fit["last_doubling"] = inc
     if fit["q0"] <= qs[-1] / 2 and inc <= 0.1 * max(abs(bs[-1]), 1e-9):
         return f"saturates: B_max {fit['b_max']:.3g} at Q_0 {fit['q0']:.3g}", fit
+    power = f", Q^{fit['exp']:.2f}" if math.isfinite(fit["exp"]) else ""
     sat = f", B_max {fit['b_max']:.3g} at Q_0 {fit['q0']:.3g}" if fit["q0"] <= 4 * qs[-1] else ""
-    return f"grows: +{inc:.3g} over the last doubling, Q^{fit['exp']:.2f}{sat}", fit
+    return f"grows: +{inc:.3g} over the last doubling{power}{sat}", fit
 
 
 def persist_config(s: dict) -> dict:
@@ -148,9 +149,29 @@ def checkpoint_qs(f: dict) -> list[int]:
     return sorted(int(k[1:]) for k in f if k[:1] == "q" and k[1:].isdigit())
 
 
+def tail_net(r: dict) -> float | None:
+    """The decoded set's tail score less its random-column control where that control is above zero."""
+    if r.get("tail_bits_w") is None:
+        return None
+    return r["tail_bits_w"] - max(r.get("tail_ctrl_w") or 0.0, 0.0)
+
+
+def lead(r: dict) -> float:
+    """The score a lead fault is chosen by: the tail score where the output has it, else the all-in top set."""
+    t = tail_net(r)
+    return t if t is not None else (r.get("net_bits_w") or 0.0)
+
+
+def with_ctrl(x, c) -> str:
+    if x is None or x == "-":
+        return "-"
+    return f"{x:.3g} ({c:.3g})" if isinstance(c, (int, float)) else f"{x:.3g}"
+
+
 def persist_tables(paths: list[Path], request_bits: float) -> str:
-    """Per output: the lead value fault's curve against Q (top-set net bits with its random-column control, the
-    pairwise scores with theirs), its growth, and recovered over charged bits; every-site outputs by site."""
+    """Per output: the lead value fault (the most tail-score bits at the largest Q, else the most all-in top-set bits)
+    with every score beside its random-column control, its growth against Q, and recovered over charged bits; the lead
+    fault's curve; every-site outputs by site."""
     rows, curves, sites_out = [], [], []
     for p in paths:
         s = json.loads(p.read_text())
@@ -160,74 +181,64 @@ def persist_tables(paths: list[Path], request_bits: float) -> str:
         label = f"{run}/{p.parent.name}"
         c = persist_config(s)
         fs = s["faults_detail"]
-        if s["mode"] == "decode":
-            vf = [f for f in fs if "net_bits_w" in f]
-            if not vf:
-                continue
-            f = max(vf, key=lambda f: f["net_bits_w"])
-            pz = max(vf, key=lambda f: f.get("pairz_bits_w") or f.get("pair_bits_w") or 0.0)
-            charged = c["requests"] * c["per_request_bits"]
-            top = max(f["net_bits_w"], pz.get("pairz_bits_w") or 0.0, pz.get("pair_bits_w") or 0.0)
-            rows.append([label, c["model"], "v", c["boxes"], c["where"], "decode", c["temp"], len(vf), c["requests"],
-                         f"{f['layer']}:{f['coord']} {f['kind']}", f["net_bits_w"], f["ctrl_bits_w"], "-",
-                         pz.get("pairz_bits_w", "-"), pz.get("pairz_bits_ctrl", "-"), pz.get("pair_bits_w", "-"),
-                         pz.get("pair_bits_ctrl", "-"), charged, f["net_bits_w"] / charged, top / charged,
-                         top / (c["requests"] * request_bits)])
-            continue
-        if len(c["sites"].split(",")) > 1:
+        if len(c["sites"].split(",")) > 1 and s["mode"] == "oracle":
             by = {}
             for f in fs:
-                key = f["site"]
-                score = f.get("net_bits_w") if f["site"] == "v" else f.get("split_net_u")
-                if score is not None and (key not in by or score > by[key][0]):
-                    by[key] = (score, f)
-            Q = c["requests"]
+                score = lead(f) if f["site"] == "v" else f.get("split_net_u")
+                if score is not None and (f["site"] not in by or score > by[f["site"]][0]):
+                    by[f["site"]] = (score, f)
+            charged = c["requests"] * c["per_request_bits"]
             for site, (score, f) in sorted(by.items(), key=lambda x: -x[1][0]):
-                charged = Q * c["per_request_bits"]
+                ctrl = (f.get("tail_ctrl_w", f.get("ctrl_bits_w")) if site == "v" else f.get("split_ctrl_u"))
                 sites_out.append([label, c["model"], c["boxes"], site, f"{f['layer']}:{f['coord']} {f['kind']}",
-                                  "top-set along w" if site == "v" else "split-half along u", score,
-                                  f.get("ctrl_bits_w") if site == "v" else f.get("split_ctrl_u"),
-                                  f["direct"] / max(f.get("reads", Q), 1), charged, score / charged])
+                                  ("tail" if "tail_bits_w" in f else "all-in") + " top set along w" if site == "v"
+                                  else "split-half top set along u", with_ctrl(score, ctrl),
+                                  f["direct"] / max(f.get("reads", c["requests"]), 1), charged, score / charged])
             continue
         vf = [f for f in fs if "net_bits_w" in f]
         if not vf:
             continue
-        f = max(vf, key=lambda f: f["net_bits_w"])
-        qs = checkpoint_qs(f)
-        nets = [f[f"q{q}"].get("net_bits_w", 0.0) for q in qs]
-        verdict, _ = growth(qs, nets)
-        Q = qs[-1]
-        charged = Q * c["per_request_bits"]
+        f = max(vf, key=lead)
         pz = max(vf, key=lambda f: f.get("pairz_bits_w") or 0.0)
         pi = max(vf, key=lambda f: f.get("pair_bits_w") or 0.0)
-        top = max(f["net_bits_w"], pz.get("pairz_bits_w") or 0.0, pi.get("pair_bits_w") or 0.0)
-        rows.append([label, c["model"], "v", c["boxes"], c["where"], c["cut"], c["temp"], len(vf), Q,
-                     f"{f['layer']}:{f['coord']} {f['kind']}", f["net_bits_w"], f["ctrl_bits_w"], verdict,
-                     pz.get("pairz_bits_w", "-"), pz.get("pairz_bits_ctrl", "-"), pi.get("pair_bits_w", "-"),
-                     pi.get("pair_bits_ctrl", "-"), charged, f["net_bits_w"] / charged, top / charged,
-                     top / (Q * request_bits)])
-        for q in qs:
-            r = f[f"q{q}"]
-            curves.append([label, q, r["direct"], r["decoded"], r.get("net_bits_w", 0.0), r.get("ctrl_bits_w", "-"),
-                           r.get("ctrl_max_w", "-"), r.get("pairz_bits_w", "-"), r.get("pairz_emp_w", "-"),
-                           r.get("pairz_bits_ctrl", "-"), r.get("pair_bits_w", "-"), r.get("pair_bits_ctrl", "-"),
-                           q * c["per_request_bits"], r.get("net_bits_w", 0.0) / (q * c["per_request_bits"])])
-    out = ["Recovered bits about one weight column per fault, the lead value fault of each output (the most top-set "
-           "net bits at the largest Q), and over the charged bits (Q requests times their output bits; 8k: Q "
-           f"requests of {request_bits:g} bits):\n\n" + table(
-               ["output", "model", "site", "boxes", "position", "cut", "temperature", "faults", "Q", "lead fault",
-                "top-set net", "its control", "growth", "pairwise vs null (best)", "its control",
-                "pairwise as independent (best)", "its control", "charged bits", "top-set / charged",
-                "largest score / charged", "largest score / charged (8k)"], rows)]
+        if s["mode"] == "decode":
+            Q, cut, verdict = c["requests"], f"decode {s['args'].get('new')} tokens", "-"
+        else:
+            qs = checkpoint_qs(f)
+            Q, cut = qs[-1], c["cut"]
+            verdict, _ = growth(qs, [lead(f[f"q{q}"]) for q in qs])
+            for q in qs:
+                r = f[f"q{q}"]
+                curves.append([label, q, r["direct"], r["decoded"],
+                               with_ctrl(tail_net(r), r.get("tail_ctrl_w")), r.get("tail_ctrl_max_w", "-"),
+                               with_ctrl(r.get("net_bits_w"), r.get("ctrl_bits_w")), r.get("ctrl_max_w", "-"),
+                               with_ctrl(r.get("pairz_bits_w"), r.get("pairz_bits_ctrl")), r.get("pairz_emp_w", "-"),
+                               with_ctrl(r.get("pair_bits_w"), r.get("pair_bits_ctrl")),
+                               q * c["per_request_bits"], lead(r) / (q * c["per_request_bits"])])
+        charged = Q * c["per_request_bits"]
+        largest = max(lead(f), f.get("net_bits_w") or 0.0, pz.get("pairz_bits_w") or 0.0, pi.get("pair_bits_w") or 0.0)
+        rows.append([label, c["model"], c["boxes"], c["where"], cut, c["temp"], len(vf), Q,
+                     f"{f['layer']}:{f['coord']} {f['kind']}", with_ctrl(tail_net(f), f.get("tail_ctrl_w")),
+                     with_ctrl(f["net_bits_w"], f.get("ctrl_bits_w")), verdict,
+                     with_ctrl(pz.get("pairz_bits_w"), pz.get("pairz_bits_ctrl")),
+                     with_ctrl(pi.get("pair_bits_w"), pi.get("pair_bits_ctrl")), charged, lead(f) / charged,
+                     largest / charged, largest / (Q * request_bits)])
+    out = ["Recovered bits about one weight column (value faults at the sink), each with its random-column control in "
+           "parentheses, and over the charged bits (Q requests times the bits each returns; 8k: Q requests of "
+           f"{request_bits:g} bits). Lead fault: the most tail bits at the largest Q.\n\n" + table(
+               ["output", "model", "boxes", "position", "cut", "temperature", "faults", "Q", "lead fault",
+                "tail net", "all-in net", "growth (lead score)", "pairwise vs null, best fault",
+                "pairwise as independent, best fault", "charged bits", "lead / charged", "largest / charged",
+                "largest / charged (8k)"], rows)]
     if curves:
-        out.append("The lead fault's curve:\n\n" + table(
-            ["output", "Q", "direct reads", "decoded tokens", "top-set net", "control mean", "control max",
-             "pairwise vs null", "same, counted", "its control", "pairwise as independent", "its control",
-             "charged bits", "top-set / charged"], curves))
+        out.append("The lead fault against Q:\n\n" + table(
+            ["output", "Q", "direct reads", "decoded tokens", "tail net (control)", "control max",
+             "all-in net (control)", "control max", "pairwise vs null (control)", "same, counted in draws",
+             "pairwise as independent (control)", "charged bits", "lead / charged"], curves))
     if sites_out:
         out.append("Every site at the sink (the best fault of each site; value faults scored along the weights' "
                    "column, other sites split-half along their fitted mean effect):\n\n" + table(
-                       ["output", "model", "boxes", "site", "best fault", "score", "bits", "its control",
+                       ["output", "model", "boxes", "site", "best fault", "score", "bits (control)",
                         "direct reads / Q", "charged bits", "bits / charged"], sites_out))
     return "\n\n".join(out)
 
