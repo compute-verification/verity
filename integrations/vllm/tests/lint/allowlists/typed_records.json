@@ -299,8 +299,6 @@
     {"file": "verity_vllm/pipeline/tp/rank_replay.py", "kind": "schema-literal", "symbol": "not_run", "detail": "verity-sweep/sampled-replay/v1"},
     {"file": "verity_vllm/pipeline/tp/rank_replay.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 18},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 27},
-    {"file": "verity_vllm/pipeline/tp/rejudge.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/tp-rejudge/v1"},
-    {"file": "verity_vllm/pipeline/tp/rejudge.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 15},
     {"file": "verity_vllm/pipeline/tp/relabel_build.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/build-relabel-guard/v1"},
     {"file": "verity_vllm/pipeline/tp/relabel_build.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 5},
     {"file": "verity_vllm/pipeline/tp/serving_rows.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/tp-serving-rows/v1"},
