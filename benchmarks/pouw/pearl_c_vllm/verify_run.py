@@ -49,7 +49,9 @@ the weights; a version-1 W that registers a ``pearl-b/`` value is refused (`V1_W
 With the window's class too (``window_class``, `served_passes.py verify --class`), the tied passes must be the class's fixed load
 (`held_to_load`: a pass a round of the class's outputs, each call's rows `window_class.PearlTables`'), or the run is
 refused before the coin in the class's own words (`off_load`); W's header names no class, so the verdict takes it as
-an input, and the tie names the class it held.
+an input, and the tie names the class it held. A run held to a class publishes its work in the grid form (`grid_work`):
+the class's structural credit less the give-up padded up to H1's window grid, at most the exact credit, which stays in
+the profile (``exact_work``) on the node.
 
 The prover may drop passes from its retention before the coin (`served_passes.py retain`: a pass its CPU replay didn't
 finish, or one left over a cap): the verdict is over the retained passes alone, each at its round, and the dropped ones
@@ -100,6 +102,8 @@ from __future__ import annotations
 
 import argparse
 import bisect
+import copy
+import dataclasses
 import hashlib
 import json
 import math
@@ -133,7 +137,7 @@ from verity.protocols.pouw.verifier.protocol import Matmul, Shape, Tile, tagged
 from verity.protocols.pouw.prover.schemes import pearl_c_u as PCU
 from verity.protocols.pouw.prover.schemes import pearl_c_work as PW
 from verity.protocols.pouw.prover.schemes.pearl_c import K_MIN, TILE
-from verity.protocols.pouw.verifier.window import LIVE_SCHEME
+from verity.protocols.pouw.verifier.window import LIVE_SCHEME, pad as grid_pad
 from verity.protocols.spot.device.challenger import LiveCommitment
 from verity.protocols.spot.verifier.one_stage import registered as G, registration as REG
 from verity.errors import ProtocolError
@@ -656,7 +660,8 @@ def credited_cells(scheme: Any, r: PW.UnitRecord) -> list[int]:
 
 
 def pass_macs(p: Pass) -> int:
-    """One pass's credited cells' MACs, each cell at its record's kept K (`credit_at_assumption`'s ``macs`` over it alone)."""
+    """One pass's credited cells' MACs, each cell at its record's kept K (`credit_at_assumption`'s ``macs`` over it alone;
+    over `whole_pass`, `structural_credit`'s)."""
     return sum(sum(credited_cells(p.scheme, r)) * r.k_kept for r in p.records)
 
 
@@ -683,6 +688,43 @@ def credit_at_assumption(passes: list[Pass], t: int, delta: Fraction, over: int 
     credited = (1 - rho) * max(macs - wrong, Fraction(0))
     return {"credited": math.floor(credited), "credited_tiles": tiles, "macs": macs, "rho": str(rho), "epsilon": str(eps),
             "over_cap_draws": over}
+
+
+#: the exact credit's fields the grid form replaces (`grid_work`), kept as the profile's ``exact_work``
+EXACT_WORK = ("credited", "credited_tiles", "macs")
+
+
+def whole(r: PW.UnitRecord) -> PW.UnitRecord:
+    """The record with no row excluded or given up: every real row of its call and every column of its weight, at its
+    kept width.  Under a class's fixed load (`held_to_load`) its real rows are the class's, and its shape and kept width
+    are its weight's (`clear_work.check_records`), so it holds nothing the retained values decide."""
+    return dataclasses.replace(r, excluded_a=(), excluded_b=(), voluntary_a=(), voluntary_b=())
+
+
+def whole_pass(p: Pass) -> Pass:
+    """The pass with each record `whole`."""
+    q = copy.copy(p)
+    q.records = [whole(r) for r in p.records]
+    return q
+
+
+def structural_credit(passes: list[Pass], t: int, delta: Fraction, over: int = 0) -> dict:
+    """`credit_at_assumption` over the passes with every record `whole`, at the same draws: the credit of the run that
+    excludes and gives up no row.  For passes held to a class's fixed load it is the class's and the model's, with the
+    draws' count, ``over`` and δ: protocol structure and the verdict's outputs, not the retained values."""
+    return credit_at_assumption([whole_pass(p) for p in passes], t, delta, over)
+
+
+def grid_work(structural: dict, exact: dict) -> dict:
+    """The work a run held to its class's fixed load publishes: the class's structural credit (`structural_credit`) less
+    the give-up, the credit the excluded and given-up rows took off it (``structural`` less ``exact``,
+    `credit_at_assumption`'s), padded up to H1's window grid (`window.pad` at `window.GRID_BITS`; none at 0), which
+    ``give_up`` names.  Its MACs and credited tiles are the structural ones.  So the published work reads the retained
+    values through one grid level alone, and its credit is at most the exact one, since the padded give-up is at least
+    the give-up: the bound a credit carries holds at any credit at or below the exact one."""
+    gave = max(structural["credited"] - exact["credited"], 0)
+    give_up = grid_pad(gave) if gave else 0
+    return {**structural, "credited": max(structural["credited"] - give_up, 0), "give_up": give_up}
 
 
 def rejected(reason: str, commit: str) -> dict:
@@ -714,14 +756,20 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     0), as ``--recorded``'s salt claims nothing.
 
     An accepted run's line names its credit (the protocol's output), the draw and the tie. How many exclusion tiles the
-    passes' given-up rows made, each replayed tile's id and the MACs the passes declare are the retained values' to
-    decide: the first two are the profile's (``exclusion_tiles``, ``tiles``) and ``verdicts``, which
-    `served_verdicts.publish` holds on the node, and the last is ``public.work.macs``.
+    passes' given-up rows made, each replayed tile's id, the MACs the passes declare and the exact credit are the
+    retained values' to decide: they are the profile's (``exclusion_tiles``, ``tiles``, ``exact_work``) and ``verdicts``,
+    which `served_verdicts.publish` holds on the node.
 
     ``window_class`` is the window's class, (slots, prompt ids, outputs), where the run is a window's (``window``): passes held
     to W whose rows by round aren't the class's fixed load are refused (`held_to_load`, `off_load`), before the coin, and
     the tie names the class it held (``"load"``). Without it the verdict holds the passes to no load, and its counts of
     passes, calls and tables are structure only where something else fixed the load.
+
+    Held to a class, the work the verdict publishes (``public.work``, and the line's credit) is in the grid form
+    (`grid_work`): the class's structural credit, MACs and credited tiles (`structural_credit`), the credit less the
+    give-up padded up to H1's window grid (``give_up``), so at most the exact credit. The exact one
+    (`credit_at_assumption`'s ``credited``, ``credited_tiles`` and ``macs``) is the profile's ``exact_work``, held on the
+    node. Without a class the structural credit is not defined, and ``public.work`` is the exact credit.
 
     ``paths`` are the passes the prover retained, pass i the served run's round ``rounds[i]`` (default i), the rounds
     ``dropped`` left out before the coin: they credit nothing, and W may register them (`tie`).  ``record`` is the
@@ -825,9 +873,10 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     bad = [f"pass {i} tile {t}: {r}" for i, t, good, r, over, _ in verdicts if not good and not (over and uncredited)]
     bad += [f"pass {i} tile {t}: the batch replay's verdict is not the scalar one's" for i, t, *_, same in verdicts if same is False]
     over_draws = sum(1 for v, d in zip(verdicts, picked, strict=True) if d and v[4])
-    credit = credit_at_assumption(passes, draws, delta, over_draws)
+    exact = credit_at_assumption(passes, draws, delta, over_draws)
+    credit = exact if cls is None else grid_work(structural_credit(passes, draws, delta, over_draws), exact)
     if test_instance:
-        credit["credited"] = 0
+        credit["credited"] = exact["credited"] = 0
     out.update(scheme=scheme.name, source=source.hex(), commitment=root.hex(), replay="batch" if fast else "scalar",
                verdicts=[{"pass": i, "tile": t, "ok": g or (over and uncredited), "reason": r}
                          for i, t, g, r, over, _ in verdicts])
@@ -840,7 +889,8 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
               **({"rounds": list(rounds), "dropped": list(dropped)} if rounds is not None else {})}
     profile = {"delta": str(delta), "draws": draws, "draw": "work-weighted, with replacement", "source": source.hex(),
                "source_from": out["draw"], "over_cap": over_cap, **({"test_instance": True} if test_instance else {}),
-               "exclusion_tiles": excluded, "tiles": [[i, t] for i, t, *_ in verdicts]}
+               "exclusion_tiles": excluded, "tiles": [[i, t] for i, t, *_ in verdicts],
+               **({} if cls is None else {"exact_work": {k: exact[k] for k in EXACT_WORK}})}
     ys = [r for p in passes for r in y_roots(p)]
     tie_clause = "" if tied is None else (f", tied to W {tied['record'][:16]} on its {tied['tables']} tables"
                                           + (f", {tied['weights']}" if "weights" in tied else "")
@@ -853,9 +903,9 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
         tie_clause += ", a test instance's, credited nothing"
     out.update(answer={"protocol": PROTOCOL, "verdict": "accept", "reason": None, "commitment": root.hex(), "public": public,
                        "profile": profile},
-               # the line names the credit, the protocol's output, and the draw; not how many exclusion tiles the passes'
-               # given-up rows made, nor the MACs the passes declare, which the retained values decide (`profile`,
-               # `public.work.macs`)
+               # the line names the credit, the protocol's output (in the grid form where a class is held), and the
+               # draw; not how many exclusion tiles the passes' given-up rows made, nor the MACs the passes declare,
+               # which the retained values decide (`profile`)
                line=(f"ACCEPT {PROTOCOL} {scheme.name}: {len(todo) - excluded} drawn tiles and the exclusion tiles over "
                      f"{len(passes)} passes, y committed and checked on {sum(r is not None for r in ys)} of {len(ys)} calls"
                      f"{tie_clause}; "

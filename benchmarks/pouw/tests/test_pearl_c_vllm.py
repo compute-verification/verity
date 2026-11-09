@@ -1429,6 +1429,14 @@ def test_served_passes_verify_credits_the_timed_call_its_passes_less_the_runs_wh
     assert few["credited"] < (1 - Fraction(few["rho"])) * warm and SP.timed_credit(served, few, published(a))["credited"] == 0
     assert SP.timed_credit({**served, "passes": [{**p, "timed": True} for p in served["passes"]]}, work, published(a)) == {
         "passes": 2, "macs": work["macs"], "credited": work["credited"]}
+    # in the grid form the warm-up pass's MACs are its whole records', so the timed credit is at most the exact one
+    passes = [VR.load(x, published(x)) for x in (a, b)]
+    grid = VR.grid_work(VR.structural_credit(passes, SP.DRAWS, Fraction(1, 100)), work)
+    whole = VR.pass_macs(VR.whole_pass(passes[0]))
+    timed = SP.timed_credit(served, grid, published(a))
+    assert whole > warm and VR.pass_macs(passes[0]) == warm and timed["macs"] == grid["macs"] - whole
+    assert timed["credited"] == grid["credited"] - math.ceil((1 - Fraction(grid["rho"])) * whole) <= got["credited"]
+    assert 0 < timed["credited"] and grid["credited"] <= work["credited"] and grid["give_up"] > 0
 
 
 def test_served_passes_verify_refuses_a_serve_that_retained_no_pass(tmp_path):
@@ -2163,9 +2171,12 @@ def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path):
     are the class's fixed load: a pass a round of the class's outputs, each retained or dropped, every call of round 0
     of slots x prompt rows and of a later round of slots, committed in rows padded to 16.  Here the class is 2 slots of 8
     prompt ids and 2 outputs: round 0's calls of 16 rows, round 1's of 2 in 16.  The tie then names the class, and so
-    does the line.  Passes of another load (a round short or over, the rounds in another order, a call of other rows or
-    of other committed rows) are refused before the coin, each in the same words, the class's alone (`off_load`), which
-    name no round, call or count of the passes'.  A class is read only beside the window record."""
+    does the line.  Its work is published in the grid form (`grid_work`: the class's structural credit less the give-up
+    on H1's window grid), the exact credit beside it as the profile's ``exact_work``, and the timed call's credit is in
+    that form too; without a class the work is the exact credit.  Passes of another load (a round short or over, the
+    rounds in another order, a call of other rows or of other committed rows) are refused before the coin, each in the
+    same words, the class's alone (`off_load`), which name no round, call or count of the passes'.  A class is read only
+    beside the window record."""
     cls = (2, 8, 2)
     a = proved_pass(tmp_path / "a", PROMOTED[0], (0, 1), load=(16, 16))[0]
     b = proved_pass(tmp_path / "b", PROMOTED[0], (2, 3), load=(2, 16))[0]
@@ -2179,8 +2190,19 @@ def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path):
     assert r["answer"]["verdict"] == "accept", r["line"]
     assert r["answer"]["public"]["tie"] == {"record": REG.digest(w), "tables": 10, "load": [2, 8, 2]} == r["tie"]
     assert "on its 10 tables, at its class's fixed load (2, 8, 2)" in r["line"]
+    # held to the class, the work is in the grid form and the exact credit is the profile's; a test instance's credits 0
+    passes = [VR.load(x, coins) for x in (a, b)]
+    work, kept = r["answer"]["public"]["work"], r["answer"]["profile"]["exact_work"]
+    exact = VR.credit_at_assumption(passes, 3, VR.DELTA, work["over_cap_draws"])
+    whole = VR.structural_credit(passes, 3, VR.DELTA, work["over_cap_draws"])
+    assert kept == {"credited": 0, "credited_tiles": exact["credited_tiles"], "macs": exact["macs"]}
+    assert whole["macs"] > exact["macs"] and whole["credited"] > exact["credited"] > 0
+    assert work == {**whole, "credited": 0, "give_up": Wd.pad(whole["credited"] - exact["credited"])}
+    assert VR.grid_work(whole, exact)["credited"] == whole["credited"] - work["give_up"] <= exact["credited"]
+    assert "; 0 MACs credited at ε " in r["line"]
     r = run([a, b])
     assert r["answer"]["verdict"] == "accept" and "load" not in r["tie"] and "fixed load" not in r["line"]
+    assert r["answer"]["public"]["work"] == {**exact, "credited": 0} and "exact_work" not in r["answer"]["profile"]
     for paths, kw in (([a], {"rounds": [0], "dropped": (1,)}), ([b], {"rounds": [1], "dropped": (0,)})):
         r = run(paths, window_class=cls, **kw)
         assert r["answer"]["verdict"] == "accept" and r["tie"]["load"] == [2, 8, 2], r["line"]
@@ -2205,9 +2227,14 @@ def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path):
     (wfile := tmp_path / "w.json").write_text(json.dumps(w))
     rc, doc, answer = served_verify(d, tmp_path / "verify.json", "--tie", str(wfile), "--class", "2,8,2")
     assert rc == 0 and doc["class"] == [2, 8, 2] and answer["public"]["tie"]["load"] == [2, 8, 2], doc["line"]
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    served = answer["public"]["work"]
+    assert served["give_up"] > 0 and (served["macs"], served["credited_tiles"]) == (whole["macs"], whole["credited_tiles"])
+    assert answer["profile"]["exact_work"] == kept and doc["timed"] == {"passes": 2, "macs": whole["macs"], "credited": 0}
+    assert (SP.python_answer(doc)["work"], SP.python_answer(doc)["exact_work"]) == (served, kept)
     rc, doc, answer = served_verify(d, tmp_path / "off.json", "--tie", str(wfile), "--class", "2,8,3")
     assert rc == 1 and answer["reason"] == f"ValueError: {VR.off_load((2, 8, 3))}" and doc["class"] == [2, 8, 3]
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    assert SP.python_answer(doc)["work"] is None and SP.python_answer(doc)["exact_work"] is None
     for argv in (["--class", "2,8,2"], ["--tie", str(wfile), "--class", "2,8"], ["--tie", str(wfile), "--class", "2,0,2"]):
         with pytest.raises(SystemExit):
             SP.main(["verify", "--passes", str(d), "--out", str(tmp_path / "no.json"), *argv])
@@ -2216,7 +2243,7 @@ def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path):
 
 
 def test_the_load_check_takes_the_run_of_records_shape():
-    """The class of record's run (r20261109-042638-614b: class 4, 32, 4 over Llama 3.2 1B's 64 cut linears) is its fixed
+    """The class of record's run (r20261106-165116-614b: class 4, 32, 4 over Llama 3.2 1B's 64 cut linears) is its fixed
     load, so the check accepts its shape: 64 calls a pass, round 0's of 4 x 32 = 128 rows in 128, each later round's of 4
     in 16 (`window_class.PearlTables`' ``rows`` and ``a_rows``), also with a round dropped; and no other."""
     NS = types.SimpleNamespace
@@ -2237,6 +2264,66 @@ def test_the_load_check_takes_the_run_of_records_shape():
     odd = passes(shape)
     odd[2].records[40].real_rows = 5
     assert not VR.held_to_load(cls, odd)
+
+
+def class_run(excluded: tuple[int, int, int, int] = (0, 0, 0, 0)) -> list:
+    """The records of class (4, 32, 4)'s fixed load on Llama 3.2 1B, as passes `credit_at_assumption` reads: sixteen
+    layers of four linears (k, n), q, k and v as one (2048, 3072), o (2048, 2048), gate and up as one (2048, 16384) and
+    down (8192, 2048), round 0's calls of 128 rows and each later round's of 4 in 16, on the served scheme.  Round 0's
+    first call of each of the four shapes excludes ``excluded``'s rows of that shape."""
+    shapes, scheme = [(2048, 3072), (2048, 2048), (2048, 16384), (8192, 2048)], PPD.scheme_of("pearl-c-h100-v1-h3")
+
+    def records(real: int, m: int, ex: tuple[int, ...]) -> list:
+        return [PW.UnitRecord(Matmul(c, Shape(m, *shapes[c % 4]), c), real, shapes[c % 4][0],
+                              tuple(range(ex[c] if c < 4 else 0))) for c in range(64)]
+    return [types.SimpleNamespace(scheme=scheme, records=records(real, m, ex))
+            for (real, m), ex in zip([(128, 128), (4, 16), (4, 16), (4, 16)], [excluded, *[(0, 0, 0, 0)] * 3])]
+
+
+def test_a_class_held_runs_work_is_its_structural_credit_less_the_give_up_on_the_grid():
+    """A run held to its class's fixed load publishes its work in the grid form (`grid_work`): the structural credit, MACs
+    and credited tiles (`structural_credit`: the credit with no row excluded or given up, the class's and the model's),
+    the credit less the give-up (structural less exact) padded up to H1's window grid (`window.pad`).  So it is at most
+    the exact credit, whatever the passes exclude, and two give-ups of one grid level publish one work.
+
+    The run of record's shape and credit (r20261106-165116-614b: class 4, 32, 4 on Llama 3.2 1B, 459 draws, none over
+    the inert-work bound): its published exact credit, 134,194,399,455 MACs of 135,895,449,600 declared, is this load's
+    with 19 rows excluded, 4 of an o, 4 of a gate-up and 11 of a down, and its grid form is 4,196,341 MACs less.  The
+    Lean holds the same numbers (`PouwPearlPlus/Grid.lean`'s guard)."""
+    t, d = 459, Fraction(1, 100)
+    of_record = class_run((0, 4, 4, 11))
+    assert VR.held_to_load((4, 32, 4), of_record)
+    exact, whole = VR.credit_at_assumption(of_record, t, d), VR.structural_credit(of_record, t, d)
+    assert (exact["credited"], exact["macs"]) == (134_194_399_455, 135_895_449_600)
+    assert whole == VR.credit_at_assumption(class_run(), t, d)
+    assert (whole["credited"], whole["macs"]) == (134_525_747_434, 136_230_993_920)
+    assert [r.excluded_a for r in of_record[0].records[:4]] == [(), (0, 1, 2, 3), (0, 1, 2, 3), tuple(range(11))]
+    work = VR.grid_work(whole, exact)
+    assert whole["credited"] - exact["credited"] == 331_347_979 and work["give_up"] == Wd.pad(331_347_979) == 335_544_320
+    assert work == {**whole, "credited": 134_190_203_114, "give_up": 335_544_320}
+    assert work["credited"] == whole["credited"] - work["give_up"] and exact["credited"] - work["credited"] == 4_196_341
+    assert set(work) - set(exact) == {"give_up"} and set(VR.EXACT_WORK) <= set(exact)
+
+    for ex in ((0, 0, 0, 0), (1, 0, 0, 0), (0, 0, 0, 1), (3, 5, 0, 2), (0, 4, 4, 10), (0, 4, 4, 12), (47, 47, 47, 47),
+               (128, 128, 128, 128)):
+        e = VR.credit_at_assumption(class_run(ex), t, d)
+        g, gave = VR.grid_work(whole, e), whole["credited"] - e["credited"]
+        assert gave >= 0 and g["give_up"] == (Wd.pad(gave) if gave else 0) and (not gave or Wd.on_grid(g["give_up"]))
+        assert g["credited"] == whole["credited"] - g["give_up"] <= e["credited"], ex
+        assert {k: g[k] for k in e if k != "credited"} == {k: whole[k] for k in e if k != "credited"}
+        assert VR.structural_credit(class_run(ex), t, d) == whole
+    assert VR.grid_work(whole, whole) == {**whole, "give_up": 0}
+    assert VR.grid_work(whole, VR.credit_at_assumption(class_run((0, 4, 4, 10)), t, d)) == work
+    assert VR.grid_work(whole, VR.credit_at_assumption(class_run((1, 0, 0, 0)), t, d)) != work
+
+    over = VR.structural_credit(of_record, t, d, 2)
+    assert over["epsilon"] == VR.credit_at_assumption(of_record, t, d, 2)["epsilon"] != whole["epsilon"]
+    assert over["over_cap_draws"] == 2 and over["credited"] < whole["credited"] and over["macs"] == whole["macs"]
+    # the form's own floor: a give-up padded past the structural credit credits nothing, never below zero
+    assert VR.grid_work({"credited": 17}, {"credited": 0}) == {"credited": 0, "give_up": 18}
+    assert VR.grid_work({"credited": 5}, {"credited": 7}) == {"credited": 5, "give_up": 0}
+    whole_record = VR.whole(PW.UnitRecord(Matmul(0, Shape(128, 2048, 2048), 0), 100, 2048, (3,), (5,), (70,), (9,)))
+    assert whole_record == PW.UnitRecord(Matmul(0, Shape(128, 2048, 2048), 0), 100, 2048)
 
 
 def test_a_tie_refuses_two_passes_that_commit_one_weight_under_two_roots(tmp_path):

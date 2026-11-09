@@ -94,7 +94,9 @@ session joined closed (``served.json``'s ``coins.reserved.period``); else the no
 `verify_run`'s "The coin record"), and replays ``--draws`` work-weighted tiles over all of them and
 each pass's exclusion tiles.  A tile that passes every check but its inert-work bound is credited nothing under
 ``--over-cap uncredited`` (the default, CMP-311 option A; the credit takes the draws on such tiles, X_O) and rejects the run
-under ``--over-cap reject``; the verdict records which (``over_cap``).  The run of record takes ``--over-cap uncredited``
+under ``--over-cap reject``; the verdict records which (``over_cap``).  Under ``--class`` the work an accept publishes
+is in the grid form (`verify_run.grid_work`: the class's structural credit less the give-up padded up to H1's window
+grid), and the exact credit is the profile's ``exact_work``.  The run of record takes ``--over-cap uncredited``
 and volunteers no row (``volunteer-needed`` says ``no``, so the pipelines run no ``volunteer``): a volunteered A row
 uncredits its whole band of 64 rows, and a B row its block of 64 columns (`pearl_c_work.UnitRecord.credited`), a third
 or more of an honest run's credit, where the over-cap tiles it would spare cost under half a percent.  The passes are
@@ -112,8 +114,8 @@ verifier's coin record it wrote (``DIR/coin.json``), which pins the Lean's sourc
 held the passes to with the class ``verify --class`` held them at, and, on a live session's coins, ``--of-record``, under which the Lean takes only a challenger draw
 (`lean_argv`, the one place the Lean's command line is written). It holds the Lean's printout to the Python's verdict on
 every field both give (`LEAN_HELD`: the verdict, its reason and refusal, the run's commitment and source, the over-cap
-rule, each opened tile's verdict, and an accepted run's work), and its ``tie`` to the Python's: the same W at the
-same class's load, or none on both. Where they agree it writes the Lean's answer to ``--out`` (`lean_answer`: the
+rule, each opened tile's verdict, an accepted run's work and, where a class is held, the exact credit its grid form
+replaces, ``exact_work``), and its ``tie`` to the Python's: the same W at the same class's load, or none on both. Where they agree it writes the Lean's answer to ``--out`` (`lean_answer`: the
 printout with W at ``tie``), the file `served_verdicts.pearlplus_of_record` reads; where they don't, or the Lean doesn't
 answer within ``--timeout`` seconds, it writes none and removes any there. Either way both verdicts, the Lean's command
 line and the executable's SHA-256 go to ``--check`` (default `LEAN_CHECK` beside ``--out``). Prints one line and exits
@@ -173,7 +175,7 @@ UNRETAINED = ("unretained", "the serve retained no pass (serve --no-retain), so 
 COIN, RETENTION = "coin.json", "retention.json"
 #: the fields of the Lean `PouwCheck.PearlPlus` printout `lean` holds to the Python's verdict, as its difftest does
 #: (`benchmarks/pouw/pearlplus_lean`'s ``answer``)
-LEAN_HELD = ("verdict", "reason", "refused", "commitment", "source", "over_cap", "verdicts", "work")
+LEAN_HELD = ("verdict", "reason", "refused", "commitment", "source", "over_cap", "verdicts", "work", "exact_work")
 #: `lean`'s record of both verdicts, beside its answer
 LEAN_CHECK = "pearlplus-lean-check.json"
 LEAN_SCHEMA = "verity-pouw/pearl-plus-lean-check/v1"
@@ -394,13 +396,17 @@ def timed_credit(served: dict, work: dict, coins, rounds: list[int] | None = Non
     """An accepted run's credit over the passes its timed call made (``served.json``'s ``timed``; a pass without the flag
     is timed), the work the timed call's wall bought: the run's credited MACs less the other retained passes' (``rounds``,
     default all) credited cells' MACs at (1 − ρ), rounded up, so all of the run's deduction for ε falls on the timed
-    passes.  A dropped pass is in neither."""
+    passes.  A dropped pass is in neither.  Where the work is in the grid form (`verify_run.grid_work`, a run held to its
+    class's fixed load, which names its ``give_up``), the other passes' MACs are their whole records'
+    (`verify_run.whole_pass`): the class's, and at least their credited cells', so the timed credit reads no more of the
+    retained values than the work does and is at most the exact one."""
     sys.path.insert(0, str(HERE))
     import verify_run as VR
 
     held = [p for p in served["passes"] if p["units"]]
     held = held if rounds is None else [held[s] for s in rounds]
-    warm = sum(VR.pass_macs(VR.load(Path(p["manifest"]), coins)) for p in held if not p.get("timed", True))
+    form = VR.whole_pass if "give_up" in work else (lambda p: p)
+    warm = sum(VR.pass_macs(form(VR.load(Path(p["manifest"]), coins))) for p in held if not p.get("timed", True))
     return {"passes": sum(1 for p in held if p.get("timed", True)), "macs": work["macs"] - warm,
             "credited": max(0, work["credited"] - math.ceil((1 - Fraction(work["rho"])) * warm))}
 
@@ -626,7 +632,7 @@ def python_answer(doc: dict) -> dict:
     return {"verdict": a["verdict"], "reason": a["reason"], "refused": doc.get("refused"),
             "commitment": doc.get("commitment"), "source": doc.get("source"), "over_cap": doc.get("over_cap"),
             "verdicts": doc.get("verdicts", []),
-            "work": (a.get("public") or {}).get("work")}
+            "work": (a.get("public") or {}).get("work"), "exact_work": (a.get("profile") or {}).get("exact_work")}
 
 
 def lean(args: argparse.Namespace) -> int:
