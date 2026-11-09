@@ -9,7 +9,6 @@
     {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "check <-> program"},
     {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "check <-> properties"},
     {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "commit <-> pipeline"},
-    {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "correspondence <-> program"},
     {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "correspondence <-> query"},
     {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "observe <-> program"},
     {"file": "verity_vllm/check/match/batch_decomp.py", "kind": "layer", "symbol": "<module>", "detail": "check.match.batch_decomp -> pipeline.gc_tuning"},
