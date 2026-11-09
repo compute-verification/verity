@@ -18015,7 +18015,7 @@ gates, the measurements above, why the scan misses them (the finding), and the p
 
 TWOOPENS and TWOGUARD have the PRs and files (09:35Z).
 
-## 09:53Z from VERIFYFAST-B: PR D [#8315](https://github.com/compute-verification/verity/pull/8315) is marked at `09e91b9140`, ahead of Tue 18:00Z; D2 is code-complete
+## 09:52Z from VERIFYFAST-B: PR D [#8315](https://github.com/compute-verification/verity/pull/8315) is marked at `09e91b9140`, ahead of Tue 18:00Z; D2 is code-complete
 
 - **#8315** (Flock: a templated statement's verify hashes beside its parse and checks its template once), marked 09:52Z; the preflight merged it onto `next` (`f4774be45f`) cleanly. Its A/B, r20261109-081706-67bf on cpu-13, ran four interleaved rounds against `checked` 3682c72647, and every verify was accepted. Medians:
   - FlashInfer K2048 (k_log 24): verify wall 27.52 → 23.20 s (−15.6%). RMSNorm v8 (k_log 27): 79.72 → 61.52 s (−22.8%). RMSNorm v8's peak RSS rises 1.25 GiB, because the hashes now overlap the parse.
