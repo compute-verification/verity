@@ -366,14 +366,15 @@ def _stale(c: Candidate, ready: dict[int, Ready], below: set[int]) -> str | None
 def _inherited(f: Failed) -> bool:
     """Whether the base fails ``f`` too, so no member is to blame: at the same key (graph2 keys a task by everything it reads,
     so no member touched it, and a fail stands), with its failing tests among the base's failing tests of it, or, for a task
-    failed by reading files outside its declared inputs (each of its tests `UNDECLARED`), when the base fails that task so too,
-    whatever files each names: a task that faults stays faulted, so nothing stale passes, and the base stays red on it until
-    its declarations land."""
+    failed by reading files outside its declared inputs (tests `UNDECLARED`), when the base fails that task so too, whatever
+    files each names, and every other test it fails (what its run failed beside the reads) is among the base's: a task that
+    faults stays faulted, so nothing stale passes, and the base stays red on it until its declarations land."""
     if f.base_key is not None and f.key == f.base_key:
         return True
     if not f.tests or f.base_tests is None:
         return False
-    return f.tests <= f.base_tests or (all(t.startswith(UNDECLARED) for t in f.tests)
+    rest = {t for t in f.tests if not t.startswith(UNDECLARED)}
+    return f.tests <= f.base_tests or (len(rest) < len(f.tests) and rest <= f.base_tests
                                        and any(t.startswith(UNDECLARED) for t in f.base_tests))
 
 

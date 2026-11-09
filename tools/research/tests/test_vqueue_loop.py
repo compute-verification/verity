@@ -553,7 +553,7 @@ def test_a_task_graph2_says_faulted_which_it_labels_no_result_for_fails_the_cand
     sha = built["sha"]
     keys = env.listed(sha, {"pytest:a": ["a.txt"], "pytest:b": ["b.txt"]}, reads={"pytest:b": "pytest:a"})
     assert loop.tick() == []
-    a, why = keys["pytest:a"], "read 1 file(s) outside its declared inputs: x.txt"
+    a, why = keys["pytest:a"], f"run r1 exit 0; error: {CLEAN}; read 1 file(s) outside its declared inputs: x.txt"
     said = {"state": FAIL, "failed": [{"task": "pytest:a", "key": a, "why": why}]}
     Path(f"{script}.verdict").write_text(json.dumps(said))
     assert [f.task for f in loop.world.verdict(sha).verdict.failed] == ["pytest:a"]
@@ -657,7 +657,7 @@ def test_a_fault_main_has_too_is_inherited_by_what_it_names_so_no_pr_touching_it
 
     def faulted(at: str, key: str, run: str, fault: str) -> None:
         Path(f"{script}.verdict.ready:{at}").write_text(json.dumps({"state": FAIL, "pending": 0, "failed": [
-            {"task": "pytest:t", "key": key, "tests": [], "why": f"run {run} exit 1; error: {{}}; {fault}"}]}))
+            {"task": "pytest:t", "key": key, "tests": [], "why": f"run {run} exit 1; error: {CLEAN}; {fault}"}]}))
 
     undeclared = "read 2 file(s) outside its declared inputs: x.txt, y.txt"
     faulted(main, "sha512:t0", "r20260101-000000-aaaa on n1", undeclared)
@@ -671,10 +671,69 @@ def test_a_fault_main_has_too_is_inherited_by_what_it_names_so_no_pr_touching_it
     faulted(sha, "sha512:t1", "r20260101-000001-bbbb on node-12", race)
     (f,) = loop.world.verdict(sha, main).verdict.failed
     assert f.tests == f.base_tests == {f"fault:{race}"}
-    assert L._fault_tests("run r20260101-000000-aaaa on n1: storing its artifacts: gone") == {
+    assert L._fault_tests("run r20260101-000000-aaaa on n1: storing its artifacts: gone", "sha512:t1") == {
         "fault:run: storing its artifacts: gone"}
     acts = loop.tick()
     assert "eject" not in _acts(acts) and "advance" in _acts(acts) and env.main() == sha
+
+
+#: a runner's detail of a clean run, as graph2 writes it in a faulted task's `why`
+CLEAN = '{"errors": 0, "exit": 0, "failed": 0, "passed": 28, "skipped": 0}'
+#: the guard's report on a run that started programs it can't trace, cut at graph2's 200 characters
+UNTRACED = ('{"error": "its tests started programs the read guard can\'t trace (g++, git): name the file under its suite\'s '
+            '`[tool.verity.tests] untraced`, which keys it on the suite\'s whole tree, or give the test a')
+
+
+@pytest.mark.parametrize(("theirs", "mine", "inherits"), [
+    (CLEAN, CLEAN, True),                                   # both runs clean: only their reads differ
+    (CLEAN, '{"errors": 1, "exit": -9, "failed": 0, "passed": 0, "skipped": 0}', False),   # killed beside the reads
+    ('{"errors": 1, "exit": 1, "failed": 1, "failed_tests": ["t.py::a"], "passed": 3, "skipped": 0}',
+     '{"errors": 1, "exit": 1, "failed": 1, "failed_tests": ["t.py::a"], "passed": 4, "skipped": 0}', True),  # main fails it too
+    ('{"errors": 1, "exit": 1, "failed": 1, "failed_tests": ["t.py::a"], "passed": 3, "skipped": 0}',
+     '{"errors": 1, "exit": 1, "failed": 1, "failed_tests": ["t.py::b"], "passed": 3, "skipped": 0}', False),  # a new failure
+    (UNTRACED, UNTRACED, True),                             # the same report, as far as graph2 keeps it
+    (CLEAN, '{"errors": 2, "exit": 1, "failed": 0, "failed_tests": ["t.py::a", "t.py::', False),  # its failures cut
+    (None, None, False),                                    # neither run's detail in the 300 characters graph2 keeps
+    ('{"error": "Fatal Python error: Segmentation fault"}', '{"error": "Fatal Python error: Segmentation fault"}', True),
+])
+def test_what_a_run_failed_beside_its_undeclared_reads_is_inherited_only_where_main_s_run_failed_it_too(env, theirs, mine,
+                                                                                                        inherits):
+    """A task that read files outside its declared inputs is graph2's fault whatever its run did, so the task-level rule
+    (`vqueue._inherited`) would take a crash or a new failing test beside the reads for `main`'s fault.  The runner's detail
+    in graph2's `why` keeps them: a clean run adds no test, a failing one its failing tests or its error, and a detail graph2
+    cut is a test of the candidate's key alone, which no base fails.  The verdict's `error`, when it gives one, is read
+    before the `why`."""
+    env.put(1, {"t.txt": "1\n"})
+    loop = env.loop(vqueue.decide)
+    script = env.graph2_script(loop)
+    (built,) = loop.tick()
+    sha, main = built["sha"], built["base"]
+    env.listed(main, {"pytest:t": ["t.txt"]}, keys={"pytest:t": "sha512:t0"})
+    env.listed(sha, {"pytest:t": ["t.txt"]}, keys={"pytest:t": "sha512:t1"})
+
+    def faulted(at: str, key: str, detail: str | None, paths: str = "x.txt, y.txt", apart: str | None = None) -> None:
+        reads = f"read 2 file(s) outside its declared inputs: {paths}"
+        why = f"run r20260101-000000-aaaa on n1 exit 1; error: {detail}; {reads}" if detail else f'b"]}}; {reads}'
+        entry = {"task": "pytest:t", "key": key, "tests": [], "why": why[-300:], **({"error": apart} if apart else {})}
+        Path(f"{script}.verdict.ready:{at}").write_text(json.dumps({"state": FAIL, "pending": 0, "failed": [entry]}))
+
+    faulted(main, "sha512:t0", theirs)
+    faulted(sha, "sha512:t1", mine)
+    (f,) = loop.world.verdict(sha, main).verdict.failed
+    assert {t for t in f.tests if t.startswith("undeclared:")} == {"undeclared:x.txt", "undeclared:y.txt"}
+    assert vqueue._inherited(f) is inherits, (f.tests, f.base_tests)
+    message = ("its tests started programs the read guard can't trace (g++, git): name the file under its suite's "
+               "`[tool.verity.tests] untraced`, which keys it on the suite's whole tree, or give the test an untraced mark")
+    detail = json.dumps({"error": message})
+    paths = ", ".join(f"integrations/vllm/verity_vllm/pipeline/{n * 'x'}.py" for n in (30, 40, 50))
+    for at, key in ((main, "sha512:t0"), (sha, "sha512:t1")):   # a `why` cut before its detail, which the verdict gives apart
+        faulted(at, key, detail[:200], paths)
+    (f,) = loop.world.verdict(sha, main).verdict.failed
+    assert not vqueue._inherited(f) and "fault:the run's detail graph2 cut, at sha512:t1" in f.tests
+    for at, key in ((main, "sha512:t0"), (sha, "sha512:t1")):
+        faulted(at, key, detail[:200], paths, apart=detail)
+    (f,) = loop.world.verdict(sha, main).verdict.failed
+    assert vqueue._inherited(f) and f"fault:{message}" in f.tests and f.tests == f.base_tests
 
 
 def test_each_tick_reads_the_labels_afresh_as_drive_reads_them(env):
