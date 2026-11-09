@@ -34,7 +34,7 @@ from typing import Any
 import numpy as np
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ZERO, add, and_reduce, compress_columns, const_bits, or_reduce, sub
+from verity.ml.circuits.boolean.forms import NOT, ZERO, add, and_reduce, compress_columns, const_bits, sub
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.refs import Coll, strided_view
@@ -183,11 +183,13 @@ DsaTopKDigitPick = EW.specialized("DsaTopKDigitPick", 1, ["M", "K", "TOPK"], _pi
 
 
 def _compare(S):
-    """`DsaTopKKeyCompare_v1`: (valid AND key == theta, valid AND key > theta), key = `DsaTopKKey_v2` of s, both off theta - key:
-    zero, or a borrow."""
+    """`DsaTopKKeyCompare_v1`: (valid AND key == theta, valid AND key > theta), key = `DsaTopKKey_v2` of s, both off theta + ~key
+    with no carry in (a carry in would put a gate of theta alone in every key's instance): its low word is all ones exactly when
+    key == theta, and it carries exactly when theta > key."""
     def build(C, s, valid, theta):
-        d, borrow = sub(C, list(theta), key(list(s)), 32)
-        return [[C.AND(valid[0], NOT(or_reduce(C, d))), C.AND(valid[0], borrow)]]
+        over = add(C, list(theta), [NOT(x) for x in key(list(s))], width=32, carry_out=True)
+        eq = and_reduce(C, over[:32])
+        return [[C.AND(valid[0], eq), C.AND(valid[0], NOT(over[32] ^ eq))]]
     return build
 
 
