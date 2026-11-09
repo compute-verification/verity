@@ -1,11 +1,12 @@
 """GLM-5.3's proof-block card (`glm53.py` over `glm53_blocks.json`): it names its census and the Build by id; every
 proof-block Definition is a planner candidate whose outputs fit a size class, its units one request's count times the
-requests, its work its own ANDs and a statement at most `cap` of it; each gap family says its rows, ANDs and why; the
-totals per token and per request are the Definitions' sums; the planner certifies a sample over the card's candidates; and
-`main` prints the totals and the gaps."""
+requests, its work its own ANDs and a statement at most `cap` of it; no served row is a gap; the totals per token and per
+request are the Definitions' sums; the planner certifies a sample over the card's candidates; and `main` prints the totals and
+each gap's rows, ANDs and why."""
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 
@@ -35,10 +36,8 @@ def test_every_definition_is_a_candidate_over_the_requests(requests):
         assert c.cap == min(2 ** (35 - d["k_log"]), 2 ** 20) and c.rows == tuple(d["rows"])
 
 
-def test_each_gap_family_says_its_rows_ands_and_why():
-    assert CARD["gaps"]
-    for g in CARD["gaps"].values():
-        assert g["definitions"] >= 1 and g["prefill"] + g["decode"] > 0 and g["ands"] > 0 and g["why"]
+def test_no_served_row_is_a_gap():
+    assert not CARD["gaps"], f"rows no cut fits a block: {sorted(CARD['gaps'])}; cut their family (its module's CUTS)"
 
 
 def test_the_totals_are_the_definitions_sums():
@@ -57,9 +56,12 @@ def test_the_planner_certifies_a_draw_over_the_card():
     assert 0 < b.free_compute <= sum(c.units * c.work for c in cs)
 
 
-def test_main_prints_the_totals_and_the_gaps(capsys, monkeypatch):
-    monkeypatch.setattr(sys, "argv", ["glm53.py", "--requests", "2"])
+def test_main_prints_the_totals_and_the_gaps(capsys, monkeypatch, tmp_path):
+    gap = {"definitions": 1, "prefill": 8, "decode": 248, "ands": 6898930176, "why": "its rows alone need a 2^28 block"}
+    card = tmp_path / "card.json"
+    card.write_text(json.dumps(CARD | {"gaps": {"TokenSelect_v1": gap}}))
+    monkeypatch.setattr(sys, "argv", ["glm53.py", "--card", str(card), "--requests", "2"])
     assert G.main() == 0
     out = capsys.readouterr().out
     assert CARD["source"] in out and "decode token" in out
-    assert all(f"gap {fam}:" in out for fam in CARD["gaps"])
+    assert "gap TokenSelect_v1: 1 Definitions, 8 prefill and 248 decode rows, 6.899e+09 ANDs; its rows alone need" in out
