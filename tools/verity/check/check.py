@@ -425,7 +425,7 @@ SLOTS_TIMEOUT_S = 60
 FULL_CHECK_S = 9000
 #: a lane's own test run, which no landing needs (a PR lands on review, and drive's full check decides what reaches `main`)
 LANE_RUN = ('`research run --on auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
-            'uv run tools/verity/check/suites.py --changed $(git rev-parse origin/main) --quick"`')
+            'uv run tools/verity/check/suites.py --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"`')
 #: what `--slots` runs on a machine as `python3 -`, after SLOT_SRC and LEAN_SRC: both `--status --json` documents as one object,
 #: each `{"error": ...}` when it can't be read there, and the seconds left until the machine's DEADLINE (null without one)
 SLOTS_PROGRAM = '''

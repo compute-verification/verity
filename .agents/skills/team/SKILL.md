@@ -24,8 +24,8 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 
   ~~~text
   research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py'  # --quick: no slow tests
-  research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'
-  research status RUN  # check back on a run; --wait only for one under 20 min
+  uv run python tools/verity/check/check.py --record --on auto --pool research  # the whole check, recorded (the testing skill)
+  research status RUN  # check back on a run; research run --wait only under 20 min
   ~~~
 
 - **No tool call blocks more than 20 minutes.** Every `--wait` stops there, cancels nothing and exits 79 naming the
@@ -56,12 +56,12 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   refusal (fix it with `research queue edit N --body-file F`). A new head needs a new mark and a new review unless
   its own diff, whitespace too, is unchanged (`git patch-id --verbatim`), as after merging `main`.
   `research queue status` says what each PR waits for and lists the PRs naming no issue. The mark admits a PR: the
-  sync's own merge onto `next` is the only check before it joins, so a conflict there keeps it out, as a `hold` label
-  does; a Markdown file over its cap only warns (trim it in your next PR). A PR from a fork, or by an author outside the
-  organization but for the team's Apps and Daniel, is refused at its mark and at admission.
-- Before marking, run the Lean check of the packages you touched and the suites your change touches, `research run --on
-  auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py
-  --changed $(git rev-parse origin/main) --quick"`, plus a suite's slow tier when you changed its core. Prefer small PRs.
+  sync's own merge onto `next` is the only check before it joins, so a conflict there or a `landing_gates` refusal
+  keeps it out, as a `hold` label does; a Markdown file over its cap only warns (trim it in your next PR). A PR from a
+  fork, or by an author outside the organization but for the team's Apps and Daniel, is refused at its mark and at
+  admission.
+- Before marking, run the Lean check of the packages you touched and the suites your change touches (the testing skill's
+  pre-mark run), plus a suite's slow tier when you changed its core. Prefer small PRs.
 - Drive stacks admitted PRs on `next`. Reviewers ci staffs, never the owner, record a verdict at
   the head (`research queue review N --land|--hold REASON --by LANE`); no other per-head grant exists. Drive
   fast-forwards `checked` (`land_into`) to the longest reviewed prefix whose merges are clean and whose `.py` files compile; each sync
@@ -73,7 +73,7 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   records regenerated for #N...`, and checks that commit, so `main` moves only to one whose records are the regenerated
   ones; a lock run that fails is a red like any other. A PR whose merge onto `checked` changes nothing drive.toml's
   `lowrisk_excludes` names (Lean, locks, Lake files, `verity/core/`, the soundness-path Python) lands on its ready mark alone,
-  with no verdict (the low-risk lane: up to `lowrisk_per_tick` a tick).
+  with no verdict (the low-risk lane).
 - One run checks `checked`'s tip after each landing (circuit-check is off the merge gate). A red's culprit, the one landing
   touching what its failure names (never bisected), is rung to fix it forward: mark a fix (its new head, or a PR whose
   body names it or says `fixes suite NAME`) in 30 min, or drive reverts it on `checked`, unless the red is ratchet-gate's

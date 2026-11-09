@@ -124,13 +124,13 @@ theorem Ex_pi_prod {D : Type} [Fintype D] [Nonempty D] (f : D → ℝ) :
 /-! ## What a wait collects -/
 
 /-- What one wait collects over the coin samples `rs`, from `acc` so far: `waitAcc`'s result. -/
-def waitRes {R : Type} (run : R → Trace) (k : ℕ) : List R → List Seen → List Seen
+def waitRes {R : Type} (run : R → Transcript) (k : ℕ) : List R → List Seen → List Seen
   | [], acc => acc
   | r :: rs, acc =>
     if k ≤ acc.length then acc
     else waitRes run k rs (if (run r).out = .acc then acc ++ [(run r).seen] else acc)
 
-theorem waitAcc_res {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) :
+theorem waitAcc_res {R : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) :
     ∀ (rs : List R) (acc : List Seen), ((waitAcc k rs acc).eval H run).1 = waitRes run k rs acc := by
   intro rs
   induction rs with
@@ -140,11 +140,11 @@ theorem waitAcc_res {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) :
     simp only [waitAcc, waitRes]
     split_ifs with h hacc
     · simp [RP.eval]
-    all_goals simp [RP.eval, ih, Trace.seen, hacc]
+    all_goals simp [RP.eval, ih, Transcript.seen, hacc]
 
 /-- **The coupling**: the wait collects `k` accepted runs and they satisfy `G` with probability at most that of `k`
 independent runs all accepting and satisfying `G`, over `ε^k`; from `acc` collected so far, with `n` still to come. -/
-theorem wait_couple {D : Type} [Fintype D] [Nonempty D] (run : D → Trace) (k : ℕ) (G : List Seen → Prop) :
+theorem wait_couple {D : Type} [Fintype D] [Nonempty D] (run : D → Transcript) (k : ℕ) (G : List Seen → Prop) :
     ∀ (K n : ℕ) (acc : List Seen), acc.length + n = k →
       Pr (fun d => (run d).out = .acc) ^ n *
           Pr (fun ρ : Fin K → D => k ≤ (waitRes run k ((List.finRange K).map ρ) acc).length ∧
@@ -243,7 +243,7 @@ theorem wait_couple {D : Type} [Fintype D] [Nonempty D] (run : D → Trace) (k :
 
 /-- A wait that collects fewer than `k` accepted runs saw fewer than `k` accepting samples:
 `(1/2)^k ≤ (1/2)^{#collected} · ∏_r (1/2 if r accepts, else 1)`. -/
-theorem waitRes_short {R : Type} (run : R → Trace) (k : ℕ) :
+theorem waitRes_short {R : Type} (run : R → Transcript) (k : ℕ) :
     ∀ (rs : List R) (acc : List Seen), acc.length ≤ k → (waitRes run k rs acc).length < k →
       (1 / 2 : ℝ) ^ k ≤
         (1 / 2) ^ acc.length * (rs.map fun r => if (run r).out = .acc then (1 / 2 : ℝ) else 1).prod
@@ -267,7 +267,7 @@ theorem waitRes_short {R : Type} (run : R → Trace) (k : ℕ) :
 
 /-- **Chernoff, by Markov on `2^{−#accepted}`**: a wait over `K` samples collects fewer than `k` accepted runs with
 probability at most `2^k·(1 − ε/2)^K`. -/
-theorem wait_short_le {D : Type} [Fintype D] [Nonempty D] (run : D → Trace) (k K : ℕ) :
+theorem wait_short_le {D : Type} [Fintype D] [Nonempty D] (run : D → Transcript) (k K : ℕ) :
     Pr (fun ρ : Fin K → D => (waitRes run k ((List.finRange K).map ρ) []).length < k) ≤
       2 ^ k * (1 - Pr (fun d => (run d).out = .acc) / 2) ^ K := by
   classical

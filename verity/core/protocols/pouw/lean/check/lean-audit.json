@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": ["PouwCheck", "PouwCheck.DifftestMain"],
  "exempt": {
   "PouwCheck.Main": "the pouw-check executable's entry point, one line; its command is Core.Protocol.main over PouwCheck.protocol, audited under PouwCheck",
@@ -29,7 +30,7 @@
     "PouwCheck.Json",
     "PouwCheck.Tile",
     "PouwWindow.Length",
-    "Identity.Domains"
+    "Identity.Domains.Pouw"
    ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
@@ -43,18 +44,18 @@
     "PouwWindow.Length",
     "PouwCheck.Inputs",
     "PouwCheck.WindowSalt",
-    "Identity.Domains"
+    "Identity.Domains.Pouw"
    ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
   "PouwCheck.Opening": {
-   "imports": ["PouwCheck.Inputs", "PouwCheck.Pass", "PouwWindow.Record", "PouwWindow.Side", "Identity.Domains"],
+   "imports": ["PouwCheck.Inputs", "PouwCheck.Pass", "PouwWindow.Record", "PouwWindow.Side", "Identity.Domains.Pouw"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
   "PouwCheck.Protocol": {
-   "imports": ["CoreProtocol.Cli", "PouwCheck.Check", "Identity.Domains"],
+   "imports": ["CoreProtocol.Cli", "PouwCheck.Check", "Identity.Domains.Pouw"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
@@ -66,13 +67,13 @@
     "PouwCheck.Inputs",
     "Spot.ChallengerRecord",
     "Spot.ChallengerSession",
-    "Identity.Domains"
+    "Identity.Domains.Pouw"
    ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
   "PouwCheck.WindowSalt": {
-   "imports": ["PouwCheck.Pass", "Identity.Domains"],
+   "imports": ["PouwCheck.Pass", "Identity.Domains.Pouw"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
@@ -95,7 +96,7 @@
     "Spot.ChallengerSession",
     "Spot.PyJson",
     "Spot.Registered",
-    "Identity.Domains"
+    "Identity.Domains.Pouw"
    ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"

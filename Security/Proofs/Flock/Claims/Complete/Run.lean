@@ -102,7 +102,7 @@ theorem stepWith_acc {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Pro
     (hP : ∀ j ≤ N, ∀ hist : List (Claims.Msg × Claims.Msg), hist.map Prod.snd = (List.range j).map resp →
       ((P.next x hist ω).eval H).1 = seq j)
     (hV : ∀ j < N, ((vnext ((List.range (j + 1)).map seq)).eval H).1 = .msg (resp j))
-    (hA : ((vnext ((List.range (N + 1)).map seq)).eval H).1 = .acc) (n : ℕ) (hn : N + 1 ≤ n) (t : Claims.Trace) :
+    (hA : ((vnext ((List.range (N + 1)).map seq)).eval H).1 = .acc) (n : ℕ) (hn : N + 1 ≤ n) (t : Claims.Transcript) :
     (Claims.stepWith H P x ω vnext n [] [] t).out = .acc := by
   suffices h : ∀ d j, j + d = N → ∀ n, d + 1 ≤ n → ∀ hist t, hist.map Prod.snd = (List.range j).map resp →
       (Claims.stepWith H P x ω vnext n hist ((List.range j).map seq) t).out = .acc from

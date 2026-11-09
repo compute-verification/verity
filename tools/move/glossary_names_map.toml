@@ -3,22 +3,6 @@
 # and restacks every head above it. Declarations keep their place in the locks' records: `rename.py --moves` prints the
 # renames that `check.py --update --moved` takes.
 #
-# - Trace and transcript, swapped back to the Glossary's words. Core's `Verity.Circuit.Transcript`, one run's value for
-#   every gate, is a trace, so it becomes `Verity.Circuit.Trace`. The claims layer's `Claims.Trace`, a run's messages,
-#   each party's oracle calls and the decision, is a transcript, so it becomes `Claims.Transcript`, and `Trace.seen`,
-#   its fields and `Claims.Recursion.abortTrace` follow. Both change in one move, so no namespace holds both meanings at
-#   once (`Accounting.PeriodRun.transcript`, the trace a node committed in the period, is `period_trace_map.toml`'s).
-#   Each word is renamed only in the files that use that name and no other `Transcript` or `Trace`, so
-#   `Flock.Transcript`, `Pouw.Transcript`, `Pouw.PearlC.Transcript`, `FlockComplete.Trace` and
-#   `Accounting.Remote.Held.Trace` keep theirs. The files fall in three groups:
-#   - the dotted names in the two declaring modules, the vocabulary guard's keys and `ZkStep`, which also opens
-#     `Flock.Transcript`;
-#   - `Transcript` where it names `Verity.Circuit.Transcript` (as `C.Transcript` and `Circuit.Transcript`), and in the
-#     two `TileCheck` modules, where `(τ : Transcript)` is `Pouw.PearlC.Transcript` ([keep]);
-#   - `Trace` where it names `Claims.Trace`.
-#   A module under `Population` is listed under `SampledProofs` too, its name after the Security areas move. A module in
-#   a namespace under `Claims` that means another `Transcript` must name it in full (`Flock.Transcript`), since
-#   `Claims.Transcript` comes before an opened name there.
 # - The size ratio. c·B/T₀ is a size ratio: the Glossary keeps "slowdown" for slowdown(𝒢, 𝒜, η). `Verity.slowdown`,
 #   which Theorem 3 reads, becomes `Verity.sizeRatio`. `Nci.slowdown`, the slowdown factor ρ, is another declaration and
 #   keeps its name, so the bare word is renamed only in the Core files that declare and read `Verity.slowdown`.
@@ -48,158 +32,6 @@
 "registeredBeforeDraw" = "registeredBeforeSample"
 "UnitFixed" = "BlockFixed"
 "unitFixed" = "blockFixed"
-
-# Trace and transcript.
-[[words_in]]
-files = [
-    "Security/Definitions/Core/Circuit.lean",
-    "Security/Definitions/Core/Interaction.lean",
-    "Security/Proofs/Flock/Claims/KS/ZkStep.lean",
-    "tests/test_lean_vocabulary.py",
-]
-words = { "Verity.Circuit.Transcript" = "Verity.Circuit.Trace", "Claims.Trace" = "Claims.Transcript" }
-
-[[words_in]]
-files = [
-    "Security/Definitions/Accounting/Actual.lean",
-    "Security/Definitions/Accounting/Confidence.lean",
-    "Security/Definitions/Accounting/Guarantees/Actual.lean",
-    "Security/Definitions/Accounting/Guarantees/JointLive.lean",
-    "Security/Definitions/Accounting/JointLive.lean",
-    "Security/Definitions/Accounting/JointPeriod.lean",
-    "Security/Definitions/Core/Blocks.lean",
-    "Security/Definitions/Core/Circuit.lean",
-    "Security/Definitions/Core/Expand.lean",
-    "Security/Definitions/Core/Formalism.lean",
-    "Security/Definitions/Core/Guarantees/Circuit.lean",
-    "Security/Definitions/Core/Guarantees/Expand.lean",
-    "Security/Definitions/Core/Guarantees/Formalism.lean",
-    "Security/Definitions/Core/Partition.lean",
-    "Security/Definitions/Nci/Assumptions.lean",
-    "Security/Definitions/Nci/Assumptions/Fmt.lean",
-    "Security/Definitions/Nci/Assumptions/Fmt2.lean",
-    "Security/Definitions/Nci/Assumptions/Info.lean",
-    "Security/Definitions/Nci/Assumptions/Ldl.lean",
-    "Security/Definitions/Nci/Guarantees.lean",
-    "Security/Definitions/Nci/Guarantees/Contained.lean",
-    "Security/Definitions/Nci/Guarantees/Fmt.lean",
-    "Security/Definitions/Nci/Guarantees/Fmt2.lean",
-    "Security/Definitions/Nci/Guarantees/Info.lean",
-    "Security/Definitions/Nci/Guarantees/Ldl.lean",
-    "Security/Definitions/Nci/Info.lean",
-    "Security/Definitions/Nci/Support.lean",
-    "Security/Definitions/Population/Partition.lean",
-    "Security/Definitions/SampledProofs/Partition.lean",
-    "Security/Definitions/Pouw/PearlC/TileCheck.lean",
-    "Security/Proofs/Accounting/Actual/Runtime.lean",
-    "Security/Proofs/Accounting/JointLive.lean",
-    "Security/Proofs/Core/Boolean.lean",
-    "Security/Proofs/Core/Circuit.lean",
-    "Security/Proofs/Core/Expand.lean",
-    "Security/Proofs/Core/Formalism.lean",
-    "Security/Proofs/Flock/Bridge/CircuitOf.lean",
-    "Security/Proofs/Flock/Claims/Scope/System.lean",
-    "Security/Proofs/Nci/Contained.lean",
-    "Security/Proofs/Nci/Fmt.lean",
-    "Security/Proofs/Nci/Fmt2.lean",
-    "Security/Proofs/Nci/Info.lean",
-    "Security/Proofs/Nci/Ldl.lean",
-    "Security/Proofs/Nci/Support.lean",
-    "Security/Proofs/Nci/Training.lean",
-    "Security/Proofs/Population/Instance.lean",
-    "Security/Proofs/SampledProofs/Instance.lean",
-    "Security/Proofs/Pouw/PearlC/Block4Sem.lean",
-    "Security/Proofs/Pouw/PearlC/Row4Words.lean",
-    "Security/Proofs/Pouw/PearlC/RowCircuit.lean",
-    "Security/Proofs/Pouw/PearlC/Tile4Circuit.lean",
-    "Security/Proofs/Pouw/PearlC/TileCheck.lean",
-    "Security/Proofs/Pouw/PearlC/TileCheck4.lean",
-    "Security/Proofs/Pouw/PearlC/TileCheck4Words.lean",
-    "Security/Proofs/Pouw/PearlC/TileCheck8.lean",
-    "Security/Proofs/Pouw/PearlC/TileCheck8Words.lean",
-    "Security/Proofs/Pouw/PearlC/TileCircuit.lean",
-    "Security/Proofs/Pouw/PearlC/TileProtocol.lean",
-    "Security/Proofs/Pouw/PearlC/TileValues.lean",
-    "Security/Proofs/Pouw/PearlC/WholeCircuit.lean",
-]
-words = { "Transcript" = "Trace" }
-
-[[words_in]]
-files = [
-    "Security/Definitions/Claims/Recursion.lean",
-    "Security/Definitions/Claims/Sampling.lean",
-    "Security/Definitions/Core/Interaction.lean",
-    "Security/Proofs/Flock/Claims/Bridge/Committed.lean",
-    "Security/Proofs/Flock/Claims/Bridge/Hm96Tree.lean",
-    "Security/Proofs/Flock/Claims/Bridge/OfGame.lean",
-    "Security/Proofs/Flock/Claims/Complete/Run.lean",
-    "Security/Proofs/Flock/Claims/Complete/ZkTables/Ready.lean",
-    "Security/Proofs/Flock/Claims/DeployE.lean",
-    "Security/Proofs/Flock/Claims/ERep.lean",
-    "Security/Proofs/Flock/Claims/ERepCost.lean",
-    "Security/Proofs/Flock/Claims/Finder.lean",
-    "Security/Proofs/Flock/Claims/KS/ConflictRun.lean",
-    "Security/Proofs/Flock/Claims/KS/PlainLock.lean",
-    "Security/Proofs/Flock/Claims/KS/PlainRConflict.lean",
-    "Security/Proofs/Flock/Claims/KS/Range.lean",
-    "Security/Proofs/Flock/Claims/KS/Wait.lean",
-    "Security/Proofs/Flock/Claims/KS/Width.lean",
-    "Security/Proofs/Flock/Claims/KS/ZkAbortJR.lean",
-    "Security/Proofs/Flock/Claims/KS/ZkAbortR.lean",
-    "Security/Proofs/Flock/Claims/KS/ZkLock.lean",
-    "Security/Proofs/Flock/Claims/Recursion/Abort.lean",
-    "Security/Proofs/Flock/Claims/Recursion/AbortFork.lean",
-    "Security/Proofs/Flock/Claims/Recursion/AbortWait.lean",
-    "Security/Proofs/Flock/Claims/Recursion/BoundBridge.lean",
-    "Security/Proofs/Flock/Claims/Recursion/BoundMerged.lean",
-    "Security/Proofs/Flock/Claims/Recursion/BoundRoute.lean",
-    "Security/Proofs/Flock/Claims/Recursion/BoundRouteCols.lean",
-    "Security/Proofs/Flock/Claims/Recursion/BoundRun.lean",
-    "Security/Proofs/Flock/Claims/Recursion/Compose.lean",
-    "Security/Proofs/Flock/Claims/Recursion/Cost.lean",
-    "Security/Proofs/Flock/Claims/Recursion/CostExp.lean",
-    "Security/Proofs/Flock/Claims/Recursion/DeployChecked.lean",
-    "Security/Proofs/Flock/Claims/Recursion/DeployFacts.lean",
-    "Security/Proofs/Flock/Claims/Recursion/DeployHonest.lean",
-    "Security/Proofs/Flock/Claims/Recursion/DeployPremises.lean",
-    "Security/Proofs/Flock/Claims/Recursion/DeployScopeRuns.lean",
-    "Security/Proofs/Flock/Claims/Recursion/DeploySessions.lean",
-    "Security/Proofs/Flock/Claims/Recursion/Finders.lean",
-    "Security/Proofs/Flock/Claims/Recursion/FlockAbort.lean",
-    "Security/Proofs/Flock/Claims/Recursion/FlockKSAbort.lean",
-    "Security/Proofs/Flock/Claims/Recursion/FlockKSLin.lean",
-    "Security/Proofs/Flock/Claims/Recursion/Gap.lean",
-    "Security/Proofs/Flock/Claims/Recursion/Inner.lean",
-    "Security/Proofs/Flock/Claims/Recursion/InnerAbort.lean",
-    "Security/Proofs/Flock/Claims/Recursion/InnerAccepts.lean",
-    "Security/Proofs/Flock/Claims/Recursion/KS.lean",
-    "Security/Proofs/Flock/Claims/Recursion/KSLin2.lean",
-    "Security/Proofs/Flock/Claims/Recursion/OuterKS.lean",
-    "Security/Proofs/Flock/Claims/Recursion/PlainKSAbortFails.lean",
-    "Security/Proofs/Flock/Claims/Recursion/Serve.lean",
-    "Security/Proofs/Flock/Claims/Recursion/Transport.lean",
-    "Security/Proofs/Flock/Claims/Recursion/VStar.lean",
-    "Security/Proofs/Flock/Claims/Recursion/VStarCross.lean",
-    "Security/Proofs/Flock/Claims/Recursion/Wald.lean",
-    "Security/Proofs/Flock/Claims/Sampling/Bext.lean",
-    "Security/Proofs/Flock/Claims/Sampling/Cost.lean",
-    "Security/Proofs/Flock/Claims/Sampling/Extract.lean",
-    "Security/Proofs/Flock/Claims/Sampling/KS.lean",
-    "Security/Proofs/Flock/Claims/Sampling/Runs.lean",
-    "Security/Proofs/Flock/Claims/Sampling/RunsExp.lean",
-    "Security/Proofs/Flock/Claims/Sampling/Session.lean",
-    "Security/Proofs/Flock/Claims/Sampling/Wait.lean",
-    "Security/Proofs/Flock/Claims/Witnesses/Recursion.lean",
-    "Security/Proofs/Flock/Claims/Witnesses/Sampling.lean",
-    "Security/Proofs/Flock/Claims/ZK/Compose.lean",
-    "Security/Proofs/Flock/Claims/ZK/Congr.lean",
-    "Security/Proofs/Flock/Claims/ZK/Interact.lean",
-    "Security/Proofs/Flock/Claims/ZK/NonVacuous.lean",
-    "Security/Proofs/Flock/Claims/ZK/Stop.lean",
-    "Security/Proofs/Flock/Recursive/KSNontrivial.lean",
-    "Security/Proofs/Flock/Recursive/LinksOuter.lean",
-]
-words = { "Trace" = "Transcript", "abortTrace" = "abortTranscript" }
 
 # The size ratio.
 [[words_in]]
@@ -275,11 +107,10 @@ exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "*
            "tools/verity/lean/tests/fixtures/**"]
 
 [keep]
-# `(τ : Transcript)`: `Pouw.PearlC.Transcript` in the two `TileCheck` modules. `Gates.Declared`: the gate model's
-# declared bounds, a module `Served` imports; "Declared circuit": prose. The proofs' own `SecurityProofs.Remote.Draw`
-# stands.
+# `Gates.Declared`: the gate model's declared bounds, a module `Served` imports; "Declared circuit": prose. The
+# proofs' own `SecurityProofs.Remote.Draw` stands.
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
-            'lanes/[\w.-]+', '\(τ : Transcript\)', 'Gates\.Declared\b', 'Declared circuit',
+            'lanes/[\w.-]+', 'Gates\.Declared\b', 'Declared circuit',
             'SecurityProofs\.Remote\.Draw']
 strings = []
 
