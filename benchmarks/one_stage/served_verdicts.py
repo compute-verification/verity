@@ -437,10 +437,10 @@ def pick(serve_dir: Path, slots: int, want: int | None = None) -> dict[str, Any]
 #: A served window's own fields, never published: the windows (closed, sealed or joined), its users, its engine steps and
 #: whether its requests filled the slots, its unpadded population, its advice's length and its windows' advice by number.
 OWN = frozenset({"windows", "users", "engine_steps", "every_slot", "population", "advice_bits", "bits_by_window"})
-#: Fields that name a window or count its own where their value holds a number: the window's number, its steps, its
-#: requests' count, the windows refused. A window named ``all``, the bench Build's requests by name and a refusal's reason
-#: stay.
-NUMBERED = frozenset({"window", "steps", "requests", "refused"})
+#: Fields that name a window or count its own where their value holds a number: the window's number, its steps (as
+#: ``window_steps`` too, a tied Pearl+ piece's ``load``), its requests' count, the windows refused. A window named
+#: ``all``, the bench Build's requests by name and a refusal's reason stay.
+NUMBERED = frozenset({"window", "steps", "window_steps", "requests", "refused"})
 #: A load's own fields, held by path as (parent, key), the parent the nearest key above the field through lists: the
 #: tokens of each load of `served_overhead.py metrics`' aggregate, which over a block's outputs are the exact block
 #: count, and its span. Held by path, not as bare keys, so the inference-only policy's ``n_inputs.span_s`` stays as
