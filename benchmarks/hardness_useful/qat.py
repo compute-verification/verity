@@ -229,7 +229,7 @@ def main(argv=None) -> int:
     ap.add_argument("--recal", type=int, default=50, help="steps between solving every matrix's c again")
     ap.add_argument("--lora", type=int, default=0, metavar="R",
                     help="train a rank-R update of each block linear and the RMSNorm gains only (0: every parameter)")
-    ap.add_argument("--teacher-device", default="cuda", help="the teacher's device (default the student's)")
+    ap.add_argument("--teacher-device", default=None, help="the teacher's device (default the student's)")
     ap.add_argument("--eval-every", type=int, default=100)
     ap.add_argument("--val-tokens", type=int, default=1_048_576)
     ap.add_argument("--ppl-sets", default="wikitext2,fineweb_val", help="the perplexity sets to measure")
@@ -259,6 +259,7 @@ def main(argv=None) -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     torch.manual_seed(0)
     torch.backends.cuda.matmul.allow_tf32 = False
+    dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     t_start = time.time()
@@ -285,7 +286,7 @@ def main(argv=None) -> int:
         res["device_map"] = {k: str(v) for k, v in getattr(model, "hf_device_map", {}).items()}
     else:
         model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.float32,
-                                                     attn_implementation="sdpa").cuda()
+                                                     attn_implementation="sdpa").to(dev)
     model.config.use_cache = False
     target = None if args.target in ("absmax", "bf16") else float(args.target)
     targets = None
@@ -320,7 +321,7 @@ def main(argv=None) -> int:
     (args.out / "result.json").write_text(json.dumps(res, indent=1))
 
     if steps > 0:
-        tdev = torch.device(args.teacher_device)
+        tdev = torch.device(args.teacher_device) if args.teacher_device else dev
         teacher = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.bfloat16,
                                                        attn_implementation="sdpa").to(tdev).eval()
         teacher.config.use_cache = False
@@ -334,14 +335,16 @@ def main(argv=None) -> int:
         params = [p for p in model.parameters() if p.requires_grad]
         res["trained_params"] = sum(p.numel() for p in params)
         log("training", res["trained_params"], "parameters", f"(lora {args.lora})" if args.lora else "(all)")
-        opt = torch.optim.AdamW(params, lr=args.lr, betas=(0.9, 0.95), weight_decay=0.0, eps=1e-8, fused=True)
+        opt = torch.optim.AdamW(params, lr=args.lr, betas=(0.9, 0.95), weight_decay=0.0, eps=1e-8,
+                                fused=dev.type == "cuda")
         warm = max(1, int(args.warmup * total))
         accum = args.batch // args.micro
         curve = [{"step": 0, "fineweb_val_64": perplexity(model, val_ids, args.seq, max_windows=64)["ppl"]}]
         recals = []
-        quant.set_served(model, args.serve).reseed(TRAIN_SEED, "cuda")
+        quant.set_served(model, args.serve).reseed(TRAIN_SEED, dev)
         model.train()
-        torch.cuda.reset_peak_memory_stats()
+        if dev.type == "cuda":
+            torch.cuda.reset_peak_memory_stats()
         t0 = time.time()
         for step in range(steps):
             lr = args.lr * min(1.0, (step + 1) / warm) * 0.5 * (1 + math.cos(math.pi * step / total))
@@ -351,10 +354,10 @@ def main(argv=None) -> int:
             for j in range(accum):
                 off = (step * args.batch + j * args.micro) * args.seq
                 x = torch.from_numpy(train_ids[off:off + args.micro * args.seq].astype(np.int64)
-                                     .reshape(args.micro, args.seq)).cuda(non_blocking=True)
-                with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16):
+                                     .reshape(args.micro, args.seq)).to(dev, non_blocking=True)
+                with torch.no_grad(), torch.autocast(dev.type, dtype=torch.bfloat16):
                     tl = teacher(x.to(tdev)).logits.to(x.device)
-                with torch.autocast("cuda", dtype=torch.bfloat16):
+                with torch.autocast(dev.type, dtype=torch.bfloat16):
                     sl = model(x).logits
                 loss = KD.apply(sl, tl) / accum
                 loss.backward()
@@ -382,7 +385,7 @@ def main(argv=None) -> int:
                 break
         res["train"] = {"curve": curve, "recalibrations": recals, "seconds": time.time() - t0,
                         "tokens": done * args.batch * args.seq, "stopped_at": done if done < steps else None,
-                        "peak_mem_gb": torch.cuda.max_memory_allocated() / 2**30}
+                        "peak_mem_gb": torch.cuda.max_memory_allocated() / 2**30 if dev.type == "cuda" else None}
         del teacher, opt
         torch.cuda.empty_cache()
         if args.lora:
