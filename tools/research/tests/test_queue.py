@@ -4797,6 +4797,36 @@ def test_the_open_prs_are_read_a_wave_of_pages_at_a_time_until_one_isnt_full(mon
     assert sorted(asked) == [1, 2, 3, 4]
 
 
+def test_a_commit_s_statuses_and_check_runs_are_read_whole_from_its_repository_or_not_at_all(monkeypatch):
+    """A list cut short would read a status as absent, and an answer that is no list as none."""
+    import research.queue as Q
+
+    asked: list[str] = []
+    answers = {"status": "statuses", "check-runs": "check_runs"}
+
+    def gh(argv, **kw):
+        assert argv[:2] == ["gh", "api"] and kw["timeout"] == Q.GH_TIMEOUT_S
+        asked.append(argv[2])
+        path, page = re.fullmatch(rf"repos/o/r/commits/abc/([a-z-]+)\?per_page={Q.GH_PER_PAGE}&page=(\d+)", argv[2]).groups()
+        rows = [{"context": f"{page}-{i}"} for i in range(Q.GH_PER_PAGE if page == "1" else 3)]
+        return subprocess.CompletedProcess(argv, 0, json.dumps({"state": "pending", answers[path]: rows}), "")
+
+    monkeypatch.setattr(subprocess, "run", gh)
+    hub = Q.GitHub("o/r")
+    assert [d["context"] for d in hub.statuses("abc")] == [f"{p}-{i}" for p, n in ((1, Q.GH_PER_PAGE), (2, 3)) for i in range(n)]
+    assert len(hub.check_runs("abc")) == Q.GH_PER_PAGE + 3
+    assert asked == [f"repos/o/r/commits/abc/{what}?per_page={Q.GH_PER_PAGE}&page={p}" for what in answers for p in (1, 2)]
+    monkeypatch.setattr(Q, "GH_PAGES", 1)
+    with pytest.raises(QueueError, match=f"more than {Q.GH_PER_PAGE} statuses"):
+        hub.statuses("abc")
+    for answer, why in ((subprocess.CompletedProcess([], 1, "", "HTTP 403: Resource not accessible by integration"), "HTTP 403"),
+                        (subprocess.CompletedProcess([], 0, json.dumps({"message": "Not Found"}), ""), "holds no `check_runs` list"),
+                        (subprocess.CompletedProcess([], 0, "[]", ""), "holds no `check_runs` list")):
+        monkeypatch.setattr(subprocess, "run", lambda argv, answer=answer, **kw: answer)
+        with pytest.raises(QueueError, match=why):
+            hub.check_runs("abc")
+
+
 def test_handle_reads_mains_registry_once_per_fetch(world, monkeypatch):
     """A review tick asks `handle` of every member of `next` (`Driver._owners`), and each read of main's registry is a
     `git show` of ~70 ms in drive's clone on the network volume, times over a hundred members a tick.  A fetch reads it afresh."""
