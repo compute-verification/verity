@@ -122,7 +122,7 @@ $CP "cat > /data/infra/msg.sh && chmod +x /data/infra/msg.sh" < infra/control/ms
 ~~~
 
 `monitors-relay`'s `drift` reads git history the tree lacks from `/data/watchers/repo`, cloned once over https with `gh_app_token.sh` as its credential helper, and
-`fixtures-public`, `unverified-main` (which also reads the queue's `/root/.research/queue/verity.state.json`), the failed-check posts and
+`fixtures-public`, the failed-check posts and
 the router call `gh`, installed once into `/data/watchers/bin`:
 
 ~~~sh
