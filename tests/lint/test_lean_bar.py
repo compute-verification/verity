@@ -23,11 +23,15 @@ every package's lakefile, not a reading of the text).
 
 Findings are counted per ``(file, rule)``, the key the ratchet gate (``integrations/vllm/tools/ratchet_gate.py``) pools a
 list's counts by, so each rule's total is held apart.  An entry ``{"file", "rule", "count"}`` allows ``count`` findings of its
-pair; ``module-doc`` and ``long-file`` find one a file.  A pair found more often than its entry allows, or found with no
-entry, fails, naming each site and its fix.  An entry is never added or raised to pass: the list only shrinks.  An entry
-that allows more than is found only warns (``Stale``), naming the count to lower it to, so a change that fixes a finding
-never fails for the entry it leaves behind, and ``--prune`` deletes and lowers what this tree no longer finds.  A file that
-moves takes its entries with it, in the same change (``--move``): this lint reads no history.
+pair; ``module-doc`` and ``long-file`` find one a file.  The tree is held to the list and to nothing else: no base commit
+is read.  A pair found more often than its entry allows, or found with no entry, fails, naming each site and its fix.  An
+entry that allows more than is found only warns (``Stale``), naming the count to lower it to, so a change that fixes a
+finding never fails for the entry it leaves behind, and ``--prune`` deletes and lowers what this tree no longer finds.
+
+The list is written by this module, never by hand.  ``--record`` rewrites it to the tree's counts, for a merge that brings
+files written before the bar held them: the merge commits the rewritten list once.  It lists no new ``maxHeartbeats 0``
+(``HARD``): ``heartbeats-unlimited`` is allowed only where the list already has it, at most as often, so a new one fails
+until it has a bound.  A file that moves takes its entries with it, in the same change (``--move``).
 
 The ratchet gate runs ``test_no_new_findings`` as a change's base has it, outside pytest, when the change touches this
 module or its list.  So the module imports only the standard library and that test takes no fixture.
@@ -35,6 +39,7 @@ module or its list.  So the module imports only the standard library and that te
     python3 tests/lint/test_lean_bar.py --counts          # each rule's findings, by package
     python3 tests/lint/test_lean_bar.py --move OLD NEW    # a file (or directory) moved: its entries follow it
     python3 tests/lint/test_lean_bar.py --prune           # delete and lower what this tree no longer finds
+    python3 tests/lint/test_lean_bar.py --record          # the list is what this tree finds, but no new `maxHeartbeats 0`
 """
 from __future__ import annotations
 
@@ -58,6 +63,8 @@ BUILT = (".lake",)
 #: the lines a file may run to, Mathlib's ``linter.style.longFile``
 LONG = 1500
 FIELDS = ("file", "rule", "count")
+#: the rule `--record` never adds an entry of, or raises one of
+HARD = "heartbeats-unlimited"
 #: each rule and its fix
 RULES = {
     "module-doc": "Open the file with a module docstring after its imports: `/-! # Title`, then what the file holds and "
@@ -66,13 +73,14 @@ RULES = {
                  f"{LONG} lines; a generator splits its output.",
     "heartbeats-unlimited": "Give it a bound: measure the declaration (`set_option profiler true in`, or `#count_heartbeats "
                             "in` where Mathlib is imported), fix the proof (`simp only [...]`, a split-out lemma, a smaller "
-                            "`decide`) and set the number it then needs.",
+                            "`decide`) and set the number it then needs. No command lists a new one.",
     "heartbeats-uncommented": "Say why the declaration needs the bound in a `--` comment on the option's line or the line "
                               "above it.",
 }
-FIX = (f"Fix each as its rule says. Never add an entry to tests/lint/allowlists/{NAME}.json or raise a count there to pass: "
-       f"the list only shrinks. If the file moved, move its entries in the same change: `python3 tests/lint/test_{NAME}.py "
-       "--move OLD NEW`.")
+FIX = (f"Fix each as its rule says. Never edit tests/lint/allowlists/{NAME}.json by hand. If a merge brought these files, "
+       f"`python3 tests/lint/test_{NAME}.py --record` rewrites the list to this tree's counts: commit it with the merge. It "
+       f"lists no new `maxHeartbeats 0` ({HARD}), which fails until it has a bound. If a file moved, move its entries in "
+       f"the same change: `python3 tests/lint/test_{NAME}.py --move OLD NEW`.")
 
 #: where a comment or a string literal opens; a character literal of a quote opens none
 _OPEN = re.compile(r"""--|/-|'"'|'\\"'|(?<![\w'.])r#*"|["]""")
@@ -296,7 +304,7 @@ def test_an_unlisted_finding_fails_a_listed_one_passes_and_a_stale_entry_only_wa
         (k,) = [k for k in exact if k[1] == rule]
         why = fails(exact - Counter({k: 1}))
         assert "1 (file, rule) pair(s)" in why and f"  {k[0]} [{rule}]: 1 found, 0 allowed. {RULES[rule]}" in why, why
-        assert "Never add an entry" in why and f"test_{NAME}.py --move OLD NEW" in why, why
+        assert "by hand" in why and f"test_{NAME}.py --record" in why and f"test_{NAME}.py --move OLD NEW" in why, why
     assert f"    {a}:1 maxHeartbeats 0" in fails(exact - Counter({(a, "heartbeats-unlimited"): 1}))
     assert f"    {b}:{LONG + 1} {LONG + 1} lines, 1 past {LONG}" in fails(exact - Counter({(b, "long-file"): 1}))
 
@@ -312,6 +320,13 @@ def test_an_unlisted_finding_fails_a_listed_one_passes_and_a_stale_entry_only_wa
         "  verity/core/c/C.lean [module-doc]: 1 allowed, 0 found: delete the entry"], str(w.message)
     assert f"test_{NAME}.py --prune" in str(w.message)
     assert loose & found(tmp_path) == exact, "--prune leaves what the tree holds"
+
+    # --record lists what a merge brought and lowers what it fixed, but a `maxHeartbeats 0` the list doesn't have still fails
+    assert recorded(loose, found(tmp_path)) == exact and recorded(exact - Counter({(b, "long-file"): 1}), exact) == exact
+    unlimited = Counter({(a, HARD): 1})
+    assert recorded(Counter(), found(tmp_path)) == exact - unlimited == recorded(exact - unlimited, found(tmp_path))
+    assert recorded(exact, exact + unlimited) == exact and recorded(exact + unlimited, exact) == exact
+    assert f"  {a} [{HARD}]: 1 found, 0 allowed" in fails(recorded(Counter(), found(tmp_path)))
 
 
 def test_the_list_is_well_formed_and_an_entry_moves_with_its_file() -> None:
@@ -335,6 +350,13 @@ def test_the_list_is_well_formed_and_an_entry_moves_with_its_file() -> None:
     assert moved(have, "a", "c") == Counter({("c/X.lean", "module-doc"): 1, ("c/Y.lean", "heartbeats-uncommented"): 2,
                                              ("B.lean", "module-doc"): 1})
     assert moved(have, "a/X.lean", "B.lean") == Counter({("B.lean", "module-doc"): 2, ("a/Y.lean", "heartbeats-uncommented"): 2})
+
+
+def recorded(have: Counter, got: Counter) -> Counter:
+    """The list `--record` writes over ``have`` for a tree that finds ``got``: ``got``, but of ``HARD`` only what ``have``
+    already allows."""
+    return Counter({k: n for k, n in got.items() if k[1] != HARD}) + Counter({k: min(n, have[k]) for k, n in got.items()
+                                                                              if k[1] == HARD})
 
 
 def moved(entries: Counter, old: str, new: str) -> Counter:
@@ -375,6 +397,12 @@ if __name__ == "__main__":
         print(f"{sum(1 for k in have if k not in after)} entries moved from {sys.argv[2]} to {sys.argv[3]}")
     elif sys.argv[1:] == ["--prune"]:
         dump(allowed() & found())
+    elif sys.argv[1:] == ["--record"]:
+        dump(after := recorded(allowed(), got := found()))
+        if left := sorted(k[0] for k in got - after):
+            sys.exit("--record lists no new `maxHeartbeats 0`; these files hold more than the list allows, so give the "
+                     "new ones a bound:\n" + "\n".join(
+                f"  {f}:{line} {what}" for f, rule, line, what in scan() if rule == HARD and f in left))
     elif sys.argv[1:] == ["--counts"]:
         print(counts())
     else:

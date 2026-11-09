@@ -42,10 +42,11 @@ python3 tests/lint/test_repo_ruff.py --prune          # delete and lower what th
 python3 tests/lint/test_repo_lane_text.py --record    # the list becomes what this tree finds (the ratchet gate still flags a rise)
 ~~~
 
-Every lint takes `--move` and `--prune`; only lane text and retired terms take `--record`, and the Lean bar's list is never
-recorded: it only shrinks (`test_lean_bar.py --counts` prints each rule's findings by Lake package). Each lint reads no
-history, so a renamed file's findings count under its new path: move its entry with it, or the ratchet gate flags the
-change.
+Every lint takes `--move` and `--prune`; lane text, retired terms and the Lean bar take `--record`, which rewrites the list
+to the tree's counts. The Lean bar's is for a merge that brings files written before the bar held them, and it lists no new
+`maxHeartbeats 0`, which fails until it has a bound (`test_lean_bar.py --counts` prints each rule's findings by Lake
+package). Each lint reads no history, so a renamed file's findings count under its new path: move its entry with it, or
+the ratchet gate flags the change.
 
 ~~~sh
 uv run tools/verity/check/suites.py .                 # this suite, on a node through `research run --on auto`
