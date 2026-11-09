@@ -24,8 +24,9 @@ def slot(name: str, cpus: str = "8-19", mem: int = 40, held: bool = False, block
     return {"name": name, "cpus": cpus, "mem": mem, "trains": trains, "holder": {"pid": 1} if held else None, "blocked": blocked}
 
 
-def pool(*slots: dict, waiters: int = 0) -> dict:
-    return {"research": {"file": "/workspace/research/locks/research/slots", "slots": list(slots), "waiters": [{"pid": i} for i in range(waiters)]}}
+def pool(*slots: dict, waiters: int = 0, minutes: int = 0) -> dict:
+    return {"research": {"file": "/workspace/research/locks/research/slots", "slots": list(slots),
+                         "waiters": [{"pid": i, "minutes": minutes} for i in range(waiters)]}}
 
 
 def test_a_pool_slot_free_now_wins_even_when_node_2_could_start_the_job():
@@ -74,6 +75,25 @@ def test_slots_blocked_on_memory_are_not_capacity_when_ranking_lines():
     cpu6 = pool(*(slot(f"r{i}", held=True) for i in range(4)), waiters=6)
     target, why = auto.choose({N2: share(waiters=5), CPU1: cpu1, "vy-nebius-cpu-6": cpu6}, 4, 16)
     assert target == ("vy-nebius-cpu-6", "research"), why
+
+
+def test_a_pool_whose_line_is_stalled_on_memory_never_takes_the_job():
+    """Twice a job went to a line stalled on memory once another node's probe timed out: cpu-3's head asked 256 GB for hours
+    while its other slots, which declare no mem=, showed free; elsewhere every idle slot waited on memory with none running."""
+    mem = "-1 GB of memory free (481 GB more is reserved by live runs that haven't reached it), under the 40 GB a check here may peak at"
+    busy = pool(*(slot(f"r{i}", held=True) for i in range(4)), waiters=6)
+    stuck = pool(*(slot(f"r{i}", mem=None) for i in range(5)), waiters=1, minutes=auto.STALL_MIN)
+    target, why = auto.choose({N2: share(waiters=56), CPU1: stuck, CPU5: busy}, 4, 16)
+    assert target == (CPU5, "research") and f"{CPU1}'s research pool skipped: its line is stalled: a run has waited 5 min" in why
+    with pytest.raises(auto.Unplaceable, match="its line is stalled"):
+        auto.choose({N2: "no answer in 30 s", CPU1: stuck, CPU5: "no answer in 30 s"}, 4, 16)
+    starved = pool(*(slot(f"r{i}", blocked=mem) for i in range(13)))
+    target, why = auto.choose({N2: share(waiters=56), CPU1: starved, CPU5: busy}, 4, 16)
+    assert target == (CPU5, "research") and "every slot of it that fits waits on memory and none runs" in why
+    fresh = pool(*(slot(f"r{i}", mem=None) for i in range(5)), waiters=1, minutes=auto.STALL_MIN - 1)
+    assert auto.choose({N2: share(waiters=56), CPU1: fresh, CPU5: busy}, 4, 16)[0] == (CPU1, "research"), "a waiter between polls"
+    mixed = pool(slot("r0", held=True), *(slot(f"r{i}", blocked=mem) for i in range(1, 4)), waiters=2, minutes=60)
+    assert auto.choose({N2: share(waiters=56), CPU1: mixed}, 4, 16)[0] == (CPU1, "research"), "a running slot drains it"
 
 
 def test_cpu_3s_research_pool_takes_a_job_while_cpu_1s_and_cpu_5s_are_full():

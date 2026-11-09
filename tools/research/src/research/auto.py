@@ -12,7 +12,8 @@ then takes, in order:
     run, with no cgroup cap) is free and unblocked for every waiter ahead and this job;
   - else node 2's share when it can start the job now, with no one waiting there (a run once queued 100 min behind cpu-6's 8
     held slots and 9 waiters while node 2's 48 CPUs sat free);
-  - else the pool with the shortest wait, as waiters ahead per fitting slot;
+  - else the pool with the shortest wait, as waiters ahead per fitting slot, leaving out a pool whose line is stalled on
+    memory (`STALL_MIN`): a job placed there waits with it, however short the line;
   - node 2 only when no pool fits the job or none can be read, and node 2 itself can be. Node 2 is the only GPU node,
     and CPU work there has held its GPUs at 0% under a load of 235 on 120 cores while cpu-5 ran at 8 of 192. A node 2
     that carries remote.RUNS_VIA_SLOT_FILE counts as unread: its launcher refuses a run that doesn't come through a check
@@ -46,6 +47,9 @@ READ_TIMEOUT_S = 30
 #: its bytes free fails every job placed there, shipping its source or mid-build, with ENOSPC. One run of
 #: a large suite (tools/research's) holds some 250k pytest temp files at once, so a floor below a few of those still fails jobs
 DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 1_000_000, 50
+#: a pool whose line has waited this long beside a free slot is stalled on memory and takes no job (`_pool`), nor does one whose
+#: every fitting slot is idle and blocked with slot.py's memory reason, which contains MEMORY_BLOCK
+STALL_MIN, MEMORY_BLOCK = 5, " GB of memory free"
 #: a machine's Lean pools (tools/verity/check/lean_slot.py's file): a run that takes a Lean slot of a pool goes only where that pool
 #: has one, since lean_changed.py refuses it at once elsewhere (drive's cpu-6, 7 and 9 close `build` to lanes)
 LEAN_SLOTS = "/workspace/research/locks/lean-slots"
@@ -217,11 +221,18 @@ def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
     if not open_:
         raise ValueError(f"every slot of {doc.get('file')} that fits is closed by a window ({fit[0]['blocked']})")
     free = [s for s in open_ if s.get("holder") is None and not s.get("blocked")]
-    waiting = len(doc.get("waiters") or [])
+    waiters = doc.get("waiters") or []
+    waiting = len(waiters)
+    # a waiter retries every 20 s (slot.py's POLL_S), so one still waiting beside a free slot waits on what that slot's document
+    # doesn't show: the memory its own --mem-gb asks (cpu-3's head asked 256 GB for hours while its other slots sat free)
+    if free and waiters and (head := max(w.get("minutes") or 0 for w in waiters)) >= STALL_MIN:
+        raise ValueError(f"its line is stalled: a run has waited {head} min while slot {free[0]['name']} is free, for memory "
+                         f"it asks beyond what that slot shows")
+    if all(s.get("holder") is None and MEMORY_BLOCK in str(s.get("blocked")) for s in open_):
+        raise ValueError(f"its line is stalled: every slot of it that fits waits on memory and none runs ({open_[0]['blocked']})")
     why = (f"slots {', '.join(s['name'] + (' free' if s in free else ' held' if s.get('holder') else ' blocked') for s in fit)}; "
            f"{waiting} waiting")
-    # the line drains through the slots that run: a slot blocked on memory or disk adds no throughput until it clears, and a
-    # pool whose idle slots all wait on memory reservations would otherwise rank as a short line
+    # the line drains through the slots that run: a slot blocked on memory or disk adds no throughput until it clears
     running = [s for s in open_ if s.get("holder") is not None or not s.get("blocked")]
     return max(len(running), 1), len(free), waiting, why
 
