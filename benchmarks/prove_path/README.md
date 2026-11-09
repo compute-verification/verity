@@ -131,11 +131,11 @@ history would discharge, and doesn't discharge them yet.
   and a partial window, which lacks a writer's template, so the wire from it is not made and its port is free. No figure
   states the leak bound there. Over several windows, c is their sum, and null if any one's is.
 - δ is `delta`. Per rank, `ranks.<r>.audit.wrong_units` is `{delta, of, bound, rule, per_template}` (the
-  `wrong_units` function in `verity/core/protocols/sampled_proofs/one_stage/audit.py`). Except with probability δ, at most
+  `wrong_units` function in `verity/core/protocols/spot/one_stage/audit.py`). Except with probability δ, at most
   `bound` of the `of` units are incorrect, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
   `stratum_bounds`).
 - β_δ is `harm_bound`: the profile's `harm_bound`, each template's units weighted by its committed bits (`_template_bits`
-  in `verity/core/protocols/sampled_proofs/one_stage/partition.py`). λ_δ is `location_bits` (`consumers.location_bits`):
+  in `verity/core/protocols/spot/one_stage/partition.py`). λ_δ is `location_bits` (`consumers.location_bits`):
   log2 of the at most Σ_{j ≤ bound} C(n, j) incorrect sets. `exfiltration_bound` is β_δ + λ_δ.
 - The run doesn't print ε_ks or ε_bind (the profile's `epsilon_log2` is null), or n·log2 D, which is the certifier's term.
 
@@ -148,11 +148,12 @@ guarantee above.
 
 **The named assumptions.**
 - SHA-512 collision resistance: `FlockSoundness.Assumptions.SHA512CRStrict` and `SHA512CRExpected`
-  (`Security/Proofs/Flock/Soundness/Assumptions.lean`), and `Claims.StrictBirthday` and `Claims.ExpectedCR`
-  (`Security/Definitions/Core/Interaction.lean`).
-- A3, the coins: `FlockSoundness.Assumptions.UniformRandomBytes` (the same file).
-- Record custody: under `--zk`, `FlockSoundness.Assumptions.Zk.RecordCustodyZKJ`
-  (`Security/Proofs/Flock/Soundness/Assumptions/Zk.lean`) and `Zk.RecordCustodyZKLaw` and its forms
+  (`Security/Definitions/Assumptions/Flock.lean`, the lock's named assumptions), and `Claims.StrictBirthday` and
+  `Claims.ExpectedCR` (`Security/Definitions/Core/Interaction.lean`).
+- A3, the coins: `FlockSoundness.Assumptions.UniformRandomBytes` (the same file as the first two).
+- Record custody: under `--zk`, `FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw`
+  (`Security/Proofs/Flock/Soundness/Assumptions/ZkP.lean`; `RecordCustodyZKJ`, its instance at no public inputs, is in
+  `Security/Proofs/Flock/Soundness/Premises.lean`) and `Zk.RecordCustodyZKLaw` and its forms
   (`Security/Proofs/Flock/Soundness/Assumptions/CustodyZk.lean`); in plain, `FlockSoundness.Assumptions.RecordCustodyExec`
   and `RecordCustodyExecH` (`Security/Proofs/Flock/Soundness/Assumptions/Custody.lean`).
 - `Verity.Assumptions.TrustedHost` (`Security/Definitions/Core/Assumptions.lean`), which is why `Carries` holds of the

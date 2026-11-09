@@ -56,7 +56,7 @@ open Properties.Pouw.Period
 theorem pr_le_prob_of_equiv {A X : Type} [Fintype A] [Fintype X] (e : A ≃ X) {E : A → Prop} {F : X → Prop}
     (h : ∀ a, E a → F (e a)) : Pouw.pr E ≤ Pouw.RelativeSecurity.prob F := by
   classical
-  unfold Pouw.pr Pouw.RelativeSecurity.prob
+  unfold Pouw.pr Pouw.RelativeSecurity.prob Claims.Pr Claims.prUniform
   rw [Fintype.card_congr e]
   refine div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg _)
   have hmap : ((Finset.univ.filter E).map e.toEmbedding) ⊆ Finset.univ.filter F := by

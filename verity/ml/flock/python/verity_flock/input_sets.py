@@ -10,7 +10,7 @@ A set is a directory ``<name>/`` (the exporter writes it under ``<out>/sets/``),
   ``index.json``               one row per instance, columns :data:`INDEX_COLUMNS` (a captured row: the VU it came from; a synthetic
                                row: ``source = "synthetic"`` and ``sub = {"draw": j, ...}``)
 
-Captured sets carry ``schema = "vllm-vu-set/v1"``; synthetic ones (``verity_numerical.bench.generate``) ``"input-set/v1"``, with the
+Captured sets carry ``schema = "vllm-vu-set/v1"``; synthetic ones (``verity_flock.synthetic``) ``"input-set/v1"``, with the
 same fields.  :data:`PROVENANCE_FIELDS` are every set's provenance keys: a synthetic set writes all of them (the row, model and run
 keys ``None``), and :func:`provenance` fills ``source`` (``captured`` for a ``vllm-vu-set/v1``) and ``recipe`` (``None``) for a set
 that predates them.  A set's subcircuit is derived from its ``relation`` (``templates.identify``), never stored beside it.

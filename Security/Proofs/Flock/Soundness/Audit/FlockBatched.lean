@@ -8,8 +8,7 @@ public import Proofs.Flock.Soundness.Lowering
 public import Proofs.Flock.Soundness.SessionBatch
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Audit.Circuit
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The Flock audit at the compiled layer, several tables per session
@@ -54,7 +53,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 namespace Partition
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)

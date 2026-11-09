@@ -138,8 +138,10 @@ def test_figures_writes_every_figure(tmp_path, monkeypatch):
     be = {"beta": 1e-2, "targets": {"FP8": 1e3}, "rel": 1e-2, "spans": total_cost.SPANS,
           "rows": [{"config": "tokens", "registration": "machine", "scope": "world week", "overhead": 2.0,
                     "floor": 8e6, "h": {"FP8": None}, "beta": {"FP8": 3.0}}]}
-    monkeypatch.setattr(total_cost, "breakeven", lambda *a, **k: be)
+    seen = []
+    monkeypatch.setattr(total_cost, "breakeven", lambda *a, **k: seen.append(k) or be)
     figures.main(["--model", "GLM-5.3", "--out", str(tmp_path), "--points", "2", "--no-lean"])
+    assert seen[0]["lean"] is False
     assert json.loads((tmp_path / "figure1.json").read_text())["breakeven"] == json.loads(json.dumps(be))
     assert (tmp_path / "breakeven.txt").read_text() == total_cost.breakeven_table(be)
     for name, schema in (("figure1", total_cost.SCHEMA), ("figure1_overhead", figure1.SCHEMA),

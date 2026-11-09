@@ -634,7 +634,7 @@ def test_an_unanswered_ask_goes_to_whoever_it_asked():
 
 
 def test_asks_whose_record_cant_be_read_are_one_finding_to_infra_not_an_alert_each():
-    """The control pod's relay had no Linear or Notion key: it rang every lane and Daniel for 98 asks they had answered (INF-150)."""
+    """A relay with no Linear or Notion key can't read the asks' records, and must not ring every lane and person asked for each."""
     lost = [{"ts": f"17910500{i:02d}.000100", "by": "proofs", "to": ["daniel"], "record": "notion", "state": "unreadable (no key)"}
             for i in range(30)]
     linked = {"ts": "1791050100.000100", "by": "ci", "to": ["infra"], "record": "linear", "ref": "INF-1", "state": "in Backlog, no comment but the asker's"}
@@ -744,8 +744,8 @@ def test_the_relay_posts_what_is_still_open_first_then_each_new_event_once_with_
 
 
 def test_a_seeded_relay_records_what_is_open_as_posted_and_then_posts_only_new_events(tmp_path, monkeypatch):
-    """`relay --seed`: the relay taking over from another posts nothing on its first pass (19 Oct: a fresh relay on the control pod
-    would have posted 65 open incidents and rung five lanes again)."""
+    """`relay --seed`: the relay taking over from another posts nothing on its first pass (a fresh relay would
+    otherwise post every open incident and ring their lanes again)."""
     lines = {"node": [ev("open", "m|a"), ev("open", "m|b")], "relay": [ev("open", "asks|1")]}
 
     class Src(FakeSource):
@@ -903,7 +903,7 @@ def test_a_clear_into_a_deleted_thread_is_a_post_of_its_own(monkeypatch, capsys)
 
 
 def test_a_clear_is_posted_quiet_so_it_rings_no_one(monkeypatch):
-    """INF-168: a clear under its alert routes to no one; unmarked, the replay read each as a doorbell for the alert's owners."""
+    """A clear under its alert routes to no one; unmarked, the replay would read each as a doorbell for the alert's owners."""
     from research import slack as S
     for gone in (False, True):
         posts = fake_slack(monkeypatch, lambda ch, thread: gone and thread and S.SlackError("conversations.replies: thread_not_found"))
@@ -1064,8 +1064,8 @@ def test_the_reader_takes_no_stopped_step_for_the_failed_one(tmp_path):
 
 
 def test_the_reader_waits_for_the_classification_of_a_run_that_ended_before_any_step_failed(tmp_path):
-    """`research run` writes failure.json a few seconds after status.json; read in between, a hand cancel was posted as
-    "unclassified: no reason recorded" (dc04, 12 Oct). One whose classification never comes is still listed, later."""
+    """`research run` writes failure.json a few seconds after status.json; read in between, a hand cancel would be posted as
+    "unclassified: no reason recorded". One whose classification never comes is still listed, later."""
     slot = ["python3", "tools/verity/check/slot.py", "--", "uv", "run", "python", "tools/verity/check/check.py"]
     write_run(tmp_path, "r20261003-200000-aaaa", command=slot, state="failed", rc=143)
     d = tmp_path / "runs" / "r20261003-200000-aaaa"
@@ -1085,7 +1085,7 @@ def test_the_reader_waits_for_the_classification_of_a_run_that_ended_before_any_
 
 def test_the_reader_names_a_suites_runs_failed_suite_as_it_happens_from_its_stdout(tmp_path):
     """A suites.py run writes no steps.jsonl: its first failed suite, and that suite's first failing line, come from stdout.log
-    while it still runs (25ea, 8 Oct: verity-ops failed at 23:54Z and nobody heard until the run ended at 01:01Z)."""
+    while it still runs, not an hour later when the run ends."""
     slot = ["python3", "tools/verity/check/slot.py", "--", "bash", "-c", "uv run python tools/verity/check/suites.py --changed x"]
     out = ("suites: the change from x touches 3\npassed  verity-numerical   1093 passed in 39 s\n"
            "failed  verity-ops         61 passed, 1 failed in 5 s\n        E       assert False\n"
@@ -1242,7 +1242,7 @@ def test_an_oom_kill_is_named_with_the_run_its_scope_held_and_who_sent_it_even_a
 
 
 def test_an_oom_kill_in_a_queue_runs_cluster_scope_names_the_run_from_the_scope_and_its_requests_sender(tmp_path):
-    """INF-50: a `--queue` run is a cluster-RUN.scope under the user manager, not a session scope; a kill there names the run
+    """A `--queue` run is a cluster-RUN.scope under the user manager, not a session scope; a kill there names the run
     even when no pass saw the scope, and the sender its request records."""
     rid = "r20261018-105651-b36a"
     root = machine_root(tmp_path, {})
@@ -1373,7 +1373,7 @@ def test_a_peer_that_doesnt_answer_ssh_is_a_finding_and_one_that_does_isnt(tmp_p
 
 
 def test_the_daily_line_counts_yesterdays_full_checks_infrastructure_ended_and_pages_past_the_target(tmp_path):
-    now = 1791441000.0                     # 2026-10-08T06:30Z: the line is 2026-10-07's
+    now = 1791441000.0                     # 2026-10-08T06:30Z: the line is the day before's
     root = machine_root(tmp_path, {"session-9.scope": ("r20261007-230000-0004", 1)})
     def run(rid, cls, state, cmd):
         d = root / M.RUNS.lstrip("/") / rid
@@ -1417,8 +1417,8 @@ def test_every_nebius_machine_runs_the_watchdog_from_the_monitoring_lib_with_its
 
 @pytest.mark.parametrize("status,cancelled", [("ahead", False), ("identical", False), ("diverged", True)])
 def test_an_after_landing_run_of_main_runs_on_though_a_ticket_waits_for_its_slot(monkeypatch, status, cancelled):
-    """27 Oct: main's after-landing runs (54713f81's, 0600bab8's) were cancelled for a Lean check's slot before their pytest step
-    reported, so main stayed unverified.  A run whose tip is on `main` runs to its end; one of `next`'s commits is still
+    """Cancelling main's after-landing run for a Lean check's slot before its pytest step reports leaves main unverified.  A run
+    whose tip is on `main` runs to its end; one of `next`'s commits is still
     cancelled."""
     monkeypatch.setattr(M, "_registry", lambda: REG)
     monkeypatch.setattr(M, "CHECK_MACHINES", (("vy-nebius-cpu-1", "vy-nebius-cpu-1"),))
@@ -1479,10 +1479,10 @@ def test_a_check_whose_step_failed_is_cancelled_once_a_ticket_waits_for_a_slot_o
 
 
 def test_unverified_main_rings_ci_and_top_each_hour_past_three_until_a_post_landing_run_passes(tmp_path, monkeypatch):
-    """top, 26 Oct: main went a day and a half with no passing post-landing check and nobody outside ci heard. The relay reads
+    """Main must not go days with no passing post-landing check and nobody outside ci hearing. The relay reads
     drive's last verified commit from its state (not its log, so a stopped drive still rings) and times main's lag from the
     oldest landing after it: main's first-parent commits (drive's merges), not GitHub's compare, which lists each PR's own
-    commits, dated when their branch made them (ci, 26 Oct)."""
+    commits, dated when their branch made them."""
     state = tmp_path / M.DRIVE_STATE
     state.parent.mkdir(parents=True)
     verified = "595cce6ddaf69e4411d8b11df4e91878c5826e27"
