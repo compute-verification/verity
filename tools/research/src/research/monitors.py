@@ -696,8 +696,8 @@ def redirected_base(url: str, key: str) -> str:
         loc = (e.headers.get("Location") or "").split("?")[0]
         if e.code in (301, 302, 303, 307, 308) and loc.endswith(f"/{key}"):
             return loc[: -len(key) - 1]
-    except (urllib.error.URLError, TimeoutError, ConnectionError):
-        pass
+    except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+        print(f"monitors: the store's redirect probe failed ({type(e).__name__}: {e}); reading {url} directly", file=sys.stderr)
     return url
 
 

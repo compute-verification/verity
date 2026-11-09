@@ -405,10 +405,7 @@ def window_text(w: dict) -> str:
 
 def asking(slots: list[dict]) -> list[dict]:
     """``slots`` with each mem= raised to what the run asks (RUN_MEM_ENV, GB), in GiB as mem= is; unchanged without it."""
-    try:
-        gb = float(os.environ.get(RUN_MEM_ENV) or 0)
-    except ValueError:
-        gb = 0.0
+    gb = asked_gb()
     want = -(-int(gb * 1e9) // 2 ** 30) if gb > 0 else 0
     return [{**s, "mem": max(s.get("mem") or 0, want)} if want else s for s in slots]
 
@@ -532,11 +529,12 @@ def run_id() -> str | None:
 
 
 def asked_gb() -> float:
-    """The GB this waiter's run asks (RUN_MEM_ENV), 0 when it names none or a value that isn't a number."""
+    """The GB this waiter's run asks (RUN_MEM_ENV), 0 when it names none; a value that isn't a number stops the waiter."""
+    v = os.environ.get(RUN_MEM_ENV) or "0"
     try:
-        return max(float(os.environ.get(RUN_MEM_ENV) or 0), 0.0)
+        return max(float(v), 0.0)
     except ValueError:
-        return 0.0
+        sys.exit(f"slot: {RUN_MEM_ENV}={v!r} isn't a number of GB; set it to one, or unset it")
 
 
 def min_mem_gb() -> int | None:
@@ -763,7 +761,9 @@ def _asks(fd: int) -> float:
     """The GiB (memory_gb's unit) a waiter's ticket (its open descriptor) says its run asks, 0 when it says none."""
     try:
         return float(json.loads(os.pread(fd, 4096, 0) or b"{}").get("mem_gb") or 0) * 1e9 / 2 ** 30
-    except (ValueError, OSError, AttributeError):
+    except (ValueError, OSError, AttributeError) as e:
+        print(f"slot: a waiter's ticket is unreadable ({type(e).__name__}: {e}); it stays ahead, as if it asked no memory",
+              file=sys.stderr)
         return 0.0
 
 

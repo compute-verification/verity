@@ -607,11 +607,10 @@ def _short_bare_timeout(harness_opts: list[str]) -> str | None:
     and on a shared machine it is nearly always minutes meant (INF-605: `--timeout 60` killed each of #7908's runs 60 s after it
     took its slot). A value with a unit (`90s`, `60m`) passes as written."""
     v = remote.flag_value(harness_opts, "--timeout")
-    try:
-        n = float(v) if v is not None else None
-    except ValueError:
+    if v is None or not v.replace(".", "", 1).isdigit():
         return None
-    if n is None or n >= SHORT_TIMEOUT_S:
+    n = float(v)
+    if n >= SHORT_TIMEOUT_S:
         return None
     return (f"--timeout {v} is {n:g} seconds (a bare number reads as seconds). For minutes write --timeout {v}m, or --max-min {v} "
             f"with --on auto or --queue; a run that should really stop within {SHORT_TIMEOUT_S // 60} minutes says so with a unit, "

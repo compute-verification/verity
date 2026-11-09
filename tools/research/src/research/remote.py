@@ -2227,12 +2227,13 @@ def _runner_gone(ssh: list[str], local_dir: Path, pid: int, *, timeout: float = 
 
 
 def _remote_status(ssh: list[str], rd: str, *, timeout: float = 120) -> dict[str, Any]:
-    """The run's status.json as it is on the machine now; {} when it can't be read."""
+    """The run's status.json as it is on the machine now; {} when it isn't there, and {"unreadable": why} when it can't be
+    read."""
     try:
         probe = ssh_run(ssh, ["sh", "-c", f"cat {shlex.quote(rd)}/status.json"], timeout=timeout)
         doc = json.loads(probe.stdout.decode(errors="replace")) if probe.returncode == 0 else {}
-    except (subprocess.TimeoutExpired, ValueError):
-        return {}
+    except (subprocess.TimeoutExpired, ValueError) as e:
+        return {"unreadable": f"{type(e).__name__}: {e}"}
     return doc if isinstance(doc, dict) else {}
 
 
@@ -2289,7 +2290,8 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
                 write_json_atomic(local_dir / "status.json", again)
                 rec["last_observed"] = {"state": again["state"], "rc": again.get("rc"), "at_utc": rec["observed_utc"]}
             else:
-                rec["runner_gone"] = {"at_utc": rec["observed_utc"], "runner_pid": st["pid"], "why": why}
+                rec["runner_gone"] = {"at_utc": rec["observed_utc"], "runner_pid": st["pid"], "why": why,
+                                      **({"recheck": again["unreadable"]} if "unreadable" in again else {})}
     pid = (_read_json(local_dir / "launch.json") or {}).get("runner_pid")
     if not st and isinstance(pid, int):
         # launched, no status.json: the runner either has not written it yet or exited before it could (an argv it rejected)
