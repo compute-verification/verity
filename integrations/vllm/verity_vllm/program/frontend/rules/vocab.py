@@ -143,7 +143,7 @@ PROFILE_B1_EAGER = Vocabulary(
         "rmsnorm": "target-selected norm: batch-invariant Triton RMSNormTriton_v1{N,EPS}, otherwise "
                    "RMSNormCudaVector8_v1{N,EPS,BLOCK} at the launch's block",
         "rmsnorm_fused": "target-selected fused norm: batch-invariant generic RMSNormFusedCuda_v2{N,EPS}, otherwise "
-                         "RMSNormFusedCudaVector8_v1{N,EPS,BLOCK} at the launch's block",
+                         "RMSNormFusedCudaVector8_v3{N,EPS,BLOCK} at the launch's block",
         "rope": "RoPE_v1{NHEADS,D}: vLLM _C.rotary_embedding NeoX, bf16 cos/sin cache row as Input",
         "attention": "Attention_v1{T,NH,KVH,D}: FA2 causal GQA over [T][KVH][D] caches",
         "silu_mul": "SiluMul_v1{I}: vLLM _C.silu_and_mul",
@@ -153,9 +153,9 @@ PROFILE_B1_EAGER = Vocabulary(
         "rmsnorm_cuda": "RMSNormCudaVector8_v1{N,EPS,BLOCK}: _C.rms_norm's rms_norm_kernel<bf16, 8, 2, true> on one contiguous "
                         "row -- BLOCK threads each FMA-fold eight-element vectors t, t+BLOCK, ... from +0, CUB block reduce, "
                         "bf16_rn((f32(x) * rsqrtf(var/N + EPS)) * f32(w)) (registry.cuda_rmsnorm)",
-        "rmsnorm_fused_cuda": "RMSNormFusedCudaVector8_v1{N,EPS,BLOCK}: _C.fused_add_rms_norm's fused_add_rms_norm_kernel"
+        "rmsnorm_fused_cuda": "RMSNormFusedCudaVector8_v3{N,EPS,BLOCK}: _C.fused_add_rms_norm's fused_add_rms_norm_kernel"
                               "<bf16, 8, true> -- the vectorised residual add kept as the second output, then the same "
-                              "BLOCK-thread reduction and epilogue (registry.cuda_rmsnorm)",
+                              "BLOCK-thread reduction (its sum of squares as batches) and epilogue (registry.cuda_rmsnorm)",
     })
 
 # -- reference: NUMERIC's reference kinds (`verity/ml/definitions/registry/ref_prims.py`, vocabulary `verity-ref-vocab/1`) ----------

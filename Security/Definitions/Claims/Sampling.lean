@@ -21,7 +21,8 @@ the code side's.
 3. **Relation** (`R δ`): the set of incorrect proof blocks of the committed trace is in the confidence set
    `M_δ = {B : P_a(B) > δ}`. A unit is faulty when its committed outputs differ from its gates applied to its committed
    inputs, or a value it reads or writes is unopened: one is faulty unless some interior makes it correct, which on a
-   topologically ordered program is the glossary's form on the boundary trace (`FaultyBoundary`).
+   topologically ordered program is the glossary's form on the boundary trace (`BoundaryFaulty`;
+   `Proofs.Flock.SamplingBoundary` proves `Faulty` is it on every such program).
 4. **Scope** (`Scope`, `InScope`, `ScopeMatches`): a statement that parses, whose query evaluates; a topologically
    ordered program; a partition of all its gates but constants and unread inputs into proof blocks, each a set of gates
    whose committed values fit its public size class, `|out(u)| ≤ w_{c(u)}` (`sizeClasses`: powers of two from 16 to
@@ -39,15 +40,15 @@ the code side's.
    a finite nonce and rest, and the simulator). The extractor itself is the compiled sampled verifier's
    (`SamplingGeneric.Compiled.E` at `SamplingGeneric.ofDeploy`): `k` accepted runs, in each `k` accepted reruns of the
    second stage, in each Flock's `E^rep` on every checked unit's session.
-6. **Claims**, on the statements in scope: `Binding`; `Universal`; `FaultyBoundary`; `Complete`; `ScopeMatches`; `ZK`,
-   of the masked deployment's reference prover and simulator, relative to the trace's published leaf layer; and
-   `Nontrivial`. Knowledge soundness, its count form, bits and efficiency are the compiled sampled verifier's at the
-   deployment (`SamplingGeneric.Compiled.KS`, `KSCount`, `Bits`, `Efficient`): `KS` at every `δ ≥ 0`, with error
+6. **Claims**, on the statements in scope: `Binding`; `Universal`; `Complete`; `ScopeMatches`; `ZK`, of the masked
+   deployment's reference prover and simulator, relative to the trace's published leaf layer; and `Nontrivial`.
+   Knowledge soundness, its count form, bits and efficiency are the compiled sampled verifier's at the deployment
+   (`SamplingGeneric.Compiled.KS`, `KSCount`, `Bits`, `Efficient`): `KS` at every `δ ≥ 0`, with error
    `δ + ε_ks + ε_bind`, `ε_ks` Flock's at the units' sessions and `ε_bind = Pr[B_ext]`.
 7. **Assumptions used**: `trustedBase`, and the compiled claims' `StrictBirthday` (for `B`) and `ExpectedCR` (for
    `Bext`). `ZK` gives the simulator the leaf layer the protocol publishes, so it reads no hiding assumption of the
    leaves.
-8. **Status**: stated; `FaultyBoundary` is proved (`Proofs.Flock.SamplingBoundary`).
+8. **Status**: stated; no claim is proved.
    `Proofs.Flock.SamplingScope` shows the scope is the one `KS` needs: an out-of-scope `subset K` with `K > N` has
    `P_a = 0` at every set, and an in-scope design has a deployment at which the compiled verifier's `KS` bound is
    below `1`.
@@ -712,14 +713,6 @@ as a program built of universal units, its description committed values like any
 def Universal (D : Deploy Coin Col T) : Prop :=
   ∀ (c : SizeClass) (n : PrivateCircuit) (x : List Bool), n.Fits c → x.length = c.nIn →
     (D.universal c).eval (n.args c ++ x) = n.eval x
-
-/-- **Sampling: the incorrect set is the boundary form's**: on a topologically ordered program, a proof block of distinct
-gates is faulty exactly when its committed boundary outputs differ from its gates applied to its committed boundary
-inputs. -/
-def FaultyBoundary : Prop :=
-  ∀ (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (P : Partition) (w : Wit) (v : ℕ) (u : List ℕ),
-    s.prog.Topological → P.blocks[v]? = some u → u.Nodup → (∀ g ∈ u, g < s.prog.gates.length) →
-    (Faulty H Cm s P w v ↔ BoundaryFaulty H Cm s P w v)
 
 /-- **Sampling: Complete**, on the statements in scope, when no unit is faulty. It needs the verifier to check before
 the sample that every unit's session has a form Flock proves (`Flock.InScope`); that check waits for the reference

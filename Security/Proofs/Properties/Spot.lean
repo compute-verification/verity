@@ -3,6 +3,7 @@ module
 public import Properties.Spot
 public import Proofs.Properties.Challenger
 public import Proofs.Properties.Spot.FilePart
+public import Proofs.Core.QSort
 import all Init.Data.Array.QSort.Basic
 
 /-! # Proofs of sampled proofs' one-stage property (`Properties.Spot`)
@@ -104,12 +105,6 @@ theorem none_fail_ite_ite_push (a b : Bool) (xs : Array (String × Check)) (y : 
 theorem fails_of_codes (n : String) (c : Check) (h1 : n ≠ "draw") (h2 : c.codes = #[n]) : Fails (n, c) = true := by
   simp [Fails, h1, h2]
 
-theorem size_qsort {α : Type} (xs : Array α) (lt : α → α → Bool) : (xs.qsort lt).size = xs.size := by
-  unfold Array.qsort
-  split
-  · rfl
-  · simp
-
 theorem none_fail_base (d p : Check) :
     (∀ x ∈ #[("draw", d), ("proved", p)], Fails x = false) ↔ p.codes = #[] := by
   simp [Fails, Array.isEmpty_iff]
@@ -118,7 +113,7 @@ theorem sameDict_iff (a b : Array (String × Json)) : Record.sameDict a b = true
   simp only [Record.sameDict, SameRoots, Bool.and_eq_true, beq_iff_eq, Array.all_eq_true', Array.any_eq_true']
 
 theorem qsort_eq_empty {α : Type} (xs : Array α) (lt : α → α → Bool) : xs.qsort lt = #[] ↔ xs = #[] := by
-  rw [← Array.size_eq_zero_iff, size_qsort, Array.size_eq_zero_iff]
+  rw [← Array.size_eq_zero_iff, Verity.QSort.size_qsort, Array.size_eq_zero_iff]
 
 theorem checks_ok (reg receipt draw law : Json) (units : Array Int) (provedUnits : Array Json) (instances : Json)
     (digest : String) (served : Option (Array Int)) (sessionRoots : Option (Array (String × Json)))
@@ -815,6 +810,16 @@ theorem declaredCode_none_iff (rec : Json) (v : Registration.Verifier) :
     · by_cases hp : jeq (getD rec "program") (.str p) = true <;> simp [h, hp]
     · simp [h]
 
+/-- R7's pool chain (`Registration.poolChained`) holds exactly when `PoolChained` does. -/
+theorem poolChained_iff (rec : Json) (v : Registration.Verifier) :
+    Registration.poolChained rec v = true ↔ PoolChained rec v := by
+  unfold Registration.poolChained PoolChained
+  rcases hp : v.pool with _ | p
+  · simp
+  · rcases he : Registration.entryOf rec p.pin with _ | e <;>
+      rcases ho : Registration.poolOpen rec v p with _ | ⟨d, r⟩ <;> simp [he, ho]
+    exact ⟨fun h => ⟨d, r, ⟨rfl, rfl⟩, h⟩, fun ⟨_, _, ⟨h1, h2⟩, h⟩ => by subst h1 h2; exact h⟩
+
 theorem registration_nil (rec : Json) (v : Registration.Verifier) :
     Registration.check rec v = #[] ↔ ∃ law, Registered v rec law := by
   rw [Registration.check_eq_checkRef]
@@ -822,19 +827,21 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
   extract_lets v2 get c0 w program part partDigest mine roots previous j14 j13 j12 j11 j10 j9 j8 distinct j7 j6 j5 jD j4 j3 j2
     j1 j0 c1
   have h14 : ∀ c, j14 () c = #[] ↔ c = #[] ∧ True := fun c => ⟨fun h => ⟨h, trivial⟩, fun h => h.1⟩
-  have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ WindowSeedSalt rec v ∧ (v2 = true → R7 rec v) ∧ True := by
+  have h13 : ∀ c, j13 () c = #[] ↔
+      c = #[] ∧ WindowSeedSalt rec v ∧ (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ True := by
     intro c
     simp only [j13]
     by_cases hv : v2 = true
     · simp only [hv, ↓reduceIte, true_implies]
-      rw [h14, checkOutputs_nil, kept_nil]
-      exact ⟨fun ⟨⟨⟨a, s⟩, b⟩, _⟩ => ⟨a, s, b, trivial⟩, fun ⟨a, s, b, _⟩ => ⟨⟨⟨a, s⟩, b⟩, trivial⟩⟩
+      rw [h14, kept_nil, checkOutputs_nil, kept_nil, poolChained_iff]
+      exact ⟨fun ⟨⟨⟨⟨a, s⟩, b⟩, q⟩, _⟩ => ⟨a, s, ⟨b, q⟩, trivial⟩,
+        fun ⟨a, s, ⟨b, q⟩, _⟩ => ⟨⟨⟨⟨a, s⟩, b⟩, q⟩, trivial⟩⟩
     · simp only [hv, Bool.false_eq_true, ↓reduceIte, false_implies, h14, kept_nil]
       exact ⟨fun ⟨⟨a, s⟩, _⟩ => ⟨a, s, trivial, trivial⟩, fun ⟨a, s, _⟩ => ⟨⟨a, s⟩, trivial⟩⟩
   have h12 : ∀ c, j12 () c = #[] ↔ c = #[] ∧ (∀ sp, v.binding = some sp →
       jeq (getD (get "window") "stream") (.str sp.1) = true ∧
       jeq (getD (get "window") "prover") (.str sp.2) = true) ∧
-      (WindowSeedSalt rec v ∧ (v2 = true → R7 rec v) ∧ True) := by
+      (WindowSeedSalt rec v ∧ (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ True) := by
     intro c
     simp only [j12]
     rcases hb : v.binding with _ | ⟨stream, prover⟩
@@ -1002,7 +1009,7 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
       jeq (getD rec "format") (.str (if v.registered.isEmpty then Registration.FORMAT else Registration.FORMAT_V2)) =
         true := by
     rw [hv2]; generalize v.registered.isEmpty = e; cases e <;> exact Iff.rfl
-  have e7 : (v2 = true → R7 rec v) ↔ (ExpectsV2 v → R7 rec v) := by
+  have e7 : (v2 = true → R7 rec v ∧ PoolChained rec v) ↔ (ExpectsV2 v → R7 rec v ∧ PoolChained rec v) := by
     unfold ExpectsV2; rw [hv2]; generalize v.registered.isEmpty = e; cases e <;> simp
   rw [ek, ef, e7]
   constructor
@@ -1543,6 +1550,6 @@ theorem history_of_accept (p : Params) (c : Commitment) (e : Evidence) (pub : Pu
           jeq (getD x "root") (getD r "root") = true ∧ jeq (getD x "domain") (getD r "domain") = true ∧
           int? (getD x "leaves") = int? (getD r "leaves") := by
   obtain ⟨law, -, -, hr, -⟩ := acceptMeans p c e pub prof h
-  exact history_of_R7 c.record p.verifier (hr.2.2.2.2.2.2 hv) u q hreg hu honly hs
+  exact history_of_R7 c.record p.verifier (hr.2.2.2.2.2.2 hv).1 u q hreg hu honly hs
 
 end Properties.Spot

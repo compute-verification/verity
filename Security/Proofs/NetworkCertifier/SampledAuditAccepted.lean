@@ -213,11 +213,6 @@ theorem valOver_const {C : Prog} {inp : ℕ → Bool} {free : ℕ → Option Boo
   rw [valOver_gate h hx]
   rfl
 
-open Classical in
-/-- **The advice's held gates**: every incorrect proof block's committed gate, at the trace's value. -/
-noncomputable def heldAdv (C : Prog) (P : Partition) (F : Finset ℕ) (ref : ℕ → Option Bool) (g : ℕ) : Option Bool :=
-  if FaultyGate C P F g then some (traceVal C ref g) else none
-
 theorem heldAdv_of {C : Prog} {P : Partition} {F : Finset ℕ} {ref : ℕ → Option Bool} {g : ℕ} (h : FaultyGate C P F g) :
     heldAdv C P F ref g = some (traceVal C ref g) := by
   simp [heldAdv, h]
