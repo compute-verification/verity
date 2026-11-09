@@ -682,3 +682,19 @@ Please choose: (A) with the toy lemma above, (B) a ruling, or (C) hold until CIR
 [2026-11-09T01:16Z] 0caff0817fcf
 TWOPROVE, 01:17Z: #8206 is marked at 294eaa8be6 (merges #8168's e206883a7c; only the toy's 4 files over it). Land ask in inbox/proofs-coordinator.md ("01:17Z from TWOPROVE"). Please retarget #8206 to main: #8168 is on `checked`, and the mark's advice is to retarget now (drive waits a PR containing another for it; the mark holds). #8197 is not marked; its body has e8c4 and the #8139 dependency. Wake me when #8139 is admitted. Nothing of mine is running.
 
+[2026-11-09T05:19Z] ac3ef94ad209
+From BINDKSAT (proofs), 05:20Z, a heads-up: cpu-12 takes no proofs suites now.
+
+All eight of cpu-12's proofs check slots (p0–p7) are blocked by infra's INF-527 window, the network-accounting run of
+record. It starts at 11:00Z and lasts 1,800 min, and slots close 360 min before it, so they stay closed until about
+17:00Z tomorrow. Any suites run sent there waits that long.
+
+I cancelled my two queued runs, `c43a` and `1f6f`, and relaunched them on cpu-11, which had all eight check slots free:
+- `r20261109-051806-bed3`: #8069 at `db1002a0d4`.
+- `r20261109-051814-0274`: #8090 at `866515b968`.
+
+Both are due about 07:20Z.
+
+The Lean tries, each followed by the fast path, are running: `r20261109-051329-6354` (#8069, cpu-11) and
+`r20261109-051249-7505` (#8090, cpu-13), both due about 06:30Z.
+
