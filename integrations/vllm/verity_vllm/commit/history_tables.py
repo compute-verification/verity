@@ -19,9 +19,11 @@ request ends (`Histories.end`), since any later window's read may open any earli
 their window's requests once it is committed, but those its request names ``open`` (`release`). Rows and salts are private:
 they stay in this process on the node and in the windows' private files, never under a run's output.
 
-A table holds only positions its request computed itself, never another request's rows: with prefix caching on, a
-request served C cached prompt rows has none of its own below C, and its reads there read its own replayed rows. A window of
-history tables refuses such a request by name until it composes those reads (`pipeline.history_rows.Plan`).
+A table holds only rows its request computed itself, never another request's: with prefix caching on, a request served
+C cached prompt rows appends its own from its first computed position, so leaf i is its position C + i. Its reads open
+none of its tables at serve time: they open a composed table its replay builds, its own recomputed rows below C and then
+a held run of this table's strings. A window of history tables refuses such a request's reads by name
+(`pipeline.history_rows.Plan`).
 """
 from __future__ import annotations
 

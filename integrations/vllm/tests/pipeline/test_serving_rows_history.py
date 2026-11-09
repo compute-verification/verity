@@ -149,17 +149,17 @@ def test_a_long_row_is_topk_reads_cut_by_table_and_its_writer_commits_its_tables
         HR.Plan(TMPLS, rows, False)
 
 
-def test_a_request_served_cached_prompt_rows_is_refused_by_name_in_a_window_of_history_tables(served):
-    """A table holds only positions its request computed itself: a request served a prefix-cache hit has no rows of its own
-    below it, so its writers or its reads are refused by name rather than appended from the table's edge at the wrong
-    positions."""
+def test_a_request_served_cached_prompt_rows_appends_its_own_rows_and_its_reads_are_refused_by_name(served):
+    """A table holds only rows its request computed: a request served a prefix-cache hit appends its own latent rows from
+    the table's edge (leaf i its position C + i), and its reads, which open the composed table its replay builds, are
+    refused by name rather than opened against this one."""
     writes, reads = served.windows[0]
     warm = SimpleNamespace(kv_prefix={"C": 4, "input": "prefix"})
     assert HR.cached(None) == 0 and HR.cached(SimpleNamespace(kv_prefix=None)) == 0 and HR.cached(warm) == 4
-    for hit in ([[(x[0], warm, *x[2:]) for x in writes], reads], [writes, [(x[0], warm, *x[2:]) for x in reads]]):
-        with pytest.raises(ValueError, match="request r0 is served 4 cached prompt rows"):
-            HR.Plan(TMPLS, hit, True)
-    assert HR.Plan(TMPLS, [[(x[0], SimpleNamespace(kv_prefix=None), *x[2:]) for x in writes], reads], True).keys()
+    with pytest.raises(ValueError, match="request r0 is served 4 cached prompt rows"):
+        HR.Plan(TMPLS, [writes, [(x[0], warm, *x[2:]) for x in reads]], True)
+    plan = HR.Plan([LAT], [[(x[0], warm, *x[2:]) for x in writes]], True)
+    assert plan.keys() == [("r0", 3), ("r0", 5)] and [len(us) for us in plan.written.values()] == [5, 5]
 
 
 def light(ms) -> SimpleNamespace:

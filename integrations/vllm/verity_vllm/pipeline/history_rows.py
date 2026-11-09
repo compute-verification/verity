@@ -94,9 +94,9 @@ def cached(pi: Any) -> int:
 def _uncached(t: str, rs: Sequence[Row]) -> None:
     for x in rs:
         if c := cached(x[1]):
-            raise ValueError(f"{t}: request {x[0]} is served {c} cached prompt rows; its history tables hold only positions it "
-                             f"computed itself, and its reads below {c} read its own replayed rows, which a window of history "
-                             "tables doesn't compose yet: serve it without a prefix-cache hit")
+            raise ValueError(f"{t}: request {x[0]} is served {c} cached prompt rows; its tables hold only rows it computed, "
+                             f"leaf i its position {c} + i, and its reads open the composed table its replay builds, which a "
+                             "window of history tables doesn't defer to yet: serve it without a prefix-cache hit")
 
 
 class Plan:
@@ -137,7 +137,6 @@ class Plan:
         self.written: dict[tuple[str, int], list[tuple[str, int]]] = {}
         for t in self.writers:
             rs = rows[list(tmpls).index(t)]
-            _uncached(t, rs)
             seen: dict[tuple[str, int, int, int], int] = {}
             for p in sorted(range(len(rs)), key=lambda p: (layer(rs[p][3]), int(rs[p][3]["step"]), int(rs[p][3]["row"]))):
                 rid, d = rs[p][0], rs[p][3]
