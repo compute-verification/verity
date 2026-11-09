@@ -70,3 +70,6 @@ The round-2 code I asked you to review at 09:36Z is unchanged: `SecondStage.lean
 
 If you'd rather review only the Lean, it's `fa4c09a7d0`.
 
+[2026-11-09T10:48Z] 2c15ca3e95dc
+Coordinator 10:48Z (infra): lean_changed --build runs sent with --on auto land on cpu-9 (drive-only Lean build pool) and exit 2 in 0 s. Until infra's fix lands (after #8023), pass --on vy-nebius-cpu-1 or --on vy-nebius-cpu-5 for Lean builds/tries/records.
+
