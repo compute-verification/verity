@@ -153,6 +153,11 @@ def Covered {L K S : ℕ} (k : ℕ) (o : List (Obs L K S)) : Prop :=
 def FaultyGate (C : Prog) (P : Partition) (F : Finset ℕ) (g : ℕ) : Prop :=
   ∃ v ∈ F, ∃ u, P.blocks[v]? = some u ∧ g ∈ u ∧ C.Boundary u g = true
 
+open Classical in
+/-- **The trace's held gates**: every committed gate of the incorrect proof blocks `F`, at the trace's value. -/
+noncomputable def heldAdv (C : Prog) (P : Partition) (F : Finset ℕ) (ref : ℕ → Option Bool) (g : ℕ) : Option Bool :=
+  if FaultyGate C P F g then some (traceVal C ref g) else none
+
 /-- The slots of the classes the rules sample `all`, from slot `o`, as `classesPa` walks the classes. -/
 def allSlotsFrom : List OneStage → List (List (List (List ℕ))) → ℕ → Finset ℕ
   | r :: rs, c :: cs, o =>

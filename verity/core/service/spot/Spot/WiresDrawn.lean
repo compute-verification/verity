@@ -88,7 +88,8 @@ theorem drawnOk_iff {c : Wiring} {S : Summary} (h : check c = .ok S)
 
 /-! ## JSON: the `wires_drawn` and `wires_drawn_unrolled` pieces
 
-An instance is `{"templates", "cuts", "wires", "drawn", "reads", "writes"}`: the first three as the `wires` piece's;
+An instance is `{"templates", "cuts", "wires", "drawn", "reads", "writes"}` and optionally `"order"`: the first three and
+`order` as the `wires` piece's;
 `drawn` the sampled proof blocks `[tid, unit]` (repeats counted once); `reads` the public strings of reader rows,
 `[tid, unit, port, row, s]`; `writes` those of writer output rows, `[tid, unit, out, s]` (the first of a repeated row
 counts). A wired row is its writer's when both strings are given and equal. The output is the `wires` piece's refusal,
@@ -107,7 +108,7 @@ def keyJson (k : Key) : Json := Json.arr #[toJson k.1, toJson k.2.1, toJson k.2.
 
 def drawnInstance (j : Json) : Except String (Wiring × List (String × Nat) ×
     (Key → (String × Int × String) → Bool)) := do
-  sameKeys j ["templates", "cuts", "wires", "drawn", "reads", "writes"] "an instance"
+  instanceKeys ["templates", "cuts", "wires", "drawn", "reads", "writes"] "an instance" j
   let c ← Wiring.ofJson j
   let drawn ← (← arrOf "drawn" (← field j "drawn")).mapM fun d => do
     match ← arrOf "a drawn unit" d with

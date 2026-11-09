@@ -41,9 +41,10 @@ base had it goes, as in any three-way merge, unless that other side restated its
 side, and the merged record lists it (`held`): a side whose `--update` ran on an older tree drops a text the other
 side's restated statement still prints, and the Lean check fails on a missing entry but not on one whose premise no
 longer offends, which the next `--update` drops. An `unwitnessed` or `witnesses` entry merges the same way (`JUDGED`),
-named as a record: its value follows the statement as each side's tree builds it (a type hash, the witnesses a form
-needs), so the incoming side's, the newer tree's when drive stacks a PR, stands as a candidate, which the Lean check of
-the merged commit judges.
+named as a candidate, which the Lean check of the merged commit judges, but for one both sides changed differently: it is
+theirs only when theirs alone holds the hashes of its guarantee's merged record, and ours otherwise (a `witnesses` entry,
+which no record keys, always), so an incoming side's stale value can't re-key the entry silently, and a kept one the
+merged tree doesn't state fails that Lean check as a witness failure (`judged`).
 
 Every entry taken from one side where the sides disagree is named on stderr, one line per key. A side that is not a
 record (not JSON, not an object, or holding both `pins` and `guarantees`) is the other side's record, named; only when
@@ -203,16 +204,38 @@ def entries(path: str, o: dict, a: dict, b: dict, why: list[str], depth: int = 1
     return out
 
 
-def judged(section: str, o: dict, a: dict, b: dict, candidate: list[str]) -> dict:
+def at_record(v, rec) -> bool:
+    """Whether the `unwitnessed` value ``v`` holds the hashes of ``rec``, its guarantee's merged record: the type hash and
+    the `unfolded_hash`, which neither a bare hash nor a record of a guarantee not stated as a definition has."""
+    e = A.unwitnessed_entry(v)
+    return (isinstance(rec, dict) and e is not None and e[0] == rec.get("type_hash")
+            and A.unwitnessed_unfolded(v) == rec.get("unfolded_hash"))
+
+
+def judged(section: str, o: dict, a: dict, b: dict, candidate: list[str], records: dict) -> dict:
     """A `JUDGED` section merged entry by entry as `one` merges it, the entries the sides disagree on named in ``candidate``
-    with the side taken: theirs' where both changed it, the changed one where one side removed it."""
+    with the side taken.  An entry both sides changed differently is theirs' only when theirs alone holds the hashes of
+    its guarantee's merged record (``records``, `at_record`), and ours' otherwise, a `witnesses` entry, which no record
+    keys, always: a stale value on the incoming side would re-key the entry silently, while one kept from ours that the
+    merged tree doesn't state fails its Lean check as a witness failure.  An entry one side removed is the changed one."""
     out = {}
     for k in keys(section, a, b):
         x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
-        why: list[str] = []
-        v = one(f"{section}[{k}]", x, y, z, why)
-        if why:
-            candidate.append(f"{section}[{k}] ({'ours' if z is MISSING else 'theirs'})")
+        if MISSING not in (y, z) and y != z and x not in (y, z):
+            rec = records.get(k)
+            v = z if section == "unwitnessed" and at_record(z, rec) and not at_record(y, rec) else y
+            if section != "unwitnessed":
+                side = "ours"
+            elif v is z:
+                side = "theirs, at its merged record"
+            else:
+                side = "ours, at its merged record" if at_record(y, rec) else "ours, neither side at its merged record"
+            candidate.append(f"{section}[{k}] ({side})")
+        else:
+            why: list[str] = []
+            v = one(f"{section}[{k}]", x, y, z, why)
+            if why:
+                candidate.append(f"{section}[{k}] ({'ours' if z is MISSING else 'theirs'})")
         if v is not MISSING:
             out[k] = v
     return out
@@ -475,11 +498,14 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
     """(the merged record, the entries a person writes that the sides disagreed on, each with the side taken: empty when
     none).  A pure function of the three records, which never refuses.  ``candidate`` collects the records the build
     determines (`RECORD_DIFFERENCE`'s kinds: guarantees' records, `reads`, assumptions' digests, `JUDGED` entries) merged
-    although the sides disagree on them: the union or theirs' value, which the lock run after landing regenerates; and the
-    `shape.inline` premises `held` keeps."""
+    although the sides disagree on them: the union or theirs' value, which the lock run after landing regenerates, or the
+    side `judged` keeps; and the `shape.inline` premises `held` keeps."""
     why: list[str] = []
     candidate = [] if candidate is None else candidate
     ours, theirs = exclusive(base, ours, theirs, why)
+    o, a, b = (s.get("guarantees", MISSING) for s in (base, ours, theirs))
+    records = guarantees({} if o is MISSING else o, a, b, [], []) if (
+        isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict))) else {}
     out = {}
     for k in keys("", ours, theirs):
         o, a, b = base.get(k, MISSING), ours.get(k, MISSING), theirs.get(k, MISSING)
@@ -492,7 +518,7 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
             v = assumptions(*({} if s is MISSING else s for s in (o, a, b)), why, candidate, k)
             v = MISSING if not v and MISSING in (a, b) else v
         elif k in JUDGED and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
-            v = judged(k, {} if o is MISSING else o, a, b, candidate)
+            v = judged(k, {} if o is MISSING else o, a, b, candidate, records)
         elif k == "layers" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = layers({} if o is MISSING else o, a, b, why)
         elif names(o, a, b):
@@ -1220,6 +1246,8 @@ def main(argv: list[str]) -> int:
         print(f"merge.py: {path}: {c}: " + (
             "a shape.inline premise one side dropped and the other, restating its guarantee, has as the base had it, kept; "
             "`check.py --update` drops it where the merged tree's premise no longer offends" if c.endswith(" (kept)") else
+            "kept as named; the Lean check of the merged tree judges it, and a stale entry fails there as a witness failure"
+            if c.split("[", 1)[0] in JUDGED else
             "taken without regenerating it; the lock run after landing regenerates it"), file=sys.stderr)
     ours.write_text(A.text(merged))
     return 0
