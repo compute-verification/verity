@@ -51,11 +51,12 @@ RID's tokens and logprob bits and the schedule (a dummy's finish reason aside) u
 the replay took from the run.
 
 ``--recompute-hits`` (with ``--shape-only``) recomputes RID's prefix-cache hits rather than loading them, as a sampled
-replay that re-proves its hit does: a dummy computes each leading page it shares with RID over RID's tokens at its
-served launch, and those slots are kept rather than refilled, so each page RID hits is a block this replay computed,
-which `Hits` leaves as it is. A hit page this replay didn't compute in full (its producer ran before the start, or
-computed it from outputs a dummy samples afresh) is counted (``target_pages_unrecomputed``) and fails ``bit_exact``.
-RID must arrive inside the block.
+replay that re-proves its hit does: a dummy keeps its tokens where they are RID's, and its slots over those positions
+(over every position up to RID's length while its tokens are all RID's, so a previous turn's dummy decodes and samples
+there as serving did), so each page RID hits is the block a dummy filled under that page's hash at its served launch,
+which `Hits` leaves as it is. A hit page no block this replay filled in full holds (its producer ran before the start,
+or a dummy sampled another token) is counted (``target_pages_unrecomputed``) and fails ``bit_exact``. RID must arrive
+inside the block.
 
 ``--served`` replays an arm `tp_restore.py serve` wrote, at any tensor-parallel size: each edge's state
 (`boundary:save_edge`'s ``state.pkl``) and the first edges' whole-pool dumps (``--dump``) under its scratch directory.
@@ -626,6 +627,11 @@ def page_chain(tokens: list[int], bs: int) -> list[bytes]:
     return out
 
 
+def common_prefix(a: list[int], b: list[int]) -> int:
+    n = min(len(a), len(b))
+    return next((i for i in range(n) if a[i] != b[i]), n)
+
+
 def substitute(tokens: list[int], bs: int, keep: set[bytes], ids: tuple[int, int] = SUBSTITUTE_IDS) -> tuple[list[int], int]:
     """A dummy's tokens: each full page whose chain hash is in ``keep`` as it is, every other page replaced by tokens drawn
     from its chain hash, so two requests' pages are equal here exactly where they were; and how many pages were kept."""
@@ -649,8 +655,9 @@ class Dummies:
     ``mode`` (zero or NaN, in each layer's dtype) through ``kv`` (`LocalKv`, `RankKv`), and `scheduled` and `flush`
     refill each slot a dummy wrote once the GPU has finished the step, as `Mirror` copies them, never in a block the
     target holds. `scheduled` also notes each page the target has written (``target_pages``). With ``recompute``, a
-    dummy's slots in its leading pages shared with the target (`kept_pages`) are kept, not refilled, and each block
-    they fill is noted (``filled``) until it is refilled, poisoned or handed out again (`forget`)."""
+    dummy keeps its tokens where they are the target's, partial page included, and its slots over its leading
+    positions that are the target's (`kept_len`) are kept, not refilled; each block they fill is noted (``filled``)
+    until it is refilled, poisoned or handed out again (`forget`)."""
 
     def __init__(self, target: str, mode: str, sched: Any, kvm: Any, kv: Any, block_size: int,
                  keep_tokens: list[int], finish: dict[str, int], stops: dict[str, int] | None = None,
@@ -660,6 +667,7 @@ class Dummies:
         self.stops = {rid: s for rid, s in (stops or {}).items() if rid != target}
         full = len(keep_tokens) // block_size * block_size
         self.keep = set(page_chain(keep_tokens[:full], block_size))
+        self.keep_tokens = list(keep_tokens)
         self.target_pages: set[bytes] = set()
         self.pending: list[int] = []
         self.kept: dict[str, int] = {}
@@ -674,9 +682,12 @@ class Dummies:
         return rid != self.target
 
     def tokens(self, prompt: list[int], outs: list[int]) -> tuple[list[int], list[int]]:
-        got, kept = substitute(list(prompt) + list(outs), self.bs, self.keep)
+        seq = list(prompt) + list(outs)
+        got, kept = substitute(seq, self.bs, self.keep)
+        n = common_prefix(seq, self.keep_tokens) if self.recompute else 0
+        got[:n] = seq[:n]
         self.taken["dummies"] += 1
-        self.taken["tokens_substituted"] += len(got) - kept * self.bs
+        self.taken["tokens_substituted"] += len(got) - max(kept * self.bs, n)
         self.taken["pages_kept_target_shared"] += kept
         return got[:len(prompt)], got[len(prompt):]
 
@@ -724,11 +735,14 @@ class Dummies:
             self.forget(ids)
         return len(ids)
 
-    def kept_pages(self, rid: str) -> int:
-        """How many of dummy ``rid``'s leading full pages are the target's, its tokens there kept (`substitute`)."""
+    def kept_len(self, rid: str) -> int:
+        """How many of dummy ``rid``'s leading positions are the target's: its tokens' common prefix with the target's, or,
+        when its tokens so far are all the target's, every position up to the target's length, where what it samples
+        decides whether its pages are the target's (each page's hash, which `Hits` looks the target's hit up by)."""
         if rid not in self.kept:
-            chain = page_chain(list(self.sched.requests[rid].all_token_ids), self.bs)
-            self.kept[rid] = next((i for i, h in enumerate(chain) if h not in self.keep), len(chain))
+            seq = list(self.sched.requests[rid].all_token_ids)
+            n = common_prefix(seq, self.keep_tokens)
+            self.kept[rid] = len(self.keep_tokens) if n == len(seq) else n
         return self.kept[rid]
 
     def recomputed(self, block: int) -> bool:
@@ -750,7 +764,7 @@ class Dummies:
                 self.target_pages.update(q.block_hashes[: (start[rid] + int(n)) // bs])
                 continue
             blocks = self.kvm.get_block_ids(rid)[0]
-            kept = self.kept_pages(rid) * bs if self.recompute else 0
+            kept = self.kept_len(rid) if self.recompute else 0
             for p in range(start[rid], start[rid] + int(n)):
                 b = blocks[p // bs]
                 if p < kept:

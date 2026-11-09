@@ -328,14 +328,20 @@ class Fills(Writes):
 
 def test_recompute_hits_keeps_a_dummy_s_slots_on_the_target_s_pages_and_counts_only_blocks_this_replay_filled(
         kv_cache_utils: None) -> None:
-    """``--recompute-hits``: a dummy keeps what it computes in its leading pages that are the target's and refills the
-    rest; the target's hit counts as recomputed only on blocks those writes filled in full, and a block poisoned or
-    handed out again no longer counts. Nothing of serving's is written."""
-    sched = NS(requests={"d": NS(all_token_ids=[1, 2, 3, 4, 5, 6, 7, 8, 40, 41, 42, 43, 44])})
+    """``--recompute-hits``: a dummy keeps its tokens and what it computes where they are the target's, through its
+    decode while its tokens are all the target's, and refills the rest; the target's hit counts as recomputed only on
+    blocks those writes filled in full, and a block poisoned or handed out again no longer counts. Nothing of serving's
+    is written."""
+    sched = NS(requests={"d": NS(all_token_ids=[1, 2, 3, 4, 5, 6, 7, 8, 40, 41, 42, 43, 44]),
+                         "p": NS(all_token_ids=[1, 2, 3, 4, 5, 6])})
     kvm = NS(get_block_ids=lambda rid: ([10, 11, 12, 13],))
     kv = Fills()
     d = RB.Dummies("t", "zero", sched, kvm, kv, 4, [1, 2, 3, 4, 5, 6, 7, 8, 9], {}, recompute=True)
-    assert d.kept_pages("d") == 2
+    assert (d.kept_len("d"), d.kept_len("p")) == (8, 9)
+    prompt, outs = d.tokens([1, 2, 3, 4, 5, 6], [7, 50])
+    assert prompt == [1, 2, 3, 4, 5, 6] and outs[0] == 7 and RB.SUBSTITUTE_IDS[0] <= outs[1] < RB.SUBSTITUTE_IDS[1]
+    shape_only = RB.Dummies("t", "zero", sched, kvm, kv, 4, [1, 2, 3, 4, 5, 6, 7, 8, 9], {})
+    assert shape_only.tokens([1, 2, 3, 4, 5, 6], [])[0][4:] != [5, 6]
     d.scheduled(NS(scheduled_new_reqs=[NS(req_id="d", num_computed_tokens=0)], num_scheduled_tokens={"d": 6}))
     d.scheduled(NS(scheduled_cached_reqs=NS(req_ids=["d"], num_computed_tokens=[6]), num_scheduled_tokens={"d": 5}))
     d.flush()
