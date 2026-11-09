@@ -15,21 +15,24 @@ Lean-change test (`queue.lean_change`), and `conflict` whether `Queue._merge` me
 `candidates` are origin's `queue/<sha12>` branches, each the `Queue: #N` merges on its first-parent line down to `main` or
 another candidate, lowest first.  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`) on the merge
 gate's tasks, those drive's `executor = "on"` path gates on (none of `drive.SLIM_STEPS`, none off the gate in policy.toml at
-the candidate): a failed or blocked task is fail, else a task whose newest result is graph2's infra error (`detail.infra`) is
-infra, else every gating task passed is pass, else pending.  No graph while graph2 says its listing failed (`verdict`, else its
-`ready_verdict` label), a graph that can't be read, or no graph of a candidate the log never enqueued is list-failed.  graph2's
-own verdict, where it has one, is compared and a disagreement logged.
+the candidate): a failed or blocked task is fail, each failed task with its key in its base's graph as graph2 listed it, where
+one is made there (`Failed.base_key`: a failure at it is inherited), else a task whose newest result is graph2's infra error
+(`detail.infra`) is infra, else every gating task passed is pass, else pending.  No graph while graph2 says its listing failed
+(`verdict`, else its `ready_verdict` label), a graph that can't be read, or no graph of a candidate the log never enqueued is
+list-failed.  graph2's own verdict, where it has one, is compared and a disagreement logged.
 
 The actions.  Build merges its members in order onto its base (`Queue._merge`), leaving out one that doesn't merge (`skip`, its
 owner told once per head and base), pushes `queue/<sha12>` and enqueues `ready:<sha>` as graph/v2 at its priority.  Advance
 pushes `main` to the candidate with a lease on its base and does what drive does when `main` moves (`Driver._on_main`).  Drop
-cancels the check (graph2's `cancel`, where it has one), deletes the branch and logs its outcome.  Eject withdraws the PR's
-ready mark at its head (`Queue.eject`, under the clone's queue lock) and tells its owner the failed tasks, their keys and where
-their logs are.  Retry enqueues again, once for each terminal infra or list-failed verdict (by its evidence: the infra results
-there are, graph2's listing verdict).  Ring tells infra's handle (`drive.INFRA`), once a candidate.  Each action and its result
-is one JSON line in the log, whose directory also holds the loop's caches.
+cancels the check (graph2's `cancel`, where it has one), deletes the branch and logs its outcome, a fail's with its base and
+its inherited failures, their inputs whole, which `history` reads back.  Eject withdraws the PR's ready mark at its head
+(`Queue.eject`, under the clone's queue lock) and tells its owner the failed tasks, their keys and where their logs are.  Retry
+enqueues again, once for each terminal infra or list-failed verdict (by its evidence: the infra results there are, graph2's
+listing verdict).  Ring tells infra's handle (`drive.INFRA`), once a candidate.  Red tells `CI` and the owners of what the base
+fails (as drive names them: a test file's suite's, else its job's) that it is red on them, once a base and task.  Each action
+and its result is one JSON line in the log, whose directory also holds the loop's caches.
 
-`--shadow` logs advance, eject, ring and every message with `shadow: true` and does none of them, and builds, drops and
+`--shadow` logs advance, eject, ring, red and every message with `shadow: true` and does none of them, and builds, drops and
 retries: its `main` is the newest candidate it advanced (logged) while origin's `main` is below it, a pass its `main` no longer
 holds is no history, and a PR it ejected stays out until marked again.  `--dry-run` prints the snapshot and the actions and
 writes nothing: no ref on origin, no log, no enqueue, no label, no message.  The loop never writes drive's state, its priority
@@ -62,7 +65,7 @@ from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_key,
 from .queue import (PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, flags_at, label_verifier, lean_change,
                     lowrisk, priority_list, queue_commit, review_owners, rules_at, unreviewed)
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Drop, Eject, Failed, Outcome,
-                     Ready, Retry, Ring, Snapshot, Verdict)
+                     Ready, Red, Retry, Ring, Snapshot, Verdict)
 
 #: graph2, infra's executor on the control pod: its argv before the subcommand
 GRAPH2 = ("python3.12", "/root/executor/infra/graph2.py", "--db", "/root/executor/graph2.db", "--events", "/root/executor/events")
@@ -107,6 +110,15 @@ def _digest(doc: object) -> str:
     return hashlib.sha256(json.dumps(doc, sort_keys=True, default=str).encode()).hexdigest()[:16]
 
 
+def _failed_doc(f: Failed) -> dict:
+    """An inherited failure as an outcome logs it, whole: a red base's batch reads its inputs (`vqueue.decide`)."""
+    return {"task": f.task, "key": f.key, "inputs": sorted(f.inputs), "base_key": f.base_key}
+
+
+def _as_failed(d: dict) -> Failed:
+    return Failed(str(d.get("task")), str(d.get("key")), frozenset(d.get("inputs") or ()), d.get("base_key"))
+
+
 @dataclass
 class Past:
     """The decision log's window (`WINDOW_S`), oldest first, the last tick it holds, and why each line it skipped isn't one (a
@@ -140,7 +152,8 @@ class Past:
 
     def history(self, on: Callable[[str], bool] | None = None) -> tuple[Outcome, ...]:
         """The drops' outcomes; with ``on``, a pass only of a candidate ``on`` holds (a shadow's `main` left behind)."""
-        return tuple(Outcome(tuple(o.get("members") or ()), tuple(o.get("heads") or ()), o["state"], tuple(o.get("suspects") or ()))
+        return tuple(Outcome(tuple(o.get("members") or ()), tuple(o.get("heads") or ()), o["state"], tuple(o.get("suspects") or ()),
+                             o.get("base"), tuple(_as_failed(f) for f in o.get("inherited") or () if isinstance(f, dict)))
                      for r in self.of("drop") if isinstance(o := r.get("outcome"), dict) and o.get("state")
                      and (on is None or o["state"] != PASS or on(r.get("sha") or "")))
 
@@ -155,6 +168,11 @@ class Past:
 
     def told(self) -> set[str]:
         return {f"{h}@{r.get('base')}" for r in self.of("skip") if r.get("done") or r.get("shadow") for h in r.get("heads") or ()}
+
+    def reds(self, base: str) -> set[str]:
+        """The tasks ``base`` was told red on."""
+        return {f.get("task") for r in self.of("red") if r.get("base") == base and (r.get("done") or r.get("shadow"))
+                for f in r.get("failed") or () if isinstance(f, dict)}
 
     def built(self, sha: str) -> dict | None:
         return next(reversed(self.of("build", sha)), None)
@@ -365,8 +383,9 @@ class World:
             members.append(m)
         return None
 
-    def verdict(self, sha: str) -> Judged:
-        """Candidate ``sha``'s verdict from graph2's results (see the module's docstring), beside graph2's own."""
+    def verdict(self, sha: str, base: str = "") -> Judged:
+        """Candidate ``sha``'s verdict from graph2's results (see the module's docstring), beside graph2's own, each failed task
+        with its key in its base ``base``'s graph (`_base_keys`)."""
         check = f"ready:{sha}"
         theirs = self.graph2_verdict(sha)
         said = theirs.get("state") if isinstance(theirs, dict) else None
@@ -388,15 +407,7 @@ class World:
         if not gates:
             return Judged(Verdict(LIST_FAILED), mark=f"empty {_digest(sorted(tasks))}", note="no task on the merge gate",
                           graph2=said)
-        seen = _Seen(self.tasks.transport)
-        states = Executor(seen).settle(graph)
-        files, envs = graph.get("files") or {}, graph.get("envs") or {}
-        keys: dict[str, str] = {}
-        for i, t in tasks.items():                          # each key settle read: the graph's, or one made from its reads
-            reads = [states[r["task"]] for r in t["reads"]]
-            keys[i] = t.get("key") or (task_key(t, files, envs[t["env"]]["digest"],
-                                                {r["task"]: s[1]["outputs"] for r, s in zip(t["reads"], reads)})
-                                       if states[i][0] != BLOCKED and all(s[0] == PASS for s in reads) else "")
+        states, keys, seen = self._settled(graph)
         inputs: dict[str, frozenset[str]] = {}
 
         def reach(i: str) -> frozenset[str]:
@@ -420,7 +431,8 @@ class World:
             elif states[i][0] == BLOCKED:
                 bad += [j for j in under(i, set()) if states[j][0] == FAIL] or [i]
         infra = [i for i in needed if states[i][0] == PENDING and _infra(seen.got.get(keys[i]) or (), keys[i])]
-        fail = tuple(Failed(i, keys[i], reach(i)) for i in dict.fromkeys(bad))
+        based = self._base_keys(base, set(bad)) if bad else {}
+        fail = tuple(Failed(i, keys[i], reach(i), based.get(i)) for i in dict.fromkeys(bad))
         down = tuple(Failed(i, keys[i], reach(i)) for i in infra)
         if fail:
             mine = Verdict(FAIL, fail, down)
@@ -436,6 +448,35 @@ class World:
         note = "; ".join([*([f"graph2 says {said}"] if said in vqueue.STATES and said != mine.state else []),
                           *([f"no task of {', '.join(lacks)}"] if lacks else [])])
         return Judged(mine, mark=mark if mine.state == INFRA else None, note=note, graph2=said, lacks=lacks)
+
+    def _settled(self, graph: dict) -> tuple[dict[str, tuple], dict[str, str], _Seen]:
+        """``graph``'s tasks settled on graph2's results (`Executor.settle`), each one's key, the graph's or one made from its
+        reads ("" while they haven't all passed), and the results read."""
+        seen = _Seen(self.tasks.transport)
+        states = Executor(seen).settle(graph)
+        files, envs = graph.get("files") or {}, graph.get("envs") or {}
+        keys: dict[str, str] = {}
+        for t in graph["tasks"]:
+            reads = [states[r["task"]] for r in t["reads"]]
+            keys[t["id"]] = t.get("key") or (task_key(t, files, envs[t["env"]]["digest"],
+                                                     {r["task"]: s[1]["outputs"] for r, s in zip(t["reads"], reads)})
+                                             if states[t["id"]][0] != BLOCKED and all(s[0] == PASS for s in reads) else "")
+        return states, keys, seen
+
+    def _base_keys(self, base: str, ids: set[str]) -> dict[str, str]:
+        """The keys tasks ``ids`` have in ``base``'s graph, as graph2 listed it, where one is made there: graph2 keys a task by
+        all it reads, so a candidate's task at its base's key fails as it did there (`vqueue.Failed.base_key`)."""
+        if not base:
+            return {}
+        try:
+            got = self.tasks.graph_v2(f"ready:{base}")
+        except ValueError as e:
+            self.log(f"research queue vqueue: {base[:12]}'s graph can't be read, so no failure on it is inherited: {e}")
+            return {}
+        if got is None:
+            return {}
+        _, keys, _ = self._settled(got[1])
+        return {i: keys[i] for i in ids if keys.get(i)}
 
     def graph2_verdict(self, sha: str) -> dict | None:
         """graph2's own verdict on `ready:<sha>`: its `verdict` command's JSON, else its `ready_verdict` label's, else None."""
@@ -533,6 +574,23 @@ class World:
         p = self.prs.get(number) or self.open().get(number)
         return self.q.handle(p) if p is not None else None
 
+    def task_owners(self, sha: str, ids: Iterable[str]) -> tuple[str, ...]:
+        """The handles owning tasks ``ids`` of ``sha``'s graph, as drive names the owner of what failed (`Driver._red_owners`):
+        a test file's suite's in the registry, else its job's in ci.toml at ``sha``."""
+        try:
+            got = self.tasks.graph_v2(f"ready:{sha}")
+        except ValueError as e:
+            self.log(f"research queue vqueue: {sha[:12]}'s graph can't be read, so its failed tasks' owners aren't told: {e}")
+            got = None
+        by, d, out = {t["id"]: t for t in got[1]["tasks"]} if got else {}, self.driver(), []
+        for i in ids:
+            if (t := by.get(i)) is None:
+                continue
+            suite = (t.get("vars") or {}).get("suite") if t["kind"] == "test-file" else None
+            if h := (d._path_owner(suite) if isinstance(suite, str) else None) or d._step_owner(d._job(t), sha):
+                out.append(f"@{h}")
+        return tuple(dict.fromkeys(out))
+
     def say(self, text: str, to: tuple[str, ...]) -> bool:
         """``text`` posted to ``to`` in the merge thread, as drive posts."""
         return bool(self.post(f"{' '.join(to)} vqueue: {text}", to))
@@ -604,7 +662,7 @@ class Loop:
             else:
                 base, ms = "", []
                 w.log(f"research queue vqueue: candidate {sha[:12]} holds a commit that is no `Queue: #N` merge above its base")
-            j = w.verdict(sha)
+            j = w.verdict(sha, base)
             if not j.listed and not past.tries(sha):        # pushed, and its enqueue failed or never ran
                 j = Judged(Verdict(LIST_FAILED), mark="not enqueued", note="the log holds no enqueue of it", graph2=j.graph2,
                            listed=False)
@@ -704,7 +762,10 @@ class Loop:
         return {"at": stamp(self.now()), "tick": t.n, "shadow": self.shadow, "main": t.main, "action": action, "sha": sha,
                 "base": base, "members": list(members), "heads": list(heads), "priority": priority, "number": number,
                 "why": why, "outcome": outcome and {"members": list(outcome.members), "heads": list(outcome.heads),
-                                                    "state": outcome.state, "suspects": list(outcome.suspects)},
+                                                    "state": outcome.state, "suspects": list(outcome.suspects),
+                                                    **({"base": outcome.base} if outcome.base else {}),
+                                                    **({"inherited": [_failed_doc(f) for f in outcome.inherited]}
+                                                       if outcome.inherited else {})},
                 "failed": [{"task": f.task, "key": f.key} for f in failed],
                 **({"origin_main": t.origin} if t.origin != t.main else {}), **extra}
 
@@ -731,6 +792,8 @@ class Loop:
             return self._retry(c, t)
         if isinstance(a, Ring):
             return self._ring(a, c, t)
+        if isinstance(a, Red):
+            return [self._red(a, c, t)]
         raise QueueError(f"{a}: no such action")
 
     def _build(self, a: Build, t: Tick) -> list[dict]:
@@ -825,6 +888,19 @@ class Loop:
         return [self.record(t, "ring", sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why,
                             failed=c.verdict.infra, text=text, done=done)]
 
+    def _red(self, a: Red, c: Candidate, t: Tick) -> dict:
+        """Tell `CI` and the owners of what failed that ``a.base`` is red on it, once a base and task: a post that fails is told
+        again by the next red on that base, and the drop after it goes ahead."""
+        w, tasks = self.world, "; ".join(f"{f.task} (key {f.key})" for f in a.failed)
+        to = tuple(dict.fromkeys((CI, *w.task_owners(c.sha, (f.task for f in a.failed)))))
+        new = {f.task for f in a.failed} - t.past.reds(a.base)
+        text = None if not new else (
+            f"the verified queue's base {a.base[:12]} is red: {a.why}. Failed there as on {c.sha[:12]}: {tasks}. Each result, its "
+            f"log's digest with it: `research store labels task:<key> --key result --history`")
+        done = text is not None and not self.shadow and w.say(text, to)
+        return self.record(t, "red", sha=c.sha, base=a.base, members=c.members, heads=c.heads, why=a.why, failed=a.failed,
+                           text=text, to=list(to), done=done)
+
 
 def _name(a: Action) -> str:
     return type(a).__name__.lower()
@@ -860,7 +936,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--graph2", default=shlex.join(GRAPH2), help="graph2's argv before its subcommand (default the control pod's)")
     ap.add_argument("--batch", type=int, default=6, help="the most members a candidate holds (default 6)")
     ap.add_argument("--depth", type=int, default=2, help="the most candidates stacked at once (default 2)")
-    ap.add_argument("--shadow", action="store_true", help="log advance, eject, ring and messages, and do none of them")
+    ap.add_argument("--shadow", action="store_true", help="log advance, eject, ring, red and messages, and do none of them")
     ap.add_argument("--dry-run", action="store_true", help="print the snapshot and the actions; write nothing")
     ap.add_argument("--once", action="store_true", help="one tick")
     ap.add_argument("--interval", type=float, default=INTERVAL_S, help=f"seconds between ticks (default {INTERVAL_S})")

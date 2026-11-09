@@ -101,16 +101,17 @@ class Env:
     def lines(self) -> list[dict]:
         return [json.loads(x) for x in self.log.read_text().splitlines()] if self.log.is_file() else []
 
-    def listed(self, sha: str, tasks: dict[str, list[str]], reads: dict[str, str] | None = None) -> dict[str, str]:
-        """graph2's listing of `ready:<sha>`: a task of each ``tasks`` with those inputs, keyed unless it reads another
-        (``reads``: {task: the task it reads, whose output `out` it reads})."""
-        reads = reads or {}
+    def listed(self, sha: str, tasks: dict[str, list[str]], reads: dict[str, str] | None = None,
+               keys: dict[str, str] | None = None) -> dict[str, str]:
+        """graph2's listing of `ready:<sha>`: a task of each ``tasks`` with those inputs, keyed (by ``keys``, else by ``sha``)
+        unless it reads another (``reads``: {task: the task it reads, whose output `out` it reads})."""
+        reads, keys = reads or {}, keys or {}
         graph = {"schema": GRAPH_V2, "commit": sha, "files": {f: f"sha512:{f}" for ins in tasks.values() for f in ins},
                  "envs": {"py": {"digest": "sha512:env"}},
                  "tasks": [{"id": i, "kind": "test-file", "env": "py", "argv": ["t", i], "vars": {}, "inputs": ins,
                             "reads": [{"task": reads[i], "output": "out"}] if i in reads else [],
                             "outputs": [{"name": "out", "path": f"{i}.out"}],
-                            **({} if i in reads else {"key": f"sha512:{sha[:8]}-{i}"})} for i, ins in tasks.items()]}
+                            **({} if i in reads else {"key": keys.get(i, f"sha512:{sha[:8]}-{i}")})} for i, ins in tasks.items()]}
         self.graph2.list_graph(f"ready:{sha}", graph)
         return {t["id"]: t.get("key", "") for t in graph["tasks"]}
 
@@ -323,6 +324,41 @@ def test_the_policy_itself_ejects_the_member_a_failure_meets_rebuilds_the_rest_a
     advance, landed = loop.tick()
     assert (advance["action"], landed["action"], landed["outcome"]["state"]) == ("advance", "drop", PASS)
     assert env.main() == again["sha"] and env.queued() == {} and loop.tick() == []
+
+
+@pytest.mark.parametrize("shadow", [False, True])
+def test_a_failure_at_its_bases_key_reds_the_base_once_and_only_a_fix_is_built_on_it_until_one_lands(env, shadow):
+    main = env.main()
+    one = env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(vqueue.decide, shadow=shadow)
+    (built,) = loop.tick()
+    red, failed = {"pytest:r": "sha512:red"}, [{"task": "pytest:r", "key": "sha512:red"}]
+    env.listed(main, {"pytest:r": ["red.txt"]}, keys=red)               # the base's graph: `pytest:r` at the same key
+    keys = env.listed(built["sha"], {"pytest:a": ["a.txt"], "pytest:r": ["red.txt"]}, keys=red)
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    env.result("sha512:red", "pytest:r", "fail")
+    told, drop = loop.tick()                                            # nobody blamed, and #1 is no fix: nothing built
+    assert (told["action"], told["base"], told["failed"], told["to"], told["shadow"]) == ("red", main, failed, ["@ci"], shadow)
+    assert f"base {main[:12]} is red" in told["text"] and env.posts == ([] if shadow else [f"@ci vqueue: {told['text']}"])
+    assert drop["outcome"] == {"members": [1], "heads": [one], "state": FAIL, "suspects": [], "base": main, "inherited": [
+        {"task": "pytest:r", "key": "sha512:red", "inputs": ["red.txt"], "base_key": "sha512:red"}]}
+    assert loop.tick() == [] and env.withdrawn == []                    # the log's outcome keeps the base red
+    env.put(2, {"red.txt": "no fix\n"})
+    (two,) = loop.tick()
+    assert (two["action"], two["members"], two["base"]) == ("build", [2], main)
+    env.listed(two["sha"], {"pytest:r": ["red.txt"]}, keys=red)         # its change leaves `pytest:r` as it was
+    again, dropped = loop.tick()
+    assert (again["action"], again["text"], dropped["outcome"]["suspects"]) == ("red", None, [])     # told once a task
+    assert len(env.posts) == (0 if shadow else 1) and loop.tick() == []                              # the same batch fails so
+    fix = env.put(2, {"red.txt": "fixed\n"})
+    (three,) = loop.tick()
+    assert (three["members"], three["heads"], three["base"]) == ([2], [fix], main)
+    keys = env.listed(three["sha"], {"pytest:r": ["red.txt"]})
+    env.result(keys["pytest:r"], "pytest:r", "pass")
+    advance, landed, after = loop.tick()
+    assert (advance["action"], landed["outcome"]["state"]) == ("advance", PASS)
+    assert (after["action"], after["members"], after["base"]) == ("build", [1], three["sha"])       # past the red base
+    assert env.main() == (main if shadow else three["sha"]) and env.withdrawn == []
 
 
 def test_a_shadow_under_the_policy_itself_builds_on_the_main_it_advanced_to_until_origin_s_moves_elsewhere(env):
