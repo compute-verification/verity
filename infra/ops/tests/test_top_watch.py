@@ -223,36 +223,6 @@ def test_an_active_agent_with_no_handle_rings_top_once():
     assert [(to, "x (bc-a)" in body) for to, body, _ in ring.rings] == [("top", True)]
 
 
-def test_main_stalled_rings_ci_only_while_next_is_ahead_and_once_per_main_head():
-    state, ring = {}, Ring()
-    ahead = {"n": 0}
-
-    def read():
-        return {"sha": "abc1234567", "committed": "2026-10-19T18:30:00Z", "ahead": ahead["n"]}
-
-    T.main_stalled(state, ring, NOW - 3600, read)
-    T.main_stalled(state, ring, NOW, read)
-    assert ring.rings == []
-    ahead["n"] = 3
-    T.main_stalled(state, ring, NOW, read)
-    T.main_stalled(state, ring, NOW + 3600, read)
-    assert [to for to, _, _ in ring.rings] == ["ci"] and "60 min" in ring.rings[0][1]
-
-
-def test_a_candidate_that_just_landed_is_not_a_stall_though_its_commit_was_built_long_ago():
-    state, ring = {}, Ring()
-    heads = iter(["old", "landed", "landed", "landed"])
-
-    def read():
-        return {"sha": next(heads), "committed": "2026-10-19T16:00:00Z", "ahead": 700}
-
-    for t in (NOW - 3600, NOW, NOW + 1800):
-        T.main_stalled(state, ring, t, read)
-    assert ring.rings == []
-    T.main_stalled(state, ring, NOW + 3600, read)
-    assert [body.split(" (")[0] for _, body, _ in ring.rings] == ["ci: main hasn't moved for 60 min"]
-
-
 def test_an_idle_h200_rings_top_once_a_day_after_1500z():
     state, ring = {}, Ring()
     rows = [{"name": "vy-glm53-eu", "platform": "gpu-h200-sxm", "read": True, "gpu_util": [0, 2, 4, 0]},

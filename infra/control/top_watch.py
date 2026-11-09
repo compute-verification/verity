@@ -4,7 +4,7 @@ top's VM (asks-relay-v4, admin-hourly-v3) and stopped whenever it was suspended.
 inbox doorbells, and whatever needs judgment rings top instead of being decided.
 
     top_watch.py asks  [--every 900]  [--state PATH] [--once] [--seed] [--dry-run]    $NOTION_API_KEY, $SLACK_BOT_TOKEN
-    top_watch.py sweep [--every 3600] [--state PATH] [--once] [--seed] [--dry-run]    $SLACK_BOT_TOKEN, $GH_TOKEN, $CURSOR_API_KEY,
+    top_watch.py sweep [--every 3600] [--state PATH] [--once] [--seed] [--dry-run]    $SLACK_BOT_TOKEN, $CURSOR_API_KEY,
                                                                                       $LINEAR_CLIENT_ID, $LINEAR_CLIENT_SECRET
 
 **asks**, every 15 min: the Asks for Daniel pages (the registry's #ask-daniel `pages`) edited since the last pass, and every
@@ -27,10 +27,9 @@ seen, and the Choose last seen per page (`chosen`; its first pass records every 
 2. An ACTIVE Verity cloud agent (`GET /v1/agents`) that holds no handle: no registry `holder` and no inbox in the routes names it.
    top.
 3. A new post in #agent-coordination thread RULES_THREAD (deadlocks and rule questions): top.
-4. main's head unchanged for STALL_S (since the sweep first saw it) while `next` is ahead of it (PRs queued): ci.
-5. Once a day after 15:00Z: each H200 under H200_BUSY_PCT mean GPU utilization over 24 h, from fleet.py's samples
+4. Once a day after 15:00Z: each H200 under H200_BUSY_PCT mean GPU utilization over 24 h, from fleet.py's samples
    ($FLEET_DIR): top, with the numbers.
-6. The Linear audit (`research.linear`'s `audit`, $LINEAR_CLIENT_ID and $LINEAR_CLIENT_SECRET): one JSON line a pass in
+5. The Linear audit (`research.linear`'s `audit`, $LINEAR_CLIENT_ID and $LINEAR_CLIENT_SECRET): one JSON line a pass in
    <state dir>/linear-audit.jsonl, with the counts by lane and kind and #agent-coordination's last 24 h (`traffic --volume`:
    posts, words, posts over 80 words). Each lane with findings, once per LANE_RING_S, with its counts and the command that
    lists them (findings with no lane: top); a person's ask off track (`linear.ASK_KINDS`) rings its lane once per
@@ -67,7 +66,6 @@ KEEP_S = 14 * 86400
 SINCE_MARGIN_S = 600
 UNANSWERED_H = 1
 RULES_THREAD = "1792037552.043289"
-STALL_S = 3600
 H200_BUSY_PCT = 10
 REPORT_HOUR_UTC = 15
 LANE_RING_S = 12 * 3600
@@ -323,40 +321,6 @@ def rules_thread(state, ring, api, reg, now) -> None:
         state["rules_seen"] = new[-1]["ts"]
 
 
-MAIN_QUERY = """query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) {
-  ref(qualifiedName: "refs/heads/main") { target { oid ... on Commit { committedDate } } compare(headRef: "next") { aheadBy } } } }"""
-
-
-def gh_main() -> dict:
-    """main's head, its commit time and how far `next` is ahead, in one small GraphQL read (REST's compare of main...next
-    carries every commit and patch: megabytes while a few hundred commits are queued)."""
-    owner, name = REPO.split("/")
-    req = urllib.request.Request("https://api.github.com/graphql", method="POST",
-                                 data=json.dumps({"query": MAIN_QUERY, "variables": {"owner": owner, "name": name}}).encode(),
-                                 headers={"Authorization": f"Bearer {os.environ['GH_TOKEN']}", "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        out = json.load(r)
-    if out.get("errors"):
-        raise ValueError(f"GitHub GraphQL: {out['errors'][0].get('message')}")
-    ref = out["data"]["repository"]["ref"]
-    return {"sha": ref["target"]["oid"], "committed": ref["target"]["committedDate"], "ahead": ref["compare"]["aheadBy"]}
-
-
-def main_stalled(state, ring, now, read: Callable[[], dict] = gh_main) -> None:
-    """main's head unchanged for STALL_S. A landed candidate's commit carries the time the queue built it, not when main moved
-    to it, so the clock starts at the later of that and the first pass that saw the head."""
-    head = read()
-    committed = datetime.fromisoformat(head["committed"].replace("Z", "+00:00")).timestamp()
-    seen = state.get("main_head") or {}
-    if seen.get("sha") != head["sha"]:
-        seen = state["main_head"] = {"sha": head["sha"], "seen": now}
-    at = max(committed, seen["seen"])
-    if now - at >= STALL_S and head["ahead"] > 0:
-        once_each(state, f"main:{head['sha']}", ring, "ci",
-                  f"ci: main hasn't moved for {(now - at) // 60:.0f} min (at {head['sha'][:10]} since {iso(at)}) while "
-                  f"next is {head['ahead']} commits ahead of it: check the verified queue (`research queue status`).", None, now)
-
-
 def h200s(state, ring, now, samples: Callable[[float, float], list[dict]]) -> None:
     day = iso(now)[:10]
     if time.gmtime(now).tm_hour < REPORT_HOUR_UTC or state.get("h200_day") == day:
@@ -517,7 +481,6 @@ def main(argv: list[str] | None = None) -> int:
                     "traffic": lambda: unanswered(state, ring, reg, now, traffic_json),
                     "agents": lambda: holderless(state, ring, now, cursor_agents, known_holders(reg, routes)),
                     "rules thread": lambda: rules_thread(state, ring, api, reg, now),
-                    "main": lambda: main_stalled(state, ring, now),
                     "h200": lambda: h200s(state, ring, now, fleet_samples),
                     "linear": lambda: linear_check(state, ring, reg, now, None if ns.dry_run else state_path.parent / AUDIT_LOG)})
                 prune(state, now)

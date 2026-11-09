@@ -27,7 +27,6 @@ untraced = [
     "tests/test_binprov.py",
     "tests/test_bucket_index.py",
     "tests/test_budgets.py",
-    "tests/test_carry.py",
     "tests/test_checked_guard.py",
     "tests/test_cli.py",
     "tests/test_commitmap.py",
