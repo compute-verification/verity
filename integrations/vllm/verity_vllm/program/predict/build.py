@@ -20,9 +20,6 @@ token select: greedy TokenSelect, or the seeded temperature + top-p GumbelTopPTo
 count a `splits` Input entry, or the single request's constant S). Anything φ asks for outside it raises `Unexpressible` naming the
 fact (a result, never a silent approximation).
 
-Restored lineage: `verity_capture.experimental.aot.build` (`aot-build/eager/v8`, deleted in 528f9d21f) built the capture fold's
-`Captured_v1{PROFILE, WORKLOAD}` Program; the Build of record now derives `Derived[vLLM*]` Programs, so the emitter targets those.
-
 This module is NEVER on a record path: a predicted Program is not written into a Build row, not published as a Build Attempt and
 not read by the Build, Match or Commit (`program.frontend.inputs_trace` lists `verity_vllm/program/predict/` as a forbidden input).
 """
@@ -695,8 +692,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     before the prefill's last, which no sample reads. `stop`: its length rule, the last check (`stop_rule`).
     `dead_free`: a tensor-parallel rank's request too (the Build's `--dead-free`), each dead collective's peer rows then unread.
     `batched`: that form batched (`prune.batched_form`, the Build's `--batched`): class G's request Programs. `table_reads`: in that
-    form, the sparse-attention decoder's rows past INDEX_TOPK keys by table reads (`steps.Registered.dsa_table_reads`, the Build's
-    `--dsa-table-reads`; `dsa._Model.table_reads`).
+    form, DSA's rows past INDEX_TOPK keys by table reads (`Registered.dsa_table_reads`, the Build's `--dsa-table-reads`).
     `finish`: the body's last step in place of that drop, (body, decoder, parameters) -> (body, what it says beside the Program,
     `BuildResult.named`), as `naming.named_program` names a request Program. `batch`: the request's launch batch (`common._Launch`,
     the Build's `--launch-context '{"batch": ...}'`) in place of the one φ's workload gives it (`launch_batch`). `chunks`: a
@@ -754,9 +750,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
                              S=s["splits"], temperature_bits=f32_bits(s["temperature"]), top_p_bits=f32_bits(s.get("top_p", 1.0)))
     model = net.model(B, W, peers)
     if batched and hasattr(model, "batched"):
-        model.batched = True
-    if table_reads and hasattr(model, "table_reads"):
-        model.table_reads = True
+        model.batched, model.table_reads = True, table_reads
     batch = (launch_batch(phi, LP, T) if batch is None else batch) if wrapper == "request" else None
     in_launch(model, batch, net.model_class, chunks, T)
     if wrapper == "request" and isinstance(model, _Model):
