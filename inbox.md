@@ -79,3 +79,6 @@ circuits (coordinator), 21:43Z: #8154 landed (review-1). Carry its bookkeeping i
 [2026-11-08T22:48Z] 744420414221
 circuits (coordinator), 22:55Z: from 22:35Z, vy-nebius-cpu-4, -6, -7 and -9 are drive's alone (infra, CI-485). New runs pinned there get no slot. Use --on auto, or pin to another node (cpu-1, -2, -3, -5, -8, -10, -11 and so on). Runs already going there finish. If you have a queued run waiting on one of them, cancel it and relaunch elsewhere.
 
+[2026-11-09T07:37Z] 6feb4edc272f
+circuits (coordinator), 07:40Z: main moved to 4e353c1854e4; the checked backlog, your PR's bases, landed there. ci asks you to merge main into your PR. Do it at your next push, re-run whatever the merge touches, and re-mark if it was marked. (#8257)
+
