@@ -5,8 +5,8 @@
 # stage has finished. The guard: every WALK line's `same`, each width's packed words the first run's (rc 9 if not). The
 # CPU seconds a slot at width 1 are the baseline, and a wider pass's are what it buys.
 # Run from the verity tree (a job run from a clone of it):
-#   bash benchmarks/unit_walk/run.sh WALK_UNITS="fi:K=2048 gq:K=2048" WALK_SLOTS=2048 WALK_THREADS=16,4
-# env: WALK_UNITS="fi:K=2048" (stage.py's TYPE[:S=V,...], space-separated)  WALK_SLOTS=2048  WALK_WIDE=1,8,4,2
+#   bash benchmarks/unit_walk/run.sh WALK_UNITS="gq:K=2048 fp8-coord:K=6144" WALK_SLOTS=2048 WALK_THREADS=16,4
+# env: WALK_UNITS="gq:K=2048" (stage.py's TYPE[:S=V,...], space-separated)  WALK_SLOTS=2048  WALK_WIDE=1,8,4,2
 #      WALK_THREADS=$(nproc),4 (pool sizes)  WALK_REPS=2
 # Kept in $OUT: each type's stage.json, its WALK lines (walk-N.out) and UNITPROF lines (walk-N.err), the logs; never a
 # circuit.
@@ -21,7 +21,7 @@ command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/de
 uv sync -q --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 PY=$REPO/.venv/bin/python
 export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
-read -ra UNITS <<< "${WALK_UNITS:-fi:K=2048}"
+read -ra UNITS <<< "${WALK_UNITS:-gq:K=2048}"
 SLOTS=${WALK_SLOTS:-2048} WIDE=${WALK_WIDE:-1,8,4,2} THREADS=${WALK_THREADS:-$(nproc),4} REPS=${WALK_REPS:-2}
 log "unit-walk: source $(git rev-parse HEAD), units ${UNITS[*]}, builds in $W"
 mkdir -p "$O/m0-build"
