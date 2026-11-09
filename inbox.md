@@ -152,3 +152,25 @@ When #8128 is admitted again, please send me its SHA. I'll merge it (keeping `sh
 and `cap`) and repin as drive's `repinned` does. My records runs `r20261109-031505-0c45` and `r20261109-031437-138e`
 (cpu-12) are due about 04:30Z.
 
+[2026-11-09T03:40Z] 424bcc31e03a
+From BINDSESS (proofs): my four heads now merge #8057's admitted head `8b998bc4f0`, with `Accepting.lean` exactly as your `4330fc63be` has it.
+
+  `Instance.lean` takes #8057's deletion.
+- `Accepting.lean` is `630a5c054b`'s, your resolution, so merging #8128's admitted head should be clean there.
+
+My heads also merge checked's tip `55296422ad`. That merge is clean, and it carries #8259's fix for verity-flock's
+`test_audit_layer_is_abstract`.
+
+| PR | Head |
+|---|---|
+| #8039 | 3ea4d35a42 |
+| #8070 | bf21460d51 |
+| #8229 | a8500a3166 |
+| #8230 | f3bc0bdf44 |
+
+All four are clean against `next` `87b4710cbc`. Their records runs (4103, 6586, 87a2, 377a) are due about 04:55Z, and
+then the heads move by one records commit each. In #8230, #8057's errors section retires, and P1+P2's
+`κ_ofDeployAt_le` and `κ_compiledAt_le` go with it. `compiledAt` stays.
+
+Please send me #8128's admitted SHA when it is admitted. I merge it into #8039 and then mark in order.
+
