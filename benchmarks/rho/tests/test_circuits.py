@@ -94,14 +94,14 @@ def test_in_place_the_design_gives_both_s_times_and_gates_per_flop():
 
 @pytest.mark.parametrize("name", REFERENCES)
 def test_the_measured_s_times_moves_the_bound_by_u_over_w_on_the_share_counted_at_u(name):
-    """With the design in place `G` no longer cancels: a gate counted at `u` (the dark leaves, the uncertified routes)
+    """With the design in place `G` no longer cancels: a gate counted at `u` (the unregistered leaves, the uncertified routes)
     holds `u/w = 2G / (κ s_×)` of the reference's weight, so the lower bound's rate (`1 / overhead` before its floor
     at 1) is the default's times `a u/w + 1 − a` on the share `a` counted at `u`, the rest the same in gates. The bound
     cites the runs that measured `s_×` beside the straddling premise, its status as it was."""
     base, one = evaluate_named(REG, name), evaluate_named(circuits.in_place(REG, STEP), name)
     f = base.families[0]
     uw = 2 * circuits.units(REG, C).gates_per_flop / (f.profile.kappa * C.s_x)
-    at_u = sum(t.share for t in analysis.attribution(base) if t.name == "dark" or t.name.split(".")[0] in ROUTES)
+    at_u = sum(t.share for t in analysis.attribution(base) if t.name == "unregistered" or t.name.split(".")[0] in ROUTES)
     assert 0 < at_u <= 1
     def rate(r):
         return math.fsum(r.families[0].combined.overhead.rates().values())
