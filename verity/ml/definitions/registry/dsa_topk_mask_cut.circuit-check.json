@@ -60,5 +60,19 @@
    "and": 7,
    "type": "1b941b8a9843edefe008201b6ec850f8becf31cde0341c079b0b151db354045311fc33cafb014c5dc3a300643a04b335dabd7d873032f4bd2dd76147ad56d891"
   }
+ },
+ "digests": {
+  "DsaTopKDigitPick_v1{M=8,K=0,TOPK=2048}": {
+   "sha512": "0"
+  },
+  "DsaTopKDigitPick_v1{M=8,K=1,TOPK=2048}": {
+   "sha512": "0"
+  },
+  "DsaTopKDigitPick_v1{M=8,K=2,TOPK=2048}": {
+   "sha512": "0"
+  },
+  "DsaTopKDigitPick_v1{M=8,K=3,TOPK=2048}": {
+   "sha512": "0"
+  }
  }
 }

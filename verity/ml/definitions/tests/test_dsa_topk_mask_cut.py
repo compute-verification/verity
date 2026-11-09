@@ -7,11 +7,14 @@ to the whole mask:
   boundary, straddle signed zero and hold NaNs and infinities, at n from 0 past N, at small statics (blocks of a few keys, a
   short last block joined to the one before, TOPK 1 and TOPK a whole block) and, with ``VERITY_ML_DEFINITIONS_SLOW`` set, at the
   served ones (TOPK 2,048, the first class past `WHOLE_MAX` and 131,072);
-* `plan` wires each parameter to earlier units' outputs of its width and `cut` counts its units, None up to `WHOLE_MAX`.
+* `DsaTopKDigitPick_v1`, block b's counts its own port ``counts_b``, is gate for gate the pick over one port of the M blocks'
+  counts, at small statics and at the served ones (M = 8, each round, TOPK 2,048);
+* `plan` wires each parameter to one earlier unit's output of its width and `cut` counts its units, None up to `WHOLE_MAX`.
 """
 from __future__ import annotations
 
 import random
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -19,9 +22,11 @@ import pytest
 from verity import settings
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.boolean.trace import Traced, trace
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.reference import resolve
+from verity.ml.circuits.types import Array
 from verity.ml.definitions.registry import boolean_dsa_topk_mask as BM
 from verity.ml.definitions.registry import dsa_topk_mask as M
 from verity.ml.definitions.registry import dsa_topk_mask_cut as X
@@ -65,12 +70,7 @@ def _chain(rows, ns, TOPK: int, block: int) -> dict[tuple, list[np.ndarray]]:
         args = []
         if u.keys != (0, 0):
             args += [_bits(scores[:, u.keys[0]:u.keys[1]], 32).reshape(R, -1), _bits(ns, 32)]
-        wired: list[tuple[str, list]] = []
-        for p, w, f in u.wires:
-            if not wired or wired[-1][0] != p:
-                wired.append((p, []))
-            wired[-1][1].append(out[w][f])
-        args += [np.concatenate(parts, axis=1) for _, parts in wired]
+        args += [out[w][f] for _, w, f in u.wires]
         got = np.asarray(BS.evaluate_bits(u.defn, *args)).reshape(R, -1)
         at = np.cumsum([0, *_fields(u.defn)])
         out[u.key] = [got[:, a:b] for a, b in zip(at, at[1:])]
@@ -122,24 +122,45 @@ def test_the_units_compose_to_the_counted_mask_at_served_statics(N) -> None:
 
 
 @pytest.mark.parametrize("N,TOPK,block", [(20, 4, 8), (18, 4, 8), (X.WHOLE_MAX + 2048, 2048, X.BLOCK), (131072, 2048, X.BLOCK)])
-def test_plan_wires_each_parameter_to_earlier_outputs_of_its_width(N, TOPK, block) -> None:
+def test_plan_wires_each_parameter_to_one_earlier_output_of_its_width(N, TOPK, block) -> None:
     units = X.plan(N, TOPK, block)
     bl = X.blocks(N, TOPK, block)
     written: dict[tuple, list[int]] = {}
     for u in units:
         params, _ = resolve(u.defn).signature()
         width = {name: sum(BL.elements(t)) for name, t in params}
-        got: dict[str, int] = {}
-        for p, w, f in u.wires:
-            got[p] = got.get(p, 0) + written[w][f]
+        got = {p: written[w][f] for p, w, f in u.wires}
+        assert len(got) == len(u.wires), u.key
         operands = {"scores", "n"} if u.keys != (0, 0) else set()
         assert set(width) == operands | set(got), u.key
         assert all(got[p] == width[p] for p in got), u.key
+        if u.key[0] == "pick":
+            assert [n for n, _ in params[:len(bl)]] == [f"counts_{b}" for b in range(len(bl))]
+            assert [w for p, w, _ in u.wires if p.startswith("counts_")] == [("count", u.key[1], b) for b in range(len(bl))]
         if operands:
             assert width["scores"] == 32 * (u.keys[1] - u.keys[0]) and u.keys == bl[u.key[-1]]
         written[u.key] = _fields(u.defn)
     assert [u.keys for u in units if u.key[0] == "mask"] == bl and bl[0][0] == 0 and bl[-1][1] == N
     assert all(a[1] == b[0] for a, b in zip(bl, bl[1:])) and all(e - a >= TOPK for a, e in bl)
+
+
+def _one_port_pick(S) -> Traced:
+    """The pick's circuit with the M blocks' counts one parameter, Array<M, Array<BINS, I32>>, block b's at b."""
+    params, ret = X._pick_sig(S)
+    rest = [t for name, t in params if not name.startswith("counts_")]
+    return trace(X._pick(S), [Array(S.M, Array(X.BINS, X.I32)), *rest], ret)
+
+
+@pytest.mark.parametrize("M_,K,TOPK", [(m, k, t) for m, t in ((1, 4), (2, 4), (3, 16)) for k in range(X.ROUNDS)]
+                         + [pytest.param(8, k, SERVED_TOPK, marks=pytest.mark.slow) for k in range(X.ROUNDS)])
+def test_the_pick_with_a_port_a_block_is_the_one_port_pick_gate_for_gate(M_, K, TOPK) -> None:
+    """The served bindings (8 blocks, TOPK 2,048's r) are the ones the cut calls, and no smaller binding's trace is theirs."""
+    S = SimpleNamespace(M=M_, K=K, TOPK=TOPK)
+    split, one = X.DsaTopKDigitPick.traced(S), _one_port_pick(S)
+    assert (split.n_inputs, split.outputs, split.gates) == (one.n_inputs, one.outputs, one.gates)
+    params, _ = X._pick_sig(S)
+    assert [name for name, _ in params] == [f"counts_{b}" for b in range(M_)] + (["prefix", "r"] if K else [])
+    assert all(t == Array(X.BINS, X.I32) for _, t in params[:M_])
 
 
 @pytest.mark.parametrize("family", [M.DsaTopKMaskCounted, BM.DsaTopKMaskCountedV2])

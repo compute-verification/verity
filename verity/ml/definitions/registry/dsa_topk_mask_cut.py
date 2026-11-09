@@ -10,7 +10,8 @@ with it must supply (TOPK before round 0).  Round k is
 
 * ``DsaTopKDigitCount_v1{N,AT,K}``, per block (keys AT..AT+N-1): of its keys j < n level with the prefix, how many have each of
   the 256 values of digit k (`DsaTopKDigitOneHot_v1{K}` per key, a `DsaTopKPopCount_v1{N}` per value);
-* ``DsaTopKDigitPick_v1{M,K,TOPK}``, over the M blocks' counts: with T(v) the level keys at digit v or above, the threshold's
+* ``DsaTopKDigitPick_v1{M,K,TOPK}``, over the M blocks' counts, block b's its own port ``counts_b``: with T(v) the level keys
+  at digit v or above, the threshold's
   digit is the largest v with T(v) >= r, else 0 (fewer than r level keys: the row has fewer than TOPK keys below n), and r drops
   by T(digit + 1), the level keys the set takes above it.  Those are the digit and the r the radix select's 8 passes over the
   digit's bits leave.  Round 3's pick returns the threshold's key and, per block, how many of its keys equal to that key the set
@@ -18,9 +19,9 @@ with it must supply (TOPK before round 0).  Round k is
 
 Then ``DsaTopKMaskBlock_v1{N,AT,TOPK}``, per block: its keys j < n above the threshold's key and, of those equal to it, the first
 r_b by index (`DsaRadixTies_v1`), the block's part of `DsaRadixTies_v1`'s mask over the row, since its equal keys come after
-those of the blocks before it.  Every unit reads its own block of the scores and n, the Call's operands; each other input is an
-output row of a unit before it (`Unit.wires`): the prefix and r of the pick before, a round's counts, the threshold's key and
-r_b.  The Call's mask is the mask units' outputs in block order.  Units a row: 5M + 4, M = ceil(N / `BLOCK`) blocks (44 at
+those of the blocks before it.  Every unit reads its own block of the scores and n, the Call's operands; each other input is
+one whole output row of a unit before it (`Unit.wires`), each port's own: the prefix and r of the pick before, a block's counts,
+the threshold's key and r_b.  The Call's mask is the mask units' outputs in block order.  Units a row: 5M + 4, M = ceil(N / `BLOCK`) blocks (44 at
 131,072 keys).
 """
 from __future__ import annotations
@@ -129,9 +130,10 @@ DsaTopKDigitCount = CompositeDefinition("DsaTopKDigitCount", 1, ("N", "AT", "K")
 
 
 def _pick(S):
-    """`DsaTopKDigitPick_v1{M,K,TOPK}`: round K's digit from the M blocks' counts, with T(v) the level keys at digit v or above:
-    the largest v with T(v) >= r, else 0; returns (prefix with the digit below it, r - T(digit + 1)), and at the last round (the
-    threshold's key, r_b for each block b: that r less the keys equal to the key in blocks 0..b-1, at least 0)."""
+    """`DsaTopKDigitPick_v1{M,K,TOPK}`: round K's digit from the M blocks' counts (``counts_b`` block b's), with T(v) the level
+    keys at digit v or above: the largest v with T(v) >= r, else 0; returns (prefix with the digit below it, r - T(digit + 1)),
+    and at the last round (the threshold's key, r_b for each block b: that r less the keys equal to the key in blocks 0..b-1,
+    at least 0)."""
     RB, last = _rb(S.TOPK), S.K == ROUNDS - 1
     if not 0 <= S.K < ROUNDS or S.M < 1:
         raise ValueError(f"DsaTopKDigitPick: 0 <= K < {ROUNDS} and M >= 1 (M={S.M}, K={S.K})")
@@ -172,7 +174,7 @@ def _pick(S):
 
 def _pick_sig(S):
     RB, width = _rb(S.TOPK), DIGIT * (S.K + 1)
-    params = (("counts", Array(S.M, Array(BINS, I32))),
+    params = (*((f"counts_{b}", Array(BINS, I32)) for b in range(S.M)),
               *((("prefix", Array(DIGIT * S.K, BIT)), ("r", Array(RB, BIT))) if S.K else ()))
     if S.K < ROUNDS - 1:
         return params, Tuple(Array(width, BIT), Array(RB, BIT))
@@ -218,8 +220,8 @@ DsaTopKMaskBlock = CompositeDefinition("DsaTopKMaskBlock", 1, ("N", "AT", "TOPK"
 @dataclass(frozen=True)
 class Unit:
     """One unit of the cut: ``key`` names it, ``defn`` its Definition, ``keys`` the scores it reads ((0, 0): none; a unit that
-    reads scores reads n too), ``wires`` each wired parameter's (parameter, writer key, writer's output index), a parameter
-    named more than once reading those writers' outputs in turn; its other parameters are the Call's operands."""
+    reads scores reads n too), ``wires`` each wired parameter's (parameter, writer key, writer's output index), one writer a
+    parameter, which reads that output whole; its other parameters are the Call's operands."""
     key: tuple
     defn: Any
     keys: tuple[int, int]
@@ -247,7 +249,7 @@ def plan(N: int, TOPK: int, block: int = BLOCK) -> tuple[Unit, ...]:
         for b, (lo, hi) in enumerate(bl):
             out.append(Unit(("count", k, b), bind(DsaTopKDigitCount, N=hi - lo, AT=lo, K=k), (lo, hi),
                             (("prefix", prev, 0),) if k else ()))
-        w = tuple(("counts", ("count", k, b), 0) for b in range(len(bl)))
+        w = tuple((f"counts_{b}", ("count", k, b), 0) for b in range(len(bl)))
         out.append(Unit(("pick", k), bind(DsaTopKDigitPick, M=len(bl), K=k, TOPK=TOPK), (0, 0),
                         w + ((("prefix", prev, 0), ("r", prev, 1)) if k else ())))
     last = ("pick", ROUNDS - 1)

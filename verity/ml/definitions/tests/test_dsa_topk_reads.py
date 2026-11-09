@@ -3,6 +3,8 @@
 * a block's `DsaMaskPositions_v1` is its twin (`values`: `dsa_topk_mask.butterfly_apply` at the block's settings over its
   positions) on masks of no member to every key, and its first count slots are the members' positions, ascending, whenever it
   has at most K; `DsaPositionsMerge_v1` is `merge` on lists with words past their counts, counts past K and lists that fill K;
+* `DsaPositionsMerge_v1`, each block's list and count its own port and each slot a field of its return, is gate for gate the
+  merge over one port of the lists and one of the counts to one array, at small statics and at the served one (M 8, K 2,048);
 * the units composed over a row's blocks (each on the outputs before it) give the rows network's order over the whole row
   (`DsaTopKRow_v2`'s construction), then 0, on masks of at most K members;
 * `DsaTopKReadRows_v1` over a table that holds a history gives today's long row's kv (`DsaButterflyRowsPad_v1` at the counted
@@ -12,14 +14,18 @@
 """
 from __future__ import annotations
 
+import hashlib
 import random
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
 from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.boolean.trace import Traced, trace
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.types import Array, Tuple
 from verity.ml.commitments import row_table as RT
 from verity.ml.commitments.gates import embedding as EM
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -63,11 +69,20 @@ def _positions(N: int, AT: int, K: int, masks: list[list[int]]) -> tuple[list[li
 
 
 def _merge(M_: int, K: int, lists: np.ndarray, counts: np.ndarray) -> list[list[int]]:
-    """``lists`` (rows, M_, K) and ``counts`` (rows, M_) u32 words through the circuit."""
+    """``lists`` (rows, M_, K) and ``counts`` (rows, M_) u32 words through the circuit, block b's list and count its ports."""
     rows = len(lists)
-    got = BS.evaluate_bits(bind(R.DsaPositionsMerge, M=M_, K=K), _bits(lists, 32).reshape(rows, -1),
-                           _bits(counts, 32).reshape(rows, -1))
+    got = BS.evaluate_bits(bind(R.DsaPositionsMerge, M=M_, K=K),
+                           *(_bits(lists[:, b], 32).reshape(rows, -1) for b in range(M_)),
+                           *(_bits(counts[:, b], 32).reshape(rows, -1) for b in range(M_)))
     return [_words(g, 32) for g in np.asarray(got).reshape(rows, -1)]
+
+
+def _digest(t: Traced) -> str:
+    """A trace's inputs, outputs and gates, hashed a slice of gates at a time, so that a served trace needn't be held twice."""
+    h = hashlib.sha512(repr((t.n_inputs, t.outputs)).encode())
+    for i in range(0, len(t.gates), 1 << 16):
+        h.update(repr(t.gates[i:i + (1 << 16)]).encode())
+    return h.hexdigest()
 
 
 @pytest.mark.parametrize("N,AT,K", [(8, 0, 4), (6, 8, 4), (5, 3, 1), (16, 16, 16), (12, 1 << 17, 4), (2, 0, 2)])
@@ -94,6 +109,21 @@ def test_the_merge_is_merge(M_, K) -> None:
     got = _merge(M_, K, lists, counts)
     for li, c, g in zip(lists.tolist(), counts.tolist(), got):
         assert g == R.merge(li, c, K), (li, c, g)
+
+
+@pytest.mark.parametrize("M_,K", [(1, 4), (3, 4), (4, 3), (8, 16),
+                                  pytest.param(8, SERVED_TOPK, marks=pytest.mark.slow, id="served")])
+def test_the_merge_with_a_port_a_block_and_a_field_a_slot_is_the_one_port_merge_gate_for_gate(M_, K) -> None:
+    """Against the merge over one port of the M blocks' lists and one of their counts, returning one Array<K, I32>.  The
+    served binding (8 blocks, 2,048 slots, 12-bit shifts) is about 6M ANDs; it is the one the long row calls, and no smaller
+    binding's trace is its trace."""
+    S = SimpleNamespace(M=M_, K=K)
+    params, ret = R._merge_sig(S)
+    assert [n for n, _ in params] == [f"pos_{b}" for b in range(M_)] + [f"count_{b}" for b in range(M_)]
+    assert [t for _, t in params] == [Array(K, R.I32)] * M_ + [R.I32] * M_ and ret == Tuple(*[R.I32] * K)
+    split = _digest(trace(R._merge(S), [t for _, t in params], ret))
+    one = _digest(trace(R._merge(S), [Array(M_, Array(K, R.I32)), Array(M_, R.I32)], Array(K, R.I32)))
+    assert split == one
 
 
 @pytest.mark.parametrize("N,K,block", [(20, 4, 8), (18, 4, 8), (24, 4, 8), (10, 1, 4), (16, 16, 16)])

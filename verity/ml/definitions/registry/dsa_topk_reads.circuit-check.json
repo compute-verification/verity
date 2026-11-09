@@ -32,5 +32,10 @@
    "and": 1321,
    "type": "d54eb48fe30ababfdd41ab80556105c5124e64caa154a318d4cc456c71b614b01b75f05ecaa2fb25f214087008a7ebb809de3cc946aa0078d5f7ad56cf941cfe"
   }
+ },
+ "digests": {
+  "DsaPositionsMerge_v1{M=8,K=2048}": {
+   "sha512": "0"
+  }
  }
 }

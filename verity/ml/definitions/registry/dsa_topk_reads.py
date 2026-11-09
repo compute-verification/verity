@@ -14,7 +14,8 @@ and Path are READ's; `READ_PORTS` its parameters.  The body is three stages, eac
   ``DsaMaskPositions_v1{N,AT,K}`` compacts its members to their positions, ascending, and counts them; then
   ``DsaPositionsMerge_v1{M,K}`` writes the M blocks' lists one after another, each at the count of those before it, and 0 past
   them.  So slot j holds the row's j-th member by position, the rows network's order (`dsa_topk_mask.rows`), whenever the mask
-  has at most TOPK members, as a counted mask always has;
+  has at most TOPK members, as a counted mask always has.  Each block's list and count is a port of the merge's own
+  (``pos_b``, ``count_b``), and each slot a field of its return, so every unit's input is one whole output of one writer;
 * TOPK reads, read j at slot j's position with opening (row[j], salt[j], path[j]) under the table's root and domain id: kv[j]
   and its verdict ok[j].
 
@@ -83,9 +84,10 @@ DsaMaskPositions = CompositeDefinition(
 
 
 def _merge(S):
-    """`DsaPositionsMerge_v1{M,K}`: block b's list, its slots s < min(count_b, K) kept (`DsaRowValid_v1{K}`'s trie over count_b)
-    and the rest 0, shifted up by off_b = min(sum of min(count_c, K) over c < b, K) (a barrel shifter over off_b's bits), the
-    blocks' lists XORed, which places each where no other is."""
+    """`DsaPositionsMerge_v1{M,K}` (pos_0..pos_{M-1}, count_0..count_{M-1}) -> K fields, slot j field j: block b's list pos_b,
+    its slots s < min(count_b, K) kept (`DsaRowValid_v1{K}`'s trie over count_b) and the rest 0, shifted up by
+    off_b = min(sum of min(count_c, K) over c < b, K) (a barrel shifter over off_b's bits), the blocks' lists XORed, which
+    places each where no other is."""
     RB = S.K.bit_length()
     kept = BM._row_valid(SimpleNamespace(N=S.K))
 
@@ -120,24 +122,26 @@ def _refuse_merge(b: dict) -> str | None:
     return None
 
 
+def _merge_sig(S) -> tuple[tuple[tuple[str, Any], ...], Any]:
+    return ((*((f"pos_{b}", Array(S.K, I32)) for b in range(S.M)), *((f"count_{b}", I32) for b in range(S.M))),
+            Tuple(*[I32] * S.K))
+
+
 DsaPositionsMerge = EW.specialized(
-    "DsaPositionsMerge", 1, ["M", "K"], _merge,
-    lambda S: ((("pos", Array(S.M, Array(S.K, I32))), ("count", Array(S.M, I32))), Array(S.K, I32)),
-    doc=_merge.__doc__, refuse=_refuse_merge,
+    "DsaPositionsMerge", 1, ["M", "K"], _merge, _merge_sig, doc=_merge.__doc__, refuse=_refuse_merge,
     conformance="exact-model-tested: held to merge, the blocks' lists one after another, by the definitions' "
                 "test_dsa_topk_reads.py")
 
 
-def index(B, N: int, K: int, block: int, mask):
-    """The K positions of a row's mask (Array<N, BIT>, a Coll of ``B``): a `DsaMaskPositions_v1` per block, then the merge."""
+def index(B, N: int, K: int, block: int, mask) -> Coll:
+    """The K positions of a row's mask (Array<N, BIT>, a Coll of ``B``): a `DsaMaskPositions_v1` per block, then the merge,
+    its ``pos_b`` and ``count_b`` block b's two outputs; the merge's return, slot j its field j."""
     lists, counts = [], []
     for lo, hi in X.blocks(N, K, block):
         out = B.call(bind(DsaMaskPositions, N=hi - lo, AT=lo, K=K), Coll(Array(hi - lo, BIT), mask.refs.slice(lo, hi)))
-        lists.append(out.refs.slice(0, 32 * K))
-        counts.append(out.refs.slice(32 * K, 32 * K + 32))
-    m = len(lists)
-    return B.call(bind(DsaPositionsMerge, M=m, K=K), Coll(Array(m, Array(K, I32)), concat(lists)),
-                  Coll(Array(m, I32), concat(counts)))
+        lists.append(out[0])
+        counts.append(out[1])
+    return B.call(bind(DsaPositionsMerge, M=len(lists), K=K), *lists, *counts)
 
 
 # --- the long row ------------------------------------------------------------------------------------------------------------
@@ -168,7 +172,7 @@ def _rows_sig(S):
 def _rows(B, S, scores, n, root, domain, row, salt, path):
     _, row_t = _read(S)
     mask = B.call(bind(BM.DsaTopKMaskCountedV2, N=S.N, TOPK=S.TOPK), scores, n)
-    tok = index(B, S.N, S.TOPK, S.BLOCK, mask)
+    tok = Coll(Array(S.TOPK, I32), index(B, S.N, S.TOPK, S.BLOCK, mask).refs)
     out = B.batch(S.READ, tok, root, domain, row, salt, path, axes=(0, None, None, 0, 0, 0))
     w = row_t.leaves
     return tuple_of(Coll(Array(S.TOPK, row_t), strided_view(out, 0, w, w + 1, 1, S.TOPK * w)),
