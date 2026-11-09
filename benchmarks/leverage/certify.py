@@ -199,6 +199,7 @@ class Ctx:
 
     def __init__(self, lm: LM, boxes: Boxes | None, cls: torch.Tensor, pre: Cache, pos0: int):
         self.lm, self.boxes, self.cls, self.pre, self.pos0 = lm, boxes, cls, pre, pos0
+        self.trace: list | None = None
 
     def lin(self, x: Iv, name: str, bias: str | None = None, wt: bool = False) -> Iv:
         W = self.lm.E if name == "E" else self.lm.W[name]
@@ -214,7 +215,25 @@ class Ctx:
 
     def clamp(self, site: str, layer: int, x: Iv) -> Iv:
         """The readers' clamp over intervals: a group site's group is scaled by a power of two in [fmin, 1], then every
-        value is within its box."""
+        value is within its box. With `trace` set, each site's widths are appended to it (`widths`)."""
+        y = self._clamp(site, layer, x)
+        if self.trace is not None:
+            self.trace.append(self.widths(site, layer, y))
+        return y
+
+    def widths(self, site: str, layer: int, x: Iv) -> list:
+        """[site, layer, then at the fault's position and over the later ones: the median width over coordinates
+        (the worst part's), and its median share of the box's width (1: the box, nothing certified)]."""
+        w = (x[1] - x[0]).amax(0).float()
+        hb = self.lm.boxes.hi[(site, layer)][self.cls].float() if (site, layer) in self.lm.boxes.hi else None
+        row: list = [site, layer]
+        for sl in (slice(0, 1), slice(1, None)):
+            if w[sl].numel():
+                share = float((w[sl] / (2 * hb[sl]).clamp_min(1e-30)).clamp_max(1).median()) if hb is not None else None
+                row += [float(w[sl].median()), share]
+        return row
+
+    def _clamp(self, site: str, layer: int, x: Iv) -> Iv:
         if self.boxes is None or (site, layer) not in self.boxes.hi:
             return x
         hb = self.boxes.hi[(site, layer)][self.cls].to(x[0].dtype)
@@ -567,7 +586,10 @@ def main() -> int:
                             for P in pieces:
                                 parts = torch.linspace(lo_c, hi_c, P + 1)
                                 t0 = time.time()
+                                ctx.trace = [] if clamp_on and P == pieces[-1] else None
                                 lo, hi = iv_forward(ctx, site, layer, entry, coord, parts)
+                                if ctx.trace is not None:
+                                    rec["trace"] = ctx.trace
                                 m = metrics(zh, lo, hi)
                                 idx = torch.bucketize(vals, parts[1:-1].contiguous())
                                 viol = torch.maximum(lo[idx] - zg, zg - hi[idx])
@@ -626,6 +648,10 @@ def summarize(recs: list[dict], a: argparse.Namespace, lm: LM) -> dict:
                                                             for i in range(n)],
                                                  "max": [max(r["true_long"]["eps"][i] for r in rs) for i in range(n)]}
             g["true_long"]["flips_later"] = q([sum(r["true_long"]["flip"][1:]) for r in rs], 0.5)
+        if all("trace" in r and len(r["trace"]) == len(rs[0]["trace"]) for r in rs):
+            g["trace"] = [row[:2] + [q([r["trace"][i][j] for r in rs if r["trace"][i][j] is not None], 0.5)
+                                     for j in range(2, len(row))]
+                          for i, row in enumerate(rs[0]["trace"])]
         g["cert"] = {}
         for name in rs[0]["cert"]:
             cs = [r["cert"][name] for r in rs]
