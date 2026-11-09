@@ -124,7 +124,7 @@ def digest? : Json → Bool
 /-- `service.template_circuits`: the auditor's params naming each template's circuit file and its registered reference
 statement's header and registered reads, a two-stage run's `interior.params.proofs`, `{"templates": [{"template":
 <descriptor id>, "circuit": <SHA-512, lowercase hex>, "header": <the registered reference statement's header>,
-"registered": <the registered reads it was verified against, null for none>}, ...]}`, as (template, circuit, header,
+"registered": <the registered reads it reads, null for none>}, ...]}`, as (template, circuit, header,
 registered) in the order the check's template query `query` names the templates (`Select.templateIds`), which is
 REPLAY_c's first-instance order (`Select.replayCells`); `null` names no file and gives none. An error for any other
 form, a circuit that isn't 128 lowercase hex digits, a header that isn't an object, registered reads neither an object

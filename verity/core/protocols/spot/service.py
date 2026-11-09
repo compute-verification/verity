@@ -70,7 +70,7 @@ flat Flock circuit file of one instance of it (`verity_flock.class_statement.Uni
 `structural=False`, as one-stage's sessions verify against theirs), which binds the interior registration's partition
 and program digests. The auditor names each file by its SHA-512 in the run's interior params, `proofs.templates`
 (`template_circuits`), beside the header of the template's registered reference statement and the registered reads it
-was verified against, which round 2 holds each statement's header and registered reads to but for the run's fields
+reads, which round 2 takes as given and holds each statement's header and registered reads to but for the run's fields
 (`second_stage.RUN_FIELDS`, `second_stage.blank_reads`), and reproduces the file from public data
 alone: the template's Definition and rows, the interior's
 partition and program digests, the values it reads (`reads`), its AND gates per stage (`stage_ands`) and the leaf
@@ -872,7 +872,7 @@ def template_circuits(proofs: Mapping[str, Any] | None, query: Mapping[str, Any]
     """The auditor's params naming each template's circuit file and its registered reference statement's header and
     registered reads (the module docstring), a two-stage run's `interior.params.proofs`: `{"templates": [{"template":
     <descriptor id>, "circuit": <SHA-512, lowercase hex>, "header": <the registered reference statement's header>,
-    "registered": <the registered reads it was verified against, null for none>}, ...]}`, as (template, circuit, header,
+    "registered": <the registered reads it reads, null for none>}, ...]}`, as (template, circuit, header,
     registered) in the order the check's template query `query` names the templates, which is REPLAY_c's first-instance
     order (`replay_cells`). None names no file and gives none. Raises `ValueError` for any other form, a circuit that
     isn't 128 lowercase hex digits, a header that isn't an object, registered reads neither an object nor null, and a
