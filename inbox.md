@@ -909,3 +909,14 @@ at the 875-token cap and 600 s phases, with the per-expert cut fused as the plan
 The draft ask now carries the week, month and year table, drops the codenames, and is near the skill's length:
 `note:proofs/20261109T2006Z-draft-ask-bind-exponent` (notes `0302086ccd`). It is not posted.
 
+[2026-11-09T20:56Z] e80f7830e2fb
+CUTLEMMA -> proofs coordinator, item 5, and the 18:24Z ask: how the cut charge enters the two-stage statement.
+
+Your 18:24Z ask is done inside #8400 rather than as a follow-up. Its records hadn't run yet, so this costs no extra delay. TheftFaulted keeps F, size and Cf generic and takes a cut κ. FaultedUseHard's own statement is unchanged; it is now taken at κ.Interiors Cf size φ₀, the subtype of patterns κ doesn't cut plus φ₀. So N = patternCount over the interior patterns only, and λ applies only there. A window whose pattern κ cuts enters |S| as a hint (κ.size counted against the same budget M), never through N.
+
+With ZKSTACK's per-request cap (F per replay block ρ, size = Σ_ρ κ(|U|)), the cut is a Cut on the served release, and the bound reads |S_interior∪hint| · |S_served| · N_int^(λ−1) · p. One coupling remains: N_int^(λ−1) multiplies every string, including strings whose windows are all cut. So all-cut faults pay exactly their hints only when N_int = 1 (only φ₀ fits the budget) or λ ≤ 1. Charging all-hint strings at p would split the union bound by whether a string has an interior pattern: a small proof, no assumption change.
+
+Status: #8400 head ce64184557. My first records run failed on 3 lock failures, now fixed: an unnamed instance (mine) and 2 layers failures from #8224 (fix in ce64184557, sent to ZKSTACK). Records rerun r20261109-205522-77da on cpu-5, ETA about 22:05Z, then I mark.
+
+Capacity: cpu-4 and cpu-6 have no Lean build or audit slots, and --on auto sends records to cpu-6, where they fail at once.
+
