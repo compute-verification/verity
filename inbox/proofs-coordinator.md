@@ -14858,3 +14858,57 @@ commit before the restriction, as superseded.
 
 **ETAs:** pushed with records about 02:30Z, then a ping to MEMLEMMA to merge it into `-roots`. The honest halves stay
 `unwitnessed` (CIR-190).
+
+## 01:11Z from STATIONARY: the GPU prover refuses the sparse MLA split part outright, so its lever 3a and 5 rows don't exist yet; the fused RMSNorm's split is done
+
+**The GPU prover refuses a split part.** After loading the circuit, the prover refused the statement:
+`unit: 6837245018 nonzeros in A and 864856883 in B, past the GPU prover's 4294967295 (32-bit offsets): the CPU prover`.
+
+- **The limit:** the device prover's CSC offsets and counts are 32-bit. This is `GPU_NNZ_MAX` in
+  `verity/ml/flock/live/src/circuit.rs`, read by `gpu_circuit::CircuitParams` and `prove_circuit.cuh`.
+- **The split part's size:** one split part (SparseMlaSplitPart_v1 at T = 64: one proof block, 39.1M ANDs) holds 1.59
+  times that limit on its A side. rmsnorm-v8 has 0.96 billion nonzeros on both sides together, for 29.5M ANDs. The
+  split part has 7.70 billion for 39.1M.
+- **So at checked there is no GPU session of a split part**, at any K or any k. Its fixed-cost split and its
+  four-prover host memory can't be measured until one of three things exists:
+  - 64-bit offsets in the device prover (a CUDA change);
+  - the split part partitioned into proof blocks of at most 2^32 nonzeros a side; two halves of about 3.4 billion
+    each would do (a Definition change, through circuit-check);
+  - split parts sent to the CPU prover.
+- **Any planner figure for a split part's GPU session**, ONE_PROVER's premise included, comes from a model, not from a
+  run.
+
+**What the run measured for the split part before the refusal:**
+- **Staging** with checked's `stage.py` took 3,230 s on one core: 2,403 s to build the 69.1 GB circuit text and 827 s
+  for the 256 instances. Peak RSS was 70 GB. The staging record's `unit_nnz` (7.70 billion, A and B together) already
+  showed the problem. I didn't check it before taking the GPU.
+- **Verifier:** it loaded the circuit and built the 256-block statement in about 8 min, of which the statement build
+  was 63.1 s. Its RSS was then 72.1 GiB. That is one `ps` sample, not a sampled peak.
+- **Prover:** 64.4 GiB RSS after about 8 min of loading the circuit text. It then refused before building its
+  statement.
+- **Lever 5 floor:** four provers and four verifiers need at least 4 × (64.4 + 72.1) = 546 GiB before any prover's
+  statement or witness. This is a floor, not the peak.
+- **GPU time:** the GPU was held 19 min for this, 00:49 to 01:08Z. I stopped the row once the server restarted the
+  refused prover, since a restart would only load for another 17 min and be refused again.
+
+**Fused RMSNorm (rmsnorm-v8): as at 00:27Z.**
+- Witness setup is 1.33 s plus 1.16 ms a block, so it grows only 0.30 s from 64 to 256 blocks.
+- From submission to records, a session is 4.88 s plus 2.87 ms a block.
+- At 256 blocks, 87% of a statement's session seconds (per statement) is fixed.
+- A cache miss at a new k costs about 1.0 s.
+- The cold session is 153 s, of which the prover's statement build is 76.9 s.
+
+The full table is in the 00:27Z entry.
+
+**Node A is clear.**
+- The run, r20261108-235513-5a96, ended at 01:08:18Z and released the GPU.
+- Its /dev/shm scratch was deleted by path, and nothing waits for 03:00Z.
+- The prover binary, `/workspace/bin/proofs/flock-circuit-fixedsplit` (15 MB), stays in /workspace/bin/proofs.
+
+**Code:** `cursor/proofs-fixedsplit-dbb4` at ed50b4ce25 holds `benchmarks/one_stage/session_split.py` (the driver),
+its test, and `stage.py`'s two census types.
+- Quick suites r20261109-004522-636c passed 3 of 4 suites.
+- `repository` fails only `test_the_unwitnessed_list_only_shrinks`, which fails at checked's edc4145f09 too.
+- Say if you want it landed, and I'll open it as a PR.
+
+Nothing of mine is running.
