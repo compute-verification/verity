@@ -133,6 +133,16 @@ checks = [
     "integrations/vllm/tools/migrate/superseded_quarantine.py",
     "integrations/vllm/tests/{migrate/test_superseded_quarantine,program/test_superseded_kept}.py",
 ]
+# vLLM's tests held to a private oracle: H1's GPU rigs and circuits (`benchmarks/pouw/{h1_prove,hidden_zk,served_h1}`, the
+# live challenger's models and auditor), the int8 step's perplexity bench (`benchmarks/ppl`), and the tests that import them
+oracle_tests = [
+    "integrations/vllm/tests/engine/{ppl_oracle,test_int8_checkpoint,test_int8_exact,test_int8_experts,test_int8_k_scales}.py",
+    "integrations/vllm/tests/engine/int8_{attention_capture,attention_tpot,chunked,exact,experts,kscale}_gpu.py",
+    "integrations/vllm/tests/pipeline/test_{commit_coins,serve_h1,serve_tie}.py",
+    "integrations/vllm/tests/protocols/{challenger_host,pouw_h1_circuits,pouw_h1_gpu,pouw_h1_ranks_gpu,pouw_h1_rehearsal}.py",
+    "integrations/vllm/tests/protocols/test_pouw_h1{,_circuits,_commit,_drawn,_gpu_args,_handoff,_live,_ranks_commit}.py",
+    "integrations/vllm/tests/protocols/test_{credit_gate,pouw_pearl_c_served,rt4_h1_challenger}.py",
+]
 team = [
     "infra",
     "tools/{research,agent-guard}",
