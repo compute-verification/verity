@@ -29,7 +29,7 @@ answered its sample by the deadline, and none when the prover could rebuild the 
 advice, timing advice, inputs, every refused port-window charged at its link's full capacity, so it fails closed, and
 everything a block out for maintenance held), and the failure probability (the sum of the claims' deltas). Beside the
 covert budget, which is only what goes beyond the committed computation, it reports the export (λ_out, `export_bits`):
-the committed bits that crossed a certified boundary out of a block, by port. They count as novel information read by
+the committed bits that crossed a certified boundary out of a block, by port. They count as fresh input read by
 their receivers once the declaration's certifiers cover every link; until then the export is reported
 as not applicable, with the uncovered links named.
 
@@ -137,7 +137,7 @@ class Account:
 
     @property
     def export_bits(self) -> float:
-        """The export, λ_out: the committed bits that crossed a certified boundary out of a block, novel information
+        """The export, λ_out: the committed bits that crossed a certified boundary out of a block, fresh input
         read by their receivers. Charged only when the declaration's certifiers cover every link (`export_charged`)."""
         return sum(self.exported.values())
 

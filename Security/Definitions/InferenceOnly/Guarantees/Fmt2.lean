@@ -17,7 +17,7 @@ open Verity Finset
 `c`'s values meet the fan-out bound, its counted multiplications read weights at least `k₀` steps from the baseline,
 and its weights are incompressible with each source charged once and each thread charged by its work at `b_a`, every
 subcircuit `R` small by information computes at most `Λ = max(e, c · S / (4 d b_w))` counted multiplications per `b_a`
-bits of information its novel reads carry. -/
+bits of information its fresh input bits carry. -/
 def ThreadedReadsInfoFmt2 : Prop :=
   ∀ (c : Declaration) (θv : c.D.Transcript) (T : Threading c) (Src : T.Sources) (Γ : ℕ) (S b_w b_a : ℝ)
     (d e n k₀ : ℕ),
@@ -27,9 +27,9 @@ def ThreadedReadsInfoFmt2 : Prop :=
 
 /-- **Theorem 1 through a containment, each value charged once over its copies**: a declaration `d` contains the
 reference circuit `c` through `M`, with `c`'s baseline values `θc` the ones `θv` gives their images, and `c` is as in
-`ThreadedReadsInfoFmt2` at cap `K`. Every set `W` of `d`'s computed gates, at most `Γ` of them, whose novel reads carry
+`ThreadedReadsInfoFmt2` at cap `K`. Every set `W` of `d`'s computed gates, at most `Γ` of them, whose fresh input bits carry
 at most `K` bits of information, holds at most `Λ` of `c`'s counted multiplications per `b_a` bits of information `W`'s
-novel reads carry. -/
+fresh input bits carry. -/
 def ThreadedContainedInfoFmt2 : Prop :=
   ∀ (c d : Declaration) (M : Containment c.D d.D) (θc : c.D.Transcript) (θv : d.D.Transcript) (T : Threading c)
     (Src : T.Sources) (Γ : ℕ) (K b_w b_a : ℝ) (dd e n k₀ : ℕ),
@@ -41,7 +41,7 @@ def ThreadedContainedInfoFmt2 : Prop :=
       b_a * (T.mults (univ.filter fun g => M.emb g ∈ W)).card ≤ novelInfo d θv W * T.bound K b_w dd e
 
 /-- **The count a memory cap needs, each value charged once over its copies**: with `d`, `c` and `M` as in
-`ThreadedContainedInfoFmt2`, a set `W` of `d`'s computed gates, at most `Γ` of them, whose novel reads are a state that
+`ThreadedContainedInfoFmt2`, a set `W` of `d`'s computed gates, at most `Γ` of them, whose fresh input bits are a state that
 is a function of `k` bits and an ingress `Sin`, holds at most `K · Λ(K) / b_a` of `c`'s counted multiplications, at
 `K = k + width(Sin)`. -/
 def ThreadedOfStateFmt2 : Prop :=

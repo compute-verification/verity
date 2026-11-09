@@ -29,11 +29,11 @@ main open attack), retrieval, looped models, a better recipe than the one the la
 def Reach (c : Declaration) (T : Threading c) (Nstar : ℕ) : Prop :=
   ∀ t, (T.threadMults Finset.univ t).Nonempty → Nstar ≤ (T.threadWeights Finset.univ t).card
 
-/-- **F1 and F4 at window scale (empirical)**: every window `j` of `P` reads at least `b_w` bits of novel information
+/-- **F1 and F4 at window scale (empirical)**: every window `j` of `P` reads at least `b_w` fresh input bits
 for each weight it uses and `w_e` bits for each thread it works on but didn't start:
 `b_w · #(weights j uses) + w_e · #(threads j entered) ≤ width(in(P j) \ θ)`.
 
-F1 is the weight half of `WeightsIncompressible` at window scale: `b_w` is a rate, in bits of novel information per
+F1 is the weight half of `WeightsIncompressible` at window scale: `b_w` is a rate, in fresh input bits per
 updated weight used (2.5 at the C1 floor). F4: one window, `start t`, starts each thread from its token id, and any
 other window that works on it reads at least `w_e` bits of its values, its hidden state coming in and its gradient going
 back, or its context's keys and values, which cost more (1,147 / 35,840 / 114,688 bits, low / central / high, at
@@ -60,8 +60,8 @@ law is fitted to, or a registered base in `θ` that an update stacks on. -/
 def ReachSlots (c : Declaration) (T : Threading c) (σ : T.Slots) (Nstar : ℕ) : Prop :=
   ∀ t, (T.threadMults Finset.univ t).Nonempty → Nstar ≤ (σ.threadSlots Finset.univ t).card
 
-/-- **F1 per parameter slot and F4 at window scale (empirical)**: every window `j` of `P` reads at least `b_w` bits of
-novel information for each parameter slot of `σ` it uses and `w_e` bits for each thread it works on but didn't start:
+/-- **F1 per parameter slot and F4 at window scale (empirical)**: every window `j` of `P` reads at least `b_w` fresh input
+bits for each parameter slot of `σ` it uses and `w_e` bits for each thread it works on but didn't start:
 `b_w · #(slots j uses) + w_e · #(threads j entered) ≤ width(in(P j) \ θ)`.
 
 It is `Fits` with each parameter charged once per window, however many of its versions (optimizer steps) the window

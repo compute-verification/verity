@@ -122,7 +122,7 @@ def test_check_ranks_holds_each_ranks_run_of_the_body_to_its_own_program():
 
 @pytest.mark.slow
 def test_the_node_reads_only_its_prompt_besides_theta():
-    """One inference block over the node's computation: its novel reads are the prompt's 4 x 32 bits; the rank Programs' are their peers' too."""
+    """One inference block over the node's computation: its fresh input bits are the prompt's 4 x 32 bits; the rank Programs' are their peers' too."""
     node = build_node_program(_phi(TINY, tp={"world": 2, "rank": 0}), "request", LP=4, T=2)
     text = canonical_json(node.desc).decode()
     inp, reg, spans = NCI.root_nodes(text)

@@ -14,10 +14,10 @@ here join the two, so that the check's verdict carries the bound: on every insta
 circuit `c` it contains, under the bound's premises.
 
 * `Throttles`: `ThreadedThrottled`'s conclusion, for every `c` that `d` contains, `(dd, e)`-threaded at read cap `αΓ`
-  with its weights incompressible (`WeightsIncompressible`), with no novel input of `c` in the θ `theta` names
+  with its weights incompressible (`WeightsIncompressible`), with no fresh input of `c` in the θ `theta` names
   (`ThetaRegistered`), which the check does not see.
 * `ThrottlesDark`: `ThreadedThrottledDark`'s, for every `c` that `d` contains partly (`PartialContainment`), with no
-  dark value or novel input of `c` in the θ `theta` names (`ThetaRegistered`), which the check does not see.
+  dark value or fresh input of `c` in the θ `theta` names (`ThetaRegistered`), which the check does not see.
 * `ThrottlesSlots`, `ThrottlesDarkSlots`: the same with the weights charged per parameter slot
   (`WeightsIncompressibleSlots`).
 
@@ -49,7 +49,7 @@ def Throttled (j out : Json) : Prop :=
 /-- **A verdict of compliance throttles every threaded reference circuit the declaration contains, if its weights are
 incompressible and its θ registered** (the named assumptions `WeightsIncompressible` and `ThetaRegistered`).
 On every instance with a verdict, the verdict is `Throttled`: the bound holds for each reference circuit `c` the
-declaration contains that is `(dd, e)`-threaded at read cap `αΓ`, has incompressible weights and has no novel input in
+declaration contains that is `(dd, e)`-threaded at read cap `αΓ`, has incompressible weights and has no fresh input in
 the θ `theta` names, and says nothing of any other. -/
 def Throttles : Prop :=
   ∀ (j out : Json), evaluate j = .ok out → Throttled j out
@@ -72,7 +72,7 @@ def ThrottledDark (j out : Json) : Prop :=
 circuit the declaration contains partly, if its weights are incompressible and its θ registered (the named
 assumptions `WeightsIncompressible` and `ThetaRegistered`). On every instance with a verdict, the verdict is
 `ThrottledDark`: the bound holds for each reference circuit `c` the declaration contains partly that is
-`(dd, e)`-threaded at read cap `αΓ`, has incompressible weights and has no dark value or novel input in θ
+`(dd, e)`-threaded at read cap `αΓ`, has incompressible weights and has no dark value or fresh input in θ
 `theta` names, and says nothing of any other. -/
 def ThrottlesDark : Prop :=
   ∀ (j out : Json), evaluate j = .ok out → ThrottledDark j out

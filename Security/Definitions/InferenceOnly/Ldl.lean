@@ -7,7 +7,7 @@ import Mathlib.Data.Nat.Log
 
 The working draft's model ("Distinguishing inference from frontier training", §3–§5.1), on core's circuit and its one
 partition. The registered inputs `θ` are a declaration's baseline (`Verity.Declaration`), the blocks are a
-`Verity.Partition` of the operation gates, and a block's unregistered input bits `|in(I) \ θ|` are its novel reads
+`Verity.Partition` of the operation gates, and a block's unregistered input bits `|in(I) \ θ|` are its fresh input bits
 (`InferenceOnly.novelReads`, which on a Boolean circuit, one bit per gate, is the number of those gates). Blocks carry no order:
 each inherits the circuit's topological order.
 

@@ -1031,7 +1031,7 @@ theorem novel_eq (u : Fin n) : InferenceOnly.novelReads d (U.gates u) =
   · have : ¬ dv.theta.contains a.val = true := fun h => ha (h1.2 (Std.HashSet.contains_iff_mem.1 h))
     simp [ha, this, h2]
 
-/-- Entry `u` of `ius`: the size and novel reads of inference block `u`. -/
+/-- Entry `u` of `ius`: the size and fresh input bits of inference block `u`. -/
 theorem ius_get (u : Fin n) : (ius c dv)[u.val]! = (d.D.size (U.gates u), InferenceOnly.novelReads d (U.gates u)) := by
   have hu : u.val < (tally c dv).size := by rw [(tally_spec c dv).1, ← S.n_eq]; exact u.isLt
   rw [S.size_eq u, S.novel_eq u, ius, getElem!_pos _ u.val (by simpa using hu), Array.getElem_map,

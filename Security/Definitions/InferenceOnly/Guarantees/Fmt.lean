@@ -16,7 +16,7 @@ open Verity Finset
 /-- **Theorem 1 with reads counted by information, each thread charged by its work**: if the reference circuit `c`'s
 weights are incompressible with each thread charged by the work done on it, at `log₂ n − μ ≥ b_a` bits per thread
 value's worth, every subcircuit `R` small by information computes at most `Λ = max(e, c · S / (4 d b_w))` counted
-multiplications per `b_a` bits of information its novel reads carry. It is `ThreadedReadsInfo` with
+multiplications per `b_a` bits of information its fresh input bits carry. It is `ThreadedReadsInfo` with
 `WeightsSupportFmt` in place of `WeightsSupport` and the threading premise. -/
 def ThreadedReadsInfoFmt : Prop :=
   ∀ (c : Declaration) (θv : c.D.Transcript) (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ) (d e n : ℕ) (μ : ℝ),
@@ -26,9 +26,9 @@ def ThreadedReadsInfoFmt : Prop :=
 
 /-- **Theorem 1 through a containment, each thread charged by its work**: a declaration `d` contains the reference
 circuit `c` through `M`, with `c`'s baseline values `θc` the ones `θv` gives their images, and `c` is as in
-`ThreadedReadsInfoFmt` at cap `K`. Every set `W` of `d`'s computed gates, at most `Γ` of them, whose novel reads carry
+`ThreadedReadsInfoFmt` at cap `K`. Every set `W` of `d`'s computed gates, at most `Γ` of them, whose fresh input bits carry
 at most `K` bits of information, holds at most `Λ` of `c`'s counted multiplications per `b_a` bits of information `W`'s
-novel reads carry. -/
+fresh input bits carry. -/
 def ThreadedContainedInfoFmt : Prop :=
   ∀ (c d : Declaration) (M : Containment c.D d.D) (θc : c.D.Transcript) (θv : d.D.Transcript) (T : Threading c)
     (Γ : ℕ) (K b_w b_a : ℝ) (dd e n : ℕ) (μ : ℝ),
@@ -40,7 +40,7 @@ def ThreadedContainedInfoFmt : Prop :=
       b_a * (T.mults (univ.filter fun g => M.emb g ∈ W)).card ≤ novelInfo d θv W * T.bound K b_w dd e
 
 /-- **The count a memory cap needs, each thread charged by its work**: with `d`, `c` and `M` as in
-`ThreadedContainedInfoFmt`, a set `W` of `d`'s computed gates, at most `Γ` of them, whose novel reads are a state that
+`ThreadedContainedInfoFmt`, a set `W` of `d`'s computed gates, at most `Γ` of them, whose fresh input bits are a state that
 is a function of `k` bits and an ingress `Sin`, holds at most `K · Λ(K) / b_a` of `c`'s counted multiplications, at
 `K = k + width(Sin)`. -/
 def ThreadedOfStateFmt : Prop :=

@@ -14,12 +14,12 @@ namespace InferenceOnly.Assumptions
 open Verity
 
 /-- **Weights are incompressible, in support form**: every subcircuit `R` of the reference circuit `c` small by
-information (at most `Γ` computed gates, at most `S` bits of information read) has novel reads that take at least
+information (at most `Γ` computed gates, at most `S` bits of information read) has fresh input bits that take at least
 `2^(b_w · #(weights R uses) + b_a · Σ_t #(novel values of thread t that R reads))` distinct values over the runs with
 the baseline at `θv`. `b_w` and `b_a` are rates in bits of information per weight used and per novel thread value read.
 
 It gives `WeightsIncompressible` at the same rates, since reads carry no more information than their width, and the two
-agree on a subcircuit whose novel reads are novel input gates. It is stronger where a subcircuit's novel reads are
+agree on a subcircuit whose fresh input bits are fresh input gates. It is stronger where a subcircuit's fresh input bits are
 redundant: a thread value and a copy of it, two thread values one of which determines the other, or a computed value
 that takes fewer than `2^b_a` values over the runs. Each is charged `b_a`, and their information is less. It fails where
 `WeightsIncompressible` does (weights committed in `θ`, a low-rank update, updates rebuilt from fewer bits), and where

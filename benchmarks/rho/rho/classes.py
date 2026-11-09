@@ -6,7 +6,7 @@ statement needs is unknown). A budget at which the statement's premises fail get
 the Lean statement it instantiates first, then its named assumptions; `lean.weakest(cites)` is its status, and
 `premise_status(cites, k)` is where those assumptions stand at a block of `k` bits (`data/premises.toml`).
 
-The statements are about inference blocks of `c` gates reading `k` novel bits; here `k` is `budget.inputs`. Adding a
+The statements are about inference blocks of `c` gates reading `k` fresh input bits; here `k` is `budget.inputs`. Adding a
 class is one more `Argument` in `CLASSES`: a premise set, the profile fields it reads, and its count.
 
 **Counted sets.** Each statement counts its own products: the covering family and the partial-sum and E1 bounds count
@@ -208,7 +208,7 @@ def expensive_share(k: float, layer_bits: float, layers: int) -> float:
 
 
 def cover(k: float, b: float) -> float:
-    """`CoverTraining`: `α₀ b s ≤ (α²Γ + bα) size(d)`, so a block of `k` novel bits finishes at most `k²/b + k`."""
+    """`CoverTraining`: `α₀ b s ≤ (α²Γ + bα) size(d)`, so a block of `k` fresh input bits finishes at most `k²/b + k`."""
     return k * k / b + k
 
 
@@ -287,7 +287,7 @@ def partial_sum_keyed(k: float, b: float, legs: int, aout: float, vocab: int, bc
 
 
 def threaded(k: float, b_a: float, b_w: float, d: float, e: float, c: float) -> float:
-    """`ThreadedThrottled`: `b_a |M| ≤ α Λ(αΓ) size(d)`, so a block of `k` novel bits does at most `k Λ(k) / b_a` counted
+    """`ThreadedThrottled`: `b_a |M| ≤ α Λ(αΓ) size(d)`, so a block of `k` fresh input bits does at most `k Λ(k) / b_a` counted
     multiplications, with `Λ = max(e, c k / (4 d b_w))` (`Threading.bound`)."""
     return k * max(e, c * k / (4 * d * b_w)) / b_a
 

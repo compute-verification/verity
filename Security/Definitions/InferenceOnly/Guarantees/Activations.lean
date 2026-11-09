@@ -30,7 +30,7 @@ open Verity
 
 /-- **The activations bound for one subcircuit**: under `ActivationsIncompressibleAll` at read cap `K`, every small
 subcircuit `R` of the reference circuit `c` computes at most `Λ = max(e, c_r · K / (4 dd b_w))` counted multiplications
-per `b_a` bits of novel information it reads, where each activation enters at most `e` counted multiplications and each
+per `b_a` fresh input bits it reads, where each activation enters at most `e` counted multiplications and each
 activation computed from counted multiplications is computed from at least `dd` distinct activations of its own thread. -/
 def ActivationsReads : Prop :=
   ∀ (c : Declaration) (T : Threading c) (L : T.Links) (Γ : ℕ) (K b_w b_a : ℝ) (dd e : ℕ),

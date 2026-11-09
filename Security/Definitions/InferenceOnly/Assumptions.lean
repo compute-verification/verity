@@ -41,7 +41,7 @@ open Verity
 
 open Classical in
 /-- **Incompressibility of weights and activations** (the draft's weight and activation incompressibility, applied
-jointly). Every inference block `R` of `D` (a set of at most `Γ` computed gates) that reads at most `K` bits of novel information reads
+jointly). Every inference block `R` of `D` (a set of at most `Γ` computed gates) that reads at most `K` fresh input bits reads
 at least `b_w` bits for each weight entry it uses and `b_a` bits for each input entry it uses, other than an input entry
 linked to an entry whole in `R`, which `R` can compute from its own products alone:
 `b_w · #(weight entries R uses) + b_a · #(input entries R uses, not linked to an entry whole in R) ≤ width(in(R) \ θ)`.
@@ -53,7 +53,7 @@ an inference block can use an entry without reading its scale and leave the scal
 The draft's rationale (Lemma 1's proof): `R` must read each input entry it uses, its linked output entry, or a partial
 sum of that output entry; these are distinct for distinct input entries, since the links are injective, and each is at
 least `b_a` wide. No inference block of at most `Γ` gates can reconstruct entries of `W_ℓ`, or entries of the chain's input and output
-vectors, from fewer bits of novel information than their width.
+vectors, from fewer fresh input bits than their width.
 
 False when `D` is a declared circuit; it stands when `D` is a reference training circuit,
 as the activations' half of `TrainingIncompressible`. `ActivationsSupport`'s counterexample does not
@@ -92,7 +92,7 @@ products that make up an output entry. When several inference blocks contribute 
 between them costs its reader at least its width, at least `b_a`, and an entry whose products lie in `m ≥ 2` inference blocks needs
 at least `m − 1` partial sums to pass between inference blocks.
 
-For every division `P` of `D` into inference blocks of at most `Γ` gates, each reading at most `K` bits of novel information, the
+For every division `P` of `D` into inference blocks of at most `Γ` gates, each reading at most `K` fresh input bits, the
 partial sums passed between inference blocks can be charged to the inference blocks that receive them, `s u` to inference block `u`, so that:
 1. an entry whose products lie in `m` inference blocks is charged at least `m − 1` in total;
 2. each inference block reads at least `b_w` bits for each weight entry it uses and `b_a` bits for each partial sum charged to it.
@@ -112,7 +112,7 @@ def PartialSumsIncompressible (D : Declaration) (c : Chain D.D) (Γ : ℕ) (K b_
 
 /-- **Incompressibility of partial sums, in support form**: `PartialSumsIncompressible` restated over what values
 determine rather than over wiring. For every division `P` of `D` into inference blocks of at most `Γ` gates, each reading at most `K`
-bits of novel information, the partial sums passed between inference blocks can be charged to the inference blocks that receive them, `s u` to inference block
+fresh input bits, the partial sums passed between inference blocks can be charged to the inference blocks that receive them, `s u` to inference block
 `u`, so that an entry whose products lie in `m` inference blocks is charged at least `m − 1` in total, and the gates of each inference block take
 at least `2^(b_w · #(weight entries it uses) + b_a · s u)` distinct values over the runs of `D` with θ at its
 committed values `θv`.
@@ -120,7 +120,7 @@ committed values `θv`.
 Like `ActivationsSupport`, wiring cannot falsify it, and `b_w` and `b_a` are rates in bits of support per entry, below an
 entry's width by whatever the updated weights and the partial sums compress to. It is meant for a reference training
 circuit, the one a declared circuit contains (`InferenceOnly.Guarantees.ContainedMatMul`), where it is a claim about how
-compressible training is. An inference block's values are functions of the values on its novel reads, so it gives
+compressible training is. An inference block's values are functions of the values on its fresh input bits, so it gives
 `PartialSumsIncompressible` at the same caps (`partialSumsIncompressible_of_support`).
 
 **Falsified** for one honest matrix multiplication, with binary

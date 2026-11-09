@@ -2,7 +2,7 @@ import Proofs.Properties.InferenceOnly.Resolve
 import Proofs.Properties.InferenceOnly.Width
 
 /-!
-# The novel reads, from what `Desc.analyze` and `Desc.novelWidth` compute
+# The fresh input bits, from what `Desc.analyze` and `Desc.novelWidth` compute
 
 Toward `NovelExact`. A segment names gates with their widths (`Width.segGates`). `Desc.intoOf`
 collects, per inference block, the segments its root nodes read whose first piece is in a root node of another inference block and outside θ's
