@@ -292,6 +292,7 @@ def select (j : Json) : V Json := do
   let cm ← match getD j "closure" with
     | .null => pure none
     | c => some <$> Select.closureMap? c
+  let table ← rule.tableOver p (getD j "query") table
   let rule ← Select.resolve rule p (getD j "query")
   let (draw, _, read) ← Select.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the select"))
   return Json.mkObj [("draw", draw), ("read", Lean.toJson read)]
@@ -321,6 +322,7 @@ def slots (j : Json) : V Json := do
   let cm ← match getD j "closure" with
     | .null => pure none
     | c => some <$> Select.closureMap? c
+  let table ← rule.tableOver p (getD j "query") table
   let rule ← Select.resolve rule p (getD j "query")
   let (l, checked) ← Slots.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the slots"))
   return Json.mkObj [("classes", l.toJson),
@@ -657,8 +659,8 @@ registrations' records, the second stage's units (`drawn`), the design's links (
 (`replayWires`'), each null for none, the verdicts, whose verifiers of record report the sessions' reads
 (`Record.sessionRegistered`) and name the header, registered reads and sample each checked (`SecondStage.verifiedOf`),
 the reference header of each template's statement (`refs`, `{template: header}`, null for none) and the registered
-reads it was verified against (`ref_reads`, `{template: registered}`, each null for none, null for no template's), and
-the statements, null for none. -/
+reads it reads (`ref_reads`, `{template: registered}`, each null for none, null for no template's), and the
+statements, null for none. -/
 def secondStatements (j : Json) : V Json := do
   let .bool allow := getD j "allow" | throw "allow is not a boolean"
   let .arr ss := getD j "sample" | throw "sample is not a list"

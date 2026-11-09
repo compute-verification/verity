@@ -32,38 +32,38 @@ theorem unregistered_R1 (u : Fin 1) : R1.d.unregistered (P1.gates u) = {1} := by
 
 theorem unregistered_R1' (u : Fin 1) : R1.d.unregistered (R1.d.𝓘.gates u) = {1} := unregistered_R1 u
 
-theorem blockProgram_R1 (e : List Bool) (X : C.Transcript) (u : Fin 1) :
+theorem blockProgram_R1 (e : List Bool) (X : C.Trace) (u : Fin 1) :
     blockProgram R1 e X u = e ++ [(X 1).getLsbD 0] := by
   obtain rfl : u = 0 := Subsingleton.elim _ _
   show e ++ indexCode (0 : Fin 1) ++ C.bits X ((R1.d.unregistered (P1.gates 0)).sort (· ≤ ·)) = _
   rw [unregistered_R1]
   simp [indexCode, Circuit.bits]
 
-theorem recompute_zero (X : C.Transcript) : R1.recompute X 0 0 = 1 := C.run_fixed rfl
+theorem recompute_zero (X : C.Trace) : R1.recompute X 0 0 = 1 := C.run_fixed rfl
 
-theorem recompute_one (X : C.Transcript) : R1.recompute X 0 1 = X 1 := C.run_fixed rfl
+theorem recompute_one (X : C.Trace) : R1.recompute X 0 1 = X 1 := C.run_fixed rfl
 
-theorem recompute_two (X : C.Transcript) : ((R1.recompute X 0) 2).getLsbD 0 = (X 1).getLsbD 0 := by
+theorem recompute_two (X : C.Trace) : ((R1.recompute X 0) 2).getLsbD 0 = (X 1).getLsbD 0 := by
   have h : R1.recompute X 0 2 = C.op 2 (R1.recompute X 0) := C.run_free rfl
   rw [h]
   show (BitVec.ofBool ((R1.recompute X 0 0).getLsbD 0 && (R1.recompute X 0 1).getLsbD 0)).getLsbD 0 = _
   rw [recompute_zero, recompute_one]
   simp
 
-theorem recompute_three (X : C.Transcript) : ((R1.recompute X 0) 3).getLsbD 0 = (X 1).getLsbD 0 := by
+theorem recompute_three (X : C.Trace) : ((R1.recompute X 0) 3).getLsbD 0 = (X 1).getLsbD 0 := by
   have h : R1.recompute X 0 3 = C.op 3 (R1.recompute X 0) := C.run_free rfl
   rw [h]
   show (BitVec.ofBool ((R1.recompute X 0 0).getLsbD 0 && (R1.recompute X 0 1).getLsbD 0)).getLsbD 0 = _
   rw [recompute_zero, recompute_one]
   simp
 
-theorem eval_two (a : C.Transcript) : (C.eval a 2).getLsbD 0 = ((a 0).getLsbD 0 && (a 1).getLsbD 0) := by
+theorem eval_two (a : C.Trace) : (C.eval a 2).getLsbD 0 = ((a 0).getLsbD 0 && (a 1).getLsbD 0) := by
   rw [C.eval_op a (g := 2) (by decide)]
   show (BitVec.ofBool ((C.eval a 0).getLsbD 0 && (C.eval a 1).getLsbD 0)).getLsbD 0 = _
   rw [C.eval_input a (g := 0) (by decide), C.eval_input a (g := 1) (by decide)]
   simp
 
-theorem eval_three (a : C.Transcript) : (C.eval a 3).getLsbD 0 = ((a 0).getLsbD 0 && (a 1).getLsbD 0) := by
+theorem eval_three (a : C.Trace) : (C.eval a 3).getLsbD 0 = ((a 0).getLsbD 0 && (a 1).getLsbD 0) := by
   rw [C.eval_op a (g := 3) (by decide)]
   show (BitVec.ofBool ((C.eval a 0).getLsbD 0 && (C.eval a 1).getLsbD 0)).getLsbD 0 = _
   rw [C.eval_input a (g := 0) (by decide), C.eval_input a (g := 1) (by decide)]
@@ -75,7 +75,7 @@ theorem honest_ones : R1.Honest fun _ => 1 := fun _ _ => rfl
 theorem eval_ones : z (C.eval fun _ => 1) = [true, true] := by
   simp [z, eval_two, eval_three]
 
-theorem selection_two (T : C.Transcript) (σ : Fin 1 → Finset (Fin 4)) (hσ : σ 0 = {2, 3}) :
+theorem selection_two (T : C.Trace) (σ : Fin 1 → Finset (Fin 4)) (hσ : σ 0 = {2, 3}) :
     selectionBits T {0} σ = z T := by
   have : (({2, 3} : Finset (Fin 4)).sort (· ≤ ·)) = [2, 3] := by
     rw [Finset.sort_insert _ (by decide) (by decide), Finset.sort_singleton]

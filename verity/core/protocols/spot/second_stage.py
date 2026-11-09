@@ -36,9 +36,10 @@ holds each instance's ref to the row at the position the read gives its unit (`F
 ``second-read`` holds the read to the slot's own rows or its cell's replay block's; elsewhere it only bounds a ref by its
 table, so a ref could point a drawn unit at another unit's rows.
 
-Each statement's registered reads are its template's reference statement's (`Own.ref_reads`, the ``--registered`` file
-the auditor's params give the registered reference statement, fixed before the run), the two the same with each port's
-run fields blanked (`blank_reads`) (``second-values``, `_values_ok`). The run's fields are those ``second-read`` holds
+Each statement's registered reads are its template's reference statement's (`Own.ref_reads`, the registered reads the
+auditor's params give beside its header, fixed before the run and taken as given: round 2 never verifies the reference
+statement against them), the two the same with each port's run fields blanked (`blank_reads`) (``second-values``,
+`_values_ok`). The run's fields are those ``second-read`` holds
 to the run: every port's ``root``, ``domain`` and ``leaves`` (`READ_RUN_FIELDS`), and the rows (``reads``,
 ``reads_from``: `READ_ROW_FIELDS`) of a port a link names or one reading a port of the interior record (its own, or at
 a port a wire names its writer's), whose rows the run places (`_run_places_rows`). So the ports a session reads
@@ -192,7 +193,7 @@ class Own:
     registrations' records, the second draw's units, the design's links (`replay_links`, None when the replay block's
     Definition makes none), the ``{value: root}`` the verifiers of record report the sessions read
     (`audit.session_registered`), what they name of each session they accepted (`verified_of`), the reference header
-    of each template's statement, ``(template, header)``, and the registered reads it was verified against,
+    of each template's statement, ``(template, header)``, and the registered reads it reads,
     ``(template, registered)``, None for none (`ref_reads`), as the auditor's params give them
     (`service.template_circuits`), and the design's wires (`replay_wires`, None when the Definition makes none)."""
 
