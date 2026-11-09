@@ -788,9 +788,9 @@ def check (allow : Bool) (own : Own) (stmts : Option (Array Json)) : Check :=
       else interiorFailures own ++ designFailures ps own
   found.foldl (fun c x => c.fail x.1 x.2) {}
 
--- `check`'s equation lemmas are made here, on the command thread: Lean states them in the hygiene context of the
--- declaration that first asks for them, and the theorems that unfold `check` elaborate in parallel, so whichever asked
--- first named a binder of theirs and the module's `.olean` differed from one build to the next.
+-- `check`'s equation lemmas are made here, on the command thread: Lean names a binder of theirs in the hygiene context
+-- of the declaration that first asks for them, and the theorems below that unfold `check` elaborate in parallel, so
+-- without this, whichever of them asks first decides the module's `.olean`.
 example := @check.eq_1
 
 /-- The interior registration's audit record `rec` with round 2's check `c` as `checks.statements`, failing where `c`
