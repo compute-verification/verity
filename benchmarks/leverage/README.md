@@ -6,10 +6,14 @@ The models are small open ones (GPT-2 small, Qwen2.5-0.5B, Qwen2.5-1.5B), run on
 
 - `check.py`: `lm.LM` against Hugging Face transformers' logits, and its weight edits against changed weights; run it
   first on each model.
-- `clamp.py`: the range clamps' boxes. `--part calibrate` fits one box per coordinate and position class (position 0,
-  the attention sink, and the rest) on `traffic.py`'s calibration texts, one power of two over the honest maximum;
-  a linear input's box goes through its FP8 per-128-group UE8M0 scale. `--part complete` serves the held-out texts
-  under the boxes and counts the honest values they cut and the served tokens that change.
+- `clamp.py`: the range clamps' boxes. `--part calibrate` fits one box per coordinate and position class, read from
+  positions and token ids alone (the first `--window` positions, where attention sinks form; the tokenizer's special
+  tokens after them; the rest), one power of two over the honest maximum; a linear input's box goes through its FP8
+  per-128-group UE8M0 scale. Its traffic is `traffic.py`'s hand-written texts and, with `--mixed N`, the pinned
+  datasets' chat, web and multi-script texts; `--first-tokens -1` adds every vocabulary token at position 0.
+  `--shard i/n` splits a part across runs, and `--part merge` joins calibrate shards. `--part complete` serves the
+  held-out texts under the boxes and counts the honest values they cut and the served tokens that change; `--part
+  explain` names each value outside its box with its token and context, and each text's sink-like positions.
 - `reach.py`: one fault's reach in the served tokens by site, layer and value. Raw reach is the tokens that differ
   from the honest continuation; direct reach is the tokens no honest query on the served prefix reproduces. It
   reports their Shannon bound, their rank code and the per-position KL. `--temperature` samples under a shared-noise
@@ -17,8 +21,10 @@ The models are small open ones (GPT-2 small, Qwen2.5-0.5B, Qwen2.5-1.5B), run on
   block writing the whole group can put in one coordinate), one FP8 code at its own group scale, a group's scale at
   its bound, and all 128 codes at their group's box.
 - `extract.py`: the weight bits concrete attacks read a fault from top-k log-probabilities. The parts are `final`
-  (the LM head, from the final norm's output), `rows` (an output-side row at any layer) and `honest` (Carlini et
-  al.'s SVD attack with the same observables). `--fp4` quantizes the LM head to NVFP4; `--boxes` clamps every read
+  (the LM head, from the final norm's output), `rows` (an output-side row at any layer), `block` (under `--boxes`, a
+  fault that writes an aligned block of `--widths` coordinates of the final norm's output, read by least squares
+  over `--read-over-w` faults a coordinate: the bits a fault as the block a faulting proof block writes widens) and
+  `honest` (Carlini et al.'s SVD attack with the same observables). `--fp4` quantizes the LM head to NVFP4; `--boxes` clamps every read
   and faults at the box amplitudes; `--differential` subtracts an honest query on the same prompt, which reads
   in-range faults the faulted response alone doesn't. `--peel` has the rows' decoder estimate the LM head and the
   final norm's g and b from faults on the last layer instead of knowing them: `saturate` unclamped, `box` or `own`
@@ -38,8 +44,9 @@ uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/reach.py -
 uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/extract.py --model qwen2.5-0.5b --part final --fp4 --out "$OUT"
 uv run python benchmarks/leverage/report.py --reach "$OUT"/summary.json --extract "$OUT"/extract-*.json
 
-uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/clamp.py --model gpt2 --part calibrate --out "$OUT"/clamp
-uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/clamp.py --model gpt2 --part complete --boxes "$OUT"/clamp/boxes.pt --out "$OUT"/clamp
+uv run --extra torch-cpu --with tokenizers --with pyarrow python benchmarks/leverage/clamp.py --model gpt2 --part calibrate --mixed 200 --window 4 --first-tokens -1 --out "$OUT"/clamp
+uv run --extra torch-cpu --with tokenizers --with pyarrow python benchmarks/leverage/clamp.py --model gpt2 --part complete --mixed 100 --first-tokens 0 --boxes "$OUT"/clamp/boxes.pt --out "$OUT"/clamp
+uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/extract.py --model gpt2 --part block --boxes "$OUT"/clamp/boxes.pt --ks 20 --out "$OUT"/block
 uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/reach.py --model gpt2 --boxes "$OUT"/clamp/boxes.pt --kinds box,own,scale,codes --sites every --new 64 --out "$OUT"/reach-clamped
 uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/extract.py --model gpt2 --part rows --boxes "$OUT"/clamp/boxes.pt --differential --row-site mlph --pick widest --values box own scale codes --out "$OUT"/rows
 uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/attack.py --model qwen2.5-0.5b --boxes "$OUT"/clamp/boxes.pt --layers -2 -4 --out "$OUT"/attack
