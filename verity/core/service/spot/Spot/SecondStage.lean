@@ -26,17 +26,17 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
     rule over the interior record's program, partition and that port's leaves): the verifier computes both, so the
     prover chooses neither;
   - `second-population`: its header's `units.indices` are not its part's slots in order, or its `instances` not their
-    count;
+    count, or more than `2^64` (`MAX_LEAVES`);
   - `second-roots`: its scheme is not the interior record's, or its `frame_v3` roots and `domain_ids`, its registered
     reads aside, are not the record's for its template's ports (port `p` of template `t` is the record's `t/p` when the
     record names its ports by template, else `p`), each of which it roots or reads;
   - `second-sample`: its sample is not the verifier's own, the second draw's units in its part as a subset of its slots
     (`ownDraw`);
   - `second-read`: a port's registered read (`readOk`) is not, for a port a link names, the boundary port it names,
-    each slot reading only its cell's replay block's rows (`[S[i]·r, (S[i] + 1)·r)`, `r` the port's leaves over the
-    boundary population); else its own port of the interior record, each slot `u` reading only its own rows
-    (`[(u - off_t)·r, (u - off_t + 1)·r)`, `r` the port's leaves over the part's `Q·n_t` slots), or a value either
-    registration registers; each at its root, domain and leaves. Or a port a link names is not read.
+    each slot reading only its cell's replay block's first row (`S[i]·r`, `r` the port's leaves over the boundary
+    population); else its own port of the interior record, each slot `u` reading only its own first row
+    (`(u - off_t)·r`, `r` the port's leaves over the part's `Q·n_t` slots), or a value either registration registers;
+    each at its root, domain and leaves, at most `2^64` of them (`MAX_LEAVES`). Or a port a link names is not read.
   - `second-refs`: its header shares rows (`shared_rows`: tables whose rows its instances read by the refs in its public
     file's body) at a port it doesn't read registered (`refsOk`). At a port it reads registered, the session's verifier
     holds each instance's ref to the row at the position the read gives its unit (`Flock.Registered.check`), and
@@ -381,10 +381,15 @@ def headerOk (own : Own) (named : Bool) (k : Nat) (t : String) (h : Json) : Bool
     | none => false
   | none => false
 
-/-- The header's `units.indices` are part `p`'s slots in order, and its `instances` their count. -/
+/-- The most leaves a tree a session reads may have: its positions are 64-bit. -/
+def MAX_LEAVES : Nat := 2 ^ 64
+
+/-- The header's `units.indices` are part `p`'s slots in order, and its `instances` their count, at most
+`MAX_LEAVES`. -/
 def populationOk (q : Nat) (p : Part) (h : Json) : Bool :=
   match getD (getD h "units") "indices", nat? (getD h "instances") with
-  | .arr is, some m => m == q * p.n && is.toList.map nat? == (List.range (q * p.n)).map fun i => some (p.lo + i)
+  | .arr is, some m =>
+    m == q * p.n && decide (m ≤ MAX_LEAVES) && is.toList.map nat? == (List.range (q * p.n)).map fun i => some (p.lo + i)
   | _, _ => false
 
 /-- The header's scheme is the interior record's, its `frame_v3` roots outside the ports `reads` reads are the record's
@@ -412,12 +417,19 @@ def ownDraw (q : Nat) (p : Part) (drawn : Array Nat) : Json :=
 def registeredEntry (rec : Json) (v : String) : Option Json :=
   (match getD rec "registered" with | .arr es => es | _ => #[]).find? fun e => jsonStrIs (getD e "value") v
 
-/-- Entries `e` and `x` name one root, domain and leaf count. -/
+/-- Entry `e` names a leaf count of at most `MAX_LEAVES`. -/
+def leavesOk (e : Json) : Bool := match nat? (getD e "leaves") with
+  | some n => decide (n ≤ MAX_LEAVES)
+  | none => false
+
+/-- Entries `e` and `x` name one root, domain and leaf count, of at most `MAX_LEAVES` leaves. -/
 def sameAt (e x : Json) : Bool :=
-  jeq (getD e "root") (getD x "root") && jeq (getD e "domain") (getD x "domain") && jeq (getD e "leaves") (getD x "leaves")
+  jeq (getD e "root") (getD x "root") && jeq (getD e "domain") (getD x "domain") &&
+    jeq (getD e "leaves") (getD x "leaves") && leavesOk e
 
 /-- Every read of registered-reads entry `e` (slot `reads_from + k` reads row `reads[k]`, null for none) is by one of
-part `p`'s slots `u`, of a row of the unit `unit u` names, in a tree of `units` units' rows, `leaves / units` each. -/
+part `p`'s slots `u`, of the first row of the unit `unit u` names, in a tree of `units` units' rows, `leaves / units`
+each. -/
 def rowsOk (q : Nat) (p : Part) (e : Json) (units : Nat) (unit : Nat → Option Nat) : Bool :=
   let first : Option Nat := match getD e "reads_from" with | .null => some 0 | x => nat? x
   match nat? (getD e "leaves"), getD e "reads", first with
@@ -426,15 +438,14 @@ def rowsOk (q : Nat) (p : Part) (e : Json) (units : Nat) (unit : Nat → Option 
       match rs.getD k .null with
       | .null => true
       | x => match nat? x, unit (f + k) with
-        | some pos, some b =>
-          p.holds q (f + k) && decide (b * (leaves / units) ≤ pos) && decide (pos < (b + 1) * (leaves / units))
+        | some pos, some b => p.holds q (f + k) && pos == b * (leaves / units)
         | _, _ => false
   | _, _, _ => false
 
 /-- Template `p.template`'s session port `port` may read registered-reads entry `e`: a port a link names, only the
-boundary port it names, each slot only its cell's replay block's rows; any other, its own port of the interior record,
-each slot only its own rows, or a value either registration registers, never a boundary port. Each at its root, domain
-and leaves. -/
+boundary port it names, each slot only its cell's replay block's first row; any other, its own port of the interior
+record, each slot only its own first row, or a value either registration registers, never a boundary port. Each at its
+root, domain and leaves, at most `MAX_LEAVES` of them. -/
 def readOk (own : Own) (named : Bool) (p : Part) (port : String) (e : Json) : Bool :=
   let q := own.sample.size
   match getD e "value", linkOf own p.template port with
@@ -940,6 +951,30 @@ private def exLinked : Own := { exOwn with links := some #[⟨"Pair_v0", "x", "b
 #guard (check true { exOwn with links := none } (some #[exStmt [0, 1, 2, 3, 4, 5] [2, 4]])).codes == #["second-links"]
 #guard (check true { exOwn with links := none } none).codes == #["second-links"]
 #guard (check true { exOwn with links := some #[⟨"Other_v0", "x", "bx"⟩] } none).codes == #["second-links"]
+
+/-- A read of `leaves` leaves, slot `k` reading row `reads[k]`. -/
+private def exRows (leaves : Nat) (reads : List Nat) : Json :=
+  Json.mkObj [("leaves", Lean.toJson leaves), ("reads_from", (0 : Nat)), ("reads", natsJson reads.toArray)]
+
+-- a slot reads its unit's first row, so in a tree of two rows a unit it can't pick its unit's other
+#guard rowsOk 2 ⟨"Pair_v0", 0, 3⟩ (exRows 6 [0, 1, 2, 3, 4, 5]) 6 some
+#guard rowsOk 2 ⟨"Pair_v0", 0, 3⟩ (exRows 12 [0, 2, 4, 6, 8, 10]) 6 some
+#guard !rowsOk 2 ⟨"Pair_v0", 0, 3⟩ (exRows 12 [1, 3, 5, 7, 9, 11]) 6 some
+#guard !rowsOk 2 ⟨"Pair_v0", 0, 3⟩ (exRows 12 [0, 2, 4, 6, 8, 11]) 6 some
+
+/-- `exOwn` with the boundary registering value `w`, a tree of `leaves` leaves. -/
+private def exRegistering (leaves : Nat) : Own :=
+  { exOwn with boundary := (exRec 4 [("bx", 5, 6)]).setObjVal! "registered" (Json.arr #[Json.mkObj [("value", "w"),
+    ("root", exRoot 7), ("domain", exRoot 8), ("leaves", Lean.toJson leaves)]]) }
+
+/-- A read of registered value `w` at its root and domain, its tree of `leaves` leaves. -/
+private def exReadW (leaves : Nat) : Json :=
+  Json.mkObj [("value", "w"), ("root", exRoot 7), ("domain", exRoot 8), ("leaves", Lean.toJson leaves)]
+
+-- a read's positions are 64-bit, so its tree has at most `2^64` leaves
+#guard readOk (exRegistering (2 ^ 64)) false ⟨"Pair_v0", 0, 3⟩ "y" (exReadW (2 ^ 64))
+#guard !readOk (exRegistering (2 ^ 64 + 1)) false ⟨"Pair_v0", 0, 3⟩ "y" (exReadW (2 ^ 64 + 1))
+#guard !readOk (exRegistering 6) false ⟨"Pair_v0", 0, 3⟩ "y" (exReadW 7)
 
 /-- Port `p`'s read of the interior record's own port `p` at root `root`, domain `dom`, slot `k` reading row `reads[k]`. -/
 private def exOwnRead (p : String) (root dom : Nat) (reads : List Nat := [0, 1, 2, 3, 4, 5]) : String × Json :=

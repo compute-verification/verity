@@ -8,6 +8,7 @@ public import Proofs.Flock.Bridge.FilePart
 public import Proofs.Flock.Bridge.Lowers
 public import Proofs.Flock.Bridge.Slots
 public import Proofs.Flock.Bridge.SlotsKey
+public import Proofs.Flock.Bridge.Scope
 public import Proofs.Flock.Bridge.Count
 public import Proofs.Flock.Bridge.CircuitOf
 public import Proofs.Flock.Bridge.UnitRows

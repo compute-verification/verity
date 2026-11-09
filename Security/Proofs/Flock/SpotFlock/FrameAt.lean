@@ -6,27 +6,30 @@ public import Proofs.Flock.SpotFlock.Frame
 # The frame reads its ports off the run's roots
 
 Under SPOT[Flock]'s two-stage code an opening is checked under the run's roots: the statement's (`decode`'s `roots`)
-or a replay block's (`irootsOf`: its place among the replay blocks, then the same). They are the record's
-(`portRoots`): whether it names its ports by template, then four messages for each of its ports and registered values,
-its name behind its kind, its root, its domain id and its leaf count. The frame reads its ports off them, so a frame
-fixed before the run checks each opening at the port the run committed it under.
+or a replay block's (`irootsOf`: its place among the replay blocks and their number, then the same). They are the
+record's (`portRoots`): whether it names its ports by template, then four messages for each of its ports and registered
+values, its name behind its kind, its root, its domain id and its leaf count. The frame reads its ports off them, so a
+frame fixed before the run checks each opening at the port, and the row, the run committed it under.
 
-* `entriesOf`, `namedOf` read them back (`entriesOf_portRoots`, `namedOf_portRoots`, and the same at a replay block's
-  place, `entriesOf_cons`, `namedOf_cons`): the entries, the leaf count through `msgNat` (`msgNat_natMsg`), and the
-  naming.
+* `entriesOf`, `namedOf`, `placeOf`, `qOf` read them back (`entriesOf_portRoots`, `namedOf_portRoots`, and the same
+  at a replay block's place, `entriesOf_cons`, `namedOf_cons`, `placeOf_cons`, `qOf_cons`): the entries, the leaf count
+  through `msgNat` (`msgNat_natMsg`), the naming, and the replay block's place and the number of replay blocks, `0` at
+  the statement's roots.
 * `Slot`: where gate `g`'s row is, all public: the entry it names (`SlotKey`: template `t`'s port `p` of the record,
   named as the record names its ports, `SecondStage.portOf`; a port by its name; or a registered value), the port's row
-  schema, the row's leaf position, and the port's leaf count where the slot fixes one (a published tree's).
+  schema, and the row: unit `pos + place·stride` of a tree of `units + q·stride` units (`unitsAt`), at the unit's first
+  leaf (`leafAt`), and the port's leaf count the units' where the slot is `sized` (a published tree's, one row a unit),
+  else the entry's (`leavesAt`); leaf `pos` where the slot counts no units.
 * `keyAt roots k`, `entryAt roots s`: the first entry named as the key, or the slot, names it (`keyOf`, at the roots'
   naming).
-* `atOf slot roots g`: that entry's root, at the slot's position; `ownAtOf slot cap roots g`: its port at the slot
+* `atOf slot roots g`: that entry's root, at the slot's leaf; `ownAtOf slot cap roots g`: its port at the slot
   (`portAt`), where it is at most `cap` levels deep. `frameAt` sets both on a frame, at its own ports' depth
   (`depth_ownAtOf` gives `Code.ownAt_depth`).
-* `port_frameAt`: where the slot has a port `T`'s schema, and `T`'s leaf count where it fixes one, and the entry it
-  names has `T`'s root and domain id, and `T`'s leaf count where the slot fixes none, at most the frame's own depth, the
-  frame checks gate `g`'s opening at a port with `T`'s root, leaf count, domain id and schema, at the slot's position,
-  the first with that root: either branch of `FrameIs` at `T` (the registered read, or the published tree's port), but
-  for the position and the path. `entryAt_irootsOf` and `entryAt_decode` read the entry off the record.
+* `port_frameAt`: where the slot has a port `T`'s schema and leaf count, and the entry it names has `T`'s root and
+  domain id, at most the frame's own depth, the frame checks gate `g`'s opening at a port with `T`'s root, leaf count,
+  domain id and schema, at the slot's leaf, the first with that root: either branch of `FrameIs` at `T` (the registered
+  read, or the published tree's port), but for the position and the path. `entryAt_irootsOf` and `entryAt_decode` read
+  the entry off the record.
 -/
 
 @[expose] public section
@@ -77,12 +80,19 @@ def entries : List Msg → List Entry
   | n :: r :: d :: l :: rest => ⟨n, r, d, msgNat l⟩ :: entries rest
   | _ => []
 
-/-- **The roots' entries**: after the replay block's place where the roots have one, and the record's naming, which
-make them one or two past a multiple of four. -/
+/-- **The roots' entries**: after the replay block's place and the number of replay blocks where the roots have them,
+and the record's naming, which make them one or three past a multiple of four. -/
 def entriesOf (roots : List Msg) : List Entry := entries (roots.drop (roots.length % 4))
 
 /-- **Whether the roots' record names its ports by template**: the message before its entries. -/
 def namedOf (roots : List Msg) : Bool := (roots.drop (roots.length % 4 - 1)).head? == some [1]
+
+/-- **The replay block's place among the replay blocks** the roots state before the record's naming, `0` where they
+state none (the statement's). -/
+def placeOf (roots : List Msg) : ℕ := msgNat ((roots.take (roots.length % 4 - 1)).getD 0 [])
+
+/-- **The number of replay blocks** the roots state before the record's naming, `0` where they state none. -/
+def qOf (roots : List Msg) : ℕ := msgNat ((roots.take (roots.length % 4 - 1)).getD 1 [])
 
 /-- **A record's entry as the frame reads it**: its name behind its kind, root, domain id and leaf count. -/
 def entryOf (e : UInt8 × String × Json) : Entry :=
@@ -117,12 +127,14 @@ theorem entriesOf_portRoots (rec : Json) : entriesOf (portRoots rec) = recEntrie
     omega
   rw [entriesOf, hl, portRoots, List.drop_one, List.tail_cons, entries_flatMap, recEntries]
 
-/-- **A replay block's roots read back**: after its place, the round-1 record's entries. -/
-theorem entriesOf_cons (i : Msg) (rec : Json) : entriesOf (i :: portRoots rec) = recEntries rec := by
-  have hl : (i :: portRoots rec).length % 4 = 2 := by
-    rw [List.length_cons, length_portRoots]
+/-- **A replay block's roots read back**: after its place and the number of replay blocks, the round-1 record's
+entries. -/
+theorem entriesOf_cons (i n : Msg) (rec : Json) : entriesOf (i :: n :: portRoots rec) = recEntries rec := by
+  have hl : (i :: n :: portRoots rec).length % 4 = 3 := by
+    rw [List.length_cons, List.length_cons, length_portRoots]
     omega
-  rw [entriesOf, hl, portRoots, List.drop_succ_cons, List.drop_one, List.tail_cons, entries_flatMap, recEntries]
+  rw [entriesOf, hl, portRoots, List.drop_succ_cons, List.drop_succ_cons, List.drop_one, List.tail_cons,
+    entries_flatMap, recEntries]
 
 theorem namedOf_portRoots (rec : Json) : namedOf (portRoots rec) = Spot.SecondStage.byTemplate rec := by
   have hl : (portRoots rec).length % 4 - 1 = 0 := by
@@ -131,22 +143,61 @@ theorem namedOf_portRoots (rec : Json) : namedOf (portRoots rec) = Spot.SecondSt
   rw [namedOf, hl, List.drop_zero, portRoots]
   cases Spot.SecondStage.byTemplate rec <;> rfl
 
-theorem namedOf_cons (i : Msg) (rec : Json) : namedOf (i :: portRoots rec) = Spot.SecondStage.byTemplate rec := by
-  have hl : (i :: portRoots rec).length % 4 - 1 = 1 := by
-    rw [List.length_cons, length_portRoots]
+theorem namedOf_cons (i n : Msg) (rec : Json) :
+    namedOf (i :: n :: portRoots rec) = Spot.SecondStage.byTemplate rec := by
+  have hl : (i :: n :: portRoots rec).length % 4 - 1 = 2 := by
+    rw [List.length_cons, List.length_cons, length_portRoots]
     omega
-  rw [namedOf, hl, List.drop_one, List.tail_cons, portRoots]
+  rw [namedOf, hl, List.drop_succ_cons, List.drop_one, List.tail_cons, portRoots]
   cases Spot.SecondStage.byTemplate rec <;> rfl
+
+theorem placeOf_portRoots (rec : Json) : placeOf (portRoots rec) = 0 := by
+  have hl : (portRoots rec).length % 4 - 1 = 0 := by
+    rw [length_portRoots]
+    omega
+  rw [placeOf, hl, List.take_zero]
+  rfl
+
+theorem qOf_portRoots (rec : Json) : qOf (portRoots rec) = 0 := by
+  have hl : (portRoots rec).length % 4 - 1 = 0 := by
+    rw [length_portRoots]
+    omega
+  rw [qOf, hl, List.take_zero]
+  rfl
+
+theorem placeOf_cons (a b : ℕ) (rec : Json) : placeOf (natMsg a :: natMsg b :: portRoots rec) = a := by
+  have hl : (natMsg a :: natMsg b :: portRoots rec).length % 4 - 1 = 2 := by
+    rw [List.length_cons, List.length_cons, length_portRoots]
+    omega
+  rw [placeOf, hl]
+  exact msgNat_natMsg a
+
+theorem qOf_cons (a b : ℕ) (rec : Json) : qOf (natMsg a :: natMsg b :: portRoots rec) = b := by
+  have hl : (natMsg a :: natMsg b :: portRoots rec).length % 4 - 1 = 2 := by
+    rw [List.length_cons, List.length_cons, length_portRoots]
+    omega
+  rw [qOf, hl]
+  exact msgNat_natMsg b
 
 theorem entriesOf_irootsOf {m₁ : Msg} {rec : Json} (hm : jsonMsg m₁ = some rec) (ρ : ℕ) :
     entriesOf (irootsOf m₁ ρ) = recEntries rec := by
   simp only [irootsOf, hm, Option.map_some, Option.getD_some]
-  exact entriesOf_cons _ rec
+  exact entriesOf_cons _ _ rec
 
 theorem namedOf_irootsOf {m₁ : Msg} {rec : Json} (hm : jsonMsg m₁ = some rec) (ρ : ℕ) :
     namedOf (irootsOf m₁ ρ) = Spot.SecondStage.byTemplate rec := by
   simp only [irootsOf, hm, Option.map_some, Option.getD_some]
-  exact namedOf_cons _ rec
+  exact namedOf_cons _ _ rec
+
+theorem placeOf_irootsOf {m₁ : Msg} {rec : Json} (hm : jsonMsg m₁ = some rec) (ρ : ℕ) :
+    placeOf (irootsOf m₁ ρ) = (blocksOf rec).idxOf ρ := by
+  simp only [irootsOf, hm, Option.map_some, Option.getD_some]
+  exact placeOf_cons _ _ rec
+
+theorem qOf_irootsOf {m₁ : Msg} {rec : Json} (hm : jsonMsg m₁ = some rec) (ρ : ℕ) :
+    qOf (irootsOf m₁ ρ) = (blocksOf rec).length := by
+  simp only [irootsOf, hm, Option.map_some, Option.getD_some]
+  exact qOf_cons _ _ rec
 
 theorem decode_eq {x : Msg} {st : Roots} (hx : decode x = some st) :
     ∃ rec, jsonMsg x = some rec ∧ st = ⟨rec, portRoots rec⟩ := by
@@ -167,6 +218,14 @@ theorem namedOf_decode {x : Msg} {st : Roots} (hx : decode x = some st) :
   obtain ⟨rec, -, rfl⟩ := decode_eq hx
   exact namedOf_portRoots rec
 
+theorem placeOf_decode {x : Msg} {st : Roots} (hx : decode x = some st) : placeOf st.roots = 0 := by
+  obtain ⟨rec, -, rfl⟩ := decode_eq hx
+  exact placeOf_portRoots rec
+
+theorem qOf_decode {x : Msg} {st : Roots} (hx : decode x = some st) : qOf st.roots = 0 := by
+  obtain ⟨rec, -, rfl⟩ := decode_eq hx
+  exact qOf_portRoots rec
+
 /-! ## The frame's ports -/
 
 /-- **The entry a slot names**: template `t`'s port `p` of the record, named as the record names its ports
@@ -183,13 +242,17 @@ def keyOf (named : Bool) : SlotKey → Msg
   | .port v => 0 :: v.toUTF8.data.toList
   | .reg v => 1 :: v.toUTF8.data.toList
 
-/-- **Where a gate's row is**, all public: the entry its port is, the port's row schema, the row's leaf position, and
-the port's leaf count where the slot fixes one. -/
+/-- **Where a gate's row is**, all public: the entry its port is, the port's row schema, and the row: unit
+`pos + place·stride` of a tree of `units + q·stride` units, `q` replay blocks, at the place of the replay block whose
+roots it is read under, `0` and `0` under the statement's; or leaf `pos` where the slot counts no units. Where the slot
+is `sized` (a published tree's, one row a unit) the port's leaf count is its units'. -/
 structure Slot where
   key : SlotKey
   schema : String
   pos : ℕ
-  leaves : Option ℕ := none
+  stride : ℕ := 0
+  units : ℕ := 0
+  sized : Bool := false
 
 /-- **The first of the roots' entries named `name`.** -/
 def entryNamed (roots : List Msg) (name : Msg) : Option Entry :=
@@ -201,15 +264,26 @@ def keyAt (roots : List Msg) (k : SlotKey) : Option Entry := entryNamed roots (k
 /-- **The entry a slot names** under the roots (`keyAt`). -/
 def entryAt (roots : List Msg) (s : Slot) : Option Entry := keyAt roots s.key
 
-/-- **An entry's port at a slot**: the entry's root and domain id, the slot's schema, and the slot's leaf count where it
-fixes one, else the entry's; no name, value or reads, which the deployed check doesn't read. -/
-def portAt (s : Slot) (e : Entry) : _root_.Flock.Registered.Port :=
-  { name := "", value := "", root := bytes e.root, leaves := s.leaves.getD e.leaves, words := none, wordBits := 0,
+/-- **The units a slot's tree holds** under the roots: its own, and `stride` for each replay block. -/
+def unitsAt (roots : List Msg) (s : Slot) : ℕ := s.units + qOf roots * s.stride
+
+/-- **A port's leaf count at a slot**: its units' where the slot is sized, else the entry's. -/
+def leavesAt (roots : List Msg) (s : Slot) (e : Entry) : ℕ := if s.sized then unitsAt roots s else e.leaves
+
+/-- **The leaf a slot opens** under the roots: its unit's first, `leaves / units` leaves a unit; leaf `pos` where the
+slot counts no units. -/
+def leafAt (roots : List Msg) (s : Slot) (e : Entry) : ℕ :=
+  if unitsAt roots s = 0 then s.pos else (s.pos + placeOf roots * s.stride) * (leavesAt roots s e / unitsAt roots s)
+
+/-- **An entry's port at a slot**: the entry's root and domain id, the slot's schema, and its leaf count at the slot
+(`leavesAt`); no name, value or reads, which the deployed check doesn't read. -/
+def portAt (roots : List Msg) (s : Slot) (e : Entry) : _root_.Flock.Registered.Port :=
+  { name := "", value := "", root := bytes e.root, leaves := leavesAt roots s e, words := none, wordBits := 0,
     domain := bytes e.domain, readsRel := #[], schema := s.schema }
 
-/-- **Where the frame checks gate `g`'s opening**: at the root of the entry its slot names, at the slot's position. -/
+/-- **Where the frame checks gate `g`'s opening**: at the root of the entry its slot names, at the slot's leaf. -/
 def atOf (slot : ℕ → Option Slot) (roots : List Msg) (g : ℕ) : Option (Msg × ℕ) :=
-  (slot g).bind fun s => (entryAt roots s).map fun e => (e.root, s.pos)
+  (slot g).bind fun s => (entryAt roots s).map fun e => (e.root, leafAt roots s e)
 
 /-- **The ports gate `g`'s opening reads**: that entry's port at the slot, where it is at most `cap` levels deep; none
 otherwise. -/
@@ -217,7 +291,7 @@ def ownAtOf (slot : ℕ → Option Slot) (cap : ℕ) (roots : List Msg) (g : ℕ
   match slot g with
   | some s =>
     match entryAt roots s with
-    | some e => if _root_.Flock.log2ceil (portAt s e).leaves ≤ cap then #[portAt s e] else #[]
+    | some e => if _root_.Flock.log2ceil (portAt roots s e).leaves ≤ cap then #[portAt roots s e] else #[]
     | none => #[]
   | none => #[]
 
@@ -244,28 +318,27 @@ def frameAt (slot : ℕ → Option Slot) (c : Code) : Code :=
 variable {slot : ℕ → Option Slot} {c : Code} {roots : List Msg} {g : ℕ} {s : Slot} {e : Entry}
 
 theorem at_frameAt (hs : slot g = some s) (he : entryAt roots s = some e) :
-    (frameAt slot c).at_ roots g = some (bs (portAt s e).root, s.pos) := by
+    (frameAt slot c).at_ roots g = some (bs (portAt roots s e).root, leafAt roots s e) := by
   simp [frameAt, atOf, hs, he, portAt, bs_bytes]
 
 theorem find_frameAt (hs : slot g = some s) (he : entryAt roots s = some e)
-    (hd : _root_.Flock.log2ceil (portAt s e).leaves ≤ depth c.own) :
-    ((frameAt slot c).ownAt roots g).find? (fun P' => decide (bs P'.root = bs (portAt s e).root)) =
-      some (portAt s e) := by
+    (hd : _root_.Flock.log2ceil (portAt roots s e).leaves ≤ depth c.own) :
+    ((frameAt slot c).ownAt roots g).find? (fun P' => decide (bs P'.root = bs (portAt roots s e).root)) =
+      some (portAt roots s e) := by
   simp [frameAt, ownAtOf, hs, he, hd]
 
-/-- **The frame checks at a port as `FrameIs` asks**: where gate `g`'s slot has port `T`'s schema, and `T`'s leaf count
-where it fixes one, and the entry it names has `T`'s root and domain id, and `T`'s leaf count where the slot fixes
-none, at most the frame's own depth, the frame checks the opening at a port with `T`'s root, leaf count, domain id and
-schema, at the slot's position, the first with that root. `T` is the registered read in `FrameIs`'s registered branch
-and the published tree's port in its roots branch. -/
+/-- **The frame checks at a port as `FrameIs` asks**: where gate `g`'s slot has port `T`'s schema and leaf count
+(`leavesAt`), and the entry it names has `T`'s root and domain id, at most the frame's own depth, the frame checks the
+opening at a port with `T`'s root, leaf count, domain id and schema, at the slot's leaf, the first with that root. `T`
+is the registered read in `FrameIs`'s registered branch and the published tree's port in its roots branch. -/
 theorem port_frameAt {T : _root_.Flock.Registered.Port} (hs : slot g = some s) (he : entryAt roots s = some e)
-    (hr : bytes e.root = T.root) (hl : s.leaves.getD e.leaves = T.leaves) (hd : bytes e.domain = T.domain)
+    (hr : bytes e.root = T.root) (hl : leavesAt roots s e = T.leaves) (hd : bytes e.domain = T.domain)
     (hsc : s.schema = T.schema) (hcap : _root_.Flock.log2ceil T.leaves ≤ depth c.own) :
     ∃ P : _root_.Flock.Registered.Port, P.root = T.root ∧ P.leaves = T.leaves ∧ P.domain = T.domain ∧
-      P.schema = T.schema ∧ (frameAt slot c).at_ roots g = some (bs P.root, s.pos) ∧
+      P.schema = T.schema ∧ (frameAt slot c).at_ roots g = some (bs P.root, leafAt roots s e) ∧
       ((frameAt slot c).ownAt roots g).find? (fun P' => decide (bs P'.root = bs P.root)) = some P := by
-  refine ⟨portAt s e, hr, hl, hd, hsc, at_frameAt hs he, find_frameAt hs he ?_⟩
-  show _root_.Flock.log2ceil (s.leaves.getD e.leaves) ≤ _
+  refine ⟨portAt roots s e, hr, hl, hd, hsc, at_frameAt hs he, find_frameAt hs he ?_⟩
+  show _root_.Flock.log2ceil (leavesAt roots s e) ≤ _
   rw [hl]
   exact hcap
 

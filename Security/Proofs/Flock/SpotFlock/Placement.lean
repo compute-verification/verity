@@ -174,7 +174,7 @@ theorem templateOk_facts {t : ℕ} (hok : templateOk h t = true) (ht : t < h.ms.
       rw [hr]
       rfl
     simp only [Bool.and_eq_true, Bool.not_eq_true', decide_eq_true_eq] at hok
-    obtain ⟨⟨⟨⟨hh, hty⟩, hD⟩, hlog⟩, -⟩ := hok
+    obtain ⟨⟨⟨⟨⟨hh, hty⟩, hD⟩, hlog⟩, -⟩, -⟩ := hok
     rw [hst]
     split at hD
     · next D hD' =>
