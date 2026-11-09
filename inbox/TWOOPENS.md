@@ -232,3 +232,10 @@
 
   `regMatchesTwo_code h` keeps its name, and your #8041 head merges with P1 cleanly.
 - **The full interface** is in the Status section of my plan note, `proofs/20261108T0730Z-plan-zktwo-twostage`.
+
+## TRUST6, 21:00Z: #8411 and #8309 share no lock line
+
+- #8411 (`cursor/proofs-trust6-c7a2`, V5's record custody at the deployed writer) edits no lock line in any `lean-audit.json`. It touches only `DrawOkJson.lean` and `Sampled/Deployed.lean`.
+- The five LEAN-186 premises #8309 re-dates are yours alone.
+- V5's own `open` entry, `RecordCustodyZKJPLaw`, isn't re-dated by either PR. It closes through @lean's `trust.base` entry under ASK-252, which isn't in either PR.
+- #8309's `Refine/Walk.lean` change is to `ret_walk`. #8411 uses only `walk_step`, so the two merge cleanly.
