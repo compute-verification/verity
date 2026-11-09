@@ -53,7 +53,13 @@ when:
   of each lint whose code or allowlist changed (every lint's in a directory whose shared code did) run without pytest, the ruff
   lints with the base's pin.  A counted lint reads those replaced files too, as the base has them, so its violations in one
   are counted again on the change's own copy, against the change's list: a lint module whose prose the change cleans, with
-  its entry dropped, passes, and one that keeps its sites without its entry fails, naming the change's own sites.
+  its entry dropped, passes, and one that keeps its sites without its entry fails, naming the change's own sites.  A ruff
+  lint reads them too, and its findings in one are counted the same way, per rule, by ruff under the base's configs and pin.
+  A kind whose counts pool that the change keys anew, its list keeping none of the base's keys, at its base's total (a lint
+  that comes to count per file what it counted per package) is compared in the base's form: every key of the base's lint is then uncovered by the change's list with no
+  finding added, so the base's lint runs again with the base's entries for that kind, which hold the tree to the base's
+  counts key by key.  A re-keying that adds no finding passes, and one that adds one fails at the base's key; one that
+  changes the kind's total is judged as any change to a lint is, so a change re-keys at the total and the next lowers it.
   So loosening a lint to drop its entries (raising P10's cap, skipping a kind, ignoring a ruff rule, deleting the lint)
   fails, naming each violation the base's lint still finds, while tightening one passes once the change fixes what it
   finds.
@@ -193,8 +199,9 @@ NOQA = re.compile(r"#\s*(?:(?:ruff|flake8)\s*:\s*)?noqa\b", re.IGNORECASE)
 HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
 #: entries or violations named in a failure's fix, at most
 CHEAPEST = 12
-#: a violation that names a file, and maybe its line, as `violations` writes it: ``lint: file:line what``, ``lint: file: ...``
-SITE = re.compile(r"^[^:]+: ([^\s:]+):(?:(\d+)\b)?")
+#: a violation that names a file, and maybe its line, as `violations` writes it: ``lint: file:line what``, ``lint: file: ...``,
+#: ``lint: file [RULE]: ...``
+SITE = re.compile(r"^[^:]+: ([^\s:]+)(?: \[[^\]]+\])?:(?:(\d+)\b)?")
 #: the ratchets whose ``count`` measures one site (P10's is a size in lines) rather than counting findings, so never pooled
 MEASURES = {"size"}
 
@@ -477,6 +484,33 @@ def growth(before: dict[str, list], after: dict[str, list], paths: dict[str, str
     return grown, fix, pooled
 
 
+def base_form(before: dict[str, list], after: dict[str, list], paths: dict[str, str]
+              ) -> tuple[dict[str, list], list[str], list[str]]:
+    """(``after`` with the base's entries for each counted kind the change keys anew at its base's total; a note for each;
+    what to do about each kind it keys anew at another total): the lists a lint is run against to compare such a kind like
+    for like.  A kind is keyed anew when the change's list keeps none of its base's keys.  A lint that comes to key a kind
+    another way (typed_records' or-empty per file where it was per package) leaves every key of the base's lint uncovered
+    by the change's list, with no finding added; under the base's entries its base's lint holds the tree to the base's
+    counts, key by key, and the kind's total, which the change keeps, is all the change's list may allow.  At another
+    total the base's lint can't tell the re-keying from a lint loosened to drop its entries, so the kind stays held to the
+    change's list."""
+    like, notes, hints = dict(after), [], []
+    for s in sorted(before.keys() & after.keys()):
+        for k in sorted(counted_kinds(s, before[s] + after[s]), key=str):
+            lo, hi = ([e for e in side[s] if isinstance(e, dict) and not is_mark(e) and kind(e) == k] for side in (before, after))
+            (was, now), name = (sum(map(count, side)) for side in (lo, hi)), f"{paths[s]}{'' if k is None else f' {k}'}"
+            if not (lo and hi) or {key(e) for e in lo} & {key(e) for e in hi}:
+                continue
+            if was == now:
+                like[s] = [e for e in like[s] if e not in hi] + lo
+                notes.append(f"{name} keeps its total of {was} under other keys, so the base's lint is held to the base's "
+                             f"entries for it")
+            else:
+                hints.append(f"{name} is keyed anew and its total goes {was} -> {now}: a kind keyed anew is compared in the "
+                             f"base's form only at the base's total, so change its keys in one change and its counts in another")
+    return like, notes, hints
+
+
 def ruff_pin(rev: str) -> str | None:
     """The ruff requirement the root ``dev`` group pins at ``rev`` (``ruff==0.17.2``), or None."""
     try:
@@ -636,19 +670,22 @@ def blobs(shas: set[str]) -> dict[str, bytes]:
     return out
 
 
-def ruff_findings(ruff: list[str], config: str, files: dict[str, bytes]) -> list[tuple[str, str, int, str]]:
+def ruff_findings(ruff: list[str], config: str | dict[str, bytes], files: dict[str, bytes], at: str = ""
+                  ) -> list[tuple[str, str, int, str]]:
     """(file, rule, line, message) of each finding ``ruff`` makes on ``files`` (path: content), laid out as in the tree with
-    ``config`` as the root ``ruff.toml``, as the repository's ruff lint runs it."""
+    ``config`` as the root ``ruff.toml``, as the repository's ruff lint runs it; or, ``config`` the configs by path, run
+    from the directory ``at`` under its ``ruff.toml``, as the integration's runs it."""
     if not files:
         return []
     with tempfile.TemporaryDirectory(prefix="ratchet-gate-ruff-") as d:
         root = Path(d).resolve()
-        for path, data in files.items():
+        configs = config if isinstance(config, dict) else {REPO_RUFF_CONFIG: config.encode()}
+        for path, data in {**files, **configs}.items():
             (root / path).parent.mkdir(parents=True, exist_ok=True)
             (root / path).write_bytes(data)
-        (root / REPO_RUFF_CONFIG).write_text(config, encoding="utf-8")
         r = subprocess.run([*ruff, "check", "--config", REPO_RUFF_CONFIG, "--no-cache", "--exit-zero", "--output-format",
-                            "json", "--", *sorted(files)], cwd=root, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+                            "json", "--", *sorted(os.path.relpath(f, at or ".") for f in files)], cwd=root / at,
+                           capture_output=True, text=True, stdin=subprocess.DEVNULL)
         try:
             found = json.loads(r.stdout) if r.returncode == 0 else None
         except ValueError:
@@ -979,29 +1016,42 @@ def replaced(c: Change, lints: Iterable[str]) -> set[str]:
     return {f for f in out.split("\0") if f and not is_ratchet(f)}
 
 
-def own_copies(c: Change, lints: Iterable[str], found: list[str]) -> tuple[list[str], list[str]]:
-    """(``found``, each counted lint's violations at a file `replaced` names judged on the change's own copy; the
-    violations that leave, as found).  A counted lint reads every file the worktree holds, so in a lint directory or a ruff
+def own_copies(c: Change, lints: Iterable[str], found: list[str], after: dict[str, list]) -> tuple[list[str], list[str]]:
+    """(``found``, each counted or ruff lint's violations at a file `replaced` names judged on the change's own copy; the
+    violations that leave, as found).  Such a lint reads every file the worktree holds, so in a lint directory or a ruff
     config it reads the base's text, which the change's tree doesn't hold: the change's copy is counted as the base's lint
-    counts it, against the change's list, and within it, its violations go; past it, the change's own sites replace them.
-    Another lint's violations there stay as found."""
-    at, names = replaced(c, lints), {s for s, *_ in COUNTED}
+    counts it, against the change's list (``after``), and within it, its violations go; past it, the change's own sites
+    replace them.  A ruff lint's copy is counted per rule, by ruff under the base's configs and pin, so a lint module whose
+    finding the change fixes, with its entry dropped, passes.  Another lint's violations there stay as found."""
+    at, names = replaced(c, lints), {s for s, *_ in COUNTED} | RUFF_LINTS.keys()
     out, by = [], {}
     for v in found:
         s, m = v.partition(": ")[0], SITE.match(v)
-        if m and m[1] in at and s in names:
-            by.setdefault((s, m[1]), []).append(v)
+        f = f"{INTEGRATION}/{m[1]}" if m and s == RUFF_LINT else m and m[1]
+        if f in at and s in names:
+            by.setdefault((s, f, m[1]), []).append(v)
         else:
             out.append(v)
     gone = []
-    for (s, f), vs in by.items():
+    for (s, f, rel), vs in by.items():
+        if s in RUFF_LINTS:
+            ruff = [*python_for(ruff_pin(c.lo), [s]), "-m", "ruff"]
+            now = Counter(rule for _, rule, *_ in ruff_findings(ruff, tree_files(c.lo, set(RUFF_LINTS[s][1])),
+                                                                tree_files(c.hi, {f}), INTEGRATION * (s == RUFF_LINT)))
+            listed = Counter()
+            for e in after.get(s, []):
+                if isinstance(e, dict) and e.get("file") == rel:
+                    listed[kind(e)] += count(e)
+            over = [f"{s}: {rel} [{rule}]: {now[rule]} found, {listed[rule]} allowed" for rule in sorted(now - listed)]
+            out, gone = out + over, gone + vs * (not over)
+            continue
         _, sites, noun = next(x for x in COUNTED if x[0] == s)
         if (lint := counted_lint_at(c.lo, s, sites, noun)) is None:
             out += vs
             continue
-        holds, count = counter(lint, sites)
+        holds, sites_in = counter(lint, sites)
         own = tree_files(c.hi, {f}).get(f) if holds(f) and not f.startswith(tuple(lint.LEFT_OUT)) else None
-        now = count(own.decode("utf-8", errors="replace"), f) if own is not None else []
+        now = sites_in(own.decode("utf-8", errors="replace"), f) if own is not None else []
         listed, marked = counted_list(lint, s, c.hi)
         if len(now) <= listed[f] or getattr(lint, "is_registry", lambda path, marks: False)(f, marked):
             gone += vs
@@ -1069,6 +1119,7 @@ def judge(c: Change, base: str) -> None:
     noqa_grows = c.noqa_added > c.noqa_removed
     inherited: list[str] = []
     based: list[str] = []
+    rekey: list[str] = []
     if c.touched and not (grown or bad or uncalled or noqa_grows):
         selection = {lint: s for lint in LINTS if (s := lint_selection(c.touched, lint)) is None or s}
         if selection:
@@ -1077,7 +1128,12 @@ def judge(c: Change, base: str) -> None:
             if found:
                 had = set(violations(base_lints(Change(c.lo, c.lo, []), selection, before)[1]))
                 inherited, found = [v for v in found if v in had], [v for v in found if v not in had]
-                found, based = own_copies(c, selection, found)
+                like, rekeyed, rekey = base_form(before, after, {**was_at, **now_at})
+                if found and rekeyed:
+                    again = [v for v in violations(base_lints(c, selection, like)[1]) if v not in had]
+                    if len(again) < len(found):
+                        found, c.pooled = again, c.pooled + rekeyed
+                found, based = own_copies(c, selection, found, after)
     if not (grown or bad or uncalled or noqa_grows or found):
         c.verdict, c.why = "passed", "; ".join(
             ([f"{c.before} -> {c.after} ratchet exceptions"] if c.touched else []) + [f"pooled: {p}" for p in c.pooled] + noqa
@@ -1121,7 +1177,7 @@ def judge(c: Change, base: str) -> None:
         c.why = (f"the base's lint code ({c.lo[:12]}) finds {len(found)} violation(s) on its tree that its allowlists don't "
                  f"cover: a change to a lint is judged like source, so fix the code or keep the lint and its entries"
                  + (f" (a layout move, whose lints move with it, is exempt once `python3 {MOVE_CHECK} {c.lo[:12]} "
-                    f"{c.hi[:12]}` certifies it)" if moves else ""))
+                    f"{c.hi[:12]}` certifies it)" if moves else "") + "".join(f"; {h}" for h in rekey))
         c.fix = found[:CHEAPEST] + ([f"... and {len(found) - CHEAPEST} more"] if len(found) > CHEAPEST else [])
 
 
