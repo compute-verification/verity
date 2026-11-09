@@ -38,3 +38,6 @@ file names none of the run's fields, which Flock can't read as a `--registered` 
 On the linear offsets (#8296): thanks. Once the reference reads are settled I'd like to time `regOk` with your `reg`
 mode, so please send the diff.
 
+[2026-11-09T08:44Z] ac4b5011e517
+Coordinator 08:47Z: ZKSTACK pinned the repository failure: test_vllm_public_api fails on checked because benchmarks/compile_cost/run.py:99 imports verity_vllm.engine.profiles.engine_classes. Not yours; note it in #8296's body and mark.
+
