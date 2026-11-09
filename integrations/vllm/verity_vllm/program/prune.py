@@ -29,7 +29,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from dataclasses import replace
 from functools import cache
-from itertools import accumulate, chain, islice
+from itertools import accumulate, chain
 from typing import Any
 
 from verity.ml.circuits.defs import Body, Node, bind
@@ -40,7 +40,8 @@ from verity.ml.circuits.types import Array
 def _parts(r: Concat, done: dict[int, list]) -> Iterable[Refs]:
     """The parts of `r` a walk that accumulates (a union, idempotent) has yet to visit: for a `Concat` cut from a `PartLog`, the
     log's parts past the longest cut of it the walk has visited (`done`, by log), then its own. An attention's key sequence is the
-    one before it plus a row, so a walk over a layer's cuts visits each of its parts once, not once per row."""
+    one before it plus a row, so a walk over a layer's cuts visits each of its parts once, not once per row, in either order
+    (liveness reads the longest cut first): a slice of the log, since `islice(parts, lo, j)` steps over the first `lo` parts."""
     if r.prefix is None:
         return r.parts
     log, j = r.prefix
@@ -48,7 +49,7 @@ def _parts(r: Concat, done: dict[int, list]) -> Iterable[Refs]:
     if d is None or d[0] is not log:
         d = done[id(log)] = [log, 0]
     lo, d[1] = d[1], max(d[1], j)
-    return chain(islice(log.parts, lo, j), r.parts[j:])
+    return chain(log.parts[lo:j], r.parts[j:])
 
 
 def _mapped(r: Concat, f: Callable[[Refs], Refs], logs: dict[int, list]) -> Refs:

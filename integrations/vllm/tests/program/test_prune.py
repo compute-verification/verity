@@ -175,6 +175,40 @@ def test_an_attentions_key_sequences_renumber_as_cuts_of_one_renumbered_log():
     assert read == {0, 2, 3, 5, 6}
 
 
+class _Stepped(list):
+    """A log's parts that count the parts a walk steps over, by iteration or by slice."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.stepped = 0
+
+    def __iter__(self):
+        for p in list.__iter__(self):
+            self.stepped += 1
+            yield p
+
+    def __getitem__(self, i):
+        got = list.__getitem__(self, i)
+        self.stepped += len(got) if isinstance(i, slice) else 1
+        return got
+
+
+def test_liveness_steps_over_each_part_of_a_layers_key_rows_once_reading_the_longest_cut_first():
+    """A layer's key rows, one cut a row, each one row longer: liveness reads them last cut first (it walks the body backward), and
+    steps over each part of the log once in all, not the log's longest prefix once a cut (O(rows^2) a layer at a long context)."""
+    log, n = PartLog(), 512
+    log.parts = parts = _Stepped()
+    cuts = []
+    for k in range(n):
+        log.append(Affine("n", k, 0, 1))
+        cuts.append(log.cut(k + 1, [Affine("n", n + k, 0, 1)]))
+    parts.stepped = 0
+    read, done = set(), {}
+    for c in reversed(cuts):
+        _read(c, read, done)
+    assert read == set(range(2 * n)) and parts.stepped == n
+
+
 DOT = G.GEMM_HOPPER["DOT"]
 
 
