@@ -74,7 +74,7 @@ def runOkAt (h : Held) (x m₁ m₂ : Claims.Msg) (s₀ s₁ : ByteArray) : Bool
 
 /-- **`stmtOk`'s conjuncts on the registration alone**: the partition and the two-stage design evaluate, neither
 reading the statement `s`. -/
-def regOk (h : Held) (s : AuditStatement) : Bool := (partition h s).isSome && (two h s).isSome
+def regOk (h : Held) (s : Claims.Sampling.AuditStatement) : Bool := (partition h s).isSome && (two h s).isSome
 
 /-- **`stmtOk` is its registration's conjuncts and its run's**, the run's read through the coins' bytes. -/
 theorem stmtOk_split (h : Held) (x m₁ m₂ : Claims.Msg) (c₀ c₁ : FlockDeploy.Coin) :
