@@ -22161,7 +22161,7 @@
    }
   },
   "Properties.Spot": {
-   "digest": "32c24f3a5c9ffdfe92bff73fde41f58e478d50f45b32ed62d3c80e4480430ed5",
+   "digest": "0afdfda4db1e2f8ecd96bec0e480f22d20ec797a972f8891ef2f578ccd1e343b",
    "definitions": {
     "Properties.Spot.AcceptMeans": "e1fdb21df49bfb5eb6f73be0351a6d7bdaada6de61d229012829977e8295bbda",
     "Properties.Spot.Ascending": "17557ee116948293242d3e7d9a046a27b45ccee692aee0277b044c6c256cac37",
@@ -22190,10 +22190,10 @@
     "Properties.Spot.Honest.recordItems": "9e5eca43c8ecaa358b834d095d00a664480dfdbbf6b4b3cf45a482c05f3df240",
     "Properties.Spot.Honest.rootDefn": "d58a68e52e4ea3ddc962d474d923463634ca710d968b0ad6cb6c923808933948",
     "Properties.Spot.Honest.rootEntry": "4c3915a185464620577192d05c5469019a614640f16f070d9c54ae89c8e2fbd7",
-    "Properties.Spot.Honest.saltParams": "71ea975efc569ce8d86fe39976b6f9d3d03d00f52fbb01b4d1946b72df2c8e4c",
+    "Properties.Spot.Honest.saltParams": "45cbc041aaf9955c827ec9e9bcf7144b443f4a6caf4cdf8c1a47c37f979ecd07",
     "Properties.Spot.Honest.templateDefn": "cd2053d1703c7be57770c4e0e2c2d7a89d5b787a385212023ed3d2a1515a7b19",
     "Properties.Spot.Honest.templateParams": "96f7ff6b312d3173ba33dc6859e6f6f8555c70d0c4406cc8636cbbebdc71eb67",
-    "Properties.Spot.Honest.verifier": "a793ea73d49e76eed9f010deb67e940c4de052a4c84a67db2b30038f79b7897e",
+    "Properties.Spot.Honest.verifier": "0fba5ae97e58dd9cbeaf249f10ebfa6b006562e9388272312406f9331623c1b2",
     "Properties.Spot.Honest.window": "ffe27e7a40523c366a94c581139804b5bb5edd268beb9db1ffa52b88d33e44d9",
     "Properties.Spot.OutputPortIs": "69e9c64f0d70a6135d57a70b0963f50428987244bf24670857fc5d9030545cc5",
     "Properties.Spot.OutputValueIs": "90ab70f71002f771f6f9c78f08fcca72cfdb8c6c60ba2ab41aa1f14bb6cdd994",
@@ -22205,7 +22205,7 @@
     "Properties.Spot.R3": "b4f069fb5ee3e1fad9023d7cf54501276846f964b7d9f8d93d519fc3f84e7b77",
     "Properties.Spot.R4": "ad01592460bc2a8a4fa4d72a066e12d19561607014f4622123140d536f0412ac",
     "Properties.Spot.R5": "735e5ccbb27e62eb30cf69fb59c8f8cc5cfac7f50139e3a46df05adcde086f04",
-    "Properties.Spot.R6": "ac3f7a36c007056202b6111f9212c6e2309379611d6de44816fa4cda39f51667",
+    "Properties.Spot.R6": "13aec22fb76871f87f600760d6d2d471275b3e171cdc4ad2626b54c6b132224d",
     "Properties.Spot.R7": "2edbf47fd2583e93ecfcb03516993ed70efc3711736dfd998b92b08abab01808",
     "Properties.Spot.Receipt": "8aa1f184ada218c95592732c64cf8945ebe186fe284ce8b3f1918ff5071177da",
     "Properties.Spot.Registered": "8d82ec2ffd10859e73678d54ff800cfa1d294218a8d56c083f21ca90412564dd",
@@ -23813,7 +23813,7 @@
    }
   },
   "Spot.OneStage": {
-   "digest": "09df13d9f14356419b2d8348d8cacabe3306e0cd7b1fbac0ff0f24620059cd3e",
+   "digest": "0c8f8163ae8872a039769e5ca51b16c51c2c43f02028d401c97e217e8ca9fab5",
    "definitions": {
     "Spot.OneStage.Commitment": "a73c4a90f1c2b83c2840decc48593e672266092719b09da7b4c08282e3862285",
     "Spot.OneStage.Commitment.digest": "5ad7187d0b69df894ed454b1cef1a4593b7e2e8dd1d831e2b80ef6726c4b6e46",
@@ -23853,7 +23853,7 @@
     "Spot.OneStage.evidenceOf": "0f542f2c31def5b78e5ee6d5ab4840e0562b7f0d1cbc768a31246226c9202e77",
     "Spot.OneStage.evidenceParsed": "ee6091fd92f6ca94bb554a9d32ad7e3c24631a95b2a2349065009f7ffdf2e0dc",
     "Spot.OneStage.paramsOfJson": "999d78a093de5052bca080e42c16b5b7b6ed73744fd42218f09e6f3f34202362",
-    "Spot.OneStage.paramsParsed": "e40d303303a36f9eb1e6ec95a248a6cee2156a715a1b8fcb70247f047d399ca7",
+    "Spot.OneStage.paramsParsed": "01a9d74cf11e63fb5d772b13868e9fea0b1bae284b6767ddb58d9827ecd1dad2",
     "Spot.OneStage.protocol": "300822c245ce4c2b120c8026a5774b09392918617a1c5177056ed32ca41f4705",
     "Spot.OneStage.publicJson": "1eecfca42c0f31de9d361496f31e2620a0c17671e0b9ff47d59552ef11d92e14",
     "Spot.OneStage.recordChecks": "c8f06b53e4b19f87065742547208d843a2f54ebaa146f2581da7b9fceca4eb39",
@@ -24104,7 +24104,7 @@
    }
   },
   "Spot.Registration": {
-   "digest": "a812ab43d0380641430602829adea34be317015b7e14671013d5c5cfd6567dc5",
+   "digest": "35dd1637eb9ac783376c52a917a1a01ecccbfbe364af932cfb3b61cd2ba9c3e7",
    "definitions": {
     "Spot.Registration.Earlier": "38a79710ad138599f5f588962cb4957cde8a4a01c11545392f3680d085ffcf5f",
     "Spot.Registration.Earlier.casesOn": "d0ab5c2e32c2df5ff9add433ab5d601ac1a837f07bd68cc17d3188665ddc2d16",
@@ -24135,7 +24135,7 @@
     "Spot.Registration.PortIndex.last": "b09bdde29323640281273dab04658dbacb1f6a824dc1f745e743958ceb82c3ab",
     "Spot.Registration.PortIndex.rec": "2ab9172d4c3615a0ec4cff2a50a7f91d33f3f102b576211875b1f1f50ad2e806",
     "Spot.Registration.ROOT_KEYS": "9fe33cde00fe8238bf98ebf8ea3e56cc53db3e134b48adf7182f65a8cfe87cee",
-    "Spot.Registration.Verifier": "8fe1fd7f5ac152d4990a359285a014fc02ca1c75f508b1435280d06efca04022",
+    "Spot.Registration.Verifier": "0237f5c67ec279a59b839777952fe6d2f88f59efa26e8a50ec8271a6c1b9524e",
     "Spot.Registration.Verifier.anchors": "a7c04f5970bd8d19ff0d06a13b92172113969dc719d707512cf45f708de2bcfd",
     "Spot.Registration.Verifier.binding": "b7082e7825961d6082204bf2c3f05853d4b6595286b96cc21b3b8ef689286b5a",
     "Spot.Registration.Verifier.declared": "eb5488bbbb3f929bbab59d8e8a194d26aa3db386375d5ede3acd9cbbe697e7ed",
@@ -24147,7 +24147,7 @@
     "Spot.Registration.Verifier.params": "fe2d9865fbe38f867d3e730693553e5af1f4ace2fb813119dc92d94b5b666e67",
     "Spot.Registration.Verifier.partition": "097ef3e1666069c5e811a4d749ec2e7e284ad9627a0de53363a578681686eab2",
     "Spot.Registration.Verifier.pinned": "ed3499b70bb4c95120aa1e1744578a923c1ab346ddc97e09bee0104be5b13aa0",
-    "Spot.Registration.Verifier.pool": "025266318b79178c264802c951b922fea4e7ee506a5dd6280a7fc26809be3ebe",
+    "Spot.Registration.Verifier.pool": "484574d94f9dbeed7e7f2acc9e3145eee6b92b4e0c86dc4b834549dcf9718027",
     "Spot.Registration.Verifier.ports": "420a6250c9c544506de2ae1582329bc5ecba7ad1edc4cf94800a3aff34e1f36f",
     "Spot.Registration.Verifier.program": "733a28a37e360684293b1a825ed571a64f14b05e4df3e0355c9ffdeff259b55a",
     "Spot.Registration.Verifier.query": "56da2a82056f5b3aa0390b465e86ac39048db4197cdbd6a2f68bd05bd9646957",
@@ -24159,7 +24159,7 @@
     "Spot.Registration.Verifier.workTable": "5168d61b1a397b0e44483525077ec84869641d8b00306c3c0fc80320c9ef87f2",
     "Spot.Registration.applyOutput": "aa52307ebbf1045737a64458522798582d2a621a5f1a4fd83c1a3b5683dc09ba",
     "Spot.Registration.applyOutputs": "3ca64b38bc80309cc1017365446b3e4db37a956c8ed3ca9b0b9b17744973a9e4",
-    "Spot.Registration.check": "aceae0b6af1bf74316057c89c9f88e8e09691b5fc98e4126389db64caa44e85e",
+    "Spot.Registration.check": "3bd6428eaacb61de36485ed9ded76891cf95fbbc6b1e9895665148bd089aab70",
     "Spot.Registration.checkOutputs": "9498a405cb15e09b4f441c8e91177bed68f6fdbe00c99b24962a8ebec206e5d0",
     "Spot.Registration.checkRegistered": "cb67dff3f9efc0829f675eb68a4a79361f38c1d1ce2c97ea210cfe03f203e6ee",
     "Spot.Registration.declaredCode": "ba72591986fa52bc2832f36e5497f1a0813f72402ee1304be0ac209db0eb60f1",
