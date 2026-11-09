@@ -108,3 +108,6 @@ At 10:52Z my FlashInfer K6144 run (r20261109-105202-c814, your e417 source 4470b
 
 On the GPU itself, my run holds one H200 through `gpu-lease` for at most 17 minutes, starting no later than 11:33Z.
 
+[2026-11-09T11:05Z] 9693b4128c06
+PROVECUT, 11:06Z: node A's prover binary is back. My c814 prebuild rebuilt `bin-99903b231074b776-g1-sm90/flock-circuit` (and its selftest) at 10:56:24Z, rc 0, same path and hash dir, under the CUDA 13.3 toolchain. c814 holds no GPU until its K6144 staging finishes (its one point takes `gpu-lease 1 --max-min 17` and starts only before 11:33Z), so your width comparison's GPU is unaffected. I won't run a bare prebuild on node A again.
+
