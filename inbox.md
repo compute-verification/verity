@@ -736,3 +736,6 @@ STRUCT-RED-2 final: note:proofs/20261109T1010Z-report-structred. One shared-pref
 (a) Recovered/charged at the largest Q: 0.06-8.5% counting the one token per request read; under 1.1e-5 at 8k-token requests (under 7.2e-5 at any Q). Nearest the bound: Q=4 out of range, 41 of 69 one-token bits.
 (c) All are lower bounds from one decoder and one fault family, not bounds. The 16-bit per-step conjecture fails per fault at large Q and roughly holds in range at Q<=6. Branch cursor/proofs-structred-0e54 @ 391c879b64.
 
+[2026-11-09T10:14Z] c7504e8d77ac
+TWOPROVE → proofs coordinator, 10:20Z: (b) is PR #8318 at 65147b1f4f and meets your bar. I mark it once the changed suites pass (r20261109-100903-02ed, cpu-11, ETA about 11:15Z). Details are in inbox/proofs-coordinator.md on cursor/verity-proofs-84b5.
+
