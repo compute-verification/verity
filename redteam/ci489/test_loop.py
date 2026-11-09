@@ -27,13 +27,11 @@ def git_in(repo, *args: str, stdin: str | None = None) -> str:
     return subprocess.run(["git", *args], cwd=repo, input=stdin, capture_output=True, text=True, check=True, env=GIT_ENV).stdout.strip()
 
 
-def test_a_failed_enqueue_after_the_push_leaves_its_candidate_pending_forever(env, monkeypatch):
-    """FINDING (crash safety, fix before the cut-over): Build pushes `queue/<sha12>`, then enqueues `ready:<sha>`. When the
-    enqueue fails (graph2's database locked, the CLI missing, a restart between the two), the tick stops with the ref on
-    origin and no build record. Every later tick finds that ref, reads it `pending` (graph2: "not requested"), and `decide`
-    waits on a pending candidate without acting, so nothing ever enqueues it: the queue stops, silently. FIX: each tick
-    enqueues every live candidate that isn't terminal (graph2's enqueue is idempotent), or a candidate graph2 says is "not
-    requested" is a Retry."""
+def test_a_failed_enqueue_after_the_push_is_enqueued_by_the_next_tick(env, monkeypatch):
+    """FIXED at 702a8b73ac; a finding at 32e8a92f5e and 7c2e6589f1 (crash safety): Build pushes `queue/<sha12>`, then enqueues
+    `ready:<sha>`. When the enqueue failed (graph2's database locked, a restart between the two), every later tick read the
+    ref `pending` and nothing enqueued it: the queue stopped, silently. Now a candidate the log holds no enqueue of is
+    list-failed, and the next tick retries it, once."""
     env.put(1, {"a.txt": "1\n"})
     loop = env.loop(decide)
     calls, real = [], loop.world.enqueue
@@ -48,10 +46,11 @@ def test_a_failed_enqueue_after_the_push_leaves_its_candidate_pending_forever(en
     (failed,) = loop.tick()
     assert failed["action"] == "build" and "database is locked" in failed["error"]
     (sha,) = env.queued().values()
+    (retry,) = loop.tick()
+    assert (retry["action"], retry["sha"], retry["enqueued"]) == ("retry", sha, True)
     for _ in range(30):
         assert loop.tick() == []
-    assert calls == [sha] and env.graph2.enqueued() == []
-    assert loop.world.verdict(sha).verdict.state == "pending"
+    assert calls == [sha, sha] and [e["check"] for e in env.graph2.enqueued()] == [f"ready:{sha}"]
 
 
 def test_the_shadows_ejects_keep_prs_out_of_the_live_queue_after_the_cut_over(env):
@@ -89,9 +88,9 @@ def test_a_queue_ref_the_loop_didnt_build_displaces_its_candidate_and_lands_what
     """FINDING (soundness, fix before the cut-over): the loop takes every `queue/*` branch on origin as a candidate whose
     first-parent commits parse as `Queue: #N` merges (`queue_commit` reads only the message's trailers: not that the second
     parent is `Head`, nor the tree). A ref pushed by anyone (an agent, a stale clone, a test against the real origin) that
-    claims a better-ranked member displaces the loop's own candidate ("a second candidate on main"); never enqueued, it
-    stalls the queue; once its check passes (anyone can enqueue `ready:<sha>` on the pod, or label results: see
-    `test_a_result_label_anyone_writes_counts_as_the_tasks_pass`), `main` fast-forwards to a tree holding a file no PR has.
+    claims a better-ranked member displaces the loop's own candidate ("a second candidate on main"). Since 702a8b73ac the
+    loop enqueues it itself (a candidate the log holds no enqueue of is retried); before, it stalled the queue until anyone
+    enqueued `ready:<sha>` on the pod. Once its check passes, `main` fast-forwards to a tree holding a file no PR has.
     FIX: adopt only candidates with the loop's own build record (sha, base, members, heads), else drop them; check that each
     `Queue: #N` merge's second parent is its `Head` and its tree is `merge-tree`'s; a ruleset gives `refs/heads/queue/*` to
     drive's App alone."""
@@ -104,12 +103,12 @@ def test_a_queue_ref_the_loop_didnt_build_displaces_its_candidate_and_lands_what
     forged = forge(env, f"{built['sha']}^1", [main, one], {"evil.txt": "no PR adds this\n"})
     acts = loop.tick()
     assert ("drop", built["sha"]) in [(r["action"], r["sha"]) for r in acts]
-    assert [e["check"] for e in env.graph2.enqueued()] == [f"ready:{built['sha']}", *(f"ready:{r['sha']}" for r in acts
-                                                                                     if r["action"] == "build")]
+    assert [r["sha"] for r in acts if r["action"] == "build"] != [forged]
     keys = env.listed(forged, {"pytest:a": ["a.txt"]})
     env.result(keys["pytest:a"], "pytest:a", "pass")
     assert "advance" in _acts(loop.tick())
     assert env.main() == forged and "evil.txt" in _git(env.o.origin, "ls-tree", "--name-only", forged).split()
+    assert f"ready:{forged}" in [e["check"] for e in env.graph2.enqueued()]
 
 
 def test_a_failing_lean_agreement_task_doesnt_hold_a_candidate(env):
