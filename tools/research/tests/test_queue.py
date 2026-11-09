@@ -105,7 +105,7 @@ class World:
         self.store = LocalStore(self.tmp / "store", config_path=self.tmp / "store.toml")
 
     def queue(self, first: tuple[int, ...] | None = None, **kw) -> Queue:
-        """A queue on this world's origin; ``first``: the PRs drive's priority file lists, first to land first (`prioritize`)."""
+        """A queue on this world's origin; ``first``: the PRs the priority file lists, first to land first (`prioritize`)."""
         kw.setdefault("ready", lambda n, h: (n, h) in self.gh.ready)
         q = Queue(self.tmp / "q" / "verity", remote=str(self.origin), github=self.gh,
                   store=self.store, log=self.logs.append, **kw)
@@ -114,7 +114,7 @@ class World:
         return q
 
     def prioritize(self, q: Queue, *prs: int) -> None:
-        """Write drive's priority file, ``prs`` in their order, first to land first, and give it to ``q`` as `--priority-file`
+        """Write the priority file, ``prs`` in their order, first to land first, and give it to ``q`` as `--priority-file`
         does: each of ``q``'s syncs reads it again."""
         (path := self.tmp / "priority").write_text(" ".join(map(str, prs)) + "\n")
         q.priority_file = path
@@ -258,7 +258,7 @@ def test_a_pull_ref_github_left_behind_takes_the_head_from_its_branch_when_the_b
 
 def test_a_pr_github_has_no_pull_ref_for_waits_and_the_others_sync(world):
     """GitHub can list an open PR before it makes refs/pull/N/head, and one missing ref would fail the whole fetch, and every
-    drive tick with it: that PR waits, and the rest of the queue syncs."""
+    queue tick with it: that PR waits, and the rest of the queue syncs."""
     world.gh.put(1, world.change({"a.txt": "one\n"}))
     world.gh.put(2, two := world.change({"b.txt": "two\n"}))
     _git(world.origin, "update-ref", "-d", "refs/pull/2/head")
@@ -288,7 +288,7 @@ def test_the_priority_list_puts_a_ready_fix_at_the_bottom_of_next_ahead_of_membe
 
 
 def test_an_edit_of_the_priority_file_reorders_next_at_the_next_sync_from_the_first_pr_whose_place_changed(world):
-    """Each sync reads drive's priority file again: a number repeated keeps its first place, so it moves nothing; swapping two
+    """Each sync reads the priority file again: a number repeated keeps its first place, so it moves nothing; swapping two
     PRs rebuilds `next` from the lower one, and listing one more after them merges again only what is above them."""
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
@@ -309,7 +309,7 @@ def test_an_edit_of_the_priority_file_reorders_next_at_the_next_sync_from_the_fi
 
 
 def test_a_sync_merges_a_lean_change_like_any_other_in_the_priority_lists_then_admission_order(world):
-    """A Lean change waits for no check before it lands, so a sync merges it like any other member: drive's priority
+    """A Lean change waits for no check before it lands, so a sync merges it like any other member: the priority
     list's order, then admission's, each PR above the PRs it contains; what the sync keeps never moves for what it adds."""
     world.gh.put(1, h1 := world.change({"pkg/A.lean": "-- 1\n"}))
     world.gh.put(2, h2 := world.change({"a.txt": "2\n"}))
@@ -347,7 +347,7 @@ def test_a_sync_with_one_new_admission_keeps_every_member_and_merges_only_it(wor
 
 
 def test_members_merged_again_above_a_moved_one_keep_their_order_and_only_new_prs_are_sorted(world):
-    """Members above a moved or dropped member are merged again in `next`'s order: sorting them again would undo drive's lift
+    """Members above a moved or dropped member are merged again in `next`'s order: sorting them again would undo the lift
     (reviewed members first), and the next lift would merge them all again, each tick.  What comes new is sorted."""
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     world.gh.put(2, world.change({"pkg/A.lean": "-- 2\n"}))
@@ -355,7 +355,7 @@ def test_members_merged_again_above_a_moved_one_keep_their_order_and_only_new_pr
     world.gh.put(4, world.change({"pkg/B.lean": "-- 4\n"}))
     q = world.queue()
     q.sync()
-    q.lift = [2, 3]                                                          # drive's lift: #2 and #3 have a land verdict
+    q.lift = [2, 3]                                                          # the lift: #2 and #3 have a land verdict
     assert [m.pr for m in q.sync()[0]] == [2, 3, 1, 4]
     q.lift = []
     world.gh.put(3, world.change({"b.txt": "3 rewritten\n"}))                # moved: to the top
@@ -367,7 +367,7 @@ def test_members_merged_again_above_a_moved_one_keep_their_order_and_only_new_pr
 
 
 def test_a_pr_of_the_priority_list_goes_to_the_bottom_and_the_members_above_it_keep_their_order(world):
-    """Drive's priority list restacks `next` from the bottom: the PRs it names go below every member, which are merged
+    """The priority list restacks `next` from the bottom: the PRs it names go below every member, which are merged
     again above them in their order; the next sync with the same list keeps it all."""
     world.gh.put(1, world.change({"pkg/A.lean": "-- 1\n"}))
     world.gh.put(2, world.change({"a.txt": "2\n"}))
@@ -640,7 +640,7 @@ def test_a_sync_admits_a_ready_pr_whose_merge_is_clean_and_runs_no_preflight(wor
 
 
 def test_a_pr_of_the_priority_list_and_those_it_contains_go_first_of_what_a_sync_merges_anew(world):
-    """Drive's priority list (`Queue.priority`), the landing order: a listed PR and the PRs it contains go first of what a sync
+    """The priority list (`Queue.priority`), the landing order: a listed PR and the PRs it contains go first of what a sync
     merges anew, a Lean change among them too, and with no preflight.  A listed number that is no open PR changes nothing."""
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     world.gh.put(2, two := world.change({"pkg/A.lean": "-- 2\n"}))
@@ -729,7 +729,7 @@ def _gate_says(main: str, what: str, merged: bool = False) -> str:
 
 
 def test_a_landing_gate_left_in_its_directory_still_judges(tmp_path, monkeypatch):
-    """On drive's NFS TMPDIR the gate script just run is often left as a .nfsXXXX file, so removing its directory fails with
+    """On the control pod's NFS TMPDIR the gate script just run is often left as a .nfsXXXX file, so removing its directory fails with
     ENOTEMPTY, and every tick crashed on it.  The gate's verdict stands and the directory is left for the sweep."""
     import errno
     import tempfile
@@ -761,7 +761,7 @@ def test_a_landing_gate_left_in_its_directory_still_judges(tmp_path, monkeypatch
 
 
 def test_a_merged_tree_whose_caller_names_no_root_goes_under_merged_root_not_tmpdir(tmp_path, monkeypatch):
-    """`ported`'s codemod names no root: on drive's control pod its tree went to TMPDIR, a network volume where each worktree add
+    """`ported`'s codemod names no root: on the control pod its tree went to TMPDIR, a network volume where each worktree add
     and remove took minutes; --preflight-root (`MERGED_ROOT`) now takes it to the container disk like the preflight's."""
     import tempfile
 
@@ -900,7 +900,7 @@ def _trees(world: World, members) -> list[str]:
 def test_a_member_merged_again_onto_the_same_tree_takes_its_recorded_merge_and_so_does_a_rebuild_on_a_moved_base(
         world, monkeypatch):
     """Each merge costs `git merge-tree` with the merge drivers, the port's codemod and the lock check: tens of seconds on
-    drive's control pod, and a rebuild of `next` merges every member again.  A merge is recorded under the parent's tree (not
+    the control pod, and a rebuild of `next` merges every member again.  A merge is recorded under the parent's tree (not
     its commit), the head, their merge bases and what every merge runs with, so a later sync (a new process) merging the same
     head onto the same tree runs no `git merge-tree` and no lock check, and neither does a rebuild on a `main` moved to a
     commit with the same tree; the merge commits hold the same trees, on the new base."""
@@ -977,7 +977,7 @@ def test_a_recorded_conflict_stays_a_conflict_onto_its_tree_and_the_member_merge
 
 
 def test_a_merge_record_whose_tree_the_clone_lacks_is_merged_again_and_the_state_keeps_the_newest_records(world, monkeypatch):
-    """A record names a tree in drive's clone, which a fresh clone or a prune drops: a record whose tree is gone merges again.
+    """A record names a tree in the queue's clone, which a fresh clone or a prune drops: a record whose tree is gone merges again.
     The state keeps at most `MERGES` records, those the last syncs used."""
     world.gh.put(1, h1 := world.change({"a.txt": "1\n"}))
     world.gh.put(2, h2 := world.change({"b.txt": "2\n"}))
@@ -1012,7 +1012,7 @@ def _doc(at: int | None = None, text: str = "") -> str:
 def test_a_pr_whose_merge_onto_next_puts_a_markdown_file_over_its_cap_joins_next_and_its_warning_is_kept(world):
     """A PR whose head alone is under a Markdown file's cap can take the file over it once merged onto `next` above the members
     that also grow it.  The caps are a warn gate: the sync gives it each PR's merge onto `next`, so the bytes the members below
-    add count, keeps what it says by PR and head (the state's `warned`, which drive tells the owner) and leaves no PR out."""
+    add count, keeps what it says by PR and head (the state's `warned`, which the queue tells the owner) and leaves no PR out."""
     main = _move_main(world, {**CAP_FILES, "doc.md": _doc()})
     world.gh.put(1, h1 := world.change({"doc.md": _doc(1, "x" * 30000 + "\n")}))            # 30,064 bytes: under 49,152
     world.gh.put(2, h2 := world.change({"doc.md": _doc(8, "y" * 30000 + "\n")}))            # as much alone, 60,058 onto #1
@@ -1065,7 +1065,7 @@ def test_a_file_already_over_its_cap_below_warns_only_of_a_pr_whose_merge_grows_
 
 
 def test_status_names_a_ready_pr_that_conflicts_with_main_without_a_sync_here(world):
-    """`status` on a VM other than drive's doesn't call a PR that conflicts with `main` 'admitted' just because only the drive
+    """`status` on a VM other than the queue's doesn't call a PR that conflicts with `main` 'admitted' just because only the queue
     VM's last sync recorded the conflict."""
     world.gh.put(1, world.change({"a.txt": "pr\n"}))
     world.gh.put(2, world.change({"b.txt": "fine\n"}))
@@ -1090,7 +1090,7 @@ def test_a_pr_containing_another_goes_in_after_it_and_waits_while_it_waits(world
 
 def test_a_pr_holding_an_older_head_of_an_unmarked_pr_waits_for_it_and_shared_history_alone_holds_nothing(world):
     """A PR that branched from another at an older head, which then moved on unmarked, isn't admitted with the other's unmarked
-    commits in it, as it would be if drive looked only for the other's current head."""
+    commits in it, as it would be if the queue looked only for the other's current head."""
     old = world.change({"x.txt": "x = 1\n"})
     world.gh.put(5, old, ready=False)
     world.gh.put(7, world.change({"k.txt": "kernels\n"}, base=old))             # #7 branched from #5 at `old`
@@ -1358,7 +1358,7 @@ def test_ready_marks_a_pr_based_on_another_prs_branch_and_says_the_queue_wont_se
 
 
 def test_a_pr_carries_a_contained_unmarked_pr_of_its_own_owner_or_one_whose_owner_withdrew_it(world):
-    """Drive doesn't hold a PR containing another open PR's head until that one closes, since no one's tooling may close a
+    """The queue doesn't hold a PR containing another open PR's head until that one closes, since no one's tooling may close a
     PR, and a lane would have to rebuild it by hand.  A rebuild by the same owner, or one whose owner withdrew the PR it
     contains, carries that change and lands without it."""
     parent = world.change({"x.txt": "x = 1\n"})
@@ -1556,8 +1556,8 @@ def test_the_queue_never_repoints_the_origin_of_a_checkout_it_did_not_clone(worl
 
 
 def test_a_clone_the_queue_made_follows_the_remote_marked_copied_or_at_the_default_workdir(world, monkeypatch):
-    """What drive relies on: its clone's origin follows the remote it is given, as the URL changes.  The queue marks each clone
-    it makes in that clone's git config, a copy keeps the mark (drive seeds its clone with `cp -a`), and a clone at the
+    """What the queue relies on: its clone's origin follows the remote it is given, as the URL changes.  The queue marks each clone
+    it makes in that clone's git config, a copy keeps the mark (a clone seeded with `cp -a`), and a clone at the
     default workdir is the queue's whether marked or not, since it made those before it marked any."""
     q = world.queue()
     q._clone()
@@ -1786,7 +1786,7 @@ def test_a_cutoff_admits_only_ready_marks_written_at_or_after_it(tmp_path, monke
 
 
 def test_ready_marks_are_pulled_for_every_pr_at_once_and_each_pr_alone_when_that_fails(tmp_path, monkeypatch):
-    """One listing of the store's remote per open PR, in turn, would take seconds of every drive tick; and one GET at a time
+    """One listing of the store's remote per open PR, in turn, would take seconds of every queue tick; and one GET at a time
     took a fresh VM's listing four minutes for `next`'s ~1,000 labels, so the listings and the GETs each run
     `PREFETCH_JOBS` at once."""
     from research.queue import PREFETCH_JOBS, StoreLabels
@@ -1877,7 +1877,7 @@ def test_status_merges_each_head_onto_main_once_until_main_or_the_clones_head_mo
 
 
 def test_status_on_any_vm_applies_the_rules_cutoff_as_the_loop_does(world, monkeypatch, capsys):
-    """`research queue status` on any VM, run without `--marked-after`, doesn't list as admitted old marks drive, with its
+    """`research queue status` on any VM, run without `--marked-after`, doesn't list as admitted old marks the queue, with its
     cutoff, never takes.  The cutoff is `marked_after` in the rules on `main`, and a PR whose mark it ignores says so, so its
     owner re-marks it or closes it rather than it sitting unseen."""
     import research.queue as Qm
@@ -1995,7 +1995,7 @@ def test_the_review_listing_names_the_marked_prs_onto_main_not_on_it_lacking_a_l
 
 
 def test_an_ejection_withdraws_the_heads_ready_mark_in_the_store(world):
-    """An ejection doesn't live only in the ejecting VM's queue state, where drive, on another VM, would rebuild `next` with
+    """An ejection doesn't live only in the ejecting VM's queue state, where the queue, on another VM, would rebuild `next` with
     the ejected PR."""
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     q = world.queue()
@@ -2006,7 +2006,7 @@ def test_an_ejection_withdraws_the_heads_ready_mark_in_the_store(world):
 
 
 def test_an_ejection_naming_a_head_refuses_once_its_owner_pushed_another(world):
-    """An eject waiting for drive's tick mustn't withdraw the mark of a head pushed meanwhile.  With `--sha` it acts only while that head is the PR's, and a newer head keeps its mark."""
+    """An eject waiting for the queue's tick mustn't withdraw the mark of a head pushed meanwhile.  With `--sha` it acts only while that head is the PR's, and a newer head keeps its mark."""
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     q = world.queue()
     old = next(p.head for p in world.gh.open_prs() if p.number == 1)
@@ -2411,7 +2411,7 @@ def test_a_head_stacked_on_an_open_pr_or_built_on_todays_next_is_not_refused(wor
 
 def test_the_preflight_refuses_a_head_on_main_carrying_an_old_next_before_any_check_and_one_based_elsewhere_by_its_carry(world, capsys):
     """At the mark as at admission, in the sync's words, and first, since the fix makes another head.  A PR based on another
-    branch (a demo's) isn't judged for it, as drive never admits it; the carried-head check (`stale_carried`) refuses its mark."""
+    branch (a demo's) isn't judged for it, as the queue never admits it; the carried-head check (`stale_carried`) refuses its mark."""
     from research.queue import MarkOnly, StoreLabels, ready
 
     world.with_store_remote()
@@ -2699,7 +2699,7 @@ def test_the_preflight_fetches_the_fixtures_of_the_suites_it_collects_and_only_t
 
 def test_a_fixture_the_preflight_cannot_fetch_is_said_once_and_leaves_its_suite_unjudged(world, capsys):
     """With no credentials (or no source holding it), the suite that reads it isn't collected, so it can't refuse on bytes it
-    never had; one note names the suite and the fixtures, and the head is marked: the after-landing run fetches them."""
+    never had; one note names the suite and the fixtures, and the head is marked: its candidate's check fetches them."""
     from research.queue import MarkOnly, StoreLabels, ready
 
     files, _ = _fixture_tree(world)
@@ -2710,7 +2710,7 @@ def test_a_fixture_the_preflight_cannot_fetch_is_said_once_and_leaves_its_suite_
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=pre) == 0, capsys.readouterr().err
     said = next(s for s in world.logs if "preflight" in s)
     note = (f"pkg not judged: 1 of the 1 fixture(s) the suites read weren't fetched (no credentials for the store's remote: "
-            f"{BIG_PATH}); the after-landing run fetches them")
+            f"{BIG_PATH}); its candidate's check fetches them")
     assert said.count(note) == 1 and "collected 1 suite(s) (.)" in said and "not judged" not in said.replace(note, ""), said
     assert calls == [[BIG_PATH]]
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
@@ -2778,7 +2778,7 @@ def test_the_preflight_refuses_a_head_that_conflicts_with_next_naming_the_paths_
 
 
 def test_the_preflight_finds_a_prs_merge_on_next_past_a_lock_commit_on_checked_when_it_walks_from_main(world, capsys):
-    """When `checked` can't be fetched the preflight walks `next` from `main`, across the commit drive puts on `checked`
+    """When `checked` can't be fetched the preflight walks `next` from `main`, across a commit on `checked`
     without the queue's trailers (`Lock records regenerated for #N`).  A PR already on `next` still merges onto the commit
     below its merge there, so its rewritten head isn't refused for conflicting with its old one, and one landed on `checked`
     (open until `main` reaches it) and on `next` again below its newest merge; a conflict with a PR landed on `checked` still
@@ -2814,7 +2814,7 @@ def test_the_preflight_finds_a_prs_merge_on_next_past_a_lock_commit_on_checked_w
 
 
 def test_the_preflight_finds_a_prs_merge_on_next_while_a_landing_has_moved_checked_off_it(world, capsys):
-    """A landing moves `checked` off `next` (here drive's lock commit on the prefix it landed) until the sync rebuilds `next`
+    """A landing moves `checked` off `next` (here a lock commit on the prefix it landed) until the sync rebuilds `next`
     on it: `checked` isn't below `next` then, and a PR on `next` above that prefix still merges onto the commit below its merge
     there, not onto `next`'s tip, where its rewritten head conflicted with its old one."""
     from research.queue import MarkOnly, ready
@@ -2836,7 +2836,7 @@ def test_the_preflight_finds_a_prs_merge_on_next_while_a_landing_has_moved_check
 
 
 def test_the_preflight_runs_its_checks_on_a_merge_whose_only_conflict_is_in_a_pin_rebuilt_as_the_sync_rebuilds_it(world, capsys):
-    """A PR that regenerated a pin for its own input conflicts with one on `next` that did the same, only in the pin, which drive's
+    """A PR that regenerated a pin for its own input conflicts with one on `next` that did the same, only in the pin, which the queue's
     sync rebuilds from the merged tree (as PoUS's TRUSTED.sha256): the preflight merges it the same way and checks that tree,
     so a check failing there refuses the mark, rather than the checks being skipped while the mark goes through."""
     from research.queue import MarkOnly, StoreLabels, ready
@@ -2905,7 +2905,7 @@ def test_the_preflight_merges_with_the_drivers_of_next_not_those_of_the_older_ch
 
 
 def test_the_sync_merges_onto_each_tip_with_that_tips_drivers_not_those_of_its_checkout(world):
-    """Drive's clone sits at `checked`'s tip, so its `merge.py` can predate one a member of `next` brings, and the sync ran that
+    """The queue's clone sits at `checked`'s tip, so its `merge.py` can predate one a member of `next` brings, and the sync ran that
     old driver for every merge above that member: a PR's lock merged onto `next` by a `merge.py` from before readerless reads
     collapsed the Security lock's reads groups.  Each merge now runs the tip's own drivers."""
     caps = "tests/test_lean_packages.py"
@@ -3086,7 +3086,7 @@ def test_the_preflight_never_holds_a_head_behind_a_contained_head_on_the_landing
 
 
 def test_the_preflight_refuses_a_head_containing_an_open_pr_that_isnt_admitted_and_names_it(world, capsys):
-    """Drive holds a PR that contains one never marked, or one whose mark was withdrawn; the preflight refuses it first."""
+    """The queue holds a PR that contains one never marked, or one whose mark was withdrawn; the preflight refuses it first."""
     from research.queue import MarkOnly, ready
 
     world.with_store_remote()
@@ -3105,7 +3105,7 @@ def test_the_preflight_refuses_a_head_containing_an_open_pr_that_isnt_admitted_a
     assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 1
     assert "and #5 isn't admitted (held (`hold` label))" in capsys.readouterr().err
     world.gh.put(5, parent, ready=False)
-    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 0         # #5 admitted: drive lands it first
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 0         # #5 admitted: the queue lands it first
     world.gh.put(6, six := world.change({"z.txt": "z\n"}), ready=False, body="Lane `lane-4`.")
     world.gh.put(4, world.change({"w.txt": "w\n"}, base=six), ready=False)
     assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 0         # #6 is lane-4's own: #4 carries it
@@ -3238,7 +3238,7 @@ def _lean_world(world: World, monkeypatch) -> tuple[Path, Path]:
 
 def test_the_preflight_refuses_a_head_that_breaks_a_lean_module_a_pr_on_next_owns_naming_it_its_error_and_that_pr(
         world, monkeypatch, capsys):
-    """A PR that passes its own Lean check can break a module of another PR on `next`, which drive's Lean check of the stack
+    """A PR that passes its own Lean check can break a module of another PR on `next`, which the Lean check of its candidate
     finds only an hour later. A module failing on `next` too isn't the head's; one of the head's own that
     fails only on the merge names the PR on `next` that changed what it imports."""
     from research.queue import LakeBuild, MarkOnly, StoreLabels, ready
@@ -3273,7 +3273,7 @@ def test_the_preflight_refuses_a_head_that_breaks_a_lean_module_a_pr_on_next_own
 
 
 def test_the_lean_step_skips_past_its_bounds_and_refuses_what_it_cannot_build(world, monkeypatch, capsys):
-    """A change more modules import than the preflight builds, and a spent budget, leave the break to drive's Lean check: said
+    """A change more modules import than the preflight builds, and a spent budget, leave the break to its candidate's Lean check: said
     as a skipped check, never as nothing refused, and never refused.  A head whose few modules nothing builds (no warm tree and
     no node to build on, a node without Mathlib for the package) is refused with the fix: an unbuilt module is how a head that
     breaks `next`'s Lean got marked."""
@@ -3612,10 +3612,10 @@ def test_a_head_that_changes_a_lock_is_vouched_for_only_by_a_pass_on_its_lean_in
 
 
 def test_a_head_that_changes_a_lock_no_records_run_passed_is_marked_and_the_warning_names_each_package(world, capsys):
-    """The lock run after a landing regenerates the records of the locks it changed, so a head no records run vouches for is
+    """Its candidate's check checks the records of the locks a head changed, so a head no records run vouches for is
     marked all the same: `ready` exits 0, the mark is on the store's remote, and the warning names each package, the run that
     would record it, and why it doesn't refuse."""
-    from research.queue import RECORDS_AFTER_LANDING, RECORDS_COMMAND, MarkOnly, StoreLabels, ready
+    from research.queue import RECORDS_CHECKED, RECORDS_COMMAND, MarkOnly, StoreLabels, ready
 
     world.with_store_remote()
     h = world.change({LOCK: _lock(A="2"), "lib/lean-audit.json": _lock(B="2")})
@@ -3625,7 +3625,7 @@ def test_a_head_that_changes_a_lock_no_records_run_passed_is_marked_and_the_warn
     out, err = capsys.readouterr()
     assert err.startswith(f"research queue ready: warning: #1 at {h[:12]}: it changes the Lean lock of lib, pkg against `main`, "
                           f"and the store holds no pass of each on {h[:12]}'s Lean inputs"), err
-    assert f": {RECORDS_AFTER_LANDING}:\n  - " in err
+    assert f": {RECORDS_CHECKED}:\n  - " in err
     for pkg in ("lib", "pkg"):
         assert f"to record {pkg} before it lands, start `{RECORDS_COMMAND.format(pkg=pkg)}`" in err
     assert "is not marked" not in err and f"#1 at {h[:12]}: marked on lane-1's word, with no quick tier" in out
@@ -3951,7 +3951,7 @@ Path(sys.argv[2]).write_text(json.dumps({**a, **{k: v for k, v in b.items() if o
 def test_a_head_that_only_merged_main_into_a_vouched_head_is_vouched_for_with_no_run_of_its_own(world, capsys):
     """A lane merges `main` after its records run passed.  The fast path builds nothing for such a head and reports `path: reused`
     (every Lean input it changed is main's whole, and its lock is merge.py's merge of the two sides): that lock is a candidate,
-    which the lock run after its landing rebuilds and regenerates where another PR moved what it reads, so the gate vouches for
+    which the check of a candidate holding it rebuilds where another PR moved what it reads, so the gate vouches for
     it too, from the run below, with no new run.  A merge whose lock isn't merge.py's (a hand resolution), or that changes a file
     of its own, is no such head and samples the warning."""
     world.with_store_remote()
@@ -3983,7 +3983,7 @@ def test_the_records_gate_vouches_for_none_and_says_why_when_it_cant_read_the_st
     """A VM whose shell lost its store secrets has no remote, and one whose endpoint is down can't list it: the runs other machines
     published aren't here, so the gate vouches for none of the head's locks rather than answer from what's here, and warns
     saying why, as it does when it can't fetch the head to tell which locks it changes.  The head is marked each time."""
-    from research.queue import RECORDS_AFTER_LANDING, MarkOnly, RecordsGate, ready
+    from research.queue import RECORDS_CHECKED, MarkOnly, RecordsGate, ready
 
     h = world.change({LOCK: _lock(A="2")})
     capsys.readouterr()
@@ -3995,7 +3995,7 @@ def test_the_records_gate_vouches_for_none_and_says_why_when_it_cant_read_the_st
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), records=gone) == 0
     err = capsys.readouterr().err
     assert f"research queue ready: warning: #2 at {h[:12]}: the records gate can't tell which Lean locks it changes (git " in err
-    assert f"), so it vouches for none: {RECORDS_AFTER_LANDING}\n" in err
+    assert f"), so it vouches for none: {RECORDS_CHECKED}\n" in err
 
     _published(world, h)
     monkeypatch.setattr(LocalStore, "remote", property(lambda self: _Unreachable()))
@@ -4003,7 +4003,7 @@ def test_the_records_gate_vouches_for_none_and_says_why_when_it_cant_read_the_st
     err = capsys.readouterr().err
     assert (f"research queue ready: warning: #1 at {h[:12]}: it changes the Lean lock of pkg, and the store's records runs "
             f"can't be read (OSError: injected: endpoint unreachable; ") in err
-    assert f"so the records gate vouches for none: {RECORDS_AFTER_LANDING}\n" in err
+    assert f"so the records gate vouches for none: {RECORDS_CHECKED}\n" in err
 
 
 def test_a_head_stacked_on_a_landed_pr_that_merged_main_is_judged_by_its_own_change_not_one_merge_base(world, capsys, monkeypatch):
@@ -4771,7 +4771,7 @@ def test_a_quick_tier_in_a_check_slot_starts_lake_from_the_slots_warm_copy(tmp_p
 
 
 def test_a_gh_call_that_never_answers_fails_the_tick_instead_of_holding_it(monkeypatch):
-    """Drive's listing of the open PRs can hang for minutes on a dead connection, and gh has no timeout of its own."""
+    """The queue's listing of the open PRs can hang for minutes on a dead connection, and gh has no timeout of its own."""
     import research.merge as M
     import research.queue as Q
 
@@ -4810,8 +4810,8 @@ def test_the_open_prs_are_read_a_wave_of_pages_at_a_time_until_one_isnt_full(mon
 
 
 def test_handle_reads_mains_registry_once_per_fetch(world, monkeypatch):
-    """A review tick asks `handle` of every member of `next` (`Driver._owners`), and each read of main's registry is a
-    `git show` of ~70 ms in drive's clone on the network volume, times over a hundred members a tick.  A fetch reads it afresh."""
+    """A tick asks `handle` of every member it reads, and each read of main's registry is a
+    `git show` of ~70 ms in the queue's clone on the network volume, times over a hundred members a tick.  A fetch reads it afresh."""
     from research import queue as Q
 
     def registry(*handles: str) -> None:
@@ -4837,7 +4837,7 @@ def test_handle_reads_mains_registry_once_per_fetch(world, monkeypatch):
 
 def test_a_fetch_moves_a_clone_main_has_passed_to_main_and_keeps_one_that_contains_main(world):
     """The merge drivers run from the clone's checkout: an agent VM's clone still checked out at an old `main` would judge a
-    lean-audit.json with that day's merge.py and refuse a merge main's resolves.  Drive's checkout, `next`'s tip, stays."""
+    lean-audit.json with that day's merge.py and refuse a merge main's resolves.  A checkout at `next`'s tip stays."""
     q = world.queue()
     q._clone()
     q.fetch()
@@ -5038,7 +5038,7 @@ def test_a_premise_the_heads_own_regeneration_dropped_is_no_refusal_and_one_the_
 
 
 def test_the_sync_leaves_off_next_a_head_whose_lock_merge_drops_what_next_needs_and_keeps_the_refusal_for_its_owner(world):
-    """Drive posts each refusal the sync records to the PR's owner, once per head; a rename beside it merges."""
+    """The queue posts each refusal the sync records to the PR's owner, once per head; a rename beside it merges."""
     _lock_world(world)
     world.gh.put(2, world.change({"pkg/lean-audit.json": _lock_text(lambda d: d["shape"]["frozen"].pop("F"))}))
     world.gh.put(3, world.change({"pkg/lean-audit.json": _lock_text(_renamed)}))
@@ -5053,8 +5053,8 @@ def test_the_sync_leaves_off_next_a_head_whose_lock_merge_drops_what_next_needs_
 
 
 
-def test_drive_and_ready_take_the_preflight_root_they_are_given(tmp_path):
-    """Drive's pod keeps TMPDIR on a network volume, where a merged tree's `uv sync` can't hardlink from uv's cache and outruns
+def test_the_preflight_takes_the_root_it_is_given(tmp_path):
+    """The control pod keeps TMPDIR on a network volume, where a merged tree's `uv sync` can't hardlink from uv's cache and outruns
     the budget; `--preflight-root` puts the trees on a local disk instead, and without it they go to the temporary directory."""
     from research.queue import Preflight
 

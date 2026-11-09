@@ -970,9 +970,9 @@ LEAN_LOCK = "lean-audit.json"
 LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "lake-manifest.json")
 
 
-#: the analysis tree: a Lean change only here that touches no lock and no spec (`LEAN_SPEC`) is proofs, checked by the
-#: after-landing run, a failure blaming it; Lean anywhere else runs as code (Flock's verifier and the ZK server, the PoUS
-#: grader, the certifier program, the inference-only check, the remote audit's verifier), and a lock run follows its landing
+#: the analysis tree: a Lean change only here that touches no lock and no spec (`LEAN_SPEC`) is proofs, checked by its
+#: candidate's check, a failure blaming it; Lean anywhere else runs as code (Flock's verifier and the ZK server, the PoUS
+#: grader, the certifier program, the inference-only check, the remote audit's verifier), whose lock its records must match
 LEAN_PROOFS_TREE = "Security/"
 #: the spec: the Lean the guarantees' statements read, `Security/`'s Definitions library, and the Lake files of its package.
 #: A change to it, like a lock's, is a Lean change with or without a lock change
@@ -983,11 +983,10 @@ LEAN_SPEC = ("Security/Definitions/", "Security/Definitions.lean", "Security/lak
 def lean_change(repo: Path, commit: str, base: str | None = None) -> bool:
     """Whether ``commit``'s own change (against its first parent, or ``base``) is a Lean change, whatever its PR's title, which
     a candidate's check judges with its Lean lock records riding in the PR, and whose Lean cache `merge.lean_publish` publishes: it touches a lock or the spec (`LEAN_SPEC`), so neither a
-    guarantee's statement nor a definition it reads reaches `main` without its record (the after-landing lean-audit,
-    `--no-regenerate`, fails on a record difference), or a Lean source outside `LEAN_PROOFS_TREE` of a Lake package that has a
+    guarantee's statement nor a definition it reads reaches `main` without its record (its candidate's `lean-lock:` task
+    fails on a record difference), or a Lean source outside `LEAN_PROOFS_TREE` of a Lake package that has a
     lock, Lean that runs as code, whose lock (its `verifier.allow` among them) would go stale the same way.  A change to
-    `Security/`'s other Lean alone is proofs: no lock run follows it, and a failure of the after-landing lean-audit blames
-    it."""
+    `Security/`'s other Lean alone is proofs, and a failure of its candidate's lean-audit blames it."""
     files = changed(repo, base or f"{commit}^1", commit)
     if any(Path(f).name == LEAN_LOCK or f.endswith(LEAN_SOURCES) and f.startswith(LEAN_SPEC) for f in files):
         return True
@@ -1482,7 +1481,7 @@ class Queue:
             else:
                 _git(self.workdir, "update-ref", self.base, "refs/remotes/origin/main")
         # the merge drivers (`clone.RECORD_DRIVER`) run from this checkout, so one that `main` has moved past judges merges with old
-        # drivers (an old clone refuses a lean-audit.json conflict main's merge.py resolves).  Drive's checkout, `next`'s tip, contains `main` and stays
+        # drivers (an old clone refuses a lean-audit.json conflict main's merge.py resolves).  A checkout at `next`'s tip contains `main` and stays
         if _git(self.workdir, "merge-base", "--is-ancestor", self.base, "HEAD", check=False).returncode:
             _git(self.workdir, "checkout", "-q", "--detach", "--force", self.base)
         # exit 2: no such branch; any other failure is the remote's, never an empty queue
@@ -3694,8 +3693,8 @@ class LocalSuites:
             suites = [s for s in suites if s not in PREFLIGHT_UNCOLLECTED]
         todo = [s for s in suites if (wt / s).is_dir()]
         if todo and (f := self.free()) is not None and f < PREFLIGHT_MIN_FREE:
-            out.notes.append(f"no suite collected: {f:.0%} of memory available, under {PREFLIGHT_MIN_FREE:.0%}; the after-landing "
-                             "run still collects them")
+            out.notes.append(f"no suite collected: {f:.0%} of memory available, under {PREFLIGHT_MIN_FREE:.0%}; its candidate's "
+                             "check still collects them")
             todo = []
         need = sorted({p for s in todo for p in out.fixtures.get(s, ())})
         if need and self.fetch is not None:
@@ -3703,7 +3702,7 @@ class LocalSuites:
             if blocked := [s for s in todo if missing & set(out.fixtures.get(s, ()))]:
                 shown = ", ".join(sorted(missing)[:3]) + (f" and {len(missing) - 3} more" if len(missing) > 3 else "")
                 out.notes.append(f"{', '.join(blocked)} not judged: {len(missing)} of the {len(need)} fixture(s) the suites read "
-                                 f"weren't fetched ({why or 'no source held them'}: {shown}); the after-landing run fetches them")
+                                 f"weren't fetched ({why or 'no source held them'}: {shown}); its candidate's check fetches them")
                 todo = [s for s in todo if s not in blocked]
         with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(self.jobs, len(todo) or 1))) as pool:
             for s, res in zip(todo, pool.map(lambda s: pytest_failures(self.run, self.python, wt / s, list(self.args)), todo)):
@@ -4062,7 +4061,7 @@ def dropped_entries(base: dict, merged: dict) -> list[str]:
     lists the guarantee under `guarantees` (removed), or restated it: it records the guarantee otherwise than ``base`` does,
     its owner aside, or a definition its signature names has another hash in both (a guarantee lifted into a `Guarantees`
     definition is restated there; `check.py --update` keeps a premise only while the statement prints it, and the head's
-    records run, or the lock run after its landing, checks its lock).  It may drop an entry whose text (a premise, a frozen
+    records run, or its candidate's check, checks its lock).  It may drop an entry whose text (a premise, a frozen
     entry's reason) it holds under a key of the section ``base`` lacks (renamed), a guarantee's premises while it adds as
     many others under that guarantee (re-keyed at a restated statement, as `check.py`'s `paired` keys them), a frozen
     entry's reason while it keeps the key (reworded: `check.py` reads the key and the reason's category, not its wording),
@@ -4098,8 +4097,8 @@ def lock_drops(repo: Path, base: str, head: str, merged: str | None = None) -> l
     """`dropped_entries` of each lock (`lean-audit.json`, `LEAN_FIXTURES` aside) that ``head``'s change from its merge base with
     ``base`` touches, from ``base`` to ``merged`` (a commit or tree; by default ``head`` merged onto ``base`` as the sync merges
     it, with ``base``'s merge drivers, so `tools/verity/lean/merge.py` merges the locks), each prefixed by the lock's path.  A
-    drop ``head``'s own lock already makes against that merge base is no refusal: its records run, or the lock run after its
-    landing, regenerates the lock, and `check.py --update` keeps a premise only while a statement prints it, so a premise it
+    drop ``head``'s own lock already makes against that merge base is no refusal: its records run regenerates the lock, and
+    `check.py --update` keeps a premise only while a statement prints it, so a premise it
     dropped is printed nowhere at the head (a stale entry); only what the merge alone drops is named.  A lock either side lacks
     is the head's to add or remove, one that doesn't parse is named, and a diff or merge git can't make finds nothing: the lock
     run after its landing still fails on a dropped premise."""
@@ -4206,8 +4205,8 @@ class Preflight:
         try:
             base, onto, members = self._fetch(pr)
         except QueueError as e:
-            self.log(f"research queue: preflight: #{pr.number} at {pr.head[:12]}: checks skipped: all ({e}); the after-landing "
-                     "run still tests the head")
+            self.log(f"research queue: preflight: #{pr.number} at {pr.head[:12]}: checks skipped: all ({e}); its candidate's "
+                     "check still tests the head")
             return None
         if why := self._old_next(pr, prs):
             return why
@@ -4425,7 +4424,7 @@ class Preflight:
             return graph, {}, deadline
         if len(graph.targets) > self.lean_modules:
             notes.append(f"Lean: not built: {len(graph.targets)} modules are or import what it changes, over the "
-                         f"{self.lean_modules} the preflight builds; the lock run after its landing builds them")
+                         f"{self.lean_modules} the preflight builds; its candidate's check builds them")
             return graph, {}, deadline
         res = self.lean(wt, sorted(graph.targets), deadline - self.clock())
         if isinstance(res, LeanTimedOut):
@@ -4573,15 +4572,15 @@ class Preflight:
 
 
 class MarkOnly:
-    """`ready --mark`: the owner's word alone, with no quick tier, so marking needs no machine and no wait; the after-landing
-    run tests the head.  A ready post with no mark behind it admits nothing, so the mark is what an owner gives."""
+    """`ready --mark`: the owner's word alone, with no quick tier, so marking needs no machine and no wait; its candidate's
+    check tests the head.  A ready post with no mark behind it admits nothing, so the mark is what an owner gives."""
 
     def __call__(self, pr: PR) -> None:
         return None
 
 
 #: the result kinds whose `passes` ({Lean inputs key: package}) say a package passed Lean on those inputs: the Lean fast path's
-#: (`lean_changed.py --records`, each package whose records passed) and a check's, a shard's or an after-landing run's (its
+#: (`lean_changed.py --records`, each package whose records passed) and a check's, a shard's or a `--deferred` run's (its
 #: `lean-audit` step's, `check.py`'s `lean_passes`: each package audited on the commit's own lock with the kernel replay)
 FAST_KIND, CHECK_KINDS = "lean-fast/v1", ("check/v1", "check-shard/v1", "check-deferred/v1")
 PASS_KINDS = (FAST_KIND, *CHECK_KINDS)
@@ -4600,8 +4599,8 @@ KEY_TIMEOUT_S = 600
 RECORDS_COMMAND = ("research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone --declared-output "
                    "'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records {pkg} --update")
 #: why `RecordsGate` warns and never refuses, which each of its warnings says
-RECORDS_AFTER_LANDING = ("the lock run after its landing regenerates the records, and what it can't regenerate fails that run, "
-                         "a red whose culprit, the PR, is fixed forward or reverted")
+RECORDS_CHECKED = ("the verified queue checks each package's lock records in its candidate's check, and records that don't "
+                   "match the change eject it, telling its owner the run that regenerates them")
 #: how many commits below a head `RecordsGate` follows one that only merged the landing branch or only changed other packages' locks
 RECORDS_WALK = 8
 
@@ -4696,7 +4695,7 @@ class RecordsGate:
     were held to; from their merge base) touches a Lake package's lock (`lean-audit.json`) samples a warning, naming the run that
     would record it, for each such package unless the store holds a pass of it on the head's Lean inputs (`lean_passed`): a
     records run or a Lean check, of any commit, whose result lists the package's Lean inputs key at the head among its
-    `passes`.  The lock run after its landing regenerates the records (`RECORDS_AFTER_LANDING`), so nothing here holds the mark.
+    `passes`.  The candidate's check checks the records (`RECORDS_CHECKED`), so nothing here holds the mark.
     The key covers every file of the package and of each package it reads (`lean_changed.closure_inputs`: its lock, tests and
     docs included), their toolchains and the checker, so a pass on it is a pass of the head's lock wherever it ran: a PR that
     carries another PR's Lean change needs no run of its own.  A records run lists a package whose record its `--update` wrote
@@ -4707,7 +4706,7 @@ class RecordsGate:
     Two heads are vouched for by the commit below them, followed `RECORDS_WALK` commits at most: one that only merged the
     landing branch into a vouched commit, every file it changed being that branch's whole but a lock, which is that branch's or
     `tools/verity/lean/merge.py`'s merge of the two sides (the fast path reports `path: reused` for it: a candidate, which the
-    lock run after its landing rebuilds and regenerates where it differs); and one whose one parent is vouched and that changes
+    check of a candidate holding it rebuilds); and one whose one parent is vouched and that changes
     only other packages' locks over it, which a package's records don't read.
 
     The store is read from its remote (`refresh(attempts_only=True, since=...)` and `index_lean_results`: the runs of the last
@@ -4732,7 +4731,7 @@ class RecordsGate:
             locks = self._locks(pr)
         except QueueError as e:
             return (f"the records gate can't tell which Lean locks it changes ({e}), so it vouches for none: "
-                    f"{RECORDS_AFTER_LANDING}")
+                    f"{RECORDS_CHECKED}")
         if not locks:
             return None
         try:
@@ -4740,7 +4739,7 @@ class RecordsGate:
         except Exception as e:  # noqa: BLE001  (no store, no remote, a failed listing: vouch for none, never from what's here)
             return (f"it changes the Lean lock of {', '.join(locks)}, and the store's records runs can't be read "
                     f"({type(e).__name__}: {e}; the remote is R2_ENDPOINT and R2_BUCKET, or ~/.research/store.toml), so the "
-                    f"records gate vouches for none: {RECORDS_AFTER_LANDING}")
+                    f"records gate vouches for none: {RECORDS_CHECKED}")
         missing = []
         for pkg in locks:
             if how := self._vouch(pr.head, pkg, 0):
@@ -4759,7 +4758,7 @@ class RecordsGate:
         return (f"it changes the Lean lock of {', '.join(missing)} against `{self.into}`, and the store holds no pass of "
                 f"{'it' if len(missing) == 1 else 'each'} on {pr.head[:12]}'s Lean inputs (`{KEY_COMMAND} --inputs-key`) by a "
                 f"records run or a Lean check of any commit, nor below a head that only merged `{self.into}` or changed only other "
-                f"packages' locks{notes}: {RECORDS_AFTER_LANDING}:\n  - " + "\n  - ".join(lines))
+                f"packages' locks{notes}: {RECORDS_CHECKED}:\n  - " + "\n  - ".join(lines))
 
     def _locks(self, pr: PR) -> dict[str, str]:
         """{package: its lock's path} for each lock the head's change against the landing branch (`self.into`) touches and the
@@ -4903,12 +4902,12 @@ class RecordsGate:
 
 def ejection(store, pr: PR) -> str | None:
     """Why ``pr``'s current head was ejected, when the newest `ready` label on it is `research queue eject`'s `false` (its reason in
-    `ref`), pulled from the store's remote first; else None, and None when that pull fails: this saves a revert, and the after-landing
-    run checks the head."""
+    `ref`), pulled from the store's remote first; else None, and None when that pull fails: this saves an ejection, and its
+    candidate's check checks the head."""
     try:
         labs = StoreLabels(store, log=lambda s: print(s, file=sys.stderr))._labels(pr.number, pr.head, vocab.READY)
     except QueueError as e:
-        print(f"research queue ready: can't tell whether #{pr.number}'s head was ejected ({e}); the after-landing run still checks it",
+        print(f"research queue ready: can't tell whether #{pr.number}'s head was ejected ({e}); its candidate's check still checks it",
               file=sys.stderr)
         return None
     last = labs[-1] if labs else None
@@ -4943,8 +4942,8 @@ def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str |
     `PR.outside` refuses (its head on another repository than ``github``'s, or an author the organization doesn't have) is
     refused, then ``goals`` (`goal_gate`) warns, on stderr, of a PR whose body names no live goal of the Goals page and no
     `Issue: none: REASON`, and goes on, then ``records`` (`RecordsGate`) warns, as ``goals`` does, of a head that changes a Lean
-    lock no records run passed, of it or of a commit with the same inputs for that package (the lock run after its landing
-    regenerates the records), then ``preflight`` (`Preflight`; None with `--no-preflight`) refuses a head that would break
+    lock no records run passed, of it or of a commit with the same inputs for that package (its candidate's check checks the
+    records), then ``preflight`` (`Preflight`; None with `--no-preflight`) refuses a head that would break
     `next`, with the fix.  With ``sha`` (`--sha`) it marks only that head: GitHub's head lags a push by seconds (`git push &&
     research queue ready N --mark` can mark the old head), so it reads again, up to `SHA_READS` times, and refuses when GitHub
     still has another head.  A PR based
