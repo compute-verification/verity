@@ -1675,7 +1675,7 @@ class Loop:
         w = self.world
         tasks = "; ".join(f"{f.task} (key {f.key})" for f in a.failed) or "none named"
         text = (f"#{a.number} at {a.head[:12]} is ejected from the verified queue: {a.why}. Failed: {tasks}. Each result, its "
-                f"log's digest with it: `research store labels task:<key> --key result --history`. Fix it and mark it ready "
+                f"log's digest with it: `research data labels task:<key> --key result --history`. Fix it and mark it ready "
                 f"again")
         if locks := sorted({f.task.removeprefix(LEAN_LOCK) for f in a.failed if f.task.startswith(LEAN_LOCK)}):
             text += LEAN_LOCK_FIX.format(pkgs=", ".join(locks))
@@ -1880,7 +1880,7 @@ class Loop:
         new = {f.task for f in a.failed} - t.past.reds(a.base)
         text = None if not new else (
             f"the verified queue's base {a.base[:12]} is red: {a.why}. Failed there as on {c.sha[:12]}: {tasks}. Each result, its "
-            f"log's digest with it: `research store labels task:<key> --key result --history`")
+            f"log's digest with it: `research data labels task:<key> --key result --history`")
         posts = text is not None and not self.shadow
         done = posts and self._say(t, "red", text, to, sha=c.sha, base=a.base, failed=a.failed)
         return self.record(t, "red", sha=c.sha, base=a.base, members=c.members, heads=c.heads, why=a.why, failed=a.failed,
