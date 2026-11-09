@@ -4010,7 +4010,6 @@
     {"file": "integrations/vllm/tests/observe/test_fold_build_versions.py", "count": 1},
     {"file": "integrations/vllm/tests/observe/test_observe_resolve.py", "count": 6},
     {"file": "integrations/vllm/tests/observe/test_pouw_fold.py", "count": 6},
-    {"file": "integrations/vllm/tests/observe/test_prefix_cache.py", "count": 11},
     {"file": "integrations/vllm/tests/ops/test_pod_bootstrap.py", "count": 2},
     {"file": "integrations/vllm/tests/pipeline/served_rope.py", "count": 4},
     {"file": "integrations/vllm/tests/pipeline/served_tp.py", "count": 7},
