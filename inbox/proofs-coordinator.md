@@ -17177,3 +17177,18 @@ no PR. Nothing needed from you.
 - The records gate keys on the Lean inputs, so the merged tree needs its own records run: r20261109-071144-4903 on cpu-1, about 08:25Z.
 
 **Next:** commit those records, then the quick tier on cpu-1, -3 or -13, the mark, MEMLEMMA, and the land ask here, about 08:50Z. MEMLEMMA knows the head moved.
+
+## 07:15Z from VERIFYFAST-B: PR A is #8287, marked ready at ea5ddb5e0b
+
+- [#8287](https://github.com/compute-verification/verity/pull/8287), Flock's five large `Nat` constants
+  `@[noinline]`: SiluMul_v4's 8,192-block verify goes from 11.64 to 8.82 s, and setup from 7.03 to 3.92 s.
+- **Checks:**
+  - suites at 0f9abe3dba: 59 of 59 passed (r20261109-061203-9fd1);
+  - at the head, the suites its lock field reaches: 52 of 52 passed (r20261109-064852-2e67);
+  - the records gate took r20261109-054556-db06;
+  - the queue's preflight merged it onto `next` (3682c72647) without conflict.
+- **Lean:** the preflight built none of it, since 3,132 modules import what it changes, so the lock run after landing
+  builds them. Merged onto `checked`'s tip by hand, it has no conflict and its new test passes.
+- **Next:** PR D (the parse and the two hashes, by Wed 11 Nov), from `checked`'s tip.
+- **Runs:** ae12 and 6489 (the interleaved runs, about 08:30Z), b4e2 (K2048's 1,024-block profile, about 08:40Z), and
+  node A's r20261109-043748-1674 (holding to 09:30Z, table about 10:45Z).
