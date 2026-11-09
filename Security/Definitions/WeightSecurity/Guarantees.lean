@@ -32,10 +32,12 @@ network certifier and the dataflow discharge. Its witnesses
 
 `TheftFaulted` is the same deployment under SPOT's fault model (`Definitions.WeightSecurity.Faulted`): a fault is an
 input to the faulted circuit, not an overwrite of a release, so SPOT's part of the channel is the fault patterns, of
-sizes summing to at most `M`, and the reach of a fault drops out. What faults do to the weights' exposure is the named
-assumption `FaultedUseHard` (λ), on a typical set of weights. `TheftServed` stays as the bound that takes no claim about
-the model. Its witnesses `TheftFaultedHonest` and `TheftFaultedNontrivial` are at the toy deployment with faults
-(`Definitions.WeightSecurity.ToyFaulted`).
+sizes summing to at most `M`, and the reach of a fault drops out. What faults at the patterns no cut covers do to the
+weights' exposure is the named assumption `FaultedUseHard` (λ), on a typical set of weights; a pattern an honest cut
+`κ` cuts (`Definitions.WeightSecurity.Cut`) costs the cut's hint in the channel instead, with no assumption.
+`TheftServed` stays as the bound that takes no claim about the model. Its witnesses `TheftFaultedHonest` and
+`TheftFaultedNontrivial` are at the toy deployment with faults (`Definitions.WeightSecurity.ToyFaulted`), at the cut
+that cuts nothing.
 
 `TheftServedReq` is `TheftServed` per charge unit, in bits: the released outputs grouped into units (a request, or a
 request with the requests that read its state), each changed unit charged its whole output and its name, and the leakage
@@ -146,32 +148,37 @@ open scoped ENNReal in
 /-- **Model weight security at an audited deployment, faults as inputs.** The deployment serves `T` windows as in
 `TheftServed`, and its releases are faulted runs: each accepted window that releases released the faulted served
 function `Cf`'s answer at a fault pattern of size at most its incorrect proof blocks (`Served.Faithful`). If honest use
-steals a weight of the typical set `Typ` with probability at most `p` (`HonestUseHard`), faults hand out such a weight
-at most `N^(λ - 1)` times faster than honest use (`FaultedUseHard`, `N = patternCount size T M`), the class `Af` holds
-the outsider with each fault channel string written in (`Simulable`), and the audit leaves `M` incorrect proof blocks
-undetected with probability at most `δ` (`Served.UndetectedLe`), then the outsider steals the weights with probability
-at most `Pr[gen ω ∉ Typ] + |S| · N^(λ - 1) · p + δ + Pr[a release isn't faithful]`. `|S|` is the fault channel's
-covert strings, `N` times the served channel's at the overwrite budget `(L + 1) · |O|`, so the faults cost
-`N^λ = 2^(λ · C_arb)`, where `TheftServed` charges every value their reach `E` can overwrite. `φ₀` is the empty
-pattern (`NoFault`). -/
+steals a weight of the typical set `Typ` with probability at most `p` (`HonestUseHard`), faults at the patterns no cut
+covers hand out such a weight at most `N^(λ - 1)` times faster than honest use (`FaultedUseHard` at the parties whose
+patterns are `κ.Interior`, `N = patternCount size T M`), the class `Af` holds the outsider with each fault channel
+string written in (`Simulable`), and the audit leaves `M` incorrect proof blocks undetected with probability at most
+`δ` (`Served.UndetectedLe`), then the outsider steals the weights with probability at most
+`Pr[gen ω ∉ Typ] + |S| · N^(λ - 1) · p + δ + Pr[a release isn't faithful]`. `|S|` is the fault channel's covert
+strings: each window's interior pattern or, where the cut `κ` cuts the window's pattern, `κ`'s hint, times the served
+channel's at the overwrite budget `(L + 1) · |O|`. So interior faults cost `N^λ = 2^(λ · C_arb)` and a cut fault its
+hint, where `TheftServed` charges every value their reach `E` can overwrite. At `Cut.none` every pattern is interior.
+`φ₀` is the empty pattern (`NoFault`). -/
 def TheftFaulted : Prop :=
   ∀ {Ω R Θ Q Adv O V Tick F Θ' : Type} [Fintype Ω] [Fintype R] [Fintype Adv] [Inhabited Adv] [Fintype O]
     [DecidableEq O] [Fintype V] [Fintype Tick] [Inhabited Tick] [Fintype F]
-    (C : Θ → Q × Adv → O → V) (Cf : Θ → (Q × Adv) × F → O → V) (size : F → ℕ) (φ₀ : F) (gen : Ω → Θ)
-    (Typ : Set Θ) (Stolen : Θ → Θ' → Prop) (A : Set (Outsider R (Q × Adv) (O → V) Θ'))
-    (Af : Set (Outsider R ((Q × Adv) × F) (O → V) Θ')) (p lam : ℝ)
+    (C : Θ → Q × Adv → O → V) (Cf : Θ → (Q × Adv) × F → O → V) (size : F → ℕ) (φ₀ : F)
+    (κ : Cut (Q × Adv) (O → V)) (gen : Ω → Θ) (Typ : Set Θ) (Stolen : Θ → Θ' → Prop)
+    (A : Set (Outsider R (Q × Adv) (O → V) Θ')) (Af : Set (Outsider R ((Q × Adv) × F) (O → V) Θ')) (p lam : ℝ)
     (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ') (T L M : ℕ) (δ : ℝ≥0∞)
     (run : Θ → R → Verity.Game (List (Served O V Tick Adv))),
     NoFault size φ₀ →
     HonestUseHard C gen (fun θ θ' => θ ∈ Typ ∧ Stolen θ θ') T A p →
-    FaultedUseHard C Cf size gen (fun θ θ' => θ ∈ Typ ∧ Stolen θ θ') T M A Af lam →
-    Simulable Af (Ou.withFaults φ₀) (faultChannel R Q Adv O V Tick F size T M ((L + 1) * Fintype.card O)) →
+    FaultedUseHard C Cf size gen (fun θ θ' => θ ∈ Typ ∧ Stolen θ θ') T M A
+      (Af ∩ PatternsIn (κ.Interior Cf size φ₀) T) lam →
+    Simulable Af (Ou.withFaults φ₀)
+      (faultChannel R Q Adv O V Tick F κ Cf size φ₀ T M ((L + 1) * Fintype.card O)) →
     Served.UndetectedLe M δ run →
       Verity.Game.avg (fun z : Ω × R => Verity.Game.value
           (fun l => Stolen (gen z.1) (Ou.out z.2 (Served.view Ou L z.2 l T))) (run (gen z.1) z.2)) ≤
         ENNReal.ofReal (Claims.Pr fun z : Ω × R => gen z.1 ∉ Typ) +
-          ENNReal.ofReal (Fintype.card (faultChannel R Q Adv O V Tick F size T M ((L + 1) * Fintype.card O)).S *
-            ((patternCount size T M : ℝ) ^ (lam - 1) * p)) +
+          ENNReal.ofReal
+            (Fintype.card (faultChannel R Q Adv O V Tick F κ Cf size φ₀ T M ((L + 1) * Fintype.card O)).S *
+              ((patternCount size T M : ℝ) ^ (lam - 1) * p)) +
           δ + Verity.Game.avg (fun z : Ω × R =>
             Verity.Game.value (fun l => ¬ Served.Faithful Cf size Ou L (gen z.1) z.2 l) (run (gen z.1) z.2))
 
@@ -184,9 +191,11 @@ def TheftFaultedHonest : Prop :=
     HonestUseHard ToyServed.C ToyServed.gen (fun θ θ' => θ ∈ Set.univ ∧ ToyServed.Stolen θ θ') 2 ToyServed.anyone
       (1 / 256) ∧
     FaultedUseHard ToyServed.C ToyServed.Cf ToyServed.size ToyServed.gen
-      (fun θ θ' => θ ∈ Set.univ ∧ ToyServed.Stolen θ θ') 2 1 ToyServed.anyone ToyServed.anyoneF 1 ∧
+      (fun θ θ' => θ ∈ Set.univ ∧ ToyServed.Stolen θ θ') 2 1 ToyServed.anyone
+      (ToyServed.anyoneF ∩ PatternsIn ((Cut.none _ _).Interior ToyServed.Cf ToyServed.size none) 2) 1 ∧
     Simulable ToyServed.anyoneF (ToyServed.user.withFaults (none : ToyServed.Fault))
-      (faultChannel Unit Unit Unit Unit (Fin 16) Unit ToyServed.Fault ToyServed.size 2 1 ((0 + 1) * Fintype.card Unit)) ∧
+      (faultChannel Unit Unit Unit Unit (Fin 16) Unit ToyServed.Fault (Cut.none _ _) ToyServed.Cf ToyServed.size none
+        2 1 ((0 + 1) * Fintype.card Unit)) ∧
     Served.UndetectedLe 1 0 ToyServed.honestRun
 
 open scoped ENNReal in
@@ -199,8 +208,8 @@ def TheftFaultedNontrivial : Prop :=
         (fun l => ToyServed.Stolen (ToyServed.gen z.1) (ToyServed.thief.out z.2 (Served.view ToyServed.thief 0 z.2 l 2)))
         (ToyServed.leakRun (ToyServed.gen z.1) z.2)) ≤
       ENNReal.ofReal (Claims.Pr fun z : ToyServed.W × Unit => ToyServed.gen z.1 ∉ (Set.univ : Set ToyServed.W)) +
-        ENNReal.ofReal (Fintype.card (faultChannel Unit Unit Unit Unit (Fin 16) Unit ToyServed.Fault ToyServed.size 2 0
-            ((0 + 1) * Fintype.card Unit)).S *
+        ENNReal.ofReal (Fintype.card (faultChannel Unit Unit Unit Unit (Fin 16) Unit ToyServed.Fault (Cut.none _ _)
+            ToyServed.Cf ToyServed.size none 2 0 ((0 + 1) * Fintype.card Unit)).S *
           ((patternCount ToyServed.size 2 0 : ℝ) ^ ((1 : ℝ) - 1) * (1 / 256))) + 0 +
         Verity.Game.avg (fun z : ToyServed.W × Unit => Verity.Game.value
           (fun l => ¬ Served.Faithful ToyServed.Cf ToyServed.size ToyServed.thief 0 (ToyServed.gen z.1) z.2 l)

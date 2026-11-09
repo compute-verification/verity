@@ -20,9 +20,12 @@ hints, in place of the patterns: the faults cost their hints' bits, with no prem
   summing to at most `M`;
 * `FaultsWithin real Cf size inClass O q M θ r`: the datacenter `real` answers each of `O`'s first `q` queries with
   `Cf` at a pattern of the class, the sizes summing to at most `M`;
-* `FaultsIn size inClass q M`: the parties that query the faulted function at patterns of the class within the budget,
-  and `Outsider.dropFaults`, `faultingAs`: such a party seen as an outsider against a datacenter that faults where it
-  would.
+* `PatternsIn inClass q`: the parties that query the faulted function at patterns of the class, and
+  `Outsider.dropFaults`, `faultingAs`: such a party seen as an outsider against a datacenter that faults where it
+  would;
+* `Cut.Interior κ Cf size φ₀`: the patterns `κ` doesn't cut, the only ones `TheftFaulted` takes `FaultedUseHard` at.
+  Its fault channel (`faultChannel`) carries a hint for a window whose pattern `κ` cuts, so those faults cost their
+  hints rather than `FaultedUseHard`'s rate. `Cut.none` cuts nothing.
 
 The cuts are stated for autoregressive decoding (`decode`): position `i`'s token is a function of the tokens before it,
 which holds when the release is tokens only, nothing decodes ahead, and no state is shared across requests. Two
@@ -76,11 +79,24 @@ def FaultsWithin (real : Θ → R → List (X × Y) → X → Y) (Cf : Θ → X 
         Cf θ (O.query r (O.view r (real θ r) n), φ n)) ∧
     ∑ n ∈ Finset.range q, size (φ n) ≤ M
 
-/-- **The parties that fault within the class**: each query carries a fault pattern beside its input, and on every coin
-and against every responder the patterns of the first `q` queries are of the class, their sizes summing to at most
-`M`. -/
-def FaultsIn (size : F → ℕ) (inClass : F → Prop) (q M : ℕ) : Set (Outsider R (X × F) Y Θ') :=
-  {P | ∀ r resp, (∀ e ∈ P.view r resp q, inClass e.1.2) ∧ ((P.view r resp q).map fun e => size e.1.2).sum ≤ M}
+/-- **The parties whose patterns are of the class**: each query carries a fault pattern beside its input, and on every
+coin and against every responder the patterns of the first `q` queries are of the class. With `FaultBudget`, the parties
+that fault only within the class and the budget. -/
+def PatternsIn (inClass : F → Prop) (q : ℕ) : Set (Outsider R (X × F) Y Θ') :=
+  {P | ∀ r resp, ∀ e ∈ P.view r resp q, inClass e.1.2}
+
+/-- **The cut that cuts nothing**: it has no hints. -/
+def Cut.none (X Y : Type) : Cut X Y where
+  H := Empty
+  size h := h.elim
+  ask _ h := h.elim
+  sim _ h _ := h.elim
+
+/-- **The patterns no cut covers**: the empty pattern `φ₀`, and each pattern `φ` that `κ` doesn't cut, with the faulted
+function at `φ₀` as the honest one (`κ.Cuts (Cf · φ₀) Cf size (· = φ)`). `TheftFaulted` takes `FaultedUseHard` only at
+these: every other pattern costs its hint. At `Cut.none` every pattern is interior. -/
+def Cut.Interior (κ : Cut X Y) (Cf : Θ → X × F → Y) (size : F → ℕ) (φ₀ φ : F) : Prop :=
+  φ = φ₀ ∨ ¬ κ.Cuts (fun θ x => Cf θ (x, φ₀)) Cf size (· = φ)
 
 /-- **A faulted-use party's view rebuilt** from a view without patterns (newest first): each round's query is the
 party's at the rebuilt view so far, its pattern included. -/

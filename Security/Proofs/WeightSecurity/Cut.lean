@@ -10,7 +10,10 @@ outside the class or past the budget (`leaksThrough_cut`), and the outsider stea
 `|S| · p + ε`, where `S` is the channel's hint strings, not the patterns. `faultedUseHard_of_cut` is the per-party form:
 a party that queries the faulted function within the class and the budget is, with its patterns dropped
 (`Outsider.dropFaults`), an outsider against the datacenter that faults where it would (`dropFaults_model`), so honest
-use's hardness at `p` gives faulted use's at `|S| · p`.
+use's hardness at `p` gives faulted use's at `|S| · p`. `TheftFaulted` takes the conversion at the channel instead, where
+the fault channel carries a cut window's hint in place of its pattern: the per-party form charges `|S|` on top of the
+pattern count the fault channel already pays. `not_interior_of_cuts`: a pattern a cut cuts is not interior, so
+`TheftFaulted` takes no `FaultedUseHard` there.
 
 The instances cut autoregressive decoding (`decode`). `cuts_forced` is the dominator lemma: a faulted run that decodes
 the honest next token at every position outside a set no larger than its pattern is the forced-token query's with its
@@ -116,23 +119,23 @@ theorem sum_view (O : Outsider R X Y Θ') (r : R) (resp : List (X × Y) → X �
     omega
 
 /-- **`faultedUseHard_of_cut`**: a cut converts honest use's hardness into faulted use's, for the parties that fault
-within the class, at the cut channel's count of covert strings. -/
+only within the class and the budget (`FaultBudget`), at the cut channel's count of covert strings. -/
 theorem faultedUseHard_of_cut [Fintype Ω] [Fintype R] (κ : Cut X Y) {C : Θ → X → Y} {Cf : Θ → X × F → Y}
     {size : F → ℕ} {inClass : F → Prop} (hcut : κ.Cuts C Cf size inClass) (gen : Ω → Θ)
     (Stolen : Θ → Θ' → Prop) (q M : ℕ) (A : Set (Outsider R X Y Θ')) (Af : Set (Outsider R (X × F) Y Θ')) (p : ℝ)
     (hA : ∀ P ∈ Af, Simulable A P.dropFaults (κ.channel R q M)) :
     HonestUseHard C gen Stolen q A p →
-      HonestUseHard Cf gen Stolen q (Af ∩ FaultsIn size inClass q M) (Fintype.card (κ.channel R q M).S * p) := by
-  intro hhon P ⟨hPA, hPin⟩
+      HonestUseHard Cf gen Stolen q (Af ∩ PatternsIn inClass q ∩ FaultBudget size q M)
+        (Fintype.card (κ.channel R q M).S * p) := by
+  intro hhon P ⟨⟨hPA, hcl⟩, hsz⟩
   have hw : ∀ z : Ω × R, FaultsWithin (faultingAs P Cf) Cf size inClass P.dropFaults q M (gen z.1) z.2 := by
     intro z
-    obtain ⟨hcl, hsz⟩ := hPin z.2 (honest Cf (gen z.1))
     refine ⟨fun n => (P.query z.2 (P.view z.2 (honest Cf (gen z.1)) n)).2, fun n hn => ⟨?_, ?_⟩, ?_⟩
-    · exact hcl _ (mem_view P z.2 _ q n hn)
+    · exact hcl z.2 (honest Cf (gen z.1)) _ (mem_view P z.2 _ q n hn)
     · simp only [faultingAs, dropFaults_query, relift_view]
     · have := sum_view P z.2 (honest Cf (gen z.1)) (fun x => size x.2) q
       rw [← this]
-      exact hsz
+      exact hsz z.2 (honest Cf (gen z.1))
   calc Claims.Pr (fun z : Ω × R => Stolen (gen z.1) (P.model z.2 (honest Cf (gen z.1)) q))
       = Claims.Pr (fun z : Ω × R =>
           Stolen (gen z.1) (P.dropFaults.model z.2 (faultingAs P Cf (gen z.1) z.2) q)) := by
@@ -145,6 +148,19 @@ theorem faultedUseHard_of_cut [Fintype Ω] [Fintype R] (κ : Cut X Y) {C : Θ �
             ¬ FaultsWithin (faultingAs P Cf) Cf size inClass P.dropFaults q M (gen z.1) z.2) = 0 :=
           Pouw.pr_eq_zero fun z h => h (hw z)
         rw [h0, add_zero]
+
+/-- **A pattern the cut cuts is not interior**: where `κ` cuts a class from the faulted function at the empty pattern,
+each pattern of the class but the empty one is outside `κ.Interior`, so `TheftFaulted` charges it `κ`'s hint and takes
+no `FaultedUseHard` there. With `cuts_tokenGate`, `cuts_oneToken` and `cuts_release` at `C = (Cf · φ₀)`, these are the
+position-local blocks, the faults of a one-token request, and the reach. -/
+theorem not_interior_of_cuts (κ : Cut X Y) {Cf : Θ → X × F → Y} {size : F → ℕ} {inClass : F → Prop} {φ₀ φ : F}
+    (hcut : κ.Cuts (fun θ x => Cf θ (x, φ₀)) Cf size inClass) (hφ : inClass φ) (hne : φ ≠ φ₀) :
+    ¬ κ.Interior Cf size φ₀ φ := by
+  rintro (h | h)
+  · exact hne h
+  · refine h fun θ x φ' hφ' => ?_
+    subst hφ'
+    exact hcut θ x _ hφ
 
 /-- Two decoders that pick the same token at each position `n < N` from the first's tokens before it decode the same
 `N` tokens. -/
