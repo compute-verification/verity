@@ -242,9 +242,7 @@ The time credit adds the data sheet's rates.
 fresh bits per gate, anything outside the registered information θ (`Nci.CompliesRate Γ α_f`); and θ is registered
 information. On a Boolean circuit such a partition is a (c, k)-partition with c = Γ and k = ⌊α_f·Γ⌋
 (`Verity.Partition.IsCK`), the hypothesis part 6's local bounds take. With gates up to W bits wide, the bit-level
-expansion meets it at Γ·W gates and k = ⌊α_f·Γ·W⌋. `DampenerRemote` and `DampenerRemotePeriod` take the count's
-verdict instead, `Nci.CompliesAtMost c k n` of each day's declaration d (at most n proof blocks of a (c, k)-partition),
-which `NciCheck.Properties.DescCountsCK` states a published `complies` of the count gives (stated, not yet proved).
+expansion meets it at Γ·W gates and k = ⌊α_f·Γ·W⌋. `DampenerThreaded` takes `Nci.CompliesRate Γ α_f` of d.
 
 **How it is checked.**
 
@@ -289,10 +287,9 @@ part 6's premises say why that shape trains little.
    its structure depends on. Sampled proofs bound the incorrect proof blocks and the advice's length is public, but no
    statement bounds either per inference block yet: **open**.
 6. *The displayed bound reading the result instead of assuming `CompliesRate`:* **open** (part 6).
-7. *The count's verdict ⇒ the day's bound:* `Nci.Cut.Guarantees.CountHE`, **proved** under (H) and (E): a declaration
-   that complies with `Nci.CompliesAtMost c k n` does N ≤ n·(k + α) + (k/2)·√(n·O/(β_w·β_x)) MACs, its only premise on
-   the circuit the verdict. A published `complies` gives the verdict once `NciCheck.Properties.DescCountsCK` is proved
-   (**open**), and the bridge from the deployment's days to the declarations the count checked is **open**.
+7. *The count's verdict `Nci.CompliesAtMost c k n` ⇒ the day's bound:* `Nci.Cut.Guarantees.CountHE`, **proved** under
+   (H) and (E), the verdict its only premise on the circuit; `NciCheck.Properties.DescCountsCK`, from a published
+   `complies` to the verdict, and the tie of the deployment's days to the declarations the count checked are **open**.
 
 ### 5. The monitoring period
 
@@ -396,12 +393,12 @@ Sampled proofs' accept rule and theorems, the Lean slowdown bounds, and the comp
 | A Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ incorrect proof blocks outside what the sample catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/ScopeGate.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
 | Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
 | The overhead over remote, per period | `Nci.Guarantees.DampenerRemote` (`Security/Definitions/Nci/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
-| The overhead over a monitoring period | `Nci.Guarantees.DampenerRemotePeriod` (`Security/Definitions/Nci/Guarantees/RemotePeriod.lean`; proof `Nci.SecurityProofs.DampenerRemotePeriod` in `Security/Proofs/Nci/RemotePeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the sample missing `m` incorrect proof blocks with probability at most `(1 − q)^m` and a sampled incorrect proof block undetected with probability at most `ks t`, and each declared day's count verdict (`Nci.CompliesAtMost c k n_i`) with (H) and (E) on its work, its bound pooled over the period's days | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
+| The overhead over a monitoring period | `Nci.Guarantees.DampenerRemotePeriod` (`Security/Definitions/Nci/Guarantees/RemotePeriod.lean`; proof `Nci.SecurityProofs.DampenerRemotePeriod` in `Security/Proofs/Nci/RemotePeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the sample missing `m` incorrect proof blocks with probability at most `(1 − q)^m` and a sampled incorrect proof block undetected with probability at most `ks t`, and each day's count verdict with (H) and (E), pooled over the days | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
 | The composed soundness of remote | `Verity.Soundness`: not yet in Lean, and `lean-audit.json` here lists no guarantee (the open gap, above) | **open** | — |
 
 `DampenerRemote` is the slowdown bound ρ = max(1, 1/(s + x/MFU₀)) (`Nci.Dampener.remoteDampener`; MFU₀ divides only
 x), not the bound displayed above: arithmetic over inline hypotheses (`Nci.Assumptions.PouwSound` among them), with
-the declared computation bounded by its count verdict through the min-cut theorem (`Nci.Cut.Guarantees.CountHE`).
+the declared work bounded by `CountHE`.
 
 ### 7. What is completeness, not security
 
@@ -512,11 +509,8 @@ The slowdown, `DampenerRemote`:
     whatever came before.
   - `Nci.Assumptions.TerminalDetection`: a detected cheat ends its identity and takes its hardware out of use within Δ.
 - (H) and (E), `Nci.Cut.Assumptions.Hardness` and `Exports` (`Security/Definitions/Assumptions.lean`), on the declared
-  day's work: words behind a cut of κ gates carry at most κ in values, and every set of computed gates exports through
-  a cut of at least b per output it finishes.
-- `Nci.CompliesAtMost c k n` (`Security/Definitions/Nci.lean`), the count's verdict: at most n proof blocks of a
-  (c, k)-partition of the declaration. `DampenerRemote` takes it as a hypothesis; part 4's link 7 is what discharges it
-  once `DescCountsCK` is proved.
+  work, and the count's verdict `Nci.CompliesAtMost c k n` (`Security/Definitions/Nci.lean`), a hypothesis until
+  `DescCountsCK` is proved (part 4, link 7).
 
 The local bounds (part 6):
 
