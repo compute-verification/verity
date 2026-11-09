@@ -10,10 +10,10 @@ already released appended to its prompt, and that many fewer tokens left.
 requests in the order of those cells (by bucket, then as the ingress record holds them). For a request released
 before b, its response's
 
-- e is the number of its id cells in egress buckets before b. A cell counts by the bucket the certifier scheduled and
-  recorded it in, never by when its bytes reached the certifier or the client, nor by what the server had computed by
-  then: a cell the certifier still holds at b is in a later bucket and doesn't count, and one in a bucket before b
-  counts whatever became of it afterwards;
+- e is the number of its id cells in egress buckets before b. A cell counts by the slot the schedule releases it in,
+  which is the bucket the egress record holds it in: never by when its bytes reached the certifier, by when or whether
+  the client read them, nor by what the server had computed by then (an id the server has sent whose slot is at or
+  after b doesn't count);
 - it is *finished* before b when an end cell of its (the network certifier's `END` or `FAIL`) is in a bucket before
   b, when those e ids hold one of the deployment's end-of-sequence ids, or when e is its request's `max_tokens`;
 - it is *open* at b when it isn't finished before b.
