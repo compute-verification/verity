@@ -68,9 +68,14 @@ from pathlib import Path
 sys.path.insert(0, "benchmarks/serve_tax")
 import serve_tax as S
 c4, ck, out, n, p, o = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3]), *map(int, sys.argv[4:])
-rows = [d[:p] for d in S.load_docs(Path(c4), ck, 400) if len(d) >= p][:n]
+k = 400 if p <= 4096 else 400 + n * p // 100
+docs = S.load_docs(Path(c4), ck, k)
+rows = [d[:p] for d in docs if len(d) >= p][:n]
+if len(rows) < n and p > 4096:  # a long prompt: the shard's documents back to back
+    flat = [t for d in docs for t in d]
+    rows = [flat[i * p:(i + 1) * p] for i in range(n) if (i + 1) * p <= len(flat)]
 if len(rows) < n:
-    raise SystemExit(f"twostage-serve: {len(rows)} documents of the shard's first 400 hold {p} ids, not {n}")
+    raise SystemExit(f"twostage-serve: the shard's first {k} documents give {len(rows)} prompts of {p} ids, not {n}")
 gaps = random.Random("gap_draw/0")  # prod_plan's convention: a unit-rate gap per row, from a stream of its own
 out.write_text("".join(json.dumps({"i": i, "prompt_ids": r, "max_tokens": o, "gap_draw": gaps.expovariate(1.0),
                                    "sampling": {"temperature": 0.0, "ignore_eos": True}}, separators=(",", ":")) + "\n"
@@ -83,6 +88,17 @@ for r in plan:
     C.request_body("served", r, f"plan-{r['i']:05d}", "greedy")
 print(f"twostage-serve: plan of {n} requests, {p} prompt ids and {o} out each, in {out}")
 EOF
+
+# CANON=1: the canonical DSA top-k (`dsa_topk`'s vLLM plugin), which a row past 2,048 keys needs to pass the circuit's
+# top-k; rows of at most 2,048 keys are canonical without it. serve_tax's server_env keeps the caller's PYTHONPATH.
+if [ -n "${CANON:-}" ]; then
+  "$PY" benchmarks/dsa_topk/dsa_topk.py site "$PRIV/topk" > /dev/null \
+    && PYTHONPATH=$PRIV/topk "$PY" -c 'from importlib.metadata import entry_points; import dsa_topk
+assert any(e.name == "verity_dsa_topk" for e in entry_points(group="vllm.general_plugins"))' \
+    || { echo "twostage-serve: CANON=1 but dsa_topk's site doesn't import"; exit 2; }
+  export PYTHONPATH=$PRIV/topk${PYTHONPATH:+:$PYTHONPATH} VERITY_DSA_TOPK=canonical VERITY_DSA_TOPK_LOG=$PRIV/topk-log
+fi
+echo "twostage-serve: canonical top-k $([ "${VERITY_DSA_TOPK:-}" = canonical ] && echo on || echo off); max model len ${MAX_MODEL_LEN:-4096 (serve_tax default)}"
 
 C4=$C4 RESEARCH_RUN_DIR=$PRIV ARMS=boundary-rows MODEL_ID=glm53 RATES=burst=1000 REQUESTS=$N REPS=1 WINDOW_S=3600 \
   PLAN_FILE=$PRIV/plan-c.jsonl FLASHINFER=1 CUDA_HOME=$CUDA LDCONFIG=1 \
@@ -99,10 +115,20 @@ for c in "$B"/w*/p*-o*; do
 done
 python3 -c 'import json,sys; print("BOUNDARY-COMMITS complete:", (json.load(open(sys.argv[1])).get("boundary_commits") or {}).get("complete"))' \
   "$PRIV/out/boundary-rows/meta.json" 2>/dev/null || echo "BOUNDARY-COMMITS: no meta.json"
-stray=$(find "$OUT" -type f ! -path "$OUT/private.txt" ! -path "$OUT/boundary/*/commit.json" | wc -l)
+# Each boundary window's advice (a sent advice_c.py, on the CPU): its trace slice, requests.jsonl and `verity-vllm advice`
+# output stay in PRIV/advice/w<k>/, and OUT/advice/w<k>/registration.json carries only the binding the first stage's
+# --advice reads. The cut refuses a request outside its boundary window's steps; stdout gets only advice_c.py's own lines.
+if [ $rc = 0 ] && [ -f "$D/inputs/advice_c.py" ]; then
+  (umask 077; CUDA_VISIBLE_DEVICES= PYTHONPATH=$PWD/integrations/vllm:$PWD "$PY" "$D/inputs/advice_c.py" \
+    "$PRIV/out/boundary-rows" "$PRIV/advice" "$OUT" --controls > "$PRIV/advice.log" 2>&1); arc=$?
+  grep "^advice-c:" "$PRIV/advice.log" || true
+  echo "twostage-serve: advice exit $arc (its log: the private dir's advice.log)"
+fi
+keep=(! -path ./private.txt ! -path "./boundary/*/commit.json" ! -path "./advice/*/registration.json")
+stray=$(cd "$OUT" && find . -type f "${keep[@]}" | wc -l)
 if [ "$stray" -gt 0 ]; then
-  mkdir -p "$PRIV/stray" && (cd "$OUT" && find . -type f ! -path ./private.txt ! -path "./boundary/*/commit.json" -print0 \
-    | xargs -0 -r cp --parents -t "$PRIV/stray" && find . -type f ! -path ./private.txt ! -path "./boundary/*/commit.json" -delete)
+  mkdir -p "$PRIV/stray" && (cd "$OUT" && find . -type f "${keep[@]}" -print0 \
+    | xargs -0 -r cp --parents -t "$PRIV/stray" && find . -type f "${keep[@]}" -delete)
   echo "twostage-serve: moved $stray other file(s) from OUT to the private dir's stray/"
 fi
 exit $rc

@@ -14,7 +14,8 @@
 #     [--env END_UTC=ISO [--env NEED_MIN=45]] [--env AFTER=RUN] [--env LOAD=burst] \
 #     -- bash -c 'bash $RESEARCH_RUN_DIR/inputs/twostage_b.sh'
 # A rehearsal with no first stage sends no stage1.json and gives --env UNITS=0,1: the sample is those spans of (c)'s one
-# class (its commit.json in the private dir), not the challenger's coins, and summary.json says so ("sample").
+# class (its commit.json in the private dir), not the challenger's coins, and summary.json says so ("sample"). Where (c)
+# committed several classes (a warm-up window w0 and the burst w1), --env CLASS=w1/p256-o256 names the one.
 # Everything prover-only stays on the node, in the private dir PRIV=REPLAY_ROOT/RUN (default
 # /workspace/research/vllm-twostage-int, outside the run dir, 0700, kept KEEP long by `research keep`), which
 # OUT/private.txt names: the sampled units' engine ids, the replay (its capture: the spans' logits rows and ids; its
@@ -111,17 +112,20 @@ export PYTHONPATH=$PWD:$PWD/integrations/vllm${PYTHONPATH:+:$PYTHONPATH}
   > "$PRIV/keep.log" 2>&1 || echo "twostage-b: research keep refused (the private dir's keep.log); replaying anyway"
 echo "twostage-b: from $(date -u +%T), tree $(git rev-parse --short HEAD 2>/dev/null || echo shipped), (c) $RUN_C"
 
-"$PY" - "$I/stage1.json" "$ARM/server/boundary" "$PRIV/units.json" "${UNITS:-}" > "$PRIV/inputs.log" 2>&1 <<'EOF'
+"$PY" - "$I/stage1.json" "$ARM/server/boundary" "$PRIV/units.json" "${UNITS:-}" "${CLASS:-}" > "$PRIV/inputs.log" 2>&1 <<'EOF'
 import json, sys
 from pathlib import Path
 from verity_vllm.pipeline import boundary_rows as BR
-root, out, rehearsal = Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4]
+root, out, rehearsal, named = Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4], sys.argv[5]
 if Path(sys.argv[1]).exists():
     s1, sample = json.loads(Path(sys.argv[1]).read_text()), "stage1"
 else:
     classes = sorted(p for p in root.glob("w*/p*-o*") if (p / BR.COMMIT).exists())
+    if named:
+        classes = [p for p in classes if str(p.relative_to(root)) == named]
     if len(classes) != 1:
-        raise SystemExit(f"a rehearsal's UNITS name spans of one class; (c) committed {[str(p.relative_to(root)) for p in classes]}")
+        raise SystemExit(f"a rehearsal's UNITS name spans of one class (CLASS={named!r}); (c) committed "
+                         f"{sorted(str(p.relative_to(root)) for p in root.glob('w*/p*-o*') if (p / BR.COMMIT).exists())}")
     s1 = {"commit": json.loads((classes[0] / BR.COMMIT).read_text()), "units": [int(u) for u in rehearsal.split(",")]}
     sample = "rehearsal: UNITS, not the challenger's coins"
 if s1.get("error"):
@@ -152,7 +156,12 @@ open(sys.argv[2], "w").write("".join(f"unset {k}\n" if got.get(k, "unset") == "u
                                      for k in keys))
 EOF
 . "$PRIV/mirror.sh"
-echo "twostage-b: (c)'s engine environment: FLASHINFER=${FLASHINFER:-unset} CUDA_HOME=${CUDA_HOME:-unset}"
+# the canonical DSA top-k as (c) served it (twostage_serve.sh's CANON=1 leaves its site at PRIV_C/topk), or CANON=1
+if [ -n "${CANON:-}" ] || [ -d "$PRIV_C/topk" ]; then
+  "$PY" benchmarks/dsa_topk/dsa_topk.py site "$PRIV/topk" > /dev/null || { echo "twostage-b: no dsa_topk site"; finish 2; }
+  export PYTHONPATH=$PRIV/topk${PYTHONPATH:+:$PYTHONPATH} VERITY_DSA_TOPK=canonical VERITY_DSA_TOPK_LOG=$PRIV/topk-log
+fi
+echo "twostage-b: (c)'s engine environment: FLASHINFER=${FLASHINFER:-unset} CUDA_HOME=${CUDA_HOME:-unset}; canonical top-k $([ "${VERITY_DSA_TOPK:-}" = canonical ] && echo on || echo off)"
 echo "twostage-b: replay of $LOAD from $(date -u +%T)"
 RESEARCH_RUN_DIR=$PRIV MODEL_ID=glm53 REPLAY=$LOAD REPLAY_FROM=$ARM REPLAY_MODES=compiled REPLAY_CAPTURE=$rids \
   LDCONFIG=${LDCONFIG:-1} GPU_LEASE_WHO=twostage-b bash benchmarks/serve_tax/run.sh > "$PRIV/replay.log" 2>&1

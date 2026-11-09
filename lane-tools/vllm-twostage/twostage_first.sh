@@ -14,6 +14,9 @@
 # sent, the class is the served one (its check and directory from commit.json) and interior.json, [[name, schema], ...],
 # is the replay side's interior values; without it, make_standin.py's stand-in of class G at V=128 on a fresh run root.
 # [REPLAY=rate:1/2] [K=1] [GATE=research@204.12.178.84] [SSH_KEY=~/.ssh/vllm_lane_ed25519]
+# CHALLENGER=local: a local session instead of the gate's (sampled-proofs-verifier built first, OUT/lake.log). A sent
+# advice.json (the window's published advice registration, its binding only) goes as --advice, and ADVICE-BOUND says
+# whether every binding stage1.json names is that one.
 set -euo pipefail
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out; I=$D/inputs; mkdir -p "$OUT"
 PEER=${PEER:?set PEER, this node's name in the gate's /etc/vy/peers} GATE=${GATE:-research@204.12.178.84}
@@ -31,12 +34,39 @@ else
   echo '[["x","hm96-sha512/row/v2"],["out","hm96-sha512/row/v2"]]' > "$OUT/interior.json"
 fi
 check=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["check"])' "$class/commit.json")
-echo "FIRST: $(date -u +%T) class=$class check=$check replay=$REPLAY k=$K peer=$PEER"
+CH=${CHALLENGER:-gate:$GATE}; adv=()
+[ -f "$I/advice.json" ] && adv=(--advice "$I/advice.json")
+if [ "$CH" = local ]; then
+  echo "FIRST: building sampled-proofs-verifier from $(date -u +%T)"
+  (cd verity/core/service/spot && lake build sampled-proofs-verifier) > "$OUT/lake.log" 2>&1 \
+    || { echo "twostage-first: sampled-proofs-verifier doesn't build (out/lake.log)"; tail -n 5 "$OUT/lake.log"; exit 1; }
+fi
+echo "FIRST: $(date -u +%T) class=$class check=$check replay=$REPLAY k=$K challenger=$CH advice=${adv[1]:+yes}"
 $PY benchmarks/one_stage/two_stage.py first --boundary "$class" --check "$check" --replay "$REPLAY" --k "$K" \
-  --interior "$OUT/interior.json" --challenger "gate:$GATE" --peer "$PEER" \
+  --interior "$OUT/interior.json" --challenger "$CH" --peer "$PEER" \
   --challenger-key benchmarks/pouw/tests/fixtures/challenger-key.json --ssh-key "$KEY" --main "$I/main.txt" \
-  --out "$OUT/stage1"
+  "${adv[@]}" --out "$OUT/stage1"
 echo "FIRST-DONE: $(date -u +%T)"
-rc=0; $PY "$I/check_stage1.py" "$OUT/stage1/$(basename "$class")/stage1.json" > "$OUT/check.txt" 2>&1 || rc=$?
+s1=$OUT/stage1/$(basename "$class")/stage1.json
+rc=0; $PY "$I/check_stage1.py" "$s1" > "$OUT/check.txt" 2>&1 || rc=$?
 tail -n 3 "$OUT/check.txt"
+if [ -f "$I/advice.json" ]; then
+  python3 - "$I/advice.json" "$s1" <<'EOF' || rc=1
+import json, sys
+want = json.load(open(sys.argv[1]))["binding"]
+def found(x):
+    if isinstance(x, dict):
+        if "binding" in x:
+            yield x["binding"]
+        for v in x.values():
+            yield from found(v)
+    elif isinstance(x, list):
+        for v in x:
+            yield from found(v)
+got = list(found(json.load(open(sys.argv[2]))))
+ok = bool(got) and all(g == want for g in got)
+print(f"ADVICE-BOUND: {'yes' if ok else 'NO'}, every binding stage1.json names is the published registration's ({len(got)} named)")
+sys.exit(0 if ok else 1)
+EOF
+fi
 exit $rc
