@@ -703,6 +703,35 @@ def test_the_run_beside_each_check_starts_once_a_candidate_its_record_is_kept_an
     assert started_again.tick() == [] and len(slim.started) == 2
 
 
+def test_a_candidate_older_than_the_log_s_window_keeps_its_tries_first_enqueue_results_set_aside_and_run_beside(env):
+    env.put(1, {"a.txt": "1\n"})
+    slim, seen = Slim(), []
+    loop = env.loop(lambda s: seen.append(s) or vqueue.decide(s), slim=slim, pending_s=100 * 3600)
+    loop.world.slim_driver = lambda dry_run=False: "drive"
+    built, _ = loop.tick()
+    keys = env.listed(sha := built["sha"], {"pytest:a": ["a.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", "error", infra=True)
+    (retry,) = loop.tick()
+    assert (retry["action"], retry["counts"], retry["priority"]) == ("retry", {keys["pytest:a"]: 1}, built["priority"])
+    env.clock += 49 * 3600                                          # its build, its run beside and its retry: past the window
+    assert loop.tick() == [] and len(slim.started) == 1
+    c = seen[-1].candidates[0]
+    assert (c.sha, c.verdict.state, c.tries, c.enqueued) == (sha, PENDING, 2, T0)
+
+
+def test_a_check_rung_for_staying_pending_is_rung_once_still_when_its_ring_is_older_than_the_log_s_window(env):
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(vqueue.decide, pending_s=3600)
+    loop.tick()
+    env.clock += 3601
+    (retry,) = loop.tick()
+    env.clock += 3600
+    (ring,) = loop.tick()
+    assert (retry["action"], ring["action"], len(env.posts)) == ("retry", "ring", 1)
+    env.clock += 49 * 3600
+    assert loop.tick() == [] and len(env.posts) == 1
+
+
 def test_a_fail_whose_every_failure_is_inherited_lands_once_the_run_beside_it_passed_under_slim_s_own_combine(env):
     from research import vqueue_slim
 

@@ -15,20 +15,20 @@ rule (drive.toml's `lowrisk_lane` and `lowrisk_excludes` at `main`), not on `mai
 mark time, each after the ready PRs it contains; `files` is its change against its merge base with `main`, `lean` drive's
 Lean-change test (`queue.lean_change`), and `conflict` whether `Queue._merge` merges it onto `main`, kept by (head, `main`).
 `candidates` are the loop's own builds: each of origin's `queue/<sha12>` branches at the sha a build line of the log names
-(the window's, else the whole log's), with that line's base and members, lowest first; any other `queue/*` branch is no
-candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s` the command's (`--lean`,
-`--pending-hours`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`), each key's from the
-first a retry or a rerun didn't set aside, on the merge gate's tasks, those drive's `executor = "on"` path gates on (none
-`"gate": false`, of `drive.SLIM_STEPS` or off the gate in policy.toml at the candidate): a failed or blocked task is fail,
-each failed task with its inputs (its own, its env's spec files and those of each task it reads), its failing tests
-(result/v1's `failed_tests`) and its key and failing tests in its base's graph as graph2 listed it, where there are
+(the window's, else the whole log's, which its other lines are then read from too), with that line's base and members, lowest
+first; any other `queue/*` branch is no candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s`
+the command's (`--lean`, `--pending-hours`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`),
+each key's from the first a retry or a rerun didn't set aside, on the merge gate's tasks, those drive's `executor = "on"` path
+gates on (none `"gate": false`, of `drive.SLIM_STEPS` or off the gate in policy.toml at the candidate): a failed or blocked
+task is fail, each failed task with its inputs (its own, its env's spec files and those of each task it reads), its failing
+tests (result/v1's `failed_tests`) and its key and failing tests in its base's graph as graph2 listed it, where there are
 (`Failed.base_key`, `Failed.base_tests`), ended once no gating task runs but behind an infra error; else a task whose newest
 result is graph2's infra error (`detail.infra`; graph2's `tree` where `Failed` has one) is infra, else every gating task
 passed is pass, else pending.  No graph while graph2 says its listing failed (`verdict`, else its `ready_verdict` label), a
 graph that can't be read, or no graph of a candidate the log never enqueued is list-failed.  graph2's own verdict, where it
 has one, is compared and a disagreement logged.  With ``slim`` (`research.vqueue_slim`), the run beside the check of what
-graph2 doesn't check is started once a candidate, judged each tick, its record logged whenever it changes, and combined
-with the check's verdict: a candidate passes only when both pass.
+graph2 doesn't check is started once a candidate, judged each tick, its record logged whenever it changes, and combined with
+the check's verdict: a candidate passes only when both pass.
 
 The actions.  Build merges its members in order onto its base (`Queue._merge`), leaving out one that doesn't merge (`skip`, its
 owner told once per head and base), pushes `queue/<sha12>`, logs it, enqueues `ready:<sha>` as graph/v2 at its priority and
@@ -749,8 +749,9 @@ def _infra(docs: Iterable[object], key: str) -> bool:
 
 @dataclass
 class Tick:
-    """What one tick saw: its snapshot and what each action needs that the snapshot doesn't hold: ``foreign``, origin's
-    `queue/*` branches no build of the loop's made ({name: sha}), which are no candidates."""
+    """What one tick saw: its snapshot and what each action needs that the snapshot doesn't hold: ``past``, the log's window,
+    or the whole log while a candidate's build is older than the window, so its once-only rules read all of its lines;
+    ``foreign``, origin's `queue/*` branches no build of the loop's made ({name: sha}), which are no candidates."""
     n: int
     main: str
     origin: str
@@ -791,25 +792,26 @@ class Loop:
             if at is not None and not (w.labels.marked_at(x.number, x.head) or "") > at:
                 continue
             ready.append(x)
-        refs, builds = w.refs(), past.builds()
+        refs, builds, whole = w.refs(), past.builds(), past
         if older := {sha for name, sha in refs.items() if name == sha[:12] and sha not in builds
                      and (name, sha) not in past.ignored()}:                # past the window: read the whole log for them
-            builds |= {sha: r for sha, r in Past.read(self.log_path, 0).builds().items() if sha in older}
+            whole = Past.read(self.log_path, 0)
+            builds |= {sha: r for sha, r in whole.builds().items() if sha in older}
         mine = {sha for name, sha in refs.items() if name == sha[:12] and sha in builds}
         foreign = {name: sha for name, sha in refs.items() if sha not in mine or name != sha[:12]}
         cands, judged, wrote = [], {}, []
         for sha in sorted(mine):
-            b = builds[sha]
+            p, b = whole if sha in older else past, builds[sha]
             base, prs, heads = b.get("base") or "", tuple(b.get("members") or ()), tuple(b.get("heads") or ())
-            j = w.verdict(sha, base, past.since(sha), past.since(base))
-            if not j.listed and not past.tries(sha):        # pushed, and its enqueue failed or never ran
+            j = w.verdict(sha, base, p.since(sha), p.since(base))
+            if not j.listed and not p.tries(sha):           # pushed, and its enqueue failed or never ran
                 j = Judged(Verdict(LIST_FAILED), mark="not enqueued", note="the log holds no enqueue of it", graph2=j.graph2,
                            listed=False, theirs=j.theirs)
             if self.slim is not None and not w._ancestor(sha, main):
-                j = self._beside(past, n, main, origin, sha, base, prs, heads, j, wrote)
+                j = self._beside(p, n, main, origin, sha, base, prs, heads, j, wrote)
             judged[sha] = j
-            cands.append(Candidate(sha, base, prs, heads, j.verdict, past.tries(sha), reruns=past.reruns(sha),
-                                   enqueued=past.enqueued(sha)))
+            cands.append(Candidate(sha, base, prs, heads, j.verdict, p.tries(sha), reruns=p.reruns(sha),
+                                   enqueued=p.enqueued(sha)))
         on = {c.sha: c.base for c in cands}
 
         def height(sha: str, seen: tuple[str, ...] = ()) -> int:
@@ -819,7 +821,7 @@ class Loop:
         history = past.history((lambda sha: bool(sha) and w._ancestor(sha, main)) if self.shadow else None)
         snap = Snapshot(main, tuple(sorted(ready, key=lambda x: x.rank)), tuple(cands), history, self.batch, self.depth,
                         lean=self.lean, now=self.now(), pending_s=self.pending_s)
-        return Tick(n, main, origin, snap, judged, past, past.told(), foreign, wrote)
+        return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote)
 
     def _shadow_main(self, past: Past, origin: str) -> str:
         """The shadow's `main`: the newest candidate it advanced (`SHADOW`, else its log's newest advance) while origin's `main`
