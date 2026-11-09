@@ -13,13 +13,15 @@ import all Lean.Data.Json.Basic
 # The entries the slots name, from round 2's checks
 
 `entriesAt_of`: `EntriesAt` holds where the header names each port's published root (`HeaderRootsAt`) and the
-ports a session reads are no deeper than the code's own (`DepthsAt`).
+ports a session reads are no deeper than the code's own (`DepthsAt`), which a code at least 64 levels deep has for
+the registered reads (`depthsAt_of`), leaving the published trees' (`RootedDepthsAt`).
 
 * **The registered half** (`registered_entry`): in an accepted run, the entry round 2 reads each of a session's
-  registered reads off (`readKeyAt`, under `readRoots`) has the read's root, leaf count and domain id. The verifier's
-  registered reads are its `ports` file's entries (`portsOf_entries`); round 2's statement check reads that file
-  (`stmtJsonOf`) and passes each entry (`SecondStage.readOk`), whose `sameAt` holds it to the entry it reads off
-  (`readOk_entry`), the one `readKey` names in the record `readsInterior` picks (`recKeyAt_port`, `recKeyAt_reg`).
+  registered reads off (`readKeyAt`, under `readRoots`) has the read's root, leaf count and domain id, of at most
+  `2^64` leaves. The verifier's registered reads are its `ports` file's entries (`portsOf_entries`); round 2's
+  statement check reads that file (`stmtJsonOf`) and passes each entry (`SecondStage.readOk`), whose `sameAt` holds it
+  to the entry it reads off, and to `MAX_LEAVES` (`readOk_entry`), the one `readKey` names in the record
+  `readsInterior` picks (`recKeyAt_port`, `recKeyAt_reg`).
 * **The roots half** (`interior_entry`): template `t`'s port of the interior record at a port no registered read is
   named like has the port's published root and domain id. Round 2's `rootsOk` holds the record's entry to the
   header's (`rootsOk_entry`), and the header's is the published tree's (`HeaderRootsAt`).
@@ -128,19 +130,22 @@ theorem recKeyAt_reg (rec : Json) (v : String) :
 
 /-! ## What `readOk` holds an entry to -/
 
-/-- **An entry `sameAt` holds a registered read to** has the read's root, leaf count and domain id. -/
+/-- **An entry `sameAt` holds a registered read to** has the read's root, leaf count and domain id, and the read has at
+most `MAX_LEAVES` leaves. -/
 theorem entryOf_sameAt {k : UInt8} {nm : String} {e x : Json} {rs ds : String} {r d : ByteArray} {n : ℕ}
     (hs : Spot.SecondStage.sameAt e x = true) (hr : Spot.getD e "root" = .str rs) (hru : _root_.Flock.unhex rs = .ok r)
     (hd : Spot.getD e "domain" = .str ds) (hdu : _root_.Flock.unhex ds = .ok d)
     (hl : Spot.getD e "leaves" = .num ⟨Int.ofNat n, 0⟩) :
-    bytes (entryOf (k, nm, x)).root = r ∧ (entryOf (k, nm, x)).leaves = n ∧ bytes (entryOf (k, nm, x)).domain = d := by
+    bytes (entryOf (k, nm, x)).root = r ∧ (entryOf (k, nm, x)).leaves = n ∧ bytes (entryOf (k, nm, x)).domain = d ∧
+      n ≤ Spot.SecondStage.MAX_LEAVES := by
   unfold Spot.SecondStage.sameAt at hs
   simp only [Bool.and_eq_true] at hs
-  obtain ⟨⟨⟨h1, h2⟩, h3⟩, -⟩ := hs
+  obtain ⟨⟨⟨h1, h2⟩, h3⟩, h4⟩ := hs
+  unfold Spot.SecondStage.leavesOk at h4
   rw [hr] at h1
   rw [hd] at h2
-  rw [hl] at h3
-  refine ⟨?_, ?_, ?_⟩
+  rw [hl] at h3 h4
+  refine ⟨?_, ?_, ?_, by simpa [Spot.nat?, Spot.int?] using h4⟩
   · show bytes (hexMsg (Spot.getD x "root")) = r
     rw [← hexMsg_of_jeq h1]
     exact hexMsg_str hru
@@ -152,7 +157,7 @@ theorem entryOf_sameAt {k : UInt8} {nm : String} {e x : Json} {rs ds : String} {
 
 /-- **A read `readOk` passes has its fields at the entry `readKey` names** in the record `readsInterior` picks: the
 boundary port a link names, template `t`'s port of the interior record, or the registered value either record
-registers, each of which `sameAt` holds to the read's root, domain and leaves. -/
+registers, each of which `sameAt` holds to the read's root, domain and leaves, of at most `MAX_LEAVES`. -/
 theorem readOk_entry {own : Spot.SecondStage.Own} {p : Spot.SecondStage.Part} {port v rs ds : String} {e : Json}
     {r d : ByteArray} {n : ℕ}
     (hok : Spot.SecondStage.readOk own (Spot.SecondStage.byTemplate own.interior) p port e = true)
@@ -160,10 +165,11 @@ theorem readOk_entry {own : Spot.SecondStage.Own} {p : Spot.SecondStage.Part} {p
     (hd : Spot.getD e "domain" = .str ds) (hdu : _root_.Flock.unhex ds = .ok d)
     (hl : Spot.getD e "leaves" = .num ⟨Int.ofNat n, 0⟩) :
     ∃ y, recKeyAt (if readsInterior own p.template port v then own.interior else own.boundary)
-        (readKey own p.template port v) = some y ∧ bytes y.root = r ∧ y.leaves = n ∧ bytes y.domain = d := by
+        (readKey own p.template port v) = some y ∧ bytes y.root = r ∧ y.leaves = n ∧ bytes y.domain = d ∧
+      n ≤ Spot.SecondStage.MAX_LEAVES := by
   have hs : ∀ {k : UInt8} {nm : String} {x : Json}, Spot.SecondStage.sameAt e x = true →
       bytes (entryOf (k, nm, x)).root = r ∧ (entryOf (k, nm, x)).leaves = n ∧
-        bytes (entryOf (k, nm, x)).domain = d :=
+        bytes (entryOf (k, nm, x)).domain = d ∧ n ≤ Spot.SecondStage.MAX_LEAVES :=
     fun hsx => entryOf_sameAt hsx hr hru hd hdu hl
   unfold Spot.SecondStage.readOk at hok
   rw [hv] at hok
@@ -493,7 +499,8 @@ theorem keyAt_readRoots {x m₁ : Msg} {c₀ c₁ : FlockDeploy.Coin} {st : Root
   · exact keyAt_irootsOf hrec ρ _
 
 /-- **`EntriesAt`'s registered half**: in an accepted run, the entry round 2 reads each of a checked unit's session's
-registered reads off, under the roots it reads it under, has the read's root, leaf count and domain id. -/
+registered reads off, under the roots it reads it under, has the read's root, leaf count and domain id, and the read
+has at most `MAX_LEAVES` leaves. -/
 theorem registered_entry {x m₁ m₂ : Msg} {s} {c₀ c₁ : FlockDeploy.Coin} {u ρ : ℕ} {ins : FlockDeploy.Ins}
     {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hx : parse h x = some s) (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
@@ -503,7 +510,8 @@ theorem registered_entry {x m₁ m₂ : Msg} {s} {c₀ c₁ : FlockDeploy.Coin} 
     (hown : ins.registered = some own) (hreg : reg ∈ own) :
     ∃ e, keyAt (readRoots h x m₁ c₀ c₁ ρ (templateOf h.ms u) reg.name reg.value)
         (readKeyAt h x m₁ c₀ c₁ (templateOf h.ms u) reg.name reg.value) = some e ∧
-      bytes e.root = reg.root ∧ e.leaves = reg.leaves ∧ bytes e.domain = reg.domain := by
+      bytes e.root = reg.root ∧ e.leaves = reg.leaves ∧ bytes e.domain = reg.domain ∧
+      reg.leaves ≤ Spot.SecondStage.MAX_LEAVES := by
   have hat := stmtOkAt_unit h hx hok hu
   unfold stmtOkAt at hat
   rw [hx] at hat
@@ -524,9 +532,9 @@ theorem registered_entry {x m₁ m₂ : Msg} {s} {c₀ c₁ : FlockDeploy.Coin} 
   have hrd : Spot.SecondStage.readOk (ownOf h st rec draw c₀) (Spot.SecondStage.byTemplate rec)
       (partAt h (ownOf h st rec draw c₀).sample.size (templateOf h.ms u)) reg.name ej = true :=
     Array.all_eq_true_iff_forall_mem.1 hreads _ hm
-  obtain ⟨y, hy, hyr, hyl, hyd⟩ :=
+  obtain ⟨y, hy, hyr, hyl, hyd, hyb⟩ :=
     readOk_entry hrd (getD_of_ok hv) (getD_of_ok hr) hru (getD_of_ok hd) hdu (getD_of_ok hl)
-  refine ⟨y, ?_, hyr, hyl, hyd⟩
+  refine ⟨y, ?_, hyr, hyl, hyd, hyb⟩
   rw [keyAt_readRoots h hst hrec hdraw]
   exact hy
 
@@ -593,13 +601,42 @@ def DepthsAt (c : Code) : Prop :=
       _root_.Flock.HmOut.loadPublic ins.read.tags sts[j].c ins.read.I.publicFile = .ok pop →
       _root_.Flock.log2ceil (pubPort sts[j].c pop q).leaves ≤ depth c.own)
 
+/-- **The published trees a checked unit's one-table session reads are no deeper than `c`'s own**: each port's over
+any population its public file loads. -/
+def RootedDepthsAt (c : Code) : Prop :=
+  ∀ x s (m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) wF u ins spec sts,
+    parse h x = some s → stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
+    Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (unitStmt h m₂ u) wF = true →
+    FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts) →
+    ∀ j (hj : j < sts.size) q pop, ins.read.I.count ≤ 1 → q < sts[j].c.ports.size →
+      _root_.Flock.HmOut.loadPublic ins.read.tags sts[j].c ins.read.I.publicFile = .ok pop →
+      _root_.Flock.log2ceil (pubPort sts[j].c pop q).leaves ≤ depth c.own
+
+/-- A tree of at most `MAX_LEAVES` leaves is at most 64 levels deep. -/
+theorem log2ceil_le_64 {n : ℕ} (hn : n ≤ Spot.SecondStage.MAX_LEAVES) : _root_.Flock.log2ceil n ≤ 64 := by
+  unfold _root_.Flock.log2ceil
+  split
+  · omega
+  · rename_i h1
+    have h2 : n - 1 < 2 ^ 64 := Nat.lt_of_lt_of_le (Nat.sub_lt (by omega) Nat.one_pos) hn
+    have h3 : Nat.log2 (n - 1) < 64 := (Nat.log2_lt (by omega)).2 h2
+    omega
+
+/-- **`DepthsAt` at a code at least 64 levels deep**: round 2 holds each registered read to at most `MAX_LEAVES`
+leaves (`registered_entry`), and the published trees' depths are `RootedDepthsAt`. -/
+theorem depthsAt_of {c : Code} (h64 : 64 ≤ depth c.own) (hP : RootedDepthsAt h c) : DepthsAt h c := by
+  intro x s m₁ m₂ c₀ c₁ wF u ins spec sts hx hok hu hck hset
+  refine ⟨fun own reg hown hreg => ?_, hP x s m₁ m₂ c₀ c₁ wF u ins spec sts hx hok hu hck hset⟩
+  obtain ⟨-, -, -, -, -, hb⟩ := registered_entry h (ρ := 0) hx hok hu hset hown hreg
+  exact (log2ceil_le_64 hb).trans h64
+
 /-- **`EntriesAt` from the header's published roots and the ports' depths**: its registered half is
 `registered_entry` and its roots half `interior_entry`. -/
 theorem entriesAt_of {c : Code} (hR : HeaderRootsAt) (hD : DepthsAt h c) : EntriesAt h c := by
   intro x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF u b ρ rb ins spec sts hx hP h2 hin hok hu hck hb hρ hrb hset
   obtain ⟨hDr, hDp⟩ := hD x s m₁ m₂ c₀ c₁ wF u ins spec sts hx hok hu hck hset
   refine ⟨fun own reg hown hreg => ?_, fun j hj q pop hc1 hq hnr hpop => ?_⟩
-  · obtain ⟨e, he, hr, hl, hdm⟩ := registered_entry h (ρ := ρ) hx hok hu hset hown hreg
+  · obtain ⟨e, he, hr, hl, hdm, -⟩ := registered_entry h (ρ := ρ) hx hok hu hset hown hreg
     exact ⟨e, he, hr, hl, hdm, hDr own reg hown hreg⟩
   · obtain ⟨e, he, hr, hdm⟩ := interior_entry h hR (ρ := ρ) hx hok hu hset hj hc1 hq hnr hpop
     exact ⟨e, he, hr, hdm, hDp j hj q pop hc1 hq hpop⟩
