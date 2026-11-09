@@ -31,11 +31,12 @@ A type of `CENSUS` is a block type of the serving rows by its census name (`serv
 overhead card prices it under), one whole Definition a proof block, laid out as the served composer lays its template
 (`compose_circuit.py --template`): its served rows (`chunk_rows.unit_rows`, each parameter of seeded N(0, 1) bf16 words) and
 statement (`chunk_rows.statement`: the 64-key sparse MLA split part's MUFU reads in Flock's lookup slots, its unit cut into
-stage nets under the automatic caps, which keep it within the GPU prover's slot types; RMSNorm's inline), so the statement
-is the served one but for its name and binding. The circuit is streamed to circuit.txt once, every input's outputs checked
-against the Program's reference (``twin`` null).
+stage nets under the automatic caps, which keep it within the GPU prover's slot types; RMSNorm's inline) under its unit name,
+so the statement is the served one but for its binding: its ``class_sha512`` is the served composer's. The circuit is streamed
+to circuit.txt once, every input's outputs checked against the Program's reference (``twin`` null).
 
-Writes circuit.txt, inst.bin, pub.bin, pin.txt and stage.json under OUT, and a PARTS type's partition.json.
+Writes circuit.txt, inst.bin, pub.bin, pin.txt and stage.json under OUT, a PARTS type's partition.json, and beside a statement
+reading in slots the MUFU tables the prover reads (``tables/``, ``flock-circuit --tables``), as the served composer does.
 
 Types (GLM-5.3's statics from its config: hidden 6144, q_lora 2048, kv_lora 512, moe_intermediate 2048, 256 experts, top 8,
 FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 rank):
@@ -304,10 +305,12 @@ def stage_census(name: str, cen: Census, S: dict, tag: str, n: int, out: Path, t
     rows = {r: np.concatenate([vals[p] for p in ps], axis=1) for r, _s, _b, ps in in_rows}
     stmt = CR.statement(tp)
     t_draw = time.time() - t0
-    st = CS.UnitStager(d, f"unit/served-{tag}", in_rows, out_rows, circuit=out / "circuit.txt", **stmt)
+    st = CS.UnitStager(d, "unit/serving-rows", in_rows, out_rows, circuit=out / "circuit.txt", **stmt)
     t_built = time.time() - t0
     salt_key = hashlib.sha256(f"verity/served-units/salts\0{tag}".encode()).digest()
     got = st.stage(rows, out, salt_key)
+    if stmt.get("reads") == "slots":
+        FC.IL.write_tables(out / "tables")
     meta = got["meta"]
     return {"unit": name, "statics": S, "tag": tag, "n": n, "definition": d.id, "census": cen.name(S),
             "in_rows": [[r, s, b, ps] for r, s, b, ps in in_rows], "public_inputs": [], "packed": False, "ands": got["ands"],
@@ -352,6 +355,8 @@ def public_words(d, row: np.ndarray, params: tuple[str, ...], packed: bool = Fal
 def main() -> None:
     args = [a for a in sys.argv[1:] if a not in ("--public-weights", "--packed")]
     public, packed = "--public-weights" in sys.argv, "--packed" in sys.argv
+    if any(a.startswith("--") for a in args) or len(args) != 3:
+        raise SystemExit(f"stage.py: usage: stage.py UNIT N OUT [--public-weights [--packed]], not {sys.argv[1:]}")
     if packed and not public:
         raise SystemExit("stage.py: --packed lays out --public-weights' ports")
     spec, n, out = args[0], int(args[1]), Path(args[2])
