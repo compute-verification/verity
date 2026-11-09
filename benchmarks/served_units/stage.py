@@ -1,4 +1,4 @@
-"""stage.py UNIT N OUT [--public-weights [--packed]]: N inputs of one served proof-block type's Q_word proof block, from synthetic
+"""stage.py UNIT N OUT [--public-weights [--packed] | --read-slots]: N inputs of one served proof-block type's Q_word proof block, from synthetic
 values at the model's served statics, staged for Flock as a ``verity/flock-circuit`` statement with hidden outputs.
 
     UNIT  TYPE[:S=V,...]   a type of `UNITS`, `PARTS` or `CENSUS` at its statics (each type's defaults are its model's: GLM-5.3's
@@ -11,6 +11,10 @@ values at the model's served statics, staged for Flock as a ``verity/flock-circu
     --packed               with --public-weights, each port its parameter's leaves concatenated as the row lays them (the row's
                            own words; `UnitStager`'s ``packed``): a registered encoding read packed, so the unit's input words
                            are the opened block's.
+    --read-slots           a `CENSUS` type's pinned-table (MUFU) reads in Flock's lookup slots, its unit cut into stage nets
+                           inside the same proof block (`UnitStager`'s ``reads="slots"``, automatic ``stage_ands``), on the same
+                           values. Inline, each EX2 read puts about 1e8 entries in the unit's A, which takes the 64-key sparse
+                           MLA split part past the GPU prover's 32-bit offsets in one net (``GPU_NNZ_MAX``, checked per net).
 
 A type of `UNITS` is a Definition proved as one proof block, staged by `class_statement.stage_unit`: its Boolean Definition
 lowered once, its input rows hashed in the circuit (the per-call row on ``hm96-sha512/row-seg/v1``, the weight row on
@@ -274,8 +278,17 @@ def stage_part(name: str, part: Part, S: dict, tag: str, n: int, out: Path, t0: 
             "seconds": {"draw": round(t_draw, 1), "total": round(time.time() - t0, 1)}, "maxrss_gb": gb()}
 
 
-def stage_census(name: str, cen: Census, S: dict, tag: str, n: int, out: Path, t0: float) -> dict:
-    """``n`` inputs of the census type's Definition, a proof block each, as stage.json's record."""
+def nets(low) -> list[dict]:
+    """Each net's ANDs, rows and matrix entries a side: the unit's, then under read slots each tail stage's (the circuit's
+    ``unit``, ``stage0``, ...; a lookup slot's table counts its entries once per statement, in the prover)."""
+    stages = getattr(getattr(low, "tail", None), "stages", ())
+    lays = [("unit", low.layout), *((f"stage{i}", st.layout) for i, st in enumerate(stages))]
+    return [{"net": nm, **{k: int(lay.counts[k]) for k in ("ands", "rows", "nnz_a", "nnz_b")}} for nm, lay in lays]
+
+
+def stage_census(name: str, cen: Census, S: dict, tag: str, n: int, out: Path, t0: float, reads: str = "inline") -> dict:
+    """``n`` inputs of the census type's Definition, a proof block each, as stage.json's record; ``reads`` `UnitStager`'s
+    (the values are the same either way, drawn from the type's tag)."""
     from verity_vllm.pipeline.serving_rows import template
 
     d = template(cen.name(S)).fn
@@ -285,15 +298,18 @@ def stage_census(name: str, cen: Census, S: dict, tag: str, n: int, out: Path, t
     rng = np.random.default_rng(int.from_bytes(hashlib.sha256(f"verity/served-units/v1\0{tag}".encode()).digest()[:8], "little"))
     rows = {p: bf16(rng.standard_normal((n, ty.leaves))) for p, ty in params}
     t_draw = time.time() - t0
+    if reads == "slots":
+        tag += "-read-slots"
     in_rows = [(p, V2, 16 * ty.leaves, [p]) for p, ty in params]
     out_rows = [(V2, (j,)) for j in range(len(getattr(ret, "fields", None) or (ret,)))]
-    st = CS.UnitStager(d, f"unit/served-{tag}", in_rows, out_rows, circuit=out / "circuit.txt")
+    st = CS.UnitStager(d, f"unit/served-{tag}", in_rows, out_rows, circuit=out / "circuit.txt", reads=reads)
     t_built = time.time() - t0
     salt_key = hashlib.sha256(f"verity/served-units/salts\0{tag}".encode()).digest()
     got = st.stage(rows, out, salt_key)
     meta = got["meta"]
     return {"unit": name, "statics": S, "tag": tag, "n": n, "definition": d.id, "census": cen.name(S),
             "in_rows": [[r, s, b] for r, s, b, _ in in_rows], "public_inputs": [], "packed": False, "ands": got["ands"],
+            "reads": reads, "nets": nets(st.low), "lookups": meta.get("lookups"),
             "unit_nnz": got["unit_nnz"], "k_log": meta["k_log"], "unit_log": meta.get("unit_log"),
             "vus_per_block": meta.get("vus_per_block"), "row_schemas": meta.get("row_schemas"),
             "circuit_bytes": (out / "circuit.txt").stat().st_size, "circuit_sha512": st.pin, "class_sha512": st.class_sha512,
@@ -331,18 +347,21 @@ def public_words(d, row: np.ndarray, params: tuple[str, ...], packed: bool = Fal
 
 
 def main() -> None:
-    args = [a for a in sys.argv[1:] if a not in ("--public-weights", "--packed")]
-    public, packed = "--public-weights" in sys.argv, "--packed" in sys.argv
+    args = [a for a in sys.argv[1:] if a not in ("--public-weights", "--packed", "--read-slots")]
+    public, packed, slots = "--public-weights" in sys.argv, "--packed" in sys.argv, "--read-slots" in sys.argv
     if packed and not public:
         raise SystemExit("stage.py: --packed lays out --public-weights' ports")
     spec, n, out = args[0], int(args[1]), Path(args[2])
     t0 = time.time()
     name, u, S = parse(spec)
+    if slots and not isinstance(u, Census):
+        raise SystemExit(f"stage.py: --read-slots is for a type of CENSUS, not {name}")
     tag = f"{name}-" + "-".join(f"{k.lower()}{v}" for k, v in sorted(S.items()))
     if isinstance(u, (Part, Census)):
         if public:
             raise SystemExit(f"stage.py: --public-weights is for a type of UNITS, not {name}")
-        rec = (stage_part if isinstance(u, Part) else stage_census)(name, u, S, tag, n, out, t0)
+        rec = (stage_part(name, u, S, tag, n, out, t0) if isinstance(u, Part)
+               else stage_census(name, u, S, tag, n, out, t0, "slots" if slots else "inline"))
         (out / "pin.txt").write_text(rec["circuit_sha512"])
         (out / "stage.json").write_text(json.dumps(rec, indent=1))
         print(json.dumps(rec), flush=True)
