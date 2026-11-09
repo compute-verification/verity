@@ -49,7 +49,8 @@ class World:
     """Drive's old path, in git: `checked` lands 101, 102, 103, 104 and 106, then reverts 103 and regenerates the lock
     records; `main` holds up to 104.  The shadow's log: C1 = {101, 102} on M0 and C2 = {103} on C1 pass and advance; C3 =
     {104} fails and ejects 104, with a retry and a ring first; 105 never merges onto a build; C4 = {107} advances after the
-    old path ejected 107; C5 = {108} goes stale; C6 = {109} is still pending at the window's end."""
+    old path ejected 107; C5 = {108} goes stale; C6 = {109} is still pending at the window's end, as a drop of it that failed
+    doesn't end it."""
     tmp: Path
     repo: Path
     m0: str
@@ -69,7 +70,8 @@ class World:
 
 
 SKIP_105 = "doesn't merge onto c2: a.txt"
-NO_BUILD = "two candidates pending"
+NO_BUILD = "no member merges onto its base"
+PUSH_FAILED = "git push: connection reset"
 EJECT_104 = "pytest failed on c3"
 EJECTED_107 = "the train's check failed pytest"
 
@@ -115,9 +117,10 @@ def world(tmp_path, monkeypatch) -> World:
         decision("14:06", 2, "build", m0, sha=C2, base=C1, **members(103)),
         decision("14:07", 3, "build", m0, sha=C3, base=C2, **members(104)),
         decision("14:07", 3, "skip", m0, number=105, heads=[heads[105]], why=SKIP_105),
-        decision("14:20", 4, "retry", m0, sha=C3, why="graph2 lost its worker"),
+        decision("14:20", 4, "retry", m0, sha=C3, why="graph2 lost its worker", enqueued=True),
+        decision("14:21", 4, "retry", m0, sha=C3, why="its retry's results are pending", enqueued=False),
         decision("14:25", 5, "ring", m0, sha=C3, why="infra three times"),
-        decision("14:25", 5, "skip", m0, why=NO_BUILD),
+        decision("14:25", 5, "build", m0, base=C3, why=NO_BUILD),
         decision("14:30", 6, "advance", m0, sha=C1, base=m0, **members(101, 102)),
         decision("14:30", 6, "drop", m0, sha=C1, outcome=outcome("pass", 101, 102), why="passed"),
         decision("14:40", 7, "advance", C1, sha=C2),
@@ -131,7 +134,8 @@ def world(tmp_path, monkeypatch) -> World:
         decision("14:55", 10, "advance", C2, sha=C4, base=C2, **members(107)),
         decision("14:55", 10, "drop", C2, sha=C4, outcome=outcome("pass", 107), why="passed"),
         decision("15:00", 11, "build", C4, sha=C6, base=C4, **members(109)),
-        decision("16:30", 12, "advance", C4, sha=C6, base=C4, **members(109)),
+        decision("15:05", 12, "drop", C4, sha=C6, why="a second candidate on c4", error=PUSH_FAILED),
+        decision("16:30", 13, "advance", C4, sha=C6, base=C4, **members(109)),
     ]
     files = tmp_path / "in"
     files.mkdir()
@@ -157,8 +161,8 @@ def test_the_report_line_by_line(world, capsys):
     assert vc.main(w.argv("--main-moves", str(w.moves), "--old-reds", str(w.reds))) == 1
     text = capsys.readouterr().out
     lines = text.splitlines()
-    assert lines[0] == (f"vqueue compare {hm('14:00')} to {hm('16:00')}: 19 decision(s) in 11 tick(s) (3 advance, 6 build, "
-                        f"5 drop, 1 eject, 1 retry, 1 ring, 2 skip); 9 PR(s) seen")
+    assert lines[0] == (f"vqueue compare {hm('14:00')} to {hm('16:00')}: 21 decision(s) in 12 tick(s) (3 advance, 7 build, "
+                        f"6 drop, 1 eject, 2 retry, 1 ring, 1 skip); 9 PR(s) seen")
     assert re.split(r"\s{2,}", lines[1].strip()) == ["PR", "head", "marked", "first build", "shadow", "old path", "main"]
     assert table(text) == {
         "#101": ["#101", h[101][:12], hm("14:00"), hm("14:05"), f"advance {hm('14:30')} {C1[:12]}",
@@ -195,12 +199,13 @@ def test_the_report_line_by_line(world, capsys):
         f"  (d) {C1[:12]} passed {hm('14:30')} with #101 #102 on {w.m0[:12]}, and the old path's check of {q[102][:12]}, the "
         f"same PRs on it, was red: pytest",
     ]
-    assert rest[10:13] == [
+    assert rest[10:14] == [
         f"longest pending: 1.00 h, {C6[:12]} (#109) built {hm('15:00')}, still pending",
-        "builds dropped stale: 1; infra retries: 1; rings: 1",
+        "builds dropped stale: 1; infra retries: 1; rings: 1; failed actions: 1",
+        f"  drop {C6[:12]} {hm('15:05')} failed: {PUSH_FAILED}",
         "soundness: every advance (3) was to a candidate on the logged main, none with a failed outcome (3 with a logged pass)",
     ]
-    warnings = rest[13:]
+    warnings = rest[14:]
     assert len(warnings) == 4 and all(x.startswith("warning: ") for x in warnings)
     assert warnings[0].startswith("warning: log line 5 isn't a decision (JSONDecodeError: ") and warnings[0].endswith(": left out")
     assert warnings[1:] == [
@@ -215,7 +220,7 @@ def test_the_json_report(world, capsys):
     assert vc.main(w.argv("--main-moves", str(w.moves), "--old-reds", str(w.reds), "--json")) == 1
     rep = json.loads(capsys.readouterr().out)
     assert rep["window"] == {"since": at("14:00"), "until": at("16:00")} and rep["main_moves"] is True
-    assert rep["log"]["decisions"] == 19 and rep["log"]["not_shadow"] == 0 and [u["line"] for u in rep["log"]["unreadable"]] == [5]
+    assert rep["log"]["decisions"] == 21 and rep["log"]["not_shadow"] == 0 and [u["line"] for u in rep["log"]["unreadable"]] == [5]
     rows = {r["pr"]: r for r in rep["prs"]}
     assert sorted(rows) == list(range(101, 110))
     assert rows[104] == {
@@ -238,8 +243,10 @@ def test_the_json_report(world, capsys):
     assert (d["sha"], d["base"], d["prs"], d["old"]) == (C1, w.m0, [101, 102], {"tip": q[102], "red": ["pytest"]})
     live = rep["liveness"]
     assert live["longest_pending"] == {"hours": 1.0, "sha": C6, "members": [109], "built": at("15:00"), "ended": None}
-    assert live["dropped_stale"] == 1 and live["retries"] == [{"at": at("14:20"), "sha": C3}]
+    assert live["dropped_stale"] == [{"at": at("14:43"), "sha": C5, "why": "stale"}]
+    assert live["retries"] == [{"at": at("14:20"), "sha": C3, "why": "graph2 lost its worker"}]
     assert live["rings"] == [{"at": at("14:25"), "sha": C3, "why": "infra three times"}]
+    assert live["failed_actions"] == [{"at": at("15:05"), "action": "drop", "sha": C6, "error": PUSH_FAILED}]
     assert rep["soundness"] == {"advances": 3, "passed": 3, "violations": [], "ok": True}
 
 
@@ -264,7 +271,7 @@ def test_the_window_picks_what_is_reported_from_everything_logged_before_its_end
             "--main-moves", str(world.moves), "--json"]
     assert vc.main(argv) == 1
     rep = json.loads(capsys.readouterr().out)
-    assert rep["log"]["decisions"] == 10 and rep["log"]["ticks"] == 5
+    assert rep["log"]["decisions"] == 11 and rep["log"]["ticks"] == 6
     rows = {r["pr"]: r for r in rep["prs"]}
     assert sorted(rows) == [101, 102, 103, 104, 107, 108, 109]
     assert rows[101]["advance"] == {"at": at("14:30"), "sha": C1, "head": world.heads[101]} and rows[101]["main"] == at("15:00")
@@ -277,7 +284,8 @@ def test_the_window_picks_what_is_reported_from_everything_logged_before_its_end
     live = rep["liveness"]
     assert live["longest_pending"] == {"hours": pytest.approx(38 / 60), "sha": C3, "members": [104], "built": at("14:07"),
                                        "ended": {"at": at("14:45"), "action": "drop"}}
-    assert (live["dropped_stale"], live["retries"], live["rings"]) == (1, [], [])
+    assert ([d["sha"] for d in live["dropped_stale"]], live["retries"], live["rings"]) == ([C5], [], [])
+    assert [f["sha"] for f in live["failed_actions"]] == [C6]
     assert rep["soundness"] == {"advances": 2, "passed": 2, "violations": [], "ok": True}
     assert rep["warnings"][0].startswith("log line 5 isn't a decision") and rep["warnings"][1:] == [
         "--main-moves line 6: 'not a move': Invalid isoformat string: 'not'; want `<UTC ISO> <commit>`: left out",
@@ -333,6 +341,7 @@ def test_an_advance_off_the_logged_main_or_of_a_failed_candidate_is_unsound():
         decision("10:00", 1, "build", M0, sha=X1, base=M0, members=[1]),
         decision("10:00", 1, "build", M0, sha=X2, base=X1, members=[2]),
         decision("10:10", 2, "advance", M0, sha=X1, base=M0),
+        decision("10:10", 2, "drop", M0, sha=X1, why="on main"),
         decision("10:10", 2, "advance", M0, sha=X2, base=X1),
         decision("10:15", 3, "build", X2, sha=X3, base=M0, members=[3]),
         decision("10:30", 4, "advance", X2, sha=X3, base=M0),
@@ -353,6 +362,7 @@ def test_an_advance_off_the_logged_main_or_of_a_failed_candidate_is_unsound():
                                f"aren't counted"]
     assert f"warning: {rep['warnings'][0]}" in text.splitlines()
     assert rep["liveness"]["longest_pending"]["sha"] == X3 and rep["liveness"]["longest_pending"]["hours"] == 0.25
+    assert rep["liveness"]["dropped_stale"] == []                      # a drop `on main` isn't stale
 
 
 def test_unread_labels_and_an_empty_window_are_warned():
@@ -475,6 +485,7 @@ def test_marks_and_ejections_from_labels():
     assert vc.marked(labs) == vc.when(at("12:00")) and vc.marked(labs, vc.when(at("11:59"))) == vc.when(at("10:00"))
     assert vc.marked(labs, vc.when(at("09:00"))) is None and vc.marked([]) is None
     assert vc.ejection(labs) is None and vc.ejection(labs[:2]).ref == "pytest"
+    assert vc.ejection([lab("10:00", True), lab("11:00", False)]) is None     # a mark withdrawn with no reason isn't an ejection
 
 
 def test_store_labels_reads_ready_labels_from_the_stores_remote(tmp_path, monkeypatch, capsys):

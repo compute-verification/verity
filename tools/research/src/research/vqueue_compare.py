@@ -25,12 +25,13 @@ The report (`--json` for the whole of it):
                  `--until`, and the reverse
   disagreements  (a) the shadow ejected a PR at a head the old path landed and didn't revert;
                  (b) the shadow advanced a candidate holding a PR at a head the old path reverted or ejected;
-                 (c) a ready PR the shadow never batched, with the last reason it logged: the PR's `skip`, else a `skip` naming
-                     no PR (why nothing was built) after its mark;
+                 (c) a ready PR the shadow never batched, with the last reason it logged: the PR's `skip`, else a `build`
+                     with no sha (no member merged, so nothing was built) after its mark;
                  (d) a candidate the shadow passed whose PRs above `main` (its members and those of the candidates below it),
                      each at its head, are exactly what `checked` landed above that `main` up to a tip `--old-reds` names red
   liveness       the longest a candidate pending during the window waited from its build to its advance or drop (or
-                 `--until`), the builds dropped stale (a `drop` with no outcome), the infra retries and rings
+                 `--until`), the builds dropped stale (a `drop` with no outcome, but `on main`'s), the retries that enqueued
+                 again, the rings, and the actions that failed (a decision with an `error`, which nothing else counts)
   soundness      whether every `advance` was to a candidate whose base was the logged `main` (or the candidate advanced before
                  it in the same tick) and no outcome logged for it failed: `main` moves only to a passed tree on itself
 
@@ -60,6 +61,8 @@ LOG = Path("/data/vqueue/decisions.jsonl")
 BUILD, ADVANCE, DROP, EJECT, RETRY, RING, SKIP = "build", "advance", "drop", "eject", "retry", "ring", "skip"
 #: the decisions that name the PRs the shadow acted on; a drop, retry or ring names a candidate
 NAMING = (BUILD, ADVANCE, EJECT, SKIP)
+#: the reason `vqueue.decide` gives the drop of a candidate already on `main`: no outcome, and not stale
+ON_MAIN = "on main"
 #: the shortest commit prefix `--main-moves` and `--old-reds` may give
 PREFIX = 7
 CHAIN_FORMAT = "%H%x00%P%x00%ct%x00%B%x1e"
@@ -99,6 +102,8 @@ class Entry:
     outcome: dict | None
     failed: tuple[dict, ...]
     line: int
+    error: str = ""                    # the action failed, and the loop's tick stopped there
+    enqueued: bool | None = None       # a retry's: False when it only says why it didn't enqueue
 
     @property
     def prs(self) -> tuple[int, ...]:
@@ -124,7 +129,8 @@ def _entry(d: object, line: int) -> Entry:
                  action=str(d["action"]), sha=d.get("sha"), base=d.get("base"),
                  members=tuple(int(n) for n in d.get("members") or ()), heads=tuple(str(h) for h in d.get("heads") or ()),
                  number=None if number is None else int(number), why=str(d.get("why") or ""), outcome=outcome,
-                 failed=tuple(f for f in d.get("failed") or () if isinstance(f, dict)), line=line)
+                 failed=tuple(f for f in d.get("failed") or () if isinstance(f, dict)), line=line,
+                 error=str(d.get("error") or ""), enqueued=None if d.get("enqueued") is None else bool(d["enqueued"]))
 
 
 def parse_log(text: str) -> tuple[list[Entry], list[tuple[int, str]]]:
@@ -163,21 +169,27 @@ class Shadow:
     skips: dict[int, list[tuple[Entry, str | None]]] = field(default_factory=dict)
     heads: dict[int, list[str]] = field(default_factory=dict)
     advances: list[Entry] = field(default_factory=list)
-    nobuild: list[Entry] = field(default_factory=list)     # skips naming no PR: why nothing was built
-    stale: list[Entry] = field(default_factory=list)
-    retries: list[Entry] = field(default_factory=list)
+    nobuild: list[Entry] = field(default_factory=list)     # why nothing was built: a build no member merged into
+    stale: list[Entry] = field(default_factory=list)       # drops with no outcome, of a candidate not on `main`
+    retries: list[Entry] = field(default_factory=list)     # those that enqueued again
     rings: list[Entry] = field(default_factory=list)
-    unattributed: list[Entry] = field(default_factory=list)   # advances naming no members, of a candidate built before
+    errors: list[Entry] = field(default_factory=list)      # actions that failed: none of them took effect
+    unattributed: list[Entry] = field(default_factory=list)   # advances naming no members, of a candidate the log didn't build
 
 
-def shadow(window: list[Entry]) -> Shadow:
+def shadow(entries: list[Entry]) -> Shadow:
     s = Shadow()
-    for e in window:
+    for e in entries:
+        if e.error:
+            s.errors.append(e)
+            continue
         c = s.cands.get(e.sha or "")
         for pr in e.prs if e.action in NAMING else ():
             if (h := e.head(pr)) and h not in s.heads.setdefault(pr, []):
                 s.heads[pr].append(h)
-        if e.action == BUILD and e.sha and c is None:
+        if e.action == BUILD and not e.sha:
+            s.nobuild.append(e)
+        elif e.action == BUILD and c is None:
             c = s.cands[e.sha] = Candidate(e.sha, e.base, e.at, {pr: e.head(pr) for pr in e.members})
             for pr, h in c.members.items():
                 s.built.setdefault(pr, (e, h))
@@ -192,7 +204,7 @@ def shadow(window: list[Entry]) -> Shadow:
                 c.ended, c.passed = c.ended or e, c.passed or e
         elif e.action == DROP:
             state = (e.outcome or {}).get("state")
-            if e.outcome is None:
+            if e.outcome is None and e.why != ON_MAIN:
                 s.stale.append(e)
             if c is not None:
                 c.ended, c.outcome = c.ended or e, c.outcome or state
@@ -202,7 +214,7 @@ def shadow(window: list[Entry]) -> Shadow:
                 (s.ejects if e.action == EJECT else s.skips).setdefault(pr, []).append((e, e.head(pr)))
             if e.action == SKIP and not e.prs:
                 s.nobuild.append(e)
-        elif e.action == RETRY:
+        elif e.action == RETRY and e.enqueued is not False:
             s.retries.append(e)
         elif e.action == RING:
             s.rings.append(e)
@@ -384,9 +396,9 @@ def marked(labs: Iterable, at: datetime | None = None) -> datetime | None:
 
 
 def ejection(labs: Iterable):
-    """The newest of ``labs`` when it is `ready = false`, else None."""
+    """The newest of ``labs`` when it is `research queue eject`'s `ready = false`, its reason in `ref` (`queue.ejection`)."""
     last = max(labs, key=lambda lab: lab.ts, default=None)
-    return last if last is not None and str(last.value).lower() == "false" else None
+    return last if last is not None and str(last.value).lower() == "false" and last.ref else None
 
 
 def store_labels(root: str | None) -> Labels:
@@ -558,12 +570,12 @@ def compare(entries: list[Entry], chain: Chain, line: list[str], arrived: dict[s
     for e in advances:
         cand = s.cands.get(e.sha or "")
         base = e.base or (cand.base if cand else None)
-        if base is None or base not in (e.main, before.get(e.tick)):
+        if base is None or base not in (e.main, before.get((e.tick, e.main))):
             bad.append({"at": iso(e.at), "sha": e.sha, "base": base, "main": e.main,
                         "why": "its base isn't the logged `main`" if base else "it names no base"})
         elif cand is not None and cand.outcome == FAIL:
             bad.append({"at": iso(e.at), "sha": e.sha, "base": base, "main": e.main, "why": "the outcome logged for it failed"})
-        before[e.tick] = e.sha
+        before[(e.tick, e.main)] = e.sha
 
     warn = [f"the `ready` labels of {len(unread)} head(s) weren't read, so their marks are unknown: {', '.join(unread[:5])}"] \
         if unread else []
@@ -575,7 +587,7 @@ def compare(entries: list[Entry], chain: Chain, line: list[str], arrived: dict[s
     for e in window:
         actions[e.action] = actions.get(e.action, 0) + 1
     passed = [e for e in advances if e.sha in s.cands and s.cands[e.sha].outcome == PASS]
-    stale, retries, rings = ([e for e in xs if inside(e.at)] for xs in (s.stale, s.retries, s.rings))
+    stale, retries, rings, errors = ([e for e in xs if inside(e.at)] for xs in (s.stale, s.retries, s.rings, s.errors))
     return {
         "window": {"since": iso(since), "until": iso(until)},
         "log": {"decisions": len(window), "ticks": len({e.tick for e in window}), "actions": actions,
@@ -585,9 +597,11 @@ def compare(entries: list[Entry], chain: Chain, line: list[str], arrived: dict[s
         "aggregates": {"mark_to_advance": _stats(to_advance), "mark_to_main": _stats(to_main) if arrived is not None else None,
                        "shadow_only": sorted(set(advanced) - old_ever), "old_only": sorted(old_main - set(s.advanced))},
         "disagreements": out,
-        "liveness": {"longest_pending": longest, "dropped_stale": len(stale),
-                     "retries": [{"at": iso(e.at), "sha": e.sha} for e in retries],
-                     "rings": [{"at": iso(e.at), "sha": e.sha, "why": e.why} for e in rings]},
+        "liveness": {"longest_pending": longest,
+                     "dropped_stale": [{"at": iso(e.at), "sha": e.sha, "why": e.why} for e in stale],
+                     "retries": [{"at": iso(e.at), "sha": e.sha, "why": e.why} for e in retries],
+                     "rings": [{"at": iso(e.at), "sha": e.sha, "why": e.why} for e in rings],
+                     "failed_actions": [{"at": iso(e.at), "action": e.action, "sha": e.sha, "error": e.error} for e in errors]},
         "soundness": {"advances": len(advances), "passed": len(passed), "violations": bad, "ok": not bad},
         "warnings": warn,
     }
@@ -680,8 +694,11 @@ def render(rep: dict) -> str:
                      f"built {hm(lp['built'])}, {end}")
     else:
         lines.append("longest pending: no candidate built")
-    lines.append(f"builds dropped stale: {live['dropped_stale']}; infra retries: {len(live['retries'])}; "
-                 f"rings: {len(live['rings'])}")
+    lines.append(f"builds dropped stale: {len(live['dropped_stale'])}; infra retries: {len(live['retries'])}; "
+                 f"rings: {len(live['rings'])}; failed actions: {len(live['failed_actions'])}")
+    for f in live["failed_actions"][:5]:
+        what = f"{f['action']} {short(f['sha'])}" if f["sha"] else f["action"]
+        lines.append(f"  {what} {hm(f['at'])} failed: {plain(f['error'])}")
     if sound["ok"]:
         lines.append(f"soundness: every advance ({sound['advances']}) was to a candidate on the logged main, none with a failed "
                      f"outcome ({sound['passed']} with a logged pass)")
