@@ -20,9 +20,10 @@ R7 holds a record's entry for `pin` to the pool its verifier opens up to canonic
 `jeq_canonText`). Where the window carries the previous window's pool, that pool is the last entry for `pout` of the
 log's last record (`openOf_of_chains`), the period's previous record.
 
-R6 lets at most one window of a week reset its pool (`reset_unique`), so over a week where the verifier refused no
-window, the windows' chain pattern is one of `m + 1`, named by the window that reset or by none
-(`chains_eq_resetPattern`, `chains_mem_resetPatterns`, `card_resetPatterns_le`).
+R6 lets at most one window of a week reset its pool (`reset_unique`). So over a week where the verifier refused no
+window, the windows' chain pattern is the public one (`basePattern`) with the window that reset, or with none
+(`chains_eq_resetPattern`): one of the `m + 1` patterns `resetPatterns` fixes with the public pattern
+(`chains_mem_resetPatterns`, `card_resetPatterns_le`).
 -/
 
 @[expose] public section
@@ -158,23 +159,25 @@ theorem reset_unique {m : ℕ} (v : Fin m → Registration.Verifier) (p : Fin m 
     rw [once i hi] at h1
     exact absurd h1 Bool.false_ne_true
 
-/-- The pool's chain pattern where serving reset at `r` (none: nowhere) and the verifier refused no window: window `i`
-carries the previous window's pool unless it is the reset window or the log's last record registered another program
-(`Registration.Pool.chains`). -/
-def resetPattern {m : ℕ} (v : Fin m → Registration.Verifier) (prog : Fin m → String) (r : Option (Fin m)) :
-    Fin m → Bool := fun i =>
+/-- **The public chain pattern**: window `i` carries the previous window's pool where its log's last record registered
+the window's program, so not at a registration's first window or at another program's. -/
+def basePattern {m : ℕ} (v : Fin m → Registration.Verifier) (prog : Fin m → String) : Fin m → Bool := fun i =>
   match (v i).log.back? with
-  | some e => !decide (r = some i) && jeq (getD e "program") (Json.str (prog i))
+  | some e => jeq (getD e "program") (Json.str (prog i))
   | none => false
+
+/-- The chain pattern `base` with serving's reset at `r` (none: nowhere): the reset window restarts the chain. -/
+def resetPattern {m : ℕ} (base : Fin m → Bool) (r : Option (Fin m)) : Fin m → Bool := fun i =>
+  !decide (r = some i) && base i
 
 /-- **The chain pattern is one of `m + 1`.** Over a week's windows where the verifier refused none (`refused` false)
 and each pool is `spent` once an earlier window of the week reset, R6's `PoolResetOnce` at each window leaves the
-pattern `Registration.Pool.chains` gives the windows as `resetPattern` at the one window that reset, or at none. -/
+pattern `Registration.Pool.chains` gives the windows as the public pattern with the one window that reset, or none. -/
 theorem chains_eq_resetPattern {m : ℕ} (v : Fin m → Registration.Verifier) (p : Fin m → Registration.Pool)
     (prog : Fin m → String) (hp : ∀ i, (v i).pool = some (p i)) (honce : ∀ i, PoolResetOnce (v i))
     (hspent : ∀ i j : Fin m, j < i → (p j).reset = true → (p i).spent = true)
     (hrefused : ∀ i, (p i).refused = false) :
-    ∃ r : Option (Fin m), (fun i => (p i).chains (v i).log (prog i)) = resetPattern v prog r := by
+    ∃ r : Option (Fin m), (fun i => (p i).chains (v i).log (prog i)) = resetPattern (basePattern v prog) r := by
   have hu := reset_unique v p hp honce hspent
   by_cases hr : ∃ j, (p j).reset = true
   · obtain ⟨j, hj⟩ := hr
@@ -188,29 +191,33 @@ theorem chains_eq_resetPattern {m : ℕ} (v : Fin m → Registration.Verifier) (
           · rfl
           · exact absurd (hu j i hj h) hij
         simp [this, hij]
-    unfold Registration.Pool.chains resetPattern
+    unfold Registration.Pool.chains resetPattern basePattern
     rcases h : (v i).log.back? with _ | e <;> simp [hres, hrefused i]
   · refine ⟨none, funext fun i => ?_⟩
     have hres : (p i).reset = false := by
       cases h : (p i).reset
       · rfl
       · exact absurd ⟨i, h⟩ hr
-    unfold Registration.Pool.chains resetPattern
+    unfold Registration.Pool.chains resetPattern basePattern
     rcases h : (v i).log.back? with _ | e <;> simp [hres, hrefused i]
 
-/-- The week's chain patterns: one for each window that may reset, and one where none does. -/
-def resetPatterns {m : ℕ} (v : Fin m → Registration.Verifier) (prog : Fin m → String) : Finset (Fin m → Bool) :=
-  Finset.univ.image (resetPattern v prog)
+/-- The chain patterns of a week with public pattern `base`: one for each window that may reset, and one where none
+does. -/
+def resetPatterns {m : ℕ} (base : Fin m → Bool) : Finset (Fin m → Bool) :=
+  Finset.univ.image (resetPattern base)
 
-theorem card_resetPatterns_le {m : ℕ} (v : Fin m → Registration.Verifier) (prog : Fin m → String) :
-    (resetPatterns v prog).card ≤ m + 1 :=
+theorem card_resetPatterns_le {m : ℕ} (base : Fin m → Bool) : (resetPatterns base).card ≤ m + 1 :=
   Finset.card_image_le.trans (by simp)
 
+/-- Where the logs give the public pattern `base` (`hbase`), the week's chain pattern lies in `resetPatterns base`, a set
+fixed with `base`. -/
 theorem chains_mem_resetPatterns {m : ℕ} (v : Fin m → Registration.Verifier) (p : Fin m → Registration.Pool)
-    (prog : Fin m → String) (hp : ∀ i, (v i).pool = some (p i)) (honce : ∀ i, PoolResetOnce (v i))
+    (prog : Fin m → String) (base : Fin m → Bool) (hbase : basePattern v prog = base)
+    (hp : ∀ i, (v i).pool = some (p i)) (honce : ∀ i, PoolResetOnce (v i))
     (hspent : ∀ i j : Fin m, j < i → (p j).reset = true → (p i).spent = true)
     (hrefused : ∀ i, (p i).refused = false) :
-    (fun i => (p i).chains (v i).log (prog i)) ∈ resetPatterns v prog := by
+    (fun i => (p i).chains (v i).log (prog i)) ∈ resetPatterns base := by
+  subst hbase
   obtain ⟨r, hr⟩ := chains_eq_resetPattern v p prog hp honce hspent hrefused
   exact Finset.mem_image.mpr ⟨r, Finset.mem_univ _, hr.symm⟩
 
