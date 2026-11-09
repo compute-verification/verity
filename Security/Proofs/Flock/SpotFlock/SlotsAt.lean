@@ -15,28 +15,38 @@ At every accepted run's checked unit the layout puts the unit in a block of its 
 (`CheckedRun.blockOf_some`) and each gate at a column of that table (`CheckedRun.wire_lt`, `colAt_lt`).
 
 **A site holds at a run** (`CheckedRun.SiteHolds`): three facts about gate `g`'s site at one checked unit of an
-accepted run.
+accepted run, at the port the site names in that unit's session (`Site.port`).
 
 * `Counted`: the unit's instance is below the table's count.
 * `RowAt`: the site's port of that table is an unsegmented bit row of its place's width, and the bit it holds at the
   place, at the unit's instance, is the one the layout reads.
-* the branch facts: at a port a registered read is named like (`ReadsRegistered`), the port is the first of its name,
-  the opening's roots are those round 2 reads the value under (`readRoots`), and the site's slot is the entry round 2
-  reads the value off (`readKeyAt`) at the read's schema and the session header's position for the row; at a
-  one-table session's other ports (`ReadsInterior`), the gate is one its replay block doesn't commit, and the slot is
-  the template's port of the interior record at the published tree's schema and leaf count and the instance's row.
+* the branch facts, each giving the slot's row as the frame reads it off the gate's roots (`leafAt`, `unitsAt`): at a
+  port a registered read is named like (`ReadsRegistered`), the port is the first of its name, the gate's roots are
+  those round 2 reads the value under (`readRoots`), and the site's slot names the entry round 2 reads the value off
+  (`readKeyAt`), at the read's schema, its leaf the session header's position for the row; at a one-table session's
+  other ports (`ReadsInterior`), the gate is one its replay block doesn't commit, and the slot names the template's port
+  of the interior record, sized, at the published tree's schema, its units the tree's leaves and its leaf the drawn
+  unit's row.
 
-`Sites h` is a premise, not a theorem, because the verifier's checks don't give it today:
+A slot reads its row off the roots, so one slot fits every replay sample: under a replay block's roots, a slot at unit
+`p` with stride `n` reads unit `i·n + p` of a tree of `q·n` units, at the `i`-th of `q` sampled replay blocks
+(`leafAt_irootsOf`), the second stage's population as the two-stage registration lays it out; under the run's roots it
+reads its fixed leaf (`leafAt_decode`).
+
+`Sites h` is a premise, not a theorem, because the verifier's checks don't give it today, and at some registrations it
+can't hold:
 
 * the row format (`RowAt`'s first three facts): the scope admits `sha512/row/v1` and `sha512/row-seg/v1` ports, whose
   rows `SamplingDeploy.row` doesn't encode;
 * the copy (`RowAt`'s last fact): the opened bit is a unit column and the row's bit a message column, equal only
   through the session circuit's copy rows, and the place must be one for every unit that needs the gate;
-* the slot's position (`Counted` and the slots): an interior row's leaf is its unit's place in the second stage's
-  population, `i·n_t + p` for the `i`-th sampled replay block, in a tree of `q·n_t` leaves, so the run's coins set
-  both the position and the leaf count; and round 2 bounds a registered read's row only to its unit's range of rows;
-* the registered value (`ReadsRegistered`): round 2 lets a port read any registered value, so its slot's key is fixed
-  only where each port's registered value is the reference statement's.
+* the row (`Counted` and the slots' leaves): round 2 doesn't hold a session's population to the layout a slot reads
+  off the roots, and bounds a registered read's row only to its unit's range of rows;
+* the entry (`ReadsRegistered`): round 2 holds a session's registered reads to its template's reference statement's but
+  for the run's fields, and which entry it reads a value off (`readKeyAt`) still reads the round-1 record's port names;
+* one tree a gate: a gate one unit writes and another reads is needed by both, and the frame checks both openings at
+  the gate's one slot under the same roots, so both units' reads of its row must have one root. A registration that
+  commits a wired input as a tree of its own, under a domain of its own, as the two-stage toy does, has two.
 -/
 
 @[expose] public section
@@ -107,57 +117,41 @@ variable (r : CheckedRun)
 /-- **The unit's instance is one of its session's first table's instances.** -/
 def Counted : Prop := r.n h < r.sts[0]!.pub.n
 
-/-- **The site's port reads a registered value**: a registered read `reg` is named like it, it is the first port of
-that name, the opening's roots are those round 2 reads `reg`'s value under, and the site's slot is the entry round 2
-reads the value off, at `reg`'s schema and the position the session header gives the instance's row. -/
+/-- **The site's port reads a registered value**: a registered read `reg` is named like the unit's port, it is the
+first port of that name, the gate's roots are those round 2 reads `reg`'s value under, and the site's slot names the
+entry round 2 reads the value off, at `reg`'s schema, not sized; under those roots its leaf (`leafAt`), at an entry of
+`reg`'s leaf count, is the position the session header gives the instance's row. -/
 def ReadsRegistered (S : Site) (g : ℕ) : Prop :=
-  ∃ reg, regNamed r.ins r.sts S.port = some reg ∧
-    (List.range r.sts[0]!.c.ports.size).find? (fun q => r.sts[0]!.c.ports[q]!.name == reg.name) = some S.port ∧
-    rootsAt h r.s r.seen r.u g = readRoots h r.x r.m₁ r.c₀ r.c₁ r.ρ (templateOf h.ms r.u) reg.name reg.value ∧
+  ∃ reg, regNamed r.ins r.sts (S.port r.u) = some reg ∧
+    (List.range r.sts[0]!.c.ports.size).find? (fun q => r.sts[0]!.c.ports[q]!.name == reg.name) = some (S.port r.u) ∧
+    r.roots h g = readRoots h r.x r.m₁ r.c₀ r.c₁ r.ρ (templateOf h.ms r.u) reg.name reg.value ∧
+    S.slot.key = readKeyAt h r.x r.m₁ r.c₀ r.c₁ (templateOf h.ms r.u) reg.name reg.value ∧
+    S.slot.schema = reg.schema ∧ S.slot.sized = false ∧
     ∀ t positions paths, r.sts[0]!.pub.tables = some t →
       _root_.Flock.Registered.entry r.sts[0]!.pub reg = .ok (positions, paths) →
-      S.slot = ⟨readKeyAt h r.x r.m₁ r.c₀ r.c₁ (templateOf h.ms r.u) reg.name reg.value, reg.schema,
-        positions.getD (_root_.Flock.Registered.ref t r.sts[0]!.c.ports.size S.port (r.n h)) 0, none⟩
+      ∀ e, entryAt (r.roots h g) S.slot = some e → e.leaves = reg.leaves →
+        leafAt (r.roots h g) S.slot e =
+          positions.getD (_root_.Flock.Registered.ref t r.sts[0]!.c.ports.size (S.port r.u) (r.n h)) 0
 
-/-- **The site's port reads the interior record**: no registered read is named like it, the session has one table,
-the gate is one the unit's replay block doesn't commit, and the site's slot is the template's port of the interior
-record, at the published tree's schema and leaf count and the instance's row. -/
+/-- **The site's port reads the interior record**: no registered read is named like the unit's port, the session has
+one table, the gate is one the unit's replay block doesn't commit, and the site's slot names the template's port of
+the interior record, sized; over any population the session's public file loads, the slot has the published tree's
+schema, and under the replay block's roots its units are the tree's leaves and its leaf (`leafAt`) the drawn unit's
+row. -/
 def ReadsInterior (S : Site) (g : ℕ) : Prop :=
-  regNamed r.ins r.sts S.port = none ∧ r.ins.read.I.count ≤ 1 ∧ S.port < r.sts[0]!.c.ports.size ∧
-    (g ∈ r.rb ∧ r.s.prog.Boundary r.rb g = false) ∧ ∀ pop,
+  regNamed r.ins r.sts (S.port r.u) = none ∧ r.ins.read.I.count ≤ 1 ∧ S.port r.u < r.sts[0]!.c.ports.size ∧
+    (g ∈ r.rb ∧ r.s.prog.Boundary r.rb g = false) ∧
+    S.slot.key = .interior (h.names.getD (templateOf h.ms r.u) "") (r.sts[0]!.c.ports[S.port r.u]!).name ∧
+    S.slot.sized = true ∧ ∀ pop,
     _root_.Flock.HmOut.loadPublic r.ins.read.tags r.sts[0]!.c r.ins.read.I.publicFile = .ok pop →
-    S.slot = ⟨.interior (h.names.getD (templateOf h.ms r.u) "") (r.sts[0]!.c.ports[S.port]!).name,
-      (pubPort r.sts[0]!.c pop S.port).schema, rowAt r.sts[0]!.c pop S.port (unitOf r.ins.read.draw (r.n h)),
-      some (pubPort r.sts[0]!.c pop S.port).leaves⟩
+    S.slot.schema = (pubPort r.sts[0]!.c pop (S.port r.u)).schema ∧
+    unitsAt (iroots r.x r.seen r.ρ) S.slot = (pubPort r.sts[0]!.c pop (S.port r.u)).leaves ∧
+    ∀ e, entryAt (iroots r.x r.seen r.ρ) S.slot = some e →
+      leafAt (iroots r.x r.seen r.ρ) S.slot e = rowAt r.sts[0]!.c pop (S.port r.u) (unitOf r.ins.read.draw (r.n h))
 
 /-- **Gate `g`'s value sits at site `S`** in the run (the module's docstring). -/
 def SiteHolds (S : Site) (g : ℕ) : Prop :=
   r.Counted h ∧ r.RowAt h S g ∧ (r.ReadsRegistered h S g ∨ r.ReadsInterior h S g)
-
-/-- **`SlotsAt`'s conclusion** at gate `g` of the run's checked unit. -/
-def Slots (slot : ℕ → Option Slot) (c : Code) (L : Layout) (g : ℕ) : Prop :=
-  ∃ β j y n q, L.blockOf r.x r.m₁ (r.xS h) r.u = some β ∧ ∃ hj : j < r.sts.size,
-    y < 2 ^ r.sts[j].c.kLog ∧ L.wire r.x r.m₁ (r.xS h) r.u g = j * 2 ^ r.sts[j].c.kLog + y ∧ n < r.sts[j].pub.n ∧
-    ∃ o ∈ c.reveal r.s r.u r.seen r.wF, o.2.pos = g ∧
-      o.2.val = _root_.Flock.InnerRows.bitAt r.p r.wF j β y ∧
-      o.1 = (if g ∈ r.rb ∧ r.s.prog.Boundary r.rb g = false then iroots r.x r.seen r.ρ else r.s.roots) ∧
-      SamplingDeploy.row c.place c.bits o.2 = _root_.Flock.InnerRows.rowBytes r.p r.wF j n q ∧
-      c.salt o.2 = (_root_.Flock.InnerRows.salt r.p r.wF j n q).data.toList ∧
-      ((∃ own reg, r.ins.registered = some own ∧ reg ∈ own ∧
-        (List.range r.sts[j].c.ports.size).find? (fun q => r.sts[j].c.ports[q]!.name == reg.name) = some q ∧
-        o.1 = readRoots h r.x r.m₁ r.c₀ r.c₁ r.ρ (templateOf h.ms r.u) reg.name reg.value ∧
-        ∀ t positions paths, r.sts[j].pub.tables = some t →
-          _root_.Flock.Registered.entry r.sts[j].pub reg = .ok (positions, paths) →
-          slot g = some ⟨readKeyAt h r.x r.m₁ r.c₀ r.c₁ (templateOf h.ms r.u) reg.name reg.value, reg.schema,
-            positions.getD (_root_.Flock.Registered.ref t r.sts[j].c.ports.size q n) 0, none⟩ ∧
-          bytes (c.π o.2) = paths.getD (_root_.Flock.Registered.ref t r.sts[j].c.ports.size q n) ByteArray.empty) ∨
-      (r.ins.read.I.count ≤ 1 ∧ q < r.sts[j].c.ports.size ∧ o.1 = iroots r.x r.seen r.ρ ∧
-        (∀ own, r.ins.registered = some own → ∀ reg ∈ own, reg.name ≠ r.sts[j].c.ports[q]!.name) ∧ ∀ pop,
-        _root_.Flock.HmOut.loadPublic r.ins.read.tags r.sts[j].c r.ins.read.I.publicFile = .ok pop →
-        slot g = some ⟨.interior (h.names.getD (templateOf h.ms r.u) "") r.sts[j].c.ports[q]!.name,
-            (pubPort r.sts[j].c pop q).schema, rowAt r.sts[j].c pop q (unitOf r.ins.read.draw n),
-            some (pubPort r.sts[j].c pop q).leaves⟩ ∧
-          bytes (c.π o.2) = pubPath r.sts[j].c pop q (rowAt r.sts[j].c pop q (unitOf r.ins.read.draw n))))
 
 end CheckedRun
 
@@ -216,43 +210,46 @@ theorem wire_lt (hr : r.Ok h) (g : ℕ) : r.wire h g < 2 ^ r.sts[0]!.c.kLog := b
     rw [getElem!_pos r.sts 0 hj]
     exact wire_lt_of h hpb hpp hc hh hj [] r.m₁ r.u g
 
-/-- **`SlotsAt`'s conclusion at a site that holds**: at the base frame over the site map, the layout `layoutFor h`
-and the site map's slots. -/
-theorem slots (hr : r.Ok h) {site : ℕ → Option Site} (c₀ : Code) {g : ℕ} {S : Site} (hsS : site g = some S)
+/-- **`SlotsAtGate` at a site that holds**: at a checked unit of an accepted run, at a gate it needs whose site holds
+there, the code's opening is the site's (`openAt_revealCode`): its value is the witness's bit at the layout's column,
+its row and salt are the site's port's at the unit's instance (`row_opening`, `salt_opening`), and its path is
+`pathAt`'s (`path_opening`). -/
+theorem slotsAtGate (hr : r.Ok h) {site : ℕ → Option Site} (c₀ : Code) {g : ℕ} {S : Site} (hsS : site g = some S)
     (hg : r.s.prog.Needs r.b g) (hH : r.SiteHolds h S g) :
-    r.Slots h (slotsOf site) (revealCode h site c₀) (layoutFor h) g := by
+    SlotsAtGate h (slotsOf site) (revealCode h site c₀) (layoutFor h) r.x r.s r.m₀ r.m₁ r.m₂ r.c₀ r.c₁ r.rest r.wF r.u
+      r.ρ r.ins r.sts g := by
   obtain ⟨hn, hR, hrd⟩ := hH
   have hj := sts_pos hr
   have e0 : r.sts[0]! = r.sts[0] := getElem!_pos r.sts 0 hj
-  refine ⟨r.β h, 0, r.wire h g, r.n h, S.port, blockOf_some hr, hj, by rw [← e0]; exact wire_lt hr g,
-    by rw [Nat.zero_mul, Nat.zero_add]; rfl, by rw [← e0]; exact hn,
-    r.opening h S g, r.open_mem hr hsS hg, rfl, rfl, r.roots_opening hr S g, r.row_opening hsS hR,
-    r.salt_opening site c₀ S g, ?_⟩
+  have hsl : slotsOf site g = some S.slot := by simp [slotsOf, hsS]
+  refine ⟨r.β h, 0, r.wire h g, r.n h, S.port r.u, blockOf_some hr, hj, by rw [← e0]; exact wire_lt hr g,
+    by rw [Nat.zero_mul, Nat.zero_add]; rfl, by rw [← e0]; exact hn, ?_⟩
+  intro o
+  have ho : o = r.opening h S g := openAt_revealCode hr hsS hg c₀
+  rw [ho]
+  refine ⟨rfl, row_opening hsS hR, salt_opening site c₀ S g, ?_⟩
   rw [← e0]
-  rcases hrd with ⟨reg, hreg, hfind, hroots, hslot⟩ | ⟨hnone, hc1, hq, hint, hslot⟩
+  rcases hrd with ⟨reg, hreg, hfind, hroots, hkey, hsch, hsz, hleaf⟩ | ⟨hnone, hc1, hq, hint, hkey, hsz, hI⟩
   · obtain ⟨own, hown, hfo⟩ := Option.bind_eq_some_iff.1 hreg
     refine Or.inl ⟨own, reg, hown, Array.mem_of_find?_eq_some hfo, hfind, hroots,
-      fun t positions paths ht hent => ⟨?_, ?_⟩⟩
-    · show (site g).map Site.slot = _
-      rw [hsS]
-      exact congrArg some (hslot t positions paths ht hent)
-    · rw [r.path_opening site c₀ S g]
-      simp only [pathAt, hreg, ht, hent]
-  · refine Or.inr ⟨hc1, hq, ?_, fun own hown reg hreg => ?_, fun pop hpop => ⟨?_, ?_⟩⟩
-    · rw [r.roots_opening hr S g, ite_eq_left hint]
-    · have hnf : own.find? (fun reg => reg.name == (r.sts[0]!.c.ports[S.port]!).name) = none := by
+      fun t positions paths ht hent => ⟨S.slot, hsl, hkey, hsch, hsz, hleaf t positions paths ht hent, ?_⟩⟩
+    rw [path_opening site c₀ S g]
+    simp only [pathAt, hreg, ht, hent]
+  · have hR' : (r.opening h S g).1 = iroots r.x r.seen r.ρ := by
+      rw [roots_opening hr S g, if_pos hint]
+    refine Or.inr ⟨hc1, hq, hR', fun own hown reg hreg => ?_, fun pop hpop => ?_⟩
+    · have hnf : own.find? (fun reg => reg.name == (r.sts[0]!.c.ports[S.port r.u]!).name) = none := by
         simpa [regNamed, hown] using hnone
       simpa using Array.find?_eq_none.1 hnf reg hreg
-    · show (site g).map Site.slot = _
-      rw [hsS]
-      exact congrArg some (hslot pop hpop)
-    · rw [r.path_opening site c₀ S g]
+    · obtain ⟨hsc, hun, hl⟩ := hI pop hpop
+      refine ⟨S.slot, hsl, hkey, hsc, hsz, by rw [hR']; exact hun, fun e he => by rw [hR'] at he ⊢; exact hl e he, ?_⟩
+      rw [path_opening site c₀ S g]
       simp only [pathAt, hnone, hpop]
 
 end CheckedRun
 
 /-- **`SlotsAt` at any site map whose sites hold**: where each gate a checked unit of an accepted run needs has a site
-that holds there. -/
+that holds there (`CheckedRun.slotsAtGate`). -/
 theorem slotsAt_of {site : ℕ → Option Site}
     (hS : ∀ r : CheckedRun, r.Ok h → ∀ g, r.s.prog.Needs r.b g → ∃ S, site g = some S ∧ r.SiteHolds h S g)
     (c₀ : Code) : SlotsAt h (slotsOf site) (revealCode h site c₀) (layoutFor h) := by
@@ -260,7 +257,7 @@ theorem slotsAt_of {site : ℕ → Option Site}
   have hr : CheckedRun.Ok h ⟨x, s, m₀, m₁, m₂, c₀', c₁, rest, wF, u, b, ρ, rb, ins, sts⟩ :=
     ⟨Pt, d, spec, hx, hP, h2, hin, hok, hu, hck, hb, hρ, hrb, hset⟩
   obtain ⟨S, hsS, hH⟩ := hS _ hr g hg
-  exact CheckedRun.slots hr c₀ hsS hg hH
+  exact CheckedRun.slotsAtGate hr c₀ hsS hg hH
 
 /-- **Every gate's value has one site**, fixed before the run, that holds at every accepted run's checked unit that
 needs the gate (`CheckedRun.SiteHolds`). The premise `SlotsAt` rests on (the module's docstring). -/

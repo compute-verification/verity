@@ -7,22 +7,22 @@ public import Proofs.Flock.SpotFlock.LayoutAt
 # The base frame: a reveal that opens each gate's row at its site
 
 `revealCode h site c₀` is a frame for `frameAt`: `c₀` but for its reveal, its own ports and how it reads an opening.
-Gate `g`'s site (`site g`, a `Site`) names the port whose row holds its value, the value's place in that row and the
-frame's slot for the row, all fixed before the run. Nothing here reads `h.frame`.
+Gate `g`'s site (`site g`, a `Site`) names the value's place in its row, the port that holds the row in each unit's
+session and the frame's slot for the row, all fixed before the run. Nothing here reads `h.frame`.
 
 * **An opening's data** (`dataOf`): the row's bits, its salt and its path, each escaped (`esc`) so that the three
   read back (`unesc_esc`). `bitsOf`, `saltOf` and `pathOf` are the frame's `bits`, `salt` and `π`.
 * **The unit's instance** (`rankAt`): a checked unit's instance in its session is the first unit of the session's
   sample that the registration maps to it (`RegTwo.blockAt`, over the replay blocks the interior record lists).
   `layoutFor h` is `layoutAt` at that rank and `pickAny`.
-* **The opening** (`openingOf`, `openAt`): at gate `g` of unit `u`, the session witness's bit at the unit's block and
-  the layout's column (`bitAt`), under the replay block's roots where `g` is a gate of the replay block it doesn't
-  commit and the run's roots otherwise (`rootsAt`). Its data are row `q` of the unit's instance in the session's
-  first table (`rowBitsAt`), that row's salt and its path (`pathAt`): the session header's path for the registered
-  read named like the port where there is one, else the path in the port's published tree (`pubPath`). The reveal
-  (`revealAt`) opens every gate the unit's proof block could need (`needsOf`) that has a site.
-* **The opening facts**, at a checked unit of an accepted run (`CheckedRun`, `CheckedRun.Ok`): the reveal holds gate
-  `g`'s opening (`open_mem`), under `FrameIs`'s roots (`roots_opening`); its row is the one the row hash reads
+* **The opening** (`openingOf`, `siteOp`): at gate `g` of unit `u`, under the roots the program opens it under
+  (`Reveal.rootsAt`), the session witness's bit at the unit's block and the layout's column (`bitAt`). Its data are
+  the row of the site's port at the unit's instance in the session's first table (`rowBitsAt`), that row's salt and its
+  path (`pathAt`): the session header's path for the registered read named like the port where there is one, else the
+  path in the port's published tree (`pubPath`). The reveal is the program's (`Reveal.reveal`) at that opener.
+* **The opening facts**, at a checked unit of an accepted run (`CheckedRun`, `CheckedRun.Ok`): the code's opening at
+  a gate the unit needs, its value and data the base frame's first opening there (`Reveal.frameAt`), is the site's
+  (`openAt_revealCode`), under `FrameIs`'s roots (`roots_opening`); its row is the one the row hash reads
   (`row_opening`) where the site's port is an unsegmented bit row of its place's width whose bit at the place is the
   one the layout reads (`RowAt`); its salt is that row's (`salt_opening`) and its path `pathAt`'s (`path_opening`).
 
@@ -165,10 +165,11 @@ noncomputable abbrev layoutFor : Layout := layoutAt h (rankAt h) (pickAny h)
 
 /-! ## The opening -/
 
-/-- **Where gate `g`'s value sits**, fixed before the run: the port whose row holds it, its place in that row (the
-row's bits and the value's bit), and the frame's slot for the row. -/
+/-- **Where gate `g`'s value sits**, fixed before the run: the port whose row holds it in unit `u`'s session
+(`port u`: a gate one block writes and another reads sits in each one's own port), its place in that row (the row's
+bits and the value's bit), and the frame's slot for the row. -/
 structure Site where
-  port : ℕ
+  port : ℕ → ℕ
   place : (w : ℕ) × Fin w
   slot : Slot
 
@@ -200,64 +201,45 @@ noncomputable def pathAt (ins : FlockDeploy.Ins) (sts : Array _root_.Flock.Stmt)
     | .ok pop => pubPath sts[0]!.c pop q (rowAt sts[0]!.c pop q (unitOf ins.read.draw n))
     | .error _ => ByteArray.empty
 
-/-- **The roots gate `g`'s opening for unit `u` is under** (`FrameIs`'s): the replay block's interior roots
-(`iroots`) where `g` is a gate of `u`'s replay block that the block doesn't commit, the run's roots otherwise. -/
-noncomputable def rootsAt (s : AuditStatement) (v : Seen) (u g : ℕ) : List Msg :=
-  match partition h s, two h s with
-  | some Pt, some d =>
-    match replayOf Pt d.part u with
-    | some ρ =>
-      match d.part.blocks[ρ]? with
-      | some rb => if g ∈ rb ∧ s.prog.Boundary rb g = false then iroots [] v ρ else s.roots
-      | none => s.roots
-    | none => s.roots
-  | _, _ => s.roots
-
-/-- **The gates a proof block `b` could need** (`Prog.Needs`): its own, then those its gates read. -/
-def needsOf (C : Prog) (b : List ℕ) : List ℕ :=
-  b ++ b.flatMap fun g' => (C.gates[g']?.map BGate.reads).getD []
-
-theorem mem_needsOf {C : Prog} {b : List ℕ} {g : ℕ} (hg : C.Needs b g) : g ∈ needsOf C b := by
-  rcases hg with ⟨hg, -⟩ | ⟨⟨g', hg', x, hx, hr⟩, -, -⟩
-  · exact List.mem_append_left _ hg
-  · exact List.mem_append_right _ (List.mem_flatMap.2 ⟨g', hg', by simpa [hx] using hr⟩)
-
 /-- **Gate `g`'s opening at site `S` for unit `u`**, at the round-1 and round-2 messages `m₁` and `m₂` and the unit's
 session's setup (the module's docstring). -/
 noncomputable def openingOf (s : AuditStatement) (v : Seen) (wF : Claims.Flock.Wit) (u : ℕ) (m₁ m₂ : Msg)
     (ins : FlockDeploy.Ins) (sts : Array _root_.Flock.Stmt) (S : Site) (g : ℕ) : List Msg × Opening Bool :=
   let xS := unitStmt h m₂ u
   let n := rankAt h [] m₁ xS u
-  (rootsAt h s v u g,
+  (Reveal.rootsAt (partition h) (two h) (iroots []) s u v g,
     { pos := g
       val := _root_.Flock.InnerRows.bitAt { ins.read with sts } wF 0 (((layoutFor h).blockOf [] m₁ xS u).getD 0)
         ((layoutFor h).wire [] m₁ xS u g)
-      data := dataOf (rowBitsAt { ins.read with sts } wF n S.port)
-        (_root_.Flock.InnerRows.salt { ins.read with sts } wF 0 n S.port).data.toList
-        (pathAt ins sts n S.port).data.toList })
+      data := dataOf (rowBitsAt { ins.read with sts } wF n (S.port u))
+        (_root_.Flock.InnerRows.salt { ins.read with sts } wF 0 n (S.port u)).data.toList
+        (pathAt ins sts n (S.port u)).data.toList })
 
-/-- **Gate `g`'s opening for unit `u`** (`openingOf`); none where `g` has no site or the unit's session statement
+/-- **The opener at a site map**: gate `g`'s opening for unit `u` at its site (`openingOf`), at a transcript whose
+rounds 1 and 2 sent `m₁` and `m₂`; an empty opening at `g` where `g` has no site or the unit's session statement
 doesn't set up. -/
-noncomputable def openAt (site : ℕ → Option Site) (s : AuditStatement) (u : ℕ) (v : Seen) (wF : Claims.Flock.Wit)
-    (m₁ m₂ : Msg) (g : ℕ) : Option (List Msg × Opening Bool) :=
-  match site g, FlockDeploy.setupOf true (unitStmt h m₂ u) with
-  | some S, some (ins, _, sts) => some (openingOf h s v wF u m₁ m₂ ins sts S g)
-  | _, _ => none
-
-/-- **The reveal**: at a transcript whose rounds 1 and 2 sent `m₁` and `m₂`, each gate unit `u`'s proof block could need
-(`needsOf`) that has a site, opened (`openAt`). -/
-noncomputable def revealAt (site : ℕ → Option Site) (s : AuditStatement) (u : ℕ) (v : Seen) (wF : Claims.Flock.Wit) :
-    List (List Msg × Opening Bool) :=
+noncomputable def siteOp (site : ℕ → Option Site) (s : AuditStatement) (u : ℕ) (v : Seen) (wF : Claims.Flock.Wit)
+    (g : ℕ) (_ : List Msg) : Opening Bool :=
   match v.msgs with
   | _ :: (m₁, _) :: (m₂, _) :: _ =>
-    (needsOf s.prog (((partition h s).bind (·.blocks[u]?)).getD [])).filterMap (openAt h site s u v wF m₁ m₂)
-  | _ => []
+    match site g, FlockDeploy.setupOf true (unitStmt h m₂ u) with
+    | some S, some (ins, _, sts) => (openingOf h s v wF u m₁ m₂ ins sts S g).2
+    | _, _ => ⟨g, false, []⟩
+  | _ => ⟨g, false, []⟩
 
-/-- **The base frame**: `c₀` with the reveal `revealAt`, the own ports `revealOwn`, each gate's place its site's, and
-an opening's bits, salt and path read off its data. -/
+theorem siteOp_seenAt {site : ℕ → Option Site} {S : Site} {s : AuditStatement} {u g : ℕ} {m₀ m₁ m₂ : Msg}
+    {c₀ c₁ : FlockDeploy.Coin} {rest : List (Msg × Out)} {wF : Claims.Flock.Wit} {ins : FlockDeploy.Ins} {spec}
+    {sts : Array _root_.Flock.Stmt} (hs : site g = some S)
+    (hset : FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts)) (R : List Msg) :
+    siteOp h site s u (seenAt m₀ m₁ m₂ c₀ c₁ rest) wF g R =
+      (openingOf h s (seenAt m₀ m₁ m₂ c₀ c₁ rest) wF u m₁ m₂ ins sts S g).2 := by
+  simp only [siteOp, seenAt, hs, hset]
+
+/-- **The base frame**: `c₀` with the program's reveal at the sites' opener (`siteOp`), the own ports `revealOwn`,
+each gate's place its site's, and an opening's bits, salt and path read off its data. -/
 noncomputable def revealCode (site : ℕ → Option Site) (c₀ : Code) : Code :=
   { c₀ with
-    reveal := revealAt h site
+    reveal := Reveal.reveal (partition h) (two h) (iroots []) (siteOp h site)
     own := revealOwn
     ownAt := fun _ _ => revealOwn
     ownAt_depth := fun _ _ => le_rfl
@@ -334,85 +316,119 @@ abbrev n : ℕ := rankAt h [] r.m₁ (r.xS h) r.u
 noncomputable abbrev opening (S : Site) (g : ℕ) : List Msg × Opening Bool :=
   openingOf h r.s r.seen r.wF r.u r.m₁ r.m₂ r.ins r.sts S g
 
+/-- The roots the program opens gate `g` of the unit under (`Reveal.rootsAt`). -/
+abbrev roots (g : ℕ) : List Msg := Reveal.rootsAt (partition h) (two h) (iroots []) r.s r.u r.seen g
+
 /-- **The site's row is the one the row hash reads**, at gate `g`: the site's port of the session's first table is an
 unsegmented bit row (`sha512/row/v2`) of `16 w` bits, its place's width, and the bit the row holds at the place, at the
 unit's instance, is the one the layout reads. -/
 def RowAt (S : Site) (g : ℕ) : Prop :=
-  (r.sts[0]!.c.ports[S.port]!).v2 = true ∧ (r.sts[0]!.c.ports[S.port]!).segs = none ∧
-    S.place.1 = 16 * (r.sts[0]!.c.ports[S.port]!).words ∧
+  (r.sts[0]!.c.ports[S.port r.u]!).v2 = true ∧ (r.sts[0]!.c.ports[S.port r.u]!).segs = none ∧
+    S.place.1 = 16 * (r.sts[0]!.c.ports[S.port r.u]!).words ∧
     _root_.Flock.InnerRows.bitAt r.p r.wF 0 (r.n h / r.sts[0]!.c.g)
-      (FlockSoundness.Typed.msgCol r.sts[0]!.c (r.n h % r.sts[0]!.c.g) S.port (S.place.2 / 8) (S.place.2 % 8)) =
+      (FlockSoundness.Typed.msgCol r.sts[0]!.c (r.n h % r.sts[0]!.c.g) (S.port r.u) (S.place.2 / 8) (S.place.2 % 8)) =
       _root_.Flock.InnerRows.bitAt r.p r.wF 0 (r.β h) (r.wire h g)
 
 variable {h r}
 
-theorem open_mem {site : ℕ → Option Site} {S : Site} {g : ℕ} (hr : r.Ok h) (hs : site g = some S)
-    (hg : r.s.prog.Needs r.b g) : r.opening h S g ∈ revealAt h site r.s r.u r.seen r.wF := by
-  obtain ⟨Pt, d, spec, -, hP, -, -, -, -, -, hb, -, -, hset⟩ := hr
-  have hb' : ((partition h r.s).bind (·.blocks[r.u]?)).getD [] = r.b := by
-    rw [hP]
-    simp [hb]
-  show r.opening h S g ∈ (needsOf r.s.prog (((partition h r.s).bind (·.blocks[r.u]?)).getD [])).filterMap
-    (openAt h site r.s r.u r.seen r.wF r.m₁ r.m₂)
-  rw [hb']
-  refine List.mem_filterMap.2 ⟨g, mem_needsOf hg, ?_⟩
-  simp only [openAt, hs, hset]
+/-- **The sites' opener opens gate `g` at its site**: the program's opening there (`Reveal.openAt`) at `siteOp` is
+`openingOf`'s, where `g` has site `S`. -/
+theorem openAt_siteOp {site : ℕ → Option Site} {S : Site} {g : ℕ} (hr : r.Ok h) (hs : site g = some S) :
+    Reveal.openAt (partition h) (two h) (iroots []) (siteOp h site) r.s r.u r.seen r.wF g = r.opening h S g := by
+  obtain ⟨Pt, d, spec, -, -, -, -, -, -, -, -, -, -, hset⟩ := hr
+  show (r.roots h g, { siteOp h site r.s r.u r.seen r.wF g (r.roots h g) with pos := g }) = r.opening h S g
+  exact congrArg (fun o : Opening Bool => ((r.roots h g, { o with pos := g }) : List Msg × Opening Bool))
+    (siteOp_seenAt h hs hset _)
+
+/-- **The code's opening at a gate the unit needs is the site's** (the module's docstring): the base frame's reveal is
+the program's at `siteOp`, whose opening at gate `g` is the site's (`openAt_siteOp`), under `g`'s roots
+(`Reveal.openAt_mem`); every opening it holds is at its own gate, so its first at `g` under those roots is that one. -/
+theorem openAt_revealCode {site : ℕ → Option Site} {S : Site} {g : ℕ} (hr : r.Ok h) (hs : site g = some S)
+    (hg : r.s.prog.Needs r.b g) (c₀ : Code) :
+    Reveal.openAt (partition h) (two h) (iroots []) (Reveal.frameAt (revealCode h site c₀)) r.s r.u r.seen r.wF g =
+      r.opening h S g := by
+  have hop := openAt_siteOp hr hs
+  obtain ⟨Pt, d, spec, -, hP, -, -, -, -, -, hb, -, -, -⟩ := hr
+  have hmem := Reveal.openAt_mem (partition h) (two h) (iroots []) (siteOp h site) (v := r.seen) (wF := r.wF) hP hb hg
+  have hfind : (Reveal.reveal (partition h) (two h) (iroots []) (siteOp h site) r.s r.u r.seen r.wF).find?
+      (fun q => q.2.pos == g && q.1 == r.roots h g) =
+        some (Reveal.openAt (partition h) (two h) (iroots []) (siteOp h site) r.s r.u r.seen r.wF g) := by
+    cases hf : (Reveal.reveal (partition h) (two h) (iroots []) (siteOp h site) r.s r.u r.seen r.wF).find?
+      (fun q => q.2.pos == g && q.1 == r.roots h g) with
+    | none =>
+      refine (List.find?_eq_none.1 hf _ hmem ?_).elim
+      simp only [Bool.and_eq_true, beq_iff_eq]
+      exact ⟨rfl, rfl⟩
+    | some q =>
+      obtain ⟨g', -, rfl⟩ := (Reveal.mem_reveal (partition h) (two h) (iroots []) (siteOp h site)).1
+        (List.mem_of_find?_eq_some hf)
+      have hp := List.find?_some hf
+      simp only [Bool.and_eq_true, beq_iff_eq] at hp
+      obtain rfl : g' = g := hp.1
+      rfl
+  have hf : Reveal.frameAt (revealCode h site c₀) r.s r.u r.seen r.wF g (r.roots h g) = (r.opening h S g).2 := by
+    show (((Reveal.reveal (partition h) (two h) (iroots []) (siteOp h site) r.s r.u r.seen r.wF).find?
+      fun q => q.2.pos == g && q.1 == r.roots h g).map Prod.snd).getD ⟨g, false, []⟩ = _
+    rw [hfind]
+    exact congrArg Prod.snd hop
+  show (r.roots h g, { Reveal.frameAt (revealCode h site c₀) r.s r.u r.seen r.wF g (r.roots h g) with pos := g }) =
+    r.opening h S g
+  exact congrArg (fun o : Opening Bool => ((r.roots h g, { o with pos := g }) : List Msg × Opening Bool)) hf
 
 theorem roots_opening (hr : r.Ok h) (S : Site) (g : ℕ) :
     (r.opening h S g).1 = if g ∈ r.rb ∧ r.s.prog.Boundary r.rb g = false then iroots r.x r.seen r.ρ else r.s.roots := by
   obtain ⟨Pt, d, spec, -, hP, h2, -, -, -, -, -, hρ, hrb, -⟩ := hr
-  show rootsAt h r.s r.seen r.u g = _
-  simp only [rootsAt, hP, h2, hρ, hrb]
-  rfl
+  exact Reveal.rootsAt_eq (partition h) (two h) (iroots []) hP h2 hρ hrb
 
 theorem row_opening {site : ℕ → Option Site} {c₀ : Code} {S : Site} {g : ℕ} (hs : site g = some S)
     (hR : r.RowAt h S g) :
     row (revealCode h site c₀).place (revealCode h site c₀).bits (r.opening h S g).2 =
-      _root_.Flock.InnerRows.rowBytes r.p r.wF 0 (r.n h) S.port := by
+      _root_.Flock.InnerRows.rowBytes r.p r.wF 0 (r.n h) (S.port r.u) := by
   obtain ⟨hv2, hseg, hw, hcopy⟩ := hR
   have hplace : (revealCode h site c₀).place g = S.place := by
     show ((site g).map Site.place).getD ⟨1, 0⟩ = S.place
     simp [hs]
-  have hlen : (rowBitsAt r.p r.wF (r.n h) S.port).length = 16 * (r.sts[0]!.c.ports[S.port]!).words := by
-    show (List.ofFn fun i : Fin (8 * (2 * (r.sts[0]!.c.ports[S.port]!).words)) => _).length = _
+  have hlen : (rowBitsAt r.p r.wF (r.n h) (S.port r.u)).length = 16 * (r.sts[0]!.c.ports[S.port r.u]!).words := by
+    show (List.ofFn fun i : Fin (8 * (2 * (r.sts[0]!.c.ports[S.port r.u]!).words)) => _).length = _
     rw [List.length_ofFn]
     omega
-  have hlt : (S.place.2 : ℕ) < (rowBitsAt r.p r.wF (r.n h) S.port).length := by
+  have hlt : (S.place.2 : ℕ) < (rowBitsAt r.p r.wF (r.n h) (S.port r.u)).length := by
     rw [hlen, ← hw]
     exact S.place.2.isLt
   have hrow : rowBits (revealCode h site c₀).place (revealCode h site c₀).bits (r.opening h S g).2 =
-      rowBitsAt r.p r.wF (r.n h) S.port := by
+      rowBitsAt r.p r.wF (r.n h) (S.port r.u) := by
     apply rowBits_eq_of
     · show ((revealCode h site c₀).place g).1 = _
       rw [hplace, hlen, hw]
-    · show (rowBitsAt r.p r.wF (r.n h) S.port).getD ((revealCode h site c₀).place g).2 false =
+    · show (rowBitsAt r.p r.wF (r.n h) (S.port r.u)).getD ((revealCode h site c₀).place g).2 false =
         _root_.Flock.InnerRows.bitAt r.p r.wF 0 (r.β h) (r.wire h g)
       rw [hplace, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hlt, Option.getD_some, ← hcopy]
       simp only [rowBitsAt, List.getElem_ofFn]
     · intro i _
       exact bitsOf_dataOf _ _ _ i
   rw [row, hrow]
-  show (_root_.Flock.HmRow.rowPrefixV2 (rowBitsAt r.p r.wF (r.n h) S.port).length).data.toList ++
-      _root_.Flock.HmRow.packBits (rowBitsAt r.p r.wF (r.n h) S.port) =
-    FlockSoundness.Discharge.Hidden.Any.rowMsg (r.sts[0]!.c.ports[S.port]!)
+  show (_root_.Flock.HmRow.rowPrefixV2 (rowBitsAt r.p r.wF (r.n h) (S.port r.u)).length).data.toList ++
+      _root_.Flock.HmRow.packBits (rowBitsAt r.p r.wF (r.n h) (S.port r.u)) =
+    FlockSoundness.Discharge.Hidden.Any.rowMsg (r.sts[0]!.c.ports[S.port r.u]!)
       (FlockSoundness.Discharge.Hm.bytesOf (_root_.Flock.InnerRows.bitAt r.p r.wF 0 (r.n h / r.sts[0]!.c.g))
-        (2 * (r.sts[0]!.c.ports[S.port]!).words)
-        (FlockSoundness.Typed.msgCol r.sts[0]!.c (r.n h % r.sts[0]!.c.g) S.port))
+        (2 * (r.sts[0]!.c.ports[S.port r.u]!).words)
+        (FlockSoundness.Typed.msgCol r.sts[0]!.c (r.n h % r.sts[0]!.c.g) (S.port r.u)))
   rw [FlockSoundness.Discharge.Hidden.Any.rowMsg, hseg, hlen]
   simp only [Option.isSome_none, Bool.false_eq_true, FlockSoundness.Discharge.Hidden.rowPre, hv2,
     ↓reduceIte]
   congr 1
   exact packBits_ofFn (_root_.Flock.InnerRows.bitAt r.p r.wF 0 (r.n h / r.sts[0]!.c.g))
-    (2 * (r.sts[0]!.c.ports[S.port]!).words) (FlockSoundness.Typed.msgCol r.sts[0]!.c (r.n h % r.sts[0]!.c.g) S.port)
+    (2 * (r.sts[0]!.c.ports[S.port r.u]!).words)
+    (FlockSoundness.Typed.msgCol r.sts[0]!.c (r.n h % r.sts[0]!.c.g) (S.port r.u))
 
 theorem salt_opening (site : ℕ → Option Site) (c₀ : Code) (S : Site) (g : ℕ) :
     (revealCode h site c₀).salt (r.opening h S g).2 =
-      (_root_.Flock.InnerRows.salt r.p r.wF 0 (r.n h) S.port).data.toList := by
+      (_root_.Flock.InnerRows.salt r.p r.wF 0 (r.n h) (S.port r.u)).data.toList := by
   show saltOf (r.opening h S g).2 = _
   rw [saltOf_dataOf (r.opening h S g).2 _ _ _ rfl]
 
 theorem path_opening (site : ℕ → Option Site) (c₀ : Code) (S : Site) (g : ℕ) :
-    bytes ((revealCode h site c₀).π (r.opening h S g).2) = pathAt r.ins r.sts (r.n h) S.port := by
+    bytes ((revealCode h site c₀).π (r.opening h S g).2) = pathAt r.ins r.sts (r.n h) (S.port r.u) := by
   show bytes (pathOf (r.opening h S g).2) = _
   rw [pathOf_dataOf (r.opening h S g).2 _ _ _ rfl]
   exact bytes_bs _
