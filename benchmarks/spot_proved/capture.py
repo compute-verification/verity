@@ -1,6 +1,6 @@
 """A vLLM general plugin that records one replayed step's interior, per TP rank, in an engine that serves with CUDA graphs.
 
-    python capture.py site SITE --capture DIR --steps s[,s2] [--open dense:1,moe:1] [--mla-tokens 8] [--keep none|opened|all [--keep-steps s,...]] [--sampler] [--table L[,L2]]
+    python capture.py site SITE --capture DIR --steps s[,s2]|--steps-from STEPS.json [--open dense:1,moe:1] [--mla-tokens 8] [--keep none|opened|all [--keep-steps s,...]] [--sampler] [--table L[,L2]]
     PYTHONPATH=SITE <a vLLM engine>
 
 Registered as a ``vllm.general_plugins`` entry point (`site` writes the dist-info, and the capture's settings into
@@ -57,8 +57,10 @@ open, whose parameters each rank writes beside the step (``commit.json``, ``open
 With ``--table L[,L2]``, layers with their own indexer, each recorded step also writes on every rank, outside the step's
 root, each long row's history table at those layers (`_table_convert`): for each request whose last token of the step reads
 more than ``--table-keys`` keys, its n latent rows as the layer's paged cache holds them once the step's own are written, the
-n scores its top-k call ranked, the top-k the sparse backend's slot conversion maps (the canonical top-k), and the rows that
-attention read, under ``step<s>/table/`` (`_write_tables`). `table.py` checks that they join.
+n f32 scores its top-k call ranked, the top-k the sparse backend's slot conversion maps (the canonical top-k), and the rows
+that attention read, under ``step<s>/table/`` (`_write_tables`), and the step's ``meta.json`` names the layers. `table.py`
+checks that they join. The tables are private: ``SITE`` and ``DIR`` must lie outside any run directory, whose files custody
+uploads, and are made mode 0700 (`private_dir`); give the steps by ``--steps-from`` to keep them off the command line.
 """
 from __future__ import annotations
 
@@ -728,6 +730,8 @@ def _table_topk(op: str, flat: list) -> None:
             row = found[0]
             if "op" in e:
                 e["why"] = f"{e['op']} and {op} both rank its row"
+            if logits.dtype != torch.float32:
+                e["why"] = f"{op} ranks {logits.dtype} logits, not the f32 scores DsaTopKMaskCounted ranks"
             e.update(op=op, op_row=row, by="view" if view else "keys", keys=[int(lo[row]), int(hi[row])], op_out=out,
                      scores=logits[row, int(lo[row]):int(hi[row])].clone())
 
@@ -779,12 +783,50 @@ def _table_read(rows_at: Callable[[Any], Any], slots: Any) -> None:
 _TABLE = {"fused_norm_rope": _table_norm, "triton_convert_req_index_to_global_index": _table_convert}
 
 
-def _write_tables(d: Path) -> None:
+#: what marks a research run directory (``research.runs``), every file of which custody may upload to the store
+RUN_MARKS = ("job.json", "remote.json")
+
+
+def run_dir_of(p: Path) -> Path | None:
+    """The research run directory ``p`` lies in (``p`` or an ancestor holding a ``RUN_MARKS`` file), else None."""
+    p = Path(p).resolve()
+    return next((q for q in (p, *p.parents) if any((q / m).is_file() for m in RUN_MARKS)), None)
+
+
+def private_dir(p: Path, what: str) -> Path:
+    """``p``, made mode 0700; refused (SystemExit) inside a run directory, whose files custody uploads."""
+    if (run := run_dir_of(p)) is not None:
+        raise SystemExit(f"{what} {p} lies inside the run directory {run}, whose files custody uploads to the store: give it "
+                         "a private directory outside the run directory")
+    p.mkdir(parents=True, exist_ok=True, mode=0o700)
+    p.chmod(0o700)
+    return p
+
+
+def _private_write(path: Path, data: bytes) -> None:
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "wb") as f:
+        f.write(data)
+    path.chmod(0o600)
+
+
+def _write_tables(d: Path) -> dict[str, Any]:
     """``step<s>/table/`` (outside the step's root, as the sampler's records are): each ``--table`` row's ``<k>.kv`` (n rows of
     u16 words, the cache's bf16 bits), ``<k>.scores`` (n f32), ``<k>.topk`` (i32) and ``<k>.read`` (the rows attention read, one
-    a top-k slot), little-endian, with their shapes and SHA-512s in ``table.json``."""
+    a top-k slot), little-endian, with their shapes and SHA-512s in ``table.json``; the directory 0700 and its files 0600. A
+    capture directory that others can read or that lies inside a run directory gets no table and an error instead. Returns
+    what the step's ``meta.json`` records of them: the layers (decoder layer ``i`` of ``layers.<i>``), the key count, the rows
+    written and ``table.json``'s SHA-512."""
+    out = {"layers": sorted(S.table), "keys": S.table_keys, "rows": 0}
+    run, mode = run_dir_of(S.dir), S.dir.stat().st_mode & 0o777
+    if run is not None or mode & 0o077:
+        why = f"inside the run directory {run}" if run is not None else f"mode {mode:o}, not 0700"
+        S.errors.append(f"table: no table written, the capture directory is {why}")
+        S.tables.clear()
+        return {**out, "refused": why}
     td = d / "table"
-    td.mkdir(parents=True, exist_ok=True)
+    td.mkdir(parents=True, exist_ok=True, mode=0o700)
+    td.chmod(0o700)
     doc = {"rank": S.rank, "step": S.step, "keys": S.table_keys, "tables": []}
     for k, e in enumerate(S.tables):
         files = {}
@@ -792,10 +834,12 @@ def _write_tables(d: Path) -> None:
             v = e.pop(name, None)
             if v is not None:
                 raw = _flat_bytes(v).cpu().numpy()
-                (td / f"{k}.{name}").write_bytes(raw.tobytes())
+                _private_write(td / f"{k}.{name}", raw.tobytes())
                 files[name] = {"shape": list(v.shape), "dtype": str(v.dtype), "sha512": hashlib.sha512(raw).hexdigest()}
         doc["tables"].append({**e, "files": files})
-    (td / "table.json").write_text(json.dumps(doc, indent=1, sort_keys=True))
+    raw = json.dumps(doc, indent=1, sort_keys=True).encode()
+    _private_write(td / "table.json", raw)
+    return {**out, "rows": len(doc["tables"]), "sha512": hashlib.sha512(raw).hexdigest()}
 
 
 def _recorder_base():
@@ -1248,9 +1292,10 @@ def _finish(runner: Any) -> None:
     S.add("hash_drain", time.time() - t)
     d = S.root() / f"step{S.step}"
     d.mkdir(parents=True, exist_ok=True)
+    tables = None
     if S.table:
         t = time.time()
-        _write_tables(d)
+        tables = _write_tables(d)
         S.add("tables", time.time() - t)
     t = time.time()
     lines = "".join(json.dumps(e, sort_keys=True, separators=(",", ":")) + "\n" for e in S.events).encode()
@@ -1274,6 +1319,8 @@ def _finish(runner: Any) -> None:
             "host": {**_host_memory(), "copies_peak": S.hasher.peak if S.hasher else 0},
             "ops_sha512": ops_sha, "params_sha512": params_sha, "batch_sha512": batch_sha,
             "rank_root": hashlib.sha512(f"verity/spot/rank-root\0{ops_sha}\0{params_sha}\0{batch_sha}".encode()).hexdigest()}
+    if tables is not None:
+        meta["table"] = tables
     (d / "meta.json").write_text(json.dumps(meta, indent=1, sort_keys=True))
     commit = _commit_and_open(runner, d, meta["rank_root"])
     print(f"[spot-capture] rank {S.rank} step {S.step}: {len(S.events)} events, {meta['seconds']} s, check {meta['check']}, "
@@ -1370,8 +1417,12 @@ def _commit_and_open(runner: Any, d: Path, rank_root: str) -> dict:
 
 def site(d: Path, cfg: dict) -> Path:
     """A directory that, on PYTHONPATH, registers this file as the ``vllm.general_plugins`` entry ``verity_spot_capture``,
-    with ``cfg`` (`main`'s settings) beside it as `CONFIG`, and ``sha512.cuh`` beside it for `CHUNKS_CU`."""
+    with ``cfg`` (`main`'s settings) beside it as `CONFIG`, and ``sha512.cuh`` beside it for `CHUNKS_CU`. With ``table``
+    layers, ``d`` and the capture directory are made private (`private_dir`): the tables, and the steps in `CONFIG`, are."""
     import shutil
+    if cfg.get("table"):
+        private_dir(Path(cfg["capture"]), "the --table capture directory")
+        private_dir(d, "the --table site directory")
     info = d / "verity_spot_capture-0.0.dist-info"
     info.mkdir(parents=True, exist_ok=True)
     (info / "METADATA").write_text("Metadata-Version: 2.1\nName: verity-spot-capture\nVersion: 0.0\n")
@@ -1392,7 +1443,10 @@ def main(argv: list[str]) -> int:
     s = sub.add_parser("site", help="write the plugin's site directory, its settings beside it")
     s.add_argument("dir", type=Path)
     s.add_argument("--capture", required=True, help="where each rank's capture goes")
-    s.add_argument("--steps", required=True, help="the 0-based steps to record, comma-separated")
+    which = s.add_mutually_exclusive_group(required=True)
+    which.add_argument("--steps", help="the 0-based steps to record, comma-separated")
+    which.add_argument("--steps-from", type=Path, metavar="FILE",
+                       help="the steps to record from a private file, `table.py steps`' output, off the command line")
     s.add_argument("--open", default="dense:1,moe:1", help="how many layers of each kind the coins open, KIND:N,...")
     s.add_argument("--mla-tokens", type=int, default=8, help="how many of a sparse MLA call's tokens have their gathered KV rows recorded (FA3: those with the most keys)")
     s.add_argument("--keep", choices=("none", "opened", "all"), default="opened",
@@ -1420,7 +1474,9 @@ def main(argv: list[str]) -> int:
     s.add_argument("--table-keys", type=int, default=2048,
                    help="a row is long past this many keys (the indexer's top-k)")
     a = ap.parse_args(argv)
-    cfg = {"capture": str(Path(a.capture).resolve()), "steps": sorted({int(x) for x in a.steps.split(",") if x.strip()}),
+    steps = ({int(x) for x in a.steps.split(",") if x.strip()} if a.steps is not None
+             else {int(e["step"]) for e in json.loads(a.steps_from.read_text())["steps"]})
+    cfg = {"capture": str(Path(a.capture).resolve()), "steps": sorted(steps),
            "open": {k: int(n) for k, n in (x.split(":") for x in a.open.split(",") if x)}, "mla_tokens": a.mla_tokens,
            "keep": a.keep, "keep_steps": None if a.keep_steps is None else sorted({int(x) for x in a.keep_steps.split(",") if x.strip()}),
            "keep_max_mib": a.keep_max_mib, "min_free_gib": a.min_free_gib, "sampler": a.sampler,

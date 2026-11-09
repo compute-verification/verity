@@ -1,17 +1,18 @@
 """Whether a capture's history tables (`capture.py --table`) join: per (step, layer, request), the n latent rows below the row's
 keys, its n index scores and the top-k its attention read.
 
-    table.py steps --tree TREE --arm-dir ARM --load NAME [--rep 1] [--request ID] [--outputs 2] [--out STEPS.json]
-    table.py check CAPTURE [--steps STEPS.json] [--out FILE]
+    table.py steps --tree TREE --arm-dir ARM --load NAME [--rep 1] [--outputs 2] --out STEPS.json
+    table.py check CAPTURE [--steps STEPS.json] --out FILE
 
-``steps`` names, from the served window (TREE's ``benchmarks/serve_tax/replay.py`` `window`), the steps at which a
-request's outputs 0, 1, ... were sampled: output i from the row attending to ``len(prompt) + i`` keys, at the step whose row
-of the request ends there (``first position + tokens``). The window's step indices count from its first step, as
-``capture.py --steps`` counts a replay's steps from an empty engine. Without ``--request`` it takes the longest prompt.
+``steps`` names, from the served window (TREE's ``benchmarks/serve_tax/replay.py`` `window`), the steps at which the
+longest prompt's outputs 0, 1, ... were sampled: output i from the row attending to ``len(prompt) + i`` keys, at the step
+whose row of the request ends there (``first position + tokens``). The window's step indices count from its first step, as
+``capture.py --steps-from STEPS.json`` counts a replay's steps from an empty engine.
 
 ``check`` reads every ``rank<r>/step<s>/table/table.json`` under CAPTURE and holds each table to:
 
-* its files' SHA-512s and shapes: n rows of the cache's words, n scores, one top-k, the rows attention read;
+* its files' SHA-512s, dtypes and shapes: n rows of the cache's bf16 words, n f32 scores, one i32 top-k, the bf16 rows
+  attention read;
 * n = position + 1, past the step's ``keys`` (the indexer's top-k, so the row's top-k keeps only some keys);
 * the top-k is the canonical top-k of the scores (`dsa_topk.canonical_ok` over their f32 bits): the 2,048 positions whose
   scores rank first, in ascending order, the members of the counted mask ``DsaTopKMaskCounted`` computes from them;
@@ -19,13 +20,16 @@ of the request ends there (``first position + tokens``). The window's step indic
 * every rank holds the same table, scores and top-k (the latent cache is replicated across TP ranks);
 * with ``--steps``, each named (step, request) has a table at n = ``len(prompt) + i`` on every layer it has one on.
 
-It prints a summary and exits 1 when any table fails.
+Both write their result (request ids, steps, lengths) only to ``--out``, a file of mode 0600 outside any run directory
+(`capture.run_dir_of`), and print counts; ``check`` exits 1 when any table fails.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -34,6 +38,8 @@ import numpy as np
 from verity.ml.definitions.registry.dsa_topk import canonical_ok
 
 DTYPES = {"torch.bfloat16": "<u2", "torch.float32": "<u4", "torch.int32": "<i4"}
+#: each file's dtype: the cache's and attention's bf16 rows, the f32 scores the counted mask ranks, the i32 top-k
+WANT = {"kv": "torch.bfloat16", "scores": "torch.float32", "topk": "torch.int32", "read": "torch.bfloat16"}
 
 
 def decode_steps(w: dict, request: str | None = None, outputs: int = 2) -> dict:
@@ -70,6 +76,9 @@ def check_table(td: Path, k: int, e: dict, keys: int) -> list[str]:
     for name in ("kv", "scores", "topk", "read"):
         if name not in files:
             why.append(f"no {name}")
+            continue
+        if files[name]["dtype"] != WANT[name]:
+            why.append(f"{k}.{name} is {files[name]['dtype']}, not {WANT[name]}")
             continue
         got[name], w = _array(td, k, name, files[name])
         if w:
@@ -127,32 +136,55 @@ def check(capture: Path, steps: dict | None = None) -> dict:
             "missing": missing, "ok": bool(tables) and not failed and not missing}
 
 
+def _run_dir_of(p: Path) -> Path | None:
+    spec = importlib.util.spec_from_file_location("spot_capture", Path(__file__).with_name("capture.py"))
+    capture = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(capture)
+    return capture.run_dir_of(p)
+
+
+def write_private(path: Path, text: str) -> None:
+    """``text`` to ``path`` with mode 0600; refused (SystemExit) inside a run directory, whose files custody uploads."""
+    if (run := _run_dir_of(path.parent)) is not None:
+        raise SystemExit(f"--out {path} lies inside the run directory {run}, whose files custody uploads to the store: "
+                         "give it a private path outside the run directory")
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(text)
+    path.chmod(0o600)
+
+
+def summary(cmd: str, res: dict) -> dict:
+    """What ``res`` says that may be printed: counts, no request id, step or length."""
+    if cmd == "steps":
+        return {"outputs": len(res["steps"]), "found": sum(s["step"] is not None for s in res["steps"])}
+    return {"ok": res["ok"], "tables": res["tables"], "ranks": len(res["ranks"]), "failed": len(res["failed"]),
+            "missing": len(res["missing"])}
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    s = sub.add_parser("steps", help="the steps sampling a request's first outputs, from the served window")
+    s = sub.add_parser("steps", help="the steps sampling the longest prompt's first outputs, from the served window")
     s.add_argument("--tree", type=Path, required=True)
     s.add_argument("--arm-dir", type=Path, required=True)
     s.add_argument("--load", required=True)
     s.add_argument("--rep", type=int, default=1)
-    s.add_argument("--request")
     s.add_argument("--outputs", type=int, default=2)
-    s.add_argument("--out", type=Path)
+    s.add_argument("--out", type=Path, required=True, help="the result, private: outside any run directory, mode 0600")
     c = sub.add_parser("check", help="whether a capture's history tables join")
     c.add_argument("capture", type=Path)
     c.add_argument("--steps", type=Path, help="steps' output: each named step must hold the request's table")
-    c.add_argument("--out", type=Path)
+    c.add_argument("--out", type=Path, required=True, help="the result, private: outside any run directory, mode 0600")
     a = ap.parse_args(argv)
     if a.cmd == "steps":
         sys.path.insert(0, str(a.tree / "benchmarks" / "serve_tax"))
         import replay
-        res = decode_steps(replay.window(a.arm_dir, a.load, a.rep), a.request, a.outputs)
+        res = decode_steps(replay.window(a.arm_dir, a.load, a.rep), None, a.outputs)
     else:
         res = check(a.capture, json.loads(a.steps.read_text()) if a.steps else None)
-    text = json.dumps(res, indent=1)
-    if a.out:
-        a.out.write_text(text)
-    print(text)
+    write_private(a.out, json.dumps(res, indent=1))
+    print(json.dumps(summary(a.cmd, res)))
     return 0 if a.cmd == "steps" or res["ok"] else 1
 
 

@@ -56,11 +56,17 @@ def _stub(monkeypatch) -> None:
     sys.modules[f"{FAMS}.flashmla_sparse"].FlashMLASparseImpl = type("FlashMLASparseImpl", (), {})
 
 
-def _capture(tmp_path, monkeypatch):
+def _module(monkeypatch):
     spec = importlib.util.spec_from_file_location("spot_capture_table", HERE / "capture.py")
     capture = importlib.util.module_from_spec(spec)
     monkeypatch.setitem(sys.modules, spec.name, capture)
     spec.loader.exec_module(capture)
+    return capture
+
+
+def _capture(tmp_path, monkeypatch):
+    capture = _module(monkeypatch)
+    tmp_path.chmod(0o700)
     S = capture._State({"capture": str(tmp_path), "steps": [3], "mla_tokens": 0, "open": {}, "keep": "none",
                         "table": [LAYER], "table_keys": K})
     monkeypatch.setattr(capture, "S", S)
@@ -86,7 +92,7 @@ def _canonical(scores, n):
     return sorted(sorted(range(n), key=lambda j: (-scores[j], j))[:K]) if n > K else list(range(n)) + [-1] * (K - n)
 
 
-def _step(capture, *, copied: bool = False, other_request: bool = False, dtype: str = "auto"):
+def _step(capture, *, copied: bool = False, other_request: bool = False, dtype: str = "auto", logits=torch.float32):
     """One layer of the step: its cache write, a decode top-k over lengths, a prefill top-k over row bounds, the slot
     conversion and FA3's read. Returns the cache and what each kept row's scores and top-k must be."""
     g = torch.Generator().manual_seed(3)
@@ -101,7 +107,7 @@ def _step(capture, *, copied: bool = False, other_request: bool = False, dtype: 
                                       None, buf, slot_mapping=slots, mla_kv_cache=cache, mla_kv_cache_dtype=dtype,
                                       kv_c_out=torch.empty_like(kv_c), k_pe_out=torch.empty_like(k_pe))
 
-    dec = torch.randn(2, 16, generator=g)
+    dec = torch.randn(2, 16, generator=g).to(logits)
     lengths = torch.tensor([[7], [3]], dtype=torch.int32)
     dec_out = torch.empty(2, K, dtype=torch.int32) if copied else buf[0:2]
     want = {0: (dec[0, :7], _canonical(dec[0].tolist(), 7))}
@@ -116,7 +122,7 @@ def _step(capture, *, copied: bool = False, other_request: bool = False, dtype: 
     if copied:
         buf[0:2] = dec_out
 
-    pre = torch.randn(3, 20, generator=g)
+    pre = torch.randn(3, 20, generator=g).to(logits)
     starts, ends = torch.tensor([2, 2, 2], dtype=torch.int32), torch.tensor([9, 10, 11], dtype=torch.int32)
     want[4] = (pre[2, 2:11], _canonical(pre[2, 2:11].tolist(), 9))
 
@@ -145,7 +151,7 @@ def _u16(t):
 
 def _finish(capture, S, tmp_path) -> Path:
     d = S.root() / f"step{S.step}"
-    capture._write_tables(d)
+    S.written = capture._write_tables(d)
     capture._drain()
     return d / "table"
 
@@ -171,6 +177,67 @@ def test_each_long_rows_table_scores_and_canonical_top_k_are_written_and_join(tm
 
     res = _table().check(tmp_path, {"request": "p", "steps": [{"output": 0, "n": 9, "step": 3}]})
     assert res["ok"] and res["tables"] == 2 and res["failed"] == res["missing"] == []
+    import hashlib
+    assert S.written == {"layers": [LAYER], "keys": K, "rows": 2,
+                         "sha512": hashlib.sha512((td / "table.json").read_bytes()).hexdigest()}
+    assert td.stat().st_mode & 0o777 == 0o700
+    assert {f.name: f.stat().st_mode & 0o777 for f in td.iterdir()} == {
+        f"{k}.{x}": 0o600 for k in (0, 1) for x in ("kv", "scores", "topk", "read")} | {"table.json": 0o600}
+
+
+def test_a_top_k_over_bf16_logits_writes_no_table(tmp_path, monkeypatch) -> None:
+    _stub(monkeypatch)
+    capture, S = _capture(tmp_path, monkeypatch)
+    _step(capture, logits=torch.bfloat16)
+    assert S.tables == [] and len(S.errors) == 2
+    assert all(e.endswith("ranks torch.bfloat16 logits, not the f32 scores DsaTopKMaskCounted ranks") for e in S.errors)
+
+
+@pytest.mark.parametrize("where", ["open", "run"])
+def test_a_capture_directory_others_can_read_or_inside_a_run_directory_gets_no_table(tmp_path, monkeypatch, where) -> None:
+    _stub(monkeypatch)
+    capture, S = _capture(tmp_path, monkeypatch)
+    _step(capture)
+    if where == "open":
+        tmp_path.chmod(0o755)
+    else:
+        (tmp_path / "job.json").write_text("{}")
+    td = _finish(capture, S, tmp_path)
+    why = "mode 755, not 0700" if where == "open" else f"inside the run directory {tmp_path.resolve()}"
+    assert not td.exists() and S.tables == [] and S.written == {"layers": [LAYER], "keys": K, "rows": 0, "refused": why}
+    assert S.errors == [f"table: no table written, the capture directory is {why}"]
+
+
+def test_site_with_tables_refuses_a_run_directory_and_makes_its_directories_private(tmp_path, monkeypatch) -> None:
+    capture = _module(monkeypatch)
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "remote.json").write_text("{}")
+    with pytest.raises(SystemExit, match="lies inside the run directory"):
+        capture.main(["site", str(tmp_path / "site"), "--capture", str(run / "out" / "cap"), "--steps", "3", "--table", "2"])
+    steps = tmp_path / "steps.json"
+    steps.write_text(json.dumps({"request": "x", "prompt": 9, "steps": [{"output": 0, "n": 9, "step": 3},
+                                                                        {"output": 1, "n": 10, "step": 4}]}))
+    priv = tmp_path / "priv"
+    capture.main(["site", str(priv / "site"), "--capture", str(priv / "cap"), "--steps-from", str(steps), "--table", "2"])
+    assert [(priv / x).stat().st_mode & 0o777 for x in ("site", "cap")] == [0o700, 0o700]
+    assert json.loads((priv / "site" / capture.CONFIG).read_text())["steps"] == [3, 4]
+
+
+def test_table_py_writes_its_result_privately_and_prints_counts_only(tmp_path, monkeypatch, capsys) -> None:
+    _written(tmp_path, monkeypatch)
+    table, out = _table(), tmp_path / "check.json"
+    assert table.main(["check", str(tmp_path), "--out", str(out)]) == 0
+    assert json.loads(capsys.readouterr().out) == {"ok": True, "tables": 2, "ranks": 1, "failed": 0, "missing": 0}
+    assert out.stat().st_mode & 0o777 == 0o600 and json.loads(out.read_text())["rows"][0][2] == "d"
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "job.json").write_text("{}")
+    with pytest.raises(SystemExit, match="lies inside the run directory"):
+        table.main(["check", str(tmp_path), "--out", str(run / "check.json")])
+    assert not (run / "check.json").exists()
+    with pytest.raises(SystemExit):
+        table.main(["check", str(tmp_path)])
 
 
 def test_a_conversion_that_takes_a_kept_token_as_another_request_writes_no_table_and_says_so(tmp_path, monkeypatch) -> None:
@@ -211,6 +278,41 @@ def test_check_refuses_a_top_k_that_is_not_the_scores_canonical_one(tmp_path, mo
     _rewrite(td, 1, "topk", lambda a: a[::-1])
     res = _table().check(tmp_path)
     assert not res["ok"] and [f["why"] for f in res["failed"]] == [["its top-k is not the canonical top-4 of its scores"]]
+
+
+def test_check_refuses_scores_that_are_not_f32(tmp_path, monkeypatch) -> None:
+    td = _written(tmp_path, monkeypatch)
+    doc = json.loads((td / "table.json").read_text())
+    doc["tables"][1]["files"]["scores"]["dtype"] = "torch.bfloat16"
+    (td / "table.json").write_text(json.dumps(doc))
+    _rewrite(td, 1, "scores", lambda a: (a.view("<u4") >> 16).astype("<u2"))
+    res = _table().check(tmp_path)
+    assert [f["why"] for f in res["failed"]] == [["1.scores is torch.bfloat16, not torch.float32"]]
+
+
+def _tie(td: Path, scores: np.ndarray, pick: list[int]) -> None:
+    kv = np.fromfile(td / "1.kv", "<u2").reshape(len(scores), -1)
+    _rewrite(td, 1, "scores", lambda a: scores)
+    _rewrite(td, 1, "topk", lambda a: np.asarray(pick, "<i4"))
+    _rewrite(td, 1, "read", lambda a: kv[pick].reshape(-1))
+
+
+def test_a_tie_across_the_cut_goes_to_the_smaller_positions_as_the_counted_mask_breaks_it(tmp_path, monkeypatch) -> None:
+    """Five keys tie for the last three of four slots: `DsaTopKMaskCounted_v2` keeps positions 1 to 3, and the check accepts
+    that top-k and refuses one keeping position 5 in place of 3."""
+    from verity.ml.circuits import evaluation as E
+    from verity.ml.circuits.boolean import trace as TR
+    from verity.ml.circuits.defs import bind
+    from verity.ml.definitions.registry import boolean_dsa_topk_mask as BM
+    td = _written(tmp_path, monkeypatch)
+    scores, N = np.array([2, 1, 1, 1, 1, 1, 0, 0, 0], "<f4"), 16
+    row = scores.view("<u4").tolist() + [0] * (N - len(scores))
+    mask = np.asarray(E.evaluate_batch(TR.word_of(bind(BM.DsaTopKMaskCountedV2, N=N, TOPK=K)), [row], [len(scores)]))
+    assert np.nonzero(mask.reshape(-1))[0].tolist() == [0, 1, 2, 3]
+    _tie(td, scores, [0, 1, 2, 3])
+    assert _table().check(tmp_path)["ok"]
+    _tie(td, scores, [0, 1, 2, 5])
+    assert [f["why"] for f in _table().check(tmp_path)["failed"]] == [["its top-k is not the canonical top-4 of its scores"]]
 
 
 def test_check_refuses_a_table_row_attention_did_not_read(tmp_path, monkeypatch) -> None:
