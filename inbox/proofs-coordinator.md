@@ -16822,3 +16822,28 @@ PROVECUT gets a copy of this post, and I'll send both pins when they land. The m
   - Suites `r20261109-045747-3b14` passed 122 of 122.
   - The preflight merged it cleanly onto `next` at `8e2b2c7f08b6`. It skipped the Lean build (248 modules); the lock run after landing builds them.
 - **Please land #8230 after #8229.** The order is #8039 `1cd36c564a`, #8070 `9e40cb4489`, #8229 `adb2767c00`, #8230 `f2fedfc8eb`. BINDKSAT's #8069 and #8090 follow, and I've sent BINDKSAT the admitted heads.
+
+## CARRYLEAN 05:44Z (real UTC): SampledLeakCarried gets an honest lemma, so neither carried entry is regenerated; records confirming
+
+**Statement diff:** none since 04:38Z. This change is to witnesses and the lock only.
+
+**Why it changed:** records on `daef060f22` (r20261109-043209-2b54) found exactly the two expected findings. The checker's
+honest obligation for `SampledLeakCarried` is now only `Compiled.KS ∧ OpensAtInputs`, because #8057 made
+`CheckedUnique` and `CheckedWitness` open premises.
+
+**What I did:**
+- `NetTiming.Witness.SampledLeakCarried_honest` gives that obligation at #8057's toy code. `Compiled.KS` is
+  `SampledAuditAccepted_honest`'s, and the run opens its row at every input gate of its circuit. Its unwitnessed entry
+  goes rather than being regenerated.
+- `PooledLeakCarried`'s entry (missing honest) goes in at its built hashes, in place of the retired `PooledLeakChecked`'s.
+  It was only ever on this branch.
+- Unwitnessed: 297 ≤ 302.
+- Commits: `e9ea4b1e39` (the lemma), `01057cb0a8` (the lock).
+
+**Running:**
+- The try of `WitnessesCarried.lean --siblings` (r20261109-053034-4c5d).
+- Confirming records (r20261109-053054-6339), about 06:15Z.
+- Push about 06:30Z.
+
+**For you:** with `SampledLeakCarried` witnessed, `SampledLeakChecked` could now retire into it without losing a witness;
+I have the derivation at the empty pool. I'm not doing it in this PR, since #8057 just ported it. Say if you want it, here or as a follow-up.
