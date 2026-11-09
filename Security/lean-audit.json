@@ -772,7 +772,7 @@
   },
   "Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase": {
    "owner": "@compute-accounting",
-   "digest": "19de4d95e501636b06b44f3f2b8d4f466291377913266366ee89e7ebe5d629d5",
+   "digest": "2ce8874e28d0b9a2c022d297f7757293ee2dc218a552922e1737d9cc00abc815",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -4605,11 +4605,11 @@
   },
   "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod": {
    "type_hash": "2536a94c48b776f6a1a3a25ede2077392d15937d2f8f70321abbf5ddf02575f7",
-   "unfolded_hash": "dea45324beebf7bc9a04e879562561def879c06cd1e32270953f286312748241"
+   "unfolded_hash": "483d576b0c8d36d74a138f4627fe060dd8cbf1e1588f4342f8e8de6da83a8ad6"
   },
   "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod": {
    "type_hash": "b36ccf1574d4991f403428d8b3cbb20397872b9f6341f217dfd141a2fdc5efe2",
-   "unfolded_hash": "f93482c16c7de4cacf5c5e5ffe7295f0c46d1ba7e964cc6282ec1dc8af1da209"
+   "unfolded_hash": "0ae37756f44c2d81d9dd0f619470d3407f42b8684313a010c227189711f1d5f1"
   },
   "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced": {
    "type_hash": "2eed0526fa5f4476b6ce1975b042190a9566a0568b57aee689ee3a023705ede8",
@@ -7000,7 +7000,7 @@
      "Accounting.Assumptions.TS.OperandHMu",
      "Accounting.Assumptions.TS.ReceiptLuckAt",
      "Accounting.Assumptions.TS.UnitFixed",
-     "Accounting.Compose.ExecutionPhasePlay.EveryWindow",
+     "Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase",
      "Accounting.Compose.PrefixOf",
      "Accounting.Compose.Scope",
      "Accounting.Compose.SplitRate",
@@ -7010,7 +7010,7 @@
     "reads": []
    },
    "type_hash": "2536a94c48b776f6a1a3a25ede2077392d15937d2f8f70321abbf5ddf02575f7",
-   "unfolded_hash": "dea45324beebf7bc9a04e879562561def879c06cd1e32270953f286312748241"
+   "unfolded_hash": "483d576b0c8d36d74a138f4627fe060dd8cbf1e1588f4342f8e8de6da83a8ad6"
   },
   "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod": {
    "owner": "@compute-accounting",
@@ -7027,7 +7027,7 @@
      "Accounting.Assumptions.TS.OperandHMu",
      "Accounting.Assumptions.TS.ReceiptLuckAt",
      "Accounting.Assumptions.TS.UnitFixed",
-     "Accounting.Compose.ExecutionPhasePlay.EveryWindow",
+     "Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase",
      "Accounting.Compose.PrefixOf",
      "Accounting.Compose.Scope",
      "Accounting.Compose.SplitRate",
@@ -7037,7 +7037,7 @@
     "reads": []
    },
    "type_hash": "b36ccf1574d4991f403428d8b3cbb20397872b9f6341f217dfd141a2fdc5efe2",
-   "unfolded_hash": "f93482c16c7de4cacf5c5e5ffe7295f0c46d1ba7e964cc6282ec1dc8af1da209"
+   "unfolded_hash": "0ae37756f44c2d81d9dd0f619470d3407f42b8684313a010c227189711f1d5f1"
   },
   "Accounting.SecurityProofs.Composition": {
    "owner": "@memory-accounting",
@@ -29167,21 +29167,21 @@
    }
   },
   "Definitions.Accounting.ComposeMonitoringPeriod": {
-   "digest": "b16ed858d920888aa5f35f33c9227850fcb874287a95cbaec25c3dbbb9ef48a6",
+   "digest": "a15f41b12ce90f435517dd6eed4bb1091e4c658e4c024ef3cb2bb4e91815434b",
    "definitions": {
     "Accounting.Compose.DeadConeDead": "ca2183fb0f093df1f54d1a511bac3482a6808e51a6b37b292fc94e8fc2c96bc7",
     "Accounting.Compose.Declared.monitoringPeriodLayer": "9f5b3efa6406c5cc12a5a61da7f5ed66b017f23304064839fe4600690f1dd7b2",
     "Accounting.Compose.ExecutionPhasePlay": "c83044b357b1b0a407778073e32f98b6da8f1c20a30d38dbd3cd55e5f19fa2ea",
-    "Accounting.Compose.ExecutionPhasePlay.EveryWindow": "19de4d95e501636b06b44f3f2b8d4f466291377913266366ee89e7ebe5d629d5",
+    "Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase": "2ce8874e28d0b9a2c022d297f7757293ee2dc218a552922e1737d9cc00abc815",
     "Accounting.Compose.ExecutionPhasePlay.below": "12df5c5599f57b661e2e73941b584812c2ecbc0c79c62f0e62df2cdc630a22bc",
     "Accounting.Compose.ExecutionPhasePlay.brecOn": "279e764e031ad78abda7ef38724a7626b4d58c954b278e0640c294a2070e9671",
     "Accounting.Compose.ExecutionPhasePlay.brecOn.go": "be6420fe4ba2e2369228ec269f65a3705e84ad9369bef547f58771ab5cd4cf9c",
     "Accounting.Compose.ExecutionPhasePlay.casesOn": "7a3fe9b4b3abb5a9bbaa2ff43e49ccb832f832f5a0298b3ae72d3ec848772eda",
     "Accounting.Compose.ExecutionPhasePlay.done": "590f71e089f2e1726cbac8894f86ab22b3d2831988ba9e77c89020da03009439",
+    "Accounting.Compose.ExecutionPhasePlay.executionPhaseAt": "1b9d3b725b8ef431e2307e80d62530b2cf5d14f0bdd4ad955e7a32888aba6a02",
     "Accounting.Compose.ExecutionPhasePlay.liveAt": "3765a0301b32ac162961680d59ab170989a88e25c4d964ed64cf0a6aecafe17f",
     "Accounting.Compose.ExecutionPhasePlay.rec": "39bbc2d8ab93ff4463e68fe58e8b57a4de9b621316dbde8e2484aefaaa3d7aa8",
     "Accounting.Compose.ExecutionPhasePlay.window": "d961dd403af25e1a004c473ecf576e727dab9ab430e4785d969c66672f97ea2f",
-    "Accounting.Compose.ExecutionPhasePlay.windowAt": "89b8c2f5b7daaa57018ec5014e689e8eea94b8ad076bfe110c8d55d8bcf4ceaa",
     "Accounting.Compose.LiveWorkAt": "203edab3102362aec64440656abdcf8f3054d98a5a0d76734148dd122bdbe273",
     "Accounting.Compose.Outcomes": "a9f20d105e98575e23a6a23788f4a1a7c4d66d94cd1d0766ab4512b476b639bf",
     "Accounting.Compose.Outcomes.Credited": "438ee294cf5c6d99ec32c025241859d478b400ccb0740c4cdab2692dc9318051",
@@ -29200,7 +29200,7 @@
     "Accounting.Compose.liveCone": "fc1a07b9904b18a8d083652f260526228ad818a5cc1a1e314d3e7be4a07d7daf",
     "Accounting.Compose.liveWords": "0a60576d88cab5b6bc1024f19524c7b48d52b16e2c43faf43a10af4bb7379bdf",
     "Accounting.Compose.monitoringPeriodGame": "ce67d9fd60e6fd015e0fc38215f4d07548f44ae0196972a7c1f652e9902e9a2f",
-    "Accounting.Compose.monitoringPeriodMode": "03845c5720544222c183dd84603208f03ee50de32d66cb925a7aee061bf9039a",
+    "Accounting.Compose.monitoringPeriodMode": "bd2a8875e4610ce0bd6fe69abc37a0024014f0261eb021eaffb21a7455e7ba57",
     "Accounting.Compose.rOfPrefix": "1166975ed785ba47325b1d4600a1cc953f9dcbbd8d561d612307cf64bb1afb83"
    }
   },
@@ -29701,10 +29701,10 @@
    }
   },
   "Definitions.Accounting.Guarantees.ComposeMonitoringPeriod": {
-   "digest": "91b3248d860eadb7908185f62067f084a588c4aa041ce30c60696588c96ed3af",
+   "digest": "d0d26549d338be02bb1db4282a2c960905c799334d253bd882b61e64eaa05b27",
    "definitions": {
-    "Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod": "9e2498265ad2c0a35d3c870540b5b1626b6e81c915e51a65eedb208565da0a3a",
-    "Accounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod": "3159e883fdc6225ce652b4440338ac4c739f7693d0e39109e0a80e336865b052"
+    "Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod": "8f6c83e9015871b78f525cfbbb014a32b4b25b36dfe02e8b1f647cba1d6ce9cb",
+    "Accounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod": "7d57d09dfadd7e87118640637577f7f8d6a4a6437120a50df98b26c8ec52636a"
    }
   },
   "Definitions.Accounting.Guarantees.Confidence": {
