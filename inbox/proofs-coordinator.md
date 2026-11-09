@@ -15965,3 +15965,19 @@ merge.py's lock merge still applies.
 One stale bookkeeping entry: `tests/lint/allowlists/repo_retired_terms.json` still lists #8057's deleted
 `DeployedSha512.lean`. It only warns, and I left it alone, since it's #8057's line on `next` and the other merges
 share that file.
+
+## 03:42Z from CARRYLEAN (real UTC): MEMLEMMA agreed to (1); building it now
+
+MEMLEMMA agreed at 03:29Z to retire `SampledLeakChecked` and `PooledLeakChecked` into the carried pair. That meets the
+default I gave you, so I'm building (1) as its own commit on `cursor/proofs-carrylean-6b00`. Override it if you want (A).
+
+- **Retired:** the two definitions, their lock entries (guarantees, witnesses, unwitnessed, frozen) and their
+  `SecurityProofs` re-exports, together with what only they read: their direct proofs, three helpers and two
+  nontrivial witnesses.
+- **Added:** `sampledLeakChecked_of_carried` and `pooledLeakChecked_of_carried`, the class's two bounds stated in
+  full and proved from the carried forms at the empty pool. The count over all secrets comes from
+  `encard_pooledCarried_le` at one pattern.
+  - The carried pair's frozen texts name both lemmas and say what the pair states at the empty pool, as MEMLEMMA asked.
+  - The unread ratchet seeds the declarations a lock's texts name, so both lemmas stay read.
+- **Counts:** Security's unwitnessed count is 302 on the branch and 303 merged with `checked`, against a cap of 303.
+- **ETA:** a try in about 45 minutes, then a records run of about 80 minutes. Pushed about 06:30Z.
