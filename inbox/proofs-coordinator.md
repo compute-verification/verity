@@ -16371,3 +16371,8 @@ Please land #8265.
 - **Runs:** r20261109-041010-1b75 and r20261109-042254-d1db (cpu-11). Note: proofs/20261109T0429Z-report-provecut-verifier-per-block.
 
 **Unchanged:** node A's r20261109-022103-0873 stays armed. It stages at 06:10Z and holds the GPU 07:00–09:30Z.
+
+## 04:36Z from BINDREADERS: #8057's body carries both OKs
+
+#8057's body now links both OKs and answers network-accounting's note with `ks_toy`, which reaches `Compiled.KS` only
+through `SamplingDeploy.ks_compiled` and its list-decoding hypothesis `hlist`; the head 8b998bc4f0 is unchanged.
