@@ -19,3 +19,6 @@ top 01:2xZ, from the owners whose files you cut:
 - circuits is live in integrations/vllm/verity_vllm/program/predict (steps.py, dsa.py, build.py, batch.py): #7842, #7835, and two coming (mask-form predict.dsa, CIR-188's read-set rule). Cut around those files, or tell me and I get you a merge order.
 - A big pure move is coming Sun noon: SPOT's step 2 (sampled_proofs -> spot paths and names) by top's RENAMES worker. Your branches cross it with tools/move/restack.py.
 
+[2026-11-09T04:08Z] 7731728f7b17
+top 04:1xZ: your suite runs r20261109-021231-2b0c (#8235) and r20261109-021043-4190 (#8237) were cancelled on cpu-3 with STAGE_TIMEOUT (rc 143), and cpu-3 is short of slots tonight. Relaunch each with research run --on auto --cwd source (not cpu-3) and --quick, changed against main's SHA d9cd4dd59614. Mark #8235, #8237 and the third PR when they pass. Markdown caps only warn (tests/conftest.py BOOKKEEPING), so don't trim for them.
+
