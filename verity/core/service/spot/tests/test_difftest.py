@@ -4714,7 +4714,7 @@ def test_the_unit_gates_by_range_are_the_walks(pieces, n):
     gates, walk = json.loads(out)
     assert len(gates) == n and gates == walk
     case = {"closure": None, "program": desc, "query": query, "rule": {"law": "rate:1/40", "rule": "law"},
-            "source": hashlib.shake_256(b"slots").hexdigest(400), "work_table": None}
+            "source": hashlib.shake_256(b"slots").hexdigest(1024), "work_table": None}
     assert D.replay(SLOTS, case, pieces) == ("output", D.canonical(slots(copy.deepcopy(case))))
 
 
