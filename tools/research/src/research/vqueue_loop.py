@@ -232,7 +232,7 @@ class World:
             q._kept = json.loads(q._kept_at.read_text()) if q._kept_at.is_file() else {}
         self.post: Callable[[str, tuple[str, ...]], bool] = post or merge_thread_post
         #: graph2's subcommands it was found to lack (`_graph2`)
-        self.lacks: set[str] = set()
+        self.absent: set[str] = set()
         #: by (head, `main`): its files (`_changed`), and (lean, conflict) (`_judge`)
         self._files: dict[tuple[str, str], frozenset[str]] = {}
         self._judged: dict[tuple[str, str], tuple[bool, bool]] = {}
@@ -471,11 +471,11 @@ class World:
 
     def _graph2(self, *args: str) -> subprocess.CompletedProcess | None:
         """graph2 run with ``args``; None when it has no such subcommand (argparse's `invalid choice`), or there is no graph2."""
-        if not self.graph2 or args[0] in self.lacks:
+        if not self.graph2 or args[0] in self.absent:
             return None
         r = subprocess.run([*self.graph2, *args], cwd=self.repo, capture_output=True, text=True, stdin=subprocess.DEVNULL)
         if r.returncode == 2 and "invalid choice" in r.stderr:
-            self.lacks.add(args[0])
+            self.absent.add(args[0])
             self.log(f"research queue vqueue: graph2 has no `{args[0]}`")
             return None
         return r

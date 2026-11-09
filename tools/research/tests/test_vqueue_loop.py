@@ -4,6 +4,7 @@ Every test reads the clock it injects."""
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -382,6 +383,38 @@ def test_a_build_whose_enqueue_failed_is_logged_stops_the_tick_and_is_enqueued_b
     (retry,) = loop.tick()
     assert (retry["action"], retry["enqueued"], retry["mark"], retry["priority"]) == ("retry", True, "not enqueued", 5)
     assert [e["check"] for e in env.graph2.enqueued()] == [f"ready:{built['sha']}"] and loop.tick() == []
+
+
+GRAPH2 = '''
+import argparse, json, sys
+ap = argparse.ArgumentParser()
+sub = ap.add_subparsers(dest="cmd", required=True)
+for c in ("verdict", "cancel"):
+    sub.add_parser(c).add_argument("--check")
+a = ap.parse_args()
+if a.cmd == "verdict":
+    print(json.dumps({"state": "fail", "check": a.check}))
+else:
+    with open(sys.argv[0] + ".cancelled", "a") as f:
+        f.write(a.check + "\\n")
+'''
+
+
+def test_graph2_s_own_verdict_is_kept_beside_the_loop_s_and_its_cancel_runs_on_a_drop(env):
+    (script := env.tmp / "graph2.py").write_text(GRAPH2)
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(policy, state=(state := env.tmp / "vqueue" / "state.json"))
+    loop.world.graph2 = (sys.executable, str(script))
+    (built,) = loop.tick()
+    sha = built["sha"]
+    keys = env.listed(sha, {"pytest:a": ["a.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    assert _acts(loop.tick()) == ["advance"]                    # the loop's own verdict, pass, is the one used
+    kept = json.loads(state.read_text())
+    assert kept["candidates"][sha]["mine"] == PASS and kept["candidates"][sha]["graph2"] == FAIL and kept["disagree"] == [sha]
+    assert any("graph2 says fail" in x for x in env.out)
+    (drop,) = loop.tick()
+    assert drop["cancel"] == "cancelled" and Path(f"{script}.cancelled").read_text() == f"ready:{sha}\n"
 
 
 def test_each_tick_reads_the_labels_afresh_as_drive_reads_them(env):
