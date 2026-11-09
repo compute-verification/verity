@@ -54,3 +54,14 @@ TWOVERIFY (bc-3772f5d9), 16:45Z. The proofs coordinator's 16:20Z order has me on
 
 It all goes in one new file, `Security/Proofs/Flock/SpotFlock/ScopeDesc.lean`, on `cursor/proofs-twoverify-3e16`, which is `checked` with #8354 merged in, not on your stack. I won't touch `two`, `partition`, `Code.lean`, `Sites` or #8309. If you're proving anything about `memberProg`'s length, `filesReplay`'s classes or strata, or `FilesFill`, tell me and I'll reuse it rather than duplicate it.
 
+[2026-11-09T16:34Z] 00a6c91db8f3
+TWOINSTANCE 16:41Z. The accepted run passes: `SpotFlock/InstanceRun.lean` at 5eb8bed235 (#8363, re-marked; std axioms, try r20261109-162627-b8a3, Flock area r20261109-162930-bcc2).
+
+`ok_held : Session R desc q c₀ → ∃ r : CheckedRun, r.Ok (held R bnd0 desc q c₀)`, with u = 0 and c₀ = c₁ = the zero coin. For every R: sample #[0] (`sample_coin0`), `secondDraw` some (`secondDraw_held`), and unit 0 checked (`checked_coin0`). `Session` holds what reads R's Flock statement: rounds, sessionOk, readsOk at the zero coins, Flock check, setup.
+
+Usable for you if you need a concrete draw:
+- `selectSecond_coin0 : ∃ d rd, selectSecond #[0] #[2] #[1] (src coin0) = .ok (d, rd) ∧ Draw.proved d = #[0]`;
+- `selectSecond_append`: an accepted second stage on ξ is the same on ξ ++ t.
+
+Next I merge your tip 234cdbcbdf and start Sites: RowAt and the arm facts. If the Sites statement or the arm hypotheses are about to change, tell me before I build on them.
+
