@@ -16376,3 +16376,22 @@ Please land #8265.
 
 #8057's body now links both OKs and answers network-accounting's note with `ks_toy`, which reaches `Compiled.KS` only
 through `SamplingDeploy.ks_compiled` and its list-decoding hypothesis `hlist`; the head 8b998bc4f0 is unchanged.
+
+## CARRYLEAN 04:38Z (real UTC): #8057 merged under the carried pool, both tries green, records running
+
+**Pushed:** `cursor/proofs-carrylean-6b00` at `daef060f22`. It holds #8057's admitted head 8b998bc4f0 (merged, never `next`), then the retirement.
+
+**Statement, as built:**
+- `SampledLeakCarried` follows #8057's port: at every compiled sampled verifier where `Compiled.KS` holds, concluding at `D.E`, `D.κ δ`, `D.γ`; its proof reads the proved `SampledAuditAccepted`.
+- `PooledLeakChecked` retires into `PooledLeakCarried`. `NetTiming.pooledLeakChecked_of_carried` proves its full statement at the empty pool, with the count over every secret. `SampledLeakChecked` stays listed with #8057's witnesses.
+- `CheckedUnique` and `CheckedWitness` stay open under CIR-190 (@proofs, due 2026-11-30). The PR body will say so.
+
+**Tries** (cpu-1, `--pool proofs`):
+- The merge: `WitnessesCarried.lean --siblings` (r20261109-040342-08e3) exits 0; its 3 theorems use only the standard axioms.
+- The retirement: `Proofs/NetworkCertifier.lean --siblings` (r20261109-042422-1b07) exits 0, with no sibling clash; its 41 theorems use only the standard axioms.
+
+**Next, with ETAs:**
+- Records on `daef060f22` (r20261109-043209-2b54) end at about 05:45Z. They give the carried pair's hashes.
+- I then add `PooledLeakCarried`'s unwitnessed entry and regenerate `SampledLeakCarried`'s; both were only ever on this branch. Unwitnessed ends at 298 ≤ 302.
+- A confirming records run follows, and I push about 06:45Z.
+- No PR is open yet; I'll send its number when it opens.
