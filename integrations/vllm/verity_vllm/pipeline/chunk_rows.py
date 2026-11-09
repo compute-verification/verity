@@ -67,16 +67,22 @@ def statement(tp: Any) -> dict[str, Any]:
     return {"reads": reads(tp)}
 
 
-def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
+#: the row templates whose output row is a row of a request's history table under table reads (`Registered.dsa_table_reads`):
+#: DSA's latent row, the row a long row's `DsaHistoryReads` reads open (`EmbeddingRead_v1`), committed as the table's rows are
+TABLE_ROWS = ("DsaLatentRow_v1",)
+
+
+def unit_rows(tp: Any, table_reads: bool = False) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
     """Chunked template ``tp``'s rows as `UnitStager` stages them, ``(in_rows, out_rows)``: its Definition's bit rows
     (`interface.unit_rows`) under its cuts (`split_rows.cuts`, a ``SPLITS`` combine's), parameter g's row ``in<g>``, or
     ``in<g>.<s>`` for its row s when cut. The one exception is a ``ScaledMmS8Coordinate``'s A6 rows, ``x`` (the token's s8
     codes then its f32 scale, row-seg) and ``w`` (``W[c, :]`` then ``sw[c]``, v2), then the v2 output row ``o0``: each operand
     packed with its scale in one row is the layout serving commits (`serving_rows`' s8 row tables), where
-    `interface.unit_rows` would give ``x``, ``sx``, ``wrow`` and ``sw`` a row each."""
+    `interface.unit_rows` would give ``x``, ``sx``, ``wrow`` and ``sw`` a row each.  Under ``table_reads`` (the partition
+    file's ``dsa_table_reads``) a ``TABLE_ROWS`` template's output rows are row-seg, its history table's leaves."""
     from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
     from verity_vllm.pipeline import split_rows as SP
-    from verity_vllm.query.program_view import spec_statics
+    from verity_vllm.query.program_view import spec_base, spec_statics
 
     if tp.layout == "s8":
         bits = 16 * s8_words(int(spec_statics(tp.id)["K"]))
@@ -91,19 +97,21 @@ def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tupl
         return f"in{g[nm]}" + (f".{s}" if s else "")
 
     in_rows, out_rows = IF.unit_rows(tp.fn, SP.cuts(tp) if tp.layout == "split" else None)
+    if table_reads and spec_base(tp.word) in TABLE_ROWS:
+        out_rows = [(SEG, ps) for _s, ps in out_rows]
     return [(port(p), *rest) for p, *rest in in_rows], out_rows
 
 
-def chunk_cap(tp: Any) -> int:
+def chunk_cap(tp: Any, table_reads: bool = False) -> int:
     """The most instances of chunked template ``tp`` one flock-circuit statement holds, as ``benchmarks/one_stage/a6.py``'s
-    ``chunk_cap`` computes it: the template staged by `UnitStager` on its rows (`unit_rows`) as its `statement`, then
-    ``vus_per_block`` blocks of ``2^(M_MAX - k_log)``.  Builds the circuit (seconds to minutes; a 64-key ``SparseMlaSplitPart``
-    about 36 min at 71 GB): a partition file pins it as ``chunk_cap``."""
+    ``chunk_cap`` computes it: the template staged by `UnitStager` on its rows (`unit_rows`, under ``table_reads``) as its
+    `statement`, then ``vus_per_block`` blocks of ``2^(M_MAX - k_log)``.  Builds the circuit (seconds to minutes; a 64-key
+    ``SparseMlaSplitPart`` about 36 min at 71 GB): a partition file pins it as ``chunk_cap``."""
     import tempfile
 
     from verity_flock.class_statement import UnitStager
 
-    in_rows, out_rows = unit_rows(tp)
+    in_rows, out_rows = unit_rows(tp, table_reads)
     with tempfile.TemporaryDirectory() as d:
         st = UnitStager(tp.fn, "unit/serving-rows-cap", in_rows, out_rows, circuit=Path(d) / "circuit.txt",
                         bind={"partition": "0" * 128, "program": "0" * 128}, **statement(tp))

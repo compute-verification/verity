@@ -141,15 +141,18 @@ class Registered:
     """The registration's static part: φ without workload or sampling (the model, target, TP, engine, execution and profile), the
     seed serving fills in (`engine.served_seed.DEFAULT_SEED`, under which no request compiles: `reads.seed_of`), ℓ, the cap on
     the advice's length in bits, the served model name ingress v0's ``"model"`` carries (`io_shell`; None: no ingress is bytes),
-    and the advice code (None: the advice is I1's): advice v1's registration (`pipeline.advice_code.codec.Registered`), private
+    the advice code (None: the advice is I1's): advice v1's registration (`pipeline.advice_code.codec.Registered`), private
     like the network certifier's protocol, read only through `decode(string, record, cap_bits)`, which gives the I1 v0 `Advice`
-    the string carries under the certified record or a `ValueError` naming why not; ℓ then bounds its strings."""
+    the string carries under the certified record or a `ValueError` naming why not; ℓ then bounds its strings; and whether class
+    G's DSA rows past INDEX_TOPK keys read their history by table (`dsa_table_reads`, `program.dsa_table`; off: the rows
+    network), which no other Program reads and which takes the prefix cache off."""
 
     phi: Phi
     default_seed: int
     cap_bits: int = CAP_BITS
     served_model: str | None = None
     code: Any = None
+    dsa_table_reads: bool = False
 
     def __post_init__(self) -> None:
         if self.phi.requests:
@@ -161,12 +164,19 @@ class Registered:
         if self.code is not None and not callable(getattr(self.code, "decode", None)):
             raise ValueError(f"the advice code decodes a string against its certified record (advice_code.codec.Registered), "
                              f"and a {type(self.code).__name__} has no decode")
+        if type(self.dsa_table_reads) is not bool:
+            raise ValueError(f"dsa_table_reads is a bool, not {self.dsa_table_reads!r}")
+        if self.dsa_table_reads and self.phi.target_profile().batch_invariant:
+            raise ValueError("dsa_table_reads is class G's batched form's (a target without batch invariance)")
+        if self.dsa_table_reads and (self.phi.engine or {}).get("enable_prefix_caching") is True:
+            raise ValueError("dsa_table_reads takes the prefix cache off: a cached position's history row is another request's, "
+                             "which a request's own table can't bind")
 
     @classmethod
     def of(cls, phi: Phi, default_seed: int, cap_bits: int = CAP_BITS, served_model: str | None = None,
-           code: Any = None) -> Registered:
+           code: Any = None, dsa_table_reads: bool = False) -> Registered:
         return cls(Phi.from_json({**phi.to_json(), "workload": {}, "sampling": {"kind": "greedy"}}), int(default_seed), cap_bits,
-                   served_model, code)
+                   served_model, code, dsa_table_reads)
 
 
 @dataclass(frozen=True)
@@ -484,13 +494,15 @@ class Plan:
 def request_program(registered: Registered, unit: RequestUnit, named: bool = False) -> Any:
     """`unit`'s Program (a `build.BuildResult`): the Build's request wrapper at its (LP, T), under its policy, after its C rows of
     history, in class G at its launch context and in its prefill chunks, at φ's rank, in the registered compiler's form
-    (`dead_free`) at any world, batched in class G, its length rule last; `named`: its trace's names (`naming.named_program`, no class-G decoder)."""
+    (`dead_free`) at any world, batched in class G with its DSA long rows as the registration says (`Registered.dsa_table_reads`),
+    its length rule last; `named`: its trace's names (`naming.named_program`, no class-G decoder)."""
     phi = Phi.from_json({**registered.phi.to_json(), "sampling": unit.policy})
     if named:
         from .naming import named_program
         return named_program(phi, unit.LP, unit.T, unit.C, stop=unit.stop)
     r = build_program(phi, "request", LP=unit.LP, T=unit.T, C=unit.C, dead_free=True, batch=unit.batch(), chunks=unit.chunks,
-                      edge=unit.edge, stop=unit.stop, with_desc=False, batched=not phi.target_profile().batch_invariant)
+                      edge=unit.edge, stop=unit.stop, with_desc=False, batched=not phi.target_profile().batch_invariant,
+                      table_reads=registered.dsa_table_reads)
     return replace(r, digest=program_digest(r.program))
 
 
@@ -732,7 +744,8 @@ def trace_commands(summary: dict, registered: Registered, root: str, *, max_mode
     """One `verity-vllm build --wrapper request` per distinct request Program of a compilation (`Compiled.summary()`), on the pinned
     vLLM (CPU, on meta), each writing `<root>/<trace_dir>` at a `max_model_len` of at least its LP + T, under φ's GPU's name where
     φ states one (`--device-name`: the tuned kernel configs a GPU-free host reads); at tensor-parallel world W, φ's rank's
-    (`--tp W --rank r --dead-free`); in class G batched (`--batched`) at the unit's launch context (`--launch-context '{"batch": ...}'`), with its
+    (`--tp W --rank r --dead-free`); in class G batched (`--batched`, with `--dsa-table-reads` under `Registered.dsa_table_reads`)
+    at the unit's launch context (`--launch-context '{"batch": ...}'`), with its
     prefill chunks there when it has them (`'{"batch": ..., "chunks": ...}'`: the Build's chunked request wrapper,
     `vllm_meta.ChunkedGreedyRequest`); its length rule `--stop`. A Program with a window's edge rows has none (`NO_EDGE_TRACE`),
     so `compare` counts it `no_trace`."""
@@ -741,7 +754,8 @@ def trace_commands(summary: dict, registered: Registered, root: str, *, max_mode
     target = {k: v for k, v in phi.target.items() if k in TargetProfile.__dataclass_fields__}
     # the target's GPU name, which vLLM's get_device_name answers on any host (its tuned fused-MoE configs' key)
     device = ["--device-name", str(phi.target["device_name"])] if phi.target.get("device_name") else []
-    world, batched = int(phi.tp.get("world", 1)), ([] if phi.target_profile().batch_invariant else ["--batched"])
+    world = int(phi.tp.get("world", 1))
+    batched = [] if phi.target_profile().batch_invariant else ["--batched", *(["--dsa-table-reads"] if registered.dsa_table_reads else [])]
     tp = ["--tp", str(world), "--rank", str(int(phi.tp.get("rank", 0))), "--dead-free"] if world > 1 else []
     for u in summary["requests"]:
         if u is None or u.get("edge") or (d := trace_dir(u)) in seen:

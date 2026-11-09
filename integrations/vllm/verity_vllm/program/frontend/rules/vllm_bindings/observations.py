@@ -50,7 +50,7 @@ def attn_kind_for(obs: dict) -> tuple[str, dict, int | None]:
 FUSED_NORM_DISPATCH_PIN = "batch_invariant"
 
 _OBSERVED: dict = {"attention_impls": None, "export_facts": None, "target_profile": None, "launch_context": None,
-                   "allreduce_settings": None, "launch_region": None, "batched_form": False}
+                   "allreduce_settings": None, "launch_region": None, "batched_form": False, "dsa_table_reads": False}
 
 
 def clear_observations() -> None:
@@ -61,6 +61,7 @@ def clear_observations() -> None:
     _OBSERVED["allreduce_settings"] = None
     _OBSERVED["launch_region"] = None
     _OBSERVED["batched_form"] = False
+    _OBSERVED["dsa_table_reads"] = False
 
 
 def observe_batched_form(batched: bool) -> None:
@@ -71,6 +72,17 @@ def observe_batched_form(batched: bool) -> None:
 
 def batched_form() -> bool:
     return bool(_OBSERVED.get("batched_form"))
+
+
+def observe_dsa_table_reads(on: bool) -> None:
+    """Whether the batched form's DSA rows past TOPK keys read their history by table (the Build's `--dsa-table-reads`,
+    `predict.steps.Registered.dsa_table_reads`): `vllm_dsa`'s index and reads in place of the rows network, as `predict.dsa`
+    writes them."""
+    _OBSERVED["dsa_table_reads"] = bool(on)
+
+
+def dsa_table_reads() -> bool:
+    return bool(_OBSERVED.get("dsa_table_reads"))
 
 
 def observe_allreduce_settings(settings: dict | None) -> None:
