@@ -204,7 +204,7 @@ team = [
     "integrations/vllm/tools/topp_pin_gpu.sh",
     "integrations/vllm/tests/ops/test_{epoch_row,pod_bootstrap}.py",
     "integrations/vllm/tests/lint/test_merge_allowlist.py",
-    "integrations/vllm/tests/pipeline/test_{circuit_db,source_identity,research_tools,workload_fetch}.py",
+    "integrations/vllm/tests/pipeline/test_{circuit_db,source_identity,research_tools,workload_fetch,row_setup}.py",
     "integrations/vllm/tests/regression/test_{attempt_resolution,store_io}.py",
     # a row's stages as research Attempts (`row stage|chain|shed`), which `config.run_store` loads by name, and its test
     "integrations/vllm/verity_vllm/pipeline/research.py",
