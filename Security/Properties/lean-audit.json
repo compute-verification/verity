@@ -5445,6 +5445,28 @@
     "reads": []
    }
   },
+  "Properties.NetworkPeriod.rowsCapPublished_honest": {
+   "owner": "@network-accounting",
+   "signature": ["Properties.NetworkPeriod.rowsCapPublished_honest"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   }
+  },
+  "Properties.NetworkPeriod.rowsCapPublished_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": ["Properties.NetworkPeriod.rowsCapPublished_nontrivial"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   }
+  },
   "Properties.NetworkPeriod.rowsKBoundsCount": {
    "owner": "@network-accounting",
    "signature": ["Properties.NetworkPeriod.rowsKBoundsCount : Properties.NetworkPeriod.RowsKBoundsCount"],
