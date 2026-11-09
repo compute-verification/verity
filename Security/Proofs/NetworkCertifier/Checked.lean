@@ -294,7 +294,8 @@ theorem encard_leakAtChecked_le {L K S : ℕ} (lay : AuditStatement → Boundary
 incorrect set holds no proof block of a class sampled `all` and whose trace run is `valid`, every sequence the trace
 carries is accepted with a valid run, at the inputs pinned to the trace at the registered ones and the trace's values
 held at the incorrect set's committed gates. -/
-theorem rLeakChecked_of {Coin Col T : Type} (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ}
+theorem rLeakChecked_of {Coin : Type} {A : Claims.SamplingGeneric.Arg Coin} (H : Msg → Msg)
+    (D : Claims.SamplingGeneric.Compiled Coin A) {L K S : ℕ}
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) {δ : ℝ} (reg : AuditStatement → Finset ℕ)
     (valid : AuditStatement → (ℕ → Bool) → Prop) (Dj : ℕ) {x : Msg} (hx : ScopeAcc D lay k x) {w : Wit}
     {s : AuditStatement} {P : Partition} (hs : D.parse x = some s) (hP : D.partition s = some P)
@@ -350,15 +351,15 @@ theorem rLeak_of_rLeakChecked {H : Msg → Msg} {Cm : CommitmentScheme Bool} {pa
 
 /-- **`KSLinOn` moves from `RAcc δ` to the leak relation with a valid run**, on the statements where the check holds on
 the trace's run except with probability `εchk` (`CheckedWitness`), at `κ + εchk`. -/
-theorem ksLinOn_rLeakChecked {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
-    [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S)
-    (k : AuditStatement → ℕ) {δ : ℝ} (decode : List (ℕ × Col) → List T) (reg : AuditStatement → Finset ℕ)
+theorem ksLinOn_rLeakChecked {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+    {A : Claims.SamplingGeneric.Arg Coin} (H : Msg → Msg) (D : Claims.SamplingGeneric.Compiled Coin A) {L K S : ℕ}
+    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) {δ : ℝ} (reg : AuditStatement → Finset ℕ)
     (valid : AuditStatement → (ℕ → Bool) → Prop) (εchk : Msg → ℝ) (Dj : ℕ)
-    (h : KSLinOn H D.V (ScopeAcc D lay k) (RAcc H D.commit D.parse D.partition L K S lay k δ) (E D decode) (κ D δ)
-      (γ D) (fun _ => 1) (Bext H D.V (E D decode))) :
-    KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D decode valid εchk x)
+    (h : KSLinOn H D.V (ScopeAcc D lay k) (RAcc H D.commit D.parse D.partition L K S lay k δ) D.E (D.κ δ) D.γ
+      (fun _ => 1) (Bext H D.V D.E)) :
+    KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D valid εchk x)
       (RLeakChecked H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) valid Dj)
-      (E D decode) (fun x => κ D δ x + εchk x) (γ D) (fun _ => 1) (Bext H D.V (E D decode)) := by
+      D.E (fun x => D.κ δ x + εchk x) D.γ (fun _ => 1) (Bext H D.V D.E) := by
   intro x hx Ω _ _ P
   have h1 := h x hx.1 Ω P
   have h2 := hx.2 Ω P
@@ -367,7 +368,7 @@ theorem ksLinOn_rLeakChecked {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] 
   refine (Claims.Sampling.Pr_or_le (fun r hr => ?_) h1 h2).trans (le_of_eq ?_)
   · beta_reduce at hr ⊢
     obtain ⟨hacc, hng⟩ := hr
-    generalize ((E D decode).eval H P x r.1 r.2.1 r.2.2).1 = ow at hng ⊢
+    generalize (D.E.eval H P x r.1 r.2.1 r.2.2).1 = ow at hng ⊢
     rcases ow with _ | w
     · exact Or.inl ⟨hacc, fun hR => by simp only [Rel.ext] at hR⟩
     · by_cases hR : RAcc H D.commit D.parse D.partition L K S lay k δ x w
@@ -382,11 +383,13 @@ theorem ksLinOn_rLeakChecked {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] 
 
 /-! ### The guarantees -/
 
-/-- **The leak bound with checked inputs, given `SampledAuditAccepted`**: `Guarantees.SampledLeakChecked`, from
-`ksLinOn_rLeakChecked` at `KSAccepted`'s bound and `encard_accSeqsChecked_le` on the statements whose layout fits. -/
+/-- **The leak bound with checked inputs**: `Guarantees.SampledLeakChecked`, from `ksLinOn_rLeakChecked` at
+`KSAccepted`'s bound (`SecurityProofs.SampledAuditAccepted`) and `encard_accSeqsChecked_le` on the statements whose
+layout fits. -/
 theorem sampledLeakChecked : Guarantees.SampledLeakChecked := by
-  intro hSA Coin Col T _ _ _ _ _ H D hks L K S lay k δ decode hδ hdec reg chk valid εchk Dj
-  refine ⟨ksLinOn_rLeakChecked H D lay k decode reg valid εchk Dj (hSA H D L K S lay k hks δ decode hδ hdec),
+  intro Coin _ _ _ A H D hks L K S lay k δ hδ reg chk valid εchk Dj
+  refine ⟨ksLinOn_rLeakChecked H D lay k reg valid εchk Dj
+      (SecurityProofs.SampledAuditAccepted H D L K S lay k hks δ hδ),
     fun x hx s P hs hP hchk op ρ => ?_⟩
   obtain ⟨s', hs', hfits⟩ := hx.2
   rw [Option.some_injective _ (hs'.symm.trans hs)] at hfits

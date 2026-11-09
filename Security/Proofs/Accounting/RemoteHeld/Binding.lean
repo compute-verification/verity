@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.Guarantees.RemoteBinding
+public import Proofs.Accounting.Lemmas.RemoteBinding
 public import Proofs.Hash.RowBinding
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

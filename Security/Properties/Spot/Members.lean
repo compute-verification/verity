@@ -23,6 +23,8 @@ statement over several templates' circuit files, each template's units lowered f
   layout `l`, each member `t` holding `n_t` units (`ns`) per request: request `ρ`'s replay block is its units of every
   member together, member `t`'s units `ρ·n_t + p` for `p < n_t`, slot `filesBlockOf ms ns ρ t p`; an input slot's block
   holds none.
+* `memberBlocksFast`, `filesBlockAt`, `filesReplayFast`: `memberBlocks` and `filesReplay` with what each rebuilds per
+  unit or per gate built once, equal to them and compiled in their place (`@[csimp]`).
 
 `Proofs.Flock.Bridge.Members` proves that member `m` sits at `Bits.base ms m`, that no member's gate reads another's,
 that each unit of a member is lowered there as Bridge's lowering of the member's circuit lowers it, and where each
@@ -74,6 +76,25 @@ def memberBlocks (ms : Bits.Members) (m : ℕ) : List (List ℕ) :=
       (Bits.blockOf (Bits.keyProg ci.1 ci.2.size) (Bits.consts ci.1 ci.2.size) u).map (Bits.base ms m + ·)
   | none => []
 
+/-- `memberBlocks`, member `m`'s key program, constants, offsets (`Bits.offs`) and first position built once
+(`memberBlocks_eq_fast`); as stated, every unit rebuilds the first three and every gate the last. -/
+def memberBlocksFast (ms : Bits.Members) (m : ℕ) : List (List ℕ) :=
+  match ms[m]? with
+  | some ci =>
+    let kp := Bits.keyProg ci.1 ci.2.size
+    let κ := Bits.consts ci.1 ci.2.size
+    let t := Bits.offs kp
+    let b := Bits.base ms m
+    (List.range ci.2.size).map fun u => (Bits.blockOfAt t kp κ u).map (b + ·)
+  | none => []
+
+@[csimp] theorem memberBlocks_eq_fast : @memberBlocks = @memberBlocksFast := by
+  funext ms m
+  unfold memberBlocks memberBlocksFast
+  rcases ms[m]? with _ | ci
+  · rfl
+  · simp only [Bits.blockOfAt_offs]
+
 /-- **The members' proof-block partition**: one class, whose stratum `m` is member `m`'s proof blocks, so member `m`'s
 unit `u` is slot `unitBase ms m + u`. -/
 def membersPart (ms : Bits.Members) : Claims.Sampling.Partition :=
@@ -106,5 +127,25 @@ def filesBlock (ms : Bits.Members) (ns : Array ℕ) (b : Slots.ProofBlock) : Lis
 request's proof blocks' gates (`filesBlock`). -/
 def filesReplay (ms : Bits.Members) (ns : Array ℕ) (l : Slots.Layout) : Claims.Sampling.Partition :=
   ⟨l.classes.toList.map fun c => c.toList.map fun s => s.toList.map (filesBlock ms ns)⟩
+
+/-- `filesBlock` reading the members' proof blocks from `bs`, `membersPart ms`'s. -/
+def filesBlockAt (bs : List (List ℕ)) (ms : Bits.Members) (ns : Array ℕ) (b : Slots.ProofBlock) : List ℕ :=
+  match b.unit with
+  | some u => (filesUnits ms ns u).flatMap fun v => bs.getD v []
+  | none => []
+
+/-- `filesReplay`, the members' proof blocks built once (`filesReplay_eq_fast`); as stated, every unit of every slot
+rebuilds them. -/
+def filesReplayFast (ms : Bits.Members) (ns : Array ℕ) (l : Slots.Layout) : Claims.Sampling.Partition :=
+  let bs := (membersPart ms).blocks
+  ⟨l.classes.toList.map fun c => c.toList.map fun s => s.toList.map (filesBlockAt bs ms ns)⟩
+
+@[csimp] theorem filesReplay_eq_fast : @filesReplay = @filesReplayFast := by
+  funext ms ns l
+  have e : filesBlockAt (membersPart ms).blocks ms ns = filesBlock ms ns := by
+    funext b
+    unfold filesBlockAt filesBlock
+    rcases b.unit with _ | u <;> rfl
+  simp only [filesReplay, filesReplayFast, e]
 
 end Properties.Spot

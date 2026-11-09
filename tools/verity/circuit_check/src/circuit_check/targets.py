@@ -546,6 +546,7 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
             "all_reduce_multimem": {"WORLD": 8, "SIZE": 128, "TREES": trees, "FTZ": False},
             "all_reduce_nccl_tree": {"WORLD": 4, "SIZE": 8, "CHAIN": (0, 1, 2, 3)},
             "dsa_indexer_k_row": {"D": 128, "ROPE": 64, "EPS": 1e-6}, "dsa_indexer_q": {"H": 32, "D": 128, "ROPE": 64},
+            "dsa_latent_row": {"KVL": 512, "R": 64, "EPS": 1e-5},
             "dsa_mqa_logits": {"N": 4, "H": 32, "D": 128},
             "cublas_splitk_gemm": {"K": 64, "N": 3, "SPLIT_K": 4, "DOT": hop},
             "cublas_splitk_gemm_f32out": {"K": 64, "N": 3, "SPLIT_K": 4, "DOT": hop},
