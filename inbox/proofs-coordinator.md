@@ -20407,3 +20407,37 @@ Circuits confirms that `ok` is its own output port (#8362's `DsaTopKReadRows_v1 
 1. **The one-stage shape, carried over, would break it.** #8403's one-stage path takes the first step's rows below C out of the population, counted by name. In two-stage, rows [0, C) would then have no owning span, and a wrong one would never be drawn. #8429 refuses that schedule, but only where the record commits a schedule. It binds once PR 3 (`second-history`) refuses a span read under a record with no schedule.
 2. **Class G hits whose producers ran in an earlier execution phase** are refused by name in #8403. Those requests fail visibly, so this limits coverage, not ownership. It covers most of a steady-state window's hit FLOPs.
 3. **Form S on Thursday doesn't depend on this.** Its table is the replay's, committed in round 2. Without PR 3 nothing ties it to its writers, with prefix caching on or off. The verdict names it as form S's exception.
+
+## TWOINSTANCE, 22:25Z: C's state, branch, runs, and what Friday depends on
+
+**Branch:** `cursor/proofs-twoinstance-2a66` at `14f4faf53d`, pushed. #8363 is re-marked there; its body lists `InstanceCodes`.
+
+**C's state:**
+- **Landed on the branch: `InstanceCodes.lean`**, 19 theorems, standard axioms only (`r20261109-210658-dabc`, cpu-1). `readsOk_held` reduces round 2's check at the instance and the zero coins, with `xS = R.x`, to the checks that read the statement's bytes. Everything the registration and the coins decide is proved for every `Ref`.
+  - Its `--siblings` import failed outside it, on an existing clash: `Claims.CompleteFails` and `Claims.Bridge.OfGame` both declare `Claims.stepWith.eq_1`. Neither is mine; I can tell TWOOPENS or the file's owner.
+- **In flight: `InstanceRecords.lean`**, try `r20261109-220218-a984` (cpu-1, ETA about 22:50Z).
+  - It defines the run's interior record `interior0` and its printed bytes `m1`.
+  - It proves `jsonMsg m1 = some interior0` by `printJson`'s round trip, its replay sample `[0]`, its run name, and the interior order at the instance.
+- **Next:** the boundary record `x`, from TWOWITNESS's root and domain terms; then the five byte-reading checks, once A's `decode R.x` and `stmtJsonOf` facts exist.
+
+**The SHA-512 probe answered: the kernel can't evaluate it.** `decide +kernel` through `Sha512.hash_eq_blocks` on `"abc"` got stuck in reduction (`r20261109-210850-35ea`). This doesn't block Friday:
+- `second-header` closes as `jeq a a` (every string is `Good`) if `R.x`'s header bindings are the `portBinding` terms themselves, not hex literals. The tree already works this way (`Nontrivial.lean`'s `block [Flock.Sha512.hash]`).
+- TWOWITNESS already keeps every hash as a term. I've sent it the exact strings (`698cbdaec3`):
+  - run `run-0`, set `served/run-0/m0`;
+  - bindings `portBinding interior0 p v2 "run-0"`;
+  - interior `program` and `partition` as the literals `program-0` and `partition-0`, so only `taggedSha512` stays symbolic.
+- I also answered its (a) to (c): it writes the program and partition, we use its value names and domains, and values and salts are zero.
+
+**Review-4 notes** (`law` names, retired words in five files' prose, `InstanceSites` to `InstanceAddresses`): one pass when I merge #8309's renamed head (`Sites` to `Addresses`). TWOOPENS hasn't named it yet. Then the checks, then the re-mark. The rename moves no date of mine.
+
+**Freeze check:** four lines, all `integrations/vllm/…/seed_rule*`, from `0cee82ddb2`. That commit is on `checked`, not yet on `main`, and the integration branch contains it. None is this PR's own; they clear when `main` catches up.
+
+**Friday (Fri 13 Nov) now depends on:**
+- TWOWITNESS: its bytes as terms by Tue 06:00Z, the freeze at Tue 18:00Z, and A's `decode R.x` and `stmtJsonOf` facts by Wed 18:00Z. Those are C's remaining inputs.
+- The #8413 / #8309 order. Whoever lands second adds `rows` to `Held` and `ownOf`, or the model refuses every linked read. Our rows (`per = 1`, both units at row 0) are valid under both forms.
+- #8406's `Held` fields, for `held₀` and `stmtOk_held`.
+- #8368, for B.
+- TWOOPENS's linked-arm pieces of the address theorem, and `RowAt`, for E.
+- Whether #8363 must merge #8309's `a59ab0b49b` (TWOOPENS hasn't said), and the renamed head.
+
+**Runs:** `r20261109-220218-a984` (cpu-1, `InstanceRecords`, ETA about 22:50Z).
