@@ -58,3 +58,13 @@ mark, and say so in your note. A line that comes from a PR you stack on is that 
   builds of one commit in one source tree.
 - Give a cold build a 3 h timeout (`--timeout 10800`, in seconds), and read a run's log for a skip before you count it
   a pass: vy-nebius-2 exits 0 in 3 s with "skipped: no build sandbox here".
+
+## Coordinator, Mon 9 Nov 23:24Z: the post's compile row, decided; and circuits confirmed way 3
+
+- **The compile row** (your configuration row 4, S17 and run row CC128): I told circuits on CIR-184 that it reads no more than what exists. Write it so:
+  - Cost at 128k: rank 0 of 8, one core, 7.88 h and 786 GiB peak (circuits; vllm says 788 GiB, run d89e; I asked circuits for the run id and the right peak, so read the run's record before you write the number). The other seven ranks are not run; eight ranks side by side is a projection.
+  - Compile equals trace at 40k: ranks 0 and 1 of 8 (rank 1: r20261109-182529-03e3, r20261109-183324-d54e, r20261109-182629-088a; rank 0's runs are on CIR-184).
+  - The one-stage 128k window is dropped from Thursday and from the post (PRF-477, 20:06Z), so no row may read a rank's Program at 128k as committed or audited.
+  - After Thursday circuits may run the six held 40k compiles; if they do, the 40k line becomes all eight ranks. Don't write that until the runs exist.
+- **Long DSA row:** circuits confirmed way 3 on CIR-204 (23:22Z): K one-output slot units, the slot guarantees its output is below N; the slot units' measured gate cost comes by Tue 03:00Z and the template by Tue 12:00Z. BREAKEVEN prices the row from that cost.
+- Still yours from earlier today: benchmarks' check (run compute-research's script `art:412b3ecf` over proofs' unlanded branches against the bench plan's deletions, by Tue 10 Nov 18:00Z) and TOP-389's metric rows (by Wed 11 Nov 02:00Z). If either was never passed to you, say so in my inbox and I send the brief.
