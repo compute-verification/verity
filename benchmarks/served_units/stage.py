@@ -40,7 +40,8 @@ A type of `READS` is a table read, ``EmbeddingRead_v1{V, H}`` on its served rows
 stages a read (`chunk_rows.statement`): the templated statement at the read layout on the verifier's own read template
 (``structural``, `verity_flock.read_tmpl`, so ``flock-read-tmpl`` is built first). Its inputs are honest reads of one table of
 V ranks whose first L hold drawn rows and every later one the zero row under the zero salt, as a history table pads to its
-capacity; each read's row and verdict are held to the table's (``twin``).
+capacity; each read's row and verdict are held to the table's (``twin``). Beside the circuit it writes the template and its
+layout mode (``unit.tmpl``, ``unit.layout``), which ``flock-tmpl-unit`` places as the prover's ``--tmpl-unit`` rows.
 
 Writes circuit.txt, inst.bin, pub.bin, pin.txt and stage.json under OUT, a PARTS type's partition.json, and beside a statement
 reading in slots the MUFU tables the prover reads (``tables/``, ``flock-circuit --tables``), as the served composer does.
@@ -398,6 +399,8 @@ def stage_read(name: str, S: dict, tag: str, n: int, out: Path, t0: float) -> di
     t_built = time.time() - t0
     salt_key = hashlib.sha256(f"verity/served-units/salts\0{tag}".encode()).digest()
     got = st.stage(rows, out, salt_key)
+    (out / "unit.tmpl").write_text(FC.template_of(st.text))
+    (out / "unit.layout").write_text(st.meta["layout"])
     h, ok = np.asarray(got["outs"]["o0"], np.uint16), [int(w[0]) for w in got["outs"]["o1"]]
     if not np.array_equal(h, table[toks]) or ok != [1] * n:
         raise AssertionError(f"{tag}: the circuit's reads are not the table's rows on "
@@ -405,7 +408,7 @@ def stage_read(name: str, S: dict, tag: str, n: int, out: Path, t0: float) -> di
     meta = got["meta"]
     return {"unit": name, "statics": S, "tag": tag, "n": n, "definition": fn.id,
             "in_rows": [[r, s, b, ps] for r, s, b, ps in in_rows], "public_inputs": [], "packed": False, "ands": got["ands"],
-            "statement": {"layout": READ_LAYOUT, "structural": True}, "nets": nets(st.low),
+            "statement": {"layout": READ_LAYOUT, "structural": True, "id": st.meta.get("statement")}, "nets": nets(st.low),
             "unit_nnz": got["unit_nnz"], "k_log": meta["k_log"], "unit_log": meta.get("unit_log"),
             "vus_per_block": meta.get("vus_per_block"), "row_schemas": meta.get("row_schemas"),
             "circuit_bytes": (out / "circuit.txt").stat().st_size, "circuit_sha512": st.pin, "class_sha512": st.class_sha512,
