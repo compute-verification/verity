@@ -1,138 +1,55 @@
-# The retired name "warden" leaves the tree: every use becomes the network certifier (GLOSSARY.md, "Older names").
+# The retired name "warden" in the code's names: what `tools/move/rename.py --map tools/move/warden_map.toml` renames,
+# the network certifier's older name (GLOSSARY.md, "Older names") in paths, modules, Python names and the Lean. The
+# prose's words are `warden_term_map.toml`'s, whose move runs first.
 #
-# Names. Prose says "network certifier". The benchmarks and the certifier package hold two programs of the network
-# certifier, the relay this word named and the proxy (`active.Proxy`, `grid.Certifier`, `certifier_serve.py`,
-# `certifier-rehearse`), whose names already spell `certifier`, so an identifier of the relay takes the whole term:
-# `network_certifier`, `NetworkCertifier`, `NETWORK_CERTIFIER`, `network-certifier-` in a flag or a tool's name. The Lean
-# has no second device: its identifiers take `certifier` (`Kind.certifier`, beside `certifierCode` and
-# `CertifierSchedule`), and the two modules named for the word are named for what they define, the cells
-# (`NetworkCertifier.Cells`). Where the Lean's prose sets the relay beside the certifier's record of it, the word is
-# "relay".
+# Names. The benchmarks and the certifier package hold two programs of the network certifier, the relay this word named
+# and the proxy (`active.Proxy`, `grid.Certifier`, `certifier_serve.py`), whose names already spell `certifier`, so a
+# name of the relay takes the whole term: `warden` becomes `network_certifier` and `Warden` `NetworkCertifier`, as a name
+# or one part of one (`network_certifier.py`, `NetworkCertifierParams`, `network_certifier_serve.py`). A test file
+# `test_network_certifier_warden*.py` loses the word rather than repeat the term. The two Lean modules named for the word
+# are named for what they define, the cells (`NetworkCertifier.Cells`), and the link-window's constructor is
+# `Kind.networkCertifier`.
+#
+# Only a word that renames a path, a module or a Lean declaration is here, since `move_check.py` certifies no other
+# word of a names move. So this move leaves, for a reviewed change of their own: a constant's or an environment
+# variable's `WARDEN`, the plural `wardens`, the hyphenated names below, and the word in a string literal's sentence
+# (a message, a help text, a record's note), which no move may reword and the name's form would misspell.
 #
 # Kept bytes ([keep]): a name that something outside this move's reach holds. To rename one, regenerate what holds it:
 # - domain tags and format ids (`verity-network-warden/.../vN`, `verity/a5/warden-stand-in/v1`), which are hashed or
 #   signed: a tag changes only as a new version, with every commitment, certificate and pinned vector made under it;
 # - names staged into a circuit or a statement (`WardenRowIdentity`, `unit/warden-row`, `unit/a5-warden`,
 #   `a5-warden/rest/`): the circuit-check pins and every kept proof of those units;
-# - the word as a whole value, in quotes or as a path's segment: the link name, a link-window case's `kind` and its
-#   key, a gate request's `device`, a class, a path label, a run's directory. The Lean's JSON reader, the difftest
-#   vectors, the pinned fixtures and every kept run's records carry it: a new format version, and those regenerated;
-# - a record's keys and a kept run's file names (`warden_run`, `warden_check`, `warden.json`,
-#   `warden-registration.json`, the negatives' names): the leak guard's rows and every kept run that a later step reads;
-# - the gate's verb `warden-rehearse` and its refusal `warden-fails`: the deployed gate and its callers' keys;
-# - the trace corpus's labels (`warden-heavy`, `warden-smallkv`) and the fixture cut from it: the corpus artifact.
+# - the word as a whole value, in quotes, as a path's segment or as a command's argument: the link name, a link-window
+#   case's `kind` and its key, a gate request's `device`, a class, a path label, a run's directory. The Lean's JSON
+#   reader, the difftest vectors, the pinned fixtures and every kept run's records carry it: a new format version, and
+#   those regenerated;
+# - a record's keys and a kept run's file names (`warden_run`, `warden_check`, `warden.json`, the negatives' names):
+#   the leak guard's rows and every kept run that a later step reads;
+# - a hyphenated name: the gate's verb `warden-rehearse` and its refusal `warden-fails` (the deployed gate and its
+#   callers' keys), the trace corpus's labels `warden-heavy` and `warden-smallkv` (the corpus artifact and the fixture
+#   cut from it), the flags `--warden-run` and `--warden` with the attributes argparse gives them (every script and
+#   kept command that passes one), and a tool's label (`warden-serve`, `warden-form`);
+# - the word in a string literal's sentence, with its article, its possessive or the noun beside it: a message or a
+#   label that a test spells, or that code makes from a kept value (`f"{label} thread"`), stays whole. A reviewed
+#   change rewords these to "network certifier", the tests with them.
 #
 # Not this concept: an "active warden" and a "passive warden" in network steganography's sense, which the architecture
 # and two Lean docstrings cite as that field's term.
 #
-# Left as they are ([rewrite] exclude): the files that name the retired word as the word (`tests/test_retired_terms.py`,
-# the Glossary's "Older names" row), this directory's maps and toy fixtures, research's store vocabulary and
-# `moves.json`, and replicated fixtures.
+# Left as they are ([rewrite] exclude): the retired-terms lint, which names the retired word as the word, this
+# directory's maps and toy fixtures, research's store vocabulary and `moves.json`, and fixtures, whose bytes tests pin.
 
-[[words_in]]                              # the Lean: no second device, so `certifier`, as its other names have it
+[[words_in]]                              # the link-window's constructor, in the Lean that declares and matches it
 files = ["verity/core/protocols/network/lean/NetworkCheck/LinkWindow.lean",
          "Security/Properties/NetworkCertifier/Check/LinkWindow.lean",
-         "Security/Proofs/Properties/NetworkCertifier/Check/LinkWindow.lean",
-         "verity/core/protocols/certifier/README.md"]
+         "Security/Proofs/Properties/NetworkCertifier/Check/LinkWindow.lean"]
 
 [words_in.words]
-"Kind.warden" = "Kind.certifier"
-".warden" = ".certifier"
-"| warden" = "| certifier"
-
-[[words_in]]                              # the tap's prose sets the relay beside the certifier's record of it
-files = ["Security/Definitions/NetworkCertifier/Tap.lean", "Security/Proofs/NetworkCertifier/Tap.lean"]
-
-[words_in.words]
-"the warden" = "the relay"
-"The warden" = "The relay"
-"its warden" = "its relay"
-
-[[words_in]]
-files = ["Security/Proofs/NetworkCertifier/README.md"]
-
-[words_in.words]
-"the warden and the certifier" = "the relay and the certifier"
-"its warden sent" = "its relay sent"
-
-[[words_in]]                              # whole words, tried first: prose, and the forms no identifier rule reaches
-files = ["*"]
-
-[words_in.words]
-"warden's" = "network certifier's"
-"wardens'" = "network certifiers'"
-"the warden.py" = "the network_certifier.py"
-"a warden.WardenParams" = "a network_certifier.NetworkCertifierParams"
-"the warden-" = "the network-certifier-"
-"The warden-" = "The network-certifier-"
-"a warden-" = "a network-certifier-"
-"A warden-" = "A network-certifier-"
-"the warden" = "the network certifier"
-"The warden" = "The network certifier"
-"the wardens" = "the network certifiers"
-"a warden" = "a network certifier"
-"A warden" = "A network certifier"
-"An honest warden" = "An honest network certifier"
-"active warden" = "active network certifier"
-"auditor's warden" = "auditor's network certifier"
-"its warden" = "its network certifier"
-"this warden" = "this network certifier"
-"no warden" = "no network certifier"
-"each warden" = "each network certifier"
-"warden run" = "network certifier run"
-"warden runs" = "network certifier runs"
-"warden row" = "network certifier row"
-"warden rows" = "network certifier rows"
-"warden path" = "network certifier path"
-"warden port" = "network certifier port"
-"warden ports" = "network certifier ports"
-"warden link" = "network certifier link"
-"warden link-window" = "network certifier link-window"
-"warden link-windows" = "network certifier link-windows"
-"warden trace" = "network certifier trace"
-"warden traces" = "network certifier traces"
-"warden rehearsal" = "network certifier rehearsal"
-"warden ordinal" = "network certifier ordinal"
-"warden cells" = "network certifier cells"
-"warden profile" = "network certifier profile"
-"warden tests" = "network certifier tests"
-"warden view" = "network certifier view"
-"warden bucket" = "network certifier bucket"
-"warden release" = "network certifier release"
-"warden admission" = "network certifier admission"
-"warden thread" = "network certifier thread"
-"warden program" = "network certifier program"
-"warden check" = "network certifier check"
-"warden ticker" = "network certifier ticker"
-"warden ({" = "network certifier ({"
-"warden (its" = "network certifier (its"
-"another warden" = "another network certifier"
-"warden arrival" = "network certifier arrival"
-"warden beside" = "network certifier beside"
-"byte-cell warden" = "byte-cell network certifier"
-"trace's warden" = "trace's network certifier"
-"front's warden" = "front's network certifier"
-"certifier's warden" = "certifier's relay"
-"N2 warden" = "N2 network certifier"
-"whose warden-paced" = "whose network-certifier-paced"
-"whose warden" = "whose network certifier"
-"same warden" = "same network certifier"
-"paced warden" = "paced network certifier"
-"honest warden" = "honest network certifier"
-"synthetic warden" = "synthetic network certifier"
-"kept warden" = "kept network certifier"
-"and warden's" = "and network certifier's"
-"`verity`'s warden" = "`verity`'s network certifier"
-"▶ warden" = "▶ network certifier"
-"| warden |" = "| network certifier |"
-"| warden \"" = "| network certifier \""
-"warden sends" = "network certifier sends"
-"warden certifies" = "network certifier certifies"
-"warden-" = "network-certifier-"
-"-warden" = "-network-certifier"
-"-WARDEN" = "-NETWORK-CERTIFIER"
+"warden" = "networkCertifier"
 
 [words]
+"Kind.warden" = "Kind.networkCertifier"
 "linkWindowAcceptMeans_honest_warden" = "linkWindowAcceptMeans_honest_certifier"
 "WardenSchedule" = "CertifierSchedule"
 "wardenCode" = "certifierCode"
@@ -140,12 +57,9 @@ files = ["*"]
 "NetworkCertifier/Warden" = "NetworkCertifier/Cells"
 "NetworkCertifier.Warden" = "NetworkCertifier.Cells"
 "Warden.lean" = "Cells.lean"
-"wardens" = "network_certifiers"
-"Wardens" = "NetworkCertifiers"
 "test_network_certifier_warden" = "test_network_certifier"
 "warden" = "network_certifier"
 "Warden" = "NetworkCertifier"
-"WARDEN" = "NETWORK_CERTIFIER"
 
 [keep]
 patterns = [
@@ -155,18 +69,28 @@ patterns = [
     'cursor/[\w./-]+',                                # a branch
     '"warden"',                                       # the word as a whole value
     """'warden'(?![a-z])""",
-    '(?<!certifier/)(?<=/)warden(?![\w-]|\.\w)',           # ... as a path's segment
+    '''["']warden:''',
+    '(?<!certifier/)(?<=/)warden(?![\w-]|\.\w)',      # ... as a path's segment
     '(?<![\w./-])warden/(?=[\w$<{*])',
-    '''["'/]warden_(?:run(?!": None\}\)\))|check|endpoint|endpoint_served|certificates|cores|cores_busy|cpu_s|invol|cost|costs)["'/]''',
-    'warden\.json\b',
-    'warden-(?:registration|rehearse|fails|heavy|smallkv)',
-    'CR_PATH(?::-\}")?(?: = |=)warden',               # ... as a command's value, which reaches a quoted one
+    'CR_PATH(?::-\}")?(?: = |=)warden',               # ... as a command's argument, which reaches a quoted one
     '--class (?:test\|served\|)?warden',
+    'N2_CLASS=warden',
     'negatives\.py warden',
     'client or warden',
     'served or warden\)',
-    'N2_CLASS=warden',
-    '''["']warden:''',
+    '''["'/]warden_(?:check|endpoint|endpoint_served|certificates|cores|cores_busy|cpu_s|invol|cost|costs)["'/]''',
+    'warden\.json\b',                                 # a kept run's file
+    'warden(?=-\w)',                                  # a hyphenated name
+    '(?<=-)warden',
+    '(?<!\w)warden_run(?!\w)',                        # ... and the attributes argparse gives the flags
+    '\ba\.warden\b',
+    # the word in a sentence, which after `warden_term_map.toml`'s move stands only in a string literal
+    '''(?<![\w-])(?:[Tt]he|[Aa]|no|its|each|this|that|same|whose|active|honest|kept|synthetic|byte-cell|▶|\w+'s) warden(?![\w-])''',
+    """warden's""",
+    '(?<![\w./-])warden (?:link-windows?|rehearsals?|ordinal|profile|traces?|tests|ports?|rows?|runs?|path|link|view|windows?|cells?|thread|ticker|arrival|admission|release|check|bucket|program|beside|in front)\b',
+    '(?<![\w./-])(?:device|another|client /) warden(?![\w-])',
+    'warden \((?:its |\{WARDEN)',
+    'max ms \| warden ',
     '(?m)^\| "warden", "network warden".*$',          # the Glossary's row of older names
 ]
 strings = [
@@ -174,12 +98,13 @@ strings = [
     "unit/warden-row",
     "unit/a5-warden",
     "a5-warden/rest/",
-    "prover-root-under-the-wardens-certificate",
-    "window-naming-another-warden-root",
     "functions as an active warden",
     "an *active warden*",
     "a passive warden",
-    "this key reads only: a warden rehearsal",
+    "a warden's parameters digest is",                # an error's text the Lean check and its Python mirror both spell
+    "served or a warden's, not",
+    "a warden link's two ends are on the warden's one grid",
+    "this key reads only: a warden rehearsal",        # a message made from a kept value, as its test spells it
     '"on the warden path"',
 ]
 
