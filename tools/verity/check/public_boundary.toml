@@ -12,6 +12,10 @@
 
 # the whole-tree invariants: each test exported when everything it needs is public
 when_closed = ["tests"]
+# fetched fixtures (entries of fixtures/artifacts.json git doesn't track) the export ships as tracked files, so the public
+# tree's tests read them with no store: each public, and each of its files at most a tracked file's limit
+# (tests/test_repository.py). vLLM's stored workloads: every row file the integration's tests and stages read
+fixtures = ["integrations/vllm/workloads"]
 
 [public]
 # SPOT: the generic sampling claim, its proofs, and sampled proofs' protocol and service
