@@ -232,7 +232,7 @@ theorem κ_lt_one [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {D : Deploy Co
   have hs0 : 0 ≤ slack := Real.rpow_nonneg (by norm_num) _
   have hs := slack_le
   have hF : (SamplingGeneric.ofDeploy D iroots).κs x ≤ 1 / 100 :=
-    SamplingGeneric.maxBelow_le (by norm_num) fun _ _ => κF_le h
+    SamplingGeneric.maxBelow_le (by norm_num) fun _ _ => (SamplingGeneric.κFAt_innerN₀ D x).trans_le (κF_le h)
   have hk := k_of_toyNumbers h
   have hkr : (D.k x : ℝ) = 2 ^ 10 * 5 := by rw [hk]; push_cast; ring
   have hcapr : (D.cap x : ℝ) = 2 ^ 128 * (2 ^ 10 * 5) := by rw [Deploy.cap, hk]; push_cast; ring

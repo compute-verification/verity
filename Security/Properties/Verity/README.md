@@ -30,7 +30,7 @@ the targets alone, and with its two witnesses at the idle deployment (`Idle.lean
 
 | Subprotocol | Target | Compiled check | Remote | Onsite |
 |---|---|---|---|---|
-| sampled proofs | `SpotSound` | `VStar.Recursive.Sampled.protocol` (id `verity/sampled-proofs/v1`): one-stage v2 (`Spot.OneStageZk`) or the recursive audit, as its parameters' `form` names; one-stage v1 is refused by name | yes | yes |
+| SPOT | `SpotSound` | `VStar.Recursive.Sampled.protocol` (id `verity/sampled-proofs/v1`): one-stage v2 (`Spot.OneStageZk`); one-stage v1 and the recursive audit are refused by name | yes | yes |
 | PoUW | `PouwSound` | `PouwCheck.Period.protocol` | yes | yes |
 | the inference-only policy | `InferenceOnlySound` | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes |
 | PoUS | `PousSound` | `PousCheck.RunProtocol.protocol` | | yes |

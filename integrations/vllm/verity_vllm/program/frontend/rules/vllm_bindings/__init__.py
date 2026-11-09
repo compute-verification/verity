@@ -44,7 +44,8 @@ from verity_vllm.program.frontend.rules.vllm_bindings.norm_chain import (AddScal
                                                                          NarrowF32ToBf16Rule, RsqrtRule, SquareRule, WidenBf16ToF32Rule)
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (_OBSERVED, active_allreduce_settings, active_target_profile, clear_observations,
                                                                            declared_derived_accounting, observe_attention_impls, observe_export_facts,
-                                                                           observe_allreduce_settings, observe_launch_context, observe_target_profile)
+                                                                           observe_allreduce_settings, observe_batched_form, observe_launch_context,
+                                                                           observe_target_profile)
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import (GEMM_PINS, MEAN_PINS, QKV_RMS_PINS, RMS_PINS, _pins_ok, gemm_pins_for,
                                                                    lookup_key, tuned_gemm_table_sha256)
 from verity_vllm.program.frontend.rules.vllm_bindings.triton_launches import FusedQKvRmsNormRule, TritonGemmRule, TritonRmsNormRule
@@ -78,19 +79,21 @@ def vllm_ruleset():
     from verity_vllm.program.frontend.rules.vllm_moe import VLLM_MOE_RULES  # the fused-MoE block's leaf kernels
     from verity_vllm.program.frontend.rules.vllm_moe_fp8 import VLLM_MOE_FP8_RULES  # the block-FP8 fused_moe_kernel launches
     from verity_vllm.program.frontend.rules.vllm_moe_router import VLLM_MOE_ROUTER_RULES  # the one-group sigmoid router (grouped_topk)
-    from verity_vllm.program.frontend.rules.vllm_dsa import (VLLM_DSA_PATTERN_RULES,  # the large q-nope/value absorb chain, before generic views
-                                                             VLLM_DSA_RULES)  # DeepSeek sparse attention's leaves (export_compat.dsa_leaves)
+    from verity_vllm.program.frontend.rules.vllm_dsa import VLLM_DSA_RULES  # DeepSeek sparse attention's leaves (export_compat.dsa_leaves)
+    from verity_vllm.program.frontend.rules.vllm_dsa_absorb import (VLLM_DSA_ABSORB_RULES,  # MLA's latent absorptions around them
+                                                                    VLLM_DSA_PATTERN_RULES)  # the large q-nope/value absorb chain, before generic views
     from verity_vllm.program.frontend.rules.vllm_dsa_dense import VLLM_DSA_DENSE_RULES  # its prefill by dense MHA (the same shim's leaf)
     from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES  # the seeded temperature + top-p token select (GumbelTopPTokenSelect_v1{V,S})
     from verity_vllm.program.frontend.rules.vllm_mhc import VLLM_MHC_RULES  # DeepSeek-V4's mHC ops
     from verity_vllm.program.frontend.rules.vllm_dsv4 import VLLM_DSV4_RULES  # DeepSeek-V4's sparse MLA leaves
     from verity_vllm.program.frontend.rules.vllm_marlin_moe import VLLM_MARLIN_MOE_RULES  # the MXFP4 Marlin MoE's leaves
     return RuleSet("default+vllm-bindings", VLLM_DSA_PATTERN_RULES + base + VLLM_BINDING_RULES + VLLM_MOE_RULES + VLLM_MOE_FP8_RULES + VLLM_MOE_ROUTER_RULES
-                   + VLLM_DSA_RULES + VLLM_DSA_DENSE_RULES + list(VLLM_SAMPLING_RULES) + VLLM_MHC_RULES + VLLM_DSV4_RULES
+                   + VLLM_DSA_RULES + VLLM_DSA_ABSORB_RULES + VLLM_DSA_DENSE_RULES + list(VLLM_SAMPLING_RULES) + VLLM_MHC_RULES + VLLM_DSV4_RULES
                    + VLLM_MARLIN_MOE_RULES, list(DEFAULT_RULES.families))
 
 
 __all__ = ["AllocViewRule", "GEMM_PINS", "LayerNormAtenRule", "MEAN_PINS", "QKV_RMS_PINS", "RMS_PINS", "TritonGemmRule", "VLLM_BINDING_RULES", "_OBSERVED", "_pins_ok",
            "active_allreduce_settings", "active_target_profile", "clear_observations", "declared_derived_accounting", "gemm_pins_for", "lookup_key",
-           "observe_allreduce_settings", "observe_attention_impls", "observe_export_facts", "observe_launch_context", "observe_target_profile",
+           "observe_allreduce_settings", "observe_attention_impls", "observe_batched_form", "observe_export_facts", "observe_launch_context",
+           "observe_target_profile",
            "triton_launch", "tuned_gemm_table_sha256", "vllm_ruleset"]
