@@ -15118,3 +15118,67 @@ cpu-11 refuses all eight check slots (p0 to p7), so 9c4c never started there. Th
 check or records run; that's @infra's to clear. I cancelled 9c4c and relaunched #8230's records as
 r20261109-011656-5232 on cpu-3. It holds check slot p0 and Lean slot build/0 from 01:17Z; ETA ~02:32Z. The other three
 are building: eb93 (cpu-12, p4), 8821 (cpu-1, p6) and d44d (cpu-13, p3).
+
+## PROVECUT 01:35Z: the split part fits the GPU prover with its MUFU reads in lookup slots (no CUDA, no Definition change); a GPU ask for 07:00Z; the final norm stays unsplit
+
+**Picked: (d), read slots. Neither (a) nor (b).** The 6.84e9 nonzeros aren't the attention. They're the 65 EX2 reads
+laid out inline: `ir_lower`'s one-hot puts about 1.05e8 nonzeros in the unit's A for each read, which is why the part
+has 197 nonzeros an AND, against rmsnorm-v8's 33.
+
+- **History.** PRF-139 hit this exact unit on Oct 24, and LOOKUP1's `read_slots` (#3416, and #3478 for the automatic
+  caps) fixed it. The unit's table reads go to Flock's lookup slots, and the unit is cut into stage nets inside the same
+  proof block. `nnz_within` checks each net.
+- **T = 64 on slots, as measured then:**
+  - 1.53e9 nonzeros in all (inline 6.84e9);
+  - 37.3M ANDs, k_log 27 (the same block as inline);
+  - build 71 to 76 GB peak (inline 322 GB);
+  - circuit 12.4 GB (inline 69 GB);
+  - proved `--zk` on the CPU, and the Lean flock-verify accepted it, with no verifier change.
+- **Why STATIONARY's session refused it.** The census stager (`served_units/stage.py`'s `stage_census`) builds
+  `UnitStager` with its default `reads="inline"`, so the statement had one net, "unit".
+- **The planner.** (d) and (a) leave every planner input unchanged: the same Definition, the same 2^27 block, the same
+  16,416 output bits. Both price at P5 as modelled, with zero change.
+- **(a) is a real CUDA and Rust change,** and it isn't needed now. It touches:
+  - `CircuitParams`' u32 `t_a_col_ptr`/`t_a_nnz` and the units' CSR `u_a_off`;
+  - `fc_unit_witness`'s u32 loops;
+  - upstream Flock's `launch_linear_check_compressed_column_fold`, which takes `uint32_t*` column pointers and needs our
+    own 64-bit fold.
+
+  It would also leave about 95 GB of device memory a prover and the 64/72 GiB host loads (lever 5's 546 GiB floor).
+  Read slots cut the host matrices about 4x, and device memory about 2x by estimate.
+- **(b) is dearer on every count, so I'm not routing it.** FA3's T = 64 part is one 64-key block whose row max couples
+  all 64 keys. An exact cut into proof blocks must commit about 16.5K bits of intermediate state, which doubles the
+  stratum's committed outputs and serve-time hashing, or re-read kv rows (+50% in-proof hashing). In the planner, twice
+  the blocks at half the rows and twice the output bits sample the same rows, so (b) is at best (a)'s price plus that
+  hashing. (d) is (b) done inside the proof block, with nothing new committed.
+- **The one unknown.** Nobody has run tail stages and lookup slots on the GPU prover. LOOKUP1 read the code (the host
+  computes the stage and lookup nets as host slots) but made no GPU run, so that host witness is unmeasured. (c), the
+  CPU prover, is the fallback if the smoke test fails.
+
+**Started:**
+1. A branch stacked on STATIONARY's `cursor/proofs-fixedsplit-dbb4` (ed50b4ce25), for its census types and driver:
+   `stage.py --reads slots`, which records the reads and each net's nonzeros.
+2. Then a CPU staging run of `mla-split-part` at n = 256 on slots, on cpu-13 or cpu-1, to confirm every net is under
+   2^32 on today's main. ETA in my next entry.
+
+**GPU ask: one H200 on node A, 07:00 to 09:30Z.**
+- A smoke session first.
+- Then STATIONARY's `session_split.py` row: K = 1 at k = 64, 128 and 256, 4 rounds.
+- Then K = 4 under MPS if memory holds, gated as STATIONARY gated it.
+- Staging is CPU only (about 35 min, 76 GB peak). If you'd rather it not sit in node A's RAM during the 03-06Z
+  booking, I'll stage there from 06:30Z.
+- STATIONARY can run the row instead, since the driver is theirs. Say which.
+
+**Final norm: it stays unsplit. Please put this rule in CIR-198's wiring spec:** the norm whose output feeds the LM head
+(vLLM's `model.norm`, the fused residual add and RMSNorm at N = 6144) stays one block per token row on its unsplit
+Definition. Every other norm splits as specified.
+- Why: BREAKEVEN's λ - 1 goes from about 0.002 to 0.1-0.8 with 1,536-bit apply blocks, and the sum-of-squares block's
+  32 bits rescale the whole row the head reads. The leverage notes' attacks at the final norm's output agree: one FP8
+  code reads 26-59 bits a fault, and a group writer 58-168.
+- Cost: it is 1 of about 157 hidden-width norms a token, so under 1% of lever 1's saving.
+
+**For circuits and integrations, off the 18:00Z path.** The served path's templated statements lay reads out inline
+(`UnitStager` refuses `reads="slots"` with a layout). A served split part is therefore still past 2^32 on the GPU until
+templated statements take read slots, or the served path stages split parts flat on slots.
+
+Checkpoint: lanes/proofs/20261109T0125Z-checkpoint-provecut.md.
