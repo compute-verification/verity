@@ -8,8 +8,8 @@ element. Each box is per position class (`lm.position_class`, read from position
 --window positions, where attention sinks put their massive activations (position 0, or the first delimiter after a
 first token that hosts none); the tokenizer's special tokens after them (document separators and chat delimiters,
 sinks too); and every other position. A box is the honest calibration traffic's largest magnitude with --headroom
-powers of two (default one): an element's is the next power of two above its maximum, doubled; a group's is 448 times
-its largest UE8M0 scale, doubled (one more exponent step).
+powers of two (default one; one value, or one a class): an element's is the next power of two above its maximum,
+doubled; a group's is 448 times its largest UE8M0 scale, doubled (one more exponent step).
 
 Traffic is the hand-written sets (`traffic.CALIBRATION`, `traffic.HELDOUT`) and, with --mixed N, N texts of the pinned
 datasets' (`traffic.mixed`; Pile documents need `--with pyarrow`); --shard i/n splits a part's texts across runs.
@@ -23,6 +23,7 @@ Parts (--part):
              site's RMS (how far an in-range fault reaches, in the units of experiment 1's sweeps), and the massive
              activations (an element's largest value against its site's median RMS, with the token it sits on).
   merge      joins the calibrate shards' stats.pt (--stats) into boxes.pt and calibrate.json.
+  rebox      boxes.pt again from a calibrated one's (--boxes) maxima, at another --headroom.
   complete   honest forwards over the held-out traffic and, in shard 0, other random first tokens, under the clamps:
              every value the clamps cut (an honest value outside its box is a completeness failure), and whether the
              clamped model's served greedy continuation differs from the unclamped one's.
@@ -121,17 +122,19 @@ class Stats:
             setattr(s, k, raw[k])
         return s
 
-    def boxes(self, headroom: int) -> dict[tuple[str, int], torch.Tensor]:
-        """Each class's box, with `headroom` powers of two. The early window and the special tokens are few positions
-        of the calibration traffic, so their boxes also cover every value the ordinary class saw."""
+    def boxes(self, headroom: list[int]) -> dict[tuple[str, int], torch.Tensor]:
+        """Each class's box, with `headroom` powers of two (one value, or one a class). The early window and the
+        special tokens are few positions of the calibration traffic, so their boxes also cover every value the
+        ordinary class saw."""
+        h = torch.tensor(headroom * CLASSES if len(headroom) == 1 else headroom, dtype=torch.float32)[:, None]
         hi = {}
         for k, a in self.amax.items():
             a = torch.stack([torch.maximum(a[0], a[1]), a[1], torch.maximum(a[2], a[1])])
             if k[0] in GROUP_SITES:
                 g = a.view(CLASSES, -1, GROUP).amax(-1)
-                hi[k] = (E4M3_MAX * 2.0 ** headroom * ue8m0_scale(g)).repeat_interleave(GROUP, -1)
+                hi[k] = (E4M3_MAX * torch.exp2(h) * ue8m0_scale(g)).repeat_interleave(GROUP, -1)
             else:
-                hi[k] = torch.exp2(torch.ceil(torch.log2(a.clamp_min(2.0 ** -24))) + headroom)
+                hi[k] = torch.exp2(torch.ceil(torch.log2(a.clamp_min(2.0 ** -24))) + h)
         return hi
 
 
@@ -194,6 +197,18 @@ def part_merge(lm: LM, tok, a) -> dict:
     for p in a.stats[1:]:
         stats.merge(Stats.load(lm, p))
     return calibrated(lm, tok, a, stats)
+
+
+def part_rebox(lm: LM, tok, a) -> dict:
+    """boxes.pt again from --boxes' calibrated maxima, at --headroom."""
+    raw = torch.load(a.boxes)
+    stats = Stats(lm, raw["special"], raw["window"])
+    stats.amax = {(k.split(":")[0], int(k.split(":")[1])): v for k, v in raw["amax"].items()}
+    Boxes(stats.boxes(a.headroom), raw["special"], raw["window"]).save(
+        a.out / "boxes.pt", model=a.model, revision=MODELS[a.model]["revision"], headroom=a.headroom,
+        amax=raw["amax"])
+    return {"part": "rebox", "from": str(a.boxes), "window": raw["window"], "special": len(raw["special"]),
+            "headroom": a.headroom}
 
 
 def calibrated(lm: LM, tok, a, stats: Stats) -> dict:
@@ -337,7 +352,7 @@ def part_explain(lm: LM, tok, a) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="gpt2", choices=sorted(MODELS))
-    ap.add_argument("--part", required=True, choices=("calibrate", "merge", "complete", "explain"))
+    ap.add_argument("--part", required=True, choices=("calibrate", "merge", "rebox", "complete", "explain"))
     ap.add_argument("--texts", default="heldout", choices=("heldout", "calibration"), help="explain: which traffic")
     ap.add_argument("--mixed", type=int, default=0,
                     help="texts of the pinned datasets (traffic.mixed) added to the hand-written set of the part's split")
@@ -346,13 +361,14 @@ def main() -> int:
     ap.add_argument("--window", type=int, default=1, help="calibrate: the first positions that form the sink class")
     ap.add_argument("--special", action=argparse.BooleanOptionalAction, default=True,
                     help="calibrate: give the tokenizer's special tokens their own class")
-    ap.add_argument("--headroom", type=int, default=1, help="calibrate/merge: powers of two of headroom on each box")
+    ap.add_argument("--headroom", type=int, nargs="+", default=[1],
+                    help="calibrate/merge/rebox: powers of two of headroom on each box, one value or one a class")
     ap.add_argument("--sink-layer", type=int, default=3, help="explain: the residual stream that marks sinks")
     ap.add_argument("--sink-ratio", type=float, default=16.0,
                     help="explain: a sink-like position's residual peak over the text's median peak")
     ap.add_argument("--top", type=int, default=12, help="explain: the largest overshoots and positions listed per text")
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--boxes", type=Path, help="complete, explain: the calibrated boxes.pt")
+    ap.add_argument("--boxes", type=Path, help="complete, explain: the calibrated boxes.pt; rebox: the one to redo")
     ap.add_argument("--new", type=int, default=64, help="greedy continuation tokens a text adds to the traffic")
     ap.add_argument("--cap", type=int, default=768, help="a text's tokens, at most")
     ap.add_argument("--first-tokens", type=int, default=2048,
@@ -361,13 +377,16 @@ def main() -> int:
     ap.add_argument("--threads", type=int, default=0)
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
+    if len(a.headroom) not in (1, CLASSES):
+        ap.error(f"--headroom takes one value or {CLASSES}, one a position class")
     if a.threads:
         torch.set_num_threads(a.threads)
     a.out.mkdir(parents=True, exist_ok=True)
     lm = LM(a.model)
     tok = lm.tokenizer()
     t = time.time()
-    parts = {"calibrate": part_calibrate, "merge": part_merge, "complete": part_complete, "explain": part_explain}
+    parts = {"calibrate": part_calibrate, "merge": part_merge, "rebox": part_rebox, "complete": part_complete,
+             "explain": part_explain}
     res = parts[a.part](lm, tok, a)
     res.update({"model": a.model, "revision": MODELS[a.model]["revision"],
                 "args": {k: ([str(x) for x in v] if isinstance(v, list) else str(v) if isinstance(v, Path) else v)
