@@ -245,7 +245,7 @@ def TheftTied : Prop :=
           (Ou.out z.2 (Served.view Ou L z.2 (l.map Served.Traced.toServed) T))) (run (gen z.1) z.2)) ≤
         ENNReal.ofReal (Claims.Pr fun z : Ω × R => gen z.1 ∉ Typ) +
           ENNReal.ofReal (Fintype.card (faultChannel R Q Adv O V Tick (P.Faults V) P.faultCount T M
-              ((L + 1) * Fintype.card O)).S * ((patternCount P.faultCount T M : ℝ) ^ (lam - 1) * p)) +
+              ((L + 1) * Fintype.card O)).S * ((patternCount (P.faultCount (V := V)) T M : ℝ) ^ (lam - 1) * p)) +
           δ + ηe + ηa
 
 /-- **`TheftTied`'s premises hold together at the honest toy deployment as a population**, with every weight typical,
@@ -281,6 +281,6 @@ def TheftTiedNontrivial : Prop :=
       ENNReal.ofReal (Claims.Pr fun z : ToyServed.W × Unit => ToyServed.gen z.1 ∉ (Set.univ : Set ToyServed.W)) +
         ENNReal.ofReal (Fintype.card (faultChannel Unit Unit Unit Unit (Fin 16) Unit (ToyServed.pop.Faults (Fin 16))
             ToyServed.pop.faultCount 2 0 ((0 + 1) * Fintype.card Unit)).S *
-          ((patternCount ToyServed.pop.faultCount 2 0 : ℝ) ^ ((1 : ℝ) - 1) * (1 / 256))) + 0 + 0 + 0
+          ((patternCount (ToyServed.pop.faultCount (V := Fin 16)) 2 0 : ℝ) ^ ((1 : ℝ) - 1) * (1 / 256))) + 0 + 0 + 0
 
 end WeightSecurity.Guarantees

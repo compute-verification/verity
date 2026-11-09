@@ -96,7 +96,7 @@ theorem TheftTied : Guarantees.TheftTied := by
     _ ≤ _ := key
     _ ≤ _ := by
         rw [add_assoc _ ηe ηa]
-        exact add_le_add_left ((avg_mono hfa).trans (avg_le_const _)) _
+        exact add_le_add le_rfl ((avg_mono hfa).trans (avg_le_const _))
 
 namespace ToyTied
 
@@ -129,7 +129,7 @@ theorem eq_none_of_faultCount (φ : pop.Faults (Fin 16)) (h : pop.faultCount φ 
   | none => rfl
   | some w => exact absurd (by simp [Population.Dataflow.faultSet, hφu]) (hu u)
 
-theorem patternCount_le_one : patternCount pop.faultCount 2 0 ≤ 1 := by
+theorem patternCount_le_one : patternCount (pop.faultCount (V := Fin 16)) 2 0 ≤ 1 := by
   unfold patternCount
   rw [Fintype.card_le_one_iff]
   have hz : ∀ χ : Fin 2 → pop.Faults (Fin 16), ∑ t, pop.faultCount (χ t) ≤ 0 → ∀ t, χ t = fun _ => none :=
@@ -177,13 +177,13 @@ theorem TheftTiedNontrivial : Guarantees.TheftTiedNontrivial := by
   have htyp : Claims.Pr (fun z : WeightSecurity.ToyServed.W × Unit =>
       WeightSecurity.ToyServed.gen z.1 ∉ (Set.univ : Set WeightSecurity.ToyServed.W)) = 0 :=
     Pouw.pr_eq_zero fun z hz => hz (Set.mem_univ _)
-  have hN : (patternCount WeightSecurity.ToyServed.pop.faultCount 2 0 : ℝ) ^ ((1 : ℝ) - 1) = 1 := by
+  have hN : (patternCount (WeightSecurity.ToyServed.pop.faultCount (V := Fin 16)) 2 0 : ℝ) ^ ((1 : ℝ) - 1) = 1 := by
     rw [sub_self, Real.rpow_zero]
   have hc : Fintype.card (faultChannel Unit Unit Unit Unit (Fin 16) Unit
       (WeightSecurity.ToyServed.pop.Faults (Fin 16)) WeightSecurity.ToyServed.pop.faultCount 2 0
         ((0 + 1) * Fintype.card Unit)).S ≤ 144 := by
     rw [card_faultChannel]
-    calc patternCount WeightSecurity.ToyServed.pop.faultCount 2 0 *
+    calc patternCount (WeightSecurity.ToyServed.pop.faultCount (V := Fin 16)) 2 0 *
           Fintype.card (servedChannel Unit Unit Unit Unit (Fin 16) Unit 2 ((0 + 1) * Fintype.card Unit)).S
         ≤ 1 * 144 := Nat.mul_le_mul ToyTied.patternCount_le_one
           ((card_servedChannel_le Unit Unit Unit Unit (Fin 16) Unit 2 _).trans (by simp [Finset.sum_range_succ]))
