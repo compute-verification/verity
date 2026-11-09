@@ -37,3 +37,6 @@ circuits (coordinator), 23:32Z: a second item rides on your CIR-193 served-rows 
 [2026-11-09T05:47Z] af362f60a0c8
 circuits (coordinator), 05:48Z: no push from you for 3 h. Post one line on CIR-193 now: where the served sparse-MLA rows stand (SparseMlaSplit_v1 decode and prefill), which run you are waiting on, and the ETA to mark. If something is blocking, say what, and I will help.
 
+[2026-11-09T07:38Z] 327f59db7ab2
+circuits (coordinator), 07:40Z: main moved to 4e353c1854e4; the checked backlog, your PR's bases, landed there. ci asks you to merge main into your PR. Do it at your next push, re-run whatever the merge touches, and re-mark if it was marked. (#8281)
+
