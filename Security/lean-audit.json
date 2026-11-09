@@ -55805,7 +55805,7 @@
    }
   },
   "Spot.Supplied": {
-   "digest": "4aa170c21ce5acaef853e6b3c454763e6bdfc1d6deea49308a728fe0b27ab234",
+   "digest": "3d472d2dfc06ed1a834711ef70bac14890f232ebcbbc3df27716f0369d966791",
    "definitions": {
     "Spot.Supplied.Rows": "9ea3fe879313cec826c93ccd8e9bd6d38ab7dd085e00750198a87e2dc948eda6",
     "Spot.Supplied.SALT_BYTES": "0b23db9afdbca052397549d242aaa63a19c8cd47e30d75a8e9dfa18f9c1e85d9",
@@ -55813,10 +55813,12 @@
     "Spot.Supplied.SUPPLIED_SALT": "bbb62d6b80fffa6eea2c9472cf38d43be8fd10aff097afa691e7c9c21df219c0",
     "Spot.Supplied.WINDOW_SALT": "c0f44ae3371afd1e08529bfec5bb1e935b7cee76a1328fb14f4d9977228188ff",
     "Spot.Supplied.bytesLeaves": "71efef66b63a4b091d71ccbc79ace3ea049227807225d4f6c9940b2bbedf0e1f",
+    "Spot.Supplied.digestLeaves": "258572b194e7c6dfebb87e355e6c32bf8f78f1e452932ffe52e6aecc14c02303",
+    "Spot.Supplied.digests": "7331260433eb1558a3b697f2037e80db4de700b2c54aa007d7fae773508a4d85",
     "Spot.Supplied.logBase": "2d6ab8f65e43953cbc76224d54b9b98ade6bb023d5c3fc2372af1c638530211f",
     "Spot.Supplied.root": "eb76521a45d572aeb7cb04d6cb2c5da46bd55a36b08483390d0e39fc7f129770",
     "Spot.Supplied.rowWords": "9d962d1b6c04a5a547526c6752cf2932d50b37ecaffabc7600454b877d85084b",
-    "Spot.Supplied.rows": "0441ea11477707a9d1617bcb741705a0a0dc59ab6afda0347190c8c290c757b9",
+    "Spot.Supplied.rows": "b8b54fc191535b7113e5f68aeff040e33c7e08194768eb07cc8e8e3587834c13",
     "Spot.Supplied.salt": "e8347bcafefbb00cd680acb08929c63c64d9e5076cf854b4f2bb21abbbde51cf",
     "Spot.Supplied.sourceBytes": "46f81947ff19decbbdb4400ea3a3a1894011af5dda57738f508d53794a1c468b",
     "Spot.Supplied.sources": "f09f4e2282a1d3185bcfb0265b0c1a87e208ae299644d829a09d828d17df4db8",
