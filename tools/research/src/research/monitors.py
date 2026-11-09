@@ -739,6 +739,7 @@ def fixtures_public(ctx: Ctx) -> list[Finding]:
 DRIVE_STATE = "root/.research/queue/verity.state.json"
 DRIVE_LOG = "data/drive/drive.log"
 UNVERIFIED_S = 3 * 3600
+VQUEUE_DECISIONS = "data/vqueue/live/decisions.jsonl"
 DRIVE_TICK_STALE_S = 30 * 60
 TICK_RE = re.compile(rb"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ) tick rc=", re.M)
 
@@ -764,7 +765,20 @@ def unverified_main(ctx: Ctx) -> list[Finding]:
     GitHub's compare won't do: it lists each PR's own commits too, dated when their branch made them, and a long range's oldest
     hundreds hold no landing. One event per further hour behind, to ci and top, until an after-landing run verifies
     main again; read from drive's state, not its log, so it still rings while drive is down. Quiet while drive ticks
-    (`drive_ticking`): drive's own `_behind` alarm rings then, and this one covers drive being dead."""
+    (`drive_ticking`): drive's own `_behind` alarm rings then, and this one covers drive being dead.
+
+    Since main moves only through the verified queue (CI-489, 15:29Z 9 Nov; drive stopped for good), its decisions file
+    (`VQUEUE_DECISIONS`) is read instead when it exists: one event per further hour once the queue has decided nothing for
+    `UNVERIFIED_S`, a loop stopped or stuck; a queue that decides is ci's, which it rings itself."""
+    if (decisions := ctx.root / VQUEUE_DECISIONS).exists():
+        lines = [ln for ln in decisions.read_text().splitlines() if ln.strip()]
+        last = json.loads(lines[-1]).get("at") if lines else None
+        since = calendar.timegm(time.strptime(last, "%Y-%m-%dT%H:%M:%SZ")) if last else decisions.stat().st_mtime
+        if (behind := ctx.now - since) < UNVERIFIED_S:
+            return []
+        hours = int(behind // 3600)
+        return [Finding(f"vqueue:{hours}", f"*The verified queue has decided nothing for {hours} h*: its last decision in "
+                        f"`/{VQUEUE_DECISIONS}` is from {iso(since)}, and `main` moves only through it.", owners=("ci", "top"))]
     if drive_ticking(ctx):
         return []
     state = json.loads((ctx.root / DRIVE_STATE).read_text())

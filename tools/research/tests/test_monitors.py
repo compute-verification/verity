@@ -1517,3 +1517,11 @@ def test_unverified_main_rings_ci_and_top_each_hour_past_three_until_a_post_land
     lines = (alerts / "monitors.jsonl").read_text().splitlines()
     assert [(x["event"], x["key"], x["owners"]) for x in map(json.loads, lines)] == [
         ("event", "unverified-main|595cce6ddaf6:4", ["ci", "top"])]
+    decisions = tmp_path / M.VQUEUE_DECISIONS
+    decisions.parent.mkdir(parents=True)
+    decisions.write_text(json.dumps({"action": "ring", "at": M.iso(T0 - 600)}) + "\n")
+    assert M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=run)) == [], (
+        "the verified queue decides (ci, 9 Nov): drive's stale verified commit no longer rings")
+    decisions.write_text(json.dumps({"action": "advance", "at": M.iso(T0 - 4 * 3600 - 60)}) + "\n")
+    (f,) = M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=run))
+    assert f.key == "vqueue:4" and f.owners == ("ci", "top") and "decided nothing for 4 h" in f.text
