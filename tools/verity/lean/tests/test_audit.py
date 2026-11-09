@@ -2032,7 +2032,7 @@ def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_scope_s_memory_holds
 def test_a_heavy_build_pipelines_its_replay_under_lean_audit_s_thread_setting(tmp_path, monkeypatch):
     """`lean_audit.py` runs every check.py with `LEAN_NUM_THREADS` set, under which `replay_threads` is None for every
     package; the pipeline keyed on it never ran in a check, and the lock run's Security/Proofs replayed its 3179 modules
-    for 1117 s after its 2641 s build on 138 cores. Heaviness is the manifest's (`pins_heavy`),
+    for 1117 s after its 2641 s build on 138 cores (r20261108-212009-2b2c). Heaviness is the manifest's (`pins_heavy`),
     so a heavy package's sandboxed build with a replay cache on a large machine pipelines whatever that variable says."""
     heavy, light = tmp_path / "heavy", tmp_path / "light"
     for p, deps in ((heavy, ["mathlib", "Arklib"]), (light, ["batteries"])):
