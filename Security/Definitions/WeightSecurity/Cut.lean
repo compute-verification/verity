@@ -9,9 +9,9 @@ A fault pattern `φ : F` names some proof blocks and the values they write inste
 faulted function `Cf θ (x, φ)` is the served function's answer at the weights `θ` and the query `x` with the pattern's
 blocks writing its values. An **honest cut** for a class of patterns is a set of values through which every path from
 the faulted blocks to the answer passes and which honest use reproduces: given the cut's values as a hint, a public
-simulator (`Cut`) computes the faulted answer from one honest answer at a query it chooses. Then a datacenter that faults
-only within the class leaks through a covert channel of `Theft`'s kind (`Cut.channel`), whose covert strings are the
-hints, in place of the patterns: the faults cost their hints' bits, with no premise beyond `HonestUseHard`.
+simulator (`Cut`) computes the faulted answer from one honest answer at a query it chooses. Then a datacenter that
+faults only within the class leaks through a covert channel of `Theft`'s kind (`Cut.channel`), whose covert strings are
+the hints, in place of the patterns: the faults cost their hints' bits, with no premise beyond `HonestUseHard`.
 
 * `Cut X Y`: hints with sizes, the honest query `ask x h` and the answer `sim x h y` made of the honest answer `y`;
 * `Cut.Cuts κ C Cf size inClass`: every faulted answer at a pattern of the class is `κ`'s at a hint no larger than the
@@ -25,7 +25,8 @@ hints, in place of the patterns: the faults cost their hints' bits, with no prem
   would;
 * `Cut.Interior κ Cf size φ₀`: the patterns `κ` doesn't cut, the only ones `TheftFaulted` takes `FaultedUseHard` at.
   Its fault channel (`faultChannel`) carries a hint for a window whose pattern `κ` cuts, so those faults cost their
-  hints rather than `FaultedUseHard`'s rate. `Cut.none` cuts nothing.
+  hints rather than `FaultedUseHard`'s rate. `Cut.none` cuts nothing, and `Cut.map` reads a cut through an encoding
+  of the answers (a token list as the release's `O → V`).
 
 The cuts are stated for autoregressive decoding (`decode`): position `i`'s token is a function of the tokens before it,
 which holds when the release is tokens only, nothing decodes ahead, and no state is shared across requests. Two
@@ -42,7 +43,7 @@ simulators cover the classes with a cut:
 
 namespace WeightSecurity
 
-variable {R X Y Θ Θ' F V : Type}
+variable {R X Y Y' Θ Θ' F V : Type}
 
 /-- **A cut simulator** with hints `H`, a hint `h` of size `size h`: from the query `x` and a hint `h`, the honest query
 `ask x h` it asks the served function, and the answer `sim x h y` it makes of the honest answer `y` there. It reads no
@@ -91,6 +92,14 @@ def Cut.none (X Y : Type) : Cut X Y where
   size h := h.elim
   ask _ h := h.elim
   sim _ h _ := h.elim
+
+/-- **The cut read through an encoding of the answers**: `κ`'s hints, sizes and honest queries, with the honest answer
+read through `g` and the simulated one written through `f`. -/
+def Cut.map (κ : Cut X Y) (f : Y → Y') (g : Y' → Y) : Cut X Y' where
+  H := κ.H
+  size := κ.size
+  ask := κ.ask
+  sim x h y := f (κ.sim x h (g y))
 
 /-- **The patterns no cut covers**: the empty pattern `φ₀`, and each pattern `φ` that `κ` doesn't cut, with the faulted
 function at `φ₀` as the honest one (`κ.Cuts (Cf · φ₀) Cf size (· = φ)`). `TheftFaulted` takes `FaultedUseHard` only at

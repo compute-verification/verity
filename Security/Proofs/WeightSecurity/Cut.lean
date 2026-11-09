@@ -10,10 +10,10 @@ outside the class or past the budget (`leaksThrough_cut`), and the outsider stea
 `|S| · p + ε`, where `S` is the channel's hint strings, not the patterns. `faultedUseHard_of_cut` is the per-party form:
 a party that queries the faulted function within the class and the budget is, with its patterns dropped
 (`Outsider.dropFaults`), an outsider against the datacenter that faults where it would (`dropFaults_model`), so honest
-use's hardness at `p` gives faulted use's at `|S| · p`. `TheftFaulted` takes the conversion at the channel instead, where
-the fault channel carries a cut window's hint in place of its pattern: the per-party form charges `|S|` on top of the
-pattern count the fault channel already pays. `not_interior_of_cuts`: a pattern a cut cuts is not interior, so
-`TheftFaulted` takes no `FaultedUseHard` there.
+use's hardness at `p` gives faulted use's at `|S| · p`. `TheftFaulted` takes the conversion at the channel instead,
+where the fault channel carries a cut window's hint in place of its pattern: the per-party form charges `|S|` on top of
+the pattern count the fault channel already pays. `not_interior_of_cuts`: a pattern a cut cuts is not interior, so
+`TheftFaulted` takes no `FaultedUseHard` there, and `cuts_map` carries a cut on token lists to its release `O → V`.
 
 The instances cut autoregressive decoding (`decode`). `cuts_forced` is the dominator lemma: a faulted run that decodes
 the honest next token at every position outside a set no larger than its pattern is the forced-token query's with its
@@ -27,7 +27,7 @@ namespace WeightSecurity.SecurityProofs
 
 open Finset WeightSecurity WeightSecurity.Assumptions
 
-variable {Ω R X Y Θ Θ' F V : Type}
+variable {Ω R X Y Y' Θ Θ' F V : Type}
 
 /-- **On a run that faults within the class, the outsider's view is the cut channel's**, at the hints the cut gives
 each round's pattern. -/
@@ -161,6 +161,17 @@ theorem not_interior_of_cuts (κ : Cut X Y) {Cf : Θ → X × F → Y} {size : F
   · refine h fun θ x φ' hφ' => ?_
     subst hφ'
     exact hcut θ x _ hφ
+
+/-- **A cut survives an encoding of the answers** that `g` decodes at the honest answers: `κ.map f g` cuts the class
+from the encoded functions. It carries a cut on token lists to the release `O → V` that `TheftFaulted`'s cut reads. -/
+theorem cuts_map (κ : Cut X Y) {C : Θ → X → Y} {Cf : Θ → X × F → Y} {size : F → ℕ} {inClass : F → Prop}
+    (f : Y → Y') (g : Y' → Y) (hgf : ∀ θ x, g (f (C θ x)) = C θ x) (hcut : κ.Cuts C Cf size inClass) :
+    (κ.map f g).Cuts (fun θ x => f (C θ x)) (fun θ x => f (Cf θ x)) size inClass := by
+  intro θ x φ hφ
+  obtain ⟨h, hs, he⟩ := hcut θ x φ hφ
+  refine ⟨h, hs, ?_⟩
+  show f (Cf θ (x, φ)) = f (κ.sim x h (g (f (C θ (κ.ask x h)))))
+  rw [hgf, he]
 
 /-- Two decoders that pick the same token at each position `n < N` from the first's tokens before it decode the same
 `N` tokens. -/
