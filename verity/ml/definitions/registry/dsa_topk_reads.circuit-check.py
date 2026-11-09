@@ -17,9 +17,9 @@ RANGES = {
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
-    """The index units at small statics (a first block and one from AT, the merge of one list and of three), the long row
-    over three blocks of 4 keys, two reads of a 16-row table, and the merge the longest row calls (8 blocks, 2,048 slots), over
-    `targets.MAX_GATES` and held to its digest pin."""
+    """The index units at small statics (a first block and one from AT, the merge of one list and of three, a slot of four
+    and of five), the long row over three blocks of 4 keys, two reads of a 16-row table, and the merge and slot the longest row
+    calls (8 blocks, 2,048 slots, N 2^17), over `targets.MAX_GATES` and each held to its digest pin."""
     from verity.ml.circuits.defs import bind
     from verity.ml.commitments.gates.embedding import read
     from verity.ml.definitions.registry import dsa_topk_reads as R
@@ -30,6 +30,9 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("DsaPositionsMerge_v1", lambda: bind(R.DsaPositionsMerge, M=1, K=4)),
         ("DsaPositionsMerge_v1-blocks", lambda: bind(R.DsaPositionsMerge, M=3, K=4)),
         ("DsaPositionsMerge_v1-served", lambda: bind(R.DsaPositionsMerge, M=8, K=2048)),
+        ("DsaPositionsSlot_v1", lambda: bind(R.DsaPositionsSlot, K=4, N=20)),
+        ("DsaPositionsSlot_v1-odd", lambda: bind(R.DsaPositionsSlot, K=5, N=12)),
+        ("DsaPositionsSlot_v1-served", lambda: bind(R.DsaPositionsSlot, K=2048, N=131072)),
         ("DsaTopKReadRows_v1", lambda: bind(R.DsaTopKReadRows, N=12, TOPK=2, BLOCK=4, READ=read(16, 1))),
     ]
 

@@ -125,6 +125,43 @@ def test_the_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate(M_, K)
     assert split == one
 
 
+def _slot(K: int, N: int, slots: np.ndarray, js: list[int]) -> list[int]:
+    """Each row of ``slots`` (rows, K) u32 words, with its j, through `DsaPositionsSlot_v1{K,N}`."""
+    got = BS.evaluate_bits(bind(R.DsaPositionsSlot, K=K, N=N), _bits(slots, 32).reshape(len(js), -1), _bits(js, 32))
+    return _words(np.asarray(got).reshape(len(js), -1), 32)
+
+
+def _want_slot(K: int, N: int, row: list[int], j: int) -> int:
+    return row[j] if j < K and row[j] < N else 0
+
+
+@pytest.mark.parametrize("M_,K,N", [(3, 4, 20), (2, 5, 12), (1, 1, 4), (3, 8, 40)])
+def test_slot_j_is_the_merges_element_j(M_, K, N) -> None:
+    """On the merge's outputs (lists of positions below N and of any u32, counts from 0 past K): slot j is the merge's element
+    j, and 0 at j of K or more (u32's top bit and top among them) and where the element is N or more."""
+    rng = random.Random(M_ * 1000 + K * 10 + N)
+    lists = np.array([[[rng.randrange(N) if rng.random() < 0.7 else rng.getrandbits(32) for _ in range(K)]
+                       for _ in range(M_)] for _ in range(24)], dtype=np.uint64)
+    counts = np.array([[rng.randrange(K + 2) for _ in range(M_)] for _ in range(24)], dtype=np.uint64)
+    merged = _merge(M_, K, lists, counts)
+    js = list(range(K)) + [K, K + 1, 1 << 31, (1 << 32) - 1, rng.getrandbits(32)]
+    cases = [(row, j) for row in merged for j in js]
+    got = _slot(K, N, np.array([r for r, _ in cases], dtype=np.uint64), [j for _, j in cases])
+    assert got == [_want_slot(K, N, r, j) for r, j in cases]
+    assert all(g < N for g in got)
+
+
+def test_the_served_slot_is_its_element_below_the_table() -> None:
+    """At the served binding (2,048 slots, N 2^17, the longest row's class and the table's capacity): an 11-level tree no
+    small binding reaches, and the bound at a power of two."""
+    rng = random.Random("dsa-slot-served")
+    K, N = SERVED_TOPK, SERVED_V
+    rows = [[rng.randrange(N) if rng.random() < 0.9 else rng.getrandbits(32) for _ in range(K)] for _ in range(24)]
+    js = [0, K - 1, K, 1 << 31] + [rng.randrange(K) for _ in range(20)]
+    got = _slot(K, N, np.array(rows, dtype=np.uint64), js)
+    assert got == [_want_slot(K, N, r, j) for r, j in zip(rows, js)]
+
+
 @pytest.mark.parametrize("N,K,block", [(20, 4, 8), (18, 4, 8), (24, 4, 8), (10, 1, 4), (16, 16, 16)])
 def test_the_index_units_compose_to_the_rows_networks_order(N, K, block) -> None:
     """Blocks of 8 keys over 20 (a last block of 4), 18 (its last 2 keys joined to the block before) and 24, TOPK 1, and one

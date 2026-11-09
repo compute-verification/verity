@@ -17,7 +17,8 @@ and Path are READ's; `READ_PORTS` its parameters.  The body is three stages, eac
   has at most TOPK members, as a counted mask always has.  Each block's list and count is a port of the merge's own
   (``pos_b``, ``count_b``), one whole output of one writer.  Its slots are one output, Array<K, I32>: K outputs of one I32
   each would be K committed rows, which put the served merge's block (8 blocks, 2,048 slots) at 2^31 bits, past Flock's
-  proved range;
+  proved range.  ``DsaPositionsSlot_v1{K,N}`` (slots, j) takes slot j of the merge's output, its j an input so that one
+  template serves every slot, and 0 where j >= K or the slot is N or more, so a read's key is below N whatever its inputs;
 * TOPK reads, read j at slot j's position with opening (row[j], salt[j], path[j]) under the table's root and domain id: kv[j]
   and its verdict ok[j].
 
@@ -133,6 +134,37 @@ DsaPositionsMerge = EW.specialized(
     "DsaPositionsMerge", 1, ["M", "K"], _merge, _merge_sig, doc=_merge.__doc__, refuse=_refuse_merge,
     conformance="exact-model-tested: held to merge, the blocks' lists one after another, by the definitions' "
                 "test_dsa_topk_reads.py")
+
+
+def _slot(S):
+    """`DsaPositionsSlot_v1{K,N}` (slots: Array<K, I32>, j: I32) -> I32: slots[j] where j < K and slots[j] < N, else 0, so
+    its output is below N whatever its inputs; slots[j] by a tree of muxes over j's low bits."""
+    J = (S.K - 1).bit_length()
+
+    def build(C, *els):
+        rows, j = [list(e) for e in els[:S.K]], list(els[S.K])
+        rows += [[ZERO] * 32] * ((1 << J) - S.K)
+        for i in range(J):
+            rows = [mux(C, j[i], rows[t + 1], rows[t]) for t in range(0, len(rows), 2)]
+        x = rows[0]
+        ok = C.AND(sub(C, j, const_bits(S.K, 32), 32)[1], sub(C, x, const_bits(S.N, 32), 32)[1])
+        return [C.AND(ok, b) for b in x]
+    return build
+
+
+def _refuse_slot(b: dict) -> str | None:
+    if b.get("K") is not None and not 1 <= b["K"] <= 1 << M.RANK_BITS:
+        return f"a list of 1 <= K <= 2^{M.RANK_BITS} positions (K={b['K']})"
+    if b.get("N") is not None and not 1 <= b["N"] <= 1 << 31:
+        return f"a bound of 1 <= N <= 2^31 (N={b['N']})"
+    return None
+
+
+DsaPositionsSlot = EW.specialized(
+    "DsaPositionsSlot", 1, ["K", "N"], _slot, lambda S: ((("slots", Array(S.K, I32)), ("j", I32)), I32), doc=_slot.__doc__,
+    refuse=_refuse_slot,
+    conformance="exact-model-tested: held to the merge's slot j, and to 0 at j >= K or a slot of N or more, by the "
+                "definitions' test_dsa_topk_reads.py")
 
 
 def index(B, N: int, K: int, block: int, mask) -> Coll:
