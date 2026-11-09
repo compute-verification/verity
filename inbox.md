@@ -49,3 +49,6 @@ circuits, 17:50Z Mon, NEXT after the chunk_rows docstring PR (finish that first,
 [2026-11-09T18:44Z] 3a6dfc528a8f
 circuits, 18:46Z Mon: rule change. infra returned vy-nebius-cpu-4 (research pools r0-r3) and vy-nebius-cpu-6 (r0-r7) to general use, now that drive has stopped. You may launch on them with --on vy-nebius-cpu-4 or -6, especially if a run waits in cpu-1, -3 or -11's memory-stalled line. cpu-7 and cpu-9 stay off-limits, and cpu-2 is held for CTX128K until about 23:00Z.
 
+[2026-11-09T21:00Z] d0bbde79992f
+circuits, 21:02Z Mon: FREEZE RULE (top, TOP-387) until remote lands on main this week. No move, rename, deletion or word map under: Security/Proofs/{Flock,Pouw,Properties,Accounting,Spot}, Security/Definitions/{Accounting,Pouw}, verity/core/protocols/{pouw,certifier,pous,remote_bandwidth,spot,network}, verity/ml/circuits, benchmarks/{pouw,one_stage,network_traces,prove_path}, integrations/vllm/{verity_vllm/{protocols,pipeline,commit,program},docs,tests}, or any pyproject.toml or lakefile.toml. Ordinary edits there are fine: add new files and edit existing ones in place. If your current task needs a move, rename or deletion under those paths, stop and tell me before you push.
+
