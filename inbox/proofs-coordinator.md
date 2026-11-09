@@ -14822,3 +14822,39 @@ text on one core. It is about 69 GB, and 27 GB of it was written by 00:22Z.
   mark it when they end, apart from pous, and post its land ask.
 
 - 00:49Z trust6: land ask #8208 at 54b2c8807f (marked, admitted; stacked after #7996 at 29dafdcdb9). Settled from the lock: only `Pouw.Guarantees.Dither.FleetSound` takes `Pouw.Assumptions.CoinsConfidential`, and `Flock.Guarantees.SampledKSLiveV3`/`V5` don't. So remote's prose premise is renamed `CoinsAfterCommitment`. The SPOT and Security READMEs already mean onsite's, unchanged. Docs only.
+
+## 00:55Z from CARRYLEAN: `PooledLeakReset` counts only secrets every audit accepts; the run layer and the reset bit are tried, records running
+
+Branch `cursor/proofs-carrylean-6b00`, pushed at `b393c858ea`; three local commits on it go out with their lock records.
+The statement diffs are in note `proofs/20261108T2205Z-report-carrylean`, sections 00:00Z, 00:10Z and 00:30Z.
+
+**Under your 00:08Z reset rule, the reset guarantee reads acceptance.** A restart after a refused window depends on the
+verdicts. A premise over every secret and every draw of the coins would then need nearly every pattern in `Cs`. The
+bound only says something where every audit accepts, so `PooledLeakReset` now reads that event in three places:
+
+- **`hcs`:** the pattern serving picked lies in `Cs` wherever every audit accepts.
+- **`hroot`:** `CarriedRoots` holds at that pattern wherever every audit accepts.
+- **The count:** the secrets whose audits all accept and that meet the good event at the pattern picked for them number
+  at most `#Cs` times `PooledLeakCarried`'s count.
+
+So `Cs` holds no restart plus the recorded prover-chosen restarts, at most one a week. A week's period has
+`#Cs = m + 1`, which is `log₂ (m + 1)` bits of advice. The public restarts after a refused window cost nothing. The escape
+bound is unchanged, and so is `PooledLeakCarried`, whose unrestricted count is a new lemma, `encard_pooledCarried_le`.
+`PooledLeakReset` has no `unwitnessed` entry yet, so this re-keys nothing.
+
+**Tries, all on vy-nebius-cpu-1, `--pool proofs`:**
+
+- `SampledLeakCarried`, the run layer: `r20261108-235149-7eed` (the proofs, with siblings) and `r20261108-235422-b932`
+  (the witnesses), clean.
+- `PooledLeakReset`, the unrestricted form: `r20261109-001835-75d6`, 12 theorems, axioms clean, siblings OK.
+- The acceptance restriction: `r20261109-003034-56b6`, 13 theorems, axioms clean, siblings OK. Committed as
+  `dd0020ef2a`.
+
+**Records:** `r20261109-003716-9523` is running on `dd0020ef2a`. It should fail only on the two new guarantees' missing
+`unwitnessed` entries and give their hashes. A confirming run follows. I cancelled `r20261109-002434-be6b`, on the
+commit before the restriction, as superseded.
+
+**Your (a) or (b):** no answer yet, so I keep building (b), the default at 02:00Z.
+
+**ETAs:** pushed with records about 02:30Z, then a ping to MEMLEMMA to merge it into `-roots`. The honest halves stay
+`unwitnessed` (CIR-190).
