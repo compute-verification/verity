@@ -355,8 +355,14 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     assert out["configurations"]["per_expert"]["cut"]["label"] in caps["exfiltration"]
     assert "card_influenceTwo_le_served_min" in caps["exfiltration"] and "card_influenceTwo_le_min" in caps["exfiltration"]
     assert "the patterns' form (card_influenceTwo_le_patterns):" in caps["exfiltration"]
-    assert ("each request serves at most S = 144,000 bits, and no proof block is shared across requests"
-            in caps["exfiltration"])
+    s_bits, cap = out["served_bits_request"], out["inputs"]["max_tokens_cap"]["value"]
+    assert out["served"] == "cap" and s_bits == cap * 32
+    assert (f"Each request serves at most S = {s_bits:,.0f} bits, {cap:,} tokens, the network certifier's registered "
+            f"response cap ({f1.CAP_RULE}; the tie of the statement's served outputs to the tokens it releases is "
+            "pending), but the form reads each as serving exactly S (RequestsCover)") in caps["exfiltration"]
+    every = out | {"inputs": {k: v for k, v in out["inputs"].items() if k != "max_tokens_cap"}}
+    assert (f"each request serves exactly S = {s_bits:,.0f} bits (RequestsCover), and no proof block is shared across "
+            "requests") in t.captions(every, scope)["exfiltration"]
     assert "serve tax 3%" in caps["exfiltration"] and "measured" in caps["exfiltration"]
     at = out["betas"].index(f1.RATIO_BUDGET)
     lines = {s["config"]: s for s in out["panels"]["exfiltration"]["series"]}

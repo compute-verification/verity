@@ -202,8 +202,9 @@ Limits of the model:
 - The uncapped two-stage bound charges a wholly incorrect request every bit it commits, its interior included, not
   only what it serves; the capped ones charge at most what it serves, the sets' form on
   `card_influenceTwo_le_served_min` and the patterns' form on `card_influenceTwo_le_patterns`.
-- The patterns' form takes each request to serve at most S bits and no proof block to be shared across requests: a
-  batched or routed block that several requests read needs the planner changed.
+- The patterns' form takes each request to serve exactly S bits (`RequestsCover`) and no proof block to be shared
+  across requests: a batched or routed block that several requests read needs the planner changed, and under the
+  certifier's cap a request serves at most S, so that the bound holds for one serving fewer needs a lemma.
 - A registration's cap pads only for the first stage's count: a Definition's blocks in a sampled replay block are
   taken at their mean share of its stratum's k, and its sessions' padding to one size within a statement, not to one
   size across Definitions. A pod-wide or datacenter-wide registration needs one committer over its machines' boundary

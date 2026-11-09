@@ -136,6 +136,8 @@ class Configuration:
 #: sampled layer of one token its engine step's whole batch at that layer, the requests in flight ("step"); with them, a
 #: request replays alone ("request")
 REPLAYS = ("block", "step", "request")
+#: what the patterns' form reads each request as serving: `D.S` bits exactly
+PATTERNS_SERVED = "RequestsCover"
 
 
 #: a 64-machine pod: one committer gathering its machines' boundary rows into one registration
@@ -605,12 +607,13 @@ def captions(out: dict, scope: str) -> dict[str, str]:
         return text
 
     cap = (out["inputs"].get("max_tokens_cap") or {}).get("value")
-    conditions = (f"It takes two modeling conditions: each request serves at most S = {served:,.0f} bits, and no "
-                  "proof block is shared across requests" if cap is None else
+    conditions = (f"It takes two modeling conditions: each request serves exactly S = {served:,.0f} bits "
+                  f"({PATTERNS_SERVED}), and no proof block is shared across requests" if cap is None else
                   f"Each request serves at most S = {served:,.0f} bits, {cap:,} tokens, the network certifier's "
                   f"registered response cap ({f1.CAP_RULE}; the tie of the statement's served outputs to the tokens "
-                  "it releases is pending), and it takes one modeling condition: no proof block is shared across "
-                  "requests")
+                  f"it releases is pending), but the form reads each as serving exactly S ({PATTERNS_SERVED}), and "
+                  "that its bound holds for a request serving fewer is a modeling condition, no lemma yet; so is the "
+                  "other: no proof block is shared across requests")
     patterns = (f"the patterns' form ({f1.CAP_STATUS['patterns']}): a request's incorrect proof "
                 f"blocks are charged their committed bits up to the {served:,.0f} bits it serves, so a wholly incorrect "
                 f"request costs {served:,.0f} bits, and the bound is at most the {sc['served_bits']:.2g} bits the "
