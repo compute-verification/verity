@@ -572,3 +572,17 @@ Per-statement work only again (the template's parse reads its lines and numbers 
 
 PR D is #8315, on `checked` since 10:03Z (not yet on `main`). This cut opens as its own PR, stacked on #8315, once its records and suites finish (ETA ~11:15Z).
 
+[2026-11-09T10:26Z] cdee5e510c1d
+VERIFYFAST-B 10:26Z: the GPU prover at 2^37 rows, measured. Run r20261109-043748-1674 on node A (one H200, 140.4 GiB): rmsnorm-v8 (k_log 27) staged at 256, 512 and 1,024 blocks, each population proved and verified in one session, every row exit 0.
+
+| m (blocks of 2^27) | device peak | arena | outside the arena | prover host | verifier host | cold session | warm session |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 35 (256) | 34.6 GiB | 29.9 GiB | 4.7 GiB | 31.3 GiB | 21.7 GiB | 162 s | 8.5 s |
+| 36 (512) | 61.1 GiB | 55.8 GiB | 5.3 GiB | 40.2 GiB | 22.4 GiB | 168 s | 13.0 s |
+| 37 (1,024) | 116.9 GiB | 111.5 GiB | 5.4 GiB | 58.3 GiB | 22.4 GiB | 170 s | 14.9 s (3 rounds) |
+
+- 2^37 rows fit one device with 23.5 GiB to spare. The arena is `arena_layout.py`'s replay to 0.1 GiB, and the part outside it barely grows with the population.
+- Level 0 at 2.28 × 10^9 F128 words (past 2^31) proved and verified.
+- m = 37's warm session: 12.8 s end to end, of which the witness 10.0 s and proving 1.9 s.
+- For your model: one table at m = 37 is feasible on one device, so 1,024 blocks of 2^27 can be one table rather than four (the verifier then sets up one table, not four). What it still needs is upstream's schedules and their bounds past m = 35; no out-of-core or multi-device level 0.
+
