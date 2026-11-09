@@ -322,10 +322,10 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   excepts nothing fails. Excepted modules are still recorded. The report
   also lists, without failing, the spec definitions no guarantee of the package or a dependent one reads (`unread_spec`
   in `report.json`).
-- **Heartbeat overrides are listed, never refused.** Each `set_option maxHeartbeats N` (and
-  `synthInstance.maxHeartbeats`) in a package's sources is in its report (`heartbeats`, printed under its `AUDIT` line):
-  its file and line, its value, its reason (a `--` comment ending its line, else those just above), and its module's
-  build time in the audit's build.
+- **Heartbeat overrides are listed.** Each `set_option maxHeartbeats N` (and `synthInstance.maxHeartbeats`) in a
+  package's sources is in its report (`heartbeats`, under its `AUDIT` line): file and line, value, reason (a `--`
+  comment ending its line, else those just above) and build time. `tests/lint/test_lean_bar.py` refuses a new one
+  with no reason or no limit.
 - **The hashes are SHA-256.** They are taken over a canonical form of the kernel term (`Facts.lean`'s `canonText`),
   which keeps what Lean's `Expr.hash` keeps (constant names, universe levels, bound variable indices, projections,
   literals) and drops what it drops (binder names and binder info, `let` names, metadata). Each text holds the matchers and proofs Lean shares across a module in place, not by name, so

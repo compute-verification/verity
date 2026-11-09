@@ -18,12 +18,15 @@ table in the boundary, wall-clock, retired-term, seed and verifier-cost tests).
 
 ## Lint ratchets
 
-`lint/` holds four kinds of finding to a list in `lint/allowlists/`, counted per file: environment reads
-(`test_repo_env_reads.py`), lane text in prose (`test_repo_lane_text.py`), ruff's findings (`test_repo_ruff.py`) and except
-handlers that swallow what they catch (`test_repo_silent_excepts.py`). A file with more findings than its entry allows, or
-with findings and no entry, fails, except that lane text and ruff's style findings are bookkeeping: they warn, and a later
-PR fixes them (ruff's errors, `ERRORS` in its lint, still fail). An entry that allows more than is found doesn't, so the
-list can run ahead of the tree; the ratchet gate, which holds nothing (`off_gate` in `tools/verity/check/policy.toml`),
+`lint/` holds six kinds of finding to a list in `lint/allowlists/`, counted per file: environment reads
+(`test_repo_env_reads.py`), lane text in prose (`test_repo_lane_text.py`), retired terms (`test_repo_retired_terms.py`),
+ruff's findings (`test_repo_ruff.py`), except handlers that swallow what they catch (`test_repo_silent_excepts.py`), and
+what Mathlib's style linters refuse of a Lean file under `Security/` or `verity/core/` (`test_lean_bar.py`, per file and
+rule: no `/-!` module docstring, more than 1,500 lines, a `maxHeartbeats` of 0, one with no comment saying why). A file
+with more findings than its entry allows, or with findings and no entry, fails, except that lane text, retired terms and
+ruff's style findings are bookkeeping: they warn, and a later PR fixes them (ruff's errors, `ERRORS` in its lint, still
+fail). An entry that allows more than is found doesn't, so the list can run ahead of the tree (the Lean bar warns of one,
+naming the count to lower it to); the ratchet gate, which holds nothing (`off_gate` in `tools/verity/check/policy.toml`),
 reports a change that grows a list or adds a finding to a file it touches.
 
 ## Bookkeeping
@@ -39,8 +42,10 @@ python3 tests/lint/test_repo_ruff.py --prune          # delete and lower what th
 python3 tests/lint/test_repo_lane_text.py --record    # the list becomes what this tree finds (the ratchet gate still flags a rise)
 ~~~
 
-Every lint takes `--move` and `--prune`; only lane text takes `--record`. Each lint reads no history, so a renamed file's
-findings count under its new path: move its entry with it, or the ratchet gate flags the change.
+Every lint takes `--move` and `--prune`; only lane text and retired terms take `--record`, and the Lean bar's list is never
+recorded: it only shrinks (`test_lean_bar.py --counts` prints each rule's findings by Lake package). Each lint reads no
+history, so a renamed file's findings count under its new path: move its entry with it, or the ratchet gate flags the
+change.
 
 ~~~sh
 uv run tools/verity/check/suites.py .                 # this suite, on a node through `research run --on auto`
