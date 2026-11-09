@@ -56,7 +56,8 @@ it, as does a module's `.hash` file when the module has no trace, and after a ru
 module or a checkout other than the manifest's, are taken again. A spec whose `proved_in` package's build did not pass
 never reads that package's `.lake` (`check.proved`), which an earlier or interrupted build left. When check.py fails a
 package only on its sampled recompile (`check.sampled_recompile`: a module the tree kept or restored compiles from its
-source to other outputs, which Lean's nondeterminism can do as staleness can) and on record differences, the run discards
+source to other outputs, which Lean's nondeterminism can do as staleness can), on record differences and on a spec's
+`proved_in` package whose build that failure kept from passing (`proved_in.unpassed`), the run discards
 those modules' files in the tree (`mismatched`, `discard`) and audits the package once more, with nothing restored from
 the artifact cache, so they are compiled; the first audit's reports go to `mismatched/<path>/`, and a second failure
 fails the run.
@@ -1583,16 +1584,17 @@ def settles(out: Path, at: Path) -> bool:
 def mismatched(out: Path, tree: Path) -> dict[str, Path]:
     """{module: its package's directory} of each module whose outputs in ``tree`` check.py's sampled recompile found other
     than what its source compiles to (the reports' `sampled` `mismatched`, under ``out``), when every other failure there
-    is a record difference (`RECORD_DIFFERENCE`), which `--update` settles; {} when there is none, when another failure
-    is there, or when a package it names is outside ``tree``. Lean's output is not reproducible for every module
-    (`olean_graph`): a kept build compiled once can differ from a recompile of the same source, as a stale one does."""
+    is a record difference (`RECORD_DIFFERENCE`), which `--update` settles, or a spec's `proved_in.unpassed`, which a
+    prover's failures there cause; {} when there is none, when another failure is there, or when a package it names is
+    outside ``tree``. Lean's output is not reproducible for every module (`olean_graph`): a kept build compiled once can
+    differ from a recompile of the same source, as a stale one does."""
     found: dict[str, Path] = {}
     try:
         for r in json.loads((out / "audit.json").read_text())["packages"]:
             fails, codes, s = r.get("failures") or [], r.get("failure_codes") or [], r.get("sampled")
             mods = s.get("mismatched") or {} if isinstance(s, dict) else {}
             if len(codes) != len(fails) or codes.count("sampled") != len(mods) or \
-                    not all(c == "sampled" or c in AUDIT.RECORD_DIFFERENCE for c in codes):
+                    not all(c in ("sampled", "proved_in.unpassed") or c in AUDIT.RECORD_DIFFERENCE for c in codes):
                 return {}
             found |= {m: Path(d).resolve() for m, d in mods.items()}
     except (OSError, ValueError, KeyError, TypeError, AttributeError):

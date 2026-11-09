@@ -5321,7 +5321,7 @@ def test_a_spec_never_reads_a_proving_package_whose_build_did_not_pass(tmp_path,
     monkeypatch.setattr(A, "audit", fake)
     assert A.main([str(s), "--out", str(tmp_path / "out")]) == 1
     assert seen["ready"] is False
-    with pytest.raises(RuntimeError, match=r"\.\./p's build did not pass"):
+    with pytest.raises(A.Unpassed, match=r"\.\./p's build did not pass"):
         A.proved(s, json.loads((s / A.POLICY).read_text()), facts(modules=[], pins={}), tmp_path / "work",
                  ready=lambda q: False)
 

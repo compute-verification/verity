@@ -895,6 +895,24 @@ def test_a_sampled_mismatch_is_audited_again_only_alone_and_never_removes_files_
     assert not (tmp_path / "out" / "mismatched").exists() and outcome_line(said)["outcome"] == LC.FAILED
 
 
+def test_a_spec_failing_only_because_its_provers_sampled_recompile_did_is_audited_again(tmp_path):
+    """A spec whose `proved_in` package fails its sampled recompile fails with it (`proved_in.unpassed`: it reads none of
+    that package's facts), so that mismatch is still the one cause and the run audits once more; any other failure of the
+    spec's keeps it from doing so."""
+    tree = tmp_path / "tree"
+    (tree / "Proofs").mkdir(parents=True)
+
+    def found(spec: list[str]) -> dict:
+        (tmp_path / "audit.json").write_text(json.dumps({"packages": [
+            {"package": str(tree), "failures": [f"{c}: it" for c in spec], "failure_codes": spec, "sampled": {}},
+            {"package": str(tree / "Proofs"), "failures": [MISMATCH], "failure_codes": ["sampled"],
+             "sampled": {"mismatched": {"P.M": str(tree / "Proofs")}}}]}))
+        return LC.mismatched(tmp_path, tree)
+
+    assert found(["proved_in.unpassed"]) == found([]) == {"P.M": (tree / "Proofs").resolve()}
+    assert found(["proved_in.unpassed", "lean"]) == {}
+
+
 @pytest.fixture()
 def trying(tmp_path, monkeypatch):
     """`try_file` against nested stand-in packages `Sec` and `Sec/Proofs` (whose modules sit under `srcDir = ".."`, as
