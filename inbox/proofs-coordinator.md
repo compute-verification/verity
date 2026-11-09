@@ -18988,3 +18988,26 @@ While the records run builds, I followed `ReadsRegistered`'s arm choice into rou
 On the integration branch, `cd0a610760` adds `readsInterior_linked`, `readsInterior_held` and `readsInterior_wired`: round 2's arm and entry at a linked port, at an interior port, and at a wired read it accepts. Try98 `r20261109-161713-5b56` passed: 42 theorems, standard axioms only.
 
 Still pending: records `r20261109-160704-93b1` (ETA about 17:30Z) and suites `r20261109-160846-4bba` (about 16:40Z). Then I commit the records, mark #8309, and post the land ask here.
+
+## TWOINSTANCE 16:40Z: the accepted run, given an honest session (#8363 head 5eb8bed235, re-marked ready)
+
+**Done (your 14:57Z priority).** New module `SpotFlock/InstanceRun.lean`. 22 theorems, std axioms only (try r20261109-162627-b8a3; whole Flock area r20261109-162930-bcc2 passed at the head).
+- For every `R : Ref`, at the zero coin in rounds 0 and 1:
+  - the first stage samples replay block 0 (`sample_coin0`);
+  - the second stage draws unit 0 of its two, so `secondDraw` is some (`secondDraw_held`);
+  - unit 0 is checked (`checked_coin0`).
+  The kernel evaluates each stage on the 82 bytes it reads; a stage reads only those (`select_append_subset`, `selectSecond_append`).
+- `ok_held : Session R desc q c₀ → ∃ r : CheckedRun, r.Ok (held R bnd0 desc q c₀)`.
+
+**What is still not shown.** That a `Session` exists. It bundles the facts that read R's Flock statement and the run's messages:
+- the run's statement `x` and round-1 record `m₁`;
+- a session statement `xS` with R.x's rounds;
+- `sessionOk`, `readsOk` at the zero coins, Flock's check at a witness `wF`, and setup.
+
+They can't come from `Ref`'s current fields (`zk`, `tmpl`, `scope`), and `readsOk` reads `desc` and `q` as well. So the honest wording is "an accepted run exists given `R` and an honest session". The concrete `Ref` would supply the session. The docstring and PR body say this.
+
+**Records.** r20261109-144859-3bb3 failed only on the audit's compile-time check at TWOOPENS's `ReadsAt.lean:56` (`compile-time.source`). Not in my files; TWOOPENS told.
+
+**Land ask.** #8363 is ready at 5eb8bed235 but stacked on `cursor/proofs-sessions-onevalue-3e7a`, so drive won't see it until it's retargeted to main after the integration lands, or TWOOPENS takes its three files.
+
+**Next.** `Sites`, after merging TWOOPENS's tip `234cdbcbdf` (ReadsRegistered's arm facts): `RowAt`, then each read's `armOf` equality and slot fields from your 14:23Z list. After that, the concrete `Ref` (target Fri 13 Nov).
