@@ -76,7 +76,7 @@ from verity_vllm.check.replay.index import V2_QUERY, ProgramIndex, node_runs
 from verity_vllm.program.compact import p_item_weight_span
 from verity_vllm.query import norm_scales
 from verity_vllm.check.replay.opening import CommittedStore, model_weights_provider
-from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, ROW_EVALUATORS, plan_vu, replay_vu
+from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, ROW_EVALUATORS, plan_vu
 from verity_vllm.check.replay.population import (executed_prefix_of_record, moe_plane_alias_check, phase_anchor, population,
                                                 split_not_executed)
 from verity_vllm.check.replay.coverage import _uncovered_mechanisms, controller_rows_of, query_population
@@ -501,20 +501,13 @@ def populate(programs: dict[str, dict[str, Any]], ranks: list[int], arrivals: di
         # the `last` phase is anchored to the request's last EXECUTED step (n_exec - 1 under the executed prefix = the
         # lag step of an EOS-stopped request), not to the cap: the EOS-stopped request has a `last` stratum too, sampled deterministically
         anchors[rid] = phase_anchor(pi.n_steps, (executed_prefix or {}).get(str(rid)))
-        pc = (cached_prefixes or {}).get(rid) or {}
-        if int(pc.get("cached") or 0) and pi.kv_prefix is None:                  # its Program recomputes the hit (`recomputed_prefix`)
-            if pc.get("prompt") is None:
-                raise ValueError(f"{rid} is served {pc['cached']} cached prompt rows and its Program recomputes them: the replay needs "
-                                 "its certified prompt (`cached_prefixes[rid]['prompt']`)")
-            pi.recomputed[rid] = (int(pc["cached"]), [int(t) for t in pc["prompt"]])
-        C = pi.recomputed.get(rid, (0,))[0]
-        key = ("population", id(pi), rid, rank, int(arrivals.get(rid, 0)), ring_slots, int(anchors[rid]["last_step"]), C)
+        skip = RP.adopt(pi, rid, (cached_prefixes or {}).get(rid))                # a warm request whose Program recomputes its hit
+        key = ("population", id(pi), rid, rank, int(arrivals.get(rid, 0)), ring_slots, int(anchors[rid]["last_step"]), len(skip))
         if key not in memo:                                                       # a request's addresses are its own (keyed by it)
             got_a: dict[tuple, dict] = {}
             got_c: dict[str, dict] = {}
             memo[key] = (*population(pi, rid, rank=rank, arrive=int(arrivals.get(rid, 0)), ring_slots=ring_slots, addresses=got_a,
-                                     last_step=int(anchors[rid]["last_step"]), codes=got_c,
-                                     recomputed=RP.prefix_rows(pi, C) if C else frozenset()), got_a, got_c)
+                                     last_step=int(anchors[rid]["last_step"]), codes=got_c, recomputed=skip), got_a, got_c)
         vus, ne, nef, got_a, got_c = memo[key]
         all_vus.extend(vus)
         not_ev.update(ne)
@@ -533,20 +526,11 @@ def populate(programs: dict[str, dict[str, Any]], ranks: list[int], arrivals: di
     return all_vus, not_ev, not_ev_fam, indices, codes, addresses, anchors, addr_rec
 
 
-def recomputing(indices: dict, store: CommittedStore, weights: Callable | None, arrivals: dict[str, int], *,
-                plan: bool = False) -> dict[str, RP.RecomputedPrefix]:
-    """Each warm request whose Program recomputes its hit (`populate`) and the store its VUs read: its replay below C, the
-    committed store past it (`recomputed_prefix.RecomputedPrefix`)."""
-    return {rid: RP.RecomputedPrefix(store, pi, rid, *pi.recomputed[rid], weights, arrive=int(arrivals.get(rid, 0)), plan=plan)
-            for rid, pi in indices.items() if isinstance(rid, str) and rid in getattr(pi, "recomputed", {})}
-
-
 def planned(picked: list[dict], indices: dict, store: CommittedStore, arrivals: dict[str, int], t_start: float) -> dict[str, Any]:
     """A plan of `sampled_replay`: every picked VU's committed reads made without evaluating it (`evaluate.plan_vu`); the sample's size, its
     picks ([request, request-relative step, Program row, op_path] in sample order) and the VUs whose inputs did not resolve."""
-    stores = recomputing(indices, store, None, arrivals, plan=True)
-    unresolved = [w for vu in picked if (w := plan_vu(indices[vu["request_id"]], stores.get(vu["request_id"], store), vu,
-                                                      arrive=int(arrivals.get(vu["request_id"], 0))))]
+    own = RP.stores(indices, store, None, arrivals, plan=True)
+    unresolved = [w for vu in picked if (w := plan_vu(indices[vu["request_id"]], own.get(vu["request_id"], store), vu, arrive=int(arrivals.get(vu["request_id"], 0))))]
     return {"plan": True, "picked": len(picked), "picks": [[vu["request_id"], int(vu["step"]), int(vu["i"]), vu["op_path"]] for vu in picked],
             "unresolved_n": len(unresolved), "unresolved": unresolved[:8], "wall_s": round(time.perf_counter() - t_start, 3)}
 
@@ -622,15 +606,11 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     strata_eval: Counter = Counter()
     strata_mism: Counter = Counter()
     fam_time, fam_n = Counter(), Counter()
-
-    stores = recomputing(indices, store, weights, arrivals)
+    own = RP.stores(indices, store, weights, arrivals)                            # warm requests whose Programs recompute their hits
 
     def _one(vu: dict) -> tuple[dict, dict, float]:
         t0 = time.perf_counter()
-        own = stores.get(vu["request_id"])
-        rec = replay_vu(indices[vu["request_id"]], own or store, weights, vu, arrive=int(arrivals.get(vu["request_id"], 0)))
-        if own is not None:
-            rec["recomputed"] = own.take()
+        rec = RP.replay_vu(own, indices[vu["request_id"]], store, weights, vu, arrive=int(arrivals.get(vu["request_id"], 0)))
         return vu, rec, time.perf_counter() - t0
 
     # PARALLEL evaluation: the numpy k16-chain evaluators are GIL-bound (many small array ops), so threads gave ~2x on 16 cores; a FORKED
@@ -791,8 +771,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
             # Not-evaluable families BY NAME WITH COUNTS + reason (footnoted on the row; bounds the claim)
             "unreplayable": [{"family": f, "n": int(not_ev_fam[f]),
                               "why": NOT_YET.get(f.split(" (")[0], "structure / interior: no identity" if "(structure" in f
-                                                 else "recomputed prefix: computed by the warm request's replay, never served by it"
-                                                 if "(recomputed prefix" in f
+                                                 else "recomputed prefix: computed by the warm request's replay, never served by it" if "(recomputed prefix" in f
                                                  else ("interior producer: composed into its consumer's VU" if "(interior" in f
                                                        else ("MoE plane row -> plane slice mapping failed: see population.not_evaluable" if "(plane mapping failed)" in f
                                                              else "no registered evaluator")))}

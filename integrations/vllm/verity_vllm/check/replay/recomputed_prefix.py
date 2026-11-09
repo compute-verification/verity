@@ -10,15 +10,18 @@ the registered weights, and no read reaches the KV another request committed:
 * `RecomputedPrefix`: the request's reads, answered as `CommittedStore.words` answers them: a position below C at its
   first step from its `Replay`, one at or past C from what serving committed, C rows earlier in the member (its first step
   embedded prompt[C:]). ``reads`` logs each read the replay answered, for the VU's record.
+* `adopt`, `stores`, `replay_vu`: how `driver.sampled_replay` takes a warm request's Program in this form, builds its store
+  and replays its VUs through it.
 """
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 import numpy as np
 
+from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay.index import IDS_MEMBER, ProgramIndex
 from verity_vllm.check.replay.request_replay import Replay
 
@@ -94,3 +97,35 @@ class RecomputedPrefix:
         """The reads the replay answered since the last call."""
         out, self.reads = self.reads, []
         return out
+
+
+def adopt(pi: ProgramIndex, rid: str, warm: Mapping[str, Any] | None) -> frozenset[int]:
+    """Request ``rid``'s prefix rows where it is served a hit (``warm``: its `cached_prefixes` entry, {"cached": C, "prompt": ids})
+    that its Program ``pi`` recomputes, its C and prompt recorded on ``pi.recomputed``; none for a cold request or a Program
+    that reads a cached prefix."""
+    C = int((warm or {}).get("cached") or 0)
+    if not C or pi.kv_prefix is not None:
+        return frozenset()
+    if (warm or {}).get("prompt") is None:
+        raise ValueError(f"{rid} is served {C} cached prompt rows and its Program recomputes them: the replay needs its certified "
+                         "prompt (`cached_prefixes[rid]['prompt']`)")
+    pi.recomputed[rid] = (C, [int(t) for t in warm["prompt"]])
+    return prefix_rows(pi, C)
+
+
+def stores(indices: Mapping[Any, Any], store: Any, weights: Callable | None, arrivals: Mapping[str, int], *,
+           plan: bool = False) -> dict[str, RecomputedPrefix]:
+    """Each adopted request's store over ``store`` (`adopt`)."""
+    return {rid: RecomputedPrefix(store, pi, rid, *pi.recomputed[rid], weights, arrive=int(arrivals.get(rid, 0)), plan=plan)
+            for rid, pi in indices.items() if isinstance(rid, str) and rid in getattr(pi, "recomputed", {})}
+
+
+def replay_vu(own: Mapping[str, RecomputedPrefix], pi: ProgramIndex, store: Any, weights: Callable, vu: dict, *,
+              arrive: int) -> dict[str, Any]:
+    """`evaluate.replay_vu` through the VU's request's store where it has one, its record naming the reads its replay
+    answered (``recomputed``)."""
+    mine = own.get(vu["request_id"])
+    rec = EV.replay_vu(pi, mine or store, weights, vu, arrive=arrive)
+    if mine is not None:
+        rec["recomputed"] = mine.take()
+    return rec
