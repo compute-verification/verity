@@ -10,8 +10,9 @@ reproduces. `long-w0` is two prompts of 2,220 and 2,304 tokens, 15 decodes each.
     research run --on auto --cwd source --mem-gb 64 --timeout 60m -- bash -lc 'uv sync -q --all-packages --extra torch-cpu &&
       .venv/bin/python benchmarks/compile_cost/run.py --window long-w0 --out "$OUT" [--guard]'
 
-writes OUT/compile_cost.json: the window, its digests, wall seconds and peak RSS (`ru_maxrss`), and each phase's wall seconds and
-peak RSS while it ran (an RSS sampler thread), and prints `COMPILE-COST window=.. wall_min=.. peak_gib=.. digests=..`.
+writes OUT/compile_cost.json: the window, its digests, each Program's root nodes (by form and Definition, `root_kinds`), wall
+seconds and peak RSS (`ru_maxrss`), and each phase's wall seconds and peak RSS while it ran (an RSS sampler thread), and prints
+`COMPILE-COST window=.. wall_min=.. peak_gib=.. digests=..`.
 `--requests A:LP:MAX,...` gives the window directly, `--layers N` truncates the model to its first N layers (a scaling
 measurement: its digests are another model's), `--profile` writes cProfile's stats (`profile.pstats`, and the top functions in
 `profile.txt`). `--guard` exits 1 unless each digest is the one `PINS` holds for the window.
@@ -29,6 +30,7 @@ import resource
 import sys
 import threading
 import time
+from collections import Counter
 from pathlib import Path
 
 GLM53 = {"repo": "zai-org/GLM-5.3", "revision": "aca966e4e02791568aa6a4ced368624b3d897f42"}
@@ -238,8 +240,11 @@ def main() -> int:
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
     digests = [u.digest for u in compiled.requests]
     nodes = {d: len(p.fn.body.nodes) for d, p in compiled.programs.items()}
+    kinds = {d: dict(Counter(f"{n.form} {getattr(n.fn, 'name', None) or n.fn.id.split('{')[0]}" for n in p.fn.body.nodes).most_common())
+             for d, p in compiled.programs.items()}
     rec = {"window": a.window or a.requests, "requests": [list(r) for r in reqs], "rank": a.rank, "layers": a.layers, "engine": dict(ENGINE),
-           "digests": digests, "workload_digest": compiled.workload.digest, "root_nodes": nodes, "transfer_gates": list(transfer), "wall_s": round(wall, 3),
+           "digests": digests, "workload_digest": compiled.workload.digest, "root_nodes": nodes, "root_kinds": kinds,
+           "transfer_gates": list(transfer), "wall_s": round(wall, 3),
            "wall_min": round(wall / 60, 3), "peak_gib": round(peak / 2**30, 3), "profiled": a.profile, "phases": m.by_phase(),
            "timeline": [d for d in m.done if d["phase"] != "Builder.finish"]}
     (out / "compile_cost.json").write_text(json.dumps(rec, indent=1) + "\n")
