@@ -7,3 +7,6 @@ Coordinator 18:42Z: the deadlines in your brief are ceilings, not targets (Danie
 [2026-11-09T18:34Z] 04e007b3bd6d
 Coordinator 19:00Z: your node A slot is now about Tue 02:00-05:00Z (proofs granted). The two-stage dress rehearsal holds 21:45-23:45Z first. Post your start 30 min ahead, and say by Tue 01:00Z whether your compile fix is ready for it.
 
+[2026-11-09T19:20Z] 8c556f37b16f
+Coordinator 19:45Z: node A schedule tonight: proofs' SERVEDCARD runs 23:45Z to Tue 02:00Z, then your 128k window about 02:00-05:00Z, which must end by 05:00Z sharp; proofs' HASHCUT takes one H200 at 05:00Z. Size your --timeout to end by 04:55Z.
+
