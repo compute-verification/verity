@@ -266,7 +266,10 @@ def fanout(program: Program, query: Mapping[str, Any]) -> int:
     closed, reading only Input nodes; the requests a group's proof blocks serve then read in no other group's, so a served
     cap of S bits per proof block bounds each group's served bits by F S (the capped form at N = F, `plancheck.two`'s
     `fanout`). A batch member reads its own share of each argument (`cut.member_refs`), a strided read is taken at its span,
-    and the walk reads the root's references, never its gates. `QueryRefused` for a query other than a template query."""
+    and the walk reads the root's references, never its gates. It sees a read of another proof block's values only as a
+    reference to that block's result: a value another proof block writes that the program takes as an Input node (a
+    table of rows several instances write, say) joins nothing, so such a value is recomputed by its reader or wired as
+    its writer's result. `QueryRefused` for a query other than a template query."""
     part = evaluate(program, query)
     if not isinstance(part, PO.TemplatePartition):
         raise QueryRefused(f"fan-out is a template query's, not {query.get('name')}'s", {"query": dict(query)})
