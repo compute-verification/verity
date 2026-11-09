@@ -32,7 +32,8 @@ sampled proofs, and the one record of every verdict (the block record).
 
 What leaves the node names no window and counts none of a window's own: no window's number, no count of the windows closed,
 sealed or refused, and no engine step, request count or user of one; nor a load's tokens or span (`OWN_AT`), whose tokens
-count its blocks. ``public-lines`` prints each line of stdin in its published form (`public_line`), the line in full
+count its blocks; nor Pearl+'s exclusion tiles, their count and every tile's id (`OWN_AT`, `_tile_verdicts`), which the
+retained rows' values decide. ``public-lines`` prints each line of stdin in its published form (`public_line`), the line in full
 appended to ``--private`` (the serve dir's ``private/verdicts.txt``), and ``publish`` holds each file of OUT, once the run
 is done, in full under DIR where it names or counts a window or holds a load's own field (`publish`), its public form in
 its place. The class's padded counts, the period's declared T and S, the bench Build's requests and the
@@ -448,7 +449,11 @@ NUMBERED = frozenset({"window", "steps", "requests", "refused"})
 #: tokens of each load of `served_overhead.py metrics`' aggregate, which over a block's outputs are the exact block
 #: count, and its span. Held by path, not as bare keys, so the inference-only policy's ``n_inputs.span_s`` stays as
 #: written, and with it the policy digest its verdict cites.
-OWN_AT = frozenset({("loads", "tokens"), ("loads", "span_s")})
+#: And what Pearl+'s verdict's profile says of its exclusion tiles (`verify_run.verify_passes`): their count, and the
+#: tiles it replayed by id, the exclusion tiles among the drawn. Which rows a pass gives up, so which tiles are exclusion
+#: tiles, is the retained values' to decide: neither is an output, structure, a coin or a commitment. A drawn tile's id
+#: is the coin's through the passes' tickets, which the given-up rows weigh, so the list is held whole.
+OWN_AT = frozenset({("loads", "tokens"), ("loads", "span_s"), ("profile", "exclusion_tiles"), ("profile", "tiles")})
 #: A window's number, step range or count in text, each with what the published text says in its place
 WINDOW_TEXT = (
     (re.compile(r'\\?"(?:%s)\\?": ?(?:-?\d+(?:\.\d+)?|\[[^\]]*\]|\{[^{}]*\}|true|false)(?:, ?)?'
@@ -494,8 +499,15 @@ def _numbered(v: Any) -> bool:
     return isinstance(v, list) and any(_numbered(x) for x in v)
 
 
+def _tile_verdicts(key: Any, value: Any) -> bool:
+    """Whether the field is a run verdict's replay by tile (Pearl+'s ``verdicts``, the reference's and the Lean's: each
+    drawn and each exclusion tile by pass and id), held as the profile's ``tiles`` are (`OWN_AT`). A record's verdicts by
+    protocol's name are no list and stay."""
+    return key == "verdicts" and isinstance(value, list) and any(isinstance(v, Mapping) and "tile" in v for v in value)
+
+
 def _held(key: Any, value: Any, parent: Any = None) -> bool:
-    if (parent, key) in OWN_AT:
+    if (parent, key) in OWN_AT or _tile_verdicts(key, value):
         return True
     if key == "refused":
         return not isinstance(value, str)
@@ -528,8 +540,8 @@ def public_text(s: str) -> str:
 
 
 def public_json(o: Any, parent: Any = None) -> Any:
-    """``o`` with no field of a window's own (`OWN`, `NUMBERED`) or of a load's (`OWN_AT`, by ``parent``, the key ``o``
-    is under) and each string in its `public_text` form."""
+    """``o`` with no field of a window's own (`OWN`, `NUMBERED`), of a load's or of Pearl+'s exclusion tiles (`OWN_AT`,
+    by ``parent``, the key ``o`` is under; `_tile_verdicts`) and each string in its `public_text` form."""
     if isinstance(o, Mapping):
         return {public_text(k) if isinstance(k, str) else k: public_json(v, k) for k, v in o.items() if not _held(k, v, parent)}
     if isinstance(o, list):
@@ -593,8 +605,9 @@ def public_doc(text: str) -> str:
 def publish(out: Path, private: Path) -> list[str]:
     """Every file under ``out``, the dir that leaves the node, in its public form: one whose path names a window, or that
     `PUBLISH_MAX` keeps from being read, held whole, and one whose text names or counts a window or holds a load's own
-    field (`public_doc`) held in full, under ``private`` at its path under ``out``, its public form left in its place. A
-    file that isn't UTF-8 text is held whole. Only `PUBLIC_FILES` stay as they are, unread. The paths held, in order."""
+    field or Pearl+'s exclusion tiles (`public_doc`) held in full, under ``private`` at its path under ``out``, its public
+    form left in its place. A file that isn't UTF-8 text is held whole. Only `PUBLIC_FILES` stay as they are, unread. The
+    paths held, in order."""
     held: list[str] = []
     for p in sorted(out.rglob("*")):
         if p.is_symlink() or not p.is_file():

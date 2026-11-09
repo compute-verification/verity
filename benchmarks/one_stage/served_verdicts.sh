@@ -39,7 +39,8 @@
 #     user of one. Each line goes out through `served_verdicts.py public-lines`, in full to the serve dir's
 #     private/verdicts.txt, and once the run is done, however it ends, `served_verdicts.py publish` holds in full in the
 #     serve dir's private/out each file of $OUT that names or counts a window or holds a load's tokens or span (the
-#     aggregate's, which `served_overhead.py table` reads there), its public form in its place. The advice registration's published copies
+#     aggregate's, which `served_overhead.py table` reads there) or Pearl+'s exclusion tiles' count or its replayed tiles'
+#     ids (its verdict's profile and replay by tile, the reference's and the Lean's), its public form in its place. The advice registration's published copies
 #     ($OUT/registration.json, the records audit's served-records) carry the advice's length padded to its compiler's
 #     cap (`served_verdicts.py public-registration`), and the audit's log and run.sh's served path (its summary,
 #     registrations, sessions and audit log, which carry the advice's length) stay in the serve dir, where the record reads

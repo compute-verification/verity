@@ -318,6 +318,42 @@ def test_publish_holds_the_loads_tokens_and_span_by_path_and_leaves_the_policy_a
     assert S.publish(out, private) == []
 
 
+def test_publish_holds_pearlpluss_exclusion_tiles_count_and_ids_and_leaves_its_outputs(tmp_path):
+    """Which rows a pass gives up is its values' to decide, so `publish` holds what Pearl+'s documents say of its exclusion
+    tiles: the profile's count and the tiles it replayed by id (`OWN_AT`, by path), and each verdict's replay by tile, the
+    reference's and the Lean's (`_tile_verdicts`). The verdict, its outputs (the work credited, the tie and the class it
+    held), the draw's count and source and a record's verdicts by protocol stay as written, and the documents in full are
+    under the private dir."""
+    work = {"credited": 990, "credited_tiles": 3, "macs": 1000, "rho": "1/400", "epsilon": "1/100", "over_cap_draws": 0}
+    answer = {"protocol": "verity/pouw/pearl-plus/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64,
+              "public": {"work": work, "unit": "MAC", "tie": {"record": "cd" * 64, "tables": 10, "load": [2, 8, 2]}},
+              "profile": {"delta": "1/100", "draws": 3, "source": "ef" * 32, "over_cap": "uncredited",
+                          "exclusion_tiles": 2, "tiles": [[0, 1], [0, 5], [1, 2], [1, 7]]}}
+    tiles = [{"pass": i, "tile": t, "ok": True, "reason": None} for i, t in answer["profile"]["tiles"]]
+    docs = {"pieces/pearlplus/pearlplus-answer.json": answer,
+            "pieces/pearlplus/pearlplus-lean.json": {"verdict": "accept", "drawn": 2, "verdicts": tiles, "work": work,
+                                                     "tie": answer["public"]["tie"]},
+            "pieces/pearlplus/verify.json": {"answer": answer, "verdicts": tiles, "accepted": True},
+            "record/record.json": {"verdicts": {"pouw": "accept", "sampled_proofs": "accept"}, "tiles": 4,
+                                   "rows": [{"protocol": "pouw", "answer": answer}]}}
+    out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
+    for rel, doc in docs.items():
+        (out / rel).parent.mkdir(parents=True, exist_ok=True)
+        (out / rel).write_text(json.dumps(doc, indent=1) + "\n")
+    assert S.publish(out, private) == sorted(docs)
+    pub = {rel: json.loads((out / rel).read_text()) for rel in docs}
+    assert {rel: json.loads((private / rel).read_text()) for rel in docs} == docs
+    shown = {**answer, "profile": {k: v for k, v in answer["profile"].items() if k not in ("exclusion_tiles", "tiles")}}
+    assert pub["pieces/pearlplus/pearlplus-answer.json"] == shown and shown["public"] == answer["public"]
+    assert pub["pieces/pearlplus/pearlplus-lean.json"] == {"verdict": "accept", "drawn": 2, "work": work,
+                                                           "tie": answer["public"]["tie"]}
+    assert pub["pieces/pearlplus/verify.json"] == {"answer": shown, "accepted": True}
+    assert pub["record/record.json"] == {**docs["record/record.json"], "rows": [{"protocol": "pouw", "answer": shown}]}
+    assert json.loads(S.public_line("POUW answer " + json.dumps(answer))[len("POUW answer "):]) == shown
+    assert S.public_line('POUW {"profile": {"draws": 3, "tiles": [[0, 1], [0, 5') == "POUW " + S.CUT
+    assert S.publish(out, private) == []
+
+
 def test_a_published_line_holds_a_loads_tokens_and_span_and_leaves_the_inference_only_lines(tmp_path):
     """A verdict line's published form has no load's ``tokens`` or ``span_s`` in its JSON, in a JSON string's text or in a
     JSON object cut short, and the INFERENCE-ONLY lines, the policy's (its span in seconds) and the verdict's (the policy's
