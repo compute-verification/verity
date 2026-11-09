@@ -728,7 +728,7 @@ def test_a_circuit_check_import_of_another_distribution_is_found() -> None:
         f"{CIRCUIT_CHECK}/circuit_check/a.py": ("def check():\n    from verity_vllm.query import required\n"
                                                 "    import verity_numerical.models as M\n"),
         f"{CIRCUIT_CHECK}/circuit_check/b.py": ("import importlib\nimportlib.import_module('verity_flock.ir_lower')\n"
-                                                "LOAD = 'research.msg:main'\n"),
+                                                "LOAD = 'research.cli:main'\n"),
         f"{CIRCUIT_CHECK}/circuit_check/c.py": ("import numpy\nfrom verity.ml.circuits import defs\nfrom . import cache\n"
                                                 "from .targets import family\nNOTE = 'verity_vllm binds the vocabulary'\n"),
     }
