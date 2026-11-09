@@ -5,6 +5,7 @@ public import Proofs.Flock.SamplingGeneric.TwoDeployed
 public import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
 public import Proofs.Flock.Claims.Sampling.Select
 public import Proofs.Flock.Claims.Sampling.Reg
+public import Proofs.Flock.SamplingGeneric.ReplayPartition
 
 /-!
 # The two-stage sampled verifier's code from its Lean samples
@@ -23,8 +24,9 @@ registration the statement names (`reg x`, a `RegTwo`), and the rest `c`'s:
   The checked units are those proof blocks and the ones the registration always checks (`always`); every proof block
   is checked where either stage is refused, where the run rejects.
 
-`RegMatchesTwo` says the registration is the statement's two-stage design: its replay layout and first-stage design are
-the design's replay partition and first stage; its templates are the partition's strata, each with the design's count;
+`RegMatchesTwo` says the registration is the statement's two-stage design: its replay layout has the shape of the
+design's replay partition (its classes' strata sizes, all that the first stage's bound reads: `Design.Pa_shape`), and its
+first-stage design is the design's first stage; its templates are the partition's strata, each with the design's count;
 the layout's population slot `ρ` is unit `ρ`, and that replay block's cell of stratum `t` is `blockOf ρ t` on
 `[0, n_t)`; an input slot's cells are always checked. So the deployed second stage, one uniform `k_t`-subset per cell
 of a sampled replay block, is the contract's sample of each cell.
@@ -38,8 +40,9 @@ of a sampled replay block, is the contract's sample of each cell.
 * `drawFixed_codeTwo`: `Code.DrawFixed` from `BytesFixedTwo` (the sessions' rounds are second-stage, and neither stage's
   bytes read them).
 * `ksTwo_code`: `CompiledTwo.KS` at Flock's masked record and SHA-512 (`ksTwo_masked`) with those three facts
-  proved. It takes the code's refusals and interior roots, and its sessions' runs, scope and openings at a replay
-  block.
+  proved. It takes the code's refusals, replay cap and interior roots, and its sessions' runs, scope and openings at a
+  replay block.
+* `sessionsTwo_code`: the two-stage contract at those premises, which `ksTwo_one` reads at one session a run.
 -/
 
 @[expose] public section
@@ -398,14 +401,16 @@ variable (c : Code) (reg : Msg → Option RegTwo) (two : AuditStatement → Opti
   (bytes₂ : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → Fin (L₂ x) → Fin 256)
 
 /-- **The registration is the statement's two-stage design**: on a statement in the two-stage scope, the statement
-names a registration whose replay layout (`Slots.layout`) is the design's replay partition and whose first-stage design
-(`slotDesign`) is the design's; whose templates are the statement's strata, each sampling the design's count; the
-layout's population slot `ρ` is unit `ρ`, whose cell of stratum `t` in the statement's partition is `blockOf ρ t` on
-`[0, n_t)`, injectively; and every proof block in an input slot's cells is always checked. -/
+names a registration whose replay layout (`Slots.layout`) has the shape of the design's replay partition, its classes'
+strata sizes, and whose first-stage design (`slotDesign`) is the design's; whose templates are the statement's strata,
+each sampling the design's count; the layout's population slot `ρ` is unit `ρ`, whose cell of stratum `t` in the
+statement's partition is `blockOf ρ t` on `[0, n_t)`, injectively; and every proof block in an input slot's cells is
+always checked. -/
 def RegMatchesTwo : Prop :=
   ∀ x s Pt d, c.parse x = some s → c.partition s = some Pt → two s = some d → InScopeTwo Pt d s →
     ∃ g l, reg x = some g ∧ Spot.Slots.layout g.first.program g.first.query = .ok l ∧
-      d.part = slotPartition l ∧ slotDesign g.first.rule g.first.program g.first.query g.first.table = .ok d.replay ∧
+      d.part.classes.map strataSizes = (slotPartition l).classes.map strataSizes ∧
+      slotDesign g.first.rule g.first.program g.first.query g.first.table = .ok d.replay ∧
       g.ns.size = Pt.strata.length ∧ (∀ t < Pt.strata.length, d.k.getD t 0 = g.ks.getD t 0) ∧
       ∀ ρ b, l.blocks[ρ]? = some b →
         (b.unit = some ρ ∧ ∀ t < Pt.strata.length, Set.InjOn (g.blockOf ρ t) (Set.Iio (g.ns.getD t 0)) ∧
@@ -432,11 +437,12 @@ theorem replayDraws_code (hreg : RegMatchesTwo c reg two) (hunif : BytesUniform 
   obtain ⟨g, l, hg, hl, hpart, hds, -⟩ := hreg x s Pt d hx hP h2 hin
   have hrs : ∀ r, replayTwo c reg L₁ bytes₁ x r = g.first.checked (bytesOf (bytes₁ x r)) := fun r => by
     simp only [replayTwo, hg, Option.map_some, Option.getD_some]
-  have hwf : d.replay.WellFormed (slotPartition l) := by rw [← hpart]; exact hin.2.2.2.2.1
+  have hwf : d.replay.WellFormed (slotPartition l) := (d.replay.wellFormed_shape hpart).1 hin.2.2.2.2.1
   show Pr (fun r : Fin (c.V.k x) → FlockDeploy.Coin => ∀ ρ ∈ replayTwo c reg L₁ bytes₁ x r, ρ ∉ T) ≤
     d.replay.Pa d.part T
   simp only [hrs]
-  rw [hpart] at hT ⊢
+  rw [d.replay.Pa_shape hpart T]
+  rw [Partition.length_blocks_shape hpart] at hT
   exact (hunif x fun src => ∀ ρ ∈ g.first.checked (bytesOf src), ρ ∉ T).trans_le
     (replay_le g.first l d.replay (L₁ x) T hl hds hwf hT)
 
@@ -463,7 +469,7 @@ theorem secondDraws_code (hreg : RegMatchesTwo c reg two) (hfirst : FirstFixed c
   simp only [hchk]
   refine (hsec x r fun src₂ => ∀ u ∈ g.checked Pt.blocks.length (bytesOf (bytes₁ x r)) (bytesOf src₂), u ∉ B).trans_le
     (secondDraws_le g Pt d l (bytesOf (bytes₁ x r)) _ B (L₂ x) ?_ ?_ hT hk hblocks)
-  · rw [hpart, slotPartition_blocks, List.length_map, Array.length_toList]
+  · rw [Partition.length_blocks_shape hpart, slotPartition_blocks, List.length_map, Array.length_toList]
   · intro draw proved read hs
     rw [hrs]
     unfold Reg.checked drawChecked
@@ -480,21 +486,41 @@ theorem drawFixed_codeTwo (h : BytesFixedTwo c L₁ L₂ bytes₁ bytes₂) : (c
 /-- **The deployed two-stage sampled verifier over Flock's masked record is knowledge sound at SHA-512** with its
 Lean samples: `ksTwo_masked` at `codeTwo`, with its replay and second-stage samples (`replayDraws_code`,
 `secondDraws_code`) and its sample's fixedness (`drawFixed_codeTwo`) proved from the registration's match and its bytes'
-facts. It takes the code's refusals and interior roots, and its sessions' runs, scope and openings at a replay
-block. -/
-theorem ksTwo_code (iroots : Msg → Seen → ℕ → List Msg) (hreg : RegMatchesTwo c reg two)
+facts. It takes the code's refusals, replay cap and interior roots, and its sessions' runs, scope and openings at a
+replay block. -/
+theorem ksTwo_code (iroots : Msg → Seen → ℕ → List Msg) (cap : Msg → ℕ) (hreg : RegMatchesTwo c reg two)
     (hunif : BytesUniform c L₁ bytes₁) (hfirst : FirstFixed c L₁ bytes₁) (hsec : SecondUniform c L₂ bytes₂)
     (hfixed : BytesFixedTwo c L₁ L₂ bytes₁ bytes₂) (hr : c.RefusesTwo FlockDeploy.sha512 two)
+    (hcap : c.ReplayCap FlockDeploy.sha512 two (replayTwo c reg L₁ bytes₁) cap)
     (hi : c.InteriorFixed FlockDeploy.sha512 iroots)
-    (hruns : Claims.Sampling.SessionRuns FlockDeploy.sha512
+    (hruns : Claims.Sampling.SessionRunsTo FlockDeploy.sha512
       (deploy _root_.Flock.Readable.relation (codeTwo c reg L₁ L₂ bytes₁ bytes₂)))
     (hnum : SessionsIn (codeTwo c reg L₁ L₂ bytes₁ bytes₂))
     (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
       (deploy _root_.Flock.Readable.relation (codeTwo c reg L₁ L₂ bytes₁ bytes₂)) two iroots) :
     (compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (codeTwo c reg L₁ L₂ bytes₁ bytes₂) iroots two
-      (replayTwo c reg L₁ bytes₁)).KS FlockDeploy.sha512 :=
-  ksTwo_masked _ iroots two _ (replayDraws_code c reg two L₁ L₂ bytes₁ bytes₂ hreg hunif)
-    (secondDraws_code c reg two L₁ L₂ bytes₁ bytes₂ hreg hfirst hsec) hr hi
+      (replayTwo c reg L₁ bytes₁) cap).KS FlockDeploy.sha512 :=
+  ksTwo_masked _ iroots two _ cap (replayDraws_code c reg two L₁ L₂ bytes₁ bytes₂ hreg hunif)
+    (secondDraws_code c reg two L₁ L₂ bytes₁ bytes₂ hreg hfirst hsec) hcap hr hi
     (drawFixed_codeTwo c reg L₁ L₂ bytes₁ bytes₂ hfixed) hruns hnum hopens
+
+/-- **The two-stage contract at `codeTwo`**, at Flock's masked record and SHA-512: `sessionsTwo_compiled` with the
+three facts `ksTwo_code` proves and the inner numbers at each unit's `N₀` by `innerNumbersAt_deploy`. -/
+theorem sessionsTwo_code (iroots : Msg → Seen → ℕ → List Msg) (cap : Msg → ℕ) (hreg : RegMatchesTwo c reg two)
+    (hunif : BytesUniform c L₁ bytes₁) (hfirst : FirstFixed c L₁ bytes₁) (hsec : SecondUniform c L₂ bytes₂)
+    (hfixed : BytesFixedTwo c L₁ L₂ bytes₁ bytes₂) (hr : c.RefusesTwo FlockDeploy.sha512 two)
+    (hcap : c.ReplayCap FlockDeploy.sha512 two (replayTwo c reg L₁ bytes₁) cap)
+    (hi : c.InteriorFixed FlockDeploy.sha512 iroots)
+    (hruns : Claims.Sampling.SessionRunsTo FlockDeploy.sha512
+      (deploy _root_.Flock.Readable.relation (codeTwo c reg L₁ L₂ bytes₁ bytes₂)))
+    (hnum : SessionsIn (codeTwo c reg L₁ L₂ bytes₁ bytes₂))
+    (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
+      (deploy _root_.Flock.Readable.relation (codeTwo c reg L₁ L₂ bytes₁ bytes₂)) two iroots) :
+    (compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (codeTwo c reg L₁ L₂ bytes₁ bytes₂) iroots two
+      (replayTwo c reg L₁ bytes₁) cap).Sessions FlockDeploy.sha512 :=
+  sessionsTwo_compiled _ _ iroots two _ cap FlockDeploy.sha512
+    (replayDraws_code c reg two L₁ L₂ bytes₁ bytes₂ hreg hunif)
+    (secondDraws_code c reg two L₁ L₂ bytes₁ bytes₂ hreg hfirst hsec) hcap hr hi
+    (drawFixed_codeTwo c reg L₁ L₂ bytes₁ bytes₂ hfixed) hruns (innerNumbersAt_deploy _ _ hnum) hopens
 
 end SamplingDeploy

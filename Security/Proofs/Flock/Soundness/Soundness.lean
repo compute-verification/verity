@@ -7,8 +7,7 @@ public import Proofs.Flock.Soundness.RepSound
 import Proofs.Flock.Soundness.Accounting.Fast100
 import Proofs.Flock.Soundness.Accounting.Numbers
 import Proofs.Flock.Soundness.Defs
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.ListSize
 import VCVio.Prelude.Core
 

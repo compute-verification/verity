@@ -15,7 +15,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value as Bits
 from verity.core.protocols.spot import service as S
-from verity.core.protocols.spot.one_stage import partition as P, registration as R, verifier as V
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V
 
 import fake_challenger as FC
 
@@ -55,14 +55,14 @@ def _public(ports) -> tuple[S.Public, ...]:
 
 
 def _spec() -> S.Spec:
-    return S.Spec((*(S.Value(v, SCHEMA, "serve") for v in PORTS), STATE), S.Law("subset:2"),
+    return S.Spec((*(S.Value(v, SCHEMA, "serve") for v in PORTS), STATE), S.Law("rate:1/3"),
                   S.Check(P.program_digest(Program(CARRY)), QUERY, proof_deadline=60.0), _public(PORTS),
                   b"outputs-test")
 
 
 def _two_stage_spec() -> S.Spec:
     values = (*(S.Value(v, SCHEMA, "serve") for v in BOUNDARY), *(S.Value(v, SCHEMA, "interior") for v in INTERIOR), STATE)
-    return S.Spec(values, S.TwoStage(GRAIN, f"subset:{Q}", K),
+    return S.Spec(values, S.TwoStage(GRAIN, "rate:1/2", K),
                   S.Check(P.program_digest(Program(CARRY)), QUERY, proof_deadline=60.0), _public(BOUNDARY + INTERIOR),
                   b"outputs-two-stage-test")
 
@@ -92,11 +92,14 @@ def _left(rec: Mapping, port: str = "next") -> dict:
     return {"value": "state", "root": e["root"], "leaves": e["leaves"], "words": 2, "domain": e["domain"]}
 
 
-def _lean(registered: Mapping[str, str] | None = None) -> dict:
-    """The verdict of record, reporting the registered roots its session's reads opened against."""
+def _lean(registered: Mapping[str, str] | None = None, checked: Mapping | None = None) -> dict:
+    """The verdict of record, reporting the registered roots its session's reads opened against, and naming what it
+    checked of the session of second-stage statement `checked` (`fake_challenger.checked`)."""
     lean = {"of_record": True, "accepted": True, "digest": "dd" * 64, "sessions": [SESSION]}
     if registered:
         lean["registered"] = {v: {"value": v, "root": r} for v, r in registered.items()}
+    if checked is not None:
+        lean |= FC.checked(checked)
     return {"lean": lean}
 
 
@@ -171,8 +174,11 @@ def test_the_run_of_record_reads_the_output_values(monkeypatch):
 def test_an_interior_registration_reads_a_port_of_its_boundary():
     """Under a two-stage design the interior registration's registered `state` is the boundary registration's port
     `carry`, the state its replay blocks leave: R7 takes it in the interior registration, the interior's copies carry
-    it to the run of record, and the outcome binding both registrations is accepted. Registered with no output named,
-    it is refused under its own domain."""
+    it to the run of record, which agrees on the outcome binding both registrations. Its one failure is round 2's
+    (`second-read`): the replay block's Definition links CARRY's `x`, `state` and output to the boundary's ports of
+    them, which this boundary doesn't register, and its session, which the verdict of record names as it checked it,
+    reads `state` from the registered value instead. Registered with no output named, it is refused under its own
+    domain."""
     stream = _stream(_two_stage_spec(), replay=BLOCK)
     assert stream.n_rho == N_RHO
     m = Q * N_RHO
@@ -182,11 +188,16 @@ def test_an_interior_registration_reads_a_port_of_its_boundary():
     first = stream.select(reg)
     out = {"state": {"record": reg.digest, "port": "carry"}}
     interior, iports = _record(P.population_program(CARRY, m), QUERY, dict.fromkeys(INTERIOR, m), {"law": "subset", "k": m},
-                               0, reg.digest, [_left(boundary, "carry")], interior=True)
+                               0, reg.digest, [_left(boundary, "carry")], interior=True,
+                               replay_sample=D.proved(first.draw))
     assert "R7-domain" in _refused(lambda: stream.register_interiors(first, interior, iports, registered={"state": 2}))
     ireg = stream.register_interiors(first, interior, iports, registered={"state": 2}, outputs=out)
     assert stream._entries[reg.order].interior_copies[-1] == out
     second = stream.select(ireg)
     assert stream.deliver(second, [SESSION]) is None
-    outcome = stream.outcome(second, _lean({"state": _left(boundary, "carry")["root"]}), {"statement": "stub"})
-    assert outcome.accepted and outcome.verdict.codes == ()
+    (honest,) = stream.statements(second)
+    outcome = stream.outcome(second, _lean({"state": _left(boundary, "carry")["root"]}, honest), {"statement": "stub"},
+                             statements=[honest])
+    checks = stream.records[-1]["audit"]["checks"]
+    assert not outcome.accepted and outcome.verdict.detail["reject"]["checks"] == ["statements"]
+    assert checks["statements"]["codes"] == ["second-read"] and "run" not in checks

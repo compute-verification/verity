@@ -8,11 +8,14 @@ own opens for `WINDOW`, withheld (the verifier takes only a withheld session's c
 ends once the sample is read, as a served session's would (`remote.open_session`, `remote.close_session`). `evidence(digest)` is then `coins.coins_reason`'s evidence for the sample after `digest`.
 `Stream` is a `service.Stream` over one, as a deployment drives it: `register` names the window, `select` commits the
 coins to the registration's digest first (a second stage's to the interior registration's), and `outcome` hands the
-verifier the sample's evidence (a two-stage sample's, both stages'), and the window's seed salt's when the stream drew
-it from a `Challenger` of the seed-salt family (`seed_salt`; at the window's open, unless the test draws its own)."""
+verifier the sample's evidence (a two-stage sample's, both stages'), the window's seed salt's when the stream drew it
+from a `Challenger` of the seed-salt family (`seed_salt`; at the window's open, unless the test draws its own), a
+two-stage sample's second-stage sessions' statements, an honest prover's (`statements`), and the auditor's params for
+them (`proofs`)."""
 
 from __future__ import annotations
 
+import hashlib
 import itertools
 import shutil
 import tempfile
@@ -20,9 +23,12 @@ import weakref
 from pathlib import Path
 from typing import Any, Mapping
 
-from verity.core.protocols.spot import challenger as C, coins as T, remote as R, service as S
-from verity.core.protocols.spot.one_stage import registration as G
+from verity.core.protocols.spot import (challenger as C, coins as T, remote as R, second_stage as SS,
+                                                  service as S)
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as G
+from verity.ml.circuits.codec import canonical_json, descriptor_id
 from verity.ml.commitments.identity import canonical_json_text
+from verity.ml.commitments.window import window_binding
 
 from test_challenger import HOST, entropy
 from test_remote import HOST_PINS, MAIN, SCHEME, WINDOW, Ledger, at, pinned_key
@@ -31,6 +37,48 @@ LABEL = "positions"
 #: the window's seed salt as a Spec declares it public, the challenger's coin, which a `Stream` on this challenger's
 #: coins draws at the window's open and names in each registration's window
 SEED_ITEM = S.Public(G.SEED_SALT, "coins", "the window's seed salt: the challenger's coin, released at the window's open")
+#: The row schema of a port the spec names no schema for.
+ROW_SCHEMA = "hm96-sha512/row/v2"
+
+
+def reference_header(t: str, lo: int, hi: int, schemas: Mapping[str, str]) -> dict[str, Any]:
+    """Template `t`'s reference header, fixed before the run, as its reference statement's file has it: the served path's
+    header (`flock_inputs.flock_input_files`) for its part's `hi - lo` slots from `lo` (its range, its units' blocks
+    and classes, its circuit) and its ports' row `schemas`, under the set the reference was staged in and that set's
+    bindings, and none of the run's fields."""
+    n, circuit = hi - lo, hashlib.sha512(t.encode()).hexdigest()
+    return {"format": "flock-circuit-inputs", "statement": "verity/flock-circuit", "scheme": S.SCHEME, "set": f"unit/{t}",
+            "subcircuit": f"unit/{t}", "range": [0, n], "circuit_sha512": circuit, "rows": False,
+            "units": {"vus_per_block": 1, "units_per_vu": 1, "blocks": [[u] for u in range(lo, hi)], "classes": [circuit] * n},
+            "frame_v3": {"frame": "frame-v3-sha512", "owner": -1, "schemas": dict(schemas),
+                         "bindings": {p: "00" * 64 for p in schemas}, "row_key_sha512": "ab" * 64}}
+
+
+def served_header(ref: Mapping[str, Any], rec: Mapping[str, Any], k: int, lo: int, hi: int,
+                  roots: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+    """The header the served path writes for the session of the interior's `k`-th member, the part of slots `[lo, hi)`:
+    its template's reference header `ref` in run ``rec["window"]["run"]``, the interior record `rec`'s, with that run's
+    input set, the slots' indices and count, and its ports' (`roots`, each by its bare name the record's root) roots,
+    domains and bindings in the run, each under the window-domain rule (`window_binding`) at its row schema."""
+    run, fv = rec["window"]["run"], ref["frame_v3"]
+    return {**ref, "set": f"served/{run}/m{k}", "instances": hi - lo,
+            "units": {**ref["units"], "indices": list(range(lo, hi))},
+            "frame_v3": {**fv, "roots": {p: r["root"] for p, r in roots.items()},
+                         "domain_ids": {p: r["domain"] for p, r in roots.items()},
+                         "bindings": {p: window_binding(rec["program"], rec["partition"], roots[p]["port"], s,
+                                                        roots[p]["leaves"], run).hex() for p, s in fv["schemas"].items()}}}
+
+
+def checked(statement: Mapping[str, Any], tables: int | None = 1) -> dict[str, Any]:
+    """What `flock-verify verify`'s verdict names of the session of second-stage statement `statement` it checked, which
+    round 2 holds the statement to (`second_stage.verified_of`): the SHA-512 of its header's canonical JSON, of its
+    registered reads' when it reads any, its sample, and the `tables` it set the session up as (one, as the verifier of
+    record runs it; None: a verdict naming no count)."""
+    names = {"public_header_sha512": hashlib.sha512(canonical_json(statement.get("header"))).hexdigest(),
+             "unit_draw": statement.get("draw"), **({} if tables is None else {"session_tables": tables})}
+    if statement.get("registered") is not None:
+        names["registered_sha512"] = hashlib.sha512(canonical_json(statement["registered"])).hexdigest()
+    return names
 
 
 class Challenger(T.ChallengerCoins):
@@ -96,12 +144,14 @@ class Stream(S.Stream):
     """A `service.Stream` on a test's own challenger (`coins`, a new `Challenger` unless given; none for a stream
     that reads no coins), driven as a deployment drives it: a registration names `WINDOW`'s root unless it names
     another, a sample's coins are committed to its registration's digest before it is sampled, and an outcome's run is
-    given the sample's evidence unless the test gives its own (`coins`, None for none). With a Spec that declares the
-    window's seed salt (`registration.SEED_SALT`), the challenger releases `WINDOW`'s salt at the window's open, whether
-    or not the stream reads coins to sample: the stream draws it at `open`, else before the window's first registration
-    (`seed_salt`, from a `Challenger` of the seed-salt family), each registration of the window whose window names no
-    salt names it (`named`), and the run is given its evidence, since a run on a live window refuses one without it
-    (`Run.seedSaltOf`). A test of the salt itself draws its own (`seed_salt`) or none (`seeded=False`)."""
+    given the sample's evidence unless the test gives its own (`coins`, None for none), and a two-stage one the honest
+    second-stage statements and the auditor's params for them unless the test gives its own (`statements`, `proofs`,
+    None for none). With a Spec that declares the window's seed salt (`registration.SEED_SALT`), the challenger
+    releases `WINDOW`'s salt at the window's open, whether or not the stream reads coins to sample: the stream draws it
+    at `open`, else before the window's first registration (`seed_salt`, from a `Challenger` of the seed-salt family),
+    each registration of the window whose window names no salt names it (`named`), and the run is given its evidence,
+    since a run on a live window refuses one without it (`Run.seedSaltOf`). A test of the salt itself draws its own
+    (`seed_salt`) or none (`seeded=False`)."""
 
     _NONE: Any = object()
 
@@ -159,7 +209,8 @@ class Stream(S.Stream):
         return self.fake.evidence(registration.digest) if self.fake and after in self.fake.sessions else None
 
     def outcome(self, draw: S.Draw, verdicts: Mapping[str, Mapping[str, Any]], statement: Mapping[str, Any], *,
-                coins: Mapping[str, Any] | None = _NONE, **kwargs: Any) -> S.Outcome | S.Pending:
+                coins: Mapping[str, Any] | None = _NONE, statements: Any = _NONE, proofs: Any = _NONE,
+                **kwargs: Any) -> S.Outcome | S.Pending:
         """A two-stage sample's evidence is both stages': the first stage's after the registration, the second's
         (`interior_coins`) after the interior registration. The window's seed salt's is both registrations' (`seed_salt`,
         `interior_seed_salt`): they register in the one window."""
@@ -172,4 +223,71 @@ class Stream(S.Stream):
         if draw.replay_sample is not None:
             kwargs.setdefault("interior_coins", self._evidence(draw.registration))
             kwargs.setdefault("interior_seed_salt", kwargs.get("seed_salt"))
-        return super().outcome(draw, verdicts, statement, coins=coins, **kwargs)
+        if statements is Stream._NONE:
+            statements = None if draw.replay_sample is None else self.statements(draw)
+        if proofs is Stream._NONE:
+            proofs = None if draw.replay_sample is None else self.proofs(draw)
+        return super().outcome(draw, verdicts, statement, coins=coins, statements=statements, proofs=proofs, **kwargs)
+
+    def _roots(self, rec: Mapping[str, Any], t: str) -> dict[str, Any]:
+        """Template `t`'s ports of interior record `rec`, each its root there, by bare name (``<template>/<port>`` there
+        where the record names ports by template)."""
+        prefix = f"{t}/" if any("/" in r["port"] for r in rec["roots"]) else ""
+        return {r["port"].removeprefix(prefix): r for r in rec["roots"] if r["port"].startswith(prefix)}
+
+    def _references(self, second: S.Draw) -> list[tuple[str, int, int, dict[str, Any]]]:
+        """Each template of the interior program in the check's order, `(template, lo, hi, reference header)`: its
+        part's slots `[lo, hi)` and the header of its reference statement, fixed before the run (`reference_header`),
+        each port at the schema its value has in the spec."""
+        e = self._entries[second.registration.order]
+        schema = {v.name: v.schema for v in self.spec.values if v.schema}
+        return [(t, lo, hi, reference_header(t, lo, hi, {p: schema.get(r["port"], ROW_SCHEMA)
+                                                         for p, r in self._roots(second.registration.record, t).items()}))
+                for t, ((lo, hi),) in P.strata(e.interior_program, self.spec.check.query)]
+
+    def _reads(self, second: S.Draw) -> list[dict[str, Any] | None]:
+        """Each template's registered reads in the check's order, as an honest session reads them: each port the replay
+        block's Definition links (`second_stage.replay_links`) of the boundary port its link names, each slot the first
+        row of its cell's replay block, and each value the interior registration registers, under a port of its name
+        (None when it reads none)."""
+        e = self._entries[second.registration.order]
+        rec, boundary = second.registration.record, second.replay_sample.registration.record
+        values = {x["value"]: {k: x[k] for k in ("value", "root", "domain", "leaves")}
+                  for x in rec.get("registered", [])}
+        at = {r["port"]: r for r in boundary["roots"]}
+        links = SS.replay_links(e.program, descriptor_id(self.replay), boundary) or ()
+        sample = D.proved(second.replay_sample.draw)
+        out = []
+        for t, lo, hi, _ref in self._references(second):
+            n = (hi - lo) // len(sample)
+            reads = {**values, **{x.port: {
+                "value": x.value, **{k: at[x.value][k] for k in ("root", "domain", "leaves")}, "reads_from": lo,
+                "reads": [at[x.value]["leaves"] // boundary["population"] * sample[u // n] for u in range(hi - lo)]}
+                for x in links if x.template == t and x.value in at}}
+            out.append({"ports": reads} if reads else None)
+        return out
+
+    def proofs(self, second: S.Draw) -> dict[str, Any]:
+        """The auditor's params for the second-stage sessions (`service.template_circuits`), each template of the
+        interior program in the check's order: a stand-in for its circuit file's SHA-512, which nothing in this stream
+        reads, the header of its reference statement, fixed before the run (`reference_header`), which an honest
+        statement's header is placed in the run (`second_stage.at_run`) but for the run's fields
+        (`second_stage.RUN_FIELDS`), and the registered reads it reads: an honest session's, which round 2 holds a
+        statement's to but for the run's fields (`second_stage.blank_reads`)."""
+        return {"templates": [{"template": t, "circuit": h["circuit_sha512"], "header": h, "registered": r}
+                              for (t, _lo, _hi, h), r in zip(self._references(second), self._reads(second))]}
+
+    def statements(self, second: S.Draw) -> list[dict[str, Any]]:
+        """The statements of the second-stage sessions an honest prover runs (`second_stage`): one for each template of
+        the interior program, its header the one the served path writes for the template's slots of the interior
+        registration (`served_header`: the run's input set, the slots' indices, and its ports' roots, domains and
+        bindings there), its sample the second stage's units among them, counted from its first, and its registered
+        reads (`_reads`)."""
+        rec = second.registration.record
+        out = []
+        for m, ((t, lo, hi, ref), reads) in enumerate(zip(self._references(second), self._reads(second))):
+            units = [u - lo for u in D.proved(second.draw) if lo <= u < hi]
+            out.append({"template": t, "registered": reads,
+                        "header": served_header(ref, rec, m, lo, hi, self._roots(rec, t)),
+                        "draw": {"law": "subset", "population": hi - lo, "k": len(units), "units": units}})
+        return out

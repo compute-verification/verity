@@ -3,8 +3,10 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
 
 * **params**: the verifier's own copies, canonical JSON with exactly the keys `program` (its descriptor), `query`, `law`
   (the agreed rule: `{"law": "subset", "k"}`, `{"law": "bernoulli", "p": "NUM/DEN"}`, `{"law": "stratified" | "work",
-  "k"}`; the protocol refuses `bernoulli` at every `p`, `paramsOfJson` and `drawnFrom`, as the sampled audit's
-  soundness statement doesn't cover it), `work_table` (or null), `scheme`, `ports` (`{port: {"leaves", "domain"}}`,
+  "k"}`, or a rate as a selection rule states it, `rate:NUM/DEN[:T]`, `stratified-rate:NUM/DEN` or
+  `work-rate:NUM/DEN`, which names its sampling design and work table over the program's population (`design`); the
+  protocol refuses `bernoulli` at every `p`, `paramsOfJson` and `drawnFrom`, as the sampled audit's soundness statement
+  doesn't cover it), `work_table` (or null), `scheme`, `ports` (`{port: {"leaves", "domain"}}`,
   what its layout derives), `leaf_layer` (or null), `anchors`, `log` (this prover's earlier records; a record's
   `registered`, when truthy, a list of
   objects with a string `value` and `root`), `partition` (its own partition object, or null for the canonical one),
@@ -26,8 +28,17 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   `ChallengerKey.ofJson`) and the family they are sampled from, which needs `window_root`, refused in any other form; and
   it may add `day` and `declarations`, both or neither: the window's day (a natural number) and the registration log's
   declarations, each exactly `{"blocks", "day", "program"}` with a natural day and a string program, which R2 holds the
-  record's program to (`Registration.declaredCode`), refused in any other form; never the window's seed salt, which
-  the verifier reads from the challenger's log (`seed_salt` in the evidence);
+  record's program to (`Registration.declaredCode`), refused in any other form; it may add `pool`,
+  `{"genesis", "lag", "pin", "pout", "reset", "verdicts", "week"}`: the two registered values a window
+  opens its pool from and leaves it in, which it neither fills, pinned nor gives as outputs, the empty pool's root
+  (lowercase hex of 64 bytes), the public lag at which serving learns a verdict (a positive integer), its verdict log
+  (an object of record digests, lowercase hex of 64 bytes, to whether its run on that record accepted), whose verdict
+  on the record the lag back restarts the pool (`Registration.Pool.refused`), the window's own reset (a bool) and its
+  week on the verifier's clock (a natural), which R6 holds the record's window to name with the week's spent mark
+  (`R6-pool-reset`, `R6-pool-week`, `R6-pool-spent`, `R6-pool-reset-week`), refused in any other form; `pin` is then
+  an output value reusing the previous record's `pout` when the window carries its pool (`Registration.Pool.chains`),
+  and otherwise a supplied value of the one row `[{"bytes": genesis}]`, which R7 holds to the chain (`R7-pool-chain`);
+  never the window's seed salt, which the verifier reads from the challenger's log (`seed_salt` in the evidence);
 * **commitment**: the registration record, canonical JSON, fixed before the sample; its digest is
   `SHA-512(format || 0 || canon(record))` (`Registration.digest`), which the receipt names;
 * **evidence**: canonical JSON with exactly `receipt`, `draw` (the verifier's sample), `proved_units`, `instances`,
@@ -67,6 +78,7 @@ public import CoreProtocol.Live
 public import Spot.Registration
 public import Spot.Record
 public import Spot.ChallengerDraw
+public import Spot.Select
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -134,6 +146,19 @@ def rule (law : Json) : V Json := do
   | _ => throw "the law is not subset, bernoulli, stratified or work"
   return law
 
+/-- The agreed sampling design and the work table it is expanded over: a law object (`rule`) with the verifier's own work
+`table`, or a rate stated as a selection rule's law text (`Select.parseRate`, `Select.parseStrataRate`), which names its
+sampling design over the population of `program` under `query` and its strata as a stream's rule does (`Select.Rule.over`,
+`Select.strataSizes`, `Select.Rule.lawOver`) and its work table (`Select.Rule.tableOver`). -/
+def design (program : Program) (query : Json) (law : Json) (table : Option Json) : V (Json × Option Json) := do
+  let .str t := law | return (← rule law, table)
+  if (Select.parseRate t).isNone && (Select.parseStrataRate t).isNone then
+    throw s!"a law stated as text is a rate, rate:NUM/DEN[:T], stratified-rate:NUM/DEN or work-rate:NUM/DEN, not {pyRepr t}"
+  let n ← Partition.units program query
+  let some over := (Select.Rule.law t).over n (Select.strataSizes program query)
+    | throw s!"a rate law over {n} units draws none of them or more than {n}"
+  return (← over.lawOver n, ← (Select.Rule.law t).tableOver program query table)
+
 def PARAM_KEYS : Array String := #["anchors", "delta", "law", "leaf_layer", "log", "partition", "ports", "program", "query",
   "registered", "scheme", "work_table"]
 
@@ -149,6 +174,58 @@ private def logRecord (j : Json) : V Json := do
     throw "a record of the log registers values that are not objects with a string value, root and domain"
   return j
 
+/-- The parameters' pool (`registration._pool`): exactly `{"genesis", "lag", "pin", "pout", "reset", "verdicts",
+"week"}`, `pin` and `pout` two registered values none of `given` (the supplied, pinned and output values) names, `pin`
+with no row format of its own in `schemas` (it takes `pout`'s, `poolValues`), `genesis` lowercase hex of 64 bytes,
+`lag` a positive integer, `verdicts` an object of record digests (lowercase hex of 64 bytes) to bools, `reset` a bool
+and `week` a natural. -/
+private def poolOf (pj : Json) (registered : Array (String × Nat)) (given : List (Option Json))
+    (schemas : Option Json) : V Registration.Pool := do
+  exactly pj #["genesis", "lag", "pin", "pout", "reset", "verdicts", "week"] "the pool"
+  let (.str pin, .str pout) := (getD pj "pin", getD pj "pout") | throw "the pool's pin and pout are not strings"
+  for v in [pin, pout] do
+    if !registered.any (·.1 == v) || given.any (fun g => (g.bind (field? · v)).isSome) then
+      throw s!"the pool's {v}: not a registered value it neither fills, pinned nor gives as an output"
+  if pin == pout then throw s!"a pool opens and closes in two values, not {pin} alone"
+  if (schemas.bind (field? · pin)).isSome then throw s!"the pool's {pin} takes the row format of {pout}, which it reuses"
+  let .str genesis := getD pj "genesis" | throw "the pool's genesis is lowercase hex of 64 bytes"
+  if !(genesis.length == 128 && isHex genesis) then throw "the pool's genesis is lowercase hex of 64 bytes"
+  let .bool reset := getD pj "reset" | throw "the pool's reset is a bool"
+  let some lag := nat? (getD pj "lag") | throw "the pool's lag is a positive integer"
+  if lag == 0 then throw "the pool's lag is a positive integer"
+  let some week := nat? (getD pj "week") | throw "the pool's week is a natural"
+  let .obj vs := getD pj "verdicts" | throw "the pool's verdicts are an object of record digests to bools"
+  let verdicts ← vs.toArray.mapM fun (d, a) => do
+    let .bool a := a | throw "the pool's verdicts are an object of record digests to bools"
+    if !(d.length == 128 && isHex d) then throw "the pool's verdicts are an object of record digests to bools"
+    return (d, a)
+  return { pin, pout, genesis, lag, verdicts, reset, week }
+
+/-- `o` with field `k` set to `x`: a new object where `o` is none, and `o` as it is where it is no object. -/
+private def withField (o : Option Json) (k : String) (x : Json) : Option Json :=
+  match o with
+  | none => some (Json.mkObj [(k, x)])
+  | some (.obj kvs) => some (.obj (kvs.insert k x))
+  | some j => some j
+
+/-- The parameters' supplied values, output values and row formats with the pool's `pin` among them
+(`registration.pool_values`): the previous record's `pout`, reused, in `pout`'s row format, when the window carries the
+previous window's pool (`Registration.Pool.chains`, at `program`, the program's digest as R2 reads it), else filled from
+the empty pool's root, the one row `[{"bytes": genesis}]`. A malformed object is left as it is, for its own parse to
+refuse. -/
+private def poolValues (pool : Option Registration.Pool) (program : String) (log : Array Json)
+    (supplied outputs schemas : Option Json) : Option Json × Option Json × Option Json :=
+  match pool with
+  | none => (supplied, outputs, schemas)
+  | some p =>
+    if p.chains log program then
+      let reuse := Json.mkObj [("record", .str (Registration.lastDigest log)), ("value", .str p.pout)]
+      let schemas := match schemas, schemas.bind (field? · p.pout) with
+        | some (.obj kvs), some s => some (.obj (kvs.insert p.pin s))
+        | s, _ => s
+      (supplied, withField outputs p.pin reuse, schemas)
+    else (withField supplied p.pin (.arr #[.arr #[Json.mkObj [("bytes", .str p.genesis)]]]), outputs, schemas)
+
 /-- The parameters as parsed, before `paramsOfJson`'s refusal of the sampling design: the stream's run reads them and
 refuses the sampling design its rule names itself (`Run.run`, `bernoulli`). -/
 def paramsParsed (j : Json) : V Params := do
@@ -163,13 +240,14 @@ def paramsParsed (j : Json) : V Params := do
   let keys := if (field? j "challenger").isSome then keys.push "challenger" else keys
   let keys := if (field? j "day").isSome || (field? j "declarations").isSome then keys ++ #["day", "declarations"]
     else keys
+  let keys := if (field? j "pool").isSome then keys.push "pool" else keys
   exactly j (if (field? j "binding").isSome then keys.push "binding" else keys) "the parameters"
   let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
   let query ← obj (getD j "query") "query"
-  let law ← rule (getD j "law")
   let workTable ← match getD j "work_table" with
     | .null => pure none
     | t => some <$> obj t "work_table"
+  let (law, workTable) ← design program query (getD j "law") workTable
   let .str scheme := getD j "scheme" | throw "scheme is not a string"
   let ports ← (entries (← obj (getD j "ports") "ports")).mapM fun (p, v) => do
     exactly v #["domain", "leaves"] s!"port {p}"
@@ -195,7 +273,13 @@ def paramsParsed (j : Json) : V Params := do
       | some w => pure (v, w)
       | none => throw s!"registered: the words of {v} are not a natural number"
     pure (registered, ← Registered.params program.desc (getD j "parameters"))
-  let supplied ← match field? j "supplied" with
+  let given := [field? j "supplied", field? j "pinned", field? j "outputs"]
+  let pool ← match getD j "pool" with
+    | .null => pure none
+    | pj => some <$> poolOf pj registered given (field? j "row_schemas")
+  let (suppliedJ, outputsJ, schemasJ) := poolValues pool (Flock.hexOf program.sha512) log (field? j "supplied")
+    (field? j "outputs") (field? j "row_schemas")
+  let supplied ← match suppliedJ with
     | none => pure #[]
     | some s => do
       if registered.isEmpty then throw "supplied values are registered values: the verifier expects none registered"
@@ -209,7 +293,7 @@ def paramsParsed (j : Json) : V Params := do
             pure (v, r) else throw s!"pinned value {v}: not a registered value it doesn't fill, pinned to 64 bytes"
         | _ => throw s!"pinned value {v}: its root is not a string"
     | some _ => throw "pinned roots are not an object"
-  let outputs ← match field? j "outputs" with
+  let outputs ← match outputsJ with
     | none => pure #[]
     | some (.obj kvs) => do
       if registered.isEmpty then
@@ -228,7 +312,7 @@ def paramsParsed (j : Json) : V Params := do
         | .str d, .str p => if d.length == 128 && isHex d then pure (v, d, mk p) else throw fail
         | _, _ => throw fail
     | some _ => throw "output values are not an object"
-  let schemas ← match field? j "row_schemas" with
+  let schemas ← match schemasJ with
     | none => pure #[]
     | some (.obj kvs) => do
       if registered.isEmpty then throw "row formats are registered values' formats: the verifier expects none registered"
@@ -278,7 +362,7 @@ def paramsParsed (j : Json) : V Params := do
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
   let p : Params := { verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition,
                                     registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held,
-                                    declared },
+                                    declared, pool },
                       delta, challenger }
   let again := Registration.unwindowed p.verifier
   if !again.isEmpty then

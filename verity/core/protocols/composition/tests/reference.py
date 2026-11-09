@@ -11,7 +11,7 @@ inference-only policy's difftest's `reference` (`verity/inference-only/v0`, the 
 `spot`: its form's split over one-stage v2's audit (`verity/sampled-proofs/one-stage/v2`, one-stage v1
 refused by name, `V1_REFUSED`), its decoders `OneStageZk` reads (behind the decoders `OneStage` reads, v1's difftest's,
 `verity/core/service/spot/tests/test_difftest.py`) and its check up to its one session's coin tree, and the
-recursive form refused where the case names none of its files, the wipe's
+recursive form's params refused by name (`RECURSIVE_REFUSED`), the wipe's
 (`verity/wipe/v0`) `wipe_protocol_case.answer`, and for space (`verity/pous/p2/v4/run`) and bandwidth (PoUB-P2,
 `verity/remote-bandwidth/p2/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
 `periods.py`). Each subprotocol's own difftest holds its Lean to that Python; this one holds the composition of them.
@@ -166,9 +166,11 @@ def _recursive(rest: dict, what: str):
 
 
 #: `VStar.Recursive.Sampled.V1_REFUSED`: a one-stage statement naming no ``proofs`` is one-stage v1's.
-V1_REFUSED = ("one-stage v1 (verity/sampled-proofs/one-stage/v1) is refused: sampled proofs covers one-stage v2 "
-              "(verity/sampled-proofs/one-stage/v2), whose verdicts are its own run of the verifier on the proofs, and "
-              "the recursive audit only")
+V1_REFUSED = ("one-stage v1 (verity/sampled-proofs/one-stage/v1) is refused: SPOT's one-stage form is v2 "
+              "(verity/sampled-proofs/one-stage/v2), whose verdicts are its own run of the verifier on the proofs")
+#: `VStar.Recursive.Sampled.RECURSIVE_REFUSED`: the recursive form's params, refused before their rest is read.
+RECURSIVE_REFUSED = ("the recursive audit (verity/sampled-proofs/recursive/v1) is refused: SPOT's soundness "
+                     "covers one-stage v2 (verity/sampled-proofs/one-stage/v2) only")
 
 
 def _keys(j: Any, keys: list[str], what: str) -> None:
@@ -255,7 +257,7 @@ def _form_params(j: Any) -> dict:
     if form == "one-stage":
         return _one_stage_params(rest)
     if form == "recursive":
-        _recursive(rest, "parameters")
+        raise Reject(RECURSIVE_REFUSED)
     raise Reject(f"the parameters' form {form} is not one-stage or recursive")
 
 
@@ -285,8 +287,8 @@ def _form_evidence(b: bytes) -> dict:
 def spot(case: Any) -> dict:
     """`VStar.Recursive.Sampled.protocol` on a case and its ``blobs``: one-stage v2 (`Spot.OneStageZk`,
     `_one_stage_check`, at the coins the challenger's release gives) when its params and evidence name the form
-    ``one-stage`` and ``proofs``, a refusal of one-stage v1 (naming no ``proofs``) by name and of any other form on the
-    cases the mirror decides."""
+    ``one-stage`` and ``proofs``, a refusal of one-stage v1 (naming no ``proofs``) and of the recursive form's params
+    (`RECURSIVE_REFUSED`) by name, and of any other form on the cases the mirror decides."""
     blobs = case.get("blobs", []) if isinstance(case, dict) else []
     return P.answer(SAMPLED_PROOFS_V1, case, params=_form_params, commitment=ONE_STAGE.decode_commitment,
                     evidence=_form_evidence, digest=lambda c: c[1],
@@ -305,8 +307,8 @@ def _period_answer(case: str) -> str:
 #: A period's answer is slow to make (its windows' ledger signatures and layouts), and a composition's case asks for each
 #: subprotocol's twice, so it is made once a case.
 POUW_PERIOD = Ported(period_check.ID, lambda case: json.loads(_period_answer(canonical(case))))
-#: Integrity: sampled proofs (`VStar.Recursive.Sampled`), one-stage v2's audit (`Spot.OneStageZk`) or the
-#: recursive audit, as the params' form names it; one-stage v1 refused.
+#: Integrity: SPOT (`VStar.Recursive.Sampled`), one-stage v2's audit (`Spot.OneStageZk`); one-stage v1 and the
+#: recursive audit refused.
 SAMPLED_PROOFS = Ported(SAMPLED_PROOFS_V1, spot, blobs=True)
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")

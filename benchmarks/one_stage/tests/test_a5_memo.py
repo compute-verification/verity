@@ -15,7 +15,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value as Bits
 from verity.core.protocols.spot import coins as CC, service as S
-from verity.core.protocols.spot.one_stage import partition as P, registration as R, verifier as V
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -42,7 +42,9 @@ PUBLIC = tuple(S.Public(i, "structure", r) for i, r in (
     ("population", "N, the draw's range"), ("window", "provenance"), ("leaves:x", "x's leaf count"),
     ("domain:x", "x's served domain"), ("leaves:out", "out's leaf count"), ("domain:out", "out's served domain"),
     *((f"population:{P.template_id(t)}", "a template's stratum") for t in WINDOW))) + (FC.SEED_ITEM,)
-SPEC = S.Spec(VALUES, S.Law("stratified:3"),
+#: one of the PAIR and three of the 9 TRIPLEs
+RULE = S.Law("stratified-rate:1/3")
+SPEC = S.Spec(VALUES, RULE,
               S.Check(tuple(P.program_digest(Program(t)) for t in WINDOW), QUERY, proof_deadline=60.0), PUBLIC,
               bytes.fromhex(ROOT))
 VERDICTS = {"lean": {"of_record": True, "accepted": True, "digest": "dd" * 64, "sessions": [SESSION]}}
@@ -63,17 +65,24 @@ def _ports(run: str = RUN) -> dict:
             for p, leaves in (("x", n), ("out", 2 * n))}
 
 
+def _table(program: Program | None = None) -> dict:
+    return S.selection_table(RULE, program or _program(), QUERY, None)
+
+
 def _record(salt: str | None = None) -> dict:
     ports = _ports()
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **ports[p]} for i, p in enumerate(ports)]
-    return R.record(_program(), QUERY, {"law": "stratified", "k": 3}, S.SCHEME, roots,
-                    {"kind": "served", "run": RUN, "row": 0, **({R.SEED_SALT: salt} if salt else {})})
+    law = S.selection_law(RULE, sum(COUNTS.values()), D.strata_sizes(_program(), QUERY))
+    return R.record(_program(), QUERY, law, S.SCHEME, roots,
+                    {"kind": "served", "run": RUN, "row": 0, **({R.SEED_SALT: salt} if salt else {})},
+                    work_table=_table())
 
 
 def _check(rec: dict | None = None, program: Program | None = None, ports: dict | None = None):
     """R1-R7 by the verifier on the toy window's registration and the verifier's copies, each a new object each call."""
-    law = S.selection_law(SPEC.selection, sum(COUNTS.values()))
-    return V.check(rec or _record(), program or _program(), QUERY, law, S.SCHEME, ports or _ports())
+    program = program or _program()
+    law = S.selection_law(SPEC.selection, sum(COUNTS.values()), D.strata_sizes(program, QUERY))
+    return V.check(rec or _record(), program, QUERY, law, S.SCHEME, ports or _ports(), work_table=_table(program))
 
 
 def _asked(monkeypatch) -> Counter:

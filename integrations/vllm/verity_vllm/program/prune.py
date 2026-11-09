@@ -14,23 +14,34 @@ derive and `predict.build` put the request wrapper alike in that form at one ran
 under the Build's `--dead-free` (`build_program(dead_free=True)`): the registered compiler's Programs. A Program the Build lifts to
 bits (`TargetProfile.ir == "boolean"`) takes the form without the swaps (`BITS`): no Boolean Definition names a dead-free version
 as its word, so it keeps the v1s, whose Boolean versions the lift reads.
+
+Class G's request Programs take that form batched (`batched_form`, `BATCHED`; `build_program(batched=True)`, the Build's `--batched`): each run of
+consecutive Calls of one Definition that read no output of the run becomes one `batch` node over them, in order. An argument
+every member reads alike is shared (axis None); any other is mapped on axis 0, its members' references stacked: one `Affine` where
+they are consecutive runs of one node or Input, one `Strided` where they are evenly spaced, else their `concat`. A reference to a
+member's output becomes one to the batch's output at the member's leaves, in its form (a cut of a `PartLog` stays a cut; a plain
+`Concat` is put back in `concat`'s normal form). The form reads the body as written and nothing else, so equal bodies give equal
+forms. A collective stays a node of its own, for the root reader that takes only Calls: it reads peer Inputs in one operand of one
+Call (`tp_binding.rank_sites`). An attention's Calls batch like any other (`commit.memory_map` reads each member's KV).
 """
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from dataclasses import replace
 from functools import cache
-from itertools import chain, islice
+from itertools import accumulate, chain
 from typing import Any
 
 from verity.ml.circuits.defs import Body, Node, bind
-from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided
+from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, concat
+from verity.ml.circuits.types import Array
 
 
 def _parts(r: Concat, done: dict[int, list]) -> Iterable[Refs]:
     """The parts of `r` a walk that accumulates (a union, idempotent) has yet to visit: for a `Concat` cut from a `PartLog`, the
     log's parts past the longest cut of it the walk has visited (`done`, by log), then its own. An attention's key sequence is the
-    one before it plus a row, so a walk over a layer's cuts visits each of its parts once, not once per row."""
+    one before it plus a row, so a walk over a layer's cuts visits each of its parts once, not once per row, in either order
+    (liveness reads the longest cut first): a slice of the log, since `islice(parts, lo, j)` steps over the first `lo` parts."""
     if r.prefix is None:
         return r.parts
     log, j = r.prefix
@@ -38,7 +49,7 @@ def _parts(r: Concat, done: dict[int, list]) -> Iterable[Refs]:
     if d is None or d[0] is not log:
         d = done[id(log)] = [log, 0]
     lo, d[1] = d[1], max(d[1], j)
-    return chain(islice(log.parts, lo, j), r.parts[j:])
+    return chain(log.parts[lo:j], r.parts[j:])
 
 
 def _mapped(r: Concat, f: Callable[[Refs], Refs], logs: dict[int, list]) -> Refs:
@@ -256,6 +267,141 @@ def narrowed(body: Body) -> tuple[Body, dict[int, tuple[int, int]]]:
 
 #: `kept_records`' form for a Program the Build lifts to bits: the registered compiler's form without the swaps
 BITS = "bits"
+#: `kept_records`' form for class G's request Programs: the registered compiler's form, `batched`
+BATCHED = "batched"
+#: the root parameters a collective reads (`tp_binding.PEERS`)
+PEERS = "peers_"
+
+
+def _top(r: Refs, peers: frozenset[int], done: dict[int, list]) -> tuple[int, bool]:
+    """The greatest node `r` reads (-1 for none) and whether it reads a parameter in `peers`. A cut of a `PartLog` reads the
+    log's running maxima (`done`, by log), so a layer's cuts visit each of its parts once."""
+    if isinstance(r, (Affine, Strided)):
+        if not r.count:
+            return -1, False
+        return (r.idx, False) if r.space == "n" else (-1, r.space == "p" and r.idx in peers)
+    if isinstance(r, Explicit):
+        return (max((i for s, i, _ in r.items if s == "n"), default=-1), any(s == "p" and i in peers for s, i, _ in r.items))
+    if not isinstance(r, Concat):
+        raise TypeError(f"a reference sequence of an unknown form, {type(r).__name__}")
+    hi, peer, parts = -1, False, r.parts
+    if r.prefix is not None:
+        log, j = r.prefix
+        d = done.get(id(log))
+        if d is None or d[0] is not log:
+            d = done[id(log)] = [log, [-1], [False]]
+        tops, read = d[1], d[2]
+        while len(tops) <= j:
+            k, q = _top(log.parts[len(tops) - 1], peers, done)
+            tops.append(max(tops[-1], k))
+            read.append(read[-1] or q)
+        hi, peer, parts = tops[j], read[j], parts.tail
+    for p in parts:
+        k, q = _top(p, peers, done)
+        hi, peer = max(hi, k), peer or q
+    return hi, peer
+
+
+def _same(a: Refs, b: Refs) -> bool:
+    """Whether `a` and `b` are the same references as written."""
+    if a is b:
+        return True
+    if type(a) is not type(b) or a.count != b.count:
+        return False
+    if isinstance(a, Affine):
+        return (a.space, a.idx, a.base) == (b.space, b.idx, b.base)
+    if isinstance(a, Strided):
+        return (a.space, a.idx, a.base, a.inner, a.outer_stride, a.inner_stride) == (b.space, b.idx, b.base, b.inner, b.outer_stride, b.inner_stride)
+    if isinstance(a, Explicit):
+        return a.items == b.items
+    return len(a.parts) == len(b.parts) and all(_same(p, q) for p, q in zip(a.parts, b.parts))
+
+
+def _stacked(rs: list[Refs]) -> Refs:
+    """The references of a mapped argument whose member m reads `rs[m]`."""
+    r0, r1 = rs[0], rs[1]
+    if isinstance(r0, Affine) and isinstance(r1, Affine) and r0.count and (s := r1.base - r0.base) > 0 and all(
+            isinstance(r, Affine) and (r.space, r.idx, r.base, r.count) == (r0.space, r0.idx, r0.base + m * s, r0.count) for m, r in enumerate(rs)):
+        n = len(rs) * r0.count
+        return Affine(r0.space, r0.idx, r0.base, n) if s == r0.count else Strided(r0.space, r0.idx, r0.base, r0.count, s, 1, n)
+    return concat(rs)
+
+
+def _joined(parts: list[Refs]) -> list[Refs]:
+    """`parts` with each two neighbours that are one Affine run joined: members' outputs a batch made adjacent."""
+    out: list[Refs] = []
+    for p in parts:
+        q = out[-1] if out else None
+        if (isinstance(p, Affine) and isinstance(q, Affine) and (p.space, p.idx) == (q.space, q.idx)
+                and p.base == q.base + q.count):
+            out[-1] = Affine(q.space, q.idx, q.base, q.count + p.count)
+        else:
+            out.append(p)
+    return out
+
+
+def _moved(r: Refs, at: list[tuple[int, int]], memo: dict[int, Refs], logs: dict[int, list]) -> Refs:
+    """`r` with each leaf j of node k moved to leaf `at[k][1]` + j of node `at[k][0]`, each reference kept in its form but a plain
+    Concat's, whose neighbouring runs are joined (`_joined`)."""
+    if (hit := memo.get(id(r))) is not None:
+        return hit
+    if isinstance(r, (Affine, Strided)):
+        if r.space != "n" or not r.count or at[r.idx] == (r.idx, 0):
+            out = r
+        else:
+            k, o = at[r.idx]
+            out = (Affine("n", k, o + r.base, r.count) if isinstance(r, Affine) else
+                   Strided("n", k, o + r.base, r.inner, r.outer_stride, r.inner_stride, r.count))
+    elif isinstance(r, Concat):
+        if r.prefix is None:
+            parts = [_moved(p, at, memo, logs) for p in r.parts]
+            out = r if all(p is q for p, q in zip(parts, r.parts)) else concat(_joined(parts))
+        else:
+            out = _mapped(r, lambda p: _moved(p, at, memo, logs), logs)
+    elif isinstance(r, Explicit):
+        items = tuple(("n", at[i][0], at[i][1] + j) if s == "n" else (s, i, j) for s, i, j in r.items)
+        out = r if items == r.items else Explicit(items)
+    else:
+        raise TypeError(f"a reference sequence of an unknown form, {type(r).__name__}")
+    memo[id(r)] = out
+    return out
+
+
+def batched_form(body: Body) -> tuple[Body, list[int]]:
+    """`body` in the batched form (module docstring), and how many of `body`'s nodes each of its nodes holds, in order."""
+    nodes, peers = body.nodes, frozenset(i for i, (name, _) in enumerate(body.params) if name.startswith(PEERS))
+    at: list[tuple[int, int]] = []
+    out: list[Node] = []
+    sizes: list[int] = []
+    memo: dict[int, Refs] = {}
+    logs: dict[int, list] = {}
+    done: dict[int, list] = {}
+    k = 0
+    while k < len(nodes):
+        n, hi = nodes[k], k + 1
+        if n.form == "call" and not (peers and any(_top(a.refs, peers, done)[1] for a in n.args)):
+            while hi < len(nodes) and nodes[hi].form == "call" and nodes[hi].fn.id == n.fn.id and all(
+                    (t := _top(a.refs, peers, done))[0] < k and not t[1] for a in nodes[hi].args):
+                hi += 1
+        j = len(out)
+        if hi == k + 1:
+            args = tuple(a if (r := _moved(a.refs, at, memo, logs)) is a.refs else Coll(a.type, r) for a in n.args)
+            out.append(n if all(x is y for x, y in zip(args, n.args)) else replace(n, args=args))
+            at.append((j, 0))
+        else:
+            members, args, axes = nodes[k:hi], [], []
+            for g, a in enumerate(n.args):
+                rs = [_moved(m.args[g].refs, at, memo, logs) for m in members]
+                shared = all(_same(r, rs[0]) for r in rs[1:])
+                args.append(Coll(a.type, rs[0]) if shared else Coll(Array(len(rs), a.type), _stacked(rs)))
+                axes.append(None if shared else 0)
+            out.append(Node("batch", n.fn, tuple(args), Array(hi - k, n.out), axes=tuple(axes), n=hi - k, name=n.name))
+            at.extend((j, m * n.out.leaves) for m in range(hi - k))
+        sizes.append(hi - k)
+        k = hi
+    if len(out) == len(nodes):
+        return body, sizes
+    return Body(body.params, body.ret_type, out, _moved(body.ret, at, memo, logs), [0, *accumulate(n.gates for n in out)]), sizes
 
 
 def registered_form(ir: str | None) -> bool | str:
@@ -270,10 +416,18 @@ def _dead_free(body: Body, *, swap: bool = True) -> tuple[Body, list[int], dict[
     return form, kept, cols
 
 
-def dead_free(body: Body, *, swap: bool = True) -> tuple[Body, list[int]]:
-    """`body` in the registered compiler's form: without its dead units, the rest `swapped` (unless not `swap`) and `narrowed`; and
-    the index in `body` of each node kept, in order."""
-    return _dead_free(body, swap=swap)[:2]
+def dead_free(body: Body, *, swap: bool = True, batched: bool = False, consume: bool = False) -> tuple[Body, list[int]]:
+    """`body` in the registered compiler's form: without its dead units, the rest `swapped` (unless not `swap`) and `narrowed`, then
+    `batched_form` where `batched`; and the index in `body` of each node kept, in order (before `batched_form`). `consume`: the
+    caller hands `body` over, and its node and offset lists (a `Builder`'s, which `finish` shares) are emptied once the form
+    without dead units is built, before `batched_form`, so the flat body is never alive beside the batched one."""
+    form, kept, _ = _dead_free(body, swap=swap)
+    if consume:
+        if form.nodes is not body.nodes:
+            body.nodes.clear()
+        if form.offsets is not body.offsets:
+            body.offsets.clear()
+    return (batched_form(form)[0] if batched else form), kept
 
 
 def _cut(slot: dict, lo: int, hi: int) -> dict:
@@ -296,20 +450,25 @@ def kept_records(body: Body, calls: list | None, hints: dict[int, Any], *,
                  registered: bool | str) -> tuple[Body, list | None, dict[int, Any]]:
     """A derivation's flat `body` with its runtime correspondence's `calls` (one per node; None without a correspondence) and
     its node `hints` (by node index), in the registered compiler's form (`dead_free`) when `registered`, without its swaps when
-    `registered` is `BITS`. A swapped node keeps its Call record: its arguments and outputs are the v1's. A narrowed node's record
-    keeps the columns it computes: its output's and its column arguments' leaves cut to them."""
+    `registered` is `BITS`, and `batched_form` when it is `BATCHED`. A swapped node keeps its Call record: its arguments and outputs
+    are the v1's. A narrowed node's record keeps the columns it computes: its output's and its column arguments' leaves cut to them.
+    A batch's record is its members' (`{"members": [...]}`, in order), its hint its first member's."""
     if not registered:
         return body, calls, dict(hints)
     form, kept, cols = _dead_free(body, swap=registered != BITS)
     kept_hints = {i: hints[k] for i, k in enumerate(kept) if k in hints}
-    if calls is None:
-        return form, None, kept_hints
-    recs = [calls[k] for k in kept]
-    for i, (a, b) in cols.items():
+    recs = None if calls is None else [calls[k] for k in kept]
+    for i, (a, b) in cols.items() if recs is not None else ():
         n, rec = body.nodes[kept[i]], recs[i]
         N, widths = n.fn.bindings["N"], COLUMNS[n.fn.base_id]
         per = n.out.leaves // N
         recs[i] = {**rec, "returns": [_cut(s, a * per, b * per) for s in rec["returns"]],
                    "args": [_cut(s, a * (n.args[j].type.leaves // N), b * (n.args[j].type.leaves // N)) if j in widths else s
                             for j, s in enumerate(rec["args"])]}
+    if registered == BATCHED:
+        form, sizes = batched_form(form)
+        firsts = list(accumulate([0, *sizes[:-1]]))
+        kept_hints = {j: kept_hints[i] for j, i in enumerate(firsts) if i in kept_hints}
+        if recs is not None:
+            recs = [recs[i] if m == 1 else {"members": recs[i:i + m]} for i, m in zip(firsts, sizes)]
     return form, recs, kept_hints
