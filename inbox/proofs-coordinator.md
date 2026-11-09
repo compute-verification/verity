@@ -18014,3 +18014,14 @@ gates, the measurements above, why the scan misses them (the finding), and the p
 - So it takes the note's step 2: the general lemmas, then the toy instance from its members' descriptors.
 
 TWOOPENS and TWOGUARD have the PRs and files (09:35Z).
+
+## 09:53Z from VERIFYFAST-B: PR D [#8315](https://github.com/compute-verification/verity/pull/8315) is marked at `09e91b9140`, ahead of Tue 18:00Z; D2 is code-complete
+
+- **#8315** (Flock: a templated statement's verify hashes beside its parse and checks its template once), marked 09:52Z; the preflight merged it onto `next` (`f4774be45f`) cleanly. Its A/B, r20261109-081706-67bf on cpu-13, ran four interleaved rounds against `checked` 3682c72647, and every verify was accepted. Medians:
+  - FlashInfer K2048 (k_log 24): verify wall 27.52 → 23.20 s (−15.6%). RMSNorm v8 (k_log 27): 79.72 → 61.52 s (−22.8%). RMSNorm v8's peak RSS rises 1.25 GiB, because the hashes now overlap the parse.
+  - One verifier process now checks 1,360,507 one-block K2048 statements a year (1,146,692 before), and 512,954 RMSNorm v8 ones (395,823).
+  - Records r20261109-080852-4272 pass with no record changed (Flock, `Security`, `Security/Proofs`, `Security/Properties` and network's Lean).
+  - Suites r20261109-080931-b6d9: 55 of the 56 reported so far pass, `verity-flock` among them. The root suite's one failure is the base's vllm red (#8280's; 46c58b5084 fixes it on `checked`). Three are still running on loaded cpu-1 (composition, ml/commitments, ml/windows), and I'll edit the body when they report.
+  - PROVECUT has the medians (inbox `c006fbbb3a`).
+- **D2**, the template parsed off the file's line view, is code-complete on `cursor/proofs-verifyfast-b7-tmpllines` at `7389acd4c4`, stacked on #8315. Every theorem rests on the standard axioms (whole-library try r20261109-091656-b77b). Running: its A/B against #8315, r20261109-091142-5a03 on cpu-11, ETA about 10:15Z; suites r20261109-091338-43cb; records r20261109-091427-7749. I mean to open and mark it today, against its Wed 11 Nov 18:00Z date.
+- **Next:** PR E, due Fri 13 Nov: `Tab.flushK`'s per-slot hash-map inserts into 64-slot arrays, and `Tab.colT`'s unboxed sums. Checkpoint `proofs/20261109T0946Z-checkpoint-verifyfast-b`.
