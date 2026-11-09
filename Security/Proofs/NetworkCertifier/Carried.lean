@@ -652,7 +652,7 @@ theorem pooledGoodChecked_of_carried {L K S m : ℕ} {lay : AuditStatement → B
     {genesis : Fin m → Hash.Row} {Fmax : ℕ} {W : Fin m → Finset ℕ} {o : Fin m → List (Obs L K S)}
     (h : PooledGoodCarried lay k reg valid prow nrow Dj sw Pw ρ (fun i _ => op i) chains genesis Fmax W o) :
     PooledGoodChecked lay k reg valid Dj sw Pw ρ op Fmax W o := by
-  obtain ⟨hlt, -, -, -, hl⟩ := h
+  obtain ⟨hlt, _, _, -, hl⟩ := h
   exact ⟨hlt, fun i => leakAtChecked_of_leakAtCarried (hl i)⟩
 
 /-- **A period's good event with valid runs is its good event over the empty pool**, at the pattern that restarts no
@@ -700,13 +700,13 @@ theorem pooledLeakChecked_of_carried {L K S : ℕ} (lay : AuditStatement → Bou
           ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ (reg (sw i) ∪ chk (sw i))).card *
             Dj ^ k (sw i)) : ℕ) : ℕ∞) := by
   have hcls : ∀ i, CheckedClosing (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i))
-      (valid (sw i)) [] := fun _ => by intros; rfl
+      (valid (sw i)) [] := fun _ => by unfold CheckedClosing; intros; rfl
   refine ⟨fun z hz => ?_, fun ω => ?_⟩
   · have hroot : ∀ z ∈ Zs, ∀ ω, (∀ i, acc z i ω (ω i)) →
         CarriedRoots (fun _ _ => 0) lay k reg valid (fun _ => []) (fun _ => []) Dj sw Pw ρ (fun i _ => op i)
           (fun _ => false) (fun _ => []) := by
       intro _ _ _ _ _ _ _ _ h i
-      obtain ⟨-, -, -, -, -, -, -, -, -, hp, -, -⟩ := h i
+      obtain ⟨-, -, -, -, _, -, _, -, -, hp, -, -⟩ := h i
       simp only [List.map_nil] at hp
       simp [poolOpen, ← hp]
     have hleak' : PeriodLeaksCarried lay k reg valid (fun _ => []) (fun _ => []) Dj sw Pw ρ (fun i _ => op i) Zs acc W
