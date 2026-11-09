@@ -37,7 +37,7 @@ VC=${VCPUS:-4}; PCPU=$(echo $CPUS | cut -d, -f1-$((NC - VC))); VCPU=$(echo $CPUS
 BUILT=$FW/flock-gpu-link/flock/target/release/flock-circuit; B=${PT_BINARY:-$BUILT}; PY=$FW/py/bin/python
 has() { case " $STEPS " in *" $1 "*) return 0 ;; esac; return 1; }
 { echo "device=$DEV cpus=$CPUS prover=$PCPU verifier=$VCPU"; lscpu | grep -E 'Model name|^CPU\(s\)'; free -g | head -2
-  [ $DEV = gpu ] && nvidia-smi --query-gpu=name,driver_version,memory.total,clocks.max.sm --format=csv; } > $O/host.txt 2>&1
+  [ $DEV = gpu ] && has prove && nvidia-smi --query-gpu=name,driver_version,memory.total,clocks.max.sm --format=csv; } > $O/host.txt 2>&1
 echo "device=$DEV units=$UNITS ns=$NS warm=$WARM runs=$RUNS" > $O/config.txt
 # PAIRS: one UNIT@N a statement, each unit at its own Ns or PT_NS
 PAIRS=$(for t in $UNITS; do
