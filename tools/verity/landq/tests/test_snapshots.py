@@ -215,6 +215,12 @@ def test_the_snapshot_holds_the_reviewed_prs_by_first_mark_with_their_lean_flag(
     for e in [lq.Ready(2, "h2", frozenset({"S/A.lean"})), lq.Ready(1, "h1", frozenset({"a/x.py"}), reviewed=False),
               lq.Ready(3, "h3", frozenset({"b/y.py"})), lq.Ready(2, "h2", frozenset({"S/A.lean"}))]:
         D.on_Ready(s, e)
-    snap = D.snapshot(s, lq.Policy(batch=5, depth=2, page_after=3))
+    snap = D.snapshot(s, lq.Policy(batch=5, depth=2))
     assert [(r.number, r.lean, r.rank) for r in snap.ready] == [(2, True, 0), (3, False, 2)]
-    assert (snap.main, snap.batch, snap.depth, snap.rings) == ("m", 5, 2, 3)
+    assert (snap.main, snap.batch, snap.depth) == ("m", 5, 2)
+
+
+def test_rings_are_the_queues_own_unless_set() -> None:
+    s = D.start("m")
+    assert D.snapshot(s, lq.Policy(page_after=1)).rings == vq.Snapshot("m", (), (), ()).rings
+    assert snapshots.Driver(vq, rings=1).snapshot(s, lq.Policy()).rings == 1

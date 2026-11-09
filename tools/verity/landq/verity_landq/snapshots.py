@@ -15,8 +15,10 @@ once every task has an outcome and some only infra ones, else `pending`.  The dr
 and leaves the rest to their defaults: a failure's key, its key on the candidate's base, its failing tests and the base's
 (as the world's results give them), whether the verdict has ended (every listed task has an outcome) with its infra
 errors beside its failures, a candidate's reruns and when its check was enqueued, and the snapshot's time (the
-simulator's minutes, as seconds).  Keyword arguments set other snapshot fields, such as `lean`.  A `Red` is rung as a
-page, and a `Rerun` runs the failed keys' tasks afresh.  The module is a parameter, so nothing here imports it.
+simulator's minutes, as seconds).  The policy gives the snapshot's batch and depth; keyword arguments set its other
+fields, such as `lean` or `rings`, which otherwise keep the queue's own defaults (the model's `page_after` doesn't reach
+them).  A `Ring` or a `Red` is rung as a page, and a `Rerun` runs the failed keys' tasks afresh.  The module is a
+parameter, so nothing here imports it.
 """
 from __future__ import annotations
 
@@ -109,7 +111,7 @@ class Driver:
             return vq.Candidate(c.tree, c.base, tuple(m.pr for m in c.members), tuple(m.head for m in c.members),
                                 self.verdict(c), c.tries, **more)
 
-        fields = {"batch": policy.batch, "depth": policy.depth, "rings": policy.page_after}
+        fields = {"batch": policy.batch, "depth": policy.depth}
         if "now" in has["Snapshot"]:
             fields["now"] = s.now * 60
         return vq.Snapshot(s.main, ready, tuple(candidate(c) for c in s.stack), tuple(s.history),
