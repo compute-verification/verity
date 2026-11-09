@@ -16,7 +16,7 @@ class _Net:
 
     C = {"INDEX_TOPK": 5, "KV_LORA": 4, "QK_ROPE": 2, "INDEX_HEAD_DIM": 2}
     NL, indexers = 1, (0,)
-    reads_run, edge_groups, prefix_params = dsa.Net.reads_run, dsa.Net.edge_groups, dsa.Net.prefix_params
+    past_topk, edge_groups, prefix_params = dsa.Net.past_topk, dsa.Net.edge_groups, dsa.Net.prefix_params
 
 
 def _step(*rows: tuple[int, int, int]) -> WA.StepAdvice:

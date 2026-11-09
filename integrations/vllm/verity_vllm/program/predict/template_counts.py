@@ -115,7 +115,7 @@ class TemplateCounts(StepNeeds):
         if net.long_rows and any(long):
             raise Unexpressible(f"vocabulary cannot express: {net.long_rows}")
         last = [[] if P.S is None else [P.m - 1] if P.fused else list(range(P.m)) for P in passes]
-        every = E if set(edge) - {"prefix"} else 0
+        every = E if {"prefix_ik", "prefix_iks"} & set(edge) else 0
         bound = max([every] + [P.block[i] for P, ls in zip(passes, long) for i in ls])
         bound_last = max([every] + [P.block[i] for P, ls, X in zip(passes, long, last) for i in ls if i in X])
         first = int(self.C["FIRST_DENSE"])
