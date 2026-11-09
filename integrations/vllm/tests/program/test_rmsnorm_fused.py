@@ -2,7 +2,8 @@
 numpy twin gate for gate, and the twin reproduces every fused-norm row of the B0 commit store (v1 does not).
 
 Needs the numerics package's MUFU.RSQ model (`verity.ml.definitions.numerics`: `librms_triton_model.so`, built on demand into the
-`_jit` cache outside the checkout); skipped when it cannot be built here (no C++ compiler) or its tables are unavailable."""
+`_jit` cache outside the checkout); skipped when it cannot be built here (no C++ compiler) or its tables are unavailable.
+The B0 commit store's sweep is `test_rmsnorm_fused_of_record`."""
 
 from __future__ import annotations
 
@@ -89,20 +90,3 @@ def test_v1_and_v2_trees_differ_only_in_the_variance():
     # both are correctly-rounded-per-step sums of the same squares: they agree to a few ulps, not bit for bit
     assert np.all(np.abs(v1 - v2) <= 4 * np.spacing(np.maximum(v1, v2)))
     assert np.any(v1 != v2)
-
-
-def test_b0_store_sweep(tmp_path):
-    """The whole B0 store: v2 exact on all 2,340 fused-norm rows; v1 misses 13 (the class of the B1 §5.1 row)."""
-    _numerics()
-    from verity_vllm.program import rmsnorm_fused_sweep as SW
-    if not SW.BUNDLE.exists():
-        pytest.skip(f"B0 bundle not present: {SW.BUNDLE}")
-    commit = SW.extract_bundle(SW.BUNDLE, tmp_path)
-    rep = SW.sweep(commit)
-    assert rep["rows"] == 2340
-    assert rep["trees"]["v2"]["rows_exact"] == 2340
-    assert rep["trees"]["v2"]["words_exact"] == rep["trees"]["v2"]["words_compared"] == 2 * 2340 * 576
-    assert rep["trees"]["v1"]["rows_exact"] == 2327
-    assert rep["v1_vs_v2"]["output_differs_rows"] == 13
-    for r in rep["v1_vs_v2"]["rows"]:
-        assert r["v2"] == r["captured"] and r["v1"] != r["captured"]

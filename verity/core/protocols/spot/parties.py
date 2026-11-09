@@ -129,9 +129,9 @@ from verity.core.wire import Body, Hex, Int, Message, Schema, Str
 from .one_stage import registration as R
 
 ID = R.PROTOCOL
-#: sampled proofs as both composites compose it (`VStar.Recursive.Sampled`): one-stage v2's audit (`ID`'s record, the
-#: verdicts the verifier's own run of the proof check) or the recursive audit, as its params' and evidence's ``form``
-#: names it; `ID`'s own audit, whose verdicts are the evidence's, is refused
+#: SPOT as both composites compose it (`VStar.Recursive.Sampled`): one-stage v2's audit (`ID`'s record, the
+#: verdicts the verifier's own run of the proof check) under the ``form`` ``one-stage``; `ID`'s own audit, whose
+#: verdicts are the evidence's, and the recursive audit are refused
 COMPOSED = "verity/sampled-proofs/v1"
 VERSION = 1
 #: SPOT[Flock] on its own: no ZK server, no recursion and no composite

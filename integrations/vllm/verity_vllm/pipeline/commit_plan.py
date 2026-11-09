@@ -97,7 +97,7 @@ def key(args: Any) -> dict[str, Any]:
             "required_manifest_sha256": _sha256(getattr(args, "required_manifest", None)),
             "workload_sha256": _sha256(args.workload),
             "program_dir": real(getattr(args, "program_dir", None)), "programs_root": real(getattr(args, "programs_root", None)),
-            "code": SI.code_identity(SI.TREE)["sha256"], "vllm": _version("vllm")}
+            "code": SI.code_identity_of("the commit plan's key", SI.TREE)["sha256"], "vllm": _version("vllm")}
 
 
 def facts_to_json(facts: dict[tuple[str, str], dict[str, Any]] | None) -> list[list[Any]] | None:

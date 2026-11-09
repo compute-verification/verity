@@ -1,7 +1,7 @@
 """C-interactive (Flock, live verifier): ``verity/ml/flock/pod/30-cell.sh`` on both pods, then ``verity_flock.register``.
 
 A GEMM cell on an input set (directory or ``art:`` id) sends the set to both pods as the same tarball (``SET=``), and each side
-writes its own instance files from it (``verity_flock.instances.write_set``); on a census frozen set the scripts rebuild it.
+writes its own instance files from it (``verity_flock.instance_file.write_set``); on a census frozen set the scripts rebuild it.
 
 The circuit statement (``circuit:<template>``, ``verity/flock-circuit``, planned with ``--relation circuit:<template>``) runs
 ``verity/ml/flock/pod/61-circuit-cell.sh`` the same way (``verity_flock.circuit_bench``; the verifier stages only its public files).

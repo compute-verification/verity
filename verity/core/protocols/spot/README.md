@@ -8,16 +8,13 @@ probability δ, at most so many proof blocks are incorrect, a proof block being 
 applied to its committed inputs. The protocol is stated in Lean (see "Where things are"); this README outlines it,
 points to the code, and lists what the Lean does not state yet.
 
-Sampled proofs (`verity/sampled-proofs/v1`) is a subprotocol of both composite protocols: remote (`verity/remote/v0`,
+SPOT (`verity/sampled-proofs/v1`) is a subprotocol of both composite protocols: remote (`verity/remote/v0`,
 `verity/core/protocols/remote/`) composes it with PoUW (`verity/pouw/period/v1`) and the inference-only
 policy, and onsite (`verity/core/protocols/onsite/`) with the other subprotocols. Each composite's verifier runs
-`VStar.Recursive.Sampled`'s Lean check in the form its params name: one-stage v2 (`verity/sampled-proofs/one-stage/v2`,
-the audit on the proofs) or the recursive audit (`verity/sampled-proofs/recursive/v1`: the recursive session's inner
-coins held to the challenger's release log, every round its live-coin part recorded opened after what it recorded and
-every logged opening read (`VStar.Recursive.innerCoinsHeld`, `Spot/ChallengerInnerTrees.lean`), then V*'s
-compiled check, which ends in the one-stage audit's live check on its verdict of record). One-stage v1, whose verdicts
-are the evidence's, is refused by name (`V1_REFUSED`: a one-stage form whose params or evidence name no `proofs`). The
-composite accepts only when every subprotocol accepts.
+`VStar.Recursive.Sampled`'s Lean check: one-stage v2 (`verity/sampled-proofs/one-stage/v2`, the audit on the proofs).
+One-stage v1, whose verdicts are the evidence's, is refused by name (`V1_REFUSED`: a one-stage form whose params or
+evidence name no `proofs`), and so is the recursive audit (`verity/sampled-proofs/recursive/v1`, `RECURSIVE_REFUSED` at
+its params), which SPOT's soundness doesn't cover. The composite accepts only when every subprotocol accepts.
 
 ## SPOT[Flock] on its own
 
@@ -102,7 +99,8 @@ before any coin. In the remote protocol the coins come from the auditor's challe
 
 **The proof system** (`service`) runs these steps for a protocol, on the challenger's side. A protocol states a `Spec`:
 - what it commits;
-- its selection rule;
+- its selection rule; a `Law` or a two-stage first stage is a rate, never a fixed count (`rate:`, `stratified-rate:`,
+  `work-rate:`), each proof block sampled at least at it however the prover pads `N` (`Spot.Rate`);
 - the check, as a public Program;
 - its public items, each with its reason.
 
@@ -110,12 +108,11 @@ Everything the auditor observes must be a function of those items. A `Stream` pe
 rule and then to one-stage's checks, samples once, binds the delivered proof to its outcome, and counts failures against a
 public budget.
 
-**The sampling designs.** `subset:K` is a uniform `K`-subset of the `N` proof blocks, and `bernoulli:NUM/DEN` takes each proof block
+**The sampling designs.** `subset:K` is a uniform `K`-subset of the `N` proof blocks, and `bernoulli:NUM/DEN` takes each
 independently with probability `NUM/DEN`.
-The default is `stratified:K`: one stratum per subcircuit, and inside each an independent uniform sample
-without replacement of `k_s = max(1, ⌊(2 K n_s + N) / (2N)⌋)` proof blocks, that is `K n_s / N` rounded half up and never fewer
-than one, so every subcircuit is exercised in every audit. `work:K` keeps those strata and that sampler
-but sizes each stratum by the work its proof blocks are credited: with `W = Σ_s w_s n_s`, stratum `s` samples
+`stratified:K` has one stratum per subcircuit, and inside each an independent uniform sample without replacement of
+`k_s = max(1, ⌊(2 K n_s + N) / (2N)⌋)` proof blocks, so every subcircuit is exercised in every audit. `work:K` keeps those
+strata and that sampler but sizes each stratum by the work its proof blocks are credited: with `W = Σ_s w_s n_s`, stratum `s` samples
 `k_s = min(n_s, max(f_s, ⌈K w_s n_s / W⌉))`, where `w_s` and the floor `f_s ≥ 1` come from the verifier's own work table.
 Each verifier derives the strata from its own program and query, never from the prover. Both verifiers refuse what the
 soundness statement doesn't cover: `bernoulli` at any `p` (`bernoulli`) and a closure map (`closure`).
@@ -269,7 +266,7 @@ from verity.core.protocols.spot.costfit import fit
     raise `Refused` (with its `Verdict`) or `Pending`; `halted` is its halt's cause once its fleet halted it. Its `unit`
     is one subcircuit, or a window's several in order (a TP rank's served window): the check's `program` is then their
     digests and its query `Q_template_instances`, `register(counts=)` gives the challenger's own instances of each,
-    and the window is sampled once by `stratified:K`, a stratum per subcircuit.
+    and the window is sampled once, a stratum per subcircuit.
   - `Fleet()` has `attach(stream, operator)`, before the stream's first registration; `halted` maps each halted
     operator to its halt's cause.
   - `selection_law` is the sampling design a rule names over N proof blocks, and `select_draw` the sample object from the
@@ -419,8 +416,6 @@ core's `verity/ml/circuits/tests/partition_vectors.json` and `template_instance_
 `tests/test_one_stage.py` replays, with the object's refusals and digest.
 
 ### Sampling designs as text and as registered
-
-Code and records call a sampling design a `law`; the name stays until a format version renames it.
 
 - A sampling design's text is `subset:K` or `bernoulli:NUM/DEN` with `NUM ≤ DEN` and `DEN > 0` (`flock-circuit serve
   --draw`'s syntax), or one of the rules `stratified:K` and `work:K` with `K ≥ 1` (`draw.parse_design`), each number in ASCII digits

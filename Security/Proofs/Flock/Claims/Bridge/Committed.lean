@@ -95,7 +95,7 @@ def CProver.at {Ω : Type} (P : CProver Ω) (h : Msg) (π : ℕ → Msg) : Prove
 /-- **The committed-coins run** at tape `ω`, coins `r` and the tree's randomness `τ`: the verifier sends the root of `r`
 before the prover's first message and opens round `j`'s coin with its answer; `V` decides on the coins `r`. -/
 def runC {Coin Ω T : Type} [Inhabited Coin] (H : Msg → Msg) (P : CProver Ω) (V : Verifier Coin) (x : Msg)
-    (C : CoinTree Coin T (V.k x)) (ω : Ω) (r : Fin (V.k x) → Coin) (τ : T) : Trace :=
+    (C : CoinTree Coin T (V.k x)) (ω : Ω) (r : Fin (V.k x) → Coin) (τ : T) : Transcript :=
   run H (P.at (C.hello r τ) (openSeq (C.opn r τ))) V x ω r
 
 /-- **An online simulator** of a coin tree: a root from its tape alone, and round `j`'s opening from its tape and the
@@ -167,7 +167,7 @@ provers whose next messages agree on every history answering each round with its
 theorem stepWith_congr {Coin : Type} (H : Msg → Msg) {Ω Ω' : Type} (P : Prover Ω) (P' : Prover Ω')
     (V : Verifier Coin) (x : Msg) (ω : Ω) (ω' : Ω') (ans : Coin → Msg) (r : ℕ → Coin) (hV : AnswersCoin H V x ans)
     (hP : ∀ hist, Answered ans r hist → P.next x hist ω = P'.next x hist ω') :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), Answered ans r hist →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), Answered ans r hist →
       hist.length = as.length →
       stepWith H P x ω (fun as => V.next x as ((List.range as.length).map r)) n hist as t =
         stepWith H P' x ω' (fun as => V.next x as ((List.range as.length).map r)) n hist as t := by
@@ -237,7 +237,7 @@ simulating prover (`simProver`), whose every coin is flipped after the message i
 theorem runC_near {Coin Ω T : Type} [Fintype Coin] [Inhabited Coin] [Fintype Ω] [Nonempty Ω] [Fintype T]
     (H : Msg → Msg) (V : Verifier Coin) (x : Msg) (C : CoinTree Coin T (V.k x)) (ans : Coin → Msg) (S : OnlineSim)
     {δ_hide : ℝ} (hS : SimHides C ans S δ_hide) (hV : AnswersCoin H V x ans) (P : CProver Ω)
-    (Ev : Ω → (Fin (V.k x) → Coin) → Trace → Prop) :
+    (Ev : Ω → (Fin (V.k x) → Coin) → Transcript → Prop) :
     |Pr (fun p : Ω × (Fin (V.k x) → Coin) × T => Ev p.1 p.2.1 (runC H P V x C p.1 p.2.1 p.2.2)) -
       Pr (fun p : (Ω × S.Tape) × (Fin (V.k x) → Coin) => Ev p.1.1 p.2 (run H (simProver S V.k P) V x p.1 p.2))| ≤
       δ_hide := by
@@ -268,7 +268,7 @@ theorem runC_near {Coin Ω T : Type} [Fintype Coin] [Inhabited Coin] [Fintype Ω
 theorem Pr_runC_le {Coin Ω T : Type} [Fintype Coin] [Inhabited Coin] [Fintype Ω] [Nonempty Ω] [Fintype T]
     (H : Msg → Msg) (V : Verifier Coin) (x : Msg) (C : CoinTree Coin T (V.k x)) (ans : Coin → Msg) (S : OnlineSim)
     {δ_hide : ℝ} (hS : SimHides C ans S δ_hide) (hV : AnswersCoin H V x ans) (P : CProver Ω)
-    (Ev : Ω → (Fin (V.k x) → Coin) → Trace → Prop) :
+    (Ev : Ω → (Fin (V.k x) → Coin) → Transcript → Prop) :
     Pr (fun p : Ω × (Fin (V.k x) → Coin) × T => Ev p.1 p.2.1 (runC H P V x C p.1 p.2.1 p.2.2)) ≤
       Pr (fun p : (Ω × S.Tape) × (Fin (V.k x) → Coin) => Ev p.1.1 p.2 (run H (simProver S V.k P) V x p.1 p.2)) +
         δ_hide := by
@@ -280,7 +280,7 @@ is within `δ_hide` of the committed run on every event. -/
 theorem Pr_runC_le_of_treeHides {Coin Ω T : Type} [Fintype Coin] [Inhabited Coin] [Fintype Ω] [Nonempty Ω]
     [Fintype T] (H : Msg → Msg) (V : Verifier Coin) (x : Msg) (C : CoinTree Coin T (V.k x)) (ans : Coin → Msg)
     {δ_hide : ℝ} (hT : TreeHides C ans δ_hide) (hV : AnswersCoin H V x ans) (P : CProver Ω) :
-    ∃ S : OnlineSim, ∀ Ev : Ω → (Fin (V.k x) → Coin) → Trace → Prop,
+    ∃ S : OnlineSim, ∀ Ev : Ω → (Fin (V.k x) → Coin) → Transcript → Prop,
       Pr (fun p : Ω × (Fin (V.k x) → Coin) × T => Ev p.1 p.2.1 (runC H P V x C p.1 p.2.1 p.2.2)) ≤
         Pr (fun p : (Ω × S.Tape) × (Fin (V.k x) → Coin) => Ev p.1.1 p.2 (run H (simProver S V.k P) V x p.1 p.2)) +
           δ_hide :=
