@@ -326,7 +326,7 @@ def _period(d: Path, case: dict, answer: dict) -> str:
 def _chain_of(tmp_path, case: dict) -> SimpleNamespace:
     """An accepted chain whose certifier session, execution phases, N2 registrations and compute audits are
     ``case``'s."""
-    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+    from verity.core.protocols.spot.one_stage import registration as R
     tmp_path.mkdir(parents=True, exist_ok=True)
     steps = _steps(tmp_path, {"profile": "advice", "rc": {"n2": "0", "scan": "0"}, "run": "r-chain"})
     Path(steps.custody).write_text(json.dumps({"verdict": "accepted", "gate_runs": [{"gate_run": "c1"}]}))
@@ -590,7 +590,7 @@ def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_
     assert h["conditional"] == cr.POOLED_CONDITION
     circuit = {"templates": [["T", 4]], "external": ["T/y"], "wires": [],
                "statements": {"T": {"in_rows": [["x", 0, 8, ["x"]], ["y", 1, 16, ["y"]]]}}}
-    assert cr.free_inputs(circuit) == 4 * 8
+    assert cr.free_inputs(circuit) == 4 * (8 + 16)
     (tmp_path / "circuit.json").write_text(json.dumps(circuit))
     (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "subset", "k": 2}}))
     strata = [{"k": 1, "template": "s0", "units": [[0, 1]]}, {"k": 1, "template": "s1", "units": [[1, 4]]}]
@@ -603,7 +603,7 @@ def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_
         cr.audit_of(tmp_path)
     (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "subset", "k": 2}}))
     audit = cr.audit_of(tmp_path)
-    assert (audit["units"], audit["drawn"], audit["free"], audit["jitter"]) == (4, 2, 32, 0)
+    assert (audit["units"], audit["drawn"], audit["free"], audit["jitter"]) == (4, 2, 96, 0)
     cert = {"sync_bits": 7.0, "rows": [{"window": w, "certified": True} for w in range(3)]}
     assert cr.network_terms(cert, {"advice_bits": {"derived": 40, "v0_total": 90}}) == {"advice": 40, "syncs": 21,
                                                                                         "cells": 0}
@@ -612,3 +612,135 @@ def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_
     k = d1["K"][f"{2.0 ** -20:.3g}"]
     assert k["Fmax"] == math.ceil(20 * math.log(2) * 2) and k["K"] == sum(k["terms"].values())
     assert "open" in cr.d1_terms(cert, {}, {}, {}, {"advice_bits": {"derived": 40}})["K"]
+    assert cr.free_inputs(circuit, PIN, PIN) == 4 * (8 + 16)
+
+
+#: the verifier's pin of ``weights``, and a window whose registration records the same root
+PIN = {"weights": "ab" * 64}
+
+
+def _gemm_window(external: bool = True) -> dict:
+    """A window circuit record of four ``Gemm_v2{K=16, N=16}`` proof blocks (``x`` 256 bits, ``w`` 4,096 a unit), every
+    unit's ``w`` a registered read of the 256 leaves of ``weights``: with ``external``, every ``x`` the system's I/O, else
+    units 2 and 3 read units 0 and 1's ``o0`` through a wire and units 0 and 1's ``x`` are free."""
+    from verity.ml.circuits.codec import descriptor_id
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops import gemm as G
+    from verity.ml.windows import interface as I
+
+    gemm = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
+    gid = descriptor_id(gemm)
+    reg = I.Registered({"weights": 256}, reads=(I.Read(gid, "w", "weights", at=0, radix=(4,), base=0, step=(0,)),))
+    c = I.Circuit("gemms", ((gemm, 4),), external=(f"{gid}/x",) if external else (), registered=reg,
+                  wires=() if external else (I.Wire(gid, "x", gid, "o0", at=2, radix=(2,), base=0, step=(1,)),))
+    return _record(c)
+
+
+def _record(c) -> dict:
+    """``c``'s stated record as `chain_record` reads a window's ``circuit.json``: its description, external ports and
+    each template's input rows, a cut port's rows ``p#j``."""
+    from verity.ml.windows import interface as I
+
+    return {**c.description(), "external": list(c.external),
+            "statements": {tid: {"in_rows": [list(r) for r in I.unit_rows(fn, c.cuts.get(tid))[0]]}
+                           for (fn, _n), tid in zip(c.templates, c.ids)}}
+
+
+def test_free_inputs_take_out_a_cut_ports_wired_rows_as_the_period_counts_them():
+    """A wire into a port cut ``k`` ways fills one ``p#j`` row a reader index, its port's words over ``k``
+    (`Spot.Wires`' ``wiredBits``), which `free_inputs` takes out as `interface.input_count` does: three
+    ``Gemm_v2{K=16, N=16}`` units reading their ``x`` cut in two from six ``N=8`` slices leave none of it free. Matching
+    a cut row's element ports ``x[r]`` against the wire's ``x`` took out none. An external cut port stays free, and two
+    wires filling one row are refused."""
+    from verity.ml.circuits.codec import descriptor_id
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops import gemm as G
+    from verity.ml.windows import interface as I
+
+    gemm, g8 = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE), bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)
+    gid, g8id = descriptor_id(gemm), descriptor_id(g8)
+    wire = I.Wire(gid, "x", g8id, "o0", at=0, radix=(3, 2), base=0, step=(2, 1), cut=(0, 2))
+    c = I.Circuit("sliced", ((g8, 6), (gemm, 3)), wires=(wire,), cuts={gid: {"x": 2}})
+    doc = _record(c)
+    assert [r[0] for r in doc["statements"][gid]["in_rows"]][:2] == ["x#0", "x#1"]
+    terms, lean = cr.input_terms(doc), I.input_count(doc)
+    assert {k: terms[k] for k in ("inputs", "wired", "registered", "free")} == {
+        k: lean[k] for k in ("inputs", "wired", "registered", "free")}
+    assert terms["wired"] == 3 * 2 * 128 and terms["free"] == 6 * (256 + 2048) + 3 * 4096
+    ext = _record(I.Circuit("sliced", ((g8, 6), (gemm, 3)), cuts={gid: {"x": 2}}, external=(f"{gid}/x",)))
+    lean = I.input_count(ext)
+    assert cr.input_terms(ext) == {k: lean[k] for k in ("inputs", "wired", "registered", "free")}
+    assert cr.free_inputs(ext) == terms["free"] + 3 * 256
+    again = I.Wire(gid, "x", g8id, "o0", at=1, radix=(1,), base=0, step=(0,), cut=(1, 1))
+    with pytest.raises(ValueError, match="both fill rows of units from 1"):
+        cr.free_inputs({**doc, "wires": [*doc["wires"], again.doc()]})
+
+
+def test_free_inputs_hold_to_the_period_count_on_wires_and_registered_reads():
+    """On the uncut window too, `input_terms` is `interface.input_count`, pinned or not, an external port free."""
+    from verity.ml.windows import interface as I
+
+    for doc in (_gemm_window(external=False), _gemm_window()):
+        for pins in (None, PIN):
+            terms, lean = cr.input_terms(doc, pins, PIN), I.input_count(doc, pins=pins, roots=PIN)
+            assert terms == {k: lean[k] for k in ("inputs", "wired", "registered", "free")}
+
+
+def test_the_faulty_sets_bits_are_the_powers_without_computing_it():
+    """`power_bits` is ``(m^f - 1).bit_length()``: computed on small cases, and read off the logarithm (forced with
+    ``exact_below=0``) it agrees with the power everywhere; at keep-591e's draw (``m`` 6,963,297, ``f`` 96,531,780) it
+    finishes, within one bit of ``f·log2 m``."""
+    for m in [*range(1, 40), 1 << 20, 6_963_297, 10 ** 9 + 7]:
+        for f in [*range(0, 12), 97, 1000, 4097]:
+            exact = (m ** f - 1).bit_length()
+            assert cr.power_bits(m, f) == exact == cr.power_bits(m, f, exact_below=0), (m, f)
+    m, f = 6_963_297, 96_531_780
+    assert 0 < cr.power_bits(m, f) - f * math.log2(m) <= 1
+    with pytest.raises(ValueError, match="m ≥ 1"):
+        cr.power_bits(0, 3)
+
+
+def test_free_inputs_leave_out_the_registered_reads_of_a_parameter_held_at_the_verifiers_pin():
+    """`free_inputs` subtracts what `NetworkCheck.Circuit.countsOf` holds (`interface.input_count`'s ``registered``): the
+    weights' registered reads leave the count where the verifier's pin of ``weights`` is the root the window's
+    registration records, and stay free under no pins, another root, no root recorded, or a pin of another root; a wire
+    takes out its rows, and an external port stays free, as ``countsOf`` leaves it. A pin of the scan's state is
+    refused."""
+    ext, wired = _gemm_window(), _gemm_window(external=False)
+    assert (cr.free_inputs(ext), cr.free_inputs(wired)) == (4 * (256 + 4096), 2 * 256 + 4 * 4096)
+    assert (cr.free_inputs(ext, PIN, PIN), cr.free_inputs(wired, PIN, PIN)) == (4 * 256, 2 * 256)
+    assert cr.registered_bits(ext, PIN, {"weights": PIN["weights"].upper()}) == 4 * 4096
+    for pins, roots in [(None, PIN), (PIN, None), (PIN, {"weights": "cd" * 64}), ({"weights": "cd" * 64}, PIN),
+                        ({"acts": PIN["weights"]}, {"acts": PIN["weights"]}), ("weights", PIN)]:
+        assert (cr.free_inputs(ext, pins, roots), cr.registered_bits(ext, pins, roots)) == (4 * (256 + 4096), 0), (pins, roots)
+    with pytest.raises(ValueError, match="scan's state is no value the verifier fixes"):
+        cr.free_inputs(ext, {**PIN, cr.SCAN_STATE: "00" * 64}, PIN)
+    gid = ext["templates"][0][0]
+    assert cr.input_terms({**ext, "external": [f"{gid}/x", f"{gid}/w"]}, PIN, PIN) == cr.input_terms(ext, PIN, PIN)
+    with pytest.raises(ValueError, match=r"\{param: root\}"):
+        cr.free_inputs(ext, {"weights"}, PIN)
+
+
+def test_an_audit_leaves_out_the_registered_rows_its_registration_records_at_the_verifiers_pin(tmp_path):
+    """`audit_of` reads the window's registered roots off its registration's window and holds them to the verifier's
+    pins: the weights leave its free inputs only where the window binds ``circuit.json`` by its SHA-512, and a window
+    binding another circuit with a held pin is refused; with no pins, or a pin the window doesn't record, K counts them."""
+    body = json.dumps(_gemm_window()).encode()
+    window = {"circuit": hashlib.sha512(body).hexdigest(), "registered_roots": PIN}
+    (tmp_path / "circuit.json").write_bytes(body)
+    (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "subset", "k": 2},
+                                                            "window": window}))
+    held = cr.audit_of(tmp_path, PIN)
+    assert (held["free"], held["inputs"]["registered"], held["held"]) == (4 * 256, 4 * 4096, ["weights"])
+    for pins in (None, {"weights": "cd" * 64}):
+        got = cr.audit_of(tmp_path, pins)
+        assert (got["free"], got["inputs"]["registered"], got["held"]) == (4 * (256 + 4096), 0, [])
+        assert got["drawn"] == held["drawn"]
+    network = {"advice": 8, "syncs": 0, "cells": 0}
+    before, after = (cr.pooled_k([a], Fraction(1, 100), network) for a in (cr.audit_of(tmp_path), held))
+    assert before["K"] - after["K"] == 4 * 4096 and after["terms"]["free"] == 4 * 256
+    (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "subset", "k": 2},
+                                                            "window": {**window, "circuit": "00" * 64}}))
+    with pytest.raises(SystemExit, match="binds another circuit record than circuit.json"):
+        cr.audit_of(tmp_path, PIN)
+    assert cr.audit_of(tmp_path)["free"] == 4 * (256 + 4096)

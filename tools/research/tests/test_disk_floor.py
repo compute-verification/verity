@@ -1,4 +1,4 @@
-"""The disk floor and eviction (2026-09-27/28: the control pod's disk filled six times, the last time ending every guard on it):
+"""The disk floor and eviction (a full disk on the control pod ends every guard on it):
 `research run` and `research fetch --all` refuse under the floor and name the eviction; `research data custody --publish` removes the
 run files it has just preserved on the remote."""
 from __future__ import annotations

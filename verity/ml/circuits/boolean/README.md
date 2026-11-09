@@ -12,8 +12,15 @@ reaches is one of these or a 1-bit input.
   reads.
 - `forms`: GF(2) linear forms and the registered compiler that counts ANDs.
 - `trace`: a Boolean Definition from a registered compiler's run over `forms`, written as And/Xor/Not gates;
-  `trace.word_of` gives the word Definition a Boolean Definition computes.
+  `trace.word_of` gives the word Definition a Boolean Definition computes. `trace.folded` is a Definition of a builder at its
+  arguments' pattern, which a Definition traced with ``calls`` calls instead of writing its gates again
+  (`commitments.gates.sha512.Sha512CompressFolded`, each SHA-512 compression of the hashing Definitions).
 - `gather` and `table`: a word, or the entry of a table the program brings, selected by an index, as a multiplexer tree.
+- `gf128`: GF(2^128), C-Flock's F, as integers and over `forms` (Karatsuba's 2,187 ANDs a product), which
+  `ops.boolean.gf2k` registers as `Gf128Mul_v1` and every fingerprint under a live coin multiplies with.
+- `memcheck`: offline memory checking, `MemAccess_v1`, `MemEntry_v1` and `MemCheck_v1`: a log of reads and writes to
+  word-addressed memories is consistent iff the fingerprints of reads ∪ finals and writes ∪ initials agree under live
+  coins, every read's time is below its now and the touched list is sorted, every value private.
 
 The Boolean versions of the primitive circuits are [`verity.ml.circuits.ops`](../ops/README.md)'s (`ops.boolean`), and of
 the served kernels the `boolean_*` modules of `verity.ml.definitions.registry`; `verity.ml.definitions.boolean.boolean_version`
@@ -21,4 +28,6 @@ finds the one a word Definition has.
 
 ## Tests
 
-`tests/test_boolean.py`, in `verity/ml/circuits`'s suite, with its vectors `tests/boolean_vectors.json`.
+`tests/test_boolean.py`, in `verity/ml/circuits`'s suite, with its vectors `tests/boolean_vectors.json`, and
+`tests/test_memcheck.py`, with the RAM pool's logs `tests/fixtures/memcheck_pool.json` (`benchmarks/mempool/vectors.py`
+writes them).

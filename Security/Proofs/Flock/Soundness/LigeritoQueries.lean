@@ -5,7 +5,7 @@ public import Definitions.Flock.Defs
 public import Proofs.Flock.Soundness.LigeritoCoins
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.ZerocheckPhase
 
 /-!

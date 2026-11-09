@@ -71,30 +71,55 @@ def readTables (args : List String) : IO (List (String × ByteArray)) := do
     if ← p.pathExists then out := out ++ [(t.name, ← IO.FS.readBinFile p)]
   return out
 
-/-- `ARCHIVE/sha512/<hex>`: the verifier's own copy of an object, by content. The file must hash to its key. -/
-def archiveGet (archive hex : String) : IO (Except String ByteArray) := do
+def archiveMismatch (hex : String) : String := s!"archive: the object held under {hex} does not hash to it"
+
+/-- Whether `b` hashes to the digest `hex`, in a task. Not inlined: the compiler sinks a `Task.spawn` bound in a body down
+to the branch that reads it. -/
+@[noinline] def hashesToTask (b : ByteArray) (hex : String) : Task Bool :=
+  Task.spawn fun _ => hexOf (Sha512.hash b) == hex
+
+/-- `ARCHIVE/sha512/<hex>`: the verifier's own copy of an object, by content, its key's bytes, and whether it hashes to its
+key, still hashing (`archiveGetSha` waits for it). -/
+def archiveGetTask (archive hex : String) : IO (Except String (ByteArray × ByteArray × Task Bool)) := do
   if hex.length != 128 || !hex.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) then
     return .error s!"archive: {hex} is not a SHA-512 digest"
   let p : System.FilePath := archive ++ s!"/sha512/{hex}"
   if !(← p.pathExists) then return .error s!"archive: {hex} is not held"
   let b ← IO.FS.readBinFile p
-  if hexOf (Sha512.hash b) != hex then return .error s!"archive: the object held under {hex} does not hash to it"
-  return .ok b
+  let .ok key := unhex hex | return .error s!"archive: {hex} is not a SHA-512 digest"
+  return .ok (b, key, hashesToTask b hex)
+
+/-- `ARCHIVE/sha512/<hex>`: the verifier's own copy of an object, by content, and its SHA-512. The file must hash to its
+key. -/
+def archiveGetSha (archive hex : String) : IO (Except String (ByteArray × ByteArray)) := do
+  match ← archiveGetTask archive hex with
+  | .ok (b, key, ok) => return if ok.get then .ok (b, key) else .error (archiveMismatch hex)
+  | .error e => return .error e
+
+/-- `ARCHIVE/sha512/<hex>`: the verifier's own copy of an object, by content (`archiveGetSha`). -/
+def archiveGet (archive hex : String) : IO (Except String ByteArray) :=
+  return (← archiveGetSha archive hex).map (·.1)
 
 /-- The statement's inputs: with `--archive DIR`, the circuit, public and compression files are the verifier's own objects
 named by `--circuit`, `--public`, `--comp` SHA-512 digests, and the lookup tables are those `MUFU_TABLES` pins (`flock-verify --archive`);
-without it, the files at those paths. -/
-def statementInputs (args : List String) : IO (Except String (ByteArray × ByteArray × ByteArray × List (String × ByteArray))) := do
+without it, the files at those paths. With the circuit, its SHA-512 as the archive holds it (its key) and, unless `await`,
+the archive's check that the circuit hashes to it, still hashing, for the caller to wait on (`awaitArchive`). -/
+def statementInputs (args : List String) (await : Bool := true) :
+    IO (Except String (ByteArray × Option ByteArray × Option (String × Task Bool) × ByteArray × ByteArray ×
+      List (String × ByteArray))) := do
   let (some circuit, some pub) := (argOf args "--circuit", argOf args "--public")
     | return .error "--circuit and --public are required"
   let comp := argOf args "--comp"
   match argOf args "--archive" with
   | none =>
     let cm ← match comp with | some f => IO.FS.readBinFile f | none => pure ByteArray.empty
-    return .ok (← IO.FS.readBinFile circuit, ← IO.FS.readBinFile pub, cm, ← readTables args)
+    return .ok (← IO.FS.readBinFile circuit, none, none, ← IO.FS.readBinFile pub, cm, ← readTables args)
   | some dir =>
     let get := fun hex => archiveGet dir hex
-    let c ← match ← get circuit with | .ok b => pure b | .error e => return .error s!"circuit: {e}"
+    let (c, cSha, ok) ← match ← archiveGetTask dir circuit with
+      | .ok x => pure x
+      | .error e => return .error s!"circuit: {e}"
+    if await && !ok.get then return .error s!"circuit: {archiveMismatch circuit}"
     let pb ← match ← get pub with | .ok b => pure b | .error e => return .error s!"public file: {e}"
     let cm ← match comp with
       | none => pure ByteArray.empty
@@ -104,7 +129,12 @@ def statementInputs (args : List String) : IO (Except String (ByteArray × ByteA
     for t in MUFU_TABLES do
       let p : System.FilePath := dir ++ s!"/sha512/{t.sha512}"
       if ← p.pathExists then tables := tables ++ [(t.name, ← IO.FS.readBinFile p)]
-    return .ok (c, pb, cm, tables)
+    return .ok (c, some cSha, if await then none else some (circuit, ok), pb, cm, tables)
+
+/-- `parsed`, once the archive's check of the circuit file (`statementInputs`' task) has passed; none if the copy doesn't
+hash to its key. `parsed` is an argument, so it is computed before the wait, while the check hashes. -/
+@[noinline] def awaitArchive (parsed : V Circuit) (check : Option (String × Task Bool)) : IO (Option (V Circuit)) :=
+  return if check.all (·.2.get) then some parsed else none
 
 /-- A recursive session's inner statement's registered reads (`Tags.withPlainLeaves`, a plain-leaves statement): with the verifier's own
 registered reads, a circuit that names each port once (`Registered.namesOnce`) and its description read from the
@@ -255,6 +285,46 @@ theorem buildSessionOf_eq (tags : Tags) (circuitB pubB compB : ByteArray) (coins
   unfold buildSession
   simp only [hr, ↓reduceIte, ProvedScope.circuitOf, hh, Stmt.setupTables_eq]
 
+/-- The SHA-512 of a JSON value's canonical JSON (`canon`), as `Spot.canonSha512` digests one. -/
+def sha512Of (j : Lean.Json) : V String := do return hexOf (Sha512.hash (← canon j).toUTF8)
+
+/-- The digest a verdict names a public file's header by (`sha512Of`), none where `canon` refuses it. -/
+def headerDigest (header : Lean.Json) : Option String := (sha512Of header).toOption
+
+/-- A public file's header: the JSON of its first line, which every public-file loader parses (`Public.load`,
+`HmRow.loadPublic`) and sets the statement up from, and a sampled statement's is drawn from (`HmRow.drawn`, which adds the
+sample). A verdict names the file by its `headerDigest`. -/
+def publicHeader (file : ByteArray) : Option Lean.Json := do
+  let nl ← findByte file 10
+  let text ← String.fromUTF8? (file.extract 0 nl)
+  (Flock.JsonParse.parse text).toOption
+
+/-- The deployed hashes (`With.std`) with the SHA-512 of `file` known to be `sha`; `b == file` is one pointer comparison
+when `b` is `file` itself. -/
+def stdKnowing (file sha : ByteArray) : Hashes V :=
+  Hashes.ofSha512 fun b => if b == file then sha else Sha512.hash b
+
+theorem stdKnowing_eq (file : ByteArray) : stdKnowing file (Sha512.hash file) = With.std := by
+  have h : (fun b => if b == file then Sha512.hash file else Sha512.hash b) = Sha512.hash := by
+    funext b
+    split
+    · rename_i h
+      rw [ByteArray.ext (eq_of_beq (show (b.data == file.data) = true from h))]
+    · rfl
+  unfold stdKnowing
+  rw [h]
+
+/-- `ProvedScope.circuitOf` with the file's SHA-512 `sha` computed beforehand (`circuitOfKnowing_eq`). -/
+def circuitOfKnowing (sha : ByteArray) (tags : Tags) (file : ByteArray) (tables : List (String × ByteArray)) :
+    V Circuit :=
+  if tags.hiddenOutputs then HmOut.parseCommitWithV (stdKnowing file sha) tags file tables
+  else HmRow.parseWith (stdKnowing file sha) tags file tables
+
+theorem circuitOfKnowing_eq (tags : Tags) (file : ByteArray) (tables : List (String × ByteArray)) :
+    circuitOfKnowing (Sha512.hash file) tags file tables = ProvedScope.circuitOf tags file tables := by
+  unfold circuitOfKnowing ProvedScope.circuitOf
+  rw [HmOut.parseCommitWithV_eq, stdKnowing_eq, With.outParseCommitWith_std, With.parseWith_std]
+
 /-- `--program F`: the verifier's own copy of the program's descriptor bytes (a path, or with `--archive` its SHA-512), from which
 it derives a template query's units. -/
 def programInput (args : List String) : IO (Except String (Option ByteArray)) := do
@@ -325,10 +395,10 @@ the root of that content (`Registered.checkKnownAll`). Beside the ports, the row
 statement to: the known content (`Registered.knownOf`), whose input ports every statement must read in every bit, then each port
 the file marks `read_in_full` (`KnownRead.readOf`) as one row of its registered row's words (`KnownRead.fullRows`), and the
 template parameter each port reads (`Registered.paramsOf`, which `Registered.checkCover` holds the program's registered
-reads to). -/
+reads to), and the file's digest, the SHA-512 of its canonical JSON (`sha512Of`), which a verdict names it by. -/
 def registeredFile (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
     IO (Except String (Option (Array Registered.Port × Array (String × Array (Array Nat × ByteArray)) ×
-      Array String))) := do
+      Array String × String))) := do
   let some f := argOf args flag | return .ok none
   let bytes ← match argOf args "--archive" with
     | none => (try pure (Except.ok (← IO.FS.readBinFile f)) catch e => pure (Except.error s!"{ctx}: {e}"))
@@ -341,11 +411,11 @@ def registeredFile (args : List String) (flag : String := "--registered") (ctx :
       | .ok _, some k =>
         return .error s!"{ctx}: an object of the file names the key {k} twice, which a JSON parser would read as once: each port, and each key of a port, once"
       | .ok j, none =>
-        let r : V (Array Registered.Port × Array (String × Array (Array Nat × ByteArray)) × Array String) := do
+        let r : V (Array Registered.Port × Array (String × Array (Array Nat × ByteArray)) × Array String × String) := do
           let own ← Registered.ofJson j
           let known ← Registered.knownOf j
           Registered.checkKnownAll own known
-          return (own, known ++ KnownRead.fullRows own (← KnownRead.readOf j), ← Registered.paramsOf j)
+          return (own, known ++ KnownRead.fullRows own (← KnownRead.readOf j), ← Registered.paramsOf j, ← sha512Of j)
         return (r.mapError fun e => if flag == "--registered" then e else s!"{ctx}: {e}").map some
       | .error e, _ => return .error s!"{ctx}: not JSON: {e}"
 
@@ -760,6 +830,11 @@ def coinTreeCmd (path : String) : IO UInt32 := do
     IO.println s!"COINTREE {line.compress}"
   return (if all then 0 else 1)
 
+/-- `verify`'s refusal of upstream's plain proof files (`--upstream-plain`), which `agree` reports for a session no other
+refusal meets. -/
+def UPSTREAM_PLAIN : String :=
+  "refused: upstream's plain proof files (--upstream-plain): a form the soundness proof does not cover; flock-verify agree compares the verifier's checks on them with upstream's verdicts"
+
 /-- `verify --statement ID --circuit F --comp F --public F [--coins tree] [--session-tables J] --session DIR...`: `ID`
 names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`), and every session of a legacy
 statement (`ProvedScope.legacyStatements`) is refused before any file is read (`ProvedScope.legacyWhy`); `--comp` is the row leaf's
@@ -800,6 +875,9 @@ Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The draw-less statement is set up once, and each sampled session at its own
 sample; one verdict line per session, in order,
 naming with `--program` the digest of the verifier's own program it verified against (`program_sha512`, `ProvedScope.programDigest`),
+the digest of its public file's header (`public_header_sha512`, `publicHeader`), with `--registered F` the digest of that
+file (`registered_sha512`, `sha512Of`), a sampled session's sample (`unit_draw`), the number of tables it set the
+session up as (`session_tables`, `--session-tables J`, else 1),
 with `--rec-part J` its part (`rec_part`), the SHA-512 of every other input V*'s parts share (`rec_shared`,
 `recSharedInput`), whether it ran `--zk` (`zk`) and its session's coin key (`coin_key`), with `--rec-rows F` the
 SHA-512 of the shared rows file it checked (`rec_rows_sha512`), with `--rec-inner F` the SHA-512 of the inner shape file
@@ -833,13 +911,15 @@ ports of one published domain, or two ports whose published roots are one root u
 is accepted under `--zk` and changes nothing), and under `--zk` without `--rec-inner` (a V* session is the recursion's)
 tags, files and a sample outside the rest of that form (`KsScope.checkOf`: a typed statement, one with public outputs,
 without retained rounds or without `hm96-sha512/v1` leaves; a circuit outside `ProvedScope.scopeOkH`, which a unit
-reading several input groups or a tail stage returning the outputs is; a shared-row public file, with or without
+reading several input groups or a tail stage returning the outputs is, and a templated statement's outside
+`ProvedScope.scopeOkT`, read off its template (`KsScope.unitWhy`); a shared-row public file, with or without
 `--registered F`, outside the form `Flock.Guarantees.SampledKSLiveV5` covers (`KsScope.sharedWhy`: one whose circuit's
 public input ports do not parse, that does not load over them, or two of whose ports' roots over its tables are one root
 under different domains); at more than one table a sample that does not parse or a subset sample whose `k` the tables don't
 divide; `Flock.Guarantees.SampledKSLiveV4` is over that acceptance without shared rows, and `SampledKSLiveV5` with
-them), and last a statement version other than `verity/flock-circuit` and `verity/flock-circuit+plain-leaves`
-(`ProvedScope.served`: every `+seed-injection` version and every superseded one) and a plain session on seed coins
+them), and last a statement version other than `verity/flock-circuit`, `verity/flock-circuit+plain-leaves` and
+`verity/flock-circuit/tmpl` (`ProvedScope.served`: every `+seed-injection` version and every superseded one; a templated
+statement passes the form check only at one `--zk` table, `ProvedScope.scopeOkT`) and a plain session on seed coins
 (a plain session without `--coins tree`; `ProvedScope.servedForm`: the verifier reads coins only from a challenger's
 log), all after every
 check has passed (so the reason is the refusal only when nothing else
@@ -849,27 +929,48 @@ none is on a seed's coins (the live build reads no `FC_COINS` under `--zk`), so 
 `--coins tree`: plain sessions on that tree (`flock-circuit` under `FC_COINS=tree`), whose `Hello` names it, whose record
 opens it (R7, `CoinTree.checkHello`, `CoinTree.checkRecord`) and whose session key is fresh in the run
 (`CoinTree.checkFresh`); without `--coins`, seed coins, refused last (`ProvedScope.servedForm`).
-`--upstream-plain`: the plain proof files are upstream's form, without the zk patch's `zk_level0 = None` tag that every
-deployed prover writes after the pair (`Tags.upstreamPlain`, `Flock.Proof`), so each rep is decoded from the file then
-the tag (`verifyFiles (plainBytes true)`), while S17 binds the record's `proof_sha` to the file as received; each form is
-refused where the other is pinned. Not with `--zk`.
+`--upstream-plain`, upstream's plain proof files (without the zk patch's `zk_level0 = None` tag that every deployed
+prover writes after the pair: `Tags.upstreamPlain`, `Flock.Proof`), is refused, every session with `UPSTREAM_PLAIN`
+before any file is read: no soundness theorem covers that form (`flock_verify_sound`'s model reads `Flock.verify`, the
+deployed form), and only `agree` reads it.
 `--plain-tables`: the plain path past one table (`ProvedScope.checkP`, `Flock.ProvedScope`): a plain session of public or hidden
 outputs (at hidden outputs with `hm96-sha512/v1` leaves) at up to `Tags.MAX_TABLES` tables, at a subset sample, with the
 verifier's own `--program` the one META's `program_sha512` names (`ProvedScope.programP`), which `flock_verify_sound`'s
 plain multi-table claims cover; the check is the one without `--registered F` (`FailClosed.ScopeP`), so a shared-row
-public file is refused. Without it a plain session has at most one table. Not with `--zk`. -/
-def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins tree | --zk [--ks-form]] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR..."
+public file is refused. Without it a plain session has at most one table. Not with `--zk`.
+With `upstream` (`agree`, below) it prints `agree`'s lines in place of verdicts. -/
+def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UInt32 := do
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins tree | --zk [--ks-form]] [--session-tables J] [--plain-tables] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
-  if let some why := (argOf args "--statement").bind ProvedScope.legacyWhy then
-    for dir in (args.dropWhile (· != "--session")).drop 1 do
-      let line := Lean.Json.mkObj [("session", Lean.Json.str dir), ("accepted", Lean.Json.bool false), ("why", Lean.Json.str why)]
+  -- a session's line: the checks' outcome, then that of the refusals after them. `verify` prints its verdict; `agree`
+  -- whether the checks pass exactly when upstream accepted, and never an acceptance
+  let emit : String → Except String (Except String Unit) → List (String × Lean.Json) → IO Bool := fun dir outcome extra => do
+    match upstream with
+    | none =>
+      let (ok, why) := match outcome with | .ok (.ok ()) => (true, "") | .ok (.error e) | .error e => (false, e)
+      let line := Lean.Json.mkObj ([("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why)] ++ extra)
       IO.println s!"VERDICT {line.compress}"
-    return 1
+      return ok
+    | some up =>
+      let theirs := (up.getObjValAs? Bool dir).toOption
+      let agrees := theirs == some outcome.isOk
+      let line := Lean.Json.mkObj ([("session", Lean.Json.str dir), ("agree", Lean.Json.bool agrees),
+        ("upstream", (theirs.map Lean.Json.bool).getD Lean.Json.null),
+        ("check", Lean.Json.str (match outcome with | .error e => e | .ok _ => "")),
+        ("refusal", Lean.Json.str (match outcome with | .ok (.error e) => e | _ => ""))] ++ extra)
+      IO.println s!"AGREEMENT {line.compress}"
+      return agrees
+  let refuseAll (why : String) : IO UInt32 := do
+    let mut all := true
+    for dir in (args.dropWhile (· != "--session")).drop 1 do
+      all := (← emit dir (.error why) []) && all
+    return (if all && upstream.isSome then 0 else 1)
+  if let some why := (argOf args "--statement").bind ProvedScope.legacyWhy then return (← refuseAll why)
+  if upstream.isNone && args.contains "--upstream-plain" then return (← refuseAll UPSTREAM_PLAIN)
   let stmtName := (argOf args "--statement").getD Tags.circuit.name
   let some tags := Tags.byName? stmtName
     | IO.eprintln s!"unknown statement; known: {(Tags.all ++ Tags.templated).map (·.name)}"; return 2
-  let tags := if args.contains "--upstream-plain" then { tags with upstreamPlain := true } else tags
+  let tags := if upstream.isSome && args.contains "--upstream-plain" then { tags with upstreamPlain := true } else tags
   let stmtTags := tags
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
   let some count := ((argOf args "--session-tables").getD "1").toNat? | IO.eprintln usage; return 2
@@ -883,8 +984,6 @@ def verifyCmd (args : List String) : IO UInt32 := do
     IO.eprintln "verify --zk: --plain-tables is the plain path's (without --zk)"; return 2
   if zk && (argOf args "--coins").isSome then
     IO.eprintln "verify --zk: a --zk session's coins are its keyed coin tree, so --coins (a plain session's) does not apply"; return 2
-  if zk && tags.upstreamPlain then
-    IO.eprintln "verify --zk: a --zk session's files are the zk patch's, so --upstream-plain (upstream's plain files) does not apply"; return 2
   if zk && tags.plainLeaves then
     IO.eprintln s!"verify --zk: refused: {tags.name}, a statement with plain SHA-512 leaves (flock-leaf/sha512-unsalted): --zk's hiding needs hm96-sha512/v1 leaves"
     return 2
@@ -892,7 +991,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
       else plainCoinsArg (argOf args "--coins") (tags.tableNames count)
     | IO.eprintln s!"verify: {COINS_USAGE}"; return 2
   let t0 ← IO.monoMsNow
-  let (circuitB, pubB, compB, tables) ← match ← statementInputs args with
+  let (circuitB, circuitSha, archived, pubB, compB, tables) ← match ← statementInputs args (await := false) with
     | .ok x => pure x
     | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
   let tags := if zk then Zk.tags tags (Zk.maskLogOf circuitB) count else tags
@@ -913,8 +1012,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let closure ← match ← closureInput args with
     | .ok c => pure c
     | .error e => IO.eprintln e; return 2
-  let (registered, known, params) ← match ← registeredFile args with
-    | .ok r => pure (r.map Prod.fst, (r.map (·.2.1)).getD #[], (r.map (·.2.2)).getD #[])
+  let (registered, known, params, registeredSha) ← match ← registeredFile args with
+    | .ok r => pure (r.map Prod.fst, (r.map (·.2.1)).getD #[], (r.map (·.2.2.1)).getD #[], r.map (·.2.2.2))
     | .error e => IO.eprintln e; return 2
   let publicInputs ← match ← publicInputsInput args with
     | .ok p => pure p
@@ -971,8 +1070,13 @@ def verifyCmd (args : List String) : IO UInt32 := do
   -- (`ProvedScope.drawLaw`); a statement whose form the soundness proof does not cover (`ProvedScope.check`) is refused in
   -- each session's verdict
   -- the circuit parsed once, for the scope check and every setup (`ProvedScope.check_eq`, `buildSessionOf_eq`): a templated
-  -- statement's (`Tags.templated`) carries its template, which the check reads (`ProvedScope.scopeOkT`)
-  let parsed := ProvedScope.circuitOf tags circuitB tables
+  -- statement's (`Tags.templated`) carries its template, which the check reads (`ProvedScope.scopeOkT`); and hashed
+  -- once, the parse reading the archive's key as its SHA-512 (`circuitOfKnowing_eq`) while the archive's check hashes
+  -- the file to it, which the parse's result then waits for
+  let sha := match circuitSha with | some d => d | none => Sha512.hash circuitB
+  let parsed ← match ← awaitArchive (circuitOfKnowing sha tags circuitB tables) archived with
+    | some p => pure p
+    | none => IO.eprintln s!"statement inputs: circuit: {archiveMismatch (archived.elim "" (·.1))}"; return 2
   -- `FailClosed.ScopeP` is the check without --registered F: no plain multi-table claim reads a shared-row public file
   let scope := if plainTables then ProvedScope.checkPOf parsed tags pubB count program publicInputs.isSome false
     else ProvedScope.checkOf parsed tags zk pubB count publicInputs.isSome registered.isSome
@@ -1006,6 +1110,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
   let programSha := program.bind ProvedScope.programDigest
+  let header := (publicHeader pubB).bind headerDigest
   let ksParsed := if tags.hiddenOutputs then parsed else HmOut.parse tags circuitB tables
   let ksFiles := if zk then PortRoots.checkOf ksParsed tags pubB else .ok ()
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
@@ -1040,22 +1145,25 @@ def verifyCmd (args : List String) : IO UInt32 := do
         else (Flock.JsonParse.parse r).toOption.bind fun j =>
           (j.getObjVal? "coin_tree").toOption.bind fun ct => (ct.getObjValAs? String "key").toOption
       | _, _ => none
-    let verdict := do
+    let checked : Except String (String × Array Setup) := do
       let (record, proofs) ← files
       if let some k := coinKey then CoinTree.checkFresh coinKeys k
       let (spec, tabs, _) ← st
       if zk then Zk.verify spec tabs record proofs
       else if stmtTags.upstreamPlain then verifyFiles (plainBytes true) spec tabs record proofs
       else verify spec tabs record proofs
-      -- last, so a session that fails a check keeps that check's reason: the form's refusal (its statement's, then its
-      -- tables' sizes), then a draw-less session's, then a recursive session's without --rec-inner or a V* session's
-      -- short of every unit, then a session's over an inner record without a sample, then a session's at a holo or sparse
-      -- inner shape or a recursive one without --zk (`RecursiveKS` is the dense, masked form's), then a session's without
-      -- the program,
-      -- then a record not in its canonical text (S0), then under --zk files whose rows, names, widths, domains or port
-      -- roots the sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`), then under --zk tags, a
-      -- circuit, a public file or a sample outside its form (`KsScope.checkOf`), then a statement version other than
-      -- `ProvedScope.served` or a plain session on seed coins (`ProvedScope.servedForm`)
+      pure (record, tabs)
+    -- last, so a session that fails a check keeps that check's reason: the form's refusal (its statement's, then its
+    -- tables' sizes), then a draw-less session's, then a recursive session's without --rec-inner or a V* session's
+    -- short of every unit, then a session's over an inner record without a sample, then a session's at a holo or sparse
+    -- inner shape or a recursive one without --zk (`RecursiveKS` is the dense, masked form's), then a session's without
+    -- the program,
+    -- then a record not in its canonical text (S0), then under --zk files whose rows, names, widths, domains or port
+    -- roots the sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`), then under --zk tags, a
+    -- circuit, a public file or a sample outside its form (`KsScope.checkOf`), then a statement version other than
+    -- `ProvedScope.served` or a plain session on seed coins (`ProvedScope.servedForm`), then under `agree` upstream's
+    -- plain files, which `verify` refuses whatever else holds
+    let refusals : String × Array Setup → Except String Unit := fun (record, tabs) => do
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)
       if draw.isNone then ProvedScope.drawLaw zk tags plainTables draw
@@ -1068,14 +1176,19 @@ def verifyCmd (args : List String) : IO UInt32 := do
       ksFiles
       if zk && recInner.isNone then KsScope.checkOf ksParsed tags pubB count draw
       ProvedScope.servedForm stmtTags coins
+      if stmtTags.upstreamPlain then throw UPSTREAM_PLAIN
     if let some k := coinKey then coinKeys := coinKeys.push k
-    let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
-    all := all && ok
     -- the partition finding: the rule, the query, the digest, and whether the units were derived or taken as stated
     let (part, opened) := match st with | .ok (_, _, p, o) => (p, o) | .error _ => (Lean.Json.null, Lean.Json.null)
-    let line := Lean.Json.mkObj ([("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why)] ++
+    let ok ← emit dir (checked.map refusals) (
       (if part.isNull then [] else [("partition", part)]) ++
       (match programSha with | some h => [("program_sha512", Lean.Json.str h)] | none => []) ++
+      -- the public file's header and the registered reads it checked the session against, by their digests, the
+      -- sample it drew the session's statement at and the tables it split it into, which a caller holds a statement of
+      -- the session to
+      (match header with | some h => [("public_header_sha512", Lean.Json.str h)] | none => []) ++
+      (match registeredSha with | some h => [("registered_sha512", Lean.Json.str h)] | none => []) ++
+      (match draw with | some d => [("unit_draw", d)] | none => []) ++ [("session_tables", Lean.toJson count)] ++
       (match registered with | some r => [("registered", Registered.finding r)] | none => []) ++
       (if opened.isNull then [] else [("openings", opened)]) ++
       (match identifier with | some (j, _) => [("identifier", j)] | none => []) ++
@@ -1090,15 +1203,39 @@ def verifyCmd (args : List String) : IO UInt32 := do
         | some s => [("rec_shared", s.toJson), ("zk", Lean.Json.bool zk)] ++
           (match coinKey with | some k => [("coin_key", Lean.Json.str k)] | none => [])
         | none => []))
-    IO.println s!"VERDICT {line.compress}"
+    all := all && ok
     IO.eprintln s!"{dir}: {(← IO.monoMsNow) - t1} ms"
   return (if all then 0 else 1)
 
+/-- `agree --upstream-plain --upstream-verdicts F [verify's plain flags] --session DIR...`: the agreement check's entry
+(`verity/ml/flock/verifier/agree.py`, `check`'s `lean-agreement` job), and never a verdict. It runs `verify`'s checks and
+refusals, in `verify`'s order, on plain sessions whose proof files are upstream's form (the file then the zk patch's
+`None` tag, `verifyFiles (plainBytes true)`; `Tags.upstreamPlain`), which `verify` refuses. For each session it prints one
+line, `AGREEMENT {"session", "agree", "upstream", "check", "refusal", …}`, with `verify`'s findings and no `accepted`:
+`check` is the first check's failure (`""` when every check passes; a refusal before any check runs counts, such as a
+legacy statement's or a sample law's at setup), `refusal` the first refusal once every check has passed (`UPSTREAM_PLAIN`
+when no other refuses, so no session passes), `upstream` the session's verdict in `F` (a JSON object from each session
+directory, as given to `--session`, to upstream's verdict, `true` for accepted; `null` where `F` has none), and `agree`
+whether the checks pass exactly when upstream accepted. Exit 0 iff every session agrees. Not with `--zk`: a `--zk`
+session's verdict is `verify --zk`'s, on the deployed form. -/
+def agreeCmd (args : List String) : IO UInt32 := do
+  let usage := "usage: flock-verify agree --upstream-plain --upstream-verdicts F [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--tables DIR] [--partition F] [--program F] [--registered F] [--stratified K] [--coins tree] [--session-tables J] [--plain-tables] --session DIR..."
+  let some path := argOf args "--upstream-verdicts" | IO.eprintln usage; return 2
+  if !args.contains "--upstream-plain" then
+    IO.eprintln "agree: it reads upstream's plain proof files alone, so --upstream-plain is required"; return 2
+  if args.contains "--zk" then
+    IO.eprintln "agree: a --zk session's verdict is verify --zk's, on the deployed form; agree reads plain sessions"; return 2
+  let verdicts ← match Flock.JsonParse.parse (← IO.FS.readFile path) with
+    | .ok j => pure j
+    | .error e => IO.eprintln s!"agree: --upstream-verdicts {path}: {e}"; return 2
+  verifyCmd args (some verdicts)
+
 /-- `ks-form [--statement ID] [--archive DIR] --circuit F --public F [--session-tables J]`: `verify --zk`'s form check
 (`KsScope.checkOf`) alone, on the circuit and public file as `verify --zk` reads them and a session without a sample, as one
-line `KS-FORM ok` (exit 0) or `KS-FORM <refusal>` (exit 1). A templated statement's circuit is read as `HmOut.parse` reads
-it, which refuses it: what passing the check establishes (`KsScope.check_ok`) is stated at that parse only. It accepts no
-session: it is the check the Python mirror (`one_stage.proofs.ks_form_why`) is held to. -/
+line `KS-FORM ok` (exit 0) or `KS-FORM <refusal>` (exit 1). A templated statement's circuit carries its template
+(`ProvedScope.circuitOf`), and the check reads its form off the template (`KsScope.unitWhy`); what passing establishes is
+`KsScope.checkOf_ok`'s. It accepts no session: it is the check the Python mirror (`one_stage.proofs.ks_form_why`) is held
+to. -/
 def ksFormCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify ks-form [--statement ID] [--archive DIR] --circuit F --public F [--session-tables J]"
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
@@ -1106,12 +1243,11 @@ def ksFormCmd (args : List String) : IO UInt32 := do
   let some tags := Tags.byName? stmtName
     | IO.eprintln s!"unknown statement; known: {(Tags.all ++ Tags.templated).map (·.name)}"; return 2
   let some count := ((argOf args "--session-tables").getD "1").toNat? | IO.eprintln usage; return 2
-  let (circuitB, pubB, _, tables) ← match ← statementInputs args with
+  let (circuitB, _, _, pubB, _, tables) ← match ← statementInputs args with
     | .ok x => pure x
     | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
   let tags := Zk.tags tags (Zk.maskLogOf circuitB) count
-  let ksParsed := if tags.hiddenOutputs && !tags.isTmpl then ProvedScope.circuitOf tags circuitB tables
-    else HmOut.parse tags circuitB tables
+  let ksParsed := if tags.hiddenOutputs then ProvedScope.circuitOf tags circuitB tables else HmOut.parse tags circuitB tables
   match KsScope.checkOf ksParsed tags pubB count none with
   | .ok () => IO.println "KS-FORM ok"; return 0
   | .error why => IO.println s!"KS-FORM {why}"; return 1
@@ -1144,7 +1280,7 @@ def statementCmd (args : List String) : IO UInt32 := do
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
   let some coins := plainCoinsArg (argOf args "--coins") (tags.tableNames 1)
     | IO.eprintln s!"statement: {COINS_USAGE}"; return 2
-  let (circuitB, pubB, compB, tables) ← match ← statementInputs args with
+  let (circuitB, _, _, pubB, compB, tables) ← match ← statementInputs args with
     | .ok x => pure x
     | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
   let partition ← match ← partitionInput args with
@@ -1236,7 +1372,7 @@ def statementCmd (args : List String) : IO UInt32 := do
 def regionWordsCmd (args : List String) : IO UInt32 := do
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
-  let (circuitB, pubB, _, tables) ← match ← statementInputs args with
+  let (circuitB, _, _, pubB, _, tables) ← match ← statementInputs args with
     | .ok x => pure x
     | .error e => IO.eprintln s!"region-words inputs: {e}"; return 2
   let extra := (args.zip args.tail).filterMap fun (k, v) => if k != "--delta" then none else
@@ -1552,7 +1688,7 @@ def drawTest (path : String) (args : List String) : IO UInt32 := do
 
 /-- `template-query FILE...`: a template-instance query on a program (`Flock.TemplateQuery`) for each case `{"descriptor", "query"}`
 (the descriptor's bytes as a string): the program's SHA-512, the population, the ranges and every unit's root node, member and
-gates, or the refusal. One `TEMPLATEQUERY` line per file. -/
+gates (`TemplateQuery.unitGates`), or the refusal. One `TEMPLATEQUERY` line per file. -/
 def templateQueryCmd (paths : List String) : IO UInt32 := do
   for path in paths do
     let text ← try IO.FS.readFile path catch _ => pure ""
@@ -1567,7 +1703,11 @@ def templateQueryCmd (paths : List String) : IO UInt32 := do
       let d ← TemplateQuery.Desc.parse ((j.getObjValAs? String "descriptor").toOption.getD "").toUTF8
       let rs ← TemplateQuery.evaluate d ts
       let pop := TemplateQuery.population rs
-      let units := (Array.range pop).map fun i => match TemplateQuery.locate rs i, TemplateQuery.gates d rs i with
+      let gs := TemplateQuery.unitGates d rs
+      let gatesOf := fun i => match gs with
+        | .ok a => a[i]?
+        | .error _ => TemplateQuery.gates d rs i
+      let units := (Array.range pop).map fun i => match TemplateQuery.locate rs i, gatesOf i with
         | some (k, m, _), some (lo, hi) => Lean.toJson #[i, k, m, lo, hi]
         | _, _ => Lean.Json.null
       return Lean.Json.mkObj [("program_sha512", Lean.Json.str (hexOf d.sha512)), ("population", Lean.toJson pop),
@@ -1652,8 +1792,6 @@ def graphJson (gr : Extract.Graph) : Lean.Json :=
     ("external", Lean.toJson (gr.external.map fun b => if b then 1 else 0)), ("input_ids", Lean.toJson gr.inputIds),
     ("src", Lean.toJson (g.reads.map (·.1))), ("dst", Lean.toJson (g.reads.map (·.2))), ("input_reads", pairs g.inputReads),
     ("outputs", Lean.toJson g.outputs), ("returned_inputs", Lean.toJson g.returnedInputs), ("recomputed", pairs g.recomputed)]
-
-private def sha512Of (j : Lean.Json) : V String := do return hexOf (Sha512.hash (← canon j).toUTF8)
 
 /-- `qword-program DESCRIPTOR [X [W]] [--digests] [--cuts] [--query-version N]`: `Q_word` v1 (or vN, 1 or 2) on the program
 (`Flock.Program`, `Flock.Extract`, `Flock.Qword`): the program's SHA-512, the population and per Call its units. In full: per
@@ -1805,6 +1943,7 @@ def main (args : List String) : IO UInt32 := do
   | "draw-test" :: path :: rest => drawTest path rest
   | "statement" :: rest => statementCmd rest
   | "verify" :: rest => verifyCmd rest
+  | "agree" :: rest => agreeCmd rest
   | "ks-form" :: rest => ksFormCmd rest
   | "rec-inner" :: rest => recInnerCmd rest
   | "rec-statements" :: rest => recStatementsCmd rest

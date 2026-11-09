@@ -94,7 +94,7 @@ def test_a_get_whose_body_stalls_is_cut_off_and_retried(server, tmp_path):
 
 
 def test_a_large_get_that_trickles_is_cut_off_after_one_slow_window_and_retried(server, tmp_path, monkeypatch):
-    # INF-214: a 16 GiB part trickled at 13-170 KB/s for an hour under a 73 h whole-body deadline; a fresh connection got 45-70 MB/s
+    # a 16 GiB part can trickle at 13-170 KB/s for an hour under a 73 h whole-body deadline; a fresh connection gets 45-70 MB/s
     monkeypatch.setattr(remote_s3, "GET_STALL_MIN_BYTES", 1000)
     windowed, start = threading.Event(), _Deadline.start
 

@@ -21,10 +21,11 @@ public import Proofs.Properties.Verity.Recursive.Refusals
 public import Proofs.Properties.Verity.Recursive.Assumptions
 
 /-!
-# Sampled proofs' recursive configuration: the component's property and its target
+# SPOT's recursive configuration: the component's property and its target
 
-Sampled proofs' recursive configuration (`VStar.Recursive`, `verity/sampled-proofs/recursive/v1`, which
-`VStar.Recursive.Sampled` runs when the auditor's parameters name `"form": "recursive"`) checks, on the prover's blobs,
+SPOT's recursive configuration (`VStar.Recursive`, `verity/sampled-proofs/recursive/v1`, the form
+`"form": "recursive"` of `VStar.Recursive.Sampled`'s parameters, which that component refuses until SPOT's
+soundness covers it, `VStar.Recursive.Sampled.RECURSIVE_REFUSED`) checks, on the prover's blobs,
 the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. This module states two things.
 
 * **The property** (`acc_of_accepts`). Take a run of the deployed recursive verifier that `RecursiveKSAt` reads
@@ -37,7 +38,7 @@ the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. Thi
     session (`Assumptions.Zk.RecordCustodyZKJ`).
   - `live-verifier` is admissible here only until the component reads the session's coins through the
     challenger's live-coin part's signed device log. Then `LiveCoins` follows from the log's signatures, and the premise goes.
-* **The target** (`sampledProofsRecursive`, stated and proved in `Proofs.Properties.Verity.Recursive.Target`): sampled
+* **The target** (`spotRecursive`, stated and proved in `Proofs.Properties.Verity.Recursive.Target`): sampled
   proofs at the recursive configuration, in `Vocab.Target k .sampled`'s form (`Properties.Verity.Game`) with the
   recursive component's verdict (`RecVerdict`).
   - The game is causal (R5): the parameters, the registered circuit file and the commitment come first; then the
@@ -52,13 +53,13 @@ the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. Thi
     knowledge-soundness term (`Dep.ksAt`: `min(2^{-167.7} + t' · 2^{-174.95}, t' · 2^{-λ})` at a statement at the
     deployment's tables, `t' · 2^{-λ}` elsewhere) plus the binding term (`Dep.delta`); elsewhere `⊤`. Every budget is a
     defined function of the strategy's cost `t'` (`Vocab.cost`), with no call model.
-  - Beside it, `sampledProofsRecursive_nontrivial` (an accept-everything verifier breaks the bound) and
-    `sampledProofsRecursive_honest` (the hypotheses that are the deployment's choices hold at the honest one).
+  - Beside it, `spotRecursive_nontrivial` (an accept-everything verifier breaks the bound) and
+    `spotRecursive_honest` (the hypotheses that are the deployment's choices hold at the honest one).
 
   It takes as hypotheses `RecursiveKSAt` at the deployed brings, the coupling at the strategy (`SessionIn`, the
   session's projection) with the sample's miss, the deployment's reading of a witness (`hread`) and its collision from
   two (`hcoll`), and `live-verifier`. At the deployment `RecursiveKS` reads, `Proofs.Properties.Verity.Recursive.Audit`
-  states it with `RecursiveKS`, the call bounds and `λ₂ ≥ 135.7` discharged (`SampledProofsRecursive`).
+  states it with `RecursiveKS`, the call bounds and `λ₂ ≥ 135.7` discharged (`SpotRecursive`).
 
 The model this reads (`RecDeploy`, `Flock.Guarantees.RecursiveKSAt`) is still in the proofs tree, so the property sits
 here rather than in `Properties` until Flock's spec is extracted.
@@ -228,7 +229,7 @@ theorem part_setup_of_verdict {o : VStar.Recursive.Own} {pr : VStar.Recursive.Pr
         .ok (spec, sts) ∧
       (Part.partIns tags0 q.base.circuit (st.pub x ms j) po registered (some d) h j bindings (some h.rows)).base.read.check =
         .ok () ∧
-      SampledProofs.OneStageZk.buildSessionOf
+      Spot.OneStageZk.buildSessionOf
         (Flock.ProvedScope.circuitOf (partTags tags0 q.base.circuit) q.base.circuit [])
         (partTags tags0 q.base.circuit) q.base.circuit (st.pub x ms j) (partCoins tags0) [] 1 (some d)
         (some po.partition) (some po.program) registered = .ok (spec, sts) := by
@@ -351,8 +352,8 @@ theorem actO_decide_of {xO : Msg} {i : RecIns} {spec : Flock.SessionSpec} {sts :
 `x` is dense, it has a part, and every V\* session sets up at its staged statement and the outer verifier accepts it
 there (`Compiled`, `Names`, `PartStatement`, `SetupChecks` and `PartVerdict`). -/
 theorem sessions_of_accepts (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (v : Claims.Seen)
-    {p : VStar.Recursive.Params} {c : SampledProofs.OneStage.Commitment} {e : VStar.Recursive.Evidence}
-    {bs : Core.Blobs} {pub : SampledProofs.OneStage.Public} {prof : Core.Integrity}
+    {p : VStar.Recursive.Params} {c : Spot.OneStage.Commitment} {e : VStar.Recursive.Evidence}
+    {bs : Core.Blobs} {pub : Spot.OneStage.Public} {prof : Core.Integrity}
     (hacc : VStar.Recursive.checkBlobs p c e bs = .accept pub prof) (hnames : Names p e bs x)
     (hshow : Shows IV st x e.proofs bs v) (hrows : RowsShow IV st x e.proofs bs v) (hlive : LiveCoins IV st x v)
     (hrf : Refusals x st (v.msgs.take (kIS IV x))) :
@@ -429,8 +430,8 @@ theorem sessions_of_accepts (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (
 /-- `acc_of_accepts` where the component's refusals hold at the run's inner rounds (`Refusals`). -/
 theorem acc_of_accepts_of (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
-    (p : VStar.Recursive.Params) (c : SampledProofs.OneStage.Commitment) (e : VStar.Recursive.Evidence)
-    (bs : Core.Blobs) {pub : SampledProofs.OneStage.Public} {prof : Core.Integrity}
+    (p : VStar.Recursive.Params) (c : Spot.OneStage.Commitment) (e : VStar.Recursive.Evidence)
+    (bs : Core.Blobs) {pub : Spot.OneStage.Public} {prof : Core.Integrity}
     (hacc : VStar.Recursive.checkBlobs p c e bs = .accept pub prof)
     (x : Msg) (hnames : Names p e bs x) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω)
     (r : Fin ((recordAt wE w b aux nOf hd recRest).V.k x) → Coin)
@@ -461,8 +462,8 @@ The proof is `acc_of_accepts_of` at `Refusals`, the model's statement of what th
 (`innerOk`, `fits`, `statementFits`), read off its check (`RefusalsOf`). -/
 theorem acc_of_accepts (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
-    (p : VStar.Recursive.Params) (c : SampledProofs.OneStage.Commitment) (e : VStar.Recursive.Evidence)
-    (bs : Core.Blobs) {pub : SampledProofs.OneStage.Public} {prof : Core.Integrity}
+    (p : VStar.Recursive.Params) (c : Spot.OneStage.Commitment) (e : VStar.Recursive.Evidence)
+    (bs : Core.Blobs) {pub : Spot.OneStage.Public} {prof : Core.Integrity}
     (hacc : VStar.Recursive.checkBlobs p c e bs = .accept pub prof)
     (x : Msg) (hnames : Names p e bs x) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω)
     (r : Fin ((recordAt wE w b aux nOf hd recRest).V.k x) → Coin)
@@ -482,25 +483,25 @@ theorem acc_of_accepts (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → 
      RefusalsOf.rows_of_compiled hacc hrows⟩
 
 /-- **Sampled proofs' one-stage form is v2**: where the parameters name the one-stage form and `VStar.Recursive.Sampled`
-accepts, the evidence is one-stage too and v2 (`SampledProofs.OneStageZk.checkBlobs`) accepts the same commitment,
+accepts, the evidence is one-stage too and v2 (`Spot.OneStageZk.checkBlobs`) accepts the same commitment,
 evidence and blobs with the same public output and profile. So what is proved of v2's acceptance (`acceptMeans` at the
 coins it read, the sampled proofs bound) holds of the composed component's one-stage branch. -/
-theorem sampled_oneStage_accepts {p₀ : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment}
-    {e : VStar.Recursive.Sampled.Evidence} {bs : Core.Blobs} {pub : SampledProofs.OneStage.Public}
+theorem sampled_oneStage_accepts {p₀ : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment}
+    {e : VStar.Recursive.Sampled.Evidence} {bs : Core.Blobs} {pub : Spot.OneStage.Public}
     {prof : Core.Integrity}
     (h : VStar.Recursive.Sampled.checkBlobs (.inl p₀) c e bs = .accept pub prof) :
-    ∃ e₀, e = .inl e₀ ∧ SampledProofs.OneStageZk.checkBlobs p₀ c e₀ bs = .accept pub prof := by
+    ∃ e₀, e = .inl e₀ ∧ Spot.OneStageZk.checkBlobs p₀ c e₀ bs = .accept pub prof := by
   cases e with
   | inl e₀ => exact ⟨e₀, rfl, h⟩
   | inr e₁ => simp [VStar.Recursive.Sampled.checkBlobs] at h
 
 /-- `sampled_oneStage_accepts` at the component, `VStar.Recursive.Sampled.protocol`'s blob check. -/
-theorem sampled_protocol_oneStage_accepts {p₀ : SampledProofs.OneStageZk.Params}
-    {c : SampledProofs.OneStage.Commitment} {e : VStar.Recursive.Sampled.Evidence} {bs : Core.Blobs}
-    {pub : SampledProofs.OneStage.Public} {prof : Core.Integrity}
+theorem sampled_protocol_oneStage_accepts {p₀ : Spot.OneStageZk.Params}
+    {c : Spot.OneStage.Commitment} {e : VStar.Recursive.Sampled.Evidence} {bs : Core.Blobs}
+    {pub : Spot.OneStage.Public} {prof : Core.Integrity}
     (h : VStar.Recursive.Sampled.protocol.checkBlobs
       (show VStar.Recursive.Sampled.protocol.Params from Sum.inl p₀) c e bs = .accept pub prof) :
-    ∃ e₀, e = .inl e₀ ∧ SampledProofs.OneStageZk.checkBlobs p₀ c e₀ bs = .accept pub prof :=
+    ∃ e₀, e = .inl e₀ ∧ Spot.OneStageZk.checkBlobs p₀ c e₀ bs = .accept pub prof :=
   sampled_oneStage_accepts h
 
 /-! ## The target -/
@@ -592,7 +593,7 @@ def OneTable (x : Msg) : Prop :=
 end Dep
 
 /-- The SHA-512 calls of one run: the prover's and the verifier's. -/
-def runCalls (t : Claims.Trace) : ℕ := t.pLog.length + t.vLog.length
+def runCalls (t : Claims.Transcript) : ℕ := t.pLog.length + t.vLog.length
 
 /-- **The recursive session inside the causal game** at composite `k`, `θ`, `F`, `c` and the strategy `σ`: the
 coupling of the device log (`Vocab.families`, `Vocab.coinsRead`) with the session.
@@ -647,7 +648,7 @@ abbrev Sample (S : SessionIn V q k θ F c σ) (ξ : S.Ξ) : Type :=
 /-- **The weight of bit `i` of gate `g` reading `bit`** at the session `S`: the probability, over the sample and a run with
 the extractor's seed, that the run accepts, `g` is a wire of a unit `ξ` samples, and the extractor returns a witness in
 the recursive relation whose reading (`readX`) has `bit` there. -/
-noncomputable def weight (S : SessionIn V q k θ F c σ) (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
+noncomputable def weight (S : SessionIn V q k θ F c σ) (readX : Msg → Claims.Flock.Wit → Verity.Circuit.Trace (V.circuitOf θ F))
     (g : Fin (V.circuitOf θ F).N) (i : ℕ) (bit : Bool) : ℝ :=
   Claims.Ex fun ξ : S.Ξ => Claims.Pr fun s : q.Sample V S ξ =>
     (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) s.1 s.2.1).out = .acc ∧
@@ -659,8 +660,8 @@ noncomputable def weight (S : SessionIn V q k θ F c σ) (readX : Msg → Claims
 recursive session): each bit of each gate is the value the extractor's witnesses read there most often, over the
 samples and the accepted runs that sample the gate's unit (`false` on a tie). It is one transcript per strategy, a
 construction applied to `S`, never chosen per strategy. -/
-noncomputable def extract (S : SessionIn V q k θ F c σ) (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript) :
-    (V.circuitOf θ F).Transcript := fun g =>
+noncomputable def extract (S : SessionIn V q k θ F c σ) (readX : Msg → Claims.Flock.Wit → Verity.Circuit.Trace (V.circuitOf θ F)) :
+    Verity.Circuit.Trace (V.circuitOf θ F) := fun g =>
   BitVec.ofNat ((V.circuitOf θ F).w g) (∑ i ∈ Finset.range ((V.circuitOf θ F).w g),
     if q.weight V S readX g i false < q.weight V S readX g i true then 2 ^ i else 0)
 
@@ -759,7 +760,7 @@ end Dep
 
 /-- **Its conclusion fails for a verifier that accepts everything**: at a strategy whose extracted transcript fails
 the claim, where the finders built from it meet `FinderCR` and the error's number (`Dep.delta`) is below one. -/
-theorem sampledProofsRecursive_nontrivial (q : Dep) (V : Vocab d α) (k : Verity.Registration.Composite)
+theorem spotRecursive_nontrivial (q : Dep) (V : Vocab d α) (k : Verity.Registration.Composite)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Game.Strategy (V.game θ F c)) (S : SessionIn V q k θ F c σ)
     (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
@@ -780,7 +781,7 @@ the claim's `ε` share (`hK₀`) wherever `ε n ≥ 0`; and where the extracted 
 commitment opens it (the honest commitment's case), the target's event is empty, so its conclusion holds at every
 bound. The other hypotheses are code facts and the coupling, each its owner's: `RecursiveKS`, `hread` and `hcoll`
 (the bridge, with `place`), the session `S` and `hdraw` (the session's projection). -/
-theorem sampledProofsRecursive_honest (V : Vocab d α) (k : Verity.Registration.Composite) :
+theorem spotRecursive_honest (V : Vocab d α) (k : Verity.Registration.Composite) :
     (∀ θ (F : Array ByteArray), 0 ≤ (V.certOf θ).ε * V.units θ F → ∀ m : ℕ, (V.certOf θ).ε * V.units θ F < m →
       ⌊(V.certOf θ).ε * V.units θ F⌋₊ + 1 ≤ m) ∧
     ∀ θ F c (σ : Game.Strategy (V.game θ F c)), (∀ u, (V.partsOf θ F).Correct (V.extract θ F c σ) u) →

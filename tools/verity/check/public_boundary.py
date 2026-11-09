@@ -32,9 +32,9 @@ check allows, one `SOURCE -> TARGET` a line, and only shrinks: an edge it doesn'
 public module instead, move the lemma, or ask to move a file across), then `--prune`. A listed edge no tree has is reported,
 not refused: one list serves every checkout the landing queue holds, and an edge one of them cut another may still have.
 Lists of files a manifest builds (a lakefile's `roots`, the workspace's `members`) are not edges: the export keeps the
-public entries. A path `require`, an extra's entry and a dependency group's (`EXPORT_CUTS`) are edges the export's
-manifest rewrite drops: closed by the export, not open, so the list holds none of them, while `public_export.py --build`
-still builds what it copies without them.
+public entries. A path `require`, an extra's entry, a dependency group's and a console script (`EXPORT_CUTS`) are edges
+the export's manifest rewrite drops: closed by the export, not open, so the list holds none of them, while
+`public_export.py --build` still builds what it copies without them.
 """
 from __future__ import annotations
 
@@ -141,12 +141,14 @@ class Boundary(NamedTuple):
     needed: tuple[Needed, ...]
     when_closed: re.Pattern[str]
     residue: tuple[Residue, ...] = ()
+    #: the fetched fixtures the export ships as tracked files (`public_export.fixtures`)
+    fixtures: re.Pattern[str] = re.compile("(?!)")
 
     @classmethod
     def load(cls, doc: dict | Path = BOUNDARY) -> Boundary:
         if isinstance(doc, Path):
             doc = tomllib.loads(doc.read_text(encoding="utf-8"))
-        if other := sorted(set(doc) - {"public", "private", "needed", "when_closed", "residue"}):
+        if other := sorted(set(doc) - {"public", "private", "needed", "when_closed", "residue", "fixtures"}):
             raise ValueError(f"the boundary has keys it doesn't read: {other}")
         residue = []
         for e in doc.get("residue", []):
@@ -168,7 +170,7 @@ class Boundary(NamedTuple):
             needed.append(Needed(e.get("why", ""), globs(e["paths"]), None if src == "*" else frozenset(src),
                                  None if via == "*" else frozenset(via)))
         return cls(groups, dict(doc.get("public", {})), globs(p for ps in doc.get("private", {}).values() for p in ps),
-                   tuple(needed), globs(doc.get("when_closed", [])), tuple(residue))
+                   tuple(needed), globs(doc.get("when_closed", [])), tuple(residue), globs(doc.get("fixtures", [])))
 
     def group(self, path: str) -> str | None:
         return next((g for g, r in self.groups.items() if r.fullmatch(path)), None)
@@ -179,12 +181,13 @@ class Boundary(NamedTuple):
 
 #: the files whose needs are read: what else a public file holds (data, docs, Rust) needs nothing of the tree here
 PARSED = (".lean", ".py", ".sh", ".bash", "lakefile.toml", "pyproject.toml")
-#: the kinds of edge: what in the source needs the target (`python extra`: an extra's or a dependency group's entry)
-KINDS = frozenset({"lean import", "lake require", "python import", "python dependency", "python extra", "path", "command",
-                   "package"})
+#: the kinds of edge: what in the source needs the target (`python extra`: an extra's or a dependency group's entry;
+#: `python script`: a console script's module)
+KINDS = frozenset({"lean import", "lake require", "python import", "python dependency", "python extra", "python script",
+                   "path", "command", "package"})
 #: the kinds the export's manifest rewrite drops (`public_export.py`): closed by the export, not open, while its build of
 #: what it copies still passes
-EXPORT_CUTS = frozenset({"lake require", "python extra"})
+EXPORT_CUTS = frozenset({"lake require", "python extra", "python script"})
 
 
 class Edge(NamedTuple):
@@ -508,7 +511,7 @@ class Tree:
         for name, entry in project.get("scripts", {}).items():
             if isinstance(entry, str):
                 at = text.find(f'"{entry}"')
-                out += [Edge(f, t, text.count("\n", 0, at) + 1 if at >= 0 else 1, "python import", f"{name} = {entry}")
+                out += [Edge(f, t, text.count("\n", 0, at) + 1 if at >= 0 else 1, "python script", f"{name} = {entry}")
                         for t in self._module(entry.partition(":")[0].strip(), f)]
         return out
 

@@ -79,7 +79,7 @@ theorem coins_at {R : Array Round} {k k' n : ℕ} {c : Array F128} (hne : NoEmpt
 
 theorem coin_one {R : Array Round} {k k' : ℕ} {c : Array F128} (hne : NoEmpty (R.map (·.coins)))
     (h : (CoinSource.ofRounds (R.map (·.coins))).round k 1 = .ok c) (hk : k = k') :
-    (R[k']!).coins.getD 0 0 = c[0]! := by
+    (R[k']!).coins.getD 0 0 = (c)[0]! := by
   subst hk
   obtain ⟨hc, hn⟩ := coin_of_round hne h
   rw [hc, Array.getD_eq_getD_getElem?, getElem!_pos c 0 (by omega), Array.getElem?_eq_getElem (by omega),

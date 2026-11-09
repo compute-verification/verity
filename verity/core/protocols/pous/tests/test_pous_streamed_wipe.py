@@ -258,7 +258,7 @@ def reads_exponent(r: int, k: int) -> float:
 FIVE_GB = 5 * 10**9 * 8
 H200, RAM, DISK = 141 * 10**9, 2 * 10**12, 12 * 10**12
 MINIMAL = (8 * 3 * 10**8 + 15 * 10**8) * 8  # 8 × 0.3 GB of minimal contexts and a 1.5 GB host OS
-# vy-dc-h200-2's card as r20261026-003454-bfd2 measured it (`Pous.StreamedWipe.h200`): 143,771 MiB, a fill of 4,425
+# vy-dc-h200-2's card as measured (`Pous.StreamedWipe.h200`): 143,771 MiB, a fill of 4,425
 # segments of 32 MiB.
 H200_MS, H200_FILL = 143_771 * 2**20 * 8, 4425 * 2**25
 H200_R = H200_MS - sw.LABEL_BITS * (H200_FILL // sw.LABEL_BYTES)

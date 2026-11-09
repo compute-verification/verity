@@ -262,7 +262,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     q.add_argument("--preemptible", action="store_true", help="it may be stopped for higher-ranked work and requeued (a guest's must be)")
     q.add_argument("--gpu-host", action="store_true",
                    help="a job without --gpus whose workload takes its GPUs with gpu-lease itself, around each GPU step: its CPU "
-                        "allocation runs at a GPU job's weight (node 1: not CPUWeight=idle)")
+                        "allocation runs at a GPU job's weight (node 1: not CPUWeight=idle), with GPU_LEASE naming the node's "
+                        "lease tool")
     q.add_argument("--quiet", action="store_true", help="a timed job: the node is kept quiet while it runs (the node's owner only)")
     q.add_argument("--gpu-ids", default=None, metavar="LIST", help="the GPU indices it must get, comma-separated")
     ap.add_argument("--id", default=None, help="use this run id (rYYYYMMDD-HHMMSS-xxxx) instead of allocating one")
@@ -281,8 +282,9 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "store's remote with a key minted here, so custody does not depend on this machine (store.custody)")
     ap.add_argument("--no-custody-r2", dest="custody_r2", action="store_false",
                     help="with --on: no run custody on the remote; the records stay on the machine until `research fetch --all`")
-    ap.add_argument("--custody-ttl", default=None, metavar="TTL", help="with --custody-r2: the minted key's lifetime (default 6h, at most 24h; it must outlast "
-                                                                       "the run and its upload: a --timeout over 6h needs it)")
+    ap.add_argument("--custody-ttl", default=None, metavar="TTL", help="with --custody-r2: the minted key's lifetime, <n>[s|m|h|d], a bare number in seconds "
+                                                                       "(default 6h, at most 24h; it must outlast the run and its upload: a --timeout over "
+                                                                       "6h needs it, and one the --timeout outlives is refused)")
     ap.add_argument("--run-record", action="store_true",
                     help="a local run: the attempt also carries every run file (logs included; what custody keeps) as its run record, as an "
                          "--on run's custody does: for a pod whose run dir nothing else preserves (store.custody)")
@@ -361,8 +363,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                   f"up to {wait_s / 60:g} min for one (--pool-wait), then exits 75 without running", file=sys.stderr)
         if ns.mem_gb is not None:
             # the slot admits and reserves the run, not a launch-time reservation, which was held through the wait for a slot
-            # beside the slot's once it ran (INF-61, cpu-3 18 Oct: two waiting runs held 128 GB, admission sat at -89 GB); the
-            # slot takes the larger of its mem= and this (24 Oct: a 450 GB run in proofs' 193 GB slot p5 reserved 193)
+            # beside the slot's once it ran, so a few waiting runs drove admission below zero; the slot takes the larger of its
+            # mem= and this (a 450 GB run in a 193 GB slot reserves 450)
             ns.env = [*ns.env, f"CHECK_RUN_MEM_GB={ns.mem_gb:g}"]
             print(f"research run: --pool {ns.pool}: --mem-gb {ns.mem_gb:g} goes to the slot, which waits for and reserves the larger of "
                   "its own mem= and that", file=sys.stderr)
@@ -609,7 +611,7 @@ def _normalize_timeout(harness_opts: list[str]) -> list[str]:
 
 def _custody_ttl_problem(custody_ttl: str | None, harness_opts: list[str]) -> str | None:
     """Why a custody launch is refused: an explicit ``--custody-ttl`` over :data:`CUSTODY_TTL_CAP_S`, or a ``--timeout`` longer than
-    the default key's lifetime without an explicit ``--custody-ttl`` (the key would expire before the run's upload)."""
+    the key's lifetime, the explicit ``--custody-ttl``'s or the default's (the key would expire before the run's upload)."""
     from research.store import credentials as C  # noqa: PLC0415
     from research.store.custody import DEFAULT_TTL  # noqa: PLC0415
 
@@ -620,9 +622,13 @@ def _custody_ttl_problem(custody_ttl: str | None, harness_opts: list[str]) -> st
     if custody_ttl and ttl > CUSTODY_TTL_CAP_S:
         return f"--custody-ttl {custody_ttl} is over the {CUSTODY_TTL_CAP_S // 3600} h cap"
     timeout = _harness_timeout(harness_opts)
-    if not custody_ttl and timeout is not None and timeout > ttl:
+    if timeout is not None and timeout > ttl:
+        hours = -(-int(timeout) // 3600) + 1
+        if custody_ttl:
+            return (f"--timeout {timeout:g} s outlives --custody-ttl {custody_ttl} ({ttl} s; a bare number is seconds): the upload "
+                    f"would fail; pass a longer one, at most {CUSTODY_TTL_CAP_S // 3600}h, such as --custody-ttl {hours}h")
         return (f"--timeout {timeout:g} s outlives the custody key's default lifetime ({DEFAULT_TTL}): the upload would fail; "
-                f"pass --custody-ttl (at most {CUSTODY_TTL_CAP_S // 3600}h) longer than the run")
+                f"pass --custody-ttl (at most {CUSTODY_TTL_CAP_S // 3600}h) longer than the run, such as --custody-ttl {hours}h")
     return None
 
 
@@ -993,7 +999,7 @@ GPU_WAIT_MIN = 120
 THREAD_POOL_VARS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS")
 
 
-#: `--on auto`: an agent's suite, build or probe belongs on a node, not its VM (every handle, at Daniel's request, 18 Oct). It is
+#: `--on auto`: an agent's suite, build or probe belongs on a node, not its VM. It is
 #: queued onto vy-nebius-2's Verity share (infra/cluster/descriptions/nebius.toml: whole cores of its own inside its check slots,
 #: never a slot a train waits for; it waits on the node while none are free) as kind AUTO_KIND (infra/cluster/kinds/infra.toml),
 #: or spills to a CPU node's pool where it starts sooner (research.auto). Not node 1, whose CPUs trains and lanes' direct runs
@@ -1022,7 +1028,7 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
     ns.auto = True
     ns.project = ns.project or AUTO_PROJECT
     if remote.flag_value(harness_opts, "--cwd") is None:
-        harness_opts += ["--cwd", "source"]                      # a suite or build runs in the tree it tests (INF-65), not its run dir
+        harness_opts += ["--cwd", "source"]                      # a suite or build runs in the tree it tests, not its run dir
     if ns.queue_kind == "adhoc":
         ns.queue_kind = AUTO_KIND
     return None
@@ -1052,7 +1058,7 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str]) -> list[str] | 
         harness_opts = [*harness_opts, "--timeout", f"{(ns.max_min or AUTO_MAX_MIN) * 60}"]
     ns.queue, ns.on, ns.pool, ns.lane = False, machine, pool, ns.lane or "auto"
     ns.cpus = ns.max_min = ns.question = ns.disk_gb = None     # the slot's cores are the run's
-    ns.mem_gb = mem     # --pool hands it to the slot, which reserves the larger of its mem= and this (INF-228: a 40-GB slot held a suite to 2 workers)
+    ns.mem_gb = mem     # --pool hands it to the slot, which reserves the larger of its mem= and this (a 40-GB slot alone holds a suite to 2 workers)
     ns.queue_kind, ns.queue_class, ns.queue_phase, ns.preemptible = "adhoc", "work", None, False
     print(f"research run --on auto: spilled to {machine}'s {pool} pool, from {ns.source} ({why})", file=sys.stderr)
     return harness_opts
@@ -1373,7 +1379,7 @@ def _utc(text: str | None) -> datetime | None:
 
 def _ran_text(s: dict, now: datetime) -> str:
     """How long a run ran, and how much of that its check waited for a check slot (runs.SLOT_FILE): its state reads `running` from
-    launch, so a check that waited 95 min for a slot and checked 12 was taken for 107 min in (af2d, 10 Oct)."""
+    launch, so a check that waited 95 min for a slot and checked for 12 would otherwise read as 107 min in."""
     if not (start := _utc(s.get("started_utc"))):
         return ""
     sl, mins = s.get("slot") or {}, lambda a, b: f"{max(0.0, (b - a).total_seconds()) / 60:.0f} min"

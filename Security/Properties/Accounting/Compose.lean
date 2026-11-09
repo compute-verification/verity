@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Accounting.Compose
-public import Properties.SampledProofs.Draw
+public import Properties.Spot.Draw
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -35,7 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# A declared circuit's proof blocks, commit coins, seed preimages and sample are the service's (`SampledProofs.Slots.layout`, `Select.select`)
+# A declared circuit's proof blocks, commit coins, seed preimages and sample are the service's (`Spot.Slots.layout`, `Select.select`)
 
 `Accounting.Compose.Declared` gives each gate its proof block (`Declared.unit`), each value its commit coin
 (`Declared.commitRound`) and each round the values its seed names (`Declared.seedNames`), and the composed credit
@@ -43,7 +43,7 @@ import Mathlib.Topology.Sheaves.Init
 (`Accounting.Compose.drawOf`). `UnitsOfLayout` is the statement that the declared circuit is the service's on a
 program `p` and query:
 * **units**: the service samples and proves the units of the verifier's own partition of its program
-  (`SampledProofs.Slots.layout`: the population's proof blocks, each its unit and its gates, then the input
+  (`Spot.Slots.layout`: the population's proof blocks, each its unit and its gates, then the input
   class). Every gate of `Cd` that is not an input lies in the gates of the proof block that is its own unit, every
   input slot's gate is an input of `Cd`, and every population unit is one of `Cd`'s. It reads `Cd`'s gate `i` as `p`'s
   root gate `i`, and a `Q_word` unit's span may hold another unit's gates (`Partition.unitGates`), so it bounds each
@@ -55,7 +55,7 @@ program `p` and query:
   fails wherever a value's IR cut is before the sample and it isn't a computed value only its own unit reads (every run
   input any gate reads, `Properties.Served.SeededScheduleNotLive`), which is why the live statements credit nothing
   on today's code;
-  the seeded statements' binding layer (`Declared.atDraw`) cuts every value at the sample, no earlier than this;
+  the seeded statements' binding layer (`Declared.atSample`) cuts every value at the sample, no earlier than this;
 * **seed preimages**: what the code's seeds name (`Declared.seedNames`). Each unit's seed is `seeds.PouwSeed` of the
   salt, its position and its seed group's `pouw.roots` slot; the salt's derivation reads the weights' root
   (`PouwCommit.saltOf`), and `pouw.roots` is a Program input that no check ties to the unit's operand rows. So a
@@ -63,14 +63,14 @@ program `p` and query:
   seeded round reads an activation (a run input or an earlier round's output), which is why the seeded statements
   credit nothing on today's code either;
 * **the sample**: the code's sample under the `subset:K_d` law, from `L` uniform bytes (`Select.select`, its sampled proof blocks
-  then its closure, `Properties.SampledProofs.bytesOf`), is accepted and samples no unit of a set `U` no more often than
+  then its closure, `Properties.Spot.bytesOf`), is accepted and samples no unit of a set `U` no more often than
   `subsetDraw K_d` of a uniform permutation of the population's `N_p` tiles misses `U`.
 
 It is stated, not proved: nothing builds a `Declared` from a compiled Program yet, which is the composed statement's
 open faithfulness gap. The extractor that builds one, with this property proved of it, closes it; tying each value to
 its leaf under the weights' or the transcript's root is the extractor's too. The sample conjunct is over the code alone
 and could be proved first (`Select.select`'s subset sample from bytes, `Draw.drawUnits`), beside
-`Properties.SampledProofs.DrawMisses`.
+`Properties.Spot.DrawMisses`.
 -/
 
 @[expose] public section
@@ -88,9 +88,9 @@ input and before the sample (`Cd.rounds`) otherwise, PoUW's salt-and-draw schedu
 population is `N_p` units, the code's `subset:K_d` sample from `L` uniform bytes is accepted and misses a set `U` of
 units with probability at most the model's sample's (`Pouw.Window.subsetDraw K_d` of a uniform permutation of
 `Fin N_p`). -/
-def UnitsOfLayout {ι : Type} (Cd : Accounting.Compose.Declared ι) (Np Kd : ℕ) (p : SampledProofs.Program)
+def UnitsOfLayout {ι : Type} (Cd : Accounting.Compose.Declared ι) (Np Kd : ℕ) (p : Spot.Program)
     (query : Json) : Prop :=
-  ∀ l, SampledProofs.Slots.layout p query = .ok l →
+  ∀ l, Spot.Slots.layout p query = .ok l →
     (∀ i, i < Cd.dag.length → Cd.binding i = none →
       ∃ b ∈ l.blocks.toList, b.unit = some (Cd.unit i) ∧ b.gates.1 ≤ i ∧ i < b.gates.2) ∧
     (∀ b ∈ l.blocks.toList, b.unit = none → b.gates.1 < Cd.dag.length ∧ (Cd.binding b.gates.1).isSome) ∧
@@ -99,11 +99,11 @@ def UnitsOfLayout {ι : Type} (Cd : Accounting.Compose.Declared ι) (Np Kd : ℕ
       | some .registered => 0
       | _ => Cd.rounds) ∧
     (∀ r ℓ, Cd.Writes ℓ → (Cd.seedNames r ℓ = true ↔ Cd.binding ℓ = some .registered)) ∧
-    (SampledProofs.Partition.units p query = .ok Np →
+    (Spot.Partition.units p query = .ok Np →
       ∀ (cm : Option (Array (Int × Array Int))) (L : ℕ) (U : Finset ℕ),
         prob (fun src : Fin L → Fin 256 => ∃ r,
-            SampledProofs.Select.select (.law ("subset:" ++ toString Kd)) p query none cm
-              (Properties.SampledProofs.bytesOf src) = .ok r ∧ ∀ u ∈ U, u ∉ r.2.1) ≤
+            Spot.Select.select (.law ("subset:" ++ toString Kd)) p query none cm
+              (Properties.Spot.bytesOf src) = .ok r ∧ ∀ u ∈ U, u ∉ r.2.1) ≤
           prob (fun β : Equiv.Perm (Fin Np) => ∀ t ∈ Pouw.Window.subsetDraw Kd β, t.val ∉ U))
 
 end Properties.Compose

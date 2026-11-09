@@ -53,7 +53,7 @@ from e2e_h200.commit import _slots, layout as commit_layout  # noqa: E402
 from e2e_h200.plan import EPS_KEY  # noqa: E402
 from e2e_h200.shape import PV_K, SHAPES  # noqa: E402
 from e2e_h200.window import Locator, Registered, Run, Segment  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops.boolean import gemm as BG  # noqa: E402
 from verity.ml.circuits.ops.boolean import quant as BQ  # noqa: E402
@@ -349,7 +349,7 @@ def bundle_block(blk: dict, st: dict, com: RB.Commitment, win: Locator, weights:
 
     circuit = IF.Circuit(f"{LOOP}/{fam}", ((fn, 1),))
     run_root = hashlib.sha512(f"{LOOP}/{reg['run']}/{blk['g']}".encode()).hexdigest()
-    iw = IF.Window(circuit, run_root, D.parse_law("subset:1"), 1)
+    iw = IF.Window(circuit, run_root, D.parse_design("subset:1"), 1)
     tid = circuit.ids[0]
     iw._recorded[tid] = [IF._Recorded([], [], [*data["rows"].values(), *data["outs"].values()], c, 1, 0)]
     (m,) = iw.window.members
@@ -372,7 +372,7 @@ def bundle_block(blk: dict, st: dict, com: RB.Commitment, win: Locator, weights:
 
     doc, pay = RB.build(wdir, [0], commitment=com, locate=locate, binding=binding_of(win.family(fam).template),
                         coords=lambda label, offset: dict(label), reads=lambda cc, t, p: reads.get(p), weights=weights,
-                        draw={"source": "live", "law": D.parse_law("subset:1"), "receipt": receipt, "coins": COINS},
+                        draw={"source": "live", "law": D.parse_design("subset:1"), "receipt": receipt, "coins": COINS},
                         workers=workers)
     RB.write(doc, pay, out, "bundle")
     rec = json.loads((wdir / "registration.json").read_text())

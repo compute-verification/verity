@@ -48,3 +48,12 @@ scope = "prose"
 "The sampled proofs" = "SPOT"
 "sampled proofs" = "SPOT"
 "Sampled proofs" = "SPOT"
+
+[rewrite]
+# Never rewritten: the retired-terms lint, whose docstring names the older name as the older name.
+exclude = ["tests/test_retired_terms.py"]
+
+[keep]
+# The Glossary's row of the older name, which names it.
+patterns = ['(?m)^\| "sampled proofs", the sampled proof system.*$']
+strings = []

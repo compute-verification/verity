@@ -14,7 +14,7 @@ public import Proofs.Core.Circuit
   constant, so `Partition.ofConstInputs` and `RegisteredCircuit.constInputs_unregistered_eq` (and their expansion
   forms) carry a partition of it with its constants registered back to it, unchanged;
 * `Circuit.card_filter_unbit`: the expansion's gates whose gate satisfies `p` are the bits of the gates satisfying `p`;
-* `FlockSoundness.Audit.Circuit.toCircuit_boolean`: Flock's circuits are Boolean in the draft's sense when no gate is
+* `Verity.Boolean.Circuit.toCircuit_boolean`: Flock's circuits are Boolean in the draft's sense when no gate is
   an empty row, the one operation that reads nothing.
 -/
 
@@ -55,7 +55,7 @@ theorem card_filter_unbit (p : Fin C.N → Prop) [DecidablePred p] :
     (univ.filter fun b => p (C.unbit b).1).card = ∑ g ∈ univ.filter p, C.w g :=
   card_filter_fst p
 
-theorem expandT_bit (X : C.Transcript) (g : Fin C.N) (i : Fin (C.w g)) :
+theorem expandT_bit (X : C.Trace) (g : Fin C.N) (i : Fin (C.w g)) :
     C.expandT X (C.bit g i) = BitVec.ofBool ((X g).getLsbD i) := by
   unfold expandT
   rw [unbit_bit]
@@ -69,7 +69,7 @@ theorem mem_expand_reads {b b' : Fin C.expand.N} (hi : C.isInput (C.unbit b).1 =
   simp only [Bool.false_eq_true, ↓reduceIte]
   exact ⟨fun h => (mem_filter.1 h).2, fun h => mem_filter.2 ⟨mem_univ _, h⟩⟩
 
-theorem expand_eval (a : C.expand.Transcript) : C.expand.eval a = C.expandT (C.eval (C.collapse a)) := by
+theorem expand_eval (a : C.expand.Trace) : C.expand.eval a = C.expandT (C.eval (C.collapse a)) := by
   funext b
   induction b using WellFoundedLT.induction with
   | _ b ih => ?_
@@ -91,7 +91,7 @@ theorem expand_eval (a : C.expand.Transcript) : C.expand.eval a = C.expandT (C.e
     show a b = BitVec.ofBool ((C.eval (C.collapse a) (C.unbit b).1).getLsbD (C.unbit b).2)
     rw [C.eval_input _ hi, collapse, getLsbD_ofBits, C.bit_unbit b, ofBool_getLsbD_zero]
 
-theorem expand_bits (X : C.Transcript) (l : List (Fin C.N)) :
+theorem expand_bits (X : C.Trace) (l : List (Fin C.N)) :
     C.expand.bits (C.expandT X) (l.flatMap fun g => List.ofFn (C.bit g)) = C.bits X l := by
   induction l with
   | nil => rfl
@@ -324,7 +324,7 @@ theorem ExpandSize : Guarantees.ExpandSize := by
 
 end Verity.SecurityProofs
 
-namespace FlockSoundness.Audit.Circuit
+namespace Verity.Boolean.Circuit
 
 /-- Flock's circuits are Boolean in the draft's sense when no gate is an empty row. -/
 theorem toCircuit_boolean (B : Circuit) (h : ∀ g, B.op g ≠ .row [] []) : B.toCircuit.Boolean where
@@ -336,4 +336,4 @@ theorem toCircuit_boolean (B : Circuit) (h : ∀ g, B.op g ≠ .row [] []) : B.t
     have := h g
     cases hop : B.op g <;> simp_all [Op.args, Op.isInput]
 
-end FlockSoundness.Audit.Circuit
+end Verity.Boolean.Circuit

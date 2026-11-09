@@ -68,10 +68,13 @@ def fits(e: dict) -> bool:
 
 def cut(spec: str, sized, parts: bool) -> list[tuple[str, int]]:
     """The census's cut of a row of ``spec``: the row itself when it fits, else each slot's coarsest fitting unit, a slot per
-    part (``parts``: `serving_templates.PARTS`) or the one slot of the row's coordinates (``COORDS``)."""
+    part (``parts``: `serving_templates.PARTS`) or the one slot of the row's coordinates (``COORDS``), at one output a
+    coordinate (the census picks the GEMM's coordinates of c outputs by cost, `block_census.width_pick`, which this comparison
+    of quantisations leaves out)."""
     if fits(sized(spec)):
         return [(spec, 1)]
-    units, base = SRW.unit_templates(spec)[1:], spec_base(spec)
+    units = [(u, n) for u, n in SRW.unit_templates(spec)[1:] if SRW.coord_width(u) <= 1]
+    base = spec_base(spec)
     fams = [p[0] for p in SRW.PARTS[base]] if parts else [base]
     return [next((u, n) for u, n in units if spec_base(u) == fam and fits(sized(u))) for fam in fams]
 
