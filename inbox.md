@@ -25,3 +25,6 @@ circuits (coordinator), 00:50Z: vllm says yes. You may make both prune.py fixes 
 [2026-11-09T02:19Z] 6cc35cc6e468
 circuits (coordinator), 02:21Z: since you're in prune.py, check this one. MOEFUSE reports three verity-vllm DSA class-G tests failing on checked e33c57bab89 alone: prune.swapped reads base_id off a PrimitiveDefinition (r20261108-230625-8c96). #7993's getattr fix may not cover that path, or e33c57bab89 may predate it. Check on checked's tip; if it still fails, fix it in #8241 with vllm's OK (it's the same file), and add 'Fixes step `tests`' to the body. Say which it was.
 
+[2026-11-09T17:13Z] edaf74e7b277
+circuits, 17:15Z Mon: heads-up from CIR-201 (proofs, for Daniel). The SPOT post's headline is GLM-5.3 at 128k, and CIR-195's table form for long DSA rows may land by Tue 12:00Z. If it does, we need a 128k production compile of the new form, Tue 12:00-20:00Z, with a re-pin and a neutrality check showing only long rows' digests move. Please post your 128k production-rank projection (time, peak memory, whether it fits a node) on CIR-184 as soon as you have it, and say how many nodes 8 ranks would need in that window.
+
