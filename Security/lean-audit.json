@@ -16267,6 +16267,18 @@
    "type_hash": "017ee9f603454f5010e2234f743542cb1efe5c96ca838b195a445f50974908ad",
    "unfolded_hash": "27242e79076405ee7f6f1be3e09cdb04bfc09695172b8b3b59c17836ba4f15ef"
   },
+  "Nci.Cut.SecurityProofs.CountHE": {
+   "owner": "@training",
+   "signature": ["Nci.Cut.SecurityProofs.CountHE : Nci.Cut.Guarantees.CountHE"]
+  },
+  "Nci.Cut.SecurityProofs.CountHE_honest": {
+   "owner": "@training",
+   "signature": ["Nci.Cut.SecurityProofs.CountHE_honest : Nci.Cut.Guarantees.CountHE_honest"]
+  },
+  "Nci.Cut.SecurityProofs.CountHE_nontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.Cut.SecurityProofs.CountHE_nontrivial : Nci.Cut.Guarantees.CountHE_nontrivial"]
+  },
   "Nci.Cut.SecurityProofs.Cut_honest": {
    "owner": "@training",
    "signature": ["Nci.Cut.SecurityProofs.Cut_honest : Nci.Cut.Guarantees.Cut_honest"],

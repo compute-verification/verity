@@ -453,20 +453,24 @@ theorem DampenerRemotePeriod_honest : Guarantees.DampenerRemotePeriod_honest := 
     fun _ => 100, fun _ => 2, fun _ => 0, fun _ => 0, fun _ => 0, Unit, inferInstance, fun _ => Cut.Toy.d, fun _ => 2,
     1, 2, Unit, Finset (Fin Cut.Toy.C.N), inferInstance, inferInstance, inferInstance, fun _ => Cut.Toy.W,
     fun _ => Cut.Toy.val, 1, 1, 2,
-    by norm_num, by positivity, fun _ => by norm_num, by simp, fun t ξ => ?_,
-    fun _ _ _ _ b => b.elim, fun _ _ _ _ b => b.elim, by norm_num, le_rfl,
-    fun t ξ => by simpa using prob_uniform_le_one _,
-    fun t ξ => by rw [prob_of_forall_not _ fun _ h => by simp at h],
-    fun t t' _ h => absurd h (by rw [Subsingleton.elim t t']; exact lt_irrefl _), by simp, one_pos, le_rfl,
-    by norm_num, by simp [Assumptions.TerminalDetection], by simp, fun _ => le_rfl, le_rfl, by simp,
+    by norm_num, by positivity, fun _ => by norm_num, by simp [Assumptions.WithinCompute], ?_, ?_, by norm_num, le_rfl,
+    ?_, one_pos, le_rfl, by simp [Assumptions.TerminalDetection], fun _ => le_rfl, le_rfl,
     two_pos, by norm_num, by norm_num, by norm_num, by norm_num, one_pos, one_pos, two_pos,
     fun _ => Cut.SecurityProofs.toy_complies, fun _ => Cut.SecurityProofs.toy_values,
     fun _ => Cut.SecurityProofs.toy_noSharedPair, fun _ => Cut.SecurityProofs.toy_hardness 2,
     fun _ => Cut.SecurityProofs.toy_exports 2,
-    fun _ => two_pos, fun _ => by simp [Cut.SecurityProofs.toy_N], fun _ => by norm_num,
-    fun _ => by simp [wrongCapacity], fun _ => by norm_num, by norm_num [Finset.card_univ], fun ξ => ?_⟩
-  · rw [prob_of_forall_not _ fun _ h => h]
+    fun _ => two_pos, fun _ => by simp [Assumptions.SourcesCover, Cut.SecurityProofs.toy_N],
+    fun _ => by norm_num [Assumptions.UnmonitoredAtMost], fun _ => by simp [Assumptions.ResidualAtMost, wrongCapacity],
+    fun _ => by norm_num [Assumptions.CheatingAtMost], by norm_num [Finset.card_univ], fun ξ => ?_⟩
+  · intro t ξ
+    rw [prob_of_forall_not _ fun _ h => h]
     positivity
+  · unfold Assumptions.SampledPerWindow
+    exact ⟨fun _ _ _ _ b => b.elim, fun _ _ _ _ b => b.elim, fun t ξ => by simpa using prob_uniform_le_one _,
+      fun t ξ => by rw [prob_of_forall_not _ fun _ h => by simp at h]⟩
+  · unfold Assumptions.IdentitySchedule
+    exact ⟨fun t t' _ h => absurd h (by rw [Subsingleton.elim t t']; exact lt_irrefl _), by simp, by norm_num, by simp,
+      by simp⟩
   · simp only [remoteDampener, hardwareMultiple, efficiency, unregisteredShare, residualShare, lagShare,
       Fintype.univ_unit, Finset.sum_singleton, Cut.SecurityProofs.toy_workHE]
     norm_num
@@ -477,7 +481,8 @@ residual counts the wrong capacity, so the run's one counted multiplication (`M_
 efficiency 1, above the bound `1/2`, and hardware multiple 1, below the overhead bound `2`, on every run, while
 `δ = 0`. -/
 theorem DampenerRemotePeriod_nontrivial : Guarantees.DampenerRemotePeriod_nontrivial := by
-  refine ⟨le_rfl, by norm_num, fun _ => zero_le_one, by simp [Assumptions.WithinCompute], ?_, zero_le_one, le_rfl, ?_,
+  refine ⟨fun _ => ⟨true⟩, le_rfl, by norm_num, fun _ => zero_le_one, by simp [Assumptions.WithinCompute], ?_,
+    zero_le_one, le_rfl, ?_,
     one_pos, le_rfl, by simp [Assumptions.TerminalDetection], fun _ => le_rfl, le_rfl,
     two_pos, one_pos, le_rfl, one_pos, le_rfl, one_pos, one_pos, one_pos,
     fun i => i.elim, fun i => i.elim, fun i => i.elim, fun i => i.elim, fun i => i.elim, fun _ => Nat.one_pos,
@@ -510,7 +515,7 @@ theorem DampenerRemotePeriod_nontrivial : Guarantees.DampenerRemotePeriod_nontri
 open Guarantees.AcceptAll in
 example (h5 : ∀ (t : Fin 1) (ξ : Fin 1 → Bool),
     prob (PMF.uniformOfFintype Bool) (fun a => wrong t (Function.update ξ t a)) ≤ 0) : False := by
-  obtain ⟨h1, h2, h3, h4, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19, h20, h21, h22, h23,
+  obtain ⟨-, h1, h2, h3, h4, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19, h20, h21, h22, h23,
     h24, h25, h26, h27, h28, h29, h30, h31, h32, -, hnot⟩ := DampenerRemotePeriod_nontrivial
   exact hnot (DampenerRemotePeriod 1 (fun _ => Bool) cap wrong 0 (1 / 2) Empty Unit bad drawn detected win ∅ idW τw w
     ks 0 0 0 1 1 0 0 2 1 0 0 1 W M Mu Mr Mx Empty d n 1 1 Unit Unit Wk val 1 1 1 h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 h11 h12

@@ -160,26 +160,13 @@ def DampenerRemotePeriod_honest : Prop :=
     (_ : DecidableEq γ) (_ : DecidableEq V) (Wk : (i : R) → Cut.Work (d i).D γ)
     (val : (i : R) → Finset (Fin (d i).D.N) → V) (βw βx b : ℝ),
     -- PoUW, per window
-    0 ≤ p ∧ 0 < ε ∧ (∀ t, 0 ≤ cap t) ∧ ∑ t, cap t ≤ C ∧
-    (∀ t (ξ : (t : Fin T) → Ω t),
-      prob (PMF.uniformOfFintype (Ω t)) (fun a => wrong t (Function.update ξ t a)) ≤ p) ∧
+    0 ≤ p ∧ 0 < ε ∧ (∀ t, 0 ≤ cap t) ∧ Assumptions.WithinCompute cap C ∧ Assumptions.PouwPerWindow wrong p ∧
     -- sampled proofs, per window: faulty blocks fixed before the window's coins, its sample and verdict read them
-    (∀ t (ξ ξ' : (t : Fin T) → Ω t), (∀ s, s < t → ξ s = ξ' s) → ∀ b, win b = t → (b ∈ bad ξ ↔ b ∈ bad ξ')) ∧
-    (∀ t (ξ ξ' : (t : Fin T) → Ω t), (∀ s, s ≤ t → ξ s = ξ' s) → ∀ b, win b = t →
-      (b ∈ drawn ξ ↔ b ∈ drawn ξ') ∧ (b ∈ detected ξ ↔ b ∈ detected ξ')) ∧
-    0 ≤ q ∧ q ≤ 1 ∧
-    (∀ t (ξ : (t : Fin T) → Ω t),
-      prob (PMF.uniformOfFintype (Ω t)) (fun a => ∀ b ∈ bad ξ, win b = t → b ∉ drawn (Function.update ξ t a)) ≤
-        (1 - q) ^ ((bad ξ).filter fun b => win b = t).card) ∧
-    (∀ t (ξ : (t : Fin T) → Ω t),
-      prob (PMF.uniformOfFintype (Ω t)) (fun a => (∃ b ∈ bad ξ, win b = t ∧ b ∈ drawn (Function.update ξ t a)) ∧
-          ∀ b ∈ bad ξ, win b = t → b ∉ detected (Function.update ξ t a)) ≤ ks t) ∧
+    Assumptions.SampledPerWindow bad drawn detected win q ks ∧ 0 ≤ q ∧ q ≤ 1 ∧
     -- the identities and the halt
-    (∀ t t', idW t = idW t' → t < t' → τw t < τw t') ∧ (∀ ξ, ∀ b ∈ bad ξ, idW (win b) ∈ I) ∧
-    0 < H ∧ 0 ≤ Δ ∧ Φ * H ≤ C ∧
+    Assumptions.IdentitySchedule bad win I idW τw w Φ Δ H C B ∧ 0 < H ∧ 0 ≤ Δ ∧
     (∀ ξ, Assumptions.TerminalDetection (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b)) Δ) ∧
-    (∀ ξ j s, ∑ b ∈ bad ξ with idW (win b) = j ∧ s ≤ τw (win b) ∧ τw (win b) ≤ s + Δ, w b ≤ Φ * Δ) ∧
-    (∀ b, 0 ≤ w b) ∧ 0 ≤ B ∧ (∀ ξ, ∀ b ∈ bad ξ, w b ≤ B) ∧
+    (∀ b, 0 ≤ w b) ∧ 0 ≤ B ∧
     -- the inference-only policy: each day's verdict, and (H) and (E) on its charged work
     0 < κ ∧ 0 < C ∧ 0 ≤ U ∧ 0 < mfu ∧ mfu ≤ 1 ∧ 0 < βw ∧ 0 < βx ∧ 0 < b ∧
     (∀ i, CompliesAtMost c k (n i) (d i)) ∧ (∀ i, Cut.ValuesInjective (Wk i) (val i)) ∧
@@ -187,10 +174,10 @@ def DampenerRemotePeriod_honest : Prop :=
     (∀ i, Cut.Assumptions.Hardness (d i) ![(Wk i).allW, (Wk i).allX] (val i) ![βw, βx] k) ∧
     (∀ i, Cut.Assumptions.Exports (Wk i) b) ∧
     -- the counted multiplications
-    (∀ ξ, 0 < M ξ) ∧ (∀ ξ, M ξ ≤ Mu ξ + Mr ξ + ∑ i, (Wk i).N + Mx ξ) ∧
-    (∀ ξ, (Mu ξ : ℝ) ≤ mfu * κ * U / 2) ∧
-    (∀ ξ, (Mr ξ : ℝ) ≤ κ * (C - (1 - εW) * W ξ + wrongCapacity cap (fun t => wrong t ξ) + ∑ b ∈ bad ξ, w b) / 2) ∧
-    (∀ ξ, (Mx ξ : ℝ) ≤ κ * χ * (C + U) / 2) ∧
+    (∀ ξ, 0 < M ξ) ∧ (∀ ξ, Assumptions.SourcesCover (M ξ) (Mu ξ) (Mr ξ) (∑ i, (Wk i).N) (Mx ξ)) ∧
+    (∀ ξ, Assumptions.UnmonitoredAtMost (Mu ξ) mfu κ U) ∧
+    (∀ ξ, Assumptions.ResidualAtMost (Mr ξ) κ C εW (W ξ) (wrongCapacity cap (fun t => wrong t ξ)) (∑ b ∈ bad ξ, w b)) ∧
+    (∀ ξ, Assumptions.CheatingAtMost (Mx ξ) κ χ C U) ∧
     p / ε + I.card * (1 - q) ^ (K + 1) + ∑ t, ks t ≤ 1 / 10 ^ 6 ∧
     ∀ ξ, 1 < remoteDampener mfu (unregisteredShare C U)
         ((1 - unregisteredShare C U) *
@@ -252,7 +239,9 @@ holds, PoUW's per-window bound fails (the certificate is wrong with probability 
 at `δ = 0`, the run's compute efficiency is 1, above the bound `1/2`, and its hardware multiple is 1, below the overhead
 bound `2`, on every run. -/
 def DampenerRemotePeriod_nontrivial : Prop :=
-  -- every other premise: PoUW's capacities
+  -- every other premise: the window's coins
+  (∀ _ : Fin 1, Nonempty Bool) ∧
+  -- PoUW's capacities
   (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (∀ t, 0 ≤ AcceptAll.cap t) ∧ Assumptions.WithinCompute AcceptAll.cap 1 ∧
   -- sampled proofs, per window
   Assumptions.SampledPerWindow (Ω := fun _ => Bool) AcceptAll.bad AcceptAll.drawn AcceptAll.detected AcceptAll.win 1
