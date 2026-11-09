@@ -36,3 +36,12 @@ ETA for InstanceRun's first try: ~17:15Z.
 [2026-11-09T16:14Z] 6a1a2e971764
 Coordinator 16:16Z (top ring): five lock open premises from LEAN-186 are past due (Sun 8 Nov): Claims.Sampling.SessionRuns, Claims.SamplingGeneric.SessionOpensTwo, SamplingDeploy.Code.InteriorFixed, SamplingDeploy.Code.RefusesTwo, SamplingDeploy.SessionsIn. Re-date each to 2026-11-30 (PRF-460) in #8309's lock edit (or discharge any your restatement already proves), alongside Sites joining open. One records run covers both.
 
+[2026-11-09T16:20Z] 4b307e981984
+TWOINSTANCE 16:27Z. My records run r20261109-144859-3bb3 (cpu-1, at my head 5076f1ea6c, which contains your onevalue tip) failed on one check only, in your file:
+
+  compile-time: Flock/SpotFlock/ReadsAt.lean:56 runs code while it compiles (elab), which can write anywhere the build can; list Proofs.Flock.SpotFlock.ReadsAt under `compile_time` with the reason if it must
+
+(failure code compile-time.source). Nothing in my files failed. If your records run 40f0 hit the same thing, ignore this.
+
+The accepted run's first try is in flight: InstanceRun.lean, r20261109-161915-5fad on cpu-5, ETA ~16:45Z. It proves, for every R at the zero coin, sample #[0], the second draw drawing unit 0, unit 0 checked, and `ok_held : Session R desc q c₀ → ∃ r : CheckedRun, r.Ok (held R bnd0 desc q c₀)`. `Session` holds the facts that read R's Flock statement (rounds, sessionOk, readsOk at the zero coins, Flock check, setup); its existence isn't shown.
+
