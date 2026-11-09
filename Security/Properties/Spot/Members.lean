@@ -23,9 +23,9 @@ statement over several templates' circuit files, each template's units lowered f
   layout `l`, each member `t` holding `n_t` units (`ns`) per request: request `ρ`'s replay block is its units of every
   member together, member `t`'s units `ρ·n_t + p` for `p < n_t`, slot `filesBlockOf ms ns ρ t p`; an input slot's block
   holds none.
-* `memberProgFast`, `memberBlocksFast`, `filesBlockAt`, `filesReplayFast`: `memberProg`, `memberBlocks` and
-  `filesReplay` with what each rebuilds per gate or per unit built once, equal to them and compiled in their place
-  (`@[csimp]`).
+* `memberProgFast`, `memberBlocksFast`, `membersBlocksFrom`, `membersPartFast`, `filesBlockAt`, `filesReplayFast`:
+  `memberProg`, `memberBlocks`, `membersPart` and `filesReplay` with what each rebuilds per gate, per unit or per member
+  built once, equal to them and compiled in their place (`@[csimp]`).
 
 `Proofs.Flock.Bridge.Members` proves that member `m` sits at `Bits.base ms m`, that no member's gate reads another's,
 that each unit of a member is lowered there as Bridge's lowering of the member's circuit lowers it, and where each
@@ -113,6 +113,58 @@ def memberBlocksFast (ms : Bits.Members) (m : ℕ) : List (List ℕ) :=
 unit `u` is slot `unitBase ms m + u`. -/
 def membersPart (ms : Bits.Members) : Claims.Sampling.Partition :=
   ⟨[(List.range ms.length).map (memberBlocks ms)]⟩
+
+/-- Members `ms`' proof blocks, the first member's from position `b`: each member's key program, owners and offsets
+built once, its blocks `memberBlocksFast`'s, and the next member's first position this one's past its lowered gates
+(`Bits.offAt` at its key program's end). -/
+def membersBlocksFrom : ℕ → Bits.Members → List (List (List ℕ))
+  | _, [] => []
+  | b, ci :: ms =>
+    let kp := Bits.keyProg ci.1 ci.2.size
+    let ow := Bits.owners kp
+    let t := Bits.offs kp
+    ((List.range ci.2.size).map fun u => (Bits.blockOfAt t ow kp (Bits.constsAt ow kp) u).map (b + ·)) ::
+      membersBlocksFrom (b + Bits.offAt t kp kp.size) ms
+
+/-- `membersPart`, each member's first position the one before it plus that member's lowered gates
+(`membersPart_eq_fast`); as stated, member `m`'s first position (`Bits.base ms m`) rebuilds the key program of every
+member before it. -/
+def membersPartFast (ms : Bits.Members) : Claims.Sampling.Partition := ⟨[membersBlocksFrom 0 ms]⟩
+
+theorem bitsBase_zero (ms : Bits.Members) : Bits.base ms 0 = 0 := by
+  simp [Bits.base]
+
+theorem bitsBase_cons_succ (ci : _root_.Flock.Circuit × Array ℕ) (ms : Bits.Members) (m : ℕ) :
+    Bits.base (ci :: ms) (m + 1) =
+      Bits.off (Bits.keyProg ci.1 ci.2.size) (Bits.keyProg ci.1 ci.2.size).size + Bits.base ms m := by
+  simp [Bits.base]
+
+theorem memberBlocks_cons_zero (ci : _root_.Flock.Circuit × Array ℕ) (ms : Bits.Members) :
+    memberBlocks (ci :: ms) 0 = (List.range ci.2.size).map fun u =>
+      Bits.blockOf (Bits.keyProg ci.1 ci.2.size) (Bits.consts ci.1 ci.2.size) u := by
+  simp only [memberBlocks, List.getElem?_cons_zero, bitsBase_zero, Nat.zero_add, List.map_id']
+
+theorem memberBlocks_cons_succ (ci : _root_.Flock.Circuit × Array ℕ) (ms : Bits.Members) (m : ℕ) :
+    memberBlocks (ci :: ms) (m + 1) = (memberBlocks ms m).map
+      (·.map (Bits.off (Bits.keyProg ci.1 ci.2.size) (Bits.keyProg ci.1 ci.2.size).size + ·)) := by
+  simp only [memberBlocks, List.getElem?_cons_succ, bitsBase_cons_succ]
+  rcases ms[m]? with _ | cj
+  · rfl
+  · simp only [List.map_map, Function.comp_def, Nat.add_assoc]
+
+theorem membersBlocksFrom_eq (b : ℕ) (ms : Bits.Members) :
+    membersBlocksFrom b ms = (List.range ms.length).map fun m => (memberBlocks ms m).map (·.map (b + ·)) := by
+  induction ms generalizing b with
+  | nil => rfl
+  | cons ci ms ih =>
+    simp only [membersBlocksFrom, Bits.constsAt_owners, Bits.blockOfAt_offs, Bits.offAt_offs, ih, List.length_cons,
+      List.range_succ_eq_map, List.map_cons, List.map_map, Function.comp_def, Nat.succ_eq_add_one,
+      memberBlocks_cons_zero, memberBlocks_cons_succ, Nat.add_assoc]
+
+@[csimp] theorem membersPart_eq_fast : @membersPart = @membersPartFast := by
+  funext ms
+  rw [membersPart, membersPartFast, membersBlocksFrom_eq]
+  simp only [Nat.zero_add, List.map_id']
 
 /-- **The members' constants**: member `m`'s (`Bits.consts`) at its positions, `Bits.base ms m` later; none past the
 members. A key program's inputs come first, one lowered gate each, so `Bits.consts` reads a lowered position as the
