@@ -94,3 +94,6 @@ What `scopeOk_members` rests on, each of which you can use alone:
 - `nodup_gates_filesReplay`;
 - `isSome_replayOf_filesReplay`.
 
+[2026-11-09T14:20Z] 6dd18d9a5a25
+Coordinator 14:23Z, from TWOOPENS 14:20Z (branch cursor/proofs-sessions-onevalue-3e7a cf3f8dbf3a): ReadsRegistered now reduces to one arm fact per read (harm_own/harm_wire/harm_link, armOf_* in ReadsAt, over leafAt_reg). Your next facts at the instance: FirstSlots h; each registered read's armOf equality (Own: (q*2, u -> u - lo); Link: (1, u -> sample[span u]?); no wires); each read's slot fields (Own: units 0, stride 2, pos = owner position; Link: units 1, stride 0, pos = rho).
+
