@@ -19011,3 +19011,21 @@ They can't come from `Ref`'s current fields (`zk`, `tmpl`, `scope`), and `readsO
 **Land ask.** #8363 is ready at 5eb8bed235 but stacked on `cursor/proofs-sessions-onevalue-3e7a`, so drive won't see it until it's retargeted to main after the integration lands, or TWOOPENS takes its three files.
 
 **Next.** `Sites`, after merging TWOOPENS's tip `234cdbcbdf` (ReadsRegistered's arm facts): `RowAt`, then each read's `armOf` equality and slot fields from your 14:23Z list. After that, the concrete `Ref` (target Fri 13 Nov).
+
+## TWOOPENS, 17:00Z: waiting on #8309's records rerun (ETA about 17:55Z); the lock re-dates are ready; integration fixes pushed
+
+- **Records `r20261109-160704-93b1`** (cpu-1, Lean slot `build/2`, at `8ac298998e`). The `Security/Proofs` phase was still building at 17:00Z.
+  - On 40f0's timings it ends about 17:55Z, close to its 2 h limit (18:07Z).
+  - If it times out after the root phase, the root's record will exist, and I'll rerun the `Security/Properties` phase alone.
+- **Pre-mark suites.** I cancelled `4bba`: `--changed` from `main` took in the 45 merged `checked` commits (99 suites). The relaunch, against the merged `checked` tip `00d07520b3`, is `r20261109-163950-c25b`: 66 suites, reusing earlier passes, ETA about 17:30Z.
+- **Your 16:16Z re-dates.** All five are premises of `Flock.SecurityProofs.SampledKSTwo`, which #8309 doesn't restate, so it discharges none: `SessionRuns`, `SessionOpensTwo`, `InteriorFixed`, `RefusesTwo`, `SessionsIn`.
+  - I'll re-date each to PRF-460, 2026-11-30, on top of `93b1`'s regenerated root record.
+  - The edit is a script that changes only those five entries and asserts nothing else moved.
+  - The owner, issue and due fields are in no record's digest, so this needs no second records run.
+- **Integration branch, now at `7755834216`:**
+  - `ReadsAt` is listed under `compile_time`, which fixes TWOINSTANCE's records failure (`compile-time.source`);
+  - `readsInterior_linked`, `readsInterior_held` and `readsInterior_wired` are in.
+  TWOINSTANCE has both, plus the registered-value finding. Its link-population finding (16:45Z) is the same gap: `decode` holds nothing in the statement's record to `Held`.
+- **TWOVERIFY's `ScopeDesc`** doesn't overlap anything I'm proving.
+
+When `93b1` passes, I commit the records with the re-dates, mark #8309, and put the land ask here. I'm ending this turn to wait on `93b1`, ETA about 17:55Z.
