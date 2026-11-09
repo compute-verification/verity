@@ -16,6 +16,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.QSort
 import Proofs.Flock.Soundness.ExecDraw
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
+meta import Proofs.Flock.Soundness.Refine.Walk
 import Std.Data.TreeMap.Raw.Lemmas
 import Std.Data.TreeMap.Raw.WF
 import all Init.Data.Ord.String
@@ -31,6 +32,46 @@ the verifier draws from the population (`HmRow.drawn`) labels its `i`-th instanc
 first slot and positions (`ReadFields`), and round 2's `rowsOk` holds each position it reads to its unit's slot
 (`pos_of_rowsOk`).
 -/
+
+namespace SpotFlock.ReadsAt
+
+open Lean Meta in
+/-- A step of `ret_walk_inlining` on the goal `Ret m Q`: where `m` binds a join point whose parameter is named one of
+`names`, `m` with the join point inlined; none on any other goal. -/
+meta def inlineStep (names : Array Name) (g : MVarId) : MetaM (Option (List MVarId)) := g.withContext do
+  let ty ← instantiateMVars (← g.getType)
+  unless ty.isAppOfArity ``FlockSoundness.Refine.Ret 3 do return none
+  let .letE _ _ v b _ := (ty.getArg! 1).headBeta.consumeMData | return none
+  let .lam x _ _ _ := v.consumeMData | return none
+  unless names.contains x.eraseMacroScopes do return none
+  let g' ← mkFreshExprSyntheticOpaqueMVar
+    (mkApp3 (mkConst ``FlockSoundness.Refine.Ret) (ty.getArg! 0) (b.instantiate1 v) (ty.getArg! 2))
+  g.assign g'
+  return some [g'.mvarId!]
+
+open Lean Elab Tactic Meta in
+/-- `ret_walk_inlining [x, …] [c, …]` is `ret_walk [c, …]` but inlines each join point whose parameter is named one of
+the `x`s. `ret_walk` walks a join point's body once, at a value it knows nothing of; inlined, the body is walked at each
+jump, at the value the jump passes and with the equation the walk kept for it. -/
+elab "ret_walk_inlining" "[" xs:ident,* "]" "[" cs:ident,* "]" : tactic => do
+  let names := xs.getElems.map (·.getId)
+  let mut keep := #[]
+  for c in cs.getElems do keep := keep.push (← realizeGlobalConstNoOverloadWithInfo c)
+  let mut todo := (← getGoals)
+  let mut left := #[]
+  while true do
+    match todo with
+    | [] => break
+    | g :: rest =>
+      match ← inlineStep names g with
+      | some new => todo := new ++ rest
+      | none =>
+        match ← FlockSoundness.Refine.retStep keep g with
+        | some new => todo := new ++ rest
+        | none => left := left.push g; todo := rest
+  setGoals left.toList
+
+end SpotFlock.ReadsAt
 
 @[expose] public section
 
@@ -198,9 +239,9 @@ theorem reads_of {e : Json} {ctx : String} {rs : Array Json} {reads : Array (Opt
   rw [hk2] at hfk
   rw [Array.getElem?_eq_getElem hk0, hf _ _ hfk]
 
-/-- A leaf count as a `ports` file's entry gives it. -/
-theorem leaves_of {e : Json} {ctx : String} {n : ℕ} (h : _root_.Flock.J.nat e "leaves" ctx = .ok n) :
-    Spot.getD e "leaves" = .num ⟨Int.ofNat n, 0⟩ :=
+/-- A number a `ports` file's entry states under key `k`, as it reads it. -/
+theorem getD_nat {e : Json} {k ctx : String} {n : ℕ} (h : _root_.Flock.J.nat e k ctx = .ok n) :
+    Spot.getD e k = .num ⟨Int.ofNat n, 0⟩ :=
   HeaderRoots.getD_of_getObjVal (FlockComplete.JsonRT.nat_ok h)
 
 /-- **A `ports` file's ports read as its entries say** (`ReadFields`), each at an entry under its name. -/
@@ -218,34 +259,27 @@ theorem portsOf_reads {j : Json} {own : Array _root_.Flock.Registered.Port}
         (fun (kv : String × Json) (reg : _root_.Flock.Registered.Port) => reg.name = kv.1 ∧ ReadFields kv.2 reg)
         fun kv => by
       obtain ⟨nm, e⟩ := kv
+      dsimp (config := { zeta := false }) only
       by_cases hc : _root_.Flock.J.has e _root_.Flock.Registered.READS_FROM_KEY = true
-      · dsimp only
-        simp only [if_pos hc]
-        ret_walk [_root_.Flock.J.str, _root_.Flock.J.nat, _root_.Flock.J.arr, _root_.Flock.unhex, Array.mapM]
-        all_goals exact ⟨rfl, leaves_of ‹_›, .inr (HeaderRoots.getD_of_getObjVal (FlockComplete.JsonRT.nat_ok
-            ‹_root_.Flock.J.nat e _root_.Flock.Registered.READS_FROM_KEY _ = .ok _›)),
+      · simp (config := { zeta := false }) only [if_pos hc]
+        ret_walk_inlining [readsFrom]
+          [_root_.Flock.J.str, _root_.Flock.J.nat, _root_.Flock.J.arr, _root_.Flock.unhex, Array.mapM]
+        all_goals exact ⟨rfl, getD_nat ‹_root_.Flock.J.nat e "leaves" _ = .ok _›,
+          .inr (getD_nat ‹_root_.Flock.J.nat e _root_.Flock.Registered.READS_FROM_KEY _ = .ok _›),
           reads_of ‹_root_.Flock.J.arr e "reads" _ = .ok _› ‹_› fun r n hv => by
             try dsimp only at hv
             split at hv
             · cases hv
-            · simp only [Functor.map, Except.map] at hv
-              split at hv
-              · cases hv
-              · cases hv
-                exact FlockComplete.JsonRT.asNat_ok ‹_›⟩
-      · dsimp only
-        simp only [if_neg hc]
-        ret_walk [_root_.Flock.J.str, _root_.Flock.J.nat, _root_.Flock.J.arr, _root_.Flock.unhex, Array.mapM]
-        all_goals exact ⟨rfl, leaves_of ‹_›, .inl ⟨getD_of_not_has hc, rfl⟩,
+            · exact FlockComplete.JsonRT.asNat_ok (map_some_ok hv)⟩
+      · simp (config := { zeta := false }) only [if_neg hc, pure_bind]
+        ret_walk_inlining [readsFrom]
+          [_root_.Flock.J.str, _root_.Flock.J.nat, _root_.Flock.J.arr, _root_.Flock.unhex, Array.mapM]
+        all_goals exact ⟨rfl, getD_nat ‹_root_.Flock.J.nat e "leaves" _ = .ok _›, .inl ⟨getD_of_not_has hc, rfl⟩,
           reads_of ‹_root_.Flock.J.arr e "reads" _ = .ok _› ‹_› fun r n hv => by
             try dsimp only at hv
             split at hv
             · cases hv
-            · simp only [Functor.map, Except.map] at hv
-              split at hv
-              · cases hv
-              · cases hv
-                exact FlockComplete.JsonRT.asNat_ok ‹_›⟩
+            · exact FlockComplete.JsonRT.asNat_ok (map_some_ok hv)⟩
     refine ⟨_, by assumption, fun reg hreg => ?_⟩
     obtain ⟨⟨nm, e⟩, hkv, hn, hP⟩ := hall reg hreg
     obtain rfl : reg.name = nm := hn
@@ -325,7 +359,7 @@ theorem rowsOk_of_readOk {own : Spot.SecondStage.Own} {named : Bool} {p : Spot.S
   generalize Spot.SecondStage.wireOf own p.template port = wr
   intro h ha
   rcases val with _ | _ | _ | v | _ | _ <;> rcases lk with _ | l <;> rcases wr with _ | w <;>
-    simp only [Bool.and_eq_true] at h ha
+    simp only [Bool.and_eq_true, reduceCtorEq] at h ha
   · obtain ⟨⟨k, x⟩, hkx, hval⟩ := Option.map_eq_some_iff.1 ha
     simp only [Prod.mk.injEq] at hval
     obtain ⟨rfl, rfl⟩ := hval
@@ -354,6 +388,18 @@ theorem rowsOk_of_readOk {own : Spot.SecondStage.Own} {named : Bool} {p : Spot.S
       simp only [Bool.and_eq_true] at h
       exact h.2
     · cases h
+
+/-- **A slot at a registered read's unit opens the read's position**: where `rowsOk` accepts the read's entry, a slot
+not sized, counting the arm's units under the roots and placing its unit at the arm's unit for slot `j`, opens at an
+entry of the read's leaf count the position the read reads at `j` (`pos_of_rowsOk`). -/
+theorem leafAt_of_rowsOk {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {units : ℕ} {unit : ℕ → Option ℕ}
+    (hrows : Spot.SecondStage.rowsOk q p e units unit = true) {reg : _root_.Flock.Registered.Port}
+    (hf : ReadFields e reg) {j pos : ℕ} (hj : reg.reads[j]? = some (some pos)) {roots : List Msg} {s : Slot}
+    (hs : s.sized = false) (hu : unitsAt roots s = units)
+    (hb : ∀ b, unit j = some b → s.pos + placeOf roots * s.stride = b) {en : Entry} (hl : en.leaves = reg.leaves) :
+    leafAt roots s en = pos := by
+  obtain ⟨hpos, b, hb', -, rfl⟩ := pos_of_rowsOk hrows hf hj
+  rw [leafAt, hu, if_neg (Nat.pos_iff_ne_zero.1 hpos), leavesAt, if_neg (by rw [hs]; decide), hl, hb b hb']
 
 /-- **A drawn session's unit labels**: where a public file whose header round 2's `populationOk` accepts for part `p`
 of a sample of `q` blocks loads `pop`, and the draw `d` gives `pub`, `pub` labels its instances with the slots of
@@ -548,5 +594,31 @@ theorem readPosAt {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1
   rw [← hrd]
   congr 1
   simp [hnD, hv]
+
+/-- **A registered read's slot opens the session header's position for the instance's row**: in an accepted run whose
+checked unit's session has one table and counts the unit's instance, a registered read `reg` at the circuit's port
+`p`, and a slot not sized that, under the roots, counts the units of the tree round 2 holds the read to (`armOf`) and
+places its unit at that tree's unit for the unit's slot (`harm`), the slot's leaf at an entry of `reg`'s leaf count is
+the position the header gives the instance's row of `p`'s table (`readPosAt`, `ReadsAt.leafAt_of_rowsOk`). -/
+theorem leafAt_reg {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1) (hcnt : r.Counted h)
+    {own : Array _root_.Flock.Registered.Port} {reg : _root_.Flock.Registered.Port}
+    (hown : r.ins.registered = some own) (hreg : reg ∈ own) {p : ℕ}
+    (hp : (List.range r.sts[0]!.c.ports.size).find? (fun q => r.sts[0]!.c.ports[q]!.name == reg.name) = some p)
+    {roots : List Msg} {s : Slot} (hs : s.sized = false)
+    (harm : ∀ st rec draw e (D : _root_.Flock.Draw.UnitDraw) (hn : r.n h < D.proved.size), decode r.x = some st →
+      jsonMsg r.m₁ = some rec → secondDraw h r.c₀ r.c₁ = some draw →
+      drawnOf ((FlockDeploy.readOf true (r.xS h)).bind (·.draw)) = D.proved.toList → ReadsAt.ReadFields e reg →
+      ∃ units unit, ReadsAt.armOf (ownOf h st rec draw r.c₀) (r.drawnPart h) reg.name e = some (units, unit) ∧
+        unitsAt roots s = units ∧
+        ∀ b, unit ((r.drawnPart h).lo + D.proved[r.n h]) = some b → s.pos + placeOf roots * s.stride = b)
+    {t : _root_.Flock.Tables} {positions : Array ℕ} {paths : Array ByteArray} (ht : r.sts[0]!.pub.tables = some t)
+    (hent : _root_.Flock.Registered.entry r.sts[0]!.pub reg = .ok (positions, paths)) {en : Entry}
+    (hl : en.leaves = reg.leaves) :
+    leafAt roots s en = positions.getD (_root_.Flock.Registered.ref t r.sts[0]!.c.ports.size p (r.n h)) 0 := by
+  obtain ⟨D, hdr, hn, -, hj⟩ := readPosAt h hr hc1 hcnt hown hreg hp ht hent
+  obtain ⟨-, -, -, hx, -, -, -, hok, hu, -, -, -, -, hset⟩ := hr
+  obtain ⟨st, rec, draw, e, hst, hrec, hdraw, hrd, hf⟩ := ReadsAt.regEntry h hx hok hu hset hown hreg
+  obtain ⟨units, unit, ha, hun, hb⟩ := harm st rec draw e D hn hst hrec hdraw hdr hf
+  exact ReadsAt.leafAt_of_rowsOk (ReadsAt.rowsOk_of_readOk hrd ha) hf hj hs hun hb hl
 
 end SpotFlock.CheckedRun
