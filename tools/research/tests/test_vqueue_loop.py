@@ -877,6 +877,20 @@ def test_a_head_landed_on_the_old_paths_checked_holds_its_holders_back_from_noth
     assert [r.number for r in w.ready(env.main())] == [2]
 
 
+def test_a_pr_holding_a_marked_pr_that_isnt_taken_waits_for_it_so_it_carries_no_unreviewed_change(env):
+    """A land verdict covers its PR's own change: a PR stacked on a marked PR that is held, or has no land verdict, isn't
+    taken until that one is, else it would carry that change onto `main` under its own land."""
+    one = env.put(1, {"a.txt": "1\n"})
+    env.o.gh.put(2, env.o.change({"b.txt": "2\n"}, base=one))
+    env.labels.held.add(1)
+    loop = env.loop(lambda s: [])
+    w = loop.world
+    loop.tick()
+    assert [r.number for r in w.ready(env.main())] == []
+    env.labels.held.discard(1)
+    assert [r.number for r in w.ready(env.main())] == [1, 2]
+
+
 def test_each_tick_reads_the_labels_afresh(env):
     made: list[Labels] = []
     loop = env.loop(lambda s: [])
@@ -1201,8 +1215,8 @@ def _red_on_a_moved_main(env: Env, shadow: bool = False) -> tuple[Loop, str, str
 
 def test_a_failure_on_a_base_graph2_hasnt_listed_waits_and_the_base_is_enqueued_again_and_rung_within_the_hour_once(env):
     """Whose a failure is, the base's keys tell: on a base whose check isn't listed the candidate is pending and nobody is
-    blamed, the loop enqueues `ready:<base>`, again each `BASE_RETRY_S` while it stays unlisted, and rings `@ci` and `@infra`
-    once, `BASE_RING_S` after it first asked for it; listed, a failure at the base's key is inherited and the candidate
+    blamed, the loop enqueues `ready:<base>`, again each `BASE_RETRY_S` while it stays unlisted, and rings `CI` and
+    `landing.INFRA` once, `BASE_RING_S` after it first asked for it; listed, a failure at the base's key is inherited and the candidate
     lands."""
     loop, main, sha, one, red = _red_on_a_moved_main(env)
     w = loop.world
@@ -1237,7 +1251,7 @@ def test_a_failure_on_a_base_whose_listing_failed_or_can_t_be_read_waits_and_the
         env, why, shadow):
     """A base whose listing failed, or whose graph can't be read, has no keys to say whose a failure is: the candidate is
     pending and nobody is blamed (were each failure its own, a red `main` would eject each PR built on it), the loop enqueues
-    `ready:<base>` again each `BASE_RETRY_S`, and rings `@ci` and `@infra` at once, naming it, once a base and why (with
+    `ready:<base>` again each `BASE_RETRY_S`, and rings `CI` and `landing.INFRA` at once, naming it, once a base and why (with
     --shadow, logged only).  Listed again, a failure at the base's key is inherited and the candidate lands."""
     loop, main, sha, one, red = _red_on_a_moved_main(env, shadow)
     w = loop.world
@@ -1912,6 +1926,24 @@ def test_a_candidate_s_own_failure_of_a_step_read_whole_that_the_run_beside_main
     assert _acts(logged) == ["slim", "build", "slim", "slim", "slim", "eject", "drop"]
     assert logged[3]["why"] == "judged pass beside `main`" and env.withdrawn == [(1, logged[1]["heads"][0])]
     assert env.posts and not [r for r in logged if r["action"] in ("red", "advance")]
+
+
+def test_a_check_that_failed_to_list_never_advances_beside_a_run_whose_every_failure_is_inherited(env):
+    """A candidate whose graph2 check failed to list ran none of its gating tasks: beside a run whose only failure the run
+    beside `main` fails too, its fail never ends, so it waits as beside a run still going, and `main` doesn't move."""
+    main = env.main()
+    env.put(1, {"1.txt": "1\n"})
+    slim = Slim()
+    loop = env.loop(vqueue.decide, slim=slim, batch=1, depth=1)
+    loop.world.slim_driver = lambda: "drive"
+    logged = loop.tick()
+    (built,) = [r for r in logged if r["action"] == "build"]
+    env.graph2.list_graph(f"ready:{built['sha']}", {"schema": GRAPH_V2, "commit": "0" * 40, "tasks": []})
+    slim.end("main-1", "preflight-lints")
+    slim.end(f"run-{len(slim.started)}", "preflight-lints")
+    for _ in range(4):
+        logged += loop.tick()
+    assert env.main() == main and "advance" not in _acts(logged), _acts(logged)
 
 
 def test_a_fail_waits_for_the_run_beside_main_while_it_runs_but_no_longer_than_pending_s(env):
