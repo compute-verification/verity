@@ -683,8 +683,7 @@ class _Decoder:
 
 def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,
                   with_desc: bool = True, C: int = 0, dead_free: bool = False, batched: bool = False, finish: Callable | None = None,
-                  batch: list | None = None, chunks: tuple[int, ...] | None = None, edge: tuple[str, ...] = (), stop: dict | None = None,
-                  entries: tuple[int, ...] = ()) -> BuildResult:
+                  batch: list | None = None, chunks: tuple[int, ...] | None = None, edge: tuple[str, ...] = (), stop: dict | None = None, entries: tuple[int, ...] = ()) -> BuildResult:
     """The Program of the Build's `wrapper` for φ: `step` (one engine step, M token rows at pos0.., the last row sampled) or
     `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples). `C` > 0: the
     request's first C positions are a history it reads and doesn't compute, every layer's rows of them Inputs after its own
@@ -701,11 +700,10 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     request's prefill as the engine ran it, in launches of these rows in turn (the chunked request wrapper), where its kernels read
     the launch: per chunk one forward at its own step of `batch` (its chunks, then its T decodes), the sample after the last chunk,
     a chunk that leaves the prompt incomplete sampling nothing (vLLM discards that sample); the SRC config is `{"chunks": [...]}`
-    (its wrapper's class unchanged); one chunk is the request wrapper. `entries`: per chunk, the rows its sequence ran in that
-    launch, where a chunk computes only the first of them (a hit prefix recomputed in its producers' launches, `steps.plan_steps`'
-    ``recompute_hits``); the SRC config holds them. `edge`: the history groups (`dsa.Net.edge_groups`) a request
-    a Commit window leaves at position LP + T (inside its prompt too: T < 0, sampling nothing) returns after its samples and checks,
-    every layer's rows [0, LP + T) of each as `prefix_params(LP + T)` lays them out (`common.with_edge`); its SRC config holds them."""
+    (its wrapper's class unchanged); one chunk is the request wrapper. `entries`: per chunk, its sequence's rows in that launch, of
+    which it computes the first (`steps`' ``recompute_hits``), in the SRC config. `edge`: the history groups (`dsa.Net.edge_groups`)
+    a request a Commit window leaves at position LP + T (inside its prompt too: T < 0, sampling nothing) returns after its samples
+    and checks, every layer's rows [0, LP + T) of each as `prefix_params(LP + T)` lays them out (`common.with_edge`), in its SRC config."""
     t0 = time.time()
     net = decoder(phi, M, pos0 + M if wrapper == "step" else int(LP) + int(T))
     kind = (phi.sampling or {}).get("kind", "greedy")
