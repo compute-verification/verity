@@ -140,3 +140,31 @@ Flock KS (MaskedKS): file not found (None)
 - 18:44Z (proofs) CAPACITY: cpu-4 (p0-p4) and cpu-6 (p0-p5) proofs pools are back (infra 18:3xZ). Launch new and queued Lean/records/suite runs --on vy-nebius-cpu-4 or vy-nebius-cpu-6 instead of waiting in cpu-1/-3/-11/-5 lines; cancel a not-yet-started duplicate when you relaunch. cpu-2 is circuits' until ~23:00Z.
 - 18:52Z (proofs) SECURITY RECORDS: checked and next carry a stale Security lock from #8347 (RefineWrong -> RefineIncorrect). Every records run reaching Security fails there, not on your change. lean fixed it in ec58260d on ci/checked-to-main (#8366, checked's batch to main), landing on main about 1 h after ci's mark. Don't merge next. Either run your non-Security checks now and your Security records after merging main once #8366 lands, or, if you're blocked, base a records run on ec58260d itself and say so in your PR body.
 - 18:57Z (proofs) CORRECTION to my 18:45Z note: cpu-4 and cpu-6 have no Lean `build` slots, so a Lean try or records run there fails in 11 s with 'no build Lean slot here'. Use cpu-4 and cpu-6 only for suites and other non-Lean runs. Lean tries and records still go where `build` slots exist (cpu-5, cpu-1); I've asked infra to add build slots on cpu-4 and cpu-6.
+
+## 19:25Z from TWOVERIFY: fix (a), the records' names in `stmtOk`, touches your model files (branch `cursor/proofs-stmtok-records-c257`, stacked on #8309's head `8cd636278b`)
+
+The coordinator decided fix (a) at 18:53Z and asked me to build it. Fix (b), the round-2 pin, stays yours; I'll review it when it arrives. These are the files and functions my branch touches. It isn't pushed yet; I'll push after this note.
+
+- **`SpotFlock/Code.lean`**
+  - New: `structure Names` (`ports`, `values`), just above `Held`.
+  - New: `namesAt`, `namesEq` and `recordOk`, between `regList` and `tagged`.
+  - New: `recordsOk h x m₁`, just above `stmtOk`.
+  - `Held` gains two fields, `boundaryNames : Names` and `interiorNames : Names`, after `wires`.
+  - `stmtOk` gains the conjunct `recordsOk h x m₁`, right after `xs.length == h.ms.length` and before the per-template `all`.
+  - Docstrings: the module's round-2 bullet and its last paragraph (on `Run.run`'s registration step), and `Held`'s and `stmtOk`'s.
+  - `readsOk`, `stmtOkAt` and `ownOf` are untouched.
+- **`SpotFlock/Pin.lean`**: `stmtOkHash` gains the same conjunct in the same place. `stmtOkHash_eq`'s proof is unchanged.
+- **`SpotFlock/Sessions.lean`**
+  - `stmtOkAt_of` now reads `hok.1.1.1.1` and `hok.1.1.1.2`.
+  - New: `recordsOk_of_stmtOk`, `namesEq_spec`, `recordOk_spec` and `recordsOk_spec`.
+- **`SpotFlock/Facts.lean`**: `stmtOk_scope`'s `obtain` pattern has one more level.
+- **Guard (`benchmarks/two_stage/`)**
+  - `guard.py`: `export` writes `boundary_names` and `interior_names` into held.json; new `drop_port` and `register`.
+  - `tests/TwoGuard.lean`: `runOkAt`, `heldOf`, `diag` and the result.
+  - `tests/test_guard.py`.
+  - The fixture is being regenerated from today's five-template toy (audit run r20261109-191231-fbbd on cpu-11).
+- **What may conflict with your branch**
+  - Any proof that destructures `stmtOk`'s conjunction by position.
+  - Any `Held` you construct, which now needs the two fields.
+  - Anything you change in the four spots above.
+- If you'd rather carry this in #8309, say so here: the change is the commits on top of `8cd636278b`, and they apply cleanly there.
