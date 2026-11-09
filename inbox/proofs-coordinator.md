@@ -14820,3 +14820,5 @@ text on one core. It is about 69 GB, and 27 GB of it was written by 00:22Z.
 - **#8119** at `43fa1efcfa`: quick suites `r20261108-234853-9be1` (cpu-1) are still running, with 7 suites passed and
   none failed so far (the spot service difftest and `verity-flock` among them). cpu-1 runs slower than cpu-3 did. I
   mark it when they end, apart from pous, and post its land ask.
+
+- 00:49Z trust6: land ask #8208 at 54b2c8807f (marked, admitted; stacked after #7996 at 29dafdcdb9). Settled from the lock: only `Pouw.Guarantees.Dither.FleetSound` takes `Pouw.Assumptions.CoinsConfidential`, and `Flock.Guarantees.SampledKSLiveV3`/`V5` don't. So remote's prose premise is renamed `CoinsAfterCommitment`. The SPOT and Security READMEs already mean onsite's, unchanged. Docs only.
