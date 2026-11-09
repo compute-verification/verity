@@ -216,7 +216,7 @@ open FlockSoundness FlockSoundness.Discharge
 theorem isSome_row? {kp : Spot.Bits.KeyProg} {g : ℕ} (h1 : kp.inputs ≤ g) (h2 : g < kp.size) :
     (kp.row? g).isSome := by
   have h3 : g - kp.inputs < kp.rows.size := by unfold Spot.Bits.KeyProg.size at h2; omega
-  rw [Spot.Bits.KeyProg.row?, if_neg (show ¬ g < kp.inputs by omega), Array.getElem?_eq_getElem h3]
+  rw [Spot.Bits.KeyProg.row?, ite_eq_right (show ¬ g < kp.inputs by omega), Array.getElem?_eq_getElem h3]
   rfl
 
 /-- **A key program's output is a row**: each is a copy row of a unit's instance. -/
@@ -521,10 +521,10 @@ variable {ns : Array ℕ} {l : Spot.Slots.Layout}
 theorem nodup_slotFiles (hfit : FilesFit ms ns l) (ρ : ℕ) : (slotFiles ms ns l ρ).Nodup := by
   unfold slotFiles
   rcases hb : l.blocks[ρ]? with _ | b
-  · simp [hb]
+  · simp
   · rcases hu : b.unit with _ | u
-    · simp [hb, hu]
-    · simp only [hb, hu, Option.bind_some]
+    · simp [hu]
+    · simp only [hu, Option.bind_some]
       obtain ⟨hρu, hroom⟩ := hfit ρ b hb u hu
       rw [hρu]
       unfold filesUnits
