@@ -18,7 +18,10 @@ registers. Its charge is v4's, at its own checked witness's width. `CompileSlice
 (`compile_slice_v6`) are v5 cut in two units with the block pool carried between windows: the pool window opens the
 pool row under the previous window's output root, registered before the window's coins, and commits the row its stream
 leaves as the next. Both are proved every window, and a chain restarts from the empty pool's root after a failed
-window. The charge is ℓ_w plus the pool window's checked rows (the left row and the stream's witness) at their widths.
+window. A request open at the window's edge is cut, having emitted its ``a_O``, and continues in the next window as an
+ordinary arrival; each keyed block's page is copied into the window's carried port from its source, the window's write
+or the previous carried port (`PageCopy_v1`). The charge is ℓ_w plus the pool window's checked rows (the left row, the
+blocks' sources and the stream's witness) at their widths.
 
 **The charge** is `charge_chain.ChargeLink_v1{D}` (`build_link`; [charge-chain.md](charge-chain.md)):
 - Its inputs:
