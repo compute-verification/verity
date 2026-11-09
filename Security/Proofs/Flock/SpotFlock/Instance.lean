@@ -6,7 +6,7 @@ public import Proofs.Flock.SpotFlock.DrawnAt
 import all Init.Data.Array.Basic
 
 /-!
-# A two-stage registration SPOT[Flock]'s premises hold at
+# A two-stage registration at which SPOT[Flock]'s design and frame hold
 
 `SpotFlock.Instance.held R B desc q c₀`: the auditor's copies (`Held`) of a registration of one template whose one
 request is two units, of which the second stage proves one, over the template's reference statement `R` (`Ref`) and a
@@ -23,23 +23,28 @@ Each bundle holds the facts the two-stage design reads of it, each a decision on
 * `Bnd`: the boundary's layout is one proof block (`oneLayout`), its first stage's design is `subset:1` (`slotDesign`,
   `firstK`), and its population is in slot order (`popOk`).
 
-At them the design evaluates (`two_held`) and the second stage takes the counts (`secondProblem_held`), so the
-registration doesn't refute a checked run before any session; the frame is SPOT's own (`built_held`); SPOT's layout
-embeds the statement (`embeds_held`); round 2's parts are the one template's (`partsAt_held`); and the first stage
-samples unit slots (`firstSlots_held`), so a checked unit of a one-table session is counted (`counted_held`).
+At them the design evaluates (`two_held`) and the second stage takes the counts at every replay sample of one replay
+block or more, ascending (`secondProblem_held`), so neither refutes a checked run before any session; the frame is
+SPOT's own (`built_held`); SPOT's layout embeds the statement (`embeds_held`); round 2's parts are the one template's
+(`partsAt_held`); and the first stage samples unit slots (`firstSlots_held`), so a checked unit of a one-table session
+is counted (`counted_held`).
 
 ## What this does not show
 
 `SpotKSTwo` reads two premises of a registration, `Built h` and `Sites h`; SPOT's layout embeds the statement at every
-registration (`embeds_layoutFor`). At `held R bnd0 …` (`bnd0`, `SpotFlock.InstanceBoundary`'s concrete boundary) the
-design evaluates, the second stage takes the counts and `Built` holds, for every `R : Ref`. `Sites` is not proved here;
-of its site's three conjuncts only `Counted` is, and only at a one-table session (`counted_held`). So the two-stage
-guarantee's non-vacuity is reduced, not proved: it rests on one existence fact, a `Ref`, that is, a reference statement
-with hidden outputs and `sha512/row/v2` ports, in the two-stage scope at two units a request, whose registered reads
-carry roots and whose masked setup (`Stmt.setupHidden`, through `FlockDeploy.setupOf true`) holds at the open
-guarantee that the verifier's fixed nets build (`Properties.Flock.Nets.FixedNetsBuild`). No such statement is proved
-in Lean. That one exists is evidence, not proof: the Lean verifier accepts the honest run of the two-stage toy
-(`benchmarks/two_stage/`), whose reference statements are of this kind, one of its templates at two units a request.
+registration (`embeds_layoutFor`). At `held R bnd0 …` (`bnd0`, `SpotFlock.InstanceBoundary`'s concrete boundary)
+`Built` holds for every `R : Ref`. That does not reduce the two-stage guarantee's non-vacuity to one existence fact.
+Non-vacuity at the instance needs three things, none proved here:
+* `Sites` at the instance: of a site's three conjuncts only `Counted` is proved, and only at a one-table session
+  (`counted_held`);
+* an accepted run: that some run passes `CheckedRun.Ok` at the instance, given `R`; without one, `Sites` holds
+  vacuously and the guarantee says nothing there;
+* a concrete `Ref`: a reference statement with hidden outputs and `sha512/row/v2` ports, in the two-stage scope at two
+  units a request, whose registered reads carry roots and whose masked setup (`Stmt.setupHidden`, through
+  `FlockDeploy.setupOf true`) holds at the open guarantee that the verifier's fixed nets build
+  (`Properties.Flock.Nets.FixedNetsBuild`). No such statement is proved in Lean. That one exists is evidence, not
+  proof: the Lean verifier accepts the honest run of the two-stage toy (`benchmarks/two_stage/`), whose reference
+  statements are of this kind, one of its templates at two units a request.
 -/
 
 @[expose] public section
@@ -172,11 +177,15 @@ theorem embeds_held : Embeds (held R B desc q c₀) (layoutFor (held R B desc q 
 /-- **Round 2's parts**: the one template's, named `R.name`, from slot `0`, of two units. -/
 theorem partsAt_held (n : ℕ) : partsAt (held R B desc q c₀) n = #[⟨R.name, 0, 2⟩] := rfl
 
-/-- **The second stage takes the counts**: at the replay sample of the one request, `Select.selectSecond` raises none
-of its refusals over the registration's cells and counts, one unit of the request's two. -/
-theorem secondProblem_held :
-    Spot.Select.secondProblem #[0] (held R B desc q c₀).reg.ns (held R B desc q c₀).reg.ks = none := by
-  show Spot.Select.secondProblem #[0] #[2] #[1] = none
+/-- **The second stage takes the counts**: at every replay sample of one replay block or more, ascending,
+`Select.selectSecond` raises none of its refusals over the registration's cells and counts, one unit of a request's
+two. -/
+theorem secondProblem_held {s : Array ℕ} (hne : s.isEmpty = false)
+    (hasc : (s.toList.zip s.toList.tail).all (fun (a, b) => a < b) = true) :
+    Spot.Select.secondProblem s (held R B desc q c₀).reg.ns (held R B desc q c₀).reg.ks = none := by
+  show Spot.Select.secondProblem s #[2] #[1] = none
+  unfold Spot.Select.secondProblem
+  simp only [hne, hasc, Bool.not_true, Bool.or_false, Bool.false_eq_true, ↓reduceIte]
   decide +kernel
 
 /-- **The first stage samples unit slots**: the boundary's first stage is a uniform subset with its population in slot
