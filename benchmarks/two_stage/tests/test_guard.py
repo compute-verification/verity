@@ -45,12 +45,14 @@ from verity_config.settings import of
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import guard as G  # noqa: E402
-import toy as T  # noqa: E402
 
 EXE = of(__file__).VERITY_TWO_STAGE_GUARD
 FIXTURE = HERE / "fixtures" / "guard.tar.xz"
 #: a value no port of the toy's is named, which the registered-value variants register
 VALUE = "TwoStageToyGuard/registered"
+#: `toy.FLIP_B`'s name, the template whose own port `o0` no link or wire names; `toy` needs the workspace, which
+#: `guard_node.py --pytest`'s environment doesn't have
+FLIP_B = "TwoStageToyFlipB"
 pytestmark = pytest.mark.skipif(not EXE, reason="VERITY_TWO_STAGE_GUARD names the command that runs TwoGuard.lean "
                                 "(guard_node.py --pytest makes it)")
 
@@ -117,8 +119,8 @@ def test_one_registered_byte_flipped_fails(runs: Path, tmp_path: Path):
 
 def test_dropped_port_registered_as_a_value_fails(runs: Path, tmp_path: Path):
     honest = runs / "honest"
-    names = json.loads((honest / "held.json").read_text())["names"]
-    port = f"{names[T.TEMPLATES.index(T.FLIP_B)]}/o0"
+    (flip_b,) = [n for n in json.loads((honest / "held.json").read_text())["names"] if n.startswith(f"{FLIP_B}_")]
+    port = f"{flip_b}/o0"
     result = check(variant(tmp_path, honest, {"m1.bin": G.drop_port((honest / "m1.bin").read_bytes(), port)}))
     assert not result["recordsOk"] and not result["runOk"], result
 
