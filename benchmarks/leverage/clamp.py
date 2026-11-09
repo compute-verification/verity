@@ -15,6 +15,8 @@ scale, doubled (one more exponent step).
 
 Traffic is the hand-written sets (`traffic.CALIBRATION`, `traffic.HELDOUT`) and, with --mixed N, N texts of the pinned
 datasets' (`traffic.mixed`; Pile documents need `--with pyarrow`); --shard i/n splits a part's texts across runs.
+Calibration's texts end by position --cap + --new; complete and explain with --long N check N held-out Pile documents
+of --cap tokens instead (`traffic.long_texts`), positions calibration never saw.
 
 Parts (--part):
 
@@ -53,7 +55,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lm import E4M3_MAX, GROUP, GROUP_SITES, LM, MODELS, Boxes, Cache, position_class, sink_span, ue8m0_scale
-from traffic import CALIBRATION, HELDOUT, mixed
+from traffic import CALIBRATION, HELDOUT, long_texts, mixed
 
 
 def continued(lm: LM, tok, text: str, new: int, cap: int) -> list[int]:
@@ -162,8 +164,11 @@ def sweep_first(lm: LM, stats: Stats | None, n: int, seed: int, batch: int, part
             stats.add(taps, Stats.SWEEP + ids[:, 0], ids)
 
 
-def traffic(split: str, n_mixed: int) -> list[tuple[str, str]]:
-    """The hand-written set of `split` and n_mixed texts of the pinned datasets' (`traffic.mixed`), as (name, text)."""
+def traffic(split: str, n_mixed: int, n_long: int = 0, cap: int = 0) -> list[tuple[str, str]]:
+    """The hand-written set of `split` and n_mixed texts of the pinned datasets' (`traffic.mixed`), as (name, text); with
+    n_long, instead, that many held-out Pile documents of at least 5 characters a token of `cap` (`traffic.long_texts`)."""
+    if n_long:
+        return long_texts(n_long, 5 * cap)
     hand = CALIBRATION if split == "calibration" else HELDOUT
     return [(f"hand:{i}", t) for i, t in enumerate(hand)] + (mixed(split, n_mixed) if n_mixed else [])
 
@@ -286,7 +291,7 @@ def part_complete(lm: LM, tok, a) -> dict:
     per_text = []
     t0 = time.time()
     seen: dict[tuple[str, int], int] = {}
-    for i, (name, text) in shard(traffic("heldout", a.mixed), a.shard):
+    for i, (name, text) in shard(traffic("heldout", a.mixed, a.long, a.cap), a.shard):
         lm.boxes = None
         plain = continued(lm, tok, text, a.new, a.cap)
         lm.boxes = boxes
@@ -334,7 +339,7 @@ def part_explain(lm: LM, tok, a) -> dict:
     sink_layer = a.sink_layer if a.sink_layer >= 0 else L + a.sink_layer
     per_text, by_token = [], {}
     t0 = time.time()
-    for i, (name, text) in shard(traffic(a.texts, a.mixed), a.shard):
+    for i, (name, text) in shard(traffic(a.texts, a.mixed, a.long, a.cap), a.shard):
         lm.boxes = None
         ids = continued(lm, tok, text, a.new, a.cap)
         taps = {k: None for k in lm.sites()}
@@ -397,6 +402,8 @@ def main() -> int:
     ap.add_argument("--texts", default="heldout", choices=("heldout", "calibration"), help="explain: which traffic")
     ap.add_argument("--mixed", type=int, default=0,
                     help="texts of the pinned datasets (traffic.mixed) added to the hand-written set of the part's split")
+    ap.add_argument("--long", type=int, default=0,
+                    help="complete, explain: only this many held-out Pile documents long enough for --cap tokens")
     ap.add_argument("--shard", default="0/1", help="i/n: this run's share of the texts (merge joins calibrate's)")
     ap.add_argument("--stats", type=Path, nargs="*", default=[], help="merge: the shards' stats.pt")
     ap.add_argument("--window", type=int, default=1,

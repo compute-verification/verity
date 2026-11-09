@@ -11,7 +11,9 @@ token, digits a model's sink can't sit on).
 OpenAssistant's conversation trees (23 languages), documents from a 10,000-document sample of the Pile (web, code,
 law, papers, mail, mathematics, subtitles), and passages from Belebele in 20 scripts. Each source is in a fixed
 order, its languages or subsets taken in turn; "heldout" is the first 40% / 40% / 20% of n from each, and
-"calibration" the items after the largest held-out set (`HELDOUT_MAX`), so the two never share a text.
+"calibration" the items after the largest held-out set (`HELDOUT_MAX`), so the two never share a text. Every such text
+is cut to `CHARS` characters; `long_texts` takes held-out Pile documents long enough to reach far past the positions
+calibration sees.
 """
 import gzip
 import json
@@ -73,13 +75,13 @@ def chat_texts() -> list[tuple[str, str]]:
     return round_robin(by_lang)
 
 
-def pile_texts() -> list[tuple[str, str]]:
+def pile_texts(chars: int = CHARS) -> list[tuple[str, str]]:
     import pyarrow.parquet as pq
     t = pq.read_table(fetch_dataset("pile", SOURCES["pile"][2])).to_pylist()
     by_set: dict[str, list[str]] = {}
     for row in t:
         meta = row["meta"] if isinstance(row["meta"], dict) else json.loads(row["meta"])
-        by_set.setdefault(meta["pile_set_name"], []).append(row["text"][:CHARS])
+        by_set.setdefault(meta["pile_set_name"], []).append(row["text"][:chars])
     return round_robin(by_set)
 
 
@@ -107,6 +109,13 @@ def mixed(split: str, n: int) -> list[tuple[str, str]]:
         start = 0 if split == "heldout" else round(HELDOUT_MAX * share)
         out.extend((f"{name}:{g}", t) for g, t in items[start:start + k])
     return out
+
+
+def long_texts(n: int, chars: int) -> list[tuple[str, str]]:
+    """The first n held-out Pile documents of at least `chars` characters, cut to that: long-context traffic, from the
+    held-out range `mixed` draws from, so none is in calibration."""
+    docs = pile_texts(chars)[:round(HELDOUT_MAX * dict(SHARES)["pile"])]
+    return [(f"long:{g}", t) for g, t in docs if len(t) >= chars][:n]
 
 CALIBRATION_TEXTS = (
     "WASHINGTON (Reuters) - The Senate on Thursday passed a sweeping infrastructure bill that would spend $550 billion "
