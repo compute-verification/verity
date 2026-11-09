@@ -5039,7 +5039,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     instead of auditing, and the report's `moved` holds their moves.  The report lists the spec's definitions
     that no guarantee reads (`unread_spec`).  ``replay_cache`` (a directory) holds each module whose replay passed, under
     its `replay_keys` key: such a module's constants join the replay unchecked, and each module checked is stored there
-    when the replay passes.  ``store`` says whether this audit may write ``replay_cache`` (`replay_step`): its default,
+    when the replay passes. It is read and written only on a node whose builds are sandboxed (`sandboxed`): elsewhere a
+    build could have written it, so the report's `replay_cache` says it went unused and every module is replayed.
+    ``store`` says whether this audit may write ``replay_cache`` (`replay_step`): its default,
     sealed, lets a sealed audit store its verdicts (keyed on the sealed copies) and keeps an unsealed one, whose keys are
     from the live `.lake`, from writing the shared cache a sealed run reuses; a caller whose cache is a throwaway private
     directory passes ``store=True``.  ``closure`` replays the import closure too (`replay_step`).  ``kept_facts`` says which facts
@@ -5067,6 +5069,10 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         return reported(rep)
     tag = work.name.removeprefix("audit-")
     rep["toolchain"] = (pkg / "lean-toolchain").read_text().strip()
+    if replay_cache is not None and not sandboxed():
+        rep["replay_cache"] = "not used: this node builds without the sandbox, so a build could have written the cache"
+        log(f"replay: {pkg}: {rep['replay_cache']}; every module is replayed")
+        replay_cache = None
     t, _peak.bytes = time.monotonic(), 0
     pipe = None
     if build:
