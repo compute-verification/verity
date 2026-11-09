@@ -18,3 +18,11 @@ def test_the_notes_sync_stalls_on_a_detached_head_an_old_lock_or_an_unpushed_cha
     assert A.sync_stall(f"{NOW} main {NOW - 60} 0 0") == []
     assert any("unpushed" in w for w in A.sync_stall(f"{NOW} main 0 {NOW - 7200} 0"))
     assert any("uncommitted" in w for w in A.sync_stall(f"{NOW} main 0 0 {NOW - 7200}"))
+
+
+def test_the_disk_alerts_at_85_90_and_95_and_a_level_rearms_three_points_under_it():
+    """ci (CI-489, 9 Nov): an alarm at 85%; and the disk that fell from 97% to 90% and climbed back alerted nothing at 95%."""
+    assert A.step(84, 0) == (None, 0) and A.step(85, 0) == ("alert", 85) and A.step(96, 85) == ("alert", 95)
+    assert A.step(93, 95) == (None, 95), "within REARM of 95: no second alert for a wobble"
+    assert A.step(90, 95) == (None, 90) and A.step(95, 90) == ("alert", 95)
+    assert A.step(79, 90) == ("clear", 0) and A.step(79, 0) == (None, 0)
