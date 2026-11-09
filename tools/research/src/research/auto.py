@@ -1,9 +1,9 @@
 """`research run --on auto`'s placement: a free slot of a CPU node's pool (`SPILL`) first, then node 2's Verity share (the queue,
 `AUTO_NODE`) when it can start the job now, then the shortest pool line, and node 2's line for a job no pool fits.
 
-Node 2's share is 48 cores that queued runs claim whole (research.cores) in one first-come line; on 19 Oct two runs held all 48
-from 17:40Z for hours (a 16-job quick tier and a 32-core Lean check) while 56 runs waited, the oldest since 17:42Z, a 4-CPU suite
-36th in line, with cpu-1's idle cores unused. So before queueing, `read` asks each machine at once, over the ssh `research run
+Node 2's share is 48 cores that queued runs claim whole (research.cores) in one first-come line, so two large runs (a 16-job
+quick tier and a 32-core Lean check) can hold all 48 for hours while dozens of small runs wait behind them, with cpu-1's idle
+cores unused. So before queueing, `read` asks each machine at once, over the ssh `research run
 --on` uses, as `python3 -` with research.cores and the source tree's tools/verity/check/slot.py inlined (both stdlib only):
 node 2 for its share's live claims and waiters, and each SPILL machine for its pool's `slot.py --status --json`. `choose`
 then takes, in order:
@@ -33,23 +33,24 @@ from pathlib import Path
 from typing import Any, Callable
 
 AUTO_NODE, AUTO_PROJECT = "vy-nebius-2", "verity"
-#: (machine, pool) where `--on auto` may spill: the `research` pools of cpu-1, 2, 3, 5 and 6 are any lane's (slot_only.POOLS
-#: on cpu-1). cpu-2's shares the train slot's and proofs' cores, which sat at load 45 of 256 while the other pools had 180 runs
-#: waiting; cpu-4's cores are the train slot's, proofs' and soundness's.
+#: (machine, pool) where `--on auto` may spill: the `research` pools of cpu-1, 2, 3, 5, 6, 7, 8, 9 and 11 are any lane's
+#: (slot_only.POOLS on cpu-1). A pool left out sits idle while the listed ones queue: cpu-7, 8, 9 and 11 sat near load 0 while
+#: cpu-1, 5 and 6 queued 20 or more runs each. cpu-4's cores are the train slot's, proofs' and soundness's.
 SPILL = (("vy-nebius-cpu-1", "research"), ("vy-nebius-cpu-5", "research"), ("vy-nebius-cpu-3", "research"),
-         ("vy-nebius-cpu-2", "research"), ("vy-nebius-cpu-6", "research"))
+         ("vy-nebius-cpu-2", "research"), ("vy-nebius-cpu-6", "research"), ("vy-nebius-cpu-7", "research"),
+         ("vy-nebius-cpu-8", "research"), ("vy-nebius-cpu-9", "research"), ("vy-nebius-cpu-11", "research"))
 DESCRIPTION = Path("infra/cluster/descriptions/nebius.toml")
 SLOT_PY = Path("tools/verity/check/slot.py")
 READ_TIMEOUT_S = 30
-#: a machine whose DISK_PATH has fewer free inodes or GB than these takes no `--on auto` job: on 27 Oct cpu-5 and cpu-6 ran out of
-#: inodes with half their bytes free, and every job placed there failed shipping its source or mid-build with ENOSPC. One run of
+#: a machine whose DISK_PATH has fewer free inodes or GB than these takes no `--on auto` job: a machine out of inodes with half
+#: its bytes free fails every job placed there, shipping its source or mid-build, with ENOSPC. One run of
 #: a large suite (tools/research's) holds some 250k pytest temp files at once, so a floor below a few of those still fails jobs
 DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 1_000_000, 50
 
 
 class Unplaceable(Exception):
-    """No pool fits the job and node 2 can't be read: its queue would place it on a node that isn't up (26 Oct: node 2 stopped,
-    and an `--on auto` job too big for a pool slot was refused there with a stale admission window)."""
+    """No pool fits the job and node 2 can't be read: its queue would place it on a node that isn't up (a stopped node 2
+    refuses an `--on auto` job too big for a pool slot with a stale admission window)."""
 
 PROBE = '''
 import json, os, sys, types
@@ -194,7 +195,10 @@ def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
     waiting = len(doc.get("waiters") or [])
     why = (f"slots {', '.join(s['name'] + (' free' if s in free else ' held' if s.get('holder') else ' blocked') for s in fit)}; "
            f"{waiting} waiting")
-    return len(open_), len(free), waiting, why
+    # the line drains through the slots that run: a slot blocked on memory or disk adds no throughput until it clears, and a
+    # pool whose idle slots all wait on memory reservations would otherwise rank as a short line
+    running = [s for s in open_ if s.get("holder") is not None or not s.get("blocked")]
+    return max(len(running), 1), len(free), waiting, why
 
 
 def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float) -> tuple[tuple[str, str] | None, str]:

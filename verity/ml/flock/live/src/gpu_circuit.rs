@@ -3,7 +3,7 @@
 //! hm96 slots' inputs and every unit's input words (all computed here from the rows, a few MB), a deep unit's slots here (`deep_unit`);
 //! a tampered witness is uploaded whole. Rep 1 proves from rep 0's level-0 commitment (`Reuse`).
 
-use std::{ffi::c_void, ptr::{null, null_mut}, sync::{Mutex, OnceLock}, time::Instant};
+use std::{ffi::c_void, ptr::{null, null_mut}, sync::{atomic::{AtomicU64, Ordering}, Mutex, OnceLock}, time::Instant};
 
 use flock_field::F128;
 use flock_prover::{
@@ -16,7 +16,7 @@ use rayon::prelude::*;
 use crate::{
     LiveChallenger,
     chunk::comp,
-    gpu::{ChunkParams, ProveParams, Rounds, csc_from_rows, decode_with, link_cb, prove_params, sched, statics_for},
+    gpu::{ChunkParams, ProveParams, Rounds, csc_from_rows, csc_of, decode_with, link_cb, prove_params, sched, statics_for},
     ir_block::IrUnitNet,
     circuit::{Kind, Stmt},
 };
@@ -116,6 +116,9 @@ struct CircuitParams {
     m_inputs: *const u64,
     m_mid: *const u64,
     m_tables: *const u64,
+    /// [`Types::types_gen`]: the key the device holds the slot types' CSC and the unit's CSR under; the row arrays are null where it
+    /// holds a copy of them
+    types_gen: u64,
 }
 
 #[cfg(feature = "sha512")]
@@ -226,6 +229,8 @@ unsafe extern "C" {
     fn flock_cuda_dev_alloc(bytes: usize) -> *mut c_void;
     fn flock_cuda_copy(dst: *mut c_void, src: *const c_void, bytes: usize) -> i32;
     fn flock_cuda_dev_zero(p: *mut c_void, bytes: usize) -> i32;
+    fn flock_cuda_types_upload(types_gen: u64, set: i32, h: *const *const u32, len: *const usize, n: usize, host: u64, key: *const u8) -> i32;
+    fn flock_cuda_types_held(types_gen: u64, set: i32) -> i32;
 }
 
 /// Rep 1 proves from rep 0's level-0 commitment, which both reps bind (one level-0 root): rep 0 keeps it on the device for the
@@ -727,19 +732,26 @@ pub enum CircuitSrc<'a> {
     Device { rows: &'a [F128], host: &'a HostSlots, inputs: &'a [F128] },
 }
 
-/// The unit's expanded circuit's rows as CSR and its level schedule: level 0 the input rows and the constant, a row one past its
-/// deepest operand (itself, in an assertion row, excluded).
+/// The unit's expanded circuit's level schedule: level 0 the input rows and the constant, a row one past its deepest operand
+/// (itself, in an assertion row, excluded). The device reads its rows beside it as CSR ([`csr`]).
 pub struct UnitSched {
     /// levels [0, levels0) read no late input row; the rest do
     pub levels0: usize,
     pub late_rows: Vec<u32>,
     pub cut_rows: Vec<u32>,
-    pub a_off: Vec<u32>,
-    pub a_col: Vec<u32>,
-    pub b_off: Vec<u32>,
-    pub b_col: Vec<u32>,
     pub level_off: Vec<u32>,
     pub order: Vec<u32>,
+}
+
+/// `rows` as CSR: each row's offset into the concatenated columns, then the columns.
+pub fn csr(rows: &[Vec<usize>]) -> (Vec<u32>, Vec<u32>) {
+    let mut off = vec![0u32];
+    let mut col = Vec::new();
+    for r in rows {
+        col.extend(r.iter().map(|&c| c as u32));
+        off.push(col.len() as u32);
+    }
+    (off, col)
 }
 
 /// The unit's schedule; a cut unit's (a second input group: its late rows, the cut words the tail computes; a second output
@@ -765,17 +777,6 @@ pub fn schedule(net: &IrUnitNet) -> UnitSched {
         cut_rows.clear();
         late = vec![false; u];
     }
-    let csr = |rows: &Vec<Vec<usize>>| {
-        let mut off = vec![0u32];
-        let mut col = Vec::new();
-        for r in rows {
-            col.extend(r.iter().map(|&c| c as u32));
-            off.push(col.len() as u32);
-        }
-        (off, col)
-    };
-    let (a_off, a_col) = csr(&net.a);
-    let (b_off, b_col) = csr(&net.b);
     let mut level_off = vec![0u32];
     let mut order = Vec::new();
     let mut levels0 = 0;
@@ -804,29 +805,66 @@ pub fn schedule(net: &IrUnitNet) -> UnitSched {
             levels0 = level_off.len() - 1;
         }
     }
-    UnitSched { levels0, late_rows, cut_rows, a_off, a_col, b_off, b_col, level_off, order }
+    UnitSched { levels0, late_rows, cut_rows, level_off, order }
+}
+
+/// A slot type's circuit as the device reads it, CSC over its slot's columns: A's and B's column pointers and nonzero counts,
+/// and their row indices, the bulk ([`Types::types_gen`]'s set 0). The device holds one copy of them per GPU, which every prover
+/// there with the same slot types maps ([`arrays_key`]), and they're freed here. With `FC_CSC_HOST_MIB=M`, rows of at least M
+/// MiB stay here instead, page-locked and mapped, where the fold reads them over the bus each rep.
+struct TypeCsc {
+    col_ptr: [Vec<u32>; 2],
+    nnz: [u32; 2],
+    /// A's and B's row indices: `None` once the device holds a copy of them
+    rows: Option<[Vec<u32>; 2]>,
 }
 
 struct Types {
+    /// The key the device holds this build's slot types' CSC (set 0) and its unit's CSR (set 1) under (`FcTypeUploads`,
+    /// prove_circuit.cuh): drawn once from a counter that only goes up, so no two builds share one, and a set is read from the
+    /// host only while the device lacks it. A freed host array can then never be taken for another's, as an address could.
+    types_gen: u64,
     logs: Vec<i32>,
-    csc: Vec<Option<((Vec<u32>, Vec<u32>), (Vec<u32>, Vec<u32>))>>,
+    csc: Vec<TypeCsc>,
     ranges: Vec<(i32, i32, i32)>,
     u_range: usize,
     sched: UnitSched,
     h_range: usize,
     hsched: UnitSched,
+    /// the compression circuit's rows as CSR, A's then B's: small, and kept, since the device keys its copy by their addresses
+    /// (`FcUploads`)
+    hcsr: [(Vec<u32>, Vec<u32>); 2],
 }
 
-/// The circuit's slot types, built once per circuit and kept for the process: the device keys its copies of their arrays by
-/// their addresses (`FcUploads`, prove_circuit.cuh), so they are never freed.
+/// A digest of a set's arrays: the key under which every prover on a GPU shares one device copy of them (`fc_share_get`,
+/// prove_circuit.cuh's csc_share.cuh), so a copy another prover made holds exactly these arrays.
+fn arrays_key(arrays: &[&Vec<u32>]) -> [u8; 64] {
+    use sha2::{Digest, Sha512};
+    let mut h = Sha512::new();
+    h.update(b"verity flock-circuit: the slot types' CSC");
+    h.update((arrays.len() as u64).to_le_bytes());
+    for a in arrays {
+        let bytes = unsafe { std::slice::from_raw_parts(a.as_ptr().cast::<u8>(), 4 * a.len()) };
+        let pieces: Vec<[u8; 64]> = bytes.par_chunks(1 << 26).map(|p| Sha512::digest(p).into()).collect();
+        h.update((a.len() as u64).to_le_bytes());
+        pieces.iter().for_each(|p| h.update(p));
+    }
+    h.finalize().into()
+}
+
+/// The circuit's slot types, built once per circuit and kept for the process. Their CSC goes to the device as it is built, one
+/// copy per GPU ([`TypeCsc`]); the unit's rows as CSR are built only for a rep whose units the device computes, until it holds
+/// them ([`prove_circuit`]).
 fn types(st: &Stmt) -> &'static Types {
     static T: Mutex<Vec<([u8; 64], &'static Types)>> = Mutex::new(Vec::new());
+    static GEN: AtomicU64 = AtomicU64::new(1);
     let mut held = T.lock().unwrap();
     if let Some(&(_, t)) = held.iter().find(|(k, _)| *k == st.c.sha512) {
         return t;
     }
     let t: &'static Types = Box::leak(Box::new({
         let c = &st.c;
+        let types_gen = GEN.fetch_add(1, Ordering::Relaxed);
         let mut logs = Vec::new();
         let mut csc = Vec::new();
         let mut key: Vec<String> = Vec::new();
@@ -838,19 +876,21 @@ fn types(st: &Stmt) -> &'static Types {
                 None => {
                     key.push(k);
                     logs.push(r.slot_log as i32);
-                    csc.push(match r.kind {
+                    let ((ac, ar), (bc, br)) = match r.kind {
                         Kind::Net(i) => {
                             let net = &c.nets[i].1;
                             let n = 1usize << net.unit_log;
-                            let pad = |rows: &Vec<Vec<usize>>| { let mut x = rows.clone(); x.resize(n, Vec::new()); SparseBinaryMatrix { num_rows: n, num_cols: n, rows: x.into() } };
-                            Some((csc_from_rows(&pad(&net.a)), csc_from_rows(&pad(&net.b))))
+                            (csc_of(&net.a, n), csc_of(&net.b, n))
                         }
                         Kind::Mask => {
                             let n = 1usize << r.slot_log;
                             let id = csc_from_rows(&SparseBinaryMatrix { num_rows: n, num_cols: n, rows: (0..n).map(|i| vec![i]).collect::<Vec<_>>().into() });
-                            Some((id.clone(), id))
+                            (id.clone(), id)
                         }
-                    });
+                    };
+                    // the device's fold reads 2^slot_log + 1 column pointers of each
+                    assert!(ac.len() == (1 << r.slot_log) + 1 && bc.len() == ac.len(), "slot type {:?}: its CSC is not over its slot's columns", r.kind);
+                    csc.push(TypeCsc { nnz: [ar.len() as u32, br.len() as u32], col_ptr: [ac, bc], rows: Some([ar, br]) });
                     key.len() - 1
                 }
             };
@@ -859,7 +899,30 @@ fn types(st: &Stmt) -> &'static Types {
         assert!(logs.len() <= FC_MAX_TYPES && ranges.len() <= FC_MAX_RANGES, "too many slot types or ranges for the FFI");
         let u_range = c.ranges.iter().position(|r| r.kind == Kind::Net(c.unit_net)).unwrap();
         let h_range = c.ranges.iter().position(|r| r.kind == Kind::Net(c.sha_net)).unwrap();
-        Types { logs, csc, ranges, u_range, sched: schedule(c.unit()), h_range, hsched: schedule(&c.nets[c.sha_net].1) }
+        // set 0 in the fold's order: per type A's column pointers and rows, then B's
+        let arrays: Vec<&Vec<u32>> =
+            csc.iter().flat_map(|t: &TypeCsc| { let r = t.rows.as_ref().unwrap(); [&t.col_ptr[0], &r[0], &t.col_ptr[1], &r[1]] }).collect();
+        let (h, len): (Vec<*const u32>, Vec<usize>) = arrays.iter().map(|v| (v.as_ptr(), v.len())).unzip();
+        // FC_CSC_HOST_MIB=M: a type's rows (its odd arrays) of at least M MiB stay here, which the leaked `Types` keeps, unmoved,
+        // for the process; unset, the device holds every type's rows
+        let min = std::env::var("FC_CSC_HOST_MIB").ok().and_then(|v| v.parse::<usize>().ok()).map(|m| m.saturating_mul(1 << 20));
+        let mapped: Vec<bool> = csc.iter().map(|t| min.is_some_and(|m| 4 * (t.nnz[0] as usize + t.nnz[1] as usize) >= m)).collect();
+        let host = mapped.iter().enumerate().filter(|(_, m)| **m).fold(0u64, |b, (t, _)| b | 0b1010 << (4 * t));
+        if mapped.contains(&true) {
+            let words: usize = csc.iter().zip(&mapped).filter(|(_, m)| **m).map(|(t, _)| t.nnz[0] as usize + t.nnz[1] as usize).sum();
+            eprintln!("the slot types' rows read from the host, mapped: {} MiB ({} of {} types)", (4 * words) >> 20,
+                      mapped.iter().filter(|m| **m).count(), csc.len());
+        }
+        // the device's copy is shared by every prover on its GPU whose slot types' CSC is this one (FC_CSC_SHARE=0: a copy of
+        // this process's own)
+        let key = (host == 0 && std::env::var("FC_CSC_SHARE").map_or(true, |v| v != "0")).then(|| arrays_key(&arrays));
+        let key_ptr = key.as_ref().map_or(null(), |k| k.as_ptr());
+        // a device that can't take them now keeps them on the host, and the first rep's fold copies them under the same key
+        if unsafe { flock_cuda_types_upload(types_gen, 0, h.as_ptr(), len.as_ptr(), h.len(), host, key_ptr) } == 0 {
+            csc.iter_mut().zip(&mapped).filter(|(_, m)| !**m).for_each(|(t, _)| t.rows = None);
+        }
+        let sha = &c.nets[c.sha_net].1;
+        Types { types_gen, logs, csc, ranges, u_range, sched: schedule(c.unit()), h_range, hsched: schedule(sha), hcsr: [csr(&sha.a), csr(&sha.b)] }
     }));
     held.push((st.c.sha512, t));
     t
@@ -982,6 +1045,9 @@ pub fn prove_circuit(
             host0 = Some(*host);
         }
     }
+    // the unit's rows as CSR for a device that computes the units and lacks them, dropped once the prover returns
+    let ucsr = (matches!(src, CircuitSrc::Device { .. }) && u_host == 0 && unsafe { flock_cuda_types_held(t.types_gen, 1) } == 0)
+        .then(|| [csr(&unit.a), csr(&unit.b)]);
     let c = ChunkParams {
         delta_a: s.da.as_ptr(),
         n_delta_a: (s.da.len() / 2) as i32,
@@ -1016,10 +1082,10 @@ pub fn prove_circuit(
         h_useful: st.c.nets[st.c.sha_net].1.useful as i32,
         h_const: st.c.nets[st.c.sha_net].1.const_pos as i32,
         h_in_words: st.c.nets[st.c.sha_net].1.in_words as i32,
-        h_a_off: t.hsched.a_off.as_ptr(),
-        h_a_col: t.hsched.a_col.as_ptr(),
-        h_b_off: t.hsched.b_off.as_ptr(),
-        h_b_col: t.hsched.b_col.as_ptr(),
+        h_a_off: t.hcsr[0].0.as_ptr(),
+        h_a_col: t.hcsr[0].1.as_ptr(),
+        h_b_off: t.hcsr[1].0.as_ptr(),
+        h_b_col: t.hcsr[1].1.as_ptr(),
         h_levels: (t.hsched.level_off.len() - 1) as i32,
         h_level_off: t.hsched.level_off.as_ptr(),
         h_order: t.hsched.order.as_ptr(),
@@ -1033,10 +1099,10 @@ pub fn prove_circuit(
         u_useful: unit.useful as i32,
         u_const: unit.const_pos as i32,
         u_in_words: unit.in_words as i32,
-        u_a_off: t.sched.a_off.as_ptr(),
-        u_a_col: t.sched.a_col.as_ptr(),
-        u_b_off: t.sched.b_off.as_ptr(),
-        u_b_col: t.sched.b_col.as_ptr(),
+        u_a_off: ucsr.as_ref().map_or(null(), |u| u[0].0.as_ptr()),
+        u_a_col: ucsr.as_ref().map_or(null(), |u| u[0].1.as_ptr()),
+        u_b_off: ucsr.as_ref().map_or(null(), |u| u[1].0.as_ptr()),
+        u_b_col: ucsr.as_ref().map_or(null(), |u| u[1].1.as_ptr()),
         u_levels: (t.sched.level_off.len() - 1) as i32,
         u_level_off: t.sched.level_off.as_ptr(),
         u_order: t.sched.order.as_ptr(),
@@ -1074,6 +1140,7 @@ pub fn prove_circuit(
         m_inputs: null(),
         m_mid: null(),
         m_tables: null(),
+        types_gen: t.types_gen,
     };
     #[cfg(feature = "sha512")]
     if let Some((plan, words)) = native_sha.then(|| native_plan(st)).flatten() {
@@ -1136,13 +1203,10 @@ pub fn prove_circuit(
     let _ = salts;
     for (i, l) in t.logs.iter().enumerate() {
         p.type_log[i] = *l;
-        if let Some(((ac, ar), (bc, br))) = &t.csc[i] {
-            p.t_a_col_ptr[i] = ac.as_ptr();
-            p.t_a_rows[i] = ar.as_ptr();
-            p.t_a_nnz[i] = ar.len() as u32;
-            p.t_b_col_ptr[i] = bc.as_ptr();
-            p.t_b_rows[i] = br.as_ptr();
-            p.t_b_nnz[i] = br.len() as u32;
+        let tc = &t.csc[i];
+        (p.t_a_col_ptr[i], p.t_a_nnz[i], p.t_b_col_ptr[i], p.t_b_nnz[i]) = (tc.col_ptr[0].as_ptr(), tc.nnz[0], tc.col_ptr[1].as_ptr(), tc.nnz[1]);
+        if let Some([ar, br]) = &tc.rows {
+            (p.t_a_rows[i], p.t_b_rows[i]) = (ar.as_ptr(), br.as_ptr());
         }
     }
     for (j, &(ty, pos0, count)) in t.ranges.iter().enumerate() {
@@ -1205,5 +1269,14 @@ mod tests {
         odd[1].1[0].hi ^= 1 << 5;
         let h = HostSlots::pack_in(&odd, heap);
         assert_eq!((h.zab.to_vec(), h.ab), (packed(&odd, false), false));
+    }
+
+    #[test]
+    fn csr_holds_each_row_in_order() {
+        let rows: Vec<Vec<usize>> = vec![vec![3, 1], vec![], vec![0, 5, 2]];
+        let (off, col) = csr(&rows);
+        assert_eq!((off.clone(), col.clone()), (vec![0, 2, 2, 5], vec![3, 1, 0, 5, 2]));
+        let back: Vec<Vec<usize>> = off.windows(2).map(|w| col[w[0] as usize..w[1] as usize].iter().map(|&c| c as usize).collect()).collect();
+        assert_eq!(back, rows);
     }
 }

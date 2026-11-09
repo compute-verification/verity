@@ -20,12 +20,12 @@ from types import SimpleNamespace
 
 import pytest
 import torch
-from conftest import CC, LF, STEP, STRUCTURE, dot_alone
+from conftest import CC, LF, STEP, STRUCTURE, dot_alone, k16_steps, route_factor
 
 import grader as G
 from verity.ml.circuits.census import census
 from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.program import is_input
+from verity.ml.circuits.program import REGISTRATION, input_prim
 from verity_vllm.program.frontend.train_step import primitives
 
 aten = torch.ops.aten
@@ -170,21 +170,26 @@ def test_the_products_are_the_steps_matrix_products(step, steps, unit_prices) ->
 
 
 def test_the_gpu_steps_linears_are_its_tensor_cores_dots(steps, monkeypatch) -> None:
-    """On sm_120 each linear's GEMM is its route's row cells (conftest's `ROUTES`: unsplit, split-K over a bf16 workspace and
-    serial split-K), each k16 step a call of the tensor-core dot whose Boolean Definition the slowdown code prices a bf16 MAC
-    at (`HopperBF16WgmmaDot16_v2`, its gates over 16): priced at that dot alone, the linears' |C| is a trace's at its gates a
-    MAC exactly, and what their full |C| adds rounds and reduces. Attention's products stay `LinearRef_v1` rows at the 32
-    bits torch's math path computes them in, which call no dot."""
+    """On sm_120 each linear's GEMM is its route's row cells (conftest's `ROUTES`: unsplit, split-K over a bf16 workspace,
+    serial split-K and the three over grid.z), each k16 step a call of the tensor-core dot whose Boolean Definition the
+    slowdown code prices a bf16 MAC at (`HopperBF16WgmmaDot16_v2`, its gates over 16): priced at that dot alone, a linear's
+    |C| is that price for each k16 step its route takes, a trace's at its gates a MAC but for the zeros a grid.z slice pads
+    its residue tile with, and what their full |C| adds rounds and reduces. Attention's products stay `LinearRef_v1` rows at
+    the 32 bits torch's math path computes them in, which call no dot."""
     s = steps(torch.bfloat16, CC)
     price = dot_alone(monkeypatch, s.program)
     assert price["boolean"] == "HopperBF16WgmmaDot16_v2"
-    out = G.read(G.load_handover(s.path), CODE)
+    h = G.load_handover(s.path)
+    out, k16 = G.read(h, CODE), k16_steps(h)
     mm, bmm = ([r for r in out["products"] if r["op"] == op] for op in G.PRODUCTS)
     assert {c.split("{")[0] for r in mm for c in r["cells"]} == set(G.ROWS) - {G.CELL}
-    assert all(16 * r["gates"] == r["macs"] * price["gates"] for r in mm)
+    assert all(r["gates"] == k16[r["occ"]] * price["gates"] for r in mm)
     assert all(r["gates"] == 0 and r["widths"] == [(32, 32)] and {c.split("{")[0] for c in r["cells"]} == {G.CELL} for r in bmm)
+    padded = [r for r in mm if 16 * k16[r["occ"]] != r["macs"]]
+    assert padded and all(16 * k16[r["occ"]] > r["macs"] and "Aligned" in r["cells"][0] for r in padded)
     C = G.against(out, _trace(out["products"], 1.0, price["gates"] / 16), CODE)["C"]
-    assert C["mm"] == {"circuit": out["totals"]["gates_by_op"]["mm"], "trace": out["totals"]["gates_by_op"]["mm"], "ratio": 1.0}
+    assert C["mm"]["circuit"] == out["totals"]["gates_by_op"]["mm"]
+    assert C["mm"]["ratio"] == pytest.approx(route_factor(k16, out["products"])) and C["mm"]["ratio"] > 1
 
 
 def test_a_structure_of_another_step_is_refused(steps) -> None:
@@ -287,6 +292,12 @@ def test_each_class_is_priced_at_its_primitives_boolean_prices() -> None:
         "gates": 100, "ands": 30, "word_gates": 20, "unpriced_word_gates": {"q": 10}}
 
 
+def test_inputs_have_no_boolean_price() -> None:
+    """A step's inputs, a bool one among them (whose Boolean Definition is itself, no composite to compile), are bound, not
+    computed: `boolean_prices` leaves them out."""
+    assert G.boolean_prices({p.id: p for p in (input_prim(1), input_prim(32), input_prim(64, REGISTRATION))}) == {}
+
+
 @pytest.mark.slow
 def test_circuit_size_on_the_tiny_step(steps) -> None:
     """|C| of the tiny f32 step, read off its hand-over as `read` reads it: each root class at its primitives' Boolean prices,
@@ -296,6 +307,6 @@ def test_circuit_size_on_the_tiny_step(steps) -> None:
     C = G.circuit_size(G.load_handover(s.path).step)
     assert C["gates"] == sum(r["gates"] for r in C["classes"]) > 0 and C["ands"] == sum(r["ands"] for r in C["classes"])
     assert all(r["gates"] > 0 for r in C["classes"] if r["class"].startswith(G.CELL))
-    prices = G.boolean_prices({pid: fn for pid, fn in primitives(s.program).items() if not is_input(fn)})
+    prices = G.boolean_prices(primitives(s.program))
     assert set(C["unpriced_word_gates"]) == {pid for pid, p in prices.items() if p["boolean"] is None}
     assert G.priced(census(s.program), prices) == C

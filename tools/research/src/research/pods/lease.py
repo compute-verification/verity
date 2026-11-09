@@ -11,8 +11,8 @@ pod's own key once the lease has expired and its grace (LEASE_GRACE_S, the runs'
              a boot one runs, and starts the idle guard (pod_guard.sh daemon) with a short first-run window;
   at boot    only with `pods create --boot-lease` (`boot_fields`): for RunPod's own images (BOOT_IMAGES, whose CMD is /start.sh) a
              start command that writes lease.sh from the environment and runs it before /start.sh, so the lease holds before any ssh.
-             Opt-in: on its one live run (2026-09-29, pod fsisu66ljla298, cpu3c) the pod ended itself in the window of its lease plus
-             grace, but sshd never answered, and whether the start command or the host caused that is not settled.
+             Opt-in: a live run ended the pod in the window of its lease plus grace, but sshd never answered, and whether the start
+             command or the host caused that is not settled.
 The create call always puts the expiry in the pod's environment (RESEARCH_LEASE_EXPIRES), which the loop uses until the file exists.
 
 `pods create` terminates a pod it could not arm (no sshd, a failed ssh), so no pod leaves it unbounded.  `research run --on` extends
