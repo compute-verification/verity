@@ -4,8 +4,8 @@ import Proofs.Flock.SamplingGeneric.TwoAt
 /-!
 # SPOT[Flock]'s two-stage model on a run of the two-stage toy
 
-`lake env lean --tstack=KB --run TwoGuard.lean DIR MODE [M2]`, in `Security/Proofs` with the two modules it imports
-built: the
+`twoguard DIR MODE [M2]`, the script compiled as an executable of `Security/Proofs` (`guard_node.py` builds it), or
+`lake env lean --threads=1 --tstack=KB --run TwoGuard.lean DIR MODE [M2]` there in Lean's interpreter: the
 model's round-2 check (`SpotFlock.stmtOk`) on the run `guard.export` wrote to `DIR`, at the auditor's copies (`Held`)
 built from `DIR/held.json` and the reference statements `DIR/ref-<t>.bin` alone, never from the run's messages or coins.
 `M2` replaces round 2's message `DIR/m2.bin` (a negative's).
@@ -14,8 +14,8 @@ built from `DIR/held.json` and the reference statements `DIR/ref-<t>.bin` alone,
   statements are not in Flock's masked scope (`Held.xS₀_ok`, decided before any `Held` exists).
 * `diag`: each conjunct of `stmtOk` on its own, in the order `stmtOk` reads them, with its time, then `stmtOkAt`.
 
-Every line starts `GUARD `; the last is `GUARD-RESULT {json}`. The work runs on a thread of its own, whose stack
-`--tstack` sets: the model's statement parsers recurse deeper than the interpreter's main thread holds.
+Every line starts `GUARD `; the last is `GUARD-RESULT {json}`. The model's statement parsers recurse deeper than a
+default stack holds: give the executable a large `RLIMIT_STACK`, and the interpreter a large `--tstack`.
 
 **The coins.** `stmtOk` reads each coin only through its bytes (`SpotFlock.src`), so `stmtOkAt` takes the bytes, and
 `stmtOk_eq` says it is `stmtOk` at every pair of coins with those bytes. `src` itself reads its `2^20` bytes one list
@@ -204,7 +204,7 @@ def diag (h : Held) (x m₁ m₂ : Claims.Msg) (s₀ s₁ : ByteArray) : IO Unit
 def main (args : List String) : IO UInt32 := do
   let (dir :: mode :: rest) := args
     | do
-      IO.eprintln "usage: lake env lean --run TwoGuard.lean DIR check|diag [M2]"
+      IO.eprintln "usage: twoguard DIR check|diag [M2]"
       return 2
   let dir : System.FilePath := dir
   let t0 ← IO.monoMsNow
@@ -233,7 +233,4 @@ def main (args : List String) : IO UInt32 := do
 
 end TwoGuard
 
-def main (args : List String) : IO UInt32 := do
-  match ← IO.wait (← IO.asTask (TwoGuard.main args) (prio := .dedicated)) with
-  | .ok r => return r
-  | .error e => throw e
+def main (args : List String) : IO UInt32 := TwoGuard.main args

@@ -16,15 +16,14 @@ a session's transcript; each session's acceptance is `flock-verify`'s verdict in
 (`audit.py`), whose statements these are byte for byte (`guard.session_statement` rebuilds each from its command line
 and archive).
 
-Opt-in: ``VERITY_TWO_STAGE_GUARD`` names a `Security/Proofs` directory where `Proofs.Flock.SpotFlock.Code` and
-`Proofs.Flock.SamplingGeneric.TwoAt` are built (`guard_node.py --pytest` runs this on a node's warm tree). The fixture is a
-run's `guard/` export (`guard.py`) for both cases."""
+Opt-in: ``VERITY_TWO_STAGE_GUARD`` names `TwoGuard.lean` compiled (`twoguard`), which `guard_node.py --pytest` builds
+on a node's warm Lean tree and runs this with. The fixture is a run's `guard/` export (`guard.py`) for both cases."""
 
 from __future__ import annotations
 
 import json
 import os
-import shutil
+import resource
 import subprocess
 import tarfile
 from pathlib import Path
@@ -32,12 +31,17 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-LAKE_DIR = os.environ.get("VERITY_TWO_STAGE_GUARD")
+EXE = os.environ.get("VERITY_TWO_STAGE_GUARD")
 FIXTURE = HERE / "fixtures" / "guard.tar.xz"
-#: the script's thread's stack, in KiB (`lean --tstack`, as `guard_node.py` runs it)
-TSTACK_KIB = 128 << 20
-pytestmark = pytest.mark.skipif(not LAKE_DIR, reason="VERITY_TWO_STAGE_GUARD names a Security/Proofs where the "
-                                "script's two modules are built (guard_node.py --pytest)")
+#: the executable's stack, in bytes (its main thread's `RLIMIT_STACK`, as `guard_node.py` runs it)
+STACK = 64 << 30
+pytestmark = pytest.mark.skipif(not EXE, reason="VERITY_TWO_STAGE_GUARD names TwoGuard.lean compiled "
+                                "(guard_node.py --pytest builds it)")
+
+
+def raise_stack() -> None:
+    _, hard = resource.getrlimit(resource.RLIMIT_STACK)
+    resource.setrlimit(resource.RLIMIT_STACK, (STACK if hard == resource.RLIM_INFINITY else min(STACK, hard), hard))
 
 
 @pytest.fixture(scope="module")
@@ -49,10 +53,8 @@ def runs(tmp_path_factory) -> Path:
 
 
 def stmt_ok(run: Path, m2: Path | None = None) -> dict:
-    lake = shutil.which("lake") or str(Path.home() / ".elan" / "bin" / "lake")
-    argv = [lake, "env", "lean", "--threads=1", f"--tstack={TSTACK_KIB}", "--run", str(HERE / "TwoGuard.lean"), str(run), "check",
-            *([str(m2)] if m2 else [])]
-    p = subprocess.run(argv, cwd=LAKE_DIR, capture_output=True, text=True)
+    argv = [EXE, str(run), "check", *([str(m2)] if m2 else [])]
+    p = subprocess.run(argv, capture_output=True, text=True, preexec_fn=raise_stack)
     lines = [ln for ln in p.stdout.splitlines() if ln.startswith("GUARD-RESULT ")]
     assert lines, f"TwoGuard.lean printed no result (exit {p.returncode}):\n{p.stdout[-4000:]}\n{p.stderr[-4000:]}"
     result = json.loads(lines[-1].removeprefix("GUARD-RESULT "))
