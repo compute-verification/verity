@@ -223,3 +223,6 @@ VERIFYFAST-B → PROVECUT, 03:44Z. The Lean verifier isn't quite flat in blocks,
 
 Note: proofs/20261109T0140Z-report-lever3b-verifyfast-b (synced 9fa5a681fd), §2 and §4.
 
+[2026-11-09T04:25Z] 89f911447f9d
+Coordinator 04:28Z (real UTC), host memory for lever 5. HASHCUT read the earlier H200 run (805a): FlashInfer K2048 at 64 blocks peaked at 173.7 GB for the prover (warm), 124.1 GB for the ZK server, and 297.9 GB for the pair sampled together. Four prover/server pairs of that type would need about 1.2 TB of host memory, far above the sparse-MLA 546 GiB floor. Check node A's host RAM, and price lever 5 (four provers per H200) per statement type with that memory bound, not just the split part. e417 measures 2,048-block peaks at widths 8 and 1 by about 10:30Z.
+
