@@ -2021,7 +2021,7 @@ print("INFERENCE-ONLY POLICY at class 4,32,4: c 7 gates, k 3 fresh bits, n 16 se
       "INFERENCE-ONLY accept: session abab… (the registered one), 7 gates and 3 fresh bits a block, against c 7, k 3, n 16 "
       "(no count published: n is judged on the blocks' exact count, held on the node)")
 '''
-NCI_CHECK = "verity/core/protocols/network/nci/lean/.lake/build/bin/nci-check"
+NCI_CHECK = "verity/core/protocols/network/inference_only/lean/.lake/build/bin/nci-check"
 
 
 def _inference_only(tmp_path: Path, *args: str, lean: bool = False, **extra: str) -> tuple[int, list[str], list[list[str]]]:
@@ -2066,7 +2066,7 @@ def test_with_no_class_but_record_there_is_no_inference_only_policy_or_verdict(t
 
 
 @pytest.mark.parametrize("lean", [False, True])
-def test_the_inference_only_verdict_judges_the_windows_record_at_the_class_with_nci_check_where_the_build_built_it(
+def test_the_inference_only_verdict_judges_the_windows_record_at_the_class_with_inference_only_check_where_the_build_built_it(
         tmp_path, lean):
     """The verdict reads the policy, the serve dir, window K's circuit record at the class, its registration and the
     weights registration's pins, and writes the public verdict into the record and the full one in the serve dir; it

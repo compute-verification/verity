@@ -4,13 +4,13 @@ import Mathlib.Basic.ENNReal.Real
 /-!
 # Coverage of efficient methods
 
-Why the local bounds on inference blocks (`Definitions.Nci.Assumptions.Capability`) constrain learning at all: every
+Why the local bounds on inference blocks (`Definitions.InferenceOnly.Assumptions.Capability`) constrain learning at all: every
 sufficiently cheap way to reach the target contains enough computation that some local bound covers. It is the
 task-level hypothesis, separate from every local premise, and stated over the tasks and runs of
 `Definitions.Accounting.Slowdown`.
 -/
 
-namespace Nci.Assumptions
+namespace InferenceOnly.Assumptions
 
 open scoped ENNReal
 
@@ -34,4 +34,4 @@ def CoversEfficientMethods {In L : Type} {m : ℕ} (G : Accounting.Slowdown.Task
   ∀ (C : In → Accounting.Actual.Run L) (pos : Fin m → L × ℕ × ℕ),
     G.prob (fun x 𝒴 => (C, x) ∈ 𝒜 ∧ Accounting.Slowdown.Succeeds (C x) pos 𝒴 ∧ cost (C x) < Tmax ∧ ¬ Core C x) ≤ η
 
-end Nci.Assumptions
+end InferenceOnly.Assumptions
