@@ -2,7 +2,8 @@
 drive's), derives a `vqueue.Snapshot` from what is outside it, asks the policy (``decide``, `vqueue.decide`) what to do and
 applies its actions in order, stopping the tick at the first that fails: the next tick derives everything again.  Between ticks
 it keeps only what a snapshot reads: the refs, the labels, graph2's results and the decision log (`--log`), from which come
-`history`, each candidate's `tries`, a retry's and a ring's once-only and the owners already told.
+`history`, each candidate's `tries`, a retry's and a ring's once-only and the owners already told.  `--state` is a report it
+rewrites each tick: each candidate's verdict beside graph2's, and the jobs its graph lacks.
 
 The snapshot.  `main` is origin's `main`, fetched into the clone's own refs (`refs/vqueue/`), so drive's clone, its worktree and
 its refs are left as drive keeps them.  `ready` is the open PRs drive would land from `next` now: admitted as drive admits them
@@ -23,7 +24,8 @@ pushes `main` to the candidate with a lease on its base and does what drive does
 cancels the check (graph2's `cancel`, where it has one), deletes the branch and logs its outcome.  Eject withdraws the PR's
 ready mark at its head (`Queue.eject`) and tells its owner the failed tasks, their keys and where their logs are.  Retry
 enqueues again, once for each terminal infra or list-failed verdict (by its evidence: the infra results there are, graph2's
-listing verdict).  Ring tells @infra, once a candidate.  Each action and its result is one JSON line in the log.
+listing verdict).  Ring tells infra's handle (`drive.INFRA`), once a candidate.  Each action and its result is one JSON line
+in the log.
 
 `--shadow` logs advance, eject, ring and every message with `shadow: true` and does none of them, and builds, drops and
 retries: its `main` is the newest candidate it advanced (logged) while origin's `main` is below it, and a PR it ejected stays
@@ -41,6 +43,7 @@ import concurrent.futures
 import fcntl
 import hashlib
 import json
+import re
 import shlex
 import subprocess
 import sys
@@ -51,7 +54,8 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from . import policy, vqueue
-from .drive import JOB_OF_KIND, SLIM_STEPS, Driver, merge_thread_post
+from .drive import CI, JOB_OF_KIND, SLIM_STEPS, Driver, gating, merge_thread_post
+from .drive import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_key, task_target
 from .queue import (PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, flags_at, lean_change, lowrisk,
                     priority_list, queue_commit, review_owners, rules_at, unreviewed)
@@ -60,7 +64,7 @@ from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, B
 
 #: graph2, infra's executor on the control pod: its argv before the subcommand
 GRAPH2 = ("python3.12", "/root/executor/infra/graph2.py", "--db", "/root/executor/graph2.db", "--events", "/root/executor/events")
-LOCK, LOG = Path("/data/vqueue/vqueue.lock"), Path("/data/vqueue/decisions.jsonl")
+LOCK, LOG, STATE = Path("/data/vqueue/vqueue.lock"), Path("/data/vqueue/decisions.jsonl"), Path("/data/vqueue/state.json")
 #: drive's priority list (its `--priority-file`)
 PRIORITY = Path("/data/drive/priority")
 #: how far back the decision log is read
@@ -71,12 +75,11 @@ NS = "refs/vqueue"
 MAIN = f"{NS}/main"
 #: no automatic gc or maintenance under drive's own commands in its clone
 QUIET = ("-c", "gc.auto=0", "-c", "maintenance.auto=false")
-TIME = "%Y-%m-%dT%H:%M:%SZ"
+TIME, STAMP_RE = "%Y-%m-%dT%H:%M:%SZ", re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
 #: the store label graph2 puts on `commit:<sha>` with its terminal verdict on `ready:<sha>`
 READY_VERDICT = "ready_verdict"
 #: who ejects, as drive's ejections are by
 EJECTOR = "ci"
-INFRA_HANDLE = "@infra"
 #: the newest first-parent commits a candidate's walk reads before it gives up on finding its base
 WALK = 64
 #: the PRs judged at once (`World._judge`): a merge onto `main` takes seconds in drive's clone, and a moved `main` judges every
@@ -89,10 +92,9 @@ def stamp(t: float) -> str:
 
 
 def unstamp(s: object) -> float | None:
-    try:
-        return datetime.strptime(str(s), TIME).replace(tzinfo=UTC).timestamp()
-    except ValueError:
+    if not (isinstance(s, str) and STAMP_RE.fullmatch(s)):
         return None
+    return datetime.strptime(s, TIME).replace(tzinfo=UTC).timestamp()
 
 
 def branch(sha: str) -> str:
@@ -105,23 +107,25 @@ def _digest(doc: object) -> str:
 
 @dataclass
 class Past:
-    """The decision log's window (`WINDOW_S`), oldest first, and the last tick it holds."""
+    """The decision log's window (`WINDOW_S`), oldest first, the last tick it holds, and why each line it skipped isn't one (a
+    torn last line, as a crash mid-write leaves)."""
     tick: int = 0
     lines: list[dict] = field(default_factory=list)
-    bad: int = 0
+    bad: list[str] = field(default_factory=list)
 
     @classmethod
     def read(cls, path: Path, since: float) -> Past:
         if not path.is_file():
             return cls()
-        out, tick, bad = [], 0, 0
+        out, tick, bad = [], 0, []
         for line in reversed(path.read_text().splitlines()):
             try:
                 rec = json.loads(line)
-            except ValueError:
-                rec = None
+            except ValueError as e:
+                bad.append(f"no JSON ({e}): {line[:80]!r}")
+                continue
             if not isinstance(rec, dict):
-                bad += 1                                    # a torn last line, as a crash mid-write leaves one
+                bad.append(f"no object: {line[:80]!r}")
                 continue
             tick = tick or int(rec.get("tick") or 0)
             if (at := unstamp(rec.get("at"))) is None or at < since:
@@ -154,11 +158,14 @@ class Past:
 
 @dataclass
 class Judged:
-    """A candidate's verdict with what it rests on: ``mark`` names the terminal infra or list-failed evidence a retry answers."""
+    """A candidate's verdict with what it rests on: ``mark`` names the terminal infra or list-failed evidence a retry answers,
+    ``graph2`` is graph2's own verdict, and ``lacks`` the jobs `main` waits for (`drive.gating`) that no task of the graph runs,
+    which drive's `executor = "on"` path takes as no promotion and this verdict only reports."""
     verdict: Verdict
     mark: str | None = None
     note: str = ""
     graph2: str | None = None
+    lacks: tuple[str, ...] = ()
 
 
 class _Seen:
@@ -339,8 +346,8 @@ class World:
         if isinstance(pol := policy.at(self.repo, sha), str):
             self.log(f"research queue vqueue: {pol}: every job gates at {sha[:12]}")
             pol = policy.Policy()
-        gating = [i for i, t in tasks.items() if JOB_OF_KIND.get(t["kind"], t["kind"]) not in (*SLIM_STEPS, *pol.off_gate)]
-        if not gating:
+        gates = [i for i, t in tasks.items() if JOB_OF_KIND.get(t["kind"], t["kind"]) not in (*SLIM_STEPS, *pol.off_gate)]
+        if not gates:
             return Judged(Verdict(LIST_FAILED), mark=f"empty {_digest(sorted(tasks))}", note="no task on the merge gate",
                           graph2=said)
         seen = _Seen(self.tasks.transport)
@@ -367,9 +374,9 @@ class World:
             seen_.add(i)
             return [i, *(j for r in tasks[i]["reads"] for j in under(r["task"], seen_))]
 
-        needed = list(dict.fromkeys(j for i in gating for j in under(i, set())))
+        needed = list(dict.fromkeys(j for i in gates for j in under(i, set())))
         bad: list[str] = []
-        for i in gating:
+        for i in gates:
             if states[i][0] == FAIL:
                 bad.append(i)
             elif states[i][0] == BLOCKED:
@@ -381,13 +388,16 @@ class World:
             mine = Verdict(FAIL, fail, down)
         elif down:
             mine = Verdict(INFRA, (), down)
-        elif all(states[i][0] == PASS for i in gating):
+        elif all(states[i][0] == PASS for i in gates):
             mine = Verdict(PASS)
         else:
             mine = Verdict(PENDING)
         mark = f"infra {_digest(sorted((keys[i], len(seen.got.get(keys[i]) or ())) for i in infra))}" if infra else None
-        note = f"graph2 says {said}" if said and said != mine.state and said in vqueue.STATES else ""
-        return Judged(mine, mark=mark if mine.state == INFRA else None, note=note, graph2=said)
+        jobs = {JOB_OF_KIND.get(t["kind"], t["kind"]) for t in tasks.values()}
+        lacks = tuple(s for s in gating(self.repo, sha) if s not in jobs and s not in SLIM_STEPS)
+        note = "; ".join([*([f"graph2 says {said}"] if said in vqueue.STATES and said != mine.state else []),
+                          *([f"no task of {', '.join(lacks)}"] if lacks else [])])
+        return Judged(mine, mark=mark if mine.state == INFRA else None, note=note, graph2=said, lacks=lacks)
 
     def graph2_verdict(self, sha: str) -> dict | None:
         """graph2's own verdict on `ready:<sha>`: its `verdict` command's JSON, else its `ready_verdict` label's, else None."""
@@ -510,9 +520,9 @@ class Loop:
 
     def __init__(self, world: World, log: Path, *, decide: Callable[[Snapshot], list[Action]] = vqueue.decide,
                  shadow: bool = False, dry_run: bool = False, batch: int = 6, depth: int = 2,
-                 now: Callable[[], float] = time.time, out: Callable[[str], None] = print):
+                 now: Callable[[], float] = time.time, out: Callable[[str], None] = print, state: Path | None = None):
         self.world, self.log_path, self.decide, self.shadow, self.dry_run = world, Path(log), decide, shadow, dry_run
-        self.batch, self.depth, self.now, self.out = batch, depth, now, out
+        self.batch, self.depth, self.now, self.out, self.state = batch, depth, now, out, state
         #: the last tick this loop ran: a tick that logs nothing still counts
         self.last = 0
 
@@ -583,13 +593,30 @@ class Loop:
         for sha, j in t.judged.items():
             if j.note:
                 self.out(f"research queue vqueue: tick {t.n}: {sha[:12]} {j.verdict.state}: {j.note}")
+        if past.bad:
+            self.out(f"research queue vqueue: tick {t.n}: {len(past.bad)} line(s) of {self.log_path} read as none: {past.bad[0]}")
+        self.keep(t)
         return logged
+
+    def keep(self, t: Tick) -> None:
+        """The state file (``state``): this tick, and each candidate's verdict beside graph2's and the jobs its graph lacks."""
+        if self.state is None:
+            return
+        doc = {"at": stamp(self.now()), "tick": t.n, "main": t.main, "origin_main": t.origin,
+               "candidates": {sha: {"mine": j.verdict.state, "graph2": j.graph2, "lacks": list(j.lacks), "note": j.note}
+                              for sha, j in t.judged.items()},
+               "disagree": sorted(sha for sha, j in t.judged.items()
+                                  if j.graph2 in vqueue.STATES and j.graph2 != j.verdict.state)}
+        self.state.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.state.with_suffix(".tmp")
+        tmp.write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+        tmp.replace(self.state)
 
     def run(self, interval: float, sleep: Callable[[float], None] = time.sleep) -> int:
         while True:
             try:
                 self.tick()
-            except Exception as e:                          # the loop goes on: the next tick derives everything again
+            except Exception as e:  # noqa: BLE001 -- the loop goes on: the next tick derives everything again
                 self.out(f"research queue vqueue: the tick failed ({type(e).__name__}), the next derives everything again: {e}")
             sleep(interval)
 
@@ -649,13 +676,11 @@ class Loop:
         tip, merged, left = w.build([w.prs[n] for n in a.members], a.base)
         told, recs = t.past.told(), []
         for p, why in left:
-            done = False
-            if f"{p.head}@{a.base}" not in told and not self.shadow:
-                done = w.say(f"#{p.number} at {p.head[:12]} doesn't merge onto the verified queue's candidate on "
-                             f"{a.base[:12]}: {why}. It is left out until it merges; merge `main` into it",
-                             (f"@{w.handle(p.number)}" if w.handle(p.number) else "@ci",))
+            text = (f"#{p.number} at {p.head[:12]} doesn't merge onto the verified queue's candidate on {a.base[:12]}: {why}. "
+                    f"It is left out until it merges: merge `main` into it")
+            done = f"{p.head}@{a.base}" not in told and not self.shadow and w.say(text, self.owner(p.number))
             recs.append(self.record(t, "skip", base=a.base, members=[p.number], heads=[p.head], number=p.number, why=why,
-                                    done=done))
+                                    text=text, done=done))
         if not merged:
             recs.append(self.record(t, "build", base=a.base, priority=a.priority, why="no member merges onto its base"))
             return recs
@@ -684,12 +709,19 @@ class Loop:
         text = (f"#{a.number} at {a.head[:12]} is ejected from the verified queue: {a.why}. Failed: {tasks}. Each result, its "
                 f"log's digest with it: `research store labels task:<key> --key result --history`. Fix it and mark it ready "
                 f"again")
+        if (p := w.open().get(a.number)) is None or p.head != a.head:
+            return self.record(t, "eject", members=[a.number], heads=[a.head], number=a.number, failed=a.failed, done=False,
+                               why=f"{a.why}; not ejected: " + ("closed" if p is None else f"pushed to {p.head[:12]} since"))
         if not self.shadow:
             w.withdraw(a.number, a.head, a.why)
-            handle = w.handle(a.number)
-            w.say(text, (f"@{handle}" if handle else "@ci",))
+            w.say(text, self.owner(a.number))
         return self.record(t, "eject", members=[a.number], heads=[a.head], number=a.number, why=a.why, failed=a.failed,
                            text=text, done=not self.shadow)
+
+    def owner(self, number: int) -> tuple[str, ...]:
+        """Whom a message about PR ``number`` goes to: its owner's handle, else `CI`, as drive tells."""
+        handle = self.world.handle(number)
+        return (f"@{handle}" if handle else CI,)
 
     def _retry(self, c: Candidate, t: Tick) -> list[dict]:
         j = t.judged[c.sha]
@@ -740,7 +772,7 @@ def _locked(path: Path):
 
 
 def main(argv: list[str]) -> int:
-    from .queue import credential_args, remote_and_repo
+    from .queue import GitHub, credential_args, remote_and_repo
     from .store.local import LocalStore
 
     ap = argparse.ArgumentParser(prog="research queue vqueue", description=__doc__.split("\n\n")[0])
@@ -750,6 +782,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--store", default=None, help="evidence store root (default $RESEARCH_STORE or ~/.research/store)")
     ap.add_argument("--lock", type=Path, default=LOCK, help=f"the loop's own lock (default {LOCK})")
     ap.add_argument("--log", type=Path, default=LOG, help=f"the decision log, one JSON line per action (default {LOG})")
+    ap.add_argument("--state", type=Path, default=STATE, help=f"each tick's candidates, their verdicts beside graph2's and what "
+                                                              f"their graphs lack, rewritten each tick (default {STATE})")
     ap.add_argument("--priority-file", type=Path, default=PRIORITY, help=f"drive's priority list (default {PRIORITY})")
     ap.add_argument("--graph2", default=shlex.join(GRAPH2), help="graph2's argv before its subcommand (default the control pod's)")
     ap.add_argument("--batch", type=int, default=6, help="the most members a candidate holds (default 6)")
@@ -767,8 +801,6 @@ def main(argv: list[str]) -> int:
         remote, slug = remote_and_repo(a.remote, None, a.repo)
         store = LocalStore(a.store)
         labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr))
-        from .queue import GitHub
-
         q = _Clone(a.repo, remote=remote, github=GitHub(slug), ready=labels.ready, store=store,
                    auth=credential_args(a.repo, remote), before_cutoff=labels.before_cutoff, marked_by=labels.marked_by,
                    marked_at=labels.marked_at, prefetch=labels.prefetch, land_into="main")
@@ -776,7 +808,7 @@ def main(argv: list[str]) -> int:
         graph2 = tuple(shlex.split(a.graph2))
         world = World(q, labels, Executor(Transport(store, (*graph2, "enqueue"), a.repo)), graph2=graph2,
                       priority_file=a.priority_file)
-        loop = Loop(world, a.log, shadow=a.shadow, dry_run=a.dry_run, batch=a.batch, depth=a.depth)
+        loop = Loop(world, a.log, shadow=a.shadow, dry_run=a.dry_run, batch=a.batch, depth=a.depth, state=a.state)
         if a.once or a.dry_run:
             loop.tick()
             return 0
