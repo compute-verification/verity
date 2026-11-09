@@ -33,19 +33,19 @@ the check's verdict: a candidate passes only when both pass.
 
 The actions.  Build merges its members in order onto its base (`Queue._merge`), leaving out one that doesn't merge (`skip`, its
 owner told once per head and base), pushes `queue/<sha12>`, logs it, enqueues `ready:<sha>` as graph/v2 at its priority and
-starts the run beside it.  Advance pushes `main` to the candidate with a lease on its base and does what drive does when
-`main` moves (`Driver._on_main`).  Drop cancels the check (graph2's `cancel`, where it has one), deletes the branch and logs
-its outcome, with its base and its inherited failures, their inputs whole, which `history` reads back.  Eject withdraws the
-PR's ready mark at its head (`Queue.eject`, under the clone's queue lock) and tells its owner the failed tasks, their keys and
-where their logs are.  Retry enqueues again (graph2 lists a check whose listing failed, reruns what ended in infra errors
-once its own verdict is infra, and leaves a pending one as it is), reruns those keys itself while graph2's verdict is
-another (a task still runs, or one failed), sets the infra results aside, and starts a run beside it that ended in infra
-again.  Rerun runs the keys afresh (graph2's `rerun`), their results set aside, a key of the run beside starting that run again;
-without graph2's `rerun` it is logged `absent`, and counts as done.  Ring tells infra's handle (`drive.INFRA`), once a
-candidate and why.  Red tells `CI` and the owners of what the base fails (as drive names them: a test file's suite's, else
-its job's) that it is red on them, once a base and task.  A test graph2's verdict says flaked (`flaky`: a fail a rerun
-replaced) is told to its file's owner in drive's registry and `CI`, once a key: a test that flakes is deleted.  Each action
-and its result is one JSON line in the log, whose directory also holds the loop's caches.
+starts the run beside it.  Advance pushes `main` to the candidate with a lease on its base and does what drive does when `main`
+moves (`Driver._on_main`).  Drop cancels the check (graph2's `cancel`, where it has one) and the run beside it while that runs,
+deletes the branch and logs its outcome, with its base and its inherited failures, their inputs whole, which `history` reads
+back.  Eject withdraws the PR's ready mark at its head (`Queue.eject`, under the clone's queue lock) and tells its owner the
+failed tasks, their keys and where their logs are.  Retry enqueues again (graph2 lists a check whose listing failed, reruns
+what ended in infra errors once its own verdict is infra, and leaves a pending one as it is), reruns those keys itself while
+graph2's verdict is another (a task still runs, or one failed), sets the infra results aside, and starts a run beside it that
+ended in infra again.  Rerun runs the keys afresh (graph2's `rerun`), their results set aside, a key of the run beside starting
+that run again; without graph2's `rerun` it is logged `absent`, and counts as done.  Ring tells infra's handle (`drive.INFRA`),
+once a candidate and why.  Red tells `CI` and the owners of what the base fails (as drive names them: a test file's suite's,
+else its job's) that it is red on them, once a base and task.  A test graph2's verdict says flaked (`flaky`: a fail a rerun
+replaced) is told to its file's owner in drive's registry and `CI`, once a key: a test that flakes is deleted.  Each action and
+its result is one JSON line in the log, whose directory also holds the loop's caches.
 
 `--shadow` logs advance, eject, ring, red, flake and every message with `shadow: true` and does none of them, and builds,
 drops, retries, reruns and starts the runs beside: its `main` is the newest candidate it advanced (`refs/vqueue/shadow` in the
@@ -77,7 +77,7 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from . import policy, vqueue
-from .drive import CI, JOB_OF_KIND, SLIM_STEPS, Driver, gating, merge_thread_post
+from .drive import CI, JOB_OF_KIND, SLIM_STEPS, Driver, cancel_runs, gating, merge_thread_post
 from .drive import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_key, task_target
 from .queue import (PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, flags_at, label_verifier, lean_change,
@@ -237,7 +237,7 @@ class Judged:
     """A candidate's verdict with what it rests on: ``mark`` names the terminal infra or list-failed evidence a retry answers,
     ``graph2`` is graph2's own verdict (``theirs`` its whole JSON), ``lacks`` the jobs `main` waits for (`drive.gating`) that no
     task of the graph runs, which drive's `executor = "on"` path takes as no promotion and this verdict only reports, and
-    ``slim`` the verdict of the run beside the check (`vqueue_slim.judge`), combined into ``verdict``."""
+    ``slim`` the verdict of the run beside the check (`vqueue_slim.judge`) on its ``record``, combined into ``verdict``."""
     verdict: Verdict
     mark: str | None = None
     note: str = ""
@@ -247,6 +247,7 @@ class Judged:
     listed: bool = True
     theirs: dict | None = None
     slim: Verdict | None = None
+    record: dict | None = None
 
 
 class _Seen:
@@ -664,6 +665,10 @@ class World:
             return "no cancel"
         return "cancelled" if r.returncode == 0 else f"cancel exited {r.returncode}: {(r.stderr or r.stdout).strip()[-200:]}"
 
+    def cancel_runs(self, ids: Iterable[str], why: str) -> dict[str, str]:
+        """`research cancel` of runs ``ids``, as drive cancels a run beside a check: {run id: why} of each that failed."""
+        return cancel_runs(self.repo, list(ids), why)
+
     def advance(self, sha: str, base: str, members: list[Member]) -> None:
         """origin's `main` fast-forwarded from ``base`` to ``sha``, and what drive does once ``members`` are on it."""
         self.q._drive_only("main", "advance", False)
@@ -876,7 +881,7 @@ class Loop:
         if both.state == FAIL:              # `combine` keeps no `ended`: a fail has ended once both checks stopped running
             g = j.verdict
             both = replace(both, ended=(g.state != PENDING and (g.state != FAIL or g.ended)) and v.state != PENDING)
-        return replace(j, verdict=both, slim=v)
+        return replace(j, verdict=both, slim=v, record=rec)
 
     # -- a tick
 
@@ -1063,11 +1068,16 @@ class Loop:
                            why=f"`main` {c.base[:12]} fast-forwarded to it", done=not self.shadow)
 
     def _drop(self, a: Drop, c: Candidate, t: Tick) -> dict:
-        w = self.world
+        """Cancel ``c``'s check and the run beside it while that runs (it would hold drive's machines for nothing), delete its
+        branch and log its outcome."""
+        w, j = self.world, t.judged.get(c.sha)
         cancel = w.cancel(c.sha)
+        ids = list((j.record or {}).get("ids") or ()) if j is not None and j.slim is not None and j.slim.state == PENDING else []
+        failed = w.cancel_runs(ids, f"vqueue: candidate {c.sha[:12]} was dropped: {a.why}") if ids else {}
         w.push("", branch(c.sha), c.sha)
         return self.record(t, "drop", sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why, outcome=a.outcome,
-                           failed=c.verdict.failed, cancel=cancel, done=True)
+                           failed=c.verdict.failed, cancel=cancel, done=True,
+                           **({"beside_cancelled": ids} if ids else {}), **({"beside_cancel_failed": failed} if failed else {}))
 
     def _eject(self, a: Eject, t: Tick) -> dict:
         w = self.world

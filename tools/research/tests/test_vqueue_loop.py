@@ -60,13 +60,18 @@ class Labels:
 
 
 class Fake(World):
-    """The world with labels faked: an eject withdraws the fake mark."""
+    """The world with labels faked: an eject withdraws the fake mark, and a run's cancel is kept in ``cancelled``."""
 
     withdrawn: list
+    cancelled: list
 
     def withdraw(self, number: int, head: str, why: str):
         self.withdrawn.append((number, head))
         self.q.github.ready.discard((number, head))
+
+    def cancel_runs(self, ids, why: str) -> dict[str, str]:
+        self.cancelled.append((list(ids), why))
+        return {}
 
 
 class Env:
@@ -74,6 +79,7 @@ class Env:
         self.o, self.tmp = Origin(tmp), tmp
         self.labels, self.graph2 = Labels(self.o.gh), FileTransport(tmp / "graph2")
         self.log, self.clock, self.posts, self.out, self.withdrawn = tmp / "vqueue" / "decisions.jsonl", T0, [], [], []
+        self.cancelled: list = []
         monkeypatch.setattr(M, "caught_up", lambda *a, **k: None)
         monkeypatch.setattr(M, "_sweep_after", lambda *a, **k: None)
 
@@ -87,7 +93,7 @@ class Env:
         q.branch = "main"
         w = Fake(q, self.labels, Executor(self.graph2), post=lambda text, to=(): self.posts.append(text) or True,
                  now=lambda: self.clock)
-        w.withdrawn = self.withdrawn
+        w.withdrawn, w.cancelled = self.withdrawn, self.cancelled
         return Loop(w, self.log, decide=decide, now=lambda: self.clock, out=self.out.append, **kw)
 
     def put(self, n: int, files: dict[str, str]) -> str:
@@ -765,6 +771,24 @@ def test_the_run_beside_each_check_starts_once_a_candidate_its_record_is_kept_an
     started_again = env.loop(vqueue.decide, clone="again", slim=slim)         # a restart reads its records from the log
     started_again.world.slim_driver = lambda dry_run=False: "drive"
     assert started_again.tick() == [] and len(slim.started) == 2
+
+
+def test_a_dropped_candidate_s_run_beside_its_check_is_cancelled_while_it_runs_and_one_that_ended_is_left(env):
+    env.put(1, {"a.txt": "1\n"})
+    slim = Slim()
+    loop = env.loop(vqueue.decide, slim=slim)
+    loop.world.slim_driver = lambda dry_run=False: "drive"
+    built, _ = loop.tick()
+    env.o.gh.ready.discard((1, built["heads"][0]))                  # its ready mark withdrawn: dropped
+    (drop,) = loop.tick()
+    assert (drop["action"], drop["beside_cancelled"]) == ("drop", ["run-1"])
+    assert env.cancelled == [(["run-1"], f"vqueue: candidate {built['sha'][:12]} was dropped: #1's ready mark was withdrawn")]
+    env.put(2, {"b.txt": "2\n"})
+    two, _ = loop.tick()
+    slim.verdicts["run-2"] = FAIL
+    env.o.gh.ready.discard((2, two["heads"][0]))
+    judged, drop = loop.tick()
+    assert (judged["record"]["verdict"], drop["action"], len(env.cancelled)) == (FAIL, "drop", 1) and "beside_cancelled" not in drop
 
 
 def test_a_candidate_older_than_the_log_s_window_keeps_its_tries_first_enqueue_results_set_aside_and_run_beside(env):
