@@ -21,8 +21,15 @@ def test_the_notes_sync_stalls_on_a_detached_head_an_old_lock_or_an_unpushed_cha
 
 
 def test_the_disk_alerts_at_85_90_and_95_and_a_level_rearms_three_points_under_it():
-    """ci (CI-489, 9 Nov): an alarm at 85%; and the disk that fell from 97% to 90% and climbed back alerted nothing at 95%."""
+    """85% leaves about an hour to act; and a disk that fell from 97% to 90% and climbed back once alerted nothing at 95%."""
     assert A.step(84, 0) == (None, 0) and A.step(85, 0) == ("alert", 85) and A.step(96, 85) == ("alert", 95)
     assert A.step(93, 95) == (None, 95), "within REARM of 95: no second alert for a wobble"
     assert A.step(90, 95) == (None, 90) and A.step(95, 90) == ("alert", 95)
     assert A.step(79, 90) == ("clear", 0) and A.step(79, 0) == (None, 0)
+
+
+def test_the_first_level_is_kept_until_the_clear():
+    """Between `CLEAR` and the first level's rearm the first level stays alerted, so falling under 80% still posts the clear."""
+    assert A.step(82, 85) == (None, 85) and A.step(81, 95) == (None, 85)
+    assert A.step(84, 85) == (None, 85), "back up to just under 85: no second alert"
+    assert A.step(79, 85) == ("clear", 0)

@@ -24,7 +24,7 @@ from research.pods import budgets, connect
 
 SEEN = Path(os.environ.get("CONTROL_DISK_SEEN", Path.home() / "control-disk/seen.json"))
 LOCAL = os.environ.get("CONTROL_POD_LOCAL") == "1"
-#: graph2's ready checks take ~2 GB each, several an hour, so 85% leaves about an hour to act (ci, CI-489, 9 Nov)
+#: graph2's ready checks take ~2 GB each, several an hour, so 85% leaves about an hour to act
 LEVELS = (85, 90, 95)
 CLEAR = 80
 REARM = 3
@@ -49,13 +49,14 @@ def log(msg: str) -> None:
 
 def step(pct: int, seen: int) -> tuple[str | None, int]:
     """What a reading of ``pct``% does after the level ``seen`` was alerted: ("alert", level) for a level newly reached,
-    ("clear", 0) under `CLEAR`, else (None, the level kept: one `REARM` points above ``pct`` is dropped silently)."""
+    ("clear", 0) under `CLEAR`, else (None, the level kept: one `REARM` points above ``pct`` is dropped silently, down to the
+    first level, which only the clear drops)."""
     level = max((lv for lv in LEVELS if pct >= lv), default=0)
     if level > seen:
         return "alert", level
     if pct < CLEAR and seen:
         return "clear", 0
-    return None, max([lv for lv in LEVELS if lv <= seen and pct > lv - REARM], default=0)
+    return None, max([lv for lv in LEVELS if lv <= seen and pct > lv - REARM], default=LEVELS[0] if seen else 0)
 
 
 def post(text: str) -> bool:
