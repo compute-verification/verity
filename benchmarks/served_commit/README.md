@@ -21,12 +21,8 @@ stochastic. It renders no tables.
   ring has room; `-4k` arms hash 4 KiB rows, and `-layer` arms acquire only each layer's residual stream, K and V; no
   scheme's roots), optionally under nsys,
   summarized by `nsys_summary.py`, and with `PIN_BUILD` under a Build of record's compile artifact (`served-pin` seeds one
-  fresh Inductor dir for every arm and checks it after); `gather_bench.py` times the
-  gather kernel alone; `rows_floor.py` (`rows_floor.sh`) the rows-sha512 kernels alone and beside a busy stream;
-  `gpu_tests.sh` runs the committer's GPU byte-identity tests on a node;
-  `granularity.py` lists, from a Build's request Programs, the Call boundaries a per-block or per-layer proof block would
-  keep, with their bytes and hashing time, and `layout_bytes.py` a run's committed bytes by buffer category (estimates; no
-  scheme).
+  fresh Inductor dir for every arm and checks it after); `rows_floor.py` times the rows-sha512 kernels alone and beside a
+  busy stream; `gpu_tests.sh` runs the committer's GPU byte-identity tests on a node.
 - `hash_prof.py` and `hash_prof.sh`: one step's rows-sha512 hashing as the windowed worker calls it, at T tokens a step, in
   the worker's form (held leaves folded many windows at once, levels copied on a copy stream) and the per-window form before
   it, with the kernels' knobs, under nsys and ncu.
