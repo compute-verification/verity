@@ -148,8 +148,9 @@ Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypothes
                                          that accepts everything
 WitnessesChecked.lean  the nontrivial lemma of SampledLeakChecked; its honest lemma is
                                          SampledAuditAccepted_honest
-WitnessesCarried.lean  the nontrivial lemmas of SampledLeakCarried and PooledLeakCarried; their honest
-                                         lemmas wait on a deployed check
+WitnessesCarried.lean  SampledLeakCarried's honest lemma, at the toy code with a run that opens its row
+                                         at its input gates, and the nontrivial lemmas of SampledLeakCarried and
+                                         PooledLeakCarried; PooledLeakCarried's honest lemma waits on a deployed check
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
                                definitions above: six theorems, not guarantees (below)
 Accepted.lean   an accepted run of the network certificate check is a run of the constant-rate Program
@@ -352,8 +353,9 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
     term per opening. At the empty pool it gives the bound over windows that each hold a pool of their own, at their
     leak relations with a valid run (`LeakAtChecked`, `PeriodLeaksChecked`; `pooledLeakChecked_of_carried`).
   - `CheckedUnique` and `CheckedWitness` are open premises of all three: a deployed check proved to pin its inputs and
-    bound its miss discharges them. The carried pair's honest lemmas also wait on the pool circuit, which pins its
-    closing row (`CheckedClosing`) and opens at its inputs.
+    bound its miss discharges them. `SampledLeakCarried`'s honest lemma is its premises at the toy code, with a run
+    that opens its row at its circuit's input gates (`SampledLeakCarried_honest`). `PooledLeakCarried`'s waits on the
+    pool circuit, which pins its closing row (`CheckedClosing`), and on its period's inputs.
 
 **The program's agreements, proved and audited, not guarantees.** Six theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references

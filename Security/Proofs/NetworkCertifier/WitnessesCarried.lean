@@ -38,7 +38,14 @@ import Proofs.NetworkCertifier.Carried
 import Proofs.NetworkCertifier.WitnessesChecked
 
 /-!
-# The nontrivial lemmas of the leak bounds over a carried pool
+# The witnesses of the leak bounds over a carried pool
+
+`SampledLeakCarried`'s honest lemma (`SampledLeakCarried_honest`) is its premises at the toy code: `Compiled.KS`, as
+`SampledLeakChecked`'s (`SampledAuditAccepted_honest`), and opening gates that are inputs of each circuit, at a run that
+opens its row at every one of its input gates. `CheckedUnique` and `CheckedWitness` are open premises, as they are
+`SampledLeakChecked`'s.
+
+Their nontrivial lemmas:
 
 * `SampledLeakCarried`. Its acceptance conclusion fails at the accepting compiled verifier `leakL`, as
   `SampledLeakChecked`'s does, at the check every run passes and no opening or closing gate: a witness in `RLeakCarried`
@@ -48,9 +55,9 @@ import Proofs.NetworkCertifier.WitnessesChecked
   relation, no opening collides (the two digests of the empty row hash one message, `poolColl_empty`), and the escape
   bound reads `1 ≤ 0`.
 
-Their honest lemmas are open. `SampledLeakCarried`'s needs a deployed check that pins its checked inputs
-(`CheckedUnique`) and its miss bounded (`CheckedWitness`), and `PooledLeakCarried`'s one that pins its checked inputs,
-its closing row (`CheckedClosing`) and the roots it opens and leaves (`CarriedRoots`).
+`PooledLeakCarried`'s honest lemma is open: it needs a deployed check that pins its closing row (`CheckedClosing`) and the
+roots it opens and leaves (`CarriedRoots`), and its period's inputs (`PeriodChannel`, `PeriodAdaptive`, `PeriodEscapes`,
+`PeriodLeaksCarried`).
 -/
 
 @[expose] public section
@@ -59,6 +66,15 @@ namespace NetTiming.Witness
 
 open Claims Claims.Sampling
 open Claims.Witness.SamplingGeneric (notStmt notPart leakL)
+
+set_option synthInstance.maxSize 1024 in
+/-- **`SampledLeakCarried`'s premises at the toy code**: `Compiled.KS` (`SampledAuditAccepted_honest`), and a run that
+opens its row at every input gate of its circuit opens it at inputs (`OpensAtInputs`). -/
+theorem SampledLeakCarried_honest :
+    (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) SamplingDeploy.toyCode
+        (fun _ _ _ => [])).KS FlockDeploy.sha512 ∧
+      OpensAtInputs fun s => (List.range s.prog.gates.length).filter fun g => s.prog.gates[g]? = some .input :=
+  ⟨SampledAuditAccepted_honest, fun _ _ hg => by simpa using (List.mem_filter.1 hg).2⟩
 
 open Claims.Witness Claims.Witness.Sampling in
 /-- **`SampledLeakCarried`'s acceptance conclusion fails at the accepting verifier** `leakL`, at one step at `δ = 0`,

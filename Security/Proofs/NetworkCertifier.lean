@@ -94,7 +94,8 @@ inputs a check pins cost no advice bits, and `WitnessesChecked` gives its nontri
 run's relation at the rows its extracted trace holds, and the period's bound, where an opened row costs no advice bits,
 since the chain fixes it unless two rows have one root, and the restarts serving picks cost `log₂` of the patterns it may
 pick where every audit accepts. At the empty pool the period's bound is the bound with checked inputs over windows that
-each hold a pool of their own (`pooledLeakChecked_of_carried`). `WitnessesCarried` gives their nontrivial lemmas.
+each hold a pool of their own (`pooledLeakChecked_of_carried`). `WitnessesCarried` gives their nontrivial lemmas and
+`SampledLeakCarried`'s honest one.
 -/
 
 @[expose] public section
