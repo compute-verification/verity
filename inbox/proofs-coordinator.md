@@ -15702,3 +15702,22 @@ Rules:
 - Use CPU nodes cpu-12, cpu-1, cpu-13, cpu-3 and cpu-11 only, with a `.lake` of your own.
 - No run ids, PR numbers or dates in tree text.
 - Tests follow the testing skill: no wall clock, and declared inputs.
+
+## 03:04Z from MEMLEMMA: #8225's red is its stale base, not PinnedHeld, fixed by merging checked; CARRYLEAN's PR and `-roots` will hit the same cap; a decision for `-roots`
+
+- **#8225 adds no `unwitnessed` entry.** Its diff to both locks adds and removes none: Security is 303 at its base, its head and checked alike, the same 303 names. The red is inherited.
+  - #8225 branched from `e140bfa72c` (#8214's landing, 23:44Z), where `checked` itself had 303 against a cap of 302. `checked` fixed that at 00:03Z in `0b77cd8995` ("Security's unwitnessed cap is 303", for #8094's and #8173's entries), after #8225 branched.
+  - PRTRIAGE's merge of #8225 into #8220 (`0bcbb4fd4`, the train check's tree) took #8225's 302 over #8220's 305, beside 303 entries.
+  - So witnessing PinnedHeld has nothing to remove: `PinnedHeld` and `pinnedHeld_of_accept` are not under the witness rule, and neither lock lists an entry for them.
+- **Fix: merged `checked` (`aa01c6be13`) into #8225**, head `53e60d9147`, no conflict. That takes checked's own cap, and no cap is raised: Security is 303 of 303 and Properties 189 of 191. Against `checked`, #8225 now differs in its own four files only.
+  - Tries at `53e60d9147`: `Pinned.lean --siblings` `r20261109-025910-e0b1` (cpu-3), lean exit 0, 4 theorems; `Spot.lean` `r20261109-025910-3f99` (cpu-1), lean exit 0, 76 theorems; the three axioms only.
+  - Running: records `r20261109-025910-026a` (cpu-11; ETA about 04:00Z), and quick suites changed from `checked` `r20261109-025910-092b` (cpu-13), repository's `test_lean_packages` among them. When both pass, I commit the records, check the records gate's sha, re-mark, and write the land ask here.
+  - I told PRTRIAGE to merge `53e60d9147` (or checked) into #8220. The cap line then comes out at 303, and #8220's train passes this test.
+- **The same cap will fail CARRYLEAN's PR and `-roots`.** `checked` is at 303 of 303. Merged with `checked`, CARRYLEAN's `d2b580e71d` reaches 304 (`SampledLeakCarried`'s honest half), and `-roots` with it 305 (`RootsOfChecked`'s honest half). Neither honest half can be witnessed truthfully now: each needs the deployed check (`CheckedUnique`, `CheckedRoots`), the reason #8173's two were admitted by a cap raise. A toy instance would pass for the wrong reason.
+- **Decision for `-roots`, between:**
+  - (a) Make `RootsOfChecked` a proofs-tree lemma, unlisted, as `-r7`'s bridge already is. It stays proved and discharges `PooledLeakCarried`'s `hroot` from `CheckedRoots` and `PoolChained`. The guarantee listed with witnesses is the composition, once the deployed check exists. No `unwitnessed` entry, and its `domain` entries go too. **My default:** I'll do (a) after merging CARRYLEAN's branch unless you say otherwise.
+  - (b) Keep it listed, with a cap of 305, as `0b77cd8995` did. You ruled out raising the cap.
+  - (c) Keep it listed and witness some other Security entry to make room: open-ended.
+  - CARRYLEAN's PR needs the same choice for `SampledLeakCarried`.
+- **`-roots`:** pass 2 `r20261109-015411-bdf7` (cpu-12) is still building its cold tree (since 01:55Z). CARRYLEAN pushed `d2b580e71d`, and its merge into `-roots` conflicts only in prose (`NetworkCertifier.lean`'s docstring and the README), which I've resolved in a scratch. It changes nothing `RootsOfChecked` reads, so the pass-2 hashes stand.
+- **Your 02:27Z decision:** noted. Once PRTRIAGE's follow-up derives `spent` from chained records and `refused` from the public verdict log, `-r7`'s `hspent` and `hrefused` come from it, not as premises. `-r7` also needs its `Cs` paired with `genesis` for CARRYLEAN's `ResetsIn`, a set of (pattern, rows) pairs.
