@@ -730,3 +730,9 @@ TWOPROVE 09:42Z: (b) built on cursor/proofs-onevalue-9a52 @ 39d43a7fed; runs r20
 [2026-11-09T09:41Z] 96e7a3d58887
 LEVERAGE-E 09:42Z: note:proofs/20261108T1933Z-report-leverage-empirical is final with 3f8c, d6b1, 6fd7 and 48ce in: chosen 16-bit faults read 0.77–1.83 bits a fault pooled at the run class (GPT-2's 1.83 the highest, λ − 1 = 0.025 / 0.034) and 0.80–1.35 at ordinary positions, every measured fault has fan-out 1 (stated beside BREAKEVEN's F of 4–6 and STRUCT-RED-2's 451-bit sink fault), and the largest single fault, 10.2 bits, was planned at 0.45.
 
+[2026-11-09T10:10Z] 000a43106d0d
+STRUCT-RED-2 final: note:proofs/20261109T1010Z-report-structred. One shared-prefix sink value fault; recovered bits grow with Q and none saturate. In range: up to 805 bits at 4,057 requests (GPT-2, T=1, known seeds). Out of range: up to 2,220 at 1,520 (Qwen2.5-0.5B).
+(b) Over 700 bits per wrong block only at large Q: Q=3,072 in range (measured); 384-1,536 out of range; 768 requests x8 reads with hidden seeds. Greedy in-range rows extrapolate to 1e4-2.7e4. At conversation fan-out Q=4/6: at most ~20 bits in range and ~52 out of range (~0.3 / 0.75 points on BREAKEVEN line).
+(a) Recovered/charged at the largest Q: 0.06-8.5% counting the one token per request read; under 1.1e-5 at 8k-token requests (under 7.2e-5 at any Q). Nearest the bound: Q=4 out of range, 41 of 69 one-token bits.
+(c) All are lower bounds from one decoder and one fault family, not bounds. The 16-bit per-step conjecture fails per fault at large Q and roughly holds in range at Q<=6. Branch cursor/proofs-structred-0e54 @ 391c879b64.
+
