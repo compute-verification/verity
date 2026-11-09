@@ -280,26 +280,6 @@ namespace Served
 
 variable {O V Tick Adv R Q Θ Θ' F : Type}
 
-theorem accLen_le_count (L : ℕ) : ∀ l : List (Served O V Tick Adv), accLen l ≤ count L l
-  | [] => le_rfl
-  | w :: l => by
-    have := accLen_le_count L l
-    simp only [accLen, count]
-    split_ifs <;> omega
-
-/-- **The windows before the first rejection are accepted.** -/
-theorem accepted_of_lt_accLen : ∀ (l : List (Served O V Tick Adv)) (n : ℕ) (w : Served O V Tick Adv),
-    n < accLen l → l[n]? = some w → w.accepted
-  | [], _, _, h, _ => by simp [accLen] at h
-  | v :: l, n, w, h, hw => by
-    by_cases hv : v.accepted
-    · rcases n with _ | n
-      · simp only [List.getElem?_cons_zero, Option.some.injEq] at hw
-        exact hw ▸ hv
-      · simp only [accLen, hv, if_true] at h
-        exact accepted_of_lt_accLen l n w (by omega) (by simpa using hw)
-    · simp [accLen, hv] at h
-
 /-- The values a run released from the first rejection through the halt, by window and slot: the fault channel's
 overwrite. -/
 noncomputable def tailOverwrite (L : ℕ) (l : List (Served O V Tick Adv)) (T : ℕ) : Fin T × O → Option V :=
