@@ -813,6 +813,44 @@ def test_a_fail_graph2_s_verdict_on_the_base_lists_at_its_key_is_inherited_with_
         assert _acts(loop.tick()) == ["eject", "drop"] and env.withdrawn == [(1, one)] and env.main() == main
 
 
+def test_a_listing_other_than_the_one_graph2_runs_holds_its_candidate_and_rings_ci_once(env):
+    """The listing the loop reads, the `verity_graph` label on a candidate's commit, is self-asserted too: one that leaves a
+    gating task out hides its fail.  graph2's verdict names the listing it runs (`art`, the id of its contents): while the
+    loop's isn't it, the candidate is held, pending, and `CI` is rung once with both, their sizes and the tasks graph2 names
+    that the loop's lacks; while graph2 has labelled none, a pass waits; once they are one, it lands."""
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(vqueue.decide)
+    script = env.graph2_script(loop)
+    (built,) = loop.tick()
+    sha, w = built["sha"], loop.world
+    keys = env.listed(sha, {"pytest:a": ["a.txt"]})                     # graph2 runs `pytest:z` too, and failed it
+    env.result(keys["pytest:a"], "pytest:a", PASS)
+    ours = w.tasks.graph_v2(f"ready:{sha}")[0]
+    verdict = Path(f"{script}.verdict.ready:{sha}")
+    verdict.write_text(json.dumps({"state": FAIL, "pending": 0, "tasks": 2, "off_gate": 0, "art": "art:graph2s", "failed": [
+        {"task": "pytest:z", "key": "sha512:z", "tests": ["test_z.py::z"], "inputs": ["z.txt"], "reads": []}]}))
+    held = L.Relisted("art:graph2s", ours, 2, 1, ("pytest:z",))
+    assert str(held) == (f"graph2 runs the listing art:graph2s (2 task(s)), and the loop read {ours} (1 task(s)), which "
+                         "lacks pytest:z")
+    j = w.verdict(sha, built["base"])
+    assert (j.verdict, j.disputed, j.note) == (Verdict(PENDING), (held,),
+                                               f"graph2 says fail; held until graph2 and the loop agree: {held}")
+    acts = [r for _ in range(3) for r in loop.tick()]
+    (ring,) = acts
+    assert (ring["action"], ring["sha"], ring["why"], ring["to"], ring["done"]) == ("ring", sha, str(held), ["@ci"], True)
+    assert (ring["graph2"], ring["mine"], ring["lacks"]) == (
+        {"art": "art:graph2s", "tasks": 2}, {"art": ours, "tasks": 1}, ["pytest:z"])
+    assert env.posts == [f"@ci vqueue: {ring['text']}"] and f"commit:{sha} --key verity_graph" in ring["text"]
+    assert env.main() != sha and env.withdrawn == []
+    verdict.write_text(json.dumps({"state": PASS, "pending": 0, "tasks": 1, "off_gate": 0, "art": None}))
+    j = w.verdict(sha, built["base"])
+    assert (j.verdict, j.disputed, j.note) == (Verdict(PENDING), (),
+                                               "graph2 says pass; held: graph2 hasn't labelled the listing it runs yet")
+    assert L._relisted({"labelled": "2026-01-01T00:00:00Z", "art": "art:graph2s"}, ours, {}) is None
+    verdict.write_text(json.dumps({"state": PASS, "pending": 0, "tasks": 1, "off_gate": 0, "art": ours}))
+    assert _acts(loop.tick()) == ["advance", "on_main", "drop"] and env.main() == sha and len(env.posts) == 1
+
+
 def test_a_fault_main_has_too_is_inherited_by_what_it_names_so_no_pr_touching_its_inputs_is_ejected(env):
     """graph2 names no failing test of a task's own fault: its tests are the files it read outside its declared inputs
     (`undeclared:<path>`), else its fault (`fault:...`, without the run and node it names), from graph2's verdicts on the
