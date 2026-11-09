@@ -4,10 +4,10 @@
 #
 # This move renames prose only (`scope = "prose"`): never code, a string, backticks or a data file, so it moves no path,
 # renames no declaration and leaves every lock and pin as it is. Under that scope a word in capitals alone is a constant's
-# name and stays, so IU is renamed with the word before it ("an IU", "per IU"), in the plural and in the possessive.
-# What it leaves, each for a hand edit: IU with no such word before it (after a possessive, at the start of a line, in a
-# data file's comment or a string); the verdict's key `ius` and the names built on it, which are the check's format; and
-# the sentence of the check's README that says the older names stay ([keep]).
+# name and stays, so IU is renamed with a word beside it ("an IU", "IU condition"), in the plural and in the possessive.
+# What it leaves, each for a hand edit: IU where no row's phrase holds it (after a name in backticks, in a data file's
+# comment or a string); the verdict's key `ius` and the names built on it, which are the check's format; and the sentence
+# of the check's README that says the older names stay ([keep]).
 scope = "prose"
 
 [words]
@@ -52,6 +52,14 @@ scope = "prose"
 "for IU" = "for inference block"
 "to IU" = "to inference block"
 "with IU" = "with inference block"
+# --- IU before the word it qualifies, and after a possessive
+"per-IU" = "per-inference-block"
+"IU condition" = "inference-block condition"
+"IU assignments" = "inference-block assignments"
+"IU of each" = "inference block of each"
+"image's IU" = "image's inference block"
+"gate's IU" = "gate's inference block"
+"node's IU" = "node's inference block"
 
 [rewrite]
 # Never rewritten: the term source and the lints and tables that spell the old words on purpose, records of what was
