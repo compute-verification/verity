@@ -208,7 +208,9 @@ def compare(D: np.ndarray, results: list[tuple[np.ndarray, np.ndarray]], model_n
 
 
 def run_canary(probe: "P.Probe", ins: P.Instruction, plan: CanaryPlan, out: Path, procs: int, repo: Path | str | None = None,
-               tiles_fn: Callable[[np.ndarray, np.ndarray, np.ndarray], np.ndarray] | None = None, eval_fn: Callable[[np.ndarray, np.ndarray, np.ndarray], list[tuple[np.ndarray, np.ndarray]]] | None = None, replay_fn: Callable[[Path], dict] | None = None) -> dict:
+               tiles_fn: Callable[[np.ndarray, np.ndarray, np.ndarray], np.ndarray] | None = None,
+               eval_fn: Callable[[np.ndarray, np.ndarray, np.ndarray], list[tuple[np.ndarray, np.ndarray]]] | None = None,
+               replay_fn: Callable[[Path], dict] | None = None) -> dict:
     """The device half: run every canary tile and replay, compare against the instruction's models, write ``canary_tiles.npz``.
     ``tiles_fn(A, Bt, C) -> D``, ``eval_fn(A, Bt, C) -> [(words, errs) per model]`` and ``replay_fn(path) -> replay dict`` default
     to the probe, the model pool and ``replay_golden`` (injectable so the bookkeeping is testable without a GPU).

@@ -1127,7 +1127,8 @@ def _eval_tiles(args: tuple[np.ndarray, np.ndarray, np.ndarray]) -> tuple[list[n
 
 
 def model_eval(pool: Pool, A: np.ndarray, Bt: np.ndarray, C: np.ndarray, procs: int,
-               worker: Callable[[tuple[np.ndarray, np.ndarray, np.ndarray]], Any] = _eval_tiles) -> tuple[np.ndarray, np.ndarray] | list[tuple[np.ndarray, np.ndarray]]:
+               worker: Callable[[tuple[np.ndarray, np.ndarray, np.ndarray]], Any] = _eval_tiles,
+               ) -> tuple[np.ndarray, np.ndarray] | list[tuple[np.ndarray, np.ndarray]]:
     n = A.shape[0]
     chunks = max(1, min(n // 64 + 1, procs * 8))
     idx = np.array_split(np.arange(n), chunks)
