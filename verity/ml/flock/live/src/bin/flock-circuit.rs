@@ -615,7 +615,9 @@ impl StatementVerifier for CircuitVerifier {
 impl CircuitVerifier {
     fn new(tabs: Tables) -> Self {
         let t0 = &tabs.list[0];
+        let ts = Instant::now();
         let scope = proved_scope::check(&t0.st.c, &t0.inst, is_zk(&t0.st), tabs.list.len());
+        span("v.scope", ts, json!({"units": t0.inst.n}));
         CircuitVerifier { tabs, lincheck: sverify::Lincheck::from_env().unwrap_or_else(|e| refuse(e)), phases: Mutex::new(None), scope }
     }
 
@@ -977,7 +979,15 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
 
 /// One session's server.
 fn server_of(sv: &Serving, st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Server {
-    let s = Server::new(config_of(&sv.tabs), Box::new(CircuitVerifier::new(sv.tabs.clone())));
+    let tc = Instant::now();
+    let cfg = config_of(&sv.tabs);
+    span("v.make.config", tc, Value::Null);
+    let tv = Instant::now();
+    let cv = CircuitVerifier::new(sv.tabs.clone());
+    span("v.make.verifier", tv, Value::Null);
+    let ts = Instant::now();
+    let s = Server::new(cfg, Box::new(cv));
+    span("v.make.server", ts, Value::Null);
     let s = match &sv.tree_from {
         Some(t) => s.with_tree_from(t.0.clone()),
         None => s,
@@ -1000,8 +1010,13 @@ fn with_draw(mut s: Server, st: &Arc<Stmt>, inst: &Arc<Instances>, law: flock_li
     s.cfg.draw_law = Some((law, inst.n as u64));
     let (st, inst) = (st.clone(), inst.clone());
     s.with_draw(Box::new(move |draw: &Value| {
+        let tt = Instant::now();
         let tabs = side_tables(Side::Verifier, &st, &inst, Some(draw), count)?;
-        Ok((config_of(&tabs), Box::new(CircuitVerifier::new(tabs)) as Box<dyn StatementVerifier>))
+        span("v.reg.tables", tt, Value::Null);
+        let tc = Instant::now();
+        let cfg = config_of(&tabs);
+        span("v.reg.config", tc, Value::Null);
+        Ok((cfg, Box::new(CircuitVerifier::new(tabs)) as Box<dyn StatementVerifier>))
     }))
 }
 
@@ -6948,6 +6963,7 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
             let tm = Instant::now();
             let Some((s, tag)) = make() else { break };
             let make_s = tm.elapsed().as_secs_f64();
+            span("v.make", tm, json!({"i": i}));
             let ta = Instant::now();
             let (conn, _) = l.accept().unwrap();
             span("v.accept", ts, json!({"i": i, "slot_s": slot_s, "make_s": make_s, "accept_s": ta.elapsed().as_secs_f64()}));
