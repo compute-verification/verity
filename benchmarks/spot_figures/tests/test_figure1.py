@@ -9,6 +9,7 @@ import cards
 import figure1 as f
 import pytest
 from render import _fit, _lines, _zeros, appendix_stem, render, render_appendix, stem
+from verity.core.protocols.certifier.warden import WardenParams
 
 SCOPES = ("world year", "datacenter week")
 #: the designs every bit charged, which plan in about a second; the capped ones take seconds a point
@@ -414,6 +415,9 @@ def test_the_capped_curves_charge_at_most_what_a_request_serves(tmp_path):
     caps = out["scopes"]["datacenter week"]["captions"]
     assert (f"Capped (dash-dot; card_influenceTwo_le_served_min): two-stage with each request charged at most the "
             f"{out['inputs']['served_bits']['value']:,.0f} bits it serves") in caps["exfiltration"]
+    assert out["served"] == "cap"
+    assert (f"{out['inputs']['max_tokens_cap']['value']:,} tokens of 32 bits, at most the network certifier's "
+            f"registered response cap ({f.CAP_RULE}") in caps["exfiltration"]
     assert "card_influenceTwo_le_patterns" in caps["exfiltration_appendix"] and "Patterns" not in caps["exfiltration"]
     assert all(path.stat().st_size > 0 for path in render(out, "datacenter week", tmp_path)
                + render_appendix(out, "datacenter week", tmp_path))
@@ -425,11 +429,38 @@ def test_a_request_serves_each_token_as_the_token_selects_word():
     word: the census's mean request or, with `request="workload"`, the workload card's; another request is refused."""
     for request, tokens in (("census", f._entry(f.ADVERSARY, f.CENSUS_WORLD)["tokens_per_request"]),
                             ("workload", cards.load("workload", "GLM-5.3")["value"]["tokens"])):
-        c = f.cards("GLM-5.3", request)
-        assert c["tokens_per_request"].value == tokens
+        c = f.cards("GLM-5.3", request, served="request")
+        assert c["tokens_per_request"].value == tokens and "max_tokens_cap" not in c
         assert c["served_bits"].value == tokens * 8 * c["token_bytes"].value == tokens * 32
     with pytest.raises(ValueError, match="a request is one of"):
         f.cards(request="mean")
+
+
+def test_a_request_serves_at_most_the_certifiers_registered_cap(card_dir):
+    """Where the model's certifier card registers a response cap, a request serves at most that many tokens, each the
+    token select's 32-bit word, read through the schedule whose digest every record head binds; `served="request"`
+    keeps every token.  A schedule without a cap, or no certifier card, leaves every token served, and a cap it
+    doesn't register is refused."""
+    card = cards.load("certifier", "GLM-5.3")
+    schedule = WardenParams(**card["value"]["schedule"])
+    c, every = f.cards("GLM-5.3"), f.cards("GLM-5.3", served="request")
+    assert c["max_tokens_cap"].value == schedule.max_tokens_cap
+    assert c["served_bits"].value == schedule.max_tokens_cap * 32 < every["served_bits"].value
+    assert schedule.digest.hex() in c["max_tokens_cap"].source and f.CAP_RULE in c["served_bits"].source
+    assert (c["served_bits"].status, c["served_bits"].provisional) == (card["status"], card["provisional"])
+    assert f.served_tokens(c)[:2] == (schedule.max_tokens_cap, 32) and f.CAP_RULE in f.served_tokens(c)[2]
+    assert f.served_tokens(every) == (every["tokens_per_request"].value, 32, "every one of the request's tokens")
+    assert "max_tokens_cap" not in f.cards("DeepSeek-V4-Pro")
+    with pytest.raises(ValueError, match="has no certifier card registering a response cap"):
+        f.cards("DeepSeek-V4-Pro", served="cap")
+    with pytest.raises(ValueError, match="served tokens are one of"):
+        f.cards(served="all")
+    uncapped = {k: v for k, v in card["value"]["schedule"].items() if k != "max_tokens_cap"}
+    cards.write(card | {"value": {"schedule": uncapped}}, force=True)
+    c = f.cards("GLM-5.3")
+    assert "max_tokens_cap" not in c and c["served_bits"].value == every["served_bits"].value
+    with pytest.raises(ValueError, match="has no certifier card registering a response cap"):
+        f.cards("GLM-5.3", served="cap")
 
 
 def test_the_headline_designs_win_at_the_measured_overhead(out):

@@ -43,8 +43,9 @@ Lean checks each two-stage point too (`lean_two`, unless `lean` is off): its cou
 finds from the planner's, with the planner's bits (`planner`) and Lean's θ beside them, and a refused point is an
 error.
 
-Each configuration's two panels read one design, the one with the least exfiltration bound at β; skipped work is
-planned on its own.  The serve tax is outside β; the token ids' hashing is in the tax, not in β, for every line.  A
+A request's served bits, S, are Figure 1's (`figure1.cards`): its tokens at most the network certifier's registered
+response cap where the model's `certifier` card registers one, else every one of them.  Each configuration's two
+panels read one design, the one with the least exfiltration bound at β; skipped work is planned on its own.  The serve tax is outside β; the token ids' hashing is in the tax, not in β, for every line.  A
 two-stage statement holds one Definition's sampled proof blocks of a sampled request, or of a registration's sampled
 requests, its sessions padded to a public cap that every registration pays (`optimize.two_stage_statements`), each
 Definition taking whichever costs less.  `breakeven` gives each patterns'-form
@@ -603,12 +604,18 @@ def captions(out: dict, scope: str) -> dict[str, str]:
                      f"{f1.CAP_STATUS['sets']}, at most the scope's served bits ({f1.SERVED_STATUS}):{binds(n)}")
         return text
 
+    cap = (out["inputs"].get("max_tokens_cap") or {}).get("value")
+    conditions = (f"It takes two modeling conditions: each request serves at most S = {served:,.0f} bits, and no "
+                  "proof block is shared across requests" if cap is None else
+                  f"Each request serves at most S = {served:,.0f} bits, {cap:,} tokens, the network certifier's "
+                  f"registered response cap ({f1.CAP_RULE}; the tie of the statement's served outputs to the tokens "
+                  "it releases is pending), and it takes one modeling condition: no proof block is shared across "
+                  "requests")
     patterns = (f"the patterns' form ({f1.CAP_STATUS['patterns']}): a request's incorrect proof "
                 f"blocks are charged their committed bits up to the {served:,.0f} bits it serves, so a wholly incorrect "
                 f"request costs {served:,.0f} bits, and the bound is at most the {sc['served_bits']:.2g} bits the "
-                f"scope serves ({f1.OUTS_STATUS}). It takes two modeling conditions: each request serves at most "
-                f"S = {served:,.0f} bits, and no proof block is shared across requests, so a request's served outputs "
-                "read only its own proof blocks.")
+                f"scope serves ({f1.OUTS_STATUS}). {conditions}, so a request's served outputs read only its own proof "
+                "blocks.")
     cuts = {n: k["cut"] for n, k in conf.items() if "cut" in k and not k["variant_of"]}
     exfil_cuts = "".join(family(n, "dash-dot", f"{short}'s serving and serve tax on the partition card {k['name']}'s "
                                 f"cut ({k['label']}), its marginal proof overhead {conf[n]['overhead']:.3g}×, "
@@ -656,19 +663,19 @@ def captions(out: dict, scope: str) -> dict[str, str]:
 
 
 def run(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None = None, request: str = "census",
-        workers: int = 1, lean: bool = True) -> dict:
+        workers: int = 1, lean: bool = True, served: str | None = None) -> dict:
     """Figure 1's JSON in its total-cost form over the scopes named (default all), planned on `workers` processes, with
     Lean checking every line's designs unless `lean` is off."""
     with ProcessPoolExecutor(workers) if workers > 1 else nullcontext() as pool:
-        return _run(model_name, scope_names, request, pool.map if pool else map, lean)
+        return _run(model_name, scope_names, request, pool.map if pool else map, lean, served)
 
 
-def _lines(model_name: str, request: str, verify: bool = True) -> tuple:
+def _lines(model_name: str, request: str, verify: bool = True, served: str | None = None) -> tuple:
     """The model's cards and, for each configuration it has the cut of, its priced inputs (with each statement's
     verify where `verify` and the model has a `verifier_cost` card), its line (proof blocks a token, fill and marginal
     overhead) and which of its cells' types are computed."""
     sc = f1.slot_cards(model_name)
-    c = f1.cards(model_name, request)
+    c = f1.cards(model_name, request, served)
     cuts = {card["value"]["name"]: card for card in spot_cards.load_all("partition", model_name)}
     confs = {n: conf for n, conf in CONFIGURATIONS.items() if conf.partition is None or conf.partition in cuts}
     inputs = {n: priced(cut(c, cuts[conf.partition]) if conf.partition else c, sc["proof_overhead"])
@@ -688,8 +695,9 @@ def _lines(model_name: str, request: str, verify: bool = True) -> tuple:
     return sc, c, cuts, confs, inputs, lines, computed
 
 
-def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, each, lean: bool) -> dict:
-    sc, c, cuts, confs, inputs, lines, computed = _lines(model_name, request)
+def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, each, lean: bool,
+         served: str | None = None) -> dict:
+    sc, c, cuts, confs, inputs, lines, computed = _lines(model_name, request, served=served)
     tax = taxes(spot_cards.load("serve_tax", model_name), tuple(confs))
     part, fill, h = lines["tokens"]
     betas = sorted(set(BETAS) | set(c["budgets"].value))
@@ -734,7 +742,8 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
                          "machines": registration_gpu_seconds(r, c) / (c["machine_gpus"].value * c["window"].value),
                          "gpu_seconds": registration_gpu_seconds(r, c),
                          "requests": per_gpu_s * registration_gpu_seconds(r, c)} for r, label in REGISTRATIONS.items()}
-    out = {"schema": SCHEMA, "model": model_name, "request": request, "overhead": h, "registrations": registrations,
+    out = {"schema": SCHEMA, "model": model_name, "request": request,
+           "served": "cap" if "max_tokens_cap" in c else "request", "overhead": h, "registrations": registrations,
            "lean": {"exe": plancheck.EXE, "slack": str(plancheck.SLACK), "search": plancheck.SEARCH,
                     "precision": plancheck.TWO_P} if lean else None,
            "overhead_label": sc["proof_overhead"]["value"]["label"], "betas": betas, "budgets": c["budgets"].value,
@@ -842,14 +851,14 @@ def _certify(job: tuple) -> dict | None:
 
 
 def breakeven(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None = None, request: str = "census",
-              workers: int = 1, rel: float = 0.01, lean: bool = True) -> dict:
+              workers: int = 1, rel: float = 0.01, lean: bool = True, served: str | None = None) -> dict:
     """Each patterns'-form line's break-even on each scope: the marginal overhead at which its bound at β =
     `RATIO_BUDGET` reaches each of the weights (`weights`), the β at which it does at the line's own overhead, and its
     floor, the bound at the least overhead `SPANS` searches.  With `lean`, each has Lean's certificate (`certify`): a
     row's `lean` holds, for its floor and each break-even, the point Lean certifies (`at`, an overhead for `h`), the
     bits it certifies there and which of them and the served bits binds, so its β is an upper bound on the β at which
     the line's bound reaches the weights, and its overhead a lower bound on the overhead at which it does."""
-    _, c, _, confs, inputs, lines, computed = _lines(model_name, request)
+    _, c, _, confs, inputs, lines, computed = _lines(model_name, request, served=served)
     targets = weights(c)
     chosen = [s for s in f1.scopes(c, lines["tokens"][0]) if scope_names is None or s.name in scope_names]
     keys = [(n, s) for s in chosen for n, conf in confs.items() if conf.form == "patterns"]

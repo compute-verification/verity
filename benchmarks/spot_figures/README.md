@@ -9,7 +9,8 @@ and a design Lean refuses is an error. The two-stage designs are the planner's a
 
 ~~~sh
 uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR   # figure{1,1_overhead,2,3}.json, PNGs, SVGs
-                                                       # [--request workload] [--workers N] [--points N] [--no-lean]
+                                                       # [--request workload] [--served request] [--workers N]
+                                                       # [--points N] [--no-lean]
 uv run python benchmarks/spot_figures/total_cost.py render DIR/figure1.json  # Figure 1, from the JSON
 uv run python benchmarks/spot_figures/render.py DIR/figure1_overhead.json   # the bounds against proof overhead
 uv run python benchmarks/spot_figures/figure4.py DIR/figure1.json            # Figure 4 (figures.py writes it too)
@@ -20,7 +21,7 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
 
 - **Cards** (`cards.py`, schema `spot-card/v1`): every number the figures read arrives as one JSON card in a slot
   (`workload`, `proof_overhead`, `commitment`, `replay`, `design`, `references`, `infiltration`,
-  `commit_hillclimb`, `serve_tax`, `partition`, `verifier_cost`), for a model or for every model. `cards.py` holds each slot's fields and checks a card against
+  `commit_hillclimb`, `serve_tax`, `partition`, `verifier_cost`, `certifier`), for a model or for every model. `cards.py` holds each slot's fields and checks a card against
   them. A card is published to the evidence store and kept in `cards/SLOT.MODEL.json` with its art id; a model's
   `references` cards add up, each kept as `cards/references.MODEL.ART.json`:
 
@@ -134,8 +135,11 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
       size classes up to a threshold sampled together and each wider one apart), and request-level sampling. A
       two-stage bound is `CompiledTwo.Exfil`'s count (`optimize.two_stage_exfil`): every admissible set of incorrect
       proof blocks, each charged its own blocks' committed bits, so a wholly incorrect request is charged every bit it
-      commits. Beside it (dash-dot) is the same design with each request charged at most the bits it serves, every one
-      of its tokens as the token select's 32-bit output word, the `design` card's `token_bytes` (`served_bits`), in
+      commits. Beside it (dash-dot) is the same design with each request charged at most the bits it serves, each of
+      its tokens as the token select's 32-bit output word, the `design` card's `token_bytes` (`served_bits`): at most
+      the response cap of the model's `certifier` card, the network certifier's schedule (`WardenParams`), whose cap
+      ingress refuses a request past and `NetTiming.Guarantees.ResponseCapped` holds each response to, else every one
+      of its tokens (`--served request` takes every token under a cap too), in
       `two_stage_exfil`'s sets' form (`card_influenceTwo_le_served_min`), which still counts which of a request's proof
       blocks are incorrect, and never above the scope's served bits (`card_influenceTwo_le_min`). `--request
       workload` sizes a request as the `workload` card's instead of the census's mean. The appendix figure adds the
@@ -204,8 +208,9 @@ Limits of the model:
   taken at their mean share of its stratum's k, and its sessions' padding to one size within a statement, not to one
   size across Definitions. A pod-wide or datacenter-wide registration needs one committer over its machines' boundary
   rows.
-- The served bits count every token of a request as served, as the token select's output word alone: a circuit that
-  returns more (logits, state) serves more, and the cap is then too low.
+- The served bits count each token of a request as the token select's output word alone: a circuit that returns more
+  (logits, state) serves more, and the cap is then too low. Under the certifier's response cap, the tie of the
+  statement's served outputs to the tokens the certifier releases is pending, so the certifier card is provisional.
 - The two-stage write forms need a harm bound at the footprint, which no lemma states yet, and (B) replays a layer of
   one token with its step's batch, the requests in flight a request's lifetime over the window (`LIVE`), from state it
   retains.

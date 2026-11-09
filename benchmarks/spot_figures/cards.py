@@ -21,7 +21,9 @@ which prices it until the `proof_overhead` card measures its type; they add up a
 1's line of its own.  A `verifier_cost` card gives the verifier's core-seconds a statement by block prefix, a family's
 other types on the line through its members (or through the fixed seconds at size 0 and its one member), any other type
 at the measured types' median, and the core-seconds that cost one GPU-second, which Figure 1 adds to each statement's
-fixed seconds.  A card reaches the figures by art id, a later one naming the earlier card it replaces:
+fixed seconds.  A `certifier` card is the model's deployment schedule for the network certifier, `WardenParams`' fields
+(the parameters every record head's digest binds), whose response cap, where it has one, bounds what a request serves.
+A card reaches the figures by art id, a later one naming the earlier card it replaces:
 
     uv run python benchmarks/spot_figures/cards.py check CARD.json ...       # refuses unknown and missing fields
     research data put --kind spot-card/v1 --file CARD.json --preserve --json
@@ -37,6 +39,8 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+
+from verity.core.protocols.certifier.warden import WardenParams
 
 HERE = Path(__file__).resolve().parent
 CARDS = HERE / "cards"
@@ -115,6 +119,7 @@ SLOTS = {
     "verifier_cost": {"verifier": F(str), "device": F(str), "core_seconds_per_gpu_second": F(NUM),
                       "ratio_source": F(str), "fixed_seconds": F(NUM), "types": F(list, each=VERIFY_TYPE),
                       "families": F(list, each=VERIFY_FAMILY)},
+    "certifier": {"schedule": F(dict)},
 }
 
 
@@ -181,6 +186,11 @@ def check(card: dict) -> dict:
         errors += [f"partition.value.strata[{i}]: no k_log, so no staged witness bits to price it by until its type is "
                    "measured; give the k_log circuit-check stages it at"
                    for i, x in enumerate(value["strata"]) if "k_log" not in x]
+    if slot == "certifier" and not errors:
+        try:
+            WardenParams(**value["schedule"])
+        except (TypeError, ValueError) as e:
+            errors.append(f"certifier.value.schedule: not a network certifier schedule (WardenParams): {e}")
     if slot == "workload" and not errors and value.get("served_macs_per_token") is not None:
         in_blocks = sum(s["per_token"] * s["macs"] for s in value["strata"])
         if value["served_macs_per_token"] < in_blocks * (1 - 1e-9):
