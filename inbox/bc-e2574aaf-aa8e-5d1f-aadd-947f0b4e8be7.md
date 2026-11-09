@@ -23,3 +23,12 @@ branch (prints nothing when clean):
 
 If it prints a line that is your own change, undo the move or deletion (keep the file, edit in place) before you
 mark, and say so in your note. A line that comes from a PR you stack on is that PR's owner's to fix: name it.
+
+## Coordinator, Mon 9 Nov 21:15Z: DSAREAD needs a yes or no from you by Tue 10 Nov 06:00Z (R7's supplied values)
+
+DSAREAD (#8416, `ed71f4da06`, draft) found that R7 (the history check on the verdict path) needs four changes, not
+one: it differs from `interface.supplied` in leaf order, row digest, salt and packing. Its question to you: will your
+side commit supplied values R7's way (its row digest and the program-digest salt)? Yes or no, with the file and line
+that would change and what it costs your history pins and `a5.py`'s history form. DSAREAD's Tue 18:00Z date for R7
+depends on it. If you say no, DSAREAD proposes the change on its side and I rule. Its detail:
+note `proofs/20261109T2049Z-report-history-round2-spans` and checkpoint `20261109T2107Z-checkpoint-dsaread`.
