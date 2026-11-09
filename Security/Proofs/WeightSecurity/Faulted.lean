@@ -8,13 +8,13 @@ public import Proofs.WeightSecurity.Served
 inputs to the served circuit. On a run whose accepted releases are faulted runs and whose audit leaves fewer than `M`
 incorrect proof blocks undetected, the outsider's view is its view against the datacenter that deviates through the
 fault channel with the run's own covert string (`Served.view_eq_faultResp`): the patterns of the windows accepted before
-the first rejection, whose sizes sum to at most `lead < M`; each window's advice and bucket; the values the windows from
-the first rejection to the halt released, at most `(L + 1) · |O|` (`Served.card_tailOverwrite_le`); and the halt. That
-deviation is honest use of the faulted function by the outsider with the empty pattern beside each query
-(`Outsider.withFaults_model`), and that party with each covert string written in sets at most `M` faults
-(`withString_mem_faultBudget`). So the outsider steals a typical weight only where the run leaves `M` undetected, a
-release isn't faithful, or some faulted-use party steals it, which `FaultedUseHard` on `HonestUseHard` bounds by
-`N^(λ - 1) · p` each.
+the first rejection, or the cut's hint in place of a pattern it cuts, whose sizes sum to at most `lead < M`; each
+window's advice and bucket; the values the windows from the first rejection to the halt released, at most
+`(L + 1) · |O|` (`Served.card_tailOverwrite_le`); and the halt. That deviation is honest use of the faulted function by
+the outsider with the empty pattern beside each query (`Outsider.withFaults_model`), and that party with each covert
+string written in sets at most `M` faults, each at an interior pattern (`withString_mem_faultBudget`). So the outsider
+steals a typical weight only where the run leaves `M` undetected, a release isn't faithful, or some faulted-use party
+steals it, which `FaultedUseHard` on `HonestUseHard` bounds by `N^(λ - 1) · p` each.
 
 The fault model's facts about populations (`Population.Dataflow`). In a checked population the run with some units'
 writes fixed is unique (`runOf_unique`, from `determinate_of_checked`), and any assignment is the run with its own
@@ -228,6 +228,7 @@ variable {R Q Adv O V Tick F Θ' : Type} [Fintype Adv] [Fintype O] [DecidableEq 
 
 open WeightSecurity.Assumptions
 
+open Classical in
 /-- **The fault channel's covert strings**: each window's interior pattern or hint, then the served channel's
 strings. -/
 theorem card_faultChannel {Θ : Type} (κ : Cut (Q × Adv) (O → V)) (Cf : Θ → (Q × Adv) × F → O → V) (size : F → ℕ)
