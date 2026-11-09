@@ -15845,3 +15845,54 @@ becomes 13.86 points, \(1.6 \times 10^{15}\) GPU-seconds over a world year.
 Memo `proofs/20261108T2305Z-report-cacheopt-memo` (synced): the lead, a filled trace128 slot table, and post rows
 15–18 with flags. Run r20261109-031836-0ea6 (cpu-12, BREAKEVEN's tree a5e4e56a11, `cacheopt_trace128.py`): 72 rows,
 0 errors. It reproduces 27.43% and 11.29%.
+
+## 03:26Z from PRTRIAGE: land ask, #8220 marked ready at 5a3da53c53 (the pool's public restart and weekly reset); #8264 derives `spent` and `refused`, so no fallback premises
+
+- **#8220** is marked ready on proofs's word at `5a3da53c53` (`pr:8220@5a3da53c53844f966b62b895bb665b72034a88eb`).
+  The preflight merged it onto `next` (`3a9f421a3229`), and the checks it ran passed. It didn't build Lean: 220 modules
+  depend on the change, more than the preflight's 40. The lock run after landing builds them.
+- **It needs retargeting to `main`.** Its base is still `cursor/proofs-poolchain-cut-a558`, #8214's branch, which has
+  landed on `checked`. Retargeting keeps the head, so the mark still counts. My gh is read-only, so I can't retarget it:
+  please do, or say who should.
+- **Two commits since its records commit:**
+  - `0bcbb4fd43` merges #8225's admitted head `05a74f5256` (not `next`), taking MEMLEMMA's two `registration_nil` lines.
+  - `5a3da53c53` sets Security's `unwitnessed` cap to 303. The merge had taken #8225's stale 302 beside `checked`'s 303
+    entries (#8094's and #8173's), so `test_the_unwitnessed_list_only_shrinks` failed with 303 > 302.
+  - That is not a cap raise. 303 is `checked`'s own cap and its count, and neither PR adds an entry. It is the line
+    MEMLEMMA's merge of `checked` (`53e60d9147`) gives, without bringing `checked`'s other commits into #8220.
+  - `05a74f5256` is an ancestor of #8225's new head `53e60d9147`, so whichever of the two lands second needs no new
+    resolution.
+- **Runs:**
+  - Quick suites at the head, r20261109-025858-5d55 (cpu-1): 3 suites passed, none cached. Spot passed 720,
+    `repository` 271 and `verity-core-sampled-proofs` 195.
+  - Lean try at the merge, r20261109-024035-c9c6 (cpu-13): Lean exit 0, 76 theorems on the three axioms, no sibling
+    clash.
+  - The records gate found no records at the head's Lean inputs, for Security/Properties and Security. Records
+    r20261109-031448-5884 (cpu-11) are running, ETA about 04:25Z. When they pass I commit them, sha-checked, and
+    re-mark. If #8220 lands first, the lock run regenerates them anyway.
+- **Please land #8220** once it's retargeted.
+
+**Your 02:27Z decision is built: #8264, stacked on #8220, at `f1807f4fa0`.** It needs no fallback premises, and it's
+done well before Tue 18:00Z.
+- The record's window names `pool_week` (the verifier's week) and `pool_spent` beside `pool_reset`. R6 checks three
+  things:
+  - the week (`R6-pool-week`);
+  - `pool_spent = pool_reset || the previous record's pool_spent in the same week` (`R6-pool-spent`), so a new week
+    starts unspent;
+  - no reset where the week's is already spent (`R6-pool-reset-week`).
+- The pool is `{genesis, lag, pin, pout, reset, verdicts, week}`, where `verdicts` maps record digests to the verifier's
+  verdicts. `refused` is `Pool.refused`: the verdict log refuses the record `lag` back. A record with no verdict counts
+  as not refused.
+- The two facts MEMLEMMA's `-r7` needs then follow without premises. `refused` is false wherever every verdict accepts,
+  and every window of a week from its reset on names it spent, by induction along the log.
+- In Lean, R6's four pool lines are one term, `Registration.poolMarks`, with `poolMarks_nil`. As four separate lines they
+  pushed `check_eq_checkRef`'s `simp` past its step limit.
+- **One choice for you to confirm.** The spent mark reads the log's previous record whatever its program, so it carries
+  across a registration boundary inside a week. That allows at most one reset a week over the whole log, stricter than
+  one per registration, and the charge stays log₂(n + 1) bits a week. If each registration should get its own reset,
+  `Pool.spentBefore` gains a same-program check. My default is to keep it as is unless you say otherwise.
+- Runs at `f1807f4fa0`:
+  - Lean try r20261109-031011-2b59 (cpu-13) passed: 77 theorems on the three axioms.
+  - Quick suites r20261109-031029-d608 (cpu-3) passed: spot 721, `repository` 271 and `verity-core-sampled-proofs` 195.
+  - Records r20261109-031540-629f (cpu-13) run until about 04:30Z, and I mark #8264 once they're committed.
+- MEMLEMMA and CARRYLEAN have the field names (02:47Z) and now the PR and the Lean names.
