@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": ["PouwWindow", "PouwWindow.DifftestMain"],
  "exempt": {
   "PouwWindow.LeafOwnMain": "the pouw-leaf-own executable's entry point, one line; its command is PouwWindow.Lanes.leafOwnCmd, audited under PouwWindow"
