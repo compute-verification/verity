@@ -200,6 +200,12 @@ def _child() -> None:
     sys.dont_write_bytecode = True
     scratch = Path(tempfile.mkdtemp(prefix="documented-commands-")).resolve()
     os.environ["TMPDIR"] = tempfile.tempdir = str(scratch)
+    # A verdict reads the tree alone, the same on a laptop, an agent VM and in a job: no machines file, job variables or
+    # secrets for `secret_hint.recover` to take back, and an empty notes root, which `research notes` would clone first.
+    for k in [k for k in os.environ if k.startswith("RESEARCH_") or k == "CLOUD_AGENT_INJECTED_SECRET_NAMES"]:
+        del os.environ[k]
+    os.environ["HOME"] = str(scratch)
+    (scratch / ".research" / "notes").mkdir(parents=True)
     known = argparse.ArgumentParser.parse_known_args
     state = {"depth": 0, "armed": False, "parsed": False}
 
@@ -273,7 +279,18 @@ def _child() -> None:
 
     sys.addaudithook(hook)
     import research.cli
+    import research.remote
     import verity_cli
+
+    load_machines = research.remote.load_machines
+
+    def machines(*a, **k):
+        """Resolving a machine reads the operator's registry: past the parse (`check.py --record --on auto` does it first)."""
+        if state["armed"]:
+            raise _Acts("reads the machine registry")
+        return load_machines(*a, **k)
+
+    research.remote.load_machines = machines
 
     def enter(argv: list[str]):
         if argv[0] == "research":
