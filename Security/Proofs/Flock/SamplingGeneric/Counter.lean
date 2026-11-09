@@ -63,13 +63,13 @@ namespace Claims.SamplingGeneric
 open Claims Claims.Sampling
 open Claims.Recursion (serve viewing)
 
-theorem ownLog_flatMapRP_const {R β γ : Type} (H : Msg → Msg) (run : R → Trace) (f : β → RP R (List γ)) (m : ℕ)
+theorem ownLog_flatMapRP_const {R β γ : Type} (H : Msg → Msg) (run : R → Transcript) (f : β → RP R (List γ)) (m : ℕ)
     (l : List β) (h : ∀ b ∈ l, (ownLog H run (f b)).length = m) :
     (ownLog H run (flatMapRP f l)).length = l.length * m := by
   rw [ownLog_flatMapRP, List.map_congr_left h, List.map_const', List.sum_replicate, smul_eq_mul]
 
 /-- A wait at which every run accepts keeps the first `k` runs. -/
-theorem waitAccC_length_all {R : Type} (H : Msg → Msg) (run : R → Trace) (hrun : ∀ r, (run r).out = .acc) (k : ℕ)
+theorem waitAccC_length_all {R : Type} (H : Msg → Msg) (run : R → Transcript) (hrun : ∀ r, (run r).out = .acc) (k : ℕ)
     (l : List R) : ((waitAccC k l []).eval H run).1.length = min k l.length := by
   rw [waitAccC_eval_nil, List.length_map, accList, List.filter_eq_self.2 fun r _ => decide_eq_true (hrun r),
     List.length_take]
@@ -100,7 +100,7 @@ theorem length_ownLog_E (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P :
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- At runs that all accept, the outer wait keeps `k_out` runs. -/
-theorem length_outerList_all (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
+theorem length_outerList_all (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (c : L.ECoins x) (hrun : ∀ r, (run' r).out = .acc) : (L.outerList H x run' c).length = L.kOut x := by
   unfold outerList
   rw [List.length_zip, List.length_finRange, waitAccC_length_all H run' hrun, List.length_map, List.length_finRange,
@@ -264,7 +264,7 @@ theorem sessions₀ (H : Msg → Msg) (oc : ℕ) : (L₀ 1 oc).Sessions H where
 
 /-- At runs that all accept, a session's extraction at its one proof block is the replay, served as one rerun, then the
 check of the one opening its witness reveals: one SHA-512 call. -/
-theorem ownLog_sessExt₀ (H : Msg → Msg) (n oc : ℕ) (x : Msg) (run' : (Fin ((L₀ n oc).V.k x) → Unit) → Trace)
+theorem ownLog_sessExt₀ (H : Msg → Msg) (n oc : ℕ) (x : Msg) (run' : (Fin ((L₀ n oc).V.k x) → Unit) → Transcript)
     (hrun : ∀ r, (run' r).out = .acc) (s : AuditStatement) (u : ℕ) (r : Fin ((L₀ n oc).V.k x) → Unit) (v : Seen)
     (c : A₀.EC ((L₀ n oc).sh x u)) :
     (ownLog H run' ((L₀ n oc).sessExt x s [u] u r v c)).length = 1 := by
@@ -280,7 +280,7 @@ theorem ownLog_sessExt₀ (H : Msg → Msg) (n oc : ℕ) (x : Msg) (run' : (Fin 
   simp only [flatMapRP, checkRevealed, hr, hc]
   rfl
 
-theorem ownLog_innerBody₀ (H : Msg → Msg) (n oc : ℕ) (x : Msg) (run' : (Fin ((L₀ n oc).V.k x) → Unit) → Trace)
+theorem ownLog_innerBody₀ (H : Msg → Msg) (n oc : ℕ) (x : Msg) (run' : (Fin ((L₀ n oc).V.k x) → Unit) → Transcript)
     (hrun : ∀ r, (run' r).out = .acc) (s : AuditStatement) (c : (L₀ n oc).ECoins x) (j : Fin ((L₀ n oc).kOut x))
     (li : Fin ((L₀ n oc).kIn x) × ((Fin ((L₀ n oc).V.k x) → Unit) × Seen)) :
     (ownLog H run' ((L₀ n oc).innerBody x s c j li)).length = min ((L₀ n oc).nPU x) n := by
@@ -301,7 +301,7 @@ theorem ownLog_innerBody₀ (H : Msg → Msg) (n oc : ℕ) (x : Msg) (run' : (Fi
   · show ((List.finRange ((L₀ n oc).nPU x)).zip (List.replicate n 0)).length * 1 = min ((L₀ n oc).nPU x) n
     rw [List.length_zip, List.length_finRange, List.length_replicate, Nat.mul_one]
 
-theorem ownLog_outerBody₀ (H : Msg → Msg) (n oc : ℕ) (x : Msg) (run' : (Fin ((L₀ n oc).V.k x) → Unit) → Trace)
+theorem ownLog_outerBody₀ (H : Msg → Msg) (n oc : ℕ) (x : Msg) (run' : (Fin ((L₀ n oc).V.k x) → Unit) → Transcript)
     (hrun : ∀ r, (run' r).out = .acc) (s : AuditStatement) (c : (L₀ n oc).ECoins x)
     (jo : Fin ((L₀ n oc).kOut x) × ((Fin ((L₀ n oc).V.k x) → Unit) × Seen)) :
     (ownLog H run' ((L₀ n oc).outerBody x s c jo)).length = (L₀ n oc).kIn x * min ((L₀ n oc).nPU x) n := by
