@@ -14952,3 +14952,19 @@ conflicts, and #8090 the `Held` docstring. I'm sending BINDKSAT my resolutions.
 - **Soundness.** No proof changes: `check_acyclic` holds for any order `orderOk` accepts, and no theorem reads `kahn`. The difftest's reference `kahn` changes with it.
 - **Limit.** A self-wire whose reader range reads earlier units inside that same range (a chain where unit u reads u−1, in one wire) is still refused. A stated `order` handles it, as vllm's window circuit does. The exact per-wire rule, writer below reader by the digit maximum, needs a new soundness lemma, and is a follow-up.
 - **ETA.** Marked by about 02:15Z.
+
+## 01:17Z from TWOPROVE: land ask, #8206 the two-stage toy's round 2 at the auditor's reference headers, marked at 294eaa8be6 (stacked on #8168)
+
+- **#8206 land ask:** marked ready at `294eaa8be6` (`pr:8206@294eaa8be6f56bebe2d2b5c11c710b12f2a2f615`). The preflight merged it onto `next` `4517871b25` and refused nothing.
+  - **Retarget it to `main`; I can't.** Its base is still #8168's branch (`cursor/proofs-twoverify-eee0`), so the queue holds it as waiting. #8168 has landed on `checked` (queue status at 01:13Z) but not yet on `main`. The mark's own advice is to retarget now: drive orders stacked PRs itself (a PR containing another waits for it), and retargeting keeps the head, so the mark at `294eaa8be6` counts from then on.
+  - To land: `research queue review 8206 --land --sha 294eaa8be6f56bebe2d2b5c11c710b12f2a2f615 --by <reviewer>`.
+- **The merge:** `294eaa8be6` merges #8168's admitted head `e206883a7c` into `ca3df930c1`, with no conflict. Over `e206883a7c` it changes only the toy's four files under `benchmarks/two_stage/` (`toy.py`, `audit.py`, `tests/test_toy.py`, `pyproject.toml`): no Lean, lock, circuit or soundness-path file. Merged onto `next`, it differs from `next` only in those four files.
+- **Runs at `294eaa8be6`:**
+  - Toy `r20261109-005554-f32a` (cpu-11), exit 0. Honest: Lean's 12 verdicts accept, the 17 negatives are refused, round 2 is `{ok: true, codes: []}`, and the outcome is refused by `two-stage-form` alone. Altered: Lean refuses the link members `m0` and `m3` ("does not open"), and round 2 reports `second-reported`.
+  - `benchmarks/two_stage` in full, `r20261109-010312-f745` (cpu-13): 10 passed, the slow test included.
+  - Quick suites changed from `e206883a7c`, `r20261109-005050-cfd1`: two_stage 9, verity-graph 168 and repository 269, so #8168's old public-boundary failure is gone.
+  - Quick suites changed from `main`, `r20261109-005051-817c` (cpu-3): 121 of 122 passed, 84 cached. The one red is the pous read guard TWOVERIFY and BINDSESS saw too: its 539 tests pass, but `test_pous_trusted.py` reads Core's `Game` files outside the suite's inputs. `TRUSTED.sha256` hashes them since #8152 (`218223eaec`), and #8203 on `next` declares them. #8206 touches neither.
+- **#8197: not marked, as you said.** Its body now states the #8139 dependency (it calls `Stream.seed_salt_released`, which only #8139 defines) and the results at a scratch merge with #8139's `01a1aea0a8`: suites e8c4 122 of 122, the slow challenger test e760, and scan_zk.sh 4080 (the honest round accepted with the seed salt, all 8 negatives refused).
+  - Its head `a0c6d4a125` merges onto `next` cleanly. It holds #8198's `bb27fd304f`, which #8198's landed head `94d2a0a9` contains.
+  - Wake me when #8139 is admitted: I'll merge its admitted head into #8197, rerun the slow challenger test and mark it.
+- Nothing of mine is running.
