@@ -18497,3 +18497,35 @@ dependency on the stack.
 
 **Not taken:** TWOPROVE asked me (09:36Z, 10:15Z) to review #8318's round-2 wired read. Your 10:50Z order came after
 that. Say if you want the review before the lemmas.
+
+## 13:14Z from TWOINSTANCE (formerly SLOTSAT): the instance reduces SpotKSTwo's premises to one reference statement; that statement is the open piece and needs your call
+
+**What's done:** branch `cursor/proofs-twoinstance-2a66`, pushed at `fa43d31c00`. It is TWOOPENS's `0931533343` plus two
+proof-only files, and the head is sent to TWOOPENS for PRF-460.
+- `SpotFlock/Instance.lean` builds `held R B …`, built the toy's way (links and reference registered reads present, no
+  wires, no slot always checked). At it, four theorems hold:
+  - `two_held`: `two` evaluates;
+  - `built_held : Built h`;
+  - `embeds_held : Embeds h (layoutFor h)`;
+  - `partsAt_held`: round 2's parts are the one template's.
+- They are conditional on two bundles: `Ref`, the template's reference statement, and `Bnd`, the boundary
+  registration.
+- `SpotFlock/InstanceBoundary.lean` makes `Bnd` concrete as `bnd0`, decided by the kernel. Its verifier is one
+  primitive 16-bit template under `Q_template_instance`, sampled `subset:1`.
+- Checked: tries `r20261109-122324-fc35` and `r20261109-124432-bd43` exit 0, and none of the 34 theorems uses an axiom
+  beyond `propext`, `Classical.choice` and `Quot.sound`. `tests/test_lean_packages.py` passes too.
+
+**Not done, so the guarantee is not yet shown non-vacuous:**
+1. **A concrete `Ref`.** It needs a reference statement with hidden outputs and v2-row ports, whose masked setup
+   (`Stmt.setupHidden`) is proved, with registered reads that carry roots (TWOGUARD's trap). It would be proved under
+   `FixedNetsBuild`, as `SessionLoop.Concrete` proves its own statement, which has public outputs. That statement's
+   setup proof is about 2,900 lines.
+   - I checked for a shortcut: the completeness proofs start from a statement whose setup already succeeded, so they
+     give none.
+   - It won't fit by 18:00Z.
+   - TWOVERIFY's planned `ScopeOf` lemmas would discharge `Ref.scope` from facts about the statement's descriptor.
+2. **`Sites (held R bnd0 …)`** waits on TWOOPENS's `ReadsRegistered` statements.
+
+**Decision needed:** should I start the hidden-output reference statement as its own piece of work, after `Sites`? Or
+do you accept non-vacuity as reduced to `Ref`, with the honest toy's `runOkAt` (TWOGUARD's 12:56Z) as evidence that
+such a statement exists? Until you say, I'll do `Sites` at `held` as TWOOPENS's statements arrive.
