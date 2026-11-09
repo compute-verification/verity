@@ -55,7 +55,8 @@ WEIGHTS = "weights"
 class Pieces:
     """A request Program by part (module docstring). `parts`: each part's digest by name (`prologue`, the layer's index,
     `epilogue`); `sizes` its nodes; `launches` the launches its body splits into; `shared` the shared nodes; `callees` each
-    definition its nodes reach, descriptor id to definition digest; `header` the digest of the program function's id and parameters."""
+    definition its nodes reach, descriptor id to definition digest; `header` the digest of the program function's id and
+    parameters."""
 
     layers: int
     launches: int
@@ -136,57 +137,77 @@ def _weight_parts(t: RecordType) -> tuple[list[int], list[tuple[int | None, str]
 def pieces(program, world: int, entries: bool = False) -> Pieces:
     """`program` (a request Program, `build.build_program`'s) by part, at a tensor-parallel world of `world` (module docstring).
     `entries`: also each part's lines as written, to find where two parts differ."""
-    body = program.fn.body
-    params = body.params
-    wi = next((i for i, (n, _) in enumerate(params) if n == WEIGHTS), None)
-    if wi is None or not isinstance(params[wi][1], RecordType):
-        raise ValueError("the program has no weights record")
-    starts, fields = _weight_parts(params[wi][1])
-    layers = [L for L, _ in fields if L is not None]
-    NL = max(layers) + 1 if layers else 0
-    if sorted(set(layers)) != list(range(NL)):
-        raise ValueError("the weights don't name layers 0..NL-1")
-    E = NL + 1
-    names = [n for n, _ in params[wi][1].fields]
-    if NORM not in names:
-        raise ValueError(f"the weights have no {NORM}")
-    H = params[wi][1].fields[names.index(NORM)][1].leaves
-    fpart = [L + 1 if L is not None else 0 if n.startswith(PROLOGUE_WEIGHTS) else E if n.startswith(EPILOGUE_WEIGHTS) else None
-             for (L, _), n in zip(fields, names)]
-    peers = _peer_table(params, NL, world, H)
+    s = _Slicer(program, world, entries)
+    s.find_shared_fields()
+    s.label()
+    NL, E = s.NL, s.E
+    root_id = descriptor_id(program.root)
+    callees = {fid: definition_digest(definition_entry(fn)) for fid, fn in definitions(program).items() if fid != root_id}
+    header = hashlib.sha512(repr((descriptor_id(program.fn), tuple((n, s.tkey(t)) for n, t in s.params))).encode()).hexdigest()
+    return Pieces(layers=NL, launches=s.launch + 1, parts={_part_name(p, NL): h.hexdigest() for p, h in enumerate(s.streams)},
+                  sizes={_part_name(p, NL): s.count[p] for p in range(E + 1)}, shared=len(s.skey), callees=callees, header=header,
+                  entries={_part_name(p, NL): x for p, x in enumerate(s.lines)} if s.lines is not None else None)
 
-    nodes = body.nodes
-    lab: list[int | None] = [None] * len(nodes)
-    local: list[int] = [0] * len(nodes)
-    skey: dict[int, str] = {}
-    count = [0] * (E + 1)
-    streams = [hashlib.sha512() for _ in range(E + 1)]
-    lines: list[list[str]] | None = [[] for _ in range(E + 1)] if entries else None
 
-    def write(p: int, x) -> None:
+class _Slicer:
+    """`pieces`' walk of one Program's body: its weights' and peer Inputs' parts, then each node's part, written as it goes."""
+
+    def __init__(self, program, world: int, entries: bool):
+        body = self.body = program.fn.body
+        params = self.params = body.params
+        wi = self.wi = next((i for i, (n, _) in enumerate(params) if n == WEIGHTS), None)
+        if wi is None or not isinstance(params[wi][1], RecordType):
+            raise ValueError("the program has no weights record")
+        self.starts, self.fields = _weight_parts(params[wi][1])
+        layers = [L for L, _ in self.fields if L is not None]
+        NL = self.NL = max(layers) + 1 if layers else 0
+        if sorted(set(layers)) != list(range(NL)):
+            raise ValueError("the weights don't name layers 0..NL-1")
+        E = self.E = NL + 1
+        names = self.names = [n for n, _ in params[wi][1].fields]
+        if NORM not in names:
+            raise ValueError(f"the weights have no {NORM}")
+        H = params[wi][1].fields[names.index(NORM)][1].leaves
+        self.fpart = [L + 1 if L is not None else 0 if n.startswith(PROLOGUE_WEIGHTS) else E if n.startswith(EPILOGUE_WEIGHTS)
+                      else None for (L, _), n in zip(self.fields, names)]
+        self.peers = _peer_table(params, NL, world, H)
+        self.nodes = body.nodes
+        self.lab: list[int | None] = [None] * len(self.nodes)
+        self.local: list[int] = [0] * len(self.nodes)
+        self.skey: dict[int, str] = {}
+        self.count = [0] * (E + 1)
+        self.streams = [hashlib.sha512() for _ in range(E + 1)]
+        self.lines: list[list[str]] | None = [[] for _ in range(E + 1)] if entries else None
+        self.fn_key: dict[int, str] = {}
+        self.ty_key: dict[int, str] = {}
+        self.keep: list = []
+        self.shared_fields: set[int] = set()
+        self.launch = 0
+        self.run_of: dict[int, tuple[int, int]] = {}
+        self.run_len: dict[tuple[int, int], int] = {}
+
+    def write(self, p: int, x) -> None:
         b = repr(x)
-        streams[p].update(b.encode() + b"\n")
-        if lines is not None:
-            lines[p].append(b)
-    fn_key: dict[int, str] = {}
-    ty_key: dict[int, str] = {}
-    keep: list = []
+        self.streams[p].update(b.encode() + b"\n")
+        if self.lines is not None:
+            self.lines[p].append(b)
 
-    def fkey(fn) -> str:
-        k = fn_key.get(id(fn))
+    def fkey(self, fn) -> str:
+        k = self.fn_key.get(id(fn))
         if k is None:
-            keep.append(fn)
-            k = fn_key[id(fn)] = descriptor_id(fn)
+            self.keep.append(fn)
+            k = self.fn_key[id(fn)] = descriptor_id(fn)
         return k
 
-    def tkey(t) -> str:
-        k = ty_key.get(id(t))
+    def tkey(self, t) -> str:
+        k = self.ty_key.get(id(t))
         if k is None:
-            keep.append(t)
-            k = ty_key[id(t)] = repr(t.to_json())
+            self.keep.append(t)
+            k = self.ty_key[id(t)] = repr(t.to_json())
         return k
 
-    def field_of(leaf: int) -> int:
+    def field_of(self, leaf: int) -> int:
+        starts = self.starts
         lo, hi = 0, len(starts) - 1
         while hi - lo > 1:
             mid = (lo + hi) // 2
@@ -196,148 +217,148 @@ def pieces(program, world: int, entries: bool = False) -> Pieces:
                 hi = mid
         return lo
 
-    def wfields(p) -> range | set:
+    def wfields(self, p) -> range | set:
         """The weight fields a reference part `p` reads."""
-        if p.space != "p" or p.idx != wi or not p.count:
+        if p.space != "p" or p.idx != self.wi or not p.count:
             return range(0)
         if isinstance(p, Explicit):
-            return {field_of(leaf) for _s, _i, leaf in p.items}
+            return {self.field_of(leaf) for _s, _i, leaf in p.items}
         ends = (p.base, p.base + p.count - 1) if isinstance(p, Affine) else (p[0][2], p[p.count - 1][2])
-        return range(field_of(min(ends)), field_of(max(ends)) + 1)
+        return range(self.field_of(min(ends)), self.field_of(max(ends)) + 1)
 
-    def contributes(p) -> list[int]:
+    def contributes(self, p) -> list[int]:
         """The parts a parameter part `p` reads put its reader in."""
-        if p.space == "p" and p.idx in peers:
-            return [peers[p.idx][2]]
-        return [x for f in wfields(p) if (x := fpart[f]) is not None]
+        if p.space == "p" and p.idx in self.peers:
+            return [self.peers[p.idx][2]]
+        return [x for f in self.wfields(p) if (x := self.fpart[f]) is not None]
 
-    def operands(parts) -> list[int]:
+    def operands(self, parts) -> list[int]:
+        lab = self.lab
         return [lab[p.idx] for p in parts if p.space == "n" and not isinstance(p, Explicit) and lab[p.idx] is not None] + [
             lab[i] for p in parts if isinstance(p, Explicit) for s, i, _l in p.items if s == "n" and lab[i] is not None]
 
-    # A layer's weight that a node reading a later layer's node reads is shared (vLLM's one rotary cache, which every layer reads
-    # under layer 0's name): such fields are found by labelling alone, and then belong to no part.
-    shared_fields: set[int] = set()
-    while True:
-        cur, late = 0, set()
-        for k, n in enumerate(nodes):
-            parts = [p for a in n.args for p in _flat(a.refs)]
-            mine, ops = [x for p in parts for x in contributes(p)], operands(parts)
-            if mine:
-                top = max((x for x in ops if 1 <= x <= NL), default=0)
-                late |= {f for p in parts for f in wfields(p) if fields[f][0] is not None and fpart[f] is not None and fpart[f] < top}
-                cur = max(mine)
-            elif ops:
-                pass
-            else:
-                lab[k] = None
-                continue
-            lab[k] = cur
-        if not late:
-            break
-        shared_fields |= late
-        for f in late:
-            fpart[f] = None
-    lab = [None] * len(nodes)
+    def find_shared_fields(self) -> None:
+        """A layer's weight that a node reading a later layer's node reads is shared (vLLM's one rotary cache, which every layer
+        reads under layer 0's name): such fields are found by labelling alone, and then belong to no part."""
+        fields, fpart, NL = self.fields, self.fpart, self.NL
+        while True:
+            cur, late = 0, set()
+            for k, n in enumerate(self.nodes):
+                parts = [p for a in n.args for p in _flat(a.refs)]
+                mine, ops = [x for p in parts for x in self.contributes(p)], self.operands(parts)
+                if mine:
+                    top = max((x for x in ops if 1 <= x <= NL), default=0)
+                    late |= {f for p in parts for f in self.wfields(p)
+                             if fields[f][0] is not None and fpart[f] is not None and fpart[f] < top}
+                    cur = max(mine)
+                elif not ops:
+                    self.lab[k] = None
+                    continue
+                self.lab[k] = cur
+            if not late:
+                break
+            self.shared_fields |= late
+            for f in late:
+                fpart[f] = None
+        self.lab = [None] * len(self.nodes)
 
-    def port(space: str, idx: int, leaf: int, reader: int | None):
+    def port(self, space: str, idx: int, leaf: int, reader: int | None):
         """A reference to leaf `leaf` of node or parameter `idx`, as `reader`'s part writes it."""
         if space == "n":
-            t = lab[idx]
+            t = self.lab[idx]
             if t is None:
-                return ("S", skey[idx], leaf)
+                return ("S", self.skey[idx], leaf)
             if t == 0:
-                return ("P", local[idx], leaf)
-            if t == E:
-                return ("E", local[idx], leaf)
+                return ("P", self.local[idx], leaf)
+            if t == self.E:
+                return ("E", self.local[idx], leaf)
             if reader is None or reader == 0:
-                return ("L@", t - 1, local[idx], leaf)
+                return ("L@", t - 1, self.local[idx], leaf)
             if reader == t:
-                return ("L", 0, local[idx], leaf)
-            r, j = run_of[idx]
-            return ("L", reader - t, launch - r, run_len[(t, r)] - 1 - j, leaf)
-        if idx == wi:
-            f = field_of(leaf)
-            L, role = fields[f]
-            if L is None or f in shared_fields:
-                return ("W@", names[f], leaf - starts[f])
-            if reader is None or reader in (0, E):
-                return ("W@L", L, role, leaf - starts[f])
-            return ("W", reader - (L + 1), role, leaf - starts[f])
-        if idx in peers:
-            r, kind, part, q = peers[idx]
+                return ("L", 0, self.local[idx], leaf)
+            r, j = self.run_of[idx]
+            return ("L", reader - t, self.launch - r, self.run_len[(t, r)] - 1 - j, leaf)
+        if idx == self.wi:
+            f = self.field_of(leaf)
+            L, role = self.fields[f]
+            off = leaf - self.starts[f]
+            if L is None or f in self.shared_fields:
+                return ("W@", self.names[f], off)
+            if reader is None or reader in (0, self.E):
+                return ("W@L", L, role, off)
+            return ("W", reader - (L + 1), role, off)
+        if idx in self.peers:
+            r, kind, part, q = self.peers[idx]
             return ("Q", r, kind, (reader - part) if reader is not None else None, q, leaf)
-        return ("I", params[idx][0], leaf)
+        return ("I", self.params[idx][0], leaf)
 
-    def part_key(p, reader: int | None):
+    def part_key(self, p, reader: int | None):
         """One flat reference part, as `reader`'s part writes it: a run within one node or field keeps its shape."""
         if isinstance(p, Explicit):
-            return ("e", tuple(port(s, i, leaf, reader) for s, i, leaf in p.items))
+            return ("e", tuple(self.port(s, i, leaf, reader) for s, i, leaf in p.items))
         if p.count == 0:
             return ("0",)
         first, last = p[0], p[p.count - 1]
-        if p.space == "p" and p.idx == wi and field_of(min(first[2], last[2])) != field_of(max(first[2], last[2])):
-            return ("e", tuple(port(s, i, leaf, reader) for s, i, leaf in p))
-        head = port(p.space, p.idx, p.base, reader)
+        if p.space == "p" and p.idx == self.wi and self.field_of(min(first[2], last[2])) != self.field_of(max(first[2], last[2])):
+            return ("e", tuple(self.port(s, i, leaf, reader) for s, i, leaf in p))
+        head = self.port(p.space, p.idx, p.base, reader)
         if isinstance(p, Affine):
             return ("a", head, p.count)
         assert isinstance(p, Strided)
         return ("s", head, p.inner, p.outer_stride, p.inner_stride, p.count)
 
-    def entry(n, reader: int | None) -> tuple:
-        return (n.form, fkey(n.fn), tuple((tkey(a.type), tuple(part_key(p, reader) for p in _flat(a.refs))) for a in n.args),
-                tkey(n.out), tuple(n.axes), n.n, n.n_xs)
+    def entry(self, n, reader: int | None) -> tuple:
+        args = tuple((self.tkey(a.type), tuple(self.part_key(p, reader) for p in _flat(a.refs))) for a in n.args)
+        return (n.form, self.fkey(n.fn), args, self.tkey(n.out), tuple(n.axes), n.n, n.n_xs)
 
-    pending: list[str] = []
-    seen_shared: dict[str, int] = {}
-    launch, cur, started, splits = 0, 0, set(), []
-    run_of: dict[int, tuple[int, int]] = {}
-    run_len: dict[tuple[int, int], int] = {}
-    for k, n in enumerate(nodes):
-        parts = [p for a in n.args for p in _flat(a.refs)]
-        mine = [x for p in parts for x in contributes(p)]
-        if mine:
-            p = max(mine)
-            if p < cur:
-                launch += 1
-                if len(splits) < 4:
-                    reads = sorted({names[f] for q in parts for f in wfields(q) if fpart[f] is not None} |
-                                   {params[q.idx][0] for q in parts if q.space == "p" and q.idx in peers})
-                    splits.append(f"node {k} ({fkey(n.fn)[:60]}) in part {p} after part {cur}, reading {reads[:4]}")
-        elif operands(parts):
-            p = cur
-        else:
-            base = hashlib.sha512(repr(entry(n, None)).encode()).hexdigest()[:32]
-            seen = seen_shared.get(base, 0)
-            seen_shared[base] = seen + 1
-            skey[k] = key = base if not seen else f"{base}#{seen}"
-            pending.append(key)
-            continue
-        cur = p
-        lab[k], local[k] = p, count[p]
-        count[p] += 1
-        run_of[k] = (launch, run_len.get((p, launch), 0))
-        run_len[(p, launch)] = run_of[k][1] + 1
-        if (p, launch) not in started:
-            started.add((p, launch))
-            write(p, ("run", launch))
+    def split(self, k: int, n, parts, p: int, cur: int) -> str:
+        reads = sorted({self.names[f] for q in parts for f in self.wfields(q) if self.fpart[f] is not None} |
+                       {self.params[q.idx][0] for q in parts if q.space == "p" and q.idx in self.peers})
+        return f"node {k} ({self.fkey(n.fn)[:60]}) in part {p} after part {cur}, reading {reads[:4]}"
+
+    def label(self) -> None:
+        """Each node's part, written to its part's stream in order (module docstring); the epilogue last, with the return."""
+        pending: list[str] = []
+        seen_shared: dict[str, int] = {}
+        cur, started, splits = 0, set(), []
+        for k, n in enumerate(self.nodes):
+            parts = [p for a in n.args for p in _flat(a.refs)]
+            mine = [x for p in parts for x in self.contributes(p)]
+            if mine:
+                p = max(mine)
+                if p < cur:
+                    self.launch += 1
+                    if len(splits) < 4:
+                        splits.append(self.split(k, n, parts, p, cur))
+            elif self.operands(parts):
+                p = cur
+            else:
+                base = hashlib.sha512(repr(self.entry(n, None)).encode()).hexdigest()[:32]
+                seen = seen_shared.get(base, 0)
+                seen_shared[base] = seen + 1
+                self.skey[k] = key = base if not seen else f"{base}#{seen}"
+                pending.append(key)
+                continue
+            cur = p
+            self.lab[k], self.local[k] = p, self.count[p]
+            self.count[p] += 1
+            j = self.run_len.get((p, self.launch), 0)
+            self.run_of[k] = (self.launch, j)
+            self.run_len[(p, self.launch)] = j + 1
+            if (p, self.launch) not in started:
+                started.add((p, self.launch))
+                self.write(p, ("run", self.launch))
+            for key in pending:
+                self.write(p, ("shared", key))
+            pending = []
+            self.write(p, self.entry(n, p))
+        passes = len({r for r, _kind, _part, _q in self.peers.values()})
+        if self.peers and self.launch + 1 != passes:
+            raise ValueError(f"the body splits into {self.launch + 1} launches, its peer Inputs into {passes} passes: "
+                             + "; ".join(splits))
         for key in pending:
-            write(p, ("shared", key))
-        pending = []
-        write(p, entry(n, p))
-    passes = len({r for r, _kind, _part, _q in peers.values()})
-    if peers and launch + 1 != passes:
-        raise ValueError(f"the body splits into {launch + 1} launches, its peer Inputs into {passes} passes: " + "; ".join(splits))
-    for key in pending:
-        write(E, ("shared", key))
-    write(E, ("ret", tuple(part_key(p, E) for p in _flat(body.ret))))
-
-    root_id = descriptor_id(program.root)
-    callees = {fid: definition_digest(definition_entry(fn)) for fid, fn in definitions(program).items() if fid != root_id}
-    header = hashlib.sha512(repr((descriptor_id(program.fn), tuple((n, tkey(t)) for n, t in params))).encode()).hexdigest()
-    return Pieces(layers=NL, launches=launch + 1, parts={_part_name(p, NL): s.hexdigest() for p, s in enumerate(streams)},
-                  sizes={_part_name(p, NL): count[p] for p in range(E + 1)}, shared=len(skey), callees=callees, header=header,
-                  entries={_part_name(p, NL): x for p, x in enumerate(lines)} if lines is not None else None)
+            self.write(self.E, ("shared", key))
+        self.write(self.E, ("ret", tuple(self.part_key(p, self.E) for p in _flat(self.body.ret))))
 
 
 def compare(model: Pieces, window: Pieces, at: int) -> dict:
@@ -355,8 +376,8 @@ def compare(model: Pieces, window: Pieces, at: int) -> dict:
         rows += [(str(k - 1), str(at + k - 1)), ("epilogue", "epilogue")]
     out = [{"window": w, "model": m, "equal": window.parts[w] == model.parts[m]} for w, m in rows]
     callees = sorted(f for f in set(window.callees) & set(model.callees) if window.callees[f] != model.callees[f])
-    return {"at": at, "layers": k, "parts": out, "equal": sum(r["equal"] for r in out), "different": sum(not r["equal"] for r in out),
-            "callees_differ": callees}
+    return {"at": at, "layers": k, "parts": out, "equal": sum(r["equal"] for r in out),
+            "different": sum(not r["equal"] for r in out), "callees_differ": callees}
 
 
 def window_config(hf: dict, at: int, k: int) -> dict:

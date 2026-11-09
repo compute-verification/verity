@@ -13,8 +13,9 @@ from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.pieces import compare, pieces, window_config
 
 GLM53 = {"repo": "zai-org/GLM-5.3", "revision": "aca966e4e02791568aa6a4ced368624b3d897f42"}
-H200 = {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False, "attention_backend": None, "vllm_revision": "d9105ea80",
-        "numerics_profile": "b1-eager-v3", "flash_attn_version": None, "device_name": "NVIDIA H200", "moe_backend": "triton"}
+H200 = {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False, "attention_backend": None,
+        "vllm_revision": "d9105ea80", "numerics_profile": "b1-eager-v3", "flash_attn_version": None, "device_name": "NVIDIA H200",
+        "moe_backend": "triton"}
 ENGINE = {"max_num_batched_tokens": 2048, "max_model_len": 4096, "long_prefill_token_threshold": 256, "max_num_seqs": 256,
           "enable_prefix_caching": False}
 
@@ -58,7 +59,8 @@ def test_window_config_slices_the_layer_kinds():
     head = window_config(hf, 0, 7)
     assert (head["num_hidden_layers"], head["first_k_dense_replace"], head["index_skip_topk_offset"]) == (7, 3, 3)
     mid = window_config(hf, 2, 5)
-    assert (mid["indexer_types"], mid["mlp_layer_types"]) == (["full", "shared", "shared", "shared", "full"], ["dense"] + ["sparse"] * 4)
+    assert mid["indexer_types"] == ["full", "shared", "shared", "shared", "full"]
+    assert mid["mlp_layer_types"] == ["dense"] + ["sparse"] * 4
     assert (mid["first_k_dense_replace"], mid["index_skip_topk_offset"]) == (1, 1)
     tail = window_config(hf, 10, 6)
     assert (tail["first_k_dense_replace"], tail["index_skip_topk_offset"], tail["mlp_layer_types"]) == (0, 1, ["sparse"] * 6)
