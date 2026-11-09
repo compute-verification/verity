@@ -1,6 +1,6 @@
 """A vLLM general plugin that records one replayed step's interior, per TP rank, in an engine that serves with CUDA graphs.
 
-    python capture.py site SITE --capture DIR --steps s[,s2] [--open dense:1,moe:1] [--mla-tokens 8] [--keep none|opened|all [--keep-steps s,...]] [--sampler]
+    python capture.py site SITE --capture DIR --steps s[,s2] [--open dense:1,moe:1] [--mla-tokens 8] [--keep none|opened|all [--keep-steps s,...]] [--sampler] [--table L[,L2]]
     PYTHONPATH=SITE <a vLLM engine>
 
 Registered as a ``vllm.general_plugins`` entry point (`site` writes the dist-info, and the capture's settings into
@@ -53,6 +53,12 @@ binds every recorded byte. With
 read, for the node's registration to commit and the match gate to bind. Then
 `_commit_and_open`: the step's root over the ranks' roots, the coins rank 0 samples only after that, and the layers they
 open, whose parameters each rank writes beside the step (``commit.json``, ``open/``).
+
+With ``--table L[,L2]``, layers with their own indexer, each recorded step also writes on every rank, outside the step's
+root, each long row's history table at those layers (`_table_convert`): for each request whose last token of the step reads
+more than ``--table-keys`` keys, its n latent rows as the layer's paged cache holds them once the step's own are written, the
+n scores its top-k call ranked, the top-k the sparse backend's slot conversion maps (the canonical top-k), and the rows that
+attention read, under ``step<s>/table/`` (`_write_tables`). `table.py` checks that they join.
 """
 from __future__ import annotations
 
@@ -63,7 +69,7 @@ import sys
 import time
 import traceback
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 BIG = 1 << 30
 #: with ``--keep all``, every parameter the step read up to this size is written too (``commit.json``'s ``kept_params``: the
@@ -202,6 +208,10 @@ class _State:
         self.rank = 0
         self.errors: list[str] = []
         self.bytes = 0
+        self.table = {int(x) for x in cfg.get("table") or ()}
+        self.table_keys = int(cfg.get("table_keys", 2048))
+        self.tab: dict | None = None
+        self.tables: list[dict] = []
 
     def root(self) -> Path:
         return self.dir / f"rank{self.rank}"
@@ -568,6 +578,7 @@ def _install_mla() -> None:
             out = orig(self, q, kv_rows, topk_indices, *a, **kw)
             outs = out if isinstance(out, tuple) else (out,)
             _event("sparse_mla_kernel", ins, {f"r{i}": _ref(t) for i, t in enumerate(outs) if isinstance(t, torch.Tensor)})
+            _table_read(lambda idx: kv_rows.reshape(-1, kv_rows.shape[-1])[idx], topk_indices)
             return out
         return run
 
@@ -601,6 +612,7 @@ def _install_mla() -> None:
             out = orig(*a, **kw)
             outs = out if isinstance(out, tuple) else (out,)
             _event("fa3_sparse_mla", ins, {f"r{i}": _ref(t) for i, t in enumerate(outs) if isinstance(t, torch.Tensor)})
+            _table_read(lambda idx: torch.cat([v.reshape(v.shape[0], -1)[idx], k.reshape(k.shape[0], -1)[idx]], dim=-1), table)
             return out
         return run
 
@@ -638,6 +650,8 @@ def _py_kernel(op: str, names: tuple[str, ...], written: tuple[str, ...], caches
             outs = {f"r{i}": _ref(t) for i, t in enumerate(out if isinstance(out, tuple) else (out,))}
             outs.update({k: _ref(args[k]) for k in written if args.get(k) is not None})
             _event(op, ins, outs)
+            if op in _TABLE and S.layer in S.table:
+                _TABLE[op](args)
             return out
         return run
     return make
@@ -653,6 +667,130 @@ def _install_py_kernels() -> None:
             continue
         if hasattr(owner, name):
             _wrap(owner, name, _py_kernel(name, names, written, caches))
+
+
+#: the indexer's top-k ops (`dsa_topk.OPS`) by the position of the output among their arguments, the logits first: prefill's
+#: (logits, rowStarts, rowEnds, indices, numRows, ...) with keys [rowStarts, rowEnds), decode's (logits, next_n, seqLens,
+#: indices, numRows, ...) with keys [0, seqLens), and (logits, lengths, output, ...) with keys [0, lengths)
+TOPK_OPS = {"_C::top_k_per_row_prefill": 3, "_C::top_k_per_row_decode": 3, "_C::persistent_topk": 2,
+            "_C::cooperative_topk": 2}
+
+
+def _table_norm(args: dict) -> None:
+    """A ``--table`` layer's `fused_norm_rope`, once it has written the step's own latent rows: the paged latent cache, the top-k
+    buffer the layer's top-k calls write into, and the rows to keep: each request's last token of the step (vLLM lays the
+    step's tokens out by request, in the batch's order, each its scheduled count of them) whose row reads more than
+    ``--table-keys`` keys."""
+    ids = [str(x) for x in getattr(S.input_batch, "req_ids", None) or []]
+    counts = getattr(S.sched, "num_scheduled_tokens", None) or {}
+    pos, want, end = args.get("positions"), {}, 0
+    with _quiet():
+        for r, rid in enumerate(ids):
+            c = int(counts.get(rid, 0))
+            end += c
+            if c and (p := int(pos[end - 1])) + 1 > S.table_keys:
+                want[end - 1] = {"layer": S.layer, "request": rid, "batch_index": r, "token": end - 1, "position": p, "n": p + 1}
+    S.tab = {"layer": S.layer, "cache": args.get("mla_kv_cache"), "buf": args.get("topk_indices_buffer"), "want": want}
+
+
+def _table_topk(op: str, flat: list) -> None:
+    """A top-k call of a ``--table`` layer: the scores of each kept token's row it ranks, and the row's place in its output. A
+    call's output is a view of the layer's top-k buffer, its offset there naming its first token; a call whose output is not
+    one ranks a kept token's row where exactly one of its rows has that token's count of keys."""
+    import torch
+    t = S.tab
+    if t is None or t["layer"] != S.layer or not t["want"]:
+        return
+    out, logits, buf = flat[TOPK_OPS[op]], flat[0], t["buf"]
+    with _quiet():
+        rows = int(flat[4]) if TOPK_OPS[op] == 3 else int(logits.shape[0])
+        if op == "_C::top_k_per_row_prefill":
+            lo, hi = flat[1][:rows].long(), flat[2][:rows].long()
+        elif op == "_C::top_k_per_row_decode":
+            if int(flat[1]) != 1:
+                S.errors.append(f"step {S.step} table layer {S.layer}: {op} with next_n {int(flat[1])}, one token a row is read")
+                return
+            hi = flat[2].reshape(-1)[:rows].long()
+            lo = torch.zeros_like(hi)
+        else:
+            hi = flat[1].reshape(-1)[:rows].long()
+            lo = torch.zeros_like(hi)
+        width = buf.stride(0) * buf.element_size() if buf is not None else 0
+        off = out.data_ptr() - buf.data_ptr() if buf is not None else -1
+        view = bool(width) and off >= 0 and off % width == 0 and out.stride(0) == buf.stride(0)
+        for i, e in t["want"].items():
+            found = ([i - off // width] if 0 <= i - off // width < rows else []) if view else (
+                torch.nonzero(hi - lo == e["n"]).reshape(-1).tolist())
+            if len(found) != 1:
+                continue
+            row = found[0]
+            if "op" in e:
+                e["why"] = f"{e['op']} and {op} both rank its row"
+            e.update(op=op, op_row=row, by="view" if view else "keys", keys=[int(lo[row]), int(hi[row])], op_out=out,
+                     scores=logits[row, int(lo[row]):int(hi[row])].clone())
+
+
+def _table_convert(args: dict) -> None:
+    """A ``--table`` layer's top-k-to-slot conversion: for each kept token, its n latent rows as the paged cache holds them
+    (row i at position i, [kv_c | k_pe], the step's own included), the n scores its top-k call ranked, and the top-k the
+    conversion maps, which is that call's row as the canonical top-k left it (`dsa_topk`'s plugin rewrites the op's output in
+    place once it returns). A token whose request, keys or top-k don't join is an error of the step."""
+    import torch
+    t = S.tab
+    if t is None or t["layer"] != S.layer:
+        return
+    req, table, topk = args["req_id"], args["block_table"], args["token_indices"]
+    cache, bs = t["cache"], int(args.get("BLOCK_SIZE") or 64)
+    with _quiet():
+        for i, e in sorted(t["want"].items()):
+            out, why = e.pop("op_out", None), e.pop("why", None)
+            if why is None and (i >= req.shape[0] or int(req[i]) != e["batch_index"]):
+                why = f"the conversion's token {i} is not of batch index {e['batch_index']}"
+            elif why is None and out is None:
+                why = "no top-k call of the layer ranks its row"
+            elif why is None and e["keys"][1] - e["keys"][0] != e["n"]:
+                why = f"{e['op']} ranks keys [{e['keys'][0]}, {e['keys'][1]})"
+            elif why is None and not torch.equal(out[e["op_row"]], topk[i]):
+                why = f"the conversion's top-k of token {i} is not {e['op']}'s row {e['op_row']}"
+            elif why is None and (cache is None or cache.dim() != 3 or cache.shape[1] != bs):
+                why = f"no paged latent cache [blocks, {bs}, words] at the layer's fused_norm_rope"
+            if why:
+                S.errors.append(f"step {S.step} table layer {e['layer']} request {e['request']} token {i}: {why}")
+                continue
+            p = torch.arange(e["n"], device=cache.device)
+            S.tables.append({**e, "kv": cache[table[e["batch_index"]].long()[p // bs], p % bs].clone(),
+                             "topk": topk[i].clone()})
+    t["want"] = {}
+
+
+def _table_read(rows_at: Callable[[Any], Any], slots: Any) -> None:
+    """The rows the layer's sparse attention read for each table token: ``rows_at`` of the token's row of global slots."""
+    for e in S.tables:
+        if e["layer"] == S.layer and "read" not in e:
+            with _quiet():
+                e["read"] = rows_at(slots[e["token"]].long().clamp(min=0)).clone()
+
+
+_TABLE = {"fused_norm_rope": _table_norm, "triton_convert_req_index_to_global_index": _table_convert}
+
+
+def _write_tables(d: Path) -> None:
+    """``step<s>/table/`` (outside the step's root, as the sampler's records are): each ``--table`` row's ``<k>.kv`` (n rows of
+    u16 words, the cache's bf16 bits), ``<k>.scores`` (n f32), ``<k>.topk`` (i32) and ``<k>.read`` (the rows attention read, one
+    a top-k slot), little-endian, with their shapes and SHA-512s in ``table.json``."""
+    td = d / "table"
+    td.mkdir(parents=True, exist_ok=True)
+    doc = {"rank": S.rank, "step": S.step, "keys": S.table_keys, "tables": []}
+    for k, e in enumerate(S.tables):
+        files = {}
+        for name in ("kv", "scores", "topk", "read"):
+            v = e.pop(name, None)
+            if v is not None:
+                raw = _flat_bytes(v).cpu().numpy()
+                (td / f"{k}.{name}").write_bytes(raw.tobytes())
+                files[name] = {"shape": list(v.shape), "dtype": str(v.dtype), "sha512": hashlib.sha512(raw).hexdigest()}
+        doc["tables"].append({**e, "files": files})
+    (td / "table.json").write_text(json.dumps(doc, indent=1, sort_keys=True))
 
 
 def _recorder_base():
@@ -696,6 +834,8 @@ def _record_op(op: str, schema: Any, args: tuple, kwargs: dict, call) -> Any:
         if a.alias_info is not None and a.alias_info.is_write:
             outs[a.name] = _ref(v, write=a.name not in cache)
     S.events[seq]["out"] = outs
+    if S.tab is not None and op in TOPK_OPS:
+        _table_topk(op, flat)
     return out
 
 
@@ -1079,6 +1219,7 @@ def _reset() -> None:
     import shutil
     shutil.rmtree(S.root() / "spool", ignore_errors=True)
     S.events, S.errors, S.check = [], [], None
+    S.tab, S.tables = None, []
     S.seen.clear()
     S.spooled.clear()
     S.dropped.clear()
@@ -1102,6 +1243,10 @@ def _finish(runner: Any) -> None:
     S.add("hash_drain", time.time() - t)
     d = S.root() / f"step{S.step}"
     d.mkdir(parents=True, exist_ok=True)
+    if S.table:
+        t = time.time()
+        _write_tables(d)
+        S.add("tables", time.time() - t)
     t = time.time()
     lines = "".join(json.dumps(e, sort_keys=True, separators=(",", ":")) + "\n" for e in S.events).encode()
     (d / "ops.jsonl").write_bytes(lines)
@@ -1264,6 +1409,11 @@ def main(argv: list[str]) -> int:
     s.add_argument("--allreduce-tree", metavar="TREE",
                    help=f"the node's multimem reduction tree as its probe read it, written at each step as {TREE_FILE}")
     s.add_argument("--allreduce-tree-source", default="", help="where TREE was read (the probe's record)")
+    s.add_argument("--table", default="", metavar="LAYER[,LAYER]",
+                   help="layers with their own indexer whose long rows' history tables each step writes (outside the step's "
+                        "root): each request's last token's latent rows, scores, canonical top-k and the rows attention read")
+    s.add_argument("--table-keys", type=int, default=2048,
+                   help="a row is long past this many keys (the indexer's top-k)")
     a = ap.parse_args(argv)
     cfg = {"capture": str(Path(a.capture).resolve()), "steps": sorted({int(x) for x in a.steps.split(",") if x.strip()}),
            "open": {k: int(n) for k, n in (x.split(":") for x in a.open.split(",") if x)}, "mla_tokens": a.mla_tokens,
@@ -1271,7 +1421,8 @@ def main(argv: list[str]) -> int:
            "keep_max_mib": a.keep_max_mib, "min_free_gib": a.min_free_gib, "sampler": a.sampler,
            "hash_threads": a.hash_threads, "host_mib": a.host_mib, "cache_hash": a.cache_hash, "gpu_check": a.gpu_check,
            "allreduce_tree": {"tree": reduction_tree(a.allreduce_tree), "source": a.allreduce_tree_source}
-           if a.allreduce_tree else None}
+           if a.allreduce_tree else None,
+           "table": sorted({int(x) for x in a.table.split(",") if x.strip()}), "table_keys": a.table_keys}
     print(site(a.dir, cfg))
     return 0
 
