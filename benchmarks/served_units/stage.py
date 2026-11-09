@@ -39,7 +39,7 @@ the Program's reference (``twin`` null).
 A type of `READS` is a table read, ``EmbeddingRead_v1{V, H}`` on its served rows (`interface.unit_rows`), staged as serving
 stages a read (`chunk_rows.statement`): the templated statement at the read layout on the verifier's own read template
 (``structural``, `verity_flock.read_tmpl`, so ``flock-read-tmpl`` is built first). Its inputs are honest reads of one table of
-V ranks whose first L hold drawn rows and every later one the zero row under the zero salt, as a history table pads to its
+V ranks whose first L hold filled rows and every later one the zero row under the zero salt, as a history table pads to its
 capacity; each read's row and verdict are held to the table's (``twin``). Beside the circuit it writes the template and its
 layout mode (``unit.tmpl``, ``unit.layout``), which ``flock-tmpl-unit`` places as the prover's ``--tmpl-unit`` rows.
 
@@ -367,8 +367,8 @@ def stage_census(name: str, cen: Census, S: dict, tag: str, n: int, out: Path, t
 
 def stage_read(name: str, S: dict, tag: str, n: int, out: Path, t0: float) -> dict:
     """``n`` honest reads of one table, a proof block each, on the verifier's read template, as stage.json's record. The
-    table has V ranks of H words: its first L rows drawn under drawn salts, every later rank the zero row under the zero salt
-    (the history table's placeholder), its tokens drawn below L; each read's row and verdict are held to the table's."""
+    table has V ranks of H words: its first L rows filled at random under random salts, every later rank the zero row under the
+    zero salt (the history table's placeholder), its tokens random below L; each read's row and verdict are held to the table's."""
     from verity.ml.commitments import row_table
     from verity.ml.commitments.gates import embedding as E
     from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -393,7 +393,7 @@ def stage_read(name: str, S: dict, tag: str, n: int, out: Path, t0: float) -> di
              for t, p in ((t, tab.path(t)) for t in toks)]
     rows = {r: np.stack([np.packbits(np.array(E.arguments(V, *c)[g], np.uint8), bitorder="little").view("<u2") for c in cases])
             for g, (r, *_x) in enumerate(in_rows)}
-    t_draw = time.time() - t0
+    t_rows = time.time() - t0
     st = CS.UnitStager(fn, "unit/table-read", in_rows, out_rows, circuit=out / "circuit.txt", layout=READ_LAYOUT,
                        structural=True)
     t_built = time.time() - t0
@@ -414,7 +414,7 @@ def stage_read(name: str, S: dict, tag: str, n: int, out: Path, t0: float) -> di
             "circuit_bytes": (out / "circuit.txt").stat().st_size, "circuit_sha512": st.pin, "class_sha512": st.class_sha512,
             "inst_bytes": (out / "inst.bin").stat().st_size, "pub_bytes": (out / "pub.bin").stat().st_size, "macs": 0,
             "twin": {"agrees": True, "instances": n, "first": int(h[0, 0])},
-            "seconds": {"draw": round(t_draw, 1), "built": round(t_built - t_draw, 1),
+            "seconds": {"rows": round(t_rows, 1), "built": round(t_built - t_rows, 1),
                         "round": round(time.time() - t0 - t_built, 1), "total": round(time.time() - t0, 1)},
             "maxrss_gb": gb()}
 
