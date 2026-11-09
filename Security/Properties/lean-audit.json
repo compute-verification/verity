@@ -1018,6 +1018,10 @@
   "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
    "nontrivial": "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial"
   },
+  "Properties.NetworkPeriod.rowsCapPublished": {
+   "honest": ["Properties.NetworkPeriod.rowsCapPublished_honest"],
+   "nontrivial": "Properties.NetworkPeriod.rowsCapPublished_nontrivial"
+  },
   "Properties.Site.refuses": {
    "honest": ["Properties.Site.refuses_honest"],
    "nontrivial": "Properties.Site.refuses_nontrivial"
@@ -5429,6 +5433,17 @@
    },
    "type_hash": "30ac246ed35e00d232bcbf769692a986c35476bf91dadb94f044d3eb7e708d0d",
    "unfolded_hash": "0ac812ff7d1b70761abf83cdd7cbcc3a446a9d9a67fa5409c7d8752128a954e5"
+  },
+  "Properties.NetworkPeriod.rowsCapPublished": {
+   "owner": "@network-accounting",
+   "signature": ["Properties.NetworkPeriod.rowsCapPublished : Properties.NetworkPeriod.RowsCapPublished"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   }
   },
   "Properties.NetworkPeriod.rowsKBoundsCount": {
    "owner": "@network-accounting",
@@ -10870,6 +10885,10 @@
    "MemoryChallenger.Attest.Properties.SecurityProofs.proverSeesMessages": {
     "function": "MemoryChallenger.Attest.Properties.code",
     "outcome": "none"
+   },
+   "Properties.NetworkPeriod.rowsCapPublished": {
+    "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
    },
    "Properties.NetworkPeriod.rowsProgWired": {
     "function": "NetworkCheck.Period.check",
