@@ -72,6 +72,7 @@
   "Properties.Nci.Protocol",
   "Properties.Verity.Soundness",
   "Properties.Verity.Game",
+  "Properties.Verity.Sha512",
   "Properties.Verity.Idle",
   "Properties.Remote",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
@@ -2183,6 +2184,8 @@
     "Properties.Composition",
     "Properties.Flock.Circuit.CircuitOf",
     "Properties.Verity.Game",
+    "Properties.Verity.Sha512",
+    "Definitions.Core.Hash",
     "Definitions.Accounting.JointLive",
     "Definitions.Core.Game",
     "Definitions.Hash.RowLeaf",
@@ -2202,7 +2205,7 @@
     "Properties.Pouw.PearlPlusDraw"
    ],
    "except": [],
-   "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, and the coin device's tree as the code builds it (Flock.CoinTree's spec, Flock.Hm96's leaf and commit string), never over a proof"
+   "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 (`Properties.Verity.Sha512`, read in the hash area's message and digest, `Definitions.Core.Hash`) and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, and the coin device's tree as the code builds it (Flock.CoinTree's spec, Flock.Hm96's leaf and commit string), never over a proof"
   },
   "Properties.Core": {
    "imports": ["Definitions.Core", "CoreProtocol.Site"],
@@ -2277,7 +2280,7 @@
    "why": "a wiring's dataflow is stated against the wiring check's own types and function (`Spot.Wires`) and the population vocabulary's acyclicity (`Definitions.Spot.Dataflow`), never a proof"
   },
   "Properties.Spot.HistoryTable": {
-   "imports": ["Spot.HistoryTable", "Definitions.Hash.HistoryTable", "Properties.Verity.Game"],
+   "imports": ["Spot.HistoryTable", "Definitions.Hash.HistoryTable", "Properties.Verity.Sha512"],
    "except": [],
    "why": "a history table's registered root is stated against the root check's own functions (`Spot.HistoryTable`), the hash area's history-table root (`Definitions.Hash.HistoryTable`) and the verifier's SHA-512 as a model hash (`Verity.sha512`), never a proof"
   }
