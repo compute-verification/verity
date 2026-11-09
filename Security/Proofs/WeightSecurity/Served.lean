@@ -92,7 +92,7 @@ theorem accepted_of_lt_accLen : ∀ (l : List (Served O V Tick Adv)) (n : ℕ) (
     · rcases n with _ | n
       · simp only [List.getElem?_cons_zero, Option.some.injEq] at hw
         exact hw ▸ hv
-      · simp only [accLen, hv, if_true] at h
+      · simp only [accLen, hv, ite_true] at h
         exact accepted_of_lt_accLen l n w (by omega) (by simpa using hw)
     · simp [accLen, hv] at h
 
