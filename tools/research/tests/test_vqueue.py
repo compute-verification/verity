@@ -1192,9 +1192,10 @@ SEEDS = range(500)
 
 
 def ticks(w: World) -> int:
-    """The ticks within which a scenario settles: every good PR on main, every bad PR ejected, no candidate left.  Seeds 0 to
-    4999 settled within 78 ticks and 12 per PR, none more than 12 past 8 a PR, and with a broken main whose fixes are ranked
-    last and late, within 72 and 9.7 per PR, none more than 5 past 8 a PR."""
+    """The ticks within which a scenario settles: every good PR on main, every bad PR ejected, no candidate left (without
+    `tree_ejects`, only erring PRs left, each with its owner rung).  Seeds 0 to 4999 settled within 88 ticks and 15 per PR,
+    none more than 21 past 8 a PR, and with a broken main whose fixes are ranked last and late, within 72 and 10.7 per PR,
+    none more than 8 past 8 a PR."""
     return 40 + 8 * len(w.marks)
 
 
