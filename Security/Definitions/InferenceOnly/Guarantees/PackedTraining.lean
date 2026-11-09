@@ -2,7 +2,7 @@ import Definitions.InferenceOnly.Assumptions.PackedTraining
 import Definitions.InferenceOnly.Dark
 
 /-!
-# NCI's partial-sum law with dark gates, on a chain with several products to a gate
+# The inference-only policy's partial-sum law with dark gates, on a chain with several products to a gate
 
 `IncompressibleContainedMatMulOn` and `IncompressibleContainedTrainingOn` for a `PackedChain`. The product bound counts
 products and does not read `k`. The training form converts products off the books into dark gates, at most `k` to a

@@ -33,7 +33,7 @@ causality at latency 0, inside `X`, for computed sources, which is all the split
 
 `cut S` is a set `S` of gates as a circuit whose inputs are what it reads: `A` with every gate outside `S` an input gate,
 and the gates of `S` its outputs. `declaration X t θ` is `A[X, [0, t))` so cut, with the baseline `θ_A`, the input gates
-committed before the run, as NCI's `Declaration`. The runtime `t_A(P)` reads the strategy, not one run
+committed before the run, as the inference-only policy's `Declaration`. The runtime `t_A(P)` reads the strategy, not one run
 (`Accounting.Actual.runtime`).
 -/
 

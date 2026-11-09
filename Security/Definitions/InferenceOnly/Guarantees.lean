@@ -5,7 +5,7 @@ import Definitions.Core.Partition
 import Definitions.InferenceOnly
 
 /-!
-# NCI's guarantees
+# The inference-only policy's guarantees
 
 Each is a `def G : Prop` over `Protocol`'s definitions and the assumptions, proved as
 `InferenceOnly.SecurityProofs.G : InferenceOnly.Guarantees.G`.

@@ -6,12 +6,12 @@ import Definitions.InferenceOnly.Assumptions.CoveringTwoCosts
 /-!
 # The cover theorem on a compliant declaration, counting the covering bound's chained multiplication blocks
 
-`CoverTraining` (`Definitions.InferenceOnly.Guarantees.CoverTraining`) joins the cover theorem to the NCI policy, and counts the
+`CoverTraining` (`Definitions.InferenceOnly.Guarantees.CoverTraining`) joins the cover theorem to the inference-only policy, and counts the
 products of the cover theorem's vocabulary under its upstream certificate. `CoverTrainingChained` is the same join with
 the covering bound's count (`InferenceOnly.Guarantees.CoveringBoundTwoCosts`): `|𝓜*|`, the multiplication blocks of the reference
 training circuit `c` that are chained at depth `D` and activation cost `c_a` (`InferenceOnly.Assumptions.chainedBlocksAt`), under
 parameter-hardness at weight cost `c_w` (`InferenceOnly.Assumptions.ParameterHardAt`). Both are read on `c` bit by bit as a
-declaration (`bitDecl c`), so a block's size, what it is handed and every cut are counted in bits, the unit of the NCI
+declaration (`bitDecl c`), so a block's size, what it is handed and every cut are counted in bits, the unit of the inference-only
 policy's novel reads.
 
 Why bits and not `c`'s gates: on the gates, `|in(S) \ θ|` counts gates while an IU's novel reads count bits, so a block

@@ -2,7 +2,7 @@ import Definitions.InferenceOnly.Work
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
-# NCI over threads, each thread charged by the work done on it at a format's rate: the named assumption
+# The inference-only policy over threads, each thread charged by the work done on it at a format's rate: the named assumption
 
 `WeightsSupport` charges each novel thread value a subcircuit reads, and fails at every format where reads are
 redundant. `WeightsSupportFmt` charges each thread by the work done on it, in thread values (`Threading.work`), at the

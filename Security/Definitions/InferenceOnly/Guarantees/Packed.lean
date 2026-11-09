@@ -2,7 +2,7 @@ import Definitions.InferenceOnly.Assumptions.Packed
 import Definitions.InferenceOnly.Dark
 
 /-!
-# NCI's fan-out bound on a chain with several products to a gate
+# The inference-only policy's fan-out bound on a chain with several products to a gate
 
 `ContainedFanOutOn` for a `PackedChain`, so that it says something about a declaration that contains a reference circuit
 computing in `Dot16` steps (`k = 16`). It counts products, not the gates that hold them, and its bound does not read `k`.

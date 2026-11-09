@@ -10,7 +10,7 @@ import Definitions.Core.Declaration
 # The working draft's model: Boolean circuits, `(c, k)`-partitions and local description length
 
 The model of the working draft "Distinguishing inference from frontier training" (§3 and §4), on core's one circuit
-type `Verity.Circuit` and its one `Partition`. Every statement about training, NCI and the accounting envelopes is to be
+type `Verity.Circuit` and its one `Partition`. Every statement about training, the inference-only policy and the accounting envelopes is to be
 stated on these objects.
 
 * A **Boolean circuit** (`Circuit.Boolean`) is a circuit whose every gate holds one bit and whose every operation gate
@@ -27,7 +27,7 @@ stated on these objects.
 * The **committed declaration** `R = (θ, C, 𝓘)` (`Committed`) is a declaration `(C, θ)`, the committed values of
   `θ`'s gates and a partition `𝓘` of the operation gates into `B` proof blocks. It is not the registration
   (`Verity.Registration`), which holds only the Site, `θ` and the builder `B`: the partition is private. A proof block
-  is a unit of a `Partition`; NCI's instance calls them inference blocks, and training's serving blocks. No ordering of
+  is a unit of a `Partition`; the inference-only policy's instance calls them inference blocks, and training's serving blocks. No ordering of
   the proof blocks is required: Lemma 1 and Theorem 3 read none, so the draft's "inter-block edges point forward" is
   dropped.
 * A **`(c, k)`-partition** (`Partition.IsCK`) of a Boolean circuit: every proof block has exactly `c` gates, padding

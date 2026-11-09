@@ -2,7 +2,7 @@ import Definitions.InferenceOnly.Assumptions
 import Definitions.InferenceOnly.Dark
 
 /-!
-# NCI's partial-sum law on a reference circuit
+# The inference-only policy's partial-sum law on a reference circuit
 
 `UpdatedMatMul` states its incompressibility assumptions about the declared circuit, whose wiring the prover controls,
 and they are false there. These guarantees state the same law with the chain and both assumptions on a reference

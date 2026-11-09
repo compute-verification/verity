@@ -928,7 +928,7 @@ its bucket fails the connection there with one fail cell that carries no reason,
 scheduled end. So the client's view of the server side is the schedule, each connection's fail cell or none, and the
 data in the cells: the server's accept time, send timing, ACKs and flow control reach it only through the fail cells.
 One run of the network certifier's code gives both the cells the client receives and its record of them
-(`Security/Definitions/NetworkCertifier/Tap.lean`, under `trusted-host`). NCI's transfer gates are these cells' bits,
+(`Security/Definitions/NetworkCertifier/Tap.lean`, under `trusted-host`). The inference-only policy's transfer gates are these cells' bits,
 whose number per window the schedule fixes. The schedules are charged `log2 #schedules`, so a schedule that came to
 depend on the server is still counted. The content term comes from the audits, not from a premise:
 `SecurityProofs.PeriodLeakAccepted` composes each window's sampled leak bound at the network certifier's rows with the

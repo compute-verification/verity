@@ -3,7 +3,7 @@ import Definitions.InferenceOnly.Assumptions.Baseline
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
-# NCI's named assumptions
+# The inference-only policy's named assumptions
 
 The bound for updated matrix multiplications rests on one assumption, compute-bounded incompressibility (the draft,
 "Updated matrix multiplications"): the activations, partial sums and weights of the chain cannot be passed between IUs
@@ -16,7 +16,7 @@ Which declaration matters. On a declared circuit, whose wiring the prover contro
 simplification, and the guarantees that apply them there (`UpdatedMatMul`,
 `UpdatedMatMulReads`, `Training`) are falsified. That covers declared circuits only:
 on a reference training circuit, the one a declared circuit contains, both stand, and with `WeightsIncompressible` they
-are `TrainingIncompressible`, NCI's one adopted premise.
+are `TrainingIncompressible`, the inference-only policy's one adopted premise.
 
 Both are assumed only for chains whose weights and first inputs `x^{(0)}` depend on more than `Γ` work of training since
 the commitment (the draft, "Frontier training currently requires updated matrix multiplications"). Starting from a

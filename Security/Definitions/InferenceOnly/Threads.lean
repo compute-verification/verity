@@ -1,7 +1,7 @@
 import Definitions.InferenceOnly
 
 /-!
-# NCI over threads: the vocabulary
+# The inference-only policy over threads: the vocabulary
 
 The thread draft ("Distinguishing inference from frontier training via novel communication intensity") bounds
 the NCI of every small subcircuit of a reference training circuit `C` from two facts about `C`'s structure: each weight
