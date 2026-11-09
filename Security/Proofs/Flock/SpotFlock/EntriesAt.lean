@@ -136,7 +136,7 @@ theorem entryOf_sameAt {k : UInt8} {nm : String} {e x : Json} {rs ds : String} {
     bytes (entryOf (k, nm, x)).root = r ∧ (entryOf (k, nm, x)).leaves = n ∧ bytes (entryOf (k, nm, x)).domain = d := by
   unfold Spot.SecondStage.sameAt at hs
   simp only [Bool.and_eq_true] at hs
-  obtain ⟨⟨h1, h2⟩, h3⟩ := hs
+  obtain ⟨⟨⟨h1, h2⟩, h3⟩, -⟩ := hs
   rw [hr] at h1
   rw [hd] at h2
   rw [hl] at h3
