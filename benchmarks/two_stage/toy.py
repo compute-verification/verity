@@ -19,8 +19,8 @@ proves them (`audit.py`).
   (`verity.ml.windows.links.Port`), so Lean opens every row a session proves: a link port (b_in's input, b_out's output)
   at the boundary record, its rows committed under the boundary's salts at S[i] so an honest replay's ``b || c`` are the
   boundary's, its header naming the boundary port, the leaves S and each one's path to the boundary root; a wired port at
-  its writer's port of the interior record, unit i reading its writer's leaf i; every other port at the interior record,
-  unit i reading its own leaf i.
+  its writer's port of the interior record, its table the writer's output rows and unit i reading its writer unit's leaf;
+  every other port at the interior record, unit i reading its own leaf i.
 * **The verifier's reads** (`reads`): each member's ``--registered`` file from the two registration records and S alone.
 * **The auditor's params** (`references`), fixed before the run: each template's circuit file and its reference
   statement's header, which round 2 holds the template's statements to once it places it in the run
@@ -230,15 +230,16 @@ def wires(q: int) -> list[tuple[tuple[str, str, tuple[int, ...]], ...]]:
 
 def interior_window(boundary_digest: str, sample: Sequence[int], law: Mapping | None = None) -> CS.Binding:
     """The interior window of the replay sample ``sample`` after the boundary registration ``boundary_digest``: one member a
-    template, template-major, each wired port its writer's output value with no tree of its own (`rows.Binding.held`);
-    ``law`` the interior registration's (default: every unit, ``subset:Q·n_rho``)."""
+    template, template-major, each wired port its writer's output value with no tree of its own (`rows.Binding.held`), its
+    table the writer's Q·n_w output rows; ``law`` the interior registration's (default: every unit, ``subset:Q·n_rho``)."""
     q = len(sample)
     program, query = CS.population_program([(t, q * n) for t, n in zip(TEMPLATES, N_T)])
     ids = [tid for tid, _, _ in P.ranges(program, query)]
     members = []
-    for tid, n_t, (rows, outs), wired, base in zip(ids, N_T, LAYOUT, wires(q), offsets(q)):
+    for tid, n_t, (rows, outs), wired, base, w in zip(ids, N_T, LAYOUT, wires(q), offsets(q), WRITERS):
+        table = q * (n_t if w is None else N_T[w])
         members.append(CS.Member(tid, rows=rows, outs=outs, n=q * n_t, base=base, wired=wired, wired_trees=False,
-                                 tables=tuple((p, q * n_t) for p, _ in rows), schemas=tuple((p, V2) for p, _ in rows + outs)))
+                                 tables=tuple((p, table) for p, _ in rows), schemas=tuple((p, V2) for p, _ in rows + outs)))
     return CS.Binding(program, query, dict(law or {"law": "subset", "k": q * N_RHO}), interior_run(boundary_digest, sample),
                       tuple(members))
 
@@ -276,7 +277,7 @@ def interior(bc: CS.Committed, boundary_digest: str, sample: Sequence[int], law:
             {"rows": {"x": CS.WIRED}, "outs": {"o0": np.repeat(r["flip_b"], N_T[3], axis=0)}},
             {"rows": {"row": CS.WIRED}, "outs": {"o0": r["egress"]}}]
     for d, m in zip(data, win.members):
-        d["refs"] = np.tile(np.arange(m.n, dtype=np.int64)[:, None], (1, len(m.rows)))
+        d["refs"] = np.array([win.held_leaves(m, p) for p, _ in m.rows], dtype=np.int64).T
     salts_of = {win.members[t].port(p): ports[win.members[t].key].salts_at(at) for t, (p, _b) in LINKS.items()}
     c = CS.commit(win, data, salt_key=salt_key, salts_of=salts_of)
     registered = {m.key: {p: ports[m.key].header(at) if p == link(t) else
@@ -307,7 +308,7 @@ def references(q: int, out: Path) -> dict:
     order, its circuit file's SHA-512 and its reference statement's header and registered reads. The reference is
     `member_stager`'s statement of the template's member in the interior window of ``q`` replay blocks
     (`interior_window`, under a run of its own, whose fields round 2 places or blanks), bound to that window's partition
-    and program as the sessions' circuits are, on zero rows at the member's slots, one table row a unit a port as
+    and program as the sessions' circuits are, on zero rows at the member's slots, each port's table and refs as
     `interior` lays them out, salted under `REFERENCE_KEY`: its public file is ``out``/m<k>/pub.bin, its ``circuit.txt``
     beside it, and its prover file is deleted. Both files are a function of ``q`` and the design alone, byte for byte.
     Its registered reads are `reads`' file, which names none of the run's fields: each port the value it reads (a link
@@ -320,8 +321,10 @@ def references(q: int, out: Path) -> dict:
     named = []
     for k, (m, defn) in enumerate(zip(window.members, TEMPLATES)):
         d, rows = Path(out) / f"m{k}", {r: np.zeros((m.n, w), dtype=np.uint16) for r, w in m.rows}
-        member_stager(defn, m, bind).stage(rows, d, REFERENCE_KEY, indices=range(m.base, m.base + m.n), tables=rows,
-                                           refs={r: np.arange(m.n) for r in rows})
+        member_stager(defn, m, bind).stage(
+            rows, d, REFERENCE_KEY, indices=range(m.base, m.base + m.n),
+            tables={r: np.zeros((dict(m.tables)[r], w), dtype=np.uint16) for r, w in m.rows},
+            refs={r: np.asarray(window.held_leaves(m, r)) for r in rows})
         (d / "inst.bin").unlink()
         with open(d / "pub.bin", "rb") as f:
             header = json.loads(f.readline())
