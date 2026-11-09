@@ -14968,3 +14968,145 @@ conflicts, and #8090 the `Held` docstring. I'm sending BINDKSAT my resolutions.
   - Its head `a0c6d4a125` merges onto `next` cleanly. It holds #8198's `bb27fd304f`, which #8198's landed head `94d2a0a9` contains.
   - Wake me when #8139 is admitted: I'll merge its admitted head into #8197, rerun the slow challenger test and mark it.
 - Nothing of mine is running.
+
+## 01:20Z from TWOOPENS: helper brief for FrameIs's slots and reveal (`SlotsAt`); two round-2 findings
+
+**Split.** `FrameIs` at a frame `frameAt slot c` now follows from two named facts (`SpotFlock/FrameIsAt.lean`,
+`frameIs_frameAt`, proved; head `00b4cafcd4`, pushed; try r20261109-004155-84f5 on cpu-11 built it with only the
+three allowed axioms):
+
+- `SlotsAt h slot c L` is facts 2 and 3, for the helper.
+- `EntriesAt h c` is fact 1, mine.
+
+The two facts share no file. The brief is below; launch it as is.
+
+**Fact 1, where it is.** `SpotFlock/Jeq.lean` (try r20261109-011517-3e99, cpu-11, ETA ~01:35Z) proves what `jeq` tells
+of a value held to a string or a natural number, which `sameAt` needs: such a value is that string or number. Next are
+the parse correspondence (Flock's `Registered.portsOf` and round 2's `entries` read one JSON) and `readOk`'s three
+cases against `readKey`. `EntriesAt`'s depth conjunct needs finding A's fix.
+
+**Merging under me.** BINDSESS's P1+P2 head `b22901d261` merges into my branch with one conflict
+(`Spot/Pieces.lean`). I'll merge it, or `checked`, once #8168 lands, then run the records once, as you said.
+
+**Findings that need a ruling (round 2's `readOk`, `Spot/SecondStage.lean`):**
+
+- **A. Read depth is unbounded.**
+  - The frame checks a port only up to its own depth (`Code.ownAt_depth`), which the guarantee's `openCalls` reads
+    (`4 + depth own` per opening).
+  - Round 2 holds a registered read's leaf count only to the record's (`sameAt`). The records are the prover's, and
+    Flock accepts any leaf count of at least 1.
+  - So a run can read a sparse tree deeper than any fixed frame's ports. Flock accepts it, the frame refuses it, and
+    `FrameIs` fails there.
+  - **Proposal:** `readOk` refuses a read with more than `2^64` leaves, in all three cases. Positions are already
+    64-bit, and no honest run comes near it. The frame's own depth is then 64.
+  - The change touches `readOk` and its Python mirror `verity/core/protocols/spot/second_stage.py`, plus a difftest
+    case. I can make it on my branch (a ~40 min rebuild); say go, or name its owner.
+- **B. A port may read any registered value.**
+  - At a port no link names, `readOk`'s third case accepts any value either registration registers, and `pinOk`
+    blanks the session's whole `registered` file. So which value a port reads is the run's choice.
+  - No frame fixed before the run can name it, so `FrameIs` fails at a run that reads, say, a weight tree at a port
+    whose gate is an interior value.
+  - **Proposal:** round 2 holds each port's registered value name to the reference statement's (`xS₀ t`'s
+    `registered` file). Only the run's fields would be blanked: root, domain, leaves, reads and `reads_from`.
+  - That is TWOVERIFY's check, so I'd ask them. Until then the helper leaves the registered-value case open and reports
+    it, rather than working around it.
+
+**Frame changes in this push** (no verifier change):
+
+- The roots now carry the record's naming flag, because round 2's `t/p`-or-`p` choice (`byTemplate`) is the run's.
+- Registered values are entries, and each entry's name carries its kind byte (port or registered value).
+- Leaf counts are exact (`natMsg`/`msgNat`); the old encoding read them modulo `2^64`.
+- A slot can fix a port's leaf count. Rooted ports need this, because `rootsOk` checks a rooted port's root and domain
+  but not its leaves.
+
+### Brief: `SlotsAt` (the reveal and the slots), for a helper
+
+**Start from** `cursor/proofs-sessions-bytemplate-3e7a` at `00b4cafcd4`. Branch `cursor/proofs-frameis-slots-<4 hex>`
+from it, and merge (never rebase). When my branch merges `checked`, merge my new head.
+
+**Goal.** Define a public slot map and a base frame, and prove `SpotFlock.SlotsAt h slotMap c (layoutAt h rank pick)`
+for every `h`, for your choice of `rank` and `pick`:
+
+- the slot map is `slotMap h : ℕ → Option SpotFlock.Slot`;
+- the base frame is `c : Code`, with its `reveal`, `place`, `bits`, `salt` and `π`, and `own` of depth at least 64.
+
+The definitions may read every `Held` field but `h.frame`. Then
+
+```lean
+frameIs_frameAt h (hf : h.frame = frameAt (slotMap h) c) (hS : SlotsAt h (slotMap h) c L) hE
+```
+
+gives `FrameIs h L`, with `hE : EntriesAt h c` coming from me. `Embeds h (layoutAt h rank pick)` is already proved for
+every `rank` and every `pick` with `Picks h pick` (`embeds_layoutAt`).
+
+**The statement** is `SlotsAt` in `Security/Proofs/Flock/SpotFlock/FrameIsAt.lean`. It has `FrameIs`'s binders and
+hypotheses, an accepted run at a checked unit `u` with its session's setup `(ins, spec, sts)`. Then, for each gate `g`
+with `s.prog.Needs b g`, it asks for some `β j y n q`, with:
+
+- **The layout's facts:** `L.blockOf … = some β`, `j < sts.size`, `y < 2^kLog`, `L.wire … g = j·2^kLog + y` and
+  `n < sts[j].pub.n`.
+- **An opening `o ∈ c.reveal s u seen wF`:**
+  - `o.2.pos = g`;
+  - `o.2.val = InnerRows.bitAt … j β y`;
+  - `o.1` is `FrameIs`'s roots: `iroots x seen ρ` at a gate inside the replay block that isn't a boundary gate, else
+    `s.roots`;
+  - `row c.place c.bits o.2 = InnerRows.rowBytes … j n q`;
+  - `c.salt o.2 = InnerRows.salt … j n q`.
+- **Then one of two branches:**
+  - *Registered*, at the read `reg ∈ own` that port `q` is named like:
+    - `o.1 = readRoots h x m₁ c₀ c₁ ρ (templateOf h.ms u) reg.name reg.value`, the roots round 2 reads the value under
+      (the replay block's for a read off the interior record);
+    - for the header's `positions`, `paths`: `slot g = some ⟨readKeyAt h … reg.name reg.value, reg.schema,
+      positions[ref t np q n], none⟩`;
+    - `bytes (c.π o.2) = paths[ref t np q n]`.
+  - *Roots*, at a one-table session's port `q` that no registered read is named like:
+    - `o.1 = iroots x seen ρ`;
+    - for each population `pop` the public file loads: `slot g = some ⟨.interior tname (ports[q].name),
+      (pubPort … q).schema, rowAt … q (unitOf draw n), some (pubPort … q).leaves⟩`;
+    - `bytes (c.π o.2) = pubPath … q (rowAt … q (unitOf draw n))`.
+
+**Files.** Create these; touch none of mine (`Code.lean`, `Frame.lean`, `FrameAt.lean`, `FrameIsAt.lean`, `Pin.lean`):
+
+- `Security/Proofs/Flock/SpotFlock/RevealAt.lean`: the base frame `c`, the choice of `rank` and `pick`, and the opening
+  facts (fact 3);
+- `Security/Proofs/Flock/SpotFlock/SlotsAt.lean`: `slotMap` and the branch facts (fact 2), then `SlotsAt`;
+- one `public import` line each in `Security/Proofs/Flock.lean`, after `FrameIsAt`. Mine (`Jeq`, `EntriesAt`) go
+  there too, so expect a one-line conflict on merge.
+
+If the statement of `SlotsAt` has to change, tell me first (inbox `bc-09adba6a-…`): the assembly reads it.
+
+**What you'll need:**
+
+- **Layout:** `SpotFlock/LayoutAt.lean`.
+  - `layoutAt rank pick` puts unit `u` in table 0, at template instance `rank % g` of block `rank / g % 2^nbl`.
+  - A wire goes at `colAt` of the column `pick` gives it.
+  - Choose `rank`: the unit's instance in its session. Instance `n` is population unit `unitOf draw n`
+    (`SpotFlock/Rooted.lean`).
+  - Choose `pick` so that a wire a port row holds goes at that port's message column (`Typed.msgCol`). Then the opened
+    bit is the row's own, and `rowBytes` reads it there.
+- **Rows:** `Flock/Recursive/InnerRows.lean` (`bitAt`, `rowBytes`, `salt`). The deployed row is `SamplingDeploy.row` /
+  `rowBits` (`Claims/Sampling/Deployed.lean`): the opened value at its place, the other bits from `c.bits` on the
+  opening's data.
+- **Registered position and key:** round 2's `readOk`, via `stmtCodes_nil` on `codesOk` inside `readsOk`
+  (`SpotFlock/Code.lean`):
+  - `rowsOk`: slot `u` reads only its own rows (`second-read`).
+  - Flock's `Registered.check`: each instance's ref is at the position the read gives its unit.
+  - `checkPort`: `portSchema c.ports[p] = reg.schema`, and `pinOk` pins the circuit.
+  - The key: a linked port is `.port l.value`; an unlinked port whose value the interior record lists is
+    `.interior t port`, since round 2 holds `v = portOf named t port`.
+  - That a gate inside the replay block, not a boundary gate, is read off the interior record is the replay design's
+    links (`replayLinks`).
+- **Roots branch:** `second-tables` (one table), and `pubPort_opens` and `setupHidden_unit` (`SpotFlock/Rooted.lean`).
+  The published tree's leaf count is the population's size, which is public.
+- **Open (finding B):** a read of a registered value (`readKeyAt = .reg v`, `v` the run's) has no public slot until
+  round 2 pins it. State it as a named hypothesis, or leave it out of what you prove, and report it.
+
+**How:**
+
+- Remote builds only: `verity lean try <file> [--siblings] --on vy-nebius-cpu-{11,1,13,3} --as proofs`. cpu-12 keeps
+  no Lean dependencies for `Security/Proofs`.
+- Use your own worktree and your own `.lake`.
+- No `sorry`, `axiom` or `native_decide`. Lines are at most 120 characters.
+- In-tree text cites no run ids, PR numbers, dates or worker names.
+- Checkpoint hourly to the proofs coordinator. When green, tell me the branch and sha: I merge it into mine and land
+  both under PRF-460.
