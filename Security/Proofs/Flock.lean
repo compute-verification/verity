@@ -68,6 +68,7 @@ public import Proofs.Flock.SpotFlock.Rows
 public import Proofs.Flock.SpotFlock.Rooted
 public import Proofs.Flock.SpotFlock.RowsOpen
 public import Proofs.Flock.SpotFlock.EntriesAt
+public import Proofs.Flock.SpotFlock.HeaderRoots
 public import Proofs.Flock.Encodings
 public import Proofs.Flock.SpotFlock.UnitRows
 public import Proofs.Flock.SpotFlock.UnitEmbeds
