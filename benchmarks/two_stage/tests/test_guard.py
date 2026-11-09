@@ -16,14 +16,13 @@ a session's transcript; each session's acceptance is `flock-verify`'s verdict in
 (`audit.py`), whose statements these are byte for byte (`guard.session_statement` rebuilds each from its command line
 and archive).
 
-Opt-in: ``VERITY_TWO_STAGE_GUARD`` names `TwoGuard.lean` compiled (`twoguard`), which `guard_node.py --pytest` builds
-on a node's warm Lean tree and runs this with. The fixture is a run's `guard/` export (`guard.py`) for both cases."""
+Opt-in: ``VERITY_TWO_STAGE_GUARD`` names the command that runs `TwoGuard.lean` (`twoguard`), which `guard_node.py
+--pytest` makes on a node's warm Lean tree and runs this with. The fixture is a run's `guard/` export (`guard.py`) for both cases."""
 
 from __future__ import annotations
 
 import json
 import os
-import resource
 import subprocess
 import tarfile
 from pathlib import Path
@@ -33,15 +32,8 @@ import pytest
 HERE = Path(__file__).resolve().parent
 EXE = os.environ.get("VERITY_TWO_STAGE_GUARD")
 FIXTURE = HERE / "fixtures" / "guard.tar.xz"
-#: the executable's stack, in bytes (its main thread's `RLIMIT_STACK`, as `guard_node.py` runs it)
-STACK = 64 << 30
-pytestmark = pytest.mark.skipif(not EXE, reason="VERITY_TWO_STAGE_GUARD names TwoGuard.lean compiled "
-                                "(guard_node.py --pytest builds it)")
-
-
-def raise_stack() -> None:
-    _, hard = resource.getrlimit(resource.RLIMIT_STACK)
-    resource.setrlimit(resource.RLIMIT_STACK, (STACK if hard == resource.RLIM_INFINITY else min(STACK, hard), hard))
+pytestmark = pytest.mark.skipif(not EXE, reason="VERITY_TWO_STAGE_GUARD names the command that runs TwoGuard.lean "
+                                "(guard_node.py --pytest makes it)")
 
 
 @pytest.fixture(scope="module")
@@ -54,7 +46,7 @@ def runs(tmp_path_factory) -> Path:
 
 def stmt_ok(run: Path, m2: Path | None = None) -> dict:
     argv = [EXE, str(run), "check", *([str(m2)] if m2 else [])]
-    p = subprocess.run(argv, capture_output=True, text=True, preexec_fn=raise_stack)
+    p = subprocess.run(argv, capture_output=True, text=True)
     lines = [ln for ln in p.stdout.splitlines() if ln.startswith("GUARD-RESULT ")]
     assert lines, f"TwoGuard.lean printed no result (exit {p.returncode}):\n{p.stdout[-4000:]}\n{p.stderr[-4000:]}"
     result = json.loads(lines[-1].removeprefix("GUARD-RESULT "))

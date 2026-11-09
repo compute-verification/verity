@@ -4,8 +4,8 @@ import Proofs.Flock.SamplingGeneric.TwoAt
 /-!
 # SPOT[Flock]'s two-stage model on a run of the two-stage toy
 
-`twoguard DIR MODE [M2]`, the script compiled as an executable of `Security/Proofs` (`guard_node.py` builds it), or
-`lake env lean --threads=1 --tstack=KB --run TwoGuard.lean DIR MODE [M2]` there in Lean's interpreter: the
+`lake env lean --threads=1 --tstack=KB --run TwoGuard.lean DIR MODE [M2]` in `Security/Proofs`, best with Flock's and
+the sampled proof system's code loaded native (`--load-dynlib`; `guard_node.py` links it and writes the command): the
 model's round-2 check (`SpotFlock.stmtOk`) on the run `guard.export` wrote to `DIR`, at the auditor's copies (`Held`)
 built from `DIR/held.json` and the reference statements `DIR/ref-<t>.bin` alone, never from the run's messages or coins.
 `M2` replaces round 2's message `DIR/m2.bin` (a negative's).
@@ -15,7 +15,7 @@ built from `DIR/held.json` and the reference statements `DIR/ref-<t>.bin` alone,
 * `diag`: each conjunct of `stmtOk` on its own, in the order `stmtOk` reads them, with its time, then `stmtOkAt`.
 
 Every line starts `GUARD `; the last is `GUARD-RESULT {json}`. The model's statement parsers recurse deeper than a
-default stack holds: give the executable a large `RLIMIT_STACK`, and the interpreter a large `--tstack`.
+default stack holds: give the interpreter a large `--tstack`.
 
 **The coins.** `stmtOk` reads each coin only through its bytes (`SpotFlock.src`), so `stmtOkAt` takes the bytes, and
 `stmtOk_eq` says it is `stmtOk` at every pair of coins with those bytes. `src` itself reads its `2^20` bytes one list

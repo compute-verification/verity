@@ -1,20 +1,22 @@
 """`TwoGuard.lean` on a node's warm Lean tree:
 
     research run --on NODE --pool research --as proofs --project verity --source . --cwd clone -- \\
-      python3 benchmarks/two_stage/tests/guard_node.py [--interpret] DIR check|diag [M2]
+      python3 benchmarks/two_stage/tests/guard_node.py DIR check|diag [M2]
     ... -- python3 benchmarks/two_stage/tests/guard_node.py --pytest [PYTEST ARGS]
 
 It holds the node's `build` Lean slot and its tree as `lean_changed.py --try` does (the slot, the tree's lock, the sync of
 `Security/Proofs`' closure from this checkout, the tree's kept dependencies) and builds the two modules the script imports
-there. Then, still holding them, it compiles the script as an executable of `Security/Proofs` (`twoguard`, from a config of
-its own: the package's with the executable added, beside the script's copy under the package's `.lake/twoguard/`) and runs
-it on its arguments, or with ``--pytest`` the guard's test (`test_guard.py`) with ``VERITY_TWO_STAGE_GUARD`` naming it.
-``--interpret`` runs the script in Lean's interpreter instead (`lake env lean --run`), whose every setup of a statement
-takes minutes. Exit: the run's status, 2 when it got no slot, tree or dependencies."""
+there. Then, still holding them, it runs the script in Lean's interpreter (`lake env lean --run`) with the code of Flock's
+verifier and the sampled proof system's (`NATIVE`) loaded as native code, linked into one shared library from their
+archives, which the interpreter calls in place of interpreting them: interpreted, one setup of a statement takes minutes.
+The rest (the model, Mathlib) stays interpreted: the kept dependencies are read-only, so nothing that imports Mathlib
+compiles here. `.lake/twoguard/twoguard` under the package runs it on its arguments; ``--pytest`` runs the guard's test
+(`test_guard.py`) with ``VERITY_TWO_STAGE_GUARD`` naming it. Exit: the run's status, 2 when it got no slot, tree or
+dependencies."""
 from __future__ import annotations
 
 import os
-import resource
+import shlex
 import shutil
 import subprocess
 import sys
@@ -27,29 +29,39 @@ import lean_changed as LC  # noqa: E402
 
 PKG = "Security/Proofs"
 MODULES = ("Proofs.Flock.SpotFlock.Code", "Proofs.Flock.SamplingGeneric.TwoAt")
-EXE = "twoguard"
+#: the libraries run natively: the sampled proof system's verifier and every library it imports, none of which imports
+#: Mathlib (VStar and Flock import each other, so they link together, which Lake's per-library shared libraries can't)
+NATIVE = ("flock_verifier/VStar", "flock_verifier/Flock", "core_protocol/CoreProtocol", "verity_difftest/Difftest",
+          "lms/Lms", "core_spot/Spot")
 #: the interpreter's thread stack, in KiB (`lean --tstack`): reserved, and touched only as deep as the parsers recurse. Every
 #: thread of Lean's gets one, so the script runs with one worker (`--threads=1`), or the node refuses the reservations.
 TSTACK_KIB = 128 << 20
-#: the executable's stack, in bytes (its main thread's `RLIMIT_STACK`)
-STACK = 64 << 30
 
 
-def raise_stack() -> None:
-    _, hard = resource.getrlimit(resource.RLIMIT_STACK)
-    resource.setrlimit(resource.RLIMIT_STACK, (STACK if hard == resource.RLIM_INFINITY else min(STACK, hard), hard))
-
-
-def exe_config(tree: Path) -> list[str]:
-    """`lake` arguments that build `twoguard` in ``tree``'s `Security/Proofs`: the package's config with the executable
-    added, rooted at the script's copy, both under the package's `.lake/twoguard/`."""
-    d = tree / PKG / ".lake" / EXE
+def runner(tree: Path, lake: str) -> Path | None:
+    """`twoguard` under ``tree``'s `Security/Proofs/.lake/twoguard/`: the script in the interpreter with `NATIVE` loaded;
+    None when they don't build or link."""
+    rc, text = LC.build(PKG, tree, lake, sandbox=LC.sandboxed(), cmd=["query", *(f"{lib}:static.export" for lib in NATIVE)])
+    archives = [line for line in text.splitlines() if line.endswith(".a.export")]
+    if rc or len(archives) != len(NATIVE):
+        print(f"guard-node: the native libraries' archives: lake query exited {rc} and named {len(archives)}")
+        return None
+    pkg = tree / PKG
+    prefix = subprocess.run([lake, "env", "lean", "--print-prefix"], cwd=pkg, capture_output=True, text=True).stdout.strip()
+    d = pkg / ".lake" / "twoguard"
     d.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(HERE / "TwoGuard.lean", d / "TwoGuard.lean")
-    cfg = d / "lakefile.toml"
-    cfg.write_text((tree / PKG / "lakefile.toml").read_text()
-                   + f'\n[[lean_exe]]\nname = "{EXE}"\nroot = "TwoGuard"\nsrcDir = "Proofs/.lake/{EXE}"\n')
-    return ["-f", str(cfg), "build", EXE]
+    so = d / "libtwoguard.so"
+    link = [str(Path(prefix) / "bin" / "leanc"), "-shared", "-o", str(so),
+            "-Wl,--whole-archive", *archives, "-Wl,--no-whole-archive"]
+    print(f"guard-node: {shlex.join(link)}", flush=True)
+    if subprocess.run(link).returncode:
+        return None
+    exe = d / "twoguard"
+    exe.write_text(f"#!/bin/sh\ncd {shlex.quote(str(pkg))} && exec {shlex.quote(lake)} env lean --threads=1 "
+                   f"--tstack={TSTACK_KIB} --load-dynlib={shlex.quote(str(so))} --run "
+                   f"{shlex.quote(str(HERE / 'TwoGuard.lean'))} \"$@\"\n")
+    exe.chmod(0o755)
+    return exe
 
 
 def main(argv: list[str]) -> int:
@@ -85,20 +97,16 @@ def main(argv: list[str]) -> int:
             LC.mark(tree, package=PKG, phase="build")
             print(f"guard-node: {tree} ({n} files changed there): lake build {' '.join(MODULES)}", flush=True)
             rc, _ = LC.build(PKG, tree, lake, [f"+{m}" for m in MODULES], LC.sandboxed())
-            if rc == 0 and argv[:1] == ["--interpret"]:
-                rc, _ = LC.build(PKG, tree, lake, sandbox=False, cmd=[
-                    "env", "lean", "--threads=1", f"--tstack={TSTACK_KIB}", "--run", str(HERE / "TwoGuard.lean"), *argv[1:]])
-            elif rc == 0:
-                print(f"guard-node: lake build {EXE}", flush=True)
-                rc, _ = LC.build(PKG, tree, lake, sandbox=LC.sandboxed(), cmd=exe_config(tree))
-                exe = tree / PKG / ".lake" / "build" / "bin" / EXE
-                if rc == 0 and argv[:1] == ["--pytest"]:
-                    env = {**os.environ, "VERITY_TWO_STAGE_GUARD": str(exe)}
-                    uv = shutil.which("uv") or str(Path.home() / ".local" / "bin" / "uv")
-                    rc = subprocess.run([uv, "run", "--no-project", "--with", "pytest", "python", "-m", "pytest", "-q",
-                                         str(HERE / "test_guard.py"), *argv[1:]], cwd=ROOT, env=env).returncode
-                elif rc == 0:
-                    rc = subprocess.run([str(exe), *argv], preexec_fn=raise_stack).returncode
+            exe = runner(tree, lake) if rc == 0 else None
+            if exe is None:
+                rc = rc or 1
+            elif argv[:1] == ["--pytest"]:
+                env = {**os.environ, "VERITY_TWO_STAGE_GUARD": str(exe)}
+                uv = shutil.which("uv") or str(Path.home() / ".local" / "bin" / "uv")
+                rc = subprocess.run([uv, "run", "--no-project", "--with", "pytest", "python", "-m", "pytest", "-q",
+                                     str(HERE / "test_guard.py"), *argv[1:]], cwd=ROOT, env=env).returncode
+            else:
+                rc = subprocess.run([str(exe), *argv]).returncode
             (tree / LC.DIRTY).unlink(missing_ok=True)
             return rc
     finally:
