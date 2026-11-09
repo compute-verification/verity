@@ -5,12 +5,13 @@ to the whole mask:
 * each unit's Boolean Definition, evaluated on what the units before it computed (its block of the row, n, its writers'
   outputs), computes the twin's outputs, and the mask units' outputs in block order are the Call's mask: on rows that tie at the
   boundary, straddle signed zero and hold NaNs and infinities, at n from 0 past N, at small statics (blocks of a few keys, a
-  short last block joined to the one before, TOPK 1 and TOPK a whole block) and at the served ones (TOPK 2,048, the first
-  class past `WHOLE_MAX` and 131,072);
+  short last block joined to the one before, TOPK 1 and TOPK a whole block) and, with ``VERITY_DEFINITIONS_SLOW`` set, at the
+  served ones (TOPK 2,048, the first class past `WHOLE_MAX` and 131,072);
 * `plan` wires each parameter to earlier units' outputs of its width and `cut` counts its units, None up to `WHOLE_MAX`.
 """
 from __future__ import annotations
 
+import os
 import random
 
 import numpy as np
@@ -110,6 +111,8 @@ def test_each_unit_is_its_twin_and_the_units_compose_to_the_counted_mask(N, TOPK
 
 
 @pytest.mark.slow
+@pytest.mark.skipif(not os.environ.get("VERITY_DEFINITIONS_SLOW"),
+                    reason="VERITY_DEFINITIONS_SLOW=1 runs it: about 2 min at 43,008 keys and 3.5 at 131,072 on a CPU node, 4 GB")
 @pytest.mark.parametrize("N", [X.WHOLE_MAX + 2048, 131072])
 def test_the_units_compose_to_the_counted_mask_at_served_statics(N) -> None:
     """At TOPK 2,048 and `BLOCK`: the first class the cut serves and the longest row at 128k context, 8 blocks.  The small
