@@ -2536,23 +2536,53 @@ def printed(text: str) -> str:
 NAMES = re.compile(r"(?<![\w.'!?])([^\W\d][\w'!?]*(?:\.[^\W\d][\w'!?]*)*)")
 
 
-def paired(was: str, now: str, consts: set[str], facts: dict, known: set[str]) -> bool:
-    """Whether the premise ``now`` prints (``consts``: the constants it names) is the grandfathered ``was`` under renames:
-    the two texts split alike at their names (`NAMES`), and each name that differs is, in ``now``, a declaration with the
-    fields after it that ``was`` has after the old name, one new name for each old one, neither kept elsewhere in the
-    text; and the old name `--moved` moved to the new one, or is gone from the build (`constants`) and shares the new
-    one's root namespace while the lock read no definition of the new name (``known``), or is a definition or theorem
-    with the new one's SHA-256. A constructor is renamed only by `--moved`, and a field or projection never."""
+def moved_fields(op: list[str], np: list[str], start: int, fields: dict, moves: dict) -> list[tuple[str, str]] | None:
+    """The renames that take the dotted name ``op`` to ``np`` (each split at its dots) through its fields: the two alike up
+    to ``start`` (past a variable, or the constant ``np`` starts with) and as long, and each field that differs standing,
+    in ``np``, for one constant (``fields``), which `--moved` moved from the constant of the old field's name; None for
+    any other pair."""
+    if len(op) != len(np) or op[:start] != np[:start]:
+        return None
+    out = []
+    for k in range(start, len(np)):
+        if op[k] == np[k]:
+            continue
+        if len(cs := fields.get((".".join(np[:k]), np[k])) or set()) != 1:
+            return None
+        n = next(iter(cs))
+        o = n[:len(n) - len(np[k])] + op[k]
+        if not n.endswith("." + np[k]) or renamed(o, moves) != n:
+            return None
+        out.append((o, n))
+    return out or None
+
+
+def paired(was: str, now: str, consts: set[str], facts: dict, known: set[str], fields: dict | None = None) -> bool:
+    """Whether the premise ``now`` prints (``consts``: the constants it names; ``fields``: {(an object as printed, a
+    field): the constants that `x.f` stands for}, `Facts.lean`'s `fieldsShown`) is the grandfathered ``was`` under
+    renames: the two texts split alike at their names (`NAMES`), and each name that differs is, in ``now``, a declaration
+    with the fields after it that ``was`` has after the old name, or the same object with fields that differ
+    (`moved_fields`), one new name for each old one, neither kept elsewhere in the text (a field kept stands for what
+    ``fields`` says); and the old name `--moved` moved to the new one, or is gone from the build (`constants`) and shares
+    the new one's root namespace while the lock read no definition of the new name (``known``), or is a definition or
+    theorem with the new one's SHA-256. A constructor or a field (`x.f`) is renamed only by `--moved`, and a projection
+    (`p.1`) never."""
     a, b, constants = NAMES.split(was), NAMES.split(now), facts.get("constants")
     if len(a) != len(b) or a[::2] != b[::2] or constants is None:
         return False
+    moves, fields = facts.get("moves") or {}, fields or {}
     subst, kept = {}, set()
     for o, n in zip(a[1::2], b[1::2]):
         parts = n.split(".")
         i = next((i for i in range(len(parts), 0, -1) if ".".join(parts[:i]) in consts), 0)
         c, tail, op = ".".join(parts[:i]), parts[i:], o.split(".")
+        kept.update(x for k in range(max(i, 1), min(len(op), len(parts))) if op[:k + 1] == parts[:k + 1]
+                    for x in fields.get((".".join(parts[:k]), parts[k])) or ())
         if o == n:
             kept.add(c)
+        elif (f := moved_fields(op, parts, max(i, 1), fields, moves)) is not None:
+            if any(subst.setdefault(x, y) != y for x, y in f):
+                return False
         elif not c or len(op) <= len(tail) or op[len(op) - len(tail):] != tail or \
                 subst.setdefault(".".join(op[:len(op) - len(tail)]), c) != c:
             return False
@@ -2560,7 +2590,7 @@ def paired(was: str, now: str, consts: set[str], facts: dict, known: set[str]) -
         return False
     for o, n in subst.items():
         x, y = constants.get(o), constants.get(n)
-        if renamed(o, facts.get("moves") or {}) == n:
+        if renamed(o, moves) == n:
             continue
         if y is None or "constructor" in (y.get("kind"), (x or {}).get("kind")):
             return False
@@ -2642,11 +2672,14 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
         if bad:
             offenders[g] = bad
         consts: dict[str, set[str]] = {}
+        fields: dict[str, dict[tuple[str, str], set[str]]] = {}
         for p in pin["inline"]:
             consts.setdefault(printed(p["type"]), set()).update(p.get("consts") or [])
+            for x, f, c in p.get("fields") or []:
+                fields.setdefault(printed(p["type"]), {}).setdefault((x, f), set()).add(c)
         gone, rekeyed = [o for o in old if o not in bad], {}
         for b in [b for b in bad if b not in old]:
-            if (o := next((o for o in gone if paired(o, b, consts[b], facts, known)), None)) is not None:
+            if (o := next((o for o in gone if paired(o, b, consts[b], facts, known, fields.get(b))), None)) is not None:
                 rekeyed[b] = old[o]
                 gone.remove(o)
         if still := {b: old[b] for b in bad if b in old} | rekeyed:
