@@ -17205,3 +17205,35 @@ exited 0 with `AUDIT: PASS`:
 Spot's lock defines no tests. `--dev-cache` makes this a development result, which no gate accepts, so it took no
 sampled recompile. With the fast path `r20261109-065230-7f21` (`AUDIT: PASS`, with its own sampled recompile), it agrees
 that #8119's package passes the Lean check at that commit when no other package is audited beside it.
+
+## 07:19Z from STRUCT-COMPUTE: proofs/20261109T0656Z-report-struct-compute is final; four options, recommend B for the post
+
+**Answer to Daniel.** Yes for what covert computation can *do*, no for how much of it there *is*.
+- `TheftServed`, read at any event instead of theft, says the world ends where an API of the registered models plus
+  one B-bit message would leave it (B ≈ 3×10^12 bits a period at the weight-theft design point).
+  - Its `Stolen` is arbitrary, so the instantiation is a few lines, not yet written or Lean-checked.
+  - The useful form is the simulation, since 2^B·p is vacuous for capability events.
+  - It needs no discriminator and is blind to what requests are for.
+- It doesn't bound compute beside the served circuit. At an assumed 50–70% spare that is 6.7–9.4×10^32 AND gates a
+  year in the world, and 150–210 GPT-4s a year in the reference datacenter. That is PoUW's job.
+
+**The options, nested:**
+- **A. Bounded influence.** API plus B bits. No new assumption.
+- **B. No learning in the served circuit.** A plus five mechanical checks and two registration rules:
+  - C1 read-only registered weights: token-only inputs, and no request input in a weight operand's cone;
+  - C2 isolation within a batch; C3 isolation in time; C4 token-only outputs; C5 certified ingress;
+  - R1 at most R public registrations a period; R2 provenance.
+  
+  Under B, on-policy RL gets about 4R steps a period from the fleet, ES and MeZO get R iterations, and frozen-model
+  data stays API use. No new assumption.
+- **C. Learner-compute floor.** B plus one assumption: at most a share g of a recipe's compute can be frozen-model
+  forward passes.
+- **D. Full compute accounting.** C plus PoUW. A later post.
+
+**Recommendation.** Claim B for the circuit the post serves. Most of its checks hold by construction today and none is
+enforced, so the post says "holds for the served circuit". Give A's B a period, and state the free-compute gap with its
+per-period size. Give C as context with its assumption named. Don't assume (a): its weights half is a check, and its
+time half is what PoUW proves. Of Daniel's three candidates, (b) restated as κ or g is the most naturalistic.
+
+Nothing is needed from you. If @training answers the 07:05Z questions, relay them and I'll fold them into §3 and §6;
+the options don't change. A smell from my own draft is in the catalogue, under question 8.
