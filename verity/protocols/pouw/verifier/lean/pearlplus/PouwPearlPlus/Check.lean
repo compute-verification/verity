@@ -15,11 +15,13 @@ public import PouwPearlPlus.Credit
   retained passes' manifests (their records, the voluntary rows among them, and what each published), the number of
   draws, the verifier's coin: a source, or its record of the coin it drew on this run's commitment (`CoinRecord`), which
   pins the source, the window record W the passes are tied to where there is one, with the passes' rounds and the
-  dropped rounds (the coin record's), and whether the verdict is to be of record (`ofRecord`).
+  dropped rounds (the coin record's) and the window's class where the passes are to be its fixed load (`load`), and
+  whether the verdict is to be of record (`ofRecord`).
 * **The prover's openings** (`opener pass tile`): each opened tile's rows, leaf and y rows with their paths. The verifier
   asks only for the tiles its draw names.
 * **The verdict**: every pass loads (`load`), all of one salt and, unless the input is a test instance's
-  (`testInstance`), each at the served instance, `k_min` `K_MIN` and `TILE × TILE` tiles; the passes are W's (`tieOf`, refused as its `ValueError`), the run's
+  (`testInstance`), each at the served instance, `k_min` `K_MIN` and `TILE × TILE` tiles; the passes are W's and, given
+  the window's class, its fixed load (`tieAt`: `tieOf` and `heldToLoad`, refused as Python's `ValueError`), the run's
   commitment is the coin record's where there is one (`after-coin`), the record's challenger draw is coin ``pouw/draw`` 0
   opened after it (`drawReason`, refused as `draw`), a verdict of record takes only a challenger draw on live coins
   (`ofRecordReason`, refused as `of-record`), the draw over every pass's tickets names the drawn tiles, each pass adds one
@@ -73,6 +75,9 @@ structure Input where
   `K_MIN` and `TILE × TILE`, and the verdict credits nothing. -/
   testInstance : Bool := false
   tie : Option Json := none
+  /-- The window's class (`verify_passes`' ``window_class``), read only with `tie`: passes that are not its fixed load are
+  refused (`Tie.tieAt`). -/
+  load : Option LoadClass := none
   rounds : Option (List Nat) := none
   dropped : List Nat := []
   ofRecord : Bool := false
@@ -165,7 +170,7 @@ def plan (i : Input) : Except Refusal Plan := do
     | none => pure ()
   let tie ← match i.tie with
     | none => pure none
-    | some w => match tieOf w (i.manifests.zip passes) i.rounds i.dropped with
+    | some w => match tieAt i.load w (i.manifests.zip passes) i.rounds i.dropped with
       | .ok t => pure (some t)
       | .error e => throw { reason := s!"ValueError: {e}" }
   tryCatch (afterTie i passes tie) fun r => throw { r with tie := r.tie <|> tie }

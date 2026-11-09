@@ -40,12 +40,23 @@ def CALL_RANGE : Nat := 2 ^ 32
 def hex (b : ByteArray) : String :=
   String.ofList (b.toList.flatMap fun x => [Nat.digitChar (x.toNat / 16), Nat.digitChar (x.toNat % 16)])
 
-/-- `verify_run.tie`'s answer: the window record's digest (hex), the number of tables it ties (`Tie.tieOf`) and, for a
-version-1 W, `Tie.WEIGHTS_UNTIED`. -/
+/-- A window class's public caps (`window_class.WindowClass`'s, `verify_passes`' ``window_class``): its slots, each of at most
+`prompt` prompt ids and `outputs` outputs. Its fixed load is every slot's prompt at round 0 and a row a slot at each
+later round of its `outputs` (`Tie.heldToLoad`). -/
+structure LoadClass where
+  slots : Nat
+  prompt : Nat
+  outputs : Nat
+  deriving Repr, DecidableEq
+
+/-- `verify_run.tie`'s answer: the window record's digest (hex), the number of tables it ties (`Tie.tieOf`), for a
+version-1 W, `Tie.WEIGHTS_UNTIED`, and the class whose fixed load the passes were held to where the verdict was given
+one (`Tie.tieAt`). -/
 structure Tied where
   record : String
   tables : Nat
   weights : Option String := none
+  load : Option LoadClass := none
   deriving Repr
 
 /-- A refusal: Python's (code, why) where it has one (`passes_distinct`'s and `AFTER_COIN`), the reason it rejects with,

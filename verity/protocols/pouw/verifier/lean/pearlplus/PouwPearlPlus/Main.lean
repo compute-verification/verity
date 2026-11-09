@@ -6,20 +6,23 @@ public import PouwPearlPlus.Open
 # `pouw-pearlplus`: the run verdict from a served run's retained passes
 
     pouw-pearlplus --coins COINS.json --draws T (--source HEX | --record RECORD.json | both)
-      [--over-cap uncredited|reject] [--test-instance] [--tie W.json] [--of-record] MANIFEST...
+      [--over-cap uncredited|reject] [--test-instance] [--tie W.json [--class SLOTS,PROMPT,OUTPUTS]] [--of-record]
+      MANIFEST...
 
 prints the verdict as one JSON object: `verdict` (`accept` or `reject`), `reason`, `refused` (`[code, why]` or null),
 `commitment` and `source` (hex, once the passes load and the coin is fixed), `over_cap` (the rule on a tile over its
 inert-work bound, `uncredited` unless `--over-cap` says otherwise), `verdicts` (each opened tile's pass, id, ok and
 reason, in the verdict's order; a tile over its bound has its reason, and is ok under `uncredited`), `work`, and `tie`
-(`{record, tables}` once the passes are held to W, with `weights` `WEIGHTS_UNTIED` for a version-1 W, or null).
+(`{record, tables}` once the passes are held to W, with `weights` `WEIGHTS_UNTIED` for a version-1 W and `load`
+`[slots, prompt, outputs]` where `--class` held them to that class's fixed load, or null).
 `--test-instance` reads passes whose tile is other than 64 × 64 (a test instance's), and their work credits nothing.
 
 `COINS.json` is the epoch's coin commitment, an in-process challenger's or a live session's (`EpochCoins.ofJson`). The
 prover's side is `Open.opening` over the pass's files. A record that exists pins the source (`after-coin`) and names its
 draw, and its ``rounds`` and ``dropped`` place the passes for the tie; one that doesn't is written with the run's
 commitment, the given source and the node's draw. `--tie W.json` holds the passes to the window record W (`Tie.tieOf`),
-and `--of-record` takes only a challenger draw on live coins (`Coins.ofRecordReason`).
+`--class SLOTS,PROMPT,OUTPUTS`, read only beside it, refuses passes that are not that window class's fixed load
+(`Tie.tieAt`), and `--of-record` takes only a challenger draw on live coins (`Coins.ofRecordReason`).
 -/
 
 @[expose] public section
@@ -34,8 +37,15 @@ structure Args where
   overCap : OverCap := .uncredited
   testInstance : Bool := false
   tie : Option String := none
+  load : Option LoadClass := none
   ofRecord : Bool := false
   manifests : List String := []
+
+/-- `--class`'s `SLOTS,PROMPT,OUTPUTS`, each a positive integer. -/
+def loadClass? (v : String) : Option LoadClass :=
+  match (v.splitOn ",").map String.toNat? with
+  | [some s, some p, some o] => if s == 0 || p == 0 || o == 0 then none else some ⟨s, p, o⟩
+  | _ => none
 
 def parse : List String → Args → Except String Args
   | [], a => pure a
@@ -50,6 +60,9 @@ def parse : List String → Args → Except String Args
     | none => throw s!"--over-cap {v}: uncredited or reject"
   | "--test-instance" :: rest, a => parse rest { a with testInstance := true }
   | "--tie" :: v :: rest, a => parse rest { a with tie := some v }
+  | "--class" :: v :: rest, a => match loadClass? v with
+    | some c => parse rest { a with load := some c }
+    | none => throw s!"--class {v}: SLOTS,PROMPT,OUTPUTS, each a positive integer"
   | "--of-record" :: rest, a => parse rest { a with ofRecord := true }
   | m :: rest, a => if m.startsWith "--" then throw s!"unknown option {m}" else parse rest { a with manifests := a.manifests ++ [m] }
 
@@ -61,6 +74,8 @@ def readJson (path : String) : IO Json := do
 def main (argv : List String) : IO UInt32 := do
   let a ← IO.ofExcept (parse argv {})
   let some coinsPath := a.coins | throw (IO.userError "--coins COINS.json is required")
+  if a.load.isSome && a.tie.isNone then
+    throw (IO.userError "--class holds the passes --tie W ties to its class's fixed load: it is read only beside --tie")
   let coins ← match EpochCoins.ofJson (← readJson coinsPath) with
     | .ok c => pure c
     | .error e => throw (IO.userError s!"{coinsPath}: {e}")
@@ -89,7 +104,7 @@ def main (argv : List String) : IO UInt32 := do
       dropped := (← rows "dropped").getD []
   let tie ← a.tie.mapM readJson
   let input : Input := { coins, manifests := mans, draws := a.draws, source, held, overCap := a.overCap,
-                         testInstance := a.testInstance, tie, rounds, dropped, ofRecord := a.ofRecord }
+                         testInstance := a.testInstance, tie, load := a.load, rounds, dropped, ofRecord := a.ofRecord }
   let mut cache : Std.HashMap String ByteArray := {}
   let mut checked : Std.HashMap (String × String) (Except String ByteArray) := {}
   if let .ok pl := plan input then

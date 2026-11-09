@@ -145,7 +145,8 @@ def output (ans : RunAnswer) : Json :=
       | none => .null),
     ("tie", match ans.tie with
       | some t => Json.mkObj (([("record", jstr t.record), ("tables", (t.tables : Nat))] : List (String × Json)) ++
-          (t.weights.map fun u => [("weights", jstr u)]).getD [])
+          (t.weights.map fun u => [("weights", jstr u)]).getD [] ++
+          (t.load.map fun c => [("load", Json.arr #[.num ⟨c.slots, 0⟩, .num ⟨c.prompt, 0⟩, .num ⟨c.outputs, 0⟩])]).getD [])
       | none => .null)]
 
 end PouwCheck.PearlPlus
