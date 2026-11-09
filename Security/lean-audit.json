@@ -1597,7 +1597,7 @@
   },
   "Claims.SamplingGeneric.CompiledTwo.Sessions": {
    "owner": "@proofs",
-   "digest": "b20c82a4a2878db43cd989888bc8d36ac450a9152ac3ac2e1e3e3c02c0f29ff3",
+   "digest": "b6f25aba72be25843274f0592d377f8eea27152addca0a3bd43d20bc0d837dda",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -32186,7 +32186,7 @@
    }
   },
   "Definitions.Claims.SamplingTwo": {
-   "digest": "210b8cdd594478322d1ccd5e67da21b8aea7d4d3755689a0fcb006f0ebbbc137",
+   "digest": "2a8da2b71b9a00f4f96574b9cefe1718e8ca611bed8ef9da031dbc9e3b553bcf",
    "definitions": {
     "Claims.Sampling.Design.Two": "d1c7605e035e8d2d77209adadc6b25301fae1804f7e8ea858fa1aa597e7d4a00",
     "Claims.Sampling.Design.Two.FirstRate": "c47f092ab4e567a228b5a0bc990750a48733a96b590649f5e7bb87609a4024fc",
@@ -32209,10 +32209,12 @@
     "Claims.Sampling.cell": "8907137168290395d637224cfeec928fda35e415f4e3f952fe5cb842d40d585f",
     "Claims.Sampling.counts": "079f9a465074884a4f68c64275ba82d3f35f9294ecfda15689ae1acb4daa31bd",
     "Claims.Sampling.escCell": "2df351680cfc4f8102912671169f8a73fe3abc89e91d48b77d54493967dcf098",
+    "Claims.Sampling.footBits": "3d0fbda6699a8848bab8265f219f65fa45c6a236a24895c70a956d0f71f0b7ee",
     "Claims.Sampling.footprint": "31431658b67323f62539e20d5190ab04f4d26d72085bb394003c4e5c0c1e47a4",
     "Claims.Sampling.influenceTwo": "8d779a5c36f3b37f05a46f73bb677682a2516801cbe4ae05cb76cea274731bb9",
     "Claims.Sampling.inputsOf": "9c159e3b97080814925776999ffb810979c1b99451c65183ea7852789887fa44",
     "Claims.Sampling.replayOf": "ca6f06559c54fe2f42a798bee7ad5564c724a8476688ce3c869e8775a27a8c92",
+    "Claims.Sampling.sampleBlocks": "0ba343d59d4fbc4d00b26f30629b03f18de5d5f0dee6abbf96c1057c5eb494ad",
     "Claims.Sampling.served": "936bec2c6dadef89432a22d630b2f4b0abf6438632ca891d61dfd789b7b06eee",
     "Claims.Sampling.stratumIdx": "51cb991f43fd1b67eedb4b3625843fc58b60a492bef3952bd64b6195bf154949",
     "Claims.Sampling.wrongIn": "14680f6d84fe901a6f2e2decdb57837625368c557cbf82c262fdb7caad920355",
@@ -32220,7 +32222,7 @@
     "Claims.SamplingGeneric.CompiledTwo.Exfil": "802ad425758d4f9a5142febbe8c6b7218dca8b1ee9f99f5fced4de5012b1a4e5",
     "Claims.SamplingGeneric.CompiledTwo.KS": "a1248a70c0faedf4a598de524bcb491f3f08cd20d7dff39d0502a1dc8c78f936",
     "Claims.SamplingGeneric.CompiledTwo.Scope": "c5b24307da73e3fd56aa75fc4617e03dfd0f41984fb40bccb792e97a43515735",
-    "Claims.SamplingGeneric.CompiledTwo.Sessions": "b20c82a4a2878db43cd989888bc8d36ac450a9152ac3ac2e1e3e3c02c0f29ff3",
+    "Claims.SamplingGeneric.CompiledTwo.Sessions": "b6f25aba72be25843274f0592d377f8eea27152addca0a3bd43d20bc0d837dda",
     "Claims.SamplingGeneric.CompiledTwo.replaySample": "bc99ecaee387a6c05784d9894a69e22031f3ec413d1cbc3efa4f596a3f029841",
     "Claims.SamplingGeneric.CompiledTwo.toCompiled": "0c63c2616b1bb25764ab651b8c1f7e5428848cea5d0fa4e874c241d8ccec06a2",
     "Claims.SamplingGeneric.CompiledTwo.two": "bb5d61d75e180d0e5265c7ed2a38bbd6e337091d093c853487fe82047d09b02e",
