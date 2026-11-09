@@ -122,7 +122,7 @@ protocols = [
 ]
 # vLLM's tests that read a private protocol (the network certifier, NCI, the bandwidth audit, PoUS)
 protocol_tests = [
-    "integrations/vllm/tests/pipeline/test_{advice,advice_commit,advice_windows,serve_advice,window_advice,memory_map}.py",
+    "integrations/vllm/tests/pipeline/test_{advice,advice_commit,advice_windows,serve_advice,memory_map}.py",
     "integrations/vllm/tests/program/predict/test_{batch,block_counts,node_registration}.py",
     "integrations/vllm/tests/program/test_io_shell.py",
     "integrations/vllm/tests/commit/test_memory_map.py",
