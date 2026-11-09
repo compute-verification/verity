@@ -324,6 +324,7 @@
   },
   "Population.Dataflow.Checked": {
    "owner": "@proofs",
+   "digest": "983a774a2930c39c3b3a99e0d314e4f64309f3ad32332aa9ef1cc6e35e53ce2f",
    "why": "The served circuit's population is single assignment and acyclic, which the checker confirms from its dataflow alone, so a trace is determined by its inputs and fault pattern; the honest witness meets it at the toy population (TheftTiedHonest)."
   },
   "Pouw.NCP.Params.InstanceU": {
@@ -3310,11 +3311,13 @@
   },
   "WeightSecurity.Assumptions.AdviceCovered": {
    "owner": "@proofs",
+   "digest": "0e074fcdc1f433bc8dfe534741cab14cea7fcfbeac1b7520813152689b4f0eaf",
    "issue": "PRF-465",
    "due": "2026-11-10"
   },
   "WeightSecurity.Assumptions.EgressTied": {
    "owner": "@proofs",
+   "digest": "ebc0be405083cbffb31b502088c375ac20334221cea882972925d0a0cbc993b7",
    "issue": "PRF-462",
    "due": "2026-11-10"
   },
@@ -5097,6 +5100,11 @@
   "Flock.SecurityProofs.SessionLoopZK": "a4028bdba4de3cb93455dbf5d27c01dc1e341693a308bf26b99de7a4451e2862",
   "Flock.SecurityProofs.SessionLoopZKDeployed": "19b9ed293bdf1729089ef8b18463bb7f832ece9b92432e1e88d38c7c4a4b9659",
   "Flock.SecurityProofs.SoundAtBridge": "a65a67acd33540e7e76f251161afecd4384bc96480823282207852754b72e8fc",
+  "Flock.SecurityProofs.SpotExfilTwo": {
+   "type_hash": "ac7eedcb10306cfde243f580a97a016d9c3e11b405fd8b68666bbbdf3b51cdf6",
+   "missing": "honest",
+   "why": "honest instance needs a built two-stage layout and frame (PRF-460, open to 30 Nov)"
+  },
   "Flock.SecurityProofs.SpotKSTwo": {
    "type_hash": "3e2f6fea33f0eb0209d45bb69661e2922866f18469fb272b2a1f0b006b17b80d",
    "missing": "honest",
@@ -5284,6 +5292,12 @@
    "type_hash": "6042883e0de54d343be42f372fe18390a11842febc9feda80046b6e3f70bb455",
    "unfolded_hash": "2eec6c9336acfa7539b2c9eecfa82c9810701d4024426048b0116374af511561"
   },
+  "NetTiming.SecurityProofs.PooledLeakChecked": {
+   "type_hash": "50edf1fb52d78599b26fb54aca2b376fa475a86024556bb53ee80f3d695f1ce9",
+   "missing": "honest",
+   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique) and a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check) (CIR-190, open to 30 Nov)",
+   "unfolded_hash": "b47d65cccae8757ba6d024a7f98e4df2611ef0c9227e527821200452ff1733fa"
+  },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "type_hash": "debf2afa03a59d1d37dd902e4a99f3a2a5f9eb834c327dad8c7a697a6b101048",
    "unfolded_hash": "4c87d753bb6cc7f2adc8f9b7e770f4c9f5fa03c0ad4c56679f1269df582c2bb3"
@@ -5291,6 +5305,12 @@
   "NetTiming.SecurityProofs.SampledLeakAccepted": {
    "type_hash": "43970f90d531d3e7171623b15c9ce94eef5f67c55a52c6b00059cca4d554f37d",
    "unfolded_hash": "2d5c3f2482b79633d9c2156355f5f490907054040f4c5f9ea6e397869f81b364"
+  },
+  "NetTiming.SecurityProofs.SampledLeakChecked": {
+   "type_hash": "66ead4ee6ccd3afec409137eea719edbea430e70f6e60a9b6044779ba90db9f2",
+   "missing": "honest",
+   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique) and a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check) (CIR-190, open to 30 Nov)",
+   "unfolded_hash": "15acf0c02b43e20cb978dff94b5e7bba4a3350c3b0303e92bd999d08c1cc568d"
   },
   "NetTiming.SecurityProofs.SampledLeakRegistered": {
    "type_hash": "0eeee44bc28dd8a98e2c2545e9f4418b9741a630c9cfd62f72773757c1f9e3b3",
@@ -5497,23 +5517,6 @@
   "Verity.SecurityProofs.ServingBlockSum": {
    "type_hash": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
    "unfolded_hash": "76801bacbea7a7241bc4900b35606f76be5cb7c45089092a126af20fd85dd6e5"
-  },
-  "Flock.SecurityProofs.SpotExfilTwo": {
-   "type_hash": "ac7eedcb10306cfde243f580a97a016d9c3e11b405fd8b68666bbbdf3b51cdf6",
-   "missing": "honest",
-   "why": "honest instance needs a built two-stage layout and frame (PRF-460, open to 30 Nov)"
-  },
-  "NetTiming.SecurityProofs.PooledLeakChecked": {
-   "type_hash": "50edf1fb52d78599b26fb54aca2b376fa475a86024556bb53ee80f3d695f1ce9",
-   "missing": "honest",
-   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique) and a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check) (CIR-190, open to 30 Nov)",
-   "unfolded_hash": "b47d65cccae8757ba6d024a7f98e4df2611ef0c9227e527821200452ff1733fa"
-  },
-  "NetTiming.SecurityProofs.SampledLeakChecked": {
-   "type_hash": "66ead4ee6ccd3afec409137eea719edbea430e70f6e60a9b6044779ba90db9f2",
-   "missing": "honest",
-   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique) and a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check) (CIR-190, open to 30 Nov)",
-   "unfolded_hash": "15acf0c02b43e20cb978dff94b5e7bba4a3350c3b0303e92bd999d08c1cc568d"
   }
  },
  "witnesses_assumed": {
@@ -25332,9 +25335,17 @@
    "premises": {
     "assumptions": [],
     "domain": ["Population.Dataflow.Checked", "WeightSecurity.Served.UndetectedLe"],
-    "open": ["WeightSecurity.Assumptions.AdviceCovered", "WeightSecurity.Assumptions.EgressTied", "WeightSecurity.Assumptions.FaultedUseHard", "WeightSecurity.Assumptions.HonestUseHard", "WeightSecurity.Assumptions.Simulable"],
+    "open": [
+     "WeightSecurity.Assumptions.AdviceCovered",
+     "WeightSecurity.Assumptions.EgressTied",
+     "WeightSecurity.Assumptions.FaultedUseHard",
+     "WeightSecurity.Assumptions.HonestUseHard",
+     "WeightSecurity.Assumptions.Simulable"
+    ],
     "reads": ["WeightSecurity.Assumptions.FaultBudget", "WeightSecurity.Assumptions.patternCount"]
-   }
+   },
+   "type_hash": "41047753bccdaf518ae3c3a6ad5d4a0e600632dd0f54c510c2a368eada8de80b",
+   "unfolded_hash": "ee8563a2ed90524abfe8a3f0f7102f55efe34927e38f481a83dde220818a04e6"
   },
   "WeightSecurity.SecurityProofs.TheftTiedHonest": {
    "owner": "@proofs",
@@ -25344,8 +25355,18 @@
     "assumptions": [],
     "domain": [],
     "open": [],
-    "reads": ["WeightSecurity.Assumptions.AdviceCovered", "WeightSecurity.Assumptions.EgressTied", "WeightSecurity.Assumptions.FaultBudget", "WeightSecurity.Assumptions.FaultedUseHard", "WeightSecurity.Assumptions.HonestUseHard", "WeightSecurity.Assumptions.Simulable", "WeightSecurity.Assumptions.patternCount"]
-   }
+    "reads": [
+     "WeightSecurity.Assumptions.AdviceCovered",
+     "WeightSecurity.Assumptions.EgressTied",
+     "WeightSecurity.Assumptions.FaultBudget",
+     "WeightSecurity.Assumptions.FaultedUseHard",
+     "WeightSecurity.Assumptions.HonestUseHard",
+     "WeightSecurity.Assumptions.Simulable",
+     "WeightSecurity.Assumptions.patternCount"
+    ]
+   },
+   "type_hash": "5ebc418559e2c4dc92a63544a8d9d1c2daefdd4acdc7580670dc71530daf3fe8",
+   "unfolded_hash": "8b353a7394aacebc48f14d3fb2abc65c019cf1f8f8ddfaac9dde300b280e25b3"
   },
   "WeightSecurity.SecurityProofs.TheftTiedNontrivial": {
    "owner": "@proofs",
@@ -25356,7 +25377,9 @@
     "domain": [],
     "open": [],
     "reads": ["WeightSecurity.Assumptions.patternCount"]
-   }
+   },
+   "type_hash": "94bb98b92af6239d2f181f83121f510f37bb7236eb5b99e2d6abe476cc625c46",
+   "unfolded_hash": "7676343af01a22ea28aa54627b31a39d7a031415c4210fd2cb333690187cbcfe"
   },
   "WeightSecurity.SecurityProofs.TheftTight": {
    "owner": "@proofs",
@@ -39036,6 +39059,32 @@
     "Pouw.outputPriced": "39dea95076d2c5c59c12bcbc84ce45ea586f021436dcf92d8f2ec4d262e9feb2"
    }
   },
+  "Definitions.Spot.Dataflow": {
+   "digest": "49fe1f665191e3c2d5e74821a1f2b02adf67a166b50151eaccdad412f1e0edd4",
+   "definitions": {
+    "Population.Dataflow": "d53150aa47dc59b6e29707484f6544069f73c1bbc81efbfa9efc3741835f24eb",
+    "Population.Dataflow.Acyclic": "630d850010d9733c3f434b3a50221e39c8984b6717bd546cd575c026709dbfce",
+    "Population.Dataflow.Checked": "983a774a2930c39c3b3a99e0d314e4f64309f3ad32332aa9ef1cc6e35e53ce2f",
+    "Population.Dataflow.Correct": "b9f32486bdad7852196a98419a18f80a52244ca8bea47982c14a719c514fd991",
+    "Population.Dataflow.Dep": "c1e69c4783819c139a413c3b45ab21e7da0f4eb8ae9469038f1f5a35a3a8c555",
+    "Population.Dataflow.Fns": "3eb79732e55ae4477529b3d93b60ae6faf7eaaaf03f597578f6384e1a4e4b29c",
+    "Population.Dataflow.SingleAssignment": "e0c3188e886fa2c68a55676702ac40ef0275e09ecc4681f63081cf7ecd94b139",
+    "Population.Dataflow.input": "763eb5b3ee5aac1edc3fb1addefb1268fa1b39c1777bc507884c97bf8c28b2a8",
+    "Population.Dataflow.reads": "f4fef0ba53229e9629019c8bb6c273020edb8010742d65750b4eaf735e814550",
+    "Population.Dataflow.writes": "3ae80170d8de27236aec5f594a8dcbe258c29d56b52ca74c0dd088eb30995ce3",
+    "Population.Dataflow.wrong": "d7e9b049652e07d09af024a5357ac8cb9d5788a29315aa953a5b8cc59faa5a2a"
+   }
+  },
+  "Definitions.Spot.Faults": {
+   "digest": "3f8a8de2fc8f34f1ae33a41b065693dc3b1c28906527adc6c9043a7419c444f4",
+   "definitions": {
+    "Population.Dataflow.Faults": "1cd0a665f26ddbe313ff5c8ba33fa744b9bcfd65f653b05bf2ed78c3e92f5ebd",
+    "Population.Dataflow.RunOf": "fd7a7606f6ac233b7830443890473a90d1d622f5b801bdb3598d40a5fa893c04",
+    "Population.Dataflow.faultCount": "e9e69f525bc050614b9f5f0d64e5d7af32ca6ff09f217e3eee13771a5e988041",
+    "Population.Dataflow.faultSet": "bd94bc236f773ee91dcfeff66e8f861ebd5ca465cc905b0b5e2926e44a1c1ba5",
+    "Population.Dataflow.faultedOut": "b45a384c2db09a90f2d5d2faf54694c85f9b4ab384d2b2170697d8eccdeef14c"
+   }
+  },
   "Definitions.WeightSecurity": {
    "digest": "47ca8a64c4f42939b8f60b6c2491f040c3f4f4961ef5905100c6534f97998fbb",
    "definitions": {
@@ -39056,8 +39105,10 @@
    }
   },
   "Definitions.WeightSecurity.Assumptions": {
-   "digest": "66a88426fd9a8068b5f807983e51efde34f4ff51e9a304cb678c0a1c9ca79d2b",
+   "digest": "20839085a455fc021100ceb5a6f6049104ff39e8051d1979d8d04ca4f07fbed0",
    "definitions": {
+    "WeightSecurity.Assumptions.AdviceCovered": "0e074fcdc1f433bc8dfe534741cab14cea7fcfbeac1b7520813152689b4f0eaf",
+    "WeightSecurity.Assumptions.EgressTied": "ebc0be405083cbffb31b502088c375ac20334221cea882972925d0a0cbc993b7",
     "WeightSecurity.Assumptions.FaultBudget": "080406bc5ffda650543b6f3f67f23c54fdbf93f4e9c28b08c10f159312f12a5c",
     "WeightSecurity.Assumptions.FaultedUseHard": "67a6d0c1f4669ce5af4420f2aa0be27b428459109e45ad675db4a45dafab2ff6",
     "WeightSecurity.Assumptions.HonestUseHard": "ac9ed71d973e1db5d86647c7ab9ec3404e44567a2046211c8b0987b8084eed48",
@@ -39076,7 +39127,7 @@
    }
   },
   "Definitions.WeightSecurity.Guarantees": {
-   "digest": "6dd9cbccc98543e64bcbd4962a5f82b981a4eefc52a021c91018ec9060122924",
+   "digest": "4bf380b4cd6f5bdbb4e11eda9745c174c6f6489f19a807f89ea1c4666375bc31",
    "definitions": {
     "WeightSecurity.Guarantees.Theft": "243a4531b248cccfef6facd28bc3405391f5da31d56ab1cb55fcb1c107ca67af",
     "WeightSecurity.Guarantees.TheftFaulted": "cc4f853eb07a6b26cb9dcd01197647fc7742f97d59627e480418b7b157df8aa2",
@@ -39087,6 +39138,9 @@
     "WeightSecurity.Guarantees.TheftServed": "3001e1613e4c171768f8231c43f04b9da48f65e1c192a23c70253af21ae82447",
     "WeightSecurity.Guarantees.TheftServedHonest": "17ba31b29ff8739852838079165e4ead570e5cd1a6a04ff05c73f02008c9ebf7",
     "WeightSecurity.Guarantees.TheftServedNontrivial": "0712e05191e0bfc872041259073ddc2fd6e4adb433e46e953ac9849a58c6650a",
+    "WeightSecurity.Guarantees.TheftTied": "9318fa55f1643f0320c5bcd012c49af3609167429818a492c774300f9b1b9418",
+    "WeightSecurity.Guarantees.TheftTiedHonest": "7651074e3361537f48ce0061dfce903237cd5d0e65486506cfdaf5bf32661093",
+    "WeightSecurity.Guarantees.TheftTiedNontrivial": "e3636093cb3303f7ce229787c9a060aefdaedace0311ddb18d80bf974e4e6fa2",
     "WeightSecurity.Guarantees.TheftTight": "2296f0698d7e1ec1bf28bbbaccc1aa43192b428a061a9655fc914627c43af5ac"
    }
   },
@@ -39109,6 +39163,19 @@
     "WeightSecurity.Served.tick": "84f0fd09edc8555fef5dcc42df74bf2925e6ee1406976d579cefaa06ae6a497c",
     "WeightSecurity.Served.view": "9502eba9ec773763689c4be6a67556c1820e3866bf985a7d7a6605c990d66561",
     "WeightSecurity.servedChannel": "9d82402645753e6c721739e0d2ec3d795a9b45ca2e73b7763cb4814dbcbc7e0a"
+   }
+  },
+  "Definitions.WeightSecurity.Tied": {
+   "digest": "d7b4f5e703f592dc03c0df473ee03be7064ef05d00664486d78395d30447fd41",
+   "definitions": {
+    "WeightSecurity.Served.Traced": "bb000e0429dd085a7557bf3804cc6633898f1c0af5339ed5b805b275cfc247b1",
+    "WeightSecurity.Served.Traced.Covered": "18eafb59dbbfccc97b8d32b3a8d0a1ab7002a44bf212ab04f3880f3c67b9e5da",
+    "WeightSecurity.Served.Traced.Tied": "0394dd0b41a7cc2ef83f03c51245b688e92024bb5a8288afa85f30134e203ef4",
+    "WeightSecurity.Served.Traced.countRun": "f52416df81f17f1c3fb6713f352f0725b551e8c6d4ee984f272f5aadd4c0fad8",
+    "WeightSecurity.Served.Traced.counted": "99860ecefea94bed4e3078986e8a7fbd821570260063ded4bfcf40488d6b2fbe",
+    "WeightSecurity.Served.Traced.toServed": "e43298ef87a241c9fd3e992a53dde52830e90c62e890167abe81ba3f467a9760",
+    "WeightSecurity.Served.Traced.trace": "50944468e9ceb4ae20062654e9dc8d6f5a602b014a06bd8d841f65a35cd61b89",
+    "WeightSecurity.faultedServed": "e9e1bc0c71763aebd963d687bee2d08ba535c691c8a007748c1399aad3caab8d"
    }
   },
   "Definitions.WeightSecurity.Toy": {
@@ -39148,6 +39215,19 @@
     "WeightSecurity.ToyServed.leakRun": "8c7302ed0cc2deca1b9bf81b187b5fc72db9bef9b693a37763980ac9b7433b3e",
     "WeightSecurity.ToyServed.thief": "2b0a929b76a4dbeab0b2e4343a090c8fb4412393ec7685a4271a52177795b704",
     "WeightSecurity.ToyServed.user": "3bed128ed8f9057d5fb5efb70d0cbb9036f3ccdfb0253467f31dd4e5fdbdf1ee"
+   }
+  },
+  "Definitions.WeightSecurity.ToyTied": {
+   "digest": "e2fd5dada1a55e89d6f5c83249a8ae046f918ce6f50d41e22e499aeb977a8d98",
+   "definitions": {
+    "WeightSecurity.ToyServed.anyoneP": "53beed9e5f33e1e72bc3716bf9e95c1145dc9eff198f443ddca26f5d8b6911b7",
+    "WeightSecurity.ToyServed.eg": "1ad1f904e3181da49218b43cbca91176d9956a756c251b8376303ac769738c41",
+    "WeightSecurity.ToyServed.fns": "ecd146751de295d6b98f25b56b649b9b777e75085c482e0f2de6e8e7408d9b0a",
+    "WeightSecurity.ToyServed.honestTraced": "ca474dcb778f7537857952826a87f8fd6d85a16353351b32b2f22ffb28b716a9",
+    "WeightSecurity.ToyServed.inp": "ae1965bc64f4816c16b2b9280522bb270d74bb547d47af628ed5e7fbb5a43192",
+    "WeightSecurity.ToyServed.leakTraced": "d09b7419950f896a972f72aa6789b00ab97a6c2f4b14959b1f9dcafd35f8d98f",
+    "WeightSecurity.ToyServed.pop": "bfa14ae7bc86ccf4d8912f7326b66ad29ad9f447fd0774e98921aa6e009b8ad7",
+    "WeightSecurity.ToyServed.window": "c930210b1c7bb0441252cb4784e0d0ac740e5b6aa3a39c0e06a039ba6a9c0274"
    }
   },
   "Flock.Bytes": {
