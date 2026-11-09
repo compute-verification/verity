@@ -5992,11 +5992,15 @@ def _checked_heads(a: argparse.Namespace) -> int:
 
 
 def main(argv: list[str]) -> int:
+    if argv[:1] == ["vqueue"]:                  # the verified queue's loop, with options of its own (`vqueue_loop.main`)
+        from .vqueue_loop import main as vqueue_main
+
+        return vqueue_main(argv[1:])
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
     ap.add_argument("command", choices=["status", "sync", "eject", "ready", "judge", "drive", "open", "edit", "link", "stats",
                                             "checked-heads", "review", "baseline", "promote", "accept-checked",
                                             "drive-shard-add", "delegate",
-                                            "shadow-report"])
+                                            "shadow-report", "vqueue"])
     ap.add_argument("pr", nargs="?", help="eject, ready, review, edit, link: the PR number; judge: the quick tier's run id; baseline: the "
                     "commit of `checked` ci knows is green, which `main` moves to; "
                     "accept-checked: `checked`'s tip, which drive didn't write; drive-shard-add: the after-landing run's tip; "
@@ -6099,6 +6103,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--days", type=int, default=7, help="delegate: how long the delegation lasts (default 7, at most 14)")
     ap.add_argument("--until", metavar="YYYY-MM-DDTHH:MM:SSZ", help="stats: the window's end (default now)")
     a = ap.parse_args(argv)
+    if a.command == "vqueue":
+        ap.error("vqueue comes first, its options after it: research queue vqueue --help")
     if a.first is not None:
         ap.error(FIRST_RETIRED)
     global MERGED_ROOT
