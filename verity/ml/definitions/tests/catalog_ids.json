@@ -329,6 +329,7 @@
 "DsaMqaLogits_v3",
 "DsaMqaLogits_v4",
 "DsaPositionsMerge_v1",
+"DsaPositionsSlot_v1",
 "DsaRMSNorm_v1",
 "DsaRMSNorm_v2",
 "DsaRadixPass_v1",
