@@ -1325,6 +1325,39 @@ def test_the_facts_cache_reads_a_document_only_by_its_key_and_refuses_a_tampered
     assert A.read_cached_facts(cache, key) is None, "a document without its sidecar is a miss, never a hit"
 
 
+def test_two_writers_of_one_key_each_write_their_own_temporary_file_and_the_last_rename_wins(tmp_path, monkeypatch):
+    """Two writers of one facts or replay entry (`write_atomic`), the second running whole inside the first's rename, with
+    the process and thread ids they'd share in different PID namespaces: a temporary name made of those ids is one file,
+    which the second's rename takes from the first, and the first's then fails (`FileNotFoundError`). Each writes its own
+    temporary file, so both renames succeed, the later one's bytes stay, and no temporary file is left."""
+    monkeypatch.setattr(A.os, "getpid", lambda: 1)
+    monkeypatch.setattr(A.threading, "get_ident", lambda: 1)
+    cache, key = tmp_path / "facts", "a" * 64
+    first = {"schema": A.FACTS_SCHEMA, "toolchain": "t", "files": {}, "facts": {"x": 1}, "findings": {}}
+    second = first | {"facts": {"x": 2}}
+    replace, nested = os.replace, []
+
+    def interleaved(src, dst):
+        if not nested:
+            nested.append(dst)
+            A.store_cached_facts(cache, key, second)
+        replace(src, dst)
+
+    monkeypatch.setattr(A.os, "replace", interleaved)
+    A.store_cached_facts(cache, key, first)
+    assert nested == [cache / f"{key}.json.gz"], "the second writer ran inside the first's first rename"
+    assert sorted(p.name for p in cache.iterdir()) == [f"{key}.json", f"{key}.json.gz"], "no temporary file is left"
+    assert A.read_cached_facts(cache, key) == first, "the first writer's renames came last, and its pair is whole"
+
+    replay, nested[:] = tmp_path / "replay", []
+    replay.mkdir()
+    monkeypatch.setattr(A.os, "replace", lambda src, dst: (nested or (nested.append(dst), A.store_replay(replay, key, "N")),
+                                                           replace(src, dst)))
+    A.store_replay(replay, key, "M")
+    assert [p.name for p in replay.iterdir()] == [f"{key}.json"]
+    assert json.loads((replay / f"{key}.json").read_text())["module"] == "M"
+
+
 def test_a_facts_or_replay_cache_that_a_build_could_write_is_refused(tmp_path, capsys):
     """A facts sidecar's SHA-256 catches corruption and staleness, not a writer that rewrites the document and its sidecar
     consistently, and a replay entry is no harder to forge. So each cache must lie outside all a sandboxed build writes:
@@ -2031,9 +2064,8 @@ def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_scope_s_memory_holds
 
 def test_a_heavy_build_pipelines_its_replay_under_lean_audit_s_thread_setting(tmp_path, monkeypatch):
     """`lean_audit.py` runs every check.py with `LEAN_NUM_THREADS` set, under which `replay_threads` is None for every
-    package; the pipeline keyed on it never ran in a check, and the lock run's Security/Proofs replayed its 3179 modules
-    for 1117 s after its 2641 s build on 138 cores (r20261108-212009-2b2c). Heaviness is the manifest's (`pins_heavy`),
-    so a heavy package's sandboxed build with a replay cache on a large machine pipelines whatever that variable says."""
+    package, so a pipeline keyed on it would never run in a check. Heaviness is the manifest's (`pins_heavy`), so a heavy
+    package's sandboxed build with a replay cache on a large machine pipelines whatever that variable says."""
     heavy, light = tmp_path / "heavy", tmp_path / "light"
     for p, deps in ((heavy, ["mathlib", "Arklib"]), (light, ["batteries"])):
         p.mkdir()

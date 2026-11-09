@@ -1135,11 +1135,18 @@ def write_facts_document(path: Path, doc: dict) -> None:
 
 
 def write_atomic(path: Path, data: bytes) -> None:
-    """Write ``data`` to ``path`` whole or not at all, as `store_replay` does: a temporary file beside it, named for the
-    process and thread (the packages of one audit store in threads of one process), renamed over it (`os.replace`)."""
-    tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
-    tmp.write_bytes(data)
-    os.replace(tmp, path)
+    """Write ``data`` to ``path`` whole or not at all: a temporary file beside it that no other writer shares
+    (`tempfile.mkstemp`), renamed over it (`os.replace`), so the last of two writers of one path wins. A name made of the
+    process and thread ids is not enough: two processes in different PID namespaces, or a thread whose id was reused, give
+    the same name, and the first rename takes the other writer's file away."""
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 def read_facts_document(path: Path) -> dict:
@@ -4519,11 +4526,9 @@ def closure_plan(facts: dict, passed) -> tuple[list[str], list[str]]:
 
 
 def store_replay(replay_cache: Path, key: str, module: str) -> None:
-    """Record that ``module`` passed the replay under ``key``. The packages of one audit replay in threads of one process, and
-    two whose closures share a module store its key at once, so the temporary name is the thread's."""
-    tmp = replay_cache / f".{key}.{os.getpid()}.{threading.get_ident()}.tmp"
-    tmp.write_text(json.dumps({"schema": REPLAY_SCHEMA, "module": module, "key": key}))
-    os.replace(tmp, replay_cache / f"{key}.json")
+    """Record that ``module`` passed the replay under ``key``. Two packages whose closures share a module store its key at
+    once, each through a temporary file of its own (`write_atomic`)."""
+    write_atomic(replay_cache / f"{key}.json", json.dumps({"schema": REPLAY_SCHEMA, "module": module, "key": key}).encode())
 
 
 def touch_replays(replay_cache: Path, keys: dict[str, str], modules) -> int:
