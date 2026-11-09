@@ -17,7 +17,8 @@ each part is keyed on: a suite's `inputs_of`, its runner and the lock; a Lean pa
 requires; and the whole tree for a `lean-suites` part, as graph/v2 keys one.
 
 `run` replays the trace in every combination of batch size, depth and node count, with breaking PRs, infra errors and false
-fails drawn at the rates given, `--seeds` times each, and prints one row per combination beside the old path's.
+fails drawn at the rates given, `--seeds` times each, and prints one row per combination beside the old path's.  The queue
+is the model, or with `--queue vqueue:SRC` the snapshot queue `research.vqueue` from a checkout (`snapshots.Driver`).
 """
 from __future__ import annotations
 
@@ -35,7 +36,7 @@ from itertools import product
 from pathlib import Path
 
 from verity_landq import model as lq
-from verity_landq import sim
+from verity_landq import sim, snapshots
 
 ROOT = Path(__file__).resolve().parents[4]
 REPO = "compute-verification/verity"
@@ -225,14 +226,29 @@ def old_path(doc: dict, within: float = 120.0, lag: float = 180.0, every: float 
     return {k: s[k] for k in ("prs", "landed", "p50_h", "p90_h", "within", "lag_max_h", "lag_ok")}
 
 
+def queue(spec: str) -> tuple:
+    """The queue a run replays: ``model`` (`model.step`), or ``vqueue:SRC``, the snapshot queue `research.vqueue` imported
+    from the directory SRC (a checkout's `tools/research/src`), driven by `snapshots.Driver`; as (step, start)."""
+    if spec == "model":
+        return lq.step, lq.State.start
+    kind, _, src = spec.partition(":")
+    if kind != "vqueue" or not (Path(src) / "research" / "vqueue.py").is_file():
+        raise SystemExit(f"--queue {spec}: give `model` or `vqueue:SRC`, SRC a directory holding research/vqueue.py")
+    sys.path.insert(0, src)
+    from research import vqueue
+    driver = snapshots.Driver(vqueue)
+    return driver.step, driver.start
+
+
 def _one(job: tuple) -> dict:
-    doc, task_rows, k, d, nodes, seed, rates = job
+    doc, task_rows, k, d, nodes, seed, rates, spec = job
     world = sim.World(tasks=tuple(sim.Task(t["name"], frozenset(t["inputs"]), t["minutes"], t.get("off_pool", False))
                                   for t in task_rows),
                       nodes=nodes, build=rates["build"], listing=rates["listing"], infra=rates["infra"],
                       flaky=rates["flaky"], fix=rates["fix"], seed=seed)
     trace_, _ = arrivals(doc, rates["bad"], seed, world)
-    report = sim.simulate(trace_, world, lq.Policy(batch=k, depth=d))
+    step, start = queue(spec)
+    report = sim.simulate(trace_, world, lq.Policy(batch=k, depth=d), step=step, state=start("main"))
     return {"batch": k, "depth": d, "nodes": nodes, "seed": seed, **sim.summary(report)}
 
 
@@ -285,6 +301,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--fix", type=float, default=120.0, help="minutes until an ejected PR comes back fixed")
     r.add_argument("--build", type=float, default=2.0)
     r.add_argument("--listing", type=float, default=3.0)
+    r.add_argument("--queue", default="model", help="`model`, or `vqueue:SRC` for research.vqueue from SRC")
     r.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     r.add_argument("--out", type=Path, required=True)
     a = ap.parse_args(argv)
@@ -305,7 +322,9 @@ def main(argv: list[str] | None = None) -> int:
     else:
         doc, task_rows = json.loads(a.trace.read_text()), json.loads(a.tasks.read_text())["tasks"]
         rates = {k: getattr(a, k) for k in ("bad", "infra", "flaky", "fix", "build", "listing")}
-        jobs = [(doc, task_rows, k, d, n, s, rates) for k, d, n in product(a.batch, a.depth, a.nodes) for s in range(a.seeds)]
+        queue(a.queue)
+        jobs = [(doc, task_rows, k, d, n, s, rates, a.queue) for k, d, n in product(a.batch, a.depth, a.nodes)
+                for s in range(a.seeds)]
         with ProcessPoolExecutor(a.jobs) as ex:
             done = list(ex.map(_one, jobs))
         groups: dict[tuple, list[dict]] = {}
@@ -313,8 +332,8 @@ def main(argv: list[str] | None = None) -> int:
             groups.setdefault((row["batch"], row["depth"], row["nodes"]), []).append(row)
         rows = [_mean(g) for _, g in sorted(groups.items())]
         old = old_path(doc)
-        a.out.write_text(json.dumps({"kind": "landq-replay/v1", "rates": rates, "old_path": old, "rows": rows,
-                                     "runs": done}, indent=1) + "\n")
+        a.out.write_text(json.dumps({"kind": "landq-replay/v1", "queue": a.queue, "rates": rates, "old_path": old,
+                                     "rows": rows, "runs": done}, indent=1) + "\n")
         print(_table(old, rows))
     return 0
 

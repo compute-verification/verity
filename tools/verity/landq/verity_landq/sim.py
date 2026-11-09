@@ -103,9 +103,11 @@ Step = Callable[[lq.State, lq.Event, lq.Policy], tuple[lq.State, tuple[lq.Decisi
 
 
 def simulate(arrivals: Iterable[Arrival], world: World, policy: lq.Policy, *, step: Step = lq.step, main: str = "main",
-             limit: int = 5_000_000) -> Report:
-    """Replay ``arrivals`` through ``step`` in ``world`` until nothing is left to happen (or ``limit`` events)."""
-    return _Sim(tuple(arrivals), world, policy, step, main, limit).run()
+             state=None, limit: int = 5_000_000) -> Report:
+    """Replay ``arrivals`` through ``step`` in ``world`` until nothing is left to happen (or ``limit`` events).  ``state`` is
+    the queue's start (`State.start(main)` when None); another queue's state need only list its candidates as `stack`, each
+    with its `tree`."""
+    return _Sim(tuple(arrivals), world, policy, step, main, limit, state).run()
 
 
 def quantile(xs: list[float], f: float) -> float:
@@ -189,14 +191,15 @@ class _Run:
 
 
 class _Sim:
-    def __init__(self, arrivals: tuple[Arrival, ...], world: World, policy: lq.Policy, step: Step, main: str, limit: int):
+    def __init__(self, arrivals: tuple[Arrival, ...], world: World, policy: lq.Policy, step: Step, main: str, limit: int,
+                 state=None):
         self.world, self.policy, self.step, self.limit = world, policy, step, limit
         self.tasks = world.tasks
         self.names = [t.name for t in self.tasks]
         self.index = {t.name: i for i, t in enumerate(self.tasks)}
         self.touch = Index(self.tasks).touch
         self.rng = random.Random(world.seed)
-        self.state = lq.State.start(main)
+        self.state = lq.State.start(main) if state is None else state
         self.now = 0.0
         self.heap: list = []
         self.n = 0

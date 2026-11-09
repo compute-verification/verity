@@ -70,11 +70,12 @@ def random_scenario(rng: random.Random, *, bad: float = 0.25, infra: float = 0.0
     return Scenario(tasks, tuple(prs), policy, rng.randrange(2**32), infra, flaky, tuple(inter))
 
 
-def run(s: Scenario, step=lq.step, limit: int = 20_000) -> Run:
-    """Drive the model through the scenario until nothing is left to deliver (or `limit` events)."""
+def run(s: Scenario, step=lq.step, limit: int = 20_000, state=None) -> Run:
+    """Drive the model (or another queue: ``step`` from ``state``) through the scenario until nothing is left to deliver (or
+    `limit` events)."""
     rng = random.Random(s.order)
     r = Run(s, trees={MAIN0: frozenset()}, parent={MAIN0: None}, mains=[MAIN0])
-    state = lq.State.start(MAIN0)
+    state = lq.State.start(MAIN0) if state is None else state
     flaky = [s.flaky]
     pending: list = []
     after: dict[str, list] = {}
