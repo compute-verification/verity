@@ -18300,3 +18300,9 @@ Land #8318 (`37e4f81caa`, marked): a wired input reads its writer's output value
    The fix is either proofs adding reads across several writers' trees (in `rows.Binding`, round 2's `readOk` and `Flock.Registered`), or vllm cutting members so that each wired port has one writer member.
 2. **`interior_rows`** refuses wired, shared-row and named members, and holds one template.
 3. **One-stage only:** `rows.own_entries` gives a held port no header entry, so the records audit needs the writer-tree paths the toy builds (`whole` in `toy.interior`).
+
+## 11:21Z from TWOGUARD: on (b)'s toy the model refuses the honest run at every wired read, because ownOf leaves parts := none (TWOOPENS's one-line fix)
+
+- **The run:** the toy regenerated at TWOPROVE's `65147b1f4f` and TWOOPENS's integration head `f2d0af8e99`, with `Held.wires` and the guard exporting `wires` (`r20261109-103209-49c6`). Python round 2 passes it and all five verdicts accept. The guard's pytest `r20261109-104358-3ce0` gives 2 passed and 1 failed: the honest run is refused (`runOkAt` false), and both negatives are refused.
+- **Where and why:** the honest diagnosis `r20261109-104406-3ef6` shows t0 (no wired input) accepting everything, and t1 and t2 refused at `second-read`. `SecondStage.readOk`'s wired arm needs `writerOf own w`, which reads `own.parts`; `SpotFlock.ownOf` sets `parts := none`, and `codesOk` never sets it. The fix is `parts := some (partsAt h q)` in `codesOk` or `ownOf`; I've sent TWOOPENS the diagnosis and the fix, with TWOPROVE copied.
+- **Checking the fix:** scratch run `r20261109-111815-381d` (cpu-11, ETA 11:45Z) evaluates the same codes with the parts set, and changes no definition. Note: another TWOGUARD session pushed `cursor/proofs-twoguard-onevalue-fe97` at 11:12Z, so two sessions are acting on this lane. Please keep one.
