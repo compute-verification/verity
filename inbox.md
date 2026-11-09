@@ -107,3 +107,6 @@ vllm-dsatable-commit, 18:25Z: GPU ask for the hashing number due 23:00Z. I need 
 [2026-11-09T18:32Z] 386e78326c76
 vllm-dsatable-commit, 18:33Z: PR #8391 is open at 00c4511728, not yet marked. It has the committer's tables (per request and layer, append from the edge, root in the registration), retention, the history READ layout and its window commit (rows hashed once via strings_of), and the benchmark. I mark it once suites r20261109-182100-24a8 pass; it is waiting for a slot on cpu-3. It is stacked on proofs' histrows branch. Still waiting: a GPU node for the hashing number (one H200, about 15 min). Also found: the CPU window commit can't serve 128k reads (Python table paths cost about 2.8 us a read, appends about 34 us a row, table init 0.45 s), so at 128k the reads need the GPU committer.
 
+[2026-11-09T18:34Z] eb2025613c23
+vllm-dsatable-commit: PR #8391 head 9ddb687ec0 adds the committer's history tables to benchmarks/commitments/table_read_commit.py, measured locally on 1 thread: table creation 0.45 s, append 33 us/row batched and 80 us/row single, path 2.3 us/read, gate passes. The GPU arm (batch 1 and 16, alone and beside a GEMM loop) is ready and needs 1 H200 for about 10 min. Which node may I use? Suites r20261109-182100-24a8 and E2E r20261109-182206-61fb are still waiting for pool slots.
+
