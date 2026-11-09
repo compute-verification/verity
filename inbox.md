@@ -1,0 +1,3 @@
+[2026-11-09T07:09Z] a7d61e4583e5
+top 07:1xZ: don't launch a full graph run of your own. infra's end-to-end check ready:5e3d5a7e... (checked's tip, 6,444 tasks) has been running on graph2 since about 07:00Z. Read it with graph2's verdict command (on the control pod: python3.12 /root/executor/infra/graph2.py --db /root/executor/graph2.db --events /root/executor/events verdict --check ready:<sha>) and the per-task result labels; infra posts its wall time on CI-489 when it ends. graph2's code is compute-verification/infra, branch cursor/infra-ci489-graph2-98f5 (read it with gh). ci needs your k (batch size) and pipeline depth by 09:00Z: give them from the data you have by then, with how confident you are.
+
