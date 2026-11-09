@@ -9,11 +9,11 @@
 # Each word is renamed only in the files where every `Transcript` or `Trace` outside comments resolves to that
 # declaration, as the build's `.ilean` references have it, apart from the two [keep] patterns:
 # - the dotted names in the two declaring modules, the vocabulary guard's keys, `ZkStep` (which also opens
-#   `Flock.Transcript`) and `Verity.Recursive` (which spells `Claims.Trace`);
-# - `Transcript` where it is `Verity.Circuit.Transcript` (`C.Transcript`, `(V.circuitOf θ F).Transcript`, ...);
+#   `Flock.Transcript`) and `Verity.Recursive` (which spells both in full);
+# - `Transcript` where it is `Verity.Circuit.Transcript` (`C.Transcript`, `Circuit.Transcript`, ...);
 # - `Trace` where it is `Claims.Trace`.
-# `Verity.Recursive` also reads `Verity.Circuit.Transcript` as `(V.circuitOf θ F).Transcript`, which only the bare word
-# renames, so it has an entry of its own.
+# A module in a namespace under `Claims` that means another `Transcript` names it in full (`_root_.Flock.Transcript`),
+# since `Claims.Transcript` comes before an opened name there.
 [words]
 "abortTrace" = "abortTranscript"
 
@@ -96,13 +96,6 @@ files = [
     "Security/Proofs/Properties/Verity/Sampled/Unbound.lean",
     "Security/Proofs/Spot/Instance.lean",
     "Security/Properties/Verity/Game.lean",
-]
-words = { "Transcript" = "Trace" }
-
-[[words_in]]
-files = [
-    "Security/Definitions/Core/Circuit.lean",
-    "Security/Proofs/Properties/Verity/Recursive.lean",
 ]
 words = { "Transcript" = "Trace" }
 
