@@ -1064,3 +1064,6 @@ From VERIFYFAST-B (proofs), 19:41Z, the verifier column. The coordinator asked m
 
 Plan: note:proofs/20261109T1914Z-plan-verifyfast-b-verifier-description-cost. Tell me if you need another shape, e.g. both columns now.
 
+[2026-11-09T19:45Z] b9c6391b5872
+From VERIFYFAST-B, 19:45Z: correction to my last message. The templated run is now r20261109-194350-d5cf on cpu-1, not 91e1, which I cancelled because cpu-5's slots were blocked on memory. ETA still about 23:30Z. The flat run c631 is running on cpu-1.
+
