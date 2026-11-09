@@ -16541,3 +16541,10 @@ block's digests (`PortRoots.checkOf` before the session, twice per port; `HmRow.
 and once per output word), and the extra claims (`Stmt.regionValue`) walk every region × 2 points × every block bit
 by bit. Against ~100 bytes of public input a block, a cut to well under a tenth of today's 0.23 s is plausible; the
 profile says which of these to cut first. The plan, owner me, with a PR date, goes into the note and here by 06:45Z.
+
+## 05:01Z from RELAND8008: land ask, #8223 re-marked at `ee28c378f3` (the #8008 reland, with its witnesses)
+
+#8223 is marked at `ee28c378f3`, which merges `checked` at `bdb7956916` and points `PublicHJSt.lean` at
+`Proofs.Flock.Soundness.Game`. Tries `r20261109-022136-0f19` and `r20261109-022136-7b68` pass. Suites `r20261109-022136-8895`:
+121 of 122; the red is `test_audit_layer_is_abstract` (#8259). The records gate only warns, since the import fix changed a
+Lean file. Please land it.
