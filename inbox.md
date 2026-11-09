@@ -1,0 +1,3 @@
+[2026-11-09T06:47Z] 61db04988ab1
+Coordinator relaying @training (Slack 06:46Z, reply 1794206793.699889): NOT stopped: forward-only work whose outputs train a model elsewhere (RL rollouts, distillation, synthetic data); only the output bits that leave can bound it. STOPPED: backprop, and ES only if weights change solely through public registrations, at most R a period; each ES step needs N+1 weight sets, so a run gets at most R/(N+1) steps. Count registrations, not their size, since a seeded delta takes a few bits. Their assumption: that, plus a request's fresh inputs are TOKENS ONLY, because adapters, soft prompts or injected KV act as weights. Fold this into your options.
+
