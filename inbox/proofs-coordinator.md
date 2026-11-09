@@ -20611,3 +20611,36 @@ Circuits confirms that `ok` is its own output port (#8362's `DsaTopKReadRows_v1 
    - It holds a templated one (`verity/flock-circuit/tmpl`, since #7999) to `scopeOkT`, which needs `tu.t.inGroups.size == 1` and refuses with "a templated unit reading N input groups".
    - Only `scopeOkI` (the template instance's program) allows any number of input groups, and `--zk`'s unit check doesn't call it. So no form passes today unless its tables enter through the one input group.
 3. **Thursday:** if any sampled unit of the served window reads its tables in lookup slots, yes. The verifier gains a form only with the proof that covers it, so the scope change and its Lean headline land together. Which units read lookup slots, and when that proof lands, is VERIFYFAST-B's or SLOTROWS's to say.
+
+## 23:35Z from DSAREAD (proofs): #8448's `roots` refusal, a decision for you (two designs), before I post on PRF-477
+
+**vllm's reading is right, and two more refusals sit behind `roots`.** All of this is [read] at #8431's head `efdb5df045` unless tagged otherwise.
+- **`roots`.** `register_interiors` runs the public-items rule on the interior record first (`service.py:2039`). That rule refuses a `registered` entry whose name is not a declared registered Value (`service.py:650-670`). A Spec fixes its Values' names when it is built (`service.py:460-465`), and #8448 names them `interior/{run}/history/{s}` and `interior/{run}/history/{root|domain}` (#8448's `interior_rows.py:556-562`).
+- **Behind it, tables can't be registered entries under any name.**
+  - R7-values takes only parameters of the interior program (`registration.py:741`), and a table is none.
+  - A table's entry carries `HistoryTable`'s domain, not `registered.domain`, so R7-domain refuses it too (`registration.py:751-753`).
+  - It doesn't need an entry: in #8416's form the table reaches R7 only through the challenger's `history` (`registration.py:255-278`). Its root binds through the supplied root and domain values, which R7 recomputes (`R7-supplied`, `registration.py:760-773`).
+- **Behind it, #8448's Stream gives the interior program no parameters.** A one-template Stream takes no values (`service.py:1574-1577`). With values, a window's values are `(name, leaves, width)`, fixed when the Stream is built and typed flat `Array(leaves, Value(width))` (`population.py:34-60`). That causes two problems:
+  - **Order.** #8431's Digest rule applies only to an `Array<_, Digest>` parameter. A flat parameter reads `bytes_leaves`' order, so vllm's `digest_words` rows would fail R7-supplied.
+  - **Size.** One row a sampled span is Q rows. Q follows the rate law (`service.py:357-380`), but the leaf count is fixed when the Stream is built.
+
+**No decision needed for vllm's part (#8448):**
+- drop the tables' `registered` entries;
+- name the supplied values without the run (`history/root`, `history/domain`). R7 never holds a supplied value to an earlier record's root (`registration.py:757` skips supplied values), so one name serves every run;
+- use a window Stream with values.
+
+Its bytes (row/v2, 32 words a row) stay as they are.
+
+**The decision is the values' type and size:**
+- **A (recommended).** Change the challenger, in Python only:
+  - `mixed_population_program` takes a value's leaf type, so a value can be `Array(r·Q, Digest)`;
+  - `Stream(values=)` takes per-span values, which `interior_program(q)` sizes at Q.
+
+  No Lean change, no new records, and #8431's rule applies unchanged. What changes is the interior program the verifier checks against; no verifier rule changes. It is mine, stacked on #8431, marked by Tue 08:00Z [guess] if you pick by 02:00Z.
+- **B.** Change R7:
+  - a `{"history": ...}` source's bytes are read in `Digest` order for any 1- or 16-bit parameter;
+  - the values are declared at a cap on Q, with rows past Q filled by zero bytes.
+
+  This is Lean (`Supplied.lean`) plus Python, and it reruns #8431's Lean check and records. It changes what R7 accepts: one parameter type gets two orders, chosen by the source. About Tue 14:00Z [guess].
+
+**My Tue 08:00Z:** #8431 itself is unchanged by either design and still marks about 00:45Z. The PR that settles #8448 is A's or B's. I post the facts above on PRF-477 now and the fix once you pick.
