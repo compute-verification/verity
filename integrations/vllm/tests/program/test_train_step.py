@@ -608,6 +608,11 @@ EXP_EDGES = torch.from_numpy(np.array([0, 0x80000000, 0x7F800000, 0xFF800000, 0x
                                       dtype=np.uint32).view(np.float32).copy())
 
 
+def _unary(op):
+    """`op` as a one-input step (`make_fx` counts a defaulted parameter as an input)."""
+    return lambda v: (op(v),)
+
+
 @pytest.mark.parametrize("dt", [torch.float32, torch.bfloat16])
 def test_gpu_unary_is_its_stated_arithmetic(dt: torch.dtype) -> None:
     """At `cc` exp is `NvExpf_v1`, sigmoid `F32Div_v2(1, F32Add_v2(NvExpf_v1(-x), 1))` and reciprocal `F32Div_v2(1, x)`, a bf16
@@ -618,7 +623,7 @@ def test_gpu_unary_is_its_stated_arithmetic(dt: torch.dtype) -> None:
              "sigmoid": (torch.sigmoid, lambda v: P.F32DivV2.evaluate(ONE, P.F32AddV2.evaluate(_nv_expf(SC.F32Neg.evaluate(v)), ONE))),
              "reciprocal": (torch.reciprocal, lambda v: P.F32DivV2.evaluate(ONE, v))}
     for name, (op, word) in cases.items():
-        prog = _program(lambda v, op=op: (op(v),), x, rules=training_rules(cc=CB.TRAIN_CC))
+        prog = _program(_unary(op), x, rules=training_rules(cc=CB.TRAIN_CC))
         ids = {nd.fn.id.split("{")[0] for nd in prog.root.body.nodes}
         assert not {"F32Div_v1", "F32Add_v1", "F32ExpRn_v1", "F32ToBf16Rn_v1"} & ids, (name, ids)
         want = [word(v) for v in xs]
