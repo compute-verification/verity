@@ -59,15 +59,13 @@ from .digest import REVERT_SUBJECT
 from .merge import REVERTS
 from .queue import STALL, queue_commit
 from .queue_stats import _hours, p90, ts
-from .vqueue import FAIL, PASS
+from .vqueue import FAIL, ON_MAIN, PASS
 
 #: the loop's decision log on the control pod
 LOG = Path("/data/vqueue/decisions.jsonl")
 BUILD, ADVANCE, DROP, EJECT, RETRY, RING, SKIP = "build", "advance", "drop", "eject", "retry", "ring", "skip"
 #: the decisions that name the PRs the shadow acted on; a drop, retry or ring names a candidate
 NAMING = (BUILD, ADVANCE, EJECT, SKIP)
-#: the reason `vqueue.decide` gives the drop of a candidate already on `main`: no outcome, and not stale
-ON_MAIN = "on main"
 #: the shortest commit prefix `--main-moves` and `--old-reds` may give
 PREFIX = 7
 CHAIN_FORMAT = "%H%x00%P%x00%ct%x00%B%x1e"
