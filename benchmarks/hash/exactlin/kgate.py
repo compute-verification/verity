@@ -12,7 +12,7 @@ Per shape, the reference is the exact arm's own code on the same GPU, `int8_exac
 `dequantize(int_mm(...))`, and:
     fused       quant_rows then scaled_mm into buffers filled with 0xA5 first: xq, s_a and y equal the reference bit for bit
     fused_mm    scaled_mm alone on the reference's xq and s_a: y equal
-    op_bodies   `row_quant` then `product`, the ops' CUDA bodies as `install` serves them: xq, s_a and y equal
+    op_bodies   `row_quant` then `product`, the ops' CUDA bodies (`engine.int8_ops` registers them): xq, s_a and y equal
     control     the same 0xA5 buffers with no launch: must differ from the reference in every buffer
     graph       both kernels captured in a CUDA graph, its buffers 0xA5 again, one replay: equal
     alloc       torch's allocated bytes unchanged by the eager calls and by the capture
@@ -22,7 +22,7 @@ Per shape, the reference is the exact arm's own code on the same GPU, `int8_exac
                 multiple of 16 and the build has it, CUTLASS's GEMM as vLLM calls it and on the transposed product
                 (`cutlass_swapped`); and triton_scaled_mm's kernel at each tile a traced engine freezes (FROZEN_TILES)
                 against its per-call tile
-plus the PTX of both kernels (`exactlin.ptx_check`).  `gate()` returns the document; `ok` is the fused path's verdict
+plus the PTX of both kernels (`int8_fused.ptx_check`).  `gate()` returns the document; `ok` is the fused path's verdict
 (stock's differences are findings, not failures).
 
     python kgate.py --out OUT [--shapes all|decode] [--models llama-3.1-8b,qwen3-8b] [--no-stock] [--dump]
@@ -35,9 +35,7 @@ import sys
 from pathlib import Path
 
 import torch
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import exactlin as X
+from verity_vllm.engine import int8_fused as X
 
 MODELS = {
     "llama-3.1-8b": {"layers": 32, "linears": {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096),
@@ -50,7 +48,7 @@ MODELS = {
 LAYERS = MODELS["llama-3.1-8b"]["linears"]
 MS = (1, 32, 256, 2048, 8192)
 DECODE_MS = (1, 32, 256)
-# the gate's Ms: every exactlin.CONFIGS row (m_max 1, 16, 32, 64, 256) and an M inside two of them, masked tiles
+# the gate's Ms: every int8_fused.CONFIGS row (m_max 1, 16, 32, 64, 256) and an M inside two of them, masked tiles
 GATE_MS = {"all": (1, 7, 16, 32, 33, 64, 256, 2048, 8192), "decode": (1, 7, 16, 32, 33, 64, 256)}
 
 
@@ -241,7 +239,7 @@ def dump_replay(path: Path, x, xq, s, w, s_w, y) -> None:
 
 def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | None = None, cfg=None,
         dump: Path | None = None) -> dict:
-    """`cfg` is the GEMM's config (default `exactlin.pick`, what `install` serves); `dump` a directory that gets the
+    """`cfg` is the GEMM's config (default `int8_fused.pick`, what the op serves); `dump` a directory that gets the
     graph replay's outputs (`dump_replay`)."""
     e = E()
     cfg = cfg or X.pick(m, n, k)

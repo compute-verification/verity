@@ -13,10 +13,11 @@ copies (so the weights stream from DRAM):
 A config's gate: y equal to int8_exact's reference (`dequantize(int_mm(...))`) into 0xA5, again on a second call (a
 split-K config's workspace and counters zero again), and the last copy's y after the timing's replays.  A config that
 fails to compile (shared memory) or fails its gate is recorded and not timed.  The quantizer, at each of the models' K:
-each (num_warps, rows a program) plan gated (`quant`) and timed over copies of plain rows past the L2.
+each num_warps gated (`quant`) and timed over copies of plain rows past the L2, at the one row a program
+`int8_fused.quant_rows` launches (its plans are named "wW:r1").
 
 Writes sweep.jsonl (every config's record), best.json ({"arch", "table": {"n,k": [[m, cfg, us, vllm_tiles_us, stock_us],
-...]}}, what exactlin.CONFIGS[arch] takes) and quant.json (`--quant-only`: only it).
+...]}}, what `engine.profiles.int8_gemm_configs.CONFIGS[arch]` takes) and quant.json (`--quant-only`: only it).
 
     python ksweep.py --out OUT [--models llama-3.1-8b,qwen3-8b] [--ms 1,16,32,64,256] [--top 4] [--reps 9] [--skip-quant]
                      [--quant-only] [--tma]
@@ -29,9 +30,9 @@ import sys
 from pathlib import Path
 
 import torch
+from verity_vllm.engine import int8_fused as X
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import exactlin as X
 import kbench
 import kgate
 
@@ -39,8 +40,6 @@ BKS = (128, 256, 512)
 WARPS = (4, 8)
 STAGES = (2, 3, 4, 5)
 QUANT_WARPS = (4, 8, 16, 32)
-QUANT_ROWS = (1, 2, 4, 8)
-QUANT_MAX_ELEMS = 32768  # a program's x elements: past this its float32 tile no longer fits in registers
 
 
 def coarse_grid(m: int, tma: bool = False) -> list[X.Cfg]:
@@ -167,9 +166,8 @@ def gemm(out: Path, models: tuple[str, ...], ms: tuple[int, ...], top: int, reps
 
 
 def quant(out: Path, models: tuple[str, ...], ms: tuple[int, ...], reps: int, clock) -> list[dict]:
-    """Each (num_warps, rows a program) plan gated (xq and s_a equal int8_exact's on plain rows, on the edge rows, and, from
-    M 4, at M - 3 rows, which leaves a partial row block) and timed over copies of plain rows that together pass the L2, as
-    served activations arrive."""
+    """Each num_warps gated (xq and s_a equal int8_exact's on plain rows, on the edge rows, and, from M 4, at M - 3 rows)
+    and timed over copies of plain rows that together pass the L2, as served activations arrive."""
     e = kgate.E()
     recs = []
     l2 = torch.cuda.get_device_properties(0).L2_cache_size
@@ -185,34 +183,27 @@ def quant(out: Path, models: tuple[str, ...], ms: tuple[int, ...], reps: int, cl
             xq = torch.empty((m, k), dtype=torch.int8, device="cuda")
             s = torch.empty(m, dtype=torch.float32, device="cuda")
             for w in QUANT_WARPS:
-                for r in QUANT_ROWS:
-                    if r * triton_next_pow2(k) > QUANT_MAX_ELEMS:
-                        continue
-                    plan = rec["plans"].setdefault(f"w{w}:r{r}", {})
-                    try:
-                        for kind, x in gates.items():
-                            q, sa = xq[:x.shape[0]], s[:x.shape[0]]
-                            kgate.poison(q, sa)
-                            X.quant_rows(x, q, sa, w, r)
-                            torch.cuda.synchronize()
-                            plan["ok_" + kind] = kgate.diff(q, refs[kind][0]) == 0 and kgate.diff(sa, refs[kind][1]) == 0
-                    except Exception as ex:  # noqa: BLE001 - a plan that doesn't compile is a record
-                        plan["error"] = f"{type(ex).__name__}: {str(ex)[:200]}"
-                    if plan and all(plan.get("ok_" + kind) for kind in gates):
-                        fns[f"w{w}:r{r}"] = lambda w=w, r=r: [X.quant_rows(x, xq, s, w, r) for x in xs]
+                plan = rec["plans"].setdefault(f"w{w}:r1", {})
+                try:
+                    for kind, x in gates.items():
+                        q, sa = xq[:x.shape[0]], s[:x.shape[0]]
+                        kgate.poison(q, sa)
+                        X.quant_rows(x, q, sa, w)
+                        torch.cuda.synchronize()
+                        plan["ok_" + kind] = kgate.diff(q, refs[kind][0]) == 0 and kgate.diff(sa, refs[kind][1]) == 0
+                except Exception as ex:  # noqa: BLE001 - a plan that doesn't compile is a record
+                    plan["error"] = f"{type(ex).__name__}: {str(ex)[:200]}"
+                if plan and all(plan.get("ok_" + kind) for kind in gates):
+                    fns[f"w{w}:r1"] = lambda w=w: [X.quant_rows(x, xq, s, w) for x in xs]
             med, _, _ = kbench.timed(fns, reps, clock, copies)
             for name, us in med.items():
                 rec["plans"][name].update(us=us, tb_s=(3 * m * k + 4 * m) / us / 1e6)
-            rec["default"] = "w{}:r{}".format(*X.quant_plan(m, k))
+            rec["default"] = f"w{X.quant_warps(k)}:r1"
             rec["best"] = min(med, key=med.get) if med else None
             recs.append(rec)
             print(json.dumps({k_: v for k_, v in rec.items() if k_ != "plans"} | {
                 "best_us": med.get(rec["best"]), "default_us": med.get(rec["default"])}), flush=True)
     return recs
-
-
-def triton_next_pow2(n: int) -> int:
-    return 1 << (n - 1).bit_length()
 
 
 def main() -> int:
