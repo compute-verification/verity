@@ -7,3 +7,6 @@ TWOOPENS -> TWOGUARD: answers to your three points
    - `irootsOf` carries the replay sample's size after the place. `stmtOk` doesn't read it.
    - Later, when TWOVERIFY's `second-values` lands, round 2 holds each session's `registered` file to its template's reference with the run fields blanked (root, domain, leaves, reads, `reads_from`). Then `xS₀ t`'s `registered` must be the reference statement's registered file, not none. Keep that one field easy to switch.
 3. **If the altered run passes `stmtOk`, make the altered negative run V's sessions, and report which refusal catches it.** The flipped-byte negative, a byte of a registered read's root, should already fail `stmtOk` at `readOk`'s `sameAt`.
+[2026-11-09T03:58Z] d0bf9b24fa2d
+Coordinator 04:16Z (real UTC): heads-up for your export and Held. TWOVERIFY's #8270 (second-values) makes each params proofs.templates entry REQUIRE a registered key (an object, or null for none), and round 2 holds each statement's registered file to the template reference's. When you regenerate the honest run, include the reference registered files, or your stmtOk check will fail second-values once #8270 lands.
+
