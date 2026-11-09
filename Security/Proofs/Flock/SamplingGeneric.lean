@@ -24,6 +24,7 @@ public import Proofs.Flock.SamplingGeneric.TwoBernoulli
 public import Proofs.Flock.SamplingGeneric.TwoCap
 public import Proofs.Flock.SamplingGeneric.Complete
 public import Proofs.Flock.SamplingGeneric.TwoRankin
+public import Proofs.Flock.SamplingGeneric.TwoReg
 
 /-!
 # The sampled compiler in the claims core, at Flock
@@ -48,7 +49,10 @@ opening checks' count, `Compiled.OpenCallsLe`, without which they fail (`Counter
 `SamplingGeneric/Counter.lean`). A session's coins in a compiled run, `coinsOf` and `place`, invert each other
 (`SamplingGeneric/Coins.lean`). The committed form, against the incorrect set of the plurality trace the prover's tape
 fixes, follows from the sessions' bound and the rewinding lemma (`SamplingGeneric/Reg.lean`: `compilerKSReg_of`), so
-**`CompilerKSReg` is proved** (`compilerKSReg`), and with it Flock's (`flockKSReg`).
+**`CompilerKSReg` is proved** (`compilerKSReg`), and with it Flock's (`flockKSReg`). At two stages the committed form's
+event, against the committed boundary trace and each replay block's committed interior, follows the same way, the
+interior's rewinding at the first stage's coins and its conflicts a second binding finder's collisions
+(`SamplingGeneric/TwoReg.lean`: `CompiledTwo.eventTwo_le`).
 
 `CompilerKSAt` reads `KS`'s two hash terms at a budget on the prover's whole SHA-512 work rather than at the calls the
 oracle logs: `KS` gives it at every budget, and `CompilerEfficient`'s expected reruns and own calls bound its binding

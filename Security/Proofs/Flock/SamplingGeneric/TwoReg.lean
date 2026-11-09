@@ -83,6 +83,7 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg 
 def selIn (L : Compiled Coin A) (x : Msg) (F : Finset ℕ) (l : List ℕ) : Option (Fin (L.nPU x)) :=
   (List.finRange (L.nPU x)).find? fun i => (l[i.val]?).any fun v => decide (v ∈ F)
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- A sample of at most `n_PU` slots with a block in `F` has a first such slot, its block below `n_PU`. -/
 theorem selIn_some (L : Compiled Coin A) (x : Msg) {F : Finset ℕ} {l : List ℕ} (hlen : l.length ≤ L.nPU x)
     (hFlt : ∀ v ∈ F, v < L.nPU x) {v : ℕ} (hvl : v ∈ l) (hvF : v ∈ F) :
