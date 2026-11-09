@@ -4412,6 +4412,10 @@
   },
   "NetTiming.SecurityProofs.PooledLeakChecked": {
    "nontrivial": "NetTiming.Witness.PooledLeakChecked_nontrivial"
+  },
+  "Hash.SecurityProofs.HistoryReadBinding": {
+   "honest": ["Hash.SecurityProofs.HistoryReadBinding_honest"],
+   "nontrivial": "Hash.SecurityProofs.HistoryReadBinding_nontrivial"
   }
  },
  "unwitnessed": {
@@ -16159,6 +16163,15 @@
    "type_hash": "c0490a64c93269da77a51fd49be5835792c0659fce6b3962e9750167c044c221",
    "unfolded_hash": "96666a07570ac2ae12b5b5301fe6c9411fc7b9a14cb77edd240b11f38924b984"
   },
+  "Hash.SecurityProofs.HistoryReadBinding": {
+   "owner": "@proofs"
+  },
+  "Hash.SecurityProofs.HistoryReadBinding_honest": {
+   "owner": "@proofs"
+  },
+  "Hash.SecurityProofs.HistoryReadBinding_nontrivial": {
+   "owner": "@proofs"
+  },
   "Hash.SecurityProofs.RowBinding": {
    "owner": "@kernels",
    "signature": ["Hash.SecurityProofs.RowBinding : Hash.Guarantees.RowBinding"],
@@ -25535,6 +25548,10 @@
     "outcome": "accept"
    },
    "Hash.SecurityProofs.EmbeddingReadBinding": {
+    "function": "Hash.EmbeddingRead.ok",
+    "outcome": "accept"
+   },
+   "Hash.SecurityProofs.HistoryReadBinding": {
     "function": "Hash.EmbeddingRead.ok",
     "outcome": "accept"
    },
