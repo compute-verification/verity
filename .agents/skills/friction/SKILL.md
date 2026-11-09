@@ -95,7 +95,8 @@ whose fix needs a claim or his own accounts goes to Daniel.
 
 ## Standing rulings
 
-Daniel's rulings in force that `AGENTS.md` and the other skills don't state, each stated as itself (history: §3).
+Daniel's rulings in force that `AGENTS.md` and the other skills don't state, each stated as itself; retired ones are in
+his decisions log in Notion.
 
 What an agent may change:
 
@@ -153,40 +154,40 @@ Protocols and claims:
 - Credit and every report of computation are in AND gates (tentative). 𝓜's resources appear only inside
   exclusion, which reports in AND gates. Whoever finds a reason this is wrong floats it at once.
 - Credit of declared size, values certified, is a statement about values (sampled proofs'). Compute credit (Dither's;
-  PoUW's bar is now T1–T3) also needs values that read live noise and SAK's lower bound, so SAK is a premise of compute
-  credit as well as of exclusion (ASK-166). SAK is over noised operands only, never prover-chosen ones (pinned weights,
-  served activations, un-noised outputs), and an un-noised call earns no compute credit (ASK-174).
+  PoUW's bar is T1–T3) also needs values that read live noise and SAK's lower bound, so SAK is a premise of compute
+  credit as well as of exclusion. SAK is over noised operands only, never prover-chosen ones (pinned weights,
+  served activations, un-noised outputs), and an un-noised call earns no compute credit.
 - A workload is what a datacenter runs over a monitoring period (its Programs, their inputs and placement), at
   every scale; workloads compose, and "row" never names one.
 - The network certifier is one device on each AI server's uplink, whose one code run under one `trusted-host` gives
   both the cells and the records (`Security/Definitions/NetworkCertifier/Tap.lean`). No statement
   ties them by a premise or trusts them separately.
 - θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs
-  are never θ (drops `NciCheck.Baseline`'s output provenance).
+  are never θ.
 - A protocol's verifier switches from Python to Lean only on evidence: its gap list shows nothing the
   Python checks that the Lean doesn't, and every recorded run replayed through the Lean gets the Python's verdict,
   negative controls included. The Python keeps running as the reference, the switch is one reversible line, and it moves
-  the protocol's properties into `Properties/`.
+  the protocol's properties into `Properties/`, toward `AGENTS.md`'s "Lean is the definition and the verifier".
 - An auditor device releases its commitment to its coins only after the prover's commitment is in, so no
   soundness statement takes a hiding premise on it. A guarantee whose break includes a forged device release names two
   assumptions outside the theorem: `ecr/sha-512` for its finders and `euf-cma/lms-sha512-n64` for the forgery finder.
 - The developer controls the audited circuit's inputs and knows every coin once it is issued, so no defense assumes
   the circuit can't learn a coin, and verifier coins stay public. Only the weights may take a private encoding from a
   trusted third party, salted after the commitment with secrets the developer never sees, as one deployment variant.
-- No private or trapdoor encoding for KV. Credited dynamic memory rests on the public codec, and the stacking
-  bound on the named conjectures `SquaringFloor` and `ChainSum` in the repriced gate model (a thin lane a
-  compare-select unit), with the claims resting on them listed as conditional.
+- No private or trapdoor encoding for KV. Credited dynamic memory rests on the public codec, and the stacking bound on
+  the named conjectures `SquaringFloor` and `ChainSum` in the repriced gate model (a thin lane a compare-select unit),
+  with the claims resting on them listed as conditional; `EncodeChainHardness` is falsified (`EncodeChainRefuted`).
 - Memory and bandwidth accounting: no bound assumes the weights are incompressible, and a scheme may refuse
   all-zero weights; exhaustion is over the node's whole memory, KV included; no overhead target beyond 99%; guarantees
   are for the whole node. PoUB treats the developer's resources as one pool (conservation, no identity
   assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
   model's logits.
-- Accounting's `WorkHardness`, `KeyBinding`, `SketchHashRandom`, `TimedINC` and `pous-ring-instantiation` are standing
-  named assumptions, `prf/sha-512` until the memory challenger draws from the OS; `GGapPerCoin` stays a named
-  conjecture, `BudgetAbort` a cost-model hypothesis (ASK-237, default applied Mon 9 Nov).
+- `WorkHardness`, `KeyBinding`, `SketchHashRandom`, `TimedINC` and `pous-ring-instantiation` are standing named
+  assumptions, `prf/sha-512` until the memory challenger draws from the OS; `GGapPerCoin` stays a named conjecture,
+  `BudgetAbort` a cost-model hypothesis.
 - Only PoUW's guarantees and the memory sketch's may rest on random-oracle assumptions for SHA-512
-  (`StraightLineExtraction`, Compose's `SeedExtractedAt`, `SketchHashRandom`), each a named `Prop` the lock lists.
-  Flock's knowledge soundness keeps the collision form.
+  (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. Flock's knowledge
+  soundness keeps the collision form.
 - The deployed recursion's bound record states its inner claim at IVStar at the weight
   `coverW`, the least at which the premise P3 (`Bound.WeightCovers`) holds. Its security level is below the 100-bit floor
   under every weight (`Claims.Recursion.lam`), and every table, README or claim that cites it gives its λ and says so.
