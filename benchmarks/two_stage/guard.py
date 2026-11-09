@@ -180,15 +180,17 @@ def export(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int)
     brec = json.loads((run_out / "boundary" / "registration.json").read_text())
     if links != SS.replay_links(replay, key, brec):
         raise ValueError("the design's links at the boundary window's ports are not the run's")
+    wires = SS.replay_wires(replay, key)
+    if wires is None:
+        raise ValueError("the design's wires don't derive from the replay Definition, which round 2's design check refuses")
     irec = json.loads((run_out / "interior" / "registration.json").read_text())
     regs = {"boundary_names": (bw, brec), "interior_names": (ref, irec)}
-    names_of = {key: {"ports": list(expected_ports(w)), "values": []} for key, (w, _) in regs.items()}
-    for key, (_, rec) in regs.items():
+    names_of = {which: {"ports": list(expected_ports(w)), "values": []} for which, (w, _) in regs.items()}
+    for which, (_, rec) in regs.items():
         ran = {"ports": sorted(r["port"] for r in rec["roots"]),
                "values": sorted(e["value"] for e in rec.get("registered", []))}
-        if ran != {f: sorted(ns) for f, ns in names_of[key].items()}:
-            raise ValueError(f"the design's {key.replace('_', ' ')} are not the ones the run's record names")
-    wires = SS.replay_wires(replay, key)
+        if ran != {f: sorted(ns) for f, ns in names_of[which].items()}:
+            raise ValueError(f"the design's {which.replace('_', ' ')} are not the ones the run's record names")
     part, prog = json.dumps(ref.partition, sort_keys=True).encode(), canonical_json(encode_program(ref.program))
     names, base = [m.template for m in ref.members], 0
     vus = []
@@ -198,8 +200,7 @@ def export(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int)
     query = stream.spec.check.query
     held = {"first": first, "ns": list(stream.cells), "ks": list(stream.counts), "names": names, **names_of,
             "links": None if links is None else [{"template": x.template, "port": x.port, "value": x.value} for x in links],
-            "wires": None if wires is None else [{"template": w.template, "port": w.port, "writer": w.writer,
-                                                  "wport": w.wport} for w in wires],
+            "wires": [{"template": w.template, "port": w.port, "writer": w.writer, "wport": w.wport} for w in wires],
             "vus": vus, "desc": prog.hex(),
             "query": {"name": query["name"], "version": query["version"], "params": canonical_json(query["params"]).hex()},
             "k": list(stream.counts)}
