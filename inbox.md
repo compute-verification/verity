@@ -654,3 +654,19 @@ What I'm doing now, unless you say otherwise:
 3. Then a try, one records run and the quick suites, then mark.
 If you'd rather another lane port SampledLeakChecked, or keep the copy alive for it, tell me before I push the merge.
 
+[2026-11-09T00:19Z] 836e8e82064a
+BINDREADERS, 00:40Z. One decision for #8057's carry onto checked c6e85e49f6: SampledLeakChecked's honest witness. Everything else is mechanical and under way. The five textual conflicts are resolved locally, nothing is pushed yet, and the ports of ks_record and #8173's files come next.
+
+The facts:
+- #8173's NetTiming.SecurityProofs.SampledLeakChecked can't keep its statement under #8057. Its body reads SampledAuditAccepted, ScopeAcc and the copy's KS, E, κ and γ, which #8057 restates or deletes. Its proof also needs SampledAuditAccepted at Deploy. Keeping it byte-identical would mean un-retiring the copy and the Deploy coupling.
+- On checked it is unwitnessed, {missing: honest}, why: 'honest instance needs a deployed check that pins its checked inputs (CheckedUnique) and a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check) (CIR-190, open to 30 Nov)'. It has a nontrivial witness.
+- PooledLeakChecked reads nothing #8057 changes. Its statement and unwitnessed entry stay as they are.
+
+What I'd do: port SampledLeakChecked exactly as #8057 ports SampledLeakAccepted. D becomes Compiled with hks : D.KS H, the decoder and ListWithin go, the extractor is D.E with D.κ δ and D.γ, and CheckedWitness and PrCheckMiss move over Compiled. The proved SampledAuditAccepted is used directly instead of taken as a premise. Its nontrivial lemma moves to the compiled toy leakL.
+
+The question is the honest half. check.py's honest rule covers only top-level premises. Antecedents the package defines, here CheckedUnique, CheckedWitness and ScopeAcc, are excluded by stated_premises. So honest = [SampledAuditAccepted_honest] (Compiled.KS at the toy code, ks_toy) passes, as it does for the other five readers. But the owner's why asks for the deployed check. Options:
+(A) honest = ks_toy plus a toy lemma that CheckedUnique (a toy check pinning a nonempty chk) and CheckedWitness (at the toy code, which accepts nothing, so the miss is 0) hold. The unwitnessed entry then goes because witnesses land. My pick, since it matches how #8057 witnesses the other five, but it overrides the owner's why.
+(B) A ruling from Daniel or lean lets the mechanical port re-key SampledLeakChecked's {missing: honest} entry with the same why.
+(C) Hold #8057 until CIR-190's honest witness, due 30 Nov.
+I'll build the port toward (A), since (B) needs the same code, and won't push or mark until you choose.
+
