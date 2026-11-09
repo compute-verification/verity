@@ -1,7 +1,7 @@
 module
 
 public import Mathlib
-public import Definitions.Accounting.Guarantees.RateAuditSketch
+public import Proofs.Accounting.Lemmas.RateAuditSketch
 
 /-!
 # The honest device: the sketch rate audit is not vacuous

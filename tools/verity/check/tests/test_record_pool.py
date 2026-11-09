@@ -150,3 +150,12 @@ def test_the_commands_printed_for_a_lane_name_no_node():
                CHECK.nested_record(["--record", "--deferred", "lean-agreement"])]
     for cmd in printed:
         assert "--on auto" in cmd and "vy-" not in cmd, cmd
+
+
+def test_a_lane_run_diffs_from_where_its_branch_left_a_fetched_main():
+    """The three copies of a lane's own test run say one thing, and its base is fetched in the lane's checkout: an unfetched
+    origin/main there names an old main, whose diff to the branch touches every suite main has changed since."""
+    from research import queue
+
+    assert queue.LANE_RUN == CHECK.LANE_RUN == CHECK.SLOT.LANE_RUN
+    assert "--changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD)" in CHECK.LANE_RUN

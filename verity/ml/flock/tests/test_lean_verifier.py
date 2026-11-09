@@ -604,6 +604,34 @@ def test_verify_takes_a_stratified_draw_only_at_its_own_k(tmp_path):
     assert not why(at1, *flags, "--stratified", "1").startswith("setup: U2:")
 
 
+def test_verify_refuses_an_archived_circuit_that_does_not_hash_to_its_key(tmp_path):
+    """`verify --archive` hashes the circuit file beside its parse and waits for the hash before any session: a copy that
+    doesn't hash to its key is refused as an input (exit 2), with no verdict, and a copy that does goes on to setup."""
+    store = tmp_path / "archive" / "sha512"
+    store.mkdir(parents=True)
+
+    def held(key: str, data: bytes) -> str:
+        (store / key).write_bytes(data)
+        return key
+
+    pub = held(hashlib.sha512(b"{}\n").hexdigest(), b"{}\n")
+    bad = held(hashlib.sha512(b"the circuit its key names").hexdigest(), b"another file")
+    good = held(hashlib.sha512(b"another file").hexdigest(), b"another file")
+    (tmp_path / "s").mkdir()
+    (tmp_path / "s" / "session.json").write_text("{}")
+
+    def run(circuit):
+        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "verify", "--archive", str(tmp_path / "archive"),
+                               "--circuit", circuit, "--public", pub, "--session", str(tmp_path / "s")],
+                              capture_output=True, text=True)
+
+    p = run(bad)
+    assert p.returncode == 2 and "VERDICT" not in p.stdout, p.stdout + p.stderr
+    assert p.stderr.strip().splitlines()[-1] == f"statement inputs: circuit: archive: the object held under {bad} does not hash to it"
+    p = run(good)
+    assert "does not hash to it" not in p.stderr and "VERDICT" in p.stdout, p.stdout + p.stderr
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_closure_draw_proves_the_verifiers_closure(tmp_path):
     """`draw --work K --work-table F --closure C`: the work sample, unchanged, widened by the verifier's closure map (each

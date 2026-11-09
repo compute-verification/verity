@@ -22,13 +22,15 @@ The pricing (ANDs; `window_cost`):
 - each window: the 512-bit keys it carries (the cached blocks', NB at most, and its requests' blocks', at most the RK
   addresses it touches) hashed in and out and printed under its coin (KeyPrint_v1).
 
-The compile side (`compile_cost`) is the unit that checks a window whole, `compile_slice_v5.CompileSlice_v5`, at the
-class of the load's busiest window (`compile_statics`): its parts' ANDs at the class times their calls
-(`compile_slice_v5.parts`, which its tests hold to the built unit's), and SHA-512 over its checked witness at the same
-rate. The class: the engine's R, W = 1 and A = R + 1, K (and Q, D and DA) the ladder's class of the window's requests,
-P its steps, CU = L / B, and NS, NM, NRB and NRK the ladder's classes of its stream slots (as `window_cost` counts them
-for each kind of lookup), its M and RB addresses, and its ragged row's blocks (each request's blocks to the last its
-keys are read at). It starts from an empty engine and pool, so it carries no keys in or out.
+The proved side (`unit_cost`) is the two units every window proves, `compile_slice_v6`'s CompileSlice_v6 and
+PoolWindow_v1, at the class of the load's busiest window (`compile_statics`): each part's ANDs at the class times its
+calls (`compile_slice_v6.parts`, which its tests hold to the built units'), and SHA-512 over the pool window's checked
+witness at the same rate. The class: the engine's R, W = 1 and A = R + 1, K (and Q, D and DA) the ladder's class of the
+window's requests, P its steps, CU = L / B, and NS, NM, NRB and NRK the ladder's classes of its stream slots (as
+`window_cost` counts them for each kind of lookup), its M addresses and the keys the pool carries in (NB − 1 at most),
+its RB addresses, and its ragged row's blocks (each request's blocks to the last its keys are read at). The pool window
+opens the pool the previous window left and commits the one it leaves, so its parts include the two pool rows' digests,
+their keys' prints and a PoolOpen and a PoolClose step a block.
 
 What a window's ANDs are compared with is the caller's to state, with its source: ``--against NAME=ANDS`` reports the
 window's ANDs as a ratio of ANDS, and ``--node-share NAME=SHARE@ANDS`` scales a share of the node that a window of ANDS
@@ -52,7 +54,7 @@ from pool_ram import RP
 from verity.core.protocols.certifier.head_check import ands
 from verity.ml.circuits.defs import bind
 from verity.ml.commitments.gates import block_key as BK
-from verity.ml.protocols.certifier import cache_step_v3 as V3, compile_slice_v5 as V5
+from verity.ml.protocols.certifier import cache_step_v3 as V3, compile_slice_v5 as V5, compile_slice_v6 as V6
 
 MUL = 2187
 SHA_BLOCK = 58120
@@ -216,31 +218,37 @@ def window_cost(load: dict[str, Any], m: dict[str, int], NB: int = 5000, lookups
 
 
 def compile_statics(load: dict[str, Any], engine: dict[str, Any], lookups: str) -> dict[str, Any]:
-    """`compile_slice_v5`'s statics for the load's busiest window under `lookups` (the module's docstring)."""
+    """`compile_slice_v6`'s statics for the load's busiest window under `lookups` (the module's docstring)."""
     w, c = load["window"], V3.size_class
     R, steps = engine["max_num_seqs"], w["steps"][1] - w["steps"][0]
     K = c(w["requests"])
-    return V5.statics(R, 1, R + 1, engine, IW, Q=K, D=K, P=steps, K=K, CTW=CTW,
+    return V6.statics(R, 1, R + 1, engine, IW, Q=K, D=K, P=steps, K=K, CTW=CTW,
                       CU=engine["max_model_len"] // engine["block_size"], DA=K, NS=c(stream_slots(load, lookups)),
-                      NM=c(w["touched"]["M"]), NRB=c(w["touched"]["RB"]), NRK=c(w["ragged blocks"]))
+                      NM=c(w["touched"]["M"] + engine["num_gpu_blocks"] - 1), NRB=c(w["touched"]["RB"]),
+                      NRK=c(w["ragged blocks"]))
 
 
-#: `compile_slice_v5.parts`' order, each part's term
-COMPILE_TERMS = ("load", "steps (CompileStep)", "bus records (CompileBus)", "arrivals (CompileArrivals)",
-                 "stream slots (PoolSlot)", "touched list (PoolEntry)", "ragged keys (RaggedKey)", "pool end",
-                 "verdict")
+#: `compile_slice_v6.parts`' order for each unit, each part's term
+UNIT_TERMS = {
+    "compile": ("load", "steps (CompileStep)", "arrivals' ids (CompileIds)", "calls row (CallsEq)",
+                "verdict (CallsVerdict)"),
+    "pool": ("bus records (CompileBus)", "arrivals' counts (PoolCounts)", "pool row digests in and out",
+             "key prints in and out", "stream slots (PoolSlot)", "open steps (PoolOpen)", "touched list (PoolEntry)",
+             "ragged keys (RaggedKey)", "pool end", "close steps (PoolClose)", "M run copies (PoolCopies)",
+             "verdict (PoolVerdict)")}
 
 
-def compile_cost(st: dict[str, Any], memo: dict) -> dict[str, float]:
-    """ANDs of CompileSlice_v5 at statics `st`: each part's ANDs times its calls, and SHA-512 over the checked witness;
-    `memo` holds each part's ANDs across calls (`head_check.ands`)."""
-    out: dict[str, float] = {}
-    for term, (p, n) in zip(COMPILE_TERMS, V5.parts(**st), strict=True):
-        out[term] = n * ands(p, memo)
-    for d in V5.PARTS:
-        d.traced.cache_clear()  # a part's trace is dropped once counted: the step's at R = 256 holds gigabytes
-    out["checked witness hash"] = SHA_BIT * V5.data_bits(SimpleNamespace(**st))["chk"]
-    out["total"] = sum(out.values())
+def unit_cost(st: dict[str, Any], memo: dict) -> dict[str, dict[str, float]]:
+    """ANDs of CompileSlice_v6 and PoolWindow_v1 at statics `st`: each part's ANDs times its calls, and for the pool window
+    SHA-512 over its checked witness; `memo` holds each part's ANDs across calls (`head_check.ands`)."""
+    out: dict[str, dict[str, float]] = {}
+    for unit, ps in V6.parts(**st).items():
+        out[unit] = {term: n * ands(p, memo) for term, (p, n) in zip(UNIT_TERMS[unit], ps, strict=True)}
+        for d in (*V5.PARTS, *V6.PARTS):
+            d.traced.cache_clear()  # a part's trace is dropped once counted: the step's at R = 256 holds gigabytes
+    out["pool"]["checked witness hash"] = SHA_BIT * V6.data_bits(SimpleNamespace(**st))["chk"]
+    for unit in ("compile", "pool"):
+        out[unit]["total"] = sum(out[unit].values())
     return out
 
 
@@ -260,7 +268,7 @@ def main() -> None:
     ap.add_argument("--json", type=Path)
     ap.add_argument("--quick", action="store_true", help="one small load at R = 16 (a smoke test)")
     ap.add_argument("--from", dest="src", type=Path, help="reprice a report's measured loads instead of replaying them")
-    ap.add_argument("--no-compile", action="store_true", help="price the pool alone, not the compile side")
+    ap.add_argument("--no-compile", action="store_true", help="price the pool alone, not the proved units")
     ap.add_argument("--against", action="append", default=[], metavar="NAME=ANDS",
                     help="report each window's ANDs as a ratio of ANDS, a budget the caller states with its source")
     ap.add_argument("--node-share", action="append", default=[], metavar="NAME=SHARE@ANDS",
@@ -298,12 +306,14 @@ def main() -> None:
             if a.no_compile or engine is None or "requests" not in load["window"]:
                 continue
             st = compile_statics(load, engine, how)
-            cc = compile_cost(st, memo)
-            report["loads"][kind][how]["compile slice"] = {
-                "statics": {k: st[k] for k in ("R", "W", "A", "K", "P", "CU", "NS", "NM", "NRB", "NRK")},
-                "ANDs": cc, **compared(cc["total"])}
-            print(kind, how, "CompileSlice_v5", {k: f"{v:.3g}" for k, v in cc.items()},
-                  report["loads"][kind][how]["compile slice"]["node share"], flush=True)
+            uc = unit_cost(st, memo)
+            total = uc["compile"]["total"] + uc["pool"]["total"]
+            report["loads"][kind][how]["proved units"] = {
+                "statics": {k: st[k] for k in ("R", "W", "A", "K", "P", "CU", "NB", "NS", "NM", "NRB", "NRK")},
+                "CompileSlice_v6": uc["compile"], "PoolWindow_v1": uc["pool"], "total": total, **compared(total)}
+            for name, c in (("CompileSlice_v6", uc["compile"]), ("PoolWindow_v1", uc["pool"])):
+                print(kind, how, name, {k: f"{v:.3g}" for k, v in c.items()}, flush=True)
+            print(kind, how, "both", f"{total:.3g}", report["loads"][kind][how]["proved units"]["node share"], flush=True)
     if a.json:
         a.json.write_text(json.dumps(report, indent=1, default=str))
 
