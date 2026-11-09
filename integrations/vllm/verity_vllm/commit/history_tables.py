@@ -48,10 +48,16 @@ def on(config: Mapping[str, Any] | None) -> bool:
     return bool((config or {}).get(SWITCH, False))
 
 
-def name(request: str, layer: int) -> str:
-    """Request ``request``'s history table at layer ``layer``: the table that layer's long rows read, a registered parameter
-    of its own."""
-    return f"history/{request}/model.layers.{int(layer)}.self_attn.latent"
+#: a table's name: its request's public key and its layer
+NAME = "history/{key}/model.layers.{layer}.self_attn.latent"
+
+
+def name(key: str, layer: int) -> str:
+    """The history table at layer ``layer`` of the request ``key`` names: the table that layer's long rows read, a registered
+    parameter of its own. ``key`` is public, since a verifier derives the table's domain from it: a one-stage window's
+    request key, or a two-stage span's window run, class and slot (`pipeline.boundary_tables.key`), never the engine's id
+    for the request, which only the prover's index holds."""
+    return NAME.format(key=key, layer=int(layer))
 
 
 class Histories:
