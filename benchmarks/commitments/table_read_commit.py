@@ -44,6 +44,7 @@ from typing import Any
 
 import torch
 
+from verity_config.settings import SHARED
 from verity_vllm.commit import row_tables as RTB
 from verity_vllm.commit import row_tables_device as D
 
@@ -247,13 +248,13 @@ def main(argv: list[str] | None = None) -> int:
                "gate": gate, "batches": per_batch, "cpu_twin": cpu, "tables": tab}
     print(json.dumps({**summary, "batches": {b: {k: v for k, v in r.items() if k != "kernel_ms_all"}
                                             for b, r in per_batch.items()}}, indent=1))
-    out = ns.out or os.environ.get("RESEARCH_RUN_DIR")
+    out = ns.out or SHARED.RESEARCH_RUN_DIR
     if out:
         d = Path(out)
         d.mkdir(parents=True, exist_ok=True)
         (d / "table_read_commit.json").write_text(json.dumps(summary, indent=1) + "\n")
         result = {
-            "schema": RESULT_SCHEMA, "run_id": os.environ.get("RESEARCH_RUN_ID", "local"), "kind": "bench-result/v1",
+            "schema": RESULT_SCHEMA, "run_id": SHARED.RESEARCH_RUN_ID or "local", "kind": "bench-result/v1",
             "workload_fingerprint": {"workload": "table_read_commit", "reads": ns.reads, "layers": ns.layers, "row_bytes": ROWS,
                                      "batches": ns.batches, "reps": ns.reps,
                                      "implementation": "verity_vllm.commit.row_tables_device (pouw_cuda/row_table.cu)",
