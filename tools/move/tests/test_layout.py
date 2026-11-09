@@ -77,8 +77,8 @@ def moved(tmp_path) -> Path:
 
 
 def test_a_second_run_on_the_moved_tree_changes_nothing(moved):
-    """`restack.py` carries a branch across a move by rerunning it, and `stage.py` refuses a move whose rerun changes
-    anything: with nothing of the map left to move, no second (empty) entry goes to `moves.json`."""
+    """`restack.py` carries a branch across a move by rerunning it: with nothing of the map left to move, a second run
+    changes nothing, and no second (empty) entry goes to `moves.json`."""
     git(moved, "commit", "-q", "-m", "moved")
     subprocess.run(["python3", str(LAYOUT), "--root", str(moved), "--map", str(moved.parent / "map.toml"), "--no-lock"],
                    check=True, capture_output=True)

@@ -3,8 +3,8 @@
 branch across a generated layout move by running the move's own script on it, instead of rebasing it.
 
 With no `--move-commit`, the moves are every commit `--main` (default origin/main) has and the branch lacks whose message
-has a move line, oldest first: `Move: MAP` runs `tools/move/rename.py --map MAP`, as drive and `stage.py` write it, and
-`Layout-move: MAP` (with `--no-lock` when the move ran so) runs `tools/move/layout.py --map MAP`, as `stage.py` writes it.
+has a move line, oldest first, as the queue writes it: `Move: MAP` runs `tools/move/rename.py --map MAP`, and
+`Layout-move: MAP` (with `--no-lock` when the move ran so) runs `tools/move/layout.py --map MAP`.
 The branch crosses each in turn as below, the last merging `--onto` (default `--main`), so one command carries it across a
 window's moves. A `--move-commit` without `--script` runs its own move line's script, else `layout.py`; with `--script`,
 that script and its `--script-arg`s.
@@ -59,7 +59,7 @@ SCRIPT_ARGS: tuple[str, ...] = ()
 BRANCH_ARGS = {"tools/move/layout.py": ("--report-splits",)}
 SCRIPT_DIR = "tools/move"
 TRAILER_MOVE, TRAILER_OF = "Restack-move", "Restack-of"
-#: a move commit's line naming its map, and so its script (`stage.py` writes both kinds, drive's queue `Move:`)
+#: a move commit's line naming its map, and so its script (the queue's `MOVE_KINDS` writes both kinds)
 MOVE_LINE = re.compile(r"^(Move|Layout-move): (tools/move/[\w.-]+\.toml)((?: --no-lock)?)$", re.M)
 LINE_SCRIPT = {"Move": "tools/move/rename.py", "Layout-move": "tools/move/layout.py"}
 #: the result's own list of pins, whose `--regen` runs every stale pin's command

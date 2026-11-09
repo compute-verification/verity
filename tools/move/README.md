@@ -6,7 +6,6 @@ root, and refuses a dirty worktree; a second run changes nothing.
 
 | Tool | What it does |
 |---|---|
-| `stage.py` | Stages a move on a base: one commit per map, each certified by `move_check.py` and rerun to check it changes nothing, for its lander (`MAP...`, `--base`, `--branch`, `--push`, `--certificate`). |
 | `layout.py` | Moves the paths a layout map names and rewrites every path, module name, import, pyproject and anchor that pointed at them (`--dry-run`, `--modules`, `--resolve M`). |
 | `rename.py` | Renames the words a word map names, in paths, modules, Lean names and prose, leaving the Lean locks' records for `tools/verity/lean/check.py --update --moved` and sorting again a sorted JSON object whose keys it renames (`--map MAP`, `--dry-run`, `--moves`). |
 | `restack.py` | Carries an open branch across every move `main` has and it lacks, by rerunning each move's script on it, then merging the moved `main` (`BRANCH`, `--push-to`). |
@@ -39,44 +38,28 @@ has one map: two maps here that rename one word must reach one name whichever of
 keep two past word maps as fixtures (`tests/fixtures/`). `layout_map.toml` stays while `tools/lean/setup.sh` maps old Lake
 package paths through it.
 
-## Staging a move
+## Landing a move
 
-A move lands alone, as one commit per map on the commit it was made on. Its lead:
+A move lands through the queue, drive's or the verified queue's, as one commit made on the tip it lands on. Its lead:
 
-1. lands each map first, as an ordinary change: `tools/move/<name>.toml`, directly in this directory, where `move_check.py`
+1. lands its map first, as an ordinary change: `tools/move/<name>.toml`, directly in this directory, where `move_check.py`
    reads a word map at the move's base and anyone reruns the move from;
-2. stages the move on the base it will land on, `main`:
+2. opens the move's PR, whose body says `Move: tools/move/NAME.toml`. Its head is only the request; it needs a ready mark and
+   a land verdict like any PR, and never lands on its mark alone.
 
-       python3 tools/move/stage.py tools/move/NAME.toml [tools/move/MORE.toml...] --branch BRANCH --push --certificate cert.json
+The queue regenerates the move on the tip below it with `main`'s scripts: `rename.py --map MAP` for a word map (a
+non-empty `[words]`), `layout.py --map MAP` for a path map (a non-empty `[paths]`; `--no-lock` on a tree with no
+`uv.lock`), at the root of a fresh worktree. What that changed is one commit, whose message names the command and ends in
+the PR's trailers and its move line, `Move: MAP` or `Layout-move: MAP`, by which `restack.py` finds the move and its
+script; `main`'s `move_check.py PARENT COMMIT` (`verity check move`) must certify it. A tip that changes regenerates it
+again, so the map reruns over whatever landed since.
 
-   For each map in order, on `origin/main` (fetched first; `--base REF` names another) or on the commit the map before it
-   made, it runs the base's own `rename.py` (a map with `[words]`) or `layout.py` (a map with `[paths]`; `--no-lock` skips
-   `uv lock`) at the root of a fresh worktree, commits what that changed as one commit whose message names the command and
-   ends in its move line, `Move: MAP` or `Layout-move: MAP`, certifies it with the base's `move_check.py PARENT COMMIT`,
-   and runs the map again to check that changes nothing. Nothing in the checkout changes but the new branch, pushed and never forced.
-   `--certificate` writes each commit's `move_check.py --json` report;
-3. hands the lander the branch and the command `stage.py` printed for each commit, `verity check move PARENT COMMIT`
-   (`move_check.py`, which exits 0 on a pure move, 1 naming what isn't).
-
-Over the whole tree `rename.py` and `move_check.py` each run for minutes, so the lead stages on a node, from a checkout at
-the window's base. The node's clone can't push and its git has no identity (`stage.py` refuses before running), so the
-run names one and bundles the branch into its outputs, and the lead pushes it from the checkout:
-
-    git fetch origin main && git checkout --detach origin/main
-    research run --on auto --cwd clone -- bash -c 'export GIT_{AUTHOR,COMMITTER}_NAME=LEAD GIT_{AUTHOR,COMMITTER}_EMAIL=EMAIL;
-      python3 tools/move/stage.py tools/move/NAME.toml --base HEAD --no-fetch --branch BRANCH \
-        --bundle "$OUT/move.bundle" --certificate "$OUT/cert.json"'
-    research fetch RUN --all && git fetch ~/.research/runs/RUN/out/move.bundle BRANCH:BRANCH && git push -u origin BRANCH
-
-If `main` moves before the move lands, the lead stages it again on the new `main`: the map reruns over whatever landed
-since. A word map can also go through the queue, as a PR whose body says `Move: tools/move/NAME.toml`: drive regenerates
-its move on the tip below it with `checked`'s scripts, as `stage.py` does with its base's, lands it only if certified
-(the team skill's "Landing"), and restacks `next`'s members across it. Drive knows only the moves it regenerated: a move
-landed outside the queue leaves each open branch, `next`'s members among them, to cross it with `restack.py`.
-
-`stage.py` refuses (exit 1) a map outside this directory or missing at the commit it would run on, a map with both
-`[words]` and `[paths]` or neither (a move that needs both stages two maps), a script that fails, a map that changes
-nothing, a commit `move_check.py` doesn't certify, and a move whose second run changes anything. `move_check.py` refuses,
+The queue leaves the PR out, telling its owner why once a head, for a map outside this directory or missing at the tip, one
+that doesn't parse, one with both `[words]` and `[paths]` or neither (a move that needs both is two move PRs, each with its
+map), a script that fails, a map that changes nothing and a commit `move_check.py` doesn't certify; a PR below the move that
+changes this directory's scripts holds it back until it lands. A PR above the move whose change names a word, path or module
+of its map, or whose plain merge conflicts with it, crosses it by `restack.py` (below) before it merges; a move that
+landed outside the queue, which no queue regenerated, leaves each open branch to cross it so. `move_check.py` refuses,
 with each path's first offending hunk, every change its docstring doesn't list as part of a pure move. Among them:
 - a file's text changed beyond its moved paths, module names and the words of the word maps at the base, as `rename.py`
   writes them;

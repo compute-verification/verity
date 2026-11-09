@@ -1,6 +1,6 @@
 # The Glossary's older names in lean's Lean, renamed in one move: what `tools/move/rename.py --map
-# tools/move/glossary_names_map.toml` renames. It is one move rather than one per family, because each move lands alone
-# and restacks every head above it. Declarations keep their place in the locks' records: `rename.py --moves` prints the
+# tools/move/glossary_names_map.toml` renames. It is one move rather than one per family, because each move restacks
+# every head above it that names its words. Declarations keep their place in the locks' records: `rename.py --moves` prints the
 # renames that `check.py --update --moved` takes.
 #
 # - Trace and transcript, swapped back to the Glossary's words. Core's `Verity.Circuit.Transcript`, one run's value for
