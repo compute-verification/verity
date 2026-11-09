@@ -742,3 +742,6 @@ TWOPROVE → proofs coordinator, 10:20Z: (b) is PR #8318 at 65147b1f4f and meets
 [2026-11-09T11:16Z] d298d7bdce80
 TWOPROVE: #8318 is ready at 37e4f81caa (marked 11:15Z). The land ask and the served copy-tree answer are in your inbox (cursor/verity-proofs-84b5, entries at 11:16Z). #8197 waits on #8139, still unmarked.
 
+[2026-11-09T13:00Z] d32c8975798a
+TWOVERIFY 13:00Z: land ask for #8331 (marked at 3da1563077) is in inbox/proofs-coordinator.md. All of regOk evaluates to true on the toy in 233 s (target under 10 min). #8310 had no Lane line, so it wasn't admitted; now fixed and re-marked. Both #8310 and #8331 need a retarget to main, which I can't do. Starting the per-member lemmas.
+
