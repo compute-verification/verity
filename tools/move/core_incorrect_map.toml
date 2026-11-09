@@ -1,0 +1,46 @@
+# Core's partition lemmas and refinement guarantee in the Glossary's word: what `tools/move/rename.py --map
+# tools/move/core_incorrect_map.toml` renames (a proof block that doesn't compute its outputs is incorrect; "wrong unit" is
+# the older name). The guarantee `Verity.Guarantees.RefineWrong` and its proof `Verity.SecurityProofs.RefineWrong` become
+# `RefineIncorrect`, and `Verity.Partition.mem_wrong`, `Refines.exists_wrong_fine` and `Refines.card_wrong_le` become
+# `mem_incorrect`, `exists_incorrect_fine` and `card_incorrect_le`. The set itself, `Verity.Partition.wrong`, and Flock's
+# copies of the three lemmas, `FlockSoundness.Audit.Partition`'s, keep their names. Declarations keep their place in the
+# locks' records: `rename.py --moves` prints the renames that `check.py --update --moved` takes.
+#
+# `RefineWrong` is renamed everywhere, since no other declaration spells it. The lemmas' words, which Flock's copies
+# share, are renamed only in the declaring module and, for `mem_wrong`, in the files where the partition is
+# `Verity.Partition`, as their namespaces and the partitions they bind have it: Pouw's PearlC circuits, Spot's instance,
+# Flock's bridge inside `namespace Verity` and the sampled bridge's `(Verity.Partition.ofAudit P)`. [keep] holds the
+# Flock lemma where those bridges use it beside Core's. Each [[words_in]] lists the declaring module, since
+# `move_check.py` keeps a scoped word only where its files declare the name it renames.
+[words]
+"RefineWrong" = "RefineIncorrect"
+
+[[words_in]]
+files = ["Security/Proofs/Core/Circuit.lean"]
+words = { "exists_wrong_fine" = "exists_incorrect_fine", "card_wrong_le" = "card_incorrect_le" }
+
+[[words_in]]
+files = [
+    "Security/Proofs/Core/Circuit.lean",
+    "Security/Proofs/Flock/Bridge/CircuitOf.lean",
+    "Security/Proofs/Pouw/PearlC/RowCircuit.lean",
+    "Security/Proofs/Pouw/PearlC/Tile4Circuit.lean",
+    "Security/Proofs/Pouw/PearlC/TileCircuit.lean",
+    "Security/Proofs/Properties/Verity/Sampled/UnboundBridge.lean",
+    "Security/Proofs/Spot/Instance.lean",
+]
+words = { "mem_wrong" = "mem_incorrect" }
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+# files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
+
+[keep]
+# Flock's own `mem_wrong`: named in full in Flock's bridge, and at the sampled bridge's Flock partition `P`.
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
+            'FlockSoundness\.Audit\.Partition\.mem_wrong', 'fun hm => P\.mem_wrong']
+strings = []
+
+[keep_in]
