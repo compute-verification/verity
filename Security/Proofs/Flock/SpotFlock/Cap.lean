@@ -14,7 +14,7 @@ accepted has at most `cap h` proof blocks (`Code.ReplayCap`):
 * an accepted fork passed round 2 (`stmtOk`), so its second stage accepted the replay sample, which is then not empty:
   the first stage accepted, and the sample of record is the slots `Slots.checked` keeps of the units it proved;
 * each population slot `ρ` it keeps is unit `ρ`, whose cell of each template `t` is `blockOf ρ t` on `[0, n_t)`, and
-  every proof block of an input slot is always checked (`cellsOk`), so the sample has at most `|proved| · Σ_t n_t`
+  every proof block of an input slot is always checked (`regMatchesTwo`), so the sample has at most `|proved| · Σ_t n_t`
   proof blocks of population slots (`perBlock`) and always checked ones besides;
 * a first stage with no closure map whose law Flock reads as a uniform `K`-subset (`firstK`) proves `K` units.
 -/
@@ -24,7 +24,7 @@ accepted has at most `cap h` proof blocks (`Code.ReplayCap`):
 namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy Finset
-open Properties.Spot (slotPartition bytesOf)
+open Properties.Spot (bytesOf membersPart)
 open Properties.Spot.SecurityProofs (bind_eq_ok lawObj mem_checked flockLaw_subset deriveLaw_subset)
 open Lean (Json)
 
@@ -153,11 +153,8 @@ theorem run_acc_coins {Coin Ω : Type} [Inhabited Coin] (H : Msg → Msg) (P : P
 
 variable (h : Held)
 
-/-- The proof blocks of the statement's partition: the boundary registration's program's under the proof-block query. -/
-def nBlocks : ℕ :=
-  match (Spot.Slots.layout h.reg.first.program h.blockQuery).toOption with
-  | some lb => (slotPartition lb).blocks.length
-  | none => 0
+/-- The proof blocks of the statement's partition, the members' units (`membersPart`). -/
+def nBlocks : ℕ := (membersPart h.ms).blocks.length
 
 /-- The proof blocks of a replay block: `n_t` in template `t`'s cell (`RegTwo.ns`), summed over the templates. -/
 def perBlock : ℕ := ∑ t ∈ range h.reg.ns.size, h.reg.ns.getD t 0
@@ -171,17 +168,19 @@ def cap (_ : Msg) : ℕ :=
   | none => nBlocks h
 
 /-- **The replay cap holds** at SPOT[Flock]'s code (`Code.ReplayCap`): an accepted fork's second stage accepted the
-first stage's sample, whose replay blocks' proof blocks `cellsOk` counts. -/
+first stage's sample, whose replay blocks' proof blocks `regMatchesTwo` counts. -/
 theorem replayCap (H : Msg → Msg) : ((base h).atOrder (order h)).ReplayCap H (two h) (rs h) (cap h) := by
-  intro x s Pt d hs hPt hd _ Ω P ω r e hacc
+  intro x s Pt d hs hPt hd hin Ω P ω r e hacc
   have hs' : parse h x = some s := hs
-  obtain ⟨lb, hlb, hPteq⟩ := partition_eq h (s := s) hPt
-  obtain ⟨l, lb', hl, hlb', -, -, -, hcells⟩ := two_eq h hd
-  have hlbeq : lb' = lb := by
-    rw [hlb] at hlb'
-    exact (Except.ok.inj hlb').symm
-  rw [hlbeq, ← hPteq] at hcells
-  obtain ⟨hT, -, hcl⟩ := cellsOk_sound hcells
+  have hreg : reg h x = some h.reg := by
+    unfold reg
+    unfold parse at hs'
+    cases hdx : decode x with
+    | none => simp [hdx] at hs'
+    | some st => rfl
+  have hPteq : Pt = membersPart h.ms := partition_eq h (s := s) hPt
+  obtain ⟨g, l, hg, hl, -, -, hT, -, hcl⟩ := regMatchesTwo h x s Pt d hs hPt hd hin
+  obtain rfl : g = h.reg := Option.some.inj (hg.symm.trans hreg)
   obtain ⟨r', hr'⟩ : ∃ r', r' = forkOn (((base h).atOrder (order h)).stage2 x) r e := ⟨_, rfl⟩
   rw [← hr'] at hacc
   obtain ⟨as, has, hne⟩ := run_acc_coins H P ((base h).atOrder (order h)).V x ω r' 3 (by omega)
@@ -226,12 +225,6 @@ theorem replayCap (H : Msg → Msg) : ((base h).atOrder (order h)).ReplayCap H (
         h.reg.first.closure (src (coinSeq r' 0)) with
     | error e => exact absurd (by simp [RegTwo.sample, hS]) hne0
     | ok t => exact ⟨t.1, t.2.1, t.2.2, rfl⟩
-  have hreg : reg h x = some h.reg := by
-    unfold reg
-    unfold parse at hs'
-    cases hdx : decode x with
-    | none => simp [hdx] at hs'
-    | some st => rfl
   have hrs : rs h x r = (Spot.Slots.checked l proved).toList := by
     show ((reg h x).map fun g => g.first.checked (bytesOf (coinByte (r (order h x).first)))).getD [] = _
     rw [hreg]
@@ -242,8 +235,6 @@ theorem replayCap (H : Msg → Msg) : ((base h).atOrder (order h)).ReplayCap H (
     simp only [slots_select_of _ _ _ _ _ _ hl hS]
   have hN : nBlocks h = Pt.blocks.length := by
     rw [hPteq]
-    unfold nBlocks
-    rw [hlb]
     rfl
   have hle : (sampleBlocks Pt d.part (rs h x r)).card ≤ nBlocks h := (card_sampleBlocks_le _ _ _).trans hN.ge
   unfold cap
