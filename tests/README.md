@@ -28,9 +28,10 @@ reports a change that grows a list or adds a finding to a file it touches.
 
 `lint/allowlists/superseded_versions.json` is circuit-check's suite's
 (`tools/verity/circuit_check/tests/test_superseded_versions.py`): every Definition version the registries register below
-its name's newest, one entry each, or one line of its `held` table naming the workload of record that still names it. That
-list is exact: a superseded version with neither fails, and so does a line for a version that is gone. The same gate
-reports a change that leaves its entries more than it found.
+a higher one of its name and kind (a Boolean version, registered with the word Definition it computes, supersedes no word),
+one entry each, or one line of its `held` table naming the workload of record that still names it. That list is exact: a
+superseded version with neither fails, and so does a line for a version that is gone. The same gate reports a change that
+leaves its entries more than it found.
 
 ## Bookkeeping
 

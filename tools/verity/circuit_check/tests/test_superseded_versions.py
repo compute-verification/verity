@@ -1,9 +1,12 @@
 """No new superseded Definition version: the registries' set of them only shrinks.
 
-A Definition's id is ``Name_vN``, and a version is superseded when the registries register a higher version of its name
-(``Attention_v1`` beside ``Attention_v2``).  The registries are the ones circuit-check loads (`targets.load_registries`), read in
-an interpreter that ran nothing before (`registered`): the registry is the process's and grows as code runs, so read in this
-process it would hold whatever a test before it made.
+A Definition's id is ``Name_vN``, and a version is superseded when the registries register a higher version of its name and
+kind.  A name's versions are of two kinds: its Boolean versions, each a Boolean Definition registered with the word Definition
+it computes (`boolean.definition`'s ``word``), and the rest.  A Boolean version is its word on bits, a new version of the same
+name by the catalog's convention and not a successor: ``Name_v2`` computing ``Name_v1`` on bits supersedes nothing, while a
+second word ``Name_v3`` supersedes ``Name_v1``, and its Boolean version ``Name_v4`` supersedes ``Name_v2``.  The registries are
+the ones circuit-check loads (`targets.load_registries`), read in an interpreter that ran nothing before (`registered`): the
+registry is the process's and grows as code runs, so read in this process it would hold whatever a test before it made.
 
 ``tests/lint/allowlists/superseded_versions.json`` lists every superseded version, one entry each: ``file``, the module that
 defines it (`sidecars.owner`); ``kind``, ``superseded``; ``symbol``, its name; ``detail``, its id.  A superseded version with no
@@ -40,35 +43,38 @@ ID = re.compile(r"(.+)_v(\d+)")
 FIX = ("A change that adds Name_vN+1 deletes Name_vN with it; or deletes another superseded version and gives this one its "
        "entry (the line below; `--prune` drops the deleted one's); or, where a workload of record still names the old version, "
        'says which: add "Name_vN": "<workload>" to the list\'s `held`, the workload\'s id as '
-       "integrations/vllm/manifests/records.json has it.")
+       "integrations/vllm/manifests/records.json has it. A Boolean version registered with the word Definition it computes "
+       "(`word=`) supersedes nothing.")
 PRUNE = f"uv run python {Path(__file__).resolve().relative_to(REPO)} --prune"
 
-#: run in a fresh interpreter: each id the registries register with the file of the module that defines it, as JSON on its
-#: last line
+#: run in a fresh interpreter: each id the registries register with the file of the module that defines it and whether it is a
+#: Boolean version, as JSON on its last line
 _LOAD = """
 import json, sys
 from circuit_check import sidecars, targets
 from verity.ml.circuits.defs import REGISTRY
 targets.load_registries()
-print(json.dumps({i: sidecars.rel(sys.modules[sidecars.owner(REGISTRY.defs[i])].__file__) for i in targets.REGISTERED}))
+print(json.dumps({i: [sidecars.rel(sys.modules[sidecars.owner(d)].__file__), getattr(d, "word", None) is not None]
+                  for i in targets.REGISTERED for d in [REGISTRY.defs[i]]}))
 """
 
 
 @cache
-def registered() -> dict[str, str]:
-    """{id: the file of the module that defines it} for every Definition the registries register."""
+def registered() -> dict[str, tuple[str, bool]]:
+    """{id: (the file of the module that defines it, whether it is a Boolean version)} for every Definition the registries
+    register."""
     p = subprocess.run([sys.executable, "-c", _LOAD], capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-4000:]
-    return json.loads(p.stdout.splitlines()[-1])
+    return {i: (file, boolean) for i, (file, boolean) in json.loads(p.stdout.splitlines()[-1]).items()}
 
 
-def superseded(ids: dict[str, str]) -> dict[str, tuple[str, str]]:
-    """{each superseded id of ``ids``: (its file, the newest id of its name)}."""
-    versions = {i: (m[1], int(m[2])) for i in ids if (m := ID.fullmatch(i))}
-    newest: dict[str, int] = {}
-    for name, n in versions.values():
-        newest[name] = max(n, newest.get(name, n))
-    return {i: (ids[i], f"{name}_v{newest[name]}") for i, (name, n) in versions.items() if n < newest[name]}
+def superseded(ids: dict[str, tuple[str, bool]]) -> dict[str, tuple[str, str]]:
+    """{each superseded id of ``ids``: (its file, the newest id of its name and kind)}."""
+    versions = {i: ((m[1], boolean), int(m[2])) for i, (_, boolean) in ids.items() if (m := ID.fullmatch(i))}
+    newest: dict[tuple[str, bool], int] = {}
+    for kind, n in versions.values():
+        newest[kind] = max(n, newest.get(kind, n))
+    return {i: (ids[i][0], f"{kind[0]}_v{newest[kind]}") for i, (kind, n) in versions.items() if n < newest[kind]}
 
 
 def entry(file: str, fid: str) -> dict[str, str]:
@@ -133,9 +139,14 @@ def test_the_list_holds_only_superseded_versions_where_they_are_defined() -> Non
 
 
 def test_what_is_superseded_and_what_the_list_gets_wrong() -> None:
-    ids = {"A_v1": "a.py", "A_v2": "a.py", "A_v4": "b.py", "B_v1": "b.py", "C[A_v1]_v2": "c.py", "D_v3": "d.py", "D_v7": "d.py",
-           "E_v10": "e.py", "E_v9": "e.py", "plain": "p.py"}
+    rest, boolean = False, True
+    ids = {"A_v1": ("a.py", rest), "A_v2": ("a.py", rest), "A_v4": ("b.py", rest), "B_v1": ("b.py", rest),
+           "C[A_v1]_v2": ("c.py", rest), "D_v3": ("d.py", rest), "D_v7": ("d.py", rest), "E_v10": ("e.py", rest),
+           "E_v9": ("e.py", rest), "plain": ("p.py", rest),
+           "F_v1": ("f.py", rest), "F_v2": ("f.py", boolean), "G_v1": ("g.py", rest), "G_v2": ("g.py", boolean),
+           "G_v3": ("g.py", rest), "G_v4": ("h.py", boolean), "H_v1": ("h.py", boolean), "H_v2": ("h.py", rest)}
     now = superseded(ids)
+    assert {i: now.pop(i) for i in ("G_v1", "G_v2")} == {"G_v1": ("g.py", "G_v3"), "G_v2": ("g.py", "G_v4")}
     assert now == {"A_v1": ("a.py", "A_v4"), "A_v2": ("a.py", "A_v4"), "D_v3": ("d.py", "D_v7"), "E_v9": ("e.py", "E_v10")}
     assert entry("a.py", "C[A_v1]_v2") == {"file": "a.py", "kind": KIND, "symbol": "C[A_v1]", "detail": "C[A_v1]_v2"}
     assert not any(findings(now, {"A_v1": "a.py", "A_v2": "a.py", "D_v3": "d.py"}, {"E_v9": "a workload"}).values())
