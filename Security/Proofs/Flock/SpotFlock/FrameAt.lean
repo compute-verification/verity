@@ -18,6 +18,15 @@ them, so a frame fixed before the run checks each opening at the port the run co
   `frameAt` sets both on a frame, at its own ports' depth (`depth_ownAtOf` gives `Code.ownAt_depth`).
 * `at_frameAt`, `find_frameAt`: there the frame checks gate `g`'s opening at the entry's root and the slot's position,
   at the entry's port, the first with that root.
+* `port_frameAt`: so where the slot has a port `T`'s schema and the entry `T`'s root, leaf count and domain, the frame
+  meets either branch of `FrameIs` at `T` (the registered read, or the published tree's port), but for the position
+  and the path. `entryNamed_irootsOf` and `entryNamed_decode` read the entry off the record's ports.
+
+What `FrameIs` then asks of a frame `frameAt slot c` is three facts: the reveal's openings (`c`'s `reveal`, `place`,
+`bits`, `salt` and `π`) are the session rows' at the layout's columns; each gate's slot names its port, that port's
+schema and the row's position (the session header's, or the drawn unit's row of the published tree); and each port's
+entry in an accepted run's record has its registered read's root, leaf count and domain (round 2's `second-read`) or
+its published tree's, at most `c`'s own depth.
 -/
 
 @[expose] public section
@@ -182,5 +191,29 @@ theorem find_frameAt (hs : slot g = some s) (he : entryNamed roots s.port = some
     ((frameAt slot c).ownAt roots g).find? (fun P' => decide (bs P'.root = bs (portOf s.schema e).root)) =
       some (portOf s.schema e) := by
   simp [frameAt, ownAtOf, hs, he, hd]
+
+/-- **The frame checks at a port as `FrameIs` asks**: where gate `g`'s slot has port `T`'s schema and the roots' entry
+named like its port has `T`'s root, leaf count and domain, at most the frame's own depth, the frame checks the opening
+at a port with `T`'s root, leaf count, domain and schema, at the slot's position, the first with that root. `T` is the
+registered read in `FrameIs`'s registered branch and the published tree's port in its roots branch. -/
+theorem port_frameAt {T : _root_.Flock.Registered.Port} (hs : slot g = some s) (he : entryNamed roots s.port = some e)
+    (hr : bytes e.root = T.root) (hl : e.leaves = T.leaves) (hd : bytes e.domain = T.domain)
+    (hsc : s.schema = T.schema) (hcap : _root_.Flock.log2ceil e.leaves ≤ depth c.own) :
+    ∃ P : _root_.Flock.Registered.Port, P.root = T.root ∧ P.leaves = T.leaves ∧ P.domain = T.domain ∧
+      P.schema = T.schema ∧ (frameAt slot c).at_ roots g = some (bs P.root, s.pos) ∧
+      ((frameAt slot c).ownAt roots g).find? (fun P' => decide (bs P'.root = bs P.root)) = some P :=
+  ⟨portOf s.schema e, hr, hl, hd, hsc, at_frameAt hs he, find_frameAt hs he hcap⟩
+
+/-- **A replay block's entry named `name`** is the first of the round-1 record's ports' so named. -/
+theorem entryNamed_irootsOf {m₁ : Msg} {rec : Json} (hm : jsonMsg m₁ = some rec) (ρ : ℕ) (name : Msg) :
+    entryNamed (irootsOf m₁ ρ) name =
+      ((Spot.Record.byPort rec).toList.map entryOf).find? fun e => decide (e.name = name) := by
+  rw [entryNamed, entriesOf_irootsOf hm]
+
+/-- **The statement's entry named `name`** is the first of the boundary record's ports' so named. -/
+theorem entryNamed_decode {x : Msg} {st : Roots} (hx : decode x = some st) (name : Msg) :
+    entryNamed st.roots name =
+      ((Spot.Record.byPort st.record).toList.map entryOf).find? fun e => decide (e.name = name) := by
+  rw [entryNamed, entriesOf_decode hx]
 
 end SpotFlock
