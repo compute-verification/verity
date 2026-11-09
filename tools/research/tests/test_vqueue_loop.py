@@ -906,7 +906,16 @@ def test_a_pr_renaming_or_deleting_under_a_frozen_path_waits_while_the_freeze_la
     assert sum("#1 at" in x and "waits for the freeze to end" in x for x in env.out) == 1, env.out
     w.ready(env.main())
     assert sum("#1 at" in x and "waits for the freeze to end" in x for x in env.out) == 1, env.out    # once a head
-    frozen.write_text(frozen.read_text() + "except #1 9\n")                # the freeze's owner checked #1
+    head = env.o.gh.prs[1].head
+    cleared: dict[tuple[int, str, str], list[Lab]] = {}
+    env.labels._counted = lambda n, h, key: (cleared.get((n, h, key), []), [])
+    frozen.write_text(frozen.read_text() + "cleared-by vllm remote-cleared\n")
+    cleared[(1, head, "remote-cleared")] = [Lab("lane-1", "true", "2026-01-01T00:00:00Z")]
+    assert [r.number for r in w.ready(env.main())] == [2, 3]                # cleared, but not by the freeze's owner
+    cleared[(1, head, "remote-cleared")] = [Lab("vllm", "true", "2026-01-01T00:00:00Z")]
+    assert [r.number for r in w.ready(env.main())] == [1, 2, 3]             # the owner cleared that head
+    cleared.clear()
+    frozen.write_text(frozen.read_text() + "except #1 9\n")                # a PR the freeze's owner checked, by number
     assert [r.number for r in w.ready(env.main())] == [1, 2, 3]
     frozen.unlink()
     assert [r.number for r in w.ready(env.main())] == [1, 2, 3]
