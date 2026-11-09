@@ -327,15 +327,16 @@ def test_the_record_is_the_shared_vectors_byte_for_byte(tmp_path):
     ``record.jsonl`` exactly: rules 1 and 2 (with a slot holder that died), the statements' order (a skip, a repeat, a
     recursive session released whole, statements that can't be one's), the budget (and at b = 1 and b = 2), unended
     recursive sessions reaching it, an honest stream that never does, the schedule, strings Python escapes, no stop of a
-    session not yet opened (by ``stop``, or of a slot's holder that died), so that each stop counts against its stream,
-    and rule 5 (registrations admitted in order, one reread admitting nothing, one skipped counted as a failure and read
-    later, one not on the record, commitments none of the server's, and a skip that brings the stream to its budget).
+    session not yet opened (by ``stop``, of a slot's holder that died, or by rule 5's refusal), so that each stop counts
+    against its stream, and rule 5 (registrations admitted in order, one reread admitting nothing, one skipped counted as
+    a failure and read later, one not on the record, commitments none of the server's, and a skip that brings the stream
+    to its budget).
     ``core_firewall``'s ``test_the_lean_replays_the_shared_vectors`` runs the same file, so the two ZK servers
     read and write one record."""
     v = json.loads(VECTORS.read_text())
     assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {
-        "rules-1-2", "order", "budget", "unended", "honest", "schedule", "escapes", "registrations", "prestop", "budget-1",
-        "budget-2"}
+        "rules-1-2", "order", "budget", "unended", "honest", "schedule", "escapes", "registrations", "prestop",
+        "prestop-registrations", "budget-1", "budget-2"}
     for c in v["cases"]:
         fw = FW.Firewall(tmp_path / c["name"])
         assert [_vector_op(fw, op) for op in c["ops"]] == c["results"], c["name"]

@@ -1591,6 +1591,133 @@
    "record": "{\"budget\": 3, \"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 0, \"session\": \"r0000\", \"stream\": \"s\"}\n{\"event\": \"slot\", \"part\": \"L0\", \"seq\": 1, \"session\": \"r0001\"}\n{\"event\": \"slot\", \"part\": \"L0\", \"seq\": 2, \"session\": \"r9999\"}\n{\"budget\": 3, \"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 3, \"session\": \"r0001\", \"stream\": \"s\"}\n{\"event\": \"slot\", \"part\": \"L0\", \"seq\": 4, \"session\": \"r0001\"}\n{\"event\": \"stop\", \"part\": \"L0\", \"seq\": 5, \"session\": \"r0001\", \"why\": \"the slot's holder ended before its outcome (slot 4)\"}\n{\"event\": \"slot\", \"part\": \"L0\", \"seq\": 6, \"session\": \"r0000\"}\n{\"budget\": 3, \"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 7, \"session\": \"r0002\", \"stream\": \"s\"}\n{\"event\": \"stop\", \"part\": \"inner\", \"seq\": 8, \"session\": \"r0002\", \"why\": \"rec proxy: the session ended without Finish\"}\n"
   },
   {
+   "name": "prestop-registrations",
+   "ops": [
+    [
+     "register",
+     "aa"
+    ],
+    [
+     "registrations",
+     "r0000",
+     "L0",
+     [
+      3
+     ]
+    ],
+    [
+     "registrations",
+     "r0000",
+     "L0",
+     "row x: its root is no value commitment of the ZK server's"
+    ],
+    [
+     "open",
+     "s",
+     [
+      "L0"
+     ],
+     1,
+     null
+    ],
+    [
+     "failures",
+     "s"
+    ],
+    [
+     "finish",
+     "r0000"
+    ],
+    [
+     "admit",
+     "r0000",
+     "L0"
+    ],
+    [
+     "registrations",
+     "r0000",
+     "L0",
+     [
+      0
+     ]
+    ],
+    [
+     "release",
+     "r0000",
+     "L0"
+    ],
+    [
+     "open",
+     "s",
+     [
+      "L0"
+     ],
+     1,
+     null
+    ],
+    [
+     "finish",
+     "r0001"
+    ],
+    [
+     "admit",
+     "r0001",
+     "L0"
+    ],
+    [
+     "registrations",
+     "r0001",
+     "L0",
+     [
+      3
+     ]
+    ],
+    [
+     "failures",
+     "s"
+    ],
+    [
+     "open",
+     "s",
+     [
+      "L0"
+     ],
+     1,
+     null
+    ]
+   ],
+   "results": [
+    0,
+    {
+     "refused": "recursive session r0000 stopped at L0: registration 3 is not on the ZK server's record"
+    },
+    {
+     "refused": "recursive session r0000 stopped at L0: row x: its root is no value commitment of the ZK server's"
+    },
+    "r0000",
+    0,
+    null,
+    {
+     "release_ms": null
+    },
+    null,
+    null,
+    "r0001",
+    null,
+    {
+     "release_ms": null
+    },
+    {
+     "refused": "recursive session r0001 stopped at L0: registration 3 is not on the ZK server's record"
+    },
+    1,
+    {
+     "refused": "stream s stopped at its failure budget (1 of 1)"
+    }
+   ],
+   "record": "{\"event\": \"register\", \"n\": 0, \"record\": \"0000000000000000aa\", \"seq\": 0}\n{\"event\": \"refused\", \"part\": \"L0\", \"seq\": 1, \"session\": \"r0000\"}\n{\"event\": \"refused\", \"part\": \"L0\", \"seq\": 2, \"session\": \"r0000\"}\n{\"budget\": 1, \"event\": \"open\", \"parts\": [\"L0\"], \"seq\": 3, \"session\": \"r0000\", \"stream\": \"s\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 4, \"session\": \"r0000\"}\n{\"event\": \"admit\", \"n\": 0, \"part\": \"L0\", \"seq\": 5, \"session\": \"r0000\"}\n{\"event\": \"release\", \"part\": \"L0\", \"seq\": 6, \"session\": \"r0000\"}\n{\"budget\": 1, \"event\": \"open\", \"parts\": [\"L0\"], \"seq\": 7, \"session\": \"r0001\", \"stream\": \"s\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 8, \"session\": \"r0001\"}\n{\"event\": \"stop\", \"part\": \"L0\", \"seq\": 9, \"session\": \"r0001\", \"why\": \"registration 3 is not on the ZK server's record\"}\n{\"event\": \"refused\", \"part\": \"L0\", \"seq\": 10, \"session\": \"r0001\"}\n"
+  },
+  {
    "name": "budget-1",
    "ops": [
     [
