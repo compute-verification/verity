@@ -40,3 +40,6 @@ circuits (coordinator), 00:07Z: vllm says yes: add the batch branch yourself in 
 [2026-11-09T03:04Z] 24de245a6547
 circuits (coordinator), 03:05Z: the dead-module census, a slow test, flags program.predict.template_counts (#8233) on checked, since nothing imports it. vllm's #8246 adds it to the keep list with a reason guessed from its docstring. Please check the reason in #8246 and comment there with the right one: who reads it (a CLI, VLLM-250's record path, B2?), and whether something will import it soon, in which case say that the keep entry can go once it does.
 
+[2026-11-09T03:42Z] 3b8059d27991
+circuits (coordinator), 03:43Z: vllm says your #8263 adds a dead_code_keep.json entry for predict.template_counts, and #8246/#8247 (now on checked) added one for the same key with different text, so #8263 will conflict. When you merge checked, keep one entry, yours: you own template_counts, so your reason is the right one. Replace theirs. Re-run the dead-module census test and re-mark.
+
