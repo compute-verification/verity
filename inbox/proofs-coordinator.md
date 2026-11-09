@@ -16946,3 +16946,85 @@ every statement, so round 2 refuses everything and a theorem resting on a passin
 carrying `ownOf` (TWOOPENS, SLOTSAT, HEADERROOTS, TWOGUARD) should set it the way it sets `refs`, from the registered
 reference statements, when it merges `checked` after #8270. I've told TWOOPENS, SLOTSAT and TWOGUARD, with the admitted
 SHA. HEADERROOTS needs it from you, since I don't have its id.
+
+## 06:52Z from VERIFYFAST-B: PR A passed its checks (24% off SiluMul's 8,192-block verify); per-statement plan, PR D Wed 11 Nov and PR E Fri 13 Nov; K2048's per-block slope is 9 to 33 ms, settled about 08:30Z
+
+**Your 06:09Z list:**
+- **The K2048 pin** (r20261109-045227-5447) is done: 1, 64, 1 again and 256 blocks, three verifies each, all accepted.
+- **The K2048 profile** at 1 and 64 blocks (r20261109-045640-a8d6) is done. A call-chain profile at 1 block
+  (r20261109-060835-acb5) is done too: it gives the plan below.
+- **RMSNorm v8** (r20261109-045227-85e9) is done at 1, 16 and 1 again. At 256 blocks (r20261109-061250-f934) it lands
+  about 07:05Z, and its call-chain profile (r20261109-060859-bc5b) about 07:00Z.
+- **PROVECUT** got the slopes at 06:13Z, and at 06:50Z a correction for K2048 (below).
+
+**Correction to my 05:41Z post.** It priced the per-block verify at 100 ns an input bit and predicted 5.5 ms a block
+for K2048. That model was wrong:
+- The cut-wire check's cost follows the template's parameter leaves per unit. SiluMul_v4's units have many of them.
+- In K2048's profiles the check stays below 0.2%.
+- So PR B (the cut-wire check at O(description)) helps small-block types like SiluMul, not K2048.
+
+**The per-block slopes:**
+
+| type | blocks | per block | runs |
+| --- | --- | --- | --- |
+| SiluMul_v4 I=256 | 1 to 8,192 | 1.06 ms; 0.71 ms with PR A | f6a1; e4ac |
+| FlashInfer K2048 | 1 to 256 | 9 to 33 ms | 5447 |
+| RMSNorm v8 | 1 to 16 | at most 0.1 s, below the noise | 85e9 |
+
+- K2048's verify grows 8.4 s from 1 to 256 blocks, which is 33 ms a block.
+- But its inputs phase grew 22% in the same cells, and that phase has no per-block work; the node's load was 95 to
+  140. Taking that out leaves about 9 ms a block.
+- At a full table of 2,048 blocks that is 18 to 68 s, beside 29 s per statement. So which lever matters most for
+  K2048 depends on this number.
+- Two interleaved runs settle it. Each stages two sizes, then verifies them alternately four times, so load reaches
+  both alike:
+  - K2048 at 1 and 1,024 blocks: r20261109-064645-ae12, cpu-13, about 08:30Z;
+  - RMSNorm v8 at 1 and 256 blocks: r20261109-064715-6489, cpu-3, about 08:30Z.
+- A call-chain profile of K2048 at 1,024 blocks (r20261109-065045-b4e2, cpu-11, about 08:40Z) will show where any
+  per-block time goes.
+
+**PR A** (branch `cursor/proofs-verifyfast-b5-noinline`, head ea5ddb5e0b): five Flock `Nat` constants of 2^32 or more
+become `@[noinline]`, with a root test. Measured on SiluMul_v4 at 8,192 blocks on one node:
+- The verify went from 11.64 to 8.82 s (−24%), and setup from 7.03 to 3.92 s.
+- At 1 block nothing changes beyond the node's noise (2.97 to 3.01 s).
+- Checks:
+  - suites at 0f9abe3dba: 59 of 59 passed (r20261109-061203-9fd1);
+  - records: every package passes, and Flock's lock gains only its `format` field, as `checked`'s has
+    (r20261109-054556-db06, committed in ea5ddb5e0b);
+  - the suites that lock change reaches are running (r20261109-064852-2e67).
+- I open and mark it when they pass, about 07:15Z.
+
+**The per-statement plan** (§10 of the note `lanes/proofs/20261109T0140Z-report-lever3b-verifyfast-b.md`). Owner VERIFYFAST-B,
+PRF-464. At 1 block, K2048's verify is `inputs` 10.3 s, setup 1.15 s and checks 17.1 s. Its template has 117.7M
+references, 675 MB of the 730 MB circuit file. The profile splits it:
+- **The template fold:** about 15 s, half the verify. `Tab.flushK` takes 5.4 s: an F128 product and a hash-map insert
+  for each slot and copy of each run. The hash maps take 2.7 s in all.
+- **The template's parse:** 8.4 s:
+  - `HmOut.tmplOf` (2.8 s) scans its 675 MB for newlines a byte at a time, checks its UTF-8, copies it and splits it
+    into strings through a list. `ByteLines.View.of?` then checks and cuts the whole file again (1.2 s).
+  - `Tmpl.parseFast` reads the numbers (1.5 s).
+  - The class digest's SHA-512 takes 1.5 s.
+- **`KnownRead.sureReads`:** about 1 s of each setup. `Tmpl.soleIn` filters a list for every reference.
+- **The archive's SHA-512 of the file:** 1.7 s.
+
+The PRs:
+1. **PR D, the parse, marked by Wed 11 Nov.** The template's lines and numbers are read off the file's one line view,
+   cut and checked once. The class digest is hashed in a task, as the flat path's `classOfTask` is. Expected on
+   K2048: `inputs` from 10.3 to about 7 s of CPU, plus about 1.5 s less wall time.
+2. **PR E, the fold and setup, marked by Fri 13 Nov.** `Tab.flushK` adds a run's sums into one 64-slot array per (row
+   chunk, column chunk), with one table lookup per run. `soleIn` scans its array in place. Expected: the checks from
+   17.1 to about 14 s, and setup from 1.15 to about 0.2 s.
+3. **PR B moves to Tue 17 Nov.** If PROVECUT's repricing puts small-block types first, B goes first (Wed 11 Nov), then
+   D (Fri 13 Nov) and E (Tue 17 Nov).
+
+Each change is a `@[csimp]` twin proved equal to what the proofs read, errors included, or a refinement re-proved
+where #8136's are. Together D and E should take K2048's verify from about 29 to about 22 s of CPU. RMSNorm v8's
+profile, about 07:00Z, may move weight toward the parse: its `inputs` is 43 to 46 s of a 77 to 85 s verify.
+
+**Runs and ETAs:**
+- f934: RMSNorm v8 at 256 blocks, about 07:05Z;
+- bc5b: RMSNorm v8 profile, about 07:00Z;
+- 2e67: PR A's suites delta, about 07:10Z;
+- ae12 and 6489: the interleaved runs, about 08:30Z;
+- b4e2: the K2048 profile at 1,024 blocks, about 08:40Z;
+- the node A job (r20261109-043748-1674): holding to 09:30Z, its table about 10:45Z.
