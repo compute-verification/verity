@@ -80,6 +80,15 @@ def test_the_drop_of_a_candidate_now_on_main_records_its_pass() -> None:
     assert (s.main, s.stack, s.history) == ("T1", [], [vq.Outcome((1,), ("h1",), vq.PASS)])
 
 
+def test_an_eject_after_its_candidates_drop_names_that_candidates_tree() -> None:
+    s, p = D.start("m"), lq.Policy(batch=2, depth=1)
+    s, (build,) = D.step(s, lq.Ready(1, "h1", frozenset({"a/x.py"})), p)
+    for e in [lq.Built(build.cid, "T1"), lq.Listed("T1", frozenset({"unit:a"}))]:
+        s, _ = D.step(s, e, p)
+    s, out = D.step(s, lq.Result("T1", "unit:a", lq.FAIL, frozenset({"a/"}), "1"), p)
+    assert out == (lq.Cancel(build.cid, "T1", "fail"), lq.Eject(1, "h1", "T1", "unit:a", "fail"))
+
+
 def test_a_failed_task_keyed_on_the_whole_tree_reaches_decide_as_a_glob_of_it() -> None:
     c = snapshots.Cand(1, "m", (lq.Member(1, "h1", frozenset({"a/x.py"})),), tree="T1", tasks=frozenset({"lean-suites"}),
                        results={"lean-suites": lq.Result("T1", "lean-suites", lq.FAIL, frozenset({"."}))})

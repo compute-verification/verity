@@ -67,6 +67,7 @@ class QState:
     decides: int = 0
     now: float = 0.0
     rung: set[tuple[str, str]] = field(default_factory=set)  # (candidate, why) rings and (base, task) reds already paged
+    dropped: list[Cand] = field(default_factory=list)  # what this tick's actions dropped, for the ejects after each drop
 
 
 def _fields(cls) -> frozenset[str]:
@@ -99,7 +100,7 @@ class Driver:
             s.decides += 1
             if not actions or actions == last:
                 break
-            last = actions
+            last, s.dropped = actions, []
             for a in actions:
                 out += getattr(self, "do_" + type(a).__name__)(s, a)
         return s, tuple(out + self.begin(s))
@@ -234,12 +235,13 @@ class Driver:
         if a.sha == s.main:
             return []
         c = s.stack.pop(self.find(s, a.sha))
+        s.dropped.append(c)
         return [lq.Cancel(c.cid, c.tree, a.why)]
 
     def do_Eject(self, s: QState, a) -> list[lq.Decision]:
         if s.ready.get(a.number, ("",))[0] == a.head:
             del s.ready[a.number]
-        tree = next((c.tree for c in s.stack if any(m.pr == a.number for m in c.members)), "")
+        tree = next((c.tree for c in [*s.stack, *s.dropped] if any(m.pr == a.number for m in c.members)), "")
         return [lq.Eject(a.number, a.head, tree or "", a.failed[0].task if a.failed else "", a.why)]
 
     def do_Retry(self, s: QState, a) -> list[lq.Decision]:
