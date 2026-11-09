@@ -1,6 +1,6 @@
-"""The compile slice over the memory-checked pool: one window of the compile unit from the empty engine and pool, its
-schedule computed from the advice and held to the registered rows it reads, each pool call a record on a bus to
-`CacheStep_v3`'s stream (`cache_step_v3`), which runs inside the unit and answers them.
+"""The compile slice over the memory-checked pool: one window of the compile slice's proof block from the empty engine
+and pool, its schedule computed from the advice and held to the registered rows it reads, each pool call a record on a
+bus to `CacheStep_v3`'s stream (`cache_step_v3`), which runs inside the unit and answers them.
 
     CompileSlice_v4{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, AS, EW, Q, D, P, K, CTW, CU, DA, NS, NM}
         (adv, ing, req, srv, cout, coin, chk) -> verdict[16]
@@ -13,8 +13,8 @@ slots (CacheStep_v3) runs them: a window costs its accesses, whatever the pool's
 - ``adv`` (*advice*, unpadded): the window's DA decision bits ``dec`` and its executed step count ``steps`` (PW =
   bitlen(P) bits). DA is a static: the advice's length is registered and public, so each length is its own binding.
 - ``ing`` (*ingress*, unpadded): the window's K arrival slots' ``a_valid``, ``a_id`` and prompt length ``a_P``.
-- ``req`` (*registered*): each slot's served output length ``a_O`` (and at AS = 1 ``a_cap``), and ``tok``, each slot's
-  first CU·B token ids (its prompt, then its outputs).
+- ``req`` (*registered*): each slot's served output length ``a_O`` (and at AS = 1 whether ``a_O`` is its max_tokens),
+  and ``tok``, each slot's first CU·B token ids (its prompt, then its outputs).
 - ``srv`` (*registered*): the served rows, each step's R rows (valid, request, kind, start, n) in slot order, as
   `compile_slice.rows_bits` packs them, zero on an idle step: the row `served_rows` registers.
 - ``cout`` (*registered*): the state row S_{P+1} and the window row W_1 the window leaves, and its slot row: each
@@ -670,7 +670,7 @@ def tap(S, st: RS.State, inp: RS.Inputs) -> SimpleNamespace:
     R, W, A, B, H, L, AS = S.R, S.W, S.A, S.B, S.H, S.L, S.AS
 
     def rec(r: RS.Req, comp: int, running: bool) -> dict:
-        return {"id": r.id, "P": r.P, "O": r.O, "out": r.out, "comp": comp, "cap": r.cap if AS else 0,
+        return {"id": r.id, "P": r.P, "O": r.O, "out": r.out, "comp": comp, "max_tokens": r.cap if AS else 0,
                 "fin": r.fin if AS and running else 0}
 
     run = [rec(r, r.comp, True) for r in st.running] + [None] * (R - len(st.running))
@@ -682,7 +682,7 @@ def tap(S, st: RS.State, inp: RS.Inputs) -> SimpleNamespace:
     budget, ns, needs = S.T, [], []
     for r in run:
         n = 0
-        if r is not None and not (r["fin"] and r["cap"]):
+        if r is not None and not (r["fin"] and r["max_tokens"]):
             n = r["P"] + r["out"] - r["comp"]
             n = H if 0 < H < n else n
             n = min(n, budget, L - 1 - r["comp"])
