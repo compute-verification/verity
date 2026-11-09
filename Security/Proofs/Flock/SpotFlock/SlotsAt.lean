@@ -11,11 +11,13 @@ public import Proofs.Flock.SpotFlock.RevealAt
 whose sites hold. None of `slotMap`, `revealCode` and `layoutFor` reads `h.frame` (`slotMap_frame`,
 `revealCode_frame`, `layoutFor_frame`).
 
+At every accepted run's checked unit the layout puts the unit in a block of its session's first table
+(`CheckedRun.blockOf_some`) and each gate at a column of that table (`CheckedRun.wire_lt`, `colAt_lt`).
+
 **A site holds at a run** (`CheckedRun.SiteHolds`): three facts about gate `g`'s site at one checked unit of an
 accepted run.
 
-* `Laid`: the layout puts the unit in a block of its session's first table, at a column of that table and at an
-  instance below the table's count.
+* `Counted`: the unit's instance is below the table's count.
 * `RowAt`: the site's port of that table is an unsegmented bit row of its place's width, and the bit it holds at the
   place, at the unit's instance, is the one the layout reads.
 * the branch facts: at a port a registered read is named like (`ReadsRegistered`), the port is the first of its name,
@@ -30,9 +32,9 @@ accepted run.
   rows `SamplingDeploy.row` doesn't encode;
 * the copy (`RowAt`'s last fact): the opened bit is a unit column and the row's bit a message column, equal only
   through the session circuit's copy rows, and the place must be one for every unit that needs the gate;
-* the slot's position: an interior row's leaf is its unit's place in the second stage's population, `i·n_t + p` for
-  the `i`-th sampled replay block, in a tree of `q·n_t` leaves, so the run's coins set both the position and the leaf
-  count; and round 2 bounds a registered read's row only to its unit's range of rows;
+* the slot's position (`Counted` and the slots): an interior row's leaf is its unit's place in the second stage's
+  population, `i·n_t + p` for the `i`-th sampled replay block, in a tree of `q·n_t` leaves, so the run's coins set
+  both the position and the leaf count; and round 2 bounds a registered read's row only to its unit's range of rows;
 * the registered value (`ReadsRegistered`): round 2 lets a port read any registered value, so its slot's key is fixed
   only where each port's registered value is the reference statement's.
 -/
@@ -45,14 +47,64 @@ open Claims Claims.Sampling SamplingDeploy
 
 variable (h : Held)
 
+section Columns
+
+open FlockSoundness FlockSoundness.Discharge Exec Flock Flock.Readable
+
+/-- **Every column `colAt` gives at an accepted statement is one of its table's**: below the rows' width it is the
+accepted statement's own column (`col_val`), and from the width on it is the pin, the last column. -/
+theorem colAt_lt {T : Model.Statement} (a : HiddenExec.AcceptedH T) {gi : ℕ} (hg : gi < a.st.c.g) (x : ℕ) :
+    colAt a.st a.L.unit_built gi x < 2 ^ T.kLog := by
+  have hw : a.rows.w = (unitRows a.st a.L.unit_built).stackW a.st.c.upv := rfl
+  have h0 : 0 < (unitRows a.st a.L.unit_built).stackW a.st.c.upv := Nat.succ_pos _
+  by_cases hx : x < a.rows.w
+  · have hc := (a.col hg ⟨x, hx⟩).isLt
+    rw [col_val a hg ⟨x, hx⟩] at hc
+    exact hc
+  · have hl : a.rows.w - 1 < a.rows.w := by omega
+    have e : colAt a.st a.L.unit_built gi x = colAt a.st a.L.unit_built gi (a.rows.w - 1) := by
+      unfold colAt
+      rw [if_neg (by omega), if_neg (by omega)]
+    have hc := (a.col hg ⟨_, hl⟩).isLt
+    rw [col_val a hg ⟨_, hl⟩] at hc
+    rw [e]
+    exact hc
+
+/-- **`layoutFor h` sends every gate to a column of a session statement's first table**, at a statement the scope
+check accepts (`accepted_check`, `colAt_lt`). -/
+theorem wire_lt_of {xS : Msg} {p : Parsed} (hp : parseBytes (FlockDeploy.readOf true) xS = some p) (hP : Parses p)
+    (hc : p.check = .ok ()) (hh : p.tags.hiddenOutputs = true) (hj : 0 < p.sts.size) (x m₁ : Msg) (u G : ℕ) :
+    (layoutFor h).wire x m₁ xS u G < 2 ^ p.sts[0].c.kLog := by
+  obtain ⟨T, a, hst, hk, -, -⟩ := accepted_check hP hc hh hj
+  have hfs : firstStmt xS = some a.st := by
+    rw [hst]
+    show (parseBytes (FlockDeploy.readOf true) xS).bind (·.sts[0]?) = _
+    rw [hp]
+    exact getElem?_pos p.sts 0 hj
+  obtain ⟨hty, ⟨ls, hcc⟩, -⟩ := Hidden.Committed.check a.ht a.committed
+  have hg0 : 0 < a.st.c.g := Hidden.check_g_pos hty hcc
+  rw [← hk]
+  show ((firstStmt xS).map fun st =>
+    if hb : Built (lunit st.c) then
+      colAt st hb (rankAt h x m₁ xS u % st.c.g)
+        (pickAny h (templateOf h.ms u) (u - Properties.Spot.unitBase h.ms (templateOf h.ms u)) G)
+    else 0).getD 0 < _
+  rw [hfs]
+  show (if hb : Built (lunit a.st.c) then
+      colAt a.st hb (rankAt h x m₁ xS u % a.st.c.g)
+        (pickAny h (templateOf h.ms u) (u - Properties.Spot.unitBase h.ms (templateOf h.ms u)) G)
+    else 0) < _
+  rw [dite_eq_left (show Built (lunit a.st.c) from a.L.unit_built)]
+  exact colAt_lt a (Nat.mod_lt _ hg0) _
+
+end Columns
+
 namespace CheckedRun
 
 variable (r : CheckedRun)
 
-/-- **The layout's column for the unit's gate `g` is one of its session's first table, and the unit's instance is
-below the table's count.** -/
-def Bounds (g : ℕ) : Prop :=
-  r.wire h g < 2 ^ r.sts[0]!.c.kLog ∧ r.n h < r.sts[0]!.pub.n
+/-- **The unit's instance is one of its session's first table's instances.** -/
+def Counted : Prop := r.n h < r.sts[0]!.pub.n
 
 /-- **The site's port reads a registered value**: a registered read `reg` is named like it, it is the first port of
 that name, the opening's roots are those round 2 reads `reg`'s value under, and the site's slot is the entry round 2
@@ -79,7 +131,7 @@ def ReadsInterior (S : Site) (g : ℕ) : Prop :=
 
 /-- **Gate `g`'s value sits at site `S`** in the run (the module's docstring). -/
 def SiteHolds (S : Site) (g : ℕ) : Prop :=
-  r.Bounds h g ∧ r.RowAt h S g ∧ (r.ReadsRegistered h S g ∨ r.ReadsInterior h S g)
+  r.Counted h ∧ r.RowAt h S g ∧ (r.ReadsRegistered h S g ∨ r.ReadsInterior h S g)
 
 /-- **`SlotsAt`'s conclusion** at gate `g` of the run's checked unit. -/
 def Slots (slot : ℕ → Option Slot) (c : Code) (L : Layout) (g : ℕ) : Prop :=
@@ -148,15 +200,28 @@ theorem blockOf_some (hr : r.Ok h) : (layoutFor h).blockOf [] r.m₁ (r.xS h) r.
     some (((layoutFor h).blockOf [] r.m₁ (unitStmt h r.m₂ r.u) r.u).getD 0)
   rw [hv] <;> rfl
 
+/-- **The layout's column for each gate of an accepted run's checked unit is one of its session's first table**: the
+session statement passes the scope check (`parsed_of_stmtOkAt`, `wire_lt_of`). -/
+theorem wire_lt (hr : r.Ok h) (g : ℕ) : r.wire h g < 2 ^ r.sts[0]!.c.kLog := by
+  have hj := sts_pos hr
+  obtain ⟨_, _, _, hx, -, -, -, hok, hu, hck, -, -, -, hset⟩ := hr
+  cases hS : FlockDeploy.parse true _root_.Flock.Readable.relation (unitStmt h r.m₂ r.u) with
+  | none => simp [Claims.Flock.check, hS] at hck
+  | some S =>
+    obtain ⟨p, hpb, -, hpp, hc, hh⟩ := parsed_of_stmtOkAt h (stmtOkAt_unit h hx hok hu) hS
+    obtain ⟨rfl, -⟩ := parsed_setupOf hset hpb
+    rw [getElem!_pos r.sts 0 hj]
+    exact wire_lt_of h hpb hpp hc hh hj [] r.m₁ r.u g
+
 /-- **`SlotsAt`'s conclusion at a site that holds**: at the base frame over the site map, the layout `layoutFor h`
 and the site map's slots. -/
 theorem slots (hr : r.Ok h) {site : ℕ → Option Site} (c₀ : Code) {g : ℕ} {S : Site} (hsS : site g = some S)
     (hg : r.s.prog.Needs r.b g) (hH : r.SiteHolds h S g) :
     r.Slots h (slotsOf site) (revealCode h site c₀) (layoutFor h) g := by
-  obtain ⟨⟨hy, hn⟩, hR, hrd⟩ := hH
+  obtain ⟨hn, hR, hrd⟩ := hH
   have hj := sts_pos hr
   have e0 : r.sts[0]! = r.sts[0] := getElem!_pos r.sts 0 hj
-  refine ⟨r.β h, 0, r.wire h g, r.n h, S.port, blockOf_some hr, hj, by rw [← e0]; exact hy,
+  refine ⟨r.β h, 0, r.wire h g, r.n h, S.port, blockOf_some hr, hj, by rw [← e0]; exact wire_lt hr g,
     by rw [Nat.zero_mul, Nat.zero_add] <;> rfl, by rw [← e0]; exact hn,
     r.opening h S g, r.open_mem hr hsS hg, rfl, rfl, r.roots_opening hr S g, r.row_opening hsS hR,
     r.salt_opening site c₀ S g, ?_⟩
