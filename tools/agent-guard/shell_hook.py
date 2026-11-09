@@ -351,10 +351,15 @@ def available() -> tuple[float, float] | None:
     return avail, total
 
 
+#: a command this hook would read past its first part: on a node it runs whole only inside one `bash -lc`
+COMPOUND = re.compile(r"&&|\|\||;|\|")
+
+
 def local_work_reason(command: str) -> str | None:
     """Why this command may not run on this VM, or None."""
     w = 0 if LOCAL_OK in command else weight(command)
-    remote = (f"Run it on a node: `research run --on auto -- CMD` (placed in a CPU node's research pool from this checkout: 4 CPUs, 16 GB "
+    cmd = f"bash -lc {shlex.quote(command)}" if COMPOUND.search(command) else "CMD"
+    remote = (f"Run it on a node: `research run --on auto -- {cmd}` (placed in a CPU node's research pool from this checkout: 4 CPUs, 16 GB "
               f"and 60 min unless --cpus, --mem-gb or --timeout say otherwise; add --wait to block until it ends, for at most 20 "
               f"minutes). For a small local run "
               f"you know fits, put {LOCAL_OK} in the command.")

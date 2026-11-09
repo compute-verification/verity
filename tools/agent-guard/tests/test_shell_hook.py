@@ -1,6 +1,7 @@
 """`.cursor/hooks.json`'s shell hook refuses commands that print the environment and lets everything else through."""
 import importlib.util
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -207,6 +208,10 @@ def test_builds_and_tests_are_refused_on_an_agent_vm_and_light_ones_only_while_i
     passes = ("research run --on auto -- uv run pytest -q", "uv run research run --on m --source . -- lake build",
               "ssh n1 'cd /w && pytest'", "git status", "AGENT_GUARD_LOCAL_OK=1 uv run pytest -q tests/", "rg pytest tools/", "ls")
     meminfo.write_text("MemTotal:       16000000 kB\nMemFree:          100000 kB\nMemAvailable:    6000000 kB\n")
+    for command in ("cd tools/research && python -m pytest -x", "cd t && uv run pytest tests; echo done"):
+        advice = re.search(r"`(research run --on auto -- [^`]+)`", answer(command, **gate)["agent_message"]).group(1)
+        assert advice.startswith("research run --on auto -- bash -lc ") and verdict(advice, **gate) == "allow", \
+            f"the advice for a compound command passes the hook: {advice}"
     for command in always:
         out = answer(command, **gate)
         assert out["permission"] == "deny", command
