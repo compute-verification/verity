@@ -131,10 +131,6 @@ def _slot(K: int, N: int, slots: np.ndarray, js: list[int]) -> list[int]:
     return _words(np.asarray(got).reshape(len(js), -1), 32)
 
 
-def _want_slot(K: int, N: int, row: list[int], j: int) -> int:
-    return row[j] if j < K and row[j] < N else 0
-
-
 @pytest.mark.parametrize("M_,K,N", [(3, 4, 20), (2, 5, 12), (1, 1, 4), (3, 8, 40)])
 def test_slot_j_is_the_merges_element_j(M_, K, N) -> None:
     """On the merge's outputs (lists of positions below N and of any u32, counts from 0 past K): slot j is the merge's element
@@ -147,7 +143,7 @@ def test_slot_j_is_the_merges_element_j(M_, K, N) -> None:
     js = list(range(K)) + [K, K + 1, 1 << 31, (1 << 32) - 1, rng.getrandbits(32)]
     cases = [(row, j) for row in merged for j in js]
     got = _slot(K, N, np.array([r for r, _ in cases], dtype=np.uint64), [j for _, j in cases])
-    assert got == [_want_slot(K, N, r, j) for r, j in cases]
+    assert got == [R.slot(r, j, N) for r, j in cases]
     assert all(g < N for g in got)
 
 
@@ -159,13 +155,13 @@ def test_the_served_slot_is_its_element_below_the_table() -> None:
     rows = [[rng.randrange(N) if rng.random() < 0.9 else rng.getrandbits(32) for _ in range(K)] for _ in range(24)]
     js = [0, K - 1, K, 1 << 31] + [rng.randrange(K) for _ in range(20)]
     got = _slot(K, N, np.array(rows, dtype=np.uint64), js)
-    assert got == [_want_slot(K, N, r, j) for r, j in zip(rows, js)]
+    assert got == [R.slot(r, j, N) for r, j in zip(rows, js)]
 
 
 @pytest.mark.parametrize("N,K,block", [(20, 4, 8), (18, 4, 8), (24, 4, 8), (10, 1, 4), (16, 16, 16)])
 def test_the_index_units_compose_to_the_rows_networks_order(N, K, block) -> None:
     """Blocks of 8 keys over 20 (a last block of 4), 18 (its last 2 keys joined to the block before) and 24, TOPK 1, and one
-    block; each unit on its block of the masks and the outputs before it, each its twin."""
+    block; each unit on its block of the masks and the outputs before it, each its twin, and slot unit j the merge's j-th."""
     masks = _masks(random.Random(N * 10 + K + block), N, K, 64, most=K)
     bl = X.blocks(N, K, block)
     lists, counts = [], []
@@ -174,10 +170,12 @@ def test_the_index_units_compose_to_the_rows_networks_order(N, K, block) -> None
         lists.append(p)
         counts.append(c)
     got = _merge(len(bl), K, np.array(lists, dtype=np.uint64).transpose(1, 0, 2), np.array(counts, dtype=np.uint64).T)
+    slots = _slot(K, N, np.array([g for g in got for _ in range(K)], dtype=np.uint64), list(range(K)) * len(got))
     for i, (m, g) in enumerate(zip(masks, got)):
         twin = R.values(m, K, block)
         assert [(tuple(lists[b][i]), counts[b][i]) for b in range(len(bl))] == [twin[("positions", b)] for b in range(len(bl))]
         assert tuple(g) == twin[("merge",)][0]
+        assert slots[i * K:(i + 1) * K] == g == [twin[("slot", j)][0] for j in range(K)]
         c = sum(m)
         whole = M.butterfly_apply(M.butterfly_settings(m, K), list(range(N)), K, 0)
         assert g[:c] == whole[:c] == [j for j, b in enumerate(m) if b]
@@ -275,9 +273,10 @@ def test_the_cut_counts_its_units() -> None:
         masks = len(X.plan(N, SERVED_TOPK)) if N > X.WHOLE_MAX else 1
         assert (mask in cut) == (N <= X.WHOLE_MAX)
         assert cut[READ] == SERVED_TOPK and cut[bind(R.DsaPositionsMerge, M=len(bl), K=SERVED_TOPK)] == 1
+        assert cut[bind(R.DsaPositionsSlot, K=SERVED_TOPK, N=N)] == SERVED_TOPK
         assert {(d.bindings["N"], d.bindings["AT"]) for d in cut if d.base_id == "DsaMaskPositions_v1"} == \
                {(hi - lo, lo) for lo, hi in bl}
-        assert sum(cut.values()) == masks + len(bl) + 1 + SERVED_TOPK
+        assert sum(cut.values()) == masks + len(bl) + 1 + 2 * SERVED_TOPK
     assert R.CUTS == {"DsaTopKReadRows_v1": R.cut}
 
 

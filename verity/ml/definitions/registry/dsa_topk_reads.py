@@ -20,7 +20,8 @@ and Path are READ's; `READ_PORTS` its parameters.  The body is three stages, eac
   proved range.  ``DsaPositionsSlot_v1{K,N}`` (slots, j) takes slot j of the merge's output, its j an input so that one
   template serves every slot, and 0 where j >= K or the slot is N or more, so a read's key is below N whatever its inputs;
 * TOPK reads, read j at slot j's position with opening (row[j], salt[j], path[j]) under the table's root and domain id: kv[j]
-  and its verdict ok[j].
+  and its verdict ok[j].  The cut stages each read as its own unit at slot unit j's output, j its slot unit's input; the body
+  reads the merge's slots directly, the same function, as every slot is below N.
 
 So where every ok is 1, kv[j] is the row the table holds at the mask's j-th member: today's long row's kv when the table holds
 the history (`DsaButterflyRowsPad_v1` over the counted mask's settings), which the definitions' tests hold it to.  `values` is
@@ -237,18 +238,22 @@ DsaTopKReadRows = CompositeDefinition(
         "ascending, from the table of root and domain (DsaMaskPositions_v1 a block of BLOCK keys, DsaPositionsMerge_v1), "
         "ok[j] read j's verdict")
 
-DSA_TOPK_READS = [DsaMaskPositions, DsaPositionsMerge, DsaTopKReadRows]
+DSA_TOPK_READS = [DsaMaskPositions, DsaPositionsMerge, DsaPositionsSlot, DsaTopKReadRows]
 
 
 def cut(t) -> list[tuple[Any, int]]:
     """The units a binding of `DsaTopKReadRows_v1` is cut into, each Definition bound and how many of it: the mask's own (its
-    `dsa_topk_mask_cut.cut`, else the mask whole), a `DsaMaskPositions_v1` a block, the merge, and TOPK of READ."""
+    `dsa_topk_mask_cut.cut`, else the mask whole), a `DsaMaskPositions_v1` a block, the merge, TOPK of
+    `DsaPositionsSlot_v1{K=TOPK,N}`, slot j's j its input, and TOPK of READ, read j at slot j's output.  The body computes
+    the same function with the reads over the merge's slots directly: a slot's output is its slot wherever the merge's is
+    below N, as every one is."""
     N, TOPK, block, READ = int(t.bindings["N"]), int(t.bindings["TOPK"]), int(t.bindings["BLOCK"]), t.bindings["READ"]
     mask = bind(BM.DsaTopKMaskCountedV2, N=N, TOPK=TOPK)
     bl = X.blocks(N, TOPK, block)
     units: Counter = Counter(dict(X.cut(mask) or [(mask, 1)]))
     units.update(bind(DsaMaskPositions, N=hi - lo, AT=lo, K=TOPK) for lo, hi in bl)
     units[bind(DsaPositionsMerge, M=len(bl), K=TOPK)] += 1
+    units[bind(DsaPositionsSlot, K=TOPK, N=N)] += TOPK
     units[READ] += TOPK
     return list(units.items())
 
@@ -269,9 +274,14 @@ def merge(lists: Sequence[Sequence[int]], counts: Sequence[int], K: int) -> list
     return out + [0] * (K - len(out))
 
 
+def slot(slots: Sequence[int], j: int, N: int) -> int:
+    """`DsaPositionsSlot_v1{K,N}`'s reference, j and the slots as u32 words: slots[j] where j < K and slots[j] < N, else 0."""
+    return slots[j] if j < len(slots) and slots[j] < N else 0
+
+
 def values(mask: Sequence[int], K: int, block: int = BLOCK) -> dict[tuple, tuple]:
     """Each index unit's outputs on a row's mask (N bits), by key: ("positions", b) block b's (K positions, count), ("merge",)
-    the K positions."""
+    the K positions, ("slot", j) slot unit j's position."""
     mask = [int(m) & 1 for m in mask]
     out: dict[tuple, tuple] = {}
     lists, counts = [], []
@@ -281,5 +291,7 @@ def values(mask: Sequence[int], K: int, block: int = BLOCK) -> dict[tuple, tuple
         out[("positions", b)] = (tuple(pos), sum(m))
         lists.append(pos)
         counts.append(sum(m))
-    out[("merge",)] = (tuple(merge(lists, counts, K)),)
+    merged = merge(lists, counts, K)
+    out[("merge",)] = (tuple(merged),)
+    out.update((("slot", j), (slot(merged, j, len(mask)),)) for j in range(K))
     return out
