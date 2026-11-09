@@ -1,6 +1,7 @@
-"""`verity-vllm commit-arb`: the served Commit under arbitrary traffic, its records held to the streamed I/O.
+"""The served Commit under arbitrary traffic (COMMIT-ARB), its records held to the streamed I/O: an opt-in GPU acceptance test,
+run from integrations/vllm.
 
-    VERITY_RETAIN=host verity-vllm commit-arb --out DIR --model REPO --revision SHA [--precision int8_exact|verity_int8|pin]
+    VERITY_RETAIN=host python -m tests.pipeline.commit_arb_gpu --out DIR --model REPO --revision SHA [--precision int8_exact|verity_int8|pin]
         --required-manifest PREDICTED/manifest.json [--hidden-so SO] [--norm-tap-so SO] [--tap-cap-mb N]
         [--requests 32] [--seed 0] [--prompt-range 16:1024] [--tokens 64] [--rate 0.5]
         [--max-num-seqs 8] [--max-num-batched-tokens 2048] [--no-chunked-prefill] [--kv-cache-mb N] [--window-steps 64]
@@ -37,8 +38,11 @@ I3 record, `RequestRecord.to_json`) and ``summary.json`` (with each request's ca
 """
 from __future__ import annotations
 
+import argparse
 import json
+import os
 import shutil
+import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -459,7 +463,7 @@ def scheduler_config(engine: Any) -> dict[str, Any]:
 
 def main(opts: Options) -> int:
     if not (opts.model and opts.revision):
-        raise UsageError("commit-arb needs --model REPO --revision SHA, a pin of manifests/checkpoints.json")
+        raise UsageError("COMMIT-ARB needs --model REPO --revision SHA, a pin of manifests/checkpoints.json")
     if opts.window_steps < 1 or opts.requests < 1 or opts.tokens < 1 or opts.rate <= 0:
         raise UsageError("--window-steps, --requests and --tokens are at least 1, --rate positive")
     lo, hi = prompt_range(opts.prompt_range)
@@ -492,3 +496,25 @@ def main(opts: Options) -> int:
     (out / "summary.json").write_text(json.dumps(summary, indent=1, default=str))
     print(f"COMMIT-ARB {'PASS' if summary['passed'] else 'FAIL'}: {json.dumps(summary, default=str)}", flush=True)
     return 0 if summary["passed"] else 1
+
+
+def parser(environ: Mapping[str, str]) -> argparse.ArgumentParser:
+    """`Options`' command line, in `verity-vllm`'s option syntax and with its environment defaults."""
+    from verity_vllm.pipeline import cli
+    p = argparse.ArgumentParser(prog="python -m tests.pipeline.commit_arb_gpu", description=__doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    cli._add_options(p, Options, environ)
+    return p
+
+
+def parse(argv: Sequence[str], environ: Mapping[str, str] | None = None) -> Options:
+    from verity_vllm.pipeline import cli
+    environ = os.environ if environ is None else environ
+    return cli._options(Options, parser(environ).parse_args(list(argv)), environ)
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main(parse(sys.argv[1:])))
+    except UsageError as e:
+        parser(os.environ).error(str(e))

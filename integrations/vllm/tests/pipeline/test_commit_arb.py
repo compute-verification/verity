@@ -1,4 +1,4 @@
-"""`pipeline.commit_arb`'s traffic, verdict and Commit, without an engine: CERT-VARLEN's lengths and caps, the sampling mix,
+"""`tests.pipeline.commit_arb_gpu`'s traffic, verdict and Commit, without an engine: CERT-VARLEN's lengths and caps, the sampling mix,
 seeded and in arrival order; a run passes only when every request and every window did; it commits under serve-openai's
 rows-sha512 committer."""
 from __future__ import annotations
@@ -6,8 +6,7 @@ from __future__ import annotations
 import pytest
 
 from verity_vllm.config import UsageError
-from verity_vllm.pipeline import cli
-from verity_vllm.pipeline import commit_arb as CA
+from tests.pipeline import commit_arb_gpu as CA
 from verity_vllm.pipeline import serve_seal as SS
 
 from tests.pipeline import predicted
@@ -130,7 +129,7 @@ def test_it_commits_under_serve_openais_rows_sha512_committer_and_needs_the_rows
     row's Build of record predict wrote, or ninja for its kernels, it is refused before the model loads, and the committer
     refuses it too."""
     def parse(*more: str) -> CA.Options:
-        return cli.parse("commit-arb", ["--model", "m", "--revision", "r", "--out", str(tmp_path), *more], environ={})
+        return CA.parse(["--model", "m", "--revision", "r", "--out", str(tmp_path), *more], environ={})
 
     with pytest.raises(UsageError, match="under rows-sha512 .*--required-manifest DIR/manifest.json"):
         CA.preflight(parse(), which=lambda _: "/v/bin/ninja")

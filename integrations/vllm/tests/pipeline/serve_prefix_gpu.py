@@ -1,4 +1,4 @@
-"""commit-arb's shared-prefix traffic (`pipeline.commit_arb.traffic`: system prompts, conversations of several turns) sent to a
+"""commit-arb's shared-prefix traffic (`commit_arb_gpu.traffic`: system prompts, conversations of several turns) sent to a
 running ``serve-openai --prefix-caching`` over HTTP, for its GPU arm: one thread a conversation, each turn a streamed
 ``/v1/completions`` of token ids with ``return_token_ids``, the next turn's prompt this turn's prompt, its streamed ids and the
 next question. ``top_p`` is left out (serve-openai refuses it below 1).
@@ -19,7 +19,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.pipeline import commit_arb as CA
+from tests.pipeline import commit_arb_gpu as CA
 
 
 def post(url: str, body: dict) -> Any:

@@ -27,7 +27,6 @@
     {"file": "verity_vllm/glue.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "glue"},
     {"file": "verity_vllm/pipeline/admission_bound.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "admission-bound"},
     {"file": "verity_vllm/pipeline/boolean_replay.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "boolean-replay"},
-    {"file": "verity_vllm/pipeline/commit_arb.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "commit-arb"},
     {"file": "verity_vllm/pipeline/coverage_workloads.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "coverage-workloads"},
     {"file": "verity_vllm/pipeline/pouw_serve.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "pouw-serve"},
     {"file": "verity_vllm/pipeline/prefix_cache.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "prefix-cache"},
