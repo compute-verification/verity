@@ -50,6 +50,26 @@ def test_a_batched_primitive_reading_one_word_twice_is_the_flat_lowering():
     assert S.check(SQUARES)["mismatched_bits"] == 0
 
 
+F32x4 = tuple((nm, Value(32)) for nm in ("x", "y", "z", "w"))
+PRODUCTS = CompositeDefinition("StructLowerProducts", 1, (), lambda _S: (F32x4, Array(3, Value(32))),
+                               lambda B, _S, x, y, z, w: array_of([B.call(F32Mul, x, y), B.call(F32Mul, z, w),
+                                                                   B.call(F32Mul, y, x)]), register=False)
+
+
+def test_a_large_primitive_node_is_a_call_lowered_once_per_pattern():
+    """`F32Mul`'s piece is past `PRIM_CALL_ANDS`: x·y and z·w bind their caller's bits in the same pattern and share one
+    specialization, y·x another; lowered in place (``prim_calls=None``) there is none, and both compute the flat lowering's
+    outputs."""
+    assert S.check(PRODUCTS)["mismatched_bits"] == 0
+    assert S.check(PRODUCTS, prim_calls=None)["mismatched_bits"] == 0
+    tm, lw, top = S.lower(PRODUCTS)
+    assert T.ordered(tm)["ok"]
+    muls = [sp for k, sp in lw.specs.items() if k[0] == F32Mul.id]
+    assert len(muls) == 2 and len(top.copies) == 3
+    assert not any(k[0] == F32Mul.id for k in S.lower(PRODUCTS, prim_calls=None)[1].specs)
+    assert len(top.rows) < min(len(sp.rows) for sp in muls)
+
+
 def _constants(B, _S, x):
     return array_of([B.call(GB.BlackwellS8ImmaDot32, B.call(SB.const_word(32, v)), x, x) for v in (7, 0, 1, 0x3F800000)])
 
