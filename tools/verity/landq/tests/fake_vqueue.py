@@ -1,7 +1,7 @@
 """A small snapshot queue with the verified queue's contract (its types' fields as `research.vqueue` names them), for the
-snapshot driver's tests: one candidate at a time on `main`, holding the first `batch` ready PRs by rank.  A pass advances;
-a fail drops the candidate and ejects the members whose files meet a failing task's inputs, or every member when none
-does; infra is retried, and rung at `rings` tries."""
+snapshot driver's tests: one candidate at a time on `main`, holding the first `batch` ready PRs by rank.  A pass advances
+and then drops the candidate, now on `main`, with its outcome; a fail drops the candidate and ejects the members whose
+files meet a failing task's inputs, or every member when none does; infra is retried, and rung at `rings` tries."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -109,7 +109,7 @@ def decide(s: Snapshot) -> list:
     c = s.candidates[0]
     v = c.verdict
     if v.state == PASS:
-        return [Advance(c.sha)]
+        return [Advance(c.sha), Drop(c.sha, "on main", Outcome(c.members, c.heads, PASS))]
     if v.state == FAIL:
         files = {r.number: r.files for r in s.ready}
         named = [n for n in c.members if any(lq.touches(files.get(n, frozenset()), f.inputs) for f in v.failed)]

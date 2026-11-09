@@ -69,6 +69,22 @@ def test_the_harness_catches_a_snapshot_queue_that_advances_on_a_fail(monkeypatc
     assert hit is not None
 
 
+def test_the_drop_of_a_candidate_now_on_main_records_its_pass() -> None:
+    s, p = D.start("m"), lq.Policy(batch=2, depth=1)
+    s, (build,) = D.step(s, lq.Ready(1, "h1", frozenset({"a/x.py"})), p)
+    for e in [lq.Built(build.cid, "T1"), lq.Listed("T1", frozenset({"unit:a"}))]:
+        s, _ = D.step(s, e, p)
+    s, out = D.step(s, lq.Result("T1", "unit:a", lq.PASS), p)
+    assert out == (lq.Advance("T1", (lq.Member(1, "h1", frozenset({"a/x.py"})),)),)
+    assert (s.main, s.stack, s.history) == ("T1", [], [vq.Outcome((1,), ("h1",), vq.PASS)])
+
+
+def test_a_failed_task_keyed_on_the_whole_tree_reaches_decide_as_a_glob_of_it() -> None:
+    c = snapshots.Cand(1, "m", (lq.Member(1, "h1", frozenset({"a/x.py"})),), tree="T1", tasks=frozenset({"lean-suites"}),
+                       results={"lean-suites": (lq.FAIL, frozenset({"."}))})
+    assert D.verdict(c).failed == (vq.Failed("lean-suites", "lean-suites@T1", frozenset({snapshots.WHOLE})),)
+
+
 def test_an_action_naming_a_candidate_that_isnt_live_is_refused() -> None:
     odd = types.SimpleNamespace(**{k: getattr(vq, k) for k in dir(vq) if not k.startswith("_")})
     odd.decide = lambda s: [vq.Advance("nope")]

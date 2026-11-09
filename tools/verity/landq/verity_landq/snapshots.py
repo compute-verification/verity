@@ -25,6 +25,8 @@ from verity_landq import model as lq
 LEAN = (".lean", "lean-audit.json", "lakefile.toml", "lake-manifest.json", "lean-toolchain")
 #: the most decide calls one event leads to
 TICKS = 8
+#: the whole tree as the contract's inputs say it (a glob whose `**` crosses directories), for the model's `.`
+WHOLE = "**"
 
 
 @dataclass
@@ -93,14 +95,17 @@ class Driver:
         if c.tree is None or c.tasks is None:
             return vq.Verdict()
         got = {t: c.results.get(t) for t in sorted(c.tasks)}
-        failed = tuple(vq.Failed(t, f"{t}@{c.tree}", o[1]) for t, o in got.items() if o and o[0] == lq.FAIL)
+
+        def entry(t: str, inputs: frozenset[str]):
+            return vq.Failed(t, f"{t}@{c.tree}", frozenset(WHOLE if i in lq.ROOTS else i for i in inputs))
+
+        failed = tuple(entry(t, o[1]) for t, o in got.items() if o and o[0] == lq.FAIL)
         if failed:
             return vq.Verdict(vq.FAIL, failed=failed)
         if all(o and o[0] == lq.PASS for o in got.values()):
             return vq.Verdict(vq.PASS)
         if all(o for o in got.values()):
-            return vq.Verdict(vq.INFRA, infra=tuple(vq.Failed(t, f"{t}@{c.tree}", o[1]) for t, o in got.items()
-                                                    if o[0] == lq.INFRA))
+            return vq.Verdict(vq.INFRA, infra=tuple(entry(t, o[1]) for t, o in got.items() if o[0] == lq.INFRA))
         return vq.Verdict()
 
     def find(self, s: QState, tree: str) -> int:
@@ -168,10 +173,11 @@ class Driver:
         return [lq.Advance(a.sha, landed)]
 
     def do_Drop(self, s: QState, a) -> list[lq.Decision]:
-        i = self.find(s, a.sha)
-        c = s.stack.pop(i)
         if a.outcome is not None:
             s.history.append(a.outcome)
+        if a.sha == s.main:
+            return []
+        c = s.stack.pop(self.find(s, a.sha))
         return [lq.Cancel(c.cid, c.tree, a.why)]
 
     def do_Eject(self, s: QState, a) -> list[lq.Decision]:
