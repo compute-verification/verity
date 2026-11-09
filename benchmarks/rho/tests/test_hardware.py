@@ -59,9 +59,9 @@ def test_a_location_without_hosts_is_one_host_with_nothing_counted():
     assert loc.server_memory == 1e12
 
 
-def test_a_construction_gets_the_dark_leaves_at_their_own_mfu():
-    assert Fleet("f", "h200-hgx", 1, 0.01, 0.4, 0.4).dark_mfu == 0.4
-    assert Fleet("f", "h200-hgx", 1, 0.01, 0.4, 0.4, 0.55).dark_mfu == 0.55
+def test_a_construction_gets_the_unregistered_leaves_at_their_own_mfu():
+    assert Fleet("f", "h200-hgx", 1, 0.01, 0.4, 0.4).unreg_mfu == 0.4
+    assert Fleet("f", "h200-hgx", 1, 0.01, 0.4, 0.4, 0.55).unreg_mfu == 0.55
 
 
 def test_units_is_the_one_conversion_from_flops_to_gates():
