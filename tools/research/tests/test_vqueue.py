@@ -542,6 +542,8 @@ class World:
                     assert all(any(meets(ready[m].files, f.inputs) for f in red) for m in a.members), f"{where}: not a fix"
                     self.seen["a fix built on a red base"] += 1
             elif isinstance(a, Drop) and a.outcome is not None and a.outcome.state == FAIL:
+                failed = by[a.sha].verdict.failed
+                assert not (failed and all(f.key == f.base_key for f in failed)) or a.outcome.suspects == (), where
                 self.seen["bisected"] += len(a.outcome.suspects) > 1
                 self.seen["suspected alone"] += len(a.outcome.members) == 1 and not [e for e in acts if isinstance(e, Eject)]
                 self.seen["a mixed failure"] += bool(a.outcome.suspects and a.outcome.inherited)
