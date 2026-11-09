@@ -20,6 +20,7 @@ import composite as C
 SAMPLED = "verity/sampled-proofs/v1"
 POUW = "verity/pouw/period/v1"
 POLICY = "verity/inference-only/v0"
+PEARL_PLUS = "verity/pouw/pearl-plus/v1"
 
 
 def put(d: Path, id: str, params: dict, commitment: bytes, evidence: bytes, digest: bytes | None,
@@ -130,11 +131,39 @@ def test_the_public_output_holds_no_evidence_and_no_params_bodies(tmp_path):
     record = json.loads((tmp_path / "public" / "composite.json").read_bytes())
     assert [(c["id"], c["params_sha512"]) for c in record["cases"]] == [
         (POUW, hashlib.sha512(b"{}").hexdigest()), (SAMPLED, hashlib.sha512(C.canonical(params)).hexdigest())]
-    assert record["cases"][1]["commitment"] == "01" * 64
+    assert [c["commitment"] for c in record["cases"]] == ["bb" * 64, "aa" * 64]
     priv = tmp_path / "private"
     assert stat.S_IMODE(priv.stat().st_mode) == 0o700
     assert all(stat.S_IMODE(f.stat().st_mode) == 0o600 for f in priv.rglob("*") if f.is_file())
     assert secret.hex() in (priv / "evidence.json").read_text()
+
+
+def test_remote_v1_takes_pearl_plus_in_the_period_s_place_and_publishes_its_digest_not_its_commitment(tmp_path):
+    """Pearl+'s commitment holds its passes' manifests and their salt key, so it is witness: the public record names the
+    digest its answer gives, a public output holding the commitment is refused, and without its case remote-v1 names it
+    missing."""
+    key = os.urandom(32).hex()
+    commitment = C.canonical({"manifests": [{"hm96_salt_key": key}], "record": "aa" * 64})
+    pp = put(tmp_path / "pearlplus", PEARL_PLUS, {"draws": 3}, commitment, b'{"files":[{}]}', b"\xdd" * 64,
+             verdict="accept")
+    v1 = put(tmp_path / "v1", SAMPLED, {}, b"\x01" * 64, b"{}", b"\xaa" * 64, verdict="accept")
+    io = policy(tmp_path)
+    exe = lean(tmp_path, {"protocol": "verity/remote/v1", "verdict": "accept"}, 0)
+    assert C.main(["remote-v1", "--cases", str(pp), "--cases", str(v1), "--cases", str(io), *outs(tmp_path),
+                   "--exe", exe]) == 0
+    params = json.loads((tmp_path / "private" / "params.json").read_bytes())
+    assert [c["id"] for c in params["components"]] == list(C.COMPONENTS["remote-v1"]) == [POLICY, PEARL_PLUS, SAMPLED]
+    public = b"".join(f.read_bytes() for f in sorted((tmp_path / "public").iterdir()))
+    assert key.encode() not in public and b"hm96_salt_key" not in public
+    record = json.loads((tmp_path / "public" / "composite.json").read_bytes())
+    assert (record["product"], record["missing"]) == ("verity/remote/v1", [])
+    assert [c["commitment"] for c in record["cases"]] == ["cc" * 64, "dd" * 64, "aa" * 64]
+    assert (tmp_path / "public" / "verdicts.txt").read_text().splitlines()[:4] == [
+        f"PIECE {POLICY} accept", f"PIECE {PEARL_PLUS} accept", f"PIECE {SAMPLED} accept", "VERDICT verity/remote/v1 accept"]
+    with pytest.raises(C.Leak, match="pouw/pearl-plus/v1's commitment"):
+        C.check_public(b'{"x":"' + commitment.hex().encode() + b'"}', [C.piece(pp)])
+    assert C.main(["remote-v1", "--cases", str(v1), "--cases", str(io), *outs(tmp_path, "2")]) == 0
+    assert f"NOT_ESTABLISHED missing {PEARL_PLUS}\n" in (tmp_path / "public2" / "verdicts.txt").read_text()
 
 
 def test_a_v2_answer_whose_query_is_a_digest_its_evidence_carries_stays_private(tmp_path):

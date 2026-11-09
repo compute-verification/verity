@@ -12,6 +12,7 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
                           [--draws 459] [--delta 1/100] [--jobs J] [--fast] [--coin-record R]
   served_passes.py lean --passes DIR --verify verify.json --exe pouw-pearlplus --out pearlplus-lean.json [--check C]
                         [--timeout S]
+  served_passes.py case --passes DIR --verify verify.json --lean pearlplus-lean.json --out CASE_DIR
   served_passes.py arm --out config.json [--spec SPEC] [--arm ARM]
 
 ``arm`` writes the spec's Pearl-C arm's pouw settings (`pearl_c_arm`, each ``"$NAME"`` read from the environment the
@@ -86,7 +87,8 @@ the salt and the call's index, and each weight's ``pearl-b/<w>`` its epoch's wei
 domain; a W that states no version, written before W registered the weights, ties the calls alone, its weights named
 untied, `verify_run.WEIGHTS_UNTIED`), takes the verifier's coin (with ``PEARLC_CHALLENGER_GATE`` and ``PEARLC_CHALLENGER_PEER``
 set, a draw session's on the auditor host opened on the run's commitment, `bench_arm.LiveDraw`, reserved under
-``PEARLC_CHALLENGER_LANE`` once that lane has no period open; else the node's, `verify_run.node_draw`; the format is
+``PEARLC_CHALLENGER_LANE`` once that lane has no period open, and as its first reserve after the Pearl-C period the salt
+session joined closed (``served.json``'s ``coins.reserved.period``); else the node's, `verify_run.node_draw`; the format is
 `verify_run`'s "The coin record"), and replays ``--draws`` work-weighted tiles over all of them and
 each pass's exclusion tiles.  A tile that passes every check but its inert-work bound is credited nothing under
 ``--over-cap uncredited`` (the default, CMP-311 option A; the credit takes the draws on such tiles, X_O) and rejects the run
@@ -114,6 +116,17 @@ printout with W at ``tie``), the file `served_verdicts.pearlplus_of_record` read
 answer within ``--timeout`` seconds, it writes none and removes any there. Either way both verdicts, the Lean's command
 line and the executable's SHA-256 go to ``--check`` (default `LEAN_CHECK` beside ``--out``). Prints one line and exits
 0 on a written accept, 1 on a written reject and 2 when it wrote no answer.
+
+``case`` writes, from the Lean verdict of record ``lean`` wrote (``--lean``), the parts of the run's case in the form
+remote's composite of record reads it (`PouwCheck.PearlPlus.Protocol`, ``verity/pouw/pearl-plus/v1``) that need no
+registration record, to ``--out`` (0700, its files 0600: the manifests carry the passes' salt key, and the files their
+values): ``parts.json`` (`CASE_SCHEMA`: the params, of the epoch's ``DIR/coins.json``, the document's draws and its coin
+record's run commitment and source; the retained manifests, in order; the evidence, each pass's files the Lean's opened
+tiles read (`tile_files`), by path, under the SHA-512 of their bytes; the Lean's verdict, reason, tiles drawn and work;
+and the document's δ) and ``blobs/<SHA-512>``, each of those files' bytes once. `served_cases.pearlplus_case` makes the
+case of them once the window's registration record R is made, its commitment naming R's digest. It refuses (exit 2)
+without a Lean verdict or a coin record, on retained passes other than those the document names, and on a Lean verdict
+over another run or source.
 """
 from __future__ import annotations
 
@@ -164,6 +177,9 @@ LEAN_CHECK = "pearlplus-lean-check.json"
 LEAN_SCHEMA = "verity-pouw/pearl-plus-lean-check/v1"
 #: why the step refuses where the two verdicts disagree
 LEAN_DISAGREES = "the Lean verdict and the Python's disagree, so no Lean answer is written"
+#: `case`'s parts of the run's case, and its directory of the files they name, each under the SHA-512 of its bytes
+CASE_SCHEMA = "verity-pouw/pearl-plus-case-parts/v1"
+CASE_PARTS, CASE_BLOBS = "parts.json", "blobs"
 #: why `retain` and `volunteer` refuse once the verifier's coin is drawn
 DRAWN = "the verifier's coin is drawn (DIR/coin.json), so the passes and their records are fixed"
 #: why ``retain --window-record`` drops a warm-up pass (`pearl_c.window`)
@@ -534,8 +550,9 @@ def verify(args: argparse.Namespace) -> int:
     if paths is not None:
         coins = VR.epoch_coins(passes / "coins.json")
         window = json.loads(Path(args.tie).read_text()) if args.tie else None
+        period = (((served or {}).get("coins") or {}).get("reserved") or {}).get("period")
         draw = BA.live_draw(settings.PEARLC_CHALLENGER_GATE, settings.PEARLC_CHALLENGER_PEER,
-                            settings.PEARLC_CHALLENGER_LANE) or VR.node_draw
+                            settings.PEARLC_CHALLENGER_LANE, period=period) or VR.node_draw
         doc.update(VR.verify_passes(paths, args.draws, args.jobs, args.commit, coins, fast=args.fast,
                                     cross_check=args.cross_check, delta=args.delta, window=window, rounds=rounds,
                                     dropped=dropped, record=record, draw=draw,
@@ -670,6 +687,78 @@ def lean(args: argparse.Namespace) -> int:
     return done(None, 0 if got["verdict"] == "accept" else 1)
 
 
+def tile_files(p, tile: int) -> list[dict]:
+    """The manifest entries the opening of pass ``p``'s tile ``tile`` reads (`verify_run.Opened`'s ``open`` and
+    ``open_y``, the Lean's ``filesOf``): its call's rows and tree, its weight's, the pass's leaves and transcript tree, and
+    its call's y where the call commits one."""
+    pos, man = p.verifier.refs[tile].matmul, p.man
+    u, wt = man["matmuls"][pos], man["weights"][str(p.epoch.workload.matmuls[pos].weight)]
+    return [u["rows"], u["tree"], wt["rows"], wt["tree"], man["leaves"], man["tree_t"],
+            *((u["y"]["rows"], u["y"]["tree"]) if "y" in u else ())]
+
+
+def _private(path: Path, data: bytes) -> None:
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "wb") as fh:
+        fh.write(data)
+    os.chmod(path, 0o600)
+
+
+def case(args: argparse.Namespace) -> int:
+    sys.path.insert(0, str(HERE))
+    import verify_run as VR
+
+    passes, out = Path(args.passes), Path(args.out)
+
+    def refuse(reason: str) -> int:
+        print(f"case REFUSED: {reason}", flush=True)
+        return 2
+
+    doc = json.loads(Path(args.verify).read_text())
+    try:
+        lean = json.loads(Path(args.lean).read_text())
+    except (OSError, ValueError) as e:
+        return refuse(f"no Lean verdict of record ({type(e).__name__}: {e})")
+    record = Path(doc["coin_record"]) if doc.get("coin_record") else None
+    if record is None or not record.is_file():
+        return refuse("the Python verdict recorded no coin (verify's coin record)")
+    coin = json.loads(record.read_text())
+    served = json.loads((passes / "served.json").read_text()) if (passes / "served.json").exists() else None
+    paths = retention(passes, served)[0] if served is not None else manifests(passes)[0]
+    if [VR.read(p)[2] for p in paths] != doc.get("passes"):
+        return refuse("the retained passes are not the ones the Python verdict read, by name and SHA-256")
+    if (lean.get("commitment"), lean.get("source")) != (coin["commitment"], coin["source"]):
+        return refuse("the Lean verdict is not on the coin record's run and source")
+    coins = VR.epoch_coins(passes / "coins.json")
+    loaded = [VR.load(p, coins) for p in paths]
+    files: list[dict[str, str]] = [{} for _ in paths]
+    held: dict[str, int] = {}
+    blobs = out / CASE_BLOBS
+    blobs.mkdir(parents=True, exist_ok=True, mode=0o700)
+    for d in (out, blobs):
+        os.chmod(d, 0o700)
+    for v in lean.get("verdicts") or []:
+        i = v["pass"]
+        for spec in tile_files(loaded[i], v["tile"]):
+            if spec["path"] in files[i]:
+                continue
+            data = (paths[i].parent / spec["path"]).read_bytes()
+            files[i][spec["path"]] = h = hashlib.sha512(data).hexdigest()
+            if h not in held:
+                _private(blobs / h, data)
+                held[h] = len(data)
+    parts = {"schema": CASE_SCHEMA,
+             "params": {"coins": json.loads((passes / "coins.json").read_text()), "draws": doc["draws"],
+                        "record": {"commitment": coin["commitment"], "source": coin["source"]}},
+             "manifests": [json.loads(p.read_text()) for p in paths], "evidence": {"files": files},
+             "lean": {k: lean.get(k) for k in ("verdict", "reason", "drawn", "work")}, "delta": doc["delta"]}
+    _private(out / CASE_PARTS, (json.dumps(parts, sort_keys=True) + "\n").encode())
+    print(f"case {lean.get('verdict')}: {len(paths)} passes, {sum(map(len, files))} files their "
+          f"{len(lean.get('verdicts') or [])} opened tiles read, {len(held)} blobs of {sum(held.values()):,} bytes -> {out}",
+          flush=True)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -738,9 +827,14 @@ def main(argv: list[str] | None = None) -> int:
     n.add_argument("--out", required=True, help="where the Lean's answer goes where it agrees with the Python's")
     n.add_argument("--check", help=f"where both verdicts go (default: {LEAN_CHECK} beside --out)")
     n.add_argument("--timeout", type=float, default=3600, help="seconds the Lean has to answer (default 3,600)")
+    c = sub.add_parser("case")
+    c.add_argument("--passes", required=True)
+    c.add_argument("--verify", required=True, help="verify's --out document")
+    c.add_argument("--lean", required=True, help="lean's --out answer: the Lean verdict of record")
+    c.add_argument("--out", required=True, help="the case's parts and blobs (0700)")
     args = p.parse_args(argv)
     return {"serve": serve, "same": same, "volunteer": volunteer, "volunteer-needed": volunteer_needed, "retain": retain,
-            "verify": verify, "lean": lean, "arm": arm}[args.cmd](args)
+            "verify": verify, "lean": lean, "case": case, "arm": arm}[args.cmd](args)
 
 
 if __name__ == "__main__":

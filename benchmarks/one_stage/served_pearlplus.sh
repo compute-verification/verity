@@ -14,10 +14,12 @@
 #      a prefill-heavy load, 8 prompts a step), each engine step one pass retained in passes/, its epoch's salt coin a
 #      live session's on vy-challenger-1 where PEARLC_CHALLENGER_GATE and PEARLC_CHALLENGER_PEER are set (served_verdicts.sh
 #      sets them under POUW=pearlplus; `served_passes.py serve`'s, `bench_arm.live_coins`), else an in-process
-#      challenger's; with the gate, the lane's Pearl-C period PEARLPLUS_PERIOD (default pearlplus-RUN_ID) is open around
-#      that serve alone (`served_verdicts.py pearlplus-period`: cap 1, its circuit PIECE_DIR/pearlplus-descriptor.json's
-#      SHA-512, its answers in PIECE_DIR/period.json), so the serve's salt session joins it, and closed once the serve
-#      ends (or the piece exits), before the verifier's draw; before it, unless PEARLPLUS_UNRETAINED is set empty, the same load under its own lease with no pass
+#      challenger's; with the gate, the lane's Pearl-C period PEARLPLUS_PERIOD (default pearlplus-RUN_ID) is opened right
+#      before that serve (`served_verdicts.py pearlplus-period`: cap 1, its circuit PIECE_DIR/pearlplus-descriptor.json's
+#      SHA-512, its answers in PIECE_DIR/period.json), so the serve's salt session joins it and fills its cap, and the gate
+#      refuses every other reserve of the lane while it is open; it is closed right before the verifier's draw (step 4,
+#      or once the piece exits), so no other reserve of the lane comes between its close and the draw, which the compose
+#      takes only as the lane's first reserve after it; before it, unless PEARLPLUS_UNRETAINED is set empty, the same load under its own lease with no pass
 #      retained (`serve --no-retain`, unretained/), whose wall is the option's without writing the passes, its coins and
 #      salt key seeded (`serve --seeded`), since no verdict reads them; then, unless PEARLPLUS_SAME is set empty, that
 #      serve once more (same/) and `served_passes.py same` holding the two to the same commitments pass by pass (each
@@ -52,11 +54,13 @@
 #      alone, under PEARLPLUS_OVER_CAP's rule where it is set. Its document goes to PIECE_DIR/verify.json and its core
 #      answer to PIECE_DIR/pearlplus-answer.json, not answer.json, which the record would compose as the window's PoUW
 #      answer. Under the gate its draw source is a draw session's coin on vy-challenger-1, reserved withheld once the
-#      period closed and opened on the run's commitment (`bench_arm.LiveDraw`; verify_run.py's "The run's draw"), else
-#      the node's. Its coin, recorded in passes/coin.json before the replay, leaves the passes the moment it is drawn
-#      (`served_verdicts.py coin`: PIECE_DIR/coin.json, put
-#      in the evidence store, preserved where the node holds a store key and else in the node's own store under the same
+#      period closed, as the lane's first reserve since, and opened on the run's commitment (`bench_arm.LiveDraw`, which
+#      refuses before the coin is asked otherwise; verify_run.py's "The run's draw"), else the node's. Its coin, recorded
+#      in passes/coin.json before the replay, leaves the passes the moment it is drawn (`served_verdicts.py coin`:
+#      PIECE_DIR/coin.json, put in the evidence store, preserved where the node holds a store key and else in the node's own store under the same
 #      id, its answer in PIECE_DIR/coin-put.json, which names the run's Attempt carrying out/'s copy as its custody);
+#      the RULE line then reads the ledger again: whether the draw session was the lane's first reserve after the
+#      period's close (`served_verdicts.py pearlplus-period rule`, kept as period.json's rule);
 #   4b. once verify wrote its document, `served_passes.py lean` takes the Lean verdict of record, PouwCheck.PearlPlus's
 #      pouw-pearlplus (PEARLPLUS_LEAN_EXE, else built here as served_pouw.sh builds pouw-period, its log
 #      pouw-pearlplus-build.log; one that doesn't build answers nothing), on the same passes, epoch coins, draws, coin
@@ -64,6 +68,9 @@
 #      (default 3,600), and writes its answer to PIECE_DIR/pearlplus-lean.json,
 #      the file `served_verdicts.pearlplus_of_record` reads, only where it is the Python verdict's; both verdicts, its
 #      command line and the executable's SHA-256 go to PIECE_DIR/pearlplus-lean-check.json either way;
+#   4c. where the Lean answered, `served_passes.py case` writes the parts of the run's case as remote's composite of
+#      record reads it that need no registration record, and the pass files its opened tiles read, to
+#      SERVE_DIR/private/pearlplus/case, where served_cases.py makes the case once the window's record R is made;
 #   5. `served_verdicts.py pearlplus` writes the piece (PIECE_DIR/development.json): its verdict, with each pass's salt
 #      held to the serve's live session (`pearlplus_coins`: the session fetched through PEARLC_CHALLENGER_GATE, under
 #      H1_KEY_SHA512 and MAIN_FILE's line; with in-process coins it claims no verdict) and an accept to the published
@@ -77,9 +84,13 @@
 # s), and goes no further unless that served.json says ok; steps 3 and 4 read and write there, `retain` writing Pearl+'s
 # window record W (`--window-record`, private/pearlplus/window-record.json, rounds dropped as above) and then, before the coin,
 # PEARLPLUS_TIE_CMD (`served_verdicts.sh pearl-tie SERVE_DIR WINDOW W PASSES`) committing the window tied to W, its
-# registration R chained right after W; step 4 is `verify --tie W`, which holds the passes to W. Its salt coin is the
+# registration R chained right after W; step 4 is `verify --tie W`, which holds the passes to W, and under the gate it
+# draws only after the window serve's Pearl-C period (SERVE_DIR/pearlplus/period.json, the one its RULE line reads)
+# closed with the lane's reserves since its open the window's salt sessions alone. Its salt coin is the
 # arm's: a live salt-only session of the window's own under the gate (`serve_pearl.live`), which step 5 holds each pass
-# to as above, else in-process, and the piece then claims no verdict.
+# to as above, else in-process, and the piece then claims no verdict. Step 5 gets W (`--tie W`): the piece is then the
+# window's own epoch, and why it credits nothing by itself names the Pearl-C period its salt session joined
+# (served_verdicts.pearlplus_why_tied).
 # The passes hold the run's activations, so they stay in SERVE_DIR/private, under served_verdicts.sh's `research keep`,
 # and the piece runs under umask 077, so every file it or a step writes there is 0600.
 # env: served_verdicts.sh's (VENV, HF_HOME, CUDA_HOME), PEARLPLUS_* above. Its lines name no window. Exit 0 once step 5
@@ -198,7 +209,7 @@ copy_back() {  # passes/ from RAM to disk, modes kept, the symlink replaced only
   R=''
 }
 PERIOD_OPEN=''
-period() {  # open|close: the lane's Pearl-C period around the retained serve (served_verdicts.py pearlplus-period)
+period() {  # open|close: the lane's Pearl-C period from the retained serve to the draw (served_verdicts.py pearlplus-period)
   if [ "$1" = open ]; then
     "$TPY" benchmarks/one_stage/served_verdicts.py pearlplus-period open "$P" --gate "$PEARLC_CHALLENGER_GATE" \
       --name "${PEARLPLUS_PERIOD:-pearlplus-${RESEARCH_RUN_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}}" \
@@ -255,7 +266,6 @@ elif [ -n "${PEARLC_CUBIN:-}" ]; then
   serve serve.log --passes "$Q/passes" --out "$Q/served.json"
   rc=$?
   say "serve: served_passes.py serve exit $rc after $(took "$t"), $BF16: $(grep -m1 '^served ' "$Q/serve.log" | cut -c1-300)"
-  period close
 fi
 
 VMIN=${PEARLPLUS_VOLUNTEER_MIN:-60} JOBS=${PEARLPLUS_JOBS:-$(nproc)}
@@ -306,7 +316,18 @@ if [ -n "$GO" ] && [ -n "$TIE" ]; then
   fi
 fi
 
+PD=$P
+[ -z "$TIE" ] || PD=$SD/pearlplus
+if [ -n "$GO" ] && [ -n "$TIE" ] && [ -n "${PEARLC_CHALLENGER_GATE:-}" ]; then  # the window serve closed the period
+  held=$("$TPY" -c 'import json, sys
+d = json.load(open(sys.argv[1]))
+print("ok" if (d.get("reserves") or {}).get("ok") is True and d.get("close") else "")' "$PD/period.json" 2>/dev/null)
+  [ "$held" = ok ] || { say "draw: refused before it: the window serve's Pearl-C period didn't close with the lane's" \
+    "reserves since its open the window's salt sessions alone (served_verdicts.sh's PEARLPLUS-PERIOD line), so no draw" \
+    "follows it"; GO=; }
+fi
 if [ -n "$GO" ]; then
+  period close
   t=$(date +%s)
   TA=()
   [ -n "$TIE" ] && [ -s "$W" ] && TA=(--tie "$W")
@@ -320,6 +341,11 @@ if [ -n "$GO" ]; then
     "$TPY" benchmarks/one_stage/served_verdicts.py coin "$P" --record "$Q/passes/coin.json" --run "${RESEARCH_RUN_ID:-}" \
       ${RESEARCH_RUN_DIR:+--run-dir "$RESEARCH_RUN_DIR"} > "$Q/coin.log" 2>&1
     say "coin: $(tail -1 "$Q/coin.log" | cut -c1-400)"
+    if [ -n "${PEARLC_CHALLENGER_GATE:-}" ] && [ -s "$PD/period.json" ]; then
+      "$TPY" benchmarks/one_stage/served_verdicts.py pearlplus-period rule "$PD" --gate "$PEARLC_CHALLENGER_GATE" \
+        --lane "${PEARLC_CHALLENGER_LANE:-vllm}" --coin "$Q/passes/coin.json" >> "$Q/period.log" 2>&1
+      say "$(tail -1 "$Q/period.log" | cut -c1-400)"
+    fi
   else
     say "coin: served_passes.py verify drew none (it refused the run before its coin)"
   fi
@@ -343,10 +369,17 @@ if [ -n "$GO" ] && [ -s "$P/verify.json" ]; then
     --exe "${LX:-none}" --out "$P/pearlplus-lean.json" --timeout "${PEARLPLUS_LEAN_TIMEOUT:-3600}" > "$Q/lean.log" 2>&1
   say "lean: served_passes.py lean exit $? after $(took "$t"): $(tail -1 "$Q/lean.log" | cut -c1-400)"
 fi
+if [ -s "$P/pearlplus-lean.json" ]; then
+  t=$(date +%s)
+  "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py case --passes "$Q/passes" --verify "$P/verify.json" \
+    --lean "$P/pearlplus-lean.json" --out "$Q/case" > "$Q/case.log" 2>&1
+  say "case: served_passes.py case exit $? after $(took "$t"): $(tail -1 "$Q/case.log" | cut -c1-400)"
+fi
 
 UN=()
 [ -s "$Q/served-unretained.json" ] && UN=(--unretained "$Q/served-unretained.json")
 [ -s "$Q/volunteer.json" ] && UN+=(--volunteer "$Q/volunteer.json")
+[ -z "$TIE" ] || UN+=(--tie "$W")
 "$TPY" benchmarks/one_stage/served_verdicts.py pearlplus "$P" --served "$SERVED" --verify "$P/verify.json" \
   ${UN[@]+"${UN[@]}"} ${PEARLC_CHALLENGER_GATE:+--gate "$PEARLC_CHALLENGER_GATE"} ${H1_KEY_SHA512:+--key-sha512 "$H1_KEY_SHA512"} \
   ${MAIN_FILE:+--main "$MAIN_FILE"} --coin "$P/coin-put.json" > "$Q/pearlplus.log" 2>&1

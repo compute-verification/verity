@@ -8,7 +8,12 @@ answer, W at ``tie``, only where the Lean's printout is the Python's on every fi
 its ``drawn`` the draws and its W the Python's (or none on both).
 Anything else (a field that differs, an exit code that isn't its verdict's, a printout that isn't one, no coin record,
 passes other than those the verdict read, no executable) writes none and removes one there, and both verdicts go to the
-check document either way. The real executable's run is `benchmarks/one_stage`'s ``test_served_pearlplus_lean``."""
+check document either way. The real executable's run is `benchmarks/one_stage`'s ``test_served_pearlplus_lean``.
+
+``served_passes.py case`` on the Lean answer written there writes the run's case's parts for remote's composite of record
+(`verity/pouw/pearl-plus/v1`): its params, the retained manifests, the evidence of each file the Lean's opened tiles read
+and those files' bytes once each, private; it writes none without a Lean answer or a coin record, on passes the verdict
+didn't read, or on a Lean answer over another source."""
 from __future__ import annotations
 
 import hashlib
@@ -186,3 +191,50 @@ def test_the_step_refuses_before_the_lean_without_a_coin_record_the_verdicts_pas
     rc, answer, check = lean(tmp_path, verify, d, tmp_path / "none")
     assert (rc, answer) == (2, None) and check["reason"] == f"no Lean executable at {tmp_path / 'none'}"
     assert not (tmp_path / "argv").exists()
+
+
+def case(d: Path, verify: Path, answer: Path, out: Path) -> int:
+    return SP.main(["case", "--passes", str(d), "--verify", str(verify), "--lean", str(answer), "--out", str(out)])
+
+
+def test_case_writes_the_runs_case_parts_and_each_file_its_opened_tiles_read_privately(run, tmp_path, capsys):
+    """The params are the epoch's coins, the draws and the coin record's run and source; the manifests the retained
+    passes' in order; the evidence, per pass, each file the Lean's opened tiles read (`tile_files`, drawn and exclusion
+    tiles alike) under the SHA-512 of its bytes, and the blobs exactly those files, each once, 0700 with files 0600."""
+    d, verify, doc = run
+    assert lean(tmp_path, verify, d, stub(tmp_path, printout(doc), 0))[0] == 0
+    answer, out = tmp_path / "piece" / "pearlplus-lean.json", tmp_path / "case"
+    capsys.readouterr()
+    assert case(d, verify, answer, out) == 0
+    assert capsys.readouterr().out.startswith("case accept: 2 passes, ")
+    parts, coin = json.loads((out / SP.CASE_PARTS).read_text()), json.loads((d / SP.COIN).read_text())
+    paths = [Path(p["manifest"]) for p in json.loads((d / "served.json").read_text())["passes"]]
+    assert (parts["schema"], parts["delta"]) == (SP.CASE_SCHEMA, doc["delta"])
+    assert parts["params"] == {"coins": json.loads((d / "coins.json").read_text()), "draws": 3,
+                               "record": {"commitment": coin["commitment"], "source": SOURCE.hex()}}
+    assert parts["manifests"] == [json.loads(p.read_text()) for p in paths]
+    assert parts["lean"] == {"verdict": "accept", "reason": None, "drawn": 3, "work": doc["answer"]["public"]["work"]}
+    coins = T.VR.epoch_coins(d / "coins.json")
+    passes, want = [T.VR.load(p, coins) for p in paths], [{} for _ in paths]
+    for v in doc["verdicts"]:
+        for spec in SP.tile_files(passes[v["pass"]], v["tile"]):
+            data = (paths[v["pass"]].parent / spec["path"]).read_bytes()
+            want[v["pass"]][spec["path"]] = hashlib.sha512(data).hexdigest()
+    assert parts["evidence"] == {"files": want} and all(want)
+    blobs = out / SP.CASE_BLOBS
+    assert sorted(f.name for f in blobs.iterdir()) == sorted({h for f in want for h in f.values()})
+    assert all(hashlib.sha512(f.read_bytes()).hexdigest() == f.name for f in blobs.iterdir())
+    assert stat.S_IMODE(out.stat().st_mode) == stat.S_IMODE(blobs.stat().st_mode) == 0o700
+    assert all(stat.S_IMODE(f.stat().st_mode) == 0o600 for f in out.rglob("*") if f.is_file())
+
+
+def test_case_writes_nothing_without_the_lean_answer_its_coin_record_or_its_passes_or_on_another_source(run, tmp_path):
+    d, verify, doc = run
+    assert lean(tmp_path, verify, d, stub(tmp_path, printout(doc), 0))[0] == 0
+    answer = tmp_path / "piece" / "pearlplus-lean.json"
+    (other := tmp_path / "other.json").write_text(json.dumps({**json.loads(answer.read_text()), "source": "00" * 32}))
+    (no_coin := tmp_path / "no-coin.json").write_text(json.dumps({**doc, "coin_record": None}))
+    (fewer := tmp_path / "fewer.json").write_text(json.dumps({**doc, "passes": doc["passes"][:1]}))
+    for n, (v, a) in enumerate(((verify, tmp_path / "none.json"), (no_coin, answer), (fewer, answer), (verify, other))):
+        assert case(d, v, a, tmp_path / f"case{n}") == 2, n
+        assert not (tmp_path / f"case{n}").exists(), n

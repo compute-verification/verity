@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -56,6 +57,8 @@ elif script == "served_passes.py" and cmd == "lean":
     print("lean: no executable")
 elif script == "served_verdicts.py" and cmd == "coin":
     print("coin: kept")
+elif script == "served_verdicts.py" and argv[1:3] == ["pearlplus-period", "rule"]:
+    print(f"RULE no other reserve on lane {opt('--lane')} between period pp-r1's close and the draw: HELD (toy)")
 elif script == "served_verdicts.py" and cmd == "pearlplus":
     print("POUW-DEV {}")
 else:
@@ -63,9 +66,11 @@ else:
 '''
 
 
-def _piece(tmp_path: Path, served: dict | None, **extra: str) -> tuple[subprocess.CompletedProcess, Path, Path]:
-    """The piece on window 7 of a toy serve dir whose ``pearl/w7/served.json`` is ``served`` (none if None), under
-    PEARLPLUS_TIE with the window serve's cubin and a toy gpu-lease: the run, the serve dir and the toy tree."""
+def _piece(tmp_path: Path, served: dict | None, period: dict | None = None,
+           **extra: str) -> tuple[subprocess.CompletedProcess, Path, Path]:
+    """The piece on window 7 of a toy serve dir whose ``pearl/w7/served.json`` is ``served`` (none if None) and whose
+    window serve left ``pearlplus/period.json`` `period` (none if None), under PEARLPLUS_TIE with the window serve's cubin
+    and a toy gpu-lease: the run, the serve dir and the toy tree."""
     tree, bin_, venv, sd = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
     for p in (tree / "benchmarks" / "one_stage", tree / "benchmarks" / "harness", tree / ".venv" / "bin", bin_, venv,
               sd / "pearl" / "w7", tmp_path / "piece", tmp_path / "cubin"):
@@ -82,6 +87,9 @@ def _piece(tmp_path: Path, served: dict | None, **extra: str) -> tuple[subproces
     (tmp_path / "cubin" / "pearl_c_sm90.cubin").write_bytes(b"cubin")
     if served is not None:
         (sd / "pearl" / "w7" / "served.json").write_text(json.dumps(served))
+    if period is not None:
+        (sd / "pearlplus").mkdir()
+        (sd / "pearlplus" / "period.json").write_text(json.dumps(period))
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "PEARLPLUS_TIE": "1",
            "PEARLC_KERNEL": "pearl_c_sm90", "PEARLC_CUBIN": str(tmp_path / "cubin" / "pearl_c_sm90.cubin"),
            "PEARLPLUS_JOBS": "1", "PEARLPLUS_TIE_CMD": f'printf "%s\\n" "$@" > {tmp_path}/tie.args; echo "PEARL-TIE: tied"',
@@ -126,6 +134,7 @@ def test_under_pearlplus_tie_the_piece_ties_the_windows_own_epoch_to_its_w(tmp_p
     assert verify[verify.index("--tie") + 1] == w and verify[verify.index("--passes") + 1] == str(q / "passes")
     pearlplus = argv["served_verdicts.py pearlplus"]
     assert pearlplus[pearlplus.index("--served") + 1] == str(q / "passes" / "served.json")
+    assert pearlplus[pearlplus.index("--tie") + 1] == w
     lines = run.stdout.splitlines()
     assert any(x.startswith("POUW window: the window's own Pearl+ epoch ") and x.endswith("coins in-process -> OK")
                for x in lines), lines
@@ -137,16 +146,52 @@ def test_under_pearlplus_tie_the_piece_ties_the_windows_own_epoch_to_its_w(tmp_p
 
 def test_under_pearlplus_tie_a_window_whose_epoch_failed_or_is_missing_gets_no_retain_tie_or_verdict(tmp_path):
     """No retries: an epoch whose served.json isn't ok, or none at all, is the window's failure, and the piece gives up,
-    retains, ties, verifies or asks the Lean nothing, still writing its piece over what it has."""
+    retains, ties, verifies or asks the Lean nothing, still writing its piece over what it has, as the window's own
+    epoch (``--tie W``)."""
     for name, served in (("failed", _epoch(ok=False)), ("missing", None)):
         d = tmp_path / name
-        run, _sd, _tree = _piece(d, served)
+        run, sd, _tree = _piece(d, served)
         assert [Path(a[0]).name + " " + a[1] for a in _steps(d)] == ["served_passes.py volunteer-needed",
                                                                      "served_verdicts.py pearlplus"], run.stdout
+        pearlplus = _steps(d)[-1]
+        assert pearlplus[pearlplus.index("--tie") + 1] == str(sd / "private" / "pearlplus" / "window-record.json")
         assert not (d / "tie.args").exists()
         said = [x for x in run.stdout.splitlines() if x.startswith("POUW window: ")]
         assert len(said) == 1 and (said[0].endswith("so round s isn't step s") if served else
                                    said[0].endswith("so there are no passes to tie")), said
+
+
+@pytest.mark.parametrize("case", ["held", "unclosed", "refused", "unread"])
+def test_under_pearlplus_tie_and_the_gate_the_piece_draws_only_after_a_period_whose_reserves_held(tmp_path, case):
+    """Under the gate the window serve closed its Pearl-C period (served_verdicts.sh's serve()), its period.json saying
+    whether the lane's reserves since the open were the window's salt sessions alone (``reserves``) and holding the gate's
+    close (``close``): the piece draws only after one that closed and held, and once the coin is drawn its RULE line reads
+    the ledger (``pearlplus-period rule`` on the serve dir's pearlplus/, the lane and the coin record). Otherwise, the
+    gate's close refused too, it says why, draws nothing and still writes its piece."""
+    reserves = {"held": {"ok": True}, "unclosed": {"ok": True}, "refused": {"ok": False}, "unread": None}[case]
+    period = {"name": "pp-r1", **({} if reserves is None else {"reserves": reserves}),
+              **({} if case == "unclosed" else {"close": {"kind": "period-close"}})}
+    run, sd, _tree = _piece(tmp_path, _epoch(), period=period, PEARLC_CHALLENGER_GATE="ssh gate",
+                            PEARLC_CHALLENGER_LANE="vllm")
+    assert run.returncode == 0, (run.stdout, run.stderr)
+    names = [" ".join([Path(a[0]).name, *a[1:3 if a[1:2] == ["pearlplus-period"] else 2]]) for a in _steps(tmp_path)]
+    given = ["served_passes.py volunteer-needed", "debit.py --cubin", "served_passes.py volunteer", "served_passes.py retain"]
+    lines = run.stdout.splitlines()
+    if case == "held":
+        assert names == [*given, "served_passes.py verify", "served_verdicts.py coin",
+                         "served_verdicts.py pearlplus-period rule", "served_passes.py lean",
+                         "served_verdicts.py pearlplus"], lines
+        rule = _steps(tmp_path)[names.index("served_verdicts.py pearlplus-period rule")]
+        q = sd / "private" / "pearlplus"
+        assert rule[3:] == [str(sd / "pearlplus"), "--gate", "ssh gate", "--lane", "vllm", "--coin",
+                            str(q / "passes" / "coin.json")]
+        assert "POUW RULE no other reserve on lane vllm between period pp-r1's close and the draw: HELD (toy)" in lines
+    else:
+        assert names == [*given, "served_verdicts.py pearlplus"], lines
+        assert ("POUW draw: refused before it: the window serve's Pearl-C period didn't close with the lane's reserves "
+                "since its open the window's salt sessions alone (served_verdicts.sh's PEARLPLUS-PERIOD line), so no draw "
+                "follows it") in lines
+        assert not (sd / "pearl" / "w7" / "coin.json").exists()
 
 
 RECORD = '''import json, os, sys
@@ -174,16 +219,10 @@ SERVED = ["volunteer-needed", "pearl_c_sm90.sh", "serve"]
 CHECKED = ["verify", "lean"]
 
 
-@pytest.mark.parametrize("needed, volunteer, steps", [
-    ("yes reject", None, [*SERVED, "debit.py", "volunteer --device", "retain --volunteer", *CHECKED, "pearlplus --volunteer"]),
-    ("yes reject", "cpu", [*SERVED, "volunteer", "retain --volunteer", *CHECKED, "pearlplus --volunteer"]),
-    ("yes reject", "", ["volunteer-needed"]),
-    ("no uncredited", None, [*SERVED, *CHECKED, "pearlplus"]),
-    ("no uncredited", "", [*SERVED, *CHECKED, "pearlplus"]),
-    ("no uncredited", "1", [*SERVED, "debit.py", "volunteer --device", "retain --volunteer", *CHECKED, "pearlplus --volunteer"]),
-    ("", None, ["volunteer-needed"]),
-])
-def test_the_give_up_runs_exactly_when_volunteer_needed_says_yes_and_cant_be_skipped_then(tmp_path, needed, volunteer, steps):
+def _untied(tmp_path: Path, needed: str, volunteer: str | None = None) -> Any:
+    """The untied piece on window 3 in a toy tree whose served_passes.py, served_verdicts.py, debit.py and setup each note
+    their argv in ``calls``, ``volunteer-needed`` answering `needed`: a function running it under more environment, which
+    returns its exit code, its output and the calls in order."""
     tree, d, p, calls = tmp_path / "tree", tmp_path / "serve", tmp_path / "piece", tmp_path / "calls"
     one = tree / "benchmarks" / "one_stage"
     one.mkdir(parents=True)
@@ -213,7 +252,20 @@ def test_the_give_up_runs_exactly_when_volunteer_needed_says_yes_and_cant_be_ski
         r = subprocess.run(["bash", "benchmarks/one_stage/served_pearlplus.sh", str(d), "3", str(p)], cwd=tree,
                            env={**env, **more}, capture_output=True, text=True, check=False)
         return r.returncode, r.stdout + r.stderr, [json.loads(x) for x in calls.read_text().splitlines()]
+    return run
 
+
+@pytest.mark.parametrize("needed, volunteer, steps", [
+    ("yes reject", None, [*SERVED, "debit.py", "volunteer --device", "retain --volunteer", *CHECKED, "pearlplus --volunteer"]),
+    ("yes reject", "cpu", [*SERVED, "volunteer", "retain --volunteer", *CHECKED, "pearlplus --volunteer"]),
+    ("yes reject", "", ["volunteer-needed"]),
+    ("no uncredited", None, [*SERVED, *CHECKED, "pearlplus"]),
+    ("no uncredited", "", [*SERVED, *CHECKED, "pearlplus"]),
+    ("no uncredited", "1", [*SERVED, "debit.py", "volunteer --device", "retain --volunteer", *CHECKED, "pearlplus --volunteer"]),
+    ("", None, ["volunteer-needed"]),
+])
+def test_the_give_up_runs_exactly_when_volunteer_needed_says_yes_and_cant_be_skipped_then(tmp_path, needed, volunteer, steps):
+    d, run = tmp_path / "serve", _untied(tmp_path, needed, volunteer)
     rc, said, got = run()
     flags = {"volunteer": "--device", "retain": "--volunteer", "pearlplus": "--volunteer"}
     names = []
@@ -234,3 +286,15 @@ def test_the_give_up_runs_exactly_when_volunteer_needed_says_yes_and_cant_be_ski
         asked = {c["argv"][0]: c["argv"] for c in got if c["tool"] == "served_passes.py"}
         assert rc == 0 and asked["volunteer-needed"] == ["volunteer-needed", "--over-cap", "reject"], said
         assert asked["verify"][asked["verify"].index("--over-cap") + 1] == "reject"
+
+
+def test_under_the_gate_the_untied_piece_holds_its_pearl_c_period_open_from_its_serve_to_right_before_its_draw(tmp_path):
+    """Under the gate the untied piece opens the lane's Pearl-C period right before its retained serve and closes it only
+    right before verify draws, after the give-up and retain: while it is open its cap of 1, which the serve's salt session
+    fills, refuses every other reserve of the lane, so none comes between its close and the draw, which a compose takes
+    only as the lane's first reserve after the close."""
+    rc, said, got = _untied(tmp_path, "yes reject")(PEARLC_CHALLENGER_GATE="ssh gate")
+    names = [" ".join(c["argv"][:2]) if c["argv"][:1] == ["pearlplus-period"] else
+             c["argv"][0] if c["tool"] in ("served_passes.py", "served_verdicts.py") else c["tool"] for c in got]
+    assert rc == 0 and names == ["volunteer-needed", "pearl_c_sm90.sh", "pearlplus-period open", "serve", "debit.py",
+                                 "volunteer", "retain", "pearlplus-period close", *CHECKED, "pearlplus"], said

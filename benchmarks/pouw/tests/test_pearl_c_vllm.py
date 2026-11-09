@@ -1982,6 +1982,69 @@ def test_the_live_draw_reserves_a_withheld_draw_session_outside_any_period_and_o
             BA.live_draw(*one, "vllm", run)
 
 
+def test_the_live_draw_after_the_runs_pearl_c_period_is_the_lanes_first_reserve_since_its_close_or_asks_no_coin(monkeypatch):
+    """Given the Pearl-C period P the run's salt session joined (``served.json``'s ``coins.reserved.period``), the draw
+    is lane vllm's first reserve after P's close, the one a compose takes (`pouw_h1_window.after_close`): it is refused
+    before reserving while the ledger doesn't close P or the lane (``for``, else ``by``) reserved since, and before its
+    coin is asked when another reserve of the lane reached the gate first; another lane's reserve doesn't count."""
+    from verity_vllm.protocols.pouw.h1 import window as PHW
+
+    BA = load("pearl_c_vllm_bench_arm", KERNEL.parent / "pearl_c_vllm" / "bench_arm.py")
+    gate, root, sid = "ssh -i KEY -o BatchMode=yes research@gate", b"\xc1" * 64, "s20261104T120000Z-dr01"
+    reserve = lambda s, **b: {"kind": "reserve", "session": s, "body": {"by": "vllm", **b}}  # noqa: E731
+    salt = [{"kind": "period-open", "session": None, "body": {"period": "pc1", "lane": "vllm"}},
+            reserve("s20261104T110000Z-salt", period="pc1")]
+    closed = {"kind": "period-close", "session": None, "body": {"period": "pc1"}}
+    ledger, asked, marks, opened, first = [], [], [], [], []
+
+    def run(argv):
+        asked.append(shlex.split(argv[-1])[0])
+        if asked[-1] == "ledger":
+            return 0, "".join(json.dumps(e) + "\n" for e in ledger)
+        ledger.extend(first)
+        ledger.append(reserve(sid, withheld=True))
+        return 0, json.dumps({"session": sid, "seq": len(ledger), "peer": "vy-dc-h200", "by": "vllm", "period": None,
+                              "withheld": True})
+
+    class Session:
+        def __init__(self, entry, at, got, call):
+            self.reserved, self.challenger = got, Wd.draw_challenger(0, random.Random(7).randbytes)
+            self.session = self.commitment = None
+
+        def record(self, c):
+            opened.append(c)
+            self.session, self.commitment = {"session": self.reserved["session"], "root": c.hex()}, self.challenger.commitment
+            return self.challenger.open(Wd.DRAW, 0, c)
+
+    monkeypatch.setattr(PHW, "DrawSession", Session)
+    assert BA.live_draw(gate, "vy-dc-h200", "vllm", run, period="pc1").period == "pc1"
+    for case, held_ledger, race, why in (
+            ("first", [*salt, closed], [], None),
+            ("another lane's", [*salt, closed, reserve("s-pous", by="pous")], [reserve("s-pous2", by="pous")], None),
+            ("open", salt, [], "lane vllm's period pc1 is open"),
+            ("not in the ledger", [], [], "doesn't close the run's Pearl-C period pc1"),
+            ("reserved since", [*salt, closed, reserve("s-h1")], [],
+             "lane vllm reserved session s-h1 after its Pearl-C period pc1 closed"),
+            ("for the lane", [*salt, closed, reserve("s-for", by="admin", **{"for": "vllm"})], [],
+             "reserved session s-for after"),
+            ("raced", [*salt, closed], [reserve("s-h1")], f"draw session {sid} is not lane vllm's first reserve after its "
+                                                          "Pearl-C period pc1 closed \\(that is s-h1\\): refused before its "
+                                                          "coin is asked")):
+        ledger[:], first[:] = held_ledger, race
+        for held in (asked, marks, opened):
+            held.clear()
+        draw = BA.LiveDraw(gate, "vy-dc-h200", "vllm", run, period="pc1")
+        if why is None:
+            coin, drew = draw(root, marks.append)
+            assert asked == ["ledger", "reserve", "ledger"] and opened == [root] and drew["reserved"]["session"] == sid
+            assert marks == [{"reserved": drew["reserved"]}] and len(coin) == 64, case
+            continue
+        with pytest.raises(Ch.CoinError, match=why):
+            draw(root, marks.append)
+        assert marks == [] and opened == [], case
+        assert asked == (["ledger", "reserve", "ledger"] if case == "raced" else ["ledger"]), case
+
+
 def test_a_tie_over_a_retention_holds_each_retained_pass_at_its_round_and_passes_over_the_dropped_rounds(tmp_path):
     """With round 0 dropped before the coin, W over both rounds ties the retained pass at its round 1, its dropped round's
     entries crediting nothing; without the drop those entries are a call the run doesn't hold, and the pass at round 0

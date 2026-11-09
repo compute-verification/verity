@@ -9,7 +9,8 @@
 #     under `gpu-lease`, `--scheme rows-sha512 --seal --admit release-order --window-requests SLOTS`, its committer built from
 #     B's manifest (PRED/manifest.json) and taps (HIDDEN_SO, NORM_TAP_SO), T tokens a step (--max-num-batched-tokens; T defaults
 #     to H1_T, else 512, with or without H1); B-OF-RECORD says each sealed sampling block's record names B's manifest, and its
-#     Program digest predict's. Each closed window is sealed as a
+#     Program digest and manifest digest predict's (a record sealed before the seal recorded the manifest digest: the Program
+#     digest alone). Each closed window is sealed as a
 #     rows-sha512 row dir, and the seal opens each one's replay bundle (`deferred_rows.of_record`). Once it listens, before
 #     the first request, the committer registers its weights (`prove_path.py weights-registration`: each weight parameter of
 #     the checkpoint CKPT, REPO's snapshot at REV under HF_HOME, and the rotary table at the words the engine serves,
@@ -56,6 +57,9 @@
 #     (`prove_path/run.sh` with PP_RECORDS=1, `records_audit.py`): C-Flock `--zk` on the sampled proof blocks behind the Lean
 #     firewall, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
 #     layer 0's SiluMul_v2 at step 1, or at step 0 with MAX_TOKENS 1, whose window has no step 1), not the window circuit's.
+#     Every unit of a template the served model's compiler of record lists as a transfer gate (prove_path.GATES_OF_RECORD)
+#     is proved beside the drawn rest, which only a work:K law draws, so the preflight refuses a partition of another law
+#     or without them; PP_SETS names their input sets.
 #  4. PoUW (H1 credit, or with POUW=pearlplus Pearl+'s own served run, below), PoUS, the bandwidth audit and the network
 #     certifier: `served_verdicts.py pieces` runs each one's piece
 #     where POUW_CMD, POUS_CMD, BANDWIDTH_CMD or CERTIFIER_CMD names it, one at a time (the certifier's alone, the longest,
@@ -94,7 +98,9 @@
 #     preflight refuses any onsite command set), its record composing their verdicts alone and its composite remote's.
 #     Beside them, the inference-only verdict (`inference_only.py`), at IO_CLASS (default the first class of CLASSES but
 #     `record`): its policy, (c, k, n) and every input to them, is written before the lease from the run's settings alone
-#     (the class, REPO at REV, LEASE_MIN), $OUT/inference-only-policy.json and its INFERENCE-ONLY POLICY line; once the
+#     (the class, REPO at REV, LEASE_MIN; under PEARLPLUS_TIE in serve(), under the lease before serve-openai starts, from
+#     PEARLPLUS-CIRCUIT's statement of φ on the card, serve-phi.json, its circuit cut at Pearl+'s linears, as a BF16
+#     checkpoint's needs), $OUT/inference-only-policy.json and its INFERENCE-ONLY POLICY line; once the
 #     build is done, step 3's window circuit record at the class is judged by `NciCheck.Count`'s rule beside sampled proofs,
 #     with `nci-check --count` where the build built it, into $OUT/record/inference-only.json (the judgment against n and
 #     no count, n judged on the exact count) and its INFERENCE-ONLY line, in full with the exact counts in the serve dir's
@@ -158,7 +164,9 @@
 # `served_verdicts.sh copy deferred|compose HOST`, with D, on the node that holds the list, sends each file a deferral's
 # or a hand-off's inputs.txt lists, and nothing else, to the same path on HOST (RSYNC, default rsync over ssh), its log
 # in the serve dir's private/: the deferral's (prover-side, its window's witness) to a prover node, never COMPOSE_NODE;
-# the hand-off's only once `served_verdicts.py witness` passes its list again.
+# the hand-off's only once `served_verdicts.py witness` passes its list again. `HOST:DIR` (DIR may be empty) sends them
+# under DIR/<the serve dir's name>/ in the directory HOST's rsync writes to, a write-only rsync's (`rrsync -wo`, its key
+# in RSYNC_RSH), which makes no directory the path needs; HOST's node then moves that directory to the serve dir's path.
 # `served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]`, with D and OUT, on the node that holds the serve dir, writes
 # the hand-off from PIECES and the inference-only VERDICT (on a deferral's serve dir, at its settings, HOST as
 # `handoff`'s) and sends it to the compose gate on COMPOSE_NODE
@@ -177,8 +185,12 @@
 # proofs' step 3 samples on a local development challenger session's coins on the served node (run.sh's PP_CHALLENGER
 # default, local, pinned on PP_MAIN's line, else MAIN_FILE's, else origin's main's) unless PP_CHALLENGER names the live
 # challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY), and then too while V3c's audit is
-# live, since both open on the window's run root: step 3 is then a development check. With H1_GATE (the
-# lane's gate command, by default "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84"; empty, no
+# live, since both open on the window's run root: step 3 is then a development check. With V3c off (V3C_CLASS empty) step
+# 3's audit is the one of record, and the preflight refuses its local or loopback session unless DEVELOPMENT=1. A record
+# composed after V3c (a follow-on's, or the compose's from its hand-off) reads V3c's audit where it wrote its summary,
+# else step 3's (`sampled_of_record`). With H1_GATE (the lane's gate command, by default under the lane's own key "ssh -i
+# $HOME/.ssh/vllm_lane_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@204.12.178.84", which the gate registers
+# under lane vllm, so each reserve reads by vllm; COMPOSE_GATE keeps vllm_gate_ed25519; empty, no
 # H1) the endpoint serves PoUW H1 (--protocols pouw:eps1-sm120-h1fx1 --challenger-gate H1_GATE --challenger-peer H1_PEER,
 # default vy-dc-h200, at the engine's T and S WINDOW_STEPS 16, the Program build H1 affords), each window's coins from a
 # session of its own on vy-challenger-1, once `served_verdicts.py gate` finds no period of lane H1_LANE (default vllm,
@@ -188,7 +200,8 @@
 # linears at K 2,048 alone, the form a period's guarantee covers. SERVE_ARGS carries no --protocols-config of its own.
 # PoUW's piece (POUW_CMD's default then, `served_verdicts.py pouw`) checks the window's coins against the gate's session,
 # ledger and pins under H1_KEY_SHA512 (vy-challenger-1's key) and main's first-parent line: MAIN_FILE's (a file, kept as
-# $OUT/main.txt; the gate's pin is a commit of `next`, so give `git rev-list --first-parent` of it), else MAIN_SHA's
+# $OUT/main.txt: `git rev-list --first-parent origin/main` of a fresh fetch, which PEARLPLUS_TIE's preflight requires
+# under a live Pearl+ gate, since the gate's pin need not be on this tree's own line), else MAIN_SHA's
 # (default the tree's HEAD). That key is a development key, so the run is a development run and credits nothing. The COINS line says which.
 # With H1_CIRCUITS too (a directory), before serve-openai starts (its startup reserves window 0's session, which joins
 # only a period already open), `served_verdicts.py program D/h1` writes the Program serve-openai will declare for REPO at
@@ -260,9 +273,10 @@
 # a live session's of its own on vy-challenger-1: PEARLC_CHALLENGER_GATE defaults to the lane's gate command (H1_GATE's
 # default under h1), PEARLC_CHALLENGER_PEER to H1_PEER and PEARLC_CHALLENGER_LANE to H1_LANE's, `served_verdicts.py gate`
 # must find no period of that lane open, as for H1, and the piece holds each pass's salt to the session under
-# H1_KEY_SHA512 and MAIN_FILE's line, as H1's piece does. The piece opens the lane's Pearl-C period around its retained
-# serve and closes it after, and the verifier's draw is a draw session's of its own on that gate, reserved once the
-# period closed and opened on the run's commitment (served_pearlplus.sh's steps 2 and 4). PEARLC_CHALLENGER_GATE set
+# H1_KEY_SHA512 and MAIN_FILE's line, as H1's piece does. The piece opens the lane's Pearl-C period right before its
+# retained serve and closes it right before its verifier's draw, a draw session's of its own on that gate, reserved as
+# the lane's first reserve after the close and opened on the run's commitment (served_pearlplus.sh's steps 2 and 4);
+# while the period is open its cap refuses every other reserve of the lane. PEARLC_CHALLENGER_GATE set
 # empty leaves Pearl+'s coins an
 # in-process challenger's: the COINS line, the run's first, leads with that, and the piece claims no verdict.
 # With PEARLPLUS_TIE=1 too, the window itself is served under Pearl+, the way H1_TIE ties H1's: serve-openai serves
@@ -277,7 +291,14 @@
 # BF16 checkpoint (REPO unsloth/Llama-3.2-1B, PRECISION bfloat16, the arm's), the BF16 B4 row's traced Build under
 # /workspace/research/vllm-pearlc-h200bf16 as ROW, LOAD=fixed at V3C_CLASS's load (SLOTS its slots, PROMPTS P:P at its
 # prompt P, WINDOW_STEPS its outputs: round s of W is the window's s-th step, the class's s-th output, and the cut circuit
-# reads Pearl+'s tables at those rows; the preflight refuses another), PEARLC_BF16_ROWS=0 and V3C_LAW stratified:1. Step
+# reads Pearl+'s tables at those rows; the preflight refuses another), PEARLC_BF16_ROWS=0 and V3C_LAW stratified:1, and
+# step 3's partition layer 0's RoPE heads, the BF16 1B's transfer gates of record, every one proved, beside its
+# SiluMul_v2 under work:2 at step 1 (llama32_1b_tg_l0_step1.json, PP_SETS rope-head/d64/bf16). The preflight refuses
+# another PRECISION or row (its id names __bf16__), a V3C_CLASS CLASSES doesn't count, vLLM's prefix cache (SERVE_ARGS'
+# --prefix-caching: a hit leaves rows of a prompt uncomputed where the cut circuit reads Pearl+'s tables), a
+# certifier front (its group closes into a window of its own), and a serve dir whose filesystem has fewer than
+# PEARLPLUS_INODES inodes free (default 772388, two commits of the tied window at the class of record, three files a
+# member; 0 checks none), naming the shortfall; earlier runs' Pearl+ windows are deleted with `research retention rm`. Step
 # 3's window circuit at each class is the one cut at Pearl+'s linears (`window-circuit --pearl-tables`), the verifier's
 # own record of the circuit the window is committed as. The same record at V3C_CLASS is built before serve-openai starts,
 # under the lease, from what its serve.json will record of φ on this card (`prove_path.py serve-phi`, then `class-circuit`,
@@ -286,7 +307,12 @@
 # With a gate, serve() then opens the lane's Pearl-C period PEARLPLUS_PERIOD (default pearlplus-RUN_ID) on that record
 # (`served_verdicts.py pearlplus-period open --circuit-record`, cap 1: the window's one salt session joins it; the
 # PEARLPLUS-PERIOD lines) before serve-openai starts, and closes it once the windows are sealed and the endpoint stopped
-# (or when it never listens, or is stopped), so before Pearl+'s piece draws: open, serve, seal, close, draw. The record
+# (or when it never listens, or is stopped), so before Pearl+'s piece draws: open, serve, seal, close, draw. The close
+# first reads the ledger, waiting up to PEARLPLUS_CLOSE_WAIT seconds (default 300) for it to end each window's salt
+# session, since the gate closes a period only once its windows have ended: the lane's reserves since the open must be
+# the windows' salt sessions alone (pearl/w<k>/served.json's), its line saying held or REFUSED, and the piece draws only
+# after a period that closed with its reserves held; once the coin is drawn, its RULE line says whether the draw session
+# was the lane's first reserve after the close. The record
 # reads the period's circuit against the window-circuit record V3c held R's circuit to (`window_tie` keeps it beside R).
 # Pearl+'s piece then serves
 # nothing of its own (served_pearlplus.sh's PEARLPLUS_TIE): it takes the window's epoch pearl/w<k>/, writes W
@@ -296,6 +322,12 @@
 # after step 4 and before the record (on a node short of its audit's memory, deferred as under H1_TIE): it audits that
 # commit, held to W (WINDOW-COMMIT), with records_audit's --tie W (V3C-TIE), and the record reads R and that audit's
 # summary from pearlplus/w<k>/tie (`record --window-tie`), where `pearlplus_of_record` holds them to W.
+# Once Pearl+'s piece wrote W, before the record, the served compare holds the serve to the row of record on the CPU
+# (`served_compare.py`, within SERVED_COMPARE_TIMEOUT, default 30m): PHI, serve.json's φ is ROW_ID's declared φ and lowers
+# the same window circuit at V3C's class cut at Pearl+'s linears; BUILD, PRED is the row's Build of record BUILD_OF_RECORD
+# (PROGRAM_DIGEST:MANIFEST_DIGEST); CUT, W registers exactly that circuit's Pearl+ values. Its last line, SERVED-COMPARE:
+# EQUAL or NOT EQUAL, is the one the record names (`record --served-compare`, its served-compare/served_compare.json
+# carried to a follow-on and the compose hand-off), and NOT EQUAL fails the run.
 # A step that can't run says why, and the chain stops there. C-Flock, Lean's flock-verify and sampled-proofs-verifier and the
 # tree's venv are built while the endpoint serves, C-Flock in FLOCK_WORK (kept on the node, so a rerun reuses its build).
 #   research run --on vy-dc-h200 --project verity --source TREE --cwd clone --timeout 6h -- \
@@ -303,8 +335,8 @@
 # SETTINGS=PATH names a file of NAME=VALUE lines on the node, read before every default below: the run's job record
 # publishes its launch command, so a load's counts (REQUESTS, PROMPTS, SLOTS, CERTIFIER_FRONT's) go in the file, and the
 # command names only its path.
-# PREFLIGHT_ONLY=1 runs the preflight alone (the settings, the row dir and taps, gpu-lease, the front's flags, H1_TIE's and
-# a follow-on's checks), says what the run would do (PREFLIGHT passed: its lease, or its deferral) and exits 0 before the
+# PREFLIGHT_ONLY=1 runs the preflight alone (the settings, the row dir and taps, gpu-lease, the free inodes under
+# PEARLPLUS_TIE, the front's flags, H1_TIE's and a follow-on's checks), says what the run would do (PREFLIGHT passed: its lease, or its deferral) and exits 0 before the
 # serve dir is made, kept or anything built.
 # `served_verdicts.sh circuits K`, in TREE with D and OUT, counts serve dir D's window K's circuits alone (its advice written).
 # `served_verdicts.sh inference-policy`, in TREE with D and OUT, writes the inference-only policy at IO_CLASS alone, to
@@ -313,6 +345,7 @@
 # `served_verdicts.sh block-counts K`, in TREE with D and OUT, judges window K's circuit records at CLASSES against the
 # policy alone (`block_counts`): the judgment public, the exact counts in D's private/.
 # `served_verdicts.sh defer WHY`, in TREE with D, K and OUT, makes step 6's deferral alone.
+# `served_verdicts.sh served-compare K`, in TREE with D and OUT, runs the served compare alone on serve dir D's window K.
 # Defaults are vy-dc-h200's: the int8 B4 row's traced Build (r20261030-210701-a20f's, traced after the required manifest stopped
 # naming the FlashAttention M1 stream, as `predict row` doesn't) and taps under $H, vLLM's venv /workspace/cp/venv312, CUDA 13.0.
 # The serve dir D (row dirs, advice, the window circuits' records) stays on the node under `research keep`; $OUT keeps the
@@ -334,7 +367,7 @@ DEFER_DIR=$D/private/deferred
 FOLLOWS="K PRODUCT V3C_CLASS V3C_LAW V3C_CHALLENGER DEVELOPMENT H1_TIE PEARLPLUS_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_PEER DEFERRED_TREE COMPOSE_OFF_NODE COMPOSE_NODE DAY"
 # the compose hand-off (`handoff`): the settings its follow-on composes at, its inputs' list and sums, and the pieces
 COMPOSE_DIR=$D/private/compose
-COMPOSES="K PRODUCT PEARLPLUS_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE AUDITED_ON STEPS"
+COMPOSES="K PRODUCT PEARLPLUS_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE AUDITED_ON SAMPLED_AUDIT STEPS"
 FOLLOW= COMPOSE= CLASH=
 follow_env() {  # $1's settings, those named in $2, read over the environment's, CLASH naming each the environment set otherwise
   declare -A given=()
@@ -370,6 +403,10 @@ if [ -n "$PEARLPLUS_TIE" ]; then  # the window served under Pearl+: Llama 3.2 1B
   SLOTS=${SLOTS:-$slots} PROMPTS=${PROMPTS:-$prompt:$prompt}
   # sm_90's BF16-rows path off unless PEARLC_BF16_ROWS says otherwise (e2e.BF16_RACE)
   export PEARLPLUS_TIE PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
+  # the BF16 1B's compiler of record lists its RoPE heads as transfer gates, every unit of which step 3 proves (work:K)
+  PP_PARTITION=${PP_PARTITION:-benchmarks/prove_path/llama32_1b_tg_l0_step1.json} PP_SETS=${PP_SETS:-rope-head/d64/bf16}
+  # the row's Build of record, PROGRAM_DIGEST:MANIFEST_DIGEST, which the served compare holds PRED to (BUILD)
+  BUILD_OF_RECORD=${BUILD_OF_RECORD:-95ba0fab376a62f5421ed21ced4e650afa516531508ecb802d065f44fd4f8ab451ba422c75312d8052b9087ff28826aa43edfc945435528856b97c8952903eb7:65ce5a6ccc1fd943c23a6d78b4eb80936d32c1043306ec3aab640b279eee419ef778205bd83b81721ad2c301114bd0e338e04b95acc959f8ba1188dcfa1ceac3}
 fi
 H=/workspace/research/vllm-composed-h200int8
 ROW=${ROW:-$H/r20261030-210701-a20f/llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager} ROW_ID=${ROW_ID:-${ROW##*/}}
@@ -378,12 +415,14 @@ VENV=${VENV:-/workspace/cp/venv312}
 REPO=${REPO:-verity-int8/Llama-3.2-1B-INT8} REV=${REV:-15b0976d400d796ee589e7737d03a919526bf800} PRECISION=${PRECISION:-verity_int8}
 PORT=${PORT:-18190} SLOTS=${SLOTS:-4} PROMPTS=${PROMPTS:-16:24} MAX_TOKENS=${MAX_TOKENS:-4} RATE=${RATE:-1000} SEED=${SEED:-1}
 REQUESTS=${REQUESTS:-$SLOTS} CLASSES=${CLASSES:-4,32,4} CAP=${CAP:-8388608} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512}
+PP_PARTITION=${PP_PARTITION:-benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step$([ "$MAX_TOKENS" = 1 ] && echo 0 || echo 1).json}
 T=${T:-${H1_T:-512}}
 DISK_FLOOR_GB=${DISK_FLOOR_GB:-100}
+PEARLPLUS_INODES=${PEARLPLUS_INODES:-772388}  # two commits of the tied window at the class of record, three files a member
 H1_KEY_SHA512=${H1_KEY_SHA512:-27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc}
 POUW=${POUW:-h1}
 H1_PEER=${H1_PEER:-vy-dc-h200}
-LANE_GATE="ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84"
+LANE_GATE="ssh -i $HOME/.ssh/vllm_lane_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@204.12.178.84"
 if [ "$POUW" = pearlplus ]; then
   H1_GATE=${H1_GATE-}
   export PEARLC_CHALLENGER_GATE=${PEARLC_CHALLENGER_GATE-$LANE_GATE} PEARLC_CHALLENGER_PEER=${PEARLC_CHALLENGER_PEER:-$H1_PEER} \
@@ -418,8 +457,9 @@ if [ "$PRODUCT" = onsite ]; then
     BANDWIDTH_CMD=${BANDWIDTH_CMD-'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'}
   fi
 fi
-export H1_KEY_SHA512 H1_GATE H1_PEER WINDOW_STEPS MAIN_SHA WIPE_CMD POUS_CMD BANDWIDTH_CMD PRODUCT
+export H1_KEY_SHA512 H1_GATE H1_PEER WINDOW_STEPS MAIN_SHA WIPE_CMD POUS_CMD BANDWIDTH_CMD PRODUCT POUW
 PRED=${PRED:-$D/predicted}
+SERVED_COMPARE=$D/served-compare/served_compare.json
 FW=${FLOCK_WORK:-$ROOT/flock-work}
 export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
 export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
@@ -564,12 +604,27 @@ window_tie() {  # under PEARLPLUS_TIE: R, V3c's audit's summary and, once V3c he
   # record, in the layout `served_verdicts.py record --window-tie` reads
   local t
   t=$(pearl_dir)/tie
-  mkdir -p "$t/windows/rank0" && cp "$VW/window/registration.json" "$t/windows/rank0/" 2>/dev/null \
+  mkdir -p "$t/window" && cp "$VW/window/registration.json" "$t/window/" 2>/dev/null \
     && { cp "$VW/audit/summary.json" "$t/" 2>/dev/null || true; } \
     && { [ "$v3c_ok" != 1 ] || cp "$D/$(v3c_record)" "$t/circuit-record.json" 2>/dev/null || true; }
 }
+served_compare() {  # under PEARLPLUS_TIE, once Pearl+'s piece wrote W and before the record, on the CPU: the serve held to
+  # the row of record (served_compare.py), its SERVED-COMPARE line the one the record names (--served-compare)
+  local dir=${SERVED_COMPARE%/*} rc
+  [ -n "$PEARLPLUS_TIE" ] || { say "SERVED-COMPARE: not run: PEARLPLUS_TIE is empty, so no W ties the serve to the row"; return 3; }
+  # an earlier compare's verdict never stands for this one's, which can die before it writes its own
+  mkdir -p "$dir" "$OUT/served-compare" && rm -f "$SERVED_COMPARE" "$dir/circuit_facts.json"
+  (cd "$TREE" && CUDA_VISIBLE_DEVICES='' timeout -k 1m "${SERVED_COMPARE_TIMEOUT:-30m}" "$PY" benchmarks/one_stage/served_compare.py \
+    --serve "$D" --row "$ROW_ID" --class "$V3C" --pearl-tables "${PEARLPLUS_ARM#pouw:}" --pred "$PRED" \
+    --of-record "$BUILD_OF_RECORD" --window-record "$(pearl_dir)/registration.json" --out "$dir") 2> "$dir/compare.err" \
+    | publish_lines
+  rc=${PIPESTATUS[0]}
+  [ "$rc" -le 1 ] || say "SERVED-COMPARE: NOT EQUAL (served_compare.py exit $rc: $(tail -1 "$dir/compare.err" | cut -c1-400))"
+  cp "$dir/served_compare.json" "$dir/circuit_facts.json" "$OUT/served-compare/" 2>/dev/null
+  return "$rc"
+}
 pearl_period() {  # under PEARLPLUS_TIE with a gate, in serve(): $1 open (on PEARLPLUS-CIRCUIT's record) or close the lane's
-  # Pearl-C period the window's salt session joins
+  # Pearl-C period the window's salt session joins, its reserves first held to the windows' salt sessions
   local out
   if [ "$1" = open ]; then
     [ -n "$PEARLPLUS_TIE" ] && [ -n "$PEARLC_CHALLENGER_GATE" ] || return 0
@@ -580,7 +635,8 @@ pearl_period() {  # under PEARLPLUS_TIE with a gate, in serve(): $1 open (on PEA
   else
     [ "${PEARL_PERIOD:-}" = 1 ] || return 0
     out=$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" pearlplus-period close "$D/pearlplus" \
-      --gate "$PEARLC_CHALLENGER_GATE" 2>&1) && PEARL_PERIOD=
+      --gate "$PEARLC_CHALLENGER_GATE" --lane "$PEARLC_CHALLENGER_LANE" --windows "$D/pearl" \
+      --wait "${PEARLPLUS_CLOSE_WAIT:-300}" 2>&1) && PEARL_PERIOD=
   fi
   say "PEARLPLUS-$(tail -1 <<< "$out" | cut -c1-600)"
 }
@@ -853,7 +909,8 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
       --max-tokens "$MAX_TOKENS" ${H1_DRAW_K:+--draw-k "$H1_DRAW_K"} ${H1_MODEL:+--model "$H1_MODEL"} 2>&1 | tail -1)"
     [ -f "$D/period.json" ] && period=1
   fi
-  [ -z "$PEARLPLUS_TIE" ] || { pearl_circuit; pearl_period open; }
+  # the policy is written before serve-openai's start, which the verdict reads as the serve's beginning
+  [ -z "$PEARLPLUS_TIE" ] || { pearl_circuit; (cd "$TREE" && inference_policy); pearl_period open; }
   # shellcheck disable=SC2086
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
     --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}" --scheme rows-sha512 --seal \
@@ -996,12 +1053,15 @@ io_class() {  # the inference-only verdict's class: IO_CLASS, else the first of 
   [ -z "${IO_CLASS:-}" ] || { echo "$IO_CLASS"; return 0; }
   for c in $CLASSES; do [ "$c" = record ] || { echo "$c"; return 0; }; done
 }
-inference_policy() {  # in TREE, before the lease: the policy's (c, k, n) at the class, from the run's settings alone
-  local c out rc
+inference_policy() {  # in TREE, before the lease: the policy's (c, k, n) at the class, from the run's settings alone; under
+  # PEARLPLUS_TIE in serve(), before serve-openai starts, from serve-phi's φ (pearl_circuit's) cut at Pearl+'s linears
+  local c out rc phi=()
   c=$(io_class)
   [ -n "$c" ] || { say "INFERENCE-ONLY POLICY: none, since CLASSES names no class but record"; return 0; }
+  [ -z "$PEARLPLUS_TIE" ] || phi=(--serve "$D/pearlplus/serve-phi.json" --pearl-tables "${PEARLPLUS_ARM#pouw:}")
   out=$(CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/one_stage/inference_only.py policy --class "$c" --model "$REPO" \
-    --revision "$REV" --lease-min "${LEASE_MIN:-60}" --tree "$(tree_sha)" --out "$IO_POLICY" 2> "$D/inference-only-policy.err")
+    --revision "$REV" --lease-min "${LEASE_MIN:-60}" --tree "$(tree_sha)" "${phi[@]}" --out "$IO_POLICY" \
+    2> "$D/inference-only-policy.err")
   rc=$?
   say "${out:-INFERENCE-ONLY POLICY failed (exit $rc): $(tail -1 "$D/inference-only-policy.err" | cut -c1-300)}"
   return "$rc"
@@ -1049,22 +1109,24 @@ private_pieces() {
 # window-circuit record at the class reading H1's tables (step 3's, `v3c_record`), windows.jsonl (the run root), H1's log
 # and each record it names, the tie's window-commit answer, and the commit's window dir (circuit.json, registration.json,
 # every value file). The record's: seals.jsonl, windows.jsonl and requests.jsonl (the pick's steps), step 3's records
-# audit's summary, audit record, registration and runs, the pieces it read, and the inference-only verdict it carries. The
-# composite's: PoUW's period case. Under DAY, the serve's declaration.json and the deferral's copy of the day's log and
-# parameters. And deferred.env, the settings the follow-on runs at. Each is listed where it exists.
+# audit's summary, audit record, registration and runs (which it reads where V3c's audit writes no summary:
+# `sampled_of_record`), the pieces it read, and the inference-only verdict it carries. The
+# composite's: PoUW's period case, and Pearl+'s case's parts and blobs (served_pearlplus.sh's step 4c). Under DAY, the
+# serve's declaration.json and the deferral's copy of the day's log and parameters. And deferred.env, the settings the
+# follow-on runs at. Each is listed where it exists.
 deferred_inputs() {
   {
     printf '%s\n' weights_registration.json "$(v3c_record)" windows.jsonl seals.jsonl requests.jsonl declaration.json \
       h1/log.jsonl "h1/w$K/window-commit.json" sampled-proofs-served/summary.json sampled-proofs-served/window/audit.json \
-      sampled-proofs-served/windows/rank0/registration.json sampled-proofs-served/runs.json private/pouw/period/case.json \
+      sampled-proofs-served/window/registration.json sampled-proofs-served/runs.json private/pouw/period/case.json \
       private/pouw/period/answer.json private/deferred/inference-only.json "pearlplus/w$K/registration.json" \
-      "pearlplus/w$K/window-commit.json"
+      "pearlplus/w$K/window-commit.json" served-compare/served_compare.json
     [ ! -f "$D/h1/log.jsonl" ] || "$SAY_PY" -c 'import json, sys
 for x in open(sys.argv[1]):
     if x.strip():
         print("h1/" + str(json.loads(x).get("file")))' "$D/h1/log.jsonl"
     (cd "$D" && find "v3c-w$K-$vtag/window" private/deferred/pieces private/deferred/deferred.env private/deferred/day-log.json \
-      private/deferred/day-params.json -type f 2>/dev/null)
+      private/deferred/day-params.json private/pearlplus/case -type f 2>/dev/null)
   } | (cd "$D" && while IFS= read -r f; do [ ! -f "$f" ] || echo "$f"; done) | LC_ALL=C sort -u
 }
 HANDED_WHAT="the final record$([ -z "${COMPOSITE-1}" ] || echo " and the composite")"
@@ -1142,7 +1204,7 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
       "this node holds no row dir to count it from"
   v3c_commit && v3c_proved; vrc=$?
   local wt=()
-  [ -z "$PEARLPLUS_TIE" ] || { window_tie; wt=(--window-tie "$(pearl_dir)/tie"); }
+  [ -z "$PEARLPLUS_TIE" ] || { window_tie; wt=(--window-tie "$(pearl_dir)/tie" --served-compare "$SERVED_COMPARE"); }
   if [ "$COMPOSE_OFF_NODE" = 1 ]; then
     handoff "$DEFER_DIR/pieces" "$DEFER_DIR/inference-only.json"; rc=$?
     echo "---- verdicts"; cat "$OUT/verdicts.txt"
@@ -1153,7 +1215,7 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
     mkdir -p "$OUT/record" && cp "$DEFER_DIR/inference-only.json" "$OUT/record/inference-only.json" \
       && say "INFERENCE-ONLY: the served node's verdict, carried into this record as it wrote it (the serve dir's private/deferred/inference-only.json)"
   fi
-  "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$D/sampled-proofs-served" \
+  "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$D/$(sampled_of_record)" \
     --pieces "$DEFER_DIR/pieces" --out "$OUT/record" --product "$PRODUCT" --node "$SERVED_NODE" ${wt[@]+"${wt[@]}"} \
     --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" 2>&1 | publish_lines
   rec=${PIPESTATUS[0]}
@@ -1161,21 +1223,28 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
   echo "---- verdicts"; cat "$OUT/verdicts.txt"
   [ "$vrc" = 0 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ]
 }
+# The record's sampled-proofs audit, relative to the serve dir: V3c's of window K where it wrote its summary, the
+# sampled-proofs audit of record, on V3C_CHALLENGER's coins (step 3's are local while those are live) and, under a tie,
+# tied to H1's or Pearl+'s W; else step 3's records audit
+sampled_of_record() {
+  if [ -f "$D/v3c-w$K-$vtag/audit/summary.json" ]; then echo "v3c-w$K-$vtag/audit"; else echo sampled-proofs-served; fi
+}
 # The compose hand-off (COMPOSE_OFF_NODE=1, the default): what the final record and the composite read, relative to the
-# serve dir, and nothing else. The record's: step 3's records audit's summary, audit record, registration and runs, and
-# of each piece the files `piece_row` and `piece_server` read (copied to private/compose/pieces), Pearl+'s verdict of
-# record's among them (`pearlplus_of_record`'s: the auditor's ledger, the coin record, Pearl+'s answer, the Lean verdict
-# and each challenger session's public key, out/key.json at its path, and no other file of a session). The composite's: each
-# records audit's cases (sampled-proofs-served's and V3c's window/case.json, case-v2.json and their error files), the
-# files a case names as its blobs (the circuit, the public file, each session's record and proofs, the lookup tables),
-# H1's log and each record it names, and PoUW's period case. And compose.env, its settings: the window, its engine steps
-# (the record's, picked here from the requests file, which stays), the product, the composite, α and Γ, the served node,
-# the follow-on node COMPOSE_NODE, the tree's commit, and the host V3c's audit ran on (AUDITED_ON, empty where the hand-off carries none).
+# serve dir, and nothing else. The record's: its sampled-proofs audit's (`sampled_of_record`) summary, audit record,
+# registration and runs, and of each piece the files `piece_row` and `piece_server` read (copied to
+# private/compose/pieces), Pearl+'s verdict of record's among them (`pearlplus_of_record`'s: the auditor's ledger, the
+# coin record, Pearl+'s answer, the Lean verdict and each challenger session's public key, out/key.json at its path, and
+# no other file of a session). The composite's: each records audit's cases (sampled-proofs-served's and V3c's
+# window/case.json, case-v2.json and their error files), the files a case names as its blobs (the circuit, the public
+# file, each session's record and proofs, the lookup tables), H1's log and each record it names, and PoUW's period case.
+# And compose.env, its settings: the window, its engine steps (the record's, picked here from the requests file, which
+# stays), the product, the composite, α and Γ, the served node, the follow-on node COMPOSE_NODE, the tree's commit, the
+# host V3c's audit ran on (AUDITED_ON, empty where the hand-off carries none) and the record's audit (SAMPLED_AUDIT).
 # Every one is a verifier's input: `served_verdicts.py witness` refuses a list holding a value file, a prover's instance or
 # private file, the advice, a key, a row dir or the requests, and a blob outside the serve dir is refused too.
 COMPOSE_PIECE_FILES="answer.json development.json piece.json refused.txt served.json runs.json ledger.jsonl coin.json
 pearlplus-answer.json pearlplus-lean.json"
-handoff_inputs() {  # the hand-off's every input but its own sums, each existing file once
+handoff_inputs() {  # the hand-off's every input but its own sums, each existing file once, the record's audit $1's among them
   local a blobs cases=()
   for a in sampled-proofs-served "v3c-w$K-$vtag/audit"; do
     [ -f "$D/$a/window/case-v2.json" ] && cases+=("$D/$a/window/case-v2.json")
@@ -1193,10 +1262,9 @@ for case in sys.argv[2:]:
 EOF
 ) || return 1
   {
-    printf '%s\n' sampled-proofs-served/summary.json sampled-proofs-served/window/audit.json \
-      sampled-proofs-served/windows/rank0/registration.json sampled-proofs-served/runs.json h1/log.jsonl \
-      private/pouw/period/case.json private/pouw/period/answer.json "pearlplus/w$K/tie/windows/rank0/registration.json" \
-      "pearlplus/w$K/tie/summary.json" "pearlplus/w$K/tie/circuit-record.json"
+    printf '%s\n' "$1/summary.json" "$1/window/audit.json" "$1/window/registration.json" "$1/runs.json" h1/log.jsonl \
+      private/pouw/period/case.json private/pouw/period/answer.json "pearlplus/w$K/tie/window/registration.json" \
+      "pearlplus/w$K/tie/summary.json" "pearlplus/w$K/tie/circuit-record.json" served-compare/served_compare.json
     for a in sampled-proofs-served "v3c-w$K-$vtag/audit"; do
       printf "$a/window/%s\n" case.json case-v2.json case-error.txt case-v2-error.txt
     done
@@ -1211,7 +1279,8 @@ for x in open(sys.argv[1]):
   } | (cd "$D" && while IFS= read -r f; do [ ! -f "$f" ] || echo "$f"; done) | LC_ALL=C sort -u
 }
 handoff() {  # the compose hand-off in private/compose, from the pieces in $1 and the inference-only verdict $2
-  local d f steps why rc
+  local d f steps why rc sampled
+  sampled=$(sampled_of_record)
   (umask 077; rm -rf "$COMPOSE_DIR" && mkdir -p "$COMPOSE_DIR/pieces") || return 1
   for d in "$1"/*/; do
     [ -d "$d" ] || continue
@@ -1226,8 +1295,8 @@ handoff() {  # the compose hand-off in private/compose, from the pieces in $1 an
     || { say "HANDOFF refused: the window has no engine steps to hand the record (the serve dir's private/compose/window.err)"; return 1; }
   printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" PEARLPLUS_TIE "$PEARLPLUS_TIE" COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" \
     SERVED_NODE "${SERVED_NODE:-$(hostname)}" SERVED_DIR "$D" COMPOSE_NODE "$COMPOSE_NODE" COMPOSE_TREE "$(tree_sha)" \
-    AUDITED_ON "${V3C_AUDITED:-}" STEPS "$steps" > "$COMPOSE_DIR/compose.env" || return 1
-  handoff_inputs > "$COMPOSE_DIR/inputs.txt" 2> "$COMPOSE_DIR/inputs.err"
+    AUDITED_ON "${V3C_AUDITED:-}" SAMPLED_AUDIT "$sampled" STEPS "$steps" > "$COMPOSE_DIR/compose.env" || return 1
+  handoff_inputs "$sampled" > "$COMPOSE_DIR/inputs.txt" 2> "$COMPOSE_DIR/inputs.err"
   rc=$?
   [ "$rc" = 0 ] || { say "HANDOFF refused: $(tail -1 "$COMPOSE_DIR/inputs.err" | cut -c1-600)"; return 1; }
   why=$("$SAY_PY" "$SV" witness < "$COMPOSE_DIR/inputs.txt") \
@@ -1244,7 +1313,8 @@ compose() {  # `served_verdicts.sh compose` on a copy of a compose hand-off: the
   (cd "$D" && sha256sum --check --strict --quiet private/compose/inputs.sha256) > "$COMPOSE_DIR/check.log" 2>&1
   rc=$?
   say "COMPOSE on $(hostname -s) (COMPOSE_NODE $COMPOSE_NODE): $HANDED_WHAT of the served node $SERVED_NODE, from its compose" \
-      "hand-off (verifier-side files, no witness; $([ -n "${AUDITED_ON:-}" ] && echo "V3c's audit from $AUDITED_ON" || echo "no V3c audit")), each file as it" \
+      "hand-off (verifier-side files, no witness; $([ -n "${AUDITED_ON:-}" ] && echo "V3c's audit from $AUDITED_ON" || echo "no V3c audit");" \
+      "the record's sampled proofs ${SAMPLED_AUDIT:-sampled-proofs-served}), each file as it" \
       "hashed it (the serve dir's private/compose/inputs.sha256):" \
       "$([ "$rc" = 0 ] && echo PASS || echo "FAIL (the serve dir's private/compose/check.log)")"
   [ "$rc" = 0 ] || return 3
@@ -1258,9 +1328,10 @@ compose() {  # `served_verdicts.sh compose` on a copy of a compose hand-off: the
     mkdir -p "$OUT/record" && cp "$COMPOSE_DIR/inference-only.json" "$OUT/record/inference-only.json" \
       && say "INFERENCE-ONLY: the served node's verdict, carried into this record as it wrote it (the serve dir's private/compose/inference-only.json)"
   fi
-  "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$D/sampled-proofs-served" \
+  "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" \
+    --sampled-proofs "$D/${SAMPLED_AUDIT:-sampled-proofs-served}" \
     --pieces "$COMPOSE_DIR/pieces" --out "$OUT/record" --product "$PRODUCT" --node "$SERVED_NODE" --steps "$STEPS" \
-    ${PEARLPLUS_TIE:+--window-tie "$(pearl_dir)/tie"} \
+    ${PEARLPLUS_TIE:+--window-tie "$(pearl_dir)/tie" --served-compare "$SERVED_COMPARE"} \
     --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" --off-node --sampled-lean \
     ${SAMPLED_EXE:+--sampled-exe "$SAMPLED_EXE"} --tree "$(tree_sha)" ${COMPOSE_TREE_ON:+--tree-on "$COMPOSE_TREE_ON"} \
     2>&1 | publish_lines
@@ -1279,12 +1350,13 @@ compose_build() {  # what the compose follow-on runs: the tree's venv, and lake 
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
   uv sync --all-packages --extra torch-cpu || return 5
 }
-copy() {  # `served_verdicts.sh copy deferred|compose HOST`: each file the list names, and nothing else, to the same path on HOST
-  local kind=$1 host=$2 dir served composer n rc why log=$D/private/copy-$1.log
+copy() {  # `served_verdicts.sh copy deferred|compose HOST[:DIR]`: each file the list names, and nothing else, to the same path
+  # on HOST, or under DIR/<the serve dir's name>/ in the directory HOST's rsync writes to (a write-only rsync's, no remote mkdir)
+  local kind=$1 host=${2%%:*} name sub where dir served composer n rc why log=$D/private/copy-$1.log
   case $kind in
     deferred) dir=$DEFER_DIR ;;
     compose) dir=$COMPOSE_DIR ;;
-    *) say "COPY refused: served_verdicts.sh copy deferred|compose HOST, not $kind"; return 3 ;;
+    *) say "COPY refused: served_verdicts.sh copy deferred|compose HOST[:DIR], not $kind"; return 3 ;;
   esac
   [ -f "$dir/inputs.txt" ] && [ -f "$dir/$kind.env" ] \
     || { say "COPY refused: the serve dir $D holds no $kind list (private/$kind/inputs.txt and $kind.env)"; return 3; }
@@ -1303,11 +1375,19 @@ copy() {  # `served_verdicts.sh copy deferred|compose HOST`: each file the list 
       || { say "COPY refused: the hand-off's list names the served run's witness ($(echo "$why" | head -1 | cut -c1-400))"; return 3; }
   fi
   n=$(count "$dir/inputs.txt")
-  # shellcheck disable=SC2086
-  ${RSYNC:-rsync} -a --files-from="$dir/inputs.txt" --rsync-path="mkdir -p $(printf %q "$D") && rsync" "$D/" "$2:$D/" > "$log" 2>&1
+  if [[ $2 == *:* ]]; then
+    name=${D%/} && name=${name##*/} && sub=${2#*:} && sub=${sub%/} && sub=${sub:+$sub/}$name
+    where="under $sub/ in its rsync's directory, which its node moves to the serve dir's path"
+    # shellcheck disable=SC2086
+    ${RSYNC:-rsync} -a --files-from="$dir/inputs.txt" "$D/" "${2%%:*}:$sub/" > "$log" 2>&1
+  else
+    where="each to the same path there"
+    # shellcheck disable=SC2086
+    ${RSYNC:-rsync} -a --files-from="$dir/inputs.txt" --rsync-path="mkdir -p $(printf %q "$D") && rsync" "$D/" "$2:$D/" > "$log" 2>&1
+  fi
   rc=$?
   say "COPY the $([ "$kind" = deferred ] && echo "deferral's prover-side" || echo "hand-off's verifier-side") list's $n files to $host," \
-      "each to the same path there: $([ "$rc" = 0 ] && echo PASS || echo "FAIL (exit $rc, the serve dir's private/copy-$kind.log)")"
+      "$where: $([ "$rc" = 0 ] && echo PASS || echo "FAIL (exit $rc, the serve dir's private/copy-$kind.log)")"
   return "$rc"
 }
 gate_compose() {  # `served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]`: the hand-off from PIECES (and the
@@ -1343,6 +1423,7 @@ if [ "${1:-}" = block-counts ]; then K=${2:?served_verdicts.sh block-counts WIND
 if [ "${1:-}" = front-flags ]; then front_ok; exit $?; fi
 if [ "${1:-}" = private-pieces ]; then private_pieces; exit $?; fi
 if [ "${1:-}" = defer ]; then defer "${2:?served_verdicts.sh defer WHY}"; exit $?; fi
+if [ "${1:-}" = served-compare ]; then K=${2:?served_verdicts.sh served-compare WINDOW}; served_compare; exit $?; fi
 if [ "${1:-}" = handoff ]; then  # `served_verdicts.sh handoff [HOST]`: the compose hand-off written again, from a deferral's
   # pieces and inference-only verdict at its settings where the serve dir holds one, else from $OUT's; HOST is where V3c's
   # audit ran (a deferral's follow-on), which a serve dir holding that audit must name
@@ -1355,7 +1436,7 @@ if [ "${1:-}" = handoff ]; then  # `served_verdicts.sh handoff [HOST]`: the comp
   fi
   exit $?
 fi
-if [ "${1:-}" = copy ]; then copy "${2:?served_verdicts.sh copy deferred|compose HOST}" "${3:?served_verdicts.sh copy deferred|compose HOST}"; exit $?; fi
+if [ "${1:-}" = copy ]; then copy "${2:?served_verdicts.sh copy deferred|compose HOST[:DIR]}" "${3:?served_verdicts.sh copy deferred|compose HOST[:DIR]}"; exit $?; fi
 if [ "${1:-}" = gate-compose ]; then  # `served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]`: on a deferral's
   # serve dir at its settings, HOST where V3c's audit ran, as `handoff`'s
   V3C_AUDITED=${4:-${V3C_AUDITED:-}}
@@ -1395,6 +1476,15 @@ elif [ "${1:-}" = v3c ]; then  # V3c alone on an existing serve dir serves nothi
 else
   for f in "$ROW/manifest.json" "$ROW/build_summary.json" "$HIDDEN_SO" "$NORM_TAP_SO" "$PY"; do [ -e "$f" ] || { say "PREFLIGHT: no $f"; exit 3; }; done
   command -v gpu-lease >/dev/null || { say "PREFLIGHT: no gpu-lease on this node"; exit 3; }
+  if [ -n "$PEARLPLUS_TIE" ] && [ "$PEARLPLUS_INODES" != 0 ]; then  # the tied window's commit goes to the serve dir's filesystem
+    at=$D; until [ -e "$at" ]; do at=$(dirname "$at"); done
+    read -r itotal ifree fs < <(df --output=itotal,iavail,target "$at" 2>/dev/null | tail -1)
+    [[ ${itotal:-} =~ ^[0-9]+$ && ${ifree:-} =~ ^[0-9]+$ && $PEARLPLUS_INODES =~ ^[0-9]+$ ]] \
+      || { say "PREFLIGHT: the serve dir's free inodes can't be held to PEARLPLUS_INODES ($PEARLPLUS_INODES): df says ${ifree:-nothing} free of ${itotal:-nothing} on $at"; exit 3; }
+    # a filesystem with no inode table (none in all) makes its inodes as it needs them
+    [ "$itotal" = 0 ] || [ "$ifree" -ge "$PEARLPLUS_INODES" ] \
+      || { say "PREFLIGHT: the serve dir's filesystem $fs has $ifree inodes free, $((PEARLPLUS_INODES - ifree)) short of PEARLPLUS_INODES ($PEARLPLUS_INODES), two commits of the tied window at three files a member: delete earlier runs' Pearl+ windows with \`research retention rm\`, or set SERVE_ROOT on another filesystem"; exit 3; }
+  fi
   [ "$COMPOSE_OFF_NODE" = 0 ] || [ "$PRODUCT" != onsite ] || [ -z "${COMPOSITE-1}" ] \
     || { say "PREFLIGHT: COMPOSE_OFF_NODE=1 composes the composite off this node from its hand-off, and onsite's reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote, COMPOSITE set empty, or COMPOSE_OFF_NODE=0 for a development composite here"; exit 3; }
 fi
@@ -1434,6 +1524,11 @@ if [ -n "$V3C" ] && [ -z "$COMPOSE" ]; then  # V3c's audit's coins: the live cha
     *) say "PREFLIGHT: V3C_CHALLENGER (default PP_CHALLENGER) is local, loopback:HOST:PORT or gate:USER@HOST, not $V3C_CHALLENGER"; exit 3 ;;
   esac
 fi
+if [ -z "$V3C" ] && [ -z "$FOLLOW$COMPOSE" ] && [ "$DEVELOPMENT" != 1 ]; then  # step 3's audit is then the one of record
+  case $SP_CHALLENGER in local | loopback:*)
+    say "PREFLIGHT: with V3c off (V3C_CLASS empty) step 3's audit is the sampled-proofs audit of record, and PP_CHALLENGER is $SP_CHALLENGER, a development session, which only a development run takes: set PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, or DEVELOPMENT=1"; exit 3 ;;
+  esac
+fi
 if [ -n "$PEARLPLUS_TIE" ] && [ -z "$COMPOSE" ]; then  # the window served under Pearl+, its commit and audit tied to Pearl+'s W
   [ "$POUW" = pearlplus ] || { say "PREFLIGHT: PEARLPLUS_TIE ties the window to Pearl+'s W, which POUW=pearlplus's piece writes: POUW is $POUW"; exit 3; }
   [ -z "${H1_TIE:-}" ] || { say "PREFLIGHT: PEARLPLUS_TIE or H1_TIE, not both: the window is tied to one W"; exit 3; }
@@ -1446,8 +1541,20 @@ if [ -n "$PEARLPLUS_TIE" ] && [ -z "$COMPOSE" ]; then  # the window served under
     IFS=, read -r slots prompt _ <<< "$V3C"
     [ "$SLOTS" = "$slots" ] && [ "$PROMPTS" = "$prompt:$prompt" ] \
       || { say "PREFLIGHT: under PEARLPLUS_TIE the circuit cut at Pearl+'s linears reads its tables at the class's fixed load, its slots' requests of its prompt's ids each: SLOTS $slots (not $SLOTS) and PROMPTS $prompt:$prompt (not $PROMPTS)"; exit 3; }
+    [ "$PRECISION" = bfloat16 ] \
+      || { say "PREFLIGHT: PEARLPLUS_TIE serves the BF16 checkpoint's linears as Pearl+'s FP8 product, and PRECISION is $PRECISION: set it bfloat16"; exit 3; }
+    [[ $ROW_ID == *__bf16__* ]] \
+      || { say "PREFLIGHT: PEARLPLUS_TIE serves the BF16 checkpoint, and ROW_ID $ROW_ID is no BF16 row's (its id names __bf16__): set ROW to the BF16 row's dir"; exit 3; }
+    case " $CLASSES " in *" $V3C "*) ;; *)
+      say "PREFLIGHT: PEARLPLUS_TIE commits the window at V3C_CLASS $V3C, whose window circuit CLASSES ($CLASSES) doesn't count: add it"; exit 3 ;; esac
+    [[ " ${SERVE_ARGS:-} " != *" --prefix-caching "* ]] \
+      || { say "PREFLIGHT: under PEARLPLUS_TIE each request's prefill computes every row of its prompt, at which the cut circuit reads Pearl+'s tables, and SERVE_ARGS turns vLLM's prefix cache on (--prefix-caching): drop it"; exit 3; }
+    [ -z "${CERTIFIER_FRONT:-}" ] \
+      || { say "PREFLIGHT: under PEARLPLUS_TIE the window is V3C_CLASS's fixed load, and CERTIFIER_FRONT's group closes into a window of its own, which the run's pick takes on a tie in requests: unset CERTIFIER_FRONT"; exit 3; }
     grep -q -- '"--pearl-passes"' "$TREE/benchmarks/prove_path/prove_path.py" \
       || { say "PREFLIGHT: PEARLPLUS_TIE needs window-commit's --pearl-passes, its circuit cut at Pearl+'s linears, which this tree's prove_path.py doesn't take"; exit 3; }
+    [ -z "$PEARLC_CHALLENGER_GATE" ] || [ -n "${MAIN_FILE:-}" ] \
+      || { say "PREFLIGHT: under PEARLPLUS_TIE the gate's pin is held to main's first-parent line, which MAIN_SHA's (default this tree's HEAD) need not hold: set MAIN_FILE to \`git rev-list --first-parent origin/main\` of a fresh fetch, sent with the run"; exit 3; }
     DEFER=$(short_of_memory) || DEFER=
     [ -z "$DEFER" ] || [ "$PRODUCT" = remote ] \
       || { say "PREFLIGHT: under PEARLPLUS_TIE, where $DEFER, its audit and the composite are deferred to a follow-on, and onsite's composite reads PoUS's case, which needs this node's card: PRODUCT=remote, or a node with the memory"; exit 3; }
@@ -1478,6 +1585,22 @@ if [ -n "${DAY:-}" ] && [ -z "$FOLLOW$COMPOSE" ]; then  # the day's one circuit 
     || { say "PREFLIGHT: DAY=N declares day N's circuit: it needs DAY_LOG (the deployment's registration log) and DAY_PROGRAM (the SHA-512, lowercase hex, of the program its windows register)"; exit 3; }
   [ -f "$TREE/integrations/vllm/verity_vllm/pipeline/serve_day.py" ] && grep -q -- '"--day"' "$TREE/benchmarks/prove_path/records_audit.py" \
     || { say "PREFLIGHT: DAY needs serve-openai's --day and records_audit's --day, which this tree hasn't"; exit 3; }
+fi
+if [ -z "$FOLLOW$COMPOSE" ] && [ "${1:-}" != v3c ]; then  # step 3's law draws every unit of the served compiler's transfer gates
+  why=$(cd "$TREE" && "$SAY_PY" - benchmarks/prove_path/prove_path.py "$REPO" "$PP_PARTITION" 2>&1 <<'EOF'
+import ast, json, sys
+src, model, part = sys.argv[1:]
+record = next((ast.literal_eval(n.value) for n in ast.parse(open(src).read()).body if isinstance(n, (ast.Assign, ast.AnnAssign))
+               and "GATES_OF_RECORD" in [t.id for t in getattr(n, "targets", [getattr(n, "target", None)]) if isinstance(t, ast.Name)]), {})
+gates = list(record.get(model, ()))
+p = json.load(open(part)) if gates else None
+if p is not None and not (str(p["law"]).startswith("work:") and set(gates) <= set(p["templates"])):
+    print(f"{model}'s compiler of record lists {gates} as transfer gates (prove_path.GATES_OF_RECORD), every unit of which "
+          f"step 3 proves beside work:K of the rest, and PP_PARTITION {part} is {p['law']} over {p['templates']}: give a "
+          "work:K partition that holds them, and in PP_SETS their input sets")
+EOF
+) || { say "PREFLIGHT: step 3's partition PP_PARTITION $PP_PARTITION can't be read: $(tail -1 <<< "$why" | cut -c1-400)"; exit 3; }
+  [ -z "$why" ] || { say "PREFLIGHT: $why"; exit 3; }
 fi
 if [ -n "${PREFLIGHT_ONLY:-}" ]; then  # the checks above alone: nothing kept, built or served
   if [ -n "$FOLLOW" ]; then plan="the follow-on of $SERVED_NODE's deferral"
@@ -1547,7 +1670,9 @@ PEARLPLUS="PoUW: Pearl+'s own served run on this card after the window's (POUW=p
 LIVE_GATE=$H1_GATE LIVE_LANE=${H1_LANE:-vllm} LEAD=
 if [ "$POUW" = pearlplus ] && [ -n "$PEARLC_CHALLENGER_GATE" ]; then
   LIVE_GATE=$PEARLC_CHALLENGER_GATE LIVE_LANE=$PEARLC_CHALLENGER_LANE
-  H1_COINS="$PEARLPLUS, its epoch's salt coin a live session's of its own on vy-challenger-1's gate (peer $PEARLC_CHALLENGER_PEER, lane $PEARLC_CHALLENGER_LANE), each pass's salt checked by core_check.live_salt in its piece, its serve inside a Pearl-C period of that lane's own, and its replay's draws a draw session's coin on that gate, reserved withheld once the period closed and opened on the run's commitment, taken once before the replay, checked against the signed ledger in its piece and cited by store id in the POUW line's coin; a development piece under the lane's development key, it credits nothing"
+  PP_CREDIT="it credits nothing"
+  [ -z "$PEARLPLUS_TIE" ] || PP_CREDIT="which the record takes as PoUW's verdict of record, the prover side's, only where pearlplus_of_record holds it"
+  H1_COINS="$PEARLPLUS, its epoch's salt coin a live session's of its own on vy-challenger-1's gate (peer $PEARLC_CHALLENGER_PEER, lane $PEARLC_CHALLENGER_LANE), each pass's salt checked by core_check.live_salt in its piece, its serve inside a Pearl-C period of that lane's own, and its replay's draws a draw session's coin on that gate, reserved withheld once the period closed and opened on the run's commitment, taken once before the replay, checked against the signed ledger in its piece and cited by store id in the POUW line's coin; a development piece, $PP_CREDIT"
 elif [ "$POUW" = pearlplus ]; then
   LEAD="Pearl+'s epoch coins are in-process and the record claims no Pearl+ verdict; "
   H1_COINS="$PEARLPLUS, its epoch's coins an in-process challenger's (PEARLC_CHALLENGER_GATE empty), which the serving process holds, and its replay's draws the Lean verifier's IO.getRandomBytes on this node, taken once before the replay and cited by store id in the POUW line's coin; a development piece, it credits nothing"
@@ -1566,7 +1691,7 @@ if [ -n "$LIVE_GATE" ]; then
   [ "${PIPESTATUS[0]}" = 0 ] || stop gate 3
 fi
 if [ -n "$H1_GATE" ]; then
-  H1_COINS="PoUW H1: each window's coins from a session of its own on vy-challenger-1's gate (peer $H1_PEER, T $T, S $WINDOW_STEPS), a development run under the lane's development key: it credits nothing"
+  H1_COINS="PoUW H1: each window's coins from a session of its own on vy-challenger-1's gate (peer $H1_PEER, T $T, S $WINDOW_STEPS), a development run: it credits nothing"
   export POUW_CMD=${POUW_CMD:-"$TREE/.venv/bin/python benchmarks/one_stage/served_verdicts.py pouw \$1 \$2 \$3${H1_STATEMENTS:+ --statements $H1_STATEMENTS}${H1_LIVE_EVIDENCE:+ --live-evidence $H1_LIVE_EVIDENCE}"}
 fi
 if [ "$SP_CHALLENGER" != local ]; then
@@ -1593,7 +1718,7 @@ vv predict compare "$ROW" --row "$ROW_ID" --config "$CONFIG" --predicted "$PRED"
 rc=$?
 say "PREDICT-COMPARE against the traced Build $ROW (exit $rc): $(grep -E '^(rank|predicted|\[predict\])' "$OUT/predict_compare.log" | tr '\n' ' ' | cut -c1-1200)"
 [ "$rc" = 0 ] || stop predict-compare 18
-inference_policy
+[ -n "$PEARLPLUS_TIE" ] || inference_policy  # under PEARLPLUS_TIE in serve(), once serve-phi states φ on the card
 if [ -n "$PEARLPLUS_TIE" ]; then  # Pearl-C's sm_90 cubin, which the serve's engine and Pearl+'s piece read
   ( export RESEARCH_RUN_DIR=$D/private/pearlplus-cubin VERITY_BENCH_VENV=${VERITY_BENCH_VENV:-$VENV}
     mkdir -p "$RESEARCH_RUN_DIR" && cd "$TREE" || exit 1
@@ -1621,11 +1746,12 @@ import json, os, sys
 from pathlib import Path
 from verity_vllm.pipeline import deferred_rows as DR
 d, pred, held = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
-b_of_record = (str((pred / "manifest.json").resolve()), json.loads((pred / "predicted.json").read_text())["program_digest"])
+predicted = json.loads((pred / "predicted.json").read_text())
+b_of_record = (str((pred / "manifest.json").resolve()), predicted["program_digest"])
 serve = json.loads((d / "serve.json").read_text())
 seals = [json.loads(x) for x in (d / "seals.jsonl").read_text().splitlines() if x.strip()] if (d / "seals.jsonl").exists() else []
 sealed_ok = bound_ok = bool(seals)
-lines, why, committers = [], set(), set()
+lines, why, committers, unbound = [], set(), set(), []
 if not seals:
     why.add("no window sealed")
 if serve.get("scheme") != "rows-sha512":
@@ -1649,6 +1775,16 @@ for s in seals:
     good = good and v.get("commit_scheme") == c.get("commit_scheme") == store == "rows-sha512" and len(rr) == 128
     bound = r.ctx["served_window"].get("required_manifest", {}) if good else {}
     b = (bound.get("path"), bound.get("program_digest")) == b_of_record
+    # a seal before serve_seal.manifest_refusal recorded the manifest's digest as "digest", always None: its path and
+    # Program digest bind it alone
+    if "manifest_digest" in bound:
+        b &= bound["manifest_digest"] == predicted["manifest_digest"]
+        by = f", manifest digest {str(bound['manifest_digest'])[:16]}…"
+    elif "digest" in bound and bound["digest"] is None:
+        by = " (sealed before the seal recorded the manifest's digest: its path and Program digest bind it)"
+        unbound.append(f"w{k}")
+    else:
+        b, by = False, ", and no manifest digest"
     sealed_ok &= good
     bound_ok &= b
     committers.add(str(c.get("committer")))
@@ -1660,14 +1796,16 @@ for s in seals:
                  f"({len(rr) // 2} bytes); bundle {opened}: {'PASS' if good else 'FAIL'}")
     whose = "predict row's Build of record (its predicted.json's)" if b else f"not predict row's {b_of_record[0]}"
     lines.append(f"B-OF-RECORD w{k}: the sealed record binds {bound.get('path')}, program digest "
-                 f"{str(bound.get('program_digest'))[:16]}…: {whose}: {'PASS' if b else 'FAIL'}")
+                 f"{str(bound.get('program_digest'))[:16]}…{by}: {whose}: {'PASS' if b else 'FAIL'}")
 ok = sealed_ok and bound_ok and serve.get("scheme") == "rows-sha512"
 os.umask(0o077)
 held.write_text("".join(x + "\n" for x in lines))
 print(f"SEALED: every closed window's row dir committed under rows-sha512 (committer {', '.join(sorted(committers)) or 'none'}) "
       f"and its replay bundle opened: {'PASS' if sealed_ok else 'FAIL'}")
 print(f"B-OF-RECORD: every sealed record binds predict row's Build of record ({b_of_record[0]}, program digest "
-      f"{b_of_record[1][:16]}…): {'PASS' if bound_ok else 'FAIL'}")
+      f"{b_of_record[1][:16]}…, manifest digest {predicted['manifest_digest'][:16]}…"
+      + (f"; {', '.join(unbound)} sealed before the seal recorded the manifest's digest, by path and Program digest alone"
+         if unbound else "") + f"): {'PASS' if bound_ok else 'FAIL'}")
 print(f"SERVED-SEAL VERDICT: {'PASS' if ok else 'FAIL'} (scheme {serve.get('scheme')}, precision {serve.get('precision')}"
       + (f"; {'; '.join(sorted(why))}" if why else "") + "; each window's lines in the serve dir's private/seal.txt)")
 sys.exit(0 if ok else 1)
@@ -1734,7 +1872,7 @@ wait "$BUILD"; rc=$?
 inference_only &  # beside sampled proofs, which it doesn't read; the record waits for it
 IOV=$!
 [ "$rc" = 0 ] || { tail -30 "$OUT/build.log"; wait "$IOV"; stop build "$rc"; }
-[ "$MAX_TOKENS" = 1 ] && export PP_PARTITION=${PP_PARTITION:-benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step0.json}
+export PP_PARTITION PP_SETS=${PP_SETS:-}
 env -u PYTHONPATH PP_SERVE_RUN="$D" PP_WINDOW="$K" PP_SERVE_ROWS="$D/windows/w$K" PP_RECORDS=1 PP_ONLY="${PP_ONLY:-honest}" \
   PP_CHALLENGER="$SP_CHALLENGER" PP_MAIN="${PP_MAIN:-${MAIN_FILE:-}}" PP_VLLM_PYTHON="$PY" PP_FLOCK_WORK="$FW" \
   OUT="$OUT/sampled-proofs" bash benchmarks/prove_path/run.sh > "$D/sampled-proofs.log" 2>&1
@@ -1751,7 +1889,7 @@ if [ -f "$SR/registration.json" ]; then
     && mv "$SR/registration.public.json" "$SR/registration.json" || rm -f "$SR/registration.json" "$SR/registration.public.json"
 fi
 say "SAMPLED-PROOFS (run.sh exit $rc): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" sampled-line "$D/sampled-proofs.log" \
-  --partition "${PP_PARTITION:-benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1.json}" 2>&1 | cut -c1-3000)$(
+  --partition "$PP_PARTITION" 2>&1 | cut -c1-3000)$(
   grep -q '^RECORDS' "$D/sampled-proofs.log" || echo " (run.sh's log in the serve dir, on the node)")"
 
 # 6. here with the split certifier, whose period check reads V3c's period.json: its piece then reads the answer it wrote
@@ -1765,6 +1903,9 @@ TPY=$TREE/.venv/bin/python
 "$TPY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" ${CERT:+--skip certifier} \
   --product "$PRODUCT" 2>&1 | publish_lines
 [ -z "$CERT" ] || { wait "$CERT"; publish_lines < "$OUT/pieces-certifier.txt"; }
+# under PEARLPLUS_TIE, once Pearl+'s piece wrote W: the served compare, whose line the record names
+SC=() sc=0
+if [ -n "$PEARLPLUS_TIE" ]; then served_compare || sc=1; SC=(--served-compare "$SERVED_COMPARE"); fi
 
 # 6. here under PEARLPLUS_TIE, the commit Pearl+'s piece tied to W: the record reads the audit's tie to W
 WT=() P3C=
@@ -1781,7 +1922,7 @@ if [ "$COMPOSE_OFF_NODE" = 1 ]; then
   [ -z "$DEFER" ] || LEFT="$DEFERRED_WHAT, to a follow-on on a node with the memory, which writes the compose hand-off: $DEFER; and $LEFT"
 elif [ -n "$DEFER" ]; then LEFT="$DEFERRED_WHAT, to a follow-on on a node with the memory, which composes the final record: $DEFER"; fi
 "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$SP" \
-  --pieces "$OUT/pieces" --out "$OUT/record" --product "$PRODUCT" ${WT[@]+"${WT[@]}"} \
+  --pieces "$OUT/pieces" --out "$OUT/record" --product "$PRODUCT" ${WT[@]+"${WT[@]}"} ${SC[@]+"${SC[@]}"} \
   --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" \
   ${LEFT:+--deferred "$LEFT"} 2>&1 | publish_lines
 rec=${PIPESTATUS[0]}
@@ -1802,5 +1943,5 @@ elif [ -n "$V3C" ]; then v3c_commit && v3c_proved
 else say "V3C: not in this run (V3C_CLASS empty): \`served_verdicts.sh v3c\` runs it on the serve dir"; fi
 [ -n "$DEFER" ] || [ "$COMPOSE_OFF_NODE" = 0 ] || handoff "$OUT/pieces" "$OUT/record/inference-only.json" || left=1
 echo "---- verdicts"; cat "$OUT/verdicts.txt"
-[ "$wc_ok" = 1 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ] && [ "$left" = 0 ] \
+[ "$wc_ok" = 1 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ] && [ "$left" = 0 ] && [ "$sc" = 0 ] \
   && grep -q '"composed": "\(pending\|accept\)"' "$OUT/verdicts.txt"

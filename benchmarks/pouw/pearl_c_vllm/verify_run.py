@@ -56,8 +56,9 @@ records after the coin is refused (``after-coin``), so neither a retention nor a
 - ``challenger`` (`bench_arm.LiveDraw`, `served_passes.py verify` under ``PEARLC_CHALLENGER_GATE``): a draw session of
   its own on the auditor host's challenger (`window.DRAW_FAMILIES`, its one coin ``pouw/draw`` 0), reserved withheld
   through the lane's gate once the lane has no period open (so it joins none, and the Pearl-C period's close lists the
-  salt sessions alone), opened on C, its coin released only after C and its commitment, salt and path only at its close.
-  S is that coin's 64 bytes.
+  salt sessions alone) and, given the period the salt session joined, as the lane's first reserve after that period
+  closed (`pouw_h1_window.after_close`, held before its coin is asked), opened on C, its coin released only after C and
+  its commitment, salt and path only at its close. S is that coin's 64 bytes.
 - ``node`` (`node_draw`, the default): 32 bytes of the Lean verifier's coins on this node (``uniform/io-getrandombytes``),
   a development draw no verdict of record takes.
 
@@ -81,7 +82,8 @@ A reader holds a challenger draw to: ``opening`` is coin ``pouw/draw`` 0 of ``co
 (`challenger.live_reason`) and its coin is S; ``commitment`` is the one the session's challenger signed, of a draw
 session's layout (`window.draw_epoch_reason`); the auditor's ledger, under the pinned key, opens that session alone on C,
 withheld (`challenger.withheld_on`); and that session is its lane's first reserve after the lane's Pearl-C period closed
-(`served_verdicts.pearlplus_live_draw`), so a prover who tries again under another session holds a draw no reader takes.
+(`served_verdicts.pearlplus_live_draw`, over `pouw_h1_window.after_close`), so a prover who tries again under another
+session holds a draw no reader takes.
 
 Prints one line, ``ACCEPT …`` or ``REJECT …``, naming the pass's run and the manifest (`transcript`, as the panel's
 ``--transcript`` takes it), writes ``verify.json`` beside the manifest, and exits 0 only on acceptance, or with

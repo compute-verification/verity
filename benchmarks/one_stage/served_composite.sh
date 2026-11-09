@@ -16,8 +16,9 @@
 # SERVE_DIR/sampled-proofs-served), the latter with the policy's α and Γ read off the case's own division
 # (`--from-division`), or ALPHA and GAMMA where both are set, and its log the serve's H1 log through R's previous record;
 # and PoUW's period case (`served_pouw.sh`'s SERVE_DIR/private/pouw/period) once every window of it names R as its
-# Commit record, refused otherwise. Each CASE line's protocol and verdict go to OUT/verdicts.txt, and α and Γ, which
-# count the block's gates, stay in the case's private policy.json. Then
+# Commit record, refused otherwise, and Pearl+'s run case naming R from the parts its piece wrote
+# (`served_pearlplus.sh`'s SERVE_DIR/private/pearlplus/case). Each CASE line's protocol and verdict go to
+# OUT/verdicts.txt, and α and Γ, which count the block's gates, stay in the case's private policy.json. Then
 # `composite.py` remote and onsite,
 # each with `--exe` its product's Lean (`remote`, `onsite`, built here), over the directories under SERVE_DIR/private
 # that hold a case.json and an answer.json whose protocol is one of that product's subprotocols (composite.py's
@@ -34,7 +35,9 @@
 # to), headed COMPOSITE, and nothing else. Without served_case.sh or composite.py
 # in the tree it says so and exits 1, since no product's Lean answered. It makes no verdict: exit 0 when each product's
 # Lean answered, else 1. PRODUCT=remote (`served_verdicts.sh`'s) writes neither PoUS's case nor the wipe's, needs no
-# served_case.sh, and runs remote's Lean alone.
+# served_case.sh, and runs remote's Lean alone: under POUW=pearlplus, where the tree has remote's composite of record
+# (`remote-v1`, `Core.Remote.V1`, whose work subprotocol is Pearl+'s run verdict, served_cases.py's Pearl+ case), that
+# one (composite.py remote-v1), else v0.
 # On the served node itself (SERVED_NODE unset or its own host), which the prover controls, a composite claims no record:
 # it is refused (COMPOSITE refused, exit 1) unless COMPOSE_OFF_NODE=0, and then composed as a development check, its
 # first line COMPOSITE DEVELOPMENT and each product's composite.json and verdicts.txt led by it (composite.py
@@ -63,7 +66,8 @@ fi
 PRODUCT=${PRODUCT:-onsite}
 case $PRODUCT in
   onsite) products=(remote onsite) need=(benchmarks/pous/served_case.sh benchmarks/one_stage/composite.py) ;;
-  remote) products=(remote) need=(benchmarks/one_stage/composite.py) ;;
+  remote) products=(remote) need=(benchmarks/one_stage/composite.py)
+    [ "${POUW:-}" = pearlplus ] && [ -f verity/core/protocols/remote/RemoteV1Main.lean ] && products=(remote-v1) ;;
   *) say "COMPOSITE: not run, PRODUCT is onsite or remote, not $PRODUCT"; exit 1 ;;
 esac
 for f in "${need[@]}"; do
@@ -113,7 +117,7 @@ fi
 
 bad=0
 for x in "${products[@]}"; do
-  e=$(exe "$x" "verity/core/protocols/$x") || { bad=1; continue; }
+  e=$(exe "$x" "verity/core/protocols/${x%-v1}") || { bad=1; continue; }
   cases=()
   while IFS= read -r c; do cases+=(--cases "$c"); done < <("$TPY" - "$D/private" "$x" "$P" "$D/private/pouw" \
     "$D/private/compose" "$D/private/deferred" <<'EOF'

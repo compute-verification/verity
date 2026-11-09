@@ -2,16 +2,20 @@
 by `NciCheck.Count`'s rule (`verity/core/protocols/network/nci/lean/NciCheck/Count.lean`), against a policy the run
 registered before it served.
 
-    inference_only.py policy --class S,P,O --model REPO --revision REV --lease-min M [--utilization U] --out POLICY
+    inference_only.py policy --class S,P,O --model REPO --revision REV --lease-min M [--utilization U]
+        [--serve PHI] [--pearl-tables SCHEME] --out POLICY
     inference_only.py verdict --policy POLICY --serve-run D --circuit RECORD --registration REGISTRATION
         [--pins WEIGHTS_REGISTRATION] --out VERDICT --private FULL [--lean NCI_CHECK [--lean-timeout S]] [--retroactive WHY]
 
-**The policy** (`policy`, `POLICY_FORMAT`) is written before the serve's lease from the run's settings alone, and fixes
-(c, k, n) with every input to them and its source:
+**The policy** (`policy`, `POLICY_FORMAT`) is written before the serve from the run's settings alone, before its lease
+unless ``--serve`` states φ, and fixes (c, k, n) with every input to them and its source:
 
 - the session: the class's circuit under the registered φ (`window_circuit.class_circuit` of `prove_path.registered_of_serve`
-  on `serve_facts`, the facts an H200 int8 serve records in its ``serve.json``), read from its description (`class_doc`),
-  whose one block Definition is a slot's session over every position (`block_counts.session`);
+  on `serve_facts`, the facts an H200 int8 serve records in its ``serve.json``, or on ``--serve``'s, `prove_path.py
+  serve-phi`'s statement of the ``serve.json`` a serve will write, read on its card under the lease before it serves, as
+  a checkpoint served in BF16 needs; with ``--pearl-tables`` cut at its linears at that PoUW scheme, Pearl+'s
+  (`window_class.PearlTables`), as `prove_path.py window-circuit` records a window served under Pearl+), read from its
+  description (`class_doc`), whose one block Definition is a slot's session over every position (`block_counts.session`);
 - c, that Definition's Boolean gates by the gate table (`table_of`), and k, its fresh-input bits (`block_counts.fresh`) with
   θ every weight parameter the circuit registers held (`weights_of_record.PARAM`), B's k (`inference_blocks.budgets`): what
   the weights registration pins before the first request, so a run whose pins hold fewer weights reads more fresh bits
@@ -193,16 +197,35 @@ def serve_facts(model: str, revision: str) -> dict[str, Any]:
     return {"model": model, "revision": revision, "target": target, "execution": "bi-eager", "default_seed": DEFAULT_SEED}
 
 
-def class_doc(serve: Mapping[str, Any], cls: Any) -> tuple[dict[str, Any], list[str]]:
+def stated_serve(doc: Mapping[str, Any], model: str, revision: str) -> dict[str, Any]:
+    """What φ reads of a serve as ``doc`` states it (`prove_path.py serve-phi`'s statement of the ``serve.json`` it will
+    write, or a run's ``serve.json``), the fields `serve_facts` gives; a ValueError unless it is ``model`` at
+    ``revision``."""
+    serve = {k: doc.get(k) for k in ("model", "revision", "target", "execution", "default_seed")}
+    serve["execution"] = serve["execution"] or (doc.get("engine") or {}).get("execution")
+    if (serve["model"], serve["revision"]) != (model, revision):
+        raise ValueError(f"--serve states φ of {serve['model']} at {serve['revision']}, not of --model {model} at "
+                         f"--revision {revision}")
+    return serve
+
+
+def class_doc(serve: Mapping[str, Any], cls: Any, scheme: str | None = None) -> tuple[dict[str, Any], list[str]]:
     """The class's circuit under ``serve``'s φ (`window_circuit.class_circuit`, the circuit `prove_path.py window-circuit
-    --class` records for a window the class takes) as the description its session and fresh bits are read from, the way
-    `inference_blocks.budgets` reads B's k (no member stated, which is work per template the counts don't read), and the
-    parameters it registers."""
+    --class` records for a window the class takes), with a PoUW ``scheme`` cut at its linears (`window_class.PearlTables`),
+    as the description its session and fresh bits are read from, the way `inference_blocks.budgets` reads B's k (no
+    member stated, which is work per template the counts don't read), and the parameters it registers; `Undecided` where
+    the vocabulary can't express it."""
     sys.path.insert(0, str(ROOT / "benchmarks" / "prove_path"))
     import prove_path as PP
+    from verity_vllm.program.predict.common import Unexpressible
     from verity_vllm.program.predict.window_circuit import class_circuit
+    from verity_vllm.program.predict.window_class import PearlTables
 
-    circuit = class_circuit(PP.registered_of_serve(serve, None, None, PP.CAP_BITS), cls)
+    try:
+        circuit = class_circuit(PP.registered_of_serve(serve, None, None, PP.CAP_BITS), cls,
+                                tables=PearlTables(scheme) if scheme else None)
+    except Unexpressible as e:
+        raise Undecided(f"the class's circuit under the policy's φ: {e}") from e
     doc = {**circuit.description(), "name": circuit.name, "partition": "",
            "blocks": circuit.blocks.doc(sum(circuit.units.values()), "")}
     return doc, sorted(circuit.registered.params if circuit.registered is not None else ())
@@ -277,18 +300,21 @@ def window_class(arg: str) -> Any:
 
 
 def policy(cls_arg: str, model: str, revision: str, lease_min: int, utilization: Fraction, source: str,
-           written: str, tree: str | None) -> dict[str, Any]:
-    """The registered policy (module docstring), from the run's settings alone."""
+           written: str, tree: str | None, stated: Mapping[str, Any] | None = None,
+           scheme: str | None = None) -> dict[str, Any]:
+    """The registered policy (module docstring), from the run's settings alone: φ ``stated`` (`stated_serve`), else
+    `serve_facts`', and its circuit cut at a PoUW ``scheme``'s linears."""
     cls = window_class(cls_arg)
-    serve = serve_facts(model, revision)
-    doc, params = class_doc(serve, cls)
+    serve = serve_facts(model, revision) if stated is None else stated_serve(stated, model, revision)
+    doc, params = class_doc(serve, cls, scheme)
     pins = weight_pins(params)
     row = session_row(doc, pins, pins)
     work = session_work(cls, model)
     cap = capacity(work["theta_macs"], lease_min, utilization)
     return {"format": POLICY_FORMAT, "written_utc": written, "tree": tree,
             "class": {"slots": cls.slots, "prompt": cls.prompt, "outputs": cls.outputs, "positions": cls.positions},
-            "serve": serve, "session": {k: row[k] for k in ("definition", "key", "slots", "positions")},
+            "serve": serve, "pearl_tables": scheme,
+            "session": {k: row[k] for k in ("definition", "key", "slots", "positions")},
             "c": row["gates"], "k": row["fresh"], "n": cap["n"],
             "theta": f"every weight parameter the class's circuit registers ({len(pins)}), held",
             "table": {"sha512": digest(row["table"]), "entries": len(row["table"]), "priced": row["priced"]},
@@ -522,6 +548,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--utilization", type=Fraction, default=UTILIZATION, help=f"the declared utilization (default {UTILIZATION})")
     p.add_argument("--utilization-source", default=UTILIZATION_SOURCE)
     p.add_argument("--tree", default=None, help="the tree's commit, recorded")
+    p.add_argument("--serve", type=Path, default=None,
+                   help="φ as the serve will record it: prove_path.py serve-phi's statement of its serve.json, read on its "
+                        "card before it serves (default: an H200 int8 serve's, serve_facts)")
+    p.add_argument("--pearl-tables", metavar="SCHEME", default=None,
+                   help="the class's circuit cut at its linears at this PoUW scheme, Pearl+'s (window_class.PearlTables)")
     p.add_argument("--out", type=Path, required=True)
     v = sub.add_parser("verdict", help="the run's verdict against its policy")
     v.add_argument("--policy", type=Path, required=True)
@@ -538,7 +569,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.cmd == "policy":
         written = datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds")
         try:
-            pol = policy(a.cls, a.model, a.revision, a.lease_min, a.utilization, a.utilization_source, written, a.tree)
+            stated = None if a.serve is None else json.loads(a.serve.read_text())
+            pol = policy(a.cls, a.model, a.revision, a.lease_min, a.utilization, a.utilization_source, written, a.tree,
+                         stated, a.pearl_tables)
         except (Undecided, ValueError, KeyError, OSError) as e:
             print(f"INFERENCE-ONLY POLICY refused: {type(e).__name__}: {e}"[:1200], flush=True)
             return 1
