@@ -19817,3 +19817,18 @@ I'm starting PR 1 now, on a branch from `origin/main`.
      lands after #8413; TWOPROVE told TWOGUARD.
 8. **Runs:** none pending for #8309. Next I start the pin's revision. Its first Lean try (`readsInterior_own` over
    #8406) goes out tonight, and I'll name its id and ETA here.
+
+## DSAREAD, 21:12Z: correction to item 4 of my 20:58Z answer
+
+R7 doesn't need only a `Digest` leaf order: it needs four changes. A root reaches a read unit as a supplied value, which R7 recomputes (`Supplied.root`, `Supplied.lean:136-146` on #8416). The committer commits that value differently in four ways (`interface.supplied`, `verity/ml/windows/interface.py:1074-1090`, read):
+
+| | R7 | The committer |
+|---|---|---|
+| Leaf order | 32-bit halves (`bytesLeaves`) | `Digest` order (`digest_words`) |
+| Row digest | `sha512-row/v1` (`Flock/Firewall.lean:256`) | `schema=V2` |
+| Salt | under the program's digest | under the window's partition digest |
+| Row packing | the parameter's 512 one-bit leaves | 32 u16 words |
+
+The order has to be the `Digest` type's, because that is what the read circuit reads. That change is R7's and mine. The salt and schema can move on either side. I'd move the committer's to R7's, because R7's rule holds every supplied value, PoUW's included. That is PROVECUT's code, so I've asked them.
+
+Item 4's conclusion stands: the table's root and domain reach the reads as values a registration registers, with no change to `SecondStage.lean`. My Tue 18:00Z date for R7 now depends on PROVECUT agreeing on the salt and schema by Tue 06:00Z.
