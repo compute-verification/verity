@@ -13,7 +13,7 @@ for pair in /root/.research:/data/state/root-research /root/.runpod:/data/state/
   [ -d "$l" ] && [ ! -L "$l" ] && rmdir "$l" 2>/dev/null
   ln -sfn "$t" "$l"
 done
-# Drive's merges need `git --attr-source` (git >= 2.40); the image's Ubuntu git is 2.34, so git comes from the git-core PPA.
+# The verified queue's merges need `git --attr-source` (git >= 2.40); the image's Ubuntu git is 2.34, so git comes from the git-core PPA.
 # add-apt-repository can't run on this image (its python3 lacks apt_pkg), so the key and the list are written directly.
 PPA_KEY=/usr/share/keyrings/git-core-ppa.gpg
 git_ok() { git version | awk '{split($3, v, "."); exit !(v[1] > 2 || (v[1] == 2 && v[2] >= 40))}'; }
@@ -31,8 +31,8 @@ packages() {
    command -v rsync > /dev/null && command -v sqlite3 > /dev/null && command -v psql > /dev/null && git_ok && break
    echo "$(date -u +%FT%TZ) packages, try $try"; packages; sleep 20
  done
- git_ok && echo "$(date -u +%FT%TZ) $(git version)" || echo "$(date -u +%FT%TZ) GIT-TOO-OLD: $(git version); drive refuses to merge"
- setsid -f /data/infra/drive.sh > /dev/null 2>&1 < /dev/null) >> /data/boot/packages.log 2>&1 &
+ git_ok && echo "$(date -u +%FT%TZ) $(git version)" || echo "$(date -u +%FT%TZ) GIT-TOO-OLD: $(git version); the queue refuses to merge") \
+  >> /data/boot/packages.log 2>&1 &
 (cd /workspace/guard-src && PYTHONPATH=tools/research/src RESEARCH_MACHINES_D=/workspace/steward/research-notes/machines.d LC_ALL=C.UTF-8 \
   setsid -f python3 -m research pods guard --supervise --budgets /workspace/steward/research-notes \
   >> /root/.research/pods/guard-budgets.log 2>&1 < /dev/null)
@@ -43,7 +43,6 @@ setsid -f /data/infra/store_index.sh > /dev/null 2>&1 < /dev/null
 setsid -f /data/infra/store_gc.sh > /dev/null 2>&1 < /dev/null
 setsid -f /data/infra/fixtures_export.sh > /dev/null 2>&1 < /dev/null
 setsid -f /data/infra/agent_watch.sh > /dev/null 2>&1 < /dev/null
-setsid -f /data/infra/promote-loop.sh > /dev/null 2>&1 < /dev/null
 setsid -f /data/infra/cloud_watch.sh > /dev/null 2>&1 < /dev/null
 setsid -f /data/infra/control-disk/run.sh > /dev/null 2>&1 < /dev/null
 setsid -f /data/watchers/run.sh > /dev/null 2>&1 < /dev/null

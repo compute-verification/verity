@@ -8,17 +8,17 @@ editing on the pod.
 ## The persistence contract
 
 - **Everything that must survive lives under `/data`.** The container disk holds links and packages that `post_start.sh`
-  recreates, drive's two clones under `/root/fast` (seeded from the volume), and the local store caches `/root/drive-store`,
+  recreates, the queue's clone and the verified queue's checkout under `/root/fast`, and the local store caches `/root/drive-store`,
   `/root/watchers-preflight-store` and `/root/watchers-challenger-store` (SQLite on NFS was too slow). A RunPod reset wipes the
   container disk, `/post_start.sh` included. Any `PATCH /pods/{id}` resets the pod about 30 s later, even one that only renames
   it. So never edit the pod; make a new one.
 - **To resize, move to a new pod.** The services need more than 4 GB: at 4 GB the cgroup sat at its cap and killed processes.
   - create it with the RunPod REST API under the same name, on volume `4ue28s1c6g` mounted at `/data`, with the old pod's image
     and `PUBLIC_KEY`; it boots with sshd only;
-  - `drive.sh stop` on the old pod, then copy the store caches above to `/data/handover/<old id>/`, each `catalog.sqlite` with
+  - ci stops the verified queue's loop on the old pod; copy the store caches above to `/data/handover/<old id>/`, each `catalog.sqlite` with
     sqlite3's `.backup`;
   - stop the old pod (never start it again: its `/post_start.sh` would start a second guard), copy the caches into the new
-    pod's `/root`, and run `sh /data/boot/post_start.sh`, then `drive.sh start`;
+    pod's `/root`, and run `sh /data/boot/post_start.sh`; ci starts the loop there;
   - `research pods register vy-control --pod-id NEW --replace --any-name`, and terminate the old pod, since two pods of one
     name make `research pods ssh vy-control-verity` and the guard host's lookup refuse.
 - **After a reset, run `sh /data/boot/post_start.sh` once.** It relinks every path below, installs rsync, sqlite3, git and psql when
@@ -35,8 +35,7 @@ editing on the pod.
 | Budget guard (`research pods guard --supervise`) | `post_start.sh` | `/data/guard-src` (a `main` tree; its `COMMIT` file names it) | `/root/.research/pods/guard-budgets.log` |
 | Resource steward (`research notes watch ... --lease --standby`) | `steward-run.sh`, deployed as `/data/steward/run.sh` | `/data/steward/verity` (a clone of this repo) | `/data/steward/watch.log` |
 | `/tmp` sweep, hourly | `tmp_sweep.sh`, deployed as `/data/infra/tmp_sweep.sh` | the script | `/data/infra/tmp-sweep.log` |
-| Drive: `research queue drive`, ci's landing automation, one tick every 2 min as lane ci, flags from main's `tools/verity/check/drive.toml`, their one source, plus `/data/drive/args` (only the flags its `command_line` lets override, `--on` and `--first`; a `--config FILE` there is refused unless every key it sets has main's value); sources `r2.env` and `relay.env` (Slack); posts as ci's handle with `RESEARCH_AGENT_URL` from `/data/drive/agent-url` (ci's coordinator URL, unless the caller sets one); the verity-drive App's installation token comes from `gh_app_token.sh` (`/data/state/secrets/verity-drive.pem`), reused 45 min from memory (`--cached`): both clones' credential helper is `gh_app_token.sh git`, which hands it to git when it pushes `next`, `checked` and `main`, and `gh` is `/data/drive/ghw/gh`, which sets `GH_TOKEN` per call before running `/data/drive/bin/gh`, so a tick longer than the token's hour still pushes; nodes as `research run --on` reaches them, from the steward's notes clone's `machines.d` | `drive.sh`, deployed as `/data/infra/drive.sh`; no tick while `/data/drive/stopped` exists: ci runs `/data/infra/drive.sh stop` (waits for the tick in progress), `start`, `status`, `once --dry-run`, `deploy SHA|main`, or `queue ARGS` (`research queue ARGS` between ticks with drive's env and state: the lander's `queue eject N --by ci --reason ...` runs here; `queue promote`, a loop's every minute or so, and ci's `queue baseline SHA --by ci` fast-forward main beside a tick, without its lock or a checkout, and write nothing of drive's) | `/root/fast/verity` on the container disk (a checkout of origin/main it fetches each tick, at the landed commit `/data/drive/deployed` pins when it names one (`drive.sh deploy SHA`; `drive.sh deploy main` follows main's tip again), else at main's tip; its `tools/research`), seeded from `/data/drive/verity` when the container is new | `/data/drive/drive.log`; `verity.state.json` in `/root/.research/queue/`, whose `verity` is a symlink to the queue's clone in `/root/fast/queue-verity` (seeded from `verity.volume` beside it); the store's cache in `/root/drive-store`, its catalog there and its `objects/` and `attempts/` links into `/data/drive/store` (`store_links`); its temp dirs (`TMPDIR`, the trains' `check-lean-deps-*`) in `/data/drive/tmp`, and the trains' checkouts (`TRAIN_TREES`) in `/root/fast/trains` on the container disk, each removed an hour after its last change once nothing runs in it; `RESEARCH_EXECUTOR_ENQUEUE` names the task executor's enqueue command (`/root/executor/infra/executor.py`), which `research executor enqueue` runs |
-| Promote, every minute: `drive.sh queue promote` fast-forwards main to a `checked` commit whose after-landing run passed; skipped while `/data/drive/stopped` exists | `promote-loop.sh`, deployed as `/data/infra/promote-loop.sh`, started by `post_start.sh` | the script | `/data/drive/promote.log` |
+| Verified queue (`research queue vqueue`, ci's landing loop: each tick builds candidates from `main` and the ready PRs with land verdicts, checks each with graph2 and the run beside it, fast-forwards `main` to one that passed and ejects the culprits of one that failed; `research.vqueue_loop`'s docstring), with `RESEARCH_DRIVE=1` and the verity-drive App's token from `gh_app_token.sh` (`/data/state/secrets/verity-drive.pem`), which alone may move `main`; its flags are `tools/verity/check/drive.toml` at `main`, and its landing order is `/data/drive/priority` | ci, from a pinned checkout of this tree | `/root/fast/vqueue-src`, run in the queue's clone (`/root/.research/queue/verity`, a symlink to `/root/fast/queue-verity`) | `/data/vqueue/decisions.jsonl` (the decision log, one JSON line an action) and `/data/vqueue/state.json` (each tick's candidates and verdicts) |
 | Store index, every 5 min (`research data index --postgres` into Neon's `store_private`, and `--public` into `store_public` once `store-export.env` exists) | `store_index.sh`, deployed as `/data/infra/store_index.sh` | `/data/infra/store-index-src` (a `tools/research` tree; its `COMMIT` file names it) | `/data/infra/store-index.log` |
 | Fixture export, every 5 min (`research data export` of main's `fixtures/artifacts.json`, then next's (admitted PRs, so a train finds the fixtures its PRs register), to the public export, so nobody exports a new fixture by hand; the relay's `fixtures-public` monitor alerts on one still missing) | `fixtures_export.sh`, deployed as `/data/infra/fixtures_export.sh` | `/data/infra/fixtures-export-repo` (a checkout of origin/main it fetches each pass with the deploy key) | `/data/infra/fixtures-export.log` |
 | Store GC, every 6 h (`research data gc`, the store README §7.4: blobs only uncited artifacts past their kind's TTL hold; plans only until `/data/store-gc/apply` exists, then marks and deletes; skips a pass while the notes clone or the fixtures checkout was last fetched over 6 h ago) | `store_gc.sh`, deployed as `/data/infra/store_gc.sh` | `/data/infra/store-gc-src` (a `tools/research` tree; its `COMMIT` file names it) | `/data/infra/store-gc.log`; each pass's report in `/data/store-gc/reports/`, the marks in `marks.json`, the manifests, labels and attempts it read in `cache/` |
@@ -61,12 +60,10 @@ watch reads each sweep, so no restart is needed. It is then woken (or, with `--w
 twice that interval. A handle that isn't listed (comms wakes on its inbox, issue events and one-shot timers) is woken only by
 a doorbell pending in its inbox, never on idle time alone.
 
-Drive runs on this pod. `post_start.sh` starts its loop, and the loop ticks only while `/data/drive/stopped`
-is absent, so a reset brings drive back in whichever state ci left it. Two drives must never tick against one `next`: ci
-stops its own loop before `drive.sh start` here. Its checkout was cloned over https with `--filter=blob:none`, with
-`notes_sync.CREDENTIAL_HELPER`'s helper for `GH_TOKEN` as its local `credential.helper`.
-`drive.sh start` refuses until a dry-run push of `next` with that token goes through: the token is verity-drive's (App
-5385601, installation 173153984), minted by `gh_app_token.sh` with Contents and Pull requests write on this repository only.
+The verified queue runs on this pod, and only here: GitHub's rulesets let only the verity-drive App (App 5385601,
+installation 173153984, its token minted by `gh_app_token.sh` with Contents and Pull requests write on this repository only)
+move `main`, and `research` refuses that push without `RESEARCH_DRIVE=1`. Two loops must never tick against one `main`: ci
+stops one before starting another.
 
 The steward holds a lease, so a second copy stands by instead of running. Its `--reap` reads `lane/*` tips from origin over https,
 its clone's local `credential.helper` being `gh_app_token.sh git`; if `watch.log` shows `FETCH-FAILED`, remove `--reap` until the fetch works again.
@@ -84,7 +81,8 @@ its clone's local `credential.helper` being `gh_app_token.sh git`; if `watch.log
 | `/data/uv` | `/root/.local/bin/uv`, `/root/.local/share/uv/python`, `/usr/local/bin/python3.12` | uv and CPython 3.12 |
 | `/data/steward` | `/workspace/steward` | the verity clone, the research-notes clone, the steward's store, `run.sh`, `render-src` |
 | `/data/guard-src` | `/workspace/guard-src` | the guard's code |
-| `/data/drive` | | drive's checkout (`verity`), `bin/gh`, `gh-config`, `args`, the stop file `stopped` and `drive.log` |
+| `/data/drive` | | `priority`, the verified queue's landing order |
+| `/data/vqueue` | | the verified queue's lock, decision log and state |
 | `/data/console` | `/workspace/console` | the console's loop, its code and its outbox |
 | `/data/chats` | `/workspace/chats` | the chats archive |
 | `/data/research`, `/data/research-control` | `/workspace/research`, `/workspace/research-control` | `research run` state and control worktrees |
@@ -111,8 +109,6 @@ $CP "cat > /data/infra/cloud_watch.toml" < infra/control/cloud_watch.toml
 $CP "/data/infra/cloud_watch.sh once --dry-run --digest"     # what it would post, posting nothing and writing no state
 $CP "cat > /data/infra/gh_app_token.sh && chmod +x /data/infra/gh_app_token.sh" < infra/control/gh_app_token.sh
 $CP "cat > /data/infra/gh_notes_token.sh && chmod +x /data/infra/gh_notes_token.sh" < infra/control/gh_notes_token.sh   # the same App, scoped to research-notes: the steward's notes clones
-$CP "cat > /data/infra/drive.sh.new && chmod +x /data/infra/drive.sh.new && mv /data/infra/drive.sh.new /data/infra/drive.sh" < infra/control/drive.sh   # a new inode: the running loop keeps reading its own
-$CP "/data/infra/drive.sh once --dry-run"     # one tick that pushes, launches and posts nothing
 $CP "cat > /data/infra/agent_watch.sh && chmod +x /data/infra/agent_watch.sh" < infra/control/agent_watch.sh
 $CP "cat > /data/infra/agent_watch.py" < infra/ops/verity_ops/agent_watch.py
 $CP "cat > /data/agent-watch/timers.json" < infra/control/agent_watch_timers.json
@@ -126,7 +122,7 @@ $CP "cat > /data/infra/msg.sh && chmod +x /data/infra/msg.sh" < infra/control/ms
 ~~~
 
 `monitors-relay`'s `drift` reads git history the tree lacks from `/data/watchers/repo`, cloned once over https with `gh_app_token.sh` as its credential helper, and
-`fixtures-public`, `unverified-main` (which also reads drive's `/root/.research/queue/verity.state.json`), the failed-check posts and
+`fixtures-public`, `unverified-main` (which also reads the queue's `/root/.research/queue/verity.state.json`), the failed-check posts and
 the router call `gh`, installed once into `/data/watchers/bin`:
 
 ~~~sh

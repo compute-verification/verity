@@ -239,7 +239,7 @@ def test_main_stalled_rings_ci_only_while_next_is_ahead_and_once_per_main_head()
     assert [to for to, _, _ in ring.rings] == ["ci"] and "60 min" in ring.rings[0][1]
 
 
-def test_a_train_that_just_landed_is_not_a_stall_though_drive_built_its_commit_long_ago():
+def test_a_candidate_that_just_landed_is_not_a_stall_though_its_commit_was_built_long_ago():
     state, ring = {}, Ring()
     heads = iter(["old", "landed", "landed", "landed"])
 

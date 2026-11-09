@@ -2146,7 +2146,8 @@ def test_read_heads_remembers_each_pushed_sha_s_branch_for_two_days(tmp_path):
 
 
 def test_a_quiet_handles_runs_are_not_rung(tmp_path):
-    """Drive's train checks end every few minutes under `--by ci`, and drive reads them itself: ringing ci for each is noise."""
+    """The verified queue's checks end every few minutes under `--by ci`, and the queue reads them itself: ringing ci for each is
+    noise."""
     api, clock, w, sh, roots = nodes_setup(tmp_path)
     cfg = json.loads((tmp_path / "nodes.json").read_text())
     (tmp_path / "nodes.json").write_text(json.dumps({**cfg, "quiet_handles": ["vllm"]}))

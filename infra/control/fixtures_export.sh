@@ -22,7 +22,7 @@ while :; do
       python3.12 -m research data export --store /data/infra/fixtures-export-store --repo "$REPO" --jobs 16
   ) >> "$LOG" 2>&1
   echo "$(date -u +%FT%TZ) pass rc=$? $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null)" >> "$LOG"
-  # Then the registry of origin/next (drive's stack of admitted PRs), with main's code: a fixture an admitted PR registers is
+  # Then the registry of origin/next (the frozen stack of admitted PRs), with main's code: a fixture an admitted PR registers is
   # public before its train fetches it, not only once it lands. Up to one pass (5 min) after a PR joins next.
   (
     W=/data/infra/fixtures-export-next

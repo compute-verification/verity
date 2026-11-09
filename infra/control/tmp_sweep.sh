@@ -1,5 +1,5 @@
 #!/bin/sh
-# Hourly: remove top-level /tmp entries with nothing inside modified in 6 h (drive's train-* checkouts: 1 h), unless a process has one as its cwd, holds a file
+# Hourly: remove top-level /tmp entries with nothing inside modified in 6 h (train.sh's train-* checkouts: 1 h), unless a process has one as its cwd, holds a file
 # under it open, or names it in its environment (PYTHONPATH and the like). DRY=1 lists only. Log: /workspace/infra/tmp-sweep.log
 LOG=/workspace/infra/tmp-sweep.log
 while :; do
@@ -7,7 +7,7 @@ while :; do
            readlink "$p/cwd"; ls -l "$p/fd" 2>/dev/null | sed -n 's/.*-> //p'; tr '\0:=' '\n\n\n' < "$p/environ"
          done 2>/dev/null | grep '^/tmp/.' | cut -d/ -f1-3 | sort -u)
   freed=0
-  # drive's train checkouts (/tmp/train-<sha>, ~420 MB, a few an hour) go after 1 h, which a 20 GiB root needs
+  # train.sh's checkouts (/tmp/train-<sha>, ~420 MB, a few an hour) go after 1 h, which a 20 GiB root needs
   for e in $(find /tmp -mindepth 1 -maxdepth 1 \( -name 'train-*' -mmin +60 \) -o \( -mmin +360 ! -name 'tmux-*' ! -name '.*' ! -name 'ssh-*' ! -name 'systemd-*' \)); do
     printf '%s\n' "$used" | grep -qxF "$e" && continue
     case $e in /tmp/train-*) age=60 ;; *) age=360 ;; esac

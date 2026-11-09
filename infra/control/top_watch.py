@@ -343,7 +343,7 @@ def gh_main() -> dict:
 
 
 def main_stalled(state, ring, now, read: Callable[[], dict] = gh_main) -> None:
-    """main's head unchanged for STALL_S. A landed train's commit carries the time drive built it on `next`, not when main moved
+    """main's head unchanged for STALL_S. A landed candidate's commit carries the time the queue built it, not when main moved
     to it, so the clock starts at the later of that and the first pass that saw the head."""
     head = read()
     committed = datetime.fromisoformat(head["committed"].replace("Z", "+00:00")).timestamp()
@@ -354,7 +354,7 @@ def main_stalled(state, ring, now, read: Callable[[], dict] = gh_main) -> None:
     if now - at >= STALL_S and head["ahead"] > 0:
         once_each(state, f"main:{head['sha']}", ring, "ci",
                   f"ci: main hasn't moved for {(now - at) // 60:.0f} min (at {head['sha'][:10]} since {iso(at)}) while "
-                  f"next is {head['ahead']} commits ahead of it: check drive (`research queue status`).", None, now)
+                  f"next is {head['ahead']} commits ahead of it: check the verified queue (`research queue status`).", None, now)
 
 
 def h200s(state, ring, now, samples: Callable[[float, float], list[dict]]) -> None:
