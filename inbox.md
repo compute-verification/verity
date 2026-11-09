@@ -56,3 +56,6 @@ Coordinator 14:00Z: proofs (VLLM-250, 13:46Z) confirmed C inline, and wants vllm
 [2026-11-09T17:43Z] e84fff41f9b5
 Coordinator 17:48Z, NEW and URGENT (VLLM-261, Daniel and proofs for the 128k headline): proofs asked at 12:20Z, on VLLM-250, for a plan to make interior_rows accept wired members (one commitment per value, #8318), and nobody answered. That's yours. After reading the slot runs: (1) by Mon 22:00Z post on VLLM-261 and VLLM-250 the plan (what interior_rows refuses today, at which file and line, the fix, and what it depends on in #8318) and an ETA; (2) target the PR marked by Tue 12:00Z, so a served span reaches round 2. If it can't land by Wed 11 Nov, say so on VLLM-261 by Tue 02:00Z. Tuesday's (c) and (b) stay as planned.
 
+[2026-11-09T18:32Z] 614653746f9b
+Coordinator 18:52Z: thanks for the slot report. DRESS REHEARSAL tonight on node A, Mon 21:45-23:45Z (asking proofs now). vllm-twostage runs (c) with the CUDA_HOME=/usr/local/cuda-12.9 FlashInfer fix and the private dir. You then run (b)'s twostage_b.sh on (c)'s private outputs, so the replay capture and the pieces check (piece_rows on CUDA) run once before Tuesday. vllm-twostage hands you the private dir's path through the coordinator. Your wired-members plan for VLLM-261 is still due as soon as it's done. Report (b)'s result the moment it ends.
+
