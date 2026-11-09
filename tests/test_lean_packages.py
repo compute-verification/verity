@@ -239,10 +239,9 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: the size of each lock's `shape.inline`, in premises: the inline hypotheses lock-listed guarantees took that are neither
 #: a named assumption, another listed guarantee's statement nor a plain range when the inline rule came (`check.py`'s
 #: `inline_failures`), with those the PRs on `next` then brought and those `main` landed before the rule reached them, less
-#: the 392 premises of the lemmas and completeness theorems the lock stopped listing and the guarantees deleted with the
+#: the 398 premises of the lemmas and completeness theorems the lock stopped listing and the guarantees deleted with the
 #: falsified conjectures they rest on; a renamed or restated premise counts twice, under both texts, until `--update`
 #: drops the one no tree prints
-# Security's 945: merge residue of renamed premise texts, which the lock run's --update drops and the after-landing bookkeeping lowers
 INLINE = {"Security": 917, "Security/Properties": 132, "verity/core/service/flock": 6}
 
 

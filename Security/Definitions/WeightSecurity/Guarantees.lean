@@ -18,8 +18,8 @@ The proof is the leakage lemma: for each covert string `s`, the outsider with `s
 is an honest-use party that sees, when `s` is the datacenter's, exactly what the outsider sees, so the outsider's
 success is at most the sum over `s` of theirs.
 
-`TheftHonest` and `TheftNontrivial` are its witnesses, and `TheftTight` shows the factor `|S|` is attained, all at the
-toy instance (`Definitions.WeightSecurity.Toy`).
+`TheftHonest` and `TheftNontrivial` are its witnesses, at the toy instance (`Definitions.WeightSecurity.Toy`), where a
+lemma, `TheftTight` (`Security/Proofs/WeightSecurity/Lemmas.lean`), shows the factor `|S|` is attained.
 
 `TheftServed` is `Theft` at an audited deployment (`Definitions.WeightSecurity.Served`). The channel is the served one:
 advice, timing buckets, the overwrites the audit lets through and the halt. The leakage term is the probability `δ` that
@@ -65,16 +65,6 @@ def TheftNontrivial : Prop :=
     ¬ Claims.Pr (fun z : (Bool × Bool) × Unit =>
         Toy.Stolen (Toy.gen z.1) (Toy.thief.model z.2 (Toy.cheatDC (Toy.gen z.1) z.2) 1)) ≤
       Fintype.card Toy.silent.S * 2⁻¹ + 0
-
-/-- **`Theft`'s factor `|S|` is attained.** The cheating toy datacenter's view goes through the one-bit channel (two
-covert strings) with `ε = 0`, and the thief steals the weights with probability `1`, the bound `2 · 1/2 + 0`: each
-covert bit can double the theft's probability, so it is only unlikely while the covert capacity stays below
-`log₂ (1/p)`. -/
-def TheftTight : Prop :=
-  LeaksThrough Toy.C Toy.gen Toy.cheatDC Toy.thief 1 Toy.oneBit 0 ∧
-    Claims.Pr (fun z : (Bool × Bool) × Unit =>
-        Toy.Stolen (Toy.gen z.1) (Toy.thief.model z.2 (Toy.cheatDC (Toy.gen z.1) z.2) 1)) =
-      Fintype.card Toy.oneBit.S * 2⁻¹ + 0
 
 open scoped ENNReal in
 /-- **Model weight security at an audited deployment that serves through the network certifier.** The weights are
