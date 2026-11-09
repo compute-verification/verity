@@ -604,7 +604,7 @@ def test_the_batched_forms_rows_past_topk_select_each_among_its_own_keys_in_bloc
     its keys' logits, then their own key counts, `DsaTopKMaskCounted_v1` at the block's class and the settings, each op over the
     block's rows in turn, and both layers' sparse MLA reads the rows routed from the block's history.  The outputs are the
     reference's over each row's own top-2 in ascending index order, so no row selects a key past its own."""
-    monkeypatch.setattr(vllm_dsa, "LONG_ROW_BLOCK", block)
+    monkeypatch.setattr(vllm_dsa, "BLOCK_KEYS", block)
     monkeypatch.setitem(PROFILES, BATCHED.name, BATCHED)
     VB.observe_batched_form(True)
     model = _model(topk=2, steps=((0, 2), (2, 3)))

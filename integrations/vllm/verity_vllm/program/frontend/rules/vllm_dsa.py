@@ -93,18 +93,18 @@ def long_row_keys(n: int, topk: int) -> int:
 
 
 #: the multiple a call's rows past TOPK round their keys up to in the batched form, a block's rows sharing one (`long_row_blocks`)
-LONG_ROW_BLOCK = 256
+BLOCK_KEYS = 256
 
 
 def long_row_blocks(keys: list[int], topk: int) -> list[tuple[int, list[int]]]:
     """A call's rows past `topk` keys (`keys` in row order, increasing) in the batched form, as (the block's keys, its rows'
-    indices): a row's keys rounded up to a multiple of `LONG_ROW_BLOCK`, at most the call's last row's, so a block's rows share one
+    indices): a row's keys rounded up to a multiple of `BLOCK_KEYS`, at most the call's last row's, so a block's rows share one
     specialization of each long-row Definition and batch (`prune.batched_form`), each row selecting among its own keys alone
     (`DsaTopKMaskCounted`)."""
     out: list[tuple[int, list[int]]] = []
     for i, n in enumerate(keys):
         if n > topk:
-            N = min(-(-n // LONG_ROW_BLOCK) * LONG_ROW_BLOCK, keys[-1])
+            N = min(-(-n // BLOCK_KEYS) * BLOCK_KEYS, keys[-1])
             if out and out[-1][0] == N:
                 out[-1][1].append(i)
             else:

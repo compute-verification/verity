@@ -116,9 +116,9 @@ def test_rows_past_index_topk_count_their_selection_and_the_slots_they_read(tmp_
 
 @pytest.mark.parametrize("case", LONG)
 def test_rows_past_index_topk_in_several_blocks_count_each_blocks_selection(tmp_path, monkeypatch, case):
-    """At blocks of 2 keys (`vllm_dsa.LONG_ROW_BLOCK`) a call's rows past INDEX_TOPK read several key counts: the chunk of rows of
+    """At blocks of 2 keys (`vllm_dsa.BLOCK_KEYS`) a call's rows past INDEX_TOPK read several key counts: the chunk of rows of
     6, 7 and 8 keys has blocks of 6 and 8."""
-    monkeypatch.setattr(vllm_dsa, "LONG_ROW_BLOCK", 2)
+    monkeypatch.setattr(vllm_dsa, "BLOCK_KEYS", 2)
     _check(_phi(tmp_path, topk=4), **LONG[case])
 
 
