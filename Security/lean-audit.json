@@ -301,6 +301,14 @@
    "digest": "727b29fa325435eeddaf8266d17571053bd61f3138f42a01a5d24a37aaef1837",
    "why": "The layer below's guarantee at each window: the leak relation with checked inputs at the window's faulty set, which the live SampledLeakChecked gives."
   },
+  "Population.Dataflow.Checked": {
+   "owner": "@proofs",
+   "why": "The served circuit's population is single assignment and acyclic, which the checker confirms from its dataflow alone, so its honest run is determined by its inputs and a trace with the same inputs differs from it only in its wrong units' cones; the honest witness meets it at the toy population (TheftServedTiedHonest)."
+  },
+  "Population.Dataflow.FanOut": {
+   "owner": "@proofs",
+   "why": "The fan-out F the bound is stated at: each unit's cone writes the egress of at most F charge units, which the public wiring alone determines; the honest witness meets it at the toy population (TheftServedTiedHonest)."
+  },
   "Pouw.NCP.Params.InstanceU": {
    "owner": "@compute-research",
    "digest": "3b60969f8f81104b0596a2883beb8066d6bf0d7e7b08219325779dc298b062a1",
@@ -3302,6 +3310,16 @@
    "issue": "LEAN-186",
    "due": "2026-11-07"
   },
+  "WeightSecurity.Assumptions.AdviceCovered": {
+   "owner": "@proofs",
+   "issue": "PRF-465",
+   "due": "2026-11-10"
+  },
+  "WeightSecurity.Assumptions.EgressTied": {
+   "owner": "@proofs",
+   "issue": "PRF-462",
+   "due": "2026-11-10"
+  },
   "WeightSecurity.Assumptions.HonestUseHard": {
    "owner": "@proofs",
    "digest": "ac9ed71d973e1db5d86647c7ab9ec3404e44567a2046211c8b0987b8084eed48",
@@ -4347,6 +4365,10 @@
   "WeightSecurity.SecurityProofs.TheftServedReq": {
    "honest": ["WeightSecurity.SecurityProofs.TheftServedHonest"],
    "nontrivial": "WeightSecurity.SecurityProofs.TheftServedReqNontrivial"
+  },
+  "WeightSecurity.SecurityProofs.TheftServedTied": {
+   "honest": ["WeightSecurity.SecurityProofs.TheftServedTiedHonest"],
+   "nontrivial": "WeightSecurity.SecurityProofs.TheftServedTiedNontrivial"
   },
   "WeightSecurity.SecurityProofs.TheftServedMinEntropy": {
    "honest": ["WeightSecurity.SecurityProofs.TheftServedMinEntropyHonest"],
@@ -5823,9 +5845,9 @@
    "why": "the network certifier's bridge to the joint period reads the period run (Definitions.Accounting.JointPeriod), the network certifier's window good event (Definitions.NetworkCertifier.Period), and the deployed network certifier's code and record format (Definitions.NetworkCertifier.Tap) with its trust, trusted-host (Definitions.Core.Assumptions), which the run carries as a field; it imports no guarantee or proof"
   },
   "Definitions.WeightSecurity": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.WeightSecurity"],
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.WeightSecurity", "Definitions.Spot.Dataflow"],
    "except": [],
-   "why": "weight security's definitions are trusted text: they import no assumption, guarantee or proof; the weights are a core declaration's registered inputs and probability is core's"
+   "why": "weight security's definitions are trusted text: they import no assumption, guarantee or proof; the weights are a core declaration's registered inputs and probability is core's; a served circuit is a population (Definitions.Spot.Dataflow)"
   },
   "Definitions.WeightSecurity.Assumptions": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.WeightSecurity", "Definitions.WeightSecurity.Assumptions"],
@@ -25638,6 +25660,49 @@
     "reads": []
    }
   },
+  "WeightSecurity.SecurityProofs.TheftServedTied": {
+   "owner": "@proofs",
+   "signature": ["WeightSecurity.SecurityProofs.TheftServedTied : WeightSecurity.Guarantees.TheftServedTied"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Population.Dataflow.Checked", "Population.Dataflow.FanOut", "WeightSecurity.Served.UndetectedLe"],
+    "open": [
+     "WeightSecurity.Assumptions.AdviceCovered",
+     "WeightSecurity.Assumptions.EgressTied",
+     "WeightSecurity.Assumptions.HonestUseHard",
+     "WeightSecurity.Assumptions.Simulable"
+    ],
+    "reads": []
+   }
+  },
+  "WeightSecurity.SecurityProofs.TheftServedTiedHonest": {
+   "owner": "@proofs",
+   "signature": ["WeightSecurity.SecurityProofs.TheftServedTiedHonest : WeightSecurity.Guarantees.TheftServedTiedHonest"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": [
+     "WeightSecurity.Assumptions.AdviceCovered",
+     "WeightSecurity.Assumptions.EgressTied",
+     "WeightSecurity.Assumptions.HonestUseHard",
+     "WeightSecurity.Assumptions.Simulable"
+    ]
+   }
+  },
+  "WeightSecurity.SecurityProofs.TheftServedTiedNontrivial": {
+   "owner": "@proofs",
+   "signature": ["WeightSecurity.SecurityProofs.TheftServedTiedNontrivial : WeightSecurity.Guarantees.TheftServedTiedNontrivial"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   }
+  },
   "WeightSecurity.SecurityProofs.TheftTight": {
    "owner": "@proofs",
    "signature": ["WeightSecurity.SecurityProofs.TheftTight : WeightSecurity.Guarantees.TheftTight"],
@@ -26631,6 +26696,7 @@
    "WeightSecurity.SecurityProofs.TheftServed": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (Security/Definitions/WeightSecurity/Served.lean), under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard), the served channel's simulability (WeightSecurity.Assumptions.Simulable) and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the releases' locality as a probability term that the network certifier and the dataflow are to discharge; it reads no function's acceptance.",
    "WeightSecurity.SecurityProofs.TheftServedReq": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (Security/Definitions/WeightSecurity/Served.lean), per charge unit and with the served channel's covert capacity in bits (WeightSecurity.servedBits), under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard), the served channel's simulability (WeightSecurity.Assumptions.Simulable) and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the releases' isolation (WeightSecurity.Served.Isolated) as a probability term that the network certifier and the dataflow are to discharge; it reads no function's acceptance.",
    "WeightSecurity.SecurityProofs.TheftServedMinEntropy": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (Security/Definitions/WeightSecurity/Served.lean) by two to the served channel's covert capacity in bits less the weights' min-entropy under honest use, stated as honest-use hardness against every party (WeightSecurity.Assumptions.HonestUseHard at Set.univ), and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the releases' isolation (WeightSecurity.Served.Isolated) as a probability term; it reads no function's acceptance.",
+   "WeightSecurity.SecurityProofs.TheftServedTied": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run records each window's trace of a checked population (Security/Definitions/WeightSecurity/Tied.lean) by two to the served channel's covert capacity per charge unit in bits times the honest-use bound, under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard), the served channel's simulability (WeightSecurity.Assumptions.Simulable), the bound on what the audit leaves undetected among the traces' incorrect blocks (WeightSecurity.Served.UndetectedLe), the population's check (Population.Dataflow.Checked) and its fan-out to charge units (Population.Dataflow.FanOut), with two open premises as probability terms: that a release is not its trace's outputs, the network certifier's egress tie (WeightSecurity.Assumptions.EgressTied), and that a trace does not hold its window's inputs, the advice charge's (WeightSecurity.Assumptions.AdviceCovered); it reads no function's acceptance.",
    "Pouw.NCP.GameProofs.gapFromTTNCP": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTNCP, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.SecurityProofs.GapFromTT": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TT, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.SecurityProofs.NCP.GapFromTTNCP_U_C2": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTNCP_U, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
