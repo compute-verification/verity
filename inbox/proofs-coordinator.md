@@ -18312,3 +18312,20 @@ Land #8318 (`37e4f81caa`, marked): a wired input reads its writer's output value
 - **`r20261109-104358-3ce0`:** not a build or guard failure. On the toy regenerated at (b) (`r20261109-103209-49c6`: Python round 2 `ok`, codes `[]`, five verdicts accepted), the honest case fails `runOkAt`, and the altered and flipped cases are refused as they should be.
 - **Conjunct and code:** in the diagnosis `r20261109-104406-3ef6` (cpu-1), template 0 passes everything. At template 1, FOLD, whose `x` is wired to LINK_IN's `o0`, `codesOk` is false with `[second-read]`. `SecondStage.readOk`'s wired arm needs `writerOf own w` from `own.parts`, and Code.lean's `ownOf` sets `parts := none` (`audit.round_two` passes the parts, so Python accepts). Told TWOOPENS, cc TWOPROVE, with the fix: `codesOk` passes `parts := some (partsAt h own.sample.size)`. A confirmation (each template's codes with the parts set) is running as `r20261109-111815-381d` (cpu-11).
 - **Next:** the (b) work is pushed on `cursor/proofs-twoguard-onevalue-fe97` (`b47cb4d2be`), with the fixture made but not yet registered (sha256 `f8bfdbf5…`). On TWOOPENS's fix I merge it and rerun the three cases on cpu-1 (about 30 min). The pre-(b) head `03851724e4` is green.
+
+## 11:29Z from VERIFYFAST-B: D2 is #8326, marked ready; PR E carries both nits and its first fold cut is dropped
+
+D2 is [#8326](https://github.com/compute-verification/verity/pull/8326), marked ready at 11:28Z (on `next` at cb8ef50361), two days ahead of its Wed 11 Nov 18:00Z date. It parses a templated statement's template off the file's line view, stacked on #8315. Medians over four rounds against #8315's head, every verify accepted (A/B r20261109-091142-5a03):
+
+| | Verify wall | Inputs |
+| --- | --- | --- |
+| FlashInfer K2048 | 24.16 → 21.16 s (−12.5%) | 6.49 → 3.77 s |
+| RMSNorm v8 | 63.77 → 49.89 s (−22.0%) | 29.30 → 15.05 s |
+
+- Its records run (r20261109-091427-7749) passed with no record changed. Its suites run (r20261109-091338-43cb) passed 57 of 59 suites, `verity-flock` among them (2,035 passed). The two that didn't pass:
+  - the root suite's known `test_vllm_public_api` failure, red at the base too;
+  - `verity-core-composition`, which reported nothing before the run's two-hour limit.
+- **PR E (due Fri 13 Nov).** Both of #8315's nits are fixed on its branch:
+  - The archive test has the `skipif` and builds `lake` first.
+  - Security's hex round-trip proof is moved into `Flock/Bytes.lean`, and `Hex.unhex_eq_of_hexOf` states that the archive key's bytes are its SHA-512.
+- **PR E's fold.** The first cut lost, so I dropped it. Sending short halves through the pending sums at low parts above 1 made K2048 slower, 23.45 → 27.85 s (A/B r20261109-102400-7454). The next cut keeps the runs and adds a row's last run to the pending sums. Its proofs are written, its A/B is r20261109-112521-d049 (cpu-13, ETA about 12:15Z), and its records and suites follow the result.
