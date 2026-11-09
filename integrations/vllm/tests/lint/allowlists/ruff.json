@@ -245,7 +245,6 @@
     {"file": "verity_vllm/acquire/sources/kv_slots_source.py", "kind": "BLE001", "symbol": "KvSlotsSource._pre.pre", "detail": "Do not catch blind exception: `Exception`"},
     {"file": "verity_vllm/check/batch.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.ml.circuits.defs.SpecializedDefinition` imported but unused"},
     {"file": "verity_vllm/check/c2_rules.py", "kind": "F541", "symbol": "_replay_seed_of_record", "detail": "f-string without any placeholders"},
-    {"file": "verity_vllm/check/capture_map.py", "kind": "F841", "symbol": "check", "detail": "Local variable `shape` is assigned to but never used"},
     {"file": "verity_vllm/check/fold_compare.py", "kind": "BLE001", "symbol": "compare_structure", "detail": "Do not catch blind exception: `Exception`", "count": 2},
     {"file": "verity_vllm/check/fold_compare.py", "kind": "BLE001", "symbol": "compare_subcircuits", "detail": "Do not catch blind exception: `Exception`"},
     {"file": "verity_vllm/check/fold_compare.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.ml.circuits.types.Array` imported but unused"},

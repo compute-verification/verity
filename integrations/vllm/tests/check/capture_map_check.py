@@ -1,4 +1,4 @@
-"""Capture maps (`verity-vllm/capture-map/v0`): what the committer captures from a served model, where, and what checks it.
+"""Holding a capture map (`verity-vllm/capture-map/v0`) against a module inventory.  A capture map is what the committer captures from a served model, where, and what checks it.
 
 A capture map is data (`manifests/capture-maps/*.json`), the capture half of a semantic profile for one checkpoint served one way
 (a target device, a tensor-parallel size, an environment).  It lists every module the pinned vLLM builds for the checkpoint, each
@@ -17,23 +17,18 @@ holds the device and the process-wide switches the inventory was built under aga
 which the committer's sources read too.  A tap marked `target_only` runs only on the map's target device (its kernels have no
 build for the devices the inventory and the tests run on).
 
-    verity-vllm capture-map check --map M.json --config config.json --inventory inv.json [--rank R]
-    verity-vllm capture-map counts --map M.json --config config.json
-    verity-vllm capture-map ids --map M.json --config config.json --t 0 --phase prefill --rank 0 [--route R] [--binder B --names]
-        [--off-target]
+`report` is the whole check of an inventory document as the tests read it: each problem as a `FAIL` line, each rank's count of
+problems and inventory signature, and the map's counts.
 """
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.commit.capture_map import (DISPOSITIONS, LAYER_VAR, STATUSES, TP_KINDS, MapError, at_layer, committer_names,
-                                            config_value, counts, dim, evaluate, identities, layer_set, load, route_sites, symbols,
-                                            tap_layers, tap_value_id)
+from verity_vllm.commit.capture_map import (DISPOSITIONS, LAYER_VAR, STATUSES, TP_KINDS, MapError, at_layer, config_value, counts,
+                                            dim, evaluate, layer_set, load, route_sites, symbols, tap_layers)
 from verity_vllm.commit.identity import NAMED_LAYERS
-from verity_vllm.config import option
 from verity_vllm.properties.record import REGISTRY as PROPERTIES
 
 
@@ -160,7 +155,8 @@ def check(cmap: dict[str, Any], inventory: dict[str, Any], config: dict[str, Any
             problems.append(f"{where}: commit name {c.get('name')!r} must name its layer")
         try:
             layers = tap_layers(cmap, t, env)
-            shape = [dim(d, env, free) for d in t["shape"]]
+            for d in t["shape"]:
+                dim(d, env, free)
         except MapError as e:
             problems.append(f"{where}: {e}")
             continue
@@ -260,84 +256,23 @@ def check_document(cmap: dict[str, Any], doc: dict[str, Any], config: dict[str, 
     return out
 
 
-@dataclass(frozen=True, kw_only=True)
-class CheckOptions:
-    "a capture map against a module inventory (a meta-device build, or a serving engine's ranks)"
-
-    map: str = option("--map")
-    config: str = option("--config", help="the checkpoint's config.json")
-    inventory: str = option("--inventory", help="a meta-inventory document (`verity-vllm meta-inventory`, or a live one)")
-    rank: str | None = option("--rank", default=None, help="one rank of the inventory (default: every rank it holds)")
-    tp: int | None = option("--tp", type=int, default=None, help="tensor-parallel size (default: the map's target)")
-    cmd: str = field(default="check", init=False)
-
-
-@dataclass(frozen=True, kw_only=True)
-class CountsOptions:
-    "module entries, module types, tap templates and taps per step and rank, by Program status and by route"
-
-    map: str = option("--map")
-    config: str = option("--config", help="the checkpoint's config.json")
-    tp: int | None = option("--tp", type=int, default=None, help="tensor-parallel size (default: the map's target)")
-    cmd: str = field(default="counts", init=False)
-
-
-@dataclass(frozen=True, kw_only=True)
-class IdsOptions:
-    "the canonical value ids of one step's taps on one rank"
-
-    map: str = option("--map")
-    config: str = option("--config", help="the checkpoint's config.json")
-    tp: int | None = option("--tp", type=int, default=None, help="tensor-parallel size (default: the map's target)")
-    profile: str = option("--profile", default="000000000000", help="the capture profile id (12 hex)")
-    request: str = option("--request", default="r0")
-    t: int = option("--t", type=int, default=0, help="the step's first position")
-    phase: str = option("--phase", default="prefill", choices=("prefill", "decode"))
-    route: list[str] | None = option("--route", action="append", default=None, help="the step's routes (default: all)")
-    rank: int | None = option("--rank", type=int, default=None, help="the tensor-parallel rank (`s=`; default: none)")
-    binder: list[str] | None = option("--binder", action="append", default=None,
-                                      help="only the taps this committer binder binds (`commit.binder`; default: every tap)")
-    names: bool = option("--names", action="store_true", default=False,
-                         help="each bound tap's id and the tensor name the committer binds it as")
-    off_target: bool = option("--off-target", action="store_true", default=False,
-                              help="a rank off the map's target device: leave out the target_only taps")
-    cmd: str = field(default="ids", init=False)
-
-
-COMMANDS = {"check": CheckOptions, "counts": CountsOptions, "ids": IdsOptions}
-
-
-def main(a: CheckOptions | CountsOptions | IdsOptions) -> int:
-    cmap = load(a.map)
-    config = json.loads(Path(a.config).read_text())
-    tp = a.tp or cmap["target"]["tensor_parallel_size"]
-    env = symbols(cmap, config, tp)
-    if a.cmd == "ids":
-        step = {"phase": a.phase, "routes": tuple(a.route) if a.route else None, "binders": tuple(a.binder) if a.binder else None,
-                "on_target": not a.off_target}
-        if a.names:
-            for name, (tap, layer) in committer_names(cmap, env, rank=a.rank or 0, **step).items():
-                print(tap_value_id(tap, layer, profile=a.profile, request=a.request, t=a.t, phase=a.phase, rank=a.rank), name)
-            return 0
-        for cid in identities(cmap, env, profile=a.profile, request=a.request, t=a.t, rank=a.rank, **step):
-            print(cid)
-        return 0
-    if a.cmd == "counts":
-        print(json.dumps({"all routes": counts(cmap, env), **{r: counts(cmap, env, (r,)) for r in cmap.get("routes", {})}}, indent=1))
-        return 0
+def report(map_path: str | Path, config_path: str | Path, inventory_path: str | Path, rank: str | None = None,
+           tp: int | None = None) -> tuple[int, str]:
+    """`check_document` of the inventory at ``inventory_path`` against the map, with the registry's Definitions: 1 and its
+    report if any problem is found, else 0."""
     from verity.ml.definitions.registry import catalog
 
+    cmap = load(map_path)
+    config = json.loads(Path(config_path).read_text())
+    tp = tp or cmap["target"]["tensor_parallel_size"]
+    env = symbols(cmap, config, tp)
     registry, errors = catalog.load()
-    doc = json.loads(Path(a.inventory).read_text())
-    found = check_document(cmap, doc, config, tp, registry.defs, a.rank)
+    doc = json.loads(Path(inventory_path).read_text())
+    found = check_document(cmap, doc, config, tp, registry.defs, rank)
     if errors:
         found["registry"] = list(errors)
-    for where, problems in found.items():
-        for p in problems:
-            print(f"FAIL {where}: {p}")
+    out = [f"FAIL {where}: {p}" for where, problems in found.items() for p in problems]
     sigs = {r: rec.get("signature") for r, rec in doc["ranks"].items()}
-    for where, problems in found.items():
-        if where.startswith("rank "):
-            print(f"{where}: {len(problems)} problems, signature {sigs.get(where[5:])}")
-    print(json.dumps(counts(cmap, env), indent=1))
-    return 1 if any(found.values()) else 0
+    out += [f"{where}: {len(problems)} problems, signature {sigs.get(where[5:])}" for where, problems in found.items() if where.startswith("rank ")]
+    out.append(json.dumps(counts(cmap, env), indent=1))
+    return (1 if any(found.values()) else 0), "\n".join(out) + "\n"
