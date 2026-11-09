@@ -171,8 +171,8 @@ def commit(driver: Driver, sha: str, rid: str, prs: Iterable[int]) -> tuple[str,
     scratch = Path(tempfile.mkdtemp(prefix="vqueue-records-"))
     try:
         locks, held = driver._locks(rid, scratch)
-        if held:
-            return held
+        if held:                            # the loop rings a held commit once a why: one naming this call's dir would ring each tick
+            return held.replace(str(scratch), "<scratch>")
         if not locks:
             return f"{rid}'s Lean report names no record it regenerated"
         index = {"GIT_INDEX_FILE": str(scratch / "index")}

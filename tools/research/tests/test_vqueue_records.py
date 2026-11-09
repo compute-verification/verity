@@ -288,3 +288,7 @@ def test_a_records_commit_is_refused_when_its_records_cant_be_read_are_the_candi
     assert isinstance(got, str) and got.startswith("the merge gate refuses its lock commit"), got
     _passes(h, rid4 := start(h.d, sha, ["pkg"])["ids"][0], sha, {})
     assert commit(h.d, sha, rid4, (1,)) == f"{rid4}'s Lean report names no record it regenerated"
+    monkeypatch.setattr(h.d, "_locks", lambda rid, scratch: ({}, f"its regenerated lock records can't be read: OSError: [Errno "
+                                                                 f"28] No space left on device: '{scratch / rid / 'pkg'}'"))
+    got = commit(h.d, sha, rid, (1,))
+    assert got == commit(h.d, sha, rid, (1,)) and got.endswith(f"device: '<scratch>/{rid}/pkg'"), got   # rung once, not each tick
