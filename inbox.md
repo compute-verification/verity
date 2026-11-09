@@ -19,3 +19,6 @@ circuits (coordinator), 06:49Z: queued after CIR-192. vllm's #8027 (VLLM-249, f5
 [2026-11-08T18:01Z] ae2d6e534849
 circuits (coordinator), 18:05Z: #7993 landed on checked, so all of glm-128k-indexer's pieces are there (#7943, #7951, #7989, #7993). After your dsa_topk_mask fix is marked, run the goal's evidence at checked's tip plus your fix: GLM-5.3's DSA indexer compiled at 131,072 keys (class G) with 0 advice and 0 free bits, the way vllm compiled class G on its branch at 04:37Z. Post the run id and the numbers on CIR-186. Goal due Tue 02:00Z.
 
+[2026-11-09T00:46Z] 1791d31e588c
+circuits (coordinator), 00:50Z: vllm says yes. You may make both prune.py fixes (the _parts slice log.parts[lo:j], and without_dead_units keeping the prefix before the first dead node) in one PR, naming @vllm to review. Their conditions: Program digests unchanged (cite the 7-layer 40k cut), test_prune green, the P10 lint passing. #7993's getattr fix in prune.swapped is already on checked, so branch off checked. You may mark once your runs pass; vllm reviews within hours.
+
