@@ -8432,6 +8432,62 @@
    },
    "type_hash": "2aa795e0e48427aa3a447208c25005031098fcee4ce418aa3195fd2bd0d3843d"
   },
+  "Properties.Spot.SecurityProofs.historyRootIsModel": {
+   "owner": "@proofs",
+   "signature": ["Properties.Spot.SecurityProofs.historyRootIsModel : Properties.Spot.HistoryRootIsModel"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "2fffed8d9ec79d66ef701ce501c3fe457e4dcefb4387c81a86a9dfa70dd6bafd",
+   "unfolded_hash": "6756c50c4d5381d14b91f3c04f0c739b7d540d5b01b3471e3b25a4509aec99cd"
+  },
+  "Properties.Spot.SecurityProofs.historyRootIsModel_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Spot.SecurityProofs.historyRootIsModel_honest :",
+    "  Eq",
+    "    (Spot.HistoryTable.checkAt Spot.HistoryTable.CAPACITY \"p\" \"t\" 1",
+    "      (List.cons { data := Array.replicate 128 0 } List.nil).toArray",
+    "      (Spot.HistoryTable.rootAt Spot.HistoryTable.CAPACITY",
+    "        ((Except.toOption (Spot.HistoryTable.domainAt Spot.HistoryTable.CAPACITY \"p\" \"t\" 1)).getD ByteArray.empty)",
+    "        (List.cons { data := Array.replicate 128 0 } List.nil).toArray (Spot.HistoryTable.placeholder 1)))",
+    "    (Except.ok Unit.unit)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "06e49a8b2b2ef63bbd151c7c3ffbefacb9e924f64eaa44fd8a86ef11e54f7348"
+  },
+  "Properties.Spot.SecurityProofs.historyRootIsModel_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Spot.SecurityProofs.historyRootIsModel_nontrivial (dom : ByteArray) :",
+    "  Not",
+    "    (And (Eq (Spot.HistoryTable.domainAt 2 \"p\" \"t\" 1) (Except.ok dom))",
+    "      (Eq ByteArray.empty.data.toList",
+    "        (Hash.HistoryTable.root Verity.sha512 (Properties.Spot.historyDomain 2 dom)",
+    "            Flock.Hm96.Default512.key.data.toList",
+    "            (Hash.HistoryTable.string List.nil.toArray.size",
+    "              (fun r => (Array.instGetElem?NatLtSize.getElem! List.nil.toArray r).data.toList)",
+    "              (Spot.HistoryTable.placeholder 1).data.toList)).bytes))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "4c94d93de50f1a12aee501d5455872f9b8a4645dfc1783b2404887ceccf575b7"
+  },
   "Properties.Spot.SecurityProofs.leakCheckSound": {
    "owner": "@proofs",
    "signature": ["Properties.Spot.SecurityProofs.leakCheckSound : Properties.Spot.LeakCheckSound"],
@@ -9237,15 +9293,6 @@
    },
    "type_hash": "0f8b2d89ec524d62964511f87a23864eacc612e51d9b331978880e16cfe01502",
    "unfolded_hash": "1f21b6df5fa96097fb3a6c6c3364bd53addbd00548769bc4ed2429919ffb7ede"
-  },
-  "Properties.Spot.SecurityProofs.historyRootIsModel": {
-   "owner": "@proofs"
-  },
-  "Properties.Spot.SecurityProofs.historyRootIsModel_honest": {
-   "owner": "@proofs"
-  },
-  "Properties.Spot.SecurityProofs.historyRootIsModel_nontrivial": {
-   "owner": "@proofs"
   },
   "Properties.Spot.wiresAcyclic": {
    "owner": "@proofs",
@@ -14243,6 +14290,14 @@
     "Hash.Assumptions.LmsUnforgeable": "53b0ceae6abe1e800ca2ed8e64c70ff33d5cf5656bcbb5427fa2ee7ccab09648"
    }
   },
+  "Definitions.Hash.HistoryTable": {
+   "digest": "bbe43e239ad0014cdfd89b3d53577a5c5cd07a29bdd60106046d049746950d2f",
+   "definitions": {
+    "Hash.HistoryTable.leaf": "82cec979ebee69fcafabf2e8398fcd5174a4c92bc5b3cb60d8b89b2eae1530ed",
+    "Hash.HistoryTable.root": "0f12dfc1dc8d5e0de8387ea1f01a72da172e8b023773cdf7e381cf4a060569fc",
+    "Hash.HistoryTable.string": "bc121098672100e4d912b1d10669e3368c7b3e3add3dfde940a1ee4fdb03a568"
+   }
+  },
   "Definitions.Hash.Hm96": {
    "digest": "2919811e2da5f123bd49979e0c5206477db9d3e71a483e698495d91f8d9c7f09",
    "definitions": {
@@ -14304,7 +14359,7 @@
    }
   },
   "Definitions.Hash.Tree": {
-   "digest": "b6d2e783fe8ed3ee9c5ad5f77af9fdc6a3b910a933e9115969c1d80087e2db00",
+   "digest": "5b5009fe8a64117a9ac7c501f62f1815c01964f9f7999163e32c4db70f679f8a",
    "definitions": {
     "Hash.Tree.Domain": "c2c79d8570596b033121c42768e11af8fd3ddb0e656b558424aac662adddff74",
     "Hash.Tree.Domain.count": "c7812871a6e03a1a9b88abf30238ba383cab05ec0dd67f385b4c35790c066f53",
@@ -14316,7 +14371,9 @@
     "Hash.Tree.depth": "fae7624f67ea840b85336f50ef04f61fd932ef6b34c921874243d1950a7ede3f",
     "Hash.Tree.frame": "13959de8be69faa822b6eea50bee86deef490427851d98c9f0d68743a83d0ec1",
     "Hash.Tree.leafMsg": "6a99db444e670c04751199804ecb785dc5e3b5844936bb6f45be04ebc7d0afd5",
-    "Hash.Tree.nodeMsg": "eac379afe30c0f23fdb1cb331a144809e9367083bbbc7dc760d44938041bcee2"
+    "Hash.Tree.nodeAt": "2c49706be72b6d66cdfde6358fea9566b73490bbec909bfff3a687aa18600641",
+    "Hash.Tree.nodeMsg": "eac379afe30c0f23fdb1cb331a144809e9367083bbbc7dc760d44938041bcee2",
+    "Hash.Tree.rootOf": "9faf95296bc3c312925c56c555d470a1e1d5d6870c2e56937eff2e73fdc064e5"
    }
   },
   "Definitions.Nci": {
@@ -22468,6 +22525,13 @@
     "Properties.Spot.runs": "2f7893eddb475e6885f36974e0ada11e2755afdf68eefd461bb17b9493348414"
    }
   },
+  "Properties.Spot.HistoryTable": {
+   "digest": "c1104089bb2ac56d478b9ae67ee954f7a2d5a13fc7f9cc004614b862fa1b1071",
+   "definitions": {
+    "Properties.Spot.HistoryRootIsModel": "6f5cde306dbc6e014d27b659712d98745ccbe99643ddb1587640fa980b1def0c",
+    "Properties.Spot.historyDomain": "f4e073075deba05499d7d7b0c0e92d252c95279438e4563656e35e1dddbec132"
+   }
+  },
   "Properties.Spot.Interval": {
    "digest": "7a4a6415296e7688d9c69859339951e89a786c48ac5c14e08f0233a6656e40e7",
    "definitions": {
@@ -23931,6 +23995,27 @@
     "Spot.Fleet.run": "f077dbc29bbecf1c4498c736f398dfde3841729968634b6e76dc582138990e9c",
     "Spot.Fleet.step": "017f87e4521115b87809ed725f5a2d050c733640a522932c806275802d1e69c3",
     "Spot.Fleet.streamsOf": "f0d70b7076717d21b47d72e15ad74fc2b976a76fcdac07a9431e372f6862cf66"
+   }
+  },
+  "Spot.HistoryTable": {
+   "digest": "76ec7bab653b37209efc25351f6cff03cc6facab39661779941ddb9b61e9ebb8",
+   "definitions": {
+    "Spot.HistoryTable.BC_BYTES": "22dba8b290627adc7d19d0c5084acc67c82cd458825c478bbc5fc0efc8e3515a",
+    "Spot.HistoryTable.CAPACITY": "925a6e0d2b5cf3c81c9c0a01a313d595e99658c43b8337acfd6787f39d8614f9",
+    "Spot.HistoryTable.DIGEST_BYTES": "673e4e0835dc70349c6adfd547c230bc18b97ba523db484e8ca6a234f2aa590a",
+    "Spot.HistoryTable.DOMAIN_TAG": "c83a5b196e7d1f54569b884f67c924218f81374b2cb77a75316bc127d3653696",
+    "Spot.HistoryTable.OWNER": "a73cb1c18e2ebf2fb8ec7bbcbbe3e025b799641609c755372fb40cea998bdc7e",
+    "Spot.HistoryTable.SALT_BYTES": "119f9acdc078c57046b704eee5b48f24488f980b1eea8a839e0d4ae81d1df944",
+    "Spot.HistoryTable.SCHEMA": "3024162f0f7845a94a8e420a09debc00952b53069288b558ae4fa514f7a163b7",
+    "Spot.HistoryTable.binding": "b59818face537b4e5456c5655e125a047d29b353166aed74a432977394d5d6be",
+    "Spot.HistoryTable.capOk": "d5c58d7a6495d12f2e1b66eb43439519e71f8bd30613e10ca2b3853a0f9adda5",
+    "Spot.HistoryTable.checkAt": "10ceaaaef0260daedb3f3fd5d0754514214207495e00ca071b54f44ce2f1373a",
+    "Spot.HistoryTable.domainAt": "955f18e66faa40538446825e98e6809e7515391a879645f73267dd30194fc40c",
+    "Spot.HistoryTable.leafAt": "0475d9058a41615a394f1dac6d03ec7d9ee06db88f9559aebe95cfbb148612ac",
+    "Spot.HistoryTable.leavesAt": "228b0ff601e703c94cc0e40bd171f0733be871c5655b4a8424470c49bec6086f",
+    "Spot.HistoryTable.placeholder": "58e2846f1230b47f88ff82fea01bc76d17e54ff475f61620879fc52b74458b1e",
+    "Spot.HistoryTable.rootAt": "62db0e0a216d65399f4c7c44ccdd99ca52e7ca4764430f2a8215c8f5722f7bbe",
+    "Spot.HistoryTable.wordsOk": "d4653c347bb78dc17a31c746f542b87662df71e03e9db65e17f4bbfe8a1816b2"
    }
   },
   "Spot.Interval": {
