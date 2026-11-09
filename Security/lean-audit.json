@@ -18795,6 +18795,9 @@
    "type_hash": "50edf1fb52d78599b26fb54aca2b376fa475a86024556bb53ee80f3d695f1ce9",
    "unfolded_hash": "b47d65cccae8757ba6d024a7f98e4df2611ef0c9227e527821200452ff1733fa"
   },
+  "NetTiming.SecurityProofs.ResponseCapped": {
+   "owner": "@network-accounting"
+  },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "owner": "@proofs",
    "signature": ["NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted"],
@@ -25678,6 +25681,10 @@
    "Definitions.Pouw.Assumptions.LeadCommit"
   ],
   "properties": {
+   "NetTiming.SecurityProofs.ResponseCapped": {
+    "function": "NetTiming.cappedCode",
+    "outcome": "none"
+   },
    "Flock.SecurityProofs.PublicAudit": {
     "conjuncts": [
      {

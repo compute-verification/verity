@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Core.Assumptions
 public import Definitions.NetworkCertifier.Guarantees.ResponseCap
 meta import Definitions.NetworkCertifier.ResponseCap
 
@@ -9,8 +10,9 @@ meta import Definitions.NetworkCertifier.ResponseCap
 `Definitions.NetworkCertifier.ResponseCap`. On arrivals held to `m` data cells, a lane from its cell `j` sends at most
 `m - j` data cells (`dataCells_lane_capped`): a data cell past the first `m` is late, so the lane fails there and pads
 to its end. So the network certifier's code under the cap sends each connection at most its admitted `max_tokens`
-(`dataCells_cappedCode`), which is at most the cap and at most the request's own (`admitted_le`), and under
-`trusted-host` so does its run (`Guarantees.ResponseCapped`).
+(`dataCells_cappedCode`), which is at most the cap and at most the request's own (`admitted_le`):
+`Guarantees.ResponseCapped`. Under `trusted-host` the network certifier's run is that code, so its run sends no more
+(`responseCapped_run`).
 
 The `#guard` holds the capped lane to the Python network certifier's cells under a cap of four (the test harness of
 `verity/core/protocols/certifier/tests/test_network_certifier_warden.py`, `CAPPED`: r = 2, D = 3, a connection
@@ -65,18 +67,26 @@ theorem dataCells_cappedCode {κ : Type} (s : CertifierSchedule κ) (cap : ℕ) 
   have := dataCells_lane_capped (arr c) (s.bucket c) (admitted cap (mt c)) (s.cells c) 0
   simpa [cappedCode, certifierCode] using this
 
-/-- A request's admitted `max_tokens` is at most the cap, and at most its own. -/
-theorem admitted_le (cap : ℕ) (o : Option ℕ) : admitted cap o ≤ cap ∧ ∀ m, o = some m → admitted cap o ≤ m := by
+/-- A request's admitted `max_tokens` is at most the cap, and at most its own (none for one not read). -/
+theorem admitted_le (cap : ℕ) (o : Option ℕ) : admitted cap o ≤ cap ∧ admitted cap o ≤ o.getD 0 := by
   cases o with
   | none => simp [admitted]
   | some m => by_cases h : m ≤ cap <;> simp [admitted, h]
 
 theorem responseCapped : Guarantees.ResponseCapped := by
-  intro κ Cell Srv Dev s cap mt arr dev run htrust σ c
-  rw [htrust σ]
-  have h := dataCells_cappedCode s cap mt (arr σ) c
+  intro κ Cell s cap mt arr c
+  have h := dataCells_cappedCode s cap mt arr c
   obtain ⟨h1, h2⟩ := admitted_le cap (mt c)
-  exact ⟨Nat.le_trans h h1, fun m hm => Nat.le_trans h (h2 m hm)⟩
+  exact ⟨Nat.le_trans h h1, Nat.le_trans h h2⟩
+
+/-- Under `trusted-host`, a network certifier running the code under the cap sends each connection at most the cap's
+and its request's `max_tokens` data cells. -/
+theorem responseCapped_run {κ Cell Srv Dev : Type} (s : CertifierSchedule κ) (cap : ℕ) (mt : κ → Option ℕ)
+    (arr : Srv → κ → Arrivals Cell) (dev : Dev) (run : Dev → Srv → κ → List (ℕ × CellView Cell))
+    (htrust : Verity.Assumptions.TrustedHost dev run fun σ => cappedCode s cap mt (arr σ)) (σ : Srv) (c : κ) :
+    dataCells (run dev σ c) ≤ cap ∧ dataCells (run dev σ c) ≤ (mt c).getD 0 := by
+  rw [htrust σ]
+  exact responseCapped s cap mt (arr σ) c
 
 #guard ((cappedCode (⟨2, 3, fun _ => 1, fun _ => 4⟩ : CertifierSchedule Unit) 4 (fun _ => some 2)
     (fun _ => ⟨[0, 1, 2], fun _ => 0⟩) ()).map fun x =>

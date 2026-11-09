@@ -1,6 +1,5 @@
 module
 
-public import Definitions.Core.Assumptions
 public import Definitions.NetworkCertifier.ResponseCap
 
 /-!
@@ -16,14 +15,13 @@ namespace NetTiming.Guarantees
 open NetTiming
 
 /-- **Each certified response holds at most its request's certified `max_tokens` tokens, hence at most the cap.** On a
-schedule `s` registered with the response cap `cap`, each connection `c`'s request read at ingress as `mt c`: with the
-network certifier running its code under the cap (`cappedCode`) by `trusted-host`, whatever the server sends and
-whenever it arrives (`arr σ`), every connection's lane holds at most `cap` data cells, and at most `m` where its request
-read as `some m`. In the id egress form a data cell is one token. -/
+schedule `s` registered with the response cap `cap`, each connection `c`'s request read at ingress as `mt c` (`none`
+where its field isn't a u32), the network certifier's code under the cap (`cappedCode`) sends every connection at most
+`cap` data cells and at most its request's `max_tokens` (none for a request it couldn't read), whatever the server
+sends and whenever it arrives (`arr`). In the id egress form a data cell is one token. Under `trusted-host` the network
+certifier's run is this code, so each response it certifies is so bounded. -/
 def ResponseCapped : Prop :=
-  ∀ {κ Cell Srv Dev : Type} (s : CertifierSchedule κ) (cap : ℕ) (mt : κ → Option ℕ) (arr : Srv → κ → Arrivals Cell)
-    (dev : Dev) (run : Dev → Srv → κ → List (ℕ × CellView Cell)),
-    Verity.Assumptions.TrustedHost dev run (fun σ => cappedCode s cap mt (arr σ)) →
-    ∀ σ c, dataCells (run dev σ c) ≤ cap ∧ ∀ m, mt c = some m → dataCells (run dev σ c) ≤ m
+  ∀ {κ Cell : Type} (s : CertifierSchedule κ) (cap : ℕ) (mt : κ → Option ℕ) (arr : κ → Arrivals Cell) (c : κ),
+    dataCells (cappedCode s cap mt arr c) ≤ cap ∧ dataCells (cappedCode s cap mt arr c) ≤ (mt c).getD 0
 
 end NetTiming.Guarantees
