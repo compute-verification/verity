@@ -18,6 +18,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
     "tests/test_challenger_difftest.py",
+    "tests/test_challenger_inner_trees.py",
     "tests/test_difftest.py",
     "tests/test_harm_bound.py",
     "tests/test_wires_difftest.py",

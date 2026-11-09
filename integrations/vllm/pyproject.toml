@@ -312,7 +312,11 @@ paths = ["benchmarks/pous/p2_v1"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/query/test_word.py"]
-paths = ["integrations/vllm/verity_vllm/pipeline", "verity/ml/circuits"]
+paths = ["integrations/vllm/verity_vllm/pipeline", "verity/ml/circuits", "verity/ml/definitions/encoding.py"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/regression/test_step_segmentation.py", "tests/regression/test_store_io.py"]
+paths = ["tools/research/src/research"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_imports_resolve.py", "tests/test_no_dead_modules.py"]

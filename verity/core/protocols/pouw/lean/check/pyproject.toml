@@ -69,5 +69,6 @@ untraced = [
     "tests/test_difftest.py",
     "tests/test_leaf_own.py",
     "tests/test_live_verified_difftest.py",
+    "tests/test_period_difftest.py",
     "tests/test_verified_difftest.py",
 ]

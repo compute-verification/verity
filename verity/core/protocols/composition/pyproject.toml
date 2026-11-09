@@ -54,3 +54,10 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__
           # the deployment layer and its wire, which space's and bandwidth's challenger-host sides are started through
           # (`deploy.stream.Side`)
           "verity/core/deploy", "verity/core/wire"]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_inference_only_not_composed.py"]
+paths = ["verity/core/protocols/network/nci/lean/scripts"]
