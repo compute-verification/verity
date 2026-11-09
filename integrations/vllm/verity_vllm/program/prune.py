@@ -21,8 +21,8 @@ every member reads alike is shared (axis None); any other is mapped on axis 0, i
 they are consecutive runs of one node or Input, one `Strided` where they are evenly spaced, else their `concat`. A reference to a
 member's output becomes one to the batch's output at the member's leaves, in its form (a cut of a `PartLog` stays a cut; a plain
 `Concat` is put back in `concat`'s normal form). The form reads the body as written and nothing else, so equal bodies give equal
-forms. Two kinds of Call stay nodes of their own, for the root readers that take only Calls: an attention's, which holds the KV
-`commit.memory_map` reads (`holds_kv`), and a collective, which reads peer Inputs (`tp_binding.rank_sites`).
+forms. A collective stays a node of its own, for the root reader that takes only Calls: it reads peer Inputs in one operand of one
+Call (`tp_binding.rank_sites`). An attention's Calls batch like any other (`commit.memory_map` reads each member's KV).
 """
 from __future__ import annotations
 
@@ -268,16 +268,8 @@ def narrowed(body: Body) -> tuple[Body, dict[int, tuple[int, int]]]:
 BITS = "bits"
 #: `kept_records`' form for class G's request Programs: the registered compiler's form, `batched`
 BATCHED = "batched"
-#: an attention's KV parameters, which `commit.memory_map` reads from one Call (its `KV` and `LATENT`)
-KV = ("kc", "vc")
-LATENT = {"SparseMla": ("kv",), "SparseMlaSplit": ("kv",)}
 #: the root parameters a collective reads (`tp_binding.PEERS`)
 PEERS = "peers_"
-
-
-def holds_kv(fn: Any) -> bool:
-    """Whether a Call of `fn` holds an attention's KV (`KV`, `LATENT`)."""
-    return set(LATENT.get(getattr(fn, "name", None), KV)) <= {p for p, _ in fn.signature()[0]}
 
 
 def _top(r: Refs, peers: frozenset[int], done: dict[int, list]) -> tuple[int, bool]:
@@ -383,12 +375,10 @@ def batched_form(body: Body) -> tuple[Body, list[int]]:
     memo: dict[int, Refs] = {}
     logs: dict[int, list] = {}
     done: dict[int, list] = {}
-    kv: dict[str, bool] = {}
     k = 0
     while k < len(nodes):
         n, hi = nodes[k], k + 1
-        if n.form == "call" and not (kv[n.fn.id] if n.fn.id in kv else kv.setdefault(n.fn.id, holds_kv(n.fn))) and not (
-                peers and any(_top(a.refs, peers, done)[1] for a in n.args)):
+        if n.form == "call" and not (peers and any(_top(a.refs, peers, done)[1] for a in n.args)):
             while hi < len(nodes) and nodes[hi].form == "call" and nodes[hi].fn.id == n.fn.id and all(
                     (t := _top(a.refs, peers, done))[0] < k and not t[1] for a in nodes[hi].args):
                 hi += 1

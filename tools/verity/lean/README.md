@@ -115,12 +115,17 @@ Every declaration of the package's audited modules (not a list of theorems), fro
 - no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
   statement that nobody has acknowledged (below);
 - the kernel accepts every declaration again (`Replay.lean`, on one import of the package's dependencies, each
-  declaration in a task of its own on Lean's threads, `LEAN_NUM_THREADS` (by default its affinity, bounded by the cgroup
-  quota, not Lean's whole machine), checked against the import and the declarations it comes after): a declaration that skipped the kernel shows no axiom, and only the replay catches it.
+  declaration against the import and the declarations it comes after, on `LEAN_NUM_THREADS` threads, by default
+  `cores`): a declaration that skipped the kernel shows no axiom, and only the replay catches it.
   The replay also walks the environment it checked for the axioms the package uses, and the audit fails if they differ
   from the sets the `.olean` files recorded. A replay killed by a signal
   (out of memory) is reported as a kill, not as a verdict. With `--closure` it checks the whole import closure the
   same way (below);
+- with `--build`, a sample of the modules the build didn't compile (restored from the node's artifact cache, or kept
+  from an earlier build), taken after the build with randomness nothing the build runs sees, compiles again in the
+  sandbox with no cache to the outputs the build holds: byte for byte, and `olean.server` and `olean.private`, which
+  keep the source's absolute path, as object graphs (`sampled_recompile`, `olean_graph.py`; failure `sampled`). The
+  report's `sampled` names the modules. A sample can miss a wrong module, so the uncached nightly check stays the backstop;
 - each test under `runs` passes on the data whose SHA-256 the record holds (below), and its `generate` and `args` name no
   path outside the package except as `{repo}/...`, which check's scratch tree would not hold;
 - nothing changes this directory, the toolchain's `lean`, `lake` and `leanchecker`, or the `.olean` files of a package
@@ -132,17 +137,16 @@ and PID namespaces, everything read-only but the build's `.lake` directories and
 outliving the build.
 The audit says when it had to build without one; the `compile-time` check then stands in for the sandbox. `--build` first
 takes one of the node's Lean audit slots (`lean_slot`; pool `LEAN_SLOT_POOL`, else `audit`) unless it holds one, and exits
-2 when refused. Packages are audited side by side after one `setup.sh`: a package's build waits for those of the packages
-it requires by path, and builds that write one `.lake` take turns (`writing`). `check.py` exits 0 when every package
+2 when refused. Packages are audited side by side after one `setup.sh`, each build after those of the packages it
+requires by path, never beside one that writes the same `.lake` (`writing`). `check.py` exits 0 when every package
 passes, 1 when one fails, and 2 on a usage error or a refusal.
 
 A package that pins ArkLib (`Security/Proofs`, and `Security`, which audits it beside itself) is refused, exit 2, on a
 machine with less than `MEM_FLOOR_GIB` (24 GiB, memory and swap within the cgroup), by `check.py` and the fast path
 alike; the refusal prints the fast path's `research run --on auto …` line (`BELOW_FLOOR_RUN`). `VERITY_LEAN_MEM_FLOOR_GIB` sets
-another floor (0: none). Lake runs as many `lean` at once as `LEAN_NUM_THREADS`, so the build of a package that pins Mathlib
-or ArkLib runs at most one per `BUILD_GIB_PER_JOB` (8 GiB) of the memory its cgroup allows (`build_threads`, from the
-process's own cgroup, so a queued run's scope counts); a `LEAN_NUM_THREADS` already set wins. Its kernel
-replay runs at most one thread per `REPLAY_GIB_PER_THREAD` (4 GiB), one such replay at a time (`replay_threads`). An audit of a spec beside the ArkLib package that proves its guarantees (`Security`)
+another floor (0: none). Unless `LEAN_NUM_THREADS` is set, the build and the replay of a package that pins Mathlib or
+ArkLib run only as many threads as its cgroup's memory holds (`build_threads`, `replay_threads`), one such replay at a
+time. An audit of a spec beside the ArkLib package that proves its guarantees (`Security`)
 is refused below `SPEC_FLOOR_GIB` (160 GiB; `check.py` says why), and the
 refusal names `--kind lean-audit`, a 280 GiB shape.
 
@@ -153,15 +157,17 @@ skipped the kernel passes it. `--closure` closes that gap module by module. Ever
 so it covers every `.olean` file under it. With `--replay-cache DIR`, a module whose key `DIR` holds passed the replay
 before, with its imports in the environment, and a module checked is stored there once the replay passes. The replay of
 a package then sends to the kernel each own module and each module of the closure that has not passed (`closure_plan`),
-loads unchecked the modules that passed and import one of those (an import of them would bring the unpassed one in
-unchecked), and imports the rest. By induction over the import DAG every declaration of the closure has been through
-the kernel, with its imports present, under a key that covers them: cold, the whole closure goes through the kernel in
-one process, `leanchecker --fresh`'s check of every root at once; warm, nothing outside the package does, and a change to
-an own module replays it and what imports it, as without `--closure`. The cache is shared between packages, so
+loads unchecked the modules that passed and import one of those, and imports the rest. By induction over the import DAG
+every declaration of the closure has been through the kernel, with its imports present, under a key that covers them.
+The cache is shared between packages, so
 `Security` reuses the Mathlib modules `Security/Proofs` checked. So that a module's verdict is a function of its key,
 `Replay.lean` pins what the kernel loads: no constant from outside the module's imports, an equation lemma two modules
 realize checked once each, a reused public part's axiom copy taken as Lean's import does (`subsumesInfo`), and the
 quotient's own constants. A change to `Replay.lean` changes every key, so the next run is cold.
+A key vouches for what a module's files hold, not for who wrote the entry. So the cache is used only on a node whose
+builds run in the sandbox, and only where no build can write it: `check.py` refuses a `--replay-cache` or
+`--facts-cache` inside a build's `writable` roots (`build_roots_over`), and on a node without the sandbox the replay
+neither reuses nor stores an entry (the report's `replay_cache` says so).
 The audit prints `closure: N modules checked, M reused` under each package's line. `check`'s lean-audit step runs
 `--closure` against the node's kept cache (`lean_audit.FLAGS`, `lean-replay/`), so a dependency module that skipped the
 kernel fails the merge check, and the `closure_dependency` control fails without `--fresh`. `lean_audit.py --fresh` (the
@@ -490,8 +496,7 @@ record before Lake unpacks the modules whose input hashes match, and the rest co
 ArkLib. A miss, a mismatch, a missing read credential (the `LEAN_CACHE_*` variables, else
 `~/.config/verity/lean-cache-read.env`), the kill switch or `LEAN_CACHE=off` means building from source. The audit never
 reads it: `lake_env()` sets `LEAN_CACHE=off`, and check's audit and a records run restore only from their node's own Lake
-cache, which only a passing run there fills (`lean_audit.LakeArtifacts`): each build reads a copy staged for it of the
-modules whose key (`module_keys.py`, the task graph's key of its compile) it indexes, and builds the rest. `cache.py`'s
+cache, which only a passing run there fills, by each module's compile key (`lean_audit.LakeArtifacts`, `module_keys.py`). `cache.py`'s
 docstring has the bucket's layout and how integration publishes (as root, outside the build's sandbox, from a clean
 checkout of `origin/main`), and `run_daily.py`'s the daily publish.
 

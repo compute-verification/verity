@@ -371,8 +371,8 @@ theorem sessionOpensTwo_of_eval (dec : Dec) (he : Evaluates h dec) (hr : Reveals
 /-- **SPOT[Flock]'s two-stage knowledge soundness at its code from a decoder**: `ksTwo_spot`, with the sessions'
 openings from a decoder whose values evaluate each checked unit (`Evaluates`) and that the reveal opens (`Reveals`). -/
 theorem ksTwo_spot_of_eval (dec : Dec) (he : Evaluates h dec) (hr : Reveals h dec) :
-    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h) (rs h)).KS
-      FlockDeploy.sha512 :=
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h) (rs h)
+      (cap h)).KS FlockDeploy.sha512 :=
   ksTwo_spot h (sessionOpensTwo_of_eval h dec he hr)
 
 end SpotFlock

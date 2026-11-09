@@ -88,10 +88,10 @@ It follows from `SampledKSLiveV2`, the same bound at the circuit files the verif
 are the coins (A3, `FlockSoundness.Assumptions.UniformRandomBytes`), the live verifier, and SHA-512's collision resistance.
 
 **The property.** `NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted`, at any
-sampling deployment `D`: `∀ H D L K S lay k, Claims.Sampling.KS H D → KSAccepted H D L K S lay k`. The sampled step units
-are its sampled class. On the statements in scope (`ScopeAcc`), at every δ ≥ 0, every decoder within Flock's radius and
-every prover, Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind, with ε_ks = κ(δ) − δ + √(γ·Pr[B]) and ε_bind = Pr[B_ext]. Pr[B] and
-Pr[B_ext] are the chances of finding a SHA-512 collision in the run, not an assumption. `RAcc δ` holds when:
+compiled sampled verifier `D`: `∀ H D L K S lay k, D.KS H → KSAccepted H D L K S lay k` (`Compiled.KS`). The sampled
+step units are its sampled class. On the statements in scope (`ScopeAcc`), at every δ ≥ 0 and every prover,
+Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind, with ε_ks = κ(δ) − δ + √(γ·Pr[B]) and ε_bind = Pr[B_ext]. Pr[B] and Pr[B_ext] are
+the chances of finding a SHA-512 collision in the run, not an assumption. `RAcc δ` holds when:
 - the incorrect set is in M_δ = {B : P_a(B) > δ} (`RelS`);
 - no incorrect proof block is in a class sampled `all`: the transfer-gate units and the network certifier's head checks
   (`allSlots`);
@@ -101,8 +101,8 @@ Pr[B_ext] are the chances of finding a SHA-512 collision in the run, not an assu
   `free` is empty and `Accepted` is exact.
 
 **The leak bound.** `NetTiming.SecurityProofs.SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted`
-(`NetTiming.sampledLeak_reg`) composes the property with the count `EncardAccSeqsSampledLe`, over any deployment. Given
-`SampledAuditAccepted` and `Claims.Sampling.KS` at the deployment, except with probability δ + ε_ks + ε_bind, an accepted
+(`NetTiming.sampledLeak_reg`) composes the property with the count `EncardAccSeqsSampledLe`, over any compiled
+verifier. Given `SampledAuditAccepted` and `Compiled.KS` there, except with probability δ + ε_ks + ε_bind, an accepted
 audit's carried sequences, cut at the horizon, number at most 2^c · #faultySets(δ) · 2^β · D^n, at whatever values the
 statement's registered inputs `reg` hold (`AsReg`). So the audit leaks at most c + λ_δ + β_δ + n·log2 D bits:
 - c = #(`freeInputs` \ `reg`): the free inputs are the circuit's input gates that no step before the horizon lists as

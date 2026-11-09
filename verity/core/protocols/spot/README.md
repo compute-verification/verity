@@ -8,16 +8,13 @@ probability δ, at most so many proof blocks are incorrect, a proof block being 
 applied to its committed inputs. The protocol is stated in Lean (see "Where things are"); this README outlines it,
 points to the code, and lists what the Lean does not state yet.
 
-Sampled proofs (`verity/sampled-proofs/v1`) is a subprotocol of both composite protocols: remote (`verity/remote/v0`,
+SPOT (`verity/sampled-proofs/v1`) is a subprotocol of both composite protocols: remote (`verity/remote/v0`,
 `verity/core/protocols/remote/`) composes it with PoUW (`verity/pouw/period/v1`) and the inference-only
 policy, and onsite (`verity/core/protocols/onsite/`) with the other subprotocols. Each composite's verifier runs
-`VStar.Recursive.Sampled`'s Lean check in the form its params name: one-stage v2 (`verity/sampled-proofs/one-stage/v2`,
-the audit on the proofs) or the recursive audit (`verity/sampled-proofs/recursive/v1`: the recursive session's inner
-coins held to the challenger's release log, every round its live-coin part recorded opened after what it recorded and
-every logged opening read (`VStar.Recursive.innerCoinsHeld`, `Spot/ChallengerInnerTrees.lean`), then V*'s
-compiled check, which ends in the one-stage audit's live check on its verdict of record). One-stage v1, whose verdicts
-are the evidence's, is refused by name (`V1_REFUSED`: a one-stage form whose params or evidence name no `proofs`). The
-composite accepts only when every subprotocol accepts.
+`VStar.Recursive.Sampled`'s Lean check: one-stage v2 (`verity/sampled-proofs/one-stage/v2`, the audit on the proofs).
+One-stage v1, whose verdicts are the evidence's, is refused by name (`V1_REFUSED`: a one-stage form whose params or
+evidence name no `proofs`), and so is the recursive audit (`verity/sampled-proofs/recursive/v1`, `RECURSIVE_REFUSED` at
+its params), which SPOT's soundness doesn't cover. The composite accepts only when every subprotocol accepts.
 
 ## SPOT[Flock] on its own
 
