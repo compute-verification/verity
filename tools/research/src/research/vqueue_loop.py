@@ -621,10 +621,10 @@ class World:
     def _allowed(self, sha: str, tasks: dict[str, dict], states: dict[str, tuple], ids: Iterable[str]) -> set[str]:
         """The failed tasks of ``ids`` an allowance of ``sha``'s policy covers, each red record they name, as drive's
         `executor = "on"` path reads them (`Driver._task_units`, `Driver._task_allowed`): drive takes each as passed."""
-        d, out = self.driver(), set()
+        out = set()
         for i in ids:
             if states[i][0] == FAIL:
-                res = states[i][1] or {}
+                d, res = self.driver(), states[i][1] or {}
                 if all(d._task_allowed(sha, tasks[i], res, row).covered for row in d._task_units(sha, tasks[i], res).values()):
                     out.add(i)
         return out
@@ -838,7 +838,7 @@ class World:
         if self._slim is None:
             if not (on := flags_at(self.repo, self._main or MAIN).on):
                 raise QueueError(f"drive.toml at main {(self._main or MAIN)[:12]} names no `on`, drive's machines, so no run "
-                                 "beside a candidate's check can launch: name them (--no-slim runs only with --shadow)")
+                                 "beside a candidate's check can launch: name them (--no-slim runs only with --shadow or --dry-run)")
             self._slim = Driver(self.q, on=on, post=self.post, now=self.now)
         return self._slim
 
