@@ -56,20 +56,40 @@ NO_HOST = 1 << 62
 
 
 def position_class(pos: torch.Tensor, ids: torch.Tensor | None = None, special: torch.Tensor | None = None,
-                   window: int = 1, span: torch.Tensor | None = None) -> torch.Tensor:
+                   window: int = 1, span: torch.Tensor | None = None, last_long: torch.Tensor | None = None) -> torch.Tensor:
     """0 for the sink's positions: every position before a sequence's first sink host, the run of that token from it,
     and the `window` - 1 positions after the run (a model forms its attention sink, with its massive activations, at the
     first token that can host one: position 0 unless the sequence opens with tokens that can't, such as Qwen's digits;
     a repeat of the token right after it repeats them, and the token after a run reads more than an ordinary one;
-    `span` (B, 3) from `sink_span`, else the sink is at position 0 and doesn't repeat); 2 for a special token
-    (`special`, the tokenizer's control tokens: document separators and chat delimiters, which act as sinks too) after
-    them; and 1 for every other position. A class reads only positions and token ids, both fixed inputs, never a
-    value."""
+    `span` (B, 3) from `sink_span`, else the sink is at position 0 and doesn't repeat); and, with `last_long` (B, t)
+    from `long_runs`, every position of a long run of a host token from its `run`-th copy and the `window` - 1
+    positions after it (a long enough run anywhere takes over attention and forms the sink again); 2 for a special
+    token (`special`, the tokenizer's control tokens: document separators and chat delimiters, which act as sinks too)
+    after them; and 1 for every other position. A class reads only positions and token ids, both fixed inputs, never
+    a value."""
     end = window if span is None else (span[:, 2] + window - 1)[:, None]
     c = (pos >= end).long()
+    if last_long is not None:
+        c = torch.where(pos - last_long <= window - 1, 0, c)
     if ids is not None and special is not None and len(special):
         c = torch.where((c == 1) & torch.isin(ids, special), 2, c)
     return c
+
+
+def long_runs(ids: torch.Tensor, hosts: torch.Tensor, run: int, pos0: int = 0,
+              prior: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
+    """For token ids (B, t) at positions pos0..: (B, t), the last position at or before each that is at least the
+    `run`-th copy of a host token in a row (-NO_HOST if none); and (B, 3), the state after them (the last token, its
+    run length up to `run`, the last such position), from `prior` (B or 1, 3), the state before pos0."""
+    b, t = ids.shape
+    prior = (torch.tensor([[-1, 0, -NO_HOST]]) if prior is None else prior).expand(b, 3)
+    prev = torch.cat([prior[:, :1], ids[:, :-1]], 1)
+    i = torch.arange(t)[None].expand(b, t)
+    start = torch.where(ids != prev, i, -1).cummax(1).values
+    length = torch.where(start >= 0, i - start + 1, prior[:, 1:2] + i + 1)
+    longp = (length >= run) & torch.isin(ids, hosts)
+    last = torch.maximum(torch.where(longp, pos0 + i, -NO_HOST).cummax(1).values, prior[:, 2:3])
+    return last, torch.stack([ids[:, -1], length[:, -1].clamp(max=run), last[:, -1]], 1)
 
 
 def sink_span(ids: torch.Tensor, hosts: torch.Tensor, pos0: int = 0, prior: torch.Tensor | None = None) -> torch.Tensor:
@@ -100,25 +120,30 @@ class Boxes:
     the largest |value| / box among them: an honest value cut is a completeness failure."""
 
     def __init__(self, hi: dict[tuple[str, int], torch.Tensor], special: list[int] | None = None, window: int = 1,
-                 hosts: list[int] | None = None):
+                 hosts: list[int] | None = None, run: int | None = None):
         self.hi = hi
         self.special = torch.tensor(sorted(special or []), dtype=torch.long)
         self.window = window
         self.hosts = None if hosts is None else torch.tensor(sorted(hosts), dtype=torch.long)
+        self.run = run
         self.cut: dict[tuple[str, int], int] = {}
         self.worst: dict[tuple[str, int], float] = {}
 
     def classes(self, pos0: int, t: int, ids: torch.Tensor | None,
                 prior: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor | None]:
         """(B or 1, t): the class of each position pos0.. of each row, from its token ids where given; and with sink
-        hosts, each row's `sink_span` through them (`prior`: before pos0, which a cache records)."""
+        hosts, each row's state through them (`prior`: before pos0, which a cache records): its `sink_span` and,
+        with a long-run threshold `run`, its `long_runs` state, side by side."""
         pos = (pos0 + torch.arange(t))[None]
         if ids is None or self.hosts is None:
             return position_class(pos, ids, self.special if ids is not None else None, self.window), prior
         if prior is None and pos0:
             raise ValueError("the positions before pos0 have no recorded sink span: fill the cache under these boxes")
-        span = sink_span(ids, self.hosts, pos0, prior)
-        return position_class(pos, ids, self.special, self.window, span), span
+        span = sink_span(ids, self.hosts, pos0, None if prior is None else prior[:, :3])
+        if self.run is None:
+            return position_class(pos, ids, self.special, self.window, span), span
+        last, runs = long_runs(ids, self.hosts, self.run, pos0, None if prior is None else prior[:, 3:])
+        return position_class(pos, ids, self.special, self.window, span, last), torch.cat([span, runs], 1)
 
     def apply(self, key: tuple[str, int], x: torch.Tensor, pos0: int, cls: torch.Tensor | None = None) -> torch.Tensor:
         h = self.hi.get(key)
@@ -149,13 +174,14 @@ class Boxes:
 
     def save(self, path: Path, **meta) -> None:
         torch.save({"hi": {f"{s}:{l}": h for (s, l), h in self.hi.items()}, "special": self.special.tolist(),
-                    "window": self.window, "hosts": None if self.hosts is None else self.hosts.tolist(), **meta}, path)
+                    "window": self.window, "hosts": None if self.hosts is None else self.hosts.tolist(),
+                    "run": self.run, **meta}, path)
 
     @classmethod
     def load(cls, path: Path) -> "Boxes":
         raw = torch.load(path)
         return cls({(k.split(":")[0], int(k.split(":")[1])): h for k, h in raw["hi"].items()}, raw.get("special"),
-                   raw.get("window", 1), raw.get("hosts"))
+                   raw.get("window", 1), raw.get("hosts"), raw.get("run"))
 
 
 def cache_dir() -> Path:
@@ -258,7 +284,7 @@ class Edit:
 
 class Cache:
     """Per layer (K, V), each (B, kv_heads, S, head_dim); layers may differ in B, a batch-1 entry expanding. Under boxes
-    with sink hosts, `sink` (B or 1, 3) is each row's `sink_span` over the cached positions."""
+    with sink hosts, `sink` (B or 1, 3 or 6) is each row's class state over the cached positions (`Boxes.classes`)."""
 
     def __init__(self, kv: dict[int, tuple[torch.Tensor, torch.Tensor]] | None = None,
                  sink: torch.Tensor | None = None):
@@ -271,7 +297,7 @@ class Cache:
 
     def expand(self, b: int) -> "Cache":
         return Cache({l: (k.expand(b, -1, -1, -1), v.expand(b, -1, -1, -1)) for l, (k, v) in self.kv.items()},
-                     None if self.sink is None else self.sink.expand(b, 3))
+                     None if self.sink is None else self.sink.expand(b, -1))
 
     def append(self, layer: int, k: torch.Tensor, v: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         if layer in self.kv:

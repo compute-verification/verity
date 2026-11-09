@@ -54,7 +54,7 @@ from pathlib import Path
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lm import E4M3_MAX, GROUP, GROUP_SITES, LM, MODELS, Boxes, Cache, position_class, sink_span, ue8m0_scale
+from lm import E4M3_MAX, GROUP, GROUP_SITES, LM, MODELS, Boxes, Cache, ue8m0_scale
 from traffic import CALIBRATION, HELDOUT, long_texts, mixed
 
 
@@ -81,10 +81,11 @@ class Stats:
 
     SWEEP = 1 << 20
 
-    def __init__(self, lm: LM, special: list[int], window: int, hosts: list[int] | None = None):
+    def __init__(self, lm: LM, special: list[int], window: int, hosts: list[int] | None = None, run: int | None = None):
         self.keys = lm.sites()
-        self.special, self.window = torch.tensor(special, dtype=torch.long), window
+        self.special, self.window, self.run = torch.tensor(special, dtype=torch.long), window, run
         self.hosts = None if hosts is None else torch.tensor(sorted(hosts), dtype=torch.long)
+        self.rule = Boxes({}, special, window, hosts, run)
         self.amax = {k: torch.zeros(CLASSES, lm.width(k[0])) for k in self.keys}
         self.at = {k: torch.full((CLASSES, lm.width(k[0]), 2), -1, dtype=torch.long) for k in self.keys}
         self.ss = {k: torch.zeros(CLASSES, lm.width(k[0]), dtype=torch.float64) for k in self.keys}
@@ -95,8 +96,7 @@ class Stats:
         """taps[key]: (B, T, width) for B sequences `seqs` (B,) of token ids (B, T) at positions 0..T-1."""
         b, t = ids.shape
         pos = torch.arange(t)[None].expand(b, t)
-        span = None if self.hosts is None else sink_span(ids, self.hosts)
-        c = position_class(pos, ids, self.special, self.window, span).reshape(-1)
+        c = self.rule.classes(0, t, ids)[0].expand(b, t).reshape(-1)
         where = torch.stack([seqs[:, None].expand(b, t).reshape(-1), pos.reshape(-1)], 1)
         for k in self.keys:
             flat = taps[k].abs().float().reshape(b * t, -1)
@@ -121,13 +121,13 @@ class Stats:
         self.tokens.update(o.tokens)
 
     def save(self, path: Path) -> None:
-        torch.save({k: getattr(self, k) for k in ("amax", "at", "ss", "n", "tokens", "window")}
+        torch.save({k: getattr(self, k) for k in ("amax", "at", "ss", "n", "tokens", "window", "run")}
                    | {"special": self.special.tolist(), "hosts": None if self.hosts is None else self.hosts.tolist()}, path)
 
     @classmethod
     def load(cls, lm: LM, path: Path) -> "Stats":
         raw = torch.load(path)
-        s = cls(lm, raw["special"], raw["window"], raw.get("hosts"))
+        s = cls(lm, raw["special"], raw["window"], raw.get("hosts"), raw.get("run"))
         for k in ("amax", "at", "ss", "n", "tokens"):
             setattr(s, k, raw[k])
         return s
@@ -213,7 +213,7 @@ def part_calibrate(lm: LM, tok, a) -> dict:
     """The shard's texts and its share of the position-0 sweep; with one shard, the boxes too (else `merge` makes
     them)."""
     stats = Stats(lm, lm.special_ids() if a.special else [], a.window,
-                  torch.load(a.hosts)["hosts"] if a.hosts else None)
+                  torch.load(a.hosts)["hosts"] if a.hosts else None, a.run)
     t0 = time.time()
     texts = shard(traffic("calibration", a.mixed), a.shard)
     for j, (name, text) in texts:
@@ -243,7 +243,7 @@ def part_rebox(lm: LM, tok, a) -> dict:
     raw = torch.load(a.boxes)
     stats = Stats(lm, raw["special"], raw["window"])
     stats.amax = {(k.split(":")[0], int(k.split(":")[1])): v for k, v in raw["amax"].items()}
-    Boxes(stats.boxes(a.headroom), raw["special"], raw["window"], raw.get("hosts")).save(
+    Boxes(stats.boxes(a.headroom), raw["special"], raw["window"], raw.get("hosts"), raw.get("run")).save(
         a.out / "boxes.pt", model=a.model, revision=MODELS[a.model]["revision"], headroom=a.headroom,
         amax=raw["amax"])
     return {"part": "rebox", "from": str(a.boxes), "window": raw["window"], "special": len(raw["special"]),
@@ -254,7 +254,8 @@ def calibrated(lm: LM, tok, a, stats: Stats) -> dict:
     """Writes boxes.pt from the merged statistics; per site and class, the boxes against the site's RMS, and the
     largest values (massive activations) with the token each sits on."""
     hi = stats.boxes(a.headroom)
-    Boxes(hi, stats.special.tolist(), stats.window, None if stats.hosts is None else stats.hosts.tolist()).save(
+    Boxes(hi, stats.special.tolist(), stats.window, None if stats.hosts is None else stats.hosts.tolist(),
+          stats.run).save(
         a.out / "boxes.pt", model=a.model, revision=MODELS[a.model]["revision"], headroom=a.headroom,
         amax={f"{s}:{l}": v for (s, l), v in stats.amax.items()})
     rows, massive = [], []
@@ -282,7 +283,7 @@ def calibrated(lm: LM, tok, a, stats: Stats) -> dict:
                                 "token": tok.decode([ids[pos]]) if 0 <= pos < len(ids) else None})
     return {"part": "calibrate", "texts": len(stats.tokens), "first_tokens": a.first_tokens, "new": a.new,
             "cap": a.cap, "window": stats.window, "special": len(stats.special),
-            "hosts": None if stats.hosts is None else len(stats.hosts), "headroom": a.headroom,
+            "hosts": None if stats.hosts is None else len(stats.hosts), "run": stats.run, "headroom": a.headroom,
             "positions": stats.n.tolist(), "sites": rows, "massive": massive}
 
 
@@ -409,6 +410,9 @@ def main() -> int:
     ap.add_argument("--window", type=int, default=1,
                     help="calibrate: the sink class's positions from the first sink host on, past any run of it")
     ap.add_argument("--hosts", type=Path, help="calibrate: the hosts part's hosts.pt, where each sequence's classes start")
+    ap.add_argument("--run", type=int,
+                    help="calibrate: with --hosts, a host token's run from its RUN-th copy and --window - 1 positions "
+                         "after it join the sink class")
     ap.add_argument("--special", action=argparse.BooleanOptionalAction, default=True,
                     help="calibrate: give the tokenizer's special tokens their own class")
     ap.add_argument("--headroom", type=int, nargs="+", default=[1],
