@@ -131,16 +131,17 @@ def test_a_cached_fail_answers_a_retest_of_the_same_key_without_running(g2, db):
 
 # --- liveness ----------------------------------------------------------------------------------------------------------------
 
-def test_an_undeclared_read_is_a_failure_and_every_exhausted_error_is_marked_the_trees(g2, db):
-    """FIXED at 40e08bd3556 (at ffa125a3756 an error a PR causes was infra forever): an undeclared read or a race is the
-    task's own fault, `faulted`, a failed entry W3 blames by inputs.
-    FINDING (innocent ejects, fix before the cut-over): an exhausted error is `tree: true` when it errored on two nodes, and
-    graph2 runs each retry on another node, so an outage's errors (a full disk, the CAS refusing an artifact, each a
-    different why) are as much the tree's as a PR's timeout; core3 bisects on `tree` and ejects lone members for them. FIX:
-    `tree` only when the same error repeated on two nodes on which other tasks passed in the meantime."""
+def test_fixed_an_undeclared_read_is_a_failure_and_an_outages_errors_arent_the_trees(g2, db, monkeypatch):
+    """FIXED: at 40e08bd3556 an undeclared read or a race is the task's own fault (`faulted`, a failed entry W3 blames by
+    inputs; at ffa125a3756 it was infra forever); at 3afee5d3402 an exhausted error is `tree` only when the same error came
+    on two nodes that each passed another task after it (`trees`), so an outage's errors (each a different why, or on
+    nodes that pass nothing meanwhile) aren't; at 40e08bd3556 any error on two nodes was."""
+    clock = iter(range(1, 10**6))
+    monkeypatch.setattr(g2, "now", lambda: float(next(clock)))
     c, ev = db
     check = f"ready:{A}"
-    sid = listed(g2, c, ev, check, doc(g2, A, [{"id": "test-file:reads_undeclared.py"}, {"id": "test-file:t2.py"}]))
+    sid = listed(g2, c, ev, check, doc(g2, A, [{"id": "test-file:reads_undeclared.py"}, {"id": "test-file:t2.py"},
+                                               {"id": "test-file:t3.py"}]))
     assert end(g2, c, ev, sid, "test-file:reads_undeclared.py", "error", undeclared_reads=["src/y.py"],
                error="an undeclared read") == "faulted"
     for slot, why in (("c4x0", "the CAS refused an artifact"), ("n2x0", "No space left on device"),
@@ -148,7 +149,31 @@ def test_an_undeclared_read_is_a_failure_and_every_exhausted_error_is_marked_the
         end(g2, c, ev, sid, "test-file:t2.py", "error", slot=slot, error=why)
     v = g2.verdict(c, check)
     assert [(f["task"], f["tests"]) for f in v["failed"]] == [("test-file:reads_undeclared.py", [])]
-    assert [(f["task"], f["tree"]) for f in v["infra"]] == [("test-file:t2.py", True)]
+    assert [(f["task"], f["tree"]) for f in v["infra"]] == [("test-file:t2.py", False)]
+    for slot in ("c4x0", "n2x0", "n3x0"):
+        end(g2, c, ev, sid, "test-file:t3.py", "error", slot=slot, error="Timeout after 1800 s")
+    assert [(f["task"], f["tree"]) for f in g2.verdict(c, check)["infra"]] == [("test-file:t2.py", False),
+                                                                             ("test-file:t3.py", False)]
+
+
+def test_an_outages_errors_become_the_trees_once_it_ends(g2, db, monkeypatch):
+    """FINDING (after the cut-over; it matters only once `--tree-ejects` is on): `trees` reads each node's newest pass at
+    the time of the verdict, with no bound, so the same error two nodes gave in an outage (a full disk on both) becomes the
+    tree's as soon as each passes any other task after the outage, and the loop reads every verdict again at each tick. With
+    `--tree-ejects` on, that bisects and ejects lone members for the outage after it ends. FIX: count a node's pass only
+    before the task's next attempt (or within its run's window), stored with the error when it is logged."""
+    clock = iter(range(1, 10**6))
+    monkeypatch.setattr(g2, "now", lambda: float(next(clock)))
+    c, ev = db
+    check = f"ready:{A}"
+    sid = listed(g2, c, ev, check, doc(g2, A, [{"id": "test-file:t2.py"}, {"id": "test-file:t3.py"},
+                                               {"id": "test-file:t4.py"}]))
+    for slot in ("c4x0", "n2x0", "c4x1"):
+        end(g2, c, ev, sid, "test-file:t2.py", "error", slot=slot, error="OSError: [Errno 28] No space left on device")
+    assert [(f["task"], f["tree"]) for f in g2.verdict(c, check)["infra"]] == [("test-file:t2.py", False)]
+    end(g2, c, ev, sid, "test-file:t3.py", "pass", slot="c4x0")
+    end(g2, c, ev, sid, "test-file:t4.py", "pass", slot="n2x0")
+    assert [(f["task"], f["tree"]) for f in g2.verdict(c, check)["infra"]] == [("test-file:t2.py", True)]
 
 
 def test_a_listing_submit_refuses_wedges_the_check_in_listing(g2, db):

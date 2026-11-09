@@ -107,18 +107,26 @@ def test_a_queue_ref_the_loop_didnt_build_is_ignored_and_never_lands(env):
     assert f"ready:{forged}" not in [e["check"] for e in env.graph2.enqueued()]
 
 
-def test_a_failing_lean_agreement_task_doesnt_hold_a_candidate(env):
-    """FINDING (coverage, blocks the cut-over; still open at 3b9df5d6dc, where W3b's slim run beside each candidate is due):
-    the loop leaves out of the gate every task of a `drive.SLIM_STEPS` job (lean-agreement, ratchet-gate), as drive's
-    `executor = "on"` path does, but it doesn't fold in the slim train.sh run that path judges them and the preflights by
-    (`Driver._start_slim`/`_follow_slim`). So a candidate whose lean-agreement task fails against upstream's Rust verifier
-    advances, and `uv lock --check`, fixture fetchability and the landing gates run nowhere before `main`. FIX: start the
-    slim run at each candidate's sha and fold its steps into the verdict (pass only when both pass); or list lean-agreement
-    and the preflights as graph tasks that gate. This test then fails: rewrite it as the regression check."""
+def test_fixed_a_failing_run_beside_the_check_holds_a_candidate(env):
+    """FIXED at a2a1368d98 (W3b's c3931ab8); a finding (coverage) at 3b9df5d6dc and before, when the loop left every
+    `drive.SLIM_STEPS` task (lean-agreement, ratchet-gate) out of the gate and folded in no run that judged them, so a
+    candidate whose lean-agreement failed advanced. Now the run beside each candidate's check starts at its build, and the
+    verdict is `vqueue_slim.combine` of graph2's and the run's: while the run runs the candidate waits, and a failing
+    lean-agreement (or preflight) holds it. graph2's own lean-agreement task is still off the gate, so the run beside is the
+    one thing that judges it; `--no-slim` is refused outside --shadow and --dry-run."""
+    from research import vqueue_slim
+    from test_vqueue_loop import Slim
+
+    class Beside(Slim):
+        combine = staticmethod(vqueue_slim.combine)
+
     env.put(1, {"verity/ml/flock/verifier/check.py": "1\n"})
-    loop = env.loop(decide)
-    (built,) = loop.tick()
+    slim = Beside()
+    loop = env.loop(decide, slim=slim)
+    loop.world.slim_driver = lambda: "drive"
+    built, started = loop.tick()
     sha = built["sha"]
+    assert (started["action"], started["sha"], started["why"]) == ("slim", sha, "started")
     task = {"env": "py", "argv": ["t"], "vars": {}, "reads": [], "outputs": []}
     env.graph2.list_graph(f"ready:{sha}", {
         "schema": GRAPH_V2, "commit": sha, "envs": {"py": {"digest": "sha512:env"}},
@@ -129,7 +137,11 @@ def test_a_failing_lean_agreement_task_doesnt_hold_a_candidate(env):
     env.result("sha512:a", "test-file:t/test_a.py", "pass")
     env.result("sha512:agree", "lean-agreement:verity/ml/flock/verifier", "fail")
     assert loop.world.verdict(sha).verdict.state == "pass"
-    assert "advance" in _acts(loop.tick()) and env.main() == sha
+    for _ in range(3):
+        assert "advance" not in _acts(loop.tick())
+    slim.verdicts["run-1"] = "fail"
+    after = [a for _ in range(5) for a in _acts(loop.tick())]
+    assert "advance" not in after and env.main() != sha
 
 
 def test_a_result_label_anyone_writes_counts_as_the_tasks_pass(tmp_path):

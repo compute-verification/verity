@@ -175,23 +175,68 @@ def test_a_pair_that_fails_only_together_ejects_one_of_them_and_lands_the_rest(v
     assert sorted(w.landed) == sorted([1, 2, 3, 4, 5, *({7584, 8146} - {w.ejected[0].number})])
 
 
-def test_an_infra_outage_ejects_lone_members_as_the_tree(vq):
-    """FINDING (innocent ejects, fix before the cut-over): during an outage (every check ends in errors graph2 saw on two
-    nodes, which graph2 marks `tree` for any exhausted error since it retries elsewhere), `decide` bisects and ejects lone
-    members for errors their change didn't cause, at w3 after one retry whatever `tree` says, at core3 on graph2's `tree`.
-    FIX: graph2's `tree` needs the same error on two nodes on which other tasks passed meanwhile; `decide` ejects for infra
-    only when the base's check passed in the same window."""
-    out = {"n": 0}
+def _outage(vq, tree, c, base):
+    err = vq.Failed("test-file:t/test_store.py", "sha512:k", frozenset({"t/test_store.py"}),
+                    **({"tree": True} if "tree" in vq.Failed.__dataclass_fields__ else {}))
+    return vq.Verdict(vq.INFRA, infra=(err,), ended=True)
+
+
+def test_fixed_an_infra_outage_ejects_nobody(vq):
+    """FIXED at a2a1368d98 (W3e's `Snapshot.tree_ejects`, off by default: the loop's `--tree-ejects`); a finding at
+    3b9df5d6dc and core3 df980a2f28, which bisected and ejected lone members for an outage graph2 marks `tree`. Off, infra
+    with `tree` entries is retried at every reading and rung, and nothing is bisected or ejected."""
+    if "tree_ejects" not in vq.Snapshot.__dataclass_fields__:
+        pytest.skip("no tree_ejects switch: this decide ejects for an outage graph2 marks tree")
+    w = World(vq, [pr(vq, n) for n in range(1, 7)], _outage).run(120)
+    assert w.landed == [] and w.ejected == [] and w.said(vq.Ring)
+
+
+def test_with_tree_ejects_on_an_outage_marked_tree_ejects_lone_members(vq):
+    """Why `--tree-ejects` stays off until graph2's `tree` means the same error repeated (and `trees` bounds when a pass
+    counts: test_graph2's outage test): on, every lone member is ejected for errors its change didn't cause."""
+    if "tree_ejects" not in vq.Snapshot.__dataclass_fields__:
+        pytest.skip("no tree_ejects switch")
+    w = World(vq, [pr(vq, n) for n in range(1, 7)], _outage, kw={"tree_ejects": True}).run(120)
+    assert w.landed == [] and len(w.ejected) >= 1
+
+
+def test_with_tree_ejects_off_a_pr_whose_change_errs_stops_the_queue(vq):
+    """FINDING (liveness, before the cut-over or accepted with a run-book): with `tree_ejects` off, infra never bisects or
+    ejects, so a PR whose own change makes a task err on every node (a hang, an out-of-memory kill: errors graph2 marks
+    `tree`) is never taken out. The lowest candidate holding it is retried at every reading and @infra is rung, not its
+    owner; every PR batched or stacked above it waits until a person removes it. FIX: with `tree_ejects` off, still bisect a
+    candidate whose infra persists over `rings` readings, ejecting nobody: the members without the error land, and the lone
+    erring PR waits, rung to its owner."""
+    if "tree_ejects" not in vq.Snapshot.__dataclass_fields__:
+        pytest.skip("no tree_ejects switch")
 
     def oracle(vq, tree, c, base):
-        out["n"] += 1
-        err = vq.Failed("test-file:t/test_store.py", "sha512:k", frozenset({"t/test_store.py"}),
-                        **({"tree": True} if "tree" in vq.Failed.__dataclass_fields__ else {}))
+        if 3 not in tree:
+            return vq.Verdict(vq.PASS, ended=True)
+        err = vq.Failed("test-file:pkg3/tests/test_big.py", "sha512:big", frozenset({"pkg3/mod.py"}), tree=True)
         return vq.Verdict(vq.INFRA, infra=(err,), ended=True)
 
-    w = World(vq, [pr(vq, n) for n in range(1, 7)], oracle).run(120)
-    assert w.landed == [] and len(w.ejected) >= 1
-    assert all("t/test_store.py" in str(e.failed) for e in w.ejected)
+    w = World(vq, [pr(vq, n, f"pkg{n}/mod.py") for n in range(1, 21)], oracle,
+              kw={"batch": 16, "depth": 3, "lean": 3}).run(300)
+    assert w.ejected == [] and w.landed == []
+    assert w.built == 2 and len(w.said(vq.Retry)) > 100
+
+
+def test_a_red_main_on_a_whole_tree_step_of_the_run_beside_ejects_every_pr(vq):
+    """FINDING (innocent ejects, before the cut-over or a run-book check): the run beside a check keys `preflight-lints` on
+    the whole tree (`vqueue_slim.WHOLE`), so with `main` red on it the candidate's key never equals the base's and the
+    failure is never inherited. Bisected, each lone member fails alone again on its rerun, and the flake rule ejects it,
+    though the failure names no file it touched: all 8 PRs go. `main` turns red on it only through what the run beside
+    didn't judge (a red `main` at the cut-over, a landing by the old path, a lint that reads beyond the tree). FIX: before
+    ejecting a lone member whose failures meet none of its files, judge the base (its run beside, or graph2's check of
+    `main`): a failure the base has too is a Red; and at the cut-over, check that `main` passes the run beside."""
+    def oracle(vq, tree, c, base):
+        f = vq.Failed("step preflight-lints", f"sha512:{sorted(tree)}", frozenset({"docs/README.md"}),
+                      base_key=f"sha512:{sorted(base)}")
+        return vq.Verdict(vq.FAIL, (f,), ended=True)
+
+    w = World(vq, [pr(vq, n) for n in range(1, 9)], oracle).run(200)
+    assert sorted(e.number for e in w.ejected) == list(range(1, 9)) and w.landed == []
 
 
 def test_fixed_a_pending_candidate_is_retried_then_rung(vq):
