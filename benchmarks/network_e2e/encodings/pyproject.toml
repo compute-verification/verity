@@ -35,5 +35,5 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "integrations/vllm/verity_vllm/pipeline/serve_admit.py", "integrations/vllm/verity_vllm/engine/__init__.py",
           "integrations/vllm/verity_vllm/engine/hooks.py",
           # test_pool_row and test_pool_cut export the carried pool's row with the integration's exporter
-          # (`engine.pool_row`)
-          "integrations/vllm/verity_vllm/engine/pool_row.py"]
+          # (`engine.pool_row`), which refuses with the integration's `Refused`
+          "integrations/vllm/verity_vllm/engine/pool_row.py", "integrations/vllm/verity_vllm/errors.py"]

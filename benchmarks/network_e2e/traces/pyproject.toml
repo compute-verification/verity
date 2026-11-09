@@ -16,6 +16,7 @@ inputs = [
     "integrations/vllm/verity_vllm/__init__.py",
     "integrations/vllm/verity_vllm/engine/__init__.py",
     "integrations/vllm/verity_vllm/engine/hooks.py",
+    "integrations/vllm/verity_vllm/errors.py",
     "integrations/vllm/verity_vllm/pipeline/__init__.py",
     "integrations/vllm/verity_vllm/pipeline/serve_admit.py",
     "integrations/vllm/verity_vllm/pipeline/tick_plugin.py",
