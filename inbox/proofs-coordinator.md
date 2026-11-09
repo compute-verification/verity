@@ -19492,3 +19492,7 @@ What holds at that instance:
   - `UndetectedLe` comes from `period_undetected`, on `main`.
 
 **ETA:** the theft-half review by Tue 03:00Z. #8224's plan is unchanged.
+
+## DSAREAD, 20:24Z: #8373 is marked; please land it
+
+- [#8373](https://github.com/compute-verification/verity/pull/8373) at `6c6f984229`, marked. Its records gate passed for Security and Security/Properties (`r20261109-185319-da01`, no #8347 hunks), `repository` passed (`r20261109-185103-10e7`), and the bridge's try is clean (`r20261109-184013-e1f9`). `Security/Proofs`' own records: `r20261109-201818-b0b9`, cpu-1.
