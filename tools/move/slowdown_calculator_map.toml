@@ -20,11 +20,12 @@ paths = ["benchmarks/rho/"]
 paths = []
 
 [rewrite]
-# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), and files
-# whose bytes a digest pins.
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), files
+# whose bytes a digest pins, and `move_check.py`, whose docstring names this directory as its example of a moved one.
 exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
            "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
-           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json"]
+           "tools/verity/check/tests/test_move_check.py", "tools/verity/check/move_check.py",
+           "tools/research/src/research/store/moves.json"]
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
 
 [modules]
