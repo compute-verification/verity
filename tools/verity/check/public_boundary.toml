@@ -45,7 +45,9 @@ firewall = [
     "Security/**/RecGeneric*",
     "verity/core/service/vstar",
 ]
-vllm = ["integrations/vllm"]
+# the vLLM integration, and its advice format (advice v0: vLLM's serving decisions as one canonical bit string), which the
+# certifier's package still holds
+vllm = ["integrations/vllm", "verity/core/protocols/certifier/advice.py"]
 # what the public side shares: the one challenge derivation, the one signature scheme, the Python held to each Lean, the
 # deployment's configuration, and what public proofs import from private areas: two lemmas, and Bits' layout as the
 # claims' program, which the bridge reads
@@ -95,7 +97,13 @@ pouw_tests = [
     "verity/core/protocols/pouw/lean/window/tests/test_known_rows.py",
 ]
 protocols = [
-    "verity/core/protocols/{pous,bandwidth,remote_bandwidth,certifier,network}",
+    "verity/core/protocols/{pous,bandwidth,remote_bandwidth,network}",
+    # the network certifier: all but the advice format (`advice.py`, public with the integration) and its package's files
+    "verity/core/protocols/certifier/{lean,protocol,tests,README.md,PROTOCOL.md}",
+    "verity/core/protocols/certifier/{active,arith_encode,audit,blocks,boundary,cache_step,calibration,capacity,certificate}*",
+    "verity/core/protocols/certifier/{charge_chain,coin_link,commitment,compile_slice,grid,head_check,io_request,io_tie}*",
+    "verity/core/protocols/certifier/{lean_audit,online,out_commit,pacer,release,replay_chain,replay_step,schedule}*",
+    "verity/core/protocols/certifier/{served,service,tie_service,transfer_rows,warden}*",
     "verity/ml/protocols/{pous,certifier}",
     "Security/*/{Nci,NciDesc}{,.lean}",
     "Security/Proofs/Properties/Nci{,.lean}",
