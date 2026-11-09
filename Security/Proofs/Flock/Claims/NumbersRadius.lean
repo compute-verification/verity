@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Flock.Claims.NumbersDeploy
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Init.Data.Nat.Power2.Basic
 
 /-!
 # The radius `ε_table` is computed at, and the decoder's

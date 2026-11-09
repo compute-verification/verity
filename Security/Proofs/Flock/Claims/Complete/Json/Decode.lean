@@ -2,6 +2,9 @@ module
 
 public import Proofs.Flock.Claims.Complete.Json.Record
 public import Proofs.Flock.Claims.Complete.Json.Canon
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Lean.Data.Json.Basic
 
 /-!
 # The honest record decodes (S1–S14)

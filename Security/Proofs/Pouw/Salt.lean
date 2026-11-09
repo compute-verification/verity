@@ -3,6 +3,7 @@ module
 public import Definitions.Pouw.Guarantees.KeyedLeaf
 public import Proofs.Pouw.Prob
 public import Proofs.Hash.RowBinding
+import all Init.Data.String.Defs
 
 /-!
 # `Pouw.Salt.keyed_leaf_hides : Pouw.Guarantees.KeyedLeaf.Hides` and `Pouw.Salt.keyed_leaf_binds`

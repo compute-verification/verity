@@ -642,6 +642,7 @@ theorem msg_inj (id : String) {B B' : String}
   have e1 := congrArg (fun b : ByteArray => b.data.toList) e
   simp only [ByteArray.data_append, Array.toList_append, List.append_assoc] at e1
   have e2 := List.append_cancel_left (List.append_cancel_left e1)
+  simp only [String.toUTF8_eq_toByteArray] at e2
   exact String.toByteArray_inj.1 (ByteArray.ext (Array.ext' e2))
 
 end BindInj

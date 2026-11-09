@@ -1898,8 +1898,16 @@ def leaf_registered_file(program: str, layout: dict, shape: dict, u: int, statem
     `produced.entry` under the window's descriptor digest `program` and its draw root `registration` at the produced
     record's root `produced` (``{value: root}``); its known ports `h1window.leaf_known_ports`' (``pub`` of the window's
     Program salt `salt`, position u and the call's roots root(``a/<K>@<s>``) and root(``b/<K>``), ``admit`` every row and
+<<<<<<< HEAD
     every ``o0`` the row 1, each its own served value under `leaf_lanes.known_salt`). A read of an A row, a B row or a
     partials row is marked ``read_in_full``."""
+||||||| merged common ancestors
+    every ``o0`` the row 1, each its own served value under `leaf_lanes.known_salt`); and ``complete``. A read of an A
+    row, a B row or a partials row is marked ``read_in_full``."""
+=======
+    every ``o0`` the row 1, each its own served value under `leaf_lanes.known_salt`). A read of an A row, a B row or
+    a partials row is marked ``read_in_full``."""
+>>>>>>> 705be2b532
     (r, c), prefix, kind, m = layout["tile"], shape["prefix"], statement[0], layout["m"]
     ln, ch = (statement[1:] + (None, None))[:2]
     at = leaf_place(layout, shape, u, steps)

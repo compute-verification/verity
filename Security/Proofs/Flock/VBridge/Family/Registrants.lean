@@ -5,6 +5,7 @@ public import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
 public import Proofs.Flock.Level3.RowV2
 public import Proofs.Flock.VBridge.Family.Registered
+import all Init.Data.String.Defs
 
 /-!
 # Two registrants' records at one registered root and position

@@ -26,7 +26,7 @@ def FORMAT_V0 : String := "verity/registered-reads/v0"
 /-- A `FORMAT` port's first unit: unit `reads_from + i` reads `reads[i]`, and every other unit reads nothing. -/
 def READS_FROM_KEY : String := "reads_from"
 
-def REGISTERED_DOMAIN : String := "verity/one-stage/registered-domain/v0"
+def REGISTERED_DOMAIN : String := "verity/one-stage/registered-domain/v1"
 /-- The default leaf width, which the domain and the entry name only by leaving `word_bits` out. -/
 def WORD_BITS : Nat := 16
 def WIDTHS : List Nat := [16, 32]
@@ -53,8 +53,8 @@ private def tagged (frame : String) (H : ByteArray → ByteArray) (tag : String)
   return H (frame.toUTF8.push 0 ++ Flock.be32 t.size.toUInt32 ++ t ++ Flock.be64 m.size.toUInt64 ++ m)
 
 /-- `registered.domain(program, value, words, leaves, word_bits, ...).domain_id` (one-stage `registered.py`), `leaves`
-the value's rows: `CommitmentDomain(B, -2, RangeIndexedDomain(0, leaves), hash="sha512").domain_id`, `B` the bytes of
-`identity_digest("verity/one-stage/registered-domain/v0", {"program", "value", "schema", "words", "leaves"})` with
+the value's rows: `CommitmentDomain(B, -2, RangeIndexedDomain(0, leaves), hash="sha512").domain_id`, `B` the 64 bytes of
+`identity_digest_sha512("verity/one-stage/registered-domain/v1", {"program", "value", "schema", "words", "leaves"})` with
 `"word_bits"` beside them when it is not 16, and `extra` after them (a per-window value's `"window"`, a produced value's
 `"produced"`). -/
 def domainWith (program value : String) (words leaves wordBits : Nat) (extra : List (String × Json)) :
@@ -63,7 +63,7 @@ def domainWith (program value : String) (words leaves wordBits : Nat) (extra : L
   let manifest := Json.mkObj ([("program", Json.str program), ("value", Json.str value), ("schema", Json.str HmRow.ROW_SCHEMA),
     ("words", Lean.toJson words), ("leaves", Lean.toJson leaves)] ++
     (if wordBits == WORD_BITS then [] else [(WIDTH_KEY, Lean.toJson wordBits)]) ++ extra)
-  let binding ← tagged "veritor/tagged-sha256/v1" Flock.Sha256.hash REGISTERED_DOMAIN manifest
+  let binding ← tagged "verity/tagged-sha512/v1" Flock.Sha512.hash REGISTERED_DOMAIN manifest
   let positions ← tagged "verity/tagged-sha512/v1" Flock.Sha512.hash "veritor/indexed-domain/range/v1"
     (Json.mkObj [("start", Lean.toJson (0 : Nat)), ("step", Lean.toJson (1 : Nat)), ("stop", Lean.toJson leaves)])
   return FV3.hash "domain" [binding, FV3.uint 0, positions, FV3.uint leaves] Flock.Sha512.hash

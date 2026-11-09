@@ -2,6 +2,7 @@ module
 
 public import Properties.SampledProofs
 public import Proofs.Properties.Challenger
+import all Init.Data.Array.QSort.Basic
 
 /-! # Proofs of sampled proofs' one-stage property (`Properties.SampledProofs`)
 
@@ -799,6 +800,7 @@ theorem r2loop (g : String → Json) (a : Json) (oq : Flock.V String) (od : Opti
 
 theorem id_bind {α β : Type} (x : Id α) (f : α → Id β) : x >>= f = f x := rfl
 
+<<<<<<< ours
 theorem declaredCode_none_iff (rec : Json) (v : Registration.Verifier) :
     (Registration.declaredCode (getD rec "program") v.declared).isSome = false ↔ DeclaredDay rec v := by
   unfold DeclaredDay Registration.declaredCode
@@ -823,6 +825,19 @@ theorem linkRefused_false_iff (v : Registration.Verifier) : Registration.linkRef
           fun ⟨_, _, h1, h⟩ => by cases h1; rw [hr] at h; exact Except.ok.inj h⟩
   · simp
 
+||||||| base
+=======
+theorem declaredCode_none_iff (rec : Json) (v : Registration.Verifier) :
+    (Registration.declaredCode (getD rec "program") v.declared).isSome = false ↔ DeclaredDay rec v := by
+  unfold DeclaredDay Registration.declaredCode
+  rcases v.declared with _ | ⟨day, ds⟩
+  · simp
+  · rcases h : Registration.declaredOf day ds with _ | ⟨p, _ | ⟨q, l⟩⟩
+    · simp [h]
+    · by_cases hp : jeq (getD rec "program") (.str p) = true <;> simp [h, hp]
+    · simp [h]
+
+>>>>>>> theirs
 theorem registration_nil (rec : Json) (v : Registration.Verifier) :
     Registration.check rec v = #[] ↔ ∃ law, Registered v rec law := by
   rw [Registration.check_eq_checkRef]

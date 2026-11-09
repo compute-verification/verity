@@ -3,6 +3,8 @@ module
 public import Batteries.Tactic.OpenPrivate
 public import Properties.Pouw.LiveSalt
 public import Std.Tactic.Do
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # The challenger's ledger, for `Properties.Pouw.LiveSalt.LedgerShows`
@@ -25,6 +27,8 @@ it back at an `.ok` result.
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 set_option mvcgen.warning false
 
@@ -504,7 +508,7 @@ theorem nat_nonnull {j : Json} {n : Nat} (h : SampledProofs.nat? j = some n) : j
 theorem strOf_eq {j : Json} {s : String} (h : strOf j = s) (hs : s ≠ "") : j = .str s := by
   cases j <;> first | (subst h; rfl) | exact absurd h.symm hs
 
-theorem getD_root (x : Json) : SampledProofs.getD (Json.mkObj [("root", x)]) "root" = x := rfl
+theorem getD_root (x : Json) : SampledProofs.getD (Json.mkObj [("root", x)]) "root" = x := (rfl)
 
 theorem idx_session {pre : List LedgerEntry} {wins : Array Win} {v2 : Bool} (hI : LedgerInv pre wins v2)
     {i j : Nat} (hi : i < wins.size) (hj : j < wins.size)

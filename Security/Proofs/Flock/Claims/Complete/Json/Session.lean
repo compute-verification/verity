@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Complete.Json.Decode
 public import Proofs.Flock.Claims.Complete.Shape
+import all Init.Data.Array.Basic
 
 /-!
 # What the one-table honest session returns and sends

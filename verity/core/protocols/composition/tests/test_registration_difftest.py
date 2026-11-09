@@ -60,7 +60,13 @@ ITEMS = (WEIGHTS, {"domain": "e" * 128, "kind": "theta", "leaves": 1, "root": "d
                    "word_bits": 32, "words": 8},
          {"advice": "verity/advice/v1", "cap": 32, "digest": "f" * 128, "kind": "builder"})
 DAY0 = G.Declaration(0, "1" * 128, ("block0",))
+<<<<<<< HEAD
 EXAMPLE = (G.site((SHEET,), LOCS, LINKS), G.Information(ITEMS), DAY0)
+||||||| merged common ancestors
+EXAMPLE = (G.Hardware((CARD,), LOCS, LINKS), G.Information(ITEMS))
+=======
+EXAMPLE = (G.Hardware((CARD,), LOCS, LINKS), G.Information(ITEMS), DAY0)
+>>>>>>> 705be2b532
 
 
 def _wrap(f):
@@ -174,9 +180,18 @@ TWISTS = (G.site(links=(S.Link("l3", ("node0", S.OUTSIDE), 1, 0),)),
 
 @st.composite
 def changed(draw) -> list:
+<<<<<<< HEAD
     """The example, sometimes with a twist after it, and with up to three changes: a location, a link, a sheet or an item
     dropped, replaced, added or with one field set, a site entry split in two, entries swapped, a declaration added, or
     the example's declaration's day, program or blocks set."""
+||||||| merged common ancestors
+    """The example, sometimes with a twist after it, and with up to three changes: a location, a link, a card or an item dropped, replaced, added or with
+    one field set, a hardware entry split in two, or entries swapped."""
+=======
+    """The example, sometimes with a twist after it, and with up to three changes: a location, a link, a card or an item dropped, replaced, added or with
+    one field set, a hardware entry split in two, entries swapped, a declaration added, or the example's declaration's
+    day, program or blocks set."""
+>>>>>>> 705be2b532
     bodies = list(EXAMPLE) + ([pick(draw, TWISTS)] if pick(draw, [True, False]) else [])
     for _ in range(pick(draw, [0, 0, 0, 1, 1, 2, 3])):
         i = pick(draw, range(len(bodies)))
@@ -244,7 +259,13 @@ def cases(draw) -> dict:
     if source == "twist":
         return case(composite, chain(composite, [*EXAMPLE, pick(draw, TWISTS)]))
     bodies = (draw(changed()) if source == "changed"
+<<<<<<< HEAD
               else draw(st.lists(st.one_of(site, information, declarations), max_size=3)))
+||||||| merged common ancestors
+    bodies = draw(changed()) if source == "changed" else draw(st.lists(st.one_of(hardware, information), max_size=3))
+=======
+              else draw(st.lists(st.one_of(hardware, information, declarations), max_size=3)))
+>>>>>>> 705be2b532
     log = chain(composite, bodies)
     if log and not pick(draw, range(8)):
         k = pick(draw, range(len(log)))
@@ -310,7 +331,12 @@ def test_the_example_and_its_refusals_agree_with_the_lean_guards() -> None:
     view = G.check(AUDITOR, "onsite", chain("onsite", EXAMPLE)).view()
     assert view.value("weights") == WEIGHTS and view.theta == ITEMS[:2] and view.builder == ITEMS[2]
     assert view.site.locs == LOCS
+<<<<<<< HEAD
     assert view.declared(0) == DAY0.declared() and view.declared(1) is None
+||||||| merged common ancestors
+=======
+    assert view.declared(0) == DAY0 and view.declared(1) is None
+>>>>>>> 705be2b532
     malformed = {**chain("onsite", EXAMPLE)[2].to_json(), "program": "1"}
     with pytest.raises(G.Malformed, match="program"):
         G.entry_of(malformed)

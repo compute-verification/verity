@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.CallsRep
+import Proofs.Flock.Claims.Recursion.CallsFast100
 
 /-!
 # A verdict's SHA-512 calls on every run
@@ -451,14 +452,10 @@ theorem fast100_none_of_gt (m : ℕ) (h : 35 < m) : fast100 m = none := by
 
 /-- **Every fast100 schedule's Ligerito makes at most `2^16` calls** (64,568 at `m = 35`, the most). -/
 theorem ligC_fast100 {m : ℕ} {sch : Schedule} (hs : fast100 m = some sch) : ligC sch ≤ 2 ^ 16 := by
-  have key : ∀ m < 36, (match fast100 m with
-      | some s => decide (ligC s ≤ 2 ^ 16)
-      | none => true) = true := by
-    decide +kernel
   by_cases hm : m < 36
-  · have h := key m hm
+  · have h := fast100_calls m hm
     rw [hs] at h
-    simpa using h
+    simpa [ligC] using h
   · rw [fast100_none_of_gt m (by omega)] at hs
     cases hs
 

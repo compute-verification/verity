@@ -11,6 +11,8 @@ public import Mathlib.Data.Fintype.Card
 public import Mathlib.Data.Fintype.Prod
 public import Mathlib.Algebra.Polynomial.Degree.Operations
 public import Mathlib.Algebra.Polynomial.Degree.Support
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
 
 @[expose] public section
 

@@ -1332,11 +1332,39 @@
  "inputs": {
   "verity/ml/flock/tests/lean/RandomnessVectors.lean": "b9329b680abae3d3c68f779538b356e7d5dad45f0e36d1d96dfd88ab06439b54",
   "verity/ml/randomness/tests/vectors.json": "ddf31f7f92ac4e022bd9cbe26f2df3a3b66b529825c5d57efda665454eea1b63",
+<<<<<<< HEAD
   "verity/core/primitives/randomness/Randomness.lean": "b62f0a5784ceaf412afbe526b21c5f2755d2c17a5fd2d01859557fabe3d8aa55",
   "Security/Proofs/Flock/Soundness/PlanDraw.lean": "c43af291e915dd33fe3111010ad61179e4422f0ff3fd145488f79d149d9c4478",
   "Security/Proofs/lake-manifest.json": "3af226f6bd1021d146394f69e98218fc96462dad6ba04c2047df62b88562eed3",
+||||||| merged common ancestors
+  "verity/core/primitives/randomness/Randomness.lean": "b62f0a5784ceaf412afbe526b21c5f2755d2c17a5fd2d01859557fabe3d8aa55",
+  "Security/Proofs/Flock/Soundness/PlanDraw.lean": "c43af291e915dd33fe3111010ad61179e4422f0ff3fd145488f79d149d9c4478",
+<<<<<<<<< Temporary merge branch 1
+<<<<<<<<< Temporary merge branch 1
+  "Security/Proofs/lake-manifest.json": "4cc519754e1baa2eaaf8e58866cee7719cfa7fe3f5fa4de51ca49f66733b0dfb",
+||||||||| merged common ancestors
+<<<<<<<<<<< Temporary merge branch 1
+  "Security/Proofs/lake-manifest.json": "106679e91dc2e8eebe768458b4e50ffdbffe12b1f87fe9d3147fe8a7b7d505ed",
+||||||||||| merged common ancestors
+  "Security/Proofs/lake-manifest.json": "f4cb72d3c83b113593469e056cc6fb514bd049421264f74adca175527ba3bb29",
+===========
+  "Security/Proofs/lake-manifest.json": "4cc519754e1baa2eaaf8e58866cee7719cfa7fe3f5fa4de51ca49f66733b0dfb",
+>>>>>>>>>>> Temporary merge branch 2
+=========
+  "Security/Proofs/lake-manifest.json": "333f5cf114a9b210af856945e1d4d4eab4d1b7a234ca6977f2bdf4480418edff",
+>>>>>>>>> Temporary merge branch 2
+||||||||| merged common ancestors
+  "Security/Proofs/lake-manifest.json": "333f5cf114a9b210af856945e1d4d4eab4d1b7a234ca6977f2bdf4480418edff",
+=========
+  "Security/Proofs/lake-manifest.json": "0430019c71184f47c6b3e7870ed94e2750b7da509817075cd625bc51d3b31d42",
+>>>>>>>>> Temporary merge branch 2
+=======
+  "verity/core/primitives/randomness/Randomness.lean": "b5a31856648ab4d91545f3ac9478650e36a3126b1c305b9dfb73bf5cb2d6de7a",
+  "Security/Proofs/Flock/Soundness/PlanDraw.lean": "1be94b205f69b6834b598474117e68ccf798b4eb70f7c55de41f328989fab39c",
+  "Security/Proofs/lake-manifest.json": "ff93ba694c8590e42a4a230477990c192059d3929935f71021592c8eb1217c89",
+>>>>>>> 705be2b532
   "Security/Proofs/lean-toolchain": "8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632",
-  "verity/core/service/flock/Flock/Hash.lean": "5f618f4ae9f546246695039a5c83a38d83279841d72fb3b35dcb9741dc151b5e",
-  "verity/core/service/flock/Flock/Draw.lean": "37e3d2f532981d36313fb17cf6c892ee60126b3f832ceb07ff1bdb8f69468dae"
+  "verity/core/service/flock/Flock/Hash.lean": "b1131984e0d07d2bf750f52a1e315be74c9a81fed4b5d09f00eaeac12d3dca58",
+  "verity/core/service/flock/Flock/Draw.lean": "56301e50b748812aa00a41f0714c314c3cbe2745023fcb17e2b0c83221abeba1"
  }
 }

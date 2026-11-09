@@ -1,6 +1,10 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.VStarPorts
+import all Init.Data.String.TakeDrop
+import all Init.Data.String.Slice
+import all Init.Data.String.Pattern.String
+import all Init.Data.String.Pattern.Basic
 
 /-!
 # Where the stager places the message rounds' rows (an algebra part's `m<i>` ports)

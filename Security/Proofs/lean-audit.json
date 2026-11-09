@@ -1,6 +1,7 @@
 {
  "roots": [
   "Proofs.Core",
+  "Proofs.Core.Rec",
   "Proofs.Nci",
   "Proofs.Pous",
   "Proofs.Pouw",
@@ -10,6 +11,7 @@
   "Proofs.Accounting",
   "Proofs.Accounting.Bandwidth",
   "Proofs.Population",
+  "Proofs.WeightSecurity",
   "Proofs.Properties.Pouw",
   "Proofs.Properties.Pouw.Check",
   "Proofs.Properties.Pouw.Commit",
@@ -64,6 +66,9 @@
   "Proofs.Properties.RemoteAudit.Schedule",
   "Proofs.Properties.RemoteAudit.Live",
   "Proofs.Properties.RemoteAudit.Component",
+  "Proofs.Flock.Claims.Bridge.CustodyZkP",
+  "Proofs.Properties.Verity.SampledCoins",
+  "Proofs.Properties.Verity.Sampled.Deployed",
   "Proofs.Properties.RemoteAudit.ComponentWitnesses",
   "Proofs.Properties.Pouw.LiveSalt.Ledger",
   "Proofs.Properties.Pouw.LiveSalt.Canon",
@@ -73,13 +78,40 @@
   "Proofs.Properties.Composition",
   "Proofs.Properties.Pous.WipeSigned",
   "Proofs.Properties.Challenger",
+  "Proofs.Properties.Challenger.Limits",
+  "Proofs.Properties.Challenger.Coins",
+  "Proofs.Properties.Challenger.Session",
+  "Proofs.Properties.Firewall",
   "Proofs.Properties.Core.Site",
   "Proofs.Properties.Nci.Protocol",
   "Proofs.Properties.Verity.Soundness",
+  "Proofs.Properties.Verity.Sampled",
+  "Proofs.Properties.Verity.Sampled.Binding",
+  "Proofs.Properties.Verity.Sampled.Device",
+  "Proofs.Properties.Challenger.Window",
+  "Proofs.Properties.Challenger.CanonLine",
+  "Proofs.Properties.Challenger.Drawn",
+  "Proofs.Properties.Verity.Sampled.Messages",
+  "Proofs.Properties.Verity.Sampled.Coupling",
+  "Proofs.Properties.Verity.Sampled.Project",
+  "Proofs.Properties.Verity.Sampled.CoinMap",
+  "Proofs.Properties.Verity.Sampled.Moves",
+  "Proofs.Properties.Verity.Sampled.Accepts",
+  "Proofs.Properties.Verity.Sampled.Assembled",
+  "Proofs.Properties.Verity.Sampled.Decoders",
+  "Proofs.Properties.Verity.Sampled.ParseBridge",
+  "Proofs.Properties.Verity.Sampled.Link",
+  "Proofs.Properties.Verity.SampledDraw",
+  "Proofs.Properties.Verity.SampledLog",
+  "Proofs.Properties.Verity.SampledRead",
   "Proofs.Properties.Verity.Subprotocols",
   "Proofs.Properties.Verity.Wipe",
   "Proofs.Properties.Remote",
-  "Proofs.Properties.Remote.Honest"
+  "Proofs.Properties.Remote.Honest",
+  "Proofs.Properties.Verity.Recursive",
+  "Proofs.Properties.Verity.Recursive.Target",
+  "Proofs.Properties.Verity.Recursive.Refusals",
+  "Proofs.Properties.Verity.Recursive.Audit"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
@@ -106,23 +138,23 @@
  "compile_time": {
   "Proofs.Flock.Claims.Complete.CostWalk": {
    "why": "cost_walk, the tactic that bounds a computation's sends by its head (Flock/Claims/Complete/Count.lean's proof of the goal SendCount), a macro that expands to repeated apply of the module's Cost lemmas, extract_lets, intro and split. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
-   "digest": "31980c57d92439ebfa78113f6020236da361df92073e51a3e32ca499b163bbfb"
+   "digest": "15bff7ad7abcb073f216afebe2d2a28fcb992672acf3ffac5b6ca6cf8734ae94"
   },
   "Proofs.Flock.Claims.KS.PushSched": {
    "why": "push_unfold and lead_unfold, local tactics that unfold the primed prover one node (a `simp only` over Lock's rightSame, leftSame, lockWith, interleaveLock, bind and oracleStrat) in the pushing chooser's proofs (firstS_push, followR_push, lead_push and the rest of the module). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
-   "digest": "34be1e89abec1ac3c72f02d08dc9ac7c78124e56f609216a1ef9b345746e2edf"
+   "digest": "e62b9b13b899c98d9350d2ddac80bb50c62be51b376b83b2febc121dab31a393"
   },
   "Proofs.Flock.Claims.Recursion.CallsLe": {
    "why": "keep_walk, a macro that expands to repeated refine/exact of the module's keepL/keepT bind, pure and get lemmas (a logged computation keeps its log's prefix). It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
-   "digest": "3b5080f54c4b73aea6b61de4721c9ec6c30aa29eb33d9bb0666a05ec19d1d431"
+   "digest": "92dcca8d0bd7762513d11e21511ce6591c930c57ffae5f937bbbbdf9ba2c4ea5"
   },
   "Proofs.Flock.Claims.Recursion.CallsRep": {
    "why": "tw_walk, tw_step and lw_step, macros that expand to first/repeat' over refine/exact of the module's calcCS/calcCS2 bind, pure, throw and sample lemmas (the call bound of a rep's verification). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
-   "digest": "21eefb3d7ab83b3a0ec14542c323777458cfddc7c0a92858eeb36cc31e03e988"
+   "digest": "6298cc1a478b999ad84a38c910d956f0e2887506ce3784f8365bb081e93d3f5b"
   },
   "Proofs.Flock.Claims.Recursion.CallsTop": {
    "why": "cl_step, dec_step and ret_step, macros that expand to first over refine/exact of the module's CL/Ret bind, pure and throw lemmas, and cl_bind_of and cl_head, elabs that only read the goal and fail unless its program's head is the named constant. They run only inside the elaborator, read no files and do no IO, and the kernel replays every proof they build.",
-   "digest": "134361c6a8301fa0818f80a036c7ad0c25cbbf0347b4db16929b115c758e5c88"
+   "digest": "2310e14f7b7c1f2404df7fd10852a8e052c791e786f8493dc6f0805add075da2"
   },
   "Proofs.Flock.Claims.Recursion.IrDepSession": {
    "why": "its one #eval runs IrDepSession.main only when VERITY_IRDEP_ARGS is set (the Lean side of test_irdep_difftest.py): it reads the run tree that variable names and prints one IRDEP line of JSON, writing nothing; unset, as in every build, it does nothing. The module declares no guarantee and nothing a guarantee reads.",
@@ -130,15 +162,19 @@
   },
   "Proofs.Flock.Claims.Recursion.LogWalk": {
    "why": "retl_walk, the tactic (an elab) that walks RetL goals at elaboration, step by step on the logged computation's head (retlStep, in Recursion/DecodeLog.lean's proofs and the module's own). It reads no files and does no IO, and the kernel replays every proof it builds.",
-   "digest": "5dca0cbd5c9510d395564190eaa9597f5352180152be0e3b481a6ceb301f0435"
+   "digest": "690aa56388b181e93d141f7ab4d7ee926e9c0cf0b3e64c0c81ccb37daa44913b"
   },
   "Proofs.Flock.Claims.ZK.FinishLigEnd": {
    "why": "end_l and keep_l, local tactics (two macro_rules) that walk a Ligerito step by its head to its last squeeze (EndL) or through steps that only update its state (KeepL), trying the module's endL_*/keepL_* lemmas with refine, exact and split, in ligeritoCut_end's proof. They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
-   "digest": "accc9479df9dc288a7e94f66fb36e63584f870dc095aaa78c798265fc1bbda7c"
+   "digest": "86eeee557231869acc7fd3a518924a3884e3879885a9015c8ea1c00eeabe16cc"
+  },
+  "Proofs.Flock.Soundness.Refine.OkLe": {
+   "why": "ok_le_walk, the tactic (an elab, over okLeStep) that walks two runs of one executable at once by their heads, closing each step with the module's okLe_bind/ite/dite/let/jp/forIn/throw lemmas (Refine/Lookups.lean's proofs that more lookup tables change nothing). It reads no files and does no IO, and the kernel replays every proof it builds.",
+   "digest": "49cb6e0e891bd68f8179e5b3431afccbd9ddf46587024651f7e1141c7f6e3ac2"
   },
   "Proofs.Flock.Soundness.Refine.Walk": {
    "why": "walk_step and ret_walk, the tactics that step through a computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness), and kernel_rfl, which leaves an equation to the kernel (Composed/TagsJ.lean). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
-   "digest": "01a97925bc0546457b627fff99e05739c3739fe9a1366622621c7d23578e162e"
+   "digest": "43cef63eede2b83794053d51590b5d92c6bbbe72dcc21eb9fae89de357e7545e"
   }
  },
  "layers": {

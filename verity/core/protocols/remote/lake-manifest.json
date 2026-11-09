@@ -102,6 +102,7 @@
    "inherited": true,
    "dir":
    "../pouw/lean/check/../window/../commit/../../../../primitives/randomness",
+<<<<<<< HEAD
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -109,6 +110,10 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir": "../pouw/lean/pearlplus/../../../../primitives/evaluate",
+||||||| merged common ancestors
+   "dir": "../pouw/lean/check/../window/../commit/../../../../primitives/randomness",
+=======
+>>>>>>> 705be2b532
    "configFile": "lakefile.toml"}],
  "name": "core_remote",
  "lakeDir": ".lake",

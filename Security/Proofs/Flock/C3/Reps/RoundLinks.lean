@@ -45,8 +45,8 @@ theorem index_pre (p : String) (k : ℕ) {n : ℕ} (hn : p.length = n) :
     exact ⟨(toString k).toList, by simp⟩
   have hd : ((p ++ toString k).drop n).toString = toString k := by
     apply String.toList_inj.1
-    show ((p ++ toString k).drop n).copy.toList = _
-    rw [String.toList_copy_drop, String.toList_append, ← hn, ← String.length_toList, List.drop_left]
+    rw [String.Slice.toString_eq, String.toList_copy_drop, String.toList_append, ← hn, ← String.length_toList,
+      List.drop_left]
   simp only [hs, ↓reduceIte, hd]
   exact Nat.toNat?_repr k
 

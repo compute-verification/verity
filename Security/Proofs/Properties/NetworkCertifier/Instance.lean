@@ -2,6 +2,9 @@ module
 
 public import Proofs.Properties.NetworkCertifier.Outcomes
 public import Proofs.Properties.CertifierNetwork.Certify
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.String.Defs
 
 /-!
 # The completeness theorems' honest cases, instantiated

@@ -270,7 +270,7 @@ def ladder(out: Path) -> dict:
     floor = rows[floors[0]]
     mu4 = fit_mu(floor["p"])
     caption = (
-        "The compute dampener D at each rung of the ladder (log y): filled at T3 (NCI, PoUW, network accounting and "
+        "The compute dampener D at each rung of the ladder (log y): filled at T3 (NCI, PoUW, network certification and "
         "wipes, every proof block proved), hollow at T5 (1% of proof blocks sampled at today's proving cost, "
         f"{num(P['overhead'])}). "
         "Colour is how far the rung is from real: deployed, specified, modelled, conditional (on unproved links: F3, "

@@ -35,6 +35,7 @@ public import Definitions.Nci.Guarantees.CoverChained
 public import Definitions.Nci.Guarantees.PartitionCovers
 public import Definitions.Nci.Guarantees.CompliesCK
 public import Definitions.Nci.Guarantees.Ldl
+public import Definitions.Nci.Guarantees.Witnesses
 public import Definitions.Pous.Assumptions
 public import Definitions.Pous.Guarantees
 public import Definitions.Pouw.Assumptions
@@ -56,6 +57,8 @@ public import Definitions.NetworkCertifier.Guarantees.Period
 public import Definitions.Core.Assumptions.Transport
 public import Definitions.Core.Guarantees.Transport
 public import Definitions.NetworkCertifier.Guarantees.PooledLeak
+public import Definitions.WeightSecurity.Assumptions
+public import Definitions.WeightSecurity.Guarantees
 
 /-! Each component's named assumptions and guarantee statements. -/
 

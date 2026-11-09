@@ -10,6 +10,8 @@ public import Proofs.Flock.Claims.Complete.Zk.ConsRingSwitch
 public import Proofs.Flock.Claims.Complete.Zk.InnerGo
 public import Proofs.Flock.Claims.Complete.Zk.Lanes
 public import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The masked prover's rep returns

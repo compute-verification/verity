@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # A draw flock-verify accepts sets up

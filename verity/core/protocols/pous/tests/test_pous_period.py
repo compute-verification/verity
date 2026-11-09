@@ -144,7 +144,7 @@ def _run_of(case: dict) -> tuple:
     ev, p = json.loads(bytes.fromhex(case["evidence"])), case["params"]
     return (period.point_of(p["point"]), SCHEMES, [bytes.fromhex(t) for t in p["trusted"]],
             R.Setup.from_json(json.loads(bytes.fromhex(case["commitment"]))), bytes.fromhex(ev["digests"]),
-            R.ChallengerRecord.from_json(ev["session"]), bytes.fromhex(p["session_id"]))
+            R.ChallengePhaseRecord.from_json(ev["session"]), bytes.fromhex(p["session_id"]))
 
 
 def test_an_audit_at_the_certified_point_checks_its_run():

@@ -102,10 +102,10 @@ P2_CLAIMS = ("m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "rando
 - counter-mode SHA-512 as a random oracle for the keys (v4's, the spec's P2-EXP-IO), or SHAKE256 for v2's segment seeds
   (whose ChaCha8 streams P2-EXP-IO does not name);
 - the help-accounted row (`perfect-isolation`, the earlier model's id): the certificate bounds what the audited location
-  held plus the help it received, and nothing attests the prover's machine;
+  held plus the help it received, and nothing attests the developer's machine;
 - SHA-512 collision resistance for the commitment to W and for `vk`;
 - a live, designated verifier, whose memory challenger is the auditor's hardware, a VM under the auditor's account
-  that the prover doesn't control and nothing attests (core's `trusted-host`)."""
+  that the developer doesn't control and nothing attests (core's `trusted-host`)."""
 
 WIDE_CLAIMS = (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at")
 """What `wide_certificate` rests on: `P2_CLAIMS`, and one claim for each premise `periodHeldAt` takes at `N` blocks, the
@@ -467,8 +467,8 @@ class P2(Scheme):
         if (p.w, p.c0, p.blocks_per_segment) != POINT:
             return None
         return CapacityBound(k=CERT_K, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
-                             theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=CERT_BLOCKS // POINT[2],
-                             claims=P2_CLAIMS)
+                           theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=CERT_BLOCKS // POINT[2],
+                           claims=P2_CLAIMS)
 
     def deadline_refusals(self, deadline_ns: int, rtt_allowance_ns: int) -> tuple[str, ...]:
         out = []
@@ -502,7 +502,7 @@ def family_certificate(params: P2Params) -> CapacityBound | None:
     if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
         return None
     return CapacityBound(k=CERT_K, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
-                         theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=None, claims=P2_CLAIMS)
+                       theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=None, claims=P2_CLAIMS)
 
 
 def wide_certificate(params: P2Params) -> CapacityBound | None:
@@ -515,7 +515,7 @@ def wide_certificate(params: P2Params) -> CapacityBound | None:
     if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
         return None
     return CapacityBound(k=CERT_K, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
-                         theorem="Pous.Period.SecurityProofs.periodHeldAt", segments=None, claims=WIDE_CLAIMS)
+                       theorem="Pous.Period.SecurityProofs.periodHeldAt", segments=None, claims=WIDE_CLAIMS)
 
 
 def wide320_certificate(params: P2Params) -> CapacityBound | None:

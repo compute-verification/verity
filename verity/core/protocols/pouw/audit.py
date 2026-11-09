@@ -14,8 +14,9 @@ The clear audit that sampled, opened and recomputed tiles in the clear (`Prover`
 reference tool, not a verifier: ``benchmarks/pouw/clear/clear_audit.py``.  Served windows are checked by PoUW's verifier of
 record, the Lean (`lean/check`, `core_check`).
 
-Commitments are `verity.ml.commitments.merkle` trees, framed SHA-256 unless a scheme names another frame hash:
-``"hm96-sha512"`` (`HM96`) is ``frame-v3-sha512`` with hm96-sha512 leaves (`Hm96Domain`): each committed value is its preimage
+Commitments are `verity.ml.commitments.merkle` trees under the scheme's frame hash, by default ``"hm96-sha512"`` (`HM96`,
+hashing format h3's; a scheme on SHA-256 trees, Pearl-C's h0 or NCP, names ``"sha256"``).  `HM96` is
+``frame-v3-sha512`` with hm96-sha512 leaves (`Hm96Domain`): each committed value is its preimage
 followed by a 192-byte salt, a row's leaf ``hm96-sha512/row-seg/v1`` over the row's ``sha512/row-seg/v1`` digest and a tile's
 over its 64-byte digest itself; the prover's salts are a ChaCha20 stream under its own key (`hm96_salt`), and an opening's
 value carries its salt, so `opened_value` strips it before a scheme reads the value.
@@ -112,7 +113,7 @@ def opened_value(hash: str, value: bytes) -> bytes:
     return value[:-HM96_SALT] if hash == HM96 else value
 
 
-def rows_domain(binding: bytes, owner: int, count: int, hash: str = "sha256", digests: bool = False) -> CommitmentDomain:
+def rows_domain(binding: bytes, owner: int, count: int, hash: str = HM96, digests: bool = False) -> CommitmentDomain:
     if hash == HM96:
         return Hm96Domain(binding, owner, RangeIndexedDomain(count), hash="sha512", digests=digests)
     return CommitmentDomain(binding, owner, RangeIndexedDomain(count), hash=hash)
@@ -246,7 +247,7 @@ def transcript_binding(epoch: Epoch) -> bytes:
     return tagged(domains.POUW_TRANSCRIPT, epoch.salt, epoch.weights_root)
 
 
-def transcript_domain(epoch: Epoch, count: int, hash: str = "sha256") -> CommitmentDomain:
+def transcript_domain(epoch: Epoch, count: int, hash: str = HM96) -> CommitmentDomain:
     return rows_domain(transcript_binding(epoch), -1, count, hash, digests=True)
 
 

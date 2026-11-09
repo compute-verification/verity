@@ -3,8 +3,8 @@
 #
 #   . benchmarks/pouw/harness/jobs/toolkit.sh && benchmarks/pouw/harness/native/build.sh
 #
-# Assembles, once and under a lock, CUDA 12.9.1's nvcc, cudart, cccl, cuobjdump and nvdisasm from NVIDIA's redistributable
-# archives (each pinned by sha256) and the cuBLASLt headers and library from the wheel env.sh pins, into POUW_HARNESS_TOOLKIT
+# Assembles, once and under a lock, CUDA 12.9.1's nvcc, cudart, cccl, cuobjdump, nvdisasm, NVTX and profiler API from
+# NVIDIA's redistributable archives (each pinned by sha256) and the cuBLASLt headers and library from the wheel env.sh pins, into POUW_HARNESS_TOOLKIT
 # (default /workspace/cache/pouw-cuda-12.9.1), and exports CUDA_HOME. Needs curl, tar and xz, and uv or pip.
 
 _tk_here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,35 +15,50 @@ cuda_cudart 12.9.79 1f6ad42d4f530b24bfa35894ccf6b7209d2354f59101fd62ec4a6192a184
 cuda_cccl 12.9.27 8b1a5095669e94f2f9afd7715533314d418179e9452be61e2fde4c82a3e542aa
 cuda_cuobjdump 12.9.82 ee0de40e8c18068bfcc53e73510e7e7a1a80555205347940df67fa525d24452f
 cuda_nvdisasm 12.9.88 49296dd550e05434185a8588ec639f1325b2de413e2321ddd7e56c5182a476ff"
+# headers only (the profiler's capture range and NVTX's ranges, `bench.py --traced`), added to an assembled toolkit under
+# their own marker in its root: a checkout that doesn't list them never reassembles the toolkit another build is using
+_tk_headers="cuda_nvtx 12.9.79 819bc39192955e6ba2067de39b85f30e157de462945e54b12bfdeda429d793fb
+cuda_profiler_api 12.9.79 8c50636bfb97e9420905aa795b9fa6e3ad0b30ec6a6c8b0b8db519beb9241ce6"
 _tk_cublas="$(grep -o 'nvidia-cublas-cu12==[0-9.]*' "$_tk_here/env.sh")"
 _tk_want="$(printf '%s\n%s\n' "$_tk_parts" "$_tk_cublas" | sha256sum | cut -c1-16)"
+_tk_headers_want="$(printf '%s\n' "$_tk_headers" | sha256sum | cut -c1-16)"
 mkdir -p "$POUW_HARNESS_TOOLKIT" || return 1
 (
   set -euo pipefail
   flock 9
   t="$POUW_HARNESS_TOOLKIT"
-  [[ "$(cat "$t/ready" 2>/dev/null)" == "$_tk_want" ]] && exit 0
-  rm -rf "$t/root" "$t/dl" "$t/wheel"
-  mkdir -p "$t/root/targets/x86_64-linux" "$t/dl"
-  while read -r name ver sha; do
-    f="$t/dl/$name-linux-x86_64-$ver-archive.tar.xz"
-    curl -fsSL --retry 4 -o "$f" "$_tk_url/$name/linux-x86_64/$(basename "$f")"
-    echo "$sha  $f" | sha256sum -c --quiet
-    tar -xJf "$f" -C "$t/root" --strip-components=1
-  done <<<"$_tk_parts"
-  if command -v uv >/dev/null; then
-    uv pip install -q --no-deps --target "$t/wheel" "$_tk_cublas"
-  else
-    python3 -m pip install -q --no-deps --target "$t/wheel" "$_tk_cublas"
+  fetch() {
+    mkdir -p "$t/dl"
+    while read -r name ver sha; do
+      f="$t/dl/$name-linux-x86_64-$ver-archive.tar.xz"
+      curl -fsSL --retry 4 -o "$f" "$_tk_url/$name/linux-x86_64/$(basename "$f")"
+      echo "$sha  $f" | sha256sum -c --quiet
+      tar -xJf "$f" -C "$t/root" --strip-components=1
+    done <<<"$1"
+    rm -rf "$t/dl"
+  }
+  if [[ "$(cat "$t/ready" 2>/dev/null)" != "$_tk_want" ]]; then
+    rm -rf "$t/root" "$t/dl" "$t/wheel"
+    mkdir -p "$t/root/targets/x86_64-linux"
+    fetch "$_tk_parts"
+    if command -v uv >/dev/null; then
+      uv pip install -q --no-deps --target "$t/wheel" "$_tk_cublas"
+    else
+      python3 -m pip install -q --no-deps --target "$t/wheel" "$_tk_cublas"
+    fi
+    cp -a "$t/wheel/nvidia/cublas/include/." "$t/root/include/"
+    cp -a "$t/wheel/nvidia/cublas/lib/." "$t/root/lib/"
+    for so in libcublas libcublasLt; do ln -sf "$so.so.12" "$t/root/lib/$so.so"; done
+    ln -sfn lib "$t/root/lib64"
+    ln -sfn ../../include "$t/root/targets/x86_64-linux/include"
+    ln -sfn ../../lib "$t/root/targets/x86_64-linux/lib"
+    rm -rf "$t/wheel"
+    "$t/root/bin/nvcc" --version | tail -1
+    echo "$_tk_want" > "$t/ready"
   fi
-  cp -a "$t/wheel/nvidia/cublas/include/." "$t/root/include/"
-  cp -a "$t/wheel/nvidia/cublas/lib/." "$t/root/lib/"
-  for so in libcublas libcublasLt; do ln -sf "$so.so.12" "$t/root/lib/$so.so"; done
-  ln -sfn lib "$t/root/lib64"
-  ln -sfn ../../include "$t/root/targets/x86_64-linux/include"
-  ln -sfn ../../lib "$t/root/targets/x86_64-linux/lib"
-  rm -rf "$t/dl" "$t/wheel"
-  "$t/root/bin/nvcc" --version | tail -1
-  echo "$_tk_want" > "$t/ready"
+  if [[ "$(cat "$t/root/.headers" 2>/dev/null)" != "$_tk_headers_want" ]]; then
+    fetch "$_tk_headers"
+    echo "$_tk_headers_want" > "$t/root/.headers"
+  fi
 ) 9>"$POUW_HARNESS_TOOLKIT/.lock" || return 1
 export CUDA_HOME="$POUW_HARNESS_TOOLKIT/root"

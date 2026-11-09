@@ -1368,6 +1368,7 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
     monkeypatch.setattr(A5, "audit", audit)
     monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     args = ["audit", "--window", str(written.dir), "--law", LAW, "--circuit", written.rec["window"]["circuit"], "--run", RUN,
             "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
             "--skip-negatives", "--challenger", "local", "--main", "m.txt"]

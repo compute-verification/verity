@@ -48,11 +48,31 @@ structure SeqResponderBy (sch : Scheme M) (Sz : ℕ → ℕ) (bd : ∀ {α : Typ
   bounded : ∀ W pp j σ i, bd (step W pp j σ i)
 
 /-- A responder for simultaneous reveal: all `k` indices at once, one `(D, Q)` budget for the whole answer. -/
+<<<<<<< ours
 abbrev SimResponder (sch : Scheme M) (S D Q k : ℕ) : Type := SimResponderBy sch S k (OracleAlgorithm.Bounded D Q)
+||||||| base
+structure SimResponder (sch : Scheme M) (S D Q k : ℕ) : Type where
+  prog : Bits sch.n → Bits sch.t → Bits S → (Fin k → Fin sch.B) → Prog M (Fin k → Bits sch.ℓ)
+  bounded : ∀ W pp σ I, (prog W pp σ I).Bounded D Q
+=======
+structure SimResponder (sch : Scheme M) (S D Q k : ℕ) : Type where
+  prog : Bits sch.n → Bits sch.t → Bits S → (Fin k → Fin sch.B) → OracleAlgorithm M (Fin k → Bits sch.ℓ)
+  bounded : ∀ W pp σ I, (prog W pp σ I).Bounded D Q
+>>>>>>> theirs
 
 /-- A responder for sequential reveal: `step W pp j σ i` answers index `i` in round `j` from state `σ`, and returns
 the block and the next state, within `(D, Q)`. -/
+<<<<<<< ours
 abbrev SeqResponder (sch : Scheme M) (S D Q : ℕ) : Type := SeqResponderBy sch (fun _ => S) (OracleAlgorithm.Bounded D Q)
+||||||| base
+structure SeqResponder (sch : Scheme M) (S D Q : ℕ) : Type where
+  step : Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B → Prog M (Bits sch.ℓ × Bits S)
+  bounded : ∀ W pp j σ i, (step W pp j σ i).Bounded D Q
+=======
+structure SeqResponder (sch : Scheme M) (S D Q : ℕ) : Type where
+  step : Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B → OracleAlgorithm M (Bits sch.ℓ × Bits S)
+  bounded : ∀ W pp j σ i, (step W pp j σ i).Bounded D Q
+>>>>>>> theirs
 
 /-- The randomness of one audit: the primitive, the encoder's coins and the challenge indices. -/
 abbrev Outcome (sch : Scheme M) (k : ℕ) : Type := M.Ω × sch.Coins × (Fin k → Fin sch.B)

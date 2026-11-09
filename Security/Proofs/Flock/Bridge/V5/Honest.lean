@@ -16,9 +16,10 @@ inputs (`Flock.Bridge.Assumptions.ServedFilesParseV5`): inputs `I` whose files h
 `verity/flock-circuit`'s tags with one table and no session tables, at which the circuit file parses to `D`, the circuit of
 `D`'s proof block is built (`Built`), its public input ports `pi` parse and the public file loads over them, `D` is in `scopeOkH` and has
 the row layout it needs (`RowsOk`), no two of its ports share a name, every draw size divides into the session's tables,
-and the tags are the ones the statement takes (`TagsOkZHJ`). The registration's roots (`RootFixesDomainL`) and its
-population (`PopMatches`) are statements about the registration, not the files, and are no conjunct here; the finders'
-collision resistance is no hypothesis either: the statement takes it as `TableCRZ` and `LinkCRZC`.
+and the tags are the ones the statement takes (`TagsOkZHJ`). The registration's roots (`RootFixesDomainL`), its
+population (`PopMatches`), the law the verifier draws under from it (`DrawsUnder`) and that it is no Bernoulli law
+(`NotBernoulli`) are statements about the registration, not the files, and are no conjunct here; the finders' collision
+resistance is no hypothesis either: the statement takes it as `TableCRZ` and `LinkCRZC`.
 -/
 
 @[expose] public section

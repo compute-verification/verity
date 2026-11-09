@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.NextRRows
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The honest files' `finalC` is at the reader's `z`

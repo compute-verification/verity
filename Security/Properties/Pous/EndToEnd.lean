@@ -189,8 +189,15 @@ the device's own readings: what the server reports about its latency enters nowh
 challenger's own: whichever table it held, an accepted one has the published root, so it is `C*`'s or there is a
 collision. -/
 def RunCheckAccepts : Prop :=
+<<<<<<< ours
   ∀ (trusted : List ByteArray) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengerRecord)
     (sid : ByteArray),
+||||||| base
+  ∀ (trusted : List ByteArray) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray),
+=======
+  ∀ (trusted : List ByteArray) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengePhaseRecord)
+    (sid : ByteArray),
+>>>>>>> theirs
     Run.check trusted pub digests r sid = .ok () →
     ∀ (dev : Challengers) (C : Array (Array ByteArray)),
       AuditsSetup pub r.commitment ∧ r.commitment.session = sid ∧ r.signed.publicKey ∈ trusted ∧
@@ -203,7 +210,13 @@ salt and publishes `pub`, and the composed check accepts, against the verifier's
 keys (never the run's record), `pub`, the memory challenger's table and its session under the id `sid` the auditor
 designated. -/
 def Accepted (trusted : List ByteArray) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray))
+<<<<<<< ours
     (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengerRecord) (sid : ByteArray) : Prop :=
+||||||| base
+    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray) : Prop :=
+=======
+    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengePhaseRecord) (sid : ByteArray) : Prop :=
+>>>>>>> theirs
   SetupProtocol.protocol.check q c C = .accept pub () ∧ Run.check trusted pub digests r sid = .ok ()
 
 /-- **An accepted run certifies `C*`.** For every verifier's list `trusted` of memory-challenger keys (never the run's
@@ -217,7 +230,14 @@ data holds a SHA-512 collision or an LMS forgery under a key in `trusted`. A dis
 check's `AcceptsDecodes` and `PublishesRoot`, all proved. -/
 def RunCertifies : Prop :=
   ∀ (trusted : List ByteArray) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray))
+<<<<<<< ours
     (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengerRecord) (sid : ByteArray) (dev : Challengers),
+||||||| base
+    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray) (dev : Challengers),
+=======
+    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengePhaseRecord) (sid : ByteArray)
+    (dev : Challengers),
+>>>>>>> theirs
     Accepted trusted c C pub digests r sid →
       DecodesToCommitment q c C ∧ Published q c C pub ∧ AuditsSetup pub r.commitment ∧ r.commitment.session = sid ∧
         r.signed.publicKey ∈ trusted ∧
@@ -279,9 +299,19 @@ The real memory challenger also reveals the next index after a late answer, but 
 and fails it, so what a server learns from indices seen after one only helps a server the game counts as failed. -/
 structure Server (S D Q L : ℕ) : Type where
   pre : Preprocessor sch S
+<<<<<<< ours
   step : Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B →
     OracleAlgorithm (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × Bits S)
   bounded : ∀ W pp j σ i, (step W pp j σ i).RingBounded D Q L
+||||||| base
+  step : SessionCommitment → Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B →
+    Prog (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × Bits S)
+  bounded : ∀ sc W pp j σ i, (step sc W pp j σ i).RingBounded D Q L
+=======
+  step : SessionCommitment → Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B →
+    OracleAlgorithm (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × Bits S)
+  bounded : ∀ sc W pp j σ i, (step sc W pp j σ i).RingBounded D Q L
+>>>>>>> theirs
 
 /-- **The server passes the session**: `ω`, the coins and the streams `x`; the code's sampler reads index `I j` from
 stream `j` at `2^19` blocks, the code builds the coin tree over those indices (`coinView`, released after the session),

@@ -7,6 +7,7 @@ public import Proofs.Flock.Soundness.Discharge.Hm.Salt
 public import Proofs.Flock.Soundness.Discharge.Hm.Commit
 public import VStar.Link
 public import Flock.RecLinkRef
+import all Init.Data.String.Defs
 
 /-!
 # V*'s `RecLink{UB, PB}` unit computes its reference

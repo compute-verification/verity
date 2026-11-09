@@ -26,6 +26,8 @@ The recorded run is taken at `W c a s`, the process's session `s` with the coins
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 open RemoteAudit RemoteAudit.Session
 

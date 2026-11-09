@@ -3,6 +3,9 @@ module
 public import Properties.NetworkCertifier
 public import Proofs.Properties.Identity
 public import Mathlib.Data.Set.Card
+import all Init.Data.String.Defs
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
 
 /-!
 # The record's encodings are injective

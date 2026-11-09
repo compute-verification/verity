@@ -5,6 +5,7 @@ public import Proofs.Flock.Soundness.SparseRows
 public import Proofs.Flock.C3.Reps.ReadWhole
 public import Flock.TmplReads
 public import Flock.KnownRead
+import all Init.Util
 
 /-!
 # A templated unit's surely read columns are read by its committed net

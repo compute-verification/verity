@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Deploy
+import all Init.Data.String.Defs
 
 /-!
 # The prover's messages read back

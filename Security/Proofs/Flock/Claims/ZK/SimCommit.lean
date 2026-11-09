@@ -19,8 +19,6 @@ commitment from the cut's pads leaves (`padsTreeCut`) is the masked prover's (`i
 -/
 
 @[expose] public section
-set_option backward.privateInPublic true
-set_option backward.privateInPublic.warn false
 
 namespace FlockComplete
 

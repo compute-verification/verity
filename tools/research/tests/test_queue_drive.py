@@ -11,7 +11,7 @@ from test_queue import World, _git
 
 
 class Harness:
-    """A drive on ``world`` whose Lean-check launches are recorded (`launched`) and whose after-landing launches are recorded
+    """A drive on ``world`` whose lock-run launches are recorded (`launched`) and whose after-landing launches are recorded
     (`posted`) as `r-post-N`, each running until a test sets its state in `run_state`."""
 
     def __init__(self, world: World, monkeypatch, **kw):
@@ -20,7 +20,7 @@ class Harness:
         self.clock = 1_000_000.0
         monkeypatch.setattr(merge, "caught_up", lambda repo, remote, tool, since="", log=print, runs=None:
                             self.after.append((since, runs)))
-        monkeypatch.setattr(merge, "_sweep_after", lambda *a: None)
+        monkeypatch.setattr(merge, "_sweep_after", lambda *a, **k: None)
         monkeypatch.setattr(merge, "sweep_branches", lambda *a, **k: (0, 0))
         self.q = world.queue(**kw)
         self.d = Driver(self.q, on="m1", launch=self.launch, states=lambda repo, ids: {i: self.run_state[i] for i in ids},
@@ -28,7 +28,6 @@ class Harness:
                         cancel=lambda repo, ids, reason: self.cancelled.extend(ids), evidence=lambda repo, ids: self.evidence)
         self.evidence: list = []
         self.d.launch_postland = self.launch_post
-        self.d.lean_runs = lambda commits, since: {}
 
     def launch(self, repo, commit, machine, agreement):
         rid = f"r20261012-0000{len(self.launched):02d}-abcd"
@@ -219,7 +218,7 @@ def test_train_sh_runs_with_the_queues_credentials_and_git_never_prompts(tmp_pat
 
 
 def test_a_conflict_is_told_to_ci_and_the_lane_that_owns_the_pr(world, monkeypatch):
-    """An ejection post names the PR's owner too, not only @ci, so the owner doesn't hear of a conflict through a relay.  The
+    """An ejection post names the PR's owner too, not only drive's own handle, so the owner doesn't hear of a conflict through a relay.  The
     owner's handle comes from main's registry: the lane the body names, the agent id it carries, the ready mark's author, or
     the agent whose id ends in the branch's suffix."""
     import dataclasses
@@ -314,8 +313,8 @@ def test_two_independent_root_causes_are_two_posts(world, monkeypatch):
 
 
 def test_a_notice_reaches_the_merge_thread_without_naming_its_sender_and_a_refused_post_is_retried(world, monkeypatch):
-    """`research msg send` refuses a `--to` naming the sender, so drive posting as ci to @ci would post no notice at all. The
-    sender is also selectable (`queue eject --by lean`), so its handle, not always @ci, must be dropped."""
+    """`research msg send` refuses a `--to` naming the sender, so drive posting to its own handle would post no notice at all.
+    The sender is also selectable (`queue eject --by lean`), so its handle, not always drive's own, must be dropped."""
     from research import drive
 
     argv = []
@@ -343,9 +342,9 @@ def test_a_notice_reaches_the_merge_thread_without_naming_its_sender_and_a_refus
     assert state["told"] == ["k"] and logged[-1].startswith("research queue drive: told @ci @circuits")
 
 
-@pytest.mark.parametrize("to, sender", [(("@ci",), "ci"), (("@ci", "@circuits"), "ci"), (("@ci", "@lean"), "lean")])
+@pytest.mark.parametrize("to, sender", [(("@lean",), "lean"), (("@lean", "@circuits"), "lean"), (("@lean", "@infra"), "infra")])
 def test_every_notice_drive_sends_passes_msg_sends_own_refusals(monkeypatch, to, sender):
-    """A train's failure for @ci alone, starting `@ci queue:`, is refused by `msg send` as a post that wakes only its author.  A
+    """A notice for its sender alone, starting `@SENDER queue:`, is refused by `msg send` as a post that wakes only its author.  A
     stand-in for `msg send` would hide that refusal, so here each post goes through `msg send` itself."""
     from research import drive, slack
 
@@ -411,9 +410,9 @@ def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):
     assert lean_errors(log) == {"Security/Proofs/Flock/Claims/NumbersRadius.lean", "Security/Definitions/Claims/Sampling.lean"}
 
 
-def test_a_lean_check_whose_replay_was_killed_is_a_machines_fault(tmp_path):
+def test_a_lean_audit_whose_replay_was_killed_is_a_machines_fault(tmp_path):
     """A Security/Proofs replay OOM-killed (exit 137) fails lean-audit with rc 1; that is the machine's fault, and the fallback
-    on Lean sources mustn't eject PRs whose heads passed."""
+    on Lean sources mustn't revert landings that broke nothing."""
     from research.drive import killed
 
     d = tmp_path / "run"
@@ -437,13 +436,11 @@ def test_a_circuit_check_whose_only_failures_are_killed_targets_is_a_machines_fa
     (d / "steps.jsonl").write_text(step)
     died = ("FAIL circuit-check/killed PousSha512Head_v1: its process died (signal 9: the OOM killer?) at a peak of 164.16 GiB\n"
             "FAIL circuit-check/killed PousSha512Mid_v1{M=1}: its process died (signal 9: the OOM killer?) at a peak of 164.16 GiB\n")
-    tail = "circuit-check: 5211 target(s), 2 new failure(s), 3 known\nwarn dead-gates/ir: 258100 over 309 target(s)\n"
+    tail = "circuit-check: 5211 target(s), 2 failure(s), 0 unchecked\nwarn dead-gates/ir: 258100 over 309 target(s)\n"
     (d / "circuit-check.log").write_text(died + tail)
     assert killed(d)
     (d / "circuit-check.log").write_text(died + "FAIL partition/unchecked PousSha512Ctr_v1: an output bit is free\n" + tail)
     assert not killed(d), "a real failure beside the killed ones is the code's"
-    (d / "circuit-check.log").write_text(died + "FAIL circuit_check.known lists Foo, which no longer fails: drop it\n" + tail)
-    assert not killed(d)
     (d / "circuit-check.log").write_text(died + tail)
     (d / "steps.jsonl").write_text(step + '{"step": "pytest", "status": "failed", "rc": 1, "log": "pytest.log"}\n')
     assert not killed(d), "another failed step is judged on its own"
@@ -462,6 +459,33 @@ def test_drive_sweeps_the_repositorys_branches_once_a_day(world, monkeypatch):
     h.clock += BRANCH_SWEEP_S + 1
     h.tick()
     assert len(calls) == 2
+
+
+def test_drive_deletes_the_head_branch_of_a_pr_it_closed_as_landed_unless_something_still_needs_it(world, monkeypatch):
+    """A PR drive closes once `main` reaches it (`_close_carried`) leaves no branch behind, but drive keeps one an open PR
+    uses as its head or base, a fork's, one of `KEEP_BRANCHES`, and one pushed to since (the lease)."""
+    import dataclasses
+
+    h = Harness(world, monkeypatch)
+    h.q._clone()
+    heads = {}
+    for n, branch, base, fork in ((1, "lane/one", "main", False), (2, "lane/two", "main", False), (3, "lane/three", "lane/two", False),
+                                  (4, "lane/four", "main", True), (5, "lane/five", "main", False), (6, "next", "main", False)):
+        heads[n] = world.change({f"{n}.txt": f"{n}\n"})
+        world.gh.put(n, heads[n])
+        world.gh.prs[n] = dataclasses.replace(world.gh.prs[n], branch=branch, base=base, fork=fork)
+        _git(world.origin, "update-ref", f"refs/heads/{branch}", heads[n])
+    _git(world.origin, "update-ref", "refs/heads/lane/five", world.change({"5.txt": "pushed since\n"}))
+    for n in (1, 2, 4, 5, 6):
+        h.d._delete_head(n, heads[n])
+    left = {r.split("refs/heads/")[1] for r in _git(world.origin, "for-each-ref", "--format=%(refname)", "refs/heads/").split()}
+    assert {"lane/two", "lane/three", "lane/four", "lane/five", "next"} <= left and "lane/one" not in left
+    logs = [x for x in world.logs if "#1's head" in x or "kept" in x]
+    assert f"research queue drive: deleted origin's lane/one, #1's head at {heads[1][:12]}" in logs
+    assert "research queue drive: kept lane/two, #2's head: another open PR's head or base" in logs
+    assert "research queue drive: kept lane/four, #4's head: a fork's" in logs
+    assert "research queue drive: kept next, #6's head: kept by drive" in logs
+    assert any(x.startswith("research queue drive: kept lane/five, #5's head: ") and "stale info" in x for x in logs), logs
 
 
 def test_a_branch_sweep_at_its_limit_sweeps_again_the_next_tick(world, monkeypatch):
@@ -513,6 +537,39 @@ def test_the_after_landing_launch_gives_train_sh_no_cache_with_circuit_checks_ca
     ids, tail = train_launch(tmp_path, "c" * 40, "m1", extra.pop("agreement"), deferred="pytest,circuit-check", **extra)
     assert ids == ["r20261027-120000-aaaa"]
     assert f"argv: {'c' * 40} m1 --deferred pytest,circuit-check --no-cache --circuit-cache --no-regenerate" in tail, tail
+    ids, tail = train_launch(tmp_path, "c" * 40, "m1", False, deferred="ratchet-gate", base="b" * 40, ratchet_base="a" * 40)
+    assert f"argv: {'c' * 40} m1 --deferred ratchet-gate --base {'b' * 40} --ratchet-base {'a' * 40}" in tail, tail
+
+
+def test_the_after_landing_run_and_the_lock_run_take_a_check_slot_ahead_of_unranked_priority_checks(tmp_path, monkeypatch):
+    """Each part of the after-landing run (a shard, circuit-check's records step) and the lock run ask for their check slot at
+    `POSTLAND_SLOT_RANK` (CHECK_SLOT_RANK, which check.py passes on as `slot.py --rank`), whatever drive's own environment
+    says: a ranked priority waiter takes the next free slot ahead of the unranked, so `main` never waits on a slot for a
+    `train.sh` launched by hand."""
+    import contextlib
+    import os
+    import tempfile
+    import types
+
+    from research.drive import POSTLAND_SLOT_RANK, launched
+
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    monkeypatch.setenv("CHECK_SLOT_RANK", "7")
+    repo = tmp_path / "clone"
+    (repo / "tools" / "verity" / "check").mkdir(parents=True)
+    (repo / "tools" / "verity" / "check" / "train.sh").write_text(
+        'echo "rank=[$CHECK_SLOT_RANK]"\necho "RUN r20261103-140000-aaaa"\n')
+    d = Driver(types.SimpleNamespace(auth=(), workdir=repo), on="m1")
+
+    def tail(job: dict) -> str:
+        with contextlib.suppress(ChildProcessError):                     # its end, not a clock
+            os.waitpid(job["pid"], 0)
+        return launched(job)[1]
+
+    ranked = f"rank=[{POSTLAND_SLOT_RANK}]"
+    assert ranked in tail(d.launch_postland(repo, "c" * 40, "m1", "pytest", shard="1/3"))
+    assert ranked in tail(d.launch_postland(repo, "c" * 40, "m1", "circuit-check", cc_records=True))
+    assert ranked in tail(d.launch_locks(repo, "c" * 40, "m1"))
 
 
 def test_a_tick_sets_the_record_drivers_its_clone_lacks_and_plain_git_then_merges_two_records_with_merge_py(world, monkeypatch):

@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Shape
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The first send is the link message

@@ -135,12 +135,32 @@ end OracleAlgorithm
 /-! ## The audit game over the ring bound -/
 
 /-- `SimResponder` with `RingBounded D Q L` in place of `Bounded D Q`. -/
+<<<<<<< ours
 abbrev SimResponderOn (sch : Scheme (ringRO B w p)) (S D Q L k : ℕ) : Type :=
   SimResponderBy sch S k (OracleAlgorithm.RingBounded D Q L)
+||||||| base
+structure SimResponderOn (sch : Scheme (ringRO B w p)) (S D Q L k : ℕ) : Type where
+  prog : Bits sch.n → Bits sch.t → Bits S → (Fin k → Fin sch.B) → Prog (ringRO B w p) (Fin k → Bits sch.ℓ)
+  bounded : ∀ W pp σ I, (prog W pp σ I).RingBounded D Q L
+=======
+structure SimResponderOn (sch : Scheme (ringRO B w p)) (S D Q L k : ℕ) : Type where
+  prog : Bits sch.n → Bits sch.t → Bits S → (Fin k → Fin sch.B) → OracleAlgorithm (ringRO B w p) (Fin k → Bits sch.ℓ)
+  bounded : ∀ W pp σ I, (prog W pp σ I).RingBounded D Q L
+>>>>>>> theirs
 
 /-- `SeqResponder` with `RingBounded D Q L` in place of `Bounded D Q`. -/
+<<<<<<< ours
 abbrev SeqResponderOn (sch : Scheme (ringRO B w p)) (S D Q L : ℕ) : Type :=
   SeqResponderBy sch (fun _ => S) (OracleAlgorithm.RingBounded D Q L)
+||||||| base
+structure SeqResponderOn (sch : Scheme (ringRO B w p)) (S D Q L : ℕ) : Type where
+  step : Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B → Prog (ringRO B w p) (Bits sch.ℓ × Bits S)
+  bounded : ∀ W pp j σ i, (step W pp j σ i).RingBounded D Q L
+=======
+structure SeqResponderOn (sch : Scheme (ringRO B w p)) (S D Q L : ℕ) : Type where
+  step : Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B → OracleAlgorithm (ringRO B w p) (Bits sch.ℓ × Bits S)
+  bounded : ∀ W pp j σ i, (step W pp j σ i).RingBounded D Q L
+>>>>>>> theirs
 
 /-- `simAccepts` for a `SimResponderOn`. -/
 def simAcceptsOn (sch : Scheme (ringRO B w p)) {S D Q L k : ℕ} (W : Bits sch.n) (A₁ : Preprocessor sch S)

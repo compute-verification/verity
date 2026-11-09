@@ -5,6 +5,7 @@ public import Proofs.Flock.Claims.ZK.FramePass
 public import Proofs.Flock.Claims.ZK.FrameLoop
 public import Proofs.Flock.Claims.ZK.FrameProg
 public import Proofs.Flock.Soundness.Refine.Arith
+import all Init.Data.String.Defs
 
 /-!
 # What the frame takes at the inner proof's rounds
@@ -1485,6 +1486,7 @@ theorem ofLoop_progChecks_own (T : ZKMal.CoinLayer.TableData)
     · cases hA
   rw [ofLoop_frameAnswer_same T L₀ real x ρ (m0, r0) h1 hx (by rw [← hcs1, List.length_map] at hq1; exact hq1) hj,
     hcs1] at hF
+  replace hF := (bind_rankStop_ok hF).1
   have hsch : schedOf (real x w ρ) x cs = none :=
     schedOf_none (real x w ρ) x cs hx hq1 (by rw [hk1]; exact hreal) (by rw [hk1, hj]; exact hrs0)
       (by rw [hj]; exact hle)

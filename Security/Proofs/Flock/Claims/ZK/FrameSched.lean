@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Claims.ZK.FrameLoop
 public import Proofs.Flock.Claims.ZK.FramePass
 public import Proofs.Flock.Claims.ZK.FinishLevel0
+import all Init.Data.String.Defs
+import all Init.Data.Array.DecidableEq
 
 /-!
 # Two runs of the firewall's prover alike in shape
@@ -49,7 +51,7 @@ def PendAlike (p p' : ByteArray) : Prop :=
   ∃ fs fs' : List Frame, p.data.toList = encs fs ∧ p'.data.toList = encs fs' ∧ List.Forall₂ Alike fs fs' ∧ MidAll fs
 
 /-- Two transcripts with pending bytes of one shape. -/
-def TrAlike (t t' : Transcript) : Prop := PendAlike t.pending t'.pending
+def TrAlike (t t' : Flock.Transcript) : Prop := PendAlike t.pending t'.pending
 
 /-- **Two rounds of one shape**: a squeeze's framed bytes over pending bytes of one shape, its kind and count as
 `roundFree` takes them. -/
@@ -152,7 +154,7 @@ theorem sim_forIn {σ τ : Type} (n : ℕ) (body : ℕ → σ → TMW M (ForInSt
 /-! ## The transcript's steps -/
 
 /-- A transcript step that only appends a frame to the pending bytes. -/
-theorem sim_liftTM_mod {x x' : _root_.Flock.Transcript.TM Unit} {F F' : Transcript → Transcript}
+theorem sim_liftTM_mod {x x' : _root_.Flock.Transcript.TM Unit} {F F' : Flock.Transcript → Flock.Transcript}
     (hx : ∀ t, x t = .ok ((), F t)) (hx' : ∀ t, x' t = .ok ((), F' t))
     (hF : ∀ t t', TrAlike t t' → TrAlike (F t) (F' t')) : Sim L (· = ·) (liftTM x : TMW M Unit) (liftTM x') := by
   intro t t' ht
@@ -930,7 +932,7 @@ theorem sim_relift (coins : Array (Array F128)) (live live' : Bool) {α β : Typ
 
 /-- A stream's transcript at its start, its domain a `u64` length. -/
 theorem trAlike_init (dom : ByteArray) (hd : dom.size < 2 ^ 64) :
-    TrAlike (Transcript.init #[] dom) (Transcript.init #[] dom) :=
+    TrAlike (Flock.Transcript.init #[] dom) (Flock.Transcript.init #[] dom) :=
   ⟨[.dom dom], [.dom dom], by simp [encs, FlockSoundness.Refine.init_enc],
     by simp [encs, FlockSoundness.Refine.init_enc], .cons rfl .nil, fun f hf => by
       simp only [List.mem_singleton] at hf
@@ -939,7 +941,7 @@ theorem trAlike_init (dom : ByteArray) (hd : dom.size < 2 ^ 64) :
 
 /-- **Two opening programs alike, run** from alike transcripts at one state: alike resumptions. -/
 theorem stepRel_run {coins : Array (Array F128)} {live : Bool} {α β : Type} {S : α → β → Prop}
-    {p : TMW OpenM α} {q : TMW OpenM β} (h : Sim (openLift coins live) S p q) {t t' : Transcript}
+    {p : TMW OpenM α} {q : TMW OpenM β} (h : Sim (openLift coins live) S p q) {t t' : Flock.Transcript}
     (ht : TrAlike t t') (s : Array (Array F128)) :
     StepRel (fun _ _ => True) ((p.run' t).run' s) ((q.run' t').run' s) := by
   refine stepRel_bind (T := fun _ _ => True) (stepRel_bind (T := fun _ _ => True) (h t t' ht s) fun _ _ _ => ?_)
@@ -1010,11 +1012,11 @@ theorem stateT_bind_apply {σ α β : Type} (x : StateT σ V α) (f : α → Sta
     (x >>= f) s = x s >>= fun p => f p.1 p.2 :=
   rfl
 
-theorem tmw_bind_apply {σ α β : Type} (x : TMW (StateT σ V) α) (f : α → TMW (StateT σ V) β) (t : Transcript)
+theorem tmw_bind_apply {σ α β : Type} (x : TMW (StateT σ V) α) (f : α → TMW (StateT σ V) β) (t : Flock.Transcript)
     (s : σ) : (x >>= f) t s = x t s >>= fun p => f p.1.1 p.1.2 p.2 :=
   rfl
 
-theorem tmw_run'_run {σ α : Type} (x : TMW (StateT σ V) α) (t : Transcript) (s : σ) :
+theorem tmw_run'_run {σ α : Type} (x : TMW (StateT σ V) α) (t : Flock.Transcript) (s : σ) :
     (x.run' t).run s = x t s >>= fun p => pure (p.1.1, p.2) :=
   rfl
 
@@ -1060,7 +1062,7 @@ def recLift (h h' : ByteArray × ℕ) : Lift (M := RecM) recAsks where
 
 /-- What the masked zerocheck frames before its first squeeze, up to its label, at `dom`, `digest` and `cap`. -/
 def zcPre (digest cap dom : ByteArray) : ByteArray :=
-  (Transcript.init #[] dom).pending ++ header 2 0 "flock-r1cs-v0".toUTF8.size ++
+  (Flock.Transcript.init #[] dom).pending ++ header 2 0 "flock-r1cs-v0".toUTF8.size ++
     _root_.Flock.Transcript.padded "flock-r1cs-v0".toUTF8 ++ header 5 0 digest.size ++
     _root_.Flock.Transcript.padded digest ++ header 5 0 cap.size ++ _root_.Flock.Transcript.padded cap ++
     header 2 0 "flock-zerocheck-v0".toUTF8.size ++ _root_.Flock.Transcript.padded "flock-zerocheck-v0".toUTF8
@@ -1072,7 +1074,7 @@ def zcPend (digest cap root dom : ByteArray) : ByteArray :=
     _root_.Flock.Transcript.padded root
 
 /-- The transcript after the masked zerocheck's first round `c`, the recording's coins. -/
-def skelT8 (c : ByteArray) : Transcript :=
+def skelT8 (c : ByteArray) : Flock.Transcript :=
   { rounds := (#[] : Array _root_.Flock.Round).push
       ⟨6, ByteArray.empty, (Array.range 6).map fun i => _root_.Flock.Firewall.Skeleton.coin (0 + i + 1), some c⟩,
     k := 0 + 1, pending := ByteArray.empty }
@@ -1085,7 +1087,7 @@ def skelS1 (c : ByteArray) : Array (ByteArray × ℕ) × ℕ :=
 /-- **The recorded zerocheck up to its first round**, from a rep's start: the rest at that round recorded. -/
 theorem zerocheckFw_head (m : ℕ) (digest cap root dom : ByteArray) (lay : _root_.Flock.Zk.PadLayout)
     (mk : ℕ → F128) :
-    zerocheckFw recAsks m digest cap root lay mk (Transcript.init #[] dom) (#[], 0) =
+    zerocheckFw recAsks m digest cap root lay mk (Flock.Transcript.init #[] dom) (#[], 0) =
       zcRest recAsks m lay mk (skelT8 (zcPend digest cap root dom ++ header 4 2 6))
         (skelS1 (zcPend digest cap root dom ++ header 4 2 6)) := by
   rw [zerocheckFw_split]
@@ -1139,9 +1141,9 @@ theorem skel_run (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout) (ca
     RelV (fun a b => RecP (zcPend st.digest cap root dom ++ header 4 2 6, 6)
         (zcPend st.digest cap' root dom ++ header 4 2 6, 6) a.2 b.2)
       (((repPiop recAsks st lay cap root #[] fun _ => 0) >>= fun _ => pure () : TMW RecM Unit).run'
-        (Transcript.init #[] dom) |>.run (#[], 0))
+        (Flock.Transcript.init #[] dom) |>.run (#[], 0))
       (((repPiop recAsks st lay cap' root #[] fun _ => 0) >>= fun _ => pure () : TMW RecM Unit).run'
-        (Transcript.init #[] dom) |>.run (#[], 0)) := by
+        (Flock.Transcript.init #[] dom) |>.run (#[], 0)) := by
   have hcnt : ∀ c, (_root_.Flock.u64OfLE (zcPend st.digest c root dom ++ header 4 2 6)
       ((zcPend st.digest c root dom ++ header 4 2 6).size - 8)).toNat = 6 :=
     fun c => count_header _ 2 6 (by decide)

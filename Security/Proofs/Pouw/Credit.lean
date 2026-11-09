@@ -10,6 +10,7 @@ public import Proofs.Flock.Claims.Sampling.Draws
 public import Proofs.Flock.Claims.Sampling.Select.Misses
 public import Proofs.Accounting.Served
 public import Proofs.Pouw.Period.Accept
+public import Proofs.Pouw.Credit.Lanes
 
 /-!
 # Proofs: the ε a served window's credit reports (`WorkDrawMisses`, `EpsAtSound`, `EstablishedSound`)
@@ -452,27 +453,8 @@ theorem groupedDrawMisses : GroupedDrawMisses := by
 
 /-! ## `GroupedDrawMisses`'s witnesses
 
-The compiled `strata` and `law` run on the lanes window in the kernel (`decide +kernel`, through the `DecidableEq` the
-draw's structures derive here), past `strata`'s key sort, which the kernel doesn't reduce (`keys_lanes`, as
-`Proofs.Pouw.Period.Accept` reads H1's items); `kPrime`'s `K′` is pinned by `kPrime_least` as `Accept` pins H1's. -/
-
-deriving instance DecidableEq for Flock.Draw.Stratum
-deriving instance DecidableEq for Flock.Draw.WorkStratum
-
-theorem ok_of_toOption {ε α : Type} {x : Except ε α} {a : α} (h : x.toOption = some a) : x = .ok a := by
-  cases x <;> simp_all [Except.toOption]
-
-theorem keys_lanes : PouwCheck.keys lanesLayout = some PouwCheck.Credit.LAYOUT_KEYS :=
-  Properties.Pouw.Period.SecurityProofs.Accept.keys_of (by decide) (by decide +kernel)
-
-theorem strata_lanes : PouwCheck.Credit.strata lanesLayout = .ok lanesStrata := by
-  apply ok_of_toOption
-  unfold PouwCheck.Credit.strata
-  rw [keys_lanes]
-  decide +kernel
-
-theorem law_lanes : PouwCheck.Credit.law lanesStrata (toJson lanesK) = .ok lanesLaw :=
-  ok_of_toOption (by decide +kernel)
+The compiled `strata` and `law` on the lanes window are `Proofs.Pouw.Credit.Lanes`'s (`strata_lanes`, `law_lanes`);
+`kPrime`'s `K′` is pinned by `kPrime_least` as `Accept` pins H1's. -/
 
 /-- **`K′ ≤ 8` at ε = 1/2 and δ = 1/256 over the whole window's work**: `q = 1/2`, and `q^8 = δ`. -/
 theorem kPrime_lanes : ∃ k', PouwWindow.kPrime (1 / 2) (1 / 256) (Flock.Draw.totalWork lanesStrata)

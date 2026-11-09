@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
 public import Proofs.Flock.Soundness.Discharge.ZkSession.Session
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # `Zk.schedule` at every m it accepts

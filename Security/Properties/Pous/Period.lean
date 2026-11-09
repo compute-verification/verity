@@ -94,8 +94,15 @@ structure Audits (ΩW ΩQ : Type) where
   /-- the payload `C*` decodes to, as the ring game's bits -/
   W : ΩW × ΩQ → Bits sch.n
   /-- the memory challenger's signed session -/
+<<<<<<< ours
   session : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) →
     PousCheck.Run.ChallengerRecord
+||||||| base
+  session : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → PousCheck.Run.Session
+=======
+  session : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) →
+    PousCheck.Run.ChallengePhaseRecord
+>>>>>>> theirs
   /-- the memory challenger's record of its sessions -/
   device : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) →
     MemoryChallenger.Properties.Challengers
@@ -109,9 +116,19 @@ is signed, after the last answer. -/
 structure Strategy (ΩW ΩQ : Type) where
   /-- what survives setup -/
   pre : ΩW × ΩQ → Bits sch.n → Bits sch.t → sch.Code → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω → List Bool
+<<<<<<< ours
   /-- round `j`'s answer to index `i` from the state `σ` -/
   step : ΩW × ΩQ → Bits sch.n → Bits sch.t → ℕ → List Bool → Fin sch.B →
     OracleAlgorithm (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × List Bool)
+||||||| base
+  /-- round `j`'s answer to index `i` from the state `σ`, shown the session commitment -/
+  step : ΩW × ΩQ → MemoryChallenger.SessionCommitment → Bits sch.n → Bits sch.t → ℕ → List Bool → Fin sch.B →
+    Prog (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × List Bool)
+=======
+  /-- round `j`'s answer to index `i` from the state `σ`, shown the session commitment -/
+  step : ΩW × ΩQ → MemoryChallenger.SessionCommitment → Bits sch.n → Bits sch.t → ℕ → List Bool → Fin sch.B →
+    OracleAlgorithm (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × List Bool)
+>>>>>>> theirs
 
 namespace Audits
 
@@ -155,8 +172,18 @@ def OnTime (ω : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω �
 it from and the program it runs on index `I j`, the first round starting from what survived setup. The coin
 commitment is not among its inputs: the challenger releases it after the last answer. -/
 noncomputable def trace (τ : Strategy ΩW ΩQ) (o : ΩW × ΩQ)
+<<<<<<< ours
     (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) (I : Fin 105 → Fin (2 ^ 19)) :
     List (List Bool × OracleAlgorithm (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × List Bool)) :=
+||||||| base
+    (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) (I : Fin 105 → Fin (2 ^ 19))
+    (v : ByteArray × ByteArray) :
+    List (List Bool × Prog (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × List Bool)) :=
+=======
+    (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) (I : Fin 105 → Fin (2 ^ 19))
+    (v : ByteArray × ByteArray) :
+    List (List Bool × OracleAlgorithm (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × List Bool)) :=
+>>>>>>> theirs
   seqRounds ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer x.1)
     (τ.step o (P.W o) (sch.enc (P.W o) x.1 ()).1) 0 (List.ofFn I)
     (τ.pre o (P.W o) (sch.enc (P.W o) x.1 ()).1 (sch.enc (P.W o) x.1 ()).2 x.1)
@@ -223,6 +250,7 @@ within the budget, it answers as `τ` does. -/
 noncomputable def extract {ΩW ΩQ : Type} (τ : Strategy ΩW ΩQ) (o : ΩW × ΩQ) (D Q L : ℕ) :
     Server Pous.EndToEnd.S D Q L where
   pre W pp C ω := StateBits.pack (τ.pre o W pp C ω)
+<<<<<<< ours
   step W pp j σ i :=
     OracleAlgorithm.clip (fun out => (out.1, StateBits.pack out.2)) (fun _ => false, fun _ => false) D Q L
       (τ.step o W pp j (StateBits.unpack σ) i)
@@ -231,6 +259,25 @@ noncomputable def extract {ΩW ΩQ : Type} (τ : Strategy ΩW ΩQ) (o : ΩW × �
 /-- **PoUS's per-period guarantee, about the deployed check.** Given P2's security in the ring model at `(D, Q, L)`
 (`P2RingAuditSecure`): for every joint run on every device whose capacity coins are the ring game's, every period's
 audit `P`, every prover strategy `τ` of its device under the device
+||||||| base
+  step sc W pp j σ i :=
+    Prog.clip (fun out => (out.1, StateBits.pack out.2)) (fun _ => false, fun _ => false) D Q L
+      (τ.step o sc W pp j (StateBits.unpack σ) i)
+  bounded _ _ _ _ _ _ := Prog.clip_ringBounded _ _ _ _ _ _
+
+/-- **PoUS's per-period guarantee, about the deployed check.** Given the coin commitments' hiding (`CoinCommitHides`)
+and P2's security in the ring model at `(D, Q, L)` (`P2RingAuditSecure`): for every joint run on every device whose
+capacity coins are the ring game's, every period's audit `P`, every prover strategy `τ` of its device under the device
+=======
+  step sc W pp j σ i :=
+    OracleAlgorithm.clip (fun out => (out.1, StateBits.pack out.2)) (fun _ => false, fun _ => false) D Q L
+      (τ.step o sc W pp j (StateBits.unpack σ) i)
+  bounded _ _ _ _ _ _ := OracleAlgorithm.clip_ringBounded _ _ _ _ _ _
+
+/-- **PoUS's per-period guarantee, about the deployed check.** Given the coin commitments' hiding (`CoinCommitHides`)
+and P2's security in the ring model at `(D, Q, L)` (`P2RingAuditSecure`): for every joint run on every device whose
+capacity coins are the ring game's, every period's audit `P`, every prover strategy `τ` of its device under the device
+>>>>>>> theirs
 model (`DeviceModel`) and the instantiation (`Instantiates`), every certificate `S` with
 `S · len + S_chip + ∑ cap_i · round ≤ S₀` and every value of the other audits' coins, the verifier's whole decision
 accepts the period with no break in its own data while the capacity account held fewer than `S · len` bit-ticks over the

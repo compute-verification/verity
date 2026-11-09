@@ -42,7 +42,7 @@ its subcircuit, unit id, step, slot, why and run; part 1 lists them beside the v
 block counts them as failures, not skips. Left out, the list renders as ``⟨VISIBLE_FAILURES⟩``; an empty list says
 every drawn unit was proved.
 
-**Gathers** are wire references, not proof units: a measured subcircuit named for one is refused.
+**Gathers** are wire references, not proof blocks: a measured subcircuit named for one is refused.
 
 **Words.** Each of the six subprotocols by its name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network
 certifier, the wipe), "proof block", "sampling block", "server-time block" and "subcircuit": `render` refuses a report

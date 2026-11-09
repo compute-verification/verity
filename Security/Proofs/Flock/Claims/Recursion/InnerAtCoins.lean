@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Claims.Recursion.VerdictRowDTie
 public import Proofs.Flock.Claims.Recursion.RestLens
+import all Init.Data.Repr
+import all Init.Data.String.Defs
 
 /-!
 # Check 5's inner session at a staged part is the inner statement at the coins
@@ -610,7 +612,7 @@ theorem stmt_unit {f : RecCoins.Files} {u u' : String} {p : SessionSpec × Stmt}
     f.stmt u' = .ok p := by
   unfold RecCoins.Files.stmt at h ⊢
   revert h
-  cases Stmt.setupTables RecCoins.innerTags f.circuit f.pub Coins.os 1 (partition := some f.partition)
+  cases Stmt.setupTables RecCoins.innerTags f.circuit f.pub RecVStar.innerTree 1 (partition := some f.partition)
       (program := f.program) with
   | error e => intro h; cases h
   | ok q =>

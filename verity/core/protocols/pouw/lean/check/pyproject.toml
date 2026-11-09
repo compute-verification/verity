@@ -63,3 +63,11 @@ inputs = ["verity/core/protocols/sampled_proofs/one_stage/link_points.py", "veri
           "verity/core/primitives/lms/lean/Lms",
           "verity/core/service/flock/lakefile.toml", "verity/core/service/flock/lake-manifest.json",
           "verity/core/service/flock/lean-toolchain", "verity/core/service/flock/Flock"]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/test_coins.py",
+    "tests/test_difftest.py",
+    "tests/test_leaf_own.py",
+    "tests/test_live_verified_difftest.py",
+    "tests/test_verified_difftest.py",
+]

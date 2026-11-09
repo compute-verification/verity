@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.C3.Reps.RoundLinks
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # `RoundReads` and `WRoundReads` at the verifier's message-round ports

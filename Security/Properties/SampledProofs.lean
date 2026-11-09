@@ -12,10 +12,20 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 `AcceptMeans`: what the check accepts is a commitment and evidence for which
 
 * **the registration** keeps R1–R7 against the verifier's own copies (`Registered`): the record's format, protocol, law
+<<<<<<< ours
   and window (`R1`); its program, query, partition and population, and its day's declared program (`R2`); its scheme,
   ports, roots, leaves and domains (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window and the
   window's stream and prover (`R6`); for a v2 record its registered values (`R7`); and in the per-member form each
   member's one count of link points (`RL`);
+||||||| base
+  and window (`R1`); its program, query, partition and population (`R2`); its scheme, ports, roots, leaves and domains
+  (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window and the window's stream and prover (`R6`); and
+  for a v2 record its registered values (`R7`);
+=======
+  and window (`R1`); its program, query, partition and population, and its day's declared program (`R2`); its scheme,
+  ports, roots, leaves and domains (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window and the
+  window's stream and prover (`R6`); and for a v2 record its registered values (`R7`);
+>>>>>>> theirs
 * **the draw** is a draw of the registered law over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work law, its strata and closure;
 * **the units** were proved and served as drawn, under the registered roots, and the verifiers of record opened the

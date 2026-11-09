@@ -4,6 +4,7 @@ public import Proofs.Flock.Claims.Recursion.VerdictDecision
 public import Proofs.Flock.Claims.Recursion.VerdictFramedJson
 public import Proofs.Flock.Claims.Recursion.RepSqCounts
 public import Proofs.Flock.Claims.Recursion.CallsAgree
+import all Lean.Data.Json.Basic
 
 /-!
 # Row B's `framed` at a decision

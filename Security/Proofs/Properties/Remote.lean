@@ -12,6 +12,7 @@ public import Proofs.Properties.SampledProofs
 public import Proofs.Nci.CompliesCK
 public import Proofs.Core.Expand
 public import Std.Data.TreeMap.Raw.Lemmas
+import all Lean.Data.Json.Basic
 
 /-!
 # Remote's acceptance and the inference-only policy, proved
@@ -26,11 +27,20 @@ acceptance is `NciCheck.Baseline.evaluate`'s with the record naming the circuit 
 `DescWitnesses` and `BaselineProvenance` read; `Nci.SecurityProofs.CompliesCK`, `ExpandComplies` and
 `Verity.Circuit.expand_boolean` give the padded `(c, k)`-partitions. The parse, declaration and division an acceptance
 exhibits come from `DescAgrees` (the verdict is the gate-by-gate check's on an expansion) and `Decodes` (that check's
+<<<<<<< ours
 verdicts are about a parse, a layout, a baseline and a division). Sampled proofs' acceptance is one-stage v1's check
 (`OneStage.check`) at its params' form: in the one-stage form v2's, at the coins it read (`OneStage.checkAt`) on the
 verdicts its own run of the verifier computed (`stage_zk_registered`), in the recursive form v1's check on the inner
 statement's params after V*'s compiled check (`recursive_check`), so its record keeps R2 in either
 (`stage_registered_check`).
+||||||| base
+verdicts are about a parse, a layout, a baseline and a division).
+=======
+verdicts are about a parse, a layout, a baseline and a division). Sampled proofs' acceptance is one-stage v1's check
+at the coins it read (`OneStage.checkAt`) at its params' form: in the one-stage form v2's, on the verdicts its own run of
+the verifier computed (`stage_zk_registered`), in the recursive form v1's live check on the inner statement's params
+after V*'s compiled check (`recursive_live`), so its record keeps R2 in either (`stage_registered_at`).
+>>>>>>> theirs
 
 The policy's existence clause is neither empty nor trivial: `policyMet_honest` exhibits a declaration and a division into
 nonempty inference blocks that meet the policy, and `policyMet_nontrivial` one the policy refuses at every `α`. Both
@@ -194,10 +204,10 @@ theorem names_program {p : NciCheck.Protocol.Params} {c : NciCheck.Protocol.Comm
   simpa using hn
 
 /-- `PolicyMet` from its first clause, every inference block meeting both bounds, at `α ≥ 0`: the rest follows
-(`Nci.Complies`, and the padded partitions by `CompliesCK`, `ExpandComplies` and `expand_boolean`). -/
-theorem policyMet_of_meets {d : Declaration} {n : ℕ} {U : Partition d.D n} {Γ : ℕ} {α : ℝ} (hα : 0 ≤ α)
+(`Nci.CompliesRate`, and the padded partitions by `CompliesCK`, `ExpandComplies` and `expand_boolean`). -/
+theorem policyMet_of_meets {d : RegisteredCircuit} {n : ℕ} {U : Partition d.D n} {Γ : ℕ} {α : ℝ} (hα : 0 ≤ α)
     (h : ∀ u, Meets d U Γ α u) : PolicyMet d U Γ α := by
-  have hcomp : Nci.Complies Γ α d := ⟨n, U, h⟩
+  have hcomp : Nci.CompliesRate Γ α d := ⟨n, U, h⟩
   refine ⟨h, hcomp, fun hB => Nci.SecurityProofs.CompliesCK _ _ d hB hcomp, ?_⟩
   intro W hfan hw hW
   exact Nci.SecurityProofs.CompliesCK _ _ d.expand (d.D.expand_boolean hfan)
@@ -206,7 +216,7 @@ theorem policyMet_of_meets {d : Declaration} {n : ℕ} {U : Partition d.D n} {Γ
 /-- **Honest witness of the policy's existence clause**: a declaration and a division into nonempty inference blocks
 that meet the policy, `Nci.SecurityProofs.FitWitness`'s five-gate circuit in its two one-gate windows, at `Γ = 1` and
 `α = 3`. -/
-theorem policyMet_honest : ∃ (d : Declaration) (n : ℕ) (U : Partition d.D n) (Γ : ℕ) (α : ℝ),
+theorem policyMet_honest : ∃ (d : RegisteredCircuit) (n : ℕ) (U : Partition d.D n) (Γ : ℕ) (α : ℝ),
     0 < n ∧ (∀ u, (U.gates u).Nonempty) ∧ PolicyMet d U Γ α := by
   have hs : ∀ u, Nci.SecurityProofs.FitWitness.decl.D.size (Nci.SecurityProofs.FitWitness.windows.gates u) = 1 := by
     decide +kernel
@@ -217,7 +227,7 @@ theorem policyMet_honest : ∃ (d : Declaration) (n : ℕ) (U : Partition d.D n)
 
 /-- **Nontrivial witness of the policy's existence clause**: the policy refuses a declaration and a division into
 nonempty inference blocks, the same windows at `Γ = 0`, at every `α`: each block is a gate of width 1. -/
-theorem policyMet_nontrivial : ∃ (d : Declaration) (n : ℕ) (U : Partition d.D n),
+theorem policyMet_nontrivial : ∃ (d : RegisteredCircuit) (n : ℕ) (U : Partition d.D n),
     (∀ u, (U.gates u).Nonempty) ∧ ∀ α : ℝ, ¬ PolicyMet d U 0 α := by
   refine ⟨Nci.SecurityProofs.FitWitness.decl, 2, Nci.SecurityProofs.FitWitness.windows, by decide +kernel,
     fun α h => ?_⟩
@@ -230,12 +240,12 @@ theorem policyMet_nontrivial : ∃ (d : Declaration) (n : ℕ) (U : Partition d.
 theorem policy_met {p : NciCheck.Protocol.Params} {e : NciCheck.Protocol.Evidence} {out : Json}
     (hd : NciCheck.Desc.evaluate (instanceOf p e) = .ok out) (hc : out.getObjVal? "complies" = .ok (.bool true))
     {P : Prog} (hP : Flock.Program.decode p.program.toUTF8 = .ok P) :
-    ∀ (j' : Json) (i : NciCheck.Instance) (d : Declaration) (n : ℕ) (U : Partition d.D n),
-      Expands (instanceOf p e) j' → Parses j' i → LaysOut P d.D → Names i.theta d.θ → Divides i.owner U →
-        VerifierOwn p i ∧ PolicyMet d U i.gamma ((i.num : ℝ) / i.den) := by
-  intro j' i d n U hx hi hL hN hD
+    ∀ (j' : Json) (i : NciCheck.Instance) (d : RegisteredCircuit),
+      Expands (instanceOf p e) j' → Parses j' i → LaysOut P d.D → Names i.theta d.θ → Divides i.owner d.𝓘 →
+        VerifierOwn p i ∧ PolicyMet d d.𝓘 i.gamma ((i.num : ℝ) / i.den) := by
+  intro j' i d hx hi hL hN hD
   have hP' : Flock.Program.decode i.program.toUTF8 = .ok P := expands_program hx hi ▸ hP
-  have hR := (NciCheck.Properties.SecurityProofs.DescReports _ _ hd).2 j' hx i P d n U hi hP' hL hN hD
+  have hR := (NciCheck.Properties.SecurityProofs.DescReports _ _ hd).2 j' hx i P d hi hP' hL hN hD
   exact ⟨verifier_own hx hi,
     policyMet_of_meets (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)) (hR.2.2.1.1 hc)⟩
 
@@ -249,12 +259,32 @@ theorem policyHeld {p : NciCheck.Protocol.Params} {c : NciCheck.Protocol.Commitm
   obtain ⟨i, P, hpi, hP', D, hL, ⟨θ, hθ, hθin⟩, n, U, hD⟩ :=
     NciCheck.Properties.SecurityProofs.Decodes _ _ (hev j' hx)
   have hP : Flock.Program.decode p.program.toUTF8 = .ok P := expands_program hx hpi ▸ hP'
-  let d : Declaration := ⟨D, θ, hθin⟩
+  let d : RegisteredCircuit := .ofPartition D θ hθin n U
   exact ⟨P, hP, names_program hn hP, NciCheck.Properties.SecurityProofs.BaselineProvenance _ _ _ hb,
-    ⟨j', i, d, n, U, hx, hpi, hL, hθ, hD, policy_met hd hc hP j' i d n U hx hpi hL hθ hD⟩, policy_met hd hc hP⟩
+    ⟨j', i, d, hx, hpi, hL, hθ, hD, policy_met hd hc hP j' i d hx hpi hL hθ hD⟩, policy_met hd hc hP⟩
 
+/-- What one-stage v1's check at any coins gives on acceptance: its record keeps R2 against the audit's own
+verifier. -/
+theorem stage_registered_at {p : SampledProofs.OneStage.Params} {c : SampledProofs.OneStage.Commitment}
+    {ξ : Option ByteArray} {e : SampledProofs.OneStage.Evidence} {pub : SampledProofs.OneStage.Public}
+    {prof : Integrity} (h : SampledProofs.OneStage.checkAt p c ξ e = .accept pub prof) :
+    Properties.SampledProofs.R2 c.record p.verifier := by
+  unfold SampledProofs.OneStage.checkAt at h
+  split at h
+  · cases h
+  · obtain ⟨law, d, n, hreg, -⟩ := Properties.SampledProofs.acceptMeans _ _ _ _ _ h
+    exact hreg.2.1
+
+<<<<<<< ours
 /-- What one-stage v1's check gives on acceptance: its record keeps R2 against the audit's own verifier. -/
 theorem stage_registered_check {p : SampledProofs.OneStage.Params} {c : SampledProofs.OneStage.Commitment}
+||||||| base
+/-- What the one-stage audit's acceptance gives: its record keeps R2 against the audit's own verifier. -/
+theorem stage_registered {p : SampledProofs.OneStage.Params} {c : SampledProofs.OneStage.Commitment}
+=======
+/-- What one-stage v1's live check gives on acceptance: its record keeps R2 against the audit's own verifier. -/
+theorem stage_registered {p : SampledProofs.OneStage.Params} {c : SampledProofs.OneStage.Commitment}
+>>>>>>> theirs
     {e : SampledProofs.OneStage.Evidence} {pub : SampledProofs.OneStage.Public} {prof : Integrity}
     (h : SampledProofs.OneStage.check p c e = .accept pub prof) :
     Properties.SampledProofs.R2 c.record p.verifier := by
@@ -269,6 +299,7 @@ theorem stage_registered_at {p : SampledProofs.OneStage.Params} {c : SampledProo
     Properties.SampledProofs.R2 c.record p.verifier := by
   unfold SampledProofs.OneStage.checkAt at h
   split at h
+<<<<<<< ours
   · cases h
   · exact stage_registered_check h
 
@@ -335,8 +366,19 @@ theorem stage_zk_one_statement {p : SampledProofs.OneStageZk.Params} {c : Sample
   unfold SampledProofs.OneStageZk.checkBlobs Core.atCoins at h
   split at h
   · exact stage_zk_at_one_statement h
+||||||| base
+  · unfold SampledProofs.OneStage.checkAt at h
+    beta_reduce at h
+    split at h
+    · cases h
+    · obtain ⟨law, d, n, hreg, -⟩ := Properties.SampledProofs.acceptMeans _ _ _ _ _ h
+      exact hreg.2.1
+=======
+  · exact stage_registered_at h
+>>>>>>> theirs
   · cases h
 
+<<<<<<< ours
 /-- The recursive audit accepts only where one-stage v1's check accepts on the inner statement's params, with the
 verdicts V*'s compiled check computes. -/
 theorem recursive_check {q : VStar.Recursive.Params} {c : SampledProofs.OneStage.Commitment}
@@ -350,6 +392,56 @@ theorem recursive_check {q : VStar.Recursive.Params} {c : SampledProofs.OneStage
     · cases h
     · exact ⟨_, h⟩
 
+||||||| base
+=======
+/-- One-stage v2's check at the coins it read accepts only where v1's check accepts at them, on the verdicts its own
+run of the verifier computed. -/
+theorem stage_zk_at {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment} {ξ : ByteArray}
+    {e : SampledProofs.OneStageZk.Evidence} {bs : Blobs} {pub : SampledProofs.OneStage.Public} {prof : Integrity}
+    (h : SampledProofs.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+    ∃ r : SampledProofs.OneStageZk.Run,
+      SampledProofs.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = .accept pub prof := by
+  unfold SampledProofs.OneStageZk.checkBlobsAt at h
+  dsimp only at h
+  split at h
+  · cases h
+  · rename_i r _
+    refine ⟨r, ?_⟩
+    generalize SampledProofs.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = o at h ⊢
+    cases o with
+    | accept pub' prof' =>
+      cases hr : r.all <;> simp [hr] at h
+      obtain ⟨rfl, rfl⟩ := h
+      rfl
+    | reject s => simp at h
+    | undecided s => simp at h
+
+/-- One-stage v2 accepts only where v1's check accepts at the coins it read, on the verdicts its own run of the
+verifier computed, so its record keeps R2 against the v1 part of its params' verifier. -/
+theorem stage_zk_registered {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment}
+    {e : SampledProofs.OneStageZk.Evidence} {bs : Blobs} {pub : SampledProofs.OneStage.Public} {prof : Integrity}
+    (h : SampledProofs.OneStageZk.checkBlobs p c e bs = .accept pub prof) :
+    Properties.SampledProofs.R2 c.record p.base.verifier := by
+  unfold SampledProofs.OneStageZk.checkBlobs Core.atCoins at h
+  split at h
+  · obtain ⟨_, hr⟩ := stage_zk_at h
+    exact stage_registered_at hr
+  · cases h
+
+/-- The recursive audit accepts only where one-stage v1 accepts on the inner statement's params, with the verdicts
+V*'s compiled check computes. -/
+theorem recursive_live {q : VStar.Recursive.Params} {c : SampledProofs.OneStage.Commitment}
+    {e : VStar.Recursive.Evidence} {bs : Blobs} {pub : SampledProofs.OneStage.Public} {prof : Integrity}
+    (h : VStar.Recursive.checkBlobs q c e bs = .accept pub prof) :
+    ∃ e₀, SampledProofs.OneStage.checkLive q.base c e₀ = .accept pub prof := by
+  unfold VStar.Recursive.checkBlobs at h
+  split at h
+  · cases h
+  · split at h
+    · cases h
+    · exact ⟨_, h⟩
+
+>>>>>>> theirs
 /-- `digestOf` of a commitment that decodes is the digest of what it decodes to. -/
 theorem digestOf_ok {P : Protocol} {b : ByteArray} {c : P.Commitment} (h : P.commitment b = .ok c) :
     Properties.Composition.digestOf P b = some (P.digest c) := by
@@ -480,6 +572,7 @@ theorem stage_held {k : Case} {n : Named} {bs : Blobs} (hp : k.params = n.params
   have hp'' : (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok p := by
     rw [hp]; exact hp'
   have hc' : SampledProofs.OneStage.commitmentOf k.commitment = .ok c := hc
+<<<<<<< ours
   have hchk' : VStar.Recursive.Sampled.checkBlobs p c e bs = .accept pub prof := hchk
   clear hp' hchk
   rcases p with p | q <;> rcases e with e | e
@@ -492,6 +585,25 @@ theorem stage_held {k : Case} {n : Named} {bs : Blobs} (hp : k.params = n.params
     exact Or.inr ⟨q, c, hp'', hc', stage_registered_check he₀⟩
 
 /-- What remote's acceptance gives: the three cases in order, one digest for the policy's and sampled proofs'
+||||||| base
+  have hchk' : SampledProofs.OneStage.checkLive p c e = .accept pub prof := hchk
+  exact ⟨p, c, by rw [hp]; exact hp'', hc', stage_registered hchk'⟩
+
+/-- What remote's acceptance gives: the three cases in order, one digest for the policy's and the one-stage audit's
+=======
+  have hchk' : VStar.Recursive.Sampled.checkBlobs p c e bs = .accept pub prof := hchk
+  clear hp' hchk
+  rcases p with p | q <;> rcases e with e | e
+  · exact Or.inl ⟨p, c, hp'', hc',
+      stage_zk_registered (show SampledProofs.OneStageZk.checkBlobs p c e bs = .accept pub prof from hchk')⟩
+  · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
+  · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
+  · obtain ⟨e₀, he₀⟩ := recursive_live
+      (show VStar.Recursive.checkBlobs q c e bs = .accept pub prof from hchk')
+    exact Or.inr ⟨q, c, hp'', hc', stage_registered he₀⟩
+
+/-- What remote's acceptance gives: the three cases in order, one digest for the policy's and sampled proofs'
+>>>>>>> theirs
 records, which every Commit record the period's windows name has, and the policy's case decoding to what the policy's
 check accepts. -/
 theorem remote_accept {blobs : Array ByteArray} {ps : List Named} {c : ByteArray} {ev : List Case} {pub prof : Keyed}
@@ -537,11 +649,11 @@ theorem acceptComplies : AcceptComplies := by
   obtain ⟨kI, kW, kS, pI, cI, eI, hev, -, -, -, hp, hc, he, ⟨pub', prof', hchk⟩, -⟩ := remote_accept h
   obtain ⟨hn, out, hb, hcomp⟩ := policy_accept hchk
   obtain ⟨hd, -⟩ := NciCheck.Properties.SecurityProofs.BaselineSteps.evaluate_ok _ _ _ hb
-  obtain ⟨P, hP, hname, -, ⟨j', i, d, n, U, hx, hpi, hL, hθ, -, hown, hmet⟩, -⟩ := policyHeld hchk
+  obtain ⟨P, hP, hname, -, ⟨j', i, d, hx, hpi, hL, hθ, -, hown, hmet⟩, -⟩ := policyHeld hchk
   refine ⟨kI, kW, kS, pI, cI, eI, P, hev, hp, hc, he, hP, hname, ⟨j', i, d, hx, hpi, hL, hθ, hown, hmet.2.1⟩, ?_⟩
   intro j' i d hx hi hL hN
   have hP' : Flock.Program.decode i.program.toUTF8 = .ok P := expands_program hx hi ▸ hP
-  exact ⟨verifier_own hx hi, (NciCheck.Properties.SecurityProofs.DescWitnesses _ _ hd).2 j' hx i P d hi hP' hL hN hcomp⟩
+  exact ⟨verifier_own hx hi, ((NciCheck.Properties.SecurityProofs.DescWitnesses _ _ hd).2 j' hx i P d hi hP' hL hN hcomp).1⟩
 
 /-- **`AcceptComplies`'s nontrivial lemma**, as `AcceptInferenceOnly`'s: its conclusion fails at `ev = []`, which a check
 that accepts every input accepts. -/

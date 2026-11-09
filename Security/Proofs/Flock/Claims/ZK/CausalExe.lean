@@ -1977,7 +1977,7 @@ variable {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.Co
   (lv : ZkView.Leaves (fun j => (C j).z) → ByteArray) (j : Fin J) (r : Fin 2)
 
 theorem cutAt_masked (i) : (cutAt C cz wt ω lv j).masked r i =
-    ((C j).T (cz j)).tab.vals r (wt j) (ω j).1 (ω j).2.1.2.1 i + ((ω j).2.2.1 r).1 i := rfl
+    ((C j).T (cz j)).tab.vals r (wt j) (ω j).1 (ω j).2.1 i + ((ω j).2.2.1 r).1 i := rfl
 
 theorem cutAt_sReg : (cutAt C cz wt ω lv j).sReg = ((C j).T (cz j)).tab.sReg (wt j) := rfl
 
@@ -2112,9 +2112,9 @@ theorem repSrcCut_masked (cut : ∀ j, ((tabC PE x j).T (cz j)).tab.Cut) (k : �
   simp only [repSrcCut]
   rfl
 
-theorem tabC_vals (c : Composed.CoinsZK (tabC PE x j).Rest) (w u R i) :
-    ((tabC PE x j).T c).tab.vals r w u R i =
-      Composed.honestAt (zkTab x j).table (stAt x j) c r (Composed.zWith (stAt x j) w u) (R r) i.val := rfl
+theorem tabC_vals (c : Composed.CoinsZK (tabC PE x j).Rest) (w u V i) :
+    ((tabC PE x j).T c).tab.vals r w u V i =
+      Composed.honestAt (zkTab x j).table (stAt x j) c r (Composed.zWith (stAt x j) w u) (V.2.1 r) i.val := rfl
 
 theorem cutTab_masked (i) : (cutAt (tabC PE x) cz wt ω lv j).masked r i =
     Composed.honestAt (zkTab x j).table (stAt x j) (cz j) r (Composed.zWith (stAt x j) (wt j) (ω j).1)

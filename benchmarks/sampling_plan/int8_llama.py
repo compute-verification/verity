@@ -12,6 +12,11 @@ scheme (`inputs.serve_rows`: the Commit's taps, PoUW's work blocks, the bits the
 the proving, the units' commitments, the witnesses' replay and the zero-work subcircuits.  The `floor` scheme is the earlier
 accounting, its one measured term (`commit_floor`) and nothing else.
 
+Replay: serving keeps only the requests' tokens and the weights (a commitment is a hash, and the Commit retains no value), so
+a drawn unit's witness is rebuilt by re-running its request, one 2K prompt, from its committed tokens through every layer at
+the plain rate: the `request` replay grain, met when the draw holds any of its units.  A request's values depend on its
+own tokens alone (the served engine is batch-invariant), so no co-scheduled request is re-run with it.
+
     uv run python benchmarks/sampling_plan/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]
 """
 from __future__ import annotations
@@ -30,9 +35,21 @@ from inputs import (EPILOGUE, I, KEY, MODELS, S8_STEP, SCHEMES, Model, cap, leaf
 
 from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, pressure  # noqa: E402
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
+<<<<<<< HEAD
 from verity.core.protocols.sampled_proofs.optimize import (SHA512_ROWS, Candidate, TensorCommit, CostModel,  # noqa: E402
                                                            Objective, ReplayDomain, for_budget, for_target, frontier,
                                                            needs_benchmark, overlaps, perturb, structure, weigh)
+||||||| merged common ancestors
+from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
+                                                           ReplayDomain, for_budget, for_target, frontier,
+                                                           needs_benchmark, overlaps, perturb, row_ands, structure,
+                                                           weigh)
+=======
+from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
+                                                           ReplayGrain, for_budget, for_target, frontier,
+                                                           needs_benchmark, overlaps, perturb, row_ands, structure,
+                                                           weigh)
+>>>>>>> 705be2b532
 
 DELTA = 2.0 ** -40
 CHUNKS = (2048, 1024, 512, 256, 128, 64, 32)
@@ -98,26 +115,25 @@ def classes(context: int) -> dict[int, float]:
 
 
 def workload(v: dict, window_rounds: float, m: Model) -> dict:
-    """Per op: its root shape, its instances over the window, the replay domain's units, and the window's work."""
+    """Per op: its root shape and its instances a request (one prompt of `context` tokens through every layer); the window's
+    requests, the `request` replay grain's replay blocks; its tokens; and its work."""
     bits = int(v["noise_bits"])
     tokens = v["tokens_per_s"] * v["round"] * window_rounds
-    step = int(v["step_tokens"])
-    steps = max(1, round(tokens / step))
-    replay_units = steps * m.layers
+    context = int(v["context"])
+    requests = max(1, round(tokens / context))
     ops = {}
     for k, coords in m.linears.items():
         root = linear(k, bits)
-        ops[f"linear K={k}"] = (root, step * coords * k // root.work)
-    shares = classes(int(v["context"]))
-    mean_pos = (int(v["context"]) + 1) / 2
+        ops[f"linear K={k}"] = (root, m.layers * context * coords * k // root.work)
+    mean_pos = (context + 1) / 2
     ops["attention S"] = (s8_unit(f"S{{K={m.head_dim}}}", m.head_dim, 32, extra_rows=(4,), commit_bits=0, bits=bits),
-                          round(step * m.heads * mean_pos))
-    for length, share in shares.items():
-        per_step = round(step * share) * m.heads * m.head_dim
-        if per_step:
-            ops[f"attention PV L={length}"] = (pv(length, bits), per_step)
-    total_work = sum(root.work * per for root, per in ops.values()) * replay_units
-    return {"ops": ops, "replay_units": replay_units, "tokens": tokens, "work": total_work,
+                          m.layers * round(context * m.heads * mean_pos))
+    for length, share in classes(context).items():
+        per = round(context * share) * m.heads * m.head_dim
+        if per:
+            ops[f"attention PV L={length}"] = (pv(length, bits), m.layers * per)
+    total_work = sum(root.work * per for root, per in ops.values()) * requests
+    return {"ops": ops, "requests": requests, "tokens": tokens, "work": total_work,
             "window_gpu_s": v["round"] * window_rounds}
 
 
@@ -144,19 +160,26 @@ def serve(v: dict, m: Model, scheme: str | None, w: dict, *, kv: bool = False) -
     return tuple(out)
 
 
+<<<<<<< HEAD
 def model(v: dict, fit_: Fitted, replay_units: int, *, commitments: tuple[TensorCommit, ...] = (), commit: float = 1.0,
+||||||| merged common ancestors
+def model(v: dict, fit_: Fitted, replay_units: int, *, commitments: tuple[Commitment, ...] = (), commit: float = 1.0,
+=======
+def model(v: dict, fit_: Fitted, requests: int, *, commitments: tuple[Commitment, ...] = (), commit: float = 1.0,
+>>>>>>> 705be2b532
           statement: float = 1.0) -> CostModel:
+    """The fit with the commitment rate, the serve-time commitments and the `request` replay grain: each of the window's
+    requests re-run whole, its `context` tokens at `tokens_per_s`."""
     m = fit_.model()
     m = replace(m, commit_per_bit=v["commit_per_byte"] / 8 * commit, serve=commitments,
-                replay={"layer-step": ReplayDomain(replay_units, v["replay_layer_step"])})
+                replay={"request": ReplayGrain(requests, v["context"] / v["tokens_per_s"])})
     return perturb(m, "statement", statement) if statement != 1.0 else m
 
 
 def candidates(w: dict, costs: CostModel, objective: Objective, grid: int = 31):
     out, alts, hints = [], {}, []
     for op, (root, per) in w["ops"].items():
-        cs, a, h = cuts(op, root, per * w["replay_units"], costs, objective, grid=grid,
-                        replay=("layer-step", w["replay_units"]))
+        cs, a, h = cuts(op, root, per * w["requests"], costs, objective, grid=grid, grain=("request", w["requests"]))
         out += cs
         alts[op] = {label: [list(u) for u in units] for label, units in a.items()}
         hints += [{"op": op, **h.__dict__} for h in h]
@@ -194,7 +217,7 @@ def run(v: dict, window: str = "week", *, model_name: str = "llama-3.1-8b", sche
     m = MODELS[model_name]
     fit_ = fitted(v)
     w = workload(v, WINDOWS[window], m)
-    costs = model(v, fit_, w["replay_units"], commitments=serve(v, m, scheme, w, kv=kv), commit=commit,
+    costs = model(v, fit_, w["requests"], commitments=serve(v, m, scheme, w, kv=kv), commit=commit,
                   statement=statement)
     objective = Objective(DELTA)
     cands, alts, hints = candidates(w, costs, objective, cut_grid)
@@ -202,14 +225,14 @@ def run(v: dict, window: str = "week", *, model_name: str = "llama-3.1-8b", sche
     return fit_, w, costs, objective, cands, alts, hints, plans
 
 
-def _as_candidate(op: str, s: Shape, n: int, replay_units: int) -> Candidate:
+def _as_candidate(op: str, s: Shape, n: int, requests: int) -> Candidate:
     return Candidate(op, f"{op}:{s.id}", n, s.work, s.out_bits, s.out_gates, "", s.influence, s.ands, s.rows,
-                     s.commit_bits, s.commit_rows, s.cap, "layer-step", n // replay_units)
+                     s.commit_bits, s.commit_rows, s.cap, "request", n // requests)
 
 
 def forced(w: dict, grain: int | None) -> list[Candidate]:
     """Every op whole, the linears cut at `grain` (K-chunks of that length; None, whole coordinates)."""
-    R, out = w["replay_units"], []
+    R, out = w["requests"], []
     for op, (root, per) in w["ops"].items():
         n = per * R
         if op.startswith("linear"):
@@ -235,7 +258,7 @@ def breakeven(v: dict, model_name: str, scheme: str | None, *, kv: bool = False)
     for regime, commit, statement in REGIMES:
         for window, rounds in WINDOWS.items():
             w = workload(v, rounds, m)
-            costs = model(v, fit_, w["replay_units"], commitments=serve(v, m, scheme, w, kv=kv), commit=commit,
+            costs = model(v, fit_, w["requests"], commitments=serve(v, m, scheme, w, kv=kv), commit=commit,
                           statement=statement)
             extra = zero_work_cost(costs, v)
             for target in TARGETS:
@@ -316,8 +339,8 @@ def main(argv=None) -> None:
     base_plan = at_budget(operating, plans, cands, costs, objective, w, extra)
     hints_at = [] if base_plan is None else [
         {"op": op, **h.__dict__} for op, (root, per) in w["ops"].items()
-        for h in pressure(op, root, per * w["replay_units"], costs, objective, base_plan.lam,
-                          replay=("layer-step", w["replay_units"]))]
+        for h in pressure(op, root, per * w["requests"], costs, objective, base_plan.lam,
+                          grain=("request", w["requests"]))]
     benchmark = [] if base_plan is None else needs_benchmark(
         cands, costs, objective, operating * w["window_gpu_s"] - extra, grid=31, exact=False)
 
@@ -333,7 +356,7 @@ def main(argv=None) -> None:
                          "same_cut": p is not None and cut_of(p, alts) == base_cut,
                          "same_structure": p is not None and base_plan is not None
                          and structure(p) == structure(base_plan)})
-    for name in ("tokens_per_s", "replay_layer_step", "commit_per_byte", "cpu", "step_tokens", "passes_per_s"):
+    for name in ("tokens_per_s", "commit_per_byte", "cpu", "passes_per_s"):
         for end in ("low", "high"):
             vv = {**v, name: getattr(I[name], end)}
             _, ww, cc, oo, cs, aa, _, pl = run_(vv, grid=31, cut_grid=21)

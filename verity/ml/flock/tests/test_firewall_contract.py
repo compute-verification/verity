@@ -99,10 +99,10 @@ def test_the_contract_holds_on_every_session_of_the_agreement_test(lean, tmp_pat
     """`test_firewall_agreement`'s sessions (its cases: each schedule edit, prefix, drop, duplicate and swap of a request,
     requests after Finish, forgeries, byte flips; and every placement of the Opens) through the proxy: the contract accepts
     each session the proxy
-    finishes, and of each one it stops releases every item, save where the proxy hands the coin server a call the coin server
+    finishes, and of each one it stops releases every item, save where the proxy hands the challenger a call the challenger
     refuses (a Commit before Hello or a second one, a Link before Commit or a second one). Such a call reaches the coin
     server, so the contract's cut is that call; `Flock.Firewall.run` refuses it before it sends anything, and
-    `test_firewall_agreement` compares the calls the coin server takes."""
+    `test_firewall_agreement` compares the calls the challenger takes."""
     from test_firewall_agreement import SALTS, _coins, cases, placements
 
     sessions = []
@@ -194,7 +194,7 @@ def test_a_public_input_the_contract_cannot_read_decides_nothing(lean, tmp_path)
 @pytest.mark.parametrize("commit", [False, True], ids=["live", "committed"])
 def test_a_recorded_session_replays_to_its_record(lean, tmp_path, commit):
     """`firewall_agree.replay` on a session `rec_live` wrote, on live coins or on coins the challenger committed to (then
-    with its ``coins.json``): the same coin server record from its own coins and salts, and both accept it."""
+    with its ``coins.json``): the same challenger's record from its own coins and salts, and both accept it."""
     s = FA.run_case("honest", FA.requests(), RL.Proxy, None, challenger={"commit": commit})
     d = tmp_path / "s"
     s.proxy.write(d)

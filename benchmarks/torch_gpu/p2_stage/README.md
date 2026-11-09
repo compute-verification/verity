@@ -1,4 +1,4 @@
-# p2_stage: the staging decode
+# p2_stage: the store's load
 
 The simplest exact path from the P2-encoded weights store to the W8A8 GEMM on one H200: decode a
 layer's matrix with memory-accounting's P2 decode, unchanged, into a plaintext staging buffer, then run the exact GEMM
@@ -30,7 +30,7 @@ on that buffer.
   manifest's SHA-256, the step's decode summed tensor by tensor with the peak HBM, then one layer's exact GEMM by
   `int_mm.linear` against the twin. `check.py --sample N` checks N blocks of every tensor of the store
   against the reference afterwards.
-- `sketch.py`: PoUB's receipts beside the decode (Demo B's bandwidth leg; the interface is
+- `sketch.py`: PoUB's receipts beside the decode (Demo B's bandwidth audit; the interface is
   `verity/core/protocols/remote_bandwidth/PROTOCOL.md` §11, the fixture `benchmarks/pous/p2_v1/serve.py fixture`). With
   a pass attached (`store.sketch = sketch.Pass(seed, units, device)`, `units = sketch.plan_units(layout.tensors)`: the
   units the store's tensors lie in, so the encoded padding past the head is in no receipt), `EncodedRows.decode_rows`
@@ -40,11 +40,11 @@ on that buffer.
   block's midstate) and the root (sha512_rows' engine: each leaf's 16 receipts as a sha512/row/v2 row, its hm96-sha512
   leaf under its salt, the frame-v3-sha512 tree). `full.py --receipts` runs a pass over those units beside the
   stage pass, timed with the sketch and without; `bw_ref.py` checks it on the CPU afterwards (every y and the root
-  from the pass's σ, and sampled units' σ from C*); `bw_check.py` holds the GPU to the fixture and times the receipts
+  from the pass's σ, and the σ of a sample of units from C*); `bw_check.py` holds the GPU to the fixture and times the receipts
   at the store's size (`bw.sh`).
 - `build.sh` builds `libp2v1.so` for sm_90a on a CPU node by P2's own Makefile. `session.sh` is one run on
-  vy-dc-h200 under an untimed `gpu-lease`, from memory-accounting's store (`ENCODED=1`, the layer's segment files sent
-  with the run) or a development store. `full.sh` runs `full.py` on the demo card over memory-accounting's finished
+  an H200 under an untimed `gpu-lease`, from PoUS's encoded store (`ENCODED=1`, the layer's segment files sent
+  with the run) or a development store. `full.sh` runs `full.py` on the demo card over PoUS's finished encoded
   store in place, read only. Each script's header gives its command line.
 
 The decode is libp2v1's, unchanged. Both GEMMs are `int_mm.linear` (`benchmarks/torch_gpu/s8_linear/int_mm.py`, the

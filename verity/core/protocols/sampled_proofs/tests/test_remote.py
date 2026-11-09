@@ -24,7 +24,7 @@ import pytest
 
 from verity.core.protocols.sampled_proofs import challenger as C
 from verity.core.protocols.sampled_proofs import remote as R
-from verity.core.protocols.sampled_proofs.coins import ChallengerCoins
+from verity.core.protocols.sampled_proofs.coins import ChallengerCoins, coins_within
 from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
@@ -467,11 +467,11 @@ def test_the_client_refuses_a_bad_answer_and_every_coin_after(case):
 BATCH = [("positions", 0, root(0)), ("replay", 0, root(0)), ("positions", 1, root(1))]
 
 
-def _served(directory, signer, ask) -> tuple[bytes, object, str | None]:
-    """`ask(client)` against a challenger served on one end of a socketpair (`serve`, on a clock that counts), the
-    client then closing the session: the release log's bytes, what `ask` returned, and how `serve` ended."""
+def _served(directory, signer, ask, families=FAMILIES) -> tuple[bytes, object, str | None]:
+    """`ask(client)` against a challenger over `families` served on one end of a socketpair (`serve`, on a clock that
+    counts), the client then closing the session: the release log's bytes, what `ask` returned, and how `serve` ended."""
     directory.mkdir()
-    session = R.open_session(C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host")), pinned_key(), HOST, signer,
+    session = R.open_session(C.LiveChallenger(SCHEME, 0, families, entropy("host")), pinned_key(), HOST, signer,
                              directory, "s-1")
     a, b = socket.socketpair()
     ended: list[str | None] = []
@@ -581,7 +581,7 @@ def test_a_coin_tree_is_drawn_and_opened_in_the_windows_session_under_its_signed
     """The challenger samples a ``--zk`` session's coin tree under the prover's nonce and opens each round itself, after
     what it follows, between the session's own coins; each line is logged before its answer, the signed close covers
     them, the verifier's read of the session's roots reads past them, and a record on those coins is held to them
-    (`session_tree_reason`), one whose round's coins differ refused."""
+    (`session_tree_reason`), one whose round's coins differ refused, as is one held to another ``root_B`` length."""
     host = Host(tmp_path, signer, withhold=True)
     client = R.RemoteChallenger.connect(host.address)
     positions = C.LiveRecord(client, "positions", itertools.count().__next__)
@@ -603,10 +603,12 @@ def test_a_coin_tree_is_drawn_and_opened_in_the_windows_session_under_its_signed
     trees = C.coin_trees_of(log)
     assert list(trees) == [tree_root.hex()] and trees[tree_root.hex()].record()["key"] == key.hex()
     record = tree_record(nonce, tree_root, key, points, {"t/rep0": [(root(30), 3, rep[0]), (root(31), 2, rep[1])]})
-    assert C.session_tree_reason(trees, record) is None
+    lens = {t: len(r) for t, r in ROOT_B.items()}
+    assert C.session_tree_reason(trees, lens, record) is None
+    assert C.session_tree_reason(trees, {"t": 2 * lens["t"]}, record) == C.LINK_ROOT_LEN
     record["streams"][0]["rounds"][1]["coins"][0] = f128(rep[1][0] ^ 1)
-    assert C.session_tree_reason(trees, record) == ("its t/rep0 round 1 is not coins the challenger opened under its tree "
-                                                    "after that round's message")
+    assert C.session_tree_reason(trees, lens, record) == ("its t/rep0 round 1 is not coins the challenger "
+                                                          "opened under its tree after that round's message")
 
 
 def _tree_frames(tree_root: str) -> dict[str, list[dict]]:
@@ -795,6 +797,84 @@ def test_a_batch_past_its_bound_is_refused_before_a_frame_is_written(tmp_path, s
 
     _, got, why = _served(tmp_path / "s", signer, ask)
     assert why is None and [(o.label, o.index) for o in got] == [("positions", 0)]
+
+
+def test_the_release_log_takes_lines_up_to_its_caps_and_refuses_past_them(tmp_path):
+    """v2 refuses a release log past `MAX_LOG_LINES` lines (`coins.LIMITS`) or with a line past `MAX_LOG_LINE`
+    characters, so `_append`, the one place the log grows, writes the line that fills either and refuses, writing
+    nothing, a batch past them."""
+    path = tmp_path / R.RELEASES
+    with open(path, "a", encoding="utf-8") as log:
+        lines = ["x"] * (C.MAX_LOG_LINES - 2)
+        R._append(log, lines, ["a" * C.MAX_LOG_LINE], "the coin")
+        with pytest.raises(C.CoinError, match=f"at most {C.MAX_LOG_LINE} characters, so the coin stays on the host"):
+            R._append(log, lines, ["a" * (C.MAX_LOG_LINE + 1)], "the coin")
+        with pytest.raises(C.CoinError, match=f"at most {C.MAX_LOG_LINES} lines, so the coin stays on the host"):
+            R._append(log, lines, ["b", "c"], "the coin")
+        R._append(log, lines, ["b"], "the coin")
+        assert len(lines) == C.MAX_LOG_LINES and coins_within({"session": {"log": lines}})
+        with pytest.raises(C.CoinError, match=f"at most {C.MAX_LOG_LINES} lines, so the coin stays on the host"):
+            R._append(log, lines, ["c"], "the coin")
+    assert path.read_text() == "a" * C.MAX_LOG_LINE + "\nb\n" and len(lines) == C.MAX_LOG_LINES
+    assert not coins_within({"session": {"log": lines + ["c"]}})
+
+
+def test_a_coin_whose_release_line_is_past_its_cap_stays_on_the_host_and_ends_the_session(tmp_path, signer):
+    """A layout label long enough that its coin's release log line passes `MAX_LOG_LINE` characters: the challenger
+    refuses the coin and ends the session, signed, its log holding its head alone."""
+    label = "a" * C.MAX_LOG_LINE
+
+    def ask(client):
+        with pytest.raises(C.CoinError, match=f"at most {C.MAX_LOG_LINE} characters, so a+ coin 0 stays on the host"):
+            C.LiveRecord(client, label, itertools.count().__next__).record(root(0))
+
+    log, _, why = _served(tmp_path / "s", signer, ask, [(label, 1)])
+    assert why.endswith(f"at most {C.MAX_LOG_LINE} characters, so {label} coin 0 stays on the host")
+    assert [json.loads(line)["event"] for line in log.decode().splitlines()] == ["commitment"]
+    close = json.loads((tmp_path / "s" / R.CLOSE).read_text())
+    assert (close["ended"], close["lines"]) == (why, 1)
+
+
+def test_refused_hellos_are_logged_up_to_their_cap_and_the_next_past_it_is_refused(tmp_path):
+    """v2 refuses a session past `MAX_HELLOS` refused hellos (`coins.LIMITS`), so `log_hello` logs the last its evidence
+    holds and refuses the next, writing nothing; serve.py then ends the session (`test_serve.py`)."""
+    why = "the hello's secret is not the session's"
+    R.log_hello(tmp_path, C.MAX_HELLOS - 1, why)
+    with pytest.raises(C.CoinError, match=f"refused {C.MAX_HELLOS} hellos, the most a session's evidence holds"):
+        R.log_hello(tmp_path, C.MAX_HELLOS, why)
+    assert [json.loads(line) for line in R.hello_lines(tmp_path / R.HELLOS)] == [{"n": C.MAX_HELLOS - 1, "reason": why}]
+    assert coins_within({"session": {"hellos": ["h"] * C.MAX_HELLOS}})
+    assert not coins_within({"session": {"hellos": ["h"] * (C.MAX_HELLOS + 1)}})
+
+
+def test_a_coin_tree_at_its_coin_cap_is_sampled_and_the_logs_tree_lines_stop_at_theirs():
+    """`sample_tree` samples a tree of `MAX_TREE_COINS` coins (here up to its first read of entropy, which this test's
+    entropy refuses) and refuses one past them before it reads any (`_tree_frames`' "a tree past the coin cap"); the
+    release log's `MAX_TREE_LINES`-th coin-tree line is written (`_tree_line`) and the next refused."""
+    class Read(Exception):
+        pass
+
+    base, armed = entropy("cap"), []
+
+    def source(n: int) -> bytes:
+        if armed:
+            raise Read
+        return base(n)
+
+    ch = C.LiveChallenger(SCHEME, 0, FAMILIES, source)
+    armed.append(True)
+    at = {**TREE_SPEC, "block": C.MAX_BLOCK, "rounds_log": 9, "streams": [CT.SESSION, "t/rep0"]}
+    assert (len(at["streams"]) << at["rounds_log"]) * at["block"] == C.MAX_TREE_COINS
+    with pytest.raises(Read):
+        ch.sample_tree(at, NONCE)
+    with pytest.raises(C.CoinError, match=f"holds at most {C.MAX_TREE_COINS} coins"):
+        ch.sample_tree({**at, "streams": [CT.SESSION, "t/rep0", "t/rep1"]}, NONCE)
+
+    ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("lines"))
+    ch._tree_lines = C.MAX_TREE_LINES - 1
+    tree, _ = ch.sample_tree(TREE_SPEC, NONCE)
+    with pytest.raises(C.CoinError, match=f"at most {C.MAX_TREE_LINES} coin-tree lines"):
+        ch.open_tree(tree.root().hex(), CT.SESSION, 0, 1, root(5))
 
 
 def test_a_root_the_prover_rewrites_is_refused_against_the_challengers_log(tmp_path, signer):

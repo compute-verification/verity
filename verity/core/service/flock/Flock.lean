@@ -84,6 +84,7 @@ public import Flock.Evaluated
 public import Flock.Qcall
 public import Flock.Fuel
 public import Flock.Firewall
+public import Flock.Firewall.Honest
 public import Flock.Firewall.Contract
 public import Flock.Firewall.Assumptions
 public import Flock.Firewall.Released
@@ -96,6 +97,8 @@ public import Flock.Firewall.Link
 public import Flock.Firewall.Level0
 public import Flock.Firewall.Hello
 public import Flock.Firewall.Session
+public import Flock.Firewall.Salts
+public import Flock.Firewall.Values
 public import Flock.Firewall.Skeleton
 public import Flock.Firewall.Drive
 public import Flock.Witness

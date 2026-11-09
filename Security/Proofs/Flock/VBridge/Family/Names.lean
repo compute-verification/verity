@@ -2,6 +2,10 @@ module
 
 public import Proofs.Flock.VBridge.Family.Structure
 public import Proofs.Flock.Soundness.ExecCircuit
+import all Init.Data.String.Legacy
+import all Init.Data.String.Defs
+import all Init.Data.Repr
+import all Init.Data.Int.Repr
 
 /-!
 # The circuit file's unit name, emitted and parsed
@@ -163,8 +167,8 @@ theorem splitOnAux_nl (s : String) (pre mid post : List Char) (hs : s.toList = p
       rw [hnext, hun, extract_at s pre mid _ hs]
       have := ih (pre ++ mid ++ ['\n']) [] (by rw [hs]; simp) (by simp) (String.ofList mid :: r)
       rw [List.append_nil] at this
-      rw [this, List.nil_append, show (mid ++ '\n' :: post).splitOn '\n' = mid :: post.splitOn '\n' from
-        List.splitOnP_append_cons_of_forall_mem hmid' '\n' rfl post]
+      rw [this, List.nil_append, show (mid ++ '\n' :: post).splitOn '\n' = mid :: post.splitOn '\n' by
+        simp only [List.splitOn_eq_splitOnP]; exact List.splitOnP_append_cons_of_forall_mem hmid' '\n' rfl post]
       simp
     · rw [if_neg (by rw [hget, hnl, beq_iff_eq]; exact hc)]
       have hnext : (String.Pos.Raw.unoffsetBy ⟨ulen (pre ++ mid)⟩ 0).next s = ⟨ulen (pre ++ (mid ++ [c]))⟩ := by

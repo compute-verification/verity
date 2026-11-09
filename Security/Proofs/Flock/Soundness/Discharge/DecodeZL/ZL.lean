@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+import all Init.Data.String.Defs
 
 /-!
 # The zerocheck's and lincheck's rounds carry their messages (R11b)

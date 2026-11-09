@@ -12,8 +12,8 @@ restated in it (`GLOSSARY.md`, "Size, credit and the overhead lower bound").
 
 The protocol is experimental. Its guarantee is `Pouw.Guarantees.Dither.WorkSound` and its card instances
 `Pouw.Guarantees.DitherInstance.WorkSoundAt`, over the ACCEL model `Accel`, with the clocks of `Timed`. The change whose
-Lean covers this document deletes it. The numbers are D6 v1.1's, and the segment and noise tile NOFOLD-OPT's (see
-"The segment and the noise tile").
+Lean covers this document deletes it. The numbers are D6 v1.1's, and the segment and noise periods NOFOLD-OPT's (see
+"The segment and the noise period").
 
 **Names.** Dither is the protocol, PoUW's no-fold design, and the ACCEL model is the physical model 𝓜 it is proved over
 (the Lean's `Accel`).
@@ -47,7 +47,7 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation, and these:
 - **Sampling block**: the proof blocks of a set of independent calls (none reads another's output), which go through
   their runs together. Unlike the Glossary's default, its draw is not stratified by subcircuit (see "The sampling
   design").
-- **Proof block**: what one check proves with C-Flock `--zk`: one segment of one output cell of a call, the Glossary's
+- **Proof block**: what one check proves with Flock `--zk`: one segment of one output cell of a call, the Glossary's
   proof block in Dither's partition.
 - **W_b and W_p**: sampling block b's and proof block p's public cost, the honest cost at μ° from the public shape. W_b
   is the sum of its proof blocks' W_p. W is work at the period's prices, as in the Glossary's W_cert.
@@ -68,7 +68,7 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation, and these:
 The Lean predates these names. Its round is a sampling block, and its word is a proof block's committed value. Its `k`
 and `nsb` are k, and `k_draw` is q. Its `C` is W_reg, `H` is W_b, `H_o` is W_ans and `δ` is δ_coin. Its fleet's unit is
 a replica, and θ is 𝓜. A rename is to follow. Two premises have new names, which the Lean is to take: SHA-512's
-premise is SAK for SHA, `SAKSha` (the Lean's `ShaSpeed`), and the proof service's "the proof system is sound" is
+premise is SAK for SHA, `SAKSha` (the Lean's `ShaSpeed`), and the proof system's premise, "the proof system is sound", is
 `ProofSystemSound` (the Lean's `ServiceSound`).
 
 ## What is committed
@@ -77,10 +77,10 @@ premise is SAK for SHA, `SAKSha` (the Lean's `ShaSpeed`), and the proof service'
 weights (for PV, A is P and B is the value cache).
 
 **Noise.** The live coins give each call its dithers d_A ∈ {0,1}^{m×K} and d_B ∈ {0,1}^{N×K}, and HYB noise:
-- U is N×L′ and V is m×L′, both uniform on ±80, repeated along K in every noise tile of L′ inner indices.
+- U is N×L′ and V is m×L′, both uniform on ±80, periodic along K with period L′.
 - U's columns are permuted afresh (π_τ) in every noise tile τ.
 - A segment is t noise tiles, so L = t·L′. L, the word interval (one 16-bit word a cell every L inner indices), and L′,
-  a noise tile's length, are separate parameters (see "The segment and the noise tile").
+  the noise period, are separate parameters (see "The segment and the noise period").
 
 **The tensor operands** are X = wrap8(A + d_A + V) and W′ = wrap8(B + d_B + U π_τ), tile by tile, with wrap indicators
 w_X and w_W.
@@ -235,7 +235,7 @@ T_s − T_{s−1} ≡ Σ X W′ᵀ (mod 2^16) over the segment. For s = S it tak
 mod 2^16, from the whole rows, their wraps and the coins, and also checks O ≡ Σ_ℓ (A + d_A)_{iℓ}(B + d_B)_{jℓ}
 (mod 2^32).
 
-C-Flock `--zk` proves it on the committed values. The Definition and its circuit-check sidecar are not written yet.
+Flock `--zk` proves it on the committed values. The Definition and its circuit-check sidecar are not written yet.
 
 O is checked only in its cell's last segment, never in a proof block of its own. That block derives T_S from O, so given
 T_{S−1} it passes exactly when O is right, at any S. A constant O is therefore a free guess of the block:
@@ -303,7 +303,7 @@ replica's devices did in the period, valued at μ°, is at most the honest optim
   - tokens crossing the replica's boundary at 4 bytes a token (4,500-token requests; about 6.5 times that if HTTP/SSE
     crosses it);
   - in E_out, the answers' proofs, about 0.865 MB each, so about 12 GB a replica-week at q = 13,816. That is 0.75% (H200
-    8B) to 10.1% (RTX PRO 6000 70B) of E, and it raises ε_net by at most 0.0006%. The size is C-Flock `--zk`'s on the
+    8B) to 10.1% (RTX PRO 6000 70B) of E, and it raises ε_net by at most 0.0006%. The size is Flock `--zk`'s on the
     RoPE rows, since the proof block's Definition isn't written.
 - Over P one-week periods, P26 adds ln(P)/(ηq): +0.012% a month and +0.032% a year on the H200, and +0.011% and
   +0.030% on the RTX PRO 6000.
@@ -407,9 +407,11 @@ k_exfil. Dither needs these of the challenger and the certifier:
 
 - **Coins stay confidential until they cross the boundary** (`CoinsConfidential`, under `trusted-host`). No machine
   outside the replica's boundary may hold a coin before the coin enters the boundary, and afterwards only through bits
-  the certifier counts. Both it and its placement premise are prose only (no `.lean` file defines either): the premise
-  `WitnessPathPrivate` discharges it: private messages (the devices' signed records and salts, the prover's witness, a
-  server's coins) travel only on private links, and the certifier sits on the server's own uplink.
+  the certifier counts. Its statement is `Pouw.Assumptions.CoinsConfidential`'s docstring
+  (`Security/Definitions/Pouw/Assumptions/Dither.lean`). The placement premise `WitnessPathPrivate`
+  (`Accounting.Assumptions.Parties.WitnessPathPrivate`) discharges it in prose, with no Lean proof yet: private
+  messages (the devices' signed records and salts, the prover's witness, a server's coins) travel only on private
+  links, and the certifier sits on the server's own uplink.
   - **The MVP: the certifier's device is the challenger.** The device that runs the
     replica's network certifier produces its live coins, so each coin is made at the boundary it enters: no path carries
     one in from outside and no key is needed for it. A multi-node replica's challenger is the certifier device of its
@@ -419,10 +421,8 @@ k_exfil. Dither needs these of the challenger and the certifier:
     the measured 0.86 GB/s a core, would take about 27 certifier cores for an H200 V4 replica's 11.6 GB/s and 56 for an
     RTX PRO 6000 V4 replica's 24.0 GB/s.
   - The challenger's side is two premises, named as in `verity/core/protocols/sampled_proofs/README.md`:
-    - `CoinsConfidential`: the challenger's coin stream reaches the network certifier only over a path on auditor
-      hosts, or the challenger and the certifier are one device at the boundary. In the Lean it is the named Prop
-      `Pouw.Assumptions.CoinsConfidential`, listed in the lock, which `FleetSound` takes: a replica's strategy reads
-      none of its own coins.
+    - `CoinsConfidential`: the named Prop `Pouw.Assumptions.CoinsConfidential` above, listed in the lock, which
+      `FleetSound` takes: a replica's strategy reads none of its own coins.
     - `OneClock`: the challenger's release times and the certifier's ingress and receipt times are read on one clock,
       and a challenger on a device of its own keeps its clock within 1.03 s of the certifier's (the one clock below).
       It is a spec premise: the Lean reads every time on one axis and names no Prop for it.
@@ -471,7 +471,7 @@ k_exfil. Dither needs these of the challenger and the certifier:
   coin before its run's challenge phase. A replica's answers are a stream of one-statement batches, run concurrently
   beside its later sampling blocks and never serialized. τ_ans includes the wait for the firewall's release slot.
 - **No q(Δ + τ_ans) ≤ T.** `Timed` covers any number of sampling blocks, with answers beside later ones: their
-  sampling blocks' spans telescope to T. Selections arrive about every 43.8 s a replica (T/q).
+  sampling periods telescope to T. Selections arrive about every 43.8 s a replica (T/q).
 - **τ_ans isn't set.** v3.1's 10 s on an "8 s latency floor" rested on no measured Dither proof block. τ_ans is to be
   set from a passing `--zk` run of the proof block with live coins, the release slot included, with a wide margin.
   - One late answer refuses the week. An honest week fails 76.3% of the time if 1e-4 of answers are late and 1.43% at
@@ -515,7 +515,7 @@ Notes on the headline:
   took it and as crediting only noised segments gives it (1 − 2.8e-5), ε_skip would be 0.225–0.282%.
 - Coverage counts V4's 48.85e9 static MACs a token at their own shapes. With mHC's F32 GEMMs uncredited, V4's coverage
   is 96.4% on the H200 and 95.7% on the RTX PRO 6000.
-- The γ column is D6 v1.1's. At NOFOLD-OPT's picks (see "The segment and the noise tile"), the static calls' γ is
+- The γ column is D6 v1.1's. At NOFOLD-OPT's picks (see "The segment and the noise period"), the static calls' γ is
   1.05–1.15 on the RTX PRO 6000 with B pinned and 1.40–2.15 on the H200; the headline isn't restated at them yet.
 - What v3.2 changes and D6 v1.1 doesn't price:
   - E with the answers' proofs raises ε_net by at most 0.0006%.
@@ -578,6 +578,7 @@ week and 4.76e26 a year at H200 V4, and 1.70e26 and 7.32e26 at RTX PRO 6000 V4.
 - **The challenger's and the certifier's specs** (network-accounting, infra and proofs): the challenger on the
   certifier's device (the MVP), the exact exclusion, re-clocking, one clock and the multi-node private links, as
   implemented.
+<<<<<<< HEAD
 - **Keyed transport**, for a channel that can't meet `WitnessPathPrivate c`, the per-channel premise:
   `verity.ml.crypto.transport`, with `Guarantees.TransportPassiveZk` taking either that premise or `ChannelHides`
   (`Security/Definitions/Core/Guarantees/Transport.lean`). An onsite device holds an imprint key (a shared secret
@@ -586,6 +587,15 @@ week and 4.76e26 a year at H200 V4, and 1.70e26 and 7.32e26 at RTX PRO 6000 V4.
   links. The premise here is the zero-knowledge one: it lets the prover's own machines read a private frame, so where
   a coin must not reach an outside machine early, `CoinsConfidential` still needs the MVP's placement.
 - **The firewall** (with C-Flock's ZK server):
+||||||| merged common ancestors
+- **Keyed transport**, in place of `WitnessPathPrivate`'s private links (pre-shared keys, ML-KEM for transport only, or
+  keys set at provisioning), and whether ML-KEM may bend the one-hash rule.
+- **The firewall** (with C-Flock's ZK server):
+=======
+- **Keyed transport**, in place of `WitnessPathPrivate`'s private links (pre-shared keys, ML-KEM for transport only, or
+  keys set at provisioning), and whether ML-KEM may bend the one-hash rule.
+- **The firewall** (with Flock's ZK server):
+>>>>>>> 705be2b532
   - that it proves a replica's answers concurrently, and its release schedule. If it can't, queued check coins are the
     fix, and `Timed` must then read the check coin's time apart from the selection's;
   - main's batch rule fixes every staged statement before any run's challenge phase. Dither's statements are staged

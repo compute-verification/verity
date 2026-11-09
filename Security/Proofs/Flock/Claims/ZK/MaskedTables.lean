@@ -4,6 +4,8 @@ public import Proofs.Flock.Claims.ZK.Session
 public import Proofs.Flock.Claims.Scope.Split
 public import Proofs.Flock.Claims.Scope.StmtOf
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The deployed masked session's tables: `Tables`, `DummyReg` and `Complete`

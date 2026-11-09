@@ -37,6 +37,7 @@ public import Proofs.Flock.Claims.Recursion.SeqSim
 public import Proofs.Flock.Claims.Recursion.SeqSession
 public import Proofs.Flock.Claims.Recursion.SeqPrefix
 public import Proofs.Flock.Claims.Recursion.DeployStop
+public import Proofs.Flock.Claims.Recursion.RecSystem
 public import Proofs.Flock.Claims.Recursion.VStar
 public import Proofs.Flock.Claims.Recursion.VStarBound
 public import Proofs.Flock.Claims.Recursion.BoundDeploy
@@ -339,6 +340,8 @@ public import Proofs.Flock.Claims.Recursion.ResStepsWD
 public import Proofs.Flock.Claims.Recursion.ResNextW
 public import Proofs.Flock.Claims.Recursion.ResAccEnd
 public import Proofs.Flock.Claims.Recursion.OpenCoefTie
+public import Proofs.Flock.Claims.ZKOut
+public import Proofs.Flock.Claims.Recursion.BaseParses
 public import Proofs.Flock.Claims.Bridge.Transports
 public import Proofs.Flock.Claims.Complete.ZkTables.Round2
 public import Proofs.Flock.Claims.ZK.Assemble

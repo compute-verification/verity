@@ -1,7 +1,7 @@
 /-
 One table of domain separators: every versioned string a protocol hashes, derives from or commits under, or names its
 records, schemes and protocols by. `verity/ml/commitments/domains.py` mirrors it, entry for entry
-(`tests/test_domains.py`), beside `identity.tagged_sha512` as this file is beside `Identity.Tagged`.
+(`tests/test_domains.py`).
 
 A name is in today's words; the bytes keep the words of their version (a PoUW period's tags say "window", its
 sampling's say "draw"), because committed formats, pinned vectors and recorded runs carry them. Bytes never change in
@@ -186,7 +186,6 @@ abbrev VLLM_PEARL_C_RUN_CERTIFIED : String := "verity-vllm/pouw-pearl-c-run/v3"
 -- Not yet read from here: the commitments' own (`verity.ml.commitments`)
 abbrev BLAKE3_KEYED_ROW_NVFP4 : String := "blake3-keyed/row-nvfp4/v1"
 abbrev BLAKE3_KEYED_ROW : String := "blake3-keyed/row/v2"
-abbrev POSEIDON2_BABYBEAR_W24_ROW : String := "poseidon2-babybear-w24/row/v2h"
 abbrev SHA256_ROW_NVFP4_DIGEST : String := "sha256/row-nvfp4/v1"
 abbrev SHA256_ROW_DIGEST : String := "sha256/row/v1"
 abbrev VLLM_EMPTY : String := "verity-vllm/empty/v1"
@@ -213,7 +212,7 @@ abbrev WORD_CODEC_KV : String := "verity/word-codec/kv/v0"
 -- Not yet read from here: signatures and AEAD (`verity.ml.crypto`, `Lms`)
 abbrev LMS_I : String := "verity/lms/v0/I"
 
--- Not yet read from here: sampled proofs and the proof service's challenger
+-- Not yet read from here: sampled proofs and the proof system's challenger
 abbrev CHALLENGER_KEY : String := "challenger-key/v1"
 abbrev COIN_TREE_HM96_SHA512 : String := "coin-tree/hm96-sha512/v2"
 abbrev CHALLENGER_AUDITOR_RECORD : String := "verity/challenger-auditor-record/v1"
@@ -228,7 +227,7 @@ abbrev CHALLENGER_COMMITMENT : String := "verity/challenger/commitment/v1"
 abbrev CHALLENGER_RELEASE_LOG : String := "verity/challenger/release-log/v1"
 abbrev INTEGRITY_PROFILE : String := "verity/integrity-profile/v1"
 abbrev ONE_STAGE_AUDIT : String := "verity/one-stage/audit/v0"
-abbrev ONE_STAGE_REGISTERED_DOMAIN : String := "verity/one-stage/registered-domain/v0"
+abbrev ONE_STAGE_REGISTERED_DOMAIN : String := "verity/one-stage/registered-domain/v1"
 abbrev ONE_STAGE_SUPPLIED_SALT : String := "verity/one-stage/supplied-salt/v1"
 abbrev ONE_STAGE_PERIOD_SALT : String := "verity/one-stage/window-salt/v1"
 abbrev PROOF_SERVICE_OUTCOME : String := "verity/proof-service/outcome/v0"
@@ -260,6 +259,8 @@ abbrev FLOCK_ZK_TAU : String := "verity/flock-zk/tau/v1"
 abbrev LAYOUT : String := "verity/layout/v1"
 abbrev REC_COINS : String := "verity/rec-coins/v1"
 abbrev REC_INNER : String := "verity/rec-inner/v1"
+abbrev REC_V1_VERIFIER_SALT : String := "verity/rec-v1/verifier-salt/v1"
+abbrev REC_V1_ZERO_RESIDUAL_SALT : String := "verity/rec-v1/zero-residual-salt/v1"
 
 -- Not yet read from here: PoUS, the wipe and the memory challenger
 abbrev CHAIN_DENSE_H : String := "chain-dense-H/v1"

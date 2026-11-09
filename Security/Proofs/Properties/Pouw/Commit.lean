@@ -1,6 +1,7 @@
 module
 
 public import Properties.Pouw.Commit
+import all Init.Data.String.Defs
 
 /-!
 # Proofs of PoUW's commitment properties (`Properties.Pouw.Commit`)

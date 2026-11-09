@@ -1646,7 +1646,7 @@ def served_window(run: Run) -> Iterator[Case]:
                            pv["grid_bits"])["law"]
     n0 = Wd.Work.at(levels[0], pv["grid_bits"]).n
     tiles = {"pc8.side_tile": pc8.side_tile(pv["k"], (1, 1), "sm120"),
-             "pc8's hiding tile": pc8.templates(pv["k"], (1, 1), "sm120", hidden=True)["tile"]}
+             "pc8's hiding tile": pc8.templates(pv["k"], (1, 1), "sm120", hidden=True, hashing="h0")["tile"]}
     def own(x):
         return own_population(lambda v: P.population_program(x, n0, version=v), rec["program"])
     how, t = next(((h, x) for h, x in tiles.items() if PO.program_sha512(own(x)) == rec["program"]),
@@ -1792,7 +1792,7 @@ def served_audit(run: Run) -> Iterator[Case]:
     def copies(side: str, rec: dict, run_id: str | None = None) -> tuple[Any, dict, dict, dict]:
         c = run.json(f"out/{side}/commitment.json")
         b, (rows, n) = c["binding"], c["statement"]["tiles"]
-        t = pc8.templates(b["shape"][1], (1, 1), "sm120", hidden=True)["tile"]
+        t = pc8.templates(b["shape"][1], (1, 1), "sm120", hidden=True, hashing="h0")["tile"]
         program = own_population(lambda v: P.population_program(t, rows * n, version=v), rec["program"])
         query = P.template_instance_query(t)
         part = P.partition(program, query)

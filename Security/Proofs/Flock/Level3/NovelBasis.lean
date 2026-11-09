@@ -17,6 +17,7 @@ public import Proofs.Flock.Level3.NovelBasis.Steps28
 public import Proofs.Flock.Level3.NovelBasis.Steps31
 public import Proofs.Flock.Level3.NovelBasis.Steps34
 public import Proofs.Flock.Level3.NovelBasis.Steps37
+import all Init.Data.Array.Basic
 
 @[expose] public section
 

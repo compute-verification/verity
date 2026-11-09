@@ -32,7 +32,7 @@ def case_of(workload: dict | None, case: str | None = None) -> str:
 @dataclass
 class Engine:
     llm: Any
-    runner: Any
+    runner: Any          # the in-process model runner and its model; None at a tensor-parallel world, whose ranks hold them
     model: Any
     cp: dict
     kwargs: dict
@@ -80,6 +80,10 @@ def effective_execution_doc(llm: Any, model: Any = None) -> dict:
         doc["enable_prefix_caching"] = bool(getattr(cc, "enable_prefix_caching", None)) if getattr(cc, "enable_prefix_caching", None) is not None else None
         doc["enable_chunked_prefill"] = bool(getattr(sc, "enable_chunked_prefill", None)) if getattr(sc, "enable_chunked_prefill", None) is not None else None
         doc["max_num_batched_tokens"] = int(getattr(sc, "max_num_batched_tokens")) if getattr(sc, "max_num_batched_tokens", None) is not None else None
+        doc["long_prefill_token_threshold"] = (int(getattr(sc, "long_prefill_token_threshold"))
+                                               if getattr(sc, "long_prefill_token_threshold", None) is not None else None)
+        tp = getattr(getattr(vc, "parallel_config", None), "tensor_parallel_size", None)
+        doc["tensor_parallel_size"] = int(tp) if tp is not None else None
         doc["max_num_seqs"] = int(getattr(sc, "max_num_seqs")) if getattr(sc, "max_num_seqs", None) is not None else None
         doc["max_model_len"] = int(getattr(mc, "max_model_len")) if getattr(mc, "max_model_len", None) is not None else None
         doc["dtype"] = str(getattr(mc, "dtype", None))
@@ -217,13 +221,17 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
     if verify_weights:
         prof.verify_local_weights(cp)
     want_eager = bool(kw["enforce_eager"])
+    world = int(kw.get("tensor_parallel_size") or 1)
+    if target is not None and world > 1:
+        raise RuntimeError(f"a declared TargetProfile is checked on the in-process model, and at tensor_parallel_size {world} the "
+                           "model is in the ranks' processes: declare none")
     if kw.get("enforce_eager") is False:
         prepare_compiled_process_cache()
     t0 = time.perf_counter()
     llm = LLM(**kw)
     build_s = time.perf_counter() - t0
-    runner = handle.model_runner(llm)
-    model = runner.get_model()
+    runner = handle.model_runner(llm) if world == 1 else None
+    model = runner.get_model() if runner is not None else None
     eng = Engine(llm, runner, model, cp, kw, env_flags, build_s, case, target, execution, None, engine_env.set_since(env0))
     eng.effective = effective_execution_doc(llm, model)      # read back from vllm_config: what this engine really executes
     if execution is not None and eng.effective.get("enforce_eager") is not None and bool(eng.effective["enforce_eager"]) != want_eager:

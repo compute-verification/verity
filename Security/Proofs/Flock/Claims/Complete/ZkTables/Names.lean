@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Claims.Complete.ZkTables.Scope
 public import Proofs.Flock.Claims.Complete.ZkTables.Count
 public import Proofs.Flock.Claims.Complete.Json.Record
+import all Init.Data.Repr
 
 /-!
 # The tables' names and the rep streams' are distinct

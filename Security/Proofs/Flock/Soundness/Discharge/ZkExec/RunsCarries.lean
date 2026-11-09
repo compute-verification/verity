@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+import all Init.Data.String.Defs
 
 /-!
 # A `--zk` rep's rounds after round 0 carry its messages

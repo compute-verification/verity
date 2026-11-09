@@ -1,6 +1,8 @@
 module
 
 public import MemoryChallenger.StreamedWipe
+import all Init.Data.Int.Repr
+import all Init.Data.Repr
 
 /-!
 # What `pyJsonStr` writes is read back

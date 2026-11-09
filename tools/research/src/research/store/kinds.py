@@ -27,6 +27,8 @@ KINDS: dict[str, str] = {
     "evidence/v1": "a lane's evidence behind a note, which never goes in the notes (scripts, logs, JSON, plots): payload file or tree; "
                    "meta {lane, what, run?}; the note cites the art: id",
     "fixture/v1": "a repo-replicated input (golden records, instances); payload file/tree",
+    "fleet-samples/v1": "one UTC day of the fleet's 5-minute usage samples (pods/nebius/fleet.py, samples-YYYYMMDD.jsonl), put "
+                        "once the day is over: the usage record's second copy, off the control pod; payload file",
     "notes-evidence-index/v1": "where the bytes of files removed from the notes tree live: payload index.jsonl, one {path, sha256, "
                                "bytes, art, member, kind} per file (`research data fetch <art> --path <member>` restores it); meta "
                                "{notes_commit, files, bytes, note}",
@@ -48,6 +50,8 @@ KINDS: dict[str, str] = {
     "telemetry/v1": "events.jsonl or resources.jsonl of an attempt",
     "tasks-graph/v1": "a tasks/v1 task graph of one commit (`verity tasks list --json`), listed on a worker by the executor; "
                       "its tasks' keys are the ones their verdicts are labelled under",
+    "verity-graph/v2": "a graph/v2 of one commit (`verity graph --json`), listed on a worker by the executor; its tasks' keys (or, "
+                       "for a task that reads others, the key rule's) are the ones their results are labelled under",
     "check/v1": "a repository check run's result.json (each step's status and seconds); what `research merge` reads is its attempt",
     "check-shard/v1": "one shard's result.json (tools/verity/check/check.py --shard K/N): its steps, each with the plan's parts it ran, and "
                       "meta.shard {k, n, parts, all, commit, config}; no gate takes it alone, only a `check.py --combine` check of "

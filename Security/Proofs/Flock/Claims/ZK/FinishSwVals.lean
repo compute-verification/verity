@@ -46,7 +46,7 @@ theorem swSrcE_hinner_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ 
       FlockComplete.padsOf (Claims.ZKServer.tapeOfDraws tz (Lr.lay x) (Lr.draws ρ) frep) j.val r.val (layE x j))
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)
     (hmkV : ∀ k < (layE x j).zp 64, ((swSrcE x c w v τ j.val).rep r.val).masked k =
       q.vals[k]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).h[k]!)
     (st : _root_.Flock.Setup) (hst : st = _root_.Flock.Setup.ofCircuit (stAt x j)) (tPad : ℕ) (dom : ByteArray)
@@ -279,7 +279,7 @@ theorem swSrcE_hinner_sv_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (
       FlockComplete.padsOf (Claims.ZKServer.tapeOfDraws tz (Lr.lay x) (Lr.draws ρ) frep) j.val r.val (layE x j))
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)
     (hmkV : ∀ k < (layE x j).zp 64, ((swSrcE x c w v τ j.val).rep r.val).masked k =
       q.vals[k]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).h[k]!)
     (st : _root_.Flock.Setup) (hst : st = _root_.Flock.Setup.ofCircuit (stAt x j)) (tPad : ℕ) (dom : ByteArray)
@@ -461,8 +461,8 @@ theorem swSrcE_ligHyp_E_v (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : R
 
 /-- **`swSrcE_repCut` at any clear values `v`**: where table `j`'s rows hold at its base at `v`, rep `r`'s masked values
 below `zp 64` are the request's values plus its pads (`hmkV`) and, wherever the source's PIOP returns, from `zp 64` to
-`h_ab` level 0's `l0Clear` at the coins plus the pads (`hl0`), the firewall's
-rep returning `p` gives the cut from the switched source at `v` the same transcript and log and a proof `p'` with
+`h_ab` level 0's `l0Clear` at the coins plus the pads (`hl0`), the firewall's rep, at extra lanes and lane paddings
+that are the tape's within level 0's sizes (`hex`, `hlp`), returning `p` gives the cut from the switched source at `v` the same transcript and log and a proof `p'` with
 `eraseZ p' = eraseZ p`. -/
 theorem swSrcE_repCut_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : R) (tz : FlockComplete.TapeZk)
     (frep : ℕ → ℕ → ℕ) (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (τ : UE.Tape)
@@ -479,12 +479,16 @@ theorem swSrcE_repCut_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ 
       FlockComplete.padsOf (Claims.ZKServer.tapeOfDraws tz (Lr.lay x) (Lr.draws ρ) frep) j.val r.val (layE x j))
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)
     (hmkV : ∀ k < (layE x j).zp 64, ((swSrcE x c w v τ j.val).rep r.val).masked k =
       q.vals[k]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).h[k]!)
     (st : _root_.Flock.Setup) (hst : st = _root_.Flock.Setup.ofCircuit (stAt x j)) (dom : ByteArray)
     (g : Array _root_.Flock.F128) (hg : g = ligTab x w τ j) (cm0 : FlockComplete.Commit)
-    (ic : FlockComplete.InnerCommit) (salt : ℕ → ℕ → ByteArray)
+    (ic : FlockComplete.InnerCommit) (extra lanePad : ℕ → ℕ → _root_.Flock.F128)
+    (hex : ∀ e i, i < 2 ^ (lv0 x j).cols → extra e i = (UE.tapeZk τ).extra j.val e i)
+    (hlp : ∀ l i, l < 2 ^ (lv0 x j).lanes + _root_.Flock.Zk.EXTRA_LANES → i < (zkTab x j).tPad →
+      lanePad l i = (UE.tapeZk τ).lanePad j.val l i)
+    (salt : ℕ → ℕ → ByteArray)
     (hsalt : ∀ i, 1 ≤ i → i < (zkTab x j).sch.levels.size → ∀ q < 2 ^ ((zkTab x j).sch.levels.getD i default).d,
       salt i q = (UE.tapeZk τ).salt j.val r.val i q)
     {t₀ : _root_.Flock.Transcript} (ht₀ : t₀.rounds = #[]) {l : Array Msg}
@@ -500,8 +504,8 @@ theorem swSrcE_repCut_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ 
     {p : _root_.Flock.Zk.ZkProof} {t : _root_.Flock.Transcript} {l' : Array Msg}
     (h : ((_root_.Flock.Firewall.Finish.repFwC (FlockComplete.asksCut (ligCoin c) n)
       (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) st (zkTab x j).sch (zkTab x j).tPad r.val dom g cm0
-      extras (_root_.Flock.Firewall.Finish.padsOf q.draws).toC ic q.vals ((UE.tapeZk τ).extra j.val)
-      ((UE.tapeZk τ).lanePad j.val) salt).run t₀).go l = (.ok (p, t), l')) :
+      extras (_root_.Flock.Firewall.Finish.padsOf q.draws).toC ic q.vals extra lanePad salt).run t₀).go l =
+        (.ok (p, t), l')) :
     ∃ p', ((FlockComplete.repCut (FlockComplete.asksCut (ligCoin c) n)
         (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) st (zkTab x j).sch r.val dom
         (FlockComplete.eraseC cm0) extras ic ((swSrcE x c w v τ j.val).rep r.val)
@@ -648,8 +652,7 @@ theorem swSrcE_repCut_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ 
     ⟨rank_at_admits hx hAd hj r.isLt (ligCoin c) n (fun _ _ _ => rfl) st (by rw [hstj, hSm]) (by rw [hstj, hSk]) hkL
       _ _ _ _ ht₀ hl h₁ h₂, hsv zp zc t₁ l₁ lp lc t₂ l₂ h₁ h₂⟩
   refine _root_.Flock.Firewall.Finish.repCut_fw (ligCoin c) n st hmerk (zkTab x j).sch (zkTab x j).tPad r.val dom
-    (ligTab x w τ j) cm0 extras (_root_.Flock.Firewall.Finish.padsOf q.draws).toC ic q.vals
-    ((UE.tapeZk τ).extra j.val) ((UE.tapeZk τ).lanePad j.val) salt
+    (ligTab x w τ j) cm0 extras (_root_.Flock.Firewall.Finish.padsOf q.draws).toC ic q.vals extra lanePad salt
     ((swSrcE x c w v τ j.val).rep r.val) (priorE c j.val r.val)
     (Composed.maskWordsOf (stsOf x)[j.val]!) t₀ l hm14 hln hkL hmk hpiop ?_
     (swSrcE_hinner_sv_v Lr ρ tz frep x hx w τ c n hnr s spec hs j r v q hq hlayR hz hpads hrows hmkV st hst
@@ -671,7 +674,7 @@ theorem swSrcE_repCut_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ 
   have H := swSrcE_ligHyp_E_v x hx w hw τ c n hnr s spec hs j r extras he v q (hl0 _ _ _ hPC)
   unfold ligBasis at H
   rw [show ligSt x j = st from (tabsOf_stAt x j).trans hst.symm, ← hLyE] at H
-  exact H.ofSalt hsalt
+  exact (H.ofSalt hsalt).ofLanes (fun e i hi => hex e i (hi.trans_eq (tabS_ligTab_size _ _ x w τ j))) hlp r.isLt
 
 end Masked
 end Claims.ZKMal

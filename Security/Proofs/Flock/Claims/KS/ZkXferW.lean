@@ -2,6 +2,9 @@ module
 
 public import Proofs.Flock.Claims.KS.JointR
 public import Proofs.Flock.Claims.KS.ZkDecodeW
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Init.Data.Nat.Power2.Basic
 
 /-!
 # The masked live sessions' bound at the deployed decoders, off the table on a witness lane

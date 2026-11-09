@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Claims.Complete.Zk.Json.Goals
 public import Proofs.Flock.Claims.Complete.Files
 public import Proofs.Flock.Claims.Complete.Json.Canon
+import all Init.Data.Nat.Power2.Basic
 
 /-!
 # The honest masked run's proof files

@@ -3,6 +3,9 @@ module
 public import Proofs.Flock.Claims.Recursion.VStarTraceOk
 public import Proofs.Flock.VBridge.Family.Names
 public import Std.Data.String.ToNat
+import all Init.Data.String.Defs
+import all Init.Data.String.Basic
+import all Init.Data.List.SplitOn.Basic
 
 /-!
 # A staged part's circuit has three nets (`nets_three`)
@@ -38,7 +41,7 @@ open RecDeploy.VStarTraceOk (RowsOk)
 /-- Lines, each with its newline. -/
 def joinNl (L : List String) : String := String.join (L.map (· ++ "\n"))
 
-theorem joinNl_nil : joinNl [] = "" := rfl
+theorem joinNl_nil : joinNl [] = "" := (rfl)
 
 theorem joinNl_cons (a : String) (L : List String) : joinNl (a :: L) = a ++ "\n" ++ joinNl L := by
   simp [joinNl, String.join_cons, String.append_assoc]

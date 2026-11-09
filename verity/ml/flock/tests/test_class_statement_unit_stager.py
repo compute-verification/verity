@@ -288,6 +288,41 @@ def test_a_stager_writes_its_circuit_as_it_composes_it(which, tmp_path, monkeypa
           st.stage(rows, tmp_path / "streamed", b"k" * 32, **round_kw), st.circuit)
 
 
+def _packed_toy(w: int = 16) -> object:
+    """A unit returning its public ``w`` (``w`` 8-bit leaves) beside four 32-bit scales ``s`` and a 2048-bit row ``x``."""
+    sig = ((("w", Array(w, Value(8))), ("s", Array(4, Value(32))), ("x", Array(128, Value(16)))), Array(w, Value(8)))
+    return bind(CompositeDefinition(f"PackedPublicToy{w}", 1, (), lambda S: sig, lambda B, S, w, s, x: w, register=False))
+
+
+def test_a_packed_public_port_lays_its_leaves_out_as_a_row_does():
+    """`unit_ports`' public ports: each leaf in its own u16 words by default, with ``packed`` the parameter's leaves
+    concatenated as a row's (16 8-bit leaves in 8 words, not 16), the row after them either way; a packed port of a part word
+    is refused."""
+    for packed, words in ((False, [16, 8, 128]), (True, [8, 8, 128])):
+        ports, out_words, row_words = CS.unit_ports(_packed_toy(), "unit/packed-toy", [("x", ["x"])], ("w", "s"), packed)
+        step, s0 = (8, 128) if packed else (16, 256)
+        assert row_words == words and out_words == [8] and len(ports.ins) == sum(words)
+        assert ports.leaves[:16] == tuple(tuple(range(step * i, step * i + 8)) for i in range(16))
+        assert ports.leaves[16:20] == tuple(tuple(range(s0 + 32 * i, s0 + 32 * i + 32)) for i in range(4))
+        assert ports.leaves[20] == tuple(range(16 * (words[0] + 8), 16 * (words[0] + 9)))
+    with pytest.raises(ValueError, match="public port w is 24 bits"):
+        CS.unit_ports(_packed_toy(3), "unit/packed-toy", [("x", ["x"])], ("w", "s"), True)
+
+
+@pytest.mark.slow
+def test_a_packed_public_port_stages_on_the_rows_own_words(tmp_path):
+    """A stager with ``packed`` stages its public ports as the row's own words: the IR reference reads the unit's ``w`` there
+    on every instance (the unit returns it), and the circuit's ``w`` port is half the words of the default layout's."""
+    rng = np.random.default_rng(0)
+    w = rng.integers(0, 1 << 16, (3, 8), dtype=np.uint16)
+    rows = {"w": w, "s": rng.integers(0, 1 << 16, (3, 8), dtype=np.uint16), "x": rng.integers(0, 1 << 16, (3, 128), dtype=np.uint16)}
+    pins = {p: {"seed": "00", "derivation": "test/packed"} for p in ("w", "s")}
+    got = CS.stage_unit(_packed_toy(), "unit/packed-toy", [("x", V2, 2048, ["x"])], [(V2, (0,))], rows, tmp_path, b"k" * 32,
+                        public_inputs=pins, packed=True)
+    assert np.array_equal(got["outs"]["o0"], w)
+    assert {p["port"]: p["words"] for p in got["meta"]["public_inputs"]} == {"w": 8, "s": 8}
+
+
 def test_a_unit_lowering_drops_its_circuit_once_laid_out(monkeypatch):
     """`unit_lowering` keeps no circuit (a GLM-5.3 norm unit's is 51 GiB, which nothing reads after the layout), and its compact
     circuit (`_UnitCircuit`) lays out a plain `gf2.Circuit`'s netlist; `Lowering.domain` then reads the layout's assertions."""

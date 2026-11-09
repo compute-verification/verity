@@ -84,8 +84,8 @@ def SameAccepted (id : String) (ss : List String) (cs : List Protocol) (ps : Lis
 
 /-- **An accepted `same` composition is `SameAccepted`**: what `checkSame` accepts is an accepted composition of its
 components (`AcceptMeans`'s conclusion), and the components `ss` committed to one record. At remote
-(`Core.Remote.protocol`, under its ties) and at onsite (`Core.Onsite.protocol`, under its ties) the policy and the
-one-stage audit committed to one record (`Core.Remote.tied`, `Core.Onsite.tied`). -/
+(`Core.Remote.protocol`, under its ties) and at onsite (`Core.Onsite.protocol`, under its ties) the policy and
+sampled proofs committed to one record (`Core.Remote.tied`, `Core.Onsite.tied`). -/
 def AcceptSame : Prop :=
   ∀ (id : String) (ss : List String) (cs : List Protocol) (ps : List Named) (c : ByteArray) (ev : List Case)
     (pub prof : Keyed),

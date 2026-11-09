@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 # The dither-hb benches. Libraries are built on a CPU host and copied to the GPU host, so nothing but the bench runs on
 # the H200 or the B200 (no CPU phase there):
+<<<<<<< HEAD
 #   build    (a CPU host) every library for each ARCH in a comma list: $OUT/lib/ARCH/{kb,kb_pg,h1noise,h1u}.so and the
+||||||| merged common ancestors
+#   build    (a CPU host) every library for each ARCH in a comma list: $OUT/lib/ARCH/{kb,kb_pg,h1noise,h1u,h1zref,h1c}.so and the
+=======
+#   build    (a CPU host) every library for each ARCH in a comma list: $OUT/lib/ARCH/{kb,kb_pg,h1noise,h1u,h1zref}.so and the
+>>>>>>> 705be2b532
 #            h1u variants in $VARIANTS (NAME=FLAGS, e.g. pd4=-DH1U_PF=1,-DH1U_PD=4 builds h1u_pd4.so), their SASS and
 #            resource usage, and BUILD.txt: the commit and arch, and per library the sha256 of the repository files
 #            nvcc -M names (a bench refuses a library whose sources differ at its own commit)
@@ -25,7 +31,13 @@
 #   OUT=B bash benchmarks/hash/dither/job.sh sm_90a,sm_100a build          (a CPU host with CUDA 13.0, up to 20 minutes)
 #   OUT=R LIBS=B/lib/sm_90a bash benchmarks/hash/dither/job.sh sm_90a h1u  (an H200 under a GPU lease, up to 40 minutes)
 #
+<<<<<<< HEAD
 # Env: VARIANTS (default below), BUILDS (the base libraries a build makes, default "kb h1noise h1u" and
+||||||| merged common ancestors
+# Env: VARIANTS (default below), BUILDS (the base libraries a build makes, default "kb h1noise h1u h1zref h1c" and
+=======
+# Env: VARIANTS (default below), BUILDS (the base libraries a build makes, default "kb h1noise h1u h1zref" and
+>>>>>>> 705be2b532
 # kb_pg on sm_100a; set empty, only the variants), NVCC_EXTRA (nvcc flags every build adds, e.g. --no-compress for the
 # SASS gate), JOBS (builds at once, default 8), BENCH_ARGS (extra flags for the bench, e.g. "--ms 1,32 --linears o"), HB_WHO (the lease owner, default dither/ and the run's id), LEASE (gpu-lease flags, default
 # "--max-min 14"), LIBS (the shipped libraries, default $RESEARCH_RUN_DIR/inputs), VERITY_BENCH_VENV (default
@@ -33,7 +45,13 @@
 # beside NVCC).
 # Exit: the bench's (4 a gate failed), 2 a build failed or the shipped libraries are missing or another commit's.
 set -uo pipefail
+<<<<<<< HEAD
 ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a|sm_120a kbench|h1|h1u|prof|units|unitsprof|partials[,...]}
+||||||| merged common ancestors
+ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a|sm_120a kbench|h1|h1u|h1z|j10hb|prof|units|unitsprof|partials|z|zprof[,...]}
+=======
+ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a|sm_120a kbench|h1|h1u|h1z|j10hb|prof|units|unitsprof|partials[,...]}
+>>>>>>> 705be2b532
 BENCH=${2:-kbench}
 HERE=$(cd "$(dirname "$0")" && pwd)
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
@@ -68,7 +86,13 @@ if [ "$BENCH" = build ]; then
   for arch in ${ARCH//,/ }; do
     dir="$OUT/lib/$arch"
     mkdir -p "$dir"
+<<<<<<< HEAD
     read -r -a builds <<< "${BUILDS-kb h1noise h1u}"
+||||||| merged common ancestors
+    read -r -a builds <<< "${BUILDS-kb h1noise h1u h1zref h1c}"
+=======
+    read -r -a builds <<< "${BUILDS-kb h1noise h1u h1zref}"
+>>>>>>> 705be2b532
     [ "$arch" = sm_100a ] && [ -z "${BUILDS+set}" ] && builds+=(kb_pg)
     # h1u.cu's knobs: H1U_MINB (CTAs an SM the registers leave room for), H1U_PF (the fused form prefetches too), H1U_PD
     # (segments of A and B in flight), H1U_L2PF (L2 prefetch 16 segments ahead and of the next chunk's workspace), H1U_WARPS,

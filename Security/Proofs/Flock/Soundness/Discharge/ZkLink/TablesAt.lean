@@ -8,6 +8,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Block
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
+import all Init.Data.Nat.Power2.Basic
 
 /-!
 # The `--zk` table at each draw, from flock-verify's setup (statements)

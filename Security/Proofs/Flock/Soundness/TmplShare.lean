@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.TmplUnit
 public import Proofs.Flock.Soundness.TmplUnrollAt
+import all Init.Util
 
 /-!
 # The templated unit's share is the flat slot's

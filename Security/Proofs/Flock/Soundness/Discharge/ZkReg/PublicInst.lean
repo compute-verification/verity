@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundInst
+import all Init.Data.Array.Basic
 
 @[expose] public section
 

@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # Ligerito's rounds carry its messages (R11b)

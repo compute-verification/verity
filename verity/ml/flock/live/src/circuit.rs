@@ -1930,6 +1930,58 @@ impl Instances {
         Some(out)
     }
 
+    /// The rows whose salts the file holds: every instance's per port, or a shared-row file's table rows.
+    pub fn salt_count(&self, np: usize) -> usize {
+        match &self.tables {
+            Some(t) => t.counts.iter().sum(),
+            None => self.n * np,
+        }
+    }
+
+    /// Puts `salts` in place of the file's row salts, in the file's order ([`Instances::salt_count`] of them): a registered
+    /// population's prover file only.
+    pub fn set_salts(&mut self, np: usize, salts: Vec<u8>) -> Result<(), String> {
+        if !self.has_rows() || self.population.is_some() {
+            return Err("salts are set on a registered population's prover file".into());
+        }
+        if salts.len() != SALT_BYTES * self.salt_count(np) {
+            return Err(format!("{} bytes of salts, where the file's {} rows take {}", salts.len(), self.salt_count(np), SALT_BYTES * self.salt_count(np)));
+        }
+        match &mut self.tables {
+            Some(t) => t.salts = Some(std::sync::Arc::new(salts)),
+            None => self.salts = Some(salts),
+        }
+        Ok(())
+    }
+
+    /// The prover's file of this registered population, as [`Instances::load`] reads it: the header (`rows` true), the rows,
+    /// their salts and the public bytes.
+    pub fn prover_file(&self) -> Result<Vec<u8>, String> {
+        if self.population.is_some() || !self.has_rows() {
+            return Err("a prover's file is a registered population's, with its rows".into());
+        }
+        let mut header = self.header.clone();
+        header["rows"] = Value::Bool(true);
+        let mut b = serde_json::to_vec(&header).map_err(|e| format!("header: {e}"))?;
+        b.push(b'\n');
+        match &self.tables {
+            Some(t) => {
+                b.extend(t.rows.as_deref().into_iter().flatten());
+                b.extend(t.salts.as_deref().into_iter().flatten());
+            }
+            None => {
+                b.extend(self.rows.iter().flatten());
+                b.extend(self.salts.iter().flatten());
+            }
+        }
+        b.extend(self.bcs.iter().flatten());
+        if let Some(t) = &self.tables {
+            b.extend(t.refs.iter().flat_map(|r| r.to_le_bytes()));
+        }
+        b.extend(self.public.iter().flat_map(|w| w.to_le_bytes()));
+        Ok(b)
+    }
+
     /// Every instance's row salts, instance-major, ports in order (a shared-row file's gathered by its refs); `None`: the
     /// verifier's file.
     pub fn instance_salts(&self, np: usize) -> Option<Vec<u8>> {
@@ -2326,7 +2378,7 @@ pub struct Stmt {
     pub flock_digest: [u8; 32],
     /// how the verifier's identity is pinned: profile, reps, zk, leaf scheme, coin mode (backend identity)
     pub identity: Value,
-    /// `r1cs.c0_is_identity()`, a function of the statement alone: computed by its first verification, read by the rest
+    /// `r1cs.c0_is_identity()`, a function of the statement alone: computed by its first verification or zk replay, read by the rest
     pub c0_identity: OnceLock<bool>,
 }
 
@@ -3408,6 +3460,38 @@ mod tests {
         let d = inst.drawn(&c, &json!({"law": "subset", "population": n, "k": 1, "units": [1]})).unwrap();
         assert_eq!(d.public_file_sha512, file);
         assert_ne!(d.public_sha512, inst.public_sha512);
+    }
+
+    /// A prover's file with its salts set elsewhere (the ZK server's: `flock-circuit --salt-refs`) is written as `load` reads
+    /// it: the same rows, the new salts and the same public part. Salts of another count, a verifier's file and a drawn
+    /// statement are refused.
+    #[test]
+    fn salts_set_on_a_prover_file_round_trip() {
+        let c = Composite::parse(&typed_statement(), None).unwrap();
+        let (n, np) = (2, c.ports.len());
+        let header = json!({"format": INST_FORMAT, "statement": c.statement(), "circuit_sha512": crate::hex(&c.sha512),
+                            "instances": n, "rows": true, "units": units_entry(&c, &[0, 1])});
+        let mut b = serde_json::to_vec(&header).unwrap();
+        b.push(b'\n');
+        let body = n * c.row_bytes() + n * np * SALT_BYTES + BC_BYTES * n * np + 2 * n * c.public_words();
+        b.extend((0..body).map(|i| i as u8));
+        let p = std::env::temp_dir().join(format!("flock-prover-file-{}.bin", std::process::id()));
+        std::fs::write(&p, &b).unwrap();
+        let inst = Instances::load(p.to_str().unwrap(), &c);
+        let mut inst = inst.unwrap();
+        assert_eq!(inst.prover_file().unwrap(), b, "unchanged, the file as it was read");
+        assert_eq!(inst.salt_count(np), n * np);
+        assert!(inst.set_salts(np, vec![7; SALT_BYTES * n * np - 1]).unwrap_err().contains("bytes of salts"));
+        let salts: Vec<u8> = (0..SALT_BYTES * n * np).map(|i| (i % 251) as u8).collect();
+        inst.set_salts(np, salts.clone()).unwrap();
+        std::fs::write(&p, inst.prover_file().unwrap()).unwrap();
+        let again = Instances::load(p.to_str().unwrap(), &c);
+        std::fs::remove_file(&p).unwrap();
+        let again = again.unwrap();
+        assert_eq!((again.rows.as_ref(), again.salts.as_ref(), &again.bcs, &again.public), (inst.rows.as_ref(), Some(&salts), &inst.bcs, &inst.public));
+        assert_eq!(again.public_file().unwrap(), inst.public_file().unwrap());
+        let mut d = inst.drawn(&c, &json!({"law": "subset", "population": n, "k": 1, "units": [1]})).unwrap();
+        assert!(d.prover_file().is_err() && d.set_salts(np, vec![0; SALT_BYTES * np]).is_err());
     }
 
     #[test]

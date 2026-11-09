@@ -19,6 +19,8 @@ coins (`ligCoin`) and the packed table of the witness's trace (`ligTab`). So the
 * `repFwC_piopFw`: where the firewall's rep returned, so did its PIOP.
 * `zcCoins_ligRespE`, `lcCoins_ligRespE`, `rsCoins_ligRespE`: the closed forms' coins at the replies `ligRespE c` are
   the opened coins.
+* `LigLock.LigHyp.ofSalt`, `LigLock.LigHyp.ofLanes`: `LigHyp` reads levels ≥ 1's salts only on the schedule, and the
+  extra lanes and lane paddings only within level 0's sizes.
 * **`swSrcE_repCut`**: `repCut_fw` at the switched source. `hmk` is `swSrcE_hmk_frame`. `hpiop`'s rank half is
   `rank_at_admits`, and its switched vectors are the prover's (`swSrc_sv`), whose claims have the firewall's points
   (`zerocheckCut_at`, `lincheckCut_at`, `claims_x`) and `m − 6` coordinates (`claims_xsize'`), read off the packed
@@ -80,6 +82,47 @@ theorem LigHyp.ofSalt {coin : ℕ → ℕ → _root_.Flock.F128} {n p0 : ℕ} {m
     LigHyp coin n p0 ms sch t b lay h rep tPad extra lanePad salt' src :=
   { H with salt := fun a b' i h1 h2 q hq => by rw [hs i h1 h2 q hq]; exact H.salt a b' i h1 h2 q hq }
 
+/-- **`LigHyp` reads the extra lanes and lane paddings only within level 0's sizes**: it holds at extra lanes that agree
+with its own below the folded table's size, and at lane paddings that agree on the `2^lanes + 4` lanes below `t_pad`,
+for rep `0` or `1`. -/
+theorem LigHyp.ofLanes {coin : ℕ → ℕ → _root_.Flock.F128} {n p0 : ℕ} {ms : _root_.Flock.MerkleScheme}
+    {sch : _root_.Flock.Schedule} {t b : Array _root_.Flock.F128} {lay : _root_.Flock.Zk.PadLayout}
+    {h : Array _root_.Flock.F128} {rep tPad : ℕ} {extra lanePad extra' lanePad' : ℕ → ℕ → _root_.Flock.F128}
+    {salt : ℕ → ℕ → ByteArray} {src : FlockComplete.RepSrc}
+    (H : LigHyp coin n p0 ms sch t b lay h rep tPad extra lanePad salt src)
+    (he : ∀ e c, c < (tabS coin p0 t sch.k0).size → extra' e c = extra e c)
+    (hp : ∀ l i, l < 2 ^ (sch.levels.getD 0 default).lanes + _root_.Flock.Zk.EXTRA_LANES → i < tPad →
+      lanePad' l i = lanePad l i)
+    (hr : rep < 2) :
+    LigHyp coin n p0 ms sch t b lay h rep tPad extra' lanePad' salt src := by
+  have hA : ∀ e, (Array.range (tabS coin p0 t sch.k0).size).map (extra' e) =
+      (Array.range (tabS coin p0 t sch.k0).size).map (extra e) := fun e =>
+    Array.map_congr_left fun c hc => he e c (Array.mem_range.1 hc)
+  have hE : _root_.Flock.Zk.EXTRA_LANES = 4 := rfl
+  have hB : (Array.range tPad).map (fun i =>
+      (List.range (2 ^ (sch.levels.getD 0 default).lanes)).foldl
+        (fun acc l => acc + ((_root_.Flock.eqTableK ((Array.range sch.k0).map (chS coin p0)))[l]!).smul (lanePad' l i))
+        ((rhoS coin p0 sch.k0).1.smul (lanePad' (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep) i) +
+          (rhoS coin p0 sch.k0).2.smul (lanePad' (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep + 1) i))) =
+      (Array.range tPad).map (fun i =>
+      (List.range (2 ^ (sch.levels.getD 0 default).lanes)).foldl
+        (fun acc l => acc + ((_root_.Flock.eqTableK ((Array.range sch.k0).map (chS coin p0)))[l]!).smul (lanePad l i))
+        ((rhoS coin p0 sch.k0).1.smul (lanePad (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep) i) +
+          (rhoS coin p0 sch.k0).2.smul (lanePad (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep + 1) i))) := by
+    refine Array.map_congr_left fun i hi => ?_
+    have hi' := Array.mem_range.1 hi
+    rw [hp (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep) i (by omega) hi',
+      hp (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep + 1) i (by omega) hi']
+    exact List.foldl_ext _ _ _ fun acc l hl => by
+      have := List.mem_range.1 hl
+      try dsimp only
+      rw [hp l i (by omega) hi']
+  exact { H with
+    e0 := by rw [hA]; exact H.e0
+    e1 := by rw [hA]; exact H.e1
+    y1 := fun a b' => by rw [hA, hA]; exact H.y1 a b'
+    ybar := fun a b' => by rw [hB]; exact H.ybar a b' }
+
 end FlockComplete.LigLock
 
 namespace Claims.ZKMal
@@ -130,7 +173,7 @@ theorem swSrcE_repCut {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
       FlockComplete.padsOf (Claims.ZKServer.tapeOfDraws tz (Lr.lay x) (Lr.draws ρ) frep) j.val r.val (layE x j))
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, valsFw x c A B j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)
     (st : _root_.Flock.Setup) (hst : st = _root_.Flock.Setup.ofCircuit (stAt x j)) (dom : ByteArray)
     (g : Array _root_.Flock.F128) (hg : g = ligTab x w τ j) (cm0 : FlockComplete.Commit)
     (ic : FlockComplete.InnerCommit) (salt : ℕ → ℕ → ByteArray)

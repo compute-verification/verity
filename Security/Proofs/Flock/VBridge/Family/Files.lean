@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.VBridge.Family
 public import Proofs.Flock.VBridge.Runs.Rep
+import all Init.Data.Repr
 
 /-!
 # The family's table files: `HSch`, `HFiles`, `HRuns`

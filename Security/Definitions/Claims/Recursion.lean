@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Claims.IndexedTapes
+public import Definitions.Claims
 
 /-!
 # Claims: the ZK-recursion compiler (a draft, before it freezes)

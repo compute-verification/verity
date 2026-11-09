@@ -4,6 +4,8 @@ public import Proofs.Flock.VBridge.Family.Rep
 public import Proofs.Flock.VBridge.Family.Openings
 public import Proofs.Flock.VBridge.Family.Files
 public import Proofs.Flock.Soundness.Refine.Regions
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The structure facts at V*'s shape

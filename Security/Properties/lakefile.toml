@@ -51,6 +51,10 @@ name = "core_memory_challenger"
 path = "../../verity/core/devices/memory_challenger/lean"
 
 [[require]]
+name = "core_firewall"
+path = "../../verity/core/service/firewall"
+
+[[require]]
 name = "network_check"
 path = "../../verity/core/protocols/network/lean"
 
@@ -97,9 +101,10 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.NetworkCertifier.LinkWindow", "Properties.CertifierNetwork", "Properties.CertifierNetwork.Runs",
   "Properties.Identity", "Properties.Annot", "Properties.NciDesc", "Properties.NciDesc.Verdict",
   "Properties.NciDesc.Cover", "Properties.Nci.Baseline", "Properties.Nci.Count", "Properties.SampledProofs",
-  "Properties.SampledProofs.Draw", "Properties.SampledProofs.Halt", "Properties.Evaluate", "Properties.NetworkRecords",
-  "Properties.NetworkPeriod", "Properties.Core.Period", "Properties.NetworkScan", "Properties.Accounting.Requirement",
-  "Properties.Accounting.Compose", "Properties.RemoteAudit",
+  "Properties.SampledProofs.Draw", "Properties.SampledProofs.Halt", "Properties.SampledProofs.Second",
+  "Properties.Evaluate", "Properties.NetworkRecords", "Properties.NetworkPeriod", "Properties.Core.Period",
+  "Properties.NetworkScan", "Properties.Accounting.Requirement", "Properties.Accounting.Compose",
+  "Properties.RemoteAudit",
   "Properties.RemoteAudit.Coins", "Properties.RemoteAudit.Pooled", "Properties.Accounting.Served",
   "Properties.Accounting.DeclaredCircuit", "Properties.RemoteAudit.Line", "Properties.RemoteAudit.Schedule",
   "Properties.RemoteAudit.Shared", "Properties.RemoteAudit.Live", "Properties.RemoteAudit.Component",
@@ -107,4 +112,4 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.Accounting.JointBridge.ServiceSoundOfSessions",
   "Properties.Flock.Circuit", "Properties.Nci.Protocol", "Properties.Verity.Soundness", "Properties.Verity.Game",
   "Properties.Verity.Idle", "Properties.Verity.Subprotocols", "Properties.Remote", "Properties.Pous.WipeSigned",
-  "Properties.Challenger", "Properties.Core.Site"]
+  "Properties.Challenger", "Properties.Firewall", "Properties.Core.Site"]

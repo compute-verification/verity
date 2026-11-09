@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Nci.Resolve
+import all Init.Data.Stream
 
 /-!
 # Lemmas for `BodiesOk`: types, loops and streams

@@ -2,6 +2,12 @@ module
 
 public import Flock.RecVStar
 public import Batteries.Tactic.OpenPrivate
+import all Init.Data.Array.QSort.Basic
+import all Init.Data.String.TakeDrop
+import all Init.Data.String.Slice
+import all Init.Data.String.Pattern.String
+import all Init.Data.String.Pattern.Basic
+import all Init.Data.String.Defs
 
 /-!
 # R's stream's first top makes R's registered entry
@@ -74,7 +80,7 @@ section Loop
 
 variable (lt : α → α → Bool) {lo hi : Nat} (hhi : hi < n) (pivot : α)
 
-theorem loop_sameOn :
+private theorem loop_sameOn :
     ∀ (d : Nat) (as : Vector α n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
       SameOn lo hi as (Array.qpartition.loop lt lo hi hhi pivot as i k ilo ik w).2 := by
   intro d
@@ -95,7 +101,7 @@ theorem loop_sameOn :
     · exact ih _ _ _ _ _ _ (by omega)
 
 /-- The loop's split: past its pivot's place, no element is below the pivot, which it puts there. -/
-theorem loop_split :
+private theorem loop_split :
     ∀ (d : Nat) (as : Vector α n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
       as[hi] = pivot → (∀ j (hj : j < n), i ≤ j → j < k → lt as[j] pivot = false) →
       ∀ m as', Array.qpartition.loop lt lo hi hhi pivot as i k ilo ik w = (m, as') →
@@ -141,7 +147,7 @@ theorem loop_split :
       · exact hb j hj h1 (by omega)
 
 /-- The loop puts its pivot before `hi` once it has passed a place `mid < hi` whose element is not below it. -/
-theorem loop_lt {mid : Nat} (hmid : mid < hi) :
+private theorem loop_lt {mid : Nat} (hmid : mid < hi) :
     ∀ (d : Nat) (as : Vector α n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
       (i < k ∨ (k ≤ mid ∧ lt (as[mid]'(by omega)) pivot = false)) →
       (Array.qpartition.loop lt lo hi hhi pivot as i k ilo ik w).1.1 < hi := by
@@ -191,7 +197,7 @@ theorem ite_swap_lt (lt : α → α → Bool) (hasym : ∀ a b, lt a b = true �
   · rename_i h; simp only [Vector.getElem_swap_left, Vector.getElem_swap_right]; exact hasym _ _ h
   · rename_i h; simpa using h
 
-theorem loop_spec (lt : α → α → Bool) {lo hi : Nat} (hhi : hi < n) {as as₃ : Vector α n} (w : lo ≤ hi) {mid : Nat}
+private theorem loop_spec (lt : α → α → Bool) {lo hi : Nat} (hhi : hi < n) {as as₃ : Vector α n} (w : lo ≤ hi) {mid : Nat}
     (hm1 : lo ≤ mid) (hm2 : mid ≤ hi) (hmid : lo < hi → mid < hi) (hS : SameOn lo hi as as₃)
     (H : lt (as₃[mid]'(by omega)) as₃[hi] = false) :
     ∀ m as', Array.qpartition.loop lt lo hi hhi as₃[hi] as₃ lo lo (Nat.le_refl _) (Nat.le_refl _) w = (m, as') →
@@ -218,7 +224,7 @@ theorem qpartition_spec (lt : α → α → Bool) (hasym : ∀ a b, lt a b = tru
         (sameOn_ite_swap _ _ _ _ (by omega) (by omega) (by omega) (by omega)))
   · exact ite_swap_lt lt hasym _ _ _
 
-theorem sort_spec (lt : α → α → Bool) (hasym : ∀ a b, lt a b = true → lt b a = false)
+private theorem sort_spec (lt : α → α → Bool) (hasym : ∀ a b, lt a b = true → lt b a = false)
     (htr : ∀ a b c, lt a b = false → lt b c = false → lt a c = false) :
     ∀ (d : Nat) (as : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n), hi - lo < d →
       SameOn lo hi as (Array.qsort.sort lt as lo hi w hlo hhi) ∧
@@ -279,6 +285,31 @@ theorem qsort_min (as : Array α) (f : α → Nat) {x y : α} (hx : x ∈ as)
     rw [key _ _ _ (Nat.zero_min _) hy] at h
     simp at h
     exact Nat.le_of_not_lt (of_decide_eq_false h)
+
+theorem mem_of_sameOn {as : Array α} {r : Vector α as.size} {lo hi : Nat} (hS : SameOn lo hi as.toVector r)
+    (hlo : lo = 0) (hhi : as.size ≤ hi + 1) (x : α) : x ∈ r.toArray ↔ x ∈ as := by
+  subst hlo
+  rw [Vector.mem_toArray_iff, Vector.mem_iff_getElem, Array.mem_iff_getElem]
+  constructor
+  · rintro ⟨j, hj, rfl⟩
+    obtain ⟨j', hj', -, -, e⟩ := (hS.2 r[j]).2 ⟨j, hj, Nat.zero_le _, by omega, rfl⟩
+    exact ⟨j', hj', e⟩
+  · rintro ⟨j, hj, rfl⟩
+    obtain ⟨j', hj', -, -, e⟩ := (hS.2 as[j]).1 ⟨j, hj, Nat.zero_le _, by omega, rfl⟩
+    exact ⟨j', hj', e⟩
+
+/-- **`Array.qsort` keeps its elements**, under an order whose negation is transitive. -/
+theorem qsort_mem (as : Array α) (lt : α → α → Bool) (hasym : ∀ a b, lt a b = true → lt b a = false)
+    (htr : ∀ a b c, lt a b = false → lt b c = false → lt a c = false) (x : α) : x ∈ as.qsort lt ↔ x ∈ as := by
+  unfold Array.qsort
+  split
+  · exact Iff.rfl
+  · rename_i h0
+    try simp only
+    obtain ⟨hS, -⟩ := sort_spec lt hasym htr _ as.toVector (min 0 (as.size - 1))
+      (max (min 0 (as.size - 1)) (min (as.size - 1) (as.size - 1))) (by omega) (by omega) (by omega)
+      (Nat.lt_succ_self _)
+    exact mem_of_sameOn hS (Nat.zero_min _) (by omega) x
 
 end QSort
 

@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.VBridge.Family.Rounds
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 public import Proofs.Flock.Verifier.Registered
+import all Init.Data.Array.Basic
 
 /-!
 # The family's public files at accepting sessions: `PubCommits` up to a SHA-512 collision

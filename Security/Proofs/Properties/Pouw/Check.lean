@@ -3,6 +3,7 @@ module
 public import Properties.Pouw
 public import Properties.Pouw.Check
 public import Proofs.Properties.Pouw.Grid
+import all Lean.Data.Json.Basic
 
 /-!
 # Proofs of PoUW's check properties (`Properties.Pouw.Check`)

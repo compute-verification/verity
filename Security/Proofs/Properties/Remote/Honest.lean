@@ -2,6 +2,8 @@ module
 
 public import Proofs.Properties.Remote
 public import Proofs.Flock.Claims.Complete.Json.Hex
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
 
 /-!
 # Remote's tie on an honest run: one record, one digest

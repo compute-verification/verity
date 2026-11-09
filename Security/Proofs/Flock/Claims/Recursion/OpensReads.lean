@@ -9,6 +9,8 @@ public import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 public import Proofs.Flock.Soundness.Discharge.Layout.QSort
 public import Proofs.Flock.Claims.Recursion.SlotsCheck
 public import Proofs.Flock.Claims.Recursion.LayoutBTops
+import all Init.Data.String.Defs
+import all Init.Data.Repr
 
 /-!
 # What a staged part's transcript shows is the record the verifier read in its own format

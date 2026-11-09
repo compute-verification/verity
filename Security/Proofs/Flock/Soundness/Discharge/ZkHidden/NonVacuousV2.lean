@@ -3,6 +3,9 @@ module
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousJ
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
 public import Proofs.Flock.Soundness.ExecSetup
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Lean.Data.Json.Basic
 
 @[expose] public section
 

@@ -11,7 +11,9 @@ tables, constants), never on its batch-mates. The batch reaches a Program two wa
   max_seqlen_q, FA2's guard `MASKED_FROM` from the launch's causal flag on cc 12.0).
 
 So Inputs are labelled by provenance (`OWN_GROUPS` own, the registration's shared, any other request-local group `BATCH`), and a
-role's launch statics are held to (b) across the launch shapes the registration allows (`templates`).
+role's launch statics are held to (b) across the launch shapes the registration allows (`templates`). In class G (`steps.CLASS_G`,
+no batch invariance) every token-count-dependent kernel choice reads the launch, so no template holds its statics to (b): each
+request's Program is built at its launch context, which the advice fixes, and the rules below hold its values to its own inputs.
 
 `check_compiled` refuses (`BatchDependent`), deterministically:
 
@@ -21,7 +23,10 @@ role's launch statics are held to (b) across the launch shapes the registration 
   renumbered, its own release buckets): planning reads no batch-mate, whatever path a later change adds. A prefix-cache hit on
   another request's KV is kept when its tokens are checked equal (through each run, the source's certified prompt equals the
   request's), since that KV is then a function of the request's own prompt, given (a) and (b) on the units that computed it.
-  Alone, a stand-in computes it from the request's own tokens. Any other hit on another request's KV is refused.
+  Alone, a stand-in computes it from the request's own tokens. Any other hit on another request's KV is refused. In class G a
+  unit also holds its launch context, the advice's schedule of the steps its rows ran in, never a batch-mate's value: R2 is then
+  the request compiled alone at the same launch context, so the unit is compared apart from its launch (alone each row is a launch
+  of its own), with its rows and its discarded rows.
 - R1: GP-01 wiring: a RowRef or a component naming another request's Program, or a request's outputs whose cone (`check.batch.
   separable` over `workload_labels`) reads another request's Inputs or a batch-provenance one (a `prefix` behind no checked
   hit included). A tensor-parallel rank's `peers_*` are its request's own: this rests on the node binding each to the same
@@ -113,7 +118,8 @@ def templates(phi: Phi, *, max_tokens: int = 2048, max_seqs: int = 64, max_model
     verdicts; then GP-01 over ``composition``'s (LP, T) requests, greedy, at the registered split count, and under a derived one."""
     tp, C = phi.target_profile(), model_shape(phi.model["hf_config"])
     if not tp.batch_invariant:
-        raise Unexpressible(f"{phi.execution!r}: the request-major compiler serves batch-invariant targets only")
+        raise Unexpressible(f"{phi.execution!r}: templates hold a batch-invariant registration's launch statics; without batch "
+                            f"invariance each request's Program is built at its launch context (`steps.CLASS_G`)")
     specs = cache(lambda M: _Specs(C, tp, M=M))
     S1 = specs(1)
     rows = _grid(1, max_tokens, 2, 64, 128, 256)

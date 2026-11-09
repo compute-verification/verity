@@ -4,6 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.PlainReg.Defs
 public import Proofs.Flock.Soundness.Discharge.PlainReg.BindH
 public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedH
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineInst
+import all Init.Data.Array.Basic
 
 /-!
 # The registered check at an accepted hidden-output `verify --registered F` outcome, without `--zk`

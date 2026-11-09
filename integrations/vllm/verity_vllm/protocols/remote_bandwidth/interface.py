@@ -10,11 +10,21 @@ codec       a region's encoding: payload words in, stored words out, `encode(pay
 receipt     a keyed hash of one block read in a pass, `keyed(seed)(j, block, z)`; `z` is the input a receipt bound to the
             prior tile's output reads (None for receipts that bind only the block)
 registration  putting a block into the store: its bytes are the codec's encoding of a payload a `Source` names; every
+<<<<<<< HEAD
             registration is a record in the store's chain, and `ChainHead.root` commits the chain
 window      the interval of one challenge σ: `begin_window(σ)` ... `end_window()`, which the verifier's boundary
             message ends (the next window's challenge, or the close after the last)
+||||||| merged common ancestors
+            registration is a record in the log, and `Registration.root` commits the log
+window      the interval of one challenge σ: `begin_window(σ)` ... `end_window()`, which the verifier's boundary
+            message ends (the next window's challenge, or the close after the last)
+=======
+            registration is a record in the log, and `Registration.root` commits the log
+window      the interval of one challenge chal_t: `begin_window(chal_t)` ... `end_window()`, which the verifier's
+            boundary message ends (the next window's challenge, or the close after the last)
+>>>>>>> 705be2b532
 pass        one read of the live store: weights, the batch's written KV, and filler to top up, no block twice; its seed
-            is chained, seed_j = H(σ, j, commitment before it) across windows (the verifier's registration digest
+            is chained, seed_j = H(chal_t, j, commitment before it) across windows (the verifier's registration digest
             before the session's first), so pass j's receipts can't start before the pass before it is committed
 segment     some of one region's blocks read in a pass, in read order; one reader (a fused GEMM, attention, the filler
             sweep) receipts it.  The store lays a pass's segments out as subtrees of its tree (whole leaves, a power

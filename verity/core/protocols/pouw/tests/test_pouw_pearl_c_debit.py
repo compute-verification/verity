@@ -89,7 +89,7 @@ def test_aligned_spike_tile_is_over_the_cap(spike):
     """The negative control: the R = 300 aligned-spike tile, formed by the scheme's own `encode`, passes the domain and has
     74.6% of its atom-words flagged, about 15x the cap; without spikes the debit is far below it."""
     k, t = 4096, 4
-    s = C.PearlC(k_min=128, tile=(t, t), forming="v1")
+    s = C.PearlC(k_min=128, tile=(t, t), forming="v1", hashing="h0")
     ctx = Context(b"\x11" * 32, Matmul(0, Shape(t, k, t), 0), b"\x22" * 32, b"\x33" * 32)
     ops = s.encode(ctx, s.noise(ctx), spiked_rows(k, t, 100, spike), spiked_rows(k, t, 900, spike),
                    Tile(tuple(range(t)), tuple(range(t))))

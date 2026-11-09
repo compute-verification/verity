@@ -110,7 +110,7 @@ def VStarParses {S : ℕ} (t₀ : Flock.Tags) (i : RecVStar.Inner) (bind : Fin S
     Prop :=
   ∀ (j : Fin S) (ss : Array VStar.Stmt) (s : VStar.Stmt) (cf : ByteArray), RecVStar.statements i = .ok ss →
     ss[(j : ℕ)]? = some s → RecVStar.circuitFile s (bind j) i.holo = .ok cf →
-    HmRow.parse (Flock.Zk.tags (t₀.withCoins (.tree (Flock.Zk.coinSpec #[t₀.table]))) (Flock.Zk.maskLogOf cf) 1) cf
+    HmRow.parse (Flock.Zk.tags t₀ (Flock.Zk.maskLogOf cf) 1) cf
       [] = .ok (Vs j).c ∧ (Vs j).nv = s.instances
 
 /-- Obligation: a fact about our code, not a premise. **The inputs' tags are the statement their name names**
@@ -611,7 +611,7 @@ def VStarParsesScoped {S : ℕ} (t₀ : Flock.Tags) (i : RecVStar.Inner) (bind :
     (Vs : Fin S → VStmt) : Prop :=
   ∀ (j : Fin S) (ss : Array VStar.Stmt) (s : VStar.Stmt) (cf : ByteArray) (c : Flock.Circuit),
     RecVStar.statements i = .ok ss → ss[(j : ℕ)]? = some s → RecVStar.circuitFile s (bind j) i.holo = .ok cf →
-    HmRow.parse (Flock.Zk.tags (t₀.withCoins (.tree (Flock.Zk.coinSpec #[t₀.table]))) (Flock.Zk.maskLogOf cf) 1) cf
+    HmRow.parse (Flock.Zk.tags t₀ (Flock.Zk.maskLogOf cf) 1) cf
       [] = .ok c → Layout.scopeOk c = true → c = (Vs j).c ∧ (Vs j).nv = s.instances
 
 theorem vstarParsesScoped_of {S : ℕ} {t₀ : Flock.Tags} {i : RecVStar.Inner} {bind : Fin S → VStar.Bindings}

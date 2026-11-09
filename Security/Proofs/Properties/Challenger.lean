@@ -1,6 +1,9 @@
 module
 
 public import Properties.Challenger
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
+import all Init.Data.Array.Basic
 
 /-!
 # Proofs of `Properties.Challenger`

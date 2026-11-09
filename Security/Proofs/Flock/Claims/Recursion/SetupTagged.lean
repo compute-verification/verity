@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Recursion.LayoutBTops
 public import Proofs.Flock.Claims.Recursion.VStarCross
+import all Init.Data.String.Defs
 
 /-!
 # The plain setup makes a call no recorded part makes

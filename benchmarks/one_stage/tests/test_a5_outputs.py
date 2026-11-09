@@ -1,7 +1,8 @@
 """a5's output class (`a5.output_units`): a window's units whose outputs are served out would be proved whole beside a work
 sample only on a closure map, which the stream refuses (`closure`), so a5 refuses a window with an output class before the
-sample (`a5.output_refusal`). The stream refuses the class's closure map before reading a coin, and the same registration's
-work sample without one is accepted, the Lean's `Run.run` agreeing. A toy window of one template."""
+sample (`a5.output_refusal`). On a test's own challenger (`fake_challenger`) the stream refuses the class's closure map
+before reading a coin, and the same registration's work sample without one is accepted, the Lean's `Run.run` agreeing. A
+toy window of one template."""
 
 from __future__ import annotations
 
@@ -54,8 +55,8 @@ class Clock:
         return self.now
 
 
-def args(outputs=OUTPUTS, coins="challenger") -> SimpleNamespace:
-    return SimpleNamespace(outputs=outputs, coins=coins)
+def args(outputs=OUTPUTS) -> SimpleNamespace:
+    return SimpleNamespace(outputs=outputs)
 
 
 def program() -> Program:
@@ -94,15 +95,27 @@ def test_an_output_class_is_refused_before_the_sample():
 
 @pytest.mark.parametrize("seed", range(3))
 def test_the_class_closure_map_is_refused_and_the_work_draw_without_it_accepted(seed):
-    """The stream refuses the class's closure map (every unit's closure the whole class) before any coin is read; the same
-    registration's sample of record without it draws k (the work law over one template of work 1 is the uniform
-    k-subset), proves exactly those, and is accepted, the Lean's run agreeing."""
+    """The stream refuses the class's closure map (every unit's closure the whole class) before any coin is read, so its
+    sample of record afterwards is the one a stream on the same challenger draws with no refusal before it: k units (the
+    work law over one template of work 1 is the uniform k-subset), proving exactly those, and accepted, the Lean's run
+    agreeing."""
     stream = stream_of(FC.Challenger(f"a5-outputs/{seed}"))
     reg = register(stream)
     with pytest.raises(S.Refused) as e:
         stream.select(reg, closure={u: OUTS for u in range(N)})
     assert e.value.verdict.codes == ("closure",)
     draw = stream.select(reg)
+<<<<<<< HEAD
+||||||| merged common ancestors
+    draw = stream.select(register(stream), closure=closure)
+    units, proved = draw.draw["units"], D.proved(draw.draw)
+    assert draw.draw["law"] == "work" and len(units) == K
+    assert set(OUTS) <= set(proved) and set(proved) == set(units) | set(OUTS)
+    assert sorted(draw.draw.get("closure", [])) == sorted(set(OUTS) - set(units))
+=======
+    fresh = stream_of(FC.Challenger(f"a5-outputs/{seed}"))
+    assert draw.draw == fresh.select(register(fresh)).draw
+>>>>>>> 705be2b532
     units = draw.draw["units"]
     assert draw.draw["law"] == "work" and len(units) == K and "closure" not in draw.draw and D.proved(draw.draw) == units
     got, audit = outcome(stream, draw)

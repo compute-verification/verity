@@ -2,6 +2,8 @@ module
 
 public import Mathlib.Data.List.Induction
 public import Definitions.Core.Site
+import all Init.Data.Repr
+import all Init.Data.ToString.Basic
 
 /-!
 # The registration: its check, and the Site along it
@@ -9,8 +11,11 @@ public import Definitions.Core.Site
 * `Registration.Entry.refusal_eq_none_iff`: an entry is refused exactly when it is invalid, so a refusal names a check
   the entry fails, the first in `Entry.Valid`'s order (a site entry's: `Site.Entry.refusal_eq_none_iff`).
 * `Registration.valid_append_singleton`: a log with one more entry is valid exactly when the log is and the entry is
-  valid against it, so a log is checked one entry at a time; and every prefix of a valid log is valid
-  (`Registration.Valid.of_prefix`).
+  valid against it and registers no item and declares no day it registers or declares, so a log is checked one entry
+  at a time (`Registration.valid_append_singleton_iff_refusal`, by the log's refusal); and every prefix of a valid log
+  is valid (`Registration.Valid.of_prefix`).
+* `Registration.Valid.days_nodup`: a valid log declares each day at most once; and a day's declaration stays the day's as
+  the log grows (`Registration.declared_prefix`).
 * `Site.ofLog_prefix`: the Site grows along the log, a prefix's sheets, locations and links being a prefix of every
   extension's; and what an id names in a prefix's Site it names in every extension's (`Site.loc?_ofLog_prefix`,
   `Site.kind?_ofLog_prefix`), so a later entry changes nothing already registered.
@@ -18,8 +23,9 @@ public import Definitions.Core.Site
   tree, each location under a registered parent of a kind its own allows.
 * A small onsite site and a later entry for each check, each refused by that check's name
   (`Registration.Example.onsite_refusals`), and the same entries on a remote site, which accepts the two that only an
-  onsite site refuses (`Registration.Example.remote_refusals`); and a device's model read off the Site
-  (`Registration.Example.gpu0_device`).
+  onsite site refuses (`Registration.Example.remote_refusals`); a device's model read off the Site
+  (`Registration.Example.gpu0_device`); and the onsite site with day 0 declared, a second declaration of the day refused
+  (`Registration.Example.declaration_refusals`).
 -/
 
 @[expose] public section
@@ -40,7 +46,6 @@ theorem ofLog_append (l l' : Registration) :
 theorem ofLog_concat (l : Registration) (e : Registration.Entry) : ofLog (l ++ [e]) = (ofLog l).add e.added := by
   simp [ofLog, add]
 
-/-- Adding nothing leaves the Site as it was. -/
 @[simp] theorem add_empty (S : Site) : S.add {} = S := by
   cases S; simp [add]
 
@@ -115,21 +120,20 @@ theorem Entry.refusal_eq_none_iff {S : Site} {head : String} {e : Entry} :
   | site _ s =>
     unfold Entry.refusal Entry.Valid Entry.kindRefusal Entry.Checks
     split_ifs <;> simp_all [Site.Entry.refusal_eq_none_iff]
+  | information _ _ =>
+    unfold Entry.refusal Entry.Valid Entry.kindRefusal Entry.Checks
+    split_ifs <;> simp_all
   | declaration _ _ =>
     unfold Entry.refusal Entry.Valid Entry.kindRefusal Entry.Checks
     split_ifs <;> simp_all
 
-/-- **The log's refusal decides validity**: the log refuses its next entry exactly when the entry is invalid against it
-or declares a day it declares. -/
+/-- **The log's refusal decides validity**: the log refuses its next entry exactly when the entry is invalid against it,
+registers an item twice or declares a day it declares. -/
 theorem refusal_eq_none_iff {l : Registration} {e : Entry} :
-    refusal D A c l e = none ↔ e.Valid D A c (Site.ofLog l) (head D c l) ∧ e.Once (days l) := by
-  unfold refusal
+    refusal D A c l e = none ↔ e.Valid D A c (Site.ofLog l) (head D c l) ∧ e.Once l := by
+  unfold refusal Entry.Once
   rw [Option.or_eq_none_iff, Entry.refusal_eq_none_iff]
   split_ifs <;> simp_all
-
-/-- A site entry declares no day, so it is never a second declaration. -/
-@[simp] theorem Entry.once_site (days : List ℕ) (p : String) (s : Site.Entry) : (Entry.site p s).Once days := by
-  simp [Entry.Once, Entry.declared?]
 
 @[simp] theorem days_nil : days [] = [] := rfl
 
@@ -146,9 +150,9 @@ theorem days_concat (l : Registration) (e : Entry) :
   simp [Valid]
 
 /-- **A log is checked one entry at a time**: with one more entry it is valid exactly when it was, and the entry is
-valid against it and declares no day it declares. -/
+valid against it and registers no item it registers. -/
 theorem valid_append_singleton {l : Registration} {e : Entry} :
-    Valid D A c (l ++ [e]) ↔ Valid D A c l ∧ e.Valid D A c (Site.ofLog l) (head D c l) ∧ e.Once (days l) := by
+    Valid D A c (l ++ [e]) ↔ Valid D A c l ∧ e.Valid D A c (Site.ofLog l) (head D c l) ∧ e.Once l := by
   unfold Valid
   constructor
   · intro h
@@ -183,6 +187,7 @@ theorem Valid.days_nodup {l : Registration} (h : Valid D A c l) : (days l).Nodup
   | nil => simp
   | append_singleton l e ih =>
     obtain ⟨hl, -, ho⟩ := valid_append_singleton.mp h
+    have ho : e.DayOnce l := ho.2
     rw [days_concat, List.nodup_append]
     refine ⟨ih hl, ?_, ?_⟩
     · cases e.declared? <;> simp
@@ -209,11 +214,17 @@ theorem Valid.ids_nodup {l : Registration} (h : Valid D A c l) : (Site.ofLog l).
   induction l using List.reverseRecOn with
   | nil => simp [Site.ids]
   | append_singleton l e ih =>
-    obtain ⟨hl, ⟨-, he⟩, -⟩ := valid_append_singleton.mp h
     rw [Site.ofLog_concat]
+    obtain ⟨hl, ⟨-, he⟩, -⟩ := valid_append_singleton.mp h
     cases e with
     | site _ s => exact he.1.1
+<<<<<<< ours
     | declaration _ _ => simpa [Entry.added] using ih hl
+||||||| base
+=======
+    | information _ _ => simpa [Entry.added] using ih hl
+    | declaration _ _ => simpa [Entry.added] using ih hl
+>>>>>>> theirs
 
 /-- **A valid log's Site is a tree**: each location's parent is registered, and of a kind the location's own allows. -/
 theorem Valid.parents {l : Registration} (h : Valid D A c l) :
@@ -224,6 +235,7 @@ theorem Valid.parents {l : Registration} (h : Valid D A c l) :
   | append_singleton l e ih =>
     obtain ⟨hl, ⟨-, he⟩, -⟩ := valid_append_singleton.mp h
     cases e with
+    | information _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl
     | declaration _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl
     | site _ s => ?_
     have hpre : (Site.ofLog l).locs <+: ((Site.ofLog l).add s).locs := by simp [Site.add, List.prefix_append]

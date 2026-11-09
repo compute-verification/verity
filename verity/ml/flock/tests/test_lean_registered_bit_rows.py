@@ -3,10 +3,12 @@ registered values committed in each port's own format (`registered.Registered.co
 opens each table row under its port's leaf schema, refusing a registration in another format, under another format's
 root or of another width. The statement is `test_lean_registered_reads.py`'s RoPE d64 one, composed with every row a bit
 row of its words' bits (`compose`'s `port_bits`) and cs segmented, and both input ports registered: x (unit i reads row
-i) as a `row/v2` value and cs (`cs_table`) as a `row-seg/v1` one. A second circuit has both ports `row/v2` and reads
-two rows of one value a unit, one at each port (`one_value`), as H1's tile reads R rows of A. Composing a circuit takes
-about 30 s and each call sets it up, so the module is slow; it catches what `tests/test_registered.py` can't: the
-executable verifier's own checks of each format, and of several rows of one value a unit."""
+i) as a `row/v2` value and cs (`cs_table`) as a `row-seg/v1` one, and the output row out (unit i writes row i) as a
+`row/v2` `rope_out` value, since a statement under `--registered` registers every port (`Registered.checkComplete`). A
+second circuit has both ports `row/v2` and reads two rows of one value a unit, one at each port (`one_value`), as H1's
+tile reads R rows of A. Composing a circuit takes about 30 s and each call sets it up, so the module is slow; it catches
+what `tests/test_registered.py` can't: the executable verifier's own checks of each format, and of several rows of one
+value a unit."""
 from __future__ import annotations
 
 import json
@@ -18,13 +20,12 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.ml.commitments import hm96
 from verity.ml.circuits.codec import canonical_json, encode_program
 from verity_flock import circuit as FC
 from verity.core.protocols.pouw import audit as PA
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G
 
-from test_lean_registered_reads import BIN, LEAN, POSITIONS, STATEMENT, TABLE_ROWS, VALUE, _program
+from test_lean_registered_reads import BIN, LEAN, OUT_VALUE, POSITIONS, STATEMENT, TABLE_ROWS, VALUE, _program
 
 N = len(POSITIONS)
 WORDS = 64
@@ -65,8 +66,10 @@ def staged(tmp_path_factory):
     roots = {v: r.root.hex() for v, r in regs.items()}
     own = G.reads_file(program, query, values, roots, schemas=SCHEMAS)
     assert own["ports"]["x"]["row_schema"] == G.SCHEMA_V2 and own["ports"]["cs"]["row_schema"] == G.SCHEMA_SEG
+    out = _out(prog, rng)
+    own["ports"]["out"] = {**out.entry(), "word_bits": 16, "row_schema": G.SCHEMA_V2, "reads": list(range(N))}
     (d / "own.json").write_text(json.dumps(own))
-    st = SimpleNamespace(dir=d, text=text, regs=regs, own=own, bound=["--partition", str(d / "partition.json"),
+    st = SimpleNamespace(dir=d, text=text, regs=regs, out=out, own=own, bound=["--partition", str(d / "partition.json"),
                                                                       "--program", str(d / "program.json")])
     st.public = _stage(st, "honest")
     return st
@@ -101,12 +104,20 @@ def one_value(tmp_path_factory):
     reg = regs["rows"]
     port = {"value": ROWS, "root": reg.root.hex(), "leaves": n, "words": WORDS, "word_bits": 16,
             "domain": reg.domain.domain_id.hex(), "row_schema": G.SCHEMA_V2}
-    own = {"format": G.READS, "ports": {p: {**port, "reads": r} for p, r in reads.items()}}
+    out = _out(prog, rng)
+    outs = {**out.entry(), "word_bits": 16, "row_schema": G.SCHEMA_V2, "reads": list(range(N))}
+    own = {"format": G.READS, "ports": {**{p: {**port, "reads": r} for p, r in reads.items()}, "out": outs}}
     (d / "own.json").write_text(json.dumps(own))
-    st = SimpleNamespace(dir=d, text=text, regs=regs, reads=reads, own=own,
+    st = SimpleNamespace(dir=d, text=text, regs=regs, out=out, reads=reads, own=own,
                          bound=["--partition", str(d / "partition.json"), "--program", str(d / "program.json")])
     st.public = _write(st, "honest", {p: (reg, r) for p, r in reads.items()})
     return st
+
+
+def _out(prog: str, rng) -> G.Registered:
+    """The registered `rope_out` rows the statement's output row reads, unit i row i: a `row/v2` bit row of all its words,
+    as `compose` lays out the output rows of a bit-row statement."""
+    return G.Registered.commit(prog, OUT_VALUE, rng.integers(0, 1 << 16, (N, WORDS)).tolist(), schema=G.SCHEMA_V2)
 
 
 def _stage(s, name: str, regs: dict | None = None) -> Path:
@@ -118,18 +129,18 @@ def _stage(s, name: str, regs: dict | None = None) -> Path:
 
 def _write(s, name: str, reads: dict) -> Path:
     """The statement whose table of each port is the rows of `reads[port]`'s registration at its positions, each unit
-    reading its own, under their registered salts and paths."""
+    reading its own, under their registered salts and paths, and whose output row is the fixture's `rope_out` rows."""
     tabs, salts, entries, refs = {}, {}, {}, {}
     for port, (reg, rows_read) in reads.items():
         positions, refs[port] = G.table(rows_read)
         rows, salts[port], entries[port] = reg.statement(positions)
         tabs[port] = np.asarray(rows, np.uint16)
+    out_rows, salts["out"], entries["out"] = s.out.statement(range(N))
     sub = json.loads(s.text.split("\n", 2)[1][5:]).get("subcircuit", "rope-head/d64/neox-bf16")
     inputs = SimpleNamespace(name="rope-registered-bit-rows", subcircuit=SimpleNamespace(id=sub))
     out = s.dir / f"{name}.bin"
     FC.write(s.text, inputs, 0, N, None, out, None, list(range(N)), share_rows=True,
-             outs={"out": np.zeros((N, WORDS), np.uint16)}, tables=tabs, refs=refs,
-             salts={**salts, "out": [hm96.SHA512.fresh_salt() for _ in range(N)]}, registered=entries)
+             outs={"out": np.asarray(out_rows, np.uint16)}, tables=tabs, refs=refs, salts=salts, registered=entries)
     return out
 
 
@@ -152,7 +163,8 @@ def test_bit_row_registered_statement_is_accepted(staged):
     assert code == 0, out
     line = json.loads(out.splitlines()[0])
     assert line["registered"] == {"cs": {"value": VALUE, "root": staged.regs[VALUE].root.hex()},
-                                  "x": {"value": "x", "root": staged.regs["x"].root.hex()}}
+                                  "x": {"value": "x", "root": staged.regs["x"].root.hex()},
+                                  "out": {"value": OUT_VALUE, "root": staged.out.root.hex()}}
     assert line["partition_check"]["units"] == "derived"
 
 
@@ -223,21 +235,26 @@ def test_a_pearl_plus_tree_opens_under_its_own_domain(staged):
     reads file's `domains`): cs's rows committed as Pearl+ commits a call's A, under PoUW's rows domain and salts, whose
     root the verifier opens at every table row under that domain. A table row with one word flipped opens nothing, nor
     does x, a `row/v2` port, read from a Pearl+ tree of its rows (whose leaves are `row-seg/v1`), nor cs under
-    one-stage's own domain for it (`registered.domain`, whichever binding it takes). It catches what
+    one-stage's own domain for it (`registered.domain`, whichever binding it takes). The reads file registers the output
+    row out as the fixture does, since a statement under `--registered` registers every port. It catches what
     `tests/test_registered.py`'s Python reads can't: the executable verifier holding a read to a domain from outside
     one-stage, verbatim."""
     program, query = _program()
     (cs, cs_reg), (x, x_reg) = _pearl_plus(staged, VALUE, 7), _pearl_plus(staged, "x", 8)
     mine = G.domain(P.program_digest(program), VALUE, WORDS, TABLE_ROWS).domain_id.hex()
-    assert cs.domain.domain_id.hex() != mine
+    assert cs.domain.domain_id.hex() != mine and staged.own["ports"]["cs"]["domain"] == mine
     own = G.reads_file(program, query, {VALUE: WORDS, "x": WORDS},
                        {VALUE: cs.commitment.root.hex(), "x": staged.regs["x"].root.hex()},
                        domains={VALUE: cs.domain.domain_id.hex()}, schemas=SCHEMAS)
+    assert own["ports"]["cs"]["domain"] == cs.domain.domain_id.hex()
+    own["ports"]["out"] = staged.own["ports"]["out"]
     (staged.dir / "own-pearl.json").write_text(json.dumps(own))
     public = _write(staged, "pearl", {"x": (staged.regs["x"], range(N)), "cs": (cs_reg, POSITIONS)})
     code, out = _statement(staged, staged.dir / "own-pearl.json", public)
     assert code == 0, out
-    assert json.loads(out.splitlines()[0])["registered"]["cs"] == {"value": VALUE, "root": cs.commitment.root.hex()}
+    assert json.loads(out.splitlines()[0])["registered"] == {"cs": {"value": VALUE, "root": cs.commitment.root.hex()},
+                                                             "x": {"value": "x", "root": staged.regs["x"].root.hex()},
+                                                             "out": {"value": OUT_VALUE, "root": staged.out.root.hex()}}
     flipped = _write(staged, "pearl-flipped", {"x": (staged.regs["x"], range(N)),
                                                "cs": (_pearl_plus(staged, VALUE, 7, flip=True)[1], POSITIONS)})
     code, out = _statement(staged, staged.dir / "own-pearl.json", flipped)
@@ -257,7 +274,8 @@ def test_two_rows_of_one_value_a_unit_are_accepted(one_value):
     code, out = _statement(one_value, one_value.dir / "own.json")
     assert code == 0, out
     root = one_value.regs["rows"].root.hex()
-    assert json.loads(out.splitlines()[0])["registered"] == {p: {"value": ROWS, "root": root} for p in ("x", "cs")}
+    assert json.loads(out.splitlines()[0])["registered"] == {
+        **{p: {"value": ROWS, "root": root} for p in ("x", "cs")}, "out": {"value": OUT_VALUE, "root": one_value.out.root.hex()}}
 
 
 def test_a_row_at_the_wrong_index_is_refused(one_value):
@@ -295,11 +313,12 @@ def test_a_reads_file_naming_a_port_twice_is_refused(one_value):
     input it can't read, as any malformed `--registered` file."""
     good = {p: json.dumps(e) for p, e in one_value.own["ports"].items()}
     bad = json.dumps({**one_value.own["ports"]["cs"], "root": one_value.regs["again"].root.hex()})
-    for name, ports, key in (("cs-twice", f'"cs": {bad}, "cs": {good["cs"]}, "x": {good["x"]}', '"cs"'),
-                             ("root-twice", f'"cs": {good["cs"][:-1]}, "root": "{"00" * 64}"}}, "x": {good["x"]}', '"root"')):
+    rest = f'"x": {good["x"]}, "out": {good["out"]}'
+    for name, ports, key in (("cs-twice", f'"cs": {bad}, "cs": {good["cs"]}, {rest}', '"cs"'),
+                             ("root-twice", f'"cs": {good["cs"][:-1]}, "root": "{"00" * 64}"}}, {rest}', '"root"')):
         own = one_value.dir / f"{name}.json"
         own.write_text(f'{{"format": "{G.READS}", "ports": {{{ports}}}}}')
-        assert json.loads(own.read_text())["ports"].keys() == {"cs", "x"}
+        assert json.loads(own.read_text())["ports"].keys() == {"cs", "x", "out"}
         code, out = _statement(one_value, own)
         assert code == 2 and f"registered reads: an object of the file names the key {key} twice" in out, (name, out)
     code, out = _statement(one_value, one_value.dir / "own.json")

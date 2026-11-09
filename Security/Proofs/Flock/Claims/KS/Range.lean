@@ -3,6 +3,9 @@ module
 public import Proofs.Flock.Claims.KS.Deploy
 public import Proofs.Flock.Soundness.Discharge.Exec.Tables
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Init.Data.Nat.Power2.Basic
 
 /-!
 # `k ≥ 8` wherever the deployed verifier accepts, at SHA-512

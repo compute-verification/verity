@@ -10,6 +10,7 @@ public import Proofs.Flock.Level3.ArithFacts
 public import Proofs.Flock.Level3.Assembly
 public import Mathlib.Data.Matrix.Mul
 public import Mathlib.LinearAlgebra.Matrix.NonsingularInverse
+import all Init.Data.Array.Basic
 
 @[expose] public section
 

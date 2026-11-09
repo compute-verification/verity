@@ -5,6 +5,8 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 public import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
 public import Proofs.Flock.Claims.Complete.Json.Parse
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
 
 /-!
 # What the masked record needs of the statement, at one table
@@ -27,6 +29,8 @@ antecedent.
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace FlockComplete.ZkTables
 

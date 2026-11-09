@@ -3,6 +3,8 @@ module
 public import Properties.NetworkCertifier.LinkWindow
 public import Proofs.Properties.CertifierDevice.Lms
 public import Std.Data.TreeMap.Raw.WF
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # N2's link-window verdict: what an acceptance establishes

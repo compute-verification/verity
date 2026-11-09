@@ -18,12 +18,17 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py pearlplus-period rule DIR --gate CMD --lane L --coin COIN_RECORD
     served_verdicts.py coin DIR --record FILE [--run RUN_ID] [--run-dir DIR]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
+<<<<<<< HEAD
                               [--product P] [--deferred WHY] [--steps LO,HI] [--off-node]
                               [--sampled-lean [--sampled-exe PATH]] [--key-sha512 HEX] [--lane L] [--window-tie DIR]
                               [--tree SHA [--tree-on BRANCH]] [--served-compare FILE]
     served_verdicts.py witness < PATHS
     served_verdicts.py rebase SERVE_DIR SERVED_DIR < PATHS
     served_verdicts.py composed ANSWER DIR [--gate-exit RC]
+||||||| merged common ancestors
+=======
+                              [--product P]
+>>>>>>> 705be2b532
     served_verdicts.py public-registration REGISTRATION
     served_verdicts.py sampled-line LOG [--partition FILE]
     served_verdicts.py front-line SESSION
@@ -160,6 +165,7 @@ a subprotocol: its verdict and, unless it accepted here, why; an accept here wit
 record's at which its quantity is not established); PoUW's development piece reads ``development run, credits nothing``
 with core's refusal of the window's credit. Prints one ``RECORD`` line, naming the product, each subprotocol's verdict
 (the development piece's `DEV_VERDICT`), each missing one and why, each dropped one, each rejecting one, each one
+<<<<<<< HEAD
 elsewhere, and the reason. The report and the line say where they were composed (``composed_on``: the host, whether it
 is the record's node, and what it read, `COMPOSED_FROM`, or off that node `COPIED_FROM`), and with ``--deferred`` what
 the run left to a follow-on and why (``deferred``: `served_verdicts.sh`'s step 6 on a node short of V3c's audit's
@@ -184,6 +190,12 @@ PATH: WHY`` line each; exit 1 when there is one. A compose hand-off lists none, 
 paths of stdin (relative to SERVE_DIR) that names ``blobs`` gets them under SERVE_DIR, a blob outside SERVED_DIR refused.
 ``composed``: the compose gate's answer ANSWER (`host.py`'s ``compose``) written out under DIR (`composed`), one
 ``GATE-COMPOSE`` line saying what it composed; exit 0 only when it composed and accepted.
+||||||| merged common ancestors
+with core's refusal of the window's credit. Prints one ``RECORD`` line, naming each subprotocol's verdict (the
+development piece's `DEV_VERDICT`), each missing one and why, each rejecting one, each one elsewhere, and the reason.
+=======
+elsewhere, and the reason.
+>>>>>>> 705be2b532
 """
 from __future__ import annotations
 
@@ -473,6 +485,10 @@ _AT_FIELD = re.compile("|".join(r'\\?"%s\\?":.*?\\?"(?:%s)\\?":' % (re.escape(p)
 CUT = "{…} (cut short; in full in the serve dir's private/verdicts.txt)"
 #: a file `publish` reads larger than this is held whole
 PUBLISH_MAX = 256 << 20
+#: The files under the published dir that `publish` leaves as they are, unread: the serve dir's declared Program, the
+#: window's class Program, which is public structure. Its JSON runs to hundreds of MB, beyond what `PUBLISH_MAX` lets
+#: `publish` read.
+PUBLIC_FILES = frozenset({"serve/h1/window-program.json.gz"})
 
 
 def _numbered(v: Any) -> bool:
@@ -586,14 +602,25 @@ def public_doc(text: str) -> str:
 def publish(out: Path, private: Path) -> list[str]:
     """Every file under ``out``, the dir that leaves the node, in its public form: one whose path names a window, or that
     `PUBLISH_MAX` keeps from being read, held whole, and one whose text names or counts a window or holds a load's own
+<<<<<<< HEAD
     field (`public_doc`) held in
     full, under ``private`` at its path under ``out``, its public form left in its place. A file that isn't UTF-8 text
     stays. The paths held, in order."""
+||||||| merged common ancestors
+    `PUBLISH_MAX` or its encoding keeps from being read as text, held whole, and one whose text names or counts a window
+    (`public_doc`) held in full, under ``private`` at its path under ``out``, its public form left in its place. Binary
+    files stay. The paths held, in order."""
+=======
+    field (`public_doc`) held in full, under ``private`` at its path under ``out``, its public form left in its place. A
+    file that isn't UTF-8 text is held whole. Only `PUBLIC_FILES` stay as they are, unread. The paths held, in order."""
+>>>>>>> 705be2b532
     held: list[str] = []
     for p in sorted(out.rglob("*")):
         if p.is_symlink() or not p.is_file():
             continue
         rel = p.relative_to(out).as_posix()
+        if rel in PUBLIC_FILES:
+            continue
         dst = private / rel
         private.mkdir(mode=0o700, parents=True, exist_ok=True)
         dst.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -604,6 +631,15 @@ def publish(out: Path, private: Path) -> list[str]:
             continue
         text = data.decode(errors="replace")
         if text.encode() != data:
+<<<<<<< HEAD
+||||||| merged common ancestors
+        try:
+            text = data.decode()
+        except UnicodeDecodeError:
+=======
+            shutil.move(p, dst)
+            held.append(rel)
+>>>>>>> 705be2b532
             continue
         pub = public_doc(text)
         if pub != text:
@@ -2044,9 +2080,15 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     at = ({k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
           | {k: (None, "real") for k in drops})
     rows = {k: dropped_row(k, product) if k in drops else dict(r) for k, r in rows.items()}
+<<<<<<< HEAD
     for k, r in rows.items():
         if k not in drops and "answer_from" not in r and (r.get("verdict") != "missing" or "development" in r):
             r["answer_from"] = f"{AS_WRITTEN} ({WRITTEN.get(k) or f'its piece files in {PIECES.get(k, WIPE)[1]}/'})"
+||||||| merged common ancestors
+    at = {k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
+    rows = {k: dict(r) for k, r in rows.items()}
+=======
+>>>>>>> 705be2b532
     built: dict[str, dict[str, Any]] = {}
     for k, r in rows.items():
         if r.get("verdict") == "accept" and at[k][0] is not None:

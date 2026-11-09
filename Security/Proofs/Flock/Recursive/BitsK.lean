@@ -10,7 +10,9 @@ public import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
 deployment's dense statements `Pr[acc ∧ ¬R] ≤ κ + t·ε`, `κ` once a session and `ε` once per SHA-512 call of the
 prover's run, under `StrictBirthday` at `B` and `ExpectedCR` at `B_I`, `Fdev`, `FCI` and `F0I`, the named SHA-512
 collision assumptions. `recursiveBitsK_deployed` evaluates it at the deployment's sizes (`SizesAt` at the session's
-brings, call bounds `n, v ≤ 2^32`) with `kappa_eps_deployed`: `Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}`.
+brings, call bounds `n, v ≤ 2^32`) with `kappa_eps_deployed`: `Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}`. Every
+statement the compiled verifier accepts is at those sizes and calls, so `recursiveBitsK_tight` (`BitsKTight`) states
+the bound with neither as a premise.
 
 Both are stated at the brings `b` (`RecursiveBitsKAt`, `RecursiveBitsKBoundAt`), as `Flock.Guarantees.RecursiveKSAt`
 is, and hold at `deployedB b`. A statement that writes `{ deployedB b with … }` itself carries a `let`, which the
@@ -72,11 +74,11 @@ theorem recursiveBitsKBoundAt_of (b : Brings) (aux : Msg → ℕ → _root_.Floc
     (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (h : RecursiveBitsKAt b aux nOf hd recRest) : RecursiveBitsKBoundAt b aux nOf hd recRest := by
   refine Claims.Recursion.bitsKAt_of h (fun _ hx => hx.1) ?_
-  rintro decI x n v ⟨-, ⟨s, spec, sts, hin, h1⟩, hO, hn, hS⟩ hU hV
+  rintro decI x n v ⟨-, ⟨s, spec, sts, hin, h1⟩, hO, hS⟩ hU hV
   exact kappa_eps_deployed _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd recRest }
     (DeployedR.layR OpenRows.elemR) (FlockDeploy.nextR DeployedR.rdR)
     (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation DeployedR.rdR).cols DeployedR.wER
-    FlockDeploy.joinR rowInDeployed DeployedR.finalR DeployedR.wR decI hin h1 hO hn hS hU hV
+    FlockDeploy.joinR rowInDeployed DeployedR.finalR DeployedR.wR decI hin h1 hO hS hU hV
 
 /-- **`Pr[acc ∧ ¬R] ≤ κ + t·ε` at the deployed reader**, at the deployment's dense statements: `RecursiveKS` through
 `recursiveBitsKAt_of`. -/

@@ -36,6 +36,7 @@ path = "../pouw/lean/check"
 name = "nci_check"
 path = "../network/nci/lean"
 
+<<<<<<< ours
 # Integrity: sampled proofs in the form its params name, one-stage v2's audit or the recursive audit, V*'s compiled
 # check (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`).
 [[require]]
@@ -47,6 +48,15 @@ path = "../../service/vstar/recursive"
 name = "pouw_pearlplus"
 path = "../pouw/lean/pearlplus"
 
+||||||| base
+=======
+# Integrity: sampled proofs in the form its params name, one-stage v2's audit or the recursive audit, V*'s compiled
+# check (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`).
+[[require]]
+name = "core_vstar_recursive"
+path = "../../service/vstar/recursive"
+
+>>>>>>> theirs
 [[lean_lib]]
 name = "CoreRemote"
 

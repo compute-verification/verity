@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Claims.Recursion.NextShaS17
 public import Proofs.Flock.Claims.Recursion.NextShaRep
 public import Proofs.Flock.Claims.Recursion.CallsAgree
+import all Lean.Data.Json.Basic
+import all Init.Data.Array.Basic
 
 /-!
 # The last step's decision with no proof file decoded (`decisionAtS_eval`)

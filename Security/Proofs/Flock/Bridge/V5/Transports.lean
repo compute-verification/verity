@@ -200,8 +200,8 @@ open scoped ENNReal
 /-- **`Bridge.TransportsLiveV5` holds** (`transports_shapedP`): `dupName` and `RootFixesDomainL` give distinct roots,
 and the verifier's public-file check every proof block's ref below its port's count (`ref_lt_cntP`). -/
 theorem _root_.Flock.Bridge.transportsLiveV5 : Bridge.TransportsLiveV5 := by
-  intro n Reg I own ht D hD hU pi hpi pub hpub hscope hrows hdup hroots kd _ hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hTags
-    hCust τ P vb σ Cc Lm rows κ roots Cd u g _ _ o he hcan
+  intro n Reg I own ht D hD hU pi hpi pub hpub hscope hrows hdup hroots law kd hdiv dj S₀ d₀ y₀ wr dg N L hTags hCust hsz
+    τ P vb σ Cc Lm rows κ roots Cd u g _ _ o he hcan
   obtain ⟨⟨r, hr, hv, hvw⟩, hy⟩ := hcan
   obtain ⟨p, v, y⟩ := o
   exact Bridge.transports_shapedP (dj := dj) (y₀ := y₀) (ht := ht) (hc := Flock.Desc.parseStmt_stmt hD)

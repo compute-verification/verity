@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Claims.KS.ConflictOC
 public import Proofs.Flock.Claims.KS.Fork
 public import Proofs.Flock.Verifier.Merkle
+import all Init.Data.List.Control
 
 /-!
 # The shipped Merkle check logs every node of its paths

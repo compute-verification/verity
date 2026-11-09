@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Refine.Schedule
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # Seams: the executable's constants are the model's

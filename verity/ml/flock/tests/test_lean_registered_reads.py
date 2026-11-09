@@ -516,7 +516,7 @@ def _hexes(bs: list[bytes]) -> list[str]:
 
 
 def _inner_transcript(path: Path, root: list[bytes], tops: list[list[bytes]], points=LINK_POINTS) -> Path:
-    """The coin server's record of that session: Hello's one table, its `root_B` (`root`, a `b ‖ c` a node), rep `x`'s round 0
+    """The challenger's record of that session: Hello's one table, its `root_B` (`root`, a `b ‖ c` a node), rep `x`'s round 0
     absorbing one `c_k` and its round 1 committing its level-1 top `tops[x]`, and the link points, flat."""
     rounds = [r for x in (0, 1) for r in (
         {"stream": f"circuit/rep{x}", "k": 0, "tops": [], "level0": 0, "commits": _hexes([bytes([0xC0 + x]) * 128]), "n": 1,
@@ -533,7 +533,7 @@ def _inner_transcript(path: Path, root: list[bytes], tops: list[list[bytes]], po
 @pytest.mark.parametrize("level", [0, 1])
 def test_a_rounds_tops_are_the_coin_servers(staged, tmp_path, level):
     """`RecVStar.checkTopRows`: a statement whose `out` reads the circuit table's level-`l` tops `rec-top-L<l>` (V*'s levels'
-    `out`) has each table row, at the registered position `x` it opens, the `b ‖ c` the coin server recorded there: at level
+    `out`) has each table row, at the registered position `x` it opens, the `b ‖ c` the challenger recorded there: at level
     0 node `x` of the table's `root_B`, above it rep 0's level-`l` top and then rep 1's (`rec_outer.TopValue`). Here the
     registered rows are the session's level-`l` tops: its `root_B`, or rep 0's top of six nodes and rep 1's of four. With
     the inner transcript recording them the full draw passes setup (to the session's proof files, which it has none of); a

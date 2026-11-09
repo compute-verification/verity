@@ -211,6 +211,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_REPLAY_DUMP_MAX", int, 1024, DEBUG, "the most values the replay dumps"),
     S("VERITY_REPLAY_FORK_GC_FREEZE", not_off, True, VALUE, "the replay freezes the GC before it forks its workers"),
     S("VERITY_RESEARCH", str, None, WHERE, "the research tree a row's stages import (the row sets it)"),
+    S("VERITY_TICK", json.loads, None, VALUE, "the certified tick under vLLM's own OpenAI server (`pipeline.tick_plugin`), a JSON "
+      "object: the registered bucket_us, sat_us and free_us, hold_ms, the feed file and the gate's log directory; unset, none"),
     S("VERITY_TIMELINE", str, None, WHERE, "the stage telemetry file"),
     S("VERITY_TREE", str, None, WHERE, "the source tree that runs (the mixed-tree refusal)"),
     S("VERITY_UNIT_RULE_CACHE", str, None, WHERE, "the host's unit-rule cache directory (`sweep --unit-rule-cache`)"),
@@ -295,7 +297,7 @@ VERITY_REGRESSION_RECORD_ACTUAL VERITY_REGRESSION_ROWS_ROOT VERITY_REGRESSION_SC
 VERITY_REGRESSION_TIERS VERITY_REGRESSION_VERIFY_ALL VERITY_REPIN VERITY_RESEARCH_POSTGRES VERITY_RMS_TABLES VERITY_SESSION_SO
 VERITY_SKIP_STORE VERITY_SLOW VERITY_STORE_REQUIRED VERITY_TC_PROBE_FP4_NVCC VERITY_TEST_CACHE VERITY_TEST_CACHE_MIN_S
 VERITY_TRACE_DIR VERITY_VEC_IN VERITY_VEC_OUT VERITY_VLLM_BOOLEAN_NORMS_FULL VERITY_VLLM_BOOLEAN_SWEEPS
-VERITY_VLLM_INT8_K_SCALES VERITY_VLLM_TANH_EXHAUSTIVE VERITY_VSTAR_STAGE VERITY_VSTAR_STAGE_OUT
+VERITY_VLLM_CLASS_G_WINDOW VERITY_VLLM_INT8_K_SCALES VERITY_VLLM_TANH_EXHAUSTIVE VERITY_VSTAR_STAGE VERITY_VSTAR_STAGE_OUT
 """.split())
 
 #: ``VERITY_*`` names the library spells out that are not environment variables: the C preprocessor macros of the tap builds.

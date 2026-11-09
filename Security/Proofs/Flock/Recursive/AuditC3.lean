@@ -11,7 +11,7 @@ public import Proofs.Flock.Recursive.LeafFinder
 /-!
 # The recursive audit at candidate 3 (trusted)
 
-`RecursiveAuditC3` is `PublicAudit` at candidate 3's inner protocol, the design that runs: the inner session's
+`RecursiveAuditHolo` is `PublicAudit` at candidate 3's inner protocol, the Holo design: the inner session's
 circuits have hidden unit circuits, whose templates are the registered table R's, opened by the sparse phase and R's
 registered opening (`Model.holoTableCL`, `Recursion.holoInnerAt`). It is a conjunction:
 
@@ -44,10 +44,10 @@ What it takes, against `PublicAudit`:
   top rows under, which they hold (`registrant-holds-openings`: the guarantee is applied at the held salts), so `st`
   fixes the cap up to `topFinder`'s collision. No registrant's
   openings are taken: the word is the one the prover's
-  own runs open at R's level 0 against `cap` at each draw (`regWord`, the knowledge form of `note:41519fce`), on which
-  two runs disagree only by a collision, read as an inner fork. The word's closeness to a codeword is no hypothesis: the
-  statement holds only when some table within the unique-decoding radius of the word has a satisfiable hidden
-  statement, so a far word is a false statement that the bound covers;
+  own runs open at R's level 0 against `cap` at each draw (`regWord`, the knowledge form, which takes no registrant's
+  word), on which two runs disagree only by a collision, read as an inner fork. The word's closeness to a codeword is no
+  hypothesis: the statement holds only when some table within the unique-decoding radius of the word has a satisfiable
+  hidden statement, so a far word is a false statement that the bound covers;
 * the coin server's records of the inner session as a function of the history (`wr`: the inner transcript and session
   record it writes at each history, `--rec-inner-transcript` and `--rec-inner-session`), in place of fixed records: the
   event reads the records written at the outcome's history, and their custody (`_hIC`,
@@ -82,7 +82,7 @@ What it takes, against `PublicAudit`:
 * V*'s files parse to `Vs` only where the verifier's acceptance parses them into scope (`VStarParsesScoped`; the
   `scopeOk` refusal), so `_hob` asks nothing of the writer's round trip.
 
-Its proof is `Flock.SecurityProofs.RecursiveAuditC3` (`Proofs.Flock.Recursive.AuditC3Proof`), from gap 2 at the
+Its proof is `Flock.SecurityProofs.RecursiveAuditHolo` (`Proofs.Flock.Recursive.AuditC3Proof`), from gap 2 at the
 word the runs open (`Recursive/RegExtract.lean`), which reads piece (a)'s runs (`FlockC3.Fork.holo_runs_sound`). Its
 non-vacuity needs VBridgeCOff at candidate 3 (piece (b), `FlockC3.Compose`) and
 V*'s statements over the verifier's list (piece (h)), which at candidate 3's inner shape is circuits' gap 2's eleven:
@@ -337,7 +337,7 @@ The attribute makes any accidental crossing fail fast. -/
 attribute [local irreducible] holoAt
 
 /-- **The recursive audit at candidate 3's soundness half, at coin types `CT` and the record map `im`**
-(`RecursiveAuditC3` reads it at the inner session's coin kinds, `holoCTs`, and the verifier's map, `holoMap`).
+(`RecursiveAuditHolo` reads it at the inner session's coin kinds, `holoCTs`, and the verifier's map, `holoMap`).
 
 For every partition object `obj` and program `prog` of the verifier's own, every inner statement `st` and sparse
 parameters `hp`, R's registration (the verifier of record's record `reg`, which `st`'s META binds by its digest, and R's
@@ -763,13 +763,14 @@ each stream round's coins read off the history's prefix at the last round it tak
 bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`),
 and `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved
 (`Flock.SecurityProofs.RecursiveKS`) but does not reach the Holo statements (i) is about, and `BitsLin2` at the dense
-statements follows from it (`bitsLin2On_of_ksLin2On`).
+statements follows from it (`bitsLin2On_of_ksLin2On`). The dense form, which `verity/sampled-proofs/recursive/v1`
+accepts, is `RecursiveAuditC3`, at `λ₂ = 135.7` and, at the deployment's tables, at `κ + t'·ε`.
 -/
-def RecursiveAuditC3 : Prop :=
+def RecursiveAuditHolo : Prop :=
   RecursiveAuditC3At holoCTs holoMap ∧ RecursiveFirewallPrivate
 
-/-- **`RecursiveAuditC3` with no A3**: `RecursiveAuditC3` with its first part with no A3. -/
-def RecursiveAuditC3NoA3 : Prop :=
+/-- **`RecursiveAuditHolo` with no A3**: `RecursiveAuditHolo` with its first part with no A3. -/
+def RecursiveAuditHoloNoA3 : Prop :=
   RecursiveAuditC3AtNoA3 holoCTs holoMap ∧ RecursiveFirewallPrivate
 
 end Flock.Guarantees

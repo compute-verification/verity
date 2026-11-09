@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hm.Nets
+import all Init.Data.Range.Basic
+import all Init.Data.String.Defs
 
 /-!
 # A row's commit string under any 128-byte prefix

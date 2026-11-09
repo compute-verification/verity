@@ -77,12 +77,22 @@ useful output; everything else (commitments, salt, sample, openings) is the prot
   Pearl's FP8 (E4M3) proof of useful work, the GEMM-based scheme Pearl publishes (`pearl-fp8-v4`,
   `schemes/pearl_kw.py`), adopted as a PoUW scheme, with its noisy clean-up pinned bit for bit so that the useful output
   is a checked value. It runs on the H100 and on the RTX PRO 6000 Blackwell (sm_120). The `-h3` forms hash with SHA-512
-  throughout; the others keep Pearl's BLAKE3 hashing.
+  throughout, and h3 is the default wherever a hashing format or tree hash goes unnamed. The others (h0, taken by name)
+  keep Pearl's keyed-BLAKE3 seeds, lines and tickets, with TurboSHAKE128 leaves and SHA-256 trees.
 - **Pearl-C4** (`pearl-c-nvfp4-v0`, `schemes/pearl_c4.py`): Pearl-C with the FP8 product replaced by sm_120's
   block-scaled FP4, NVFP4 only.
+<<<<<<< HEAD
 - **NCP** (`ncp-v1`, `schemes/ncp.py`): noise-cancelling polarization over int7 activations.
 - **Dither**, a no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`. It rests
   on SAK and is no longer the bar or the plan (below).
+||||||| merged common ancestors
+- **NCP** (`ncp-v1`, `schemes/ncp.py`): noise-cancelling polarization over int7 activations.
+- **Dither**, PoUW's no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`.
+=======
+- **NCP** (`ncp-v1`, `schemes/ncp.py`): noise-cancelling polarization over int7 activations, on SHA-256 trees (its
+  `commitment_hash`: its tile digests are 32 bytes).
+- **Dither**, PoUW's no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`.
+>>>>>>> 705be2b532
 
 Each scheme module's docstring states its steps and roundings, with pinned vectors under `tests/vectors`.
 

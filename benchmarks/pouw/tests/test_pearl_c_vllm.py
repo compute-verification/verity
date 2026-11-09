@@ -1150,6 +1150,16 @@ def test_verify_run_accepts_an_honest_pass_as_the_work_law_does(honest_pass):
     assert VR.main([str(path), *coins_args(path), "--jobs", "2", "--commit", "0" * 7, "--fast", "--cross-check", "1"]) == 0
 
 
+def test_verify_run_counts_the_tiles_it_drew_where_no_tile_is_credited(honest_pass, monkeypatch):
+    """A pass with no credited cell, as a no-write control whose rows are all excluded, draws no tile (`clear_work.draw`), so
+    its line and counts name none drawn and every exclusion tile, not the draws asked for."""
+    path, s, *_ = honest_pass
+    monkeypatch.setattr(VR.CW, "draw", lambda *_: [])
+    got = VR.verify(path, 3, 1, "test", b"verifier" * 4, coins=published(path))
+    assert got["accepted"] and (got["drawn"], got["exclusion_tiles"], len(got["tiles"])) == (0, 1, 1), got.get("line")
+    assert got["line"].startswith(f"ACCEPT {s.name} pouw:{s.name}: clear_work's tiles (0 drawn, 1 for excluded rows)")
+
+
 @pytest.mark.slow
 def test_verify_run_rejects_a_wrong_weight_row_and_undeclared_exclusions(honest_pass):
     path, *_ = honest_pass

@@ -9,6 +9,7 @@ module
 
 public import Flock.HmRow
 public import Mathlib.Data.List.Basic
+import all Init.Data.String.Defs
 
 @[expose] public section
 

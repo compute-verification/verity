@@ -11,9 +11,9 @@ the deploy bindings' (below), so binding another host changes no hash.
 ## The phases
 
 - **Registration**: the site (the prover node the configuration places the developer's parties on), θ (the served
-  weights, registered before the first request) and the builder B (the committer's registered compiler).
+  weights, registered before the first request) and the registered compiler B (the committer's).
 - **Execution**: the served window: serve-openai under the node's GPU lease, the requests, every closed window sealed.
-- **Verification**: each component's commitment, challenge, proof or timed response (PoUS's and PoUB's sessions), and
+- **Verification**: each subprotocol's commitment, challenge, proof or timed response (PoUS's and PoUB's sessions), and
   validation: the pieces' answers, then the onsite check, `served_verdicts.py record`, whose composed verdict is the
   period's `VERDICT` line.
 
@@ -22,15 +22,15 @@ the deploy bindings' (below), so binding another host changes no hash.
 | party | principal | machine | its pieces (`served_table.PARTIES`) |
 | --- | --- | --- | --- |
 | `workers` | developer | `prover-node` | the served window, `benchmarks/one_stage/served_verdicts.sh`, run once with every piece's hooks; sampled proofs' commitment and proofs; PoUW's H1 on the engine |
-| `firewall` | developer | `prover-node` | the Lean firewall of the records audit, inside the served window |
+| `firewall` | developer | `prover-node` | the Lean ZK server of the records audit, inside the served window |
 | `prover` | developer | `prover-node` | PoUS's served piece, PoUB's served session and the wipe, inside the served window |
 | `challenger` | auditor | `gate-host` | the gate: sampled proofs' live challenger and PoUW's H1 coins |
-| `network-certifier` | auditor | `gate-host` | the warden in front of the endpoint and its piece, reached through the gate |
+| `network-certifier` | auditor | `gate-host` | the network certifier in front of the endpoint and its piece, reached through the gate |
 | `memory-challenger` | auditor | `auditor-host` | PoUS's and the wipe's timed reads, on its own coins and clock, signing the session |
 | `bandwidth-verifier` | auditor | `auditor-host` | PoUB's verifier, on its own coins and clock |
 | `verifier` | auditor | `auditor-host` | the onsite check over the served window's public record |
 
-The channels are the components' declarations (`served_table.MANIFESTS`, sampled proofs' and the wipe's from core's
+The channels are the subprotocols' declarations (`served_table.MANIFESTS`, sampled proofs' and the wipe's from core's
 `MANIFEST`s), merged per sender and receiver; `verity run --dry-run` prints each.
 
 ## The hooks
@@ -38,7 +38,7 @@ The channels are the components' declarations (`served_table.MANIFESTS`, sampled
 The served window's runner reads each piece from its variables, which `verity run` sets from the configuration and the
 deploy bindings:
 
-| variables | component | from |
+| variables | subprotocol | from |
 | --- | --- | --- |
 | `REPO`, `REV`, `PRECISION`, `SLOTS`, `WINDOW_STEPS`, `LOAD` | the workload | `[workload.params]` |
 | `V3C_LAW` | sampled proofs | `[service] law` |
@@ -58,7 +58,7 @@ through from the environment).
 
 ## The deploy bindings
 
-A TOML file, a table per party and in it a table per listed component that declares it (`verity_cli.run`'s docstring);
+A TOML file, a table per party and in it a table per listed subprotocol that declares it (`verity_cli.run`'s docstring);
 a key a piece needs and the file lacks is refused `unbound` before the served window starts:
 
 ~~~toml

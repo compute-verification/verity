@@ -1,7 +1,7 @@
 """One table of domain separators: every versioned string a protocol hashes, derives from or commits under, or names its
 records, schemes and protocols by. The Lean is `Identity.Domains`
-(`verity/core/primitives/identity/Identity/Domains.lean`), beside the tagged SHA-512 most of them key; this module mirrors
-it beside `identity.tagged_sha512`.
+(`verity/core/primitives/identity/Identity/Domains.lean`); this module mirrors it, beside `identity.tagged_sha512`, the
+tagged SHA-512 most of them key.
 
 A constant's name is in today's words. Its bytes are what committed formats, pinned vectors and recorded runs carry, so
 they keep the words of their version: a PoUW period's tags say "window", its sampling's say "draw", the network
@@ -187,7 +187,6 @@ VLLM_PEARL_C_RUN_CERTIFIED = "verity-vllm/pouw-pearl-c-run/v3"
 # Not yet read from here: the commitments' own (`verity.ml.commitments`)
 BLAKE3_KEYED_ROW_NVFP4 = "blake3-keyed/row-nvfp4/v1"
 BLAKE3_KEYED_ROW = "blake3-keyed/row/v2"
-POSEIDON2_BABYBEAR_W24_ROW = "poseidon2-babybear-w24/row/v2h"
 SHA256_ROW_NVFP4_DIGEST = "sha256/row-nvfp4/v1"
 SHA256_ROW_DIGEST = "sha256/row/v1"
 VLLM_EMPTY = "verity-vllm/empty/v1"
@@ -214,7 +213,7 @@ WORD_CODEC_KV = "verity/word-codec/kv/v0"
 # Not yet read from here: signatures and AEAD (`verity.ml.crypto`, `Lms`)
 LMS_I = "verity/lms/v0/I"
 
-# Not yet read from here: sampled proofs and the proof service's challenger
+# Not yet read from here: sampled proofs and the proof system's challenger
 CHALLENGER_KEY = "challenger-key/v1"
 COIN_TREE_HM96_SHA512 = "coin-tree/hm96-sha512/v2"
 CHALLENGER_AUDITOR_RECORD = "verity/challenger-auditor-record/v1"
@@ -229,7 +228,7 @@ CHALLENGER_COMMITMENT = "verity/challenger/commitment/v1"
 CHALLENGER_RELEASE_LOG = "verity/challenger/release-log/v1"
 INTEGRITY_PROFILE = "verity/integrity-profile/v1"
 ONE_STAGE_AUDIT = "verity/one-stage/audit/v0"
-ONE_STAGE_REGISTERED_DOMAIN = "verity/one-stage/registered-domain/v0"
+ONE_STAGE_REGISTERED_DOMAIN = "verity/one-stage/registered-domain/v1"
 ONE_STAGE_SUPPLIED_SALT = "verity/one-stage/supplied-salt/v1"
 ONE_STAGE_PERIOD_SALT = "verity/one-stage/window-salt/v1"
 PROOF_SERVICE_OUTCOME = "verity/proof-service/outcome/v0"
@@ -261,6 +260,8 @@ FLOCK_ZK_TAU = "verity/flock-zk/tau/v1"
 LAYOUT = "verity/layout/v1"
 REC_COINS = "verity/rec-coins/v1"
 REC_INNER = "verity/rec-inner/v1"
+REC_V1_VERIFIER_SALT = "verity/rec-v1/verifier-salt/v1"
+REC_V1_ZERO_RESIDUAL_SALT = "verity/rec-v1/zero-residual-salt/v1"
 
 # Not yet read from here: PoUS, the wipe and the memory challenger
 CHAIN_DENSE_H = "chain-dense-H/v1"

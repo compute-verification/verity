@@ -5,6 +5,8 @@ public import Proofs.Flock.Claims.Complete.Shaped.Piop
 public import Proofs.Flock.Claims.Complete.Json.Stmt
 public import Proofs.Flock.VBridge.Family.Lig
 public import Proofs.Flock.Soundness.Refine.Regions
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The honest rep's proof fits its shape

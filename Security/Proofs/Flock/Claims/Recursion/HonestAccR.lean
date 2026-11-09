@@ -6,6 +6,8 @@ public import Proofs.Flock.Claims.Recursion.HonestVerdictR
 public import Proofs.Flock.Claims.Recursion.HonestVerdictFinal
 public import Proofs.Flock.Claims.Recursion.RestLive
 public import Proofs.Flock.Soundness.Refine.Seam
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The deployed verifier accepts the honest recursive prover (non-vacuity, the honest half)

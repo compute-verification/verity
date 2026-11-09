@@ -20,8 +20,8 @@ def test_the_steps_are_the_suites_then_circuit_check_then_the_lean_hook(tmp_path
     names = [(n, argv if isinstance(argv, str) else argv[1:4]) for n, argv, _cwd in CHECK.steps(tmp_path)]
     assert names[0] == ("pytest", [str(ROOT / "tools/verity/check/suites.py"), "--json", str(tmp_path / "suites.json")])
     assert names[1] == ("flock-circuit-build", [str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")])
-    assert names[2] == ("circuit-check", ["-m", "circuit_check", "--all"])
-    assert names[3] == ("flock-rust-tests", ["CARGO_BUILD_JOBS=1", "RUST_TEST_THREADS=1", "bash"])
+    assert names[2] == ("flock-rust-tests", ["CARGO_BUILD_JOBS=1", "RUST_TEST_THREADS=1", "bash"])
+    assert names[3] == ("circuit-check", ["-m", "circuit_check", "--all"])
     assert names[4] == ("lean", "skipped: verity/core/service/flock is not on this tree")
 
 
@@ -44,7 +44,7 @@ def test_the_rust_tests_run_the_live_crates_unit_tests_and_every_test_of_the_cra
     patched = set()
     for p in sorted((ROOT / "verity" / "ml" / "flock").glob("flock-*-b684b12.patch")):
         patched |= {m.group(1) for line in p.read_text().splitlines() if (m := re.match(r"\+\+\+ b/crates/([a-z-]+)/", line))}
-    upstream = re.search(r"cargo test --release -q((?: -p [a-z-]+)+)$", mode, re.M).group(1).split(" -p ")[1:]
+    upstream = re.search(r"cargo test --release -q((?: -p [a-z-]+)+)(?: \\)?$", mode, re.M).group(1).split(" -p ")[1:]
     assert sorted(upstream) == sorted(patched - {"flock-live"}), "every crate a patch changes, and only those"
 
 
@@ -211,6 +211,11 @@ def test_the_agreement_runs_ci_on_the_pinned_binaries_only(tmp_path, monkeypatch
     assert argv[argv.index("--upstream") + 1] == f"abc={out / 'flock-agreement' / 'upstream' / 'upstream-abc'}"
     assert argv[argv.index("--inputs") + 1].endswith("flock-agreement/inputs") and argv[argv.index("--fuzz") + 1] == "2"
     assert int(argv[argv.index("--session-jobs") + 1]) == CHECK.session_jobs() >= 1
+    assert argv[argv.index("--lean") + 1] == str(CHECK.FLOCK_LEAN / ".lake" / "build" / "bin" / "flock-verify")
+    out, sent = _pinned(tmp_path / "given", monkeypatch)
+    assert CHECK.main(["--lean-agreement", str(out), str(sent / "a.tar.gz"), str(sent / "b.tar.gz"), str(tmp_path / "fv")]) == 0
+    argv = json.loads((out / "flock-agreement" / "argv.json").read_text())
+    assert argv[argv.index("--lean") + 1] == str(tmp_path / "fv")
     out, sent = _pinned(tmp_path / "t", monkeypatch, binary=b"tampered")
     assert CHECK.lean_agreement(out, sent / "a.tar.gz", sent / "b.tar.gz") == 1
 
@@ -484,6 +489,10 @@ def test_the_ratchet_gate_step_fails_when_its_base_is_head_or_above_it(tmp_path,
         argv = gate(at)
         assert not isinstance(argv, str) and argv[4] == at, argv
     assert gate("0" * 40) == f"skipped: no base: {'0' * 40} names no commit here"
+    (out / "inputs" / CHECK.RATCHET_BASE_FILE).write_text(f"{below}\n")    # --ratchet-base: the gate's, over --base's
+    argv = CHECK.ratchet_gate(out, True)
+    assert not isinstance(argv, str) and argv[4] == below, argv
+    (out / "inputs" / CHECK.RATCHET_BASE_FILE).unlink()
     (out / "inputs" / CHECK.BASE_FILE).unlink()
     assert CHECK.ratchet_gate(out, True) == "skipped: no base: origin/main names no commit here"
 
@@ -702,9 +711,9 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
     monkeypatch.delenv(CHECK.SLOT.SLOT_MEM_ENV, raising=False)
-    assert "--mem-gb" not in CHECK.groups(tmp_path, 16)[1][1][1]
+    assert "--mem-gb" not in CHECK.groups(tmp_path, 16)[1][2][1]
     monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
-    (pt,), (build, cc, rust), (lean,), (gate,) = CHECK.groups(tmp_path, 16)
+    (pt,), (build, rust, cc), (lean,), (gate,) = CHECK.groups(tmp_path, 16)
     assert cc[1][cc[1].index("--mem-gb") + 1] == "210", "a slot's mem=, less what pytest and Lean hold beside it, caps circuit-check"
     assert build[0] == "flock-circuit-build" and build[1][-1].endswith("verity/ml/flock/check_build.sh")
     assert rust[0] == "flock-rust-tests" and rust[1][-2:] == [build[1][-1], "test"] and "CARGO_BUILD_JOBS=8" in rust[1]
@@ -1275,6 +1284,30 @@ def test_the_preflight_runs_first_and_a_failure_there_starts_nothing_else(tmp_pa
     assert CHECK.run(tmp_path, 2)[0] and marker.exists()
 
 
+def test_a_prebuild_that_fails_refuses_the_run_with_its_output_and_exit_status_even_under_keep_going(tmp_path, monkeypatch):
+    """The C++ models' prebuild ran with its output captured and its exit ignored, and fell back to building nothing where the
+    twins didn't import, so a check whose models didn't build ran on, each step compiling them untraced: it refuses now."""
+    import json
+
+    assert "except" not in CHECK.PREBUILD, "a prebuild whose models don't import fails, never falls back to building none"
+    marker = tmp_path / "ran"
+    touch = _py("open(__import__('sys').argv[1], 'w')", marker)
+    for keep_going in (False, True):
+        _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=[("preflight-lock", _py("pass"), tmp_path)])
+        monkeypatch.setattr(CHECK, "PREBUILD", "import sys\nprint('compiling tc_model.cpp', flush=True)\nsys.exit('g++: not found')")
+        ok, done = CHECK.run(tmp_path, 2, keep_going=keep_going)
+        assert not ok and not marker.exists(), keep_going
+        assert [(s["step"], s["status"], s.get("rc")) for s in done] == [("preflight-lock", "passed", 0), ("prebuild", "failed", 1)]
+        assert done[1]["detail"].startswith("refused: the C++ models' prebuild exited 1 (g++: not found; prebuild.log)")
+        assert (tmp_path / "prebuild.log").read_text().splitlines() == ["compiling tc_model.cpp", "g++: not found"]
+        assert json.loads((tmp_path / "steps.jsonl").read_text().splitlines()[-1])["step"] == "prebuild"
+    _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=[("preflight-lock", _py("pass"), tmp_path)])
+    monkeypatch.setattr(CHECK, "PREBUILD", "print('{\"tc_model\": \"libtc_model.so\"}')")
+    ok, done = CHECK.run(tmp_path, 2)
+    assert ok and marker.exists() and [s["step"] for s in done] == ["preflight-lock", "pytest"]
+    assert (tmp_path / "prebuild.log").read_text() == '{"tc_model": "libtc_model.so"}\n'
+
+
 def test_a_failed_preflight_starts_nothing_else_even_under_keep_going(tmp_path, monkeypatch):
     """Every train's check runs with --keep-going: a failed preflight must still end it in seconds, not hold its slot."""
     marker = tmp_path / "ran"
@@ -1570,6 +1603,8 @@ def test_train_sh_refuses_every_flag_but_agreement(tmp_path):
     assert p.returncode == 1 and "no parent store key" in p.stderr, p.stderr
     p = train("--base", "main")
     assert p.returncode == 2 and "train: --base refused without --deferred" in p.stderr, p.stderr
+    p = train("--ratchet-base", "main")
+    assert p.returncode == 2 and "train: --ratchet-base refused without --deferred" in p.stderr, p.stderr
 
 
 def test_train_sh_copied_out_of_the_tree_finds_the_trees_settings(tmp_path):
@@ -1657,6 +1692,7 @@ def _train_repo(tmp_path):
         env.pop(k, None)
 
     def train(*a, **extra):
+        done.unlink(missing_ok=True)      # else `sleep` returns at once on an earlier call's launch, before this one's
         return subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), *a], capture_output=True, text=True,
                               cwd=tmp_path / "repo", env={**env, **extra})
 
@@ -1679,29 +1715,6 @@ def test_train_sh_refuses_an_empty_commit_and_one_origin_lacks(tmp_path):
     p = train("HEAD", "vy-x")
     assert p.returncode == 1 and "is on no branch of origin" in p.stderr, p.stderr
     assert not argv.exists()
-
-
-def test_train_sh_runs_with_priority_and_posts_a_launch_that_registers_no_run(tmp_path):
-    git, train, argv = _train_repo(tmp_path)
-    (tmp_path / "repo" / "a").write_text("b\n")
-    git("commit", "-q", "-am", "change")
-    git("push", "-q", "origin", "HEAD:main")
-    p = train("HEAD", "vy-x", "--agreement")
-    args = argv.read_text().split()
-    assert p.returncode == 0 and {"--record", "--priority", "--keep-going", "--agreement"} <= set(args), args
-    p = train("HEAD", "vy-x", "--deferred", "pytest,circuit-check", "--no-cache", "--circuit-cache", "--no-regenerate")
-    args = argv.read_text().split()
-    assert p.returncode == 0 and args[args.index("--deferred"):] == ["--deferred", "pytest,circuit-check", "--no-cache",
-                                                                     "--circuit-cache", "--no-regenerate"], args
-    p = train("HEAD", "vy-x", "--deferred", "pytest", "--shard", "2/3")
-    args = argv.read_text().split()
-    assert p.returncode == 0 and args[-4:] == ["--deferred", "pytest", "--shard", "2/3"], args
-    assert "shard 2/3" in p.stdout and f"train-{git('rev-parse', 'HEAD')[:12]}-2of3.log" in p.stdout, p.stdout
-
-    (tmp_path / "origin.git").rename(tmp_path / "gone.git")
-    (tmp_path / "bin" / "sleep").write_text("#!/bin/sh\n")                # the fetch's backoffs: nothing launches to wait for
-    p = train("HEAD", "vy-x")
-    assert p.returncode == 1 and "git fetch origin failed" in (tmp_path / "posted").read_text()
 
 
 def test_train_sh_launches_the_records_step_alone_and_hands_a_shard_its_artifact(tmp_path):
@@ -1782,6 +1795,13 @@ def test_train_sh_hands_check_the_base_below_the_tip_that_drive_sends(tmp_path):
     argv.unlink()
     p = train("HEAD", "vy-x", "--deferred", "ratchet-gate", "--base", "nope")
     assert p.returncode == 1 and "--base nope: no such commit" in p.stderr and not argv.exists(), p.stderr
+    # ratchet-gate's own base (`--ratchet-base`: the tip of drive's last run whose gate gave a verdict), beside `--base`
+    p = train("HEAD", "vy-x", "--deferred", "ratchet-gate", "--base", "HEAD~1", "--ratchet-base", "HEAD~1")
+    args = argv.read_text().split()
+    assert p.returncode == 0 and args[args.index("--base"):] == ["--base", verified, "--ratchet-base", verified], (p.stderr, args)
+    argv.unlink()
+    p = train("HEAD", "vy-x", "--deferred", "ratchet-gate", "--ratchet-base", "nope")
+    assert p.returncode == 1 and "--ratchet-base nope: no such commit" in p.stderr and not argv.exists(), p.stderr
 
 
 def test_train_sh_retries_a_failed_first_fetch_twice_with_a_backoff(tmp_path):

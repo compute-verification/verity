@@ -25,7 +25,7 @@ The phases, each a function here:
    projection of the layout (`Layout.accounting`).
 
 `prove` and `verify` are a stand-in for Flock behind the ZK server: the proof is the sampled proof block's opening, which `verify`
-checks against the commitments and re-evaluates in the clear. It is sound for the example and not zero-knowledge.
+checks against the commitments and re-evaluates in the clear. It is sound for the demo and not zero-knowledge.
 """
 
 from __future__ import annotations
@@ -889,6 +889,7 @@ def frame_commitment(data: bytes, salt: bytes) -> str:
 
 
 IDS = {**parties.IDS, "pouw-period": period_check.ID, "wipe": wipe_period.PROTOCOL,
+<<<<<<< HEAD
        "bandwidth": parties.SUBPROTOCOLS["verity/onsite/v0"]["bandwidth"]}
 """Each subprotocol's id as the composites run it (`products`): integrity is the one-stage audit (`SampledProofs.OneStage`)
 at onsite and sampled proofs (`SAMPLED`) at remote, the work PoUW's period in both, onsite's PoUB is the one over PoUS's
@@ -897,6 +898,17 @@ SAMPLED = {"onsite": parties.SUBPROTOCOLS["verity/onsite/v0"]["sampled-proofs"],
 """Each composite's integrity subprotocol, under whose id sampled proofs' answer goes: onsite's the one-stage audit, and
 remote's sampled proofs (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`, one-stage v2's audit or the recursive
 audit)."""
+||||||| merged common ancestors
+       "bandwidth": parties.SUBPROTOCOLS["verity/onsite/v0"]["bandwidth"]}
+"""Each subprotocol's id as the composites run it (`products`): integrity is the one-stage audit (`SampledProofs.OneStage`)
+in both, so is the work, PoUW's period, onsite's PoUB is the one over PoUS's P2 store, and onsite's memory challenger
+also runs a wipe."""
+=======
+       **{n: parties.SUBPROTOCOLS["verity/onsite/v0"][n] for n in ("bandwidth", "sampled-proofs")}}
+"""Each subprotocol's id as the composites run it (`products`): integrity is sampled proofs (`VStar.Recursive.Sampled`,
+`verity/sampled-proofs/v1`, one-stage v2's audit or the recursive audit) in both, so is the work, PoUW's period,
+onsite's PoUB is the one over PoUS's P2 store, and onsite's memory challenger also runs a wipe."""
+>>>>>>> 705be2b532
 
 
 def label(seed: str, i: int) -> str:
@@ -1436,22 +1448,22 @@ class Verifier:
         return None
 
 
-# --- the example's inputs ----------------------------------------------------------------------------------------------
+# --- the demo's inputs ----------------------------------------------------------------------------------------------
 
 def theta_of(seed: int) -> Theta:
-    """A model's weights for the example, from a seed."""
+    """A model's weights for the demo, from a seed."""
     rng = np.random.default_rng(seed)
     return Theta(tuple(int(v) for v in rng.integers(-128, 128, D * D)), tuple(int(v) for v in rng.integers(-128, 128, D * D)))
 
 
 def load_of(seed: int, sizes: Sequence[int]) -> list[list[list[int]]]:
-    """The example's requests: one list an execution phase, each request D int8 codes."""
+    """The demo's requests: one list an execution phase, each request D int8 codes."""
     rng = np.random.default_rng(seed)
     return [[[int(v) for v in rng.integers(-128, 128, D)] for _ in range(n)] for n in sizes]
 
 
 SIZES = (3, 4, 2)
-"""Requests in each execution phase of the example's monitoring period."""
+"""Requests in each execution phase of the demo's monitoring period."""
 PLAN = ((1, ("gpu0", "gpu1")), (2, ("gpu0", "gpu1", "gpu2")))
 """B's placement: gpu2 from declaration 2 on, once the later hardware registration holds it."""
 CHEATS = ("hardware", "builder", "placement", "unreported", "advice-cap", "recommit", "wrong-value", "fork")

@@ -19,8 +19,6 @@ of the evidence agree, and so do the grids, the clock and the frame-size check t
 -/
 
 @[expose] public section
-set_option backward.privateInPublic true
-set_option backward.privateInPublic.warn false
 
 namespace NetworkCheck.RecordsBytes
 

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.C3.RegLevels.LgCoins
+import all Init.Data.Repr
 
 /-!
 # R's rounds in the history's order are the ones META's shape gives R's held stream

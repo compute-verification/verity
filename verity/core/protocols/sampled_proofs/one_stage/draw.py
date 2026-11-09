@@ -5,11 +5,12 @@
     {"law": "stratified", "population": N, "k": K, "strata": [<stratum>, ...], "units": [...]}
     {"law": "work", "population": N, "k": K, "strata": [<work stratum>, ...], "units": [...], ["closure": [...]]}
 
-This is the Lean verifier's `Flock.Draw` object and `flock-circuit`'s `unit_draw`. A stream samples it from the auditor's
-challenger's coins (`service.Stream.select`, Lean `Select.select`); `flock-verify draw` without `--stream` still samples the
-operating system's randomness (`Flock.Draw`'s OS draw); nothing here samples, and no sample is derived from a
-commitment. `check_draw` holds a sample to the registration and to the verifier's own sampling design, and `check_proved` holds the
-proved statement's proof blocks to the sample.
+This is the Lean verifier's `Flock.Draw` object and `flock-circuit`'s `unit_draw`. A stream samples it from the
+auditor's challenger's coins (`service.Stream.select`, Lean `Select.select`); `flock-verify draw` reads them too
+(`--stream`, `--stream-file`), and without them refuses any sample that reads coins: the verifier has no randomness of
+its own. Nothing here samples, and no sample is derived from a commitment. `check_draw` holds a sample to the
+registration and to the verifier's own sampling design, and `check_proved` holds the proved statement's proof blocks to
+the sample.
 
 **The stratified sampling design**: one stratum per template, a uniform k_s-subset drawn
 without replacement inside each, independently.
@@ -69,7 +70,7 @@ def parse_law(text: str) -> dict[str, Any]:
     """`subset:K` or `bernoulli:NUM/DEN` (`flock-circuit serve --draw`'s syntax), or `stratified:K` or `work:K` (rules, which `derive`
     expands over a program and query, and for `work` a work table), as a sampling design object; numbers in ASCII digits, `K >= 1`.
     A design outside the sampling claims' scope (`Claims.Sampling.OneStage.WellFormed`) is refused: `subset:0` draws
-    nothing, so its `P_a` is no miss probability."""
+    nothing, so its `P_a` is no acceptance probability."""
     kind, _, arg = text.partition(":")
     if kind == "subset" and digits(arg) and int(arg) >= 1:
         return {"law": "subset", "k": int(arg)}

@@ -157,7 +157,7 @@ key that isn't on the node, and kills nothing. Its header lists the challenger's
 runs it on a CPU, with one segment in host memory.
 
 `served_case.py --window DIR` builds PoUS's or the wipe's piece for the one-stage composite (composite.py, beside
-served_verdicts.py) from what a served window kept: `case.json`, the component's case, and `answer.json`, its own answer
+served_verdicts.py) from what a served window kept: `case.json`, the subprotocol's case, and `answer.json`, its own answer
 on it, whose commitment is the digest the composite binds. Both go to the window's private directory (0700), never
 beside the public answer. `served_piece.py` and `streamed_wipe/served_wipe.sh` write that piece through it while they
 run; after a run, from the kept outputs alone, PoUS's `C*` is encoded again from the served snapshot at the kept salt, and

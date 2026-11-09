@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Composed.SoundJ
 public import Proofs.Flock.Soundness.Assumptions.Zk
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # `zk_session_soundJ` at the coin server's custody

@@ -3,6 +3,9 @@ module
 public import Proofs.Flock.Claims.KS.ZkUntrim
 public import Proofs.Flock.Claims.KS.Extend
 public import Proofs.Flock.Claims.GS.ZkRadius
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Init.Data.Nat.Power2.Basic
 
 /-!
 # `ExtendJ` at the untrimmed masked instance

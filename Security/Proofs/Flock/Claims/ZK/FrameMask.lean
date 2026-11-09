@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Claims.ZK.FrameParse
+import all Init.Data.String.Defs
+import all Init.Data.Array.Basic
 
 /-!
 # What the frame releases of a round: the device's frames, masked

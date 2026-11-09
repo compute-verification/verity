@@ -4,6 +4,9 @@ public import Proofs.Flock.Claims.Complete.Json.Live
 public import Proofs.Flock.Claims.Complete.Zk.Json.Record
 public import Proofs.Flock.Claims.JsonNorm
 public import Proofs.Flock.Claims.Complete.Json.Canon
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Lean.Data.Json.Basic
 
 /-!
 # The honest masked record decodes, reads live and carries the draw

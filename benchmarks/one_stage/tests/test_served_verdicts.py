@@ -4,11 +4,20 @@ with the command it lacks and given no verdict, one that refused to run is missi
 wrote no answer errs; and sampled proofs' accepted answer composes, with the others missing, to a pending block record that
 `block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing composes to reject with no
 block record. The record accepts only when every subprotocol accepted on its node, and names each one missing, rejecting,
+<<<<<<< HEAD
 malformed or about another server. An accepted network certifier's clause names the one link K counts and every other
 link of the node uncounted and uncertified; one whose certifier ran on the node names no link. The wipe composes only
 when its answer accepts on the record's server. Remote's product runs no onsite piece and composes sampled proofs and
 PoUW alone, the others dropped. PoUW's development piece checks the window's gate session and credits
 nothing, and the gate is refused while the lane has a period
+||||||| merged common ancestors
+malformed or about another server. The wipe composes only when its answer accepts on the record's server. PoUW's
+development piece checks the window's gate session and credits nothing, and the gate is refused while the lane has a period
+=======
+malformed or about another server. The wipe composes only when its answer accepts on the record's server. Remote's
+product runs no onsite piece and composes sampled proofs and PoUW alone, the others dropped. PoUW's
+development piece checks the window's gate session and credits nothing, and the gate is refused while the lane has a period
+>>>>>>> 705be2b532
 open. The period the served windows join opens, through infra's own gate, on the Program serve-openai declared and
 the circuit files built for it, as core's credit reads them, and is refused on files of anything else.
 `served_verdicts.sh`'s window circuits gate on every class of CLASSES, and the class of record's count after them
@@ -16,6 +25,7 @@ gates nothing; its endpoint gets one token budget, T, with or without H1. Its pr
 front doesn't take, a front whose endpoint isn't on the warden's id form, and a front load with no front; its composite
 step publishes each case's and each product's verdict lines and nothing else. Its V3c step runs the split network
 certifier's chain after the window commit and its period check on V3c's period.json, and fails where no period.json is
+<<<<<<< HEAD
 written; its preflight refuses the split beside the certifier's whole piece, or without V3c. Under H1_TIE its serve gives
 serve-openai the tie's command, which, run as `serve_tie` runs it at an H1 window's close, writes the window's advice and
 commits it chained after H1's W, its registration the window's record R, and writes no R when the advice is pending or the
@@ -33,6 +43,14 @@ records about the served node and composes, each saying it composed elsewhere, a
 and what was deferred. What it publishes holds a load's tokens and span by path, leaving the inference-only policy, its
 digest and its verdict line as written. Its load, `serve_load.py
 --varied`, writes each request's send, first-token and done times beside its record, on an injected clock and a stand-in
+||||||| merged common ancestors
+written; its preflight refuses the split beside the certifier's whole piece, or without V3c. Its load, `serve_load.py
+--varied`, writes each request's send, first-token and done times beside its record, on an injected clock and a stand-in
+=======
+written; its preflight refuses the split beside the certifier's whole piece, or without V3c. What it publishes holds a
+load's tokens and span by path, leaving the inference-only policy, its digest and its verdict line as written. Its load,
+`serve_load.py --varied`, writes each request's send, first-token and done times beside its record, on an injected clock and a stand-in
+>>>>>>> 705be2b532
 endpoint."""
 from __future__ import annotations
 
@@ -200,7 +218,7 @@ def test_a_published_line_names_no_window_and_counts_none_of_a_windows_own(tmp_p
 def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_public_form(tmp_path):
     """`publish`, once the run is done: a file whose path names a window is held whole in the serve dir's private/out, one
     whose text or JSON names or counts a window is held there in full with its public form left in out/, and the rest,
-    the bench Build's requests by name, a window named ``all`` and a binary file among them, stay byte for byte. Then out/
+    the bench Build's requests by name, a window named ``all`` and the gzipped declared Program, stay byte for byte. Then out/
     names no window and counts none of a window's own, and a second pass holds nothing."""
     out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
     files = {
@@ -239,6 +257,7 @@ def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_pu
     assert S.publish(out, private) == []
 
 
+<<<<<<< HEAD
 #: `served_overhead.py metrics`' aggregate of a composed run's one load: 4 requests of 4 tokens, so 16 tokens, one block
 #: a request
 AGGREGATE = {"schema": "verity-bench/served-overhead-metrics/v0", "run_id": "r1", "commit": True, "protocols": ["commit"],
@@ -316,6 +335,115 @@ def test_a_published_line_holds_a_loads_tokens_and_span_and_leaves_the_inference
     pub = {"verdict": "accept", "reason": None, "classes": [["cd" * 32, 1_000, 4_000]], "registered_session": True,
            "c": POLICY["c"], "k": POLICY["k"], "n": POLICY["n"], "policy": {"sha512": IO.digest(POLICY)}}
     for line in (policy_line, f"INFERENCE-ONLY {IO.line(pub)}", f"INFERENCE-ONLY {json.dumps(pub)}"):
+||||||| merged common ancestors
+=======
+def test_publish_holds_whole_each_file_that_isnt_text_but_the_declared_program(tmp_path, monkeypatch):
+    """`publish` fails closed on a file it can't read as text: bytes that aren't UTF-8, a gzip stream that doesn't
+    decompress, and gzipped JSON, whether or not it names a window, are each held whole in private/out. Only the declared
+    Program (`PUBLIC_FILES`) stays in out/, byte for byte and unread, even past `PUBLISH_MAX`."""
+    monkeypatch.setattr(S, "PUBLISH_MAX", 64)
+    out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
+    program = gzip.compress(json.dumps({"rows": list(range(256))}).encode())
+    public = gzip.compress(json.dumps({"rows": 512}).encode())
+    files = {"serve/h1/window-program.json.gz": program,
+             "blob.bin": b"\xff\x00window 7",
+             "broken.json.gz": public[:-6],
+             "public.json.gz": public,
+             "named.json.gz": gzip.compress(json.dumps({"window": 7}).encode())}
+    assert len(program) > S.PUBLISH_MAX
+    for rel, body in files.items():
+        (out / rel).parent.mkdir(parents=True, exist_ok=True)
+        (out / rel).write_bytes(body)
+    assert S.publish(out, private) == ["blob.bin", "broken.json.gz", "named.json.gz", "public.json.gz"]
+    assert (out / "serve" / "h1" / "window-program.json.gz").read_bytes() == program
+    assert not (private / "serve" / "h1" / "window-program.json.gz").exists()
+    for rel in ("blob.bin", "broken.json.gz", "named.json.gz", "public.json.gz"):
+        assert not (out / rel).exists() and (private / rel).read_bytes() == files[rel], rel
+    assert S.publish(out, private) == []
+
+
+#: `served_overhead.py metrics`' aggregate of a composed run's one load: 4 requests of 4 tokens, so 16 tokens, one block
+#: a request
+AGGREGATE = {"schema": "verity-bench/served-overhead-metrics/v0", "run_id": "r1", "commit": True, "protocols": ["commit"],
+             "identity": {"precision": "verity_int8"}, "scheduler": {"max_num_batched_tokens": 512},
+             "loads": [{"requests": 4, "tokens": 16, "steps": 9, "span_s": 2.5, "windows": {"n": 1, "open_s": 0.5, "h1": ["tied"]},
+                        "time_per_output_token_s": 0.15625, "tokens_per_s": 6.4, "client_tokens_per_s": 6.1}]}
+#: an inference-only policy as `inference_only.py policy` writes it, whose ``n_inputs.span_s`` is the lease's, not a load's
+POLICY = {"format": "verity-bench/inference-only-policy/v1", "written_utc": "2026-11-06T05:58:00+00:00", "tree": "ab" * 20,
+          "class": {"slots": 4, "prompt": 32, "outputs": 4, "positions": 35},
+          "serve": {"model": "verity-int8/Llama-3.2-1B-INT8", "revision": "15b0976d", "precision": "verity_int8"},
+          "session": {"definition": "cd" * 32, "key": "Session_v1{S=4}", "slots": 4, "positions": 35},
+          "c": 123_456_789, "k": 4_096, "n": 25_165_824,
+          "theta": "every weight parameter the class's circuit registers (147), held",
+          "table": {"sha512": "ef" * 64, "entries": 40, "priced": ["BitAtx32_v1"]},
+          "n_inputs": {"n": 25_165_824, "raw": 24_570_799, "grid_bits": 3,
+                       "rate": {"macs_per_s": 989_429_760_000_000, "clock_mhz": 1830, "source": "θ"},
+                       "utilization": [1, 4], "span_s": 3600, "utilization_source": "the declared share",
+                       "span_source": "the serve's GPU lease limit",
+                       "work": {"linears": 34_057_748_480, "attention": 41_287_680, "lm_head": 1_050_673_152,
+                                "theta_macs": 36_241_670_144, "source": "one slot of the class's fixed load"}}}
+
+
+def _digest(doc: dict) -> str:
+    """A policy's digest as its verdict cites it: SHA-512 of its sorted, compact JSON."""
+    return hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def test_publish_holds_the_loads_tokens_and_span_by_path_and_leaves_the_policy_and_its_digest_as_written(tmp_path):
+    """The load's tokens over a block's outputs are its exact block count, so `publish` holds each load's ``tokens`` and
+    ``span_s`` (`OWN_AT`, by path) with its counts, keeping its rates; an inference-only policy's ``n_inputs.span_s``, a
+    ``tokens`` under no load and the verdict citing the policy's digest stay byte for byte, and the digest is the same
+    before and after."""
+    out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
+    (out / "serve").mkdir(parents=True)
+    (out / "serve" / "overhead.json").write_text(json.dumps(AGGREGATE) + "\n")
+    (out / "inference-only-policy.json").write_text(json.dumps(POLICY, indent=1, sort_keys=True) + "\n")
+    before = _digest(json.loads((out / "inference-only-policy.json").read_text()))
+    verdict = {"verdict": "accept", "reason": None, "complies": True, "failure": None,
+               "policy": {"sha512": before, "written_utc": POLICY["written_utc"]}, "c": POLICY["c"], "k": POLICY["k"],
+               "n": POLICY["n"], "classes": [["cd" * 32, 1_000, 4_000]], "slots": 4, "positions": 35}
+    (out / "record").mkdir()
+    (out / "record" / "inference-only.json").write_text(json.dumps(verdict, indent=1, sort_keys=True) + "\n")
+    (out / "pieces" / "pearlplus").mkdir(parents=True)
+    (out / "pieces" / "pearlplus" / "load.json").write_text(json.dumps({"tokens": 1024, "span_s": 9.5, "served_tokens": 64}))
+    kept = {p: p.read_bytes() for p in out.rglob("*.json") if p.name != "overhead.json"}
+    assert S.publish(out, private) == ["serve/overhead.json"]
+    (ld,) = json.loads((out / "serve" / "overhead.json").read_text())["loads"]
+    assert ld == {"time_per_output_token_s": 0.15625, "tokens_per_s": 6.4, "client_tokens_per_s": 6.1}
+    assert json.loads((private / "serve" / "overhead.json").read_text()) == AGGREGATE
+    assert {p: p.read_bytes() for p in kept} == kept
+    after = json.loads((out / "inference-only-policy.json").read_text())
+    assert after["n_inputs"]["span_s"] == 3600 and _digest(after) == before == _digest(POLICY)
+    assert json.loads((out / "record" / "inference-only.json").read_text())["policy"]["sha512"] == before
+    assert S.public_json(POLICY) == POLICY and S.public_json(verdict) == verdict
+    assert S.publish(out, private) == []
+
+
+def test_a_published_line_holds_a_loads_tokens_and_span_and_leaves_the_inference_only_lines(tmp_path):
+    """A verdict line's published form has no load's ``tokens`` or ``span_s`` in its JSON, in a JSON string's text or in a
+    JSON object cut short, and the INFERENCE-ONLY lines, the policy's (its span in seconds) and the verdict's (the policy's
+    digest), are their own published form."""
+    agg = json.dumps(AGGREGATE)
+    assert S.public_line(f"OVERHEAD {agg}") == "OVERHEAD " + json.dumps(S.public_json(AGGREGATE))
+    assert not re.search(r'"(?:tokens|span_s)"', S.public_line(f"OVERHEAD {agg}"))
+    assert S.public_line('OVERHEAD {"loads": [{"tokens": 16, "span_s": 2.5, "tokens_per_s": 6.') == f"OVERHEAD {S.CUT}"
+    quoted = json.dumps({"said": agg})
+    assert json.loads(json.loads(S.public_line(quoted))["said"]) == S.public_json(AGGREGATE)
+    for kept in ('{"n_inputs": {"span_s": 3600, "raw": 24570799}}', '{"tokens": 1024, "span_s": 9.5}',
+                 'POLICY {"n_inputs": {"span_s": 3600, "raw": 2457',
+                 'PEARL+ {"load": {"requests": "all", "prompt_tokens": 1024}, "served_tokens": 64}'):
+        assert S.public_line(kept) == kept
+    i, digest = POLICY["n_inputs"], _digest(POLICY)
+    policy_line = (f"INFERENCE-ONLY POLICY at class 4,32,4: c {POLICY['c']} gates, k {POLICY['k']} fresh bits, n {POLICY['n']} "
+                   f"sessions (⌈{i['utilization'][0]}/{i['utilization'][1]} x {i['rate']['macs_per_s']} MAC/s x {i['span_s']} s / "
+                   f"{i['work']['theta_macs']} θ-MACs⌉ = {i['raw']}, on the grid); session {POLICY['session']['definition'][:16]}…, "
+                   f"policy {digest[:16]}…")
+    verdict_line = (f"INFERENCE-ONLY accept: session {'cd' * 8}… (the registered one), 1000 gates and 4000 fresh bits a block, "
+                    f"against c {POLICY['c']}, k {POLICY['k']}, n {POLICY['n']} (no count published: n is judged on the blocks' "
+                    "exact count, held on the node)")
+    pub = {"verdict": "accept", "c": POLICY["c"], "k": POLICY["k"], "n": POLICY["n"], "policy": {"sha512": digest}}
+    for line in (policy_line, verdict_line, f"INFERENCE-ONLY {json.dumps(pub)}"):
+>>>>>>> 705be2b532
         assert S.public_line(line) == line and S.public_line(line + "\n") == line + "\n"
 
 
@@ -711,6 +839,7 @@ def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(
     """PRODUCT=remote: `pieces` runs PoUW's piece and no onsite one, whatever its command, printing a DROPPED line for
     each; the record names PoUS, the bandwidth audit, the network certifier and the wipe dropped, neither missing nor
     composed, whatever their pieces left, and composes accept from sampled proofs' and PoUW's accepts on its node. The
+<<<<<<< HEAD
     same pieces composed for onsite reject on the wipe's answer. The report and the line say they were composed on the
     served node, from the answer files it wrote, and the published line keeps that, as it keeps what the run deferred
     (``--deferred``) and the served compare's line (``--served-compare``; none, saying why, where its file is absent or
@@ -930,6 +1059,46 @@ def test_a_sampled_proofs_row_the_lean_here_cant_recompute_says_so_and_never_tak
         f"{S.AS_WRITTEN} ({S.WRITTEN['integrity']}): the records audit wrote no v2 case (window/case-v2.json), so "
         "there are no proofs to recompute it from"))
     assert line["answers"]["sampled proofs"] == row["answer_from"]
+||||||| merged common ancestors
+=======
+    same pieces composed for onsite reject on the wipe's answer."""
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    pieces, ran = tmp_path / "pieces", tmp_path / "ran"
+    pouw = {"verdict": "accept", "reason": None, "commitment": "ef" * 64, **ACCEPTS["pouw"]}
+    env = {"POUW_CMD": f"echo '{json.dumps(pouw)}' > \"$3/answer.json\"",
+           **{f"{c}_CMD": f"touch {ran}" for c in ("POUS", "BANDWIDTH", "CERTIFIER")}}
+    got = S.pieces(tmp_path, 1, pieces, env=env, node="vy-dc-h200", product="remote")
+    why = "not run: the remote product composes sampled proofs and PoUW alone"
+    assert not ran.exists()
+    assert got == {"pouw": {"verdict": "accept", "rc": 0},
+                   **{c: {"verdict": "dropped", "why": why} for c in ("pous", "bandwidth", "certifier")}}
+    dropped = [x.split(" (")[0] for x in capsys.readouterr().out.splitlines() if x.startswith("DROPPED ")]
+    assert dropped == ["DROPPED PoUS", "DROPPED the bandwidth audit", "DROPPED the network certifier"]
+    (pieces / "wipe").mkdir()
+    (pieces / "wipe" / "answer.json").write_text(json.dumps(WIPE_REJECT))
+    (pieces / "wipe" / S.SERVED).write_text(json.dumps({"server": "vy-dc-h200"}))
+    (tmp_path / "serve").mkdir()
+    argv = ["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs",
+            str(tmp_path / "audit"), "--pieces", str(pieces), "--out", str(tmp_path / "record"), "--node", "vy-dc-h200",
+            "--product", "remote"]
+    rc = S.main(argv)
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert rc == 0 and line["check"] == {} == BR.check(rec)
+    assert (line["product"], line["composed"], line["record_missing"], line["missing"]) == ("remote", "accept", [], {})
+    names = ("PoUS", "the bandwidth audit", "the network certifier", "the wipe")
+    assert line["dropped"] == {n: why for n in names} and all(line["verdicts"][n] == "dropped" for n in names)
+    assert line["reason"] == "sampled proofs: accept; PoUW: accept; " + "; ".join(f"{n}: dropped, {why}" for n in names)
+    assert (rec["composed"]["product"], rec["composed"]["dropped"]) == ("remote", ["bandwidth", "certifier", "pous", "wipe"])
+    assert rec["composed"]["legs"] == {"integrity": "accept", "pouw": "accept"} and rec["legs"]["wipe"] is None
+    report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
+    assert report["protocols"]["wipe"] == {"verdict": "dropped", "owner": "memory-accounting", "why": why}
+    assert S.main([*argv, "--product", "onsite"]) == 1
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    assert (line["product"], line["composed"], line["by"]) == ("onsite", "reject", ["the wipe"])
+>>>>>>> 705be2b532
 
 
 SID = "s20261026T221500Z-ab12"
@@ -4702,6 +4871,30 @@ def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_
     _script(venv / "python", f'exec {sys.executable} "$@"')
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
            "LOAD": load, "CERTIFIER_FRONT": front, "SERVE_ARGS": serve_args}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+                        check=False).returncode
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
+    assert (rc, said) == ((3, [line]) if line else (0, []))
+
+
+@pytest.mark.parametrize("product, extra, line", [
+    ("remote", {}, None),
+    ("remote", {"POUS_CMD": "true"}, "PREFLIGHT: PRODUCT=remote runs no onsite piece, and POUS_CMD is set: unset it"),
+    ("remote", {"CERTIFIER_CHAIN_CMD": "true"},
+     "PREFLIGHT: PRODUCT=remote runs no onsite piece, and CERTIFIER_CHAIN_CMD is set: unset it"),
+    ("remote", {"CERTIFIER_FRONT": FRONT},
+     "PREFLIGHT: PRODUCT=remote runs no onsite piece, and CERTIFIER_FRONT is set: unset it"),
+    ("onsite", {}, None),
+    ("offsite", {}, "PREFLIGHT: PRODUCT is onsite or remote, not offsite"),
+])
+def test_remote_sets_no_onsite_default_and_its_preflight_refuses_an_onsite_command(tmp_path, product, extra, line):
+    """PRODUCT=remote drops the onsite pieces: in a tree that has the wipe's piece its default WIPE_CMD isn't set, and
+    the preflight refuses any onsite piece's command set, before anything runs."""
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    _script(tree / "benchmarks" / "pous" / "streamed_wipe" / "served_wipe.sh", "exit 0")
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "PRODUCT": product, **extra}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
                         check=False).returncode
     said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []

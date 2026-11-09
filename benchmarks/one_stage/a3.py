@@ -11,8 +11,8 @@ one integrity profile.
   `Q_template_instances` v0: one unit per instance, no width rule.
 * **One registration** lists every template's roots (ports named `<set>/<port>`), and `leaf_layer` is the SHA-512 of the
   canonical map from set to the SHA-512 of its public file.
-* **One sample, `Subset(k)` over the union.** The verifier's Lean `flock-verify draw` draws k units over the whole population,
-  on a development challenger's coins opened after the registration (`a0.challenger_draw`).
+* **One sample, `Subset(k)` over the union.** The verifier's Lean `flock-verify draw` draws k units over the whole
+  population, on a development challenger's coins opened after the registration (`a0.challenger_draw`).
   With `--draw-file` (M0 `serve --draw-file`) each template's server serves its share of that very draw, so the audited
   draw is the verifier's; without it, the Lean draw fixes only how many units fall in each template and each server draws
   a uniform subset of that size, which is still exactly `Subset(k)` over the union (conditioned on the counts, a uniform
@@ -166,9 +166,9 @@ def main() -> int:
             local = sorted(u - m["base"] for u in split["units"] if m["base"] <= u < m["base"] + m["n"])
             dfile.write_text(json.dumps({"law": "subset", "population": m["n"], "k": k_t, "units": local}, sort_keys=True))
         t = time.time()
-        # per-round OS coins, verified under --coins os: Lean refuses a plain session on a seed's coins
+        # on the keyed coin tree, verified under --coins tree: Lean refuses a plain session on a seed's coins
         record, live = a0.session(a.bin, m["st"], m["n"], f"subset:{k_t}", a.port + j, sdir, draw_file=dfile,
-                                  env={"FC_COINS": "os"})
+                                  env={"FC_COINS": "tree"})
         m["session_s"] = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": m["n"]}, {"law": "subset", "k": k_t})
@@ -182,7 +182,7 @@ def main() -> int:
                                                 and (live or {}).get("roots") == m["header"]["frame_v3"]["roots"] and v.ok,
                                                 "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}
         verdicts[f"lean-draw/{m['name']}"] = {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}
-        verdicts[f"lean-verify/{m['name']}"] = {**a0.lean_verify(a.lean, m["st"], m["n"], sdir, flags=("--coins", "os")), "tool": "flock-verify verify --archive"}
+        verdicts[f"lean-verify/{m['name']}"] = {**a0.lean_verify(a.lean, m["st"], m["n"], sdir, flags=("--coins", "tree")), "tool": "flock-verify verify --archive"}
         statement[m["name"]] = {k: (live or {}).get(k) for k in ("circuit_sha512", "statement_digest", "public_sha512", "sigma")}
         statement[m["name"]]["timing"] = {k: (live or {}).get(k) for k in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")}
         statement[m["name"]]["timing"]["verify_s"] = ((record or {}).get("verdict") or {}).get("verify_s")

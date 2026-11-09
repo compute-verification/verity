@@ -431,12 +431,61 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
         p = load(path, coins, recorded, man)
         scheme, records, c, out["salt"] = p.scheme, p.records, man["commitment"], p.salt
         source = PV.coins(32) if source is None else source
+<<<<<<< HEAD
         key = CW.replay_key(CW.RecordedDraw(1, source), p.transcript.commitment.root, bytes.fromhex(man["records_root"]), p.epoch.salt)
         todo = [(0, pos, tid) for pos, tid in p.tile_ids(CW.draw(scheme, records, key, draws) + CW.exclusion_tiles(scheme, records))]
         verdicts, fast = replay([p], todo, jobs, fast, cross_check)
         out["replay"] = "batch" if fast else "scalar"
         differ = [t for _, t, _, _, _, same in verdicts if same is False]
         ok = all(v[2] for v in verdicts) and not differ
+||||||| merged common ancestors
+        key = CW.replay_key(CW.RecordedDraw(1, source), transcript.commitment.root, bytes.fromhex(man["records_root"]), epoch.salt)
+        ids = {(ref.matmul, ref.tile.rows[0], ref.tile.cols[0]): ref.id for ref in verifier.refs}
+        picks = CW.draw(scheme, records, key, draws)
+        picks += CW.exclusion_tiles(scheme, records)
+        todo = [(pos, ids[(pos, t.rows[0], t.cols[0])]) for pos, t in picks]
+        if fast and (scheme.forming != "v1" or scheme.device.g is None):
+            fast, out["replay"] = False, "scalar"
+        _JOB.clear()
+        _JOB.update(scheme=scheme, epoch=epoch, transcript=transcript, records=records, verifier=verifier,
+                    prover=Opened(man, Files(path.parent), verifier.refs), cross_check=cross_check,
+                    undo=FT.install(scheme) if fast else None)
+        try:
+            if jobs > 1 and len(todo) > 1:
+                # fork: the workers unpickle their function from this module, which callers load from its path, not by an importable name
+                with multiprocessing.get_context("fork").Pool(min(jobs, len(todo))) as pool:
+                    verdicts = pool.map(check, todo, chunksize=1)
+            else:
+                verdicts = [check(p) for p in todo]
+        finally:
+            if _JOB.get("undo") is not None:
+                _JOB.pop("undo")()
+        differ = [t for t, _, _, same in verdicts if same is False]
+        ok = all(v[1] for v in verdicts) and not differ
+=======
+        key = CW.replay_key(CW.RecordedDraw(1, source), transcript.commitment.root, bytes.fromhex(man["records_root"]), epoch.salt)
+        ids = {(ref.matmul, ref.tile.rows[0], ref.tile.cols[0]): ref.id for ref in verifier.refs}
+        drawn, excluded = CW.draw(scheme, records, key, draws), CW.exclusion_tiles(scheme, records)
+        todo = [(pos, ids[(pos, t.rows[0], t.cols[0])]) for pos, t in drawn + excluded]
+        if fast and (scheme.forming != "v1" or scheme.device.g is None):
+            fast, out["replay"] = False, "scalar"
+        _JOB.clear()
+        _JOB.update(scheme=scheme, epoch=epoch, transcript=transcript, records=records, verifier=verifier,
+                    prover=Opened(man, Files(path.parent), verifier.refs), cross_check=cross_check,
+                    undo=FT.install(scheme) if fast else None)
+        try:
+            if jobs > 1 and len(todo) > 1:
+                # fork: the workers unpickle their function from this module, which callers load from its path, not by an importable name
+                with multiprocessing.get_context("fork").Pool(min(jobs, len(todo))) as pool:
+                    verdicts = pool.map(check, todo, chunksize=1)
+            else:
+                verdicts = [check(p) for p in todo]
+        finally:
+            if _JOB.get("undo") is not None:
+                _JOB.pop("undo")()
+        differ = [t for t, _, _, same in verdicts if same is False]
+        ok = all(v[1] for v in verdicts) and not differ
+>>>>>>> 705be2b532
         w_ref, credit = CW.work(scheme, records)
         bad = "; ".join(f"tile {t}: {r}" for _, t, good, r, *_ in verdicts if not good)
         if differ:
@@ -447,10 +496,22 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
         at = CW.draw_wref(scheme)
         out.update(accepted=ok, scheme=scheme.name, source=source.hex(), tiles=[t for _, t, *_ in verdicts],
                    draw_wref=at.statement if at else "wref",
+<<<<<<< HEAD
                    drawn=draws, exclusion_tiles=len(todo) - draws,
                    verdicts=[{"tile": t, "ok": g, "reason": r} for _, t, g, r, *_ in verdicts], w_ref=str(w_ref), credit=str(credit))
         out["line"] = (f"{'ACCEPT' if ok else 'REJECT'} {scheme.name} {man['entry']}: clear_work's tiles ({draws} drawn, "
                        f"{len(todo) - draws} for excluded rows) of {c['count']} over {len(records)} matmuls"
+||||||| merged common ancestors
+                   drawn=draws, exclusion_tiles=len(todo) - draws,
+                   verdicts=[{"tile": t, "ok": g, "reason": r} for t, g, r, _ in verdicts], w_ref=str(w_ref), credit=str(credit))
+        out["line"] = (f"{'ACCEPT' if ok else 'REJECT'} {scheme.name} {man['entry']}: clear_work's tiles ({draws} drawn, "
+                       f"{len(todo) - draws} for excluded rows) of {c['count']} over {len(matmuls)} matmuls"
+=======
+                   drawn=len(drawn), exclusion_tiles=len(excluded),
+                   verdicts=[{"tile": t, "ok": g, "reason": r} for t, g, r, _ in verdicts], w_ref=str(w_ref), credit=str(credit))
+        out["line"] = (f"{'ACCEPT' if ok else 'REJECT'} {scheme.name} {man['entry']}: clear_work's tiles ({len(drawn)} drawn, "
+                       f"{len(excluded)} for excluded rows) of {c['count']} over {len(matmuls)} matmuls"
+>>>>>>> 705be2b532
                        f"{'' if ok else ' (' + bad + ')'}; transcript root {c['root'][:16]}, records {man['records_root'][:16]}, "
                        f"source {source.hex()[:16]}; transcript {named}; verifier {commit}"
                        f"{'; batch replay, ' + str(len(out['cross_checked'])) + ' tiles cross-checked' if fast else ''}")

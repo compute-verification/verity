@@ -8,8 +8,8 @@ that judge its output bit for bit. The call is `verity/core/protocols/pouw/circu
 - the prefix sums T_s after each segment of L inner indices (S = ⌈K / L⌉ segments);
 - and, for a served call, its output O mod 2^32.
 
-The call's values are committed as hm96 rows (hiding leaves) in one frame-v3-sha512 tree, before the check coin. The
-verifier then opens the proof blocks that the check coin draws. A served call commits T_1 .. T_{S−1} and O, since O
+The call's values are committed under hiding commitments (hiding leaves) in one frame-v3-sha512 tree, before the check
+coin. The verifier then opens the proof blocks that the check coin samples. A served call commits T_1 .. T_{S−1} and O, since O
 implies T_S. A filler call commits T_1 .. T_S over its pad. `benchmarks/pouw/highutil` runs its periods through this
 binding.
 
@@ -31,7 +31,6 @@ binding.
   every knob.
 - `h200_step.py`: the H200's step, from `v31 fill-bench`'s JSON lines.
 - `h200_pipes.py`: each pipe's duty over an overlapped call, from Nsight Compute.
-- `duty.metrics`: an Nsight Compute metric list, read by `benchmarks/torch_gpu/sha512_rows/beside.sh`.
 
 ## API
 

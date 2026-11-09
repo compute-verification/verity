@@ -27,6 +27,9 @@ through the links' binding `Flock.Guarantees.LinksBindDeployed`) covers a statem
 
 module
 
+import all Init.Data.Array.DecidableEq
+import all Init.Data.Array.Basic
+
 @[expose] public section
 
 namespace Flock

@@ -20,12 +20,13 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from fractions import Fraction
-from typing import Any
+from typing import Any, NamedTuple
 
 from verity.ml.randomness import uniform_from_words
 
-from .challenger import (COIN_BYTES, WITHHELD, ChallengerKey, CoinError, LiveCommitment, LiveOpening, LiveRecord, Verify,
-                         live_reason, record_many, trusted_session_of, withheld_on)
+from .challenger import (COIN_BYTES, MAX_COINS, MAX_HELLOS, MAX_LEDGER_LINES, MAX_LOG_LINES, MAX_PATH, MAX_PINS,
+                         WITHHELD, ChallengerKey, CoinError, LiveCommitment, LiveOpening, LiveRecord, Verify, live_reason,
+                         record_many, trusted_session_of, withheld_on)
 from .one_stage.draw import digits, strata_problem
 from .remote import MAX_BATCH
 
@@ -354,6 +355,43 @@ def draw_coins(key: ChallengerKey, window: str, label: str, after: bytes, coins:
     return challenger_stream(commitment, segment, after, roots.get(label, ()))
 
 
+class Limits(NamedTuple):
+    """Bounds on the sizes of a sample's coin evidence (`coins_within`), each defined once in `challenger`, whose device
+    code refuses past each (`remote`, "The device's caps")."""
+    log: int
+    hellos: int
+    ledger: int
+    pins: int
+    openings: int
+    path: int
+
+    def form(self) -> str:
+        """The refusal of evidence past these."""
+        return (f"a draw's coin evidence holds at most {self.log} release log lines, {self.hellos} refused hellos, "
+                f"{self.ledger} ledger lines, {self.pins} pins log lines and {self.openings} openings, each opening's "
+                f"path at most {self.path} digests")
+
+
+LIMITS = Limits(MAX_LOG_LINES, MAX_HELLOS, MAX_LEDGER_LINES, MAX_PINS, MAX_COINS, MAX_PATH)
+
+
+def coins_within(coins: Any, limits: Limits = LIMITS) -> bool:
+    """Lean `Challenger.withinAt`: every size the evidence of a draw's coins holds is within `limits`, as v2 requires of
+    its evidence's ``coins`` at `LIMITS` before it reads anything else of it (`OneStageZk.evidenceOf`): the session's
+    release log lines and refused hellos, the ledger's and the pins log's lines, the segment's openings and each
+    opening's path. A value absent or not a list counts as none: what reads it refuses it."""
+    def get(j: Any, k: str) -> Any:
+        return j.get(k) if isinstance(j, Mapping) else None
+
+    def size(j: Any) -> int:
+        return len(j) if isinstance(j, list) else 0
+    session, openings = get(coins, "session"), get(get(coins, "segment"), "openings")
+    return (size(get(session, "log")) <= limits.log and size(get(session, "hellos")) <= limits.hellos
+            and size(get(coins, "ledger")) <= limits.ledger and size(get(coins, "pins")) <= limits.pins
+            and size(openings) <= limits.openings
+            and all(size(get(o, "path")) <= limits.path for o in (openings if isinstance(openings, list) else ())))
+
+
 def closure_of(closure: Mapping[int, Sequence[int]], units: Sequence[int]) -> list[int]:
     """A sample's closure under the verifier's closure map (Lean `Flock.Draw.closureOf`): every proof block in a sampled proof block's
     closure that is not itself drawn, ascending."""
@@ -423,5 +461,14 @@ def _nth(ranges: Sequence[Sequence[int]], j: int) -> int:
     raise IndexError(j)
 
 
+<<<<<<< HEAD
 __all__ = ["COINS_FORM", "ChallengerCoins", "DRAW_FORM", "OwnRandomness", "RAN_OUT", "SEGMENT_FORM", "Segment",
            "challenger_stream", "closure_of", "coins_reason", "draw_coins", "draw_first", "ran_out", "read_reason"]
+||||||| merged common ancestors
+__all__ = ["COINS_FORM", "ChallengerCoins", "DRAW_FORM", "OwnRandomness", "SEGMENT_FORM", "Segment",
+           "challenger_stream", "closure_of", "coins_reason", "draw_coins", "draw_first", "read_reason"]
+=======
+__all__ = ["COINS_FORM", "ChallengerCoins", "DRAW_FORM", "LIMITS", "Limits", "MAX_HELLOS", "MAX_LEDGER_LINES", "MAX_PATH",
+           "MAX_PINS", "OwnRandomness", "SEGMENT_FORM", "Segment", "challenger_stream", "closure_of", "coins_reason",
+           "coins_within", "draw_coins", "draw_first", "read_reason"]
+>>>>>>> 705be2b532

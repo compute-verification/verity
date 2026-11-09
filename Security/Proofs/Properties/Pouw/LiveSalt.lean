@@ -4,6 +4,7 @@ public import Properties.Pouw.LiveSalt
 public import Proofs.Properties.Pouw.LiveSalt.Ledger
 public import Proofs.Properties.Pouw.Commit
 public import Proofs.Properties.NetworkRecords.Bytes
+import all Lean.Data.Json.Basic
 
 /-!
 # Proofs of the Pearl-C live salt's properties (`Properties.Pouw.LiveSalt`)

@@ -3,6 +3,9 @@ module
 public import Proofs.Flock.Claims.Complete.Json.Session
 public import Proofs.Flock.Soundness.Discharge.Exec.Event
 public import Proofs.Flock.Claims.JsonNorm
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import all Init.Data.Array.Basic
 
 /-!
 # The honest record's live session and draw

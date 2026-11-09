@@ -3,6 +3,9 @@ module
 public import Proofs.Flock.Claims.Recursion.InnerAtCoins
 public import Proofs.Flock.Claims.Recursion.InnerSetupSame
 public import Proofs.Flock.Claims.Bridge.Custody
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import all Init.Data.Array.Basic
 
 /-!
 # Check 5's extra claims and comb are the deployed table's
@@ -232,7 +235,8 @@ that proves every unit in order (the only one `drawnSpec` takes) at the drawn st
 (`drawn_same`). -/
 theorem drawnSpec_shape {f : RecCoins.Files} {spec' : SessionSpec} {st' : Stmt} {specD : SessionSpec}
     (h : f.drawnSpec spec' st' = .ok specD)
-    (hst' : Stmt.setupHidden RecCoins.innerTags f.circuit f.pub Coins.os [] none (some f.partition) f.program = .ok st')
+    (hst' : Stmt.setupHidden RecCoins.innerTags f.circuit f.pub RecVStar.innerTree [] none (some f.partition) f.program =
+      .ok st')
     (hspec : spec' = st'.spec) : specD.points = 2 ∧ specD.mPts = st'.mPts := by
   unfold RecCoins.Files.drawnSpec RecCoins.drawnSpec at h
   cases hr : RecCoins.recordDraw f.record with

@@ -182,10 +182,18 @@ def prove(dump: str | os.PathLike, run: str, t: int = 8, workers: int = 1, schem
     refs = au.tile_refs(s, workload)
     if len(leaves) != 32 * len(refs):
         raise ValueError(f"{len(leaves)} bytes of leaves are not {len(refs)} tile leaves")
-    tree = MerkleTree(au.transcript_domain(epoch, len(refs)), {i: leaves[32 * i:32 * i + 32] for i in range(len(refs))},
+    tree = MerkleTree(au.transcript_domain(epoch, len(refs), s.commitment_hash), {i: leaves[32 * i:32 * i + 32] for i in range(len(refs))},
                       lambda _: au.TILE_SCHEMA)
+<<<<<<< HEAD
     tree_a = au.commit_rows(au.activation_binding(epoch.salt, unit.index), unit.index, rows_a, "sha256", public=True)
     tree_b = au.commit_rows(au.weight_binding(unit.weight), -2, rows_b, "sha256", public=True)
+||||||| merged common ancestors
+    tree_a = au.commit_rows(au.activation_binding(epoch.salt, unit.index), unit.index, rows_a)
+    tree_b = au.commit_rows(au.weight_binding(unit.weight), -2, rows_b)
+=======
+    tree_a = au.commit_rows(au.activation_binding(epoch.salt, unit.index), unit.index, rows_a, s.commitment_hash)
+    tree_b = au.commit_rows(au.weight_binding(unit.weight), -2, rows_b, s.commitment_hash)
+>>>>>>> 705be2b532
     real = call["real_rows"]
     fmap, done = _pool(workers, max(1, (real + n) // (4 * max(workers, 1))))
     try:

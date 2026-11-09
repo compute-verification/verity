@@ -12,6 +12,9 @@ public import Proofs.Flock.Claims.Complete.Honest
 public import Proofs.Flock.Claims.Complete.Zk.Honest
 public import Proofs.Flock.Claims.Complete.Ready
 public import Proofs.Flock.Claims.Complete.ZkTables.Faithful
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Init.Data.Nat.Power2.Basic
 
 /-!
 # Flock's deployed instances of `Claims.Flock.Deploy`

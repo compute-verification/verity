@@ -146,7 +146,7 @@ Pi2            = Feistel10 on 2ℓ + 64 B, F_i(x) = SHAKE256(0x48 || u8(i) || x)
 
 ## P3 (research)
 
-`W` is `N` segments of `n` lower inputs, each a label of `m = n · wc` bits (`n` components of `wc` bits). For segment
+`W` is `N` segments of `n` lower inputs, each a label of `m = n · wc` bits (`n` parts of `wc` bits). For segment
 `s`, with `tag_s = salt || u64(s)` and the band graph `B(n, k)` (the `max(k, 1)` nodes before `v`):
 
 ~~~text
@@ -172,7 +172,7 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
 
 1. **Commit.** The server commits to `W` before any salt exists (`setup.commit`: tagged SHA-512 over the parameters and
    `W`, tag `verity-pous/w-commitment/v2`).
-2. **Salt.** The verifier draws the 24-byte salt after the commitment (`setup.draw_salt`, through `verity.ml.randomness`
+2. **Salt.** The verifier samples the 24-byte salt after the commitment (`setup.draw_salt`, through `verity.ml.randomness`
    from its own secret or a later beacon round).
 3. **Encode.** The server computes `C* = Enc(W, salt)` and sends it segment by segment. The verifier builds `vk` by
    `setup.verifier_setup`, one of two ways.
@@ -242,9 +242,17 @@ audit makes public its verdict and nothing about a single round:
 - the verdict;
 - the salted roots of `W` and of the encoding `C`;
 - the salt;
+<<<<<<< HEAD
 - the setup draw and its profile;
 - the memory challenger's session commitment (its coin tree's root and key) and the openings of its coin tree, both
   released once the session is signed.
+||||||| merged common ancestors
+- the setup draw and its profile;
+- the openings of the memory challenger's coin tree, once the session has closed.
+=======
+- the setup's sample and its profile;
+- the openings of the memory challenger's coin tree, once the session has closed.
+>>>>>>> 705be2b532
 
 Everything else is witness. The per-round on-time bits stay in the memory challenger's signed record, so a server can't
 steer what the auditor sees round by round. The memory challenger reveals each index from its coin tree, receives the
@@ -361,7 +369,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
     either way;
   - `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key` and `responder` wrap the modules
     below;
-  - every coin comes from `verity.ml.randomness` through `setup` and `audit`, and a scheme draws none.
+  - every coin comes from `verity.ml.randomness` through `setup` and `audit`, and a scheme flips none.
 - **Segment tags must be injective across all segments.** This is a hard requirement of every implementation:
   segment `s` is keyed by `tag_s = salt ‖ u64 s` (`labels.tag`), or by one salt with global indices.
   - With a shared domain, identical segments get identical labels. An adversary storing one of them then answers every
@@ -384,7 +392,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 
 `continuous.ContinuousMemoryChallenger(vk, key, n, late_deadline_ns=Δ_late, max_misses=f₀)` is the memory challenger
 of the continuous audit's model, `Security/Definitions/Pous/Model/Continuous.lean`, with the guarantee
-`Pous.SecurityProofs.ContinuousAudit`: `n` challenges over time, drawn as the timed audit's indices, accepted
+`Pous.SecurityProofs.ContinuousAudit`: `n` challenges over time, sampled as the timed audit's indices, accepted
 when at most `f₀` answers miss. A miss is an answer that is wrong or later than `Δ + RTT`. `n` is fixed before the
 stream, so the stream is never stopped or extended on misses, though it may reject early (`exceeded`). It is one
 `audit.UnsignedRounds` over the stream with a hard deadline, and it enforces the three requirements that
@@ -436,7 +444,7 @@ once the memory challenger's clock is past `until`, the open challenge's `closes
 `Δ_late + RTT`). A reply naming any challenge but the open one is dropped. Once the hard deadline has passed, the driver
 closes the open challenge with `expire()`, the last one too, so a silent or slow responder cannot hold the stream open.
 A transport that returns None before the deadline makes `expire()` refuse, and the audit stops with the challenge open.
-The caller chooses the arrival times and `n`, and nothing here draws or checks them. The game needs both to be the
+The caller chooses the arrival times and `n`, and nothing here samples or checks them. The game needs both to be the
 memory challenger's own randomness, independent of the setup, the indices and the answers. Without `late_deadline_ns`,
 `UnsignedRounds` is unchanged, the single audit's memory challenger. `tests/test_pous_continuous.py` tests each
 requirement.
@@ -464,7 +472,7 @@ c_j   = derive(coin_secret, "verity/pous/streamed-wipe-coins/v1", {server, sessi
 ~~~
 
 A label's message is 75 bytes, one SHA-512 compression, so a GPU derives labels faster than any link carries them.
-SHA-512 is the PRF (C3, claim `prf/sha-512`). `coin_secret` is drawn from the OS once the fill is complete, and the
+SHA-512 is the PRF (C3, claim `prf/sha-512`). `coin_secret` is sampled from the OS once the fill is complete, and the
 indices are uniform and independent, with replacement: live coins, never Fiat–Shamir.
 
 **Messages.** One session per server and wipe, under an id the auditor designates (`session`, 32 bytes):
@@ -473,12 +481,12 @@ indices are uniform and independent, with replacement: live coins, never Fiat–
 |---|---|---|
 | open | challenger, public | the `WipeCommitment` header: the protocol, the server, the session, `N`, the label size, `k`, the batch size, the deadline a batch (`limit_ns`), and every memory tier inside the boundary with its size, the sizes adding up to `N · 64` bytes; the id goes into the challenger's `SessionLog` first, which refuses it again |
 | fill | challenger, server | `L_0 … L_{N−1}` in index order, a chunk at a time; the challenger reads its clock at the first and last chunk |
-| challenge | challenger, server | once the fill is complete, the coins are drawn, then batch `t`'s indices, `c_{tB} … c_{tB+B−1}`; the send time is read |
+| challenge | challenger, server | once the fill is complete, the coins are flipped, then batch `t`'s indices, `c_{tB} … c_{tB+B−1}`; the send time is read |
 | answer | server, challenger | 64 bytes an index, in order; the receipt time is read before anything is hashed, then each answer is compared with `L_{c_j}` |
 | egress | network certifier, challenger | the bits that crossed the boundary over the session (C6), as the certifier counts them |
 | sign | challenger | one LMS signature (`memory_challenger.SCHEMES`, n = 64) over `SHA-512("verity-pous/streamed-wipe/session/v1\0" ‖ u64 len ‖ header ‖ records root)`: the header is the commitment, how the session ended, the fill's times, the batch count and the egress; the records root is the frame-v3-sha512 root of the batch records, each `u32 b ‖ u32 first ‖ u32 count ‖ u64 send_ns ‖ u64 receipt_ns ‖ u32 wrong ‖ SHA-512(indices ‖ answers)` |
 
-The first late or wrong batch ends the session (`late`, `wrong`). No batch is retried and no index is redrawn, so a
+The first late or wrong batch ends the session (`late`, `wrong`). No batch is retried and no index is sampled again, so a
 failed wipe is a visible failure. `verdict(signed, commitment, trusted=...)` accepts a session only when it is
 signed under a trusted key and its header is the published commitment, its batch size is 1 (the reveal the guarantee
 covers), every batch is present in order, none has a wrong answer, each is within `limit_ns` on the challenger's clock,
@@ -489,7 +497,7 @@ The verdict a caller records is the Lean's: `MemoryChallenger.StreamedWipe.verdi
 the trusted keys and the accepted schemes' ids as JSON (`to_json`), and which refuses a record `to_json` can't have
 written. `wipe_verdict.VERDICT` is the switch: `lean` (the Lean alone), `both` (the Python's beside it, and a session
 the two differ on in any field rejected as a disagreement) or `python` (no Lean).
-`verity/core/devices/memory_challenger/lean/tests/test_wipe_verdict.py` holds the Lean to `streamed_wipe.verdict` on drawn sessions at every batch size, one adversarial edit of them (a wrong
+`verity/core/devices/memory_challenger/lean/tests/test_wipe_verdict.py` holds the Lean to `streamed_wipe.verdict` on generated sessions at every batch size, one adversarial edit of them (a wrong
 label, a late or early answer, an untrusted signer, a wrong count, a batch dropped or added, a field past its width),
 JSON the Lean must refuse, and named negative controls.
 
@@ -657,7 +665,7 @@ which was not measured. The node's load average was about 930 during the run, wh
 | `audit` | `challenge_key`, `HonestResponder`, `UnsignedRounds` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `ChallengeReply.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `UnsignedRounds` refuses a band deadline past the cliff |
 | `memory_challenger` | the memory challenger, which signs its rounds and on the deployed path replaces `audit.UnsignedRounds`: `CoinTree` (its `k` indices from its own secret, committed on the device before the session and released after it; `CoinOpening`, `verify_coin`), `MemoryChallenger(coins, signer, log=, limit_ns=, block_bytes=, binding=)` with its `SessionCommitment` (`commitment`, released once the session is signed; `binding` the setup's 64-byte root of `C*`, required; `session` the auditor's id for the audit, which `log`, a `SessionLog`, records as used before the first challenge and refuses again), `challenge()`, `receive(block)` (one `Round` each: index, send and receipt times, `H(block)`; the first late round ends the session), `close()` (one signature, `SignedSession`) and `openings()`; `LmsSigner`, `register`; `verdict` (what the prover will prove of a signed session, checked in the clear; its public output is `Verdict.public`); `covering_certificate` |
 | `streamed_wipe` | the streamed-label wipe (experimental): `wipe_key`, `label`, `labels`, `draw_indices`; `WipeParams(labels, k, batch, limit_ns, tiers)` (`covered`: batch 1, the only size `verdict` accepts), `WipeCommitment`; `Challenger(secret, server, session, params, signer, log=)` with `fill(chunk)`, `challenge()`, `receive(answers)`, `run`, `close(egress_bits)` (one signature, `SignedWipe`) and `coins()`; `Prover`, the honest server; `verdict` (its public output `Verdict.public`: the verdict and `egress_mib`), the reference of the Lean verdict that decides it (`MemoryChallenger.StreamedWipe`, `wipe_verdict.judge`), with `to_json` on the records it reads; the bound, `log2_error`, `retained_bits`, `challenges_for` |
-| `run` | the composed check of a recorded run: `check(trusted, setup, digests, session, session_id)` over the verifier's list of memory-challenger keys (never the run's record), the setup's public outputs (`Setup`), the memory challenger's table of `C*`'s row digests, its record of one session (`ChallengerRecord`: signed session, commitment, openings) and the id the auditor designated for the session, at P2's deployed point (`DEPLOYED`) under `memory_challenger.SCHEMES`, raising `Refused` with the first reason; `check_at` at another `Point`; `PousCheck.Run.check` (`pous-run`) in Lean |
+| `run` | the composed check of a recorded run: `check(trusted, setup, digests, session, session_id)` over the verifier's list of memory-challenger keys (never the run's record), the setup's public outputs (`Setup`), the memory challenger's table of `C*`'s row digests, its record of one session (`ChallengePhaseRecord`: signed session, commitment, openings) and the id the auditor designated for the session, at P2's deployed point (`DEPLOYED`) under `memory_challenger.SCHEMES`, raising `Refused` with the first reason; `check_at` at another `Point`; `PousCheck.Run.check` (`pous-run`) in Lean |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
 | `protocol` | the generic protocol: `Scheme` (abstract), `CapacityBound`, `TimedAudit` (refuses what none of its certificates covers), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
 | `schemes` | `band.Band`, `dense.Dense`, `p3.P3`, `p2.P2` (experimental; one module each) as `protocol.Scheme`s with their certificates; `REGISTRY`, `DEFAULT` (`band-chain/d12/v1`), `get(name, segments, params)` |
@@ -1008,7 +1016,7 @@ the `k` boundaries passes with probability at most `(1 − p)^m + k·ε₀`. Its
 
 - `pous-ring-device` (the model): the deployed server is a `Server`, its state bounded between setup, the session and
   its rounds, with one session per audit (the memory challenger's `SessionLog`, of which its host never restores an
-  earlier copy: `trusted-host`) and the coins drawn
+  earlier copy: `trusted-host`) and the coins flipped
   online;
 - `pous-ring-speed` (the numbers): within `Δ + RTT` no allowed hardware finishes a 16,447th sequential multiplication
   round (`D = 16,446`), more than `2^20` key queries or `2^64` ring operations per answer. It rests on the floor
@@ -1038,7 +1046,7 @@ Two gaps stood between these statements and the deployed verifier:
   Under one secret a reused id would also replay the coins, which `CoinTree.draw` derives from the secret and the id.
   The composed check accepts a session only under the id the auditor designated (`run.check`'s `session_id`), so an
   audit has at most one session it can accept. On the served piece (`benchmarks/pous/served_piece.py`) the id is
-  derived, not drawn: the memory challenger draws the setup's salt after the commitment to `W` and logs it under the
+  derived, not sampled: the memory challenger samples the setup's salt after the commitment to `W` and logs it under the
   window's binding (`memory_challenger.SaltLog`, one salt an audit), derives the id from the binding, the commitment
   and the salt (`challenger_party.session_id`), and refuses a session whose setup doesn't publish exactly that
   commitment and salt. The verifier computes the same id from the binding and what setup published, never from the

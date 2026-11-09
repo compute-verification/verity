@@ -68,7 +68,7 @@ may also name an output row ``o<j>``: that row's words are the parameter's leave
 circuit sends out). It fills no input row, and wires may read the row too.
 
 The circuit's blocks (`Blocks`, ``verity/blocks/v1``, the record's ``blocks``) are stated per template and step, never per
-unit: ``proof``, the partition into proof units (its units and partition digest, which the verifier holds to the record's,
+unit: ``proof``, the partition into proof blocks (its units and partition digest, which the verifier holds to the record's,
 and the planner's ``plan`` digest, carried and never read); ``inference``, the slot and step of every unit (`InferenceEntry`:
 the entries tile each template's units exactly once, a slot digit's radix is the class's S and every step is below its T).
 Which host runs which units is private, so the blocks state no server and the members are cut by no placement. Blocks
@@ -1837,7 +1837,7 @@ class _Recorded:
 @dataclass
 class Window:
     """One window of an integration's values: ``circuit``'s units under ``run`` (the record's run root, hex) and ``law`` (the
-    proof service's law of the window, as its draw parses it), in members of at most ``cap`` units, with ``advice`` its
+    proof system's law of the window, as its draw parses it), in members of at most ``cap`` units, with ``advice`` its
     compiler and advice (`advice_binding`) when the circuit depends on run-time choices, and ``registered`` the values its
     registered reads read (`committed_reads`), by parameter: each committed once, before the run, as core's
     ``one_stage.registered.Registered`` (rows of the reading port's words, its salts the prover's; a table's in its

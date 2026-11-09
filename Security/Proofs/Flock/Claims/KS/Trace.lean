@@ -3,6 +3,9 @@ module
 public import Proofs.Flock.Claims.KS.Joint
 public import Proofs.Flock.Soundness.Refine.Seam
 public import Proofs.Flock.Soundness.LigeritoPadLevel0
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Init.Data.Nat.Power2.Basic
 
 /-!
 # The old table at the filled word

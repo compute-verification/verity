@@ -51,7 +51,7 @@ own Commit.
   blocks core draws (`credit.drawn` over the window Program's layout, as `pouw_h1_challenger.drawn_of` draws them), each
   read as the Commit's values it opens (`drawn_reads`): its call's x_q and s_a rows of its row tile at the engine step its
   step maps to. With a gate session its stream is the window's open root and its K its period-open's ``draw_k``; with
-  in-process coins (no open root, no period, nothing credited) its calls_root and the proof service's K
+  in-process coins (no open root, no period, nothing credited) its calls_root and the proof system's K
   (`pouw_h1_challenger.draw_k`). A window whose draw can't be formed (it never opened, its close failed, no draw coin,
   no period) refuses its release by name, so its seal fails visibly and never waits.
 * **Its Commit record, tied to the audited window** (``--seal --h1-prover --h1-window-commit CMD``, `serve_tie`). Its
@@ -414,12 +414,9 @@ class H1Windows:
         t1 = self.clock()
         self.tap = HC.tap(self.com, self.model, self.layers, range(self.steps))
         prover = self.prover_of(window)
-        # on a gate session the tables bind the window's open root (`Served.key`), the root the ledger opens it on and
-        # credit's domains bind; in-process coins credit nothing, and a random root stands in for the session's
         served = SV.Served(unit=self.unit, weights=self.weights, tap=self.tap,
-                           window=None if self.sessions is not None else os.urandom(64),
-                           program=self.program, program_digest=self.digest,
-                           prover=None if prover is None else str(prover))
+                           window=None if self.sessions is not None else os.urandom(64), program=self.program,
+                           program_digest=self.digest, prover=None if prover is None else str(prover))
         settings = {**self.config.get("pouw", {}), "rows": self.rows, "steps": self.steps, "served": served,
                     "transcript_dir": str(self.out / "h1" / f"w{window}"), **coins}
         if self.tie is not None:
@@ -588,14 +585,14 @@ class H1Windows:
     def draw_of(self, run: Any, held: dict[str, Any] | None) -> tuple[int, str, str]:
         """The K a window is drawn at, its stream, and where that K comes from. A gate session's window: its period-open's
         ``draw_k`` (`credit.committed_k` of the gate's ledger, read once a period) and its open root. An in-process
-        window has neither, and credits nothing: the proof service's K (`pouw_h1_challenger.draw_k`) and its calls_root.
+        window has neither, and credits nothing: the proof system's K (`pouw_h1_challenger.draw_k`) and its calls_root.
         ValueError when the session joined no period or the ledger commits it no K."""
         from verity.core.protocols.pouw import credit as CR
 
         from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
         if held is None:
-            return PHC.draw_k(self.layout()), run.commits["calls_root"], "the proof service's draw_k (in-process coins)"
+            return PHC.draw_k(self.layout()), run.commits["calls_root"], "the proof system's draw_k (in-process coins)"
         period = held.get("period")
         if period is None:
             raise ValueError(f"session {held.get('session')} joined no period, so no period-open committed the K its "

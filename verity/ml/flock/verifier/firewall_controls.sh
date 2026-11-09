@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # The ZK server's negative controls through the Lean session loop: one honest firewalled CPU `prove --zk` session (FC_FIREWALL=1
 # FC_HOST_WITNESS=1), then one session per FC_FIREWALL_TAMPER control (the device dishonest in one named way, live
-# PROTOCOL.md §10.1), each against the same `serve --zk`. The honest session must be accepted, and every control must end in a
+# PROTOCOL.md §10.1), each against the same `serve --zk`. The honest session must be accepted with no rep stopped (no
+# `frames: ... stops the rep` line, no `prover_stopped`): each honest round passes the Lean frame's checks, the completeness
+# `Loop.HonestRoundsPass` names (Security/Proofs/Flock/SessionLoop/Fill.lean). Every control must end in a
 # visible refusal at its `Finish`, never before: the verifier's verdict (its `SESSION` line) does not accept, after as many
 # rounds as the honest session's, and the prover's record carries the control's own refusal (`EXPECT` below:
-# `prover_stopped`'s, the ZK server's, and the verdict's `why`, the Lean frame's stop where it stopped a rep). A `cut-MODE` control (a worker that fails) runs at its table's device rounds 2, half way and the last of
-# the honest session's (`firewall_device_rounds`). Run from the source tree's root:
+# `prover_stopped`'s, the ZK server's, and the verdict's `why`, the Lean frame's stop where it stopped a rep; `ALSO`, a
+# second refusal a control may carry beside it). A `cut-MODE` control (a worker that fails) runs at its table's device rounds 2, half way and the last of
+# the honest session's (`firewall_device_rounds`), and `inner` (FC_INNER_TAMPER, §10.4: table 0 rep 0's inner round J
+# relayed with a value byte flipped) at each of the inner proof's rounds 0 to 3. Run from the source tree's root:
 #   bash verity/ml/flock/verifier/firewall_controls.sh
 #   (a job run from the source tree, 16 CPUs, 48 GB, keeping out/*)
 # FC_CONTROLS names the controls (default every one); the builds, staging and config are firewall_finish_agree.sh's
@@ -30,14 +34,18 @@ pin=$(cat "$D/pin.txt") port=$(free_port)
   --operator loopback --draw "subset:$N" > "$O/serve.log" 2>&1 &
 srv=$!
 until grep -q '^SERVING ' "$O/serve.log" 2>/dev/null; do kill -0 $srv 2>/dev/null || { log "serve: $(tail -1 "$O/serve.log")"; exit 1; }; sleep 1; done
-# one session: its name, then FC_FIREWALL_TAMPER and FC_FIREWALL_CUT_AT (empty: none); its LIVE record, with the control's
-# name and the prover's exit, goes to $O/controls.jsonl
+# one session: its name, then FC_FIREWALL_TAMPER and FC_FIREWALL_CUT_AT (empty: none), or `inner` and FC_INNER_TAMPER; its
+# LIVE record, with the control's name and the prover's exit, goes to $O/controls.jsonl
 n=0
 session() {
   local name=$1 tamper=$2 at=$3 env=(FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_LEAN=$FIREWALL)
   n=$((n + 1))
-  [ -n "$tamper" ] && env+=(FC_FIREWALL_TAMPER=$tamper)
-  [ -n "$at" ] && env+=(FC_FIREWALL_CUT_AT=$at)
+  if [ "$tamper" = inner ]; then
+    env+=(FC_INNER_TAMPER=$at)
+  else
+    [ -n "$tamper" ] && env+=(FC_FIREWALL_TAMPER=$tamper)
+    [ -n "$at" ] && env+=(FC_FIREWALL_CUT_AT=$at)
+  fi
   log "$tag: session $name"
   env "${env[@]}" "$BIN" prove --zk --verifier 127.0.0.1:$port --instances "$D/inst.bin" --circuit "$D/circuit.txt" \
     --runs 1 --warm 0 > "$O/$name.out" 2> "$O/$name.err"
@@ -66,8 +74,9 @@ EOF
 session honest "" ""
 dev=$("$PY" -c "import json, sys; print(json.loads(open(sys.argv[1]).readline()).get('device_rounds', 0))" "$O/controls.jsonl")
 log "$tag: the honest session's device rounds: $dev"
-for c in ${FC_CONTROLS:-root witness label opening opening-frame algebra algebra-proof shape cut-rc cut-rc240 cut-panic cut-silent cut-decode cut-tree}; do
+for c in ${FC_CONTROLS:-root witness label opening opening-frame algebra steer algebra-proof shape cut-rc cut-rc240 cut-panic cut-silent cut-decode cut-tree inner}; do
   case $c in
+    inner) for j in 0 1 2 3; do session "$c@$j" "$c" "$j"; done ;;
     cut-tree) for at in 0 $((dev / 2)); do session "$c@$at" "$c" "$at"; done ;;
     cut-*) for at in 2 $((dev / 2)) $((dev - 1)); do session "$c@$at" "$c" "$at"; done ;;
     *) session "$c" "$c" "" ;;
@@ -81,22 +90,31 @@ import json, sys
 FW, DEV, FRAME = "FIREWALL-REFUSED: ", "FIREWALL-REFUSED: the device failed: ", "PROVER-STOPPED: the Lean frame stopped table 0 rep "
 EXPECT = {"root": (FW + "level-0 root: the device committed ", True), "witness": (FW + "level-0 root: the device committed ", True),
           "label": (FW + "the proof's exposed value ", True), "opening": ("", True), "opening-frame": ("", True),
-          "algebra": (FW + "circuit: the constraints ", False), "algebra-proof": (FW + "the proof's exposed value ", False),
+          "algebra": (FW + "circuit: the constraints ", False), "steer": (FW + "circuit: the constraints ", False),
+          "algebra-proof": (FW + "the proof's exposed value ", False),
           "shape": (FW + "the proof's shape ", False), "cut-rc": (DEV + "CUDA circuit prover returned error ", None),
           "cut-rc240": (DEV + "PROVER-STOPPED: degenerate coins: ", None), "cut-panic": (DEV + "panicked: ", None),
           "cut-silent": (DEV + "silent past the firewall's deadline", None), "cut-decode": (DEV + "the device's output does not decode", None),
-          "cut-tree": ("", True)}
+          "cut-tree": ("", True), "inner": ("", True)}
+# a second detection a control may carry and never needs: a session stops at its first failure, every rep with it
+# (`Frames.Sessions.stopped`: each later round leaves as a stopped rep's scheduled round), so where the Lean frame alone stops
+# a rep (the opening's rounds, cut-tree at round 0, every inner round), the ZK server's own check of the proof's exposed values
+# against the ones the frame passed may refuse it too
+ALSO = {c: FW + "the proof's exposed value " for c in ("opening", "opening-frame", "cut-tree", "inner")}
 rows = [json.loads(l) for l in open(sys.argv[1])]
 rounds = (rows[0].get("auditor") or {}).get("rounds") if rows else None
 for r in rows:
     a = r.get("auditor") or {}
     if r["control"] == "honest":
-        r["ok"] = r.get("accepted") is True and a.get("accepted") is True and bool(rounds)
+        r["ok"] = (r.get("accepted") is True and a.get("accepted") is True and bool(rounds)
+                   and not r.get("frame_stops") and not r.get("prover_stopped"))
     else:
-        stopped, frame = EXPECT[r["control"].split("@")[0]]
+        c = r["control"].split("@")[0]
+        stopped, frame = EXPECT[c]
         why, ps = r.get("why") or "", r.get("prover_stopped") or ""
         r["ok"] = (r.get("accepted") is False and a.get("accepted") is False and a.get("rounds") == rounds
-                   and (ps.startswith(stopped) if stopped else ps == "") and frame in (None, why.startswith("Ok(Refused(\"" + FRAME)))
+                   and (ps.startswith(stopped) if stopped else ps == "" or (c in ALSO and ps.startswith(ALSO[c])))
+                   and frame in (None, why.startswith("Ok(Refused(\"" + FRAME)))
     print(("OK " if r["ok"] else "BAD ") + json.dumps(r))
 ok = bool(rows) and rows[0]["control"] == "honest" and all(r["ok"] for r in rows)
 json.dump({"ok": ok, "rows": rows}, open(sys.argv[2], "w"), indent=1)

@@ -4,15 +4,17 @@ This is the byte format of a Program and the rules that turn it into a circuit: 
 reader obtains every gate, its primitive and its operand gates, and nothing else is needed. It is written for a second
 implementation, such as the Lean port of `Q_word` (`verity/core/service/sampled_proofs/`). It describes the bytes the codec writes and moves no digest.
 
-- Reference: `verity.ml.circuits.codec` (`encode_program`, `decode_program`, `canonical_json`, `jcs_domain_error`, `program_digest`),
+- Reference: `verity.ml.circuits.codec` (`encode_program`, `decode_program`, `canonical_json`, `jcs_domain_error`, `program_digest`,
+  `definition_digest`),
   with `types`, `refs`, `defs` (`Node`, `Body`, `Builder`), `program` (the root, `INPUT_ID`), `layout` (`Circuit`, `resolve`),
   `parts.n_members`, for §8, §10 and §11 `cut` and `partition_object`, for §9 `boolean`, and for §12 `ports`.
 - Vectors: `verity/ml/circuits/tests/format_vectors.json`, written by
-  `python verity/ml/circuits/tests/test_format_spec.py --write`.
+  `uv run python tools/verity/check/pins.py --write verity/ml/circuits/tests/format_vectors.json`.
 - Conformance: `verity/ml/circuits/tests/test_format_spec.py` checks the reference against every vector, and restates
   canonical JSON (as RFC 8785), leaf order, reference sequences and the interning order independently of it. Each section
   names its vector keys. `verity/ml/circuits/tests/partition_vectors.json` pins `Q_word` v1 on top of this format.
-- Scope: schema v1; §4.7 adds the self-contained definition entry, and schema v0, whose definitions are those entries.
+- Scope: schema v1; §4.7 adds the self-contained definition entry, and schema v0, whose definitions are those entries, and
+  §4.8 the definition digest.
 
 Indices are 0-based, `[a, b)` is half-open, and a *leaf* is one scalar position of a type.
 
@@ -246,12 +248,28 @@ it is read without the descriptor around it:
 - each reference sequence is §3's JSON of the sequence as the body holds it: a concatenation keeps the parts it was built with,
   nested concatenations included, and there is no alias (§4.5).
 
-A digest of one definition alone is taken over this entry, in canonical JSON (§1); this format fixes the entry, not the
-digests. The entry keeps the nesting that v1 flattens, so it is a function of how a body was built and not of its gates alone:
-decoding the v1 descriptor vector changes the root's entry, which nests a concatenation at node 12, and so every digest over it.
+The entry keeps the nesting that v1 flattens, so it is a function of how a body was built and not of its gates alone: decoding
+the v1 descriptor vector changes the root's entry, which nests a concatenation at node 12. A definition's digest is taken over
+the entry's canonical form instead (§4.8).
 
 A `verity-ir/descriptor/v0` descriptor is §4.1's without `callees` and `types`, each definition its self-contained entry. It
 decodes as §4.6 says, with the callee id and the types read in place, and its decode gives back the same entries.
+
+### 4.8 The definition digest
+
+A definition's digest is the hex SHA-512 of the canonical bytes (§1) of its *canonical entry*, with no domain prefix. A
+primitive's canonical entry is its entry. A composite's is its self-contained entry (§4.7) with every reference sequence of a
+node argument and of `ret` written flat: its parts, each concat spliced in, as `{"concat": [...]}`, or as its only part when it
+has one. From a v1 entry a reader builds the same, with the tables read in place and each `{"alias": [k, a]}` replaced by the
+flat parts of argument a of node k (§4.5). Every other key stays as written.
+
+So one definition has one digest in any program, from either schema's bytes, whichever aliases the writer chose and however
+the body nested its concatenations when it was built. Callees enter by descriptor id, so the digest covers the definition's own body, not its
+callees' bodies. Parts compare by form and fields, as in §4.5, so two entries that write one reference sequence in different
+forms have different digests.
+
+Reference: `codec.definition_digest(entry, desc)` (`desc` supplies a v1 entry's tables) and `codec.canonical_entry`. Vectors:
+`definition_digest` (descriptor id, digest), one per definition of the descriptor vector.
 
 ## 5. Programs and input nodes
 
@@ -453,7 +471,7 @@ significant first), or a `Value<1>` that is not inside one. `elements(T)` lists 
 `word_type`: the signature of the word Definition it computes. A port's number format is metadata
 (`verity/metadata/v0`), outside every digest; the word view does not read it.
 
-Vectors (`verity/ml/circuits/tests/boolean_vectors.json`, written by `python verity/ml/circuits/tests/test_boolean.py --write`): `gates` (id,
+Vectors (`verity/ml/circuits/tests/boolean_vectors.json`, written by `uv run python tools/verity/check/pins.py --write` on it): `gates` (id,
 kind, parameters, return type, truth table), `constants`, `gate_ids` (id, its kind and inputs, or null), `constant_ids` (id,
 its width and value, or null), `word_view` (type, element widths, word type), and `program`: a 2-bit
 adder built from two full-adder calls, a batch of `Xor2_v1` over axis 1, a constant, a `Not_v1` and an `Xor3_v1`, with its
@@ -534,7 +552,7 @@ Rules the Program format left open, pinned here:
 - **A proof block with no outputs** (a dead gate) is still a proof block: every computing gate is in exactly one.
 - **An unread parameter leaf** is in the input unit and is not committed.
 
-Vectors: `qcall_vectors.json`, written by `python verity/ml/circuits/tests/test_qcall_vectors.py --write`. They cover a word
+Vectors: `qcall_vectors.json`, written by `uv run python tools/verity/check/pins.py --write` on its path. They cover a word
 program and a Boolean program at two values of X. The word program has a Call that fits; one that splits into sub-Calls two levels
 down; a batch of a composite and of a primitive; a scan with a chained carry and one with a passed-through carry; pass-through
 outputs; a constant read by two proof blocks; a constant-derived gate committed across proof blocks; a 64-bit input and constant; a recompute

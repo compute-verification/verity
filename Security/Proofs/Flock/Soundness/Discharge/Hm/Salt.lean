@@ -8,6 +8,9 @@ module
 public import Mathlib.Data.List.GetD
 public import Proofs.Flock.Soundness.Discharge.Hm.Hash
 public import Proofs.Flock.Soundness.Discharge.Hm.Hm96
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Init.Data.String.Defs
 
 @[expose] public section
 

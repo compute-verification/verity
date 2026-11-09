@@ -509,7 +509,7 @@ def disk_gaps(store: Mapping[str, Any] | None) -> list[str]:
 
 def uncertified(where: Mapping[str, Any], signed: sw.SignedWipe | None) -> list[str]:
     """What an accepted wipe's bound doesn't cover, from its placement (`wipe_party.placement`) and signed session: the
-    memory challenger off its own host (its key on the prover's node), an egress signed `UNCOUNTED`, each undeclared
+    memory challenger off its own host (its key on the developer's node), an egress signed `UNCOUNTED`, each undeclared
     tier, a GPU's driver reserve when NVML gave no total (`wipe_store.Cuda.info`; a joint store's GPU part too), what
     the prover's disks leave outside the boundary (`disk_gaps`) and each link leaving the node that no network
     certifier counts."""
@@ -638,7 +638,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m verity.core.protocols.pous.wipe_period", description=main.__doc__)
     ap.add_argument("--period", type=Path, required=True, help="the period's directory, holding period.json")
     ap.add_argument("--out", type=Path, required=True, help="where wipe.json and wipe.case.json go")
-    ap.add_argument("--node", default=socket.gethostname(), help="the prover's node: the wiped server's id")
+    ap.add_argument("--node", default=socket.gethostname(), help="the developer's node: the wiped server's id")
     ap.add_argument("--expect", choices=("accept", "reject"), default="accept",
                     help="the verdict that exits 0 (reject: a cheat's run)")
     a = ap.parse_args(argv)

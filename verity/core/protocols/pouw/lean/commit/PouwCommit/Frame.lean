@@ -9,12 +9,29 @@ public import Identity.Domains
 /-!
 # frame-v3 trees (`verity.ml.commitments.merkle`) over range positions
 
+<<<<<<< ours
 C-Flock's frame-v3 (`Flock.FV3`) under the frame's hash: `sha256` (`Flock.FV3.Sha256`, 32-byte digests) or `sha512`
 (`Flock.FV3.Sha512`, 64). A domain over positions `0 … count-1` is `binding` (32 or 64 bytes), `owner ≥ -2`, and its id
 `H("domain", binding, uint(owner + 2), identity, uint(count))`, `identity` the positions' range identity under the frame's
 tagged hash; its leaves, nodes, pads and empty root are `Flock.FV3.Domain`'s. What this module adds is what the Python
 refuses: a binding or owner `CommitmentDomain` refuses (`Domain.mk?`), a frame `merkle._frame` refuses (`frameHash?`), and
 `verify_opening`'s checks and limits (`Domain.verify`).
+||||||| base
+A frame hashes `FRAME ‖ be32 |tag| ‖ tag ‖ Σ (be64 |part| ‖ part)` under the frame's hash: `sha256` (32-byte digests) or
+`sha512` (64). A domain over positions `0 … count-1` is `binding` (32 or 64 bytes), `owner ≥ -2`, and its id
+`H("domain", binding, uint(owner + 2), identity, uint(count))`, `identity` the positions' range identity under the frame's
+tagged hash. A tree pads its leaves to a power of two with `H("pad", id, uint rank)`, nodes are
+`H("node", id, uint level, uint index, l, r)`, and an empty tree's root is `H("empty", id)`. Integers are minimal big-endian,
+any size (`natBytes`).
+=======
+A frame hashes `FRAME ‖ be32 |tag| ‖ tag ‖ Σ (be64 |part| ‖ part)` under the frame's hash: `sha512` (64-byte digests, the
+default) or `sha256` (32, Pearl-C's h0 format and NCP's, named where it is read). A domain over positions `0 … count-1` is
+`binding` (32 or 64 bytes), `owner ≥ -2`, and its id `H("domain", binding, uint(owner + 2), identity, uint(count))`,
+`identity` the positions' range identity under the frame's
+tagged hash. A tree pads its leaves to a power of two with `H("pad", id, uint rank)`, nodes are
+`H("node", id, uint level, uint index, l, r)`, and an empty tree's root is `H("empty", id)`. Integers are minimal big-endian,
+any size (`natBytes`).
+>>>>>>> theirs
 -/
 
 @[expose] public section
@@ -27,7 +44,10 @@ open Flock
 inductive Hash where
   | sha256
   | sha512
-  deriving BEq, Repr, Inhabited
+  deriving BEq, Repr
+
+/-- SHA-512, the one hash; `sha256` is only ever named. -/
+instance instInhabitedHash : Inhabited Hash := ⟨.sha512⟩
 
 namespace Hash
 

@@ -65,6 +65,8 @@ module
 public import CoreProtocol.Record
 public import SampledProofs.ChallengerRecord
 public import SampledProofs.PyJson
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -204,12 +206,13 @@ def ChallengerClose.toJson (c : ChallengerClose) : Json :=
     ("lines", Lean.toJson c.lines), ("session", Json.str c.session), ("signature", Json.str (Flock.hexOf c.signature))]
 
 /-- A release log line's event: the line, refused unless it is its own canonical JSON in at most `MAX_LOG_LINE`
-characters. -/
+characters. Its objects hold their keys in order (`sortedKeys`), as every parse's do. -/
 def event (line : String) : V Json := do
   unless line.length ≤ MAX_LOG_LINE do throw LOG_MALFORMED
-  let .ok j := Json.parse line | throw LOG_MALFORMED
+  let .ok j := Flock.JsonParse.parse line | throw LOG_MALFORMED
   let .ok text := Flock.canon j | throw LOG_MALFORMED
   unless text == line do throw LOG_MALFORMED
+  unless sortedKeys j do throw LOG_MALFORMED
   pure j
 
 private def pairs : List String → List (String × String)
@@ -222,7 +225,7 @@ private def isTime (j : Json) : Bool := (nat? j).isSome
 `event` is `TREE_EVENT` or `OPEN_EVENT`. -/
 def treeLine (line : String) : Bool :=
   match event line with
-  | .ok j => getD j "event" == Json.str TREE_EVENT || getD j "event" == Json.str OPEN_EVENT
+  | .ok j => jsonStrIs (getD j "event") TREE_EVENT || jsonStrIs (getD j "event") OPEN_EVENT
   | .error _ => false
 
 /-- The roots the challenger received, by family in order. -/
@@ -441,12 +444,13 @@ private def isBodyOf (kind : String) (v2 : Bool) (b : Json) : Bool :=
 /-- `_ledger_entry`: a ledger line's entry when it is its own `ledger_text` (`PyJson.canonical`), escapes no surrogate,
 has only integers (`Flock.canon`), in at most `MAX_LEDGER_LINE` characters, is a record entry (`Core.Record.ofJson`)
 and is of the ledger's form: a schema of the ledger's, a session's entry naming its session and a period's or a
-declaration's none. -/
+declaration's none. Its objects hold their keys in order (`sortedKeys`), as every parse's do. -/
 def ledgerEntry? (line : Json) : Option LedgerEntry := do
   let .str text := line | none
   guard (text.length ≤ MAX_LEDGER_LINE)
-  let e ← (Json.parse text).toOption
+  let e ← (Flock.JsonParse.parse text).toOption
   guard ((PyJson.canonical e).toOption == some text && !escapesSurrogate text && (Flock.canon e).toOption.isSome)
+  guard (sortedKeys e)
   let r ← (Core.Record.ofJson e).toOption
   let _ ← ledgerTag? r.schema
   guard (4 ≤ r.sig.size)
@@ -837,7 +841,7 @@ def circuitReason (period : Option String) (circuit : Json) (descriptor : ByteAr
 `{commit, main, pinned_utc}`, two commits in 40 lowercase hex and a time `later` holds fixed. -/
 def pinOf? (line : Json) : Option String := do
   let .str text := line | none
-  let e ← (Json.parse text).toOption
+  let e ← (Flock.JsonParse.parse text).toOption
   guard ((PyJson.canonical e).toOption == some text && keys? e == some #["commit", "main", "pinned_utc"])
   guard (isDigest (getD e "commit") 40 && isDigest (getD e "main") 40)
   let .str t := getD e "pinned_utc" | none

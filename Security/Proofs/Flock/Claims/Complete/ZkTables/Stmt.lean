@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Claims.Complete.ZkTables.Reps
 public import Proofs.Flock.Claims.Complete.Zk.Json.Record
 public import Proofs.Flock.Verifier.Hash
+import all Lean.Data.Json.Basic
 
 /-!
 # What the masked record needs of the statement, at several tables

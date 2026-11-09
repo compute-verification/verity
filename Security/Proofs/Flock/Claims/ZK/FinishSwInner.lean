@@ -30,9 +30,9 @@ set_option synthInstance.maxHeartbeats 1000000
 
 /-- The triple's two messages `ρ_in`, `σ_in` are the same on pads moved by `padShift`. -/
 theorem FlockSoundness.ZK.Table.innerMsg_padShift {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
-    (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (p q : W) (u : T.Mask) (R : T.XLanes)
+    (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (p q : W) (u : T.Mask) (V : T.Vis)
     (h : Fin 2 → (Fin T.nE → F) × F × F) (r : Fin 2) :
-    T.innerMsg r ((h + T.padShift p q u R) r) = T.innerMsg r (h r) := by
+    T.innerMsg r ((h + T.padShift p q u V) r) = T.innerMsg r (h r) := by
   simp only [FlockSoundness.ZK.Table.innerMsg, Pi.add_apply, Prod.fst_add, Prod.snd_add,
     FlockSoundness.ZK.Table.padShift]
   refine Prod.ext ?_ ?_ <;> simp only [] <;> ring
@@ -42,19 +42,19 @@ set_option smartUnfolding false in
 theorem FlockSoundness.ZK.Table.swPre_inner {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand) :
     (T.swPre w v ω).inner = (T.preView w ω).inner := by
-  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1.2.1
+  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1
   · rw [FlockSoundness.ZK.Table.swPre, ite_eq_left hr]
     rfl
   · rw [FlockSoundness.ZK.Table.swPre, ite_eq_right hr]
     funext r
-    exact T.onVals.innerMsg_padShift (w, v) (w, T.vals) ω.1 ω.2.1.2.1 ω.2.2.1 r
+    exact T.onVals.innerMsg_padShift (w, v) (w, T.vals) ω.1 ω.2.1 ω.2.2.1 r
 
 set_option smartUnfolding false in
 /-- The switched pre-final view's `Y₂` is the honest view's. -/
 theorem FlockSoundness.ZK.Table.swPre_Y2 {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand) :
     (T.swPre w v ω).Y2 = (T.preView w ω).Y2 := by
-  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1.2.1
+  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1
   · rw [FlockSoundness.ZK.Table.swPre, ite_eq_left hr]
     rfl
   · rw [FlockSoundness.ZK.Table.swPre, ite_eq_right hr]
@@ -64,7 +64,7 @@ set_option smartUnfolding false in
 /-- Where the rows hold, the switched pre-final view's `Y₁` is the honest view's. -/
 theorem FlockSoundness.ZK.Table.swPre_Y1 {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand)
-    (hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1.2.1) :
+    (hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1) :
     (T.swPre w v ω).Y1 = (T.preView w ω).Y1 := by
   rw [FlockSoundness.ZK.Table.swPre, ite_eq_left hr]
   rfl
@@ -104,7 +104,7 @@ theorem FlockSoundness.Discharge.ZkView.Coined.swPreWith_Y1 {K W Hi VL : Type} [
     {z : FlockSoundness.Discharge.ZkView.Sizes} (T : FlockSoundness.Discharge.ZkView.Coined K W Hi VL z) (w : W)
     (v : T.tab.Vals) (b : FlockSoundness.Discharge.ZkView.Base z Hi)
     (lv lv' : FlockSoundness.Discharge.ZkView.LeafPos z → ByteArray)
-    (hr : T.tab.onVals.RowsAt (w, v) (T.randOf b 0).1 (T.randOf b 0).2.1.2.1) :
+    (hr : T.tab.onVals.RowsAt (w, v) (T.randOf b 0).1 (T.randOf b 0).2.1) :
     (T.swPreWith w v b lv).Y1 = (T.preWith w b lv').Y1 :=
   T.tab.swPre_Y1 w v (T.randOf b 0) hr
 
@@ -133,7 +133,7 @@ theorem swCutE_Y1 (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x))
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1) :
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1) :
     (swCutE x c w v τ j).Y1 = (cutE x c w τ j).Y1 := by
   unfold swCutE cutE swCutAt cutAt
   exact Table.cut_Y1_congr _ _ (ZkView.Coined.swPreWith_Y1 _ _ _ _ _ _ hrows)
@@ -168,7 +168,7 @@ theorem swSrcE_y (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.F
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1) :
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1) :
     ((swSrcE x c w v τ j.val).rep r.val).y = ((srcE x c w τ j.val).rep r.val).y := by
   have h1 := congrFun (swCutE_Y1 x c w v τ j hrows) r
   have h2 := congrFun (swCutE_Y2 x c w v τ j) r
@@ -252,7 +252,7 @@ theorem swSrcE_innerSrc_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R)
       FlockComplete.padsOf (Claims.ZKServer.tapeOfDraws t₀ (L.lay x) (L.draws ρ) rep) j.val r.val (layE x j))
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)
     (cons : Array (String × _root_.Flock.Zk.Lin)) {L₀ : ℕ} (hL : L₀ = repSlot x (2 * j.val + r.val) (innerOff 0))
     (hbat : L₀ + 1 < n →
       ((FlockComplete.Replay.InZ.lin (layE x j) (_root_.Flock.Firewall.Finish.padsOf q.draws).toC cons

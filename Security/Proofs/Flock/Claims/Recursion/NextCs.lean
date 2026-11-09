@@ -4,6 +4,9 @@ public import Proofs.Flock.Claims.Recursion.PartsCompose
 public import Proofs.Flock.Claims.Complete.Json.Decode
 public import Proofs.Flock.Soundness.Refine.Exec
 public import Std.Data.TreeMap.Raw.AdditionalOperations
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import all Init.Data.Array.Basic
 
 /-!
 # The deployed plain verifier with the record's coins read from the live coins (`nextCs`)

@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.C3.Compose.HoloCoinTys
 public import Proofs.Flock.C3.VStarList.Shape
 public import Proofs.Flock.Recursive.HoloRepCoins
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The sparse phases' and R's streams at the model's coins

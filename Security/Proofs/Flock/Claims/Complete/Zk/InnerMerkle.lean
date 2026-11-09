@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Complete.Zk.Inner
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
+import all Init.Data.Nat.Power2.Basic
 
 /-!
 # The pads' commitment opens at every column

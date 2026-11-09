@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+import all Init.Data.String.Defs
 
 /-!
 # The opening's rounds carry its messages (R11b)

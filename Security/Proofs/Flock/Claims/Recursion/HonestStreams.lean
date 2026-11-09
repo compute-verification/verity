@@ -8,6 +8,7 @@ public import Proofs.Flock.Claims.Complete.Json.Goals
 public import Proofs.Flock.Claims.Complete.ZkTables.Table
 public import Proofs.Flock.Soundness.Discharge.Exec.FramesRep
 public import Flock.With.Deployed
+import all Init.Data.Array.Basic
 
 /-!
 # The reader's streams at the honest run are the honest record's
@@ -245,7 +246,7 @@ theorem frames_emitted (g : Goals sha512 rel) (o : Run sha512 rel) {i r : ℕ} (
         (o.proof i r) (o.sw i r).1.1 := by
     simp [repFrames, FlockComplete.flat, List.append_assoc]
   rw [hfr] at e
-  obtain ⟨-, hk, hR, -⟩ := e
+  obtain ⟨-, hk, hR, -, -⟩ := e
   have hc' : (o.lg i r).2.k = (o.stream i r).rounds.size := by simpa using hc
   refine ⟨by rw [← hc', hk]; simp, fun j hj => ?_⟩
   have hj' : j < (chunks (repFrames o.tabs[i]! (o.sch i) (o.spec.domain o.spec.tables[i]! r).toUTF8

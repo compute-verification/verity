@@ -4,6 +4,8 @@ public import Proofs.Flock.Claims.Recursion.NextRFits
 public import Proofs.Flock.VBridge.Family.Runs
 public import Proofs.Flock.VBridge.Algebra.RingSwitch
 public import Proofs.Flock.C3.Reps.LigNames
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # A rep's rounds squeeze as its schedule's: `chunksOf_counts`

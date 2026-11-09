@@ -3,6 +3,11 @@ module
 public import Proofs.Flock.Claims.Recursion.SlotsCommit
 public import Proofs.Flock.Claims.Recursion.VStarLinks
 public import Proofs.Flock.Claims.Recursion.DeployComplete
+import all Init.Data.String.TakeDrop
+import all Init.Data.String.Slice
+import all Init.Data.String.Pattern.String
+import all Init.Data.String.Pattern.Basic
+import all Init.Data.String.Basic
 
 /-!
 # The hm96 slots' commit strings at the outer relation

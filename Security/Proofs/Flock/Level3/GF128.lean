@@ -11,6 +11,7 @@ public import Mathlib.Tactic.ComputeDegree
 public import Mathlib.Tactic.IntervalCases
 public import Mathlib.Tactic.LinearCombination
 public import Mathlib.Algebra.CharP.Basic
+public import Batteries.Data.UInt
 
 @[expose] public section
 

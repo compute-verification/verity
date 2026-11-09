@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
 public import Proofs.Flock.Soundness.Discharge.ZkSession.Numbers
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The live `--zk` tables are at C-Flock ZK's parameters

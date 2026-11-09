@@ -120,8 +120,7 @@ theorem indexed_digits (pre : String) (n : ℕ) :
   have hn : (toString n).toList = Nat.toDigits 10 n := Nat.toList_repr
   have hd : ((pre ++ toString n).drop pre.length).toString = toString n := by
     apply String.toList_injective
-    change ((pre ++ toString n).drop pre.length).copy.toList = _
-    rw [String.toList_copy_drop, String.toList_append]
+    rw [String.Slice.toString_eq, String.toList_copy_drop, String.toList_append]
     exact List.drop_left' String.length_toList
   have hpre : (pre ++ toString n).startsWith pre = true :=
     String.startsWith_string_iff.mpr (by rw [String.toList_append]; exact List.prefix_append _ _)

@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Pouw.LiveSalt
 public import Proofs.Properties.Pouw.LiveSalt.Canon
+import all Init.Data.String.Defs
 
 /-!
 # A live root binds its commitment and its coins (`liveCoinBinding`)

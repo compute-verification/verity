@@ -24,6 +24,11 @@ def _module(name: str, path: Path):
 CHECK = _module("repo_check_for_deferred", ROOT / "tools" / "verity" / "check" / "check.py")
 
 
+@pytest.fixture(autouse=True)
+def _provers(provers):
+    return provers(CHECK)
+
+
 def _main(monkeypatch, tmp_path, argv):
     got = []
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20261018-000000-abcd")
@@ -43,7 +48,7 @@ def test_a_deferred_run_runs_only_its_steps_and_what_they_need_inside_a_recorded
 
 
 def test_a_recorded_check_runs_every_job_on_the_gate_and_passes_without_circuit_check(monkeypatch, tmp_path):
-    """circuit-check and ratchet-gate are off the gate (ci.toml's `gate = false`): a recorded check (`--record`, the declared
+    """circuit-check and ratchet-gate are off the gate (policy.toml's `off_gate`): a recorded check (`--record`, the declared
     command in a run) leaves them out, and its `check/v1` passes on the jobs on the gate alone."""
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "cache" / "check"))
     monkeypatch.setenv("VERITY_TEST_CACHE", str(tmp_path / "cache" / "tests"))
@@ -122,7 +127,13 @@ def test_record_of_a_deferred_run_launches_it_without_the_check_tool_and_without
     head, tail = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
     assert "--tool" not in head and head[head.index("--send") + 1].endswith(CHECK.SHARD_PARTS)
     assert tail[:2] == ["slot", "--priority"] and tail[-3:] == ["--keep-going", "--deferred", "pytest,circuit-check"]
-    assert sent[CHECK.BASE_FILE] == f"{CHECK._rev('HEAD')}\n"
+    assert sent[CHECK.BASE_FILE] == f"{CHECK._rev('HEAD')}\n" and CHECK.RATCHET_BASE_FILE not in sent
+    launched.clear()
+    sent.clear()
+    assert CHECK.record(["--base", "HEAD^", "--ratchet-base", "HEAD", "--on", "vy-x", "--deferred", "ratchet-gate"]) == 0
+    [cmd] = launched
+    assert "--ratchet-base" not in cmd and "HEAD" not in cmd[cmd.index("--") + 1:]
+    assert sent[CHECK.BASE_FILE] == f"{CHECK._rev('HEAD^')}\n" and sent[CHECK.RATCHET_BASE_FILE] == f"{CHECK._rev('HEAD')}\n"
 
 
 def _pack(tmp_path: Path, monkeypatch) -> Path:

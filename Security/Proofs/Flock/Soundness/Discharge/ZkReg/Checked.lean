@@ -4,6 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkReg.Bind
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+import all Init.Data.Array.Basic
 
 /-!
 # The registered check at an accepted `--zk --registered` outcome

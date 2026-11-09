@@ -55,10 +55,10 @@ whose record holds no draw (`Flock.RecSetup.innerDrawn`), one at a holo or spars
 recursive session without `--zk` (`Flock.RecSetup.zkOnly`).
 
 `verify` accepts a session only at `verity/flock-circuit` or `verity/flock-circuit+plain-leaves` (`ProvedScope.served`),
-on live coins (`--coins os`, or under `--zk` the keyed coin tree). Every other version it sets up and checks, so the
+on the challenger's keyed coin tree (`--coins tree`, or `--zk`): it reads coins only from a challenger's log. Every other version it sets up and checks, so the
 agreement corpus and the recorded fixtures replay, and then refuses the session (`ProvedScope.servedForm`, last, once
 every check has passed): a `+seed-injection` one as a selftest build's statement, the rest as superseded; a plain session
-on seed coins (`--coins seed`, the default without `--zk`) is refused the same way. A typed version, or one before hm96
+on seed coins (without `--coins tree`) is refused the same way. A typed version, or one before hm96
 rows, is refused earlier, for its form (`ProvedScope.check`).
 
 ## Guarantees and premises
@@ -88,9 +88,17 @@ rows, is refused earlier, for its form (`ProvedScope.check`).
 
 ~~~text
 cd verity/core/service/flock && lake build    # .lake/build/bin/flock-verify and the other executables
+<<<<<<< HEAD
 flock-verify verify [--statement ID] [--archive DIR] --circuit F --public pub.bin [--tables DIR] [--coins seed|os] [--zk] \
     [--program F] [--partition F] [--registered F [--interface F]] [--session-tables J] [--plain-tables] [--upstream-plain] \
     --session DIR...
+||||||| merged common ancestors
+flock-verify verify [--statement ID] [--archive DIR] --circuit F --public pub.bin [--tables DIR] [--coins seed|os] [--zk] \
+    [--program F] [--partition F] [--registered F] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR...
+=======
+flock-verify verify [--statement ID] [--archive DIR] --circuit F --public pub.bin [--tables DIR] [--coins tree] [--zk] \
+    [--program F] [--partition F] [--registered F] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR...
+>>>>>>> 705be2b532
 flock-verify statement [--statement ID] --circuit F --public pub.bin [--tables DIR]   # digest, Σ, Hello
 flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] LOG... # a recursive statement's verdict
 ~~~
@@ -104,8 +112,9 @@ flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] 
   partition object's), whose declared registered ports a `--registered` file that binds ports must register and never
   bind (`Flock.RegBound`); such a file is refused without it.
 - `--tables DIR` holds the pinned MUFU tables (`<name>.u32`), for circuits with lookup slots.
-- `--coins` binds the coin scheme a plain session's `Hello` names: `seed`, the default, which `verify` refuses once every
-  check has passed, or `os` (per-round OS coins, `FC_COINS=os`). A `--zk` session's coins are its coin tree.
+- `--coins tree` verifies a plain session on the challenger's keyed coin tree (`FC_COINS=tree`), whose `Hello` names it
+  and whose record opens it. Without it a plain session is on seed coins, which `verify` refuses once every check has
+  passed; no other value is taken. A `--zk` session's coins are always its coin tree.
 - A plain proof file is taken in one form: by default the deployed prover's, with the `zk_level0 = None` byte after the
   pair; `--upstream-plain` takes upstream's builds' form.
 

@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Claims.Recursion.RestVerdictBases
 public import Proofs.Flock.Claims.Complete.ZkTables.Decode
 public import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
 
 /-!
 # Custody at the reader's record (`CustodyRecJ`)

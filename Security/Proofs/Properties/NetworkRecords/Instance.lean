@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Properties.NetworkRecords.Accept
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.Repr
 
 /-!
 # An instance: a unit whose records are the Program's, which the check accepts

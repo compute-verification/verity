@@ -5,6 +5,8 @@ public import Proofs.Flock.Claims.Recursion.SchedCount
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
 public import Proofs.Flock.Claims.DeployK
 public import Proofs.Flock.C3.Compose.HoloStreamSizes
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The honest rows fit: `RepFits`

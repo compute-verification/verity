@@ -13,18 +13,18 @@ many reads of a node's registered blocks the node made in each window, from rece
    receipt kind, `bind`, the layout and the rows.  The verifier keeps one live registration a node (`Registry`): a
    second while one is live is refused and draws nothing, and a registration ends only when the verifier closes it,
    counting its sessions, an unended one as failed.
-2. Coins.  Before the session the proof system's challenger draws two live coins a window, its challenge `σ_t` and
+2. Coins.  Before the session the proof system's challenger draws two live coins a window, its challenge `chal_t` and
    its openings coin, and a coin an append, and commits to them (`coins.SessionCoins`: session k's epoch of the one
    challenger, on its own host when it is remote).  Each coin opens once, after the root the verifier recorded for it,
    which the challenger's signed log keeps (`AuditRun.released_reason`), and the prover is sent its value and that root
    (`coins.Released`).  The commitment, a function of every coin, reaches the prover only once the session has its
    outcome, with every released coin's opening (`AuditRun.disclose`), and the prover checks each coin it was sent
    against them then (`Prover.end`).
-3. A session of `windows` windows.  The verifier releases `σ_0` (`AuditRun.start`), and at each window's end the next
+3. A session of `windows` windows.  The verifier releases `chal_0` (`AuditRun.start`), and at each window's end the next
    window's challenge, or the close after the last (`AuditRun.boundary`), one-way.  A window lasts at least the stated
    `T` (`Params.window_ns`, 60 s by default).
 4. Chained passes.  Pass i of window t reads the blocks of its plan (`receipts.Plan`: distinct blocks, the whole store by
-   default) and computes their receipts under `seed_(t,i) = H(σ_t, i, root_(t,i−1))` (`receipts.seed`; the root
+   default) and computes their receipts under `seed_(t,i) = H(chal_t, i, root_(t,i−1))` (`receipts.seed`; the root
    before chained to every append received before the pass's own root, `chained`), each of its block alone, or under
    a registration that binds z also of PoUW's tile output `z` before the read (`Tiles`); it commits them in a tree
    bound to the plan and sends the root and the plan, whole or as its change from the previous pass's
@@ -939,7 +939,7 @@ def _within(spans: list[tuple[int, int]], first: int, count: int) -> bool:
 class AuditRun:
     """The verifier's side of one session, driven by the coins it releases and the roots it receives, on its own clock.
     `coins` are the session's coins through the one challenger (`coins.SessionCoins`), committed before the session, each
-    asked for after the root it follows: σ_0 after the session's window root, σ_t after the last root received,
+    asked for after the root it follows: chal_0 after the session's window root, chal_t after the last root received,
     window t's openings coin after its last root and an append's coin after its root.  `not_before_ns`, which
     every session names, is the earliest its first coin may leave on the verifier's clock: the previous session's
     `Record.end_ns` over the same store, less the trusted round-trip floor if there is one, or the clock at
@@ -1007,7 +1007,7 @@ class AuditRun:
         return c.commitment, tuple(o for label, _ in c.commitment.families for o in c.opened(label))
 
     def _release(self, t: int, now: int) -> coins.LiveOpening:
-        """σ_t, after the last root received (R before any).  `now`, read before the coin leaves (and before the
+        """chal_t, after the last root received (R before any).  `now`, read before the coin leaves (and before the
         challenger is asked, unless it was asked with the coin before it, `coins.SessionCoins.ahead`), is its release in the
         record: the coin leaves later, so the record's span is the longer."""
         opening = self.coins.challenge(t, self._latest)
@@ -1052,7 +1052,7 @@ class AuditRun:
         return None if b is None else b + self.params.deadline_ns
 
     def start(self) -> coins.LiveOpening:
-        """`σ_0`, released now: refused before `not_before_ns`."""
+        """`chal_0`, released now: refused before `not_before_ns`."""
         if self.windows:
             raise SessionError("a session starts once")
         now = self.clock()

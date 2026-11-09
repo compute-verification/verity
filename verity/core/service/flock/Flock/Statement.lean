@@ -173,21 +173,17 @@ theorem checkRegionBytes_ok (nbl : Nat) (regions : Array Region) :
 
 /-- The coin source named in `Hello` (`Flock.Draw`). -/
 inductive Coins where
-  | os
+  /-- upstream's committed seed: a plain session without a challenger, which `verify` refuses once every check has passed
+  (`ProvedScope.servedForm`) -/
   | seed
   /-- the verifier's keyed coin tree (`Flock.CoinTree`): `Hello`'s `coins` is its spec, with the prover's nonce -/
   | tree (spec : CoinTree.Spec)
   deriving BEq, Inhabited
 
-/-- The keyed coin tree the coins name, which `Hello`'s `coins` carries (`helloOf`); none for the OS's coins or a seed's. -/
+/-- The keyed coin tree the coins name, which `Hello`'s `coins` carries (`helloOf`); none for a seed's. -/
 def Coins.tree? : Coins → Option CoinTree.Spec
   | .tree s => some s
-  | _ => none
-
-/-- The tags a session on `coins` is verified under: on `os` coins, a statement whose prover names its coin mode
-(`Tags.liveOs`) binds the live-OS identity (`Tags.liveOsIdentity`) in its statement digest; otherwise the tags as they are. -/
-def Tags.withCoins (t : Tags) (coins : Coins) : Tags :=
-  if coins == .os && t.liveOs then { t with identity := Tags.liveOsIdentity t.identity } else t
+  | .seed => none
 
 /-- Everything a session needs about the statement. -/
 structure Stmt where
@@ -227,7 +223,6 @@ def helloOf (tags : Tags) (sigma : ByteArray) (mPts : Nat) (coins : Coins) (tabl
   let base := match coins with
     | .seed => base ++ [("coins", Json.str tags.coinScheme)]
     | .tree s => base ++ [("coins", s.coins "")]
-    | .os => base
   let base := if tags.hm96Rows then base ++ [("digests", Json.str "sha512")] else base
   canon (Json.mkObj (if tags.retainRounds then base ++ [("rounds", Json.str "bytes retained")] else base))
 

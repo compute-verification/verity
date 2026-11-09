@@ -5,6 +5,9 @@ public import Proofs.Flock.Soundness.Assumptions.Zk
 public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
 public import Proofs.Flock.Soundness.Refine.Walk
 public import Proofs.Flock.Soundness.Refine.Table
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import all Init.Data.Ord.String
 
 /-!
 # `Deploy.V`'s custody checks, as the old theorems' `RecordsLiveZKJ`

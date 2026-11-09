@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Claims.GS.RadiusFamily
 public import Proofs.Flock.Claims.DeployPlainCode
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The radius decoders the deployed instances name

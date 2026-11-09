@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Pous.WipeSigned.Tree
 public import Proofs.Properties.Pous.MemoryChallenger.Inputs
+import all Init.Data.String.Defs
 
 /-!
 # What the wipe's hashes read

@@ -4,24 +4,24 @@ equal the reference; each composite is its word body (the selected row's GEMM co
 gate count and program digest."""
 from __future__ import annotations
 
-import json
 import re
 
 import numpy as np
 import pytest
 
-from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
 from verity.ml.circuits import evaluation as E
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.reference import standalone_call, statics_of
+from verity.ml.circuits.evaluation.reference import statics_of
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops import moe as M
 from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.boolean import moe as BM
+
+from _boolean_checks import assert_agrees, assert_pinned
 
 SELECTS = [bind(BM.select_bf16(n)) for n in (1, 3, 5, 128, 256)]
 PAIRS = [bind(BM.MoePairCoordinate, E=3, K=32, **BG.GEMM_AMPERE), bind(BM.MoePairCoordinate, E=3, K=32, **BG.GEMM_HOPPER),
@@ -48,14 +48,7 @@ PINS = {
 
 @pytest.mark.parametrize("target", SELECTS + PAIRS, ids=lambda t: t.id)
 def test_pinned_counts_and_digests(target) -> None:
-    ands, xors, nots, digest = PINS[target.id]
-    assert BL.is_boolean(target)
-    assert BS.compile(target).counts == {"and": ands, "xor": xors, "not": nots}
-    prog, _ = standalone_call(target)
-    desc = codec.encode_program(prog)
-    assert codec.program_digest(desc) == digest
-    D = codec.decode_program(json.loads(codec.canonical_json(desc)), REGISTRY)
-    assert D.gates == prog.gates and codec.program_digest(codec.encode_program(D)) == digest
+    assert_pinned(target, PINS)
 
 
 def test_the_select_costs_one_mux_per_candidate_bit_and_the_range_bit() -> None:
@@ -63,15 +56,6 @@ def test_the_select_costs_one_mux_per_candidate_bit_and_the_range_bit() -> None:
     for n in (2, 4, 128, 256, 1024):
         b = (n - 1).bit_length()
         assert BS.compile(bind(BM.select_bf16(n))).counts["and"] == (n - 1) * 16 + 16 + 31 - b
-
-
-def _agree(target, inputs) -> None:
-    word = TR.word_of(target)
-    got = BS.evaluate_words(target, *inputs).astype(np.uint64)
-    ref = E.evaluate_batch(word, *inputs).astype(np.uint64)
-    assert got.shape == ref.shape
-    bad = np.flatnonzero(got.reshape(len(got), -1) != ref.reshape(len(ref), -1))
-    assert not bad.size, f"{target.id}: {bad.size} instances differ from {word.id}, first {bad[:5]}"
 
 
 def _ids(n: int) -> np.ndarray:
@@ -89,7 +73,7 @@ def test_the_select_agrees_with_its_word_on_every_id_and_the_edges(target) -> No
     e = np.repeat(ids, reps)
     column = rng.integers(0, 1 << 16, (len(e), n), dtype=np.uint64).astype(np.uint16)
     column[::reps] = 0x7FFF ^ np.uint16(1)
-    _agree(target, [e, column])
+    assert_agrees(target, [e, column])
     want = np.where(e < n, column[np.arange(len(e)), np.minimum(e, n - 1)], 0x7FFF)
     assert (BS.evaluate_words(target, e, column).reshape(-1) == want).all()
 
@@ -103,12 +87,12 @@ def test_the_pair_forms_agree_with_their_word_definitions(target) -> None:
     S = statics_of(word)
     rng = np.random.default_rng(29)
     sampled = E.kernels(word)["numpy"].sample(rng, 2_000, params, **S)
-    _agree(target, sampled)
+    assert_agrees(target, sampled)
     ids = _ids(S["E"])
     uniform = [rng.integers(0, 1 << (32 if a.ndim == 1 else 16), (len(ids),) + a.shape[1:], dtype=np.uint64).astype(a.dtype)
                for a in sampled]
     uniform[1] = ids
-    _agree(target, uniform)
+    assert_agrees(target, uniform)
 
 
 @pytest.mark.parametrize("target", PAIRS, ids=lambda t: t.id)

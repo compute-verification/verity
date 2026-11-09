@@ -60,6 +60,7 @@ PUBLIC = {
                                           "its digest",
     "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "
                                      "Program it declares (H1Windows), which a period's offline Program must equal",
+<<<<<<< HEAD
     "verity_vllm.pipeline.serve_tie": "I1: serve-openai's H1 tie, and where a serve dir holds each window's registration W, "
                                       "its record R and their log (W_FILE, R_FILE, LOG)",
     "verity_vllm.pipeline.serve_pearl": "I1: serve-openai's Pearl+ arm (PearlWindows), its --protocols-config (config_of, "
@@ -75,6 +76,12 @@ PUBLIC = {
                                                  "W is written from (SERVED_SCHEMA, KEEP, served_passes, macs, coins_of)",
     "verity_vllm.protocols.pouw.h1.words": "I1: the words H1 commits a call's rows and a step's input ids as (chunk_words, "
                                            "ids_words)",
+||||||| merged common ancestors
+=======
+    "verity_vllm.pipeline.tick_plugin": "I1: the certified tick (--admit tick) under vLLM's own OpenAI server: its general "
+                                        "plugin (register) and ASGI middleware (TickFeed), configured by VERITY_TICK, which "
+                                        "the trace corpus serves under",
+>>>>>>> 705be2b532
     "verity_vllm.protocols.pouw.h1.drawn": "I1: a served H1 window's drawn calls staged as C-Flock statements and checked as "
                                            "credit does (main), which benchmarks/pouw/h1_prove/drawn.py runs",
     "verity_vllm.protocols.pouw.h1.answers": "I1: the verifier of record's answers on a window's statements, each run once "

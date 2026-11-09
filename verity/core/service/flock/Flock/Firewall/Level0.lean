@@ -2,7 +2,8 @@
 # A table's level 0, as the session loop holds it
 
 The session loop draws each firewalled table's level-0 hiding itself, from the operating system (as it draws `Hello`'s
-nonce), and commits level 0 on it (`Link`): the prover hands it only the table's packed witness. What it keeps of the
+nonce), and commits level 0 on it (`Link`): the prover hands it only the table's packed witness, whose mask slot the loop
+fills with words of its own first (`Session.level0`, `Frame.MaskSlot.fill`). What it keeps of the
 table is one `Level0`, from which everything of level 0 that leaves is read: the root in the session's `Commit`, and
 `Finish`'s level-0 openings (`Firewall.Finish`, ZKFIN's).
 
@@ -13,13 +14,15 @@ table is one `Level0`, from which everything of level 0 that leaves is read: the
   extra lanes, the paddings, the salts. `draw` reads those bytes from the OS in one read.
 * `ofDraws_ok`: what `ofDraws` keeps is what it commits: the rows, layers and root of a `Level0` it returns are `Link`'s
   of its own inputs (`toIn`), its root `Link.root toIn`, so a statement over `toIn` needs none of the stored fields.
-* `Slots`, `commit`: the loop's tables, each drawn for one table of a live session named by its coin tree's root
-  (`nameOf`, `Slots.draw`), once: a second draw for the same table, or one for a table the session does not have, is
-  refused. Each is gone when that session ends (`Slots.close`). A session's `Commit` is held to them: the root it
-  carries for its table `i` must be the `Level0` the loop drew for that session's table `i`, at that table's own `m`. So
-  the level 0 a session binds is the one draw the loop made for the table, and the prover has no choice among draws.
+* `Slots`, `commit`: the loop's tables, drawn for a live session named by the loop's id for it (`nameOf`,
+  `Slots.draw`) all at once, on every table's witness, and once: a second draw for the session, or one whose witnesses
+  are not one for each of its tables, is refused. So no table's witness is handed after any of the session's draws. Each
+  is gone when that session ends (`Slots.close`). A session's `Commit` is held to them: the root it carries for its table
+  `i` must be the `Level0` the loop drew for that session's table `i`, at that table's own `m`. So the level 0 a session
+  binds is the one draw the loop made for the table, and the prover has no choice among draws.
 
-The prover gets the draws back (`drawsOf`) to run its own commitment over the same codeword; what leaves is the loop's.
+The prover gets the draws back (`drawsOf`), and the mask slot's words, to run its own commitment over the same codeword;
+what leaves is the loop's.
 -/
 module
 
@@ -64,6 +67,11 @@ def Level0.toIn (l : Level0) : Link.In where
 def up (below : Array ByteArray) : Array ByteArray :=
   (Array.range (below.size / 2)).map fun i => Sha512.hash (below[2 * i]! ++ below[2 * i + 1]!)
 
+/-- Compiled code runs `Link.nodesPar`; the kernel and every proof see `up`. `@[csimp]` rewrites only code compiled after
+it, so it stays above `tower`. -/
+@[csimp] theorem up_eq_nodesPar : @up = @Link.nodesPar :=
+  funext fun below => (Link.nodesPar_eq below).symm
+
 /-- A Merkle tree over the leaves `lf q` (`q < 2^d`), `k` layers up: its top layer, and its layers from the leaves to it,
 each hashed once (`tower_fst`, `tower_snd`). -/
 def tower (d : Nat) (lf : Nat → ByteArray) : Nat → Array ByteArray × Array (Array ByteArray)
@@ -95,6 +103,19 @@ def build (m : Nat) (lv : Level) (tPad : Nat) (g : Array F128) (extra pads : Arr
   let lvs := Link.leaves lv tPad l.toIn
   let t := tower lv.d (fun q => lvs[q]!) (lv.d - lv.cap)
   { l with rows, layers := t.2, root := Link.flat t.1 }
+
+/-- `build` with the leaves (`Link.leaves`'s) on the rows it keeps, so that level 0's codeword is computed once. -/
+def buildFast (m : Nat) (lv : Level) (tPad : Nat) (g : Array F128) (extra pads : Array (Array F128))
+    (salts : ByteArray) : Level0 :=
+  let l : Level0 := { m, lv, tPad, g, extra, pads, salts, rows := #[], layers := #[], root := .empty }
+  let rows := Link.rows lv tPad l.toIn.g l.toIn.extra l.toIn.lanePad
+  let k := min lv.d Link.CHUNK
+  let lvs := Link.parRange (fun q => Link.leaf rows[q]! (l.toIn.salt q)) (2 ^ (lv.d - k)) (2 ^ k)
+  let t := tower lv.d (fun q => lvs[q]!) (lv.d - lv.cap)
+  { l with rows, layers := t.2, root := Link.flat t.1 }
+
+/-- Compiled code runs `buildFast`; proofs see `build`. -/
+@[csimp] theorem build_eq_buildFast : @build = @buildFast := rfl
 
 /-- The OS bytes level 0 draws at level `lv` with `t_pad` paddings: the extra lanes' words, the paddings' and the
 salts. -/
@@ -193,7 +214,7 @@ structure Slot where
   deriving Inhabited
 
 /-- **The loop's tables' level 0**: each drawn one (`slots`), and the sessions a level-0 request may name (`sessions`):
-each live session's name, the hex of its coin tree's root (`nameOf`), its number and its count of tables. A slot lives
+each live session's name, the hex of the loop's id for it (`nameOf`), its number and its count of tables. A slot lives
 only as long as the session it was drawn for (`close`). -/
 structure Slots where
   slots : Array Slot := #[]
@@ -201,26 +222,41 @@ structure Slots where
   tables : Array (Nat × Nat) := #[]
   deriving Inhabited
 
-/-- A session's name: the hex of its coin tree's root, the first 64 bytes of the words of `Hello`'s answer `a`
-(`Resp::Coins`: tag, `u32le` count, then the words), which the prover receives as it is. -/
-def nameOf (a : ByteArray) : String := hexOf (a.extract 5 69)
+/-- The bytes of the loop's id for a session, which it draws from the operating system for the session's `Hello`. -/
+def ID_BYTES : Nat := 64
+
+/-- A session's name: the hex of the loop's id for it, which the prover receives in place of `Hello`'s answer
+(`Session.idFrame`), so it never sees the coin tree's root or the session key. -/
+def nameOf (id : ByteArray) : String := hexOf id
 
 /-- Session `sid`, named `name` once its `Hello`'s answer checked, with `n` tables. -/
 def Slots.name (R : Slots) (name : String) (sid n : Nat) : Slots :=
   { R with sessions := R.sessions.push (name, sid), tables := R.tables.push (sid, n) }
 
-/-- **A level 0 drawn for table `j` of the session named `name`**, kept for it; else why not: a name no live session has,
-a table the session does not have, or a table the loop already drew a level 0 for in this session. One draw a table is
-what makes the level 0 the session binds the loop's one draw, not one the prover picked among several. -/
-def Slots.draw (R : Slots) (name : String) (j : Nat) (l : Level0) : Except String Slots :=
+/-- Whether the loop drew session `sid`'s tables' level 0. -/
+def Slots.drawn (R : Slots) (sid : Nat) : Bool := R.slots.any (·.owner == sid)
+
+/-- **The session named `name` may have its tables' level 0 drawn on `k` witnesses**: its number; else why not: a name no
+live session has, a session the loop already drew level 0 for (whatever witnesses come after the draw), or `k` other
+than its count of tables. -/
+def Slots.admit (R : Slots) (name : String) (k : Nat) : Except String Nat :=
   match R.sessions.find? (·.1 == name) with
-  | none => .error s!"a level-0 request for a session the loop is not serving (coin tree root {name})"
+  | none => .error s!"a level-0 request for a session the loop is not serving (id {name})"
   | some (_, sid) =>
     let n := ((R.tables.find? (·.1 == sid)).map (·.2)).getD 0
-    if j ≥ n then .error s!"a level-0 request for table {j} of a session with {n} tables"
-    else if R.slots.any fun s => s.owner == sid && s.table == j then
-      .error s!"a second level-0 request for table {j} of this session: the loop draws a table's level 0 once"
-    else .ok { R with slots := R.slots.push { l0 := l, owner := sid, table := j } }
+    if R.drawn sid then
+      .error "a second level-0 request for this session: the loop draws its tables' level 0 once, after every table's witness"
+    else if k != n then
+      .error s!"a level-0 request of {k} tables' witnesses for a session with {n} tables: the loop draws level 0 only on every table's witness"
+    else .ok sid
+
+/-- **The level 0s `ls` drawn for the session named `name`**, table `i`'s at `ls[i]`, kept for it; else why not
+(`admit`). All of a session's tables at once, and once, is what makes the level 0 the session binds the loop's one draw,
+not one the prover picked among several, and every table's witness the prover's before any of the session's draws. -/
+def Slots.draw (R : Slots) (name : String) (ls : Array Level0) : Except String Slots := do
+  let sid ← R.admit name ls.size
+  let (slots, _) := ls.foldl (fun (S, i) l => (S.push { l0 := l, owner := sid, table := i }, i + 1)) (R.slots, 0)
+  return { R with slots }
 
 /-- Session `sid` ended: its name and every level 0 drawn for it, bound or not, are gone. -/
 def Slots.close (R : Slots) (sid : Nat) : Slots :=

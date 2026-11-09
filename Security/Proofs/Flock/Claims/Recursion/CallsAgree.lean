@@ -4,6 +4,7 @@ public import Proofs.Flock.Claims.Recursion.VerdictLog
 public import Proofs.Flock.Claims.Recursion.LastColsDeployed
 public import Proofs.Flock.Claims.Complete.ZkTables.Scope
 public import Proofs.Flock.Claims.DeployK
+import all Init.Data.Repr
 
 /-!
 # Two accepted plain decisions on one set of proof files make one set of calls

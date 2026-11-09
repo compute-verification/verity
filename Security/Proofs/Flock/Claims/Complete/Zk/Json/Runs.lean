@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Claims.Complete.Zk.Json.Files
 public import Proofs.Flock.Claims.Complete.Runs
 public import Proofs.Flock.Claims.Complete.Json.Canon
+import all Init.Data.Array.Basic
 
 /-!
 # The honest masked session runs

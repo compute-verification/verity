@@ -5,6 +5,8 @@ public import Proofs.Flock.Claims.Recursion.RecordCanon
 public import Proofs.Flock.Claims.Recursion.NextShaDec
 public import Proofs.Flock.Claims.Recursion.CallsAgree
 public import Proofs.Flock.Claims.DeployK
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
 
 /-!
 # Row D's coin tie: the position a `rec-open` piece reads

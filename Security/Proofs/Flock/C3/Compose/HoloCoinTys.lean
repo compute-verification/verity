@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Recursive.HoloMap
 public import Proofs.Flock.VBridge.Family.Transcript
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # `CoinTys` at candidate 3

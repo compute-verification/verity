@@ -15,7 +15,7 @@ streams are the reps' (`jAt_recJ_streams`): `2·n` of them at `n ≤ 64` tables 
 rep's rounds, `2200` at a session in scope (`repLens_le_in`); and `readPs` reads `2·n` proofs. The verdict runs at the
 session the setup returns against `H`, which has at most `64` tables at any hash too (`setupWith_tables`). So a
 decision calls SHA-512 at most `2^24` times on every run (`decisionAtS_calls_in`). With the inner setup's
-`c_B = SetupCount.innerB ≤ 2^43` at any hash (`innerSetupCalls_le_acc`), its inputs (`innerSetupIns_le_acc`) and the
+`c_B = SetupCount.innerB ≤ 2^32` at any hash (`innerSetupCalls_le_acc`), its inputs (`innerSetupIns_le_acc`) and the
 scope (`plainIn_of_run_acc`), all read from an accepted run, `λ₂ ≥ 100` holds at KS's deployed record with no count
 premise (`lamLin2_R_ge_in`).
 -/
@@ -241,13 +241,14 @@ theorem lamLin2_R_ge_in (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
   obtain ⟨s, spec, sts, hin⟩ := plainIn_of_run_acc hacc
   have hB : ∀ v, FlockDeploy.setupOf false (xIOf x) = some v →
       FlockDeploy.setupCallsOf (Claims.hOf H) v.1.read ≤ SetupCount.innerB := fun v hv => by
-    obtain ⟨s', spec', sts', hset, hle⟩ := innerSetupCalls_le_acc hacc
+    obtain ⟨s', spec', sts', hset, -, hle⟩ := innerSetupCalls_le_acc hacc
     rw [hset] at hv
     cases hv
     exact hle _
   have hc : 2 ^ 28 + (SetupCount.innerB + 2 ^ 24) ≤ 2 ^ 55 :=
     le_trans (Nat.add_le_add_left (Nat.add_le_add_right SetupCount.innerB_le (2 ^ 24)) (2 ^ 28)) (by norm_num)
-  exact lamLin2_R_ge_acc' rel b L rd colsE wE join rowIn final w decI H hacc (innerSetupIns_le_acc hacc) ps
+  exact lamLin2_R_ge_acc' rel b L rd colsE wE join rowIn final w decI H hacc
+    ((innerSetupIns_le_acc hacc).trans (by norm_num)) ps
     SetupCount.innerB (2 ^ 24) hB
     (fun _ _ _ _ _ _ _ _ _ _ _ ha hw => FlockDeploy.KS.decisionAtS_calls_in H hin ha hw) hc
 

@@ -4,6 +4,8 @@ public import Proofs.Flock.Claims.ZK.FrameRounds
 public import Proofs.Flock.Claims.ZK.FrameOuter
 public import Proofs.Flock.Claims.ZK.FramePass
 public import Proofs.Flock.SessionLoop.Statement
+import all Init.Data.String.Defs
+import all Init.Data.Array.Basic
 
 /-!
 # The values a round carries freely, read back off its bytes

@@ -225,11 +225,12 @@ def stage(m: Member, base: int, bound: dict, out: Path, salt_key: bytes, files: 
 
 def _draw(coins, rec: dict, program_file: Path, partition_file: Path, k: int, lean: str, out: Path,
           bases: dict[str, tuple[int, int]]) -> dict:
-    """The verifier's sample as one sample object over global units: its Lean's on a development challenger's coins opened
-    after the registration (``coins == "lean"``, `a0.challenger_draw`), or the caller's."""
+    """The verifier's sample as one sample object over global units: its Lean's on a development challenger's coins
+    opened after the registration (``coins == "lean"``, `a0.challenger_draw`), or the caller's."""
     if coins == "lean":
-        p = a0.challenger_draw(lean, ["--program", str(program_file), "--partition", str(partition_file), "--stratified", str(k)],
-                               rec["law"], rec["population"], R.digest(rec), out / "draw.log")
+        p = a0.challenger_draw(lean, ["--program", str(program_file), "--partition", str(partition_file),
+                                      "--stratified", str(k)], rec["law"], rec["population"], R.digest(rec),
+                               out / "draw.log")
         line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
         if line is None:
             raise RuntimeError(f"flock-verify draw gave no draw (rc {p.returncode}): {p.stderr[-400:]}")

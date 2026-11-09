@@ -64,13 +64,13 @@ DEV_SCHEME, DEV_FAMILY = "verity/one-stage/dev-draw/v1", "draw"
 
 def challenger_draw(lean: str, args: list[str], law: dict, population: int, after: str | bytes,
                     log: Path) -> subprocess.CompletedProcess:
-    """Lean's draw, ``flock-verify draw ARGS --stream-file F``, on a development challenger's coins (the verifier has none
-    of its own). The challenger is an in-process `LiveChallenger` on its own entropy (`secrets.token_bytes`), committed
-    before any coin opens. Its one family holds the coins the draw reads, opened after `after` (the registration's digest)
-    by `ChallengerCoins`. F holds the bytes `law` reads over `population`, each stream once, in Lean's `Draw.drawOn` layout
-    (`coins.draw_first`'s). ``<log stem>.coins.json`` keeps the challenger's commitment and the segment, from which
-    `coins.challenger_stream` replays F. Its draws show the path, not an auditor's coins: those are `a5_coins`'
-    (`a5.py --challenger`)."""
+    """Lean's draw, ``flock-verify draw ARGS --stream-file F``, on a development challenger's coins (the verifier has
+    none of its own). The challenger is an in-process `LiveChallenger` on its own entropy (`secrets.token_bytes`),
+    committed before any coin opens. Its one family holds the coins the draw reads, opened after `after` (the
+    registration's digest) by `ChallengerCoins`. F holds the bytes `law` reads over `population`, each stream once, in
+    Lean's `Draw.drawOn` layout (`coins.draw_first`'s). ``<log stem>.coins.json`` keeps the challenger's commitment and
+    the segment, from which `coins.challenger_stream` replays F. Its draws show the path, not an auditor's coins: those
+    are `a5_coins`' (`a5.py --challenger`)."""
     reads: list[int] = []
     CC.draw_first(CC.OwnRandomness(lambda n: reads.append(n) or bytes(n)), law, population)
     need = sum(reads)
@@ -190,6 +190,9 @@ def stand_in(set_dir: str) -> dict:
 def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None,
             zk: bool = False, env: dict | None = None, prove_timeout: float = 3600) -> tuple[dict | None, dict | None]:
     """One live session: `serve --draw` (the verifier's side: registration, the sample, coins, the verdict) and `prove`.
+    Under FLOCK_CHALLENGER=1 a session on the keyed coin tree (`zk`, or `FC_COINS=tree`) takes its tree from a challenger of
+    its own under ``out/challenger`` (`verity_flock.challengers`, `serve --tree-from`): ``live["challenger"]`` is its exit
+    and its audit of the session's record, and a session whose challenger failed is refused.
     `draw_file`: the server serves the verifier's own draw from that file (`--draw-file`) instead of sampling one. `zk`: both
     sides run the masked protocol (`--zk`); without it the Lean verifier accepts a subset sample at hidden outputs and one table
     (`Flock.ProvedScope`). `env`: added to
@@ -198,12 +201,19 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
     d = st["dir"]
     tables = d / "tables"
     zf = ["--zk"] if zk else []
+    senv = {**os.environ, **(env or {})}
+    ch = None
+    if senv.get("FLOCK_CHALLENGER") == "1" and (zk or senv.get("FC_COINS") == "tree"):
+        from verity_flock import challengers as CH
+        ch = CH.start(out / "challenger")
     serve_log = open(out / "serve.log", "w")
     serve = subprocess.Popen([bin_, "serve", *zf, "--listen", f"127.0.0.1:{port}", "--out", str(out / "sessions"),
                               "--instances", str(d / f"pub-{n}.bin"), "--circuit", str(d / "circuit.txt"), "--tables", str(tables),
                               "--pin", st["pin"], "--operator", "one-stage-a0",
-                              *(["--draw-file", str(draw_file)] if draw_file else ["--draw", law]), "--sessions", "1"],
-                             stdout=serve_log, stderr=subprocess.STDOUT, text=True, env={**os.environ, **(env or {})})
+                              *(["--draw-file", str(draw_file)] if draw_file else ["--draw", law]), "--sessions", "1",
+                              *(ch[1] if ch else [])],
+                             stdout=serve_log, stderr=subprocess.STDOUT, text=True, env=senv)
+    got = None
     try:
         for _ in range(1800):
             if "SERVING" in (out / "serve.log").read_text() or serve.poll() is not None:
@@ -221,6 +231,12 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
         if serve.poll() is None:
             serve.kill()
         serve_log.close()
+        if ch:
+            got = CH.end(out / "challenger", ch[0], CH.records(out / "sessions"))
+    if got is not None:
+        live = {**live, "challenger": got}
+        if not got["ok"]:
+            live.update(accepted=False, why=f"challenger: {json.dumps(got)[:600]}")
     recs = sorted((out / "sessions").glob("*/session.json"))
     return (json.loads(recs[-1].read_text()) if recs else None), live
 
@@ -243,11 +259,21 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
                 flags: Sequence[str] = ()) -> dict:
     """The verifier of record: Lean `flock-verify verify` on the session's record, with the circuit and the public file
     held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
+<<<<<<< HEAD
     `hold_registered`) when the statement reads registered values, with the window's registered circuit record
     (`st["interface_file"]`, `--interface`) whose declared registered ports the file never binds; `zk`, a `--zk`
     session's. `log` names its logs under `out` (a negative's own, beside the honest verdict's). `flags`: more of
     `verify`'s (a plain session's ``--coins os --stratified K``). ``st["archived"]``, a dict a run's members share: a
     circuit file archived once, by its file's
+||||||| merged common ancestors
+    `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's. `log` names its logs under
+    `out` (a negative's own, beside the honest verdict's). `flags`: more of `verify`'s (a plain session's ``--coins os
+    --stratified K``). ``st["archived"]``, a dict a run's members share: a circuit file archived once, by its file's
+=======
+    `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's. `log` names its logs under
+    `out` (a negative's own, beside the honest verdict's). `flags`: more of `verify`'s (a plain session's ``--coins tree
+    --stratified K``). ``st["archived"]``, a dict a run's members share: a circuit file archived once, by its file's
+>>>>>>> 705be2b532
     identity (members' ``circuit.txt`` are links of one file), is linked into every later archive rather than put again;
     Lean holds the object to its key when it reads it (`archiveGet`)."""
     sessions = sorted((out / "sessions").glob("*/session.json"))

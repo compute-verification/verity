@@ -18,8 +18,11 @@ whose incorrect output can forfeit downstream work (a noise or form proof block 
 committed at serve time whatever the draw: every proof block's outputs (`commit_bits`, `commit_rows`),
 and the fixed serve-time commitments of every scale (`TensorCommit`: the Commit's taps, PoUW's work blocks, the remote audit's
 receipts, the bits a work block pins), so a plan's cost is the whole serve-time and proving total.  One tensor committed
-at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A drawn proof block's
-witness is built by re-executing its replay block from the last committed state (`ReplayDomain`), which commits nothing.
+at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A plan is thus a
+one-stage design (`two_stage` prices a two-stage one, below).  A sampled proof block's witness is built by replaying the
+replay block of its `ReplayGrain` it lies in from the values the prover keeps, which commits nothing: a commitment is a
+hash, so unless serving retained intermediates a replay block starts at the external inputs and the registration's
+constants.
 A subcircuit's costs are measured (`TemplateCost`) or derived from the model's rates and its features: ANDs, and the hm96
 rows a proved proof block opens (`row_ands`).
 
@@ -36,6 +39,15 @@ for `n` proof blocks of `b(s)` committed bytes at `h` a hashed byte, paid whethe
 `grain_costs` prices a ladder of partitions for the free-compute target (`Achievability`'s law, `GranularityOptimum`'s
 cost) or the exfiltration target (`ExfiltrationOptimum`'s law), and `sqrt_grain` is the work target's optimum in closed
 form, `s* = √(w β h C / (o Λ))`, when `c(s) = f + o s` and every proof block commits `β` bytes.
+
+**Two-stage.**  `grain_costs` at `design="two-stage"` over a `ReplayGrain` prices a two-stage design on the grain: serving
+commits only the replay blocks' boundaries, the first stage samples each replay block with probability q, the prover
+commits each sampled one's interior, and the second stage samples k of its n_ρ proof blocks with fresh coins.  An incorrect
+replay block is charged at its footprint w, which the second stage misses with probability C(n_ρ − w, k)/C(n_ρ, k)
+(`detection`): compute credit charges its whole work at any footprint, and a leak charges a replay block at most the bits it
+exports across its boundary, so its footprint needn't exceed `footprint_cap`.  `two_stage_rate` is the q that certifies
+the target at a k, and `two_stage` the k that prices cheapest.  One-stage is its case of one proof block a replay block and
+k = 1, where q is `work_draws`' and `leak_draws`' rate.
 """
 from __future__ import annotations
 
@@ -49,6 +61,7 @@ from pathlib import Path
 from verity.core.protocols.profile import HARM_MARGIN, IntegrityProfile, Stratified, Stratum
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound
 from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX, unit_class
+
 
 def pinned_ands(definition: str, sidecar: str = "lms") -> int:
     """`definition`'s ANDs as its circuit-check pin records them (`verity.ml.commitments.gates`' `SIDECAR.circuit-check.json`):
@@ -83,8 +96,8 @@ class Candidate:
     most `UNIT_CLASS_MAX`, as the one-stage partition refuses a wider proof block), and `influence`, the credited work a wrong
     one can forfeit downstream.  A proved proof block costs `ands` plus opening `rows` (bytes each) in circuit; serving commits
     `commit_bits` in `commit_rows` rows per proof block whatever the sampling design; one statement holds at most `cap` proof blocks
-    (m = k_log + nbl <= 35); `per_replay` proof blocks of it lie in each replay block of domain `replay`; and `kind` is its weight
-    class for the draw's weights (served proof blocks of one subcircuit, PoUW's tiles), the subcircuit itself when empty."""
+    (m = k_log + nbl <= 35); `n_rho` proof blocks of it lie in each replay block of replay grain `grain`; and `kind` is its
+    weight class for the draw's weights (served proof blocks of one subcircuit, PoUW's tiles), the subcircuit itself when empty."""
 
     op: str
     template: str
@@ -99,17 +112,17 @@ class Candidate:
     commit_bits: int = 0
     commit_rows: float = 0.0
     cap: int = 1
-    replay: str = ""
-    per_replay: int = 0
+    grain: str = ""
+    n_rho: int = 0
     kind: str = ""
 
     def __post_init__(self) -> None:
         if not self.op or not self.template or self.units < 1 or self.cap < 1 or self.out_bits < 0 or self.out_gates < 0 \
                 or min(self.work, self.influence, self.ands, self.commit_bits, self.commit_rows, *self.rows, 0) < 0 \
-                or unit_class(self.out_bits) is None or (bool(self.replay) != (self.per_replay > 0)) \
-                or self.per_replay > self.units:
+                or unit_class(self.out_bits) is None or (bool(self.grain) != (self.n_rho > 0)) \
+                or self.n_rho > self.units:
             raise ValueError(f"candidate {self.template!r}: needs units >= 1, cap >= 1, non-negative sizes, outputs in a "
-                             f"size class (<= {UNIT_CLASS_MAX} bits), and per_replay in [1, units] with a replay")
+                             f"size class (<= {UNIT_CLASS_MAX} bits), and n_rho in [1, units] with a replay grain")
 
     @property
     def alternative(self) -> str:
@@ -134,13 +147,22 @@ class TemplateCost:
 
 
 @dataclass(frozen=True)
-class ReplayDomain:
-    """`units` replay blocks (one layer of one step each, say), each re-executed from the last committed state at `cost`
-    to build the witnesses of the drawn proof blocks in it, when the draw meets any.  Replay commits nothing: every value it
-    recomputes was committed at serve time."""
+class ReplayGrain:
+    """A replay grain: `replay_blocks` replay blocks (served requests, say, each re-run whole from its tokens and the weights),
+    which the proof-block partition refines, each replayed at `cost` from the values the prover keeps to build the
+    witnesses of the sampled proof blocks in it.  Under a one-stage design replay commits nothing: every value it recomputes
+    was committed at serve time.  Under a two-stage design (`two_stage`) serving commits each replay block's
+    `boundary_bytes`, the boundary commitment, and a sampled one's replay builds its interior, which the prover then
+    commits; `out_bits` is what one exports across its boundary, which bounds what an incorrect one can leak."""
 
-    units: int
+    replay_blocks: int
     cost: float
+    boundary_bytes: float = 0.0
+    out_bits: float = inf
+
+    def __post_init__(self) -> None:
+        if self.replay_blocks < 1 or not min(self.cost, self.boundary_bytes) >= 0 or not self.out_bits > 0:
+            raise ValueError("a replay grain needs replay_blocks >= 1, a non-negative cost and boundary, and out_bits > 0")
 
 
 @dataclass(frozen=True)
@@ -174,7 +196,7 @@ class CostModel:
     proved proof block `per_and * ands`.  When `shared`, a template's statements hold only its drawn proof blocks (`IntegrityPeriod`'s
     hidden window: one session, its k drawn proof blocks split evenly over `ceil(k / cap)` statements), so only they are staged;
     otherwise its proof blocks are cut in order into statements and every touched statement is staged whole.  Serving commits each proof block's outputs at `commit_per_bit` and `commit_per_row`, and
-    `serve`, every other serve-time commitment, which every plan pays; `replay` names the replay domains that build
+    `serve`, every other serve-time commitment, which every plan pays; `replay` names the replay grains that build
     witnesses; `sigma` is a derived cost's relative uncertainty; `source` is the fit's `art:` id.  A plan's total weighs
     serving's commitments, the proof blocks' and `serve`, by `commit_weight` (`PROVING_ONLY`, 0, leaves them out)."""
 
@@ -186,8 +208,16 @@ class CostModel:
     staged_per_unit: float = 0.0
     commit_per_bit: float = 0.0
     commit_per_row: float = 0.0
+<<<<<<< HEAD
     serve: tuple[TensorCommit, ...] = ()
     replay: Mapping[str, ReplayDomain] = field(default_factory=dict)
+||||||| merged common ancestors
+    serve: tuple[Commitment, ...] = ()
+    replay: Mapping[str, ReplayDomain] = field(default_factory=dict)
+=======
+    serve: tuple[Commitment, ...] = ()
+    replay: Mapping[str, ReplayGrain] = field(default_factory=dict)
+>>>>>>> 705be2b532
     sigma: float = 0.0
     source: str = ""
     shared: bool = False
@@ -333,7 +363,7 @@ def _statement_sizes(cap: int, units: int) -> list[int]:
 
 def template_cost(c: Candidate, costs: CostModel, k: int) -> tuple[float, int, dict[str, float]]:
     """Drawing k of the candidate's proof blocks: its expected proving cost at the cheapest statement size, that size (the larger
-    one on a tie, for fewer roots), and the cost's parts.  Serving's commitments and the replay domains are the plan's."""
+    one on a tie, for fewer roots), and the cost's parts.  Serving's commitments and the replay grains are the plan's."""
     a0, a1 = costs.statement(c)
     units = k * (costs.unit(c) + costs.of(c).replay)
     if costs.shared:
@@ -349,20 +379,29 @@ def template_cost(c: Candidate, costs: CostModel, k: int) -> tuple[float, int, d
 
 
 def replay_cost(sizes: Mapping[str, int], chosen: Sequence[Candidate], costs: CostModel) -> float:
-    """The expected cost of building the drawn proof blocks' witnesses, by replaying each replay block the draw meets: a domain's
-    replay block is missed when every subcircuit's draw misses its share of it, independently across strata."""
+    """The expected cost of building the drawn proof blocks' witnesses, by replaying each replay block the draw meets: a
+    replay grain's replay block is missed when every subcircuit's draw misses its share of it, independently across strata."""
     total = 0.0
-    for name in sorted({c.replay for c in chosen if c.replay}):
+    for name in sorted({c.grain for c in chosen if c.grain}):
         if name not in costs.replay:
-            raise KeyError(f"the cost model has no replay domain {name!r}")
-        dom, log_miss = costs.replay[name], 0.0
+            raise KeyError(f"the cost model has no replay grain {name!r}")
+        rg, log_miss = costs.replay[name], 0.0
         for c in chosen:
-            if c.replay == name:
-                if c.units != dom.units * c.per_replay:
-                    raise ValueError(f"{c.template!r}: {c.units} units are not {dom.units} replay units of {c.per_replay}")
-                log_miss += _log_miss(c.units, c.per_replay, sizes[c.template])
-        total += dom.units * -expm1(log_miss) * dom.cost
+            if c.grain == name:
+                if c.units != rg.replay_blocks * c.n_rho:
+                    raise ValueError(f"{c.template!r}: {c.units} units are not {rg.replay_blocks} replay blocks of {c.n_rho}")
+                log_miss += _log_miss(c.units, c.n_rho, sizes[c.template])
+        total += rg.replay_blocks * -expm1(log_miss) * rg.cost
     return total
+
+
+def met_replay(rg: ReplayGrain, draws: float) -> float:
+    """A one-stage sample's replay: the expected cost of replaying the replay blocks that `draws` proof blocks, sampled
+    independently and uniformly over the grain's replay blocks, meet."""
+    if draws <= 0:
+        return 0.0
+    r = rg.replay_blocks
+    return -r * expm1(draws * log1p(-1 / r)) * rg.cost if r > 1 else rg.cost
 
 
 #: `ln_upper`'s atanh terms and the dyadic it rounds up to (`SampledProofs.Bound.lnTerms`, `lnBits`)
@@ -923,6 +962,7 @@ PROVING_ONLY = 0.0
 @dataclass(frozen=True)
 class Grain:
     """One uniform partition of a window, as `Partitioning.Model` states one: `units` proof blocks (n) of `work` each (s),
+<<<<<<< HEAD
     each `out_bits` wide (b, what a wrong one exports), committing `commit_bytes` at serve time whether drawn or not (b(s),
     its share of every byte the window commits under this partition), and costing `prove` when drawn (c(s), its
     statement's share included)."""
@@ -1020,3 +1060,213 @@ __all__ = ["Candidate", "TensorCommit", "CostModel", "Grain", "HM96_ANDS", "LN_B
            "grain_optimum", "leak_count", "leak_draws", "ln_bound", "ln_upper", "loc_bits", "max_harm",
            "max_harm_check", "needs_benchmark", "overlaps", "perturb", "pinned_ands", "replay_cost", "row_ands", "sensitivity",
            "sqrt_grain", "structure", "template_cost", "touched", "weigh", "work_draws", "work_law"]
+||||||| merged common ancestors
+__all__ = ["Candidate", "Commitment", "CostModel", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
+           "Objective", "Plan", "PlanBounds", "ReplayDomain", "SHA512_ANDS", "TemplateCost", "acceptance_parts", "certify", "density_bound",
+           "density_exact", "fill", "for_budget", "for_target", "frontier", "ln_bound", "ln_upper", "max_harm",
+           "max_harm_check", "needs_benchmark", "overlaps", "perturb", "replay_cost", "row_ands", "sensitivity", "structure",
+           "template_cost", "touched", "weigh", "work_law"]
+=======
+    each `out_bits` wide (b, what an incorrect one exports), committing `commit_bytes` at serve time whether drawn or not (b(s),
+    its share of every byte the window commits under this partition), and costing `prove` when drawn (c(s), its
+    statement's share included)."""
+
+    name: str
+    units: int
+    work: float
+    out_bits: float
+    commit_bytes: float
+    prove: float
+
+    def __post_init__(self) -> None:
+        if self.units < 1 or not self.work > 0 or not min(self.out_bits, self.commit_bytes, self.prove) >= 0:
+            raise ValueError(f"grain {self.name!r}: needs units >= 1, work > 0, and non-negative widths and costs")
+
+
+def loc_bits(n: int, k: int) -> float:
+    """At least Lean's `locBits n K`, log2 of sum_{j <= K} C(n, j): 0 at K = 0, n H2(K/n) up to K = n/2 and n past it
+    (`consumers.location_bits`' bound)."""
+    if k <= 0:
+        return 0.0
+    if 2 * k >= n:
+        return float(n)
+    x = k / n
+    return n * (-x * log2(x) - (1 - x) * log2(1 - x))
+
+
+def leak_count(g: Grain, ell: float) -> int:
+    """`ExfiltrationOptimum`'s K: the most incorrect proof blocks a leak target of `ell` bits allows, the largest K <= n with
+    b K + locBits(n, K) <= ell, by `loc_bits`, so the K it returns is certified."""
+    if not ell >= 0:
+        raise ValueError("a leak target is at least 0 bits")
+
+    def ok(k: int) -> bool:
+        return g.out_bits * k + loc_bits(g.units, k) <= ell
+
+    lo, hi = 0, g.units
+    if ok(hi):
+        return hi
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        lo, hi = (mid, hi) if ok(mid) else (lo, mid)
+    return lo
+
+
+def work_draws(g: Grain, target: float, delta: float) -> float:
+    """`Achievability`'s law on equal proof blocks for the free-compute target C: each drawn with probability
+    min(1, Λ s / C), so (ns/C) Λ draws, `GranularityOptimum`'s cost over c(s), while s Λ <= C, and every one past it."""
+    return g.units * min(1.0, log(1 / delta) * g.work / target)
+
+
+def leak_draws(g: Grain, ell: float, delta: float) -> float:
+    """`ExfiltrationOptimum`'s achieving law for a leak target of `ell` bits: n Λ / (K + 1) draws, at most n, and none once
+    every proof block may be incorrect."""
+    k = leak_count(g, ell)
+    return 0.0 if k >= g.units else min(float(g.units), g.units * log(1 / delta) / (k + 1))
+
+
+def detection(n: float, w: float, k: float) -> float:
+    """At most 1 - C(n - w, k)/C(n, k), the chance that k of a replay block's n proof blocks, sampled uniformly without
+    replacement, meet one of its w incorrect ones: k/n at w = 1, else 1 - (1 - w/n)^k, sampling with replacement, which
+    misses more often, and 1 once k > n - w, or for a mean n (replay blocks of unequal sizes) only once k >= n."""
+    if w <= 0 or k <= 0:
+        return 0.0
+    if k >= n or (float(n).is_integer() and k > n - w):
+        return 1.0
+    return max(k / n, -expm1(k * log1p(-w / n)))
+
+
+def footprint_cap(g: Grain, rg: ReplayGrain) -> float:
+    """The footprint past which an incorrect replay block of `rg` leaks no more: it exports at most `out_bits`, which
+    ceil(out_bits / b) incorrect proof blocks of b bits already can, so a leak's worst case needs no larger one; at most
+    its n_ρ proof blocks.  The location bits would lower it; leaving them out only raises the rate."""
+    n = g.units / rg.replay_blocks
+    return n if not g.out_bits > 0 or rg.out_bits == inf else min(n, float(ceil(rg.out_bits / g.out_bits)))
+
+
+def two_stage_rate(g: Grain, rg: ReplayGrain, k: float, delta: float, *, work: float | None = None,
+                   leak: float | None = None) -> float:
+    """The first stage's rate q (possibly past 1) at which sampling each replay block with probability q, then k of its
+    n_ρ proof blocks, certifies the target at `delta`, the replay blocks escaping independently, each at most
+    1 - q + q C(n_ρ - w, k)/C(n_ρ, k) at its footprint w (`detection`).
+
+    * Free compute, C = `work`: an incorrect replay block forfeits its whole work n_ρ s at footprint 1, so the escape
+      bound holds below C when q (k/n_ρ) >= Λ n_ρ s / C, `Achievability`'s rate on replay blocks.
+    * Exfiltration, `leak` bits: footprints w_ρ, each counted up to W = `footprint_cap`, leak at most
+      b K' + locBits(n, K') bits at K' = Σ min(w_ρ, W) (each choice of the incorrect replay blocks and of K' proof blocks
+      in them is a distinct K'-set of the n), so the target holds while K' <= K = `leak_count`.  `detection` over w falls
+      as w grows, so K + 1 counted proof blocks escape least packed W to a replay block, and q (K + 1) detection(W) / W
+      >= Λ certifies; no rate is needed when every replay block at W counts at most K."""
+    if (work is None) == (leak is None):
+        raise ValueError("one target: work (C) or leak (bits)")
+    if g.units < rg.replay_blocks:
+        raise ValueError(f"grain {g.name!r}: {g.units} proof blocks can't refine {rg.replay_blocks} replay blocks")
+    n, lam = g.units / rg.replay_blocks, log(1 / delta)
+    if work is not None:
+        return lam * n * g.work / (work * detection(n, 1.0, k))
+    count, cap = leak_count(g, leak), footprint_cap(g, rg)
+    if rg.replay_blocks * cap <= count:
+        return 0.0
+    return lam * cap / ((count + 1) * detection(n, cap, k))
+
+
+def two_stage(g: Grain, rg: ReplayGrain, delta: float, *, h: float, weight: float = 1.0, work: float | None = None,
+              leak: float | None = None) -> dict:
+    """The cheapest two-stage design on the grain over replay grain `rg`: k over the powers of 2 up to n_ρ, the
+    footprint's k = n_ρ / W and a ternary search between half and twice the best of them, at `two_stage_rate`'s q where
+    it is at most 1, else every proof block proved (q = 1, k = n_ρ).  Its costs: `prove`, c(s) for each of the q R k
+    sampled proof blocks; `replay`, `rg.cost` for each of the q R sampled replay blocks; `boundary`, R boundaries' bytes
+    at h, paid at serve time; `interior`, the sampled replay blocks' n_ρ b(s) bytes at h, committed after the first
+    stage; and `total`, proving and replay plus `weight` times both commitments."""
+    n = g.units / rg.replay_blocks
+    rows: dict[float, dict] = {}
+
+    def price(k: float, q: float) -> dict:
+        sampled = q * rg.replay_blocks
+        boundary, interior = rg.replay_blocks * rg.boundary_bytes * h, sampled * n * g.commit_bytes * h
+        prove, replay = sampled * k * g.prove, sampled * rg.cost
+        return {"grain": g.name, "work": g.work, "units": g.units, "design": "two-stage", "n_rho": n,
+                "footprint": footprint_cap(g, rg) if leak is not None else 1.0, "q": q, "k": k if q else 0,
+                "replay_sample": sampled, "draws": sampled * k, "prove": prove, "replay": replay, "boundary": boundary,
+                "interior": interior, "commit": boundary + interior,
+                "total": prove + replay + weight * (boundary + interior)}
+
+    def total(k: int) -> float:
+        """The total less the boundaries, which every k pays alike and would round the rest away."""
+        if k not in rows:
+            q = two_stage_rate(g, rg, k, delta, work=work, leak=leak)
+            rows[k] = price(k, q) if q <= 1 else None
+        return inf if rows[k] is None else rows[k]["prove"] + rows[k]["replay"] + weight * rows[k]["interior"]
+
+    top = max(1, floor(n))
+    ladder = {min(top, 1 << i) for i in range(top.bit_length() + 1)}
+    if leak is not None:
+        ladder.add(min(top, max(1, ceil(n / footprint_cap(g, rg)))))
+    best = min(sorted(ladder), key=total)
+    if total(best) == inf:
+        return price(n, 1.0)
+    lo, hi = max(1, best // 2), min(top, 2 * best)
+    while hi - lo > 2:
+        a, b = lo + (hi - lo) // 3, hi - (hi - lo) // 3
+        lo, hi = (lo, b) if total(a) < total(b) else (a, hi)
+    for k in range(lo, hi + 1):
+        total(k)
+    return rows[min((k for k in rows if rows[k]), key=lambda k: (total(k), k))]
+
+
+DESIGNS = ("one-stage", "two-stage")
+
+
+def grain_costs(grains: Iterable[Grain], delta: float, *, h: float, weight: float = 1.0, work: float | None = None,
+                leak: float | None = None, replay: ReplayGrain | None = None, design: str = "one-stage") -> list[dict]:
+    """Each partition's expected cost at one target, the free-compute target `work` (C) or the exfiltration target `leak`
+    (bits), at `delta`, in the grains' order.  One-stage: `prove`, c(s) times the target's draws; `commit`, n b(s) h, paid
+    on every proof block; `replay`, with a replay grain, the replay blocks the draws meet (`met_replay`); and `total`,
+    proving and replay plus `weight` times the commitment (`PROVING_ONLY` prices proving alone, Lean's model).
+    Two-stage prices each grain's cheapest two-stage design over `replay` (`two_stage`), whose rows add `design`,
+    `n_rho`, `footprint`, `q`, `k`, `replay_sample`, `boundary` and `interior`, `commit` being their sum."""
+    if (work is None) == (leak is None):
+        raise ValueError("one target: work (C) or leak (bits)")
+    if not 0 < delta < 1 or not weight >= 0 or not h >= 0 or (work is not None and not work > 0):
+        raise ValueError("needs 0 < delta < 1, weight >= 0, h >= 0 and a positive work target")
+    if design not in DESIGNS or (design == "two-stage" and replay is None):
+        raise ValueError(f"a design is one of {DESIGNS}, and a two-stage one needs a replay grain")
+    rows = []
+    for g in grains:
+        if design == "two-stage":
+            rows.append(two_stage(g, replay, delta, h=h, weight=weight, work=work, leak=leak))
+            continue
+        draws = work_draws(g, work, delta) if work is not None else leak_draws(g, leak, delta)
+        prove, commit = draws * g.prove, g.units * g.commit_bytes * h
+        row = {"grain": g.name, "work": g.work, "units": g.units, "draws": draws, "prove": prove,
+               "commit": commit, "total": prove + weight * commit}
+        if replay is not None:
+            r = met_replay(replay, draws)
+            row |= {"design": "one-stage", "replay": r, "total": row["total"] + r}
+        rows.append(row)
+    return rows
+
+
+def grain_optimum(grains: Iterable[Grain], delta: float, **kw) -> dict:
+    """`grain_costs`' cheapest partition, the first of the grains' order on a tie."""
+    rows = grain_costs(grains, delta, **kw)
+    if not rows:
+        raise ValueError("no partition to choose from")
+    return min(rows, key=lambda r: r["total"])
+
+
+def sqrt_grain(beta: float, h: float, target: float, o: float, delta: float, weight: float = 1.0) -> float:
+    """The free-compute target's optimal proof-block work when c(s) = f + o s and every proof block commits `beta` bytes:
+    the s minimizing (f + o s)(F/C) Λ + w (F/s) β h, which is s* = √(w β h C / (o Λ)), whatever F and f, while s* Λ <= C."""
+    return sqrt(weight * beta * h * target / (o * log(1 / delta)))
+
+
+__all__ = ["Candidate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
+           "Objective", "PROVING_ONLY", "Plan", "PlanBounds", "ReplayGrain", "SHA512_ANDS", "SHA512_ROWS", "TemplateCost",
+           "DESIGNS", "acceptance_parts",
+           "certify", "density_bound", "density_exact", "detection", "fill", "footprint_cap", "for_budget", "for_target",
+           "frontier", "grain_costs", "grain_optimum", "leak_count", "leak_draws", "ln_bound", "ln_upper", "loc_bits",
+           "max_harm", "max_harm_check", "met_replay", "needs_benchmark", "overlaps", "perturb", "pinned_ands",
+           "replay_cost", "row_ands", "sensitivity", "sqrt_grain", "structure", "template_cost", "touched",
+           "two_stage", "two_stage_rate", "weigh", "work_draws", "work_law"]
+>>>>>>> 705be2b532

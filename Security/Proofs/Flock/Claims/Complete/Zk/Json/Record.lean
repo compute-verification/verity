@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Claims.Complete.Json
 public import Proofs.Flock.Claims.Complete.Zk.Json.QSort
 public import Proofs.Flock.Claims.Complete.Json.Canon
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # The honest masked record as a JSON value, and its S2

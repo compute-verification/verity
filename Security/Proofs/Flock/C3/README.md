@@ -1,7 +1,7 @@
 # Candidate 3's recursive guarantee
 
-`Flock.SecurityProofs.RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3` (`Recursive/AuditC3.lean`,
-`Recursive/AuditC3Proof.lean`) is PublicAudit's proof at candidate 3's table (`holoInnerAt`, R from the registration's
+`Flock.SecurityProofs.RecursiveAuditHolo : Flock.Guarantees.RecursiveAuditHolo` (`Recursive/AuditC3.lean`,
+`Recursive/AuditC3Proof.lean`), unlisted, is PublicAudit's proof at candidate 3's table (`holoInnerAt`, R from the registration's
 `stacked` entry, V*'s statements over the verifier's own list). It has no `sorry`. It takes VBridge (`_hbr`) and V*'s
 parse (`_hob`) as PublicAudit does, and the modules under `C3/` discharge them. V*'s statements are indexed by the
 verifier's own list (`vstarCount ish`), which at candidate 3's inner shape is eleven statements in the writer's order:
@@ -13,8 +13,12 @@ Its soundness (i) is in fork form and states no bits. The recursion's knowledge 
 deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep_tight`; at least 100, `RecDeploy.lamLin2_deployed_ge_dep`), and `KSLin2` at the
 deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`, at the deployed reader) is proved with no hypothesis
-(`Flock.Guarantees.RecursiveKS`, `Flock.SecurityProofs.RecursiveKS` in `Recursive/KSProved.lean`). Holo statements are
-candidate 3's own model, and `BitsLin2` at the dense statements follows from `KSLin2` there (`bitsLin2On_of_ksLin2On`).
+(`Flock.Guarantees.RecursiveKS`, `Flock.SecurityProofs.RecursiveKS` in `Recursive/KSProved.lean`). The listed
+recursive audit, `Flock.Guarantees.RecursiveAuditC3` (`Proofs/Properties/Verity/Recursive/Audit.lean`), is that dense
+form, the one `verity/sampled-proofs/recursive/v1` accepts, at `λ₂ = 135.7`, and at a statement at the deployment's
+tables also at route 2C's split bound `κ + t'·ε`, `κ ≤ 2^{-167.7}` and `ε ≤ 2^{-174.95}` at the run's call caps
+(`RecDeploy.kappa_eps_oneTable_cap`). Holo statements are candidate 3's own model, and `BitsLin2` at the dense
+statements follows from `KSLin2` there (`bitsLin2On_of_ksLin2On`).
 
 What stays open is the hypotheses the discharge takes: `hbr_honest_reg`'s (`C3/Compose/Discharge.lean`, `_hbr` itself;
 at the honest source, `hbr_honest_src`'s in `C3/Compose/HonestSrc.lean`, whose module doc lists what is left) and

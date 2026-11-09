@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Layout.Region
 public import Proofs.Flock.Soundness.ExecSetup
+import all Init.Data.Array.Basic
 
 /-!
 # The `b ‖ c` that the statement pins at the `hm96` slots' outputs

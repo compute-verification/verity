@@ -26,7 +26,7 @@ from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES  # noqa: E
 from verity.core.protocols.pouw.schemes.pearl_c_work import UnitRecord  # noqa: E402
 
 H100 = DEVICES["h100"]
-H3, H0 = C.PearlC(forming="v1", device=H100, hashing="h3"), C.PearlC(forming="v1", device=H100)
+H3, H0 = C.PearlC(forming="v1", device=H100, hashing="h3"), C.PearlC(forming="v1", device=H100, hashing="h0")
 #: GLM-5.3's down projection's n, in tiles of 8 rows and 16 columns: a flagged atom-word debits 40 units, a cell earns 420
 #: at k = 256 and 1,392 at k = 1,024, so a row's cap at k = 256 is 16.8 at ρ = 1/400 and 67.2 at 4ρ, and 55.68 at ρ at
 #: k = 1,024; the tile's is 134.4 at k = 256

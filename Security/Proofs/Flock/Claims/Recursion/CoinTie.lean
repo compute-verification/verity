@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Claims.Recursion.OpensReads
 public import Proofs.Flock.Soundness.ExecDraw
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
 
 /-!
 # The coins a staged part's check 5 computes `v` at are the coins the coin server's transcript shows

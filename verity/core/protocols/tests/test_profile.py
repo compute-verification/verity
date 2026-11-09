@@ -243,7 +243,7 @@ def one_level(n, k, delta) -> IntegrityProfile:
     return IntegrityProfile((Level("unit"),), (n,), {"unit": Subset(k)}, delta)
 
 
-#: The one-stage audits' wrong-unit bounds (lane one-stage-e2e): (n units, k drawn, delta, the exact optimum to 12 digits,
+#: The one-stage audits' wrong-unit bounds: (n units, k drawn, delta, the exact optimum to 12 digits,
 #: at most).  `worst_case` is within its margin above the exact optimum.
 E2E = {"A0": (1024, 16, 0.01, 254.226320800, 254),
        "A1": (1024, 256, 2.0 ** -20, 46.9243795425, 46),
@@ -299,7 +299,7 @@ def test_rho_is_exact_where_accept_underflows():
 
 def _exact_threshold(n, k, delta) -> Decimal:
     """For one level drawn Subset(k), rho is convex from rho(0) = 0, so the relaxation's optimum interpolates between the
-    last admitted count and the next (one-stage-e2e's direct bound, #116 6ccb9b7b), here in 60-digit Decimal."""
+    last admitted count and the next (the one-stage audit's direct bound), here in 60-digit Decimal."""
     with localcontext() as ctx:
         ctx.prec = 60
         lo = _largest_admitted(n, k, delta)

@@ -18,9 +18,20 @@ A party does no I/O: what its machine does is a capability it is given (`Identit
   and pinned on main's first-parent commit ``pin``;
 - the verifier's ``audit(block, registration, challenger, firewall) -> (answer, case)``: the block's one-stage audit
   drawn on that challenger's coins, its answer (``verdict``, and its ``commitment``) and its case for the product
+<<<<<<< HEAD
   (remote's `COMPOSED`'s, in its one-stage form; onsite's `ID`'s), or None; ``component(block, name) -> (answer,
   case) | None``, another listed subprotocol's; and ``product(ids, cases, digests) -> {"product", "verdict",
   "reason"}``, the composite of exactly those subprotocols (`Core.Composites.ofIds`: remote or onsite).
+||||||| merged common ancestors
+  drawn on that challenger's coins, its answer (``verdict``, and its ``commitment``) and its case for the product, or
+  None; ``component(block, name) -> (answer, case) | None``, another listed subprotocol's; and ``product(ids, cases,
+  digests) -> {"product", "verdict", "reason"}``, the composite of exactly those subprotocols (`Core.Composites.ofIds`:
+  remote or onsite).
+=======
+  (`COMPOSED`'s, in its one-stage form), or None; ``component(block, name) -> (answer, case) | None``, another listed subprotocol's; and ``product(ids, cases,
+  digests) -> {"product", "verdict", "reason"}``, the composite of exactly those subprotocols (`Core.Composites.ofIds`:
+  remote or onsite).
+>>>>>>> 705be2b532
 
 A capability that can't do its step raises `Unavailable` with its reason, and the party finishes refused by its step's
 name with that reason recorded (an audit's or a product's is that block's ``error``). Anything else a capability raises
@@ -67,20 +78,35 @@ from verity.core.wire import Body, Hex, Int, Message, Schema, Str
 from .one_stage import registration as R
 
 ID = R.PROTOCOL
+<<<<<<< HEAD
 #: sampled proofs as remote composes it (`VStar.Recursive.Sampled`): one-stage v2's audit (`ID`'s record, the verdicts
 #: the verifier's own run of the proof check) or the recursive audit, as its params' and evidence's ``form`` names it;
 #: `ID`'s own audit, whose verdicts are the evidence's, is refused
+||||||| merged common ancestors
+=======
+#: sampled proofs as both composites compose it (`VStar.Recursive.Sampled`): one-stage v2's audit (`ID`'s record, the
+#: verdicts the verifier's own run of the proof check) or the recursive audit, as its params' and evidence's ``form``
+#: names it; `ID`'s own audit, whose verdicts are the evidence's, is refused
+>>>>>>> 705be2b532
 COMPOSED = "verity/sampled-proofs/v1"
 VERSION = 1
 CHALLENGER, FIREWALL, WORKERS, VERIFIER = "challenger", "firewall", "workers", "verifier"
 #: each composite's subprotocols, by a configuration's names, and their protocol ids (`Core.Onsite.components`,
+<<<<<<< HEAD
 #: `Core.Remote.V1.components`): onsite's PoUW is its period check and its bandwidth the P2 session on PoUS's store,
 #: remote's PoUW is Pearl+'s run verdict, remote composes sampled proofs as `COMPOSED` and onsite audits it with the
 #: one-stage audit (`ID`, one-stage v1)
+||||||| merged common ancestors
+#: `Core.Remote.components`): each one's PoUW is its period check, onsite's bandwidth the P2 session on PoUS's store,
+#: and both audit sampled proofs with the one-stage audit (`ID`, one-stage v1)
+=======
+#: `Core.Remote.components`): each one's PoUW is its period check, onsite's bandwidth the P2 session on PoUS's store,
+#: and both compose sampled proofs as `COMPOSED`
+>>>>>>> 705be2b532
 SUBPROTOCOLS = {
     "verity/onsite/v0": {"bandwidth": "verity/remote-bandwidth/p2/v0", "certifier": "verity/certifier/v0",
                          "inference-only": "verity/inference-only/v0", "pous": "verity/pous/p2/v4/run",
-                         "pouw": "verity/pouw/period/v1", "sampled-proofs": ID,
+                         "pouw": "verity/pouw/period/v1", "sampled-proofs": COMPOSED,
                          "wipe": "verity/wipe/v0"},
     "verity/remote/v1": {"inference-only": "verity/inference-only/v0", "pearl-plus": "verity/pouw/pearl-plus/v1",
                          "sampled-proofs": COMPOSED},

@@ -4,6 +4,8 @@ public import Batteries.Tactic.OpenPrivate
 public import Proofs.Flock.Claims.CanonEq
 public import Proofs.Flock.Soundness.ExecDraw
 public import Proofs.Flock.Claims.Complete.Json.Spec
+import all Init.Data.Repr
+import all Init.Data.Int.Repr
 
 /-!
 # What completeness reads of `canon`, proved
@@ -17,6 +19,8 @@ as a `\u` escape, `escU`). The round trips through the verifier's parser `Flock.
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace FlockComplete.JsonRT
 

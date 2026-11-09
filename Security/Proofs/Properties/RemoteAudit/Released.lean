@@ -15,6 +15,8 @@ with that release's blocks and the passes recorded before it.
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 open RemoteAudit RemoteAudit.Session
 
