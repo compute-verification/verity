@@ -24,7 +24,8 @@ prove  the statements of UNITS_FILE staged under FLOCK_WORK, a unit's statements
 
 Limits (env): the job's affinity at most WIN_CPUS cores and its niceness at least WIN_NICE (refused otherwise), WIN_MEM_GB,
 WIN_DISK_GB, WIN_UNTIL (UTC, e.g. 2026-11-10T01:30Z), FLOCK_WORK (under /workspace/tmp, or under /dev/shm, where what it
-holds counts as host memory beside the processes' RSS), WIN_DEV_GIB, WIN_GPUS; WIN_DEVICE=cpu builds and proves on the CPU
+holds counts as host memory beside the processes' RSS), WIN_MEM_PEER (stage: another job's pid, whose process tree's RSS
+counts against WIN_MEM_GB too, so two stagings share one memory grant), WIN_DEV_GIB, WIN_GPUS; WIN_DEVICE=cpu builds and proves on the CPU
 (a rehearsal off the GPU node). Once a statement waits for disk, later ones of more than WIN_BACKFILL_DISK_GB (default 0)
 wait behind it. Records under
 $RESEARCH_RUN_DIR/out: window.log, stage.tsv or prove.tsv, and each prove_time.sh run's own out/."""
@@ -214,14 +215,17 @@ def stage(units: list[Unit]) -> int:
     reserve, disk_backfill = float(env("WIN_FREE_GB", "50")) * GB, float(env("WIN_BACKFILL_DISK_GB", "0")) * GB
     fw = Path(env("FLOCK_WORK"))
     in_ram = str(fw).startswith(RAM)
+    peer = int(env("WIN_MEM_PEER", "") or 0)
     fw.mkdir(parents=True, exist_ok=True)
     k, free = key(), shutil.disk_usage(fw).free
     if env("WIN_DEVICE", "gpu") == "gpu" and "SM" not in os.environ:
         raise SystemExit("window.py: set SM, the GPUs' compute capability the prover is built for (90 for H200, 120 for RTX PRO 6000)")
     if free < reserve + 20 * GB:
         raise SystemExit(f"window.py: {free / GB:.0f} GB free under {fw}, under WIN_FREE_GB={reserve / GB:.0f} plus the build's 20")
+    t0 = procs()
     log(f"stage: {len(units)} types, {len(cpus)} CPUs, niceness {os.nice(0)}, memory {mem / GB:.0f} GB, disk {disk_cap / GB:.0f} GB "
-        f"({free / GB:.0f} GB free, {reserve / GB:.0f} GB kept free), until {env('WIN_UNTIL')}, FLOCK_WORK {fw}, key {k}")
+        f"({free / GB:.0f} GB free, {reserve / GB:.0f} GB kept free), until {env('WIN_UNTIL')}, FLOCK_WORK {fw}, key {k}"
+        + (f", sharing WIN_MEM_GB with pid {peer}'s tree ({sum(t0[p][1] for p in tree(peer, t0)) / GB:.1f} GB now)" if peer else ""))
     one = {"FLOCK_WORK": str(fw), "CUDA_VISIBLE_DEVICES": "", "OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"}
     prep = subprocess.run(["bash", str(PT), "STEPS=prep", "PT_DEVICE=cpu"], cwd=REPO, capture_output=True, text=True,
                           env={**os.environ, **one, "RESEARCH_RUN_DIR": str(OUT / "prep")})
@@ -269,10 +273,11 @@ def stage(units: list[Unit]) -> int:
         for j in running:
             j.rss_now = sum(t[p][1] for p in tree(j.proc.pid, t))
             j.peak = max(j.peak, j.rss_now)
+        peer_rss = sum(t[p][1] for p in tree(peer, t)) if peer else 0
         if now - last_du > 10:
             used, free, last_du = du(fw), shutil.disk_usage(fw).free, now
         stagings = [j for j in running if j.unit and not j.killed]
-        held = sum(j.rss_now for j in running) + (used if in_ram else 0)
+        held = sum(j.rss_now for j in running) + (used if in_ram else 0) + peer_rss
         if held > 0.95 * mem and stagings:
             kill(max(stagings, key=lambda j: j.started), f"host memory {held / GB:.0f} GB over {0.95 * mem / GB:.0f}")
         elif (used > 0.97 * disk_cap or free < reserve) and stagings:
@@ -287,7 +292,7 @@ def stage(units: list[Unit]) -> int:
         for u, n in list(pending):
             reason = closed
             if not reason:
-                mem_in_use = sum(max(j.rss, j.peak) for j in running) + (used if in_ram else 0)
+                mem_in_use = sum(max(j.rss, j.peak) for j in running) + (used if in_ram else 0) + peer_rss
                 if now + u.secs * slow > deadline:
                     reason = "time"
                 elif (sum(j.disk for j in running if j.unit) + u.disk * GB > min(0.95 * disk_cap - used, free - reserve)
