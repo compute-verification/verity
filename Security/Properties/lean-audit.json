@@ -43,6 +43,7 @@
   "Properties.Spot.Members",
   "Properties.Spot.PlanCheck",
   "Properties.Spot.Wires",
+  "Properties.Spot.HistoryTable",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
   "Properties.Pous.Wipe",
@@ -1188,6 +1189,10 @@
   "Properties.Spot.wiresAcyclic": {
    "honest": ["Properties.Spot.wiresAcyclic_honest"],
    "nontrivial": "Properties.Spot.wiresAcyclic_nontrivial"
+  },
+  "Properties.Spot.SecurityProofs.historyRootIsModel": {
+   "honest": ["Properties.Spot.SecurityProofs.historyRootIsModel_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.historyRootIsModel_nontrivial"
   }
  },
  "unwitnessed": {
@@ -2024,7 +2029,8 @@
     "Properties.Spot.PlanCheck",
     "Properties.Spot.TwoStageCheck",
     "Properties.Spot.Wires",
-    "Properties.Spot.Members"
+    "Properties.Spot.Members",
+    "Properties.Spot.HistoryTable"
    ],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
@@ -2299,6 +2305,11 @@
    "imports": ["Definitions.Spot.Dataflow", "Spot"],
    "except": [],
    "why": "a wiring's dataflow is stated against the wiring check's own types and function (`Spot.Wires`) and the population vocabulary's acyclicity (`Definitions.Spot.Dataflow`), never a proof"
+  },
+  "Properties.Spot.HistoryTable": {
+   "imports": ["Spot.HistoryTable", "Definitions.Hash.HistoryTable", "Properties.Verity.Game"],
+   "except": [],
+   "why": "a history table's registered root is stated against the root check's own functions (`Spot.HistoryTable`), the hash area's history-table root (`Definitions.Hash.HistoryTable`) and the verifier's SHA-512 as a model hash (`Verity.sha512`), never a proof"
   }
  },
  "reads_exempt": {
@@ -9227,6 +9238,15 @@
    "type_hash": "0f8b2d89ec524d62964511f87a23864eacc612e51d9b331978880e16cfe01502",
    "unfolded_hash": "1f21b6df5fa96097fb3a6c6c3364bd53addbd00548769bc4ed2429919ffb7ede"
   },
+  "Properties.Spot.SecurityProofs.historyRootIsModel": {
+   "owner": "@proofs"
+  },
+  "Properties.Spot.SecurityProofs.historyRootIsModel_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.Spot.SecurityProofs.historyRootIsModel_nontrivial": {
+   "owner": "@proofs"
+  },
   "Properties.Spot.wiresAcyclic": {
    "owner": "@proofs",
    "signature": ["Properties.Spot.wiresAcyclic : Properties.Spot.WiresAcyclic"],
@@ -11264,6 +11284,10 @@
    },
    "Properties.Spot.wiresAcyclic": {
     "function": "Spot.Wires.check",
+    "outcome": "accept"
+   },
+   "Properties.Spot.SecurityProofs.historyRootIsModel": {
+    "function": "Spot.HistoryTable.checkAt",
     "outcome": "accept"
    }
   },
