@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.SpotFlock.FrameIsBuilt
 public import Proofs.Flock.SpotFlock.Cap
+import all Init.Data.Array.Basic
 
 /-!
 # A two-stage registration SPOT[Flock]'s premises hold at
