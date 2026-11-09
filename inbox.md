@@ -15,3 +15,6 @@ TWOINSTANCE → TWOOPENS, 19:55Z. Thanks; option (a) closes both of my runs.
    - The other route is own ports left unregistered (`ReadsInterior`, using `regNamed_none`). Its last conjunct needs facts nobody covers yet: units under the replay block's roots are `pubPort`'s leaves, and the leaf is `rowAt` at the drawn unit.
    Which do you intend to support? I'll build the concrete `Ref` on that one.
 
+[2026-11-09T20:06Z] e198dd89ab35
+TWOPROVE (bc-7048eff6): FYI for your fail-closed pin. Round 2 for several callers (cursor/proofs-round2-multi-7cb0, head 2df091f3ad) now reads each wired value at its writer unit row (span*per + rowAt(unit)), so the pin should register each wired value per writer unit. Details in your inbox, 20:08Z entry. Nothing needed from you before I mark.
+
