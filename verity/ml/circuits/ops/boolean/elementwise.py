@@ -23,7 +23,9 @@ A row of an element-wise operation computes no value twice (`Q_word`'s no-recomp
 is decoded once: `shared_operand` cuts a builder's circuit into the gates that read only that operand (one Call per row) and the
 rest (one per member). A constant operand is not an operand at all: `specialized` traces the builder for each binding of its
 statics, so the constant is folded into the gates; `shared_specialized` cuts such a builder per binding, at an operand or at
-each element of one. `on_bits` is a composite of such Calls whose word view is a word composite at the same statics.
+each element of one. `on_bits` is a composite of such Calls whose word view is a word composite at the same statics. `rolled`
+is `specialized` over an Array whose elements' words are computed alike, written as one Call per element of each per-element
+circuit and one of the gates they share (`roll`), so its description does not grow with the elements' count.
 """
 from __future__ import annotations
 
@@ -38,8 +40,9 @@ from verity.ml.circuits.types import Array, Type
 from .. import fp32 as W
 from .. import scalar as S
 from verity.ml.circuits.silicon import fp
-from verity.ml.circuits.boolean.forms import add
-from verity.ml.circuits.boolean.trace import Traced, definition, emit, trace, word_of
+from verity.ml.circuits.boolean.forms import ONE, ZERO, add
+from verity.ml.circuits.boolean.trace import Traced, _refs, definition, emit, trace, word_of
+from verity.ml.circuits.refs import Coll
 
 __all__ = ["Bf16Add", "Bf16AddF2fp", "Bf16MulBf16", "Bf16MulF32", "F32Add", "F32AddV4", "F32Div", "F32DivV4", "F32Fma", "F32FmaV4",
            "F32Mul", "F32MulV4", "I32Add", "on_bits", "shared_operand", "shared_specialized", "specialized"]
@@ -192,6 +195,202 @@ def shared_specialized(names: tuple[str, str], version: int, statics: Sequence[s
     own.traced = lambda S: split(S)[0]  # type: ignore[attr-defined]
     rest.traced = lambda S: split(S)[1]  # type: ignore[attr-defined]
     return own, rest
+
+
+MANY = -1
+
+
+def _element_of(T: Traced, n: int, width: int) -> list[int]:
+    """Each wire's element of T's one parameter, ``n`` elements of ``width`` bits: the element every operand reads, else MANY
+    (the constants read as none)."""
+    el = [MANY, MANY] + [k // width for k in range(n * width)]
+    for _, ops in T.gates:
+        reads = {el[o] for o in ops if o >= 2}
+        el.append(reads.pop() if len(reads) == 1 else MANY)
+    return el
+
+
+def _owner_of(T: Traced, n: int, out_width: int) -> list[int]:
+    """Each wire's output element: the one element of T's first ``n * out_width`` outputs every reader of it reaches, else MANY."""
+    own: list[int | None] = [None] * (T.first_gate + len(T.gates))
+    for k, w in enumerate(T.outputs):
+        j = k // out_width if k < n * out_width else MANY
+        own[w] = j if own[w] in (None, j) else MANY
+    for i in reversed(range(len(T.gates))):
+        o = own[T.first_gate + i]
+        if o is None:
+            raise ValueError(f"gate {i} is dead")
+        for op in T.gates[i][1]:
+            own[op] = o if own[op] in (None, o) else MANY
+    return own
+
+
+def _ordered(ws) -> list[int]:
+    return list(dict.fromkeys(ws))
+
+
+def roll(T: Traced, n: int, width: int, out_width: int) -> dict:
+    """``T``, over one parameter of ``n`` elements of ``width`` bits whose first ``n * out_width`` outputs are its elements'
+    words, cut into one circuit per element twice and the gates every element shares. ``in`` is the gates that read only one
+    element (`_element_of`) and are read by more than that element's words, from its bits to the frontier the rest reads;
+    ``out`` the gates only that element's words read (`_owner_of`), from its bits, its ``in`` frontier and the ``core`` wires
+    it reads to its word; ``core`` the rest, from every bit and each element's ``in`` frontier to the wires the ``out``s read,
+    then the outputs no ``out`` gives. The elements cut into the circuits most of them share (``elements``) are the cut ones;
+    each other element's gates are ``core``'s. ``common``: every cut element's ``out`` reads the same ``core`` wires."""
+    fg, gates = T.first_gate, T.gates
+    if T.n_inputs != n * width:
+        raise ValueError(f"T has {T.n_inputs} input bits, not {n} elements of {width}")
+    el, own = _element_of(T, n, width), _owner_of(T, n, out_width)
+    ins: list[list[int]] = [[] for _ in range(n)]
+    outs: list[list[int]] = [[] for _ in range(n)]
+    for i in range(len(gates)):
+        w = fg + i
+        if own[w] != MANY:
+            outs[own[w]].append(i)
+        elif el[w] != MANY:
+            ins[el[w]].append(i)
+    xs = [list(range(2 + j * width, 2 + (j + 1) * width)) for j in range(n)]
+    read_by: dict[int, set] = {}
+    for i, (_, ops) in enumerate(gates):
+        for o in ops:
+            read_by.setdefault(o, set()).add(i)
+    out_set = set(T.outputs)
+    keys, cut = [], []
+    for j in range(n):
+        mine = set(ins[j])
+        front = [fg + i for i in ins[j] if fg + i in out_set or read_by.get(fg + i, set()) - mine]
+        word = T.outputs[j * out_width:(j + 1) * out_width]
+        have = set(xs[j]) | set(front) | {fg + i for i in outs[j]} | {0, 1}
+        other = _ordered([o for i in outs[j] for o in gates[i][1] if o not in have] + [w for w in word if w not in have])
+        a, b = _sub(T, ins[j], xs[j], front), _sub(T, outs[j], xs[j] + front + other, word)
+        cut.append((front, other, a, b))
+        keys.append((tuple(a.gates), tuple(a.outputs), tuple(b.gates), tuple(b.outputs), len(other)))
+    top = max(set(keys), key=keys.count)
+    elements = [j for j in range(n) if keys[j] == top]
+    common = all(cut[j][1] == cut[elements[0]][1] for j in elements)
+    taken = {fg + i for j in elements for i in ins[j] + outs[j]}
+    fronts = [w for j in elements for w in cut[j][0]]
+    wanted = cut[elements[0]][1] if common else [w for j in elements for w in cut[j][1]]
+    rest = [k for k in range(len(T.outputs)) if not (k < n * out_width and k // out_width in elements)]
+    core = _sub(T, [i for i in range(len(gates)) if fg + i not in taken], [w for x in xs for w in x] + fronts,
+                wanted + [T.outputs[k] for k in rest])
+    return {"in": cut[elements[0]][2], "out": cut[elements[0]][3], "core": core, "elements": elements, "common": common,
+            "front": len(cut[elements[0]][0]), "other": len(cut[elements[0]][1]), "rest": rest}
+
+
+def emit_order(T: Traced) -> list[int]:
+    """T's gates in the order `emit` writes them: by depth, then kind (`trace._KINDS`), then index."""
+    fg, gates = T.first_gate, T.gates
+    rank = {"and": 0, "xor": 1, "not": 2}
+    depth = [0] * (fg + len(gates))
+    for i, (_, ops) in enumerate(gates):
+        depth[fg + i] = 1 + max(depth[o] for o in ops)
+    return sorted(range(len(gates)), key=lambda i: (depth[fg + i], rank[gates[i][0]], i))
+
+
+def rolled(name: str, version: int, statics: Sequence[str], build: Callable, signature: Callable, doc: str = "",
+           word: Any = None, register: bool = True) -> CompositeDefinition:
+    """`specialized`'s Definition with its circuit for bindings S, ``build(S)`` traced over ``signature(S)`` (one parameter, an
+    Array whose elements' words are the first field of its return), written as calls (`roll`): a batch of ``name``In, one
+    Call of ``name``Core and a batch of ``name``Out, each traced once per binding, so its description is one element's
+    circuit and the gates the elements share, never each element's. Its ``traced(S)`` is the whole circuit. It has no
+    ``build``: a lowering that runs builders (`verity_flock.ir_lower`) runs its ``fold_build(S, C, *x)``, which writes the whole
+    circuit's gates in `emit`'s order, so it lowers to what `specialized`'s Definition lowers to gate by gate."""
+    made: dict[tuple, Traced] = {}
+    cuts: dict[tuple, dict] = {}
+
+    def key(S) -> tuple:
+        return tuple(getattr(S, k) for k in statics)
+
+    def shape(S):
+        params, ret = signature(S)
+        (_, x), = params
+        return x, ret, ret.fields[0].elem
+
+    def traced(S) -> Traced:
+        k = key(S)
+        if k not in made:
+            params, ret = signature(S)
+            made[k] = trace(build(S), [t for _, t in params], ret, key=(name, version, dict(zip(statics, k))))
+        return made[k]
+
+    def cut(S) -> dict:
+        k = key(S)
+        if k not in cuts:
+            x, _, q = shape(S)
+            cuts[k] = roll(traced(S), x.n, x.elem.leaves, q.leaves)
+        return cuts[k]
+
+    def bits(n: int) -> Array:
+        return Array(n, BL.BIT)
+
+    def in_sig(S):
+        x, _, _ = shape(S)
+        return (("x", x.elem),), bits(cut(S)["front"])
+
+    def core_sig(S):
+        x, _, _ = shape(S)
+        R = cut(S)
+        return (("x", x), ("d", Array(len(R["elements"]), bits(R["front"])))), bits(len(R["core"].outputs))
+
+    def out_sig(S):
+        x, _, q = shape(S)
+        R = cut(S)
+        return (("x", x.elem), ("d", bits(R["front"])), ("c", bits(R["other"]))), q
+
+    def part(suffix: str, sig: Callable, what: str, of: str) -> CompositeDefinition:
+        def body(B, S, *c):
+            params, ret = sig(S)
+            return emit(cut(S)[what], [t for _, t in params], ret, B, *c)
+        return CompositeDefinition(name + suffix, version, tuple(statics), sig, body, register=register,
+                                   doc=f"{name}_v{version}'s {of}", conformance="exact-model-tested")
+
+    In = part("In", in_sig, "in", "gates that read one element and that more than its word reads (`elementwise.roll`)")
+    Core = part("Core", core_sig, "core", "gates every element shares, and its elements not cut (`elementwise.roll`)")
+    Out = part("Out", out_sig, "out", "gates only one element's word reads (`elementwise.roll`)")
+
+    def body(B, S, x):
+        params, ret = signature(S)
+        R = cut(S)
+        el, m, w = R["elements"], len(R["elements"]), x.type.elem.leaves
+        xs = x if m == x.type.n else Coll(Array(m, x.type.elem), _refs([r for j in el for r in x[j].refs]))
+        bk = {k: getattr(S, k) for k in statics}
+        d = B.batch(bind(In, **bk), xs, axes=(0,))
+        c = B.call(bind(Core, **bk), x, d)
+        o = R["other"]
+        if R["common"]:
+            cs, ax = Coll(bits(o), c.refs.slice(0, o)), None
+        else:
+            cs, ax = Coll(Array(m, bits(o)), c.refs.slice(0, m * o)), 0
+        e = B.batch(bind(Out, **bk), xs, d, cs, axes=(0, 0, ax))
+        q = shape(S)[2].leaves
+        at = {j: p for p, j in enumerate(el)}
+        base = o if R["common"] else m * o
+        rest = {k: base + p for p, k in enumerate(R["rest"])}
+        refs = [e.refs[at[k // q] * q + k % q] if k not in rest else c.refs[rest[k]] for k in range(ret.leaves)]
+        return Coll(ret, _refs(refs))
+
+    def fold_build(S, C, *elements):
+        """The whole circuit's gates on ``C`` over the forms ``elements``, in `emit`'s order."""
+        T = traced(S)
+        W = [ZERO, ONE] + [f for e in elements for f in e] + [None] * len(T.gates)
+        for i in emit_order(T):
+            kind, ops = T.gates[i]
+            W[T.first_gate + i] = C.AND(W[ops[0]], W[ops[1]]) if kind == "and" else W[ops[0]] ^ W[ops[1]] if kind == "xor" \
+                else W[ops[0]].inv()
+        out = [W[o] for o in T.outputs]
+        widths = BL.elements(signature(S)[1])
+        ends = [sum(widths[:i + 1]) for i in range(len(widths))]
+        return [out[e - w:e] for w, e in zip(widths, ends)]
+
+    d = CompositeDefinition(name, version, tuple(statics), signature, body, doc=doc, conformance="exact-model-tested",
+                            register=register)
+    d.traced = traced  # type: ignore[attr-defined]
+    d.word = word  # type: ignore[attr-defined]
+    d.fold_build = fold_build  # type: ignore[attr-defined]
+    d.parts = (In, Core, Out)  # type: ignore[attr-defined]
+    d.cut = cut  # type: ignore[attr-defined]
+    return d
 
 
 def on_bits(name: str, version: int, statics: Sequence[str], signature: Callable, body: Callable, word: Any,

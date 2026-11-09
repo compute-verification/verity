@@ -92,7 +92,7 @@ def _group_quant_group(B, S, x):
 
 
 Fp8GroupQuantUe8m0GroupV2 = BD.flat("Fp8GroupQuantUe8m0Group", 2, ["G"], lambda S: DG.group_sig(S.G, T), _group_quant_group,
-                                    DG.Fp8GroupQuantUe8m0Group)
+                                    DG.Fp8GroupQuantUe8m0Group, rolled=True)
 
 
 def _group_quant(B, S, x):
@@ -110,7 +110,7 @@ def _fi_group(B, S, x):
 
 
 FlashInferFp8Quant1x128GroupV2 = BD.flat("FlashInferFp8Quant1x128Group", 2, [], lambda S: DG.fi_group_sig(S, T), _fi_group,
-                                         DG.FlashInferFp8Quant1x128Group)
+                                         DG.FlashInferFp8Quant1x128Group, rolled=True)
 
 
 def _fi(B, S, x):
