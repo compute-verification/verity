@@ -20644,3 +20644,18 @@ Its bytes (row/v2, 32 words a row) stay as they are.
   This is Lean (`Supplied.lean`) plus Python, and it reruns #8431's Lean check and records. It changes what R7 accepts: one parameter type gets two orders, chosen by the source. About Tue 14:00Z [guess].
 
 **My Tue 08:00Z:** #8431 itself is unchanged by either design and still marks about 00:45Z. The PR that settles #8448 is A's or B's. I post the facts above on PRF-477 now and the fix once you pick.
+
+## LEDGER, 23:27Z Mon 9 Nov: the full ledger, the run list and the proposals are done (note `20261109T2010Z-report-claims-ledger`)
+
+- **Counts.** 33 rows: 3 MAIN (H1, S15, S19), 0 PR, 30 NOT. 11 of the 30 need only the wording in the row's sixth column. The theorem has 17 premises and pieces (H10.1 to H10.17); 22 switches; no run has more than 6 at the post's value.
+- **BINDKSAT's draft statement, read at its Lean** (`cursor/proofs-hides-cc69`, 03a2a9aeb0). H10 stays NOT.
+  - It is statements only. Its try's log says "axiom probe: no theorems in it" for both files. Nothing is in a lock and there is no PR.
+  - `PeriodTwoReg` bounds M undetected incorrect replay blocks by Σ ε_t + (1 − r₁r₂)^M. It is not a theft bound: the theft form is not stated (H10.17).
+  - It is stated for any verifier that meets `CompiledTwo.Sessions`, not at SPOT's own code (H10.15).
+  - The first stage whose rate is proved is a uniform Q-subset inside one window's statement. At r₁ = 2.08e-6 that statement must hold at least 480,769 replay blocks, about 1,800 nodes' ten minutes at b00b's request rate (my arithmetic, unchecked). The planner draws each request on its own over the whole scope. Worth a line to BINDKSAT and BREAKEVEN.
+- **Tonight's rehearsal, from the store** (H9, H3, section 3). The first stage was accepted by the live challenger (r20261109-221913-7059, 4 of 8 spans) and those four replayed bit-exact (r20261109-223334-0f74). The 128k arm served and committed ids in and out (r20261109-223637-4078). No second stage, proof or verdict; `FORM` is false at every head I read.
+- **One new item in section 4** (14): VLLM-250 at 22:48Z says the rehearsal "passed end to end"; it stops before the second stage. Still open as written: 4, 6, 9, 10, 11, 13, 14.
+- **A correction to my 21:49Z section.** I cited `breakeven/zkstack.py:8` for "the planner's replay block is a request". That file does not price the headline rows. The claim stands from `benchmarks/spot_figures/figure1.py:29-30` and line 389 on `main`. H7 and H8 now cite the right files.
+- **Changed since 21:49Z that you may not have:** #8309's premise `Sites` is renamed `Addresses` at 58f7298323 and the ask's page still says `Sites`; the Goals page has a new `network/cap-certified`, due Tue 10 Nov 18:00 PST, where NET-281 says Fri 13 Nov.
+- **The three issue texts** (section 6, none filed): one configuration file for the post with every feeding run stamping its digest; the figures label or refuse a row whose card is off that configuration; say what the Lean verifier does with a two-stage run, in the code, the goal and the post.
+- **For a refresh:** section 8 lists what to read first. I end my turn now.
