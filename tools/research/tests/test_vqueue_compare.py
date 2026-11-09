@@ -384,6 +384,19 @@ def test_an_advance_that_lists_no_heads_holds_its_members_at_the_heads_built():
         assert [(d["kind"], d["pr"]) for d in rep["disagreements"]] == kinds
 
 
+def test_a_build_logged_with_an_error_after_its_push_is_a_candidate_still_and_a_failed_action():
+    """The loop pushed X1 and its enqueue failed, so its build line names its sha beside the error; it was enqueued again and
+    advanced.  A build that failed before its push names no sha and is no candidate."""
+    entries, bad = vc.parse_log("\n".join(json.dumps(d) for d in (
+        decision("10:05", 1, "build", M0, sha=X1, base=M0, members=[1], heads=[HEAD[1]], enqueued=False, error="graph2 is down"),
+        decision("10:06", 2, "retry", M0, sha=X1, base=M0, members=[1], heads=[HEAD[1]], enqueued=True),
+        decision("10:10", 3, "advance", M0, sha=X1, base=M0, members=[1], heads=[HEAD[1]]),
+        decision("10:11", 4, "build", X1, base=X1, members=[2], error="git push: connection reset"))))
+    s = vc.shadow(entries)
+    assert not bad and list(s.cands) == [X1] and s.cands[X1].passed is entries[2] and s.built[1] == (entries[0], HEAD[1])
+    assert [(e.action, e.sha) for e in s.errors] == [("build", X1), ("build", None)] and s.nobuild == []
+
+
 def test_unread_labels_and_an_empty_window_are_warned():
     entries, _ = vc.parse_log(json.dumps(decision("10:00", 1, "build", M0, sha=X1, base=M0, members=[1], heads=["1" * 40])))
     rep = vc.compare(entries, vc.parse_chain(""), [], None, {}, lambda heads: {}, vc.when(at("09:00")), vc.when(at("11:00")))

@@ -193,8 +193,8 @@ class Past:
         recs = self.of("slim", sha)
         return bool(recs), recs[-1].get("record") if recs else None
 
-    def ignored(self) -> set[str]:
-        return {r.get("sha") for r in self.of("ignore")}
+    def ignored(self) -> set[tuple[str, str]]:
+        return {(r.get("ref"), r.get("sha")) for r in self.of("ignore")}
 
     def flaked(self) -> set[str]:
         return {r.get("key") for r in self.of("flaky") if r.get("done") or r.get("shadow")}
@@ -745,6 +745,8 @@ class Tick:
     #: each (head, base) a skip told its owner of, as `head@base`
     told: set[str] = field(default_factory=set)
     foreign: dict[str, str] = field(default_factory=dict)
+    #: what the snapshot logged: the runs beside the checks it started or judged
+    wrote: list[dict] = field(default_factory=list)
 
 
 class Loop:
@@ -775,11 +777,12 @@ class Loop:
                 continue
             ready.append(x)
         refs, builds = w.refs(), past.builds()
-        if older := {sha for name, sha in refs.items() if name == sha[:12] and sha not in builds} - past.ignored():
+        if older := {sha for name, sha in refs.items() if name == sha[:12] and sha not in builds
+                     and (name, sha) not in past.ignored()}:                # past the window: read the whole log for them
             builds |= {sha: r for sha, r in Past.read(self.log_path, 0).builds().items() if sha in older}
         mine = {sha for name, sha in refs.items() if name == sha[:12] and sha in builds}
         foreign = {name: sha for name, sha in refs.items() if sha not in mine or name != sha[:12]}
-        cands, judged = [], {}
+        cands, judged, wrote = [], {}, []
         for sha in sorted(mine):
             b = builds[sha]
             base, prs, heads = b.get("base") or "", tuple(b.get("members") or ()), tuple(b.get("heads") or ())
@@ -788,7 +791,7 @@ class Loop:
                 j = Judged(Verdict(LIST_FAILED), mark="not enqueued", note="the log holds no enqueue of it", graph2=j.graph2,
                            listed=False, theirs=j.theirs)
             if self.slim is not None and not w._ancestor(sha, main):
-                j = self._beside(past, n, main, origin, sha, base, prs, heads, j)
+                j = self._beside(past, n, main, origin, sha, base, prs, heads, j, wrote)
             judged[sha] = j
             cands.append(Candidate(sha, base, prs, heads, j.verdict, past.tries(sha), reruns=past.reruns(sha),
                                    enqueued=past.enqueued(sha)))
@@ -801,7 +804,7 @@ class Loop:
         history = past.history((lambda sha: bool(sha) and w._ancestor(sha, main)) if self.shadow else None)
         snap = Snapshot(main, tuple(sorted(ready, key=lambda x: x.rank)), tuple(cands), history, self.batch, self.depth,
                         lean=self.lean, now=self.now(), pending_s=self.pending_s)
-        return Tick(n, main, origin, snap, judged, past, past.told(), foreign)
+        return Tick(n, main, origin, snap, judged, past, past.told(), foreign, wrote)
 
     def _shadow_main(self, past: Past, origin: str) -> str:
         """The shadow's `main`: the newest candidate it advanced (`SHADOW`, else its log's newest advance) while origin's `main`
@@ -814,15 +817,17 @@ class Loop:
         return origin
 
     def _beside(self, past: Past, n: int, main: str, origin: str, sha: str, base: str, prs: tuple[int, ...],
-                heads: tuple[str, ...], j: Judged) -> Judged:
+                heads: tuple[str, ...], j: Judged, wrote: list[dict]) -> Judged:
         """``j`` combined with the verdict of the run beside candidate ``sha``'s check (`vqueue_slim`): started once a candidate
-        (again by a retry of its infra), judged each tick, its record logged whenever it changed; with --dry-run, judged on the
-        record last logged, and nothing started or written."""
+        (by its build, else here; again by a retry of its infra or a rerun of its failure), judged each tick, its record
+        logged (to ``wrote`` too) whenever it changed; with --dry-run, judged on the record last logged, nothing started or
+        written."""
         started, rec = past.slim(sha)
         line = dict(sha=sha, base=base, members=prs, heads=heads)
         d = self.world.slim_driver(self.dry_run)
         if not started and not self.dry_run:
             self.write(got := self._started(n, main, origin, line))
+            wrote.append(got)
             rec = got["record"]
         if not started and self.dry_run:
             v = Verdict(PENDING)
@@ -830,7 +835,8 @@ class Loop:
             was = json.dumps(rec, sort_keys=True)
             v = self.slim.judge(d, rec)
             if json.dumps(rec, sort_keys=True) != was and not self.dry_run:
-                self.write(self._line(n, main, origin, "slim", **line, why=f"judged {v.state}", record=rec, done=True))
+                self.write(got := self._line(n, main, origin, "slim", **line, why=f"judged {v.state}", record=rec, done=True))
+                wrote.append(got)
         both = self.slim.combine(j.verdict, v)
         if both.state == FAIL:              # `combine` keeps no `ended`: a fail has ended once both checks stopped running
             g = j.verdict
@@ -850,10 +856,11 @@ class Loop:
         if self.dry_run:
             self.out("\n".join(f"would {_name(a)}: {a}" for a in actions) or "nothing to do")
             return []
-        logged = [self.record(t, "ignore", sha=sha, why=f"origin's queue/{name} is no build of the loop's: no candidate")
-                  for name, sha in t.foreign.items() if sha not in past.ignored()] + self._flaky(t)
-        for rec in logged:
+        new = [self.record(t, "ignore", sha=sha, ref=name, why=f"origin's queue/{name} is no build of the loop's: no candidate")
+               for name, sha in t.foreign.items() if (name, sha) not in past.ignored()] + self._flaky(t)
+        for rec in new:
             self.write(rec)
+        logged = [*t.wrote, *new]
         for a in actions:
             try:
                 recs = self.apply(a, t)
@@ -884,8 +891,10 @@ class Loop:
         if self.state is None:
             return
         doc = {"at": stamp(self.now()), "tick": t.n, "main": t.main, "origin_main": t.origin,
-               "candidates": {sha: {"mine": j.verdict.state, "graph2": j.graph2, "lacks": list(j.lacks), "note": j.note}
+               "candidates": {sha: {"mine": j.verdict.state, "graph2": j.graph2, "lacks": list(j.lacks), "note": j.note,
+                                    "beside": j.slim.state if j.slim is not None else None}
                               for sha, j in t.judged.items()},
+               "ignored": t.foreign,
                "disagree": sorted(sha for sha, j in t.judged.items()
                                   if j.graph2 in vqueue.STATES and j.graph2 != j.verdict.state)}
         self.state.parent.mkdir(parents=True, exist_ok=True)
@@ -909,10 +918,12 @@ class Loop:
         for c in s.candidates:
             j = t.judged[c.sha]
             lines.append(f"candidate {c.sha[:12]} on {c.base[:12]}: {' '.join(f'#{n}' for n in c.members)} {c.verdict.state}"
-                         f" tries {c.tries}" + (f" ({j.note})" if j.note else "")
+                         f" tries {c.tries} reruns {c.reruns}" + (f" (beside: {j.slim.state})" if j.slim else "")
+                         + (f" ({j.note})" if j.note else "")
                          + "".join(f"\n  failed {f.task} {f.key[:19]}" for f in c.verdict.failed)
                          + "".join(f"\n  infra {f.task} {f.key[:19]}" for f in c.verdict.infra))
         lines.append(f"history {len(s.history)}: " + " ".join(o.state for o in s.history[-10:]))
+        lines += [f"ignored queue/{name} at {sha[:12]}: no build of the loop's" for name, sha in t.foreign.items()]
         return "\n".join(lines)
 
     # -- the actions

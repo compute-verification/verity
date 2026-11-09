@@ -185,7 +185,8 @@ def shadow(entries: list[Entry]) -> Shadow:
     for e in entries:
         if e.error:
             s.errors.append(e)
-            continue
+            if not (e.action == BUILD and e.sha):          # a build naming its sha was pushed: it is a candidate still
+                continue
         c = s.cands.get(e.sha or "")
         for pr in e.prs if e.action in NAMING else ():
             if (h := e.head(pr)) and h not in s.heads.setdefault(pr, []):

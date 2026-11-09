@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 
 import pytest
@@ -14,7 +14,8 @@ import research.merge as M
 import research.queue as Q
 from research import vqueue
 from research.executor import GRAPH_V2, Executor, FileTransport
-from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, Advance, Build, Drop, Eject, Outcome, Retry, Ring, Snapshot)
+from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Advance, Build, Drop, Eject, Outcome, Red, Retry, Ring,
+                             Snapshot, Verdict)
 from research.vqueue_loop import Loop, World, _Clone, branch
 from test_queue import World as Origin, _git
 
@@ -478,7 +479,258 @@ def test_each_tick_reads_the_labels_afresh_as_drive_reads_them(env):
     assert made[-1].change == w.q.own_change and made[-1].since == w.q.rules().marked_after
 
 
+def test_only_the_loop_s_own_builds_are_candidates_and_another_queue_branch_is_ignored_logged_once(env):
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(policy, state=(state := env.tmp / "vqueue" / "state.json"))
+    (built,) = loop.tick()
+    sha = built["sha"]
+    forged = env.o.change({"f.txt": "forged\n"})                       # anyone who can push to origin
+    _git(env.o.origin, "update-ref", f"refs/heads/queue/{forged[:12]}", forged)
+    _git(env.o.origin, "update-ref", "refs/heads/queue/mine", sha)
+    ignored = loop.tick()
+    assert sorted((r["action"], r["ref"], r["sha"]) for r in ignored) == sorted([("ignore", forged[:12], forged),
+                                                                                 ("ignore", "mine", sha)])
+    assert loop.tick() == [] and [e["check"] for e in env.graph2.enqueued()] == [f"ready:{sha}"]    # once, and never enqueued
+    assert json.loads(state.read_text())["ignored"] == {forged[:12]: forged, "mine": sha}
+    assert list(json.loads(state.read_text())["candidates"]) == [sha]
+    env.clock += 49 * 3600                                          # its build is older than the log's window
+    keys = env.listed(sha, {"pytest:a": ["a.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    assert [a for a in _acts(loop.tick()) if a != "ignore"] == ["advance"] and env.main() == sha    # the whole log says so
+
+
+def test_a_failed_task_s_inputs_hold_its_env_s_spec_files_and_those_of_each_task_it_reads(env):
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(lambda s: [] if s.candidates else [Build((1,), s.main, 5)])
+    (built,) = loop.tick()
+    sha, w = built["sha"], loop.world
+    keys = env.listed(sha, {"lean-build:x": ["x.lean"], "pytest:a": ["a.txt"]}, reads={"pytest:a": "lean-build:x"})
+    env.result(keys["lean-build:x"], "lean-build:x", "pass")
+    _, made, _ = w._settled(w.tasks.graph_v2(f"ready:{sha}")[1])
+    env.result(made["pytest:a"], "pytest:a", "fail")
+    (f,) = w.verdict(sha).verdict.failed
+    assert (f.task, f.key, f.inputs) == ("pytest:a", made["pytest:a"], frozenset({"a.txt", "x.lean", *SPEC}))
+
+
+def test_the_snapshot_reads_the_clock_lean_and_pending_hours_and_a_check_pending_past_them_is_retried_once_and_rung(env):
+    env.put(1, {"a.txt": "1\n"})
+    seen: list[Snapshot] = []
+    loop = env.loop(lambda s: seen.append(s) or vqueue.decide(s), lean=3, pending_s=2 * 3600)
+    (built,) = loop.tick()
+    assert (seen[-1].lean, seen[-1].now, seen[-1].pending_s) == (3, T0, 7200)
+    env.clock += 2 * 3600
+    assert loop.tick() == []
+    assert (seen[-1].now, seen[-1].candidates[0].enqueued, seen[-1].candidates[0].tries) == (T0 + 7200, T0, 1)
+    env.clock += 1                                                  # past `pending_s`: enqueued again, once
+    (retry,) = loop.tick()
+    assert (retry["action"], retry["enqueued"], retry["counts"]) == ("retry", True, {})
+    assert loop.tick() == [] and len(env.graph2.enqueued()) == 2
+    env.clock = T0 + 4 * 3600 + 1                                   # past twice that: rung, once
+    (ring,) = loop.tick()
+    assert ring["action"] == "ring" and "still pending 4 h after its first enqueue" in ring["why"], ring
+    assert loop.tick() == [] and len(env.posts) == 1 and env.posts[0].startswith("@infra vqueue:")
+    assert seen[-1].candidates[0].enqueued == T0 and seen[-1].candidates[0].tries == 2
+
+
+def test_a_failure_s_tests_are_read_beside_its_base_s_and_one_whose_tests_the_base_fails_too_is_inherited(env):
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(vqueue.decide)
+    (built,) = loop.tick()
+    sha, w = built["sha"], loop.world
+    env.listed(main, {"pytest:t": ["t.py"]}, keys={"pytest:t": "sha512:base-t"})
+    keys = env.listed(sha, {"pytest:a": ["a.txt"], "pytest:t": ["t.py"]})
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    env.result(keys["pytest:t"], "pytest:t", "fail", tests=["test_t.py::a"])
+    (f,) = w.verdict(sha, main).verdict.failed                      # the base's has no result yet
+    assert (f.tests, f.base_tests, f.base_key) == (frozenset({"test_t.py::a"}), None, "sha512:base-t")
+    env.result("sha512:base-t", "pytest:t", "fail", tests=["test_t.py::a", "test_t.py::b"])
+    (f,) = w.verdict(sha, main).verdict.failed
+    assert f.base_tests == frozenset({"test_t.py::a", "test_t.py::b"})
+    assert _acts(loop.tick()) == ["red", "advance", "drop"] and env.main() == sha       # its tests fail there too
+    env.put(2, {"b.txt": "2\n"})
+    (two,) = loop.tick()
+    keys = env.listed(two["sha"], {"pytest:t": ["t.py"]})
+    env.result(keys["pytest:t"], "pytest:t", "fail", tests=["test_t.py::a", "test_t.py::c"])
+    (f,) = w.verdict(two["sha"], sha).verdict.failed
+    assert (f.tests, f.base_tests) == (frozenset({"test_t.py::a", "test_t.py::c"}), frozenset({"test_t.py::a"}))
+    assert _acts(loop.tick()) == ["rerun"]                          # one test more fails: its own failure
+
+
+@pytest.mark.parametrize("again", ["pass", "fail", "no rerun"])
+def test_a_lone_member_s_failure_its_files_dont_meet_is_rerun_once_afresh_and_the_rerun_decides(env, again):
+    one = env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(vqueue.decide)
+    script = env.graph2_script(loop) if again != "no rerun" else None
+    (built,) = loop.tick()
+    sha = built["sha"]
+    keys = env.listed(sha, {"pytest:a": ["a.txt"], "pytest:z": ["z.txt"]})
+    z = keys["pytest:z"]
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    env.result(z, "pytest:z", "fail")
+    (rerun,) = loop.tick()
+    if again == "no rerun":                                         # graph2 without `rerun`: the failure stands
+        assert (rerun["action"], rerun["absent"], rerun["done"], rerun["keys"]) == ("rerun", True, False, [z])
+    else:
+        assert (rerun["action"], rerun["keys"], rerun["counts"], rerun["done"]) == ("rerun", [z], {z: 1}, True), rerun
+        assert Path(f"{script}.rerun").read_text() == f"ready:{sha} {z}\n"
+        assert loop.tick() == []                                    # its fail set aside: pending until the rerun's result
+        env.result(z, "pytest:z", again)
+    if again == "pass":
+        assert _acts(loop.tick()) == ["advance", "drop"] and env.main() == sha and env.withdrawn == []
+    else:
+        eject, drop = loop.tick()
+        assert (eject["action"], eject["number"], env.withdrawn, drop["outcome"]["suspects"]) == ("eject", 1, [(1, one)], [1])
+    assert loop.tick() == [] or again == "pass"
+    assert script is None or Path(f"{script}.rerun").read_text().count("\n") == 1
+
+
+@pytest.mark.parametrize("shadow", [False, True])
+def test_a_test_graph2_says_flaked_rings_its_file_s_owner_once_a_key_and_the_shadow_only_logs_it(env, shadow):
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(lambda s: [] if s.candidates else [Build((1,), s.main, 5)], shadow=shadow)
+    (built,) = loop.tick()
+    sha = built["sha"]
+    z = env.listed(sha, {"pytest:z": ["z.txt"]}, suites={"pytest:z": "tools/zz"})["pytest:z"]
+    env.result(z, "pytest:z", "fail", tests=["tests/test_z.py::test_once"])
+    env.result(z, "pytest:z", "pass")                               # what a rerun replaced it with
+    env.graph2_script(loop, {"state": "pass", "check": f"ready:{sha}",
+                             "flaky": [{"task": "pytest:z", "key": z, "inputs": ["z.txt"], "reads": []}]})
+    loop.world.driver()._reg = {"handles": [{"handle": "zz", "owns": ["tools/zz/tests/test_z.py"]}]}
+    (flaky,) = loop.tick()
+    assert (flaky["action"], flaky["key"], flaky["tests"], flaky["to"], flaky["done"]) == (
+        "flaky", z, ["tests/test_z.py::test_once"], ["@zz", "@ci"], not shadow), flaky
+    assert "flakes is deleted, not rerun" in flaky["text"]
+    assert env.posts == ([] if shadow else [f"@zz @ci vqueue: {flaky['text']}"]) and loop.tick() == []     # once a key
+
+
+def test_an_infra_error_s_tree_is_graph2_s_where_vqueue_failed_has_the_field(env, monkeypatch):
+    import research.vqueue_loop as L
+
+    @dataclass(frozen=True)
+    class Treed(vqueue.Failed):
+        tree: bool = False
+
+    assert getattr(L._failure("t", "k", frozenset(), tree=True), "tree", True) is True     # dropped while it has none
+    monkeypatch.setattr(L, "Failed", Treed)
+    monkeypatch.setattr(L, "FAILED_FIELDS", frozenset(f.name for f in fields(Treed)))
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(lambda s: [] if s.candidates else [Build((1,), s.main, 5)])
+    (built,) = loop.tick()
+    sha = built["sha"]
+    keys = env.listed(sha, {"pytest:a": ["a.txt"], "pytest:b": ["b.txt"]})
+    for task in keys:
+        env.result(keys[task], task, "error", infra=True)
+    env.graph2_script(loop, {"state": "infra", "infra": [{"task": "pytest:a", "key": keys["pytest:a"], "nodes": ["n1", "n2"],
+                                                          "tree": True},
+                                                         {"task": "pytest:b", "key": keys["pytest:b"], "nodes": ["n1"],
+                                                          "tree": False}]})
+    v = loop.world.verdict(sha).verdict
+    assert v.state == INFRA and [(f.task, f.tree) for f in v.infra] == [("pytest:a", True), ("pytest:b", False)]
+
+
+def test_a_red_is_told_once_a_base_and_task_across_a_restart(env):
+    env.put(1, {"a.txt": "1\n"})
+
+    def decide(s: Snapshot) -> list:
+        if not s.candidates:
+            return [Build((1,), s.main, 5)]
+        c = s.candidates[0]
+        return [Red(c.sha, c.base, "it fails it too", c.verdict.failed)] if c.verdict.state == FAIL else []
+
+    loop = env.loop(decide)
+    (built,) = loop.tick()
+    env.listed(built["sha"], {"pytest:r": ["red.txt"]}, keys={"pytest:r": "sha512:red"})
+    env.result("sha512:red", "pytest:r", "fail")
+    (told,) = loop.tick()
+    assert (told["action"], told["done"], len(env.posts)) == ("red", True, 1)
+    (again,) = env.loop(decide, clone="again").tick()                # started again, in another clone: the log is its memory
+    assert (again["action"], again["text"], again["done"], len(env.posts)) == ("red", None, False, 1)
+
+
+class Slim:
+    """`research.vqueue_slim`'s three functions, faked: each start registers a run, judged as ``verdicts`` says (pending
+    unless it names it), and a verdict other than pending is kept in its record, as `judge` keeps it."""
+
+    def __init__(self):
+        self.started: list[tuple] = []
+        self.verdicts: dict[str, str] = {}
+
+    def start(self, driver, sha: str, base: str) -> dict:
+        self.started.append((driver, sha, base))
+        return {"ids": [f"run-{len(self.started)}"], "tip": sha, "base": base}
+
+    def judge(self, driver, rec: dict | None) -> Verdict:
+        if rec is None:
+            return Verdict(INFRA, (), (vqueue.Failed("the run beside its check registered no run", ":no run", frozenset()),))
+        state = rec.get("verdict") or self.verdicts.get(rec["ids"][0], PENDING)
+        if state != PENDING:
+            rec["verdict"] = state
+        down = (vqueue.Failed(f"the run beside its check ({rec['ids'][0]}) was lost", f"{rec['tip']}:{rec['ids'][0]}",
+                              frozenset()),)
+        return Verdict(state, (), down if state == INFRA else ())
+
+    @staticmethod
+    def combine(graph: Verdict, slim: Verdict) -> Verdict:
+        state = next(s for s in (FAIL, INFRA, PENDING, LIST_FAILED, PASS) if s in (graph.state, slim.state))
+        return Verdict(state, graph.failed + slim.failed, graph.infra + slim.infra)
+
+
+def test_the_run_beside_each_check_starts_once_a_candidate_its_record_is_kept_and_both_must_pass(env):
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    slim = Slim()
+    loop = env.loop(vqueue.decide, slim=slim)
+    loop.world.slim_driver = lambda dry_run=False: "drive"
+    built, started = loop.tick()
+    sha = built["sha"]
+    assert (started["action"], started["sha"], started["why"], started["record"]) == (
+        "slim", sha, "started", {"ids": ["run-1"], "tip": sha, "base": main})
+    keys = env.listed(sha, {"pytest:a": ["a.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    assert loop.tick() == [] and slim.started == [("drive", sha, main)]      # graph2's passed, the run beside still runs
+    slim.verdicts["run-1"] = INFRA
+    judged, retry, again = loop.tick()
+    assert (judged["action"], judged["record"]["verdict"], retry["action"]) == ("slim", INFRA, "retry")
+    assert (again["action"], again["why"], again["record"]["ids"]) == ("slim", "started again", ["run-2"])
+    assert loop.tick() == []
+    slim.verdicts["run-2"] = PASS
+    kept, advance, drop = loop.tick()
+    assert (kept["record"]["verdict"], advance["action"], drop["action"]) == (PASS, "advance", "drop") and env.main() == sha
+    assert len(slim.started) == 2 and loop.tick() == []
+    started_again = env.loop(vqueue.decide, clone="again", slim=slim)         # a restart reads its records from the log
+    started_again.world.slim_driver = lambda dry_run=False: "drive"
+    assert started_again.tick() == [] and len(slim.started) == 2
+
+
+def test_the_shadow_advances_its_own_main_once_a_candidate_and_the_comparer_reads_one_advance_each(env):
+    from research import vqueue_compare as vc
+
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(vqueue.decide, shadow=True)
+    (one,) = loop.tick()
+    keys = env.listed(one["sha"], {"pytest:a": ["a.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    env.put(2, {"b.txt": "2\n"})
+    advance, drop, two = loop.tick()
+    assert (advance["action"], drop["action"], two["action"], two["base"]) == ("advance", "drop", "build", one["sha"])
+    keys = env.listed(two["sha"], {"pytest:b": ["b.txt"]})
+    env.result(keys["pytest:b"], "pytest:b", "pass")
+    assert _acts(loop.tick()) == ["advance", "drop"]
+    for _ in range(3):
+        assert loop.tick() == []
+    env.clock += 49 * 3600                                          # the log's window holds no advance now
+    assert loop.tick() == [] and _git(loop.world.repo, "rev-parse", "refs/vqueue/shadow") == two["sha"]
+    assert env.main() == main and [r["sha"] for r in env.lines() if r["action"] == "advance"] == [one["sha"], two["sha"]]
+    entries, bad = vc.parse_log(env.log.read_text())
+    s = vc.shadow(entries)
+    assert not bad and [e.sha for e in s.advances] == [one["sha"], two["sha"]]
+    assert all(s.cands[c["sha"]].passed for c in (one, two))
+
+
 def test_research_queue_vqueue_is_its_own_command(capsys):
     with pytest.raises(SystemExit) as e:
         Q.main(["vqueue", "--help"])
-    assert e.value.code == 0 and "--shadow" in capsys.readouterr().out
+    said = capsys.readouterr().out
+    assert e.value.code == 0 and all(o in said for o in ("--shadow", "--lean", "--pending-hours", "--no-slim"))
