@@ -27,7 +27,7 @@ $RESEARCH_RUN_DIR/out: window.log, stage.tsv or prove.tsv, and each prove_time.s
 
 from __future__ import annotations
 
-import datetime as dt
+import calendar
 import hashlib
 import json
 import os
@@ -56,7 +56,7 @@ def env(k: str, default: str | None = None) -> str:
 
 
 def log(msg: str) -> None:
-    line = f"{dt.datetime.now(dt.UTC):%H:%M:%SZ} {msg}"
+    line = f"{time.strftime('%H:%M:%SZ', time.gmtime())} {msg}"
     print(line, flush=True)
     with open(OUT / "window.log", "a") as f:
         f.write(line + "\n")
@@ -153,7 +153,7 @@ def limits(mem_default: str) -> tuple[float, list[int]]:
 
 
 def until() -> float:
-    return dt.datetime.strptime(env("WIN_UNTIL"), "%Y-%m-%dT%H:%MZ").replace(tzinfo=dt.UTC).timestamp()
+    return calendar.timegm(time.strptime(env("WIN_UNTIL"), "%Y-%m-%dT%H:%MZ"))
 
 
 @dataclass

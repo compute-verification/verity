@@ -34,7 +34,11 @@ Files:
   `+packed-weights` for those arms)
   at each size of `PT_NS`, on one leased GPU (`PT_DEVICE=gpu`) or the CPU prover (`cpu`); `prove_time.py` fits each type's
   fixed seconds a statement and seconds a block, and on a GPU gives its proof overhead (seconds a block × the card's peak MACs
-  a second ÷ the block's MACs), marginal and amortized at each size.
+  a second ÷ the block's MACs), marginal and amortized at each size. A unit may carry its own sizes (`UNIT@N,N`), and a
+  census type's size may be `full` or `full/D` (the most blocks a statement holds at the block's k_log, over D).
+- `window.py stage|prove UNITS_FILE`: `prove_time.sh`'s stage and prove steps for many types on a shared node, inside
+  host limits the job enforces itself (cores, niceness, host memory, disk, a deadline, device memory a GPU); its
+  docstring has the file's format and each limit.
 
 From the source tree's root on a CPU node with 160 GB for the job (results go to `$RESEARCH_RUN_DIR/out`; `SU_CACHE` keeps
 builds and stagings between runs):
