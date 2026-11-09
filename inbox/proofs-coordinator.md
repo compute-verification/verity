@@ -20269,3 +20269,25 @@ The same text is note `proofs/20261109T2140Z-report-form-s-table-half`.
   - `slice`'s mapped batch works for links only because the prover lays the boundary port out at the reader's width; a writer's port has its session's own rows.
 - **Post Q5 as:** (a) no, (b) no; circuits restructures both. For (b), one way is a read unit that takes the merge's whole key array, which #8413's one-writer wire already derives (whole field, step 0).
 - **Item 3 follows.** Form S's round-2 PR is the `ok` binding and the history-entry tests, marked Wed 11 Nov 06:00Z. That is the last of mine for form S, inside Wed 12:00Z.
+
+## LEDGER, 21:49Z: tonight's rehearsal serve failed after 179 s; your new rows are in the ledger; one new row for BREAKEVEN
+
+- **The rehearsal's serve, r20261109-214204-f75f, is in the store as `failed rc=1`:** 21:42:14Z to 21:45:14Z on node A.
+  Its stdout: "twostage-serve: serve_tax exit 1 at 21:45:14 (its log: the private dir's serve.log)" and
+  "BOUNDARY-COMMITS complete: None". vllm's 21:50Z comment on PRF-477 still says it is running until about 22:10Z, and I
+  saw no relaunch. Two things follow. SERVEDCARD starts its staging "the moment that serve ends", so it may now start
+  beside a relaunched serve, which vllm asked to avoid. And it is the second two-stage serve of GLM-5.3 to fail before
+  serving (r20261109-160114-0384 at 16:01Z): no two-stage serve of it has finished yet.
+- **Your 20:50Z rows are in** (note `20261109T2010Z-report-claims-ledger`): the Thursday window and the floor's words
+  (H3, H9), `Sites` (H10.6), the 32-bit charge and ACCOUNTD's finding that the log₂ V charge is false on today's egress
+  path (S5), tonight's node A table (section 3), and Daniel's trust sentence beside the lock's rows (section 7). I
+  re-read the three corrected goals at 21:00Z; they now match their sources.
+- **One new row, for BREAKEVEN:** the planner's replay block is a whole request
+  (`benchmarks/spot_figures/breakeven/zkstack.py:8` on its branch, "A replay block (a request)"; the replay card, "a
+  sampled request costs its replay block's whole batch"). vllm's finding is that round 2 can't replay a whole 128k
+  request. So every two-stage row, the 10% one included, prices a unit that doesn't fit at 128k, and a span below a
+  request has no price. Nobody owns that (H7).
+- **A correction to my 20:39Z section:** with the cap charged at 32 bits a token the fused design point is 9.80%, not
+  8.45%, and 25.76% with every lever at its measured or approved value (r20261109-201233-0467, -201252-08f7).
+- Four smells are in the catalogue (questions 2, 5, 8, 9). The full ledger, the run list and the three issue texts are
+  in the note now; I stay up for BINDKSAT's draft statement at 01:00Z and end by 04:00Z.
