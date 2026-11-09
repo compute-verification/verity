@@ -16,6 +16,8 @@ A job is a member's session or the Lean checks of a finished session, and needs 
 * A job whose need alone is over the budget, or whose template has no measured peak, is exclusive: it is admitted only when
   nothing runs, and while it waits at its turn nothing behind it is admitted, so it can't be starved.
 * With no budget only the slots bound the pool, and one slot of each kind is the members' order, one session at a time.
+
+Side-by-side provers share the cores by `threads`.
 """
 from __future__ import annotations
 
@@ -74,6 +76,14 @@ class Needs:
         table = self.peaks.get(kind, {})
         peak = table.get(template, table.get(size_class(template, k_log) or ""))
         return None if peak is None else peak * (1 + HEADROOM)
+
+
+def threads(need_gb: float | None, budget_gb: float | None, session_jobs: int, cores: int) -> int:
+    """A side-by-side prover's threads: the cores' share its memory need is of the budget, and at least an even share among
+    ``session_jobs``, so a large member's prover is not held to a small one's threads while only a few of its size fit."""
+    even = 1 / session_jobs
+    share = max(even, need_gb / budget_gb) if need_gb and budget_gb else even
+    return max(1, min(cores, round(cores * min(1.0, share))))
 
 
 @dataclass

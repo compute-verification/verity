@@ -853,7 +853,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         t = time.time()
         env = {"FC_COINS": "os"} if plain(a) else {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": a.firewall, **a0.firewall_env(mm["st"])}
         record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + i, sdir, draw_file=sdir / "draw.json",
-                                  zk=not plain(a), env={**env, **threads}, prove_timeout=a.session_timeout)
+                                  zk=not plain(a), env={**env, **threads(mm)}, prove_timeout=a.session_timeout)
         session_s = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": st["draw"]["population"]}, st["law"])
@@ -895,18 +895,23 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     # when its template's measured peak memory fits under ``--memory-budget-gb``; one of each is the members' order
     statements = [staged(mm, local) for mm, local in drawn]
     limits = {POOL.SESSION: getattr(a, "session_jobs", 1), POOL.LEAN: getattr(a, "lean_jobs", 1)}
-    # side-by-side provers share the cores: each takes its share of threads unless the caller's environment says how many
-    threads = ({} if limits[POOL.SESSION] == 1 or "RAYON_NUM_THREADS" in os.environ else
-               {"RAYON_NUM_THREADS": str(max(1, len(os.sched_getaffinity(0)) // limits[POOL.SESSION]))})
-    needs = POOL.Needs.read(getattr(a, "pool_memory", None))
+    budget, needs = getattr(a, "memory_budget_gb", None), POOL.Needs.read(getattr(a, "pool_memory", None))
+
+    def need(kind: str, mm: dict) -> float | None:
+        return needs.need(kind, mm["m"].template, mm["st"]["meta"].get("k_log"))
+
+    def threads(mm: dict) -> dict:
+        """Side-by-side provers share the cores (`POOL.threads`), unless the caller's environment says how many each takes."""
+        if limits[POOL.SESSION] == 1 or "RAYON_NUM_THREADS" in os.environ:
+            return {}
+        return {"RAYON_NUM_THREADS": str(POOL.threads(need(POOL.SESSION, mm), budget, limits[POOL.SESSION], len(os.sched_getaffinity(0))))}
 
     def job(kind: str, mm: dict, run: Callable[[], dict]) -> POOL.Job:
-        k_log = mm["st"]["meta"].get("k_log")
-        return POOL.Job(kind, f"{kind}-m{mm['k']}", needs.need(kind, mm["m"].template, k_log), run)
+        return POOL.Job(kind, f"{kind}-m{mm['k']}", need(kind, mm), run)
 
     done, summary["pool"] = POOL.run(
         [job(POOL.SESSION, st["mm"], lambda i=i, st=st: member_session(i, st)) for i, st in enumerate(statements)],
-        lambda session, s: job(POOL.LEAN, s["mm"], lambda: member_checks(s)), limits, getattr(a, "memory_budget_gb", None))
+        lambda session, s: job(POOL.LEAN, s["mm"], lambda: member_checks(s)), limits, budget)
     for got in done:
         mm = got["mm"]
         summary["staging"]["drawn_s"] = round(summary["staging"].get("drawn_s", 0) + got["staged_s"], 1)
