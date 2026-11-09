@@ -8,8 +8,8 @@ The models are small open ones (GPT-2 small, Qwen2.5-0.5B, Qwen2.5-1.5B), run on
   first on each model.
 - `clamp.py`: the range clamps' boxes. `--part hosts` lists the tokens that host the attention sink at position 0, and
   `--part calibrate` fits one box per coordinate and position class, read from positions and token ids alone (where
-  the sink forms: every position before a sequence's first host, `--window` positions from it on and the run of its
-  token; the tokenizer's special tokens after them; the rest), one power of two over the honest maximum; a linear
+  the sink forms: every position before a sequence's first host, the run of its token and `--window` − 1 positions
+  after it; the tokenizer's special tokens after them; the rest), one power of two over the honest maximum; a linear
   input's box goes through its FP8 per-128-group UE8M0 scale. Its traffic is `traffic.py`'s hand-written texts and,
   with `--mixed N`, the pinned
   datasets' chat, web and multi-script texts; `--first-tokens -1` adds every vocabulary token at position 0.

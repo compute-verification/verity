@@ -5,13 +5,13 @@ Every value a proof block reads from another is clamped by its reader to a box f
 linear's input (`lm.GROUP_SITES`) per group of 128 coordinates, through its FP8 per-token-group scale, and every other
 read (the residual stream, a linear's output into the residual add, the attention cache's keys and values) per
 element. Each box is per position class (`lm.position_class`, read from positions and token ids alone): every position
-before a sequence's first sink host (--hosts, from the hosts part), the --window positions from it on and the run of its
-token from it, where attention sinks put their massive activations (position 0, unless the sequence opens with tokens
-that host none, such as Qwen's digits); the tokenizer's special tokens after them (document separators and chat
-delimiters, sinks too); and every other position. Without --hosts the window starts at position 0. A box is the honest
-calibration traffic's largest magnitude with --headroom powers of two (default one; one value, or one a class): an
-element's is the next power of two above its maximum, doubled; a group's is 448 times its largest UE8M0 scale, doubled
-(one more exponent step).
+before a sequence's first sink host (--hosts, from the hosts part), the run of its token from it and --window - 1
+positions after the run, where attention sinks put their massive activations (position 0, unless the sequence opens
+with tokens that host none, such as Qwen's digits); the tokenizer's special tokens after them (document separators and
+chat delimiters, sinks too); and every other position. Without --hosts the sink class is the first --window positions.
+A box is the honest calibration traffic's largest magnitude with --headroom powers of two (default one; one value, or
+one a class): an element's is the next power of two above its maximum, doubled; a group's is 448 times its largest UE8M0
+scale, doubled (one more exponent step).
 
 Traffic is the hand-written sets (`traffic.CALIBRATION`, `traffic.HELDOUT`) and, with --mixed N, N texts of the pinned
 datasets' (`traffic.mixed`; Pile documents need `--with pyarrow`); --shard i/n splits a part's texts across runs.
@@ -325,8 +325,10 @@ def context_of(tok, ids: list[int], pos: int, before: int = 6) -> str:
 
 def part_explain(lm: LM, tok, a) -> dict:
     """Where honest traffic leaves the boxes. Unclamped, over --texts, every value outside its box (a group site: a group
-    whose scale exceeds its bound), with its position's token and the tokens before it; and each text's sink-like
-    positions, whose largest residual-stream element at --sink-layer is over --sink-ratio times the text's median."""
+    whose scale exceeds its bound), with its position's class and token and the tokens before it; each text's largest
+    value against its box in each class (a box 2^h times wider cuts nothing in a text whose peak is under 2^h); and each
+    text's sink-like positions, whose largest residual-stream element at --sink-layer is over --sink-ratio times the
+    text's median."""
     boxes = Boxes.load(a.boxes)
     L = lm.spec.layers
     sink_layer = a.sink_layer if a.sink_layer >= 0 else L + a.sink_layer
@@ -339,6 +341,7 @@ def part_explain(lm: LM, tok, a) -> dict:
         lm.forward(torch.tensor([ids]), Cache(), taps=taps)
         cls = boxes.classes(0, len(ids), torch.tensor([ids]))[0][0]
         events = []
+        peak_ratio = torch.zeros(len(ids))
         for k in lm.sites():
             x = taps[k][0].float()
             hb = boxes.hi[k][cls].float()
@@ -351,6 +354,7 @@ def part_explain(lm: LM, tok, a) -> dict:
                 ratio = x.abs() / hb
                 over = ratio > 1
                 coord = torch.arange(x.shape[1]).expand_as(x)
+            peak_ratio = torch.maximum(peak_ratio, ratio.amax(-1))
             for t, c in over.nonzero().tolist():
                 events.append((float(ratio[t, c]), k[0], k[1], t, int(coord[t, c]), float(x[t, int(coord[t, c])].abs())))
         events.sort(reverse=True)
@@ -368,13 +372,15 @@ def part_explain(lm: LM, tok, a) -> dict:
         sinks = [{"pos": t, "context": context_of(tok, ids, t), "peak": float(peak[t]), "coord": int(at[t]),
                   "over_median": float(peak[t]) / max(med, 1e-30), "class": int(cls[t])}
                  for t in range(len(ids)) if float(peak[t]) > a.sink_ratio * med]
-        top = [{"ratio": e[0], "site": e[1], "layer": e[2], "pos": e[3], "coord": e[4], "value": e[5],
-                "context": context_of(tok, ids, e[3])} for e in events[:a.top]]
+        top = [{"ratio": e[0], "site": e[1], "layer": e[2], "pos": e[3], "class": int(cls[e[3]]), "coord": e[4],
+                "value": e[5], "context": context_of(tok, ids, e[3])} for e in events[:a.top]]
         roots = sorted(({"pos": t, "site": e[1], "layer": e[2], "ratio": e[0], "context": context_of(tok, ids, t)}
                         for t, e in first.items()), key=lambda r: (r["layer"], -r["ratio"]))
         per_text.append({"text": i, "name": name, "tokens": len(ids), "values_over": len(events),
                          "positions_over": len(first), "top": top, "first_over_by_position": roots[:a.top],
-                         "sinks": sinks, "sink_class_end": int((cls == 0).long().cumprod(0).sum())})
+                         "sinks": sinks, "sink_class_end": int((cls == 0).long().cumprod(0).sum()),
+                         "peak_ratio_by_class": [float(peak_ratio[cls == c].max()) if (cls == c).any() else None
+                                                 for c in range(CLASSES)]})
         print(f"explain {i} {name}: {len(ids)} tokens, {len(events)} values over in {len(first)} positions; worst "
               + (f"{events[0][0]:.2f}x at {events[0][1]}:{events[0][2]} {context_of(tok, ids, events[0][3])!r}"
                  if events else "none")
@@ -394,7 +400,7 @@ def main() -> int:
     ap.add_argument("--shard", default="0/1", help="i/n: this run's share of the texts (merge joins calibrate's)")
     ap.add_argument("--stats", type=Path, nargs="*", default=[], help="merge: the shards' stats.pt")
     ap.add_argument("--window", type=int, default=1,
-                    help="calibrate: the positions from the first sink host on that form the sink class")
+                    help="calibrate: the sink class's positions from the first sink host on, past any run of it")
     ap.add_argument("--hosts", type=Path, help="calibrate: the hosts part's hosts.pt, where each sequence's classes start")
     ap.add_argument("--special", action=argparse.BooleanOptionalAction, default=True,
                     help="calibrate: give the tokenizer's special tokens their own class")
