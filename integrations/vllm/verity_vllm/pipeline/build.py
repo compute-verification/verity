@@ -29,6 +29,7 @@ from verity_vllm.pipeline import launch_context as LC
 from verity.ml.definitions.boolean import write_word
 from verity_vllm.program.frontend.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
+from verity_vllm.program.frontend.seed_rule import rid_entry
 from verity_vllm.program.prune import BATCHED, registered_form
 from verity_vllm.pipeline.build_instances import (INSTANCES_GZ_LEVEL, _instance_rows, _instance_sequence,  # noqa: F401 (read through here)
                                                  _write_instances, _write_instances_file, write_instances)
@@ -213,13 +214,13 @@ def sampling_policy(arg: str | None, workload: str | None) -> dict:
     else the legacy `sampling.variant` -> `variants[...]`, else per-request `variant` / `seed` fields), and/or `--sampling <policy>` with
     `greedy` | `stoch-t<T>-p<P>[-k<K>]` | a JSON object.  Both given -> they must agree (refused otherwise).  Neither given -> greedy,
     recorded as `source: "default"` (a caller without a manifest declares greedy by omission; the row procedure passes the manifest).
-    Returns {"kind": "greedy"} or {"kind": "stochastic", "temperature", "top_p", "top_k", "seeded", "label"} (+ "source", "mixed")."""
+    Returns {"kind": "greedy"} or {"kind": "stochastic", "temperature", "top_p", "top_k", "seeded", "label"} (+ "source", "mixed", "rid": the id length the seed rule reads, `seed_rule.rid_entry`)."""
     def _norm(params: dict, label: str | None = None) -> dict:
         t = float(params.get("temperature", 1.0))
         if t == 0.0:
             return {"kind": "greedy"}
         return {"kind": "stochastic", "temperature": t, "top_p": float(params.get("top_p", 1.0)), "top_k": int(params.get("top_k", 0) or 0),
-                "seeded": bool(params.get("seeded", True)), "label": label or f"stoch-t{t:g}-p{float(params.get('top_p', 1.0)):g}"}
+                "seeded": bool(params.get("seeded", True)), "label": label or f"stoch-t{t:g}-p{float(params.get('top_p', 1.0)):g}", **({"rid": int(params["rid"])} if params.get("rid") is not None else {})}
 
     def _parse_arg(s: str) -> dict:
         s = s.strip()
@@ -263,11 +264,10 @@ def sampling_policy(arg: str | None, workload: str | None) -> dict:
         a, b = ({k: v for k, v in p.items() if k not in ("label", "source")} for p in (pol_w, pol_a))
         if a != b:
             raise ValueError(f"--sampling {arg!r} disagrees with the manifest's sampling policy {pol_w} ({workload})")
-    pol = pol_w if pol_w is not None else (pol_a if pol_a is not None else {"kind": "greedy"})
-    pol = dict(pol)
+    pol = dict(pol_w if pol_w is not None else (pol_a if pol_a is not None else {"kind": "greedy"}))
     pol["source"] = "workload" if pol_w is not None else ("arg" if pol_a is not None else "default")
     if workload:
-        pol["workload"] = workload
+        pol.update(workload=workload, **rid_entry(pol, json.load(open(workload)).get("requests", [])))
     return pol
 
 
@@ -426,11 +426,12 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         from verity_vllm.program.frontend.triton_capture import TritonLaunchLog
         import torch
         from verity_vllm.program.frontend.derive import derive_report
-        from verity_vllm.program.frontend.rules.vllm_bindings import (VLLM_BINDING_RULES, vllm_ruleset, observe_attention_impls, observe_export_facts,
+        from verity_vllm.program.frontend.rules.vllm_bindings import (VLLM_BINDING_RULES, vllm_ruleset, observe_attention_impls, observe_export_facts, observe_batched_form,
                                                             observe_target_profile, declared_derived_accounting, clear_observations, observe_allreduce_settings, observe_launch_context)
         clear_observations()
         observe_target_profile(target)
         observe_launch_context(launch)
+        observe_batched_form(batched)
         res["target"]["host"] = host_facts()
         t0 = time.time()
         with apply_target_profile(target):  # ONE application of the declared target for config, instantiation, export and derive
@@ -682,8 +683,7 @@ def _write_manifest(out: str, res: dict) -> None:
          "model": {"class": res.get("model_class"), "hf_config": res.get("hf_config"), "pin": res.get("model_pin"),
                    # `hf_config.tie_word_embeddings` above is what vLLM SET for loading (False when the checkpoint ships an
                    # lm_head); the loader's re-tie decision, reproduced from the checkpoint's bytes, is the served model's fact
-                   "lm_head_tying": res.get("lm_head_tying")},
-         "code_rev": res.get("code_rev"), "profile": res.get("profile"),
+                   "lm_head_tying": res.get("lm_head_tying")}, "code_rev": res.get("code_rev"), "profile": res.get("profile"),
          # v3: `target.declared` = the TargetProfile (the only source of every applied value); `target.applied` / `applied_after_export` =
          # read back from vLLM inside the applied shim; `target.host` = the construction host (informational, in no identity);
          # `target.consulted` = config facts + env split into consulted / ignored (dead in this pin) / non-vLLM

@@ -77,7 +77,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   sample: the registration naming another compiler or another advice root, the opening under another salt, the verifier opening
   other advice (``--other-advice-opening``: `source` and R2), and a unit committed under other advice (``--other-windows``: R4
   and its roots). With ``--transfer-gate`` (the templates the compiler lists as holding transfer gates), the window's
-  ``work:K`` law proves every unit of theirs (`serving_rows.work_table_of`: work 0, floor all its units) beside the sampled
+  work law (``work-rate:NUM/DEN``) proves every unit of theirs (`serving_rows.work_table_of`: work 0, floor all its units) beside the sampled
   rest, the stream registering with that work table; its negatives (`transfer_gate_negatives`, and in `advice_negatives` the
   registration under the compiler listing none, `source`): the proved set less a transfer-gate unit (`check_proved`), a sample
   trading one for a unit of the rest (`check_draw`), and the registration's law sampling them as the rest is (R1).
@@ -93,8 +93,9 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   (units derived).
 * **Plain sessions** (``--plain``; `--zk` is the default): Flock's unmasked protocol, which Lean's soundness covers at one
   table under a stratified sample, hidden outputs included (`SoundExecH`), until proofs' multi-table coverage (`PLAIN_SCOPE`).
-  So a plain audit takes only a stream's sample (``--challenger``) by a ``stratified:K`` law, over a
-  window of one member with no registered reads or shared rows, and refuses any other before the sample (`plain_refusal`).
+  So a plain audit takes only a stream's sample (``--challenger``) by a stratified law, over a window of one member with no
+  registered reads or shared rows, and refuses any other before the sample (`plain_refusal`): a stream's rule is a rate, and
+  the stratified rate (`stratified-rate:NUM/DEN`) is the one whose law is stratified (`service.selection_law`).
   The member's one session is served the stream's sample itself and runs on the keyed coin tree (``FC_COINS=tree``), and
   Lean `verify --coins tree --stratified K` holds it to the stratified sampling design it derives from its own `--program` and
   `--partition`. Flock's ZK server checks only a `--zk` statement's sends, so a plain prover isn't behind it (the
@@ -107,8 +108,9 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
 * **The sample from the auditor's challenger** (`--challenger local|gate:USER@HOST`, a TP Commit; `a5_coins`), on the proof
   system's path of record: the step's one challenger session, opened on the TP run root once every rank has passed its
   checks before the sample and planned the coins its sample reads (`a5_coins.need`), and only under a reserve that covers
-  them all (`a5_coins.reserve_reason`), and each rank's own `service.Stream` over its window's templates in their order (one stratified Spec over their mixed population, its sampling design the
-  partition file's rule, `stratified:K` among them), on the session's coins (`coins.ChallengerCoins` over
+  them all (`a5_coins.reserve_reason`), and each rank's own `service.Stream` over its window's templates in their order (one
+  stratified Spec over their mixed population, its sampling design the partition file's rule, a rate such as
+  `stratified-rate:NUM/DEN`), on the session's coins (`coins.ChallengerCoins` over
   `remote.RemoteChallenger`). The stream registers the rank's window at its counts under the TP run root (`register`), the
   coins commit to the registration's digest, and the stream samples once (`select`: Lean's `Select.select` on the bytes it
   read, then `check_draw`). Once the session has ended, the stream takes the proof (`deliver`) and its outcome (`outcome`)
@@ -297,6 +299,13 @@ def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want
     stream = S.Stream(spec, units[0] if one else units, budget=1, delta=a.delta, challenger=CHALLENGER, coins=coins,
                       values=taken, log=tie(a).get("log", ()))
     return stream, None if one else {t: n for t, (_, n) in defs.items()}
+
+
+def rated(w: CS.Binding, rule: str) -> CS.Binding:
+    """``w`` under the rate ``rule`` its stream samples by (`service.Law`): its law and work table the rule's over its
+    population (`service.params_law`), as `serving_rows.population` resolves a partition file's rate."""
+    law, table = S.params_law(rule, w.program, w.query, w.work_table)
+    return replace(w, law=law, work_table=table)
 
 
 def output_units(a: argparse.Namespace) -> list[int]:
@@ -727,7 +736,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
               "shared_rows": header.get("shared_rows") == ({**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}
                                                            if m.tables else None)}
         for p_name in fv["roots"]:
-            name = m.port(p_name)
+            name = mine.held(m, p_name)
             reg = roots.get(name)
             ok[f"root:{p_name}"] = (name in want and reg is not None and reg["root"] == fv["roots"][p_name]
                                     and reg["domain"] == fv["domain_ids"][p_name] == want[name]["domain"])
@@ -899,7 +908,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         lean_v = got[f"lean-verify/m{k}"]
         return {"mm": mm, "sdir": sdir, "staged_s": s["staged_s"], "verdicts": got, "lean_verify": lean_v,
                 "served": [m.base + u for u in draw_t.get("units", []) if m.base + u in drawn_units],  # a closure's are `proved`
-                "roots": {m.port(p_name): r for p_name, r in ((live or {}).get("roots") or {}).items()},
+                "roots": {mine.held(m, p_name): r for p_name, r in ((live or {}).get("roots") or {}).items()},
                 "proved": a0.proved_units(mm["header"], live or {}), "instances": (live or {}).get("instances", 0),
                 "statement": {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
                               "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
@@ -1390,7 +1399,7 @@ def main() -> int:
     ap.add_argument("--compiler", choices=["traced"], default="traced", help="with --advice-opening: the registered compiler (traced: the "
                     "stand-in, each rank's Programs of record under --build-root, advice_windows.Traced)")
     ap.add_argument("--transfer-gate", action="append", default=[], help="with --advice-opening: a template the registered compiler "
-                    "lists as holding transfer gates, every unit of which is proved (repeatable; the partition's law is work:K)")
+                    "lists as holding transfer gates, every unit of which is proved (repeatable; the partition's law is work-rate:NUM/DEN)")
     ap.add_argument("--other-advice-opening", help="with --advice-opening: the opening of advice that disagrees with the registered, "
                     "given to the verifier (a negative)")
     ap.add_argument("--other-windows", help="with --advice-opening: the windows committed under the other advice, rank<r>/ each (a "
@@ -1423,7 +1432,7 @@ def main() -> int:
     ap.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history, a commit a line "
                     "(`git rev-list --first-parent origin/main`), never the host's or the prover's")
     ap.add_argument("--plain", action="store_true", help="with --challenger: plain sessions, not --zk, "
-                    "under the partition's stratified:K law, a window of one member with no registered reads or shared rows "
+                    "under the partition's stratified law, a window of one member with no registered reads or shared rows "
                     "(PLAIN_SCOPE)")
     a = ap.parse_args()
     if bool(a.bundle) == bool(a.tp_commit):
@@ -1448,8 +1457,12 @@ def main() -> int:
                      "session's pin")
         a.rule = json.loads(Path(a.partition).read_text()).get("law")
         if not isinstance(a.rule, str):
-            ap.error(f"--challenger draws by the partition file's rule, a law's text (stratified:K, subset:K, ...), not {a.rule!r}")
-        S.Law(a.rule)
+            ap.error(f"--challenger draws by the partition file's rule, a rate's text (rate:NUM/DEN, stratified-rate:NUM/DEN, "
+                     f"work-rate:NUM/DEN), not {a.rule!r}")
+        try:
+            S.Law(a.rule)
+        except ValueError as e:
+            ap.error(f"--challenger draws by the partition file's rule: {e}")
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     sets = template_sets(Path(a.template_sets))

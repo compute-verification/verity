@@ -33,8 +33,9 @@ import torch.fx.traceback as fxt
 import torch.nn as nn
 
 from verity.ml.circuits import codec
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.refs import Affine, runs
+from verity.ml.circuits.defs import bind, composite
+from verity.ml.circuits.refs import Affine, Coll, concat, runs
+from verity.ml.circuits.types import Array, Value
 from verity.ml.circuits.evaluation import evaluate
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import derive_report
@@ -71,6 +72,19 @@ STANDIN = Vocabulary("dsa-standin", "profile", "dsa-standin",
                      kinds={**PROFILE_B1_EAGER_V3.kinds, "dsa_rmsnorm": lambda N, EPS: bind(b1.RMSNormTriton, N=N, EPS=EPS),
                             "batched_gemm": lambda B, K, N, DOT: bind(cublas_bf16.BatchedGemmWord, B=B, K=K, N=N, DOT=DOT)},
                      notes=dict(PROFILE_B1_EAGER_V3.notes))
+
+
+@composite("StandinLatentRow", 1, ["KVL", "R", "EPS"], dsa_norm._sig_latent)
+def _StandinLatentRow(B, S, kv, w, cs):
+    """`DsaLatentRow_v1` over the stand-in norm, which the reference computes the row with."""
+    kvc = B.call(bind(b1.RMSNormTriton, N=S.KVL, EPS=S.EPS), kv[0:S.KVL], w)
+    kpe = B.call(bind(RoPEHeadGptJV2, D=S.R), kv[S.KVL:S.KVL + S.R], cs)
+    return Coll(Array(S.KVL + S.R, Value(16)), concat([kvc.refs, kpe.refs]))
+
+
+BATCHED = Vocabulary("dsa-standin-batched", "profile", "dsa-standin-batched",
+                     kinds={**STANDIN.kinds, "dsa_latent_row": lambda KVL, R, EPS: bind(_StandinLatentRow, KVL=KVL, R=R, EPS=EPS)},
+                     notes=dict(STANDIN.notes))
 
 
 def _unpatched(*a, **k):
@@ -580,6 +594,46 @@ def test_a_row_past_topk_selects_its_top_k_from_its_logits_and_reads_its_rows_in
     top = sorted(dsa_topk.topk_set(logits, 2))
     assert top != [0, 1], "the selection is not the first rows, which a wrong mask would also read"
     assert _run(rep, model, xs) == _reference(model, xs, orders={2: top})
+
+
+@pytest.mark.parametrize("block", [256, 2])
+def test_the_batched_forms_rows_past_topk_select_each_among_its_own_keys_in_blocks(served, monkeypatch, block):
+    """Class G's batched form (`observe_batched_form`, the Build's `--batched`) at TOPK 2: a prefill of two, then a call of three
+    rows of 3, 4 and 5 keys.  Each token's latent row is one `dsa_latent_row`, and the call's rows go in blocks
+    (`vllm_dsa.long_row_blocks`): one of 5 keys at the served block, or blocks of 4 and 5 keys at a block of 2.  A block's rows read
+    its keys' logits, then their own key counts, `DsaTopKMaskCounted_v1` at the block's class and the settings, each op over the
+    block's rows in turn, and both layers' sparse MLA reads the rows routed from the block's history.  The outputs are the
+    reference's over each row's own top-2 in ascending index order, so no row selects a key past its own."""
+    monkeypatch.setattr(vllm_dsa, "BLOCK_KEYS", block)
+    monkeypatch.setitem(PROFILES, BATCHED.name, BATCHED)
+    VB.observe_batched_form(True)
+    model = _model(topk=2, steps=((0, 2), (2, 3)))
+    xs = _inputs(model)
+    rep = _derive(model, xs, profile=BATCHED.name)
+    assert rep.program is not None, rep.unsupported
+    blocks = {256: [(5, [0, 1, 2])], 2: [(4, [0, 1]), (5, [2])]}[block]
+    assert vllm_dsa.long_row_blocks([3, 4, 5], 2) == blocks
+    assert _ids(rep).count(bind(_StandinLatentRow, KVL=L, R=R, EPS=EPS).id) == 2 * 5
+
+    def rows(Nb: int, N: int) -> str:
+        if N > Nb:
+            return bind(dsa_topk_mask.DsaButterflyRowsPad, T=Nb, N=N, K=2, W=L + R, E=16).id
+        return bind(dsa_topk_mask.DsaButterflyRows, N=N, K=2, W=L + R, E=16).id
+
+    attn2 = bind(sparse_mla.SparseMla, T=2, NH=NH, DR=R, DV=L, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE).id
+    select, routed = [], []
+    for Nb, rs in blocks:
+        N = vllm_dsa.long_row_keys(Nb, 2)
+        select += [bind(dsa.DsaMqaLogitsV3, N=Nb, H=H, D=D).id] * len(rs) + [bind(dsa_topk_mask.DsaTopKMaskCounted, N=N, TOPK=2).id] * len(rs)
+        select += [bind(dsa_topk_mask.DsaButterflySettings, N=N, K=2).id] * len(rs)
+        routed += [rows(Nb, N)] * len(rs)
+    kept = set(select) | set(routed) | {attn2}
+    assert [i for i in _ids(rep) if i in kept] == [attn2, attn2] + select + routed + [attn2] * 3 + routed + [attn2] * 3
+    nodes = rep.program.fn.body.nodes
+    counted = [n for n in nodes if n.fn.id.startswith("DsaTopKMaskCounted_v1{")]
+    assert [nodes[runs(n.args[1].refs)[0][1]].fn.id for n in counted] == [f"Const32[0x{n:08x}]_v1" for n in (3, 4, 5)]
+    orders = {p: sorted(dsa_topk.topk_set(lg, 2)) for p, lg in _index_logits(model, xs).items() if p >= 2}
+    assert _run(rep, model, xs) == _reference(model, xs, orders=orders)
 
 
 class _LargeMlaAbsorb(nn.Module):
