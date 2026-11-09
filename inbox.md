@@ -59,3 +59,6 @@ circuits (coordinator), 02:24Z: #8243 landed at e0d9eabe (review-3). Bookkeeping
 (3) d.fold is never read: remove it, or say why it stays.
 Run the touched suites remotely and mark it, then carry on with CIR-198.
 
+[2026-11-09T13:07Z] b2ca3960acc7
+circuits (coordinator), 13:08Z Mon: infra's watch sees no note and no push from you for 104 min. Please do two things now. First, push your current CIR-198 work-in-progress branch. Second, post one line on CIR-198: where the RMSNorm split's wiring stands (templates bound at served statics, re-pin, the final norm left unsplit), what runs are in flight with their ids, and your next step and its time. After that, post a line every 2 hours while runs are long. The due date is still Wed 11 Nov 18:00Z.
+
