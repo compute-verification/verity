@@ -1,5 +1,7 @@
 """stage.py UNIT N OUT [--public-weights [--packed]]: N inputs of one served proof-block type's Q_word proof block, from synthetic
-values at the model's served statics, staged for Flock as a ``verity/flock-circuit`` statement with hidden outputs.
+values at the model's served statics, staged for Flock as a ``verity/flock-circuit`` statement with hidden outputs. For a
+`CENSUS` type N may be ``full``, the most blocks a statement of `MAX_STATEMENT_BITS` holds at the built block's k_log, or
+``full/D``, that over D.
 
     UNIT  TYPE[:S=V,...]   a type of `UNITS`, `PARTS` or `CENSUS` at its statics (each type's defaults are its model's: GLM-5.3's
                            at TP8, s8-coord's Llama-3.2-1B's), e.g. fp8-coord:K=2048, router:C=1, s8-coord:K=8192, gq:K=384
@@ -316,9 +318,9 @@ def nets(low) -> list[dict]:
     return [{"net": nm, **{k: int(lay.counts[k]) for k in ("ands", "rows", "nnz_a", "nnz_b")}} for nm, lay in lays]
 
 
-def stage_census(name: str, cen: Census, S: dict, tag: str, n: int, out: Path, t0: float) -> dict:
+def stage_census(name: str, cen: Census, S: dict, tag: str, n: int | str, out: Path, t0: float) -> dict:
     """``n`` inputs of the census type's Definition, a proof block each, on its served rows and statement, as stage.json's
-    record."""
+    record; ``n`` ``full`` or ``full/D`` is the most blocks a statement holds at the built block's k_log, over D."""
     from verity_vllm.pipeline import chunk_rows as CR
     from verity_vllm.pipeline.serving_rows import template
 
@@ -330,7 +332,7 @@ def stage_census(name: str, cen: Census, S: dict, tag: str, n: int, out: Path, t
     d = tp.fn
     params, _ret = d.signature()
     rng = np.random.default_rng(int.from_bytes(hashlib.sha256(f"verity/served-units/v1\0{tag}".encode()).digest()[:8], "little"))
-    vals = {p: census_leaves(rng, ty, n) for p, ty in params}
+    vals: dict[str, np.ndarray] = {}
     types = dict(params)
 
     def part(p: str) -> np.ndarray:
@@ -344,13 +346,16 @@ def stage_census(name: str, cen: Census, S: dict, tag: str, n: int, out: Path, t
         return vals[m[1]][:, int(m[2]) * w:(int(m[2]) + 1) * w]
 
     in_rows, out_rows = CR.unit_rows(tp)
+    stmt = CR.statement(tp)
+    st = CS.UnitStager(d, "unit/serving-rows", in_rows, out_rows, circuit=out / "circuit.txt", **stmt)
+    t_built = time.time() - t0
+    if isinstance(n, str):
+        n = max(1, (MAX_STATEMENT_BITS >> st.meta["k_log"]) // int(n.partition("/")[2] or 1))
+    vals.update({p: census_leaves(rng, ty, n) for p, ty in params})
     rows = {r: np.concatenate([part(p) for p in ps], axis=1) for r, _s, _b, ps in in_rows}
     if any(rows[r].shape != (n, b // 16) for r, _s, b, _ps in in_rows):
         raise SystemExit(f"stage.py: {tp.id}'s drawn rows {[rows[r].shape for r, *_x in in_rows]} are not its rows' words")
-    stmt = CR.statement(tp)
-    t_draw = time.time() - t0
-    st = CS.UnitStager(d, "unit/serving-rows", in_rows, out_rows, circuit=out / "circuit.txt", **stmt)
-    t_built = time.time() - t0
+    t_draw = time.time() - t0 - t_built
     salt_key = hashlib.sha256(f"verity/served-units/salts\0{tag}".encode()).digest()
     got = st.stage(rows, out, salt_key)
     if stmt.get("reads") == "slots":
@@ -364,8 +369,8 @@ def stage_census(name: str, cen: Census, S: dict, tag: str, n: int, out: Path, t
             "vus_per_block": meta.get("vus_per_block"), "row_schemas": meta.get("row_schemas"),
             "circuit_bytes": (out / "circuit.txt").stat().st_size, "circuit_sha512": st.pin, "class_sha512": st.class_sha512,
             "inst_bytes": (out / "inst.bin").stat().st_size, "pub_bytes": (out / "pub.bin").stat().st_size, "macs": 0,
-            "twin": None, "seconds": {"draw": round(t_draw, 1), "built": round(t_built - t_draw, 1),
-                                      "round": round(time.time() - t0 - t_built, 1), "total": round(time.time() - t0, 1)},
+            "twin": None, "seconds": {"draw": round(t_draw, 1), "built": round(t_built, 1),
+                                      "round": round(time.time() - t0 - t_built - t_draw, 1), "total": round(time.time() - t0, 1)},
             "maxrss_gb": gb()}
 
 
@@ -403,9 +408,12 @@ def main() -> None:
         raise SystemExit(f"stage.py: usage: stage.py UNIT N OUT [--public-weights [--packed]], not {sys.argv[1:]}")
     if packed and not public:
         raise SystemExit("stage.py: --packed lays out --public-weights' ports")
-    spec, n, out = args[0], int(args[1]), Path(args[2])
+    spec, out = args[0], Path(args[2])
+    n: int | str = args[1] if re.fullmatch(r"full(/[1-9]\d*)?", args[1]) else int(args[1])
     t0 = time.time()
     name, u, S = parse(spec)
+    if isinstance(n, str) and not isinstance(u, Census):
+        raise SystemExit(f"stage.py: N {n} is for a CENSUS type, whose block's k_log sets it; {spec} takes a count")
     tag = f"{name}-" + "-".join(f"{k.lower()}{v}" for k, v in sorted(S.items()))
     if name == "census":
         tag += hashlib.sha256(u.name(S).encode()).hexdigest()[:16]

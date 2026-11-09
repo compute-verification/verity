@@ -4,7 +4,8 @@
 #   1. build   flock-circuit (verity/ml/flock/pod/60-circuit.sh MODE=build; with PT_DEVICE=gpu its CUDA prover), outside any lease
 #   2. stage   each UNIT of PT_UNITS (stage.py's TYPE[:S=V,...] or census:NAME, `+public-weights` for its --public-weights,
 #              `+packed-weights` for --public-weights --packed) at each N of
-#              PT_NS, PT_JOBS at a time, outside any lease, into $FLOCK_WORK/data/ (kept, keyed by the staging tree)
+#              PT_NS, or of its own list (UNIT@N,N...; a census type's N may be stage.py's full or full/D), PT_JOBS at a
+#              time, outside any lease, into $FLOCK_WORK/data/ (kept, keyed by the staging tree)
 #   3. prove   per statement, a loopback --zk session set: a verifier process on VCPUS cores, WARM + RUNS prover sessions on the
 #              rest, as benchmarks/flock_s8_block/run.sh runs its sessions (the ZK server's send check off, FC_COINS=os);
 #              with PT_DEVICE=gpu every session under one `gpu-lease 1` of at most LEASE_MIN minutes, the prover with --gpu
@@ -28,6 +29,7 @@ if [ $DEV = gpu ]; then
   . verity/ml/flock/pod/cuda-13.3.sh
   C13=${CUDA_TK:-/usr/local/cuda-13.3}; export PATH=$C13/bin:$PATH LD_LIBRARY_PATH=$C13/lib64:${LD_LIBRARY_PATH:-}
 fi
+set -f  # a census name's brackets are not a glob
 export PATH=$HOME/.cargo/bin:$PATH FC_COINS=os FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
 CPUS=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))'); NC=$(echo $CPUS | tr , '\n' | wc -l)
 VC=${VCPUS:-4}; PCPU=$(echo $CPUS | cut -d, -f1-$((NC - VC))); VCPU=$(echo $CPUS | cut -d, -f$((NC - VC + 1))-)
@@ -36,6 +38,11 @@ has() { case " $STEPS " in *" $1 "*) return 0 ;; esac; return 1; }
 { echo "device=$DEV cpus=$CPUS prover=$PCPU verifier=$VCPU"; lscpu | grep -E 'Model name|^CPU\(s\)'; free -g | head -2
   [ $DEV = gpu ] && nvidia-smi --query-gpu=name,driver_version,memory.total,clocks.max.sm --format=csv; } > $O/host.txt 2>&1
 echo "device=$DEV units=$UNITS ns=$NS warm=$WARM runs=$RUNS" > $O/config.txt
+# PAIRS: one UNIT@N a statement, each unit at its own Ns or PT_NS
+PAIRS=$(for t in $UNITS; do
+  u=${t%@*}; ns=$NS; [ "$u" = "$t" ] || ns=$(echo "${t##*@}" | tr , ' ')
+  for n in $ns; do echo "$u@$n"; done
+done)
 
 if has build; then
   echo "== build $(date -u +%T)"
@@ -56,7 +63,7 @@ KEY=$(cd $REPO && find benchmarks/served_units/stage.py verity/ml integrations/v
 name() {
   local s=$(echo "$1" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9.\n-' '-' | tr -s '-'); s=${s%-}
   [ ${#s} -gt 96 ] && s="${s:0:80}-$(echo -n "$1" | sha256sum | cut -c1-12)"
-  echo "$s-n$2"
+  echo "$s-n${2//\//-}"
 }
 # stage UNIT N: stage.py's statement into $FW/data/NAME-KEY, its record under $O/stage/NAME
 stage() {
@@ -78,10 +85,10 @@ stage() {
 if has stage; then
   echo "== stage $(date -u +%T) key $KEY"
   fail=0
-  for u in $UNITS; do for n in $NS; do
+  for p in $PAIRS; do
     while [ "$(jobs -rp | wc -l)" -ge $JOBS ]; do wait -n || fail=1; done
-    stage $u $n &
-  done; done
+    stage "${p%@*}" "${p##*@}" &
+  done
   while [ "$(jobs -rp | wc -l)" -gt 0 ]; do wait -n || fail=1; done
   [ $fail = 0 ] || { echo "a statement failed to stage"; exit 1; }
 fi
@@ -127,12 +134,12 @@ if has prove; then
   echo "== prove ($DEV) $(date -u +%T)"
   if [ $DEV = gpu ]; then
     export -f session name gpu_sample free_port wait_serving stamp
-    export B O FW KEY DEV PCPU VCPU NC VC NSESS WARM RUNS UNITS NS
+    export B O FW KEY DEV PCPU VCPU NC VC NSESS WARM RUNS PAIRS
     GPU_LEASE_WHO=${GPU_LEASE_WHO:-served-units-time} gpu-lease 1 --wait --max-min ${LEASE_MIN:-30} -- bash -c '
-      nvidia-smi -L > $O/lease-gpu.txt
-      for u in $UNITS; do for n in $NS; do session $u $n; done; done'
+      set -f; nvidia-smi -L > $O/lease-gpu.txt
+      for p in $PAIRS; do session "${p%@*}" "${p##*@}"; done'
   else
-    for u in $UNITS; do for n in $NS; do session $u $n; done; done
+    for p in $PAIRS; do session "${p%@*}" "${p##*@}"; done
   fi
 fi
 echo "== summary $(date -u +%T)"
