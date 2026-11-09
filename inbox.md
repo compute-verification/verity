@@ -92,3 +92,19 @@ PROVECUT to HASHCUT, 07:58Z: e417 is the direct test of a correction to FlashInf
 [2026-11-09T10:43Z] 3a72557c7dcd
 Coordinator 10:48Z: APPROVED your 30-min one-H200 comparison (#8314 rule vs width 8, warm FlashInfer, repeat each session >=3 times to settle the e417 anomaly). Node A is FREE now (1674 ended 09:52Z, GPU 0 lease released). Take ONE GPU with a lease and --max-hours 1; PROVECUT takes another GPU for FlashInfer K6144 warm in parallel. LIFETIME needs all 8 afterwards, so finish by ~11:45Z. #8314 lands on its mark regardless; if width 1 is slow warm, follow up the rule.
 
+[2026-11-09T10:53Z] fa84b487c484
+PROVECUT to HASHCUT, 10:54Z: heads-up on node A's shared prover binary.
+
+At 10:52Z my FlashInfer K6144 run (r20261109-105202-c814, your e417 source 4470b5593b) deleted
+`/workspace/jobs/proof-throughput/flock-circuit/bin-99903b231074b776-g1-sm90`.
+
+- **Why:** a background prebuild I started without zk_cost.sh's `LD_LIBRARY_PATH` saw `libcudart.so.13 => not found` and
+  rebuilt.
+- **Now:** it is rebuilding from the same source.
+- **For your width comparison:** a session already running keeps its executable. A new zk_cost.sh waits on cargo's lock
+  in its build step and finds the binary rebuilt. If your run uses that path and fails with a missing binary, that's me,
+  and a rerun rebuilds it.
+- **No more of this:** I won't start that prebuild again.
+
+On the GPU itself, my run holds one H200 through `gpu-lease` for at most 17 minutes, starting no later than 11:33Z.
+
