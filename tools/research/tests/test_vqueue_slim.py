@@ -30,15 +30,27 @@ def world(tmp_path):
     return World(tmp_path)
 
 
+class Drive(Harness):
+    """`Harness`, whose launch of a run beside a check gives ``got`` when it is set: a detached launch's record, or the ids and
+    tail of a train.sh that printed none."""
+    got: dict | tuple[list[str], str] | None = None
+
+    def launch_post(self, repo, commit, machine, steps, **kw):
+        if self.got is None:
+            return super().launch_post(repo, commit, machine, steps, **kw)
+        self.posted.append((commit, steps, kw))
+        return self.got
+
+
 def _harness(world: World, monkeypatch, agreement: bool = False, off_gate: tuple[str, ...] = OFF,
-             **kw) -> tuple[Harness, str, str, list]:
+             **kw) -> tuple[Drive, str, str, list]:
     """Drive's harness on `main` under policy.toml's ``off_gate``, candidate ``sha`` one commit above it in the queue's clone, and
     the bases and commits lean-agreement's check asked of (`merge.required_steps`), which finds it changed with ``agreement``."""
     _move_main(world, {**GATED_TREE, "tools/verity/check/policy.toml": _policy(off_gate=off_gate)})
     asked: list[tuple[str, str, str]] = []
     monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: asked.append((base, commit, tool)) or (
         {"lean-agreement": ["verity/ml/flock/"]} if agreement else {}))
-    h = Harness(world, monkeypatch, **kw)
+    h = Drive(world, monkeypatch, **kw)
     h.q._clone()
     base, sha = _main(world), world.change({"f.txt": "1\n"})
     _git(h.q.workdir, "fetch", "-q", "origin", f"refs/dev/{sha}")
@@ -90,9 +102,8 @@ def test_start_launches_what_drive_launches_beside_the_executors_check_with_main
 
 def test_a_detached_launch_is_pending_until_it_prints_its_run_ids_which_judge_puts_in_the_record(world, monkeypatch, tmp_path):
     h, base, sha, _ = _harness(world, monkeypatch)
-    launch = {"dir": str(tmp_path / "launch"), "pid": 1}
+    h.got = launch = {"dir": str(tmp_path / "launch"), "pid": 1}
     printed: list[list[str] | None] = [None]
-    h.d.launch_postland = lambda repo, commit, machine, steps, **kw: launch
     h.d.launched = lambda got: (printed[0], "")
     rec = start(h.d, sha, base)
     assert rec == {"ids": [], "launch": launch, "tip": sha, "base": base, "at": h.clock, "steps": ["ratchet-gate"],
@@ -109,12 +120,11 @@ def test_a_launch_that_registers_no_run_is_infra(world, monkeypatch, tmp_path):
     """A train.sh that printed no run ids: at once, `start` gives no record, which `judge` takes as infra; detached, `judge`
     finds it so, once it exited or `LAUNCH_LOST_S` after its launch, and keeps that in the record."""
     h, base, sha, _ = _harness(world, monkeypatch)
-    h.d.launch_postland = lambda repo, commit, machine, steps, **kw: ([], "train.sh: no machine answered")
+    h.got = ([], "train.sh: no machine answered")
     assert start(h.d, sha, base) is None
     assert any(x.endswith("registered no run: train.sh: no machine answered") for x in world.logs), world.logs
     assert judge(h.d, None) == Verdict(INFRA, (), (Failed("the run beside its check registered no run", ":no run", frozenset()),))
-    launch = {"dir": str(tmp_path / "launch"), "pid": 1}
-    h.d.launch_postland = lambda repo, commit, machine, steps, **kw: launch
+    h.got = launch = {"dir": str(tmp_path / "launch"), "pid": 1}
     h.d.launched = lambda got: ([], "train.sh: refused")
     rec = start(h.d, sha, base)
     want = Verdict(INFRA, (), (Failed(f"the run beside its check registered no run: train.sh: refused (log {launch['dir']}/log)",

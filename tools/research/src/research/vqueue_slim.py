@@ -22,13 +22,13 @@ ORDER = (FAIL, INFRA, PENDING, LIST_FAILED, PASS)
 
 
 def start(driver: Driver, sha: str, base: str) -> dict | None:
-    """Launch the run beside candidate ``sha``'s check, ``base`` the commit of `main` below it: `SLIM_STEPS` but those a run of
-    every step of ``sha`` above ``base`` skips by name (lean-agreement, unless what it checks changed), with that run's
-    keywords (`Driver._postland_args`: ratchet-gate judges the merges above ``base``), through `Driver.launch_postland` on
-    drive's machines (`Driver.on`).  The record to keep (`Driver._started`): ``ids``, none yet while a detached launch runs
-    (its ``launch`` then); the candidate (``tip``), ``base``, when it launched (``at``), the ``steps`` it runs and those it
-    skips (``skip``).  None, logged, when it registered no run, or when ``driver`` launches nothing (a dry run, or its
-    queue's shadow), as `Driver._start_slim` does."""
+    """Launch the run beside candidate ``sha``'s check, ``base`` the commit of `main` below it, as `Driver._start_slim` launches
+    it beside the executor's check of ``sha`` with ``base`` verified: `SLIM_STEPS` but those a run of every step of ``sha``
+    above ``base`` skips by name (lean-agreement, unless what it checks changed), with that run's keywords (ratchet-gate
+    judges the merges above ``base``), on drive's machines (`Driver.on`).  The record to keep (`Driver._started`): ``ids``,
+    none yet while a detached launch runs (its ``launch`` then); the candidate (``tip``), ``base``, when it launched
+    (``at``), the ``steps`` it runs and those it skips (``skip``).  None, logged, when it registered no run, or when
+    ``driver`` launches nothing (a dry run, or its queue's shadow), as `Driver._start_slim` does."""
     if not driver.on:
         raise ValueError("the run beside a candidate's check needs drive's machines: build the Driver with drive.toml's `on` "
                          "(`research.queue.drive_flags(q.workdir)[0].on`)")
