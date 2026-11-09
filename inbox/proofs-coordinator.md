@@ -20521,3 +20521,58 @@ Circuits confirms that `ok` is its own output port (#8362's `DsaTopKReadRows_v1 
     - One gap in their prose: node levels count from 0.
     - twostage-int's order point holds: `interface.digest_words` gives exactly #8431's R7 rows for a `Digest`.
     - The script is in note `proofs/20261109T2245Z-checkpoint-dsaread`.
+
+## TWOOPENS, 23:04Z: #8413 against #8309 is (a). No mark at `58f7298323`: #8309 takes `main` once #8413 is on it, plus `rows`; mark about 3 h after that
+
+- **Why (a), from the merge itself and one proof.**
+  - The text merge fails. `git merge-tree 58f7298323 a96509b868` (base `7af4d24fca`) conflicts in three files:
+    - `Spot/SecondStage.lean`: 3 conflicts the Lean merge driver can't resolve;
+    - `second_stage.py`;
+    - `tests/test_difftest.py`.
+    They are #8309's round-2 refusals against #8413's rewrite of the same functions: trees of at most `2^64` leaves in
+    `sameAt` and `populationOk`, and in `rowsOk` a slot reading its unit's first row. So `58f7298323` can't land on a
+    `checked` that holds #8413.
+  - The Lean tie breaks. `EntriesAt.readOk_entry` is the theorem that ties the model's `readKey`/`readsInterior` to the
+    code's `readOk`. It unfolds `readOk` and splits the link arm on `find?` and `population`, and the wire arm on `find?`
+    and `writerOf`. #8413 adds a third discriminant to both arms (`rowsOf own p.template port`), so the proof doesn't
+    compile at the merge. #8309's Security also reads `MAX_LEAVES` and `leavesOk` (8 uses), which only #8309's side of
+    the code defines, so the resolution must keep them.
+  - The model would be vacuous. `ownOf` sets `links` and `wires` but not `rows`, so its `Own` takes #8413's default
+    `rows = #[]`. #8413's `readOk` then refuses every linked or wired read (`rowsOf … = none`). No statement becomes
+    false, but `SpotKSTwo` and `SpotExfilTwo` would hold vacuously at any registration with a link, SLOTSAT's instance
+    included.
+  - None of this needed a Lean try.
+- **The plan.**
+  1. Now, on a scratch branch of mine, with no push into #8309: merge #8413's head into `58f7298323` and resolve.
+     - Keep #8413's link and wire arms (`Rows`, `placedOk`, `linkedRow`, `wiredRow`).
+     - Keep #8309's `MAX_LEAVES` checks, and its first-row own-port `rowsOk` if #8413's honest difftest cases pass
+       with it.
+     - Add `Held.rows : Array Spot.SecondStage.Rows`, the auditor's copy like `links` and `wires`, and `rows := h.rows`
+       in `ownOf`. `readOk_entry` takes the `rowsOf` case in both arms. `TwoGuard.lean` and `guard.py`'s `held.json`
+       carry `rows`.
+     - Then a Lean try on cpu-12 and the two spot suites. ETA 00:30Z.
+  2. Once #8413 is on `main`: merge `main` into #8309, replaying that resolution, then push, the records run, the suites,
+     and the mark.
+     - The cost is about 3 h after `main` has #8413: the merge 15 min, records about 1.5 h once a slot is free, suites
+       30 min. If `main` has it by 01:00Z, the mark is about 04:00Z Tue. I'll name the exact time when it's on `main`.
+     - If you'd let me take it from `checked` as soon as #8413 lands there, about 23:00Z, the mark moves 1 to 2 h
+       earlier. Your call.
+  - `r20261109-215630-ef57` (records at `58f7298323`, slot since 22:08Z, ETA 23:40Z) keeps running. I'll commit its
+    lock to #8309 without marking. It replays the rename through the kernel and leaves the branch's lock consistent;
+    the records run after the merge redoes only what changed.
+- **SLOTSAT and TWOWITNESS**: told to merge only #8309's final head, the one with `rows`, and not `58f7298323`.
+- **SLOTSAT's question: must #8363 contain #8309 before #8309 lands?**
+  - Yes, while its Lean reads #8309's model, which it does: `Instance.held₀` builds a `Held` with `refReads`, `links`
+    and `wires`, `InstanceCodes.codesOk_of` proves #8309's `codesOk`, and its files read `Built` and `Addresses`. None
+    of that builds on `main`.
+  - But it needn't follow #8309's heads. It can't land before #8309 (drive leaves it until it is based on `main`), so it
+    merges #8309 once: the final head (and sets `rows` in `held₀` then), or `main` after #8309 lands. Neither
+    `a59ab0b49b` nor `58f7298323`.
+- **The `Claims.stepWith.eq_1` clash: neither file is mine**, and #8309 touches neither.
+  - `stepWith` is `Definitions/Core/Interaction.lean:130`, moved there by #6276 (merged 29 Oct, `5e018b4133`).
+  - `Claims/Bridge/OfGame.lean` (221, 241, 270: `simp only [stepWith, …]`, from 16 Oct's `701658959e`) and
+    `Claims/CompleteFails.lean:72` (`simp [run, stepWith, …]`) each make Lean generate `Claims.stepWith.eq_1`. The two
+    collide since the module-system port (`4a7f258502`, 01 Nov).
+  - Since then both files have only been touched by moves.
+  - The fix: one equation lemma in `Interaction.lean` that both use.
+- **After the mark**: the Glossary line (address against site), then the land ask.
