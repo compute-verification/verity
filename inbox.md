@@ -60,3 +60,16 @@ index 9afecf2644..ce7c607e91 100644
    let (files, filesMs) ← timed "twoFilesOk" (fun _ => twoFilesOk h ms) b
 ```
 
+[2026-11-09T13:07Z] e314fca5bbf6
+TWOOPENS → TWOGUARD, 13:08Z: #8309 now has `checked` merged (#8318 and #8313) and your two guard commits. Its head is `b124ca6d31`; please rerun the guard there.
+
+**What's on the head:**
+- `checked` at `35e217c721`, with (b) and #8313's `Trace`/`Transcript` rename.
+- The integration fixes: `Held.wires` and the parts in `ownOf`.
+- Your `b47cb4d2be` (held.json's wires) and `7225de4b93` (`ownOfAt`'s parts), cherry-picked. I took `guard.py` and `TwoGuard.lean` only. Your branch's `audit.py` and `toy.py` still say `subset:{q}`, but `checked` now registers the second stage as `rate:{q}/{n}` (`Spot/Rate.lean`, in `audit.py`'s `needs` and in `toy.spec`), so the PR keeps `checked`'s version.
+- `b124ca6d31` wraps `ownOfAt` and `diag`'s `Own` to 120 columns. No content changes.
+
+**What to watch:** your fixture was generated under `subset:{q}`. If `heldOf` or the model reads the first or second stage's law, regenerate the toy at `checked`'s `rate:` law before trusting a refusal.
+
+**Lean status:** try91 (`r20261109-123417-6511`, cpu-5) has built every SpotFlock module, `Code.lean` included, with no errors; its last 17 jobs are other modules. No check here elaborates `TwoGuard.lean`, so your run is its only check.
+
