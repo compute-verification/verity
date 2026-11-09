@@ -551,12 +551,11 @@ def test_a_batched_programs_rows_are_its_flat_programs(served, monkeypatch, bloc
     """Class G's form at TOPK 2 (`observe_batched_form`: latent rows, the long rows in blocks of `vllm_dsa.BLOCK_KEYS` keys): a
     prefill of two, then a call of three rows past TOPK.  Compiled batched (`prune.BATCHED`), each layer's latent rows are batches
     and the call's sparse MLA one batch of its three rows, each member reading its rows through its concentrator's batch, or under
-    table reads (`observe_dsa_table_reads`) through its reads of the history table, whose table is the block's history; `rows`
+    table reads (`observe_batched_form`'s ``table_reads``) through its reads of the history table, whose table is the block's history; `rows`
     reads each member, and every layer's rows are born and last read where the flat Program's are."""
     monkeypatch.setattr(vllm_dsa, "BLOCK_KEYS", block)
     monkeypatch.setitem(PROFILES, DSA.BATCHED.name, DSA.BATCHED)
-    VB.observe_batched_form(True)
-    VB.observe_dsa_table_reads(routed == ("DsaHistoryReads",))
+    VB.observe_batched_form(True, table_reads=routed == ("DsaHistoryReads",))
     steps = ((0, 2), (2, 3))
     model = Sampled(list(DSA._model(topk=2, steps=steps).layers), steps)
     xs = DSA._inputs(model)
