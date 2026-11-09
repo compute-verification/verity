@@ -1580,7 +1580,8 @@ class Watch:
         """Record `silent` for each agent in `known` (agent -> {name, handle, lane, run, since: ACTIVE since, branches}) with no
         note of its (`note_times`), no push to its branches (its own, the ones its notes name, those of open PRs whose body names
         it, every head ending in its id's last four characters, as a coordinator's `cursor/...-1037`, and the heads `same_task`
-        finds for any of these; with none of these, its lane's: `cursor/<lane>-*` and open PRs whose `Lane NAME` line is it) and no start or end of a research run it sent (`run_ends`' `ran`) for `SILENT_S`, counted from
+        finds for any of these; with none of these, its lane's: `cursor/<lane>-*` and open PRs whose `Lane NAME` line is it, and
+        its lane's agents' runs) and no start or end of a research run it sent (`run_ends`' `ran`) for `SILENT_S`, counted from
         the latest of those, its ACTIVE spell's start and the first heads read; again after a second window, then not until one
         of those moves. Needs
         `--notes` and heads read in the last `HEADS_STALE_S`."""
@@ -1600,14 +1601,21 @@ class Watch:
                     *self.pr_branches.get(agent, ()), *self.pr_branches.get(short_id(agent), ()),
                     *(b for b in heads if b.endswith("-" + agent[-4:]))}
             mine |= {h for h in heads if any(same_task(h, b) for b in mine)}
-            if not mine and k.get("lane"):
+            by_lane = not mine and bool(k.get("lane"))
+            if by_lane:
                 # nothing names its branches (a Task-launched worker: no `git.branches`, a PR body naming only its lane): its
-                # lane's pushes stand in, since archiving one at work loses it (circuits' MOEFUSE, 9 Nov, 40 min after a push)
+                # lane's pushes and runs stand in, since archiving one at work loses it (circuits' MOEFUSE, 9 Nov, 40 min after
+                # a push; its runs went under its coordinator's id)
                 mine = {b for b in heads if b.startswith(f"cursor/{k['lane']}-")} | self.pr_lanes.get(k["lane"], set())
             pushed = max((heads[b][1] for b in mine if b in heads), default=None)
             # a coordinator signs its notes with its lane, not its id, so its id alone rings it falsely as silent
             lane_note = max((lanes[x] for x in (k["handle"], k["lane"]) if x and x in lanes), default=None) if coord else None
-            ran = (self.ends.get("ran") or {}).get(agent)
+            ran_by = self.ends.get("ran") or {}
+            ran = ran_by.get(agent)
+            if by_lane:
+                ran = max((x for a, x in ran_by.items() if x is not None and (a == agent or (known.get(a) or {}).get("lane") == k["lane"]
+                                                                              or (known.get(a) or {}).get("handle") == k["lane"])),
+                          default=ran)
             last = max(x for x in (k["since"], heard.get(agent), heard.get(short_id(agent)), lane_note, pushed, ran,
                                    self.heads["t0"]) if x is not None)
             s = self.silent.get(agent)

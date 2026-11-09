@@ -1831,6 +1831,34 @@ def test_a_worker_whose_branches_nothing_names_takes_its_lanes_pushes_as_its_act
     assert rec["since"] == W.iso(pushed) and set(rec["branches"]) == {"cursor/circuits-cir193-6f04", "feature/served-rows"}
 
 
+def test_a_worker_whose_branches_nothing_names_takes_its_lanes_runs_as_its_activity(tmp_path):
+    """MOEFUSE's runs went under its coordinator's id (`--by circuits`), so they were no activity of its: with no branch of its
+    known, a run an agent of its lane sent counts as its activity."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker MOEFUSE ({W1_})", age_s=2 * 3600)
+    note(notes, "circuits", "b.md", f"circuits worker W2 ({W2_}) on cursor/w2-x-c7a9", age_s=2 * 3600)
+    (notes / "machines.d").mkdir(parents=True)
+    root = tmp_path / "vy-nebius-1"
+    (notes / "machines.d" / "vy-nebius-1.toml").write_text(
+        f'provider = "ssh"\nhost = "vy-nebius-1.example"\nuser = "research"\nproject = "verity"\nroot = "{root}"\n')
+    (tmp_path / "nodes.json").write_text(json.dumps({"nodes": ["vy-nebius-1"], "every_s": 300, "ssh": ["ssh"]}))
+    active = worker("ACTIVE", W.iso(T0 - 3 * 3600))
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: active, W2_: active}, notes=notes, git_remote=REMOTE,
+                                 sh=FakeSh({"cursor/w2-x-c7a9": "a" * 40}), nodes=tmp_path / "nodes.json", timers=None)
+    w.sweep(lambda r: None)
+    sweeps(w, clock, 60)
+    rid, started = "r20261018-200000-0002", clock.t
+    node_run(root, rid, started + 3600, by=f"https://cursor.com/agents/{W2_}", wall_s=3600)
+    status_json = root / "runs" / rid / "status.json"
+    status_json.write_text(json.dumps({"state": "running", "transitions": [{"state": "running", "t_utc": W.iso(started)}]}))
+    W.os.utime(status_json, (started, started))
+    sweeps(w, clock, 85)
+    assert W1_ not in {r["agent"] for r in silent(tmp_path)}, "a run of its lane's is its activity"
+    sweeps(w, clock, 10)
+    assert [r["since"] for r in silent(tmp_path) if r["agent"] == W1_] == [W.iso(started)], \
+        "its silence counts from its lane's run"
+
+
 def test_github_prs_reads_every_page_of_open_prs_with_the_token_from_its_file(tmp_path, monkeypatch):
     env = tmp_path / "relay.env"
     env.write_text("SLACK_BOT_TOKEN=x\nGH_TOKEN=ghs_dummy_for_tests\n")
