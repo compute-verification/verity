@@ -20,7 +20,9 @@ epilogue:
 
 Each part is then the run of its nodes in each launch, in order; the launches are the passes the peer Inputs are laid out by
 (refused otherwise). A node is written with references of its part's own: a node of its part by its index in the part, a node
-of an earlier layer by how many layers back and its index there, the prologue's or epilogue's by its index there, a shared node by
+of an earlier layer by how many layers and launches back and its index from the end of that layer's run in that launch (a
+window's first layer starts with its own norm, the rest of it as the model's layer), the prologue's or epilogue's by its index
+there, a shared node by
 its content, a weight by its name less `model.layers.{L}.` and how many layers back, a peer Input by its pass, its collective, how
 many layers back and its peer, a request Input by name. Writing the launches' runs part by part in order and resolving each
 reference inverts this, so two Programs with the same header (`Pieces.header`: the program function's id and parameters), the
@@ -252,7 +254,10 @@ def pieces(program, world: int, entries: bool = False) -> Pieces:
                 return ("E", local[idx], leaf)
             if reader is None or reader == 0:
                 return ("L@", t - 1, local[idx], leaf)
-            return ("L", reader - t, local[idx], leaf)
+            if reader == t:
+                return ("L", 0, local[idx], leaf)
+            r, j = run_of[idx]
+            return ("L", reader - t, launch - r, run_len[(t, r)] - 1 - j, leaf)
         if idx == wi:
             f = field_of(leaf)
             L, role = fields[f]
@@ -288,6 +293,8 @@ def pieces(program, world: int, entries: bool = False) -> Pieces:
     pending: list[str] = []
     seen_shared: dict[str, int] = {}
     launch, cur, started, splits = 0, 0, set(), []
+    run_of: dict[int, tuple[int, int]] = {}
+    run_len: dict[tuple[int, int], int] = {}
     for k, n in enumerate(nodes):
         parts = [p for a in n.args for p in _flat(a.refs)]
         mine = [x for p in parts for x in contributes(p)]
@@ -311,6 +318,8 @@ def pieces(program, world: int, entries: bool = False) -> Pieces:
         cur = p
         lab[k], local[k] = p, count[p]
         count[p] += 1
+        run_of[k] = (launch, run_len.get((p, launch), 0))
+        run_len[(p, launch)] = run_of[k][1] + 1
         if (p, launch) not in started:
             started.add((p, launch))
             write(p, ("run", launch))
