@@ -15,7 +15,7 @@ serving wrote (``window/``, its private files too) and a5's records
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/a5_row_tables.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
-        [--firewall flock-firewall] --main FILE --out DIR
+        [--firewall flock-firewall] [--structural iv/hybrid/4 --tmpl-unit-bin flock-tmpl-unit] --main FILE --out DIR
 """
 from __future__ import annotations
 
@@ -72,6 +72,9 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=7551)
     ap.add_argument("--session-timeout", type=float, default=3600)
     ap.add_argument("--compose-cache", help="a5.py's: this machine's composed circuits (`compose_circuit.py --cache`)")
+    ap.add_argument("--structural", metavar="MODE", help="a5.py's: each chunked template reading inline as struct_lower's "
+                    "templated statement at MODE where it lowers, with --tmpl-unit-bin")
+    ap.add_argument("--tmpl-unit-bin", help="a5.py's: flock-tmpl-unit, which places a templated statement's unit rows")
     a = ap.parse_args()
     out = Path(a.out)
     mine, live = commit(out / "window")

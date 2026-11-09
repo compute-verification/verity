@@ -83,6 +83,10 @@
 # ZK_SERVER=1: every session's prover runs behind the Lean ZK server's send check (--firewall to a5.py and each STANDIN
 #   script, the core protocols' path); by default each runs `prove --zk` itself, as SPOT[Flock]'s proof server does (Figure
 #   1's dev arm).
+# A5_STRUCTURAL=MODE (iv/hybrid/4): each chunked template reading inline is composed as struct_lower's templated statement at
+#   MODE where it lowers, its verifier reading the template, and its prover the unit flock-tmpl-unit places (a5.py
+#   --structural --tmpl-unit-bin, to a5.py and the row-tables and sparse-mla scripts); each template's statement, and why one
+#   stayed flat, are in its summary's circuits, e.g. STANDIN=sparse-mla A5_CHALLENGER=local A5_STRUCTURAL=iv/hybrid/4.
 set -uxo pipefail
 REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; mkdir -p $O
 PY=${PY:-$REPO/.venv/bin/python}; VV=${VV:-$REPO/.venv/bin/verity-vllm}
@@ -129,6 +133,15 @@ uv sync --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O/syn
 
 (cd verity/core/service/flock && lake build flock-verify flock-firewall) > $O/build-lean.log 2>&1 &
 LP=$!
+TUP=; TUD=$W/tmplunit
+if [ -n "${A5_STRUCTURAL:-}" ]; then   # flock-tmpl-unit, in a copy of the Lean package with its own .lake
+  mkdir -p $TUD
+  ( (cd verity/core/service/flock && tar --exclude=.lake -cf - .) | tar -xf - -C $TUD \
+    && cp verity/ml/flock/tests/lean/TmplUnit.lean $TUD/ \
+    && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> $TUD/lakefile.toml \
+    && cd $TUD && lake build flock-tmpl-unit ) > $O/build-tmplunit.log 2>&1 &
+  TUP=$!
+fi
 mkdir -p $O/m0-build
 FW=${A5_FLOCK_WORK:-$W}   # a kept build dir: 20-gpu-link.sh re-applies this tree's patches and cargo rebuilds what changed
 RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/ml/flock/pod/60-circuit.sh > $O/m0-build/build.log 2>&1 \
@@ -139,7 +152,12 @@ LEAN=$REPO/verity/core/service/flock/.lake/build/bin/flock-verify; FWL=${LEAN%/*
 ZKS=(); if [ "${ZK_SERVER:-0}" = 1 ]; then ZKS=(--firewall $FWL); fi
 PLAINS=(); if [ "${A5_PLAIN:-0}" = 1 ]; then PLAINS=(--plain); fi
 (cd verity/core/service/spot && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
-sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
+STRS=()
+if [ -n "$TUP" ]; then
+  wait $TUP || { tail -40 $O/build-tmplunit.log; exit 7; }
+  STRS=(--structural $A5_STRUCTURAL --tmpl-unit-bin $TUD/.lake/build/bin/flock-tmpl-unit)
+fi
+sha256sum $BIN $LEAN $FWL ${TUP:+$TUD/.lake/build/bin/flock-tmpl-unit} | tee $O/binaries.sha256
 
 # the verifier's lowering: a synthetic input set per template (its values are never read)
 for I in ${A5_SETS:-256 1536}; do
@@ -166,7 +184,7 @@ TIME=$([ -x /usr/bin/time ] && echo "/usr/bin/time -v")
 audit() {  # NAME TP_COMMIT BUILD WORKLOAD WINDOWS PARTITION [A5 ARGS...]: WORKLOAD empty under --advice
   mkdir -p $O/$1
   $TIME $PY benchmarks/one_stage/a5.py --tp-commit $2 --build-root $3 ${4:+--workload $4} --windows $5 --partition $6 "${@:7}" \
-    ${A5_RANKS:+--ranks $A5_RANKS} ${A5_JOBS:+--jobs $A5_JOBS} ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" "${PLAINS[@]}" --out $W/$1 \
+    ${A5_RANKS:+--ranks $A5_RANKS} ${A5_JOBS:+--jobs $A5_JOBS} ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" "${PLAINS[@]}" "${STRS[@]}" --out $W/$1 \
     ${A5_CHALLENGER:+--challenger $A5_CHALLENGER} ${A5_PEER:+--peer $A5_PEER} ${A5_CHALLENGER_KEY:+--challenger-key $A5_CHALLENGER_KEY} ${A5_GATE_KEY:+--gate-key $A5_GATE_KEY} \
     ${MAIN:+--main $MAIN} ${A5_COMPOSE_CACHE:+--compose-cache $A5_COMPOSE_CACHE} > $O/$1/a5.log 2> $O/$1/a5.err
   local rc=$?
@@ -232,7 +250,7 @@ else
     if [ "$e" = row-tables ] || [ "$e" = sparse-mla ]; then
       [ -n "$MAIN" ] || { echo "STANDIN $e draws from a challenger's coins: set A5_CHALLENGER=local"; exit 3; }
       mkdir -p $O/$e
-      $TIME $PY benchmarks/one_stage/a5_${e//-/_}.py --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" --main $MAIN \
+      $TIME $PY benchmarks/one_stage/a5_${e//-/_}.py --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" "${STRS[@]}" --main $MAIN \
         ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} ${A5_COMPOSE_CACHE:+--compose-cache $A5_COMPOSE_CACHE} \
         --out $W/$e > $O/$e/a5.log 2> $O/$e/a5.err || rc=1
       grep '^A5' $O/$e/a5.log | cut -c1-4000; tail -25 $O/$e/a5.err
