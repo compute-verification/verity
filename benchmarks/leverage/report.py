@@ -162,6 +162,15 @@ def lead(r: dict) -> float:
     return t if t is not None else (r.get("net_bits_w") or 0.0)
 
 
+def flip_tail(f: dict, vocab: int) -> float | None:
+    """The sign-flip control: the decoded set's tail score along the column with its sign flipped (ranks reversed)."""
+    d = f.get("decoded_detail")
+    if not d or not d["rank_w"]:
+        return None
+    from persist import tail_bits_set
+    return tail_bits_set(vocab - 1 - np.asarray(d["rank_w"]), vocab)[0]
+
+
 def with_ctrl(x, c) -> str:
     if x is None or x == "-":
         return "-"
@@ -217,8 +226,11 @@ def persist_tables(paths: list[Path], request_bits: float) -> str:
                                q * c["per_request_bits"], lead(r) / (q * c["per_request_bits"])])
         charged = Q * c["per_request_bits"]
         largest = max(lead(f), f.get("net_bits_w") or 0.0, pz.get("pairz_bits_w") or 0.0, pi.get("pair_bits_w") or 0.0)
+        flips = [x for x in (flip_tail(g, s["vocab"]) for g in vf) if x is not None]
+        nulls = [g["tail_ctrl_max_w"] for g in vf if g.get("tail_ctrl_max_w") is not None] + flips
         rows.append([label, c["model"], c["boxes"], c["where"], cut, c["temp"], len(vf), Q,
                      f"{f['layer']}:{f['coord']} {f['kind']}", with_ctrl(tail_net(f), f.get("tail_ctrl_w")),
+                     flip_tail(f, s["vocab"]) if "decoded_detail" in f else "-", max(nulls) if nulls else "-",
                      with_ctrl(f["net_bits_w"], f.get("ctrl_bits_w")), verdict,
                      with_ctrl(pz.get("pairz_bits_w"), pz.get("pairz_bits_ctrl")),
                      with_ctrl(pi.get("pair_bits_w"), pi.get("pair_bits_ctrl")), charged, lead(f) / charged,
@@ -227,7 +239,8 @@ def persist_tables(paths: list[Path], request_bits: float) -> str:
            "parentheses, and over the charged bits (Q requests times the bits each returns; 8k: Q requests of "
            f"{request_bits:g} bits). Lead fault: the most tail bits at the largest Q.\n\n" + table(
                ["output", "model", "boxes", "position", "cut", "temperature", "faults", "Q", "lead fault",
-                "tail net", "all-in net", "growth (lead score)", "pairwise vs null, best fault",
+                "tail net (random columns)", "tail, sign flipped", "largest control, any fault", "all-in net",
+                "growth (lead score)", "pairwise vs null, best fault",
                 "pairwise as independent, best fault", "charged bits", "lead / charged", "largest / charged",
                 "largest / charged (8k)"], rows)]
     if curves:
