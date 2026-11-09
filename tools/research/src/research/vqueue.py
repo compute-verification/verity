@@ -10,7 +10,10 @@ as `next` is), pushed to `queue/<sha12>` and checked by graph2 as `ready:<sha>`.
              inputs are the suspects: one suspect is ejected (its ready mark withdrawn, its owner told which tasks failed),
              several are bisected; none meeting them makes every member a suspect, and a lone member's failed keys are rerun
              once, afresh, before it is ejected.  The candidates above it are dropped, and the rest go into the next batch.
-             A fail that names no failed task is rung, and nothing else happens
+             A fail that names no failed task is rung, and nothing else happens.  A fail whose own failures are all stale
+             Lean lock records (`Failed.records`) is no fail yet: its records run regenerates them on its tree, and a
+             records commit of them on top of it is checked in its place (`Regenerate`, `Commit`); a records run that
+             fails, or whose records change what a guarantee says, refuses them, and the fail stands with that reason
     infra    nothing is blamed and `main` stays: the check is enqueued again at every reading, and infra is rung from `rings`
              enqueues on (2 at most), in words that change only with the erring tasks, so the loop tells infra once for each
              set; a listing failure is handled alike.  With `tree_ejects`, infra errors graph2 saw on two or more nodes
@@ -63,6 +66,8 @@ class Failed:
     tests: frozenset[str] = frozenset()       # its failing test ids, empty when unknown
     base_tests: frozenset[str] | None = None  # the base's failing tests of the same task id: None when it passed or is unknown
     tree: bool = False             # infra: graph2 saw it err on two or more nodes, so the tree breaks the machines
+    records: bool = False          # a Lean package's lock failed on its records alone, which graph2's lean-lock says the Lean
+                                   # check regenerates: a records run may repair it (`Regenerate`)
 
 
 @dataclass(frozen=True)
@@ -76,6 +81,19 @@ class Verdict:
 
 
 @dataclass(frozen=True)
+class RecordsRun:
+    """A candidate's records run (`Regenerate`): drive's lock run on its tree, which regenerates the lock records it finds
+    stale.  Pending while it launches or runs, or with ``why`` while its passed run's records can't be read yet; pass once it
+    passed with records that may be committed (`Commit`); fail when it failed or its records can't be: one it didn't
+    regenerate, or a change to what a guarantee says, which ``owners`` (handles) are rung about; infra when it registered no
+    run or never ran, launched again while ``starts`` is under 2."""
+    state: str = PENDING
+    why: str = ""
+    owners: tuple[str, ...] = ()
+    starts: int = 1                # how many times it was launched
+
+
+@dataclass(frozen=True)
 class Candidate:
     sha: str
     base: str                      # `main`'s tip when it was built, or the candidate below it
@@ -85,6 +103,8 @@ class Candidate:
     tries: int = 1                 # how many times `ready:<sha>` was enqueued
     reruns: int = 0                # how many times its failed keys were rerun (`Rerun`)
     enqueued: float | None = None  # when `ready:<sha>` was first enqueued, in seconds since the epoch; None when unknown
+    records: RecordsRun | None = None   # its records run, None while none was launched
+    repairs: str | None = None     # a records commit (`Commit`): the candidate it is, its records regenerated, on the same base
 
 
 @dataclass(frozen=True)
@@ -112,6 +132,7 @@ class Snapshot:
     pending_s: float = 4 * 3600    # how long the lowest candidate is pending after its first enqueue before it is retried
     tree_ejects: bool = False      # infra errors marked `tree` are bisected and eject; off while graph2 marks `tree` on any
                                    # error that ran out of attempts on two or more nodes, as an outage's do
+    records: bool = False          # stale lock records are regenerated on the candidate (`Regenerate`); off, they fail it
 
 
 @dataclass(frozen=True)
@@ -165,10 +186,12 @@ class Rerun:
 @dataclass(frozen=True)
 class Ring:
     """Tell infra that ``sha``'s check keeps ending in infra errors or failing to list, or stays pending, or that its verdict is
-    malformed; or tell the owner of ``pr``, its lone member, that its check keeps erring."""
+    malformed, or that its records run's records can't be read; or tell the owner of ``pr``, its lone member, that its check
+    keeps erring; or tell ``to`` (handles) why its records run refused its records."""
     sha: str
     why: str
     pr: int | None = None
+    to: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -181,7 +204,20 @@ class Red:
     failed: tuple[Failed, ...]
 
 
-Action = Build | Advance | Drop | Eject | Retry | Rerun | Ring | Red
+@dataclass(frozen=True)
+class Regenerate:
+    """Launch ``sha``'s records run: drive's lock run on its tree, of the packages its stale records are in."""
+    sha: str
+
+
+@dataclass(frozen=True)
+class Commit:
+    """Commit the records ``sha``'s passed records run regenerated on top of it, as drive commits a lock run's, push that
+    records commit and enqueue its check: a candidate on ``sha``'s base with ``sha``'s members that `repairs` ``sha``."""
+    sha: str
+
+
+Action = Build | Advance | Drop | Eject | Retry | Rerun | Ring | Red | Regenerate | Commit
 
 
 #: the prefix of a task's test for each file it read outside its declared inputs, a fault graph2 names by file
@@ -198,11 +234,12 @@ def decide(s: Snapshot) -> list[Action]:
 
     A candidate already on `main` (the loop advanced to it and stopped before its drop, or `main` was moved to it) is dropped
     `on main`, with a pass outcome when its verdict passed, and its members stay out of the next batch, as does a PR whose
-    head a pass outcome holds: it is on `main`."""
+    head a pass outcome holds: it is on `main`.  While the lowest candidate's records run runs or its records are committed
+    (`_records`), no batch is built: one on it would be dropped with it once its records commit replaces it."""
     ready = {r.number: r for r in s.ready}
     acts: list[Action] = []
     chain, landed = _chain(s, ready, acts)
-    main, ejected = s.main, set()
+    main, ejected, hold = s.main, set(), False
     if chain:
         c1 = chain[0]
         reading = _reading(c1.verdict)
@@ -213,10 +250,15 @@ def decide(s: Snapshot) -> list[Action]:
             acts += _red(c1, _outcomes(s, acts))
             acts += [Advance(c1.sha), Drop(c1.sha, ON_MAIN, _passed(c1))]
             main, landed, chain = c1.sha, landed | set(c1.members), chain[1:]
+        elif reading == FAIL and (records := _records(s, c1)) is not None:
+            acts += records
+            hold = True
         elif reading == FAIL and (rerun := _rerun(c1, ready)) is not None:
             acts.append(rerun)
         elif reading == FAIL or (reading == INFRA and s.tree_ejects and _tree(c1.verdict)):
-            ejected = _failed(c1, ready, _outcomes(s, acts), acts)
+            if (r := c1.records) is not None and r.state == FAIL and r.owners:
+                acts.append(Ring(c1.sha, f"{c1.sha[:12]}'s records run refused its records: {r.why}", to=r.owners))
+            ejected = _failed(c1, ready, _outcomes(s, acts), acts, note=_refused(c1))
             acts += [Drop(c.sha, BASE_FAILED) for c in chain[1:]]
             chain = []
         elif reading == INFRA and (s.tree_ejects or c1.tries < min(s.rings, 2)):
@@ -248,7 +290,7 @@ def decide(s: Snapshot) -> list[Action]:
             if s.now - c1.enqueued > 2 * s.pending_s:
                 acts.append(Ring(c1.sha, f"{c1.sha[:12]}'s check is still pending {2 * s.pending_s / 3600:g} h after its first "
                                          f"enqueue, {c1.tries} times enqueued"))
-    if len(chain) < s.depth:
+    if len(chain) < s.depth and not hold:
         base = chain[-1].sha if chain else main
         busy = landed | ejected | {m for c in chain for m in c.members}
         pool = sorted((r for r in ready.values() if r.number not in busy and not r.conflict), key=lambda r: (r.rank, r.number))
@@ -294,7 +336,8 @@ def _inputs(inputs: frozenset[str]) -> tuple[frozenset[str], tuple[re.Pattern[st
 
 def _chain(s: Snapshot, ready: dict[int, Ready], acts: list[Action]) -> tuple[list[Candidate], set[int]]:
     """Main's chain, lowest first, and the members of the candidates already on `main`; the drops of the other candidates go
-    to ``acts``, each with every candidate above it."""
+    to ``acts``, each with every candidate above it.  A candidate a records commit on the same base repairs is dropped for
+    it, whatever their ranks."""
     by_sha: dict[str, Candidate] = {}
     for c in sorted(s.candidates, key=lambda c: c.sha):
         by_sha.setdefault(c.sha, c)
@@ -325,6 +368,12 @@ def _chain(s: Snapshot, ready: dict[int, Ready], acts: list[Action]) -> tuple[li
     below: set[int] = set()
     top = s.main
     while on := [c for c in above.get(top, ()) if c.sha not in done]:
+        fixed = {c.repairs: c.sha for c in on if c.repairs is not None}
+        for c in on:
+            if c.sha in fixed:
+                drop(c, f"its records were regenerated in {fixed[c.sha][:12]}, which is checked in its place")
+        if not (on := [c for c in on if c.sha not in fixed]):
+            break
         keep = min(on, key=lambda c: (_ranks(c, ready), c.sha))
         for c in on:
             if c is not keep:
@@ -425,10 +474,42 @@ def _rerun(c1: Candidate, ready: dict[int, Ready]) -> Rerun | None:
     return Rerun(c1.sha, keys)
 
 
-def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], acts: list[Action], tree: bool = True) -> set[int]:
+def _records(s: Snapshot, c1: Candidate) -> list[Action] | None:
+    """What a failed lowest candidate whose own failures are all stale lock records (`Failed.records`) calls for: its records
+    run (`Regenerate`), launched again once when it ended in infra; nothing while it runs, or a ring of infra while its passed
+    run's records can't be read; once it passed, the commit of its records (`Commit`).  None when it fails as any other: the
+    loop regenerates no records (`Snapshot.records`), a failure of its own isn't stale records, it is a records commit
+    already (its records didn't settle them), or its records run refused them (`_refused`)."""
+    own = [f for f in c1.verdict.failed if not _inherited(f)]
+    if not s.records or c1.repairs is not None or not own or not all(f.records for f in own) or _refused(c1):
+        return None
+    r = c1.records
+    if r is None or r.state == INFRA:
+        return [Regenerate(c1.sha)]
+    if r.state == PASS:
+        return [Commit(c1.sha)]
+    return [Ring(c1.sha, f"{c1.sha[:12]}'s records run: {r.why}")] if r.why else []
+
+
+def _refused(c: Candidate) -> str:
+    """Why ``c``'s stale lock records weren't committed, to go with its failure: its records run failed or refused them, or
+    ended in infra twice; or it is a records commit and they are stale still.  "" when none of these is so."""
+    r, own = c.records, [f for f in c.verdict.failed if not _inherited(f)]
+    if r is not None and r.state == FAIL:
+        return f"; its records run refused its records: {r.why}"
+    if r is not None and r.state == INFRA and r.starts >= 2:
+        return f"; its records run ended in infra twice: {r.why}"
+    if c.repairs is not None and any(f.records for f in own):
+        return f"; the records it commits on {c.repairs[:12]}, which its records run regenerated, are stale still"
+    return ""
+
+
+def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], acts: list[Action], tree: bool = True,
+            note: str = "") -> set[int]:
     """What a failed lowest candidate calls for: the ring of the reds it shows, the ejection its own failures make (or, with
     none, its infra errors that follow the tree; with ``tree`` False, every infra error of a check that keeps erring, which
-    ejects nobody), if any, and its drop; the PRs it ejects.  Only those suspect anyone."""
+    ejects nobody), if any, and its drop, each why with ``note`` (`_refused`); the PRs it ejects.  Only those suspect
+    anyone."""
     v, heads = c1.verdict, dict(zip(c1.members, c1.heads))
     own = tuple(f for f in v.failed if not _inherited(f))
     by_inputs = [m for m in c1.members if any(meets(ready[m].files, f.inputs) for f in own or (_tree(v) if tree else v.infra))]
@@ -436,13 +517,13 @@ def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], act
     if own and len(by_inputs) == 1:
         n = by_inputs[0]
         hit = ", ".join(f.task for f in own if meets(ready[n].files, f.inputs))
-        eject = Eject(n, heads[n], f"{hit} failed, and its changed files meet their inputs, no other member's", own)
+        eject = Eject(n, heads[n], f"{hit} failed, and its changed files meet their inputs, no other member's{note}", own)
     elif own and len(c1.members) == 1:
         n = c1.members[0]
         again = " and again when rerun afresh" if c1.reruns else ""
         eject = Eject(n, heads[n], f"{', '.join(f.task for f in own)} failed alone at {heads[n][:12]}{again}, and no failing "
                                    "task's inputs meet its files: if a test flaked, delete it (a test that flakes is deleted, "
-                                   "not rerun)", own)
+                                   f"not rerun){note}", own)
     elif len(c1.members) == 1 and tree:
         n = c1.members[0]
         eject = Eject(n, heads[n], f"{_tree_why(c1)}, with only it merged on {c1.base[:12]}: a check that keeps erring on a "
@@ -452,7 +533,7 @@ def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], act
     if eject is not None:
         acts.append(eject)
     why = (f"failed: {', '.join(f.task for f in v.failed)}" if own else _tree_why(c1) if tree else
-           f"{_ring_why(c1)}, again after it was enqueued again: bisected on them, ejecting nobody")
+           f"{_ring_why(c1)}, again after it was enqueued again: bisected on them, ejecting nobody") + note
     acts.append(Drop(c1.sha, why, Outcome(c1.members, c1.heads, FAIL, suspects, c1.base,
                                           tuple(f for f in v.failed if _inherited(f)))))
     return set() if eject is None else {eject.number}

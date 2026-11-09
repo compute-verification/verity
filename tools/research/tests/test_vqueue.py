@@ -11,8 +11,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
 import pytest
-from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Advance, Build, Candidate, Drop, Eject, Failed, Outcome,
-                             Ready, Red, Rerun, Retry, Ring, Snapshot, Verdict, decide, meets)
+from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Advance, Build, Candidate, Commit, Drop, Eject, Failed,
+                             Outcome, Ready, RecordsRun, Red, Regenerate, Rerun, Retry, Ring, Snapshot, Verdict, decide, meets)
 
 MAIN = "m0"
 
@@ -529,6 +529,103 @@ def test_a_red_main_lands_what_fails_nothing_more_and_its_reds_only_shrink():
         Advance("c2"), Drop("c2", "on main", Outcome((6,), heads(6), PASS))]
 
 
+# ---- stale lock records: the records run ---------------------------------------------------------------------------------------
+
+def stale(pkg: str = "Security", *inputs: str) -> Failed:
+    """graph2's lean-lock fail of ``pkg`` on its records alone, which it names the command that regenerates."""
+    return Failed(f"lean-lock:{pkg}", f"key:lean-lock:{pkg}", frozenset(inputs or (f"{pkg}/",)), records=True)
+
+
+def lean(n: int, *files: str) -> Ready:
+    return pr(n, None, *(files or (f"Security/A{n}.lean",)), lean=True)
+
+
+def test_a_fail_on_stale_lock_records_alone_launches_their_records_run_and_builds_nothing_meanwhile():
+    """No eject, no bisect, no batch on it: its records are regenerated on its tree, and the candidates above it stay, as
+    graph2's check of them warms its cache, until its records commit replaces it.  Off (`Snapshot.records`), it fails."""
+    c1, c2 = cand("c1", MAIN, 1, 2, state=FAIL, failed=(stale(),)), cand("c2", "c1", 3)
+    s = snap(c1, c2, ready=[lean(1), lean(2), *prs(3, 4)], depth=3, records=True)
+    assert decide(s) == [Regenerate("c1")]
+    assert decide(replace(s, candidates=(c1,))) == [Regenerate("c1")]
+    off = decide(replace(s, records=False))
+    assert kinds(off) == [Drop, Drop, Build] and off[0].why == "failed: lean-lock:Security"
+
+
+def test_stale_records_are_regenerated_only_when_every_failure_of_the_candidates_own_is_one():
+    """An inherited failure beside them doesn't count (`main` fails it too); a test failure of its own makes it a fail, whose
+    ejection tells the owner how to regenerate the records (`vqueue_loop.LEAN_LOCK_FIX`)."""
+    red, own = inherited("suite:r", "red/"), task("suite:a", "pkg9/")
+    s = snap(cand("c1", MAIN, 1, 3, state=FAIL, failed=(stale(), red)), ready=[lean(1), pr(3)], records=True)
+    assert decide(s) == [Regenerate("c1")]
+    acts = decide(replace(s, candidates=(cand("c1", MAIN, 1, 3, state=FAIL, failed=(stale(), own)),)))
+    assert acts[0] == Eject(1, "h1", "lean-lock:Security failed, and its changed files meet their inputs, no other member's",
+                            (stale(), own))
+    assert kinds(acts) == [Eject, Drop, Build]
+
+
+def test_a_records_run_holds_its_candidate_while_it_runs_and_its_records_are_committed_once_it_passed():
+    """Pending, nothing happens; pending with why (its passed run's records can't be read yet), infra is rung, in words a
+    ring says once; passed, its records are committed on top of it (`Commit`)."""
+    c1 = cand("c1", MAIN, 1, state=FAIL, failed=(stale(),))
+    s = snap(replace(c1, records=RecordsRun()), ready=[lean(1), pr(2)], records=True)
+    assert decide(s) == []
+    held = replace(c1, records=RecordsRun(PENDING, "its Lean report can't be read yet"))
+    assert decide(replace(s, candidates=(held,))) == [Ring("c1", "c1's records run: its Lean report can't be read yet")]
+    assert decide(replace(s, candidates=(replace(c1, records=RecordsRun(PASS)),))) == [Commit("c1")]
+
+
+def test_a_records_commit_is_checked_in_place_of_the_candidate_it_repairs_with_every_candidate_above_that_dropped():
+    """Same members, same base: the records commit wins whatever the shas' order, and the chain goes on from it."""
+    for name in ("a", "z"):
+        c1 = replace(cand("c1", MAIN, 1, state=FAIL, failed=(stale(),)), records=RecordsRun(PASS))
+        fixed = replace(cand(name, MAIN, 1), repairs="c1")
+        s = snap(c1, fixed, cand("c2", "c1", 2), ready=[lean(1), *prs(2, 3)], records=True)
+        assert decide(s) == [Drop("c1", f"its records were regenerated in {name}, which is checked in its place"),
+                             Drop("c2", "its base was dropped"), Build((2, 3), name, 1)]
+
+
+def test_a_records_commit_stale_still_fails_without_a_second_records_run():
+    c = replace(cand("c1r", MAIN, 1, state=FAIL, failed=(stale(),)), repairs="c1")
+    acts = decide(snap(c, ready=[lean(1)], records=True))
+    assert acts == [Eject(1, "h1", "lean-lock:Security failed, and its changed files meet their inputs, no other member's; the "
+                                   "records it commits on c1, which its records run regenerated, are stale still", (stale(),)),
+                    Drop("c1r", "failed: lean-lock:Security; the records it commits on c1, which its records run regenerated, "
+                                "are stale still", Outcome((1,), heads(1), FAIL, (1,), MAIN))]
+
+
+def test_a_records_run_that_failed_refuses_its_records_and_its_candidate_fails_with_why():
+    """Ejected (or bisected) as any fail, the records run's reason with it; no records are committed."""
+    r = RecordsRun(FAIL, "it failed: r1 failed rc=1")
+    acts = decide(snap(replace(cand("c1", MAIN, 1, 2, state=FAIL, failed=(stale(),)), records=r), cand("c2", "c1", 3),
+                       ready=[lean(1), pr(2), pr(3)], records=True))
+    note = "; its records run refused its records: it failed: r1 failed rc=1"
+    assert acts == [Eject(1, "h1", f"lean-lock:Security failed, and its changed files meet their inputs, no other member's{note}",
+                          (stale(),)),
+                    Drop("c1", f"failed: lean-lock:Security{note}", Outcome((1, 2), heads(1, 2), FAIL, (1,), MAIN)),
+                    Drop("c2", "its base failed"), Build((2, 3), MAIN, 2)]
+    both = decide(snap(replace(cand("c1", MAIN, 1, 2, state=FAIL, failed=(stale(),)), records=r), ready=[lean(1), lean(2)],
+                       records=True))
+    assert kinds(both) == [Drop, Build] and both[0].why == f"failed: lean-lock:Security{note}"
+
+
+def test_a_records_run_whose_records_change_what_a_guarantee_says_refuses_them_and_rings_its_owners():
+    why = "regenerating Security's records changes what a guarantee says: guarantee G: changed"
+    r = RecordsRun(FAIL, why, ("@proofs", "@memory-accounting"))
+    acts = decide(snap(replace(cand("c1", MAIN, 1, state=FAIL, failed=(stale(),)), records=r), ready=[lean(1)], records=True))
+    assert acts[0] == Ring("c1", f"c1's records run refused its records: {why}", to=("@proofs", "@memory-accounting"))
+    assert kinds(acts) == [Ring, Eject, Drop] and acts[1].why.endswith(f"; its records run refused its records: {why}")
+
+
+def test_a_records_run_ended_in_infra_is_launched_again_once_and_then_its_candidate_fails():
+    c1 = cand("c1", MAIN, 1, state=FAIL, failed=(stale(),))
+    s = snap(replace(c1, records=RecordsRun(INFRA, "it registered no run")), ready=[lean(1)], records=True)
+    assert decide(s) == [Regenerate("c1")]
+    twice = replace(c1, records=RecordsRun(INFRA, "it never ran or was stopped (r1)", starts=2))
+    acts = decide(replace(s, candidates=(twice,)))
+    assert kinds(acts) == [Eject, Drop]
+    assert acts[0].why.endswith("; its records run ended in infra twice: it never ran or was stopped (r1)")
+
+
 # ---- 3. fill --------------------------------------------------------------------------------------------------------------------
 
 def test_a_batch_goes_on_main_at_priority_depth_or_on_the_chains_top_at_depth_minus_its_position():
@@ -623,10 +720,15 @@ def test_decide_reads_no_clock_files_or_randomness(monkeypatch):
 HAWKEYE = "benchmarks/numerical/tests/reference/test_hawkeye_close.py"
 
 
+#: a tree's member that stands for the records a records commit regenerated (`Play`)
+RECORDS = 0
+
+
 @dataclass
 class Play:
     """A small world for the red team's cases: `decide`'s actions applied as the loop does, each pending candidate's verdict
-    from ``oracle(tree, candidate)``, and a clock that moves ``step_s`` a tick."""
+    from ``oracle(tree, candidate)``, each pending records run's from ``records(tree, candidate)``, a records commit's tree
+    its candidate's with `RECORDS`, and a clock that moves ``step_s`` a tick."""
     ready: list[Ready]
     oracle: Callable[[frozenset[int], Candidate], Verdict]
     kw: dict = field(default_factory=dict)
@@ -639,6 +741,7 @@ class Play:
     ejected: list[Eject] = field(default_factory=list)
     acts: list[list] = field(default_factory=list)
     built: int = 0
+    records: Callable[[frozenset[int], Candidate], RecordsRun] | None = None
 
     def tick(self) -> list:
         now = len(self.acts) * self.step_s
@@ -665,9 +768,19 @@ class Play:
                 sha = f"c{self.built}"
                 self.trees[sha] = self.trees[a.base] | set(a.members)
                 self.cands[sha] = Candidate(sha, a.base, a.members, tuple(f"h{m}" for m in a.members), enqueued=now)
+            elif isinstance(a, Regenerate):
+                c = self.cands[a.sha]
+                self.cands[a.sha] = replace(c, records=RecordsRun(starts=c.records.starts + 1 if c.records else 1))
+            elif isinstance(a, Commit):
+                c, sha = self.cands[a.sha], f"{a.sha}r"
+                self.trees[sha] = self.trees[a.sha] | {RECORDS}
+                self.cands[sha] = Candidate(sha, c.base, c.members, c.heads, enqueued=now, repairs=a.sha)
         for sha, c in self.cands.items():
             if c.verdict.state == PENDING:
                 self.cands[sha] = replace(c, verdict=self.oracle(self.trees[sha], c))
+            if c.records is not None and c.records.state == PENDING and self.records is not None:
+                got = self.records(self.trees[sha], c)
+                self.cands[sha] = replace(self.cands[sha], records=replace(got, starts=c.records.starts))
         return acts
 
     def run(self, ticks: int = 60) -> Play:
@@ -677,6 +790,36 @@ class Play:
 
     def count(self, kind: type) -> int:
         return sum(isinstance(a, kind) for acts in self.acts for a in acts)
+
+
+def test_two_lean_prs_whose_records_go_stale_only_together_land_together_with_their_records_commit():
+    """Each carries its own records, and merged they leave a lock's records stale, as two Lean PRs meeting do: their
+    candidate's records are regenerated on its tree and committed on top of it, and that records commit lands all three,
+    nobody ejected or bisected."""
+    def oracle(tree, c):
+        return Verdict(FAIL, (stale(),), ended=True) if {1, 2} <= tree and RECORDS not in tree else Verdict(PASS)
+
+    p = Play([lean(1), lean(2), pr(3)], oracle, {"records": True, "lean": 2}, records=lambda tree, c: RecordsRun(PASS)).run(12)
+    assert sorted(p.landed) == [1, 2, 3] and not p.ejected and p.main == "c1r"
+    assert p.count(Regenerate) == 1 and p.count(Commit) == 1 and not any(o.state == FAIL for o in p.history)
+
+
+def test_records_whose_regeneration_changes_a_guarantees_statement_eject_the_pr_that_brings_them_and_ring_their_owner():
+    """#2 leaves a guarantee's statement unrecorded, so its records are stale wherever it is merged, and regenerating them
+    changes what the guarantee says: refused each time, the batch bisected on the members their records meet, #1 lands and
+    #2 alone is ejected, the guarantee's owner rung with each refusal."""
+    def oracle(tree, c):
+        return Verdict(FAIL, (stale(),), ended=True) if 2 in tree and RECORDS not in tree else Verdict(PASS)
+
+    def records(tree, c):
+        return RecordsRun(FAIL, "regenerating Security's records changes what a guarantee says: guarantee G: changed",
+                          ("@proofs",))
+
+    p = Play([lean(1), lean(2)], oracle, {"records": True, "lean": 2}, records=records).run(20)
+    assert p.landed == [1] and [e.number for e in p.ejected] == [2] and p.count(Commit) == 0
+    rings = [a for acts in p.acts for a in acts if isinstance(a, Ring)]
+    assert len(rings) == 2 and {r.to for r in rings} == {("@proofs",)}
+    assert "changes what a guarantee says" in p.ejected[0].why
 
 
 def test_a_red_main_no_pr_touches_lands_every_pr_and_rings_its_red_once():
