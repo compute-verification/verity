@@ -29,8 +29,8 @@ network certifier and the dataflow discharge. Its witnesses
 
 `TheftServedReq` is `TheftServed` per charge unit, in bits: the released outputs grouped into units (a request, or a
 request with the requests that read its state), each changed unit charged its whole output and its name, and the leakage
-term the probability that an incorrect proof block changes more than `F` units, in its window or later ones
-(`Served.Isolated`). `TheftServedMinEntropy` is `TheftServedReq` against every party, where honest use leaves the weights
+term the probability that an incorrect proof block changes more than `F` units, in its window or later ones, before the
+first rejection (`Served.Isolated`). `TheftServedMinEntropy` is `TheftServedReq` against every party, where honest use leaves the weights
 `K` bits of min-entropy: `2^(B - K)`. `TheftServedHonest` is the first's honest witness, `TheftServedMinEntropyHonest`
 the second's, and each has a nontrivial witness at the leaking toy deployment.
 -/
@@ -153,8 +153,9 @@ $$B = T\,(\log_2|\mathrm{Adv}| + \log_2|\mathrm{Tick}|) + K\,(\log_2|W| + \log_2
 \qquad K = F M + (L + 1)\,|U|:$$
 each window's advice and timing bucket, each changed unit's whole output with its name among the run's `T · |U|` units,
 and the halt. `Served.Isolated C F` says each incorrect proof block changes at most `F` units, in its own window or
-later ones, so `F M` counts the units the audit's undetected blocks change and `(L + 1) |U|` the windows released from
-the first rejection to the halt. `Served.Local` at `E = F` gives `Served.Isolated`. -/
+later ones, through the windows accepted before the first rejection, so `F M` counts the units the audit's undetected
+blocks change there and `(L + 1) |U|` the windows released from the first rejection to the halt. `Served.Local` at
+`E = F` gives `Served.Isolated`. -/
 def TheftServedReq : Prop :=
   ∀ {Ω R Θ Q Adv U W Tick Θ' : Type} [Fintype Ω] [Fintype R] [Fintype Adv] [Inhabited Adv] [Fintype U]
     [DecidableEq U] [Fintype W] [Nonempty W] [Fintype Tick] [Inhabited Tick]

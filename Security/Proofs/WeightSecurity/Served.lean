@@ -56,12 +56,6 @@ namespace Served
 
 variable {O V Tick Adv R Q Θ Θ' : Type}
 
-open Classical in
-/-- The number of windows accepted before the first rejection. -/
-noncomputable def accLen : List (Served O V Tick Adv) → ℕ
-  | [] => 0
-  | w :: l => if w.accepted then accLen l + 1 else 0
-
 theorem count_le_length (L : ℕ) : ∀ l : List (Served O V Tick Adv), count L l ≤ l.length
   | [] => le_rfl
   | w :: l => by
@@ -81,6 +75,26 @@ theorem count_le_accLen (L : ℕ) : ∀ l : List (Served O V Tick Adv), count L 
     · omega
     · rw [zero_add]
       exact Nat.succ_le_succ (min_le_right _ _)
+
+theorem accLen_le_count (L : ℕ) : ∀ l : List (Served O V Tick Adv), accLen l ≤ count L l
+  | [] => le_rfl
+  | w :: l => by
+    have := accLen_le_count L l
+    simp only [accLen, count]
+    split_ifs <;> omega
+
+/-- **The windows before the first rejection are accepted.** -/
+theorem accepted_of_lt_accLen : ∀ (l : List (Served O V Tick Adv)) (n : ℕ) (w : Served O V Tick Adv),
+    n < accLen l → l[n]? = some w → w.accepted
+  | [], _, _, h, _ => by simp [accLen] at h
+  | v :: l, n, w, h, hw => by
+    by_cases hv : v.accepted
+    · rcases n with _ | n
+      · simp only [List.getElem?_cons_zero, Option.some.injEq] at hw
+        exact hw ▸ hv
+      · simp only [accLen, hv, if_true] at h
+        exact accepted_of_lt_accLen l n w (by omega) (by simpa using hw)
+    · simp [accLen, hv] at h
 
 /-- **The windows accepted before the first rejection count in `lead`** when no accepted window sampled an incorrect
 proof block: each of them sampled none. -/
@@ -108,7 +122,7 @@ theorem isolated_of_local (C : Θ → Q × Adv → O → V) (E : ℕ) (Ou : Outs
   intro k hk
   rw [mul_sum]
   refine sum_le_sum fun n hn => ?_
-  have hn' : n < count L l := lt_of_lt_of_le (mem_range.1 hn) hk
+  have hn' : n < count L l := lt_of_lt_of_le (mem_range.1 hn) (hk.trans (accLen_le_count L l))
   have hlen : n < l.length := lt_of_lt_of_le hn' (count_le_length L l)
   have hw : l[n]? = some l[n] := List.getElem?_eq_getElem hlen
   refine (hloc n hn' _ hw).trans (le_of_eq ?_)
@@ -122,27 +136,15 @@ theorem sum_card_changed_le (C : Θ → Q × Adv → O → V) (F : ℕ) (Ou : Ou
     (hacc : ¬ ∃ w ∈ l, w.accepted ∧ w.sampledIncorrect) :
     ∑ n ∈ range (count L l), (changed C Ou L θ r l n).card ≤ F * lead l + (L + 1) * Fintype.card O := by
   have hca := count_le_accLen L l
-  have hk : min (accLen l) (count L l) ≤ count L l := min_le_right _ _
-  rw [← sum_range_add_sum_Ico _ hk]
+  rw [← sum_range_add_sum_Ico _ (accLen_le_count L l)]
   apply add_le_add
-  · calc ∑ n ∈ range (min (accLen l) (count L l)), (changed C Ou L θ r l n).card
-        ≤ F * ∑ n ∈ range (min (accLen l) (count L l)), incorrectAt l n := hiso _ hk
-      _ ≤ F * ∑ n ∈ range (accLen l), incorrectAt l n :=
-          Nat.mul_le_mul_left _ (sum_le_sum_of_subset_of_nonneg
-            (fun n hn => mem_range.2 (lt_of_lt_of_le (mem_range.1 hn) (min_le_left _ _))) fun _ _ _ => Nat.zero_le _)
+  · calc ∑ n ∈ range (accLen l), (changed C Ou L θ r l n).card
+        ≤ F * ∑ n ∈ range (accLen l), incorrectAt l n := hiso _ le_rfl
       _ ≤ F * lead l := Nat.mul_le_mul_left _ (sum_incorrectAt_le_lead l hacc)
-  · calc ∑ n ∈ Ico (min (accLen l) (count L l)) (count L l), (changed C Ou L θ r l n).card
-        ≤ ∑ _n ∈ Ico (min (accLen l) (count L l)) (count L l), Fintype.card O :=
-          sum_le_sum fun n _ => card_le_univ _
-      _ = (count L l - min (accLen l) (count L l)) * Fintype.card O := by
-          rw [sum_const, Nat.card_Ico, smul_eq_mul]
-      _ ≤ (L + 1) * Fintype.card O := by
-          refine Nat.mul_le_mul_right _ ?_
-          rcases le_total (accLen l) (count L l) with h | h
-          · rw [min_eq_left h]
-            omega
-          · rw [min_eq_right h]
-            omega
+  · calc ∑ n ∈ Ico (accLen l) (count L l), (changed C Ou L θ r l n).card
+        ≤ ∑ _n ∈ Ico (accLen l) (count L l), Fintype.card O := sum_le_sum fun n _ => card_le_univ _
+      _ = (count L l - accLen l) * Fintype.card O := by rw [sum_const, Nat.card_Ico, smul_eq_mul]
+      _ ≤ (L + 1) * Fintype.card O := Nat.mul_le_mul_right _ (by omega)
 
 variable [DecidableEq O]
 
