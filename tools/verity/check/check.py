@@ -1325,7 +1325,11 @@ CIRCUIT_ENTRIES = "check/circuit-check/"
 def verdicts_in(pack: Path, run_dir: Path | None, only: str | None = None) -> dict:
     """Import a verdict pack before the steps run (`verdicts.py`): the path given, else its name in a recorded run's `inputs/`;
     with ``only``, just its entries under that pack path."""
-    if not pack.exists() and run_dir is not None and (run_dir / "inputs" / pack.name).exists():
+    try:
+        here = pack.exists()
+    except PermissionError:                  # the launcher's path, under a directory this machine can't read (its /root)
+        here = False
+    if not here and run_dir is not None and (run_dir / "inputs" / pack.name).exists():
         pack = run_dir / "inputs" / pack.name
     added, kept = VERDICTS.import_(pack, only)
     print(f"check: verdicts: {added} imported, {kept} already here, from {pack.name}{f' (only {only})' if only else ''}", flush=True)

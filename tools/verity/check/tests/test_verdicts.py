@@ -280,6 +280,29 @@ def test_check_imports_a_pack_from_the_runs_inputs_and_names_it_in_the_result(tm
     assert json.loads((run / "result.json").read_text())["verdicts"]["in"]["added"] == 4
 
 
+def test_a_pack_under_a_directory_the_machine_cant_read_is_found_in_the_runs_inputs(tmp_path, monkeypatch):
+    """The launcher names the pack by its own path, and on another machine that path can sit under a directory the run may not
+    read (the control pod's /root): stat raises PermissionError there, not FileNotFoundError, and the run's copy is used."""
+    check = _load("check")
+    _fill(_machine(tmp_path, monkeypatch, "a"))
+    V.export(tmp_path / "verdicts-gathered.tar.gz")
+    _machine(tmp_path, monkeypatch, "node")
+    run = tmp_path / "run"
+    (run / "inputs").mkdir(parents=True)
+    (tmp_path / "verdicts-gathered.tar.gz").rename(run / "inputs" / "verdicts-gathered.tar.gz")
+    launcher = Path("/root/fast/vqueue-tmp/check-lean-deps-x/verdicts-gathered.tar.gz")
+    exists = Path.exists
+
+    def denied(self, *a, **kw):
+        if self == launcher:
+            raise PermissionError(13, "Permission denied", str(self))
+        return exists(self, *a, **kw)
+
+    monkeypatch.setattr(Path, "exists", denied)
+    got = check.verdicts_in(launcher, run)
+    assert got["added"] == 4 and got["pack"] == "verdicts-gathered.tar.gz"
+
+
 def test_the_agreement_key_leaves_out_what_names_the_machine(monkeypatch):
     check = _load("check")
     base = {"PATH": f"{check.ROOT}/.venv/bin:/usr/bin", "VERITY_SLOW": "1"}
