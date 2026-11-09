@@ -17909,3 +17909,33 @@ My plan is to prove the row format as a theorem and take it out of `Sites`, then
 So "lands right after TWOPROVE's PR" holds for the restatement, not for the toy witness.
 
 **Your call: mark after (b) and the records run, or hold the mark for the witness?** I'd mark after (b) and records, with `Sites` open and the witness following. Under (b) and `c1c80f9661`, `Sites` is no longer false at the toy and `Held` can be built there; both are expected to hold but aren't proved. The PR body would then say "unproven at the toy" rather than "vacuous". Say if you'd rather hold the mark for the witness.
+
+[2026-11-09T09:39Z] TWOOPENS (bc-09adba6a-e10f-536a-ad43-eeefd6ae53aa): #8309 is at `f806fd5ab6` with every commit pushed, and the witness sizing is ready early. Its long pole is building the toy's `Held`, not the copy fact.
+
+**#8309, still unmarked.** All four follow-up commits passed one try, `r20261109-093352-6fe3` (cpu-11, rc 0, at `f806fd5ab6`). It ran in about 2 minutes because its build directory was warm from the `5cca3e70d1` try: Lake rebuilt the 30 modules downstream of `SpotFlock.Code`, `Guarantees` among them, with no `sorry` outside ArkLib. I've cancelled `r20261109-090258-cfab` and `r20261109-092333-1c93`, which only checked intermediate commits.
+- The guarantees now rest on `Built` (domain) and `Sites` (open), beside the scope premises their statement reads. `Embeds` is a theorem (`embeds_layoutFor`), and `Held.refReads` is in.
+- New, `f806fd5ab6`: the row's format is no longer part of a site. `v2Row_port` proves every port of a checked unit's session's first table is an unsegmented bit row, from the pin and `templateOk`. `RowAt` keeps the width and the copy.
+- The body is rewritten for this head. Its first lines still say `Sites` is false at the toy until (b), and that `Held` couldn't be built at the toy before this PR.
+- TWOGUARD has the PR branch to merge for `refReads`.
+
+**Witness sizing: what's left of `Sites`, and the instance.**
+- **The copy fact (`RowAt`'s second fact) is smaller than I said at 09:27Z.** Its core is already proved at an accepted hidden statement:
+  - `copy_site_instH` (`HiddenExec/Inst.lean`): an instance's input column keyed `.msg q byte bit` holds the witness's bit at `Typed.msgCol`.
+  - `out_copy_instH`, the same for output rows.
+
+  What's missing is a bridge, general and not toy-specific:
+  - the layout's column for a gate (`colAt` at `pickAny`) is such an instance column, keyed by the site's port and place;
+  - the session's block for the unit (`β`) is the instance's block, `n / c.g`, which needs `Counted` and the table's size;
+  - the session witness's `InnerRows.bitAt` is the model witness at `siteAddrH`, from `accepted_check`'s satisfaction clause.
+
+  I'd estimate a few hundred lines.
+- **`Counted` is provable where no unit is always checked.** SPOT's code gives input slots empty cells, so a registration may set `always` to false everywhere. A checked unit is then a drawn second-stage unit's image, the session's draw is the part's sample (round 2), and the draw check's U3 gives drawn count = `instances` = `pub.n`. That's moderate, and it needs `always = false` as a hypothesis or a field of the instance.
+- **The width (`RowAt`'s first fact)** is the site's own choice. Under (b) a reader reads the writer's port, so the row is one row with one width.
+- **`ReadsRegistered`** comes after (b), from its `readOk` and `rowsOk`.
+- **The long pole is the instance, a `Held` for the toy.** `xS₀_ok` needs each template's reference statement decided in Flock's masked scope in the kernel, with no `native_decide`. The one precedent is `SessionLoop.Concrete`: a 15-module family for one statement with a `copy16` unit (`concreteStmt_setup`, under the open `FixedNetsBuild`; `Concrete.Trace` alone takes 529 s). The toy has five templates with `hm96` rows after (b)'s split. Separately, `Sites` quantifies over every accepted run, so its toy instance also needs the toy's `two`, `partition` and `reg` evaluated; TWOVERIFY's `regOk` note applies there.
+
+**Your call: which instance first?**
+- **(1) The toy itself:** the general theorems above, then each toy reference statement decided as `Concrete` decides its one. This is the long one, and I can't size the statements' kernel cost before trying one.
+- **(2) A synthetic two-stage registration first:** every template's reference statement is `Concrete.concreteStmt`, which reuses `concreteStmt_setup` under `FixedNetsBuild`. It shows `Held`, `Built` and `Sites` hold together at some two-stage registration, so the guarantee isn't vacuous in general. The toy follows as (1).
+
+I'd do (2) first, after the general theorems, since those are needed either way. Meanwhile I'll start the copy bridge and `Counted`, both general, in a separate branch off #8309 so the PR's statement doesn't move again before (b). Say if you'd rather they go into #8309 before its records run, since each one narrows what `Sites` says.
