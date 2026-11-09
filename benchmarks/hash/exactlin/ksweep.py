@@ -27,6 +27,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 
@@ -34,6 +35,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import exactlin as X
 import kbench
 import kgate
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 BKS = (128, 256, 512)
 WARPS = (4, 8)
@@ -63,7 +67,7 @@ def log(out: Path, rec: dict) -> None:
 
 
 class Shape:
-    def __init__(self, n: int, k: int, m: int):
+    def __init__(self, n: int, k: int, m: int) -> None:
         e = kgate.E()
         self.n, self.k, self.m = n, k, m
         self.copies = kbench.copies_for(n, k)
@@ -74,7 +78,7 @@ class Shape:
         self.y_last = e.dequantize(e.int_mm(self.xq, self.ws[-1][0]), self.sa, self.ws[-1][1])
         self.y = torch.empty((m, n), dtype=torch.bfloat16, device="cuda")
 
-    def fn(self, cfg: X.Cfg):
+    def fn(self, cfg: X.Cfg) -> Callable[[], None]:
         work = kgate.work()
 
         def f():
@@ -100,7 +104,8 @@ class Shape:
         return kgate.diff(self.y, self.y_last)
 
 
-def stage(out: Path, shape: Shape, cfgs: list[X.Cfg], reps: int, clock, phase: str, extra: dict | None = None) -> dict:
+def stage(out: Path, shape: Shape, cfgs: list[X.Cfg], reps: int, clock: Callable[[], int | None], phase: str,
+          extra: dict | None = None) -> dict:
     """Gate each config, time the ones that pass together (interleaved), and check the last y after the replays."""
     fns, recs = {}, {}
     for cfg in cfgs:
@@ -135,11 +140,12 @@ def stage(out: Path, shape: Shape, cfgs: list[X.Cfg], reps: int, clock, phase: s
     return {name: us for name, us in med.items() if name not in recs or recs[name]["ok"]}
 
 
-def best(med: dict, top: int, skip=()) -> list[X.Cfg]:
+def best(med: dict, top: int, skip: tuple[str, ...] = ()) -> list[X.Cfg]:
     return [X.Cfg.parse(c) for c, _ in sorted(((c, u) for c, u in med.items() if c not in skip), key=lambda cu: cu[1])[:top]]
 
 
-def gemm(out: Path, models: tuple[str, ...], ms: tuple[int, ...], top: int, reps: int, clock, tma: bool = False) -> dict:
+def gemm(out: Path, models: tuple[str, ...], ms: tuple[int, ...], top: int, reps: int, clock: Callable[[], int | None],
+         tma: bool = False) -> dict:
     from vllm.model_executor.layers.quantization.compressed_tensors.triton_scaled_mm import (
         triton_scaled_mm,
     )
@@ -166,7 +172,8 @@ def gemm(out: Path, models: tuple[str, ...], ms: tuple[int, ...], top: int, reps
     return table
 
 
-def quant(out: Path, models: tuple[str, ...], ms: tuple[int, ...], reps: int, clock) -> list[dict]:
+def quant(out: Path, models: tuple[str, ...], ms: tuple[int, ...], reps: int,
+          clock: Callable[[], int | None]) -> list[dict]:
     """Each (num_warps, rows a program) plan gated (xq and s_a equal int8_exact's on plain rows, on the edge rows, and, from
     M 4, at M - 3 rows, which leaves a partial row block) and timed over copies of plain rows that together pass the L2, as
     served activations arrive."""

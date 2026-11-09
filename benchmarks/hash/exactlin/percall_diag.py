@@ -25,8 +25,14 @@ import multiprocessing as mp
 import os
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from multiprocessing.connection import Connection
+
+    import torch
 
 HERE = Path(__file__).resolve().parent
 PIN = "/workspace/hf/hub/models--verity-int8--Llama-3.1-8B-INT8/snapshots/723d342ac443b040931242c768df342b0f6f15a7"
@@ -74,14 +80,14 @@ def stock_checkpoint(scratch: Path) -> Path:
 class Recorder:
     """Per int8 GEMM call while `on`: (K, N, M) and M s_a bits, M xq checksums, M y checksums (int64, exact)."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.on = False
         self.kn: list[tuple[int, int, int]] = []
         self.data: list[np.ndarray] = []
         self.short = 0
         self.wv = None
 
-    def take(self, xq, s_a, y) -> None:
+    def take(self, xq: torch.Tensor, s_a: torch.Tensor, y: torch.Tensor) -> None:
         import torch
         m, k = xq.shape
         n = y.shape[1]
@@ -184,7 +190,7 @@ def install_tuning_log(pick: str | None) -> list[dict]:
     return log
 
 
-def worker(spec: dict, conn) -> None:
+def worker(spec: dict, conn: Connection) -> None:
     """One engine: SPEC's env set before torch is imported, built, then served on the parent's `go`."""
     os.environ.update(spec["env"])
     os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
@@ -303,7 +309,7 @@ def compare_records(pa: Path, pb: Path) -> dict:
     return out
 
 
-def run_scenario(name: str, a, out: Path, scratch: Path) -> dict:
+def run_scenario(name: str, a: argparse.Namespace, out: Path, scratch: Path) -> dict:
     """NAME's engines up one at a time and resident together, then served in order; each's rc-like status."""
     graphs, caches, engines = SCENARIOS[name]
     ctx = mp.get_context("spawn")

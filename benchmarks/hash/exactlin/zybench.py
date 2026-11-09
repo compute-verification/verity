@@ -28,15 +28,19 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from verity_vllm.engine import int8_exact as E
+from verity_vllm.engine import int8_fused as F
+
 import kbench
 import kgate
 
-from verity_vllm.engine import int8_exact as E
-from verity_vllm.engine import int8_fused as F
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
@@ -81,7 +85,8 @@ def gate_row(n: int, k: int, m: int) -> dict:
     return row
 
 
-def arm_fn(arm: str, xq, s, ws, y, zys, rows):
+def arm_fn(arm: str, xq: torch.Tensor, s: torch.Tensor, ws: list[tuple[torch.Tensor, torch.Tensor]], y: torch.Tensor,
+           zys: list[torch.Tensor], rows: int) -> Callable[[], None]:
     m, k = xq.shape
     cfg = F.pick(m, ws[0][0].shape[0], k)
     if arm == "scaled_mm":
@@ -100,7 +105,7 @@ def arm_fn(arm: str, xq, s, ws, y, zys, rows):
     return f
 
 
-def shape_row(n: int, k: int, m: int, reps: int, clock, names: list[str]) -> dict:
+def shape_row(n: int, k: int, m: int, reps: int, clock: Callable[[], int | None], names: list[str]) -> dict:
     rows = rows_for(m)
     copies = kbench.copies_for(n, k)
     xq, s = F.row_quant(kgate.activations(m, k, 7 + m, special=False))
