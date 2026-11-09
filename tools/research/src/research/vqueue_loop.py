@@ -28,8 +28,8 @@ listing verdict).  Ring tells infra's handle (`drive.INFRA`), once a candidate. 
 in the log.
 
 `--shadow` logs advance, eject, ring and every message with `shadow: true` and does none of them, and builds, drops and
-retries: its `main` is the newest candidate it advanced (logged) while origin's `main` is below it, and a PR it ejected stays
-out until marked again.  `--dry-run` prints the snapshot and the actions and writes nothing: no ref on origin, no log, no
+retries: its `main` is the newest candidate it advanced (logged) while origin's `main` is below it, a pass its `main` no longer
+holds is no history, and a PR it ejected stays out until marked again.  `--dry-run` prints the snapshot and the actions and writes nothing: no ref on origin, no log, no
 enqueue, no label, no message.  The loop never writes drive's state, its priority file, `next`, `checked` or a label, but an
 eject's without `--shadow`.
 
@@ -136,9 +136,11 @@ class Past:
     def of(self, action: str, sha: str | None = None) -> list[dict]:
         return [r for r in self.lines if r.get("action") == action and (sha is None or r.get("sha") == sha)]
 
-    def history(self) -> tuple[Outcome, ...]:
+    def history(self, on: Callable[[str], bool] | None = None) -> tuple[Outcome, ...]:
+        """The drops' outcomes; with ``on``, a pass only of a candidate ``on`` holds (a shadow's `main` left behind)."""
         return tuple(Outcome(tuple(o.get("members") or ()), tuple(o.get("heads") or ()), o["state"], tuple(o.get("suspects") or ()))
-                     for r in self.of("drop") if isinstance(o := r.get("outcome"), dict) and o.get("state"))
+                     for r in self.of("drop") if isinstance(o := r.get("outcome"), dict) and o.get("state")
+                     and (on is None or o["state"] != PASS or on(r.get("sha") or "")))
 
     def tries(self, sha: str) -> int:
         return sum(1 for r in self.lines if r.get("sha") == sha and r.get("action") in ("build", "retry") and r.get("enqueued"))
@@ -433,7 +435,7 @@ class World:
             except ValueError as e:
                 self.log(f"research queue vqueue: commit:{sha[:12]}'s {READY_VERDICT} label holds no JSON ({e})")
                 return None
-        return v if isinstance(v, dict) else None
+        return {"labelled": labs[-1].ts, **v} if isinstance(v, dict) else None     # each verdict its own, for a retry's mark
 
     def _graph2(self, *args: str) -> subprocess.CompletedProcess | None:
         """graph2 run with ``args``; None when it has no such subcommand (argparse's `invalid choice`), or there is no graph2."""
@@ -579,7 +581,8 @@ class Loop:
             return 1 + height(on[sha], (*seen, sha)) if on.get(sha) in on and sha not in seen else 0
 
         cands.sort(key=lambda c: (height(c.sha), c.sha))       # each after the candidate it is built on
-        snap = Snapshot(main, tuple(sorted(ready, key=lambda x: x.rank)), tuple(cands), past.history(), self.batch, self.depth)
+        history = past.history((lambda sha: bool(sha) and w._ancestor(sha, main)) if self.shadow else None)
+        snap = Snapshot(main, tuple(sorted(ready, key=lambda x: x.rank)), tuple(cands), history, self.batch, self.depth)
         return Tick(n, main, origin, snap, judged, members, past, past.told())
 
     # -- a tick
@@ -751,7 +754,7 @@ class Loop:
 
     def _retry(self, c: Candidate, t: Tick) -> list[dict]:
         j = t.judged[c.sha]
-        why = (f"{c.verdict.state} verdict ({j.mark}) was retried already: its retry's results are pending" if j.mark in
+        why = (f"{c.verdict.state} verdict ({j.mark}) was retried already, and graph2 has said nothing new since" if j.mark in
                t.past.retried(c.sha) else None if j.mark else f"its verdict is {c.verdict.state}, not a terminal infra or "
                f"list-failed one")
         if why is not None:

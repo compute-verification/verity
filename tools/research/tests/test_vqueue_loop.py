@@ -204,8 +204,8 @@ def test_an_infra_verdict_is_retried_once_for_each_terminal_verdict_and_rings_in
     env.result(keys["pytest:a"], "pytest:a", "error", infra=True)
     (retry,) = loop.tick()
     assert (retry["action"], retry["enqueued"], retry["failed"]) == ("retry", True, [{"task": "pytest:a", "key": keys["pytest:a"]}])
-    (held,) = loop.tick()                                       # the same infra verdict: its retry's results are pending
-    assert (held["action"], held["enqueued"]) == ("retry", False) and "pending" in held["why"]
+    (held,) = loop.tick()                                       # the same infra verdict: its retry has no result yet
+    assert (held["action"], held["enqueued"]) == ("retry", False) and "nothing new" in held["why"]
     assert loop.tick() == []                                    # ... said once
     assert len(env.graph2.enqueued()) == 2
     env.result(keys["pytest:a"], "pytest:a", "error", infra=True)
@@ -319,6 +319,28 @@ def test_the_policy_itself_ejects_the_member_a_failure_meets_rebuilds_the_rest_a
     advance, landed = loop.tick()
     assert (advance["action"], landed["action"], landed["outcome"]["state"]) == ("advance", "drop", PASS)
     assert env.main() == again["sha"] and env.queued() == {} and loop.tick() == []
+
+
+def test_a_shadow_under_the_policy_itself_builds_on_the_main_it_advanced_to_until_origin_s_moves_elsewhere(env):
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(vqueue.decide, shadow=True)
+    (built,) = loop.tick()
+    keys = env.listed(built["sha"], {"pytest:a": ["a.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    advance, drop = loop.tick()
+    assert (advance["action"], advance["shadow"], advance["done"], drop["action"]) == ("advance", True, False, "drop")
+    assert env.main() == main and env.queued() == {}
+    env.put(2, {"b.txt": "2\n"})
+    (on,) = loop.tick()
+    assert (on["action"], on["members"], on["base"], on["main"], on["origin_main"]) == ("build", [2], built["sha"],
+                                                                                         built["sha"], main), on
+    moved = env.o.change({"z.txt": "z\n"})                          # drive lands something else on origin's `main`
+    _git(env.o.origin, "update-ref", "refs/heads/main", moved)
+    dropped, again = loop.tick()
+    assert (dropped["action"], dropped["sha"], dropped["main"]) == ("drop", on["sha"], moved) and "not on main" in dropped["why"]
+    assert (again["action"], again["members"], again["base"]) == ("build", [1, 2], moved)
+    assert env.main() == moved and env.posts == [] and env.withdrawn == []
 
 
 def test_an_action_that_fails_stops_the_tick_with_its_error_logged_and_a_torn_line_stays_its_own(env):
