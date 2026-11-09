@@ -186,10 +186,80 @@ def part_complete(lm: LM, tok, a) -> dict:
             "first_tokens": first}
 
 
+def context_of(tok, ids: list[int], pos: int, before: int = 6) -> str:
+    return tok.decode(ids[max(0, pos - before):pos]) + "⟦" + tok.decode([ids[pos]]) + "⟧"
+
+
+def part_explain(lm: LM, tok, a) -> dict:
+    """Where honest traffic leaves the boxes. Unclamped, over --texts, every value outside its box (a group site: a group
+    whose scale exceeds its bound), with its position's token and the tokens before it; and each text's sink-like
+    positions, whose largest residual-stream element at --sink-layer is over --sink-ratio times the text's median."""
+    boxes = Boxes.load(a.boxes)
+    texts = HELDOUT if a.texts == "heldout" else CALIBRATION
+    L = lm.spec.layers
+    sink_layer = a.sink_layer if a.sink_layer >= 0 else L + a.sink_layer
+    per_text, by_token = [], {}
+    t0 = time.time()
+    for i, text in enumerate(texts):
+        lm.boxes = None
+        ids = continued(lm, tok, text, a.new, a.cap)
+        taps = {k: None for k in lm.sites()}
+        lm.forward(torch.tensor([ids]), Cache(), taps=taps)
+        cls = position_class(torch.arange(len(ids)))
+        events = []
+        for k in lm.sites():
+            x = taps[k][0].float()
+            hb = boxes.hi[k][cls].float()
+            if k[0] in GROUP_SITES:
+                amax = x.abs().view(len(ids), -1, GROUP).amax(-1)
+                ratio = amax / hb[:, ::GROUP]
+                over = ue8m0_scale(amax) > hb[:, ::GROUP] / E4M3_MAX
+                coord = x.abs().view(len(ids), -1, GROUP).argmax(-1) + torch.arange(0, x.shape[1], GROUP)
+            else:
+                ratio = x.abs() / hb
+                over = ratio > 1
+                coord = torch.arange(x.shape[1]).expand_as(x)
+            for t, c in over.nonzero().tolist():
+                events.append((float(ratio[t, c]), k[0], k[1], t, int(coord[t, c]), float(x[t, int(coord[t, c])].abs())))
+        events.sort(reverse=True)
+        first: dict[int, tuple] = {}
+        for e in events:
+            if e[3] not in first or (e[2], e[1]) < (first[e[3]][2], first[e[3]][1]):
+                first[e[3]] = e
+        for t, e in first.items():
+            s = by_token.setdefault(tok.decode([ids[t]]), {"positions": 0, "max_ratio": 0.0})
+            s["positions"] += 1
+            s["max_ratio"] = max(s["max_ratio"], max(x[0] for x in events if x[3] == t))
+        r = taps[("resid", sink_layer)][0].float().abs()
+        peak, at = r.max(-1)
+        med = float(peak.median())
+        sinks = [{"pos": t, "context": context_of(tok, ids, t), "peak": float(peak[t]), "coord": int(at[t]),
+                  "over_median": float(peak[t]) / max(med, 1e-30)}
+                 for t in range(len(ids)) if float(peak[t]) > a.sink_ratio * med]
+        top = [{"ratio": e[0], "site": e[1], "layer": e[2], "pos": e[3], "coord": e[4], "value": e[5],
+                "context": context_of(tok, ids, e[3])} for e in events[:a.top]]
+        roots = sorted(({"pos": t, "site": e[1], "layer": e[2], "ratio": e[0], "context": context_of(tok, ids, t)}
+                        for t, e in first.items()), key=lambda r: (r["layer"], -r["ratio"]))
+        per_text.append({"text": i, "tokens": len(ids), "values_over": len(events), "positions_over": len(first),
+                         "top": top, "first_over_by_position": roots[:a.top], "sinks": sinks})
+        print(f"explain {i}: {len(ids)} tokens, {len(events)} values over in {len(first)} positions; worst "
+              + (f"{events[0][0]:.2f}x at {events[0][1]}:{events[0][2]} {context_of(tok, ids, events[0][3])!r}"
+                 if events else "none")
+              + f"; sinks {[(s['pos'], s['context'][-12:], round(s['over_median'])) for s in sinks]}, {time.time() - t0:.0f} s",
+              file=sys.stderr, flush=True)
+    return {"part": "explain", "texts": a.texts, "sink_layer": sink_layer, "per_text": per_text,
+            "by_token": dict(sorted(by_token.items(), key=lambda kv: -kv[1]["max_ratio"]))}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="gpt2", choices=sorted(MODELS))
-    ap.add_argument("--part", required=True, choices=("calibrate", "complete"))
+    ap.add_argument("--part", required=True, choices=("calibrate", "complete", "explain"))
+    ap.add_argument("--texts", default="heldout", choices=("heldout", "calibration"), help="explain: which traffic")
+    ap.add_argument("--sink-layer", type=int, default=3, help="explain: the residual stream that marks sinks")
+    ap.add_argument("--sink-ratio", type=float, default=16.0,
+                    help="explain: a sink-like position's residual peak over the text's median peak")
+    ap.add_argument("--top", type=int, default=12, help="explain: the largest overshoots and positions listed per text")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--boxes", type=Path, help="complete: the calibrated boxes.pt")
     ap.add_argument("--new", type=int, default=64, help="greedy continuation tokens a text adds to the traffic")
@@ -205,7 +275,7 @@ def main() -> int:
     lm = LM(a.model)
     tok = lm.tokenizer()
     t = time.time()
-    res = {"calibrate": part_calibrate, "complete": part_complete}[a.part](lm, tok, a)
+    res = {"calibrate": part_calibrate, "complete": part_complete, "explain": part_explain}[a.part](lm, tok, a)
     res.update({"model": a.model, "revision": MODELS[a.model]["revision"],
                 "args": {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(a).items()},
                 "seconds": time.time() - t})
