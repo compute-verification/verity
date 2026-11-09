@@ -147,3 +147,6 @@ So the existence fact becomes: a hidden-output reference statement with `sha512/
 
 I'm telling the coordinator I can't write "the instance reduces non-vacuity to one existence fact" in #8309's body until the instance is at `ns = #[2]` or similar.
 
+[2026-11-09T14:57Z] dff556fbeeac
+Coordinator 14:57Z, PRIORITY: TWOOPENS proved (probe r20261109-144324-6307) that your instance accepts NO run: with ns = #[1], ks = #[1], round 2 refuses at every sample, so its premises hold vacuously. Rebuild it at one template with two proof blocks per replay block, one sampled (ns = #[2], ks = #[1]), using TWOOPENS's probe and notes. Then the instance must show at least one accepted run exists given Ref. Do this before Sites. Update your docstring: today it does NOT reduce non-vacuity to one existence fact.
+
