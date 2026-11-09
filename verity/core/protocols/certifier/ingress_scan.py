@@ -1,8 +1,9 @@
 """The ingress side of the step-indexed scan: one proof block a certifier bucket t, `IngressScanBucket`, which reads
 bucket t's ingress row, the carried state S_{t−1} and the Programs' row at t, and computes S_t from them and S_t's
 egress view, its outputs beside an ok bit (the generator form); the first bucket's, `IngressScanFirst`, reads no state
-and starts from the empty one. Every switch is computed from the state and the rows; none is witness. Nothing here is
-in a Spec.
+and starts from the empty one. Every switch is computed from the state and the rows; none is witness. Their Spec is
+the egress tie's (`scan_service.EgressTie`): of an execution phase, its ``first`` statement is bucket 0's proof block,
+its ``ingress`` statement buckets 1 … T − 2's and its ``last`` statement bucket T − 1's.
 
 **The row** is `warden_rows.window_rows`' row t of the ingress link: S = lanes·r slots of B-byte cells, lane block ρ
 (slots ρ·r … ρ·r + r − 1) the ρ-th live connection by ordinal and a block no connection holds r·B zero bytes. Its cells
@@ -34,8 +35,9 @@ anchor), and `ids`, C·K prompt ids of IDB bits: cell c's field k at c·K + k, s
 Each field is least significant bit first, the fields in `layout`'s order, then `pad`, zeros to a whole 16-bit word
 (S_t's zero, `sin`'s not read). The empty state (`empty`) is all zeros.
 
-**The token-id row** (`token_row`): the Programs at boundary b read the scan's state row b − 1, o1 of bucket b − 1's
-proof block, committed under its hiding leaf and registered as `verity/certifier/scan-state/v1`'s row b − 1: slot j's
+**The token-id row** (`token_row`): the Programs at boundary b read S_{b−1}, o1 of bucket b − 1's proof block,
+committed under its hiding leaf and registered as leaf b of the scan's state tree (`verity/certifier/scan-state/v1`,
+whose leaf 0 is the empty state and leaf t + 1 bucket t's o1, the sin bucket t + 1 reads): slot j's
 `occ`, 1 where the slot's Program starts at b and 0 for an empty slot, its `fields`, the request's prompt length, and
 its prompt ids, prompt position p at `ids[position(p)]` for p below `fields`, each IDB bits, beside the request's
 `max_tokens`, `seed`, `temperature` and `top_p`. The ids are the scan's own reading of the certified cells, each the
@@ -46,8 +48,8 @@ zero-extended, copies with no gate, through a read of the whole state row (`stat
 An empty slot's `fields` and ids aren't zeroed, nor are the ids past `fields` (they can be a request's not
 anchored at b, or an earlier request's), so such a Program masks its outputs by `occ` and reads a slot's first
 `fields` ids only. A window circuit of the execution phase from scan bucket t0 reads the window's rows as one value
-(vLLM's `SCAN_STATE`, row a for boundary a): `window_state`, the scan's rows t0 − 1 … t0 + buckets − 2, a constant
-offset t0 − 1, with row −1, the first execution phase's, the empty state's, since no proof block registers S_{−1}.
+(vLLM's `SCAN_STATE`, row a for boundary a): `window_state`, the state tree's leaves t0 … t0 + buckets − 1, a constant
+offset t0, with leaf 0, the first execution phase's first row, the empty state, which no proof block computes.
 
 **The Programs' row** (`prog_encode`) at bucket t is NR entries, entry j its own port `prog<j>`, one row of
 `entry_bits`: `read` (1 bit), n (u32) and KO output ids of IDB bits (`entry_layout`), then zeros to a whole 16-bit word
@@ -64,8 +66,10 @@ row j·nb + ⌊t / EVERY⌋ of one slot-entries input (`NetworkCheck.Period`'s `
 ⌊t / EVERY⌋ as `SlotEntry_v1` lays them out. Unless that input is a compute audit's `SlotEntry_v1` template's entries,
 its `read` bit is the prover's word: an entry of `read` 1, n 0 and no outputs for a request no Program reads passes
 these gates (o0's ok 1), and an unwired input is a free input the prover commits, not a zero. So the refusal of an
-absent entry holds against an honest prover only, and the period check refuses such a link-window (`wired`), and one
-whose scan's state is not that audit's `SCAN_STATE`, by root and domain (`stateTied`). The scan's state tree is the
+absent entry holds against an honest prover only, and the period check refuses such a link-window (`wired`), one
+whose scan's state is not that audit's `SCAN_STATE`, by root and domain, or whose registration doesn't state bucket t's
+sin at leaf t and its o1 at leaf t + 1 (`stateTied`), and one whose registration doesn't open leaf 0 to the empty state
+(`stateEmpty`). The scan's state tree is the
 window state (`window_state`), each row but the empty state's the S_t one unit computes (its o1) and the next reads (its
 sin), both registered reads, so each row a Program reads is the one the scan's step computed from the row before.
 
@@ -113,13 +117,13 @@ from one bucket's ingress to a later bucket's gates: each step reads the state t
 arrivals and the prompt lengths, which stay private.
 
 **Where it runs.** `row`, `sin` and each `prog<j>` are a registered read, an input port `Registered.checkPort` accepts:
-`row` the warden's signed row t (`warden_rows.bucket_port`), `sin` the scan's state row t − 1 and `prog<j>` the
-slot-entries row of slot j at t's boundary. o1 and o2 are gates, never inputs: the unit's statement commits o1 as the
-scan's state row t and o2 as its view row t, each registered as a read of its row (`checkPort` accepts a hidden-output
-statement's output row, the verifier's PROTOCOL.md §16.13), so bucket t + 1's `sin` and egress bucket t's `state`, which
-read those rows, read what bucket t computed: the carried state and the view are wires through the registered roots. The
-first bucket's unit, `IngressScanFirst`, has no `sin`: its S_{−1} is the empty state, constants of the circuit, so no
-row the prover commits stands in for it. Only o0 is public: a unit proof's public output is at most 16 bits, and o1 and
+`row` the warden's signed row t (`warden_rows.bucket_port`), `sin` leaf t of the scan's state tree (S_{t−1}) and
+`prog<j>` the slot-entries row of slot j at t's boundary. o1 and o2 are gates, never inputs: the unit's statement commits
+o1 as the state tree's leaf t + 1 and o2 as its view row t, each registered as a read of its row (`checkPort` accepts a
+hidden-output statement's output row, the verifier's PROTOCOL.md §16.13), so bucket t + 1's `sin` and egress bucket t's
+`state`, which read those rows, read what bucket t computed: the carried state and the view are wires through the
+registered roots. The first bucket's unit, `IngressScanFirst`, has no `sin`: it starts from the empty state, constants of
+the circuit, the state tree's leaf 0, which the period check holds to the empty state's encoding (`stateEmpty`). Only o0 is public: a unit proof's public output is at most 16 bits, and o1 and
 o2 are committed.
 
     IngressScanBucket{B, r, lanes, C, IDB, EVERY, WITHIN, D, KO, KI}(row: Array<lanes·r·B, Byte>, sin: Array<NS>,
@@ -603,14 +607,14 @@ SCAN_STATE = "verity/certifier/scan-state/v1"
 
 def window_state(cls: Class, rows: Sequence[Sequence[int]], t0: int, buckets: int) -> list[list[int]]:
     """The state rows a window circuit of the execution phase of `buckets` buckets from scan bucket t0 reads (the module
-    docstring's token-id row), row a the state boundary a's Programs read: the scan's rows t0 − 1 … t0 + buckets − 2
-    of `rows` (S_0, S_1, … as the proof blocks register them), row −1 the empty state's. ValueError, naming the fix,
-    unless the execution phase is whole slot strides and `rows` reach its last."""
+    docstring's token-id row), row a the state boundary a's Programs read: the state tree's leaves t0 … t0 + buckets − 1,
+    leaf 0 the empty state and leaf t + 1 `rows`[t] (S_0, S_1, …, the o1s the proof blocks register at leaves 1, 2, …).
+    ValueError, naming the fix, unless the execution phase is whole slot strides and `rows` reach its last."""
     if t0 < 0 or buckets < 1 or t0 % cls.EVERY or buckets % cls.EVERY:
         raise ValueError(f"a link-window starts at a boundary and is whole timesteps: t0 >= 0 and buckets >= 1, each "
                          f"a multiple of EVERY = {cls.EVERY}, not t0 = {t0}, buckets = {buckets}")
     if t0 + buckets - 1 > len(rows):
-        raise ValueError(f"the link-window from {t0} reads state rows up to {t0 + buckets - 2}: register "
+        raise ValueError(f"the link-window from {t0} reads the state tree's leaves up to {t0 + buckets - 1}: register "
                          f"{t0 + buckets - 1} rows, not {len(rows)}")
     if any(len(rows[t]) != state_bits(cls) for t in range(max(t0 - 1, 0), t0 + buckets - 1)):
         raise ValueError(f"a state row is {state_bits(cls)} bits")

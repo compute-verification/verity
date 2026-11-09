@@ -19,10 +19,11 @@ nothing, and ignores every entry outside a due, occupied slot (an entry off its 
 entry's padding, a due slot's entry whose occupancy word is 0, which takes no outputs); the Programs' entries are
 `SlotEntry_v1`'s rows, word-aligned, one port a slot; the same traffic at a KI one below request 3's prompt is
 refused at the cell that takes it past; a window
-circuit's state rows (`window_state`) are the scan's from t0 − 1, the empty state's first; the first bucket's circuit
-is the ingress circuit at the empty state, bit for bit; the egress circuit is its reference on the views;
-`scan_traffic.serve`, the zk run's driver, ticks the same rows as the network certifier; and the w63 class's state is
-the scan's sized layout, with the outputs N2's view reads."""
+circuit's state rows (`window_state`) are the state tree's leaves from t0, leaf 0 the empty state; the first bucket's
+circuit is the ingress circuit at the empty state, bit for bit; the egress circuit is its reference on the views;
+`scan_traffic.serve`, the zk run's driver, ticks the same rows as the network certifier; phase 6's prompt split and
+phase 9's carried field count are other scan states; and the w63 class's state is the scan's sized layout, with the
+outputs N2's view reads."""
 from __future__ import annotations
 
 import asyncio
@@ -160,7 +161,43 @@ def test_a_prompt_over_KI_ids_is_refused_at_the_cell_that_takes_it_past(run):
     assert refused == end and run.states[end + 1].slots[0].fields == CLS.KI
 
 
-def test_a_window_circuit_reads_the_scan_s_state_rows_from_t0_minus_one(run):
+def _read(states) -> dict[int, tuple]:
+    """Each request's prompt as its Program reads it: its slot's token row in the one state where the slot is
+    occupied (`token_row`'s length and ids)."""
+    return {s.q: IS.token_row(CLS, st)[j][1:] for st in states for j, s in enumerate(st.slots) if s.occ}
+
+
+def test_the_scan_reads_each_prompt_off_its_cells_so_a_split_or_a_carried_count_is_another_state(run):
+    """The ingress tie's refusals, the scan's: the prompt split (phase 6: two requests' prompt lengths swapped, their
+    cells' total kept) and the carried field count (phase 9: a lane's carry-in fields + Δ). The scan holds no advice:
+    the token row a Program reads is the scan's state, computed from the cells, so the same requests served in the
+    other order give each request its own prompt, and the honest state with requests 1's and 2's prompts swapped is
+    none of the scan's state rows, which the period check's `stateTied` holds an audit's `SCAN_STATE` to. Request 3's
+    prompt count + Δ before its last cell is refused or computes another S_t than the scan's."""
+    assert _read(run.states) == {q: (len(p), tuple(p)) for q, p in enumerate(PROMPTS, 1)}
+    swapped = ST.serve(PARAMS, [run.reqs[1], run.reqs[0], run.reqs[2]], [0, 1, 1], [1 << 20] * 3, RESPONSES, 1)
+    other = ST.chain(CLS, *swapped.rows(), {q: xs for q, xs in enumerate(RESPONSES, 1)})
+    assert other.ingress != run.rows
+    assert _read(other.scan) == {q: (len(p), tuple(p)) for q, p in enumerate((PROMPTS[1], PROMPTS[0], PROMPTS[2]), 1)}
+    t = next(t for t, st in enumerate(run.states) if sum(s.occ for s in st.slots) == 2)
+    a, b = run.states[t].slots
+    split = replace(run.states[t], slots=[replace(a, fields=b.fields, ids=b.ids), replace(b, fields=a.fields, ids=a.ids)])
+    honest = _read([run.states[t]])
+    assert {a.q, b.q} == {1, 2} and _read([split]) == {a.q: honest[b.q], b.q: honest[a.q]} != honest
+    assert IS.encode(CLS, split) not in run.chain.states
+    ch = run.chain
+    t, j = next((t, j) for t, st in enumerate(run.states) for j, s in enumerate(st.slots)
+                if s.live and s.q == 3 and s.fields and not s.done)
+    for delta in (1, 5, 40):
+        slots = list(run.states[t].slots)
+        slots[j] = replace(slots[j], fields=slots[j].fields + delta)
+        ok, st, _ = IS.reference(CLS, ch.ingress[t], IS.encode(CLS, replace(run.states[t], slots=slots)), ch.progs[t])
+        assert ok == 0 or st != ch.outputs(t)[0], delta
+
+
+def test_a_window_circuit_reads_the_scan_s_state_tree_from_leaf_t0(run):
+    """`window_state` numbers the rows as the state tree's leaves: leaf 0 the empty state, leaf t + 1 bucket t's o1, so
+    the window from t0 reads leaves t0 … t0 + n − 1, which is the chain's own numbering (``states[t + 1]`` is S_t)."""
     ch, T = run.chain, PARAMS.window
     registered = ch.states[1:]
     assert len(registered) == T and IS.window_state(CLS, registered, 0, T) == ch.states[:T]

@@ -13,12 +13,13 @@ A spec-level reference for network accounting's timing channel:
   against the digest its certificate signs), with a host-side verifier of record (no proof of the
   check yet) that compares no grid in the clear. Its claim is counts only: on every execution phase the head check holds
   the egress head's counts to the profile (and the ingress head's, where that end declares one), so the link's timing
-  is at the profile. Nothing here holds the frames, the rest of the egress grid (N3, the content check prototyped in
-  `benchmarks/network_sim`, is retired, superseded by the step-indexed scan, `ingress_scan` and `egress`, outside this
-  protocol). The network verdict of record is
-  `LinkWindows.network_verdict`, the AND over the link's execution phases with no ε or share credit: every window of the
-  egress profile registered in order with an accepted outcome, and a rejected, late, missing or out-of-order window
-  rejects the link;
+  is at the profile. On a network certifier link the egress tie (`scan_service`, below) holds the frames, the rest of
+  the egress grid, to the committed trace (N3, the content check prototyped in `benchmarks/network_sim`, is retired,
+  superseded by it). The network verdict of record is
+  `LinkWindows.network_verdict`, the AND over the link's execution phases with no ε or share credit: every execution
+  phase of the egress profile registered in order with an accepted outcome and, on a network certifier link, its egress
+  tie accepted (`network_verdict(egress=…)`), and a rejected, late, missing, untied or out-of-order phase rejects the
+  link;
 - a served link's counts (`served`, `LinkWindows(served=ServedProfile(F, F_in, windows, own))`), whose egress end has no
   occupancy profile: N2's served proof block, `NetworkServedLinkWindow`, adds a Boolean Definition,
   `NetworkServedCounts_v1` (678,795 ANDs at T = 600, F = 1024, F_in = 1, R = 6, R_in = 1), that holds the egress
@@ -39,37 +40,38 @@ A spec-level reference for network accounting's timing channel:
   the committed decisions and `compile_steps`' Programs, and is held step for step to the replay
   (`benchmarks/network_e2e/encodings/replay_vectors.py`); it is in no proof-system Spec yet. It takes the circuits
   and their evaluator from `verity`;
-- the I/O tie (`io_tie`), a design (`PROTOCOL.md`, "The I/O tie") and its prototype on a fake upstream, in no Spec:
-  served through the network certifier's egress, every cell of an egress execution phase is opened, each a pad, the
-  canonical event of one token id or the response's end on the stream the network certifier set, and each is the cell
-  the advice's map names at its place (`window_map`, from the advice's outputs, release buckets and advice v1's order
-  permutation, each request on its ingress ordinal's stream from 1, accepted on TRACE-CORPUS's heavy trace; the verifier
-  computes it in the clear from the opened advice, the named gap, until the map is read in the proof under the advice's
-  hiding root), with the id the Commit sampled for it (the port: one hiding row of ids a step, read under the Commit's
-  root). The cells are the network certifier's (`warden`): a connection's r slots a bucket, a `PAD` on its stream before
-  its first cell and after its `END`, one id event a `DATA` cell. The network certifier commits each bucket's cells as
-  one hiding row. It has the reference and the proof block's Boolean Definition, one a bucket row (`IoTieBucket`: the
-  row and the port's rows read as registered rows, the network certifier's and the Commit's (`port_reads`), then
-  `IoTieContent`: `IoTieCell` on every cell, the prover's Beneš routing of the port's entries `IoTieRoute`,
-  `IoTieMatch`);
+- what the network certifier's ties share (`io_tie`, `PROTOCOL.md`, "The I/O tie"): the id form's cells and their one
+  reading (`parse_cell`), a Commit's rows read as registered rows (`port_reads`) and the Beneš routing (`IoTieRoute`),
+  on which the ingress tie, the ingress-ids tie and the egress tie build;
 - the ingress tie (`io_request`, `PROTOCOL.md`, "The ingress tie") on the network certifier's own ingress (`serve`): one
   proof block a registered bucket row (`warden_rows.bucket_port`), each live connection's lane of r slots read as the
   network certifier's cells (a `PAD` on its ordinal, a `DATA` of exactly B − 9 bytes, its `END`), each request cell a
   cell of CERT-VARLEN's id
-  request, with its count of prompt fields carried across buckets from the lane's carry-in to its carry-out, which
-  hold each request's prompt_len to the advice's and which the ingress tie's verdict (`tie_service.IoTieVerdict`) is
-  built from. It has the reference, the lanes the verifier computes from the advice and the warden's release
-  (`lanes`, `Release`), and the proof block's Boolean Definition (`IoTieRequest`: one `IoTieRequestFrame` and
-  `IoTieRequestStep` a cell, `IoTieRequestEnd` a lane); the ingress-ids tie (`io_ids`, `IoTieRequestIds`) adds the
-  Commit's `c00.input/ids` rows to the same scan and holds every prompt id to them;
+  request, with its count of prompt fields carried across buckets from the lane's carry-in to its carry-out. It has
+  the reference, the lanes built from advice prompt lengths and the warden's release (`lanes`, `Release`), and the
+  proof block's Boolean Definition (`IoTieRequest`: one `IoTieRequestFrame` and `IoTieRequestStep` a cell,
+  `IoTieRequestEnd` a lane); the ingress-ids tie (`io_ids`, `IoTieRequestIds`) adds the Commit's `c00.input/ids` rows
+  to the same scan and holds every prompt id to them. No verifier computes lanes, which would publish the advice's
+  prompt lengths: the step-indexed scan's ingress units read each request's prompt off the cells into the scan's
+  state (`ingress_scan`, below);
 - the capacity counts;
-- the egress side of the step-indexed scan (`egress`, N2) on a fake upstream, in no Spec: one proof block a link and
+- the egress side of the step-indexed scan (`egress`, N2): one proof block a link and
   bucket t (`EgressBucket`) that reads the scan's slot state S_t, a registered read, and computes the bucket's row of
   cells from it with every switch computed and none witness (the generator form): its outputs are a u16, `ACCEPT`
   exactly when the state renders a row, the one public output, and the row, committed as a registered read of the
   network certifier's egress row t (`warden_rows.bucket_port`), which opens only if the computed row is the network
   certifier's. It has the reference (`bucket_map`, `computed`, `rendered`, `outputs`) and the state's egress-view layout
   (`Shape`'s offsets), which the scan's ingress step writes;
+- the egress tie through the proof system (`scan_service`): `EgressTie`, an execution phase's step-indexed scan as one
+  registration of the proof system with every bucket proved, its 2T proof blocks in four statements (``first``,
+  bucket 0's `IngressScanFirst`; ``ingress``, buckets 1 … T − 2's `IngressScanBucket` blocks batched; ``last``,
+  bucket T − 1's, whose S_{T−1} no state leaf holds; ``egress``, the T `EgressBucket` blocks batched), every port a
+  registered read of the network certifier's rows, the committed trace's `SCAN_STATE` and slot entries, or the
+  prover's ``scan/view`` and ``scan/last``, so each S_t is the state leaf one block writes and the next reads; decided
+  by its verifier (`EgressTie.verify`: C-Flock's Lean verifier on its own registered reads), and `EgressTie.tie`, which
+  builds `EgressTieVerdict` from the stream's outcomes alone. `Scans`, the tie and its stream, is the verifier's own
+  source that `network_verdict(egress=…)` reads. `benchmarks/network_traces/scan_tie.py` proves an execution phase
+  through it on C-Flock's prover;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
@@ -211,19 +213,21 @@ A spec-level reference for network accounting's timing channel:
   occupied slot whose entry of the Programs' row isn't read (its read bit 0: a request no Program served). Unless the
   Programs' row is a compute audit's `SlotEntry_v1` template's entries, that template a pinned Definition (its closure
   digest one of `slotEntryPins`), the read bit is the prover's word (an entry of read 1 and no outputs passes), so the
-  period check refuses such a link-window (`NetworkCheck.Period`'s `wired`), and one whose scan's state isn't that
-  audit's `SCAN_STATE`, by root and domain (`stateTied`): the scan's state tree is the window state (`window_state`),
+  period check refuses such a link-window (`NetworkCheck.Period`'s `wired`), one whose scan's state isn't that
+  audit's `SCAN_STATE`, by root and domain, or whose registration doesn't state unit t's sin at leaf t and its o1 at
+  leaf t + 1 (`stateTied`), and one whose registration doesn't open leaf 0 to the empty state (`stateEmpty`): the
+  scan's state tree is the window state (`window_state`),
   each row but the empty state's the one a unit computes (its o1) and the next reads (its sin), both registered reads,
   so a Program reads the states the scan's steps computed;
   `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. Programs start at
   fixed slots a network timestep (ASK-122): a timestep is `EVERY` buckets, the warden's `every`, which divides its
   window, with `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a
-  slot's Program reads is the scan's state row b − 1 (`verity/certifier/scan-state/v1`, `token_row`): its occupancy
+  slot's Program reads is S_{b−1}, leaf b of the scan's state tree (`verity/certifier/scan-state/v1`, `token_row`;
+  leaf 0 the empty state, leaf t + 1 bucket t's o1): its occupancy
   word `occ` (1 for a slot whose Program starts at b, 0 for an empty slot), its prompt's length `fields` and its prompt
   ids, which the scan reads off the warden's signed ingress cells, so no other tie holds them to the certified bytes;
   `slot_row` gives each one's bits in the state row, for a reader that takes them as i32s (vllm's `ScanSlots_v2`), and
-  `window_state` the rows a window circuit of the link-window from bucket t0 reads, the scan's rows t0 − 1 on (the
-  empty state's for row −1). A Program gives all its outputs to its entry at its anchor (its read bit, n, u32, and 64
+  `window_state` the rows a window circuit of the link-window from bucket t0 reads, the state tree's leaves t0 on. A Program gives all its outputs to its entry at its anchor (its read bit, n, u32, and 64
   ids of 17 bits at w63's class, 71 words, the row `SlotEntry_v1` writes); a link-window's
   bucket t reads slot j's entry at row j·nb + ⌊t / EVERY⌋ of one slot-entries input, and an empty slot's entry is
   ignored (its outputs masked by `occ`, never on the egress). A request the class can't hold is refused at the scan's
@@ -255,16 +259,7 @@ A spec-level reference for network accounting's timing channel:
   window) its ingress admits whole requests by the admission rule (`served.Admission`). On a sealed pair link
   (`Proxy(pair=active.Pair.of(…))`, off by default), between two of the auditor's certifiers, every slot of the link is
   sealed after its record and opened before it (`verity.ml.crypto.aead`, SHA-512 counter mode then HMAC-SHA512, a
-  nonce per slot), so the records are the unsealed run's and a unit that doesn't open fails the link closed;
-- the ingress tie through the proof system (`tie_service`): `IngressTie`, each ingress link-window's `IoTieRequest`
-  proof blocks, one a bucket row of the network certifier's registered ingress cells, proved as
-  `NetworkIngressTieBucket` (one gate
-  naming its pinned circuit digest, `io_request.circuit-check.json`) with the row read off the warden's root
-  (`warden_rows.bucket_port`) and its lanes and output row off values the verifier registers at known content
-  (`IngressTie.known`), decided by the verifier of record on its own lanes from the advice and the warden's
-  release, and `IngressTie.tie`, which builds `IoTieVerdict` on the link and the stream's registrations from the
-  stream's outcomes of record alone; `Ties`, the tie, its stream and the release as the verifier's own tie source,
-  which gives the verdict only on its own link. A size class no sidecar pins has no accepted proof.
+  nonce per slot), so the records are the unsealed run's and a unit that doesn't open fails the link closed.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof system, the hm96 leaves and the check's
@@ -280,7 +275,10 @@ package to them (`lake exe certifier-difftest INSTANCES PYTHON N` on what `lean/
 from `lean/lean-audit.json`). Advice v1's charge has its own: `lake exe certifier-charge-difftest INSTANCES PYTHON N` on
 what `lean/scripts/charge_vectors.py` writes from `arith_encode.reference_charge`, and its whole window's
 `lake exe certifier-window-difftest INSTANCES PYTHON N` on what `lean/scripts/window_vectors.py` writes from
-`window_charge.reference_window`.
+`window_charge.reference_window`. Its `NetworkCertifier.Rows` is the active network certifier's records as rows and their
+audit, the code form of `RecordRows` over the network certifier's lanes with `warden.audit` its reference, which
+`network-rows` (`verity/core/protocols/network`) runs on a run's certified records; no proof ties it to `RecordRows`
+yet.
 
 The two terms of the charge the capacity bounds leave open are fixed in the trusted text, in the last section of
 `Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation:
@@ -316,10 +314,11 @@ uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 
 ## Zero knowledge: what N2's verdict reads, and what's open
 
-Every protocol is to be zero-knowledge. The network audit's claim is counts only: N2 holds each window's per-bucket
-counts to the occupancy profile on every link-window (on a served link, to the ones its ingress counts derive under
-the declared sync), beside the proved timing bound (provisional). N3, the content check,
-is retired, superseded by the step-indexed scan (`ingress_scan`, `egress`).
+Every protocol is to be zero-knowledge. N2 holds each execution phase's per-bucket
+counts to the occupancy profile in every phase (on a served link, to the ones its ingress counts derive under
+the declared sync), beside the proved timing bound (provisional); on a network certifier link the egress tie
+(`scan_service`) holds the egress rows to the committed trace, and the network verdict counts only the execution
+phases it tied. N3, the content check, is retired, superseded by the step-indexed scan (`ingress_scan`, `egress`).
 
 N2's verifier of record, `LinkWindows.verify`, decides each execution phase on a `--zk` proof of N2's registered proof
 block (`NetworkLinkWindow` v5, served `NetworkServedLinkWindow` v4) and public inputs alone: its own run of Flock's Lean
@@ -362,8 +361,6 @@ to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
   (`Properties.NetworkCertifier.LinkWindowAcceptMeans`, proved): an accepted execution phase was proved, opened to the
   word 0b11, certified on both ends and synced within Σ_sync (a network certifier link's syncs are not asked of), and
   its public outputs are verdict 1 and deadline 1.
-
-`tie_service.IngressTie.verify`, the ingress tie's verifier, is not ported and stays Python.
 
 A proof of the proof block is held to its circuit. Each gate names its Definition's circuit digest
 (`Gate[NetworkHeadCheck_v2{…}@<digest>]_v2`, `served.gate` likewise), as `head_check.circuit-check.json` and

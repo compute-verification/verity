@@ -9,7 +9,7 @@ Seven adversarial cases, with two gaps closed:
   b. The compact record's ordinal is pinned to its connection's stream, its fill is zero and its token field is no
      wider than an id event's, but its finish is in band: `COMPACT_LAST` and `COMPACT_STOP` are flags of records the
      certifier commits whatever they say. `compact_finish_violations` holds them to the Commit's sampled ids (a stop
-     carries its EOS id), the rule the I/O tie applies.
+     carries its EOS id), the rule a compact run's tie applies.
 """
 
 from __future__ import annotations

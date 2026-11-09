@@ -1,5 +1,6 @@
 """N2, the egress side of the step-indexed scan: each egress bucket's cells computed, as the proof block's gates, from
-the scan's slot state, the generator form. Nothing here is in a Spec yet.
+the scan's slot state, the generator form. Its Spec is the egress tie's (`scan_service.EgressTie`), whose ``egress``
+statement is an execution phase's T proof blocks of it.
 
 **One proof block a link ℓ and bucket t** (`EgressBucket`). It reads one row, ``state``, the egress view of the slot
 state S_t the scan's ingress step t wrote (a registered read of the scan's view leaf t), and computes the row of R
