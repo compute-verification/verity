@@ -438,6 +438,17 @@ def lock_message(prs: str, rid: str, into: str, tip: str, warned: list[str], fil
 
 #: how many bookkeeping warnings of a lock run (`_put_locks`) its post lists; the lock commit lists them all
 BOOKKEEPING_SHOWN = 12
+
+
+def bookkeeping_told(rid: str, into: str, tip: str, prs: str, lock: str, warned: list[str]) -> tuple[str, tuple[str, ...]]:
+    """What is told of the bookkeeping lock run ``rid`` of ``into``'s ``tip`` repaired in lock commit ``lock`` (``warned``,
+    `merge.bookkeeping_warnings`: each a warning for the next PR to fix), and to whom, as handles with no `@`: the Lean check's
+    owner, `lean`, and each owner a warning names (`Driver._put_locks`)."""
+    owners = sorted({h for w in warned for h in re.findall(r"\(@([\w-]+)\)", w)} - {"lean"})
+    shown = "; ".join(warned[:BOOKKEEPING_SHOWN]) + (f"; and {len(warned) - BOOKKEEPING_SHOWN} more in the commit"
+                                                    if len(warned) > BOOKKEEPING_SHOWN else "")
+    return (f"the lock run {rid} of `{into}` {tip[:12]} repaired bookkeeping that {prs} brought, in {lock[:12]}, each a warning "
+            f"for the next PR to fix: {shown}", ("lean", *owners))
 #: the check slot rank (`slot.py --rank`) of every part of the after-landing run and of the lock run: a ranked
 #: priority waiter takes the next free check slot ahead of the unranked ones, so `main` never waits on a slot for them
 POSTLAND_SLOT_RANK = 0
@@ -3203,11 +3214,8 @@ class Driver:
               f"as {lock[:12]}" + (f", merged onto `{into}` {now[:12]} with {', '.join(take) or 'none of them'}"
                                    if now != tip else f" on `{into}`"))
         if warned:
-            owners = sorted({h for w in warned for h in re.findall(r"\(@([\w-]+)\)", w)} - {"lean"})
-            shown = "; ".join(warned[:BOOKKEEPING_SHOWN]) + (f"; and {len(warned) - BOOKKEEPING_SHOWN} more in the commit"
-                                                            if len(warned) > BOOKKEEPING_SHOWN else "")
-            self.tell(drive, [f"bookkeeping:{lock}"], f"the lock run {rid} of `{into}` {tip[:12]} repaired bookkeeping that "
-                      f"{prs} brought, in {lock[:12]}, each a warning for the next PR to fix: {shown}", "lean", *owners)
+            text, to = bookkeeping_told(rid, into, tip, prs, lock, warned)
+            self.tell(drive, [f"bookkeeping:{lock}"], text, *to)
         return lock
 
     def _chain(self) -> tuple[str, list[Member]]:
