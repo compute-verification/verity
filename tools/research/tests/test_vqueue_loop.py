@@ -730,8 +730,8 @@ def test_a_failure_s_tests_are_read_beside_its_base_s_and_one_whose_tests_the_ba
     keys = env.listed(sha, {"pytest:a": ["a.txt"], "pytest:t": ["t.py"]})
     env.result(keys["pytest:a"], "pytest:a", "pass")
     env.result(keys["pytest:t"], "pytest:t", "fail", tests=["test_t.py::a"])
-    (f,) = w.verdict(sha, main).verdict.failed                      # the base's has no result yet
-    assert (f.tests, f.base_tests, f.base_key) == (frozenset({"test_t.py::a"}), None, "sha512:base-t")
+    j = w.verdict(sha, main)                                        # the base's has no result yet: it waits for one
+    assert (j.verdict, j.note) == (Verdict(PENDING), "waiting for the base's listing: pytest:t there haven't ended")
     env.result("sha512:base-t", "pytest:t", "fail", tests=["test_t.py::a", "test_t.py::b"])
     (f,) = w.verdict(sha, main).verdict.failed
     assert f.base_tests == frozenset({"test_t.py::a", "test_t.py::b"})
@@ -1009,8 +1009,37 @@ def test_a_failure_waits_while_its_task_s_key_at_the_base_waits_on_what_it_reads
     v = w.verdict(sha, main).verdict
     assert v.state == FAIL and [(f.task, f.base_key) for f in v.failed] == [("pytest:r", None)]
     env.result("sha512:lx", "lean-build:x", "pass")
+    j = w.verdict(sha, main)                                         # its key there is made: it waits for its result
+    assert (j.verdict, j.note) == (Verdict(PENDING), "waiting for the base's listing: pytest:r there haven't ended")
+    _, base_keys, _ = w._settled(w.tasks.graph_v2(f"ready:{main}")[1])
+    env.result(base_keys["pytest:r"], "pytest:r", "pass")
     (f,) = w.verdict(sha, main).verdict.failed
-    assert f.base_key is not None and f.base_key != f.key
+    assert f.base_key == base_keys["pytest:r"] != f.key and not f.base_tests and not vqueue._inherited(f)
+
+
+def test_a_failure_waits_for_its_task_s_result_at_the_base_whatever_else_there_ended_in_infra(env):
+    """A failed task whose task of the same id at the base, keyed apart by the change, has no result yet leaves its candidate
+    pending, so a fault `main` has too is read beside the base's before any member is blamed: an infra error elsewhere in
+    the base's check leaves the wait as it is, one in the task there ends it."""
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(vqueue.decide)
+    (built,) = loop.tick()
+    sha, main, w = built["sha"], built["base"], loop.world
+    env.listed(main, {"pytest:t": ["t.py"], "pytest:u": ["u.py"]}, keys={"pytest:t": "sha512:base-t", "pytest:u": "sha512:base-u"})
+    keys = env.listed(sha, {"pytest:a": ["a.txt"], "pytest:t": ["t.py"], "pytest:u": ["u.py"]})
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    env.result(keys["pytest:u"], "pytest:u", "pass")
+    env.result(keys["pytest:t"], "pytest:t", "fail", tests=["test_t.py::a"])
+    env.result("sha512:base-u", "pytest:u", "error", infra=True)
+    j = w.verdict(sha, main)
+    assert (j.verdict, j.note) == (Verdict(PENDING), "waiting for the base's listing: pytest:t there haven't ended")
+    assert not {"drop", "eject", "rerun"} & set(_acts(loop.tick()))
+    env.result("sha512:base-t", "pytest:t", "error", infra=True)       # main's may never end: the wait ends
+    v = w.verdict(sha, main).verdict
+    assert v.state == FAIL and [(f.task, f.base_tests) for f in v.failed] == [("pytest:t", None)]
+    env.result("sha512:base-t", "pytest:t", "fail", tests=["test_t.py::a"])
+    (f,) = w.verdict(sha, main).verdict.failed
+    assert f.base_tests == {"test_t.py::a"} and vqueue._inherited(f)
 
 
 def test_a_graph_lacking_a_job_main_waits_for_is_list_failed_marked_with_it_so_it_is_retried_and_rung(env):

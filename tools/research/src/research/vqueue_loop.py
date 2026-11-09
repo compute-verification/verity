@@ -728,8 +728,9 @@ class World:
         task by all it reads, so a candidate's task at its base's key fails as it did there: `vqueue.Failed.base_key`), and its
         failing tests there, None unless it failed naming them, in its result or in graph2's verdict on ``base`` (read once a
         tick: `_named`), each a test id of that task's (`vqueue.Failed.base_tests`).  Why not yet, while that is to
-        come: `ready:<base>` isn't listed (`UNLISTED`), or a task's key there waits on what it reads; no failure is the
-        candidate's own until then.  A base whose listing failed, or whose graph can't be read, has none (logged)."""
+        come: `ready:<base>` isn't listed (`UNLISTED`), or a task there hasn't ended, its key waiting on what it reads or its
+        result to come, unless it or what it reads there ended in an infra error; no failure is the candidate's own until
+        then.  A base whose listing failed, or whose graph can't be read, has none (logged)."""
         if not base:
             return {}
         try:
@@ -745,9 +746,13 @@ class World:
                 return {}
             return UNLISTED
         states, keys, seen = self._settled(got[1], since, _said(theirs))
-        stuck = any(_infra(seen.got.get(k) or (), k) for k in keys.values() if k)      # what they read may never pass
-        if not stuck and (waiting := sorted(i for i in ids if i in keys and not keys[i] and states[i][0] == PENDING)):
+        erred = frozenset(i for i, k in keys.items() if k and _infra(seen.got.get(k) or (), k))
+        closure = _Closure({t["id"]: t for t in got[1]["tasks"]}, got[1].get("envs") or {})
+        open_ = [i for i in ids if i in keys and states[i][0] == PENDING and not closure.meets(i, erred)]
+        if waiting := sorted(i for i in open_ if not keys[i]):
             return f"{', '.join(waiting)} there still wait on what they read"
+        if running := sorted(open_):
+            return f"{', '.join(running)} there haven't ended"
         named = _named(theirs)
         return {i: (keys[i] or None, (_tests(states[i][1]) | named.get((i, keys[i]), frozenset()) or None)
                     if states[i][0] == FAIL else None) for i in ids if i in keys}
