@@ -2836,13 +2836,14 @@ pub fn unit_flat() -> bool {
 }
 
 /// Lane groups of 64 host unit slots evaluated in one pass of [`IrUnitNet::eval_wide`] by a walk over `slots` slots on a pool of
-/// `threads`: `FC_UNIT_WIDE` (1 to 8) for every walk when set, else [`width_for`] the walk's lane groups.
+/// `threads`: `FC_UNIT_WIDE` (1 to 8) for every walk when set, else [`width_for`] the walk's lane groups under the process's
+/// huge-page advice ([`crate::huge_pages::on`]).
 pub fn unit_width(slots: usize, threads: usize) -> usize {
     static N: OnceLock<Option<usize>> = OnceLock::new();
     let fixed = *N.get_or_init(|| std::env::var("FC_UNIT_WIDE").ok().map(|v| {
         v.parse().ok().filter(|n| (1..=8).contains(n)).unwrap_or_else(|| panic!("FC_UNIT_WIDE={v}: 1 to 8 lane groups a pass"))
     }));
-    fixed.unwrap_or_else(|| width_for(slots.div_ceil(64), threads))
+    fixed.unwrap_or_else(|| width_for(slots.div_ceil(64), threads, crate::huge_pages::on()))
 }
 
 /// The widest of 8, 4 and 2 lane groups a pass that still leaves `groups` at least `threads` passes, else 1, a pass a group. A
@@ -2850,8 +2851,12 @@ pub fn unit_width(slots: usize, threads: usize) -> usize {
 /// passes than threads leave cores idle. A pass of 3 or of 5 to 7 groups costs what its row word's full width does, so those
 /// widths are never taken. A wide pass holds its groups' rows at once, so the width stops at 8; and since a narrower width is
 /// taken only where 8 would leave a thread idle, a walk of wide passes never holds more row words at once than it would at 8.
-fn width_for(groups: usize, threads: usize) -> usize {
-    [8, 4, 2].into_iter().find(|&w| groups.div_ceil(w) >= threads).unwrap_or(1)
+/// Without huge-page advice (`advised` false, a GPU prover's), a walk of more than one group never takes 1: each pass faults
+/// its fresh buffers in 4 KiB at a time, and a pass a group runs enough passes at once that their faults at times stall the
+/// walk for many times its length, which 2 a pass, half as many, doesn't.
+fn width_for(groups: usize, threads: usize, advised: bool) -> usize {
+    let w = [8, 4, 2].into_iter().find(|&w| groups.div_ceil(w) >= threads).unwrap_or(1);
+    if w == 1 && !advised && groups > 1 { 2 } else { w }
 }
 
 /// `FC_UNIT_PROFILE=1`: the host witness's parts as `UNITPROF` lines on stderr.
@@ -3855,7 +3860,7 @@ mod tests {
     }
 
     #[test]
-    fn the_width_leaves_every_thread_a_pass_and_holds_no_more_than_8() {
+    fn the_width_leaves_every_thread_a_pass_holds_no_more_than_8_and_without_advice_is_never_1() {
         // the row words a walk of wide passes holds at once at most: its `threads` largest passes, a pass of n groups in a
         // row word of n.next_power_of_two() lanes
         let held = |groups: usize, w: usize, threads: usize| {
@@ -3865,16 +3870,23 @@ mod tests {
         };
         for threads in 1..=40 {
             for groups in 0..=320 {
-                let w = width_for(groups, threads);
+                let w = width_for(groups, threads, true);
                 let passes = groups.div_ceil(w);
                 let at = format!("{groups} lane groups on {threads} threads, {w} a pass");
                 assert!([1, 2, 4, 8].contains(&w), "{at}");
                 assert!(passes >= threads.min(groups), "{at}: {passes} passes leave a thread idle");
                 assert!(w == 8 || groups.div_ceil(2 * w) < threads, "{at}: {} a pass also leaves every thread a pass", 2 * w);
                 assert!(held(groups, w, threads) <= held(groups, 8, threads), "{at}: holds more row words at once than 8 a pass");
+                // without huge-page advice, 2 a pass where the advised width is 1, else the advised width
+                let u = width_for(groups, threads, false);
+                assert!(u == w || (w == 1 && u == 2 && groups > 1), "{at}: {u} a pass without huge-page advice");
+                assert!(u > 1 || groups <= 1, "{at}: 1 a pass without huge-page advice");
+                assert!(held(groups, u, threads) <= held(groups, 8, threads), "{at}, without advice {u}: holds more than 8 a pass");
             }
         }
-        assert_eq!([width_for(32, 4), width_for(32, 16), width_for(32, 96), width_for(1024, 96)], [8, 2, 1, 8]);
+        let advised = [width_for(32, 4, true), width_for(32, 16, true), width_for(32, 96, true), width_for(1024, 96, true)];
+        assert_eq!(advised, [8, 2, 1, 8]);
+        assert_eq!([width_for(32, 96, false), width_for(1, 96, false), width_for(1024, 96, false)], [2, 1, 8]);
     }
 
     #[test]

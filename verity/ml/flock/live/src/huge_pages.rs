@@ -27,6 +27,11 @@ pub fn set(on: bool) {
     ON.store(on, Ordering::Relaxed);
 }
 
+/// Whether allocations take the advice ([`set`]).
+pub fn on() -> bool {
+    ON.load(Ordering::Relaxed)
+}
+
 fn advise(p: *mut u8, size: usize) -> *mut u8 {
     if !p.is_null() && size >= MIN_BYTES && ON.load(Ordering::Relaxed) {
         let (a, e) = (p as usize / PAGE * PAGE, (p as usize + size).next_multiple_of(PAGE));
