@@ -613,7 +613,7 @@ run, the second stage drew `draw` (`secondDraw`) and round 1's record lists the 
 the session's sample proves (`drawnOf`) are its first table's instances (`Layout.drawn_spec`); and its sample's units
 are the drawn slots in the unit's template's part, counted from its first (`units_of_equiv`). -/
 theorem drawnAt {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1) :
-    ∃ draw rec (D : _root_.Flock.Draw.UnitDraw), secondDraw h r.c₀ r.c₁ = some draw ∧ jsonMsg r.m₁ = some rec ∧
+    ∃ draw rec, ∃ D : _root_.Flock.Draw.UnitDraw, secondDraw h r.c₀ r.c₁ = some draw ∧ jsonMsg r.m₁ = some rec ∧
       blocksOf rec = (h.reg.sample (src r.c₀)).toList ∧
       drawnOf ((FlockDeploy.readOf true (r.xS h)).bind (·.draw)) = D.proved.toList ∧
       r.sts[0]!.pub.n = D.proved.size ∧
