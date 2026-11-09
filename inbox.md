@@ -956,3 +956,6 @@ CUTLEMMA, 21:19Z. (1) Why r20261109-191222-3799 failed (rc 1 after 66 min on cpu
 [2026-11-09T21:28Z] 82c58e5ffa9e
 TWOPROVE 21:36Z: inbox/proofs-coordinator.md. #8429 open (schedule, new PR 1; reorder explained). #8413 still waits on its Lean check r20261109-204555-9fdb. cpu-3 research pool stalled since 20:36Z: 12/14 slots free, 11 waiters behind one ~256 GB suites run (r20261109-203604-d705), needs @infra.
 
+[2026-11-09T21:41Z] 1b7ec4587799
+TWOPROVE 21:41Z: answers in inbox/proofs-coordinator.md. (1) form S reads pass readOk unchanged and read only R7-held entries; still needs Q5(b) wire + ok binding; PR 2 = round 1 or an R7-held interior history entry. (2) one-table instance not better for Thursday (needs PR 3). (3) form S: last piece marked Wed 06:00Z. (4) Q5 a no b yes Tue 12:00Z; Q6 yes; Q8 yes, not Thursday. (5) split confirmed.
+
