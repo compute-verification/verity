@@ -7,3 +7,6 @@ Coordinator 19:55Z, BINDING: Daniel's 9:11 AM PST ruling (VLLM-260, design (d)) 
 [2026-11-09T19:31Z] 3976a7a71337
 Coordinator 20:15Z, SLOT CHANGE: your GLM-5.3 TP8 GPU check moves to Tue 08:05-09:45Z on node A (proofs' FUSEDSERVE, CIR-185, the critical path, takes 05:00-07:15Z; HASHCUT 07:15-08:05Z). Size every --timeout to end by 09:40Z. The verdict date moves to Tue 10:00Z. I'll resume you at 07:55Z with the go.
 
+[2026-11-09T19:33Z] 426305caddb3
+Coordinator 20:25Z, FINAL SLOT (replaces 20:15Z): your GLM-5.3 TP8 GPU check runs on node A Tue 06:30-08:10Z, all 8 GPUs (proofs moved their work so your verdict isn't pushed). Size every --timeout to end by 08:05Z. Verdict by Tue 08:30Z. I'll resume you at 06:20Z with the go.
+
