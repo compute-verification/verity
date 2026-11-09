@@ -211,11 +211,12 @@ files = [
 words = { "Session" = "Run" }
 
 [[words_in]]
-# The remote audit's record reads `Accounting.Remote.Draw.Session` beside the code's `RemoteAudit.Session`, which keeps
-# its name, so there only the dotted name is renamed.
+# The remote audit's record and its pooled bound read `Accounting.Remote.Draw.Session` beside the code's
+# `RemoteAudit.Session`, which keeps its name, so there only the dotted name is renamed.
 files = [
     "Security/Definitions/Accounting/Remote/Draw.lean",
     "Security/Properties/Accounting/Remote/Line/Record.lean",
+    "Security/Properties/Accounting/Remote/Pooled.lean",
 ]
 words = { "Draw.Session" = "Draw.Run" }
 
