@@ -99,12 +99,12 @@ def test_the_gate_refuses_a_field_reads_doesnt_declare_by_name():
 
 def test_the_table_is_the_compilers_read_path(monkeypatch):
     """Without its declaration a field the planner reads fails it by name, and the planner's body roles are the table's."""
-    from verity_vllm.program.predict import steps
+    from verity_vllm.program.predict import ingress_policy as IP
     monkeypatch.setattr(R, "_DECLARED", R._DECLARED - {("request", "finish")})
     with pytest.raises(R.UndeclaredRead, match=re.escape("the compiler reads request.finish")):
         plan_steps(_registered(), *_mixed())
-    assert steps._INERT == {f.name: f.inert for f in R.READS if f.role == "inert"}
-    assert set(steps._KNOWN) | set(steps._TRANSPORT) == {f.name for f in R.READS if f.record == "body"}
+    assert IP._INERT == {f.name: f.inert for f in R.READS if f.role == "inert"}
+    assert set(IP._KNOWN) | set(IP._TRANSPORT) == {f.name for f in R.READS if f.record == "body"}
 
 
 def test_the_compiler_reads_every_field_the_gate_passes(monkeypatch, tmp_path):
