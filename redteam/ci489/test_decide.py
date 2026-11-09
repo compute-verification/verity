@@ -1,7 +1,8 @@
 """`research.vqueue.decide` (ci's W3a) on crafted snapshots and in a small world that applies its actions as the loop does.
 
-Run against ci's branch: `VQRED_VQUEUE=<checkout of cursor/ci-vqueue-core>/tools/research/src/research/vqueue.py pytest
-redteam/ci489/test_decide.py`. The world gives each candidate a verdict from a scripted oracle over the PRs its tree holds.
+Run against ci's branch: `VQRED_VQUEUE=<checkout of cursor/ci-vqueue-w3>/tools/research/src/research/vqueue.py pytest
+redteam/ci489/test_decide.py` (10 pass at 2fe8e8f19c, which has the base_key extension; at f694fc7ec6 the two tests of the
+extension skip). The world gives each candidate a verdict from a scripted oracle over the PRs its tree holds.
 """
 from __future__ import annotations
 
@@ -77,13 +78,60 @@ def red_on_base(vq, tree, c):
 def test_a_red_base_ejects_every_pr_as_a_possible_flake(vq):
     """FINDING (innocent ejects, blocks the cut-over; top's 07:09Z point 1): with a task red on `main` that no PR touches, every
     candidate fails it; no member meets its inputs, so each batch is bisected down to single PRs, each fails alone twice, and
-    each is ejected "if a test flaked, delete it". After the world runs, every PR is ejected and none landed. FIX: ci's
-    `base_key` extension (due 08:30Z): a failure whose key equals the base's same task's key blames nobody; the loop must give
-    `decide` the base's verdict (`ready:<main sha>`), and wait (not eject) while it is pending."""
+    each is ejected "if a test flaked, delete it". After the world runs, every PR is ejected and none landed. This is still
+    `decide`'s answer after ci's `base_key` extension whenever `Failed.base_key` is None, which is every failure the loop gives
+    it at 702a8b73ac (it lists no base). FIX: the loop gives each failed task its base's key (`ready:<base>`'s graph), and
+    waits, ejecting nobody, while the base's graph is unlisted."""
     w = World(vq, [pr(vq, n) for n in range(1, 9)], red_on_base).run()
     assert w.landed == []
     assert sorted(e.number for e in w.ejected) == list(range(1, 9))
     assert all("if a test flaked, delete it" in e.why for e in w.ejected)
+
+
+HAWKEYE = "benchmarks/numerical/tests/reference/test_hawkeye_close.py"
+
+
+def inherited(vq, task: str, inputs: set[str], key: str):
+    """A failure at its base's own key: graph2 keys a task by all it reads, so the base fails it too."""
+    if "base_key" not in vq.Failed.__dataclass_fields__:
+        pytest.skip("this decide predates the base_key extension")
+    return vq.Failed(task, key, frozenset(inputs), base_key=key)
+
+
+def test_a_red_base_with_base_keys_lands_nothing_until_a_fix_does(vq):
+    """FINDING (liveness, blocks the cut-over), on ci's extension (w3 at 2fe8e8f19c): with base keys, a red base blames nobody,
+    but a candidate whose every failure is inherited still fails, so `main` can't move, and `_red` then batches only PRs that
+    touch the red task's inputs. Eight PRs, none touching it: one batch is built, it fails, Red is said once, and nothing is
+    built again. Nothing lands until someone writes a fix; a flaky fail cached on the base's key holds the queue the same way.
+    top's 07:09Z rule (no task fails on the candidate that passes on its base) lands all eight. FIX: a candidate whose
+    failures are all inherited advances; Red rings the task's owners once a base; batches stay open to every PR."""
+    def oracle(vq, tree, c):
+        return vq.Verdict(vq.FAIL, (inherited(vq, f"test-file:{HAWKEYE}", {HAWKEYE}, "sha512:red"),))
+
+    w = World(vq, [pr(vq, n) for n in range(1, 9)], oracle).run()
+    assert w.landed == [] and w.ejected == []
+    assert w.built == 1
+    assert sum(isinstance(a, vq.Red) for acts in w.acts for a in acts) == 1
+    assert all(acts == [] for acts in w.acts[2:])
+
+
+def test_a_fix_for_one_of_two_reds_cant_land(vq):
+    """FINDING (liveness, blocks the cut-over), on ci's extension: `main` red on two tasks (tonight: lean-audit's race and
+    hawkeye). #9 fixes the first; its tree still fails the second at the base's key, so it fails with every failure
+    inherited, is `_futile` from then on, and never lands; neither does anything else. Under the strict rule, the reds are
+    fixed only by one batch holding a fix for each. FIX: as above (no new failures)."""
+    a_in, b_in = {"a/tests/test_a.py", "a/mod.py"}, {HAWKEYE}
+
+    def oracle(vq, tree, c):
+        b = inherited(vq, f"test-file:{HAWKEYE}", b_in, "sha512:b")
+        if 9 in tree:
+            return vq.Verdict(vq.FAIL, (b,))
+        return vq.Verdict(vq.FAIL, (inherited(vq, "test-file:a/tests/test_a.py", a_in, "sha512:a"), b))
+
+    w = World(vq, [*(pr(vq, n) for n in range(1, 9)), pr(vq, 9, "a/mod.py")], oracle).run()
+    assert w.landed == [] and w.ejected == []
+    assert [c for c in w.trees if 9 in w.trees[c]] == ["c2"]
+    assert all(acts == [] for acts in w.acts[4:])
 
 
 def test_a_fail_with_no_failed_task_bisects_and_ejects_everyone(vq):
@@ -165,7 +213,8 @@ def test_a_pr_that_touches_a_red_tasks_inputs_is_ejected_for_it(vq):
     though `main` fails the same test the same way. top's rule is that no task fails on the candidate that passed on its
     base. FIX: a failure is inherited when the base failed the same task and the candidate's failing tests (`detail.
     failed_tests`) are a subset of the base's; a task without that detail (Lean, circuits) blames the PR as now."""
-    red = vq.Failed("test-file:t/test_x.py", "sha512:changed-by-the-pr", frozenset({"t/test_x.py", "src/x.py"}))
+    red = vq.Failed("test-file:t/test_x.py", "sha512:changed-by-the-pr", frozenset({"t/test_x.py", "src/x.py"}),
+                    **({"base_key": "sha512:red-on-main"} if "base_key" in vq.Failed.__dataclass_fields__ else {}))
     touching = pr(vq, 2, "src/x.py")
     c1 = vq.Candidate("c1", MAIN, (1, 2, 3), ("h1", "h2", "h3"), vq.Verdict(vq.FAIL, (red,)))
     acts = vq.decide(vq.Snapshot(MAIN, (pr(vq, 1), touching, pr(vq, 3)), (c1,)))
