@@ -5,7 +5,8 @@ public import Spot.WiresSound
 /-! **`check` is complete against its unrolled reference** (`check_complete`): whatever `checkRef` accepts, `check`
 accepts, for wires whose radices are 1 or more (as every wire `Wire.ofJson` reads is). With `check_sound` the two decide
 the same circuits: the span is attained (a reader index reaches the least writer and one the greatest), and two wires
-of one port whose rectangles meet wire a reader row twice. -/
+of one port whose rectangles meet wire a reader row twice; the order's closed form is its check unit by unit
+(`orderedWire_eq_ref`). -/
 
 @[expose] public section
 
@@ -167,6 +168,9 @@ theorem check_complete {c : Wiring} {es : List Entry} (hr : ∀ w ∈ c.wires, �
       split at h
       · cases h
       · rename_i hov
+        split at h
+        · cases h
+        rename_i hord
         have hall := firstWire_eq_none.1 hf
         have hw : ∀ w ∈ c.wires, 1 ≤ w.cuts ∧ w.units % w.cuts = 0 ∧ 1 ≤ w.units := fun w hw =>
           match hs : shape c w with
@@ -179,7 +183,10 @@ theorem check_complete {c : Wiring} {es : List Entry} (hr : ∀ w ∈ c.wires, �
           rw [List.map_flatMap, List.Nodup, List.pairwise_flatMap] at hov
           refine (pairwiseDisjoint_iff _).2 (hov.2.imp_of_mem fun {a b} ha hb hab => ?_)
           exact disjoint_of_entries (hw a ha).1 (hw a ha).2.1 (hw a ha).2.2 (hw b hb).1 (hw b hb).2.1 (hw b hb).2.2 hab
+        have hord' : orderCode c orderedWire = none := by
+          obtain ⟨o, ho, hin⟩ := orderCode_eq_none.1 hord
+          exact orderCode_eq_none.2 ⟨o, ho, fun w hw' => (orderedWire_eq_ref o w).symm ▸ hin w hw'⟩
         unfold check
-        simp [hcut, hf', hd]
+        simp [hcut, hf', hd, hord']
 
 end Spot.Wires

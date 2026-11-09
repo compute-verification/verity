@@ -16,7 +16,7 @@
 
 use sha2::{Digest, Sha256, Sha512};
 
-use crate::ir_block::{Group, IrUnitNet, RowRead, RowWrite};
+use crate::ir_block::{Group, IrUnitNet, RowRead, RowWrite, Rows};
 
 /// The library (core's `verity.ml.circuits.library`, the verifier's `Flock/Library.lean`): name, SHA-512 of the raw u32 LE words,
 /// index bits, value bits. A table is `library` exactly when its SHA-512 is listed, and `program` otherwise.
@@ -155,7 +155,7 @@ impl LookupNet {
     /// the net's SHA-256 identity).
     #[allow(clippy::too_many_arguments)]
     fn rows(name: &str, table: &'static [u32], n: usize, lo: usize, bits: usize, k: usize, products_b: bool, header: String) -> (IrUnitNet, Self) {
-        let (a, b, ln) = Self::rows_of::<Vec<Vec<usize>>>(table, n, lo, bits, k, products_b);
+        let (a, b, ln) = Self::rows_of::<Rows>(table, n, lo, bits, k, products_b);
         let mut h = Sha256::new();
         h.update(header.as_bytes());
         for w in table {
@@ -166,7 +166,7 @@ impl LookupNet {
             in_groups: vec![Group { col: 0, words: 1, bits: vec![n] }],
             out_groups: vec![Group { col: ln.out0 / 128, words: 1, bits: vec![bits] }],
             in_words: 1, out_cols: vec![ln.out0 / 128], a, b, unit_log: ln.unit_log, sha256: h.finalize().into(), leaves: None,
-            cut: None, order: None, flat: Default::default(),
+            cut: None, order: None, pass: Default::default(),
         };
         (net, ln)
     }
@@ -372,7 +372,7 @@ mod tests {
         for j in 0..ln.k {
             for h in 0..nh {
                 let want: Vec<usize> = (0..nlo).filter(|&l| (table[h * nlo + l] >> j) & 1 == 1).map(|l| ln.lo_top() + l).collect();
-                assert_eq!(net.b[ln.prod0 + j * nh + h], want, "product row ({j}, {h})");
+                assert_eq!(net.b.row_cols(ln.prod0 + j * nh + h).collect::<Vec<_>>(), want, "product row ({j}, {h})");
             }
         }
     }
@@ -387,10 +387,10 @@ mod tests {
         let (built, bl) = LookupNet::build_v2("t", &sha, table, n, 3, 31).unwrap();
         let (read, rl) = LookupNet::read_v2("t", &sha, table, n, 3, 31).unwrap();
         let products = bl.prod0..bl.prod0 + (bl.k << (n - bl.lo));
-        let mut want = built.b.clone();
+        let mut want = built.b.to_vecs();
         products.clone().for_each(|r| want[r].clear());
-        assert!(products.clone().any(|r| !built.b[r].is_empty()), "no product row reads the table");
-        assert!(read.a == built.a && read.b == want, "the rows");
+        assert!(products.clone().any(|r| built.b.row_len(r) > 0), "no product row reads the table");
+        assert!(read.a == built.a && read.b == Rows::from_vecs(&want), "the rows");
         assert_eq!((read.useful, read.const_pos, read.unit_log, read.sha256, read.out_cols.clone()),
                    (built.useful, built.const_pos, built.unit_log, built.sha256, built.out_cols.clone()));
         assert_eq!((rl.prod0, rl.out0, rl.lo_top(), rl.k), (bl.prod0, bl.out0, bl.lo_top(), bl.k));
@@ -404,8 +404,8 @@ mod tests {
         let table = random_table(n, 31337, 0x7FFF_FFFF, 0);
         for (lo, k, products_b) in [(4, 31, true), (5, 20, true), (4, 31, false)] {
             let (va, vb, vl) = LookupNet::rows_of::<Vec<Vec<usize>>>(table, n, lo, 31, k, products_b);
-            let (ra, rb, rl) = LookupNet::rows_of::<crate::ir_block::Rows>(table, n, lo, 31, k, products_b);
-            assert!(ra == crate::ir_block::Rows::from_vecs(&va) && rb == crate::ir_block::Rows::from_vecs(&vb), "lo {lo} k {k}");
+            let (ra, rb, rl) = LookupNet::rows_of::<Rows>(table, n, lo, 31, k, products_b);
+            assert!(ra == Rows::from_vecs(&va) && rb == Rows::from_vecs(&vb), "lo {lo} k {k}");
             assert_eq!((rl.const_pos, rl.prod0, rl.out0, rl.lo_rows, rl.hi_rows), (vl.const_pos, vl.prod0, vl.out0, vl.lo_rows, vl.hi_rows));
         }
     }

@@ -9,7 +9,8 @@ import pytest
 
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array, Value as Bits
+from verity.ml.circuits.refs import array_of, coll_concat
+from verity.ml.circuits.types import Array, Tuple, Value as Bits
 from verity.core.protocols.spot import service as S
 from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V
 
@@ -47,18 +48,36 @@ def _program(counts=COUNTS, window=WINDOW, values=()):
     return P.mixed_population_program([(t, counts[P.template_id(t)]) for t in window], values=values)
 
 
-def _ports(counts=COUNTS, values=()) -> dict:
-    part = P.partition(_program(counts, values=values), QUERY)
+def _gathered(counts=COUNTS) -> Program:
+    """The window in another form than its templates' mixed population, as the network certifier's scan's generator form
+    is: PAIR's instances read their bytes from one input they share, instance j rows j and j + 1 of ``t``."""
+    n0, n1 = counts[P.template_id(PAIR)], counts[P.template_id(TRIPLE)]
+
+    def signature(S_):
+        return ((("t", Array(n0 + 1, Bits(8))), ("1.x", Array(n1, Array(3, Bits(8))))),
+                Tuple(Array(n0, Bits(8)), Array(n1, Bits(8))))
+
+    def body(B, S_, t, x):
+        pairs = array_of([array_of([t[j], t[j + 1]]) for j in range(n0)])
+        return coll_concat(signature(S_)[1], [B.batch(PAIR, pairs, axes=(0,)), B.batch(TRIPLE, x, axes=(0,))])
+    return Program(bind(CompositeDefinition("ServiceTestGathered", 0, ("counts",), signature, body, register=False),
+                        counts=(n0, n1)))
+
+
+def _ports(counts=COUNTS, values=(), program=None) -> dict:
+    part = P.partition(program or _program(counts, values=values), QUERY)
     n = sum(counts.values())
     return {p: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), p, SCHEMA, leaves, RUN)}
             for p, leaves in (("x", n), ("out", 2 * n))}
 
 
-def _record(counts=COUNTS, program=None, query=QUERY, law=None, values=(), **kw) -> dict:
-    ports = _ports(counts, values)
+def _record(counts=COUNTS, program=None, query=QUERY, law=None, values=(), form=None, **kw) -> dict:
+    """A registration of the window's mixed population, or of `program` with the mixed population's ports; of `form`
+    with its own."""
+    ports = _ports(counts, values, form)
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **ports[p]} for i, p in enumerate(ports)]
-    return R.record(program or _program(counts, values=values), query, law or {"law": "stratified", "k": 3}, S.SCHEME,
-                    roots, {"kind": "served", "run": RUN, "row": 0}, **kw)
+    return R.record(form or program or _program(counts, values=values), query, law or {"law": "stratified", "k": 3},
+                    S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0}, **kw)
 
 
 def test_a_windows_stream_takes_its_templates_digests_and_query_in_its_order():
@@ -121,6 +140,38 @@ def test_a_registration_of_another_window_is_refused():
     assert _refused(lambda: pair_stream().register(pair_record(), pair_ports(6), counts={pair: 6})) == ("population",)
     reg = stream.register(_record(), _ports(), counts=COUNTS)
     assert reg.order == 0
+
+
+def test_a_window_in_another_form_runs_on_the_challengers_own_copy_of_it():
+    """A window registered in another form than its templates' mixed population (`_gathered`, as the network certifier's
+    scan registers its generator form) runs to an accepted outcome by the Lean run on a stream given the challenger's
+    own copy of that form (`Stream(program=)`), whose digest names it; a stream without it builds the mixed population and
+    refuses the registration (`R2-program`, `R2-partition`), and the stream with it refuses a registration of the mixed
+    population (`R2-program`) and counts that aren't its form's ranges (`population`). A form is a window's, of its
+    templates, one range each, in its order: refused with one template, values or another order."""
+    gathered = _gathered()
+    rec, ports = _record(form=gathered), _ports(program=gathered)
+    assert {"R2-program", "R2-partition"} <= set(_refused(lambda: _stream().register(rec, ports, counts=COUNTS)))
+    stream = FC.Stream(_spec(), WINDOW, budget=2, delta=DELTA, challenger="challenger-test", clock=Clock(),
+                       program=gathered)
+    assert stream.digest != _stream().digest
+    assert "R2-program" in _refused(lambda: stream.register(_record(), _ports(), counts=COUNTS))
+    pair, triple = P.template_id(PAIR), P.template_id(TRIPLE)
+    assert _refused(lambda: stream.register(rec, ports, counts={pair: 2, triple: 8})) == ("population",)
+    reg = stream.register(rec, ports, counts=COUNTS)
+    assert stream._entries[reg.order].program is gathered
+    draw = stream.select(reg)
+    assert len(draw.units) == 4 and 0 in draw.units and V.check_draw(draw.draw, rec, stream._entries[reg.order].law).ok
+    assert stream.deliver(draw, [SESSION]) is None
+    out = stream.outcome(draw, _lean(), {"statement": "stub"})
+    assert out.accepted and "run" not in stream.records[-1]["audit"]["checks"]
+    from test_service import _spec as pair_spec
+    for unit, spec, kw, why in ((PAIR, pair_spec(), {}, "takes no values"),
+                                (WINDOW, _spec(), {"values": (VALUE,)}, "takes no values"),
+                                (WINDOW, _spec(), {"program": P.mixed_population_program([(TRIPLE, 9), (PAIR, 1)])},
+                                 "one range a template")):
+        with pytest.raises(ValueError, match=why):
+            FC.Stream(spec, unit, budget=2, delta=DELTA, challenger="c", **{"program": gathered, **kw})
 
 
 def test_a_stratum_short_of_its_floor_is_refused():

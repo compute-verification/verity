@@ -48,11 +48,15 @@ planned on its own.  The serve tax is outside β; the token ids' hashing is in t
 two-stage statement holds one Definition's sampled proof blocks of a sampled request, or of a registration's sampled
 requests, its sessions padded to a public cap that every registration pays (`optimize.two_stage_statements`), each
 Definition taking whichever costs less.  `breakeven` gives each patterns'-form
-line's marginal overhead and β at which its bound reaches the weights, at FP8 and FP4.
+line's marginal overhead and β at which its bound reaches the weights, at FP8 and FP4, each certified by Lean unless
+`lean` is off (`certify`: at the β it gives, the bits Lean certifies for the planner's design are at most the weights).
+Only that side is Lean's: Lean bounds a design's bits from above, so nothing certifies that a smaller β can't reach the
+weights; and what a design costs, so which design fits a β, is the planner's pricing of the proof_overhead card.
 
     uv run python benchmarks/spot_figures/total_cost.py priced-card --model GLM-5.3 --out CARD.json
     uv run python benchmarks/spot_figures/total_cost.py render DIR/figure1.json [--scope "world year"] [--out DIR]
-    uv run python benchmarks/spot_figures/total_cost.py breakeven --model GLM-5.3 --out DIR [--scope S] [--workers N]
+    uv run python benchmarks/spot_figures/total_cost.py breakeven --model GLM-5.3 --out DIR [--scope S] [--workers N] \
+        [--no-lean]
 """
 from __future__ import annotations
 
@@ -762,49 +766,89 @@ def weights(c: dict[str, f1.InputCard]) -> dict[str, float]:
     return {"FP8": 8 * c["weights_bytes"].value, "FP4": 4 * c["params"].value}
 
 
-def _bound(line: tuple, scale: float, beta: float) -> float:
-    """A request-grain line's exfiltration bound at β with its marginal overhead times `scale`: `_point`'s, at most the
-    scope's served bits."""
+def _bound(line: tuple, scale: float, beta: float, lean: bool = False) -> dict:
+    """A request-grain line's exfiltration point at β with its marginal overhead times `scale`: `_point`'s, its `y` at
+    most the scope's served bits, with Lean's check of its design if `lean`."""
     name, i, (tb, fl, oh), s, computed, conf, gpu_s, replays = line
     m = f1.model(i, tb, s, oh * scale, fl)
     g = Grain(m.replay.replay_blocks, m.cells, m.replay.cost * replays, m.served)
-    job = (name, m, g, beta * s.gpu_seconds, computed, conf.form, g.replay_blocks * gpu_s / s.gpu_seconds, False)
-    return _point(job)["exfiltration"]["y"]
+    job = (name, m, g, beta * s.gpu_seconds, computed, conf.form, g.replay_blocks * gpu_s / s.gpu_seconds, lean)
+    return _point(job)["exfiltration"]
+
+
+def _at(what: str, line: tuple, beta: float, x: float, lean: bool = False) -> dict:
+    """The point a break-even searches: at the overhead's multiple `x` and β (`what` "h"), or at β = `x` and the line's
+    own overhead ("beta")."""
+    return _bound(line, x, beta, lean) if what == "h" else _bound(line, 1.0, x, lean)
 
 
 def _solve(job: tuple) -> float | None:
     """The multiple of a line's marginal overhead (`what` "h") at which its bound at β reaches `target` bits, or the β
-    ("beta") at which it does at its own overhead, by bisection in log to `rel` over its `SPANS`; None where the bound
-    is above the target over the whole span, and the span's end where it is below it throughout.  At a target of None,
-    the floor: the bound at the least overhead."""
+    ("beta") at which it does at its own overhead, by bisection in log to `rel` over its `SPANS`: the end of the last
+    bracket at which the bound is at most the target, so within 1 + `rel` of the break-even on its safe side; None
+    where the bound is above the target over the whole span, and the span's end where it is below it throughout.  At a
+    target of None, the floor: the bound at the least overhead."""
     what, target, line, beta, rel = job
     lo, hi = SPANS[what]
     if target is None:
-        return _bound(line, lo, beta)
-
-    def bound(x: float) -> float:
-        return _bound(line, x, beta) if what == "h" else _bound(line, 1.0, x)
-
+        return _bound(line, lo, beta)["y"]
     rising = what == "h"
-    if bound(lo if rising else hi) > target:
+    if _at(what, line, beta, lo if rising else hi)["y"] > target:
         return None
-    if bound(hi if rising else lo) <= target:
+    if _at(what, line, beta, hi if rising else lo)["y"] <= target:
         return hi if rising else lo
     while hi / lo > 1 + rel:
         mid = (lo * hi) ** 0.5
-        lo, hi = (mid, hi) if (bound(mid) <= target) == rising else (lo, mid)
-    return (lo * hi) ** 0.5
+        lo, hi = (mid, hi) if (_at(what, line, beta, mid)["y"] <= target) == rising else (lo, mid)
+    return lo if rising else hi
 
 
 #: the spans a break-even searches: the marginal overhead's multiple, and β
 SPANS = {"h": (1e-12, 1e2), "beta": (1e-6, 1e6)}
+#: the most steps outward from a solved break-even that Lean's certificate takes, the i-th of (1 + `rel`)^(2^i)
+STEPS = 6
+
+
+def certify(at, x: float, target: float, rising: bool, rel: float) -> dict:
+    """Lean's certificate that a line's exfiltration bound at a break-even's point is at most `target` bits.  `at(x)` is
+    the line's point at `x` with Lean's check of its design (`_point`'s exfiltration with `lean`): its count is the
+    bits Lean certifies for the design the planner picks there (`lean_two`), rounded up to a float, so `y`, that count
+    or the served bits if fewer, at most the target is the certificate.  Where it is above the target (Lean's bits
+    above the planner's, at a point the planner puts near the target), `x` steps outward (down for a bound rising in
+    it, up for one falling), the i-th step by (1 + `rel`)^(2^i), at most `STEPS` times; `at` None says no step reached
+    it."""
+    for step in range(STEPS + 1):
+        pt = at(x)
+        if pt["y"] <= target:
+            return _certificate(x, step, pt)
+        x = x / (1 + rel) ** 2 ** step if rising else x * (1 + rel) ** 2 ** step
+    return _certificate(None, STEPS, pt)
+
+
+def _certificate(x: float | None, steps: int, pt: dict) -> dict:
+    return {"at": x, "steps": steps, "y": pt["y"], "binds": pt["binds"],
+            **{k: pt.get(k) for k in ("count", "lean", "planner", "theta")}}
+
+
+def _certify(job: tuple) -> dict | None:
+    """`certify` at a break-even `_solve` found, at `x`; None where it found none.  At a target of None, the floor:
+    Lean's bound at the least overhead."""
+    what, target, line, beta, rel, x = job
+    if x is None:
+        return None
+    if target is None:
+        return _certificate(SPANS["h"][0], 0, _bound(line, SPANS["h"][0], beta, True))
+    return certify(lambda v: _at(what, line, beta, v, True), x, target, what == "h", rel)
 
 
 def breakeven(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None = None, request: str = "census",
-              workers: int = 1, rel: float = 0.01) -> dict:
+              workers: int = 1, rel: float = 0.01, lean: bool = True) -> dict:
     """Each patterns'-form line's break-even on each scope: the marginal overhead at which its bound at β =
     `RATIO_BUDGET` reaches each of the weights (`weights`), the β at which it does at the line's own overhead, and its
-    floor, the bound at the least overhead `SPANS` searches."""
+    floor, the bound at the least overhead `SPANS` searches.  With `lean`, each has Lean's certificate (`certify`): a
+    row's `lean` holds, for its floor and each break-even, the point Lean certifies (`at`, an overhead for `h`), the
+    bits it certifies there and which of them and the served bits binds, so its β is an upper bound on the β at which
+    the line's bound reaches the weights, and its overhead a lower bound on the overhead at which it does."""
     _, c, _, confs, inputs, lines, computed = _lines(model_name, request)
     targets = weights(c)
     chosen = [s for s in f1.scopes(c, lines["tokens"][0]) if scope_names is None or s.name in scope_names]
@@ -813,32 +857,54 @@ def breakeven(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None =
                        registration_gpu_seconds(confs[n].registration, c), batch(confs[n], s, c)), f1.RATIO_BUDGET, rel)
             for n, s in keys for what, t in [("h", None)] + [(w, t) for w in SPANS for t in targets.values()]]
     with ProcessPoolExecutor(workers) if workers > 1 else nullcontext() as pool:
-        it = iter(list((pool.map if pool else map)(_solve, jobs)))
+        each = pool.map if pool else map
+        solved = list(each(_solve, jobs))
+        certs = list(each(_certify, [j + (x,) for j, x in zip(jobs, solved)])) if lean else None
+    it, cit = iter(solved), iter(certs or [])
     rows = []
     for n, s in keys:
         oh, floor_bits = lines[n][2], next(it)
         at = {what: {name: next(it) for name in targets} for what in SPANS}
-        rows.append({"config": n, "scope": s.name, "registration": confs[n].registration, "overhead": oh,
-                     "floor": floor_bits, "h": {k: None if v is None else v * oh for k, v in at["h"].items()},
-                     "beta": at["beta"]})
-    return {"beta": f1.RATIO_BUDGET, "targets": targets, "rel": rel, "spans": SPANS, "rows": rows}
+        row = {"config": n, "scope": s.name, "registration": confs[n].registration, "overhead": oh,
+               "floor": floor_bits, "h": {k: None if v is None else v * oh for k, v in at["h"].items()},
+               "beta": at["beta"]}
+        if lean:
+            row["lean"] = {"floor": next(cit), **{what: {name: next(cit) for name in targets} for what in SPANS}}
+            for cert in [row["lean"]["floor"], *row["lean"]["h"].values()]:
+                if cert and cert["at"] is not None:
+                    cert["at"] *= oh
+        rows.append(row)
+    return {"beta": f1.RATIO_BUDGET, "targets": targets, "rel": rel, "spans": SPANS, "rows": rows,
+            "lean": {"exe": plancheck.EXE, "slack": str(plancheck.SLACK), "search": plancheck.SEARCH,
+                     "precision": plancheck.TWO_P, "steps": STEPS} if lean else None}
 
 
 def breakeven_table(be: dict) -> str:
     """The break-even as a table: a row per line and scope, its floor, the marginal overheads at which its bound at β
-    reaches each weights size and the β at which it does at its own overhead."""
-    names = list(be["targets"])
+    reaches each weights size and the β at which it does at its own overhead.  With Lean's certificates, each is the
+    point Lean certifies, marked "(served)" where the served bits bind there, and "uncertified" where Lean's bits stay
+    above the target."""
+    names, lean = list(be["targets"]), be.get("lean") is not None
     head = (["line", "registration", "scope", "h", "floor"] + [f"h for {n} at β = {_share(be['beta'])}" for n in names]
             + [f"β for {n}" for n in names])
 
     def fmt(v: float | None, end: float) -> str:
         return "none" if v is None else (">" if v >= end else "") + f"{v:.3g}"
 
+    def cell(r: dict, what: str, n: str, end: float) -> str:
+        if not lean:
+            return fmt(r[what][n], end)
+        cert = r["lean"][what][n]
+        if cert is None or cert["at"] is None:
+            return "none" if cert is None else "uncertified"
+        return fmt(cert["at"], end) + (" (served)" if cert["binds"] == "served" else "")
+
     rows = [[CONFIGURATIONS[r["config"]].label.split(" ")[0]
              + (" batch-invariant" if CONFIGURATIONS[r["config"]].replay == "request" else ""),
              r["registration"], r["scope"], f"{r['overhead']:.3g}",
-             _size(r["floor"])] + [fmt(r["h"][n], be["spans"]["h"][1] * r["overhead"]) for n in names]
-            + [fmt(r["beta"][n], be["spans"]["beta"][1]) for n in names] for r in be["rows"]]
+             _size(r["lean"]["floor"]["y"] if lean else r["floor"])]
+            + [cell(r, "h", n, be["spans"]["h"][1] * r["overhead"]) for n in names]
+            + [cell(r, "beta", n, be["spans"]["beta"][1]) for n in names] for r in be["rows"]]
     return "\n".join(" | ".join(x) for x in [head] + rows) + "\n"
 
 
@@ -1027,13 +1093,15 @@ def main(argv=None) -> None:
     be.add_argument("--out", type=Path, required=True)
     be.add_argument("--scope", action="append", help="a scope's name; default all")
     be.add_argument("--workers", type=int, default=1)
+    be.add_argument("--no-lean", action="store_true", help="skip Lean's certificate of each break-even")
     args = ap.parse_args(argv)
     if args.cmd == "priced-card":
         args.out.write_text(json.dumps(priced_card(args.model), indent=1) + "\n")
         print(args.out)
         return
     if args.cmd == "breakeven":
-        out = breakeven(args.model, tuple(args.scope) if args.scope else None, workers=args.workers)
+        out = breakeven(args.model, tuple(args.scope) if args.scope else None, workers=args.workers,
+                        lean=not args.no_lean)
         args.out.mkdir(parents=True, exist_ok=True)
         (args.out / "breakeven.json").write_text(json.dumps(out, indent=1, allow_nan=False) + "\n")
         (args.out / "breakeven.txt").write_text(breakeven_table(out))

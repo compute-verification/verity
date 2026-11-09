@@ -4,9 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.StrictCRL
 public import Proofs.Flock.Recursive.Schedule
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Accounting.Numbers
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Soundness
 
 /-!

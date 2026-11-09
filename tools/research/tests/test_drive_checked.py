@@ -91,6 +91,25 @@ def test_a_red_after_landing_run_moves_nothing_on_main_and_its_culprit_is_revert
     assert world.on_next(h.q) == []                             # #2, reverted, is still open: its head is on `checked`
 
 
+def test_a_failure_at_or_below_a_tip_that_passed_it_since_is_no_red(world, monkeypatch, tmp_path):
+    """A late rerun of an old shard can fail a suite that a newer run passed above it (its green), or that `main` was verified
+    past: that failure is no red, so it holds no landing and reverts no culprit."""
+    h = Review(world, monkeypatch, land_into="checked")
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    old = _checked(world)
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.review(2)
+    assert h.tick().startswith("landed #2"), world.logs
+    new = _checked(world)
+    late = {"tip": old, "ids": ["r-late"]}
+    for pl in ({"green": {"suite pkg": new}, "verified": old}, {"verified": new, "verified_as": {"steps": ["pytest"]}}):
+        h.d._name({}, pl, late, "suite pkg", tmp_path, {"suite": "pkg", "step": "pytest"}, [])
+        assert pl["red"] == {}, pl
+    assert sum(f"suite pkg failed at `checked` {old[:12]} (run r-late), but it passed at" in x for x in world.logs) == 2
+
+
 def test_a_pr_containing_a_head_landed_on_checked_never_waits_for_it_and_one_on_an_unlanded_pr_still_does(world, monkeypatch):
     """A PR that landed on `checked` stays open until `main` follows it, and may be held or lose its mark meanwhile: a PR built
     on its head doesn't wait for it.  A PR built on an unlanded PR that isn't admitted still waits."""

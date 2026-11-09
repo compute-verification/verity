@@ -23,6 +23,7 @@
 // it is held beside the arena while the next session's witness builds
 #define FC_WITNESS_BATCH (512LL << 20)
 #include "arena_bytes.h"
+#include "csc_share.cuh"
 
 typedef struct {
     FlockChunkParams c;                // link, delta, gamma, phase, host witness (c.host_z / host_a / host_b)
@@ -89,8 +90,9 @@ typedef struct {
     // and the key's byte tables (hm96 mask: 192 x 256 x 8 u64); m_plan null: the hm96 slots are among the host slots
     int m_range; int m_useful; int m_in_words; int m_tape_words;
     const uint32_t* m_plan; const uint64_t* m_inputs; const uint64_t* m_mid; const uint64_t* m_tables;
-    // the key of the slot types' CSC and the unit's CSR on the device (FcTypeUploads); where it holds them, the row arrays
-    // (t_a_rows, t_b_rows; u_a_off, u_a_col, u_b_off, u_b_col) may be null. 0: keyed by their host addresses (FcUploads)
+    // the key of the slot types' CSC and the unit's CSR on the device (FcTypeUploads: the CSC one copy per GPU, shared by its provers);
+    // where it holds a copy, the row arrays (t_a_rows, t_b_rows; u_a_off, u_a_col, u_b_off, u_b_col) may be null. 0: keyed by
+    // their host addresses (FcUploads)
     unsigned long long types_gen;
 } FlockCircuitParams;
 
@@ -98,21 +100,24 @@ typedef struct {
 // leaves are: a test vector against flock_merkle::hm96::leaf.
 extern "C" int flock_cuda_hm96_leaves(const uint8_t* x, const uint8_t* salts, long long n, const uint8_t* prefixes,
                                       const uint64_t* tables, uint8_t* out) {
-    const size_t tb = (size_t)192 * 256 * 8 * sizeof(uint64_t);
+    std::vector<uint32_t> frag(2 * HM96_FRAGS);
+    hm96_fragments(tables, frag.data());
     uint8_t *d_x = nullptr, *d_s = nullptr, *d_pre = nullptr;
-    uint64_t *d_t = nullptr, *d_mid = nullptr;
+    uint32_t* d_f = nullptr;
+    uint64_t* d_mid = nullptr;
     if (cudaMalloc(&d_x, (size_t)n * 64) != cudaSuccess || cudaMalloc(&d_s, (size_t)n * 192) != cudaSuccess ||
-        cudaMalloc(&d_pre, 256) != cudaSuccess || cudaMalloc(&d_t, tb) != cudaSuccess || cudaMalloc(&d_mid, 16 * sizeof(uint64_t)) != cudaSuccess)
+        cudaMalloc(&d_pre, 256) != cudaSuccess || cudaMalloc(&d_f, frag.size() * sizeof(uint32_t)) != cudaSuccess ||
+        cudaMalloc(&d_mid, 16 * sizeof(uint64_t)) != cudaSuccess)
         return 1;
     cudaMemcpy(d_x, x, (size_t)n * 64, cudaMemcpyHostToDevice);
     cudaMemcpy(d_s, salts, (size_t)n * 192, cudaMemcpyHostToDevice);
     cudaMemcpy(d_pre, prefixes, 256, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_t, tables, tb, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_f, frag.data(), frag.size() * sizeof(uint32_t), cudaMemcpyHostToDevice);
     hm96_midstates<<<1, 1>>>(d_pre, d_mid);
-    hm96_finish_leaves<<<(unsigned)((n + 127) / 128), 128>>>(d_x, (const uint32_t*)d_s, 0, n, d_t, d_mid);
+    launch_hm96_finish(d_x, (const uint32_t*)d_s, 0, n, 128, d_f, d_mid);
     cudaError_t e = cudaMemcpy(out, d_x, (size_t)n * 64, cudaMemcpyDeviceToHost);
     cudaMemset(d_s, 0, (size_t)n * 192);
-    cudaFree(d_x); cudaFree(d_s); cudaFree(d_pre); cudaFree(d_t); cudaFree(d_mid);
+    cudaFree(d_x); cudaFree(d_s); cudaFree(d_pre); cudaFree(d_f); cudaFree(d_mid);
     return e == cudaSuccess ? 0 : 2;
 }
 
@@ -765,6 +770,10 @@ extern "C" int flock_cuda_dev_zero(void* p, size_t bytes) {
 // rows, then B's); 1, the unit's rows as CSR and its level schedule (fc_witness's six arrays). A set is copied from the host the
 // first time its key is asked for, as flock_cuda_copy copies (beside a session proving meanwhile), and its host arrays are never
 // read again, so the host frees them once the set is here and passes null. A set not here whose host arrays are null is refused.
+// A set asked for with a key (a digest of its arrays) is one device copy shared by every process on this GPU that asks for that
+// key (fc_share_get, csc_share.cuh), and a copy of the process's own where it can't be. The arrays the asker marks in `host`
+// (bit i, array i) stay where they are instead, page-locked and mapped, and the device reads them there for the process: the host
+// must keep them, unmoved, for as long. An array the runtime won't lock is copied.
 struct FcTypeUploads {
     std::mutex mu;
     std::vector<std::pair<std::pair<unsigned long long, int>, std::vector<uint32_t*>>> held;
@@ -774,7 +783,8 @@ struct FcTypeUploads {
             if (e.first == std::make_pair(gen, set)) return true;
         return false;
     }
-    cudaError_t get(unsigned long long gen, int set, const uint32_t* const* h, const size_t* len, size_t n, uint32_t** d) {
+    cudaError_t get(unsigned long long gen, int set, const uint32_t* const* h, const size_t* len, size_t n, uint32_t** d,
+                    unsigned long long host = 0, const uint8_t* key = nullptr) {
         std::lock_guard<std::mutex> lock(mu);
         for (const auto& e : held)
             if (e.first == std::make_pair(gen, set)) {
@@ -785,10 +795,37 @@ struct FcTypeUploads {
         for (size_t i = 0; i < n; i++)
             if (len[i] && !h[i]) return cudaErrorInvalidValue;
         std::vector<uint32_t*> got(n, nullptr);
+        if (key && !host && fc_share_get(key, h, len, n, got.data()) == 0) {
+            held.emplace_back(std::make_pair(gen, set), got);
+            std::copy(got.begin(), got.end(), d);
+            return cudaSuccess;
+        }
+        std::vector<char> locked(n, 0);
+        auto undo = [&] {
+            for (size_t i = 0; i < n; i++)
+                if (locked[i]) cudaHostUnregister(const_cast<uint32_t*>(h[i]));
+                else if (got[i]) cudaFree(got[i]);
+        };
         for (size_t i = 0; i < n; i++) {
+            if (i < 64 && (host >> i) & 1 && len[i]) {
+                void* hp = const_cast<uint32_t*>(h[i]);
+                void* dp = nullptr;
+                cudaError_t r = cudaHostRegister(hp, len[i] * sizeof(uint32_t), cudaHostRegisterMapped | cudaHostRegisterPortable);
+                if (r == cudaSuccess) {
+                    if ((r = cudaHostGetDevicePointer(&dp, hp, 0)) == cudaSuccess) {
+                        got[i] = (uint32_t*)dp;
+                        locked[i] = 1;
+                        continue;
+                    }
+                    cudaHostUnregister(hp);
+                }
+                cudaGetLastError();
+                fprintf(stderr, "FFI circuit: a slot type's rows (%zu words) not page-locked (%s); copied to the device\n", len[i],
+                        cudaGetErrorString(r));
+            }
             cudaError_t err = cudaMalloc(&got[i], (len[i] ? len[i] : 1) * sizeof(uint32_t));
             if (err == cudaSuccess && len[i] && flock_cuda_copy(got[i], h[i], len[i] * sizeof(uint32_t))) err = cudaErrorUnknown;
-            if (err != cudaSuccess) { for (uint32_t* p : got) if (p) cudaFree(p); return err; }
+            if (err != cudaSuccess) { undo(); return err; }
         }
         held.emplace_back(std::make_pair(gen, set), got);
         std::copy(got.begin(), got.end(), d);
@@ -797,10 +834,13 @@ struct FcTypeUploads {
 };
 static FcTypeUploads fc_type_uploads;
 
-// set `set` of generation `gen` onto the device now (FcTypeUploads) from its n host arrays of len[i] words: 0 once it is there
-extern "C" int flock_cuda_types_upload(unsigned long long gen, int set, const uint32_t* const* h, const size_t* len, size_t n) {
+// set `set` of generation `gen` onto the device now (FcTypeUploads) from its n host arrays of len[i] words, those marked in
+// `host` read in place, shared with this GPU's other processes under `key` (64 bytes; null: this process's own): 0 once it is
+// there
+extern "C" int flock_cuda_types_upload(unsigned long long gen, int set, const uint32_t* const* h, const size_t* len, size_t n,
+                                       unsigned long long host, const uint8_t* key) {
     std::vector<uint32_t*> d(n);
-    if (fc_type_uploads.get(gen, set, h, len, n, d.data()) != cudaSuccess) { cudaGetLastError(); return 1; }
+    if (fc_type_uploads.get(gen, set, h, len, n, d.data(), host, key) != cudaSuccess) { cudaGetLastError(); return 1; }
     return 0;
 }
 

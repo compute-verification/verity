@@ -21,7 +21,7 @@ import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
 import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # `EndToEndRegisteredRows` from the rows' extraction bound
