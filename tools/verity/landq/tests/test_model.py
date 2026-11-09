@@ -202,12 +202,17 @@ def test_the_same_events_give_the_same_decisions() -> None:
     assert feed(lq.State.start("m0"), events) == feed(lq.State.start("m0"), events)
 
 
-def test_touches_reads_an_input_as_a_file_or_a_directory() -> None:
+def test_touches_reads_an_input_as_a_file_a_directory_the_tree_or_a_glob() -> None:
     assert lq.touches(frozenset({"a/b/c.py"}), frozenset({"a/b"}))
     assert lq.touches(frozenset({"a/b/c.py"}), frozenset({"a/b/"}))
     assert lq.touches(frozenset({"a/b/c.py"}), frozenset({"a/b/c.py"}))
     assert not lq.touches(frozenset({"a/bc/d.py"}), frozenset({"a/b"}))
     assert not lq.touches(frozenset({"a/b/c.py"}), frozenset({"a/b/c.pyi"}))
+    assert lq.touches(frozenset({"x.md"}), frozenset({"."}))
+    assert not lq.touches(frozenset(), frozenset({"."}))
+    assert lq.touches(frozenset({"S/P/A.lean"}), frozenset({"S/**/*.lean"}))
+    assert lq.touches(frozenset({"S/A.lean"}), frozenset({"S/*.lean"}))
+    assert not lq.touches(frozenset({"S/A.py"}), frozenset({"S/**/*.lean"}))
 
 
 def test_bad_policies_and_results_are_refused_by_name() -> None:

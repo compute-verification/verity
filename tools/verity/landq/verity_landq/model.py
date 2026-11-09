@@ -47,10 +47,13 @@ The rules
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+from fnmatch import fnmatchcase
 from types import MappingProxyType
 from typing import Mapping, Union
 
 PASS, FAIL, INFRA, PENDING = "pass", "fail", "infra", "pending"
+#: inputs that name the whole tree, and the characters that make an input a glob
+ROOTS, GLOB = frozenset({".", "./"}), frozenset("*?[")
 #: why a PR was ejected: its change touches the failing task's declared inputs, or it was the failing task's only suspect
 INPUTS, ALONE = "inputs", "alone"
 #: why a candidate was cancelled
@@ -286,10 +289,16 @@ def _verdict(results: Mapping[tuple[str, str], Outcome], candidate: Candidate) -
 
 
 def touches(paths: frozenset[str], inputs: frozenset[str]) -> bool:
-    """Whether a change touching `paths` touches `inputs`: a path that is an input, or lies under one (a directory)."""
-    if paths & inputs:
+    """Whether a change touching `paths` touches `inputs`: a path that is an input, lies under one (a directory; `.` is the
+    whole tree), or matches one that is a glob (`fnmatch`'s, whose `*` crosses `/`)."""
+    if not paths:
+        return False
+    if paths & inputs or inputs & ROOTS:
         return True
-    dirs = tuple(i.rstrip("/") + "/" for i in inputs)
+    globs = [i for i in inputs if GLOB.intersection(i)]
+    if globs and any(fnmatchcase(p, g) for g in globs for p in paths):
+        return True
+    dirs = tuple(i.rstrip("/") + "/" for i in inputs if not GLOB.intersection(i))
     return any(p.startswith(dirs) for p in paths)
 
 
