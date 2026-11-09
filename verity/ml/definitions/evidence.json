@@ -17,7 +17,7 @@
   },
   "hopper_tf32_k8_step_probe": {"run_record": "art:7a87428ee4b0cb9ae98420432f65c493e8f12f2d0b7bf5b90cc927a86f1129ab"},
   "cc12_tf32_gemm_capture": {"run_record": "art:d660f85d3a6e0e88514ca14ea84e08e2bb9b56ee23cb8388d1da4f988ae4e1fb",
-                             "fit": "art:45cfa2b4de2594eac76420e6ca7dee6a2e0efa69733e8def136c58eaa29519e7"},
+                             "fit": "art:84094fd4473b4af283db2356f42fd0c650a1dde596ad5aa902ef2db4a9225cfd"},
   "dsv4_compressor_capture": {
     "run_record": "art:29147a8d544386a92edcb29f6c8ae8649c0942ec040a271450f4323daa9bf610",
     "art": "art:914dd281ad207ce67db3affd9378d3fa2088a27e00508046ab9f9dce09922048",
