@@ -480,8 +480,8 @@ theorem TheftServedReq : Guarantees.TheftServedReq := by
     exact zero_le
 
 theorem TheftServedMinEntropy : Guarantees.TheftServedMinEntropy := by
-  intro Ω R Θ Q Adv U W Tick Θ' _ _ _ _ _ _ _ _ _ _ C gen Stolen K Ou T L F M δ run hhon hesc
-  have h := TheftServedReq C gen Stolen Set.univ ((2 : ℝ) ^ (-K)) Ou T L F M δ run hhon
+  intro Ω R Θ Q Adv U W Tick Θ' _ _ _ _ _ _ _ _ _ _ C gen Stolen H Ou T L F M δ run hhon hesc
+  have h := TheftServedReq C gen Stolen Set.univ ((2 : ℝ) ^ (-H)) Ou T L F M δ run hhon
     (fun _ => Set.mem_univ _) hesc
   rwa [← Real.rpow_add two_pos, ← sub_eq_add_neg] at h
 

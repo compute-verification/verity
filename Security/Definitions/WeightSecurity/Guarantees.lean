@@ -32,7 +32,7 @@ network certifier and the dataflow discharge. Its witnesses
 request with the requests that read its state), each changed unit charged its whole output and its name, and the leakage
 term the probability that an incorrect proof block changes more than `F` units, in its window or later ones, before the
 first rejection (`Served.Isolated`). `TheftServedMinEntropy` is `TheftServedReq` against every party, where honest use
-leaves the weights `K` bits of min-entropy: `2^(B - K)`. `TheftServedHonest` is the first's honest witness,
+leaves the weights `H` bits of min-entropy: `2^(B - H)`. `TheftServedHonest` is the first's honest witness,
 `TheftServedMinEntropyHonest` the second's, and each has a nontrivial witness at the leaking toy deployment.
 
 `TheftServedTied` is `TheftServedReq` at a served circuit that is a checked population, its egress named by charge unit
@@ -185,22 +185,22 @@ def TheftServedReqNontrivial : Prop :=
 
 open scoped ENNReal in
 /-- **Model weight security per charge unit, from the weights' min-entropy.** `TheftServedReq` against every party.
-If honest use leaves the weights `K` bits of min-entropy, so that every party, whatever its time, steals them from `T`
-honest queries with probability at most `2^(-K)` (`HonestUseHard` at `A = Set.univ`), then every class holds the
+If honest use leaves the weights `H` bits of min-entropy, so that every party, whatever its time, steals them from `T`
+honest queries with probability at most `2^(-H)` (`HonestUseHard` at `A = Set.univ`), then every class holds the
 outsider with each covert string written in, and `Ou` outputs a stolen model with probability at most
-$$2^{B - K} + \delta + \Pr[\neg \mathrm{Isolated}],$$
-`B` as in `TheftServedReq`. The guarantee says something while `B < K`. -/
+$$2^{B - H} + \delta + \Pr[\neg \mathrm{Isolated}],$$
+`B` as in `TheftServedReq`. The guarantee says something while `B < H`. -/
 def TheftServedMinEntropy : Prop :=
   ∀ {Ω R Θ Q Adv U W Tick Θ' : Type} [Fintype Ω] [Fintype R] [Fintype Adv] [Inhabited Adv] [Fintype U]
     [DecidableEq U] [Fintype W] [Nonempty W] [Fintype Tick] [Inhabited Tick]
-    (C : Θ → Q × Adv → U → W) (gen : Ω → Θ) (Stolen : Θ → Θ' → Prop) (K : ℝ)
+    (C : Θ → Q × Adv → U → W) (gen : Ω → Θ) (Stolen : Θ → Θ' → Prop) (H : ℝ)
     (Ou : Outsider R (Q × Adv) (Option ((U → W) × Tick)) Θ') (T L F M : ℕ) (δ : ℝ≥0∞)
     (run : Θ → R → Verity.Game (List (Served U W Tick Adv))),
-    HonestUseHard C gen Stolen T (Set.univ : Set (Outsider R (Q × Adv) (U → W) Θ')) ((2 : ℝ) ^ (-K)) →
+    HonestUseHard C gen Stolen T (Set.univ : Set (Outsider R (Q × Adv) (U → W) Θ')) ((2 : ℝ) ^ (-H)) →
     Served.UndetectedLe M δ run →
       Verity.Game.avg (fun z : Ω × R => Verity.Game.value
           (fun l => Stolen (gen z.1) (Ou.out z.2 (Served.view Ou L z.2 l T))) (run (gen z.1) z.2)) ≤
-        ENNReal.ofReal ((2 : ℝ) ^ (servedBits Adv U W Tick T (F * M + (L + 1) * Fintype.card U) - K)) + δ +
+        ENNReal.ofReal ((2 : ℝ) ^ (servedBits Adv U W Tick T (F * M + (L + 1) * Fintype.card U) - H)) + δ +
           Verity.Game.avg (fun z : Ω × R =>
             Verity.Game.value (fun l => ¬ Served.Isolated C F Ou L (gen z.1) z.2 l) (run (gen z.1) z.2))
 
