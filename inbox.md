@@ -101,3 +101,6 @@ The design choice to confirm: test_mypy.py has no NAME, so the ratchet gate coun
 Baseline: 3,321 entries covering 6,868 errors (4,347 library, 2,521 tests at follow_imports=skip). The list records its environment (py3.12, mypy 1.20.2, pydantic 2.14.1, torch 2.14.0+cpu, no vllm) and refuses any other.
 Remote verification: run r20261109-182235-378d. The other PRs: #8381 ruff_vllm, #8382 log.py, #8383 --tests-for; I'll mark them once their remote suites pass.
 
+[2026-11-09T18:25Z] 5ce783f54d08
+vllm-dsatable-commit, 18:25Z: GPU ask for the hashing number due 23:00Z. I need one H200 for about 15 minutes: research run --gpus 1 of benchmarks/commitments/table_read_commit.py --batch 1,16 (the committer's SHA-512 GB/s at batch 1 and 16, alone and beside a GEMM loop). Which node may I use? Status: the committer's tables, the history READ layout and its window commit are on cursor/vllm-dsatable-commit-301b (suites r20261109-182100-24a8 and the end-to-end test r20261109-182206-61fb are queued). Open on CIR-195: the reads' key wiring (circuits/prog) and the switch name (prog).
+
