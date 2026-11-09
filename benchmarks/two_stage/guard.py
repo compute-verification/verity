@@ -235,8 +235,9 @@ def pack(run_out: Path, fixture: Path, cases: Sequence[str] = ("honest", "altere
                 tar.add(p, arcname=f"{case}/{p.name}", filter=plain)
 
 
-def registered_span(st: bytes) -> tuple[int, int]:
-    """Where a statement's registered reads sit in its `FlockDeploy.Raw` encoding (`raw`'s field order)."""
+def registered_span(st: bytes) -> tuple[int, int] | None:
+    """Where a statement's registered reads sit in its `FlockDeploy.Raw` encoding (`raw`'s field order), or None when it
+    carries none."""
     i = 0
 
     def nat() -> int:
@@ -264,7 +265,7 @@ def registered_span(st: bytes) -> tuple[int, int]:
     for f in (skip, skip, skip, nat, skip, nat, skip):
         opt(f)
     if st[i] != 1:
-        raise ValueError("the statement has no registered reads")
+        return None
     i += 1
     n = nat()
     return i, i + n
@@ -275,11 +276,11 @@ def split_refs(guard: Path) -> None:
     its ``ref-<t>.reads.json``, as `export` now writes them; one that carries none gets ``null``."""
     for ref in sorted(guard.glob("ref-*.bin")):
         st = ref.read_bytes()
-        try:
-            lo, hi = registered_span(st)
-        except ValueError:
+        span = registered_span(st)
+        if span is None:
             reads = b"null"
         else:
+            lo, hi = span
             reads, st = st[lo:hi], st[:lo - 9] + b"\x00" + st[hi:]
             json.loads(reads)
         ref.with_suffix(".reads.json").write_bytes(reads)
@@ -291,7 +292,10 @@ def flip_registered(m2: bytes) -> bytes:
     the first ``"root"`` value, so the reads still parse as JSON and name another root."""
     out = bytearray(m2)
     start = 16
-    lo, hi = registered_span(m2[start:start + int.from_bytes(m2[8:16], "little")])
+    span = registered_span(m2[start:start + int.from_bytes(m2[8:16], "little")])
+    if span is None:
+        raise ValueError("round 2's first statement has no registered reads")
+    lo, hi = span
     reads = out[start + lo:start + hi]
     at = reads.index(b'"root"')
     at = reads.index(b'"', at + len(b'"root"') + 1) + 1
