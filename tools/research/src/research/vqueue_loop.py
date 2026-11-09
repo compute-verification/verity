@@ -62,6 +62,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import contextlib
 import fcntl
 import hashlib
 import json
@@ -80,8 +81,8 @@ from . import policy, vqueue
 from .drive import CI, JOB_OF_KIND, SLIM_STEPS, Driver, cancel_runs, gating, merge_thread_post
 from .drive import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_key, task_target
-from .queue import (PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, flags_at, label_verifier, lean_change,
-                    lowrisk, merged_tree, priority_list, queue_commit, review_owners, rules_at, unreviewed)
+from .queue import (PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, base_drivers, flags_at, label_verifier,
+                    lean_change, lowrisk, merged_tree, priority_list, queue_commit, review_owners, rules_at, unreviewed)
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Drop, Eject, Failed, Outcome,
                      Ready, Red, Rerun, Retry, Ring, Snapshot, Verdict)
 
@@ -406,7 +407,10 @@ class World:
                 held = (unreviewed(reviews, ()) or "").startswith("held")
                 if landing or not held and lowrisk(files[n], excludes):
                     took.append(n)
-            chosen = {n: (files[n], *j) for n, j in zip(took, pool.map(lambda n: self._judge(main, entries[n].pr.head), took))}
+            new = any((entries[n].pr.head, main) not in self._judged for n in took)
+            with base_drivers(self.repo, main) if new else contextlib.nullcontext(None) as cfg:   # once a tick, not a PR
+                chosen = {n: (files[n], *j)
+                          for n, j in zip(took, pool.map(lambda n: self._judge(main, entries[n].pr.head, cfg), took))}
         first = {n: i for i, n in enumerate(priority_list(self.priority_file) if self.priority_file else ())}
         order = sorted(chosen, key=lambda n: (first.get(n, len(first)), labels.marked_at(n, entries[n].pr.head) or "", n))
         placed: list[int] = []
@@ -430,13 +434,14 @@ class World:
             self._files[key] = frozenset(_out(self.repo, "diff", "--name-only", "--no-renames", f"{main}...{head}").splitlines())
         return self._files[key]
 
-    def _judge(self, main: str, head: str) -> tuple[bool, bool]:
+    def _judge(self, main: str, head: str, config: tuple[str, ...] | None = None) -> tuple[bool, bool]:
         """(whether ``head`` is a Lean change, whether it doesn't merge onto ``main``), kept by (head, main).  The merge is `git
-        merge-tree`'s alone (`merged_tree`, no worktree), so judging every ready PR stays cheap; a build's codemod
-        (`Queue._merge`) checks out a worktree, and a member it refuses is left out of that build as one that doesn't merge."""
+        merge-tree`'s alone (`merged_tree`, no worktree, with ``main``'s merge drivers: ``config``, else `base_drivers`), so
+        judging every ready PR stays cheap; a build's codemod (`Queue._merge`) checks out a worktree, and a member it refuses is
+        left out of that build as one that doesn't merge."""
         if (key := (head, main)) not in self._judged:
             self._judged[key] = (lean_change(self.repo, head, _out(self.repo, "merge-base", main, head)),
-                                 merged_tree(self.repo, main, head)[0] is None)
+                                 merged_tree(self.repo, main, head, config=config)[0] is None)
         return self._judged[key]
 
     def refs(self) -> dict[str, str]:
