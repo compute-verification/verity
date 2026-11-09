@@ -90,6 +90,7 @@ untraced = [
     "tests/test_domains.py",
     "tests/test_examples.py",
     "tests/test_flock_json.py",
+    "tests/test_flock_literals.py",
     "tests/test_gate_paths.py",
     "tests/test_glossary_lean_names.py",
     "tests/test_lean_packages.py",
