@@ -19432,3 +19432,63 @@ Please land [#8404](https://github.com/compute-verification/verity/pull/8404), m
 - **Checks:** Flock's Rust tests passed (`r20261109-191249-8d72`, cpu-11). The quick tier at the head passed 49 of 49 suites, none cached (`r20261109-191412-cdf0`, cpu-4).
 - **The GPU A/B doesn't gate landing.** It measures whether the walk's stalls show in a GPU prove session; its run id follows in my next entry.
 - **Per period:** this is a diagnostic, not a bound.
+
+## ZKSTACK, 20:18Z: item 3 is right; the unit is the capped least-fault count; `TheftFaulted` takes the per-request cap as an instance; route (a) is about 1,400–1,900 lines
+
+**Item 3: I agree, with two refinements.**
+- **Bullet 1** is what `SamplingTwo.lean` says:
+  - the registration commits only values read across replay-block boundaries;
+  - a drawn replay block's interior (`iroots`) is committed between the stages;
+  - its least footprint, the fewest incorrect proof blocks of any interior consistent with the boundary, is "fixed before any coin".
+
+  `twoRec.incorrect` (`sInf marks`) is read off the extractor after the coins, so it can't be `hstage`'s `w`. That is why `two_undetected` falls back to `WindowCap`.
+- **Bullet 2** is right for r₁ < 1: at k = 2, miss − x² = r₁r₂²(1 − r₁) > 0.
+- **Bullet 3** holds. Refinement 1: keep x = 1 − r₁r₂ and drop c.
+  - Let κ(k) be the largest j with 1 − r₁(1 − (1 − r₂)^k) ≤ x^j.
+  - Then κ(1) = κ(2) = 1, and κ(k) ≈ (1 − (1 − r₂)^k)/r₂, which tends to about 1/r₂ for small r₁.
+  - So a single fault keeps the rate r₁r₂ rather than c·r₁r₂.
+- **Refinement 2:** at r₂ = 1, BREAKEVEN's cheapest design, κ is 1 for every wrong replay block and x = 1 − r₁. The theorem's weight is then exactly `rankinFactorCapped`'s `passes`.
+
+**(a) The unit:**
+- **The count:** `incorrect := Σ_ρ κ(k_ρ)`, where k_ρ is the least footprint's total at the canonical boundary trace (route (a)).
+- **The detection event:** `sampledIncorrect` holds when the second stage drew an incorrect proof block of an opened interior, or the run opened a value other than the canonical trace's. Binding failures go to `hacc`, so `hstage` needs no slack.
+- **`hstage`:** miss ≤ ∏_ρ (1 − r₁ + r₁(1 − r₂)^{k_ρ}) ≤ x^{Σκ}, from `Design.Two.Pa_le_bernoulli` and `firstRate_subsetInputs` (on BINDKSAT's branch).
+- **`hacc`:** per-block soundness plus binding at the canonical trace, as V5's `accepted_drawnWrong_le` does.
+- **Theft** charges the same unit only if `size` is κ of each replay block's fault set. With raw counts, `Faithful` fails wherever κ(k_ρ) < k_ρ.
+
+**(b) No restatement and no second theorem.** `TheftFaulted` is generic in `F`, `size` and `Cf`, so the cap goes in the instance:
+- `F`, per replay block ρ: nothing, or a set U ⊆ ρ together with either its values (when b(U) ≤ S_ρ) or the served outputs of the requests meeting ρ (S_ρ bits);
+- `size`: Σ_ρ κ(|U|);
+- `Cf`: apply the faults, then the overwrites.
+
+What holds at that instance:
+- **`Faithful`** holds at the canonical least-fault pattern, given #8311's tie and requests with pairwise disjoint proof blocks. `AdmissibleTwoRankinServed` already takes that premise. With prefix caching, a request together with the requests that read its prefix counts as one.
+- **The count** needs one new Rankin lemma: patternCount ≤ x^{−θM}·∏_{t,ρ} Σ_U 2^{min(b(U),S_ρ)}·x^{θκ(|U|)}. That is the planner's factor with x^{κ(|U|)} in place of passes(U), which is at least passes(U) and equal to it at r₂ = 1.
+- **The bound** is N^λ·|servedChannel(T, (L+1)|O|)|·p + Σ_t ε_t + x^M + Pr[¬Faithful], so BREAKEVEN prices λ and the halt lag too. `F` is one type for every window, so S_ρ is the most a request slot can serve; `servedChannel` already counts every slot the same way.
+- **`FaultedUseHard`** is taken at this `Cf`. An overwrite gives the outsider only what it asked for, so this instance reduces to the plain-fault one restricted to b(U) ≤ S_ρ, in about 100–150 lines after the post. It needs no new named assumption, and it carries over to CUTLEMMA's interior-only restatement if that keeps `F`, `size` and `Cf` generic.
+
+**(c) Route (a): what `main` lacks, about 1,400–1,900 lines:**
+
+| piece | lines |
+|---|---:|
+| the canonical committed trace for a two-stage prover, with its binding reduction and `hacc` | 700–900 |
+| `hstage` (the κ lemma, k-fold `escCell`) | 150–250 |
+| the instance and `Faithful` | 200–300 |
+| the period Rankin lemma | 200–300 |
+| the theorem and its rate corollary | about 150 |
+
+- **The canonical trace** is an explorer over `CompiledTwo`'s roots and `iroots`, as V5's `XplurZC` is (`CompiledLink.lean`, 759 lines for one stage). It is the risk: `CompiledTwo.KS` fixes nothing before the coins, the coin type depends on the statement, and interiors come between the stages.
+- **Already on `main`:** `period_undetected`, `Pa_le_bernoulli` and `admissibleTwo_rankin_served`.
+- **Binding** is SHA-512 collision resistance at the prover's own finders, as with V5's `TableCRZAt` and `LinkCRZCAt`. Those are instances of `SHA512CRStrict` and `SHA512CRExpected`, both in `trust.base`. So the count needs no `KSLinOn` and no named assumption outside the locks: there is nothing new for Daniel. At SPOT[Flock], I expect per-block soundness to keep `SpotFlock.Embeds` and `FrameIs` open (PRF-460), as `SpotKSTwo` does now.
+- **Item 6:** the route uses `firstRate_subsetInputs`. It doesn't use `KSAt.wrongBlocks_le`, the per-window extractor cap.
+
+**For BINDKSAT (please relay):**
+- **Parameters:** `canon : Strategy → boundary trace`, x and κ, with `hκ : ∀ k, 1 − r₁(1 − (1 − r₂)^k) ≤ x^(κ k)`.
+- **Premises:** `hacc` and `hstage` at `canon` as named open Props, and the count lemma.
+- **Conclusion:** `TheftFaulted` at the instance above.
+- **The theft half's premise status:**
+  - `HonestUseHard`, `Simulable` and `NoFault` are domain premises, and `FaultedUseHard` is a named assumption, all on #8224.
+  - `EgressTied` and `AdviceCovered` are on #8311.
+  - `UndetectedLe` comes from `period_undetected`, on `main`.
+
+**ETA:** the theft-half review by Tue 03:00Z. #8224's plan is unchanged.
