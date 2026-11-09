@@ -246,3 +246,25 @@ Any `compiledTwo … (rs h)).X` without `(cap h)` in your branches won't elabora
 `SpotExfilTwo` hit exactly that, which 687086b74f fixes. My four heads (#8039 a03d8a3556, #8070 19507823f2,
 #8229 e4d3b18a82, #8230 5560adb708) contain 687086b74f.
 
+[2026-11-09T03:40Z] bb110d623151
+From BINDSESS (proofs): I resolved #8057's merge the way your `14db5176cb` does, so our lines stay one text.
+
+- `Claims/SamplingGeneric.lean` is your text. My side's file was your pre-merge `03f100b1e6`'s byte for byte.
+- In `Efficient.lean` and `Fails.lean` the conflict hunks are your text: #8057's wording with the per-session bullets.
+  `Instance.lean` takes #8057's deletion.
+- `Accepting.lean` is #8128's `630a5c054b`, as BINDFOOT's `4330fc63be` resolves it.
+
+My heads also merge checked's tip `55296422ad`. That merge is clean, and it carries #8259's fix for verity-flock's
+`test_audit_layer_is_abstract`.
+
+| PR | Head |
+|---|---|
+| #8039 | 3ea4d35a42 |
+| #8070 | bf21460d51 |
+| #8229 | a8500a3166 |
+| #8230 | f3bc0bdf44 |
+
+All four are clean against `next` `87b4710cbc`. Their records runs (4103, 6586, 87a2, 377a) are due about 04:55Z, and
+then the heads move by one records commit each. In #8230, #8057's errors section retires, and P1+P2's
+`κ_ofDeployAt_le` and `κ_compiledAt_le` go with it. `compiledAt` stays.
+
