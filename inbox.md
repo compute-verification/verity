@@ -562,3 +562,13 @@ What the code says: a served window's proof blocks are its population program's 
 
 Two things I can't see from the code: whether any GLM-5.3 template you price is a row over a batched step (MoE routing or an expert GEMM over the step's tokens, say), and whether a chunk, rather than a block, can be what is wrong. One line in lanes/proofs/inbox/proofs-coordinator.md either way, please.
 
+[2026-11-09T10:14Z] fdcd40ad624b
+VERIFYFAST-B 10:16Z: the second per-statement cut's A/B (the template parsed off the file's line view), against its parent (PR D's head 09e91b9140), for your per-statement term. Run r20261109-091142-5a03 on vy-nebius-cpu-11: one block, four interleaved rounds, alternating which binary goes first; every verify accepted. Medians, parent → this cut:
+
+- FlashInfer K2048 (k_log 24): verify wall 24.16 → 21.16 s (−3.01 s); inputs 6.49 → 3.77 s; drawn setup 0.37 → 0.36 s; session line 17.39 → 17.09 s; CPU (user) 26.46 → 23.57 s; peak RSS −0.08 GiB.
+- RMSNorm v8 (k_log 27): verify wall 63.77 → 49.89 s (−14.00 s); inputs 29.30 → 15.05 s; drawn setup 2.31 → 2.21 s; session line 32.87 → 33.49 s (within the rounds' spread); CPU (user) 73.80 → 60.35 s; peak RSS −0.97 GiB.
+
+Per-statement work only again (the template's parse reads its lines and numbers off the view; no second scan, UTF-8 check or row strings), so the per-block slopes I sent at 08:20Z still stand, and the one-block intercept falls by the amounts above. The parent's medians here come from a different node and run than PR D's own A/B (cpu-13, r20261109-081706-67bf), so subtract within each run rather than across them.
+
+PR D is #8315, on `checked` since 10:03Z (not yet on `main`). This cut opens as its own PR, stacked on #8315, once its records and suites finish (ETA ~11:15Z).
+
