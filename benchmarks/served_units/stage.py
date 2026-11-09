@@ -55,6 +55,8 @@ FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 r
                 the block's inputs instead.
     gq          `CENSUS`: Fp8GroupQuantUe8m0_v1{K,G}, one token row's quantization to E4M3 in groups of G with power-of-two
                 scales, before an FP8 linear of K inputs (K = 6144: the hidden state's); a K below 6144 is a column block.
+    mla-split-part  `CENSUS`: SparseMlaSplitPart_v1 at T = 64, one query's sparse MLA over one split's 64 keys (FA3's).
+    rmsnorm-v8  `CENSUS`: RMSNormFusedCudaVector8_v1{N=6144,BLOCK=256}, the fused residual add and RMSNorm of one token row.
     the rest    `PARTS`: the capture map's Programs (``glm-moe-dsa-eager-hopper-tp8-v0``) at their GLM-5.3 statics; the MoE
                 tiles' KB and SWAP are Triton's 128 and swapped until the H200 capture pins them."""
 from __future__ import annotations
@@ -197,17 +199,23 @@ for _p in PARTS.values():
 
 @dataclass(frozen=True)
 class Census:
-    """A census type: its family, bound at statics ``S`` in the order of ``defaults`` (its census name's)."""
+    """A census type: its family, bound at statics ``S`` in the order of ``defaults`` (its census name's), then ``fixed``, the
+    statics no spec overrides (a function's or a float's, as the census name writes them)."""
 
     family: str
     defaults: dict
+    fixed: str = ""
 
     def name(self, S: dict) -> str:
-        return f"{self.family}{{{','.join(f'{k}={v}' for k, v in S.items())}}}"
+        return f"{self.family}{{{','.join([*(f'{k}={v}' for k, v in S.items()), *filter(None, [self.fixed])])}}}"
 
 
+_EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
 CENSUS: dict[str, Census] = {
     "gq": Census("Fp8GroupQuantUe8m0_v1", {"K": 6144, "G": 128}),
+    "mla-split-part": Census("SparseMlaSplitPart_v1", {}, 'T=64,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},'
+                             'INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}'),
+    "rmsnorm-v8": Census("RMSNormFusedCudaVector8_v1", {}, f"N=6144,EPS={_EPS},BLOCK=256"),
 }
 
 
