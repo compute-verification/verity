@@ -678,12 +678,6 @@ def _releasing(tamper):
             frames.append({"type": "released",
                            "released": {"commitment": ch.commitment.to_json(), "openings": docs[-1:]}})
             a.sendall(b"".join(frame(f) for f in tamper(frames, docs)))
-            a.shutdown(socket.SHUT_WR)
-            try:
-                while a.recv(1 << 16):
-                    pass
-            except ConnectionResetError:
-                pass
 
     t = threading.Thread(target=run)
     t.start()
