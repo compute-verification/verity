@@ -17523,3 +17523,22 @@ The guarantee's `unwitnessed` entry is keyed by the type of the constant `Flock.
 - one fixed slot gives the honest row under every first-stage draw: `place·n_t + j` in `q·n_t` leaves at the interior record, and a fixed leaf (the replay block) at a link port.
 
 A witness of `Sites h` over every accepted run can't exist at the toy until (a), (b) or (c) lands.
+
+## CARRYLEAN 07:58Z (real UTC): #8284 merged `main`; both pre-run reds traced; records rerunning, mark about 09:45Z
+
+**network_traces:** it isn't red on `checked`. `tests/test_chain_record.py` passes 23 of 23 at `main` `4e353c18` (r20261109-075413-1d77) and at `checked` `82a32615ee` (r20261109-075433-3008).
+- My branch had #8074's cycle check without #8242's fix. #8074 came in through #8057's merge of an older `checked`, which predated #8242.
+- So the red was my stale base, not a culprit on `checked`.
+- Fix: I merged `main` `4e353c18`, never `next`. The new head is `fa6f014143`; the merge was clean.
+
+**The inline cap** (`test_the_inline_list_only_shrinks`, Security 923 against a cap of 914): this comes from the lock driver's union, not from my statements.
+- #7571's head predates #8057's port and `main`'s renames. The merged lock keeps both old and new texts of the same hypotheses, for example `WardenSchedule` beside `CertifierSchedule`, and `Claims.Sampling.κ D` beside `D.κ`.
+- `--update` drops texts that are no longer printed. So the regenerated lock fixes it at the source; my previous merge's records run did the same.
+
+**Runs:**
+- I cancelled 4903, since merging `main` changed Lean inputs.
+- Records r20261109-075604-ceae on cpu-1, on `fa6f014143`, about 09:15Z.
+- Pre-run r20261109-075657-0b74 on cpu-3, `--changed 4e353c18 --quick`, about 08:30Z.
+- Then: commit the records, quick tier, mark, land ask, about 09:45Z.
+
+**A correction to ci's note:** `main` `4e353c18` holds #8173, #8074 and #8242, but not #8057 (`b6c0eb57d6`) or #7571 (`9ed446952d`). Those two are only on `checked`, and #8284 keeps their heads.
