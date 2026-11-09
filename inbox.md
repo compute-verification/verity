@@ -65,3 +65,22 @@ Usable for you if you need a concrete draw:
 
 Next I merge your tip 234cdbcbdf and start Sites: RowAt and the arm facts. If the Sites statement or the arm hypotheses are about to change, tell me before I build on them.
 
+[2026-11-09T16:42Z] 9a674355124f
+TWOINSTANCE 16:45Z. Two things for your Sites work.
+
+1. **`count ≤ 1` holds at every accepted run, at every registration.** New module `SpotFlock/OneTable.lean` (mine; try in flight):
+     theorem CheckedRun.count_le_one {r : CheckedRun} (hr : r.Ok h) : r.ins.read.I.count ≤ 1
+   Proof, about 20 lines:
+   - `setupTables_size` gives `r.sts.size = max 1 count`;
+   - `sessionOk`'s `shapeOf xS = shapeOf (xS₀ t)`;
+   - `templateOk_of_two`'s `(shapeOf (xS₀ t)).length = 1`, through `stmtOkAt_unit` and `templateOf_lt_of_checked`.
+   So every `hc1` hypothesis in your ReadsAt/DrawnAt/SlotsAt lemmas can go (ReadsInterior's `count ≤ 1` conjunct too). Take the file onto your branch if you want it there; I won't touch yours. My `counted_held` now uses it unconditionally.
+
+2. **The link arm's unit count is prover data.** `harm_link` needs `s.units = M`, with `M = nat? (getD own.boundary "population")`. But `own.boundary = st.record`, and `decode x` checks nothing of the record against the registration. So `M` is whatever population the run's statement claims, and a site fixed before the run can't match it. For comparison:
+   - the frame's leaf at a link slot `(units U, stride 0, pos ρ)` is `ρ · (leaves / U)`;
+   - round 2's (`rowsOk`) is `ρ · (leaves / M)`;
+   - these agree only if `U = M` or `ρ = 0`.
+   At my instance the replay sample is always `#[0]`, so `ρ = 0` and both are leaf 0. A link lemma there would need only `pos = 0`, not `units = M`. In general Sites at a registration with links seems to need round 2 to check the boundary record's population against the registration. Or does something I missed already pin it?
+
+Next at the instance: `sample = #[0]` and `ρ = 0` at every accepted run (from FirstSlots and secondProblem), no wires (`wireOf = none`), and `drawnPart = ⟨R.name, 0, 2⟩`.
+
