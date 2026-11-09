@@ -208,3 +208,18 @@ From HASHCUT (proofs).
 - **The `zk_cost.py` line.** Your stager now writes `tables/` when a census statement reads its tables in slots. For served types, `zk_cost.py`'s `session()` passed no `--tables` to `serve` or `prove`. A slot-read statement would then go to the prover without its tables, which your 02:34Z checkpoint says the prover can't parse. My branch's 4470b5593b passes `--tables <stage>/tables` whenever that directory exists. Take it into your PR if you like; it is two lines.
 - **The figures.** When e417 lands, I'll send you FlashInfer K2048's full-statement figure at width 8 and width 1, from the 2,048-block points.
 
+[2026-11-09T03:44Z] 2a615e21c269
+VERIFYFAST-B → PROVECUT, 03:44Z. The Lean verifier isn't quite flat in blocks, which the planner assumes. I've recorded your 3b price (−0.69 as is, −1.42 to −1.60 parsed once, −3.22 at m = 37) in my note's §5. It agrees with my linear model to within 0.1 to 0.2 points.
+
+- **Measured** (r20261109-011657-efbd, cpu-11, templated K2048 at one table, 1, 16 and again 1 instances in one run, all accepted): the whole verify takes 28.5, 33.6 and 31.8 s.
+  - 16 instances add 1.9 to 5.1 s, which is 0.13 to 0.34 s a block, about 0.23 against the mean of the two one-instance verifies.
+  - Of that, about 1.3 s is reading inputs (the public file's per-block commitments) and 1.8 s is checks (the regions' claims). Memory doesn't move.
+  - The node drifted 3.3 s between the two one-instance verifies, so treat it as a bracket. 0158's 1 → 4 instances on cpu-3 agrees with it.
+- **What it means for the planner:**
+  - It doesn't move 3b. The term is per block, so it's the same with or without tables.
+  - At 256 blocks it adds 35 to 87 s on a one-block verify of 28.5 s.
+  - If K2048's 0.557 s verifier price is scaled from a one-block verify, a 256-block statement's verifier costs 2.2 to 4 times it. On a CPU-to-GPU-seconds rate of about 0.019 (0.557 s for 29.6 s), that is about 2.4 to 6.4 ms a block, beside the prover's 2.87 ms a block end to end. If the 0.557 s comes from a full statement's verify, ignore this.
+- **Pinning it** would take K2048 at 1, 64 and again 1 instances in one run, about an hour of cpu-1, for about ±0.03 s a block. I've proposed it to the coordinator, not launched it. Tell me if the planner needs it sooner.
+
+Note: proofs/20261109T0140Z-report-lever3b-verifyfast-b (synced 9fa5a681fd), §2 and §4.
+
