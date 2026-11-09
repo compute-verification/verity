@@ -931,3 +931,22 @@ ACCOUNTD 21:03Z, the log2 V lemma (note lanes/proofs/20261109T2103Z-checkpoint-a
 4. The 32-bit route is true today with no new lemma or certifier change: 28,000 bits, 9.80% as priced. Both routes still wait on EgressTied tying served outputs to released tokens.
 5. Spans: the Lean never reads "request" (req is any split). Spans reading each other's KV break RequestsCover (one replay block per r) unless each span is closed, and give F = spans per request in the capped form. The figures say "a replay block is a request" (figure1.py:117). Smell: RequestsCover needs servedBits = S exactly (TwoStageCheck.lean:63), the cap gives at most S, and an = to <= lemma is about 50-100 lines. Retired term "cap": GLOSSARY retires it for Pearl's inert-work bound, so in the cap PR I mark Pearl's "cap" alone (the lint skips it), and SPOT's served cap keeps the word.
 
+[2026-11-09T21:10Z] 3119bce68e4d
+ACCOUNTD 21:20Z, VLLM-260: what keys F = 1 (lines at #8414 head 91a7f7bbb4 unless marked main or #8403).
+KEY: a property of the registered Program, its reads between replay blocks. It is not a field and not the registration.
+- Python: F is the `fanout` argument of optimize.two_stage_rankin/_exfil/_design (optimize.py:1162-1207; the cap is read as F*S at :1207) and of plancheck.two, which sends it as the class N (plancheck.py:94-117, N at :117). Its value is partition.fanout(program, query) (one_stage/partition.py:263): a union-find over the boundary Program's references, joining two proof blocks when one reads part of the other's result, with F the largest group. It reads references only, never gates.
+- Lean: checkTwoStage charges lnFactorUpperCapped c.cells (c.N * D.S) (verity/core/service/spot/Spot/TwoStageCheck.lean:66, main). TwoStageCheckServedSound (Security/Properties/Spot/TwoStageCheck.lean:100) holds under ServedCover (:89-95): for some split req of the served outputs, the requests whose outputs read a proof block of replay block rho serve at most N*S bits together. F = 1 means ServedCover holds at N = 1.
+- Caveat: nothing calls partition.fanout on a served statement today. The figures call plancheck.two without fanout (total_cost.py:452, main), so F = 1 is the default 1, not a measurement.
+THE THREE MARKS: none is read by the accounting.
+- No producers and no prefix input are the integration's way of building a Program with no cross-request reads, which is exactly what makes fanout = 1 and ServedCover at N = 1 hold for the per-request split.
+- recomputed > 0 only correlates: a request with no hit is closed at recomputed = 0, and a Program can recompute and still read another request's KV.
+- No prefix input carries weight the walk cannot check: a value another block writes, held as an Input node, joins nothing (partition.py:263-272 docstring).
+FALSE F = 1: refused by nothing on the soundness side today.
+- Python: fanout is the caller's number, default 1. plancheck refuses only F < 1, or F > 1 with union.
+- Lean: ServedCover is a hypothesis. A false F = 1 leaves TwoStageCheckServedSound vacuous while checkTwoStage still passes, because it never reads the statement's reads.
+- vllm: Replay refuses a Program with a cached-prefix read (if pi.kv_prefix, check/replay/request_replay.py:39, #8403), but that is a completeness check the cheating prover does not run.
+- To close it: the verifier computes N from the registered Program (fanout on the statement, not a caller argument), refuses an Input node that a proof block writes, and Lean discharges ServedCover from the registered partition rather than taking it as a premise.
+ZKSTACK DEPENDENCIES:
+(a) Whether a hit may be public does not change the key, since F reads reads, not hits. If hits must stay private, the verifier must compute F without them, and under (d) F = 1 for every request either way.
+(b) A replay reading the previous window's advice keeps F = 1 only if what it reads is committed advice (launch schedule) charged at its width, not KV or other values another proof block computed. Values arriving as an Input node are the case fanout cannot see, and F would be understated.
+
