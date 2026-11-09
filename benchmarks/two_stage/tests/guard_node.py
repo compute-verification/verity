@@ -24,7 +24,8 @@ import lean_changed as LC  # noqa: E402
 
 PKG = "Security/Proofs"
 MODULES = ("Proofs.Flock.SpotFlock.Code", "Proofs.Flock.SamplingGeneric.TwoAt")
-#: the script's thread's stack, in KiB (`lean --tstack`): reserved, and touched only as deep as the parsers recurse
+#: the script's thread's stack, in KiB (`lean --tstack`): reserved, and touched only as deep as the parsers recurse. Every
+#: thread of Lean's gets one, so the script runs with one worker (`--threads=1`), or the node refuses the reservations.
 TSTACK_KIB = 128 << 20
 
 
@@ -69,7 +70,7 @@ def main(argv: list[str]) -> int:
                                          str(HERE / "test_guard.py"), *argv[1:]], cwd=ROOT, env=env).returncode
                 else:
                     rc, _ = LC.build(PKG, tree, lake, sandbox=False,
-                                     cmd=["env", "lean", f"--tstack={TSTACK_KIB}", "--run", str(HERE / "TwoGuard.lean"), *argv])
+                                     cmd=["env", "lean", "--threads=1", f"--tstack={TSTACK_KIB}", "--run", str(HERE / "TwoGuard.lean"), *argv])
             (tree / LC.DIRTY).unlink(missing_ok=True)
             return rc
     finally:

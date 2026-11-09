@@ -50,7 +50,7 @@ def runs(tmp_path_factory) -> Path:
 
 def stmt_ok(run: Path, m2: Path | None = None) -> dict:
     lake = shutil.which("lake") or str(Path.home() / ".elan" / "bin" / "lake")
-    argv = [lake, "env", "lean", f"--tstack={TSTACK_KIB}", "--run", str(HERE / "TwoGuard.lean"), str(run), "check",
+    argv = [lake, "env", "lean", "--threads=1", f"--tstack={TSTACK_KIB}", "--run", str(HERE / "TwoGuard.lean"), str(run), "check",
             *([str(m2)] if m2 else [])]
     p = subprocess.run(argv, cwd=LAKE_DIR, capture_output=True, text=True)
     lines = [ln for ln in p.stdout.splitlines() if ln.startswith("GUARD-RESULT ")]
