@@ -551,6 +551,28 @@ def evaluate(sp: Split, inputs: np.ndarray) -> np.ndarray:
     return np.concatenate([p for p, tag in zip(produced[last], sp.outs[last]) if tag[0] == "ret"])
 
 
+def check(target, seed: int) -> dict:
+    """``target``'s split evaluated on 64 random inputs drawn from ``seed`` (`evaluate`), against the flat lowering's
+    outputs (`forms.Circuit.evaluate`)."""
+    from verity.ml.circuits.boolean.forms import Circuit
+
+    sp, _tm, _lw = lower(target)
+    _prog, root = IL.standalone(target)
+    args = list(dict.fromkeys(root.args))
+    widths = [IL._width(root.circuit.gate(a).prim) for a in args]
+    lanes = np.random.default_rng(seed).integers(0, 1 << 64, size=sum(widths), dtype=np.uint64)
+    got = [int(x) for x in evaluate(sp, lanes[:, None])[:, 0]]
+    C = Circuit()
+    words = IL.lower(C, target, [C.input(f"in{a}", w) for a, w in zip(args, widths)])
+    for j, w in enumerate(words):
+        C.output(f"o{j}", w)
+    at = np.cumsum([0, *widths])
+    want, _fail = C.evaluate({f"in{a}": [int(x) for x in lanes[at[i]:at[i + 1]]] for i, a in enumerate(args)}, 64)
+    want = [x for j in range(len(words)) for x in want[f"o{j}"]]
+    return {"nets": len(sp.nets), "lookups": len(sp.lookups), "outputs": len(want),
+            "mismatched_bits": sum(x != y for x, y in zip(got, want)) + abs(len(got) - len(want))}
+
+
 #: a split on disk (`write`): ``<net>.tmpl`` a net, and ``slots.json`` its nets in order, port tags and widths, slots and wires
 FORMAT = "struct-slots/v1"
 

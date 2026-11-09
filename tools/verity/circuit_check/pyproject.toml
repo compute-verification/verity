@@ -172,7 +172,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_ambient.py", "tests/test_cache.py", "tests/test_structural.py"]
+tests = ["tests/test_ambient.py", "tests/test_cache.py", "tests/test_structural.py", "tests/test_structural_slots.py"]
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "verity/core/protocols/certifier",
