@@ -17860,3 +17860,52 @@ follows with the new timings.
 - **03ca** (cpu-3, `394c4ff3ed`, altered and flipped): `held: false`, the same cause as 071c (the reference reads sat in `xS₀ t`'s `registered`). Nothing of the run was evaluated.
 - **f820** (cpu-11, `69d976a822`, honest, with the reads split into `ref-<t>.reads.json`): `Held` exists. Every conjunct of `runOkAt` accepts at all four templates except round 2's codes, `[second-values]`, as expected, because `refRegisteredOf` was null before TWOOPENS's field. `twoFilesOk` is true (90 s).
 - **Now:** merged TWOOPENS's `Held.refReads` (`c1c80f9661`) at `c6942aeff4`. The honest, altered and flipped cases are next, on today's toy repacked from its last run. I've asked TWOPROVE for the head where (b) regenerates the toy, and the fixture is regenerated once there. cpu-11's slots are blocked (its check cache has 36 GB free, under the 50 GB floor), and cpu-11 removed `r20261109-075304-9306`'s large outputs at 08:45Z; the export survives in the store (`art:e73ff2b7…`).
+
+[2026-11-09T09:27Z] TWOOPENS (bc-09adba6a-e10f-536a-ad43-eeefd6ae53aa): checkpoint on your 08:27Z and 08:43Z orders. `Held`'s reference reads are fixed (`c1c80f9661`) and TWOGUARD has the field's name. The PR is open unmarked, TWOPROVE has the spec of (b), and the toy witness is bigger than tonight.
+
+**08:43Z, `Held` unsatisfiable: done as TWOGUARD proposed, with one change.** I read this order at 09:20Z, later than I should have.
+- `c1c80f9661` adds `Held.refReads : ℕ → Json`: template `t`'s reference registered reads, `null` for none. `refRegisteredOf` now reads it, giving every template an entry, and `xS₀ t` is staged without `registered`.
+- The change: `Json` rather than `Option Json` with a `null` default. `valuesOk` refuses a template with no entry and reads `null` as "none", and the deployed verifier (`Run.lean`) gives every circuit one, so the `Option` layer added nothing.
+- `pinOk` blanks `registered` on both sides, and no proof reads `refRegisteredOf` beyond `ownOf`, so nothing else changes.
+- TWOGUARD has the field and the side branch `cursor/proofs-refreads-3e7a` (at `c1c80f9661`) to merge now, sent 09:25Z. The PR body states the second vacuity in its first lines too, and the commit is listed under its next commits.
+- Try `r20261109-092333-1c93` (cpu-1) covers it, ETA about 10:25Z.
+
+**PR.** [#8309](https://github.com/compute-verification/verity/pull/8309). It's unmarked, under PRF-460, at `8030f0af63`, which try `5da1` vouches for (rc 0: 12391 jobs built, Lean exit 0 in 3875 s, no `sorry` outside ArkLib's own two).
+- Its first lines say `Sites h` is false at the toy until (b) lands, so the guarantee is vacuous there today, and they link the 07:58Z finding. They then say `Held` can't be built at the toy at this head either.
+- No records yet, as you said.
+- The VM reset again and took my unpushed commits. I recovered the same three commits from cpu-1's shipped repository through a bundle (`r20261109-082723-1f62`), so the try vouches for exactly what's pushed.
+
+**Two more commits, each under its own try.**
+- **`5cca3e70d1` keys `readKey` by the value read** (`.port v`), not by the reading port.
+  - A writer and its readers then name one entry. This is my half of (b), so TWOPROVE's PR needn't touch `Security/`.
+  - At today's toy it changes no bytes, because `keyOf` encodes `.interior t p` and `.port (portOf t p)` the same way.
+  - Try `r20261109-084016-d786` (cpu-11), ETA about 09:40Z.
+- **`180177c463` drops the `Embeds` premise from `SpotKSTwo` and `SpotExfilTwo`.** It's already a theorem at every registration: `embeds_layoutAt_any` proves `Embeds h (layoutAt h rank (pickAny h))` with no hypothesis, and `layoutFor h` is that layout at `rankAt h`. Your 07:44Z plan listed it as a premise; this commit doesn't need it.
+  - The guarantees then rest on `Built` (domain) and `Sites` (open), beside the `CompiledTwo.Scope` and `InScopeTwo` premises their statement reads.
+  - At records, `SpotFlock.Embeds` leaves `open` along with `FrameIs`, since nothing else lists it.
+  - Try `r20261109-090258-cfab` (cpu-3), covering both commits, ETA about 10:00Z.
+
+I'll push the three commits to the PR branch when their tries pass.
+
+**The spec of (b), sent to TWOPROVE at 08:45Z.** TWOPROVE found a case the plan didn't cover: the toy's `FLIP/x` has two writers. The first flip reads `FOLD/o0` and the second reads `FLIP/o0`, but Flock gives a registered port one value.
+- My call: (ii) for the toy now. The second flip becomes its own template, so REPLAY is LINK_IN → FOLD → FLIP → FLIP_B → LINK_OUT and every template is called once. Nothing in Flock changes, and round 2 derives the wires with the machinery the links already use.
+- (i), a port naming several values, is what served spans need (a layer's input reads the previous layer's output). It would change `Flock.Registered`, its proofs and my `ReadsRegistered`, so I asked TWOPROVE to name it in the inventory as the open item.
+- The invariant `Sites` needs from (b), for a gate one unit writes and another reads:
+  - one value: every session holding the gate reads the writer's port, and round 2 refuses a wired port reading its own copy;
+  - one leaf: the reader reads its cell's writer row;
+  - whole-row edges;
+  - the writer's binding (`atRun` binds a wired port by the writer's port).
+- The functions: new `replayWires` beside `replayLinks`, `readOk`'s non-link case, `wiredRead`, `atRun`, the Python mirror and difftest, and the toy's `wires`, `interior`, `reads` and `references`.
+
+**The toy witness (`Sites` and now `Held`): bigger than tonight.** `Sites` quantifies over every accepted run, so each fact must follow from the checks:
+- **The instance count (`Counted`) is not a plain theorem.** A checked unit is either drawn in the second stage (its rank is then below the session's `instances`, by the draw check's U3) or always checked: the proof blocks of input slots, and every unit where the second stage is refused. `rankAt` finds no drawn unit for an always-checked one, so `Counted` fails there unless its session draws it. It stays in `Sites` until the toy's witness shows how those sessions draw.
+- **The row format (`RowAt`: v2, unsegmented, width 16·words).** It should follow from `templateOk` through the pin (`Placement.stmt_of_pin`, `templateOk_facts`).
+- **The copy (`RowAt`'s last fact): the long pole.** It says the port's message bit equals the gate's column. It needs the hidden-outputs copy rows (`Typed.copySrc`) tied to the column `pickAny` chooses, through Bridge's lowering of the member's key program. That proof is general, not toy-specific, and of Bridge size.
+- **The read (`ReadsRegistered`).** It follows from (b)'s `readOk` and `rowsOk` once TWOPROVE's check is final.
+- **The toy instance.** It needs a `Held` for the toy (each `xS₀ t` passing `zkOk`, which is a computation over the staged bytes) and `replayWires` holding at the toy's replay Definition. It also needs the toy's per-template checks, where TWOVERIFY's `regOk` note applies: they need a proof, not `decide`.
+
+My plan is to prove the row format as a theorem and take it out of `Sites`, then size the copy proof after reading `Hidden.Committed` and `Typed.copySrc`. I'll report by 11:00Z.
+
+So "lands right after TWOPROVE's PR" holds for the restatement, not for the toy witness.
+
+**Your call: mark after (b) and the records run, or hold the mark for the witness?** I'd mark after (b) and records, with `Sites` open and the witness following. Under (b) and `c1c80f9661`, `Sites` is no longer false at the toy and `Held` can be built there; both are expected to hold but aren't proved. The PR body would then say "unproven at the toy" rather than "vacuous". Say if you'd rather hold the mark for the witness.
