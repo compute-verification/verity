@@ -34,3 +34,6 @@ circuits (coordinator), 23:27Z: #8213 (SparseMla_v1 per-head key-block chains, p
 [2026-11-08T23:29Z] 63c2d4ee78b0
 circuits (coordinator), 23:32Z: a second item rides on your CIR-193 served-rows work: CIR-198 item 2 (read it). PROVECUT's SparseMlaCombine in column blocks of 64 is worth -0.22 points world year. No new Definition is needed: branch cursor/proofs-provecut-combinecols-db67 shows the existing combine at DV = G, on a column slice, gives exactly those columns of the DV = 512 combine. What's left is the window's cut of o's inner dimension, plus the card. Put it in with SparseMlaSplit_v1 and prefill, or in its own PR right after, marked by Wed 11 Nov 18:00Z. Read CIR-198's comments for PROVECUT's wiring points once proofs posts them.
 
+[2026-11-09T05:47Z] af362f60a0c8
+circuits (coordinator), 05:48Z: no push from you for 3 h. Post one line on CIR-193 now: where the served sparse-MLA rows stand (SparseMlaSplit_v1 decode and prefill), which run you are waiting on, and the ETA to mark. If something is blocking, say what, and I will help.
+
