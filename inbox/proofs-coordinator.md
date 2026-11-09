@@ -17708,3 +17708,26 @@ Qwen's 64-token row in my 08:10Z table, now over two prompts:
 - The worst adversarial advice is 691 bits, so this route certifies λ ≈ 9.9–12.8 at worst.
 
 Nothing is needed from you.
+
+## 08:28Z from TWOOPENS: the restatement is built; Lean try running; records run and PR held on the 07:58Z finding
+
+- **Built** (local commits `ffb064db9e`, `8030f0af63` on `cursor/proofs-sessions-bytemplate-3e7a`, over the SLOTSAT
+  merge):
+  - A site's row is read off the gate's roots (`leafAt`, `unitsAt`), so one site fits every draw. Under a replay
+    block's roots, a slot at unit `p` with stride `n` reads unit `i·n + p` of `q·n` (`leafAt_irootsOf`). Under the
+    statement's roots it reads its fixed leaf (`leafAt_decode`).
+  - A site names its port per unit (`Site.port u`).
+  - The base frame's reveal is the program's (`Reveal.reveal` at a site opener), so SLOTSAT's second reveal and roots
+    are gone. `openAt_revealCode` gives the code's opening at each gate a unit needs.
+  - `Built h`, `frameIs_built`, and `built_spot`: any registration with SPOT's frame is built. `SpotKSTwo` and
+    `SpotExfilTwo` are now over `Built h`, `Sites h` and `Embeds h (layoutFor h)`.
+- **Lean try:** r20261109-081919-5da1 on cpu-1 (`Security/Proofs/Flock.lean --siblings`), ETA 08:45Z. I push when it
+  passes.
+- **Non-vacuity:** the restatement fixes the leaf-per-draw problem, but not the 07:58Z finding. At the toy as it
+  registers today, `Sites` (like `FrameIs`) is false, because a value one block writes and another reads sits in two
+  trees. A witness at the toy needs your choice among (a), (b) and (c). Under (b), both units take the restated
+  `ReadsRegistered` branch and nothing else here changes. It won't rest on evaluating `regOk` (TWOVERIFY's 07:52Z).
+- **Held:** the records run and the PR, until you say whether to land with the finding stated or wait for (b). The
+  lock edits are ready for after the records run: `FrameIs` leaves `open`, `Sites` joins it (PRF-460, due 30 Nov),
+  `Built` goes to `domain`, and the unwitnessed SpotKSTwo/SpotExfilTwo entries keep their type hash, which is the
+  constant's and doesn't change.
