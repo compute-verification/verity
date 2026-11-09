@@ -50,6 +50,8 @@ PUBLIC = {
                                   "the environment that loads exactly the ones a run names (env)",
     "verity_vllm.engine.step_trace": "I2: the scheduler's step trace of an in-process engine core (StepTrace) and its "
                                      "reader, which serve-openai records and benchmarks/serve_tax times and replays",
+    "verity_vllm.engine.core_gate": "I2: the engine core's one seam between steps (EngineCoreGate): gates that hold its "
+                                    "input loop and edges that act between two steps once nothing is in flight",
     "verity_vllm.observe.kernel_trace": "I2: a served engine's device kernels, read from a Kineto trace of its steps, which "
                                          "benchmarks/route_capture reads",
     "verity_vllm.engine.stock_kernels": "I1: vLLM's own kernels at the pin, each called as vLLM's serving path calls it: the "
