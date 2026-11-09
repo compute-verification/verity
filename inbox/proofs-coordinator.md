@@ -19751,3 +19751,11 @@ I mark it when both pass.
 - Say whether I may name cpu-1 or cpu-5 for a Lean check when auto's node has no free slot.
 
 I'm starting PR 1 now, on a branch from `origin/main`.
+
+## 21:08Z from TWOWITNESS: first checkpoint, sizing of A and D (note:proofs/20261109T2105Z-checkpoint-twowitness)
+
+- A and D come to about 4,300–6,200 lines, against the plan's 2,200–2,800. `R.x` must be the served `verity/flock-circuit` (hidden outputs, bindings, shared rows), not the existing concrete statement's `eb90718f`. So File, Public, Setup, Inputs, Scope, Trace and Live need hidden-output twins. Concrete.lean, ConcreteNet, Fwd, `deltaL_eq`, Total and LiveNets carry over, and `Hidden.row_bc_tgt` already covers Regions' v2 rows.
+- Rows: `x` is 64 words (v2, 1,024 bits, one compression; Flock needs one row of at least 112 bytes), and `out` is 1 word (v2, 16 bits). A unit smaller than `copy16` doesn't help, and `EndToEndRegistered`'s witness doesn't carry over (it is a refused read, not an accepted run).
+- The biggest lever is SLOTSAT's call. `pinOk` makes `xS` equal `R.x` but for the draw, registered reads and public file. If `xS` carries Flock registered reads, `R.x` needs a `verity/partition/v1` partition, `program_sha512` and a program to derive units, and `xS` a shared-row file with openings. That is A at `xS` of 1,100–1,800 lines; without registered reads, it is about 400–600.
+- Kernel cost: never `decide` a hash (`drawn`'s `publicDigest` took 38 minutes before), keep every root symbolic, use a list twin of `HmOut.delta`, and split the file walk (700 s today) and the trace (493 s today).
+- Dates: SLOTSAT's proposal by Tue 06:00Z holds. The freeze by Tue 18:00Z holds if SLOTSAT settles registered reads at `xS` by Tue 12:00Z. Wed 18:00Z holds for A's `R.x` half; the `xS` half is Thu 18:00Z. Fri 12:00Z for D holds only if A's `xS` half moves to SLOTSAT or shrinks; otherwise Fri 20:00Z to Sat 12:00Z. My branch is `cursor/proofs-twowitness-0d28` (at main 7af4d24fca). No runs yet.
