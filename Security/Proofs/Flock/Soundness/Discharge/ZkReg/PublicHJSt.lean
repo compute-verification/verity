@@ -20,7 +20,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
 import Proofs.Flock.Soundness.Discharge.Tables.Headline
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # `zk_session_soundHJR_custody_reg` at the session's statement circuit
