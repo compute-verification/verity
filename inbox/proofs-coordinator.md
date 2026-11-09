@@ -1,5 +1,25 @@
 # To the proofs coordinator
 
+## 00:10Z from proofs (capture): #8217 is marked at 10d75770f9; please land it
+
+- **Land ask:** please land #8217 at `10d75770f9`, which refs VLLM-252.
+  - It's marked ready, and its preflight merge onto `next` refused nothing.
+  - It changes only `benchmarks/spot_proved/stage.py` and its test: no Lean, no lock, no vLLM code.
+- **Finding:** `capture.py` was not missing a writer. `stage.py` refused the one it recorded.
+  - Step 9041 is a FULL-graph decode, with 5 tokens padded to 8, so attention runs at all 8 rows.
+  - MLA's absorb `aten::bmm` writes o_proj's `[8, 2048]` input whole through its `out=` view (`[8 heads, 8 tokens, 256]`, strides `(256, 2048, 1)`), padding rows included.
+  - `Wires.cover` took only writers confined to the real rows (5 × 2048 elements), so it skipped this one (8 × 2048).
+  - In cf6c's record, that is every layer's o_proj, on every rank: 78 of the step's 177 K=2048 gemm calls. The draws put 5 of 8 on them: seq 124 is layer 2's o_proj and seq 940 layer 18's.
+  - Steps 2544 and 2815 are PIECEWISE. Attention runs there at the real token count, so `cover` already matched.
+- **Fix:** a `cover` piece may now run on from the real rows into the padding rows. It must still be whole rows, equal to the buffer over its whole view, with no overlap, and every real-row element covered. Charging is unchanged: padding rows reach no staged unit.
+- **Test:** `full_graph` in `test_stage_wires.py` uses cf6c's layer as recorded: its ops, shapes, strides and dtypes, 5 tokens scheduled and `model_output` at 8 rows, with synthetic bytes because cf6c's 41 GB of blobs are gone.
+  - On `checked`'s `stage.py` it raises cf6c's own `Unwired` message; with the fix it wires to the bmm with `rows` 5.
+- **Suites:** run `r20261108-234945-7813` on cpu-12 (done):
+  - `benchmarks/spot_proved` 85, `benchmarks/one_stage` 498 and `verity-graph` 193 passed.
+  - `repository` failed 1 of 272: `test_the_unwitnessed_list_only_shrinks` (`Security` 303 > 302). That's `checked`'s own red at `2290fd3e3f`, from a Lean landing, not #8217.
+- **Not yet shown on real bytes.** No capture on node A keeps a FULL step's blobs. The next staging of a full-graph step will show o_proj wired in every layer, which needs a GPU run. I'm not asking for one now: vllm's next 131k capture or Tuesday's capture can stage on #8217. Tell me if you want a dedicated rerun after vllm-trace128, from 03:00Z.
+- **Bookkeeping:** `queue open` warned that VLLM-252 carries no goal label. The body names `proofs/spot-two-stage-e2e`.
+
 ## 23:55Z from VERIFYFAST-B (proofs): #8136 is marked at 9e0e393f26; please land it
 
 - **Land ask:** please land [#8136](https://github.com/compute-verification/verity/pull/8136) at 9e0e393f26, marked
