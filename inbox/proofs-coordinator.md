@@ -15397,3 +15397,59 @@ is gone. The statement diff is in note `proofs/20261108T2205Z-report-carrylean`,
 #8223 is marked at `4bfc363ee3`. Records `r20261108-223330-36ce` regenerated both locks, committed exactly; the queue's
 records gate passes them. Quick suites `r20261109-000419-6825` (cpu-12): 121 of 122 pass; pous's input guard is
 `checked`'s known red. `LiveAcceptsZKR` is open under PRF-471. Please land it.
+
+## FRAMESPLIT 02:09Z: land ask, #8245 a withheld session's release in frames under the coin link's head limit, marked at 0715080b9a (PRF-474); network-accounting needs no change
+
+**Land ask:** #8245 (branch `cursor/proofs-framesplit-b28e`, head `0715080b9a`, on `checked` at `d49bb9519d`) is marked,
+and its preflight onto `next` refused nothing. It needs a reviewer's land verdict: `verity/core/` and a `pyproject.toml`
+keep it off the low-risk lane. It has no Lean or lock change. Issue: PRF-474, In Review. Its goal label is unset: it
+serves vllm's Pearl+ follow-on (V3c), and I couldn't tell which goal id that is, so please label it.
+
+**Checked:** I ran the changed suites quick at the head (`r20261109-014840-e431`, cpu-12): 63 of 64 pass. The other,
+`verity-network-traces`, fails two `tests/test_chain_record.py` tests on a template cycle in
+`verity/ml/windows/interface.py`. Those two fail the same way on the base `d49bb9519d` (`r20261109-014932-7a88`, cpu-1),
+so whoever owns them should know they're red on `checked`.
+
+**What was wrong:** a withheld challenger session's close sent every opening in one `released` frame. At V3c's 722
+openings that's a 1,465,094-byte head, past `MAX_HEAD` (1,048,576). The coin link faulted it as malformed and cut, the
+settled segment kept empty salts, and the Lean run refused the draw ("coin opening is malformed").
+
+**What changed (proofs' side only):**
+
+- `verity/core/protocols/spot/remote.py`:
+  - `release_frames` cuts the release into `releasing {first, openings}` frames and a last `released {commitment,
+    openings}`, each head at most `RELEASE_HEAD` = `MAX_HEAD // 2`. At path depth 10 that's 258 openings a frame, so 722
+    openings make three frames.
+  - A release that fits one frame is unchanged on the wire.
+  - `RemoteChallenger.close` takes the frames only in order and complete. It refuses a missing, repeated, reordered,
+    empty or overlong frame, or `released` first, before using any opening.
+- Tests at 722 openings:
+  - `spot/tests/test_remote.py`: the wire, the refusals, and that the settled segment equals an in-process one.
+  - `spot/tests/test_challenger_coins.py`: the Lean `Run.run` accepts the draw.
+  - `benchmarks/live_challenger/tests/test_coin_link.py`: `serve.py --withhold` behind the real coin link closes with
+    nothing cut. The old code cut it.
+
+**Lean and difftest:** no change. `Spot/ChallengerCoins.lean`'s `drawCoins` reads the settled segment, which is
+byte-identical however the release was framed.
+
+**Network-accounting:** no code change needed. The coin link already re-cuts any frame under `MAX_HEAD` into cells and
+counts each release frame as `other`; the new link test asserts that. Three notes to route to them, none blocking:
+
+1. `coin_link.py`'s docstring says each challenger frame answers the prover's oldest unanswered frame. A withheld close
+   is now answered by several frames (all `other`), so that sentence should say "answers, or continues answering".
+2. The link reads the challenger's stream with no back-pressure. A release past the coins queue (`queue_cells` ×
+   `cell_bytes` = 1024 × 4096 at D7's defaults) faults OVERFLOW even with every frame under the head limit. That's
+   about 1,930 coins at depth 11; 722 coins is 359 cells. A session past that needs either the link to stop reading
+   the challenger while its queue lacks room for one `MAX_HEAD` frame, or a larger `queue_cells` for withheld sessions.
+3. From vllm's report: withheld `coin` frames are never an exempt COIN (the classifier verifies only `opening`
+   frames), so they count as content at 8 bits a byte. That is unchanged here.
+
+**What infra must repin, before vllm reruns V3c:**
+
+- The auditor host's gate checkout, which runs `benchmarks/live_challenger/serve.py`: repin it to the first `main`
+  commit containing #8245. `serve.py` runs `spot.remote.serve`, which is what changed. The coin link reads only
+  `HEADER` and `MAX_HEAD` from that module, and neither changed, so the link behaves the same at either commit.
+- The prover-side client: the commit vllm's run uses for its gate client (`RemoteChallenger`) must contain #8245. An
+  old client refuses a multi-frame release ("the challenger did not answer with 'released'"), so a new gate with an old
+  client fails past about 258 coins. An old gate with any client still faults past about 516.
+- Both must move together. One without the other still fails V3c's 722.
