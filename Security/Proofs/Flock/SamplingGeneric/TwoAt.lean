@@ -24,13 +24,13 @@ At this code, four of `ksTwo_code`'s hypotheses are facts of the order and the b
   challenger call (`CallsUniform`): the bytes `b x` returns on its round's coin are uniform. A3 holds every call's
   bytes independent of every earlier call's, so the second stage's bytes are uniform whatever the first stage drew.
 * `ksTwo_atOrder`: `CompiledTwo.KS` at Flock's masked record and SHA-512 from those two calls' A3 and seven facts of
-  the code (`RegMatchesTwo`, `RefusesTwo`, `ReplayCap`, `InteriorFixed`, `SessionRuns`, `SessionsIn`,
+  the code (`RegMatchesTwo`, `RefusesTwo`, `ReplayCap`, `InteriorFixed`, `SessionRunsTo`, `SessionsIn`,
   `SessionOpensTwo`), its inner wait's count the replay cap. The verifier in public-coin form, its parser, partition,
   sessions and reveals are `c`'s.
 * `sessionsTwo_atOrder`: the two-stage contract at those premises (`sessionsTwo_code`).
 
 `Flock.SecurityProofs.SampledKSTwo : Flock.Guarantees.SampledKSTwo` (`Proofs.Flock.SamplingGeneric.Guarantees`)
-states it. Its witnesses:
+states it, with the sessions' runs both ways (`SessionRuns`, which gives `SessionRunsTo`). Its witnesses:
 
 * `Flock.SecurityProofs.SampledKSTwo_honest`: every premise at a toy code (`toyCode`) that parses no statement, accepts
   none, opens no session and reads no bytes;
@@ -115,7 +115,7 @@ theorem ksTwo_atOrder (iroots : Msg → Seen → ℕ → List Msg) (cap : Msg �
     (hr : (c.atOrder j).RefusesTwo FlockDeploy.sha512 two)
     (hcap : (c.atOrder j).ReplayCap FlockDeploy.sha512 two (replayTwo (c.atOrder j) reg L₁ (bytesFirst c L₁ j b₁)) cap)
     (hi : (c.atOrder j).InteriorFixed FlockDeploy.sha512 iroots)
-    (hruns : Claims.Sampling.SessionRuns FlockDeploy.sha512
+    (hruns : Claims.Sampling.SessionRunsTo FlockDeploy.sha512
       (deploy _root_.Flock.Readable.relation (codeTwoAt c reg L₁ L₂ j b₁ b₂)))
     (hnum : SessionsIn (codeTwoAt c reg L₁ L₂ j b₁ b₂))
     (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
@@ -133,7 +133,7 @@ theorem sessionsTwo_atOrder (iroots : Msg → Seen → ℕ → List Msg) (cap : 
     (hr : (c.atOrder j).RefusesTwo FlockDeploy.sha512 two)
     (hcap : (c.atOrder j).ReplayCap FlockDeploy.sha512 two (replayTwo (c.atOrder j) reg L₁ (bytesFirst c L₁ j b₁)) cap)
     (hi : (c.atOrder j).InteriorFixed FlockDeploy.sha512 iroots)
-    (hruns : Claims.Sampling.SessionRuns FlockDeploy.sha512
+    (hruns : Claims.Sampling.SessionRunsTo FlockDeploy.sha512
       (deploy _root_.Flock.Readable.relation (codeTwoAt c reg L₁ L₂ j b₁ b₂)))
     (hnum : SessionsIn (codeTwoAt c reg L₁ L₂ j b₁ b₂))
     (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512

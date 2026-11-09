@@ -72,11 +72,14 @@ commitment is the code's (`deployOf_commit`, `rfl`), which binds at every `H` (`
 and position, hm96 leaves of rows that place the value, `row_places`, under the registered path check at the ports
 there), its universal unit is the Definition's (`universalIs_deployOf`), its opening check's calls are bounded by the
 reveal count (`openCallsLe_deployOf`, from `RevealsLe`), and the inner numbers are Flock's where `F`'s are bounded by
-the tables' (`innerNumbers_deployOf`). `sampling_deployed_of` is `sampling_assembled_bind` at the record, those
-discharged; `sampling_deployed` adds zero knowledge at `deploy`. The inner numbers are Flock's at `deploy` where every
-session is in Flock's masked scope (`SessionsIn`, `innerNumbers_deploy`), and at `deployPlain` where every session is in
-Flock's plain scope (`SessionsInPlain`, `innerNumbers_deployPlain`): the compiled sampled verifier's knowledge soundness
-at the deployed record reads them (`SamplingDeploy.ks_compiled`).
+the tables' (`innerNumbers_deployOf`; at each unit's `N₀`, `innerNumbersAt_deployOf`). `sampling_deployed_of` is
+`sampling_assembled_bind` at the record, those discharged; `sampling_deployed` adds zero knowledge at `deploy`. The
+inner numbers are Flock's at `deploy` where every session is in Flock's masked scope (`SessionsIn`,
+`innerNumbers_deploy`), and at `deployPlain` where every session is in Flock's plain scope (`SessionsInPlain`,
+`innerNumbers_deployPlain`): the compiled sampled verifier's knowledge soundness at the deployed record reads them
+(`SamplingDeploy.ks_compiled`). `SessionsIn` holds each session in Flock's masked scope at its unit's `N₀`
+(`Code.unitN₀`), which gives the inner numbers at each unit's `N₀` (`innerNumbersAt_deploy`), and at the code with every
+unit at its statement's `N₀` (`Code.atInnerN₀`) the one-stage ones (`innerNumbers_deploy`).
 -/
 
 @[expose] public section
@@ -254,18 +257,28 @@ theorem openCallsLe_deployOf (H : Msg → Msg) (h : RevealsLe c) : OpenCallsLe H
     _ = (c.reveal s u v wF).length * (4 + depth c.own) := by simp
     _ ≤ c.reveals x * (4 + depth c.own) := Nat.mul_le_mul_right _ (h x s hs u v wF)
 
+/-- **The inner numbers are Flock's at each unit's `N₀`** where `F`'s waits and truncation are the deployment's and
+every session of unit `u` at `x` has `N₀ = n₀ x u`, its `ε_table` and weight at most some `n ≤ tables` tables'
+bounds. -/
+theorem innerNumbersAt_deployOf (n₀ : Msg → ℕ → ℝ) (hw : ∀ xS, F.waits xS = Claims.Flock.Numbers.waits)
+    (hc : ∀ xS, F.cap xS = Claims.Flock.Numbers.cap)
+    (h : ∀ x u v xS vS, c.session x u v = some (xS, vS) → F.N₀ xS = n₀ x u ∧
+      ∃ n : ℕ, n ≤ c.tables x ∧ F.εtable xS ≤ n * 2 ^ (-(205 : ℝ)) ∧ F.weight xS ≤ n * 2 ^ 33) :
+    InnerNumbersAt (deployOf F c) n₀ := by
+  intro x u v xS vS hs
+  obtain ⟨hN, n, hn, he, hwt⟩ := h x u v xS vS hs
+  have hn' : (n : ℝ) ≤ c.tables x := by exact_mod_cast hn
+  exact ⟨hw xS, hc xS, hN, he.trans (mul_le_mul_of_nonneg_right hn' (by positivity)),
+    hwt.trans (mul_le_mul_of_nonneg_right hn' (by positivity))⟩
+
 /-- **The inner numbers are Flock's** where `F`'s waits and truncation are the deployment's and every session's `N₀`
 is the record's, its `ε_table` and weight at most some `n ≤ tables` tables' bounds. -/
 theorem innerNumbers_deployOf (hw : ∀ xS, F.waits xS = Claims.Flock.Numbers.waits)
     (hc : ∀ xS, F.cap xS = Claims.Flock.Numbers.cap)
     (h : ∀ x u v xS vS, c.session x u v = some (xS, vS) → F.N₀ xS = c.innerN₀ x ∧
       ∃ n : ℕ, n ≤ c.tables x ∧ F.εtable xS ≤ n * 2 ^ (-(205 : ℝ)) ∧ F.weight xS ≤ n * 2 ^ 33) :
-    InnerNumbers (deployOf F c) := by
-  intro x u v xS vS hs
-  obtain ⟨hN, n, hn, he, hwt⟩ := h x u v xS vS hs
-  have hn' : (n : ℝ) ≤ c.tables x := by exact_mod_cast hn
-  exact ⟨hw xS, hc xS, hN, he.trans (mul_le_mul_of_nonneg_right hn' (by positivity)),
-    hwt.trans (mul_le_mul_of_nonneg_right hn' (by positivity))⟩
+    InnerNumbers (deployOf F c) :=
+  innerNumbersAt_deployOf F c (fun x _ => c.innerN₀ x) hw hc h
 
 set_option synthInstance.maxSize 1024 in
 /-- **The sampling claims at the deployed record over any Flock record**, at every hash: `sampling_assembled_bind` at
@@ -296,19 +309,25 @@ theorem openCallsLe_deploy (H : Msg → Msg) (h : RevealsLe c) : OpenCallsLe H (
   openCallsLe_deployOf (FlockDeploy.deployZk rel) c H h
 
 /-- **The sessions are in Flock's masked scope**: every session's statement sets up at most `tables` tables, each at
-an `m` and of a shape the masked verifier serves (`FlockDeploy.ZkIn`), and its `N₀` is the record's. -/
+an `m` and of a shape the masked verifier serves (`FlockDeploy.ZkIn`), and its `N₀` is its unit's (`unitN₀`). -/
 def SessionsIn : Prop :=
   ∀ x u v xS vS, c.session x u v = some (xS, vS) →
-    (∃ s spec sts, FlockDeploy.ZkIn xS s spec sts ∧ sts.size ≤ c.tables x) ∧ FlockDeploy.N₀ true xS = c.innerN₀ x
+    (∃ s spec sts, FlockDeploy.ZkIn xS s spec sts ∧ sts.size ≤ c.tables x) ∧ FlockDeploy.N₀ true xS = c.unitN₀ x u
 
-/-- **The inner numbers are Flock's**: the waits and truncation by definition; at a session in Flock's masked scope,
-its `ε_table` and weight are at most its tables' count times their bounds, so at most the record's. -/
-theorem innerNumbers_deploy (h : SessionsIn c) : InnerNumbers (deploy rel c) :=
-  innerNumbers_deployOf (FlockDeploy.deployZk rel) c (fun _ => rfl) (fun _ => rfl) fun x u v xS vS hs => by
+/-- **The inner numbers are Flock's at each unit's `N₀`**: the waits and truncation by definition; at a session in
+Flock's masked scope, its `ε_table` and weight are at most its tables' count times their bounds, so at most the
+record's. -/
+theorem innerNumbersAt_deploy (h : SessionsIn c) : InnerNumbersAt (deploy rel c) c.unitN₀ :=
+  innerNumbersAt_deployOf (FlockDeploy.deployZk rel) c c.unitN₀ (fun _ => rfl) (fun _ => rfl) fun x u v xS vS hs => by
     obtain ⟨⟨s, spec, sts, hz, hn⟩, hN⟩ := h x u v xS vS hs
     refine ⟨hN, sts.size, hn, FlockDeploy.εtable_le hz.setup fun st hst => ?_, FlockDeploy.weight_zk_le rel hz⟩
     have := hz.tab st hst
     exact FlockDeploy.tableErr_zk_le spec st this.1 this.2.1 this.2.2
+
+/-- **The inner numbers are Flock's**: `innerNumbersAt_deploy` at the code with every unit at its statement's `N₀`,
+whose record is `deploy rel c`. -/
+theorem innerNumbers_deploy (h : SessionsIn c.atInnerN₀) : InnerNumbers (deploy rel c) :=
+  innerNumbersAt_deploy rel c.atInnerN₀ h
 
 set_option synthInstance.maxSize 1024 in
 /-- **The sampling claims at the deployed record**, at every hash: `sampling_deployed_of` at the masked record

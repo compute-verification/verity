@@ -85,7 +85,7 @@ end Flock.Guarantees
 
 theorem Flock.SecurityProofs.SampledKSTwo : Flock.Guarantees.SampledKSTwo :=
   fun c reg two L₁ L₂ j b₁ b₂ iroots cap hA₁ hA₂ hreg hr hcap hi hruns hnum hopens =>
-    SamplingDeploy.ksTwo_atOrder c reg two L₁ L₂ j b₁ b₂ iroots cap hA₁ hA₂ hreg hr hcap hi hruns hnum hopens
+    SamplingDeploy.ksTwo_atOrder c reg two L₁ L₂ j b₁ b₂ iroots cap hA₁ hA₂ hreg hr hcap hi hruns.to hnum hopens
 
 theorem Flock.SecurityProofs.SpotKSTwo : Flock.Guarantees.SpotKSTwo :=
   fun h L he hF => SpotFlock.ksTwo_spot h (SpotFlock.sessionOpensTwo_of_frameIs h L he hF)
