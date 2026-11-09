@@ -260,7 +260,7 @@ read at a replay block.
   `X` with probability at most `∏_{ρ∈S} ∏_t C(n_{ρ,t} − |X ∩ cell(ρ, t)|, k_t)/C(n_{ρ,t}, k_t)`, `S` the replay
   blocks `r` samples: the second stage's sample is, in each sampled replay block, a uniform `k_t`-subset of each cell,
   independently.
-* `slots`, `refuses` (at `CompiledTwo.Scope`), `fixed` and `runs`: `Sessions`'.
+* `slots`, `shared`, `refuses` (at `CompiledTwo.Scope`), `fixed` and `runs`: `Sessions`'.
 * `unions`: on a statement in scope, both waits' unions are within their bits: the outer wait's, over the sets' counts
   per cell, `M ≤ n_out` (`footBits`), and the inner wait's, over sets of the proof blocks of the replay blocks `r`
   samples, `|sampleBlocks| ≤ n_in` at every `r` of which some second-stage fork is accepted.
@@ -280,6 +280,10 @@ structure Sessions (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop where
           ∏ t ∈ Finset.range Pt.strata.length,
             escCell (cell Pt d.part ρ t).card (d.k.getD t 0) (X ∩ cell Pt d.part ρ t).card
   slots : ∀ x r, (L.checked x r).length ≤ L.nPU x
+  shared : ∀ x (Ω : Type) (P : Prover Ω) ω r i j u u', (run H P L.V x ω r).out = .acc →
+    (L.checked x r)[i]? = some u → (L.checked x r)[j]? = some u' →
+    L.skey x (L.checked x r) i = L.skey x (L.checked x r) j →
+    L.session x u (run H P L.V x ω r).seen = L.session x u' (run H P L.V x ω r).seen
   unions : ∀ x s Pt d, L.parse x = some s → L.partition s = some Pt → L.two s = some d → InScopeTwo Pt d s →
     footBits Pt d ≤ L.nOut x ∧ ∀ (Ω : Type) (P : Prover Ω) ω (r e : Fin (L.V.k x) → Coin),
       (run H P L.V x ω (forkOn (L.stage2 x) r e)).out = .acc →

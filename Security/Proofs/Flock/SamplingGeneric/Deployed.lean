@@ -97,6 +97,9 @@ omit [Fintype Coin] [Nonempty Coin] in
 theorem ofDeploy_nPU (x : Msg) : (ofDeploy D iroots).nPU x = Claims.Sampling.nPU D x := rfl
 
 omit [Fintype Coin] [Nonempty Coin] in
+theorem ofDeploy_nSess (x : Msg) : (ofDeploy D iroots).nSess x = Claims.Sampling.nPU D x := rfl
+
+omit [Fintype Coin] [Nonempty Coin] in
 theorem ofDeploy_kOut (x : Msg) : (ofDeploy D iroots).kOut x = D.k x := rfl
 
 omit [Fintype Coin] [Nonempty Coin] in
@@ -230,6 +233,12 @@ theorem sessions_ofDeploy (H : Msg → Msg) (hd : Claims.Sampling.DrawLaw D) (hr
     · obtain ⟨p, hp⟩ := (mem_ofDeploy_checked D iroots).1 hu
       exact h u huB p hp
   slots _ _ := List.length_take_le _ _
+  shared _ _ _ _ _ i j u u' _ hu hu' hk := by
+    obtain rfl : i = j := hk
+    obtain rfl : u = u' := Option.some.inj (hu.symm.trans hu')
+    rfl
+  keys x _ := Finset.card_image_le.trans ((Finset.card_range _).trans_le
+    ((List.length_take_le _ _).trans_eq (ofDeploy_nSess D iroots x).symm))
   unions x := (ofDeploy_nPU D iroots x).le
   refuses := hr
   interior := hi
