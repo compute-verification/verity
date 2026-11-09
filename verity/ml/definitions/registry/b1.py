@@ -579,6 +579,12 @@ def TokenSelectCombine(B, S, x0, best, idx):
     return run_i
 
 
+#: the Calls serving stages as their cut, by family: greedy selection as a tree of partial argmaxes over the row's chunks, each
+#: unit of at most a Flock block (`greedy_stages.cut`), which circuit-check holds to the block in the Call's place
+#: (`checks.cut_of`).  It names the module whose ``cut`` it is rather than importing it: that module imports this one
+CUTS = {"TokenSelect_v1": "verity.ml.definitions.registry.greedy_stages"}
+
+
 # ---------------------------------------------------------------------------------------------------------
 # layer and model
 # ---------------------------------------------------------------------------------------------------------

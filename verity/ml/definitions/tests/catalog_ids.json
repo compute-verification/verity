@@ -738,6 +738,8 @@
 "Gemm_v2",
 "Gemm_v3",
 "Gemm_v4",
+"GreedyChunk_v1",
+"GreedyCombine_v1",
 "GuardNegInfZero_v1",
 "GuardNegInfZero_v2",
 "GumbelArgmaxBf16_v1",

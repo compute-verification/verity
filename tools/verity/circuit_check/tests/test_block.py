@@ -164,6 +164,19 @@ def test_sparse_mla_is_held_to_the_block_by_its_head_chain():
         ("SparseMlaHeadBlock_v1", 8), ("SparseMlaHeadBlock_v1", 8), ("SparseMlaHeadEnd_v1", 8)]
 
 
+def test_glm53_greedy_select_is_held_to_the_block_by_its_chunks():
+    """GLM-5.3's greedy `TokenSelect_v1` at its served vocabulary (V = 154,880) is past the block whole (2^28 bits) and cut by
+    `b1.CUTS` into ten chunks and their combine, whose largest, a chunk of 16,384 lanes, is a quarter of the block."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.definitions.registry import b1
+
+    F = CK.Findings()
+    b = CK.block_range(bind(b1.TokenSelect, V=154880), F)
+    assert not F.failures and b["whole"]["k_log"] == 28 and b["k_log"] == 25
+    assert [(u["unit"].partition("{")[0], u["count"], u["k_log"]) for u in b["cut"]] == [
+        ("GreedyChunk_v1", 1, 25), ("GreedyChunk_v1", 8, 25), ("GreedyChunk_v1", 1, 24), ("GreedyCombine_v1", 1, 24)]
+
+
 def test_sparse_mla_split_is_held_to_the_block_by_its_split_chain():
     """GLM-5.3's `SparseMlaSplit_v1` at T = 130 in two splits (split 0 of two blocks) is past the block whole and cut by
     `sparse_mla_split.CUTS` into each split's blocks, its ends in column blocks and each column block's combine, whose
