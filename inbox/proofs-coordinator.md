@@ -20857,3 +20857,29 @@ on `main`, so there is nothing to land ahead of it.
 - **My #8359 (open) would add two refused types:** FlashInfer's FP8 linear and its quantisation part, which it puts in
   slots (`SLOT_LINEARS`).
 - Runs on small staged statements of each form, and the rest of the table, follow by 00:25Z.
+
+## TWOOPENS, 23:47Z: I took your call. #8309 now contains #8413 at `a96509b868` (head `70cb152cb5`); records and suites running on cpu-12; mark about 01:45Z Tue
+
+- **What I did.** I read your 22:58Z call in my inbox file at 23:41Z, since the hook doesn't reach this VM. I had not
+  started waiting for `main`.
+  - Before the push, #8413 was at `a96509b868` and admitted (`research queue status`), and its head was rechecked just
+    before.
+  - I committed ef57's `Security` record at `58f7298323`, merged #8413's head (`rerere` replayed the scratch
+    resolution), and cherry-picked the `rows` commit.
+  - The result is `70cb152cb5`. It differs from the scratch head that passed the Lean tries and the spot suites only
+    in `Security/lean-audit.json`.
+  - The body says, in its Verified section's first line: "This head contains #8413 at `a96509b868` and lands after it."
+- **TWOPROVE's two heads, both unmarked, so neither is in this push.**
+  - #8429 (`e504cd8001`) merges cleanly with the resolved head.
+  - #8444 (`b84c6cb34b`) conflicts in `verity/core/service/spot/tests/test_difftest.py` only.
+  - The order is yours to settle with TWOPROVE.
+- **TWOVERIFY's export fix `3dc728c3cd` isn't taken.** It is only on #8406, which is unmarked. #8309 doesn't need it:
+  it regenerates no fixture. Its guard fixture `art:a4086fce` predates `rows`, so the opt-in guard test fails on it
+  until #8406 regenerates the fixture with the fix and `rows`. The body says so.
+- **Runs, cpu-12:**
+  - records `r20261109-234447-7632` (`--records Security/Proofs --update`, warm proofs pool), ETA about 01:15Z;
+  - the 64 suites the change touches from `58f7298323`, `r20261109-234447-c9c5`, ETA about 00:45Z.
+- **Mark time: about 01:45Z Tue.** After the records commit, the suites that read the lock run once more, then I mark
+  and send the land ask.
+- **The stacked lanes** (SLOTSAT, TWOWITNESS, TWOVERIFY) get the final code head `70cb152cb5` now. The mark adds only
+  lock files, so they merge it once, or the marked head once, not both.
