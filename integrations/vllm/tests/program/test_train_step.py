@@ -872,6 +872,63 @@ def test_gpu_refuses_what_its_capture_does_not_cover(monkeypatch) -> None:
         step_report(None, None, None, None, rules=training_rules(), cc=CC)
 
 
+class _DeviceBranch(torch.nn.Module):
+    """A product whose operands' dtype the device decides, as Newton-Schulz's `x = g.bfloat16() if g.is_cuda else g.float()`."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.w = torch.nn.Parameter(torch.empty(32, 64, device="meta"))
+
+    def forward(self, x):
+        x, w = (x.bfloat16(), self.w.bfloat16()) if x.is_cuda else (x.float(), self.w.float())
+        return x @ w.t()
+
+
+def _sum_of_squares(model, batch):
+    return model(batch).float().square().sum()
+
+
+def test_gpu_export_takes_the_steps_cuda_branches() -> None:
+    """`export_step(..., gpu=True)` traces the step as the GPU runs it: the step's own `is_cuda` reads True, so a product it
+    computes in bf16 on a GPU and in f32 elsewhere is bf16, forward and backward; without `gpu` it is f32; and afterwards
+    `Tensor.is_cuda` is torch's again."""
+    batch = torch.empty(4, 64, device="meta")
+
+    def dtypes(gpu: bool) -> set:
+        gm = export_step(_DeviceBranch(), _sum_of_squares, AdamW(**ADAMW), batch, gpu=gpu)[0]
+        return {n.args[0].meta["val"].dtype for n in gm.graph.nodes if n.target is aten.mm.default}
+
+    assert dtypes(False) == {torch.float32} and dtypes(True) == {torch.bfloat16}
+    assert not isinstance(torch.Tensor.__dict__.get("is_cuda"), property) and torch.zeros(1).is_cuda is False
+
+
+def test_gpu_export_reads_the_steps_tf32(monkeypatch) -> None:
+    """At a cc the step's cuda.matmul.allow_tf32 is the rules' `tf32`, as `export_step(..., gpu=True)` reads it: under it an f32
+    linear's product is cuBLAS's TF32 GEMM, which `Matmul` refuses; a step that changes it between its products is refused, as
+    is an export traced without `gpu`."""
+    model, batch, opt = torch.nn.Linear(64, 32, bias=False, device="meta"), torch.empty(4, 64, device="meta"), AdamW(**ADAMW)
+    monkeypatch.setattr(torch.backends.cuda.matmul, "allow_tf32", True)
+    ex = export_step(model, _sum_of_squares, opt, batch, gpu=True)
+    assert ex[2].gpu and ex[2].tf32
+    u = step_report(model, _sum_of_squares, opt, batch, exported=ex, cc=CC).unsupported
+    assert u is not None and "TF32 GEMM" in u.hint, u
+    monkeypatch.setattr(torch.backends.cuda.matmul, "allow_tf32", False)
+    assert not export_step(model, _sum_of_squares, opt, batch, gpu=True)[2].tf32
+
+    def toggles(m, b):
+        y = m(b)
+        torch.backends.cuda.matmul.allow_tf32 = True
+        try:
+            return (m(b) + y).square().sum()
+        finally:
+            torch.backends.cuda.matmul.allow_tf32 = False
+
+    with pytest.raises(ValueError, match="changes cuda.matmul.allow_tf32"):
+        export_step(model, toggles, opt, batch, gpu=True)
+    with pytest.raises(ValueError, match=r"export_step\(\.\.\., gpu=True\)"):
+        step_report(model, _sum_of_squares, opt, batch, exported=export_step(model, _sum_of_squares, opt, batch), cc=CC)
+
+
 def test_tiny_step_theta_is_the_parameters() -> None:
     model, prog = _tiny_program()
     layout = prog.annotations["train_step"]
