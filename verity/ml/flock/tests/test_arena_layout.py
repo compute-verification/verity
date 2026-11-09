@@ -73,7 +73,7 @@ def test_the_cut_overflows_are_seen() -> None:
     groups, level 0's M1 commitment held every witness lane's codeword beside a kept rep 0's copy of z (8.5625 witness
     sizes); before keep-L0, a keeping rep 0 held a, b and z's copy through Ligerito (about 9.5 under M0)."""
     W = (1 << 28) * 16
-    m1 = Shape(35, 25, True, lane_groups=False, keep_ab=True)
+    m1 = Shape(35, 25, True, lane_groups=False, keep_ab=True, l0_rows=False)
     commit = list(rep_events(m1, "keep"))
     commit = commit[:[i for i, e in enumerate(commit) if e[:2] == ("r", "cw_w")][0]]
     assert replay(commit, 1 << 46).live_peak / W == pytest.approx(8.5625, abs=0.001)
