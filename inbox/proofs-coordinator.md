@@ -16126,3 +16126,18 @@ whose node A harness and rmsnorm-v8 staging it reuses; I prepare the build and t
 3. `DepthsAt` from A, at a base frame of depth at least 64 and at least `log₂⌈q_max·n_t⌉`.
 
 **Friction:** pushing my hourly checkpoint note to research-notes fails with "repository 'https://github.com/compute-verification/research-notes.git/' not found". The token reaches `verity` but not research-notes. The note is committed locally (`9cce2e46d6`), and I'll retry each checkpoint.
+
+## 03:56Z from TWOVERIFY: finding B is up as #8270 (`second-values`, stacked on #8119), checks running; #8119 waits on `r20261109-031413-63ee`
+
+- **#8270** ([PR](https://github.com/compute-verification/verity/pull/8270), `cursor/proofs-twoverify-7300`, head `c4f904f305`), stacked on #8119's `6a0dd4f0c4`. It is unmarked until #8119 is marked and its checks pass.
+  - **The check, `second-values`,** is round 2's last per-statement code. Each statement's `--registered` file must equal its template's reference statement's (`xS₀ t`'s). Both sides first have each port's run fields blanked: `root`, `domain`, `leaves`, `reads` and `reads_from`.
+  - **What it pins:** which ports read registered values, the value each reads, its words and schema, and the file's other keys.
+  - **Where the reference comes from:** a new required `registered` key in each `proofs.templates` entry of the params. It is an object, or null for none.
+  - **Code:** in Lean, `SecondStage.valuesOk` with `blankReads` and `Own.refReads`; in Python, `second_stage._values_ok` and `blank_reads`.
+  - **New theorem:** `check_ok_values`. In a passing check, every statement's registered reads are the params' reference reads for its template, except in the run's fields.
+  - **Tests:** the negative test is `test_round_two_holds_a_port_to_the_registered_value_its_reference_reads`. The interior registers `w1` and `w2`, and a port that no link names reads one of them. The statement passes only where its reference reads the same value. There is also a difftest case (`test_round_two_holds_each_port_to_the_value_its_reference_reads`), with two new `SECOND_CHANGES` and a `run` case, plus `#guard`s and the toy's slow test.
+  - **First Lean try failed, now fixed.** `r20261109-034651-0f64` at `f2218ab3ba` failed on one `#guard` whose `.isEmpty` sat on its own line. All 21 theorems used only the three axioms, and every other guard held. `c4f904f305` fixes the line break.
+  - **Runs at `c4f904f305`:** the Lean try `r20261109-035402-85f3` (cpu-1, ETA about 04:05Z) and the quick suites plus `benchmarks/two_stage` fresh, `r20261109-035405-808f` (cpu-3, ETA about 04:40Z).
+  - **No records run.** No lock record reads a changed definition: `Spot.Run.run`'s body is unchanged, and the spot lock lists no guarantees.
+- **TWOOPENS** has the check's name and head (`c4f904f305`), and that `stmtCodes_nil` gains a 10th conjunct. I don't touch `readOk`, `rowsOk` or their Python mirrors. Its 04:02Z entry plans to merge the branch and set `refReads` from `xS₀ t`'s `registered`.
+- **#8119:** `r20261109-031413-63ee` (cpu-12, at `6a0dd4f0c4`) was still running at 03:53Z, ETA about 04:30Z. When it ends I mark per your 03:12Z rule and write the land ask here.
