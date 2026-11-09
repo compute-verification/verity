@@ -278,7 +278,7 @@ def test_table_reads_are_the_batched_forms(phi):
 def test_a_registration_with_table_reads_builds_and_traces_its_request_programs_by_table(tmp_path):
     """`Registered.dsa_table_reads`: class G's registration builds a request Program past INDEX_TOPK in the table form
     (`request_program`) and traces it with `--dsa-table-reads` after `--batched`; off (the default), neither.  A registration
-    with no batched form (a batch-invariant target) refuses it by name."""
+    with no batched form (a batch-invariant target), or with the prefix cache on, refuses it by name."""
     from verity_vllm.program.predict.steps import Registered, plan_steps, request_program, trace_commands
     from tests.program.predict.test_steps import _registered
     hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
@@ -298,6 +298,10 @@ def test_a_registration_with_table_reads_builds_and_traces_its_request_programs_
     assert _registered().phi.target_profile().batch_invariant
     with pytest.raises(ValueError, match="dsa_table_reads is class G's batched form's"):
         Registered.of(_registered().phi, 7, dsa_table_reads=True)
+    cached = Phi.from_json({**off.phi.to_json(), "engine": {**off.phi.engine, "enable_prefix_caching": True}})
+    assert not Registered.of(cached, 7).dsa_table_reads
+    with pytest.raises(ValueError, match="dsa_table_reads takes the prefix cache off"):
+        Registered.of(cached, 7, dsa_table_reads=True)
 
 
 def test_run_bits_route_each_served_order():

@@ -145,7 +145,7 @@ class Registered:
     seed serving fills in (`engine.served_seed.DEFAULT_SEED`, under which no request compiles: `reads.seed_of`), ℓ, the cap on
     the advice's length in bits, the served model name ingress v0's ``"model"`` carries (`io_shell`; None: no ingress is bytes),
     and whether class G's DSA rows past INDEX_TOPK keys read their history by table (`dsa_table_reads`, `program.dsa_table`;
-    off: the rows network), which no other Program reads."""
+    off: the rows network), which no other Program reads and which takes the prefix cache off."""
 
     phi: Phi
     default_seed: int
@@ -164,6 +164,9 @@ class Registered:
             raise ValueError(f"dsa_table_reads is a bool, not {self.dsa_table_reads!r}")
         if self.dsa_table_reads and self.phi.target_profile().batch_invariant:
             raise ValueError("dsa_table_reads is class G's batched form's (a target without batch invariance)")
+        if self.dsa_table_reads and (self.phi.engine or {}).get("enable_prefix_caching") is True:
+            raise ValueError("dsa_table_reads takes the prefix cache off: a cached position's history row is another request's, "
+                             "which a request's own table can't bind")
 
     @classmethod
     def of(cls, phi: Phi, default_seed: int, cap_bits: int = CAP_BITS, served_model: str | None = None,
