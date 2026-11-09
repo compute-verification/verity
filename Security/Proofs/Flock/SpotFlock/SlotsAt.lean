@@ -294,7 +294,7 @@ theorem slotsAtGate (hr : r.Ok h) {addr : ℕ → Option Address} (c₀ : Code) 
     rw [path_opening addr c₀ S g]
     simp only [pathAt, hreg, ht, hent]
   · have hR' : (r.opening h S g).1 = iroots r.x r.seen r.ρ := by
-      rw [roots_opening hr S g, if_pos hint]
+      rw [roots_opening hr S g, ite_eq_left hint]
     refine Or.inr ⟨hc1, hq, hR', fun own hown reg hreg => ?_, fun pop hpop => ?_⟩
     · have hnf : own.find? (fun reg => reg.name == (r.sts[0]!.c.ports[S.port r.u]!).name) = none := by
         simpa [regNamed, hown] using hnone
