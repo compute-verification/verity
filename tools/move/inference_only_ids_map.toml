@@ -1,0 +1,44 @@
+# The inference-only policy's names that no move renames: what `tools/move/rename.py --map
+# tools/move/inference_only_ids_map.toml` renames, on a tree `inference_only_map.toml`'s move has run on (its files are
+# named where that move puts them). `move_check.py` certifies a word that renames a path, a module or a Lean declaration;
+# these rename an executable, a constant or a lock's reason, so the change they make is an ordinary one, reviewed as such.
+# - `nci-` becomes `inference-only-` where it starts a name in kebab case: the check's executables (`nci-check`, the six
+#   difftests') and `nci-phases`, in the lakefiles, the scripts that build and run them, and every mention.
+# - The constants `NCI_SCRIPTS`, `NCI_CONSTS` and `NCI_CONSTANTS`, and the variable `NCI_COST_FLAGS`.
+# - The check's lock's `runs` reasons, which name the check's Lean and its Python reference.
+# What stays: a constant named `NCI` alone (three files name the check's package or the policy's protocol id so), a hand
+# edit, since one word has one map and `inference_only_map.toml` has this one's; `benchmarks/nci/`'s own names and the slowdown calculator's `draft:nci-search` ([keep_in], [keep]), and the
+# ids that end in a version (`verity/nci-glm/v1`), until a format version ([keep]).
+
+[words]
+"NCI_SCRIPTS" = "INFERENCE_ONLY_SCRIPTS"
+"NCI_CONSTS" = "INFERENCE_ONLY_CONSTS"
+"NCI_CONSTANTS" = "INFERENCE_ONLY_CONSTANTS"
+"NCI_COST_FLAGS" = "INFERENCE_ONLY_COST_FLAGS"
+
+# A name in kebab case, whole: `nci-check`, never `inference_only-check`.
+[[words_in]]
+files = ["*"]
+words = { "nci-" = "inference-only-" }
+
+# The check's lock: its `runs` reasons (`rename.py` leaves a lock's records to `check.py --update --moved`).
+[[words_in]]
+files = ["verity/core/protocols/network/inference_only/lean/lean-audit.json"]
+words = { "NciCheck" = "InferenceOnlyCheck", "Nci.Complies'" = "InferenceOnly.Complies'", "nci_reference" = "inference_only_reference" }
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the Glossary's table
+# of older names, the retired-terms lints' own examples, the frozen backends, files whose bytes a digest pins
+# (`rename.py` repins a `TRUSTED.sha256` line itself), lock files, move_check's own tests, and the Lean tools' fixtures,
+# locks as they were on a past tree, which their tests read as such.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "GLOSSARY.md",
+           "tests/test_retired_terms.py", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock",
+           "tools/verity/check/tests/test_move_check.py", "tools/verity/lean/tests/fixtures/**"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
+            'lanes/[\w.-]+', 'draft:[\w.-]+']
+strings = []
+
+[keep_in]
+"benchmarks/nci/**" = ["nci-"]
