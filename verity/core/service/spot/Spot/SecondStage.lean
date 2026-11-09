@@ -51,7 +51,7 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
     `second-read` holds the read to the slot's own rows or its cell's replay block's; at any other it only bounds a ref
     by its table, so a ref could point a drawn unit at another unit's rows.
   - `second-values`: its registered reads are not its template's reference statement's (`Own.refReads`, the
-    `--registered` file the auditor's params give the registered reference statement, fixed before the run), both with
+    registered reads the auditor's params give beside its header, fixed before the run and taken as given), both with
     each port's run fields blanked (`blankReads`), or the params give its template none. The run's fields are those
     `second-read` holds to the run: every port's `root`, `domain` and `leaves` (`READ_RUN_FIELDS`), and the rows
     (`reads`, `reads_from`: `READ_ROW_FIELDS`) of a port a link names or one reading the interior record's own port,
@@ -219,8 +219,8 @@ def linksOf? : Json → Option (Array Link)
 registrations' records, the second draw's units, the design's links (`replayLinks`, none when the replay block's
 Definition makes none), the `{value: root}` the verifiers of record report the sessions read
 (`Record.sessionRegistered`), what they name of each session they accepted (`verifiedOf`), and the reference header of
-each template's statement and the registered reads it was verified against (`refReads`, null for none), as the
-auditor's params give them (`Run.templateCircuits`). -/
+each template's statement and the registered reads it reads (`refReads`, null for none), as the auditor's params give
+them (`Run.templateCircuits`), taken as given: nothing here verifies the reference statement against them. -/
 structure Own where
   sample : Array Nat
   parts : Option (Array Part)

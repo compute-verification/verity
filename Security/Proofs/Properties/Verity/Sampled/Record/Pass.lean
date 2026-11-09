@@ -38,7 +38,7 @@ session's statement v2 reads only as the JSON they parse to (`fits_of_accepts`).
 namespace Verity.Sampled.Record
 
 open Lean (Json)
-open Claims (Seen Prover Trace run coinSeq)
+open Claims (Seen Prover Transcript run coinSeq)
 open FlockDeploy (Coin)
 open Verity.Recursive.BaseSetup (bind_ok)
 
@@ -165,7 +165,7 @@ theorem units_of_pass (A : Live) (o : Own) {b : ByteArray} {p : _root_.Spot.OneS
   have h64 := reach_draw FlockDeploy.sha512 P ω r
   have hsm : (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen.msgs =
       (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs := by
-    simp only [Trace.seen]
+    simp only [Transcript.seen]
   exact units_of_accepts A o he hacc hn hlaw (prefix_of_live A o P ω r hlive.1) (by rw [hsm]; exact h64) hshow
 
 /-- **v2's acceptance makes the run's draw file a reference draw file** (`RefOk`): at `pass_of_accepts`'s hypotheses,
@@ -189,7 +189,7 @@ theorem refOk_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Spot.O
   have h64 := reach_draw FlockDeploy.sha512 P ω r
   have hsm : (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen.msgs =
       (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs := by
-    simp only [Trace.seen]
+    simp only [Transcript.seen]
   have hmem : s ∈ ev.sessions := by rw [hs]; exact Array.mem_singleton_self s
   obtain ⟨rec, hrecD, J, hJ, hrJ⟩ := hshow.1 (by rw [hsm]; exact h64) s hmem
   have hrec : rec = record := by
