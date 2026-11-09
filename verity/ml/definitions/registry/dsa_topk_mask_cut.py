@@ -46,11 +46,11 @@ from verity.ml.definitions.registry.dsa_topk import check_statics
 BIT = BL.BIT
 F32 = I32 = Array(32, BIT)
 
-#: keys a block: a count unit is then 2^26 bits of Flock's 2^27 (9.6M ANDs, its scores' hashes 174 sha512x3 slots), a mask
-#: unit 2^26 and a pick at most 2^24
+#: keys a block: the most, a power of two, at which a block's count unit, its mask unit and a pick each fit Flock's block
+#: (circuit-check's block rule at the sidecar's RANGES spots)
 BLOCK = 16384
-#: the largest N the Call is checked and proved whole at: `DsaTopKMaskCounted_v2` is 133,431,296 of the block's 134,217,728
-#: bits at 40,960 keys and 139,198,464 at 43,008; past it, `cut`
+#: the largest N the Call is checked and proved whole at, the longest served class at which `DsaTopKMaskCounted_v2` fits
+#: Flock's block whole; past it, `cut`
 WHOLE_MAX = 40960
 DIGIT, ROUNDS = 8, 4
 BINS = 1 << DIGIT

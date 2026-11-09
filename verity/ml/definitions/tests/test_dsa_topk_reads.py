@@ -146,11 +146,12 @@ def _scores(rng: random.Random, Nb: int, N: int) -> list[list[int]]:
 
 @pytest.mark.slow
 def test_the_long_row_reads_todays_kv_rows() -> None:
-    """A few minutes, most of it tracing the read's parts.  A history of Nb = 18 rows read at its class N = 20 (TOPK 4, blocks
-    of 8 keys: three blocks), each row of scores at several n past TOPK up to Nb, from a table of V = 32 rows of H = 2 words,
-    the openings at the mask's members by position: kv is `DsaButterflyRowsPad_v1`'s over the history and its zero pad at
-    `DsaButterflySettings_v1` of `DsaTopKMaskCounted_v1`, ok all 1; a flipped row bit, another member's salt and another
-    position's path each give ok 0 at their slot alone."""
+    """The one test of the long row whole: the units' tests hold each part, this one their wiring into the reads and the
+    reads' openings against a committed table, which no cheaper test builds.  A history of Nb = 18 rows read at its class
+    N = 20 (TOPK 4, blocks of 8 keys: three blocks), each row of scores at several n past TOPK up to Nb, from a table of
+    V = 32 rows of H = 2 words, the openings at the mask's members by position: kv is `DsaButterflyRowsPad_v1`'s over the
+    history and its zero pad at `DsaButterflySettings_v1` of `DsaTopKMaskCounted_v1`, ok all 1; a flipped row bit, another
+    member's salt and another position's path each give ok 0 at their slot alone."""
     rng = random.Random("dsa-topk-reads")
     TOPK, block, V, H, Nb = 4, 8, 32, 2, 18
     N = -(-Nb // TOPK) * TOPK
