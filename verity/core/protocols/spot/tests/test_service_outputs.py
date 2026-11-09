@@ -15,7 +15,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value as Bits
 from verity.core.protocols.spot import service as S
-from verity.core.protocols.spot.one_stage import partition as P, registration as R, verifier as V
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V
 
 import fake_challenger as FC
 
@@ -183,7 +183,8 @@ def test_an_interior_registration_reads_a_port_of_its_boundary():
     first = stream.select(reg)
     out = {"state": {"record": reg.digest, "port": "carry"}}
     interior, iports = _record(P.population_program(CARRY, m), QUERY, dict.fromkeys(INTERIOR, m), {"law": "subset", "k": m},
-                               0, reg.digest, [_left(boundary, "carry")], interior=True)
+                               0, reg.digest, [_left(boundary, "carry")], interior=True,
+                               replay_sample=D.proved(first.draw))
     assert "R7-domain" in _refused(lambda: stream.register_interiors(first, interior, iports, registered={"state": 2}))
     ireg = stream.register_interiors(first, interior, iports, registered={"state": 2}, outputs=out)
     assert stream._entries[reg.order].interior_copies[-1] == out
