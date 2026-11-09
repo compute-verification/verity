@@ -30,7 +30,10 @@ order (`null`: pass i is round i), and the rounds dropped from the retention bef
 passes to W (`tieOf`, `verify_run.tie`): W registers exactly each call's A rows and y and each weight's B rows among its
 ``pearl-a/``, ``pearl-y/`` and ``pearl-b/`` values, beside the dropped rounds' calls', each B at the root the pass's
 tiles open B against (`Pass.weightRoots`, which the weights' root folds), so a run whose passes or whose rootB are not
-the ones W registers is refused before its coin, a W that registers no weight among them. Its digest is
+the ones W registers is refused before its coin, a version-2 W that registers no weight among them. That is a W at
+version 2, its header's ``version`` (`wVersion`). A W that states none is version 1, written before W registered the
+weights: it is held to the calls alone, as it was then, and the verdict's tie names its weights untied
+(`WEIGHTS_UNTIED`), so its accept says that no weight it credits is a registered value. Its digest is
 SHA-512(`commitmentTag` ‖ 0 ‖ the commitment's bytes).
 
 **Evidence**, canonical JSON `{"files": [files, …]}`, one object per pass in the commitment's order: each manifest path

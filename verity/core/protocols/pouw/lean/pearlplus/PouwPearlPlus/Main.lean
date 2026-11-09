@@ -10,7 +10,7 @@ prints the verdict as one JSON object: `verdict` (`accept` or `reject`), `reason
 `commitment` and `source` (hex, once the passes load and the coin is fixed), `over_cap` (the rule on a tile over its
 inert-work bound, `uncredited` unless `--over-cap` says otherwise), `verdicts` (each opened tile's pass, id, ok and
 reason, in the verdict's order; a tile over its bound has its reason, and is ok under `uncredited`), `work`, and `tie`
-(`{record, tables}` once the passes are held to W, or null).
+(`{record, tables}` once the passes are held to W, with `weights` `WEIGHTS_UNTIED` for a version-1 W, or null).
 `--test-instance` reads passes whose tile is other than 64 × 64 (a test instance's), and their work credits nothing.
 
 `COINS.json` is the epoch's coin commitment, an in-process challenger's or a live session's (`EpochCoins.ofJson`). The

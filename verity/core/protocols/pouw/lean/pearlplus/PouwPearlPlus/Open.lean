@@ -129,7 +129,8 @@ def output (ans : RunAnswer) : Json :=
           ("over_cap_draws", (c.overCapDraws : Nat))]
       | none => .null),
     ("tie", match ans.tie with
-      | some t => Json.mkObj [("record", jstr t.record), ("tables", (t.tables : Nat))]
+      | some t => Json.mkObj (([("record", jstr t.record), ("tables", (t.tables : Nat))] : List (String × Json)) ++
+          (t.weights.map fun u => [("weights", jstr u)]).getD [])
       | none => .null)]
 
 end PouwCheck.PearlPlus

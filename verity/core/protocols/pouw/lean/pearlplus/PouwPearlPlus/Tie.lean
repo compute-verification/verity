@@ -17,11 +17,16 @@ For pass s's call c, and each weight w the passes read:
 * ``pearl-b/{w}``: the pass's weight root (`Pass.weightRoots`, which the weights' root folds and `checkTile` opens B
   against), its n rows of K 32-bit words, under `weightBinding`'s, one entry however many passes read it.
 
-A W that registers no ``pearl-b/`` value at all (one written before W registered the weights) is refused as untied
-(`UNTIED_WEIGHTS`), whatever its calls' entries: the run's B is then no registered value.
+That is the tie of a W at version 2, its ``window`` header's ``version`` (`wVersion`, `pearl_c.window.version_of`). A
+version-2 W that registers no ``pearl-b/`` value at all is refused as untied (`UNTIED_WEIGHTS`), whatever its calls'
+entries: the run's B is then no registered value. A W that states no version is version 1, written before W registered
+the weights: it is held to the calls alone, as it was then, and the answer names its weights untied (`WEIGHTS_UNTIED`);
+one that registers a ``pearl-b/`` value is refused (`V1_WEIGHTS`), and a W stating any other version is refused
+(`UNKNOWN_VERSION`).
 
-An entry that names no ``word_bits`` is at `registered.WORD_BITS` (16). The answer is `{record: digest(W), tables}`; the
-first mismatch is Python's `ValueError`, in its words. Every JSON comparison is by a match (`Want.holds`).
+An entry that names no ``word_bits`` is at `registered.WORD_BITS` (16). The answer is `{record: digest(W), tables}`, with
+`weights` for a version-1 W; the first mismatch is Python's `ValueError`, in its words. Every JSON comparison is by a
+match (`Want.holds`).
 -/
 
 namespace PouwCheck.PearlPlus
@@ -32,9 +37,26 @@ def TIE_PREFIXES : List String := ["pearl-a/", "pearl-y/", "pearl-b/"]
 /-- `verify_run.TIE_CALLS`: a call's values, a round's. -/
 def TIE_CALLS : List String := ["pearl-a/", "pearl-y/"]
 
-/-- `verify_run.UNTIED_WEIGHTS`: why a W that ties the calls alone is refused. -/
+/-- `verify_run.UNTIED_WEIGHTS`: why a version-2 W that ties the calls alone is refused. -/
 def UNTIED_WEIGHTS : String :=
   "W registers no weight's B rows (no pearl-b/ value: a window record written before W registered them)"
+/-- `verify_run.WEIGHTS_UNTIED`: the tie's `weights` for a version-1 W, which ties the calls alone. -/
+def WEIGHTS_UNTIED : String := "weights untied (W v1)"
+/-- `verify_run.V1_WEIGHTS`: why a version-1 W that registers a weight's B rows is refused. -/
+def V1_WEIGHTS : String := "W states no version (version 1), whose values are the calls' alone, and registers"
+/-- `pearl_c.window.VERSION`: the version of a W that registers the weights' B rows. -/
+def W_VERSION : Nat := 2
+/-- `pearl_c.window.UNKNOWN_VERSION`: why a W stating a version other than `W_VERSION` is refused. -/
+def UNKNOWN_VERSION : String :=
+  s!"W's window states a version other than {W_VERSION}: a W states version {W_VERSION}, or none (version 1, " ++
+    "written before W registered the weights)"
+
+/-- `pearl_c.window.version_of`: W's ``window`` header's ``version``, 1 where it states none, else `UNKNOWN_VERSION`. -/
+def wVersion (w : Json) : Except String Nat :=
+  match (get? w "window").bind (get? · "version") with
+  | none => pure 1
+  | some (.num ⟨n, 0⟩) => if n == (W_VERSION : Int) then pure W_VERSION else throw UNKNOWN_VERSION
+  | some _ => throw UNKNOWN_VERSION
 
 /-- `verify_run._owner`: what a value is of, in a mismatch's words. -/
 def tieOwner (v : String) : String := if v.startsWith "pearl-b/" then "weight" else "call"
@@ -80,12 +102,13 @@ def tieWeights (passes : List (Nat × Pass)) : Except String (List (String × Ti
           throw s!"pass {s} commits weight {w}'s B rows under another root or shape than an earlier pass, and W registers one"
   pure out
 
-/-- `tie_entries(passes, rounds)`: what W must register for each call of the run, then for each weight the passes read,
-in Python's order. `passes` are the manifests with their loaded passes. -/
-def tieEntries (passes : List (Json × Pass)) (rounds : Option (List Nat)) : Except String (List (String × TieEntry)) := do
+/-- `tie_entries(passes, rounds, weights)`: what W must register for each call of the run, then, with `weights` (a
+version-2 W's), for each weight the passes read, in Python's order. `passes` are the manifests with their loaded passes. -/
+def tieEntries (passes : List (Json × Pass)) (rounds : Option (List Nat)) (weights : Bool := true) :
+    Except String (List (String × TieEntry)) := do
   let ss := rounds.getD (List.range passes.length)
   let calls ← go ss passes
-  pure (calls ++ (← tieWeights (ss.zip (passes.map (·.2)))))
+  pure (calls ++ (← if weights then tieWeights (ss.zip (passes.map (·.2))) else pure []))
 where
   go : List Nat → List (Json × Pass) → Except String (List (String × TieEntry))
     | [], [] => pure []
@@ -105,7 +128,8 @@ where
             ("words", .nat u.n), ("word_bits", .nat 32), ("domain", .str dy)])]
       pure (out ++ (← go rs ps))
 
-/-- `tie(w, passes, rounds, dropped)`: W's digest and the number of tables it ties, or the first mismatch. -/
+/-- `tie(w, passes, rounds, dropped)`: W's digest and the number of tables it ties, with `WEIGHTS_UNTIED` for a
+version-1 W, or the first mismatch. -/
 def tieOf (w : Json) (passes : List (Json × Pass)) (rounds : Option (List Nat)) (dropped : List Nat) :
     Except String Tied := do
   let regs ← match w, get? w "registered" with
@@ -113,6 +137,7 @@ def tieOf (w : Json) (passes : List (Json × Pass)) (rounds : Option (List Nat))
       if fieldIs (get? w "format") Flock.WindowRecord.FORMAT_V2 then pure es.toList
       else throw s!"W is no {Flock.WindowRecord.FORMAT_V2} record with registered values"
     | _, _ => throw s!"W is no {Flock.WindowRecord.FORMAT_V2} record with registered values"
+  let tied := (← wVersion w) == W_VERSION
   let mut got : List (String × Json) := []
   for e in regs do
     let v := match e with | .obj _ => get? e "value" | _ => none
@@ -120,7 +145,10 @@ def tieOf (w : Json) (passes : List (Json × Pass)) (rounds : Option (List Nat))
       if TIE_PREFIXES.any (fun t => v.startsWith t) then
         if (got.lookup v).isSome then throw s!"W registers {v} twice"
         got := got ++ [(v, e)]
-  let want ← tieEntries passes rounds
+  if !tied then
+    if let some (b, _) := got.find? (·.1.startsWith "pearl-b/") then
+      throw s!"{V1_WEIGHTS} {b}: a W that registers the weights states version {W_VERSION}"
+  let want ← tieEntries passes rounds tied
   let skip := dropped.map toString
   let extra := got.map (·.1) |>.filter fun v =>
     (want.lookup v).isNone &&
@@ -137,6 +165,7 @@ def tieOf (w : Json) (passes : List (Json × Pass)) (rounds : Option (List Nat))
       if k == "word_bits" then (get? e k).getD (.num ⟨REGISTERED_WORD_BITS, 0⟩) else (get? e k).getD .null
     let bad := x.filterMap fun (k, want) => if want.holds (held k) then none else some k
     if !bad.isEmpty then throw s!"W's {v}: its {", ".intercalate bad} not the {tieOwner v}'s"
-  pure { record := ← Flock.WindowRecord.digestHex w, tables := want.length }
+  pure { record := ← Flock.WindowRecord.digestHex w, tables := want.length,
+         weights := if tied then none else some WEIGHTS_UNTIED }
 
 end PouwCheck.PearlPlus

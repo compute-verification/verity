@@ -452,7 +452,8 @@ def test_a_challenger_draw_that_is_not_the_runs_coin(exe, tmp_path):
 def test_a_run_tied_to_its_window_record(exe, tmp_path):
     """A window record W registering each call's A rows and y and each weight's B rows once: the Lean holds the passes to W as the Python does and
     prints the same tie, W's digest and its table count, also when W lists a round dropped before the coin (the coin
-    record's rounds and dropped, which the Python wrote)."""
+    record's rounds and dropped, which the Python wrote). A W that states no version (version 1, the run of record's,
+    registering the calls alone) accepts in both on the calls' tables, the tie naming its weights untied."""
     warm, a, b = (T.proved_pass(tmp_path / n, H100, ix)[0] for n, ix in (("w", (0, 1)), ("a", (2, 3)), ("b", (4, 5))))
     (w := tmp_path / "w.json").write_text(json.dumps(T.window_record(a, b)))
     got = same(exe, [a, b], 8, tie=w, record=tmp_path / "coin.json")
@@ -462,13 +463,18 @@ def test_a_run_tied_to_its_window_record(exe, tmp_path):
     assert got["verdict"] == "accept" and got["tie"]["tables"] == 10
     rec = json.loads((tmp_path / "coin3.json").read_text())
     assert (rec["rounds"], rec["dropped"]) == ([1, 2], [0])
+    (w1 := tmp_path / "w1.json").write_text(json.dumps(T.window_record(a, b, version=1)))
+    got = same(exe, [a, b], 8, tie=w1, record=tmp_path / "coin1.json")
+    assert got["verdict"] == "accept" and got["tie"] == {"record": T.REG.digest(json.loads(w1.read_text())), "tables": 8,
+                                                         "weights": VR.WEIGHTS_UNTIED}
 
 
 def test_a_pass_that_is_not_ws(exe, tmp_path):
     """W whose entry for a call or a weight has another root (B another weight's: a foreign rootB) or domain, or lacks
-    one, or registers a call or weight the run doesn't have, or one twice, or registers no weight at all (a W written
-    before the weights' entries, every call's entry right: untied, not a tie), or isn't a v2 record: refused before the
-    coin (Python's `ValueError`, in its words), as the Python does."""
+    one, or registers a call or weight the run doesn't have, or one twice, or registers no weight at all at version 2
+    (every call's entry right: untied, not a tie), or states no version (version 1) and registers a weight, or states a
+    version other than 2, or isn't a v2 record: refused before the coin (Python's `ValueError`, in its words), as the
+    Python does."""
     a, b = (T.proved_pass(tmp_path / n, H100, ix)[0] for n, ix in (("a", (0, 1)), ("b", (2, 3))))
     good = T.window_record(a, b)
     reg = good["registered"]
@@ -492,6 +498,10 @@ def test_a_pass_that_is_not_ws(exe, tmp_path):
               "ValueError: W registers pearl-b/2, no weight of the run's"),
              ({**good, "registered": [e for e in reg if not e["value"].startswith("pearl-b/")]},
               f"ValueError: {VR.UNTIED_WEIGHTS}, so the run's rootB is no W's (pearl-b/0 first)"),
+             ({**(old := T.window_record(a, b, version=1)), "registered": [*old["registered"], b1]},
+              f"ValueError: {VR.V1_WEIGHTS} pearl-b/1: a W that registers the weights states version 2"),
+             ({**good, "window": {"kind": "served", "version": 1}}, f"ValueError: {T.PWR.UNKNOWN_VERSION}"),
+             ({**good, "window": {"kind": "served", "version": "2"}}, f"ValueError: {T.PWR.UNKNOWN_VERSION}"),
              ({**good, "format": "verity/registration/v1"},
               "ValueError: W is no verity/registration/v2 record with registered values")]
     for doc, why in cases:

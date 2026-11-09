@@ -22,9 +22,13 @@ rejects v1 whatever the subprotocols answer. Pearl+'s check holds the passes to 
 `served_passes.py retain --window-record` writes, which registers each call's A rows and y and each weight's B rows,
 ``pearl-b/<w>``, at the root of PoUW's tree of them), and v1 ties W to the run's record (`V1.window`): the policy's
 record must be chained right after W (its `previous` is W's digest), as the served pipeline writes it, so the values the
-record takes from W are the ones Pearl+ credited. The weights Pearl+'s tiles open B against are W's ``pearl-b/``
-values, each registered once in the run's record's log, and a W that registers no weight is refused, so PoUW's credited
-work reads the weights that log registers. The audited circuit, cut at its linears, reads no B row.
+record takes from W are the ones Pearl+ credited. W states its version (its header's ``version``). At version 2 the
+weights Pearl+'s tiles open B against are W's ``pearl-b/`` values, each registered once in the run's record's log, and
+a version-2 W that registers no weight is refused, so PoUW's credited work reads the weights that log registers. A W
+that states no version is version 1, written before W registered the weights, and Pearl+'s verdict on it names its
+weights untied (`PouwCheck.PearlPlus.WEIGHTS_UNTIED`): there the tie is by the record alone, nothing holds PoUW's
+committed weights to the weights the record registers, and remote doesn't establish that PoUW's credited work and the
+audited inference read the same weights. The audited circuit, cut at its linears, reads no B row.
 
 v0's subprotocols are the inference-only policy (`NciCheck.Protocol.protocol`, `verity/inference-only/v0`: the declared
 circuit divides into inference blocks within their gate and fresh-input budgets, which reads only the declared circuit
