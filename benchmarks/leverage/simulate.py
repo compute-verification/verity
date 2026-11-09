@@ -11,8 +11,12 @@ in-range faults under clamp.py's boxes, with three simulators:
   edit    one token of the prompt's last --window positions replaced, x' = x[tau <- u]; the advice is log2(W V) for the
           edit plus the code of the direct tokens of the honest model on x' reading the faulted tokens
 
-A fault is covered by its charge when its advice is at most c + --slot-bits: c its block's output bits, and the
-location the charge pays beyond a served slot's (log2 of proof blocks a served token, GLM-5.3's by default).
+The direct tokens are coded two ways: "tokens", each token's id, which is all a simulator served tokens alone can
+decode, and "rank", its rank under the honest model's scores, which needs log-probabilities. A record's forced_bits,
+edit_bits, edit_direct, edit and best_bits are the first code's, each with the best edit under it; the same names
+ending in _rank are the second's. A fault is covered by its charge when its advice is at most c + --slot-bits: c its
+block's output bits, and the location the charge pays beyond a served slot's (log2 of proof blocks a served token,
+GLM-5.3's by default).
 
 Faults sit at a prompt's last position t0 (the forward serving the first new token) or --offsets positions before it,
 every forward clamped to the boxes. Kinds:
@@ -50,6 +54,7 @@ from lm import E4M3_MAX, GROUP, GROUP_SITES, LM, MODELS, Boxes, Cache, Fault, se
 from prompts import PROMPTS
 
 KINDS = ("uniform", "edge", "own", "adv", "far")
+CODES = ("tokens", "rank")
 LN2 = math.log(2)
 
 
@@ -168,15 +173,20 @@ def step1(lm: LM, ids: torch.Tensor, tf: int, pre: Cache, site: tuple[str, int],
     return torch.cat(out), torch.cat(ns)
 
 
-def advice_bits(D: np.ndarray, rank: np.ndarray, vocab: int) -> np.ndarray:
+def advice_bits(D: np.ndarray, rank: np.ndarray, vocab: int, code: str) -> np.ndarray:
     """Per row, a prefix code for the direct tokens a simulator must be told: Elias gamma of D + 1, log2 C(N, D) for
-    their positions, and per direct token a flag and either Elias gamma of its rank - 1 or log2 V for the token."""
+    their positions, and per direct token either its id in log2 V bits ("tokens", all a simulator reading served
+    tokens alone can decode) or a flag and either Elias gamma of its rank - 1 or log2 V ("rank", which needs the
+    honest model's scores, so log-probabilities from the API)."""
     n = D.shape[1]
     d = D.sum(1)
     lgam = np.vectorize(math.lgamma)
     positions = (lgam(n + 1) - lgam(d + 1) - lgam(n - d + 1)) / math.log(2)
     gamma = lambda x: 2 * np.floor(np.log2(np.maximum(x, 1))) + 1  # noqa: E731
-    tokens = np.where(D, 1 + np.minimum(gamma(rank - 1), math.log2(vocab)), 0).sum(1)
+    if code == "tokens":
+        tokens = d * math.log2(vocab)
+    else:
+        tokens = np.where(D, 1 + np.minimum(gamma(rank - 1), math.log2(vocab)), 0).sum(1)
     return gamma(d + 1) + positions + tokens
 
 
@@ -306,6 +316,7 @@ def summarize(recs: list[dict]) -> list[dict]:
             "eff_cont": fr(eff, lambda r: r["cont_exact"]),
             "eff_edit_cheaper": fr(eff, lambda r: r["edit_bits"] < r["forced_bits"]),
             "eff_budget": fr(eff, lambda r: r["best_bits"] <= r["budget"]),
+            "eff_budget_rank": fr(eff, lambda r: r["best_bits_rank"] <= r["budget"]),
             "eff_forced_budget": fr(eff, lambda r: r["forced_bits"] <= r["budget"]),
             "eff_budget16": fr(eff, lambda r: r["best_bits"] <= r["budget"] - r["c"] + 16),
             "c_wide": fr(g, lambda r: r["c"] > 16),
@@ -387,7 +398,7 @@ def main() -> int:
                 ys, lp1, n1 = decode(lm, ids, tf, [(f["site"], f["layer"], f["coord"], f["value"]) for f in ch],
                                      a.new, a.precision)
                 D0, rank0 = decode_forced(lm, ids, [(-1, -1)] * len(ch), ys, a.precision, a.batch)
-                forced = advice_bits(D0.numpy(), rank0.numpy(), V)
+                forced = {code: advice_bits(D0.numpy(), rank0.numpy(), V, code) for code in CODES}
                 cont_rows, cont_of = [], []
                 per = []
                 for j, f in enumerate(ch):
@@ -414,24 +425,28 @@ def main() -> int:
                                 "kl_honest": float(kl_bits(lp, lp_h)), "dinf_honest": float(dh)})
                 yc = ys[torch.tensor(cont_of, dtype=torch.long)] if cont_rows else torch.zeros(0, a.new, dtype=torch.long)
                 De, ranke = decode_forced(lm, ids, cont_rows, yc, a.precision, a.batch) if cont_rows else (None, None)
-                code_e = advice_bits(De.numpy(), ranke.numpy(), V) + edit_bits if cont_rows else np.zeros(0)
+                code_e = {code: advice_bits(De.numpy(), ranke.numpy(), V, code) + edit_bits if cont_rows
+                          else np.zeros(0) for code in CODES}
                 for j, f in enumerate(ch):
                     mine = [r for r, o in enumerate(cont_of) if o == j]
-                    best = min(mine, key=lambda r: code_e[r]) if mine else None
                     raw = int((ys[j] != yh).sum())
                     rec = {"model": a.model, "prompt": pi, "offset": off, "t0": t0, **f, **per[j],
                            "flip": bool(ys[j, 0] != yh[0]), "raw": raw, "silent": raw == 0, "direct": int(D0[j].sum()),
                            "direct_at": D0[j].nonzero().flatten().tolist(),
-                           "forced_bits": float(forced[j]),
-                           "edit_bits": float(code_e[best]) if best is not None else float("inf"),
-                           "edit_direct": int(De[best].sum()) if best is not None else None,
-                           "edit": list(cont_rows[best]) if best is not None else None,
-                           "edit_text": None if best is None else
-                           [tok.decode([int(ids[0, cont_rows[best][0]])]), tok.decode([cont_rows[best][1]])],
                            "cont_exact": bool(mine) and any(not bool(De[r].any()) for r in mine),
-                           "served": tok.decode(ys[j].tolist()), "honest_served": tok.decode(yh.tolist())}
-                    rec["best_bits"] = 0.0 if rec["silent"] else min(rec["forced_bits"], rec["edit_bits"])
-                    rec["budget"] = rec["c"] + a.slot_bits
+                           "served": tok.decode(ys[j].tolist()), "honest_served": tok.decode(yh.tolist()),
+                           "budget": f["c"] + a.slot_bits}
+                    for code in CODES:
+                        sfx = "" if code == CODES[0] else "_" + code
+                        best = min(mine, key=code_e[code].__getitem__) if mine else None
+                        rec["forced_bits" + sfx] = float(forced[code][j])
+                        rec["edit_bits" + sfx] = float(code_e[code][best]) if best is not None else float("inf")
+                        rec["edit_direct" + sfx] = int(De[best].sum()) if best is not None else None
+                        rec["edit" + sfx] = list(cont_rows[best]) if best is not None else None
+                        rec["best_bits" + sfx] = 0.0 if raw == 0 else min(rec["forced_bits" + sfx],
+                                                                           rec["edit_bits" + sfx])
+                    e = rec["edit"]
+                    rec["edit_text"] = None if e is None else [tok.decode([int(ids[0, e[0]])]), tok.decode([e[1]])]
                     recs.append(rec)
                     rec_file.write(json.dumps(rec) + "\n")
                 rec_file.flush()
