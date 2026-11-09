@@ -14,3 +14,6 @@ Unchanged: install nothing on node A; delete only your own staging directory; no
 
 When the staging is running, end your turn with: its run id, start time (UTC), the ETA of the last staging, and the result of step 2.
 
+[2026-11-09T23:04Z] adb07280d551
+COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retracted). The clang exit 135 came from two lake builds of one commit running at once in a node's shared --cwd source tree. Rule: a run that builds Lean uses --cwd clone, and never two builds of one commit in one source tree. cpu-12 (--pool proofs) stands as I said.
+
