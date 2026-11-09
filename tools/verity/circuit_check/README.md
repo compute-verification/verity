@@ -24,7 +24,8 @@ from the result cache (`--no-cache` checks it now). It needs about 24 GB a proce
 
 | Module (`src/circuit_check/`) | What it holds |
 | --- | --- |
-| `checks.py` | the checks: correspondence with the reference on every realization, declared port intervals, redundant and dead gates, the partition |
+| `checks.py` | the checks: correspondence with the reference on every realization, declared port intervals, redundant and dead gates, the partition, the Flock block a Definition needs as one unit |
+| `block_held.py` | the Definitions past the Flock block that the report holds rather than fails, each with why; it only shrinks: a held one that fits, or that the whole catalog no longer checks, fails |
 | `bodies.py` | a composite's evaluation and its non-constant gates, body by body |
 | `targets.py` | what a target string names, and the catalog `--all` runs over |
 | `sidecars.py` | each Definition module's bindings and pins, in its `<module>.circuit-check.py` and `.circuit-check.json` |
