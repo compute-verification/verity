@@ -18194,3 +18194,25 @@ size classes returns true:
 Nothing of mine is running now. Possible next steps, when you say:
 - Step 2's per-member lemmas.
 - The `Bits.base` prefix sum, which would cut `membersPart` and `filesReplay` from about 60 s to about 20 s each.
+
+## 10:48Z from SLOTSAT: the two-stage instance is vacuous on `concreteStmt` (no hidden outputs, a v1 row); plan and questions sent to TWOOPENS
+
+
+**Blocker: `concreteStmt` can't be a reference statement, so a `Held` on it is vacuous.**
+- Its tags are `Zk.tags circuitEb90718f 14 1`, and `Concrete.hidden_tz : tz.hiddenOutputs = false`. Its only port, `x` (`xPort`), is a v1 row (`v2 = false`).
+- `templateOk` needs `r.tags.hiddenOutputs` and every port a `v2Row`, and `sessionOk` needs `hiddenOf`. So `templateOk` is false at it, and `two h` is `none` for every statement.
+- Then `CheckedRun.Ok h` never holds, and `Sites h` (with all of `SpotKSTwo`) holds only because nothing is accepted. That is the vacuity the instance is meant to rule out.
+- A non-vacuous instance needs a reference statement with hidden outputs and v2 rows whose setup is proved, along `Stmt.setupHidden`: `HmOut.parseCommit`, `HmIn.loadPublic`, `HmOut.checkPublic`, the `HmOut`/`HmIn` regions and `HmIn.delta`. It also needs `Desc.parseStmt` for `templateOk`. `SessionLoop.Concrete` proves the `eb90718f` path only, about 3,000 lines for the setup alone. The nets (`fixedNetsBuild`, `fixedNets_parse`) and the size lemmas carry over; the hidden-output file, public file and regions don't.
+
+**What I'll build first** (it's needed whatever the statement):
+- A file of my own, `SpotFlock/Instance.lean`, with a synthetic one-template registration: one replay block, one unit a block, `RegTwo`, `vus`, `query`, `names`, `k`, `links := none`, `wires := none`, `refReads := .null`.
+- The reference statement is a parameter, together with the facts its setup gives (zkOk, its reading, hidden outputs, untyped, `Desc.parseStmt` ok, one table, v2Row ports). Over it I'll prove that `two h` evaluates, with the kernel deciding `scopeOk` and `filesOk` on the tiny lowered unit. `Built` comes from `built_spot` and `Embeds` from `embeds_layoutFor`.
+- `Sites h` comes from your general theorems once you send their side conditions.
+- That reduces non-vacuity to one obligation: a concrete hidden-output, v2-row statement.
+
+**Questions:**
+1. Send me the `Held` interface (the per-template reference reads, `wires`) and the side conditions your `Sites` theorem will take, so the instance targets them exactly.
+2. Is `two h`-evaluates-plus-`Sites` the non-vacuity you and the coordinator want, or must it exhibit an accepted `CheckedRun`? An accepted run needs Flock to accept a session in the kernel, which is out of reach.
+3. Do you know of a hidden-output concrete statement anywhere? I found none in `Security/`. `Bridge/Assumptions/Served.lean` only assumes one.
+
+I'm copying the coordinator.
