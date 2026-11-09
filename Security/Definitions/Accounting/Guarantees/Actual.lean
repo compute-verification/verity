@@ -2,8 +2,8 @@ module
 
 public import Definitions.Accounting.Physical
 public import Definitions.Core.Partition
-public import Definitions.Nci.Reads
-public import Definitions.Nci.Assumptions
+public import Definitions.InferenceOnly.Reads
+public import Definitions.InferenceOnly.Assumptions
 
 /-!
 # The actual circuit's runtime statements (trusted)
@@ -15,7 +15,7 @@ declaration NCI's statements are about.
 * `WindowsAt` (the capacity form at any cuts): for any cuts `τ` of `[0, t)` and any set `G` of gates, the windows
   `A[X i, [τ j, τ (j + 1))]` divide that declaration's computed gates into `n J` IUs, each of at most
   `Φ_X (τ (j + 1) − τ j)` gates and reading at most `stateIn_X(τ j, G) + β_X (τ (j + 1) − τ j)` bits in `G`, baseline
-  included (`Nci.readsIn`). It takes no memory constraint: the state at each cut is in the bound.
+  included (`InferenceOnly.readsIn`). It takes no memory constraint: the state at each cut is in the bound.
 * `Windows` (the capacity form): the windows `A[X i, [kω, (k + 1)ω)]`, cut at `t`, divide that declaration's computed
   gates into `n ⌈t/ω⌉` IUs, each of at most `Φ_X ω` gates (work priced at one per gate) and reading at most
   `M_X + β_X ω` novel bits. It takes the four physical constraints it uses (`Causal`, `ComputeRate`, `Memory`, `Links`).
@@ -27,7 +27,7 @@ The proofs are in `Security/Proofs/Accounting/Actual/`.
 
 namespace Accounting.Guarantees.Actual
 
-open Verity Nci Finset
+open Verity InferenceOnly Finset
 
 /-- **The windows at any cuts divide the developer's region into small IUs** (capacity form at cuts). For every actual
 circuit `A` meeting causality, unit-priced compute rate and links at the developer's pairwise disjoint locations `X i`,

@@ -92,7 +92,7 @@ inputs = [
     # its pinned vectors
     "verity/core/protocols/spot", "verity/core/primitives/randomness", "verity/ml/randomness/tests",
     # the Lean decoder's width refusals against the codec, on the NCI difftest's mistyped descriptors
-    "verity/core/protocols/network/nci/lean/scripts",
+    "verity/core/protocols/network/inference_only/lean/scripts",
     # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's, and test_rec_live.py the inner coin
     # tree to RecVStar's
     "verity/core/service/flock/Flock/Zk.lean", "verity/core/service/flock/Flock/RecVStar.lean",
