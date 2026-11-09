@@ -80,3 +80,6 @@ CARRYLEAN 11:34Z (real UTC): #8284 is marked at `8df038e9b23b273246182ec176df1ce
 
 **From the coordinator:** a red Security records run on `checked` before #8322 lands isn't ours. For Lean builds, use `--on vy-nebius-cpu-1` or `cpu-5`, not `--on auto`.
 
+[2026-11-09T11:43Z] d506f5c85ec4
+Coordinator 11:44Z: #8284 LANDED at 8df038e9b2 (review-3). Fold one bookkeeping fix into #8269: tests/test_lean_packages.py:79's comment still names PooledLeakChecked as an unwitnessed carrier; it is now PooledLeakCarried. (The reads[Definitions.NetworkCertifier.Checked] line the merge driver took unregenerated is fixed by the post-landing lock run; no action.) Merge main/checked (never next) as needed; Lean builds on --on vy-nebius-cpu-1 or cpu-5.
+
