@@ -205,7 +205,11 @@ answers what its certified session recorded.** On every capacity coin where the 
 reads the memory challenger's signed `AnsweredOnTime`: every recorded answer is the challenged block of `C*`), the
 challenger's sample is the ring game's (`Drawn`, its streams as good as uniform bytes) and `τ`'s answers in the ring model
 are the challenged blocks of `C`. It carries the challenger's record into the ring model and bounds no strategy's state
-or time; it is the step from the deployed device to the ring model, so no Lean theorem discharges it. -/
+or time; it is the step from the deployed device to the ring model, so no Lean theorem discharges it.
+
+Its ring part (`pous-ring-instantiation`) is a standing named assumption. Its PRF part (`prf/sha-512`: the memory
+challenger's SHA-512-derived index streams are as good as uniform bytes, `Drawn`) is an assumption only until the memory
+challenger draws its streams from the OS, when PoUS's storage proofs resume. -/
 def Instantiates {ΩW ΩQ : Type} (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) : Prop :=
   ∀ (o : ΩW × ΩQ) (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams),
     P.Certified (o.1, o.2, x) →

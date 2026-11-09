@@ -13,7 +13,8 @@ Definitions/Pous.lean               trusted, the definitions: imports every modu
 Definitions/Pous/Game/{Prob,Oracle}.lean
                                     bits, uniform probability, ideal primitive, parallel oracle programs
 Definitions/Pous/Model/{Scheme,Audit,Inc}.lean
-                                    encoding schemes, the audit game, INC and TimedINC
+                                    encoding schemes, the audit game, INC (TimedINC, a named assumption:
+                                    Definitions/Assumptions/Pous.lean)
 Definitions/Pous/Model/{M1,M1p,HashChain,Pebbling,Labelling,Invertible,ColumnGame,Dense,SampledAudit}.lean
                                     model M1, M1 on `[0, p)` (`m1p`, the abstract model at P2's domain),
                                     B3's chain, Fisch's stacked DRGs and white/green game,

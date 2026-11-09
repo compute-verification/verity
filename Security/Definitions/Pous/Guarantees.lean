@@ -3,6 +3,7 @@ module
 public import Mathlib.Combinatorics.SimpleGraph.Clique
 public import Mathlib.Combinatorics.SimpleGraph.Finite
 public import Mathlib.Data.ZMod.Basic
+public import Definitions.Assumptions.Pous
 public import Definitions.Pous.Accounting.LemmaA
 public import Definitions.Pous.Accounting.Params
 public import Definitions.Pous.Accounting.PubMeets

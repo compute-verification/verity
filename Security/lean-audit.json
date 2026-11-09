@@ -5611,9 +5611,9 @@
    "why": "P2's pins and its cost model read only the game, the models and the parameters"
   },
   "Definitions.Pous.Guarantees": {
-   "imports": ["Mathlib", "Definitions.Pous", "Definitions.Pous.Assumptions", "Definitions.Pous.Guarantees"],
+   "imports": ["Mathlib", "Definitions.Pous", "Definitions.Pous.Assumptions", "Definitions.Assumptions.Pous", "Definitions.Pous.Guarantees"],
    "except": [],
-   "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof",
+   "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses (PoUS's own, and TimedINC from Definitions.Assumptions.Pous), never over a proof",
    "sealed": true
   },
   "Definitions.Pous.Guarantees.P2": {
@@ -5743,9 +5743,9 @@
    "why": "a guarantee is stated over the bandwidth audit's game, never over a proof"
   },
   "Definitions.Accounting.Assumptions": {
-   "imports": ["Mathlib", "Definitions.Pouw", "Definitions.Accounting", "Definitions.Accounting.Assumptions"],
+   "imports": ["Mathlib", "Definitions.Pouw", "Definitions.Accounting", "Definitions.Accounting.Assumptions", "Definitions.Assumptions.Accounting"],
    "except": [],
-   "why": "a named assumption of resource accounting (the remote audit's W at the rebuild pricing, Identity, PoUW's conjecture for the bound z) is a Prop over its definitions, never over a guarantee or a proof",
+   "why": "a named assumption of resource accounting (the remote audit's W at the rebuild pricing, Identity, PoUW's conjecture for the bound z) is a Prop over its definitions, never over a guarantee or a proof; the rate audit's, stacking's and the sketch bound's modules re-export the named assumptions they read (Definitions.Assumptions.Accounting)",
    "sealed": true
   },
   "Definitions.Claims": {
@@ -5842,10 +5842,11 @@
     "Definitions.Accounting",
     "Definitions.Nci",
     "Definitions.Pouw",
+    "Definitions.Pous.Model.Audit",
     "Definitions.Assumptions"
    ],
    "sealed": true,
-   "why": "the named assumptions, the real ones the guarantees take without proof, read the hash, protocol and device definitions, the training formalism's (Definitions.Nci.Cut, Definitions.Nci.Formalism) and PoUW's cost model (Definitions.Pouw.Game.Defs, for Definitions.Assumptions.Pouw), never a guarantee or a proof"
+   "why": "the named assumptions, the real ones the guarantees take without proof, read the hash, protocol and device definitions, the training formalism's (Definitions.Nci.Cut, Definitions.Nci.Formalism), PoUW's and Pearl-C's games (Definitions.Pouw.Game.Defs, Definitions.Pouw.PearlC.Game, for Definitions.Assumptions.Pouw) and PoUS's audit game (Definitions.Pous.Model.Audit, for Definitions.Assumptions.Pous), never a guarantee or a proof"
   }
  },
  "reads_exempt": {

@@ -2,6 +2,8 @@ module
 
 public import Definitions.Accounting.PerRun
 public import Definitions.Accounting.Pouw
+public import Definitions.Assumptions.Accounting
+public import Definitions.Assumptions.Pouw
 public import Definitions.Pouw.Game.Params
 public import Definitions.Pouw.PearlC.W1Stop
 public import Definitions.Pouw.Assumptions.Game
