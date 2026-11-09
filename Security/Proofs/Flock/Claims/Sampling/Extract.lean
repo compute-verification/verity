@@ -6,16 +6,15 @@ public import Proofs.Flock.Claims.ERepCost
 /-!
 # Coins fresh on a set of rounds, and the extractor's waits
 
-The sampled extractor (`Claims.Sampling.E`) reruns the judged run fresh on some rounds and keeps its coins elsewhere
-(`forkOn`): the second stage at each outer run, a checked unit's session at each inner run.
+The compiled sampled extractor (`SamplingGeneric.Compiled.E`) reruns the judged run fresh on some rounds and keeps its
+coins elsewhere (`forkOn`): the second stage at each outer run, a checked unit's session at each inner run.
 
 * `Ex_forkOn`: coins fresh on `I` and the judged run's elsewhere are uniform when both are. `Ex_acc_forkOn`,
   `Pr_acc_forkOn`: a judged run's acceptance against a weight that ignores `I` averages as the acceptance probability
   of the runs fresh on `I`.
 * `Ex_finsum`, `Ex_pi_eval`, `sum_map_eq_count`: averages over a list of units.
-* `waitsProg`, `waits_amortized`, `waits_runs_le`: Flock's `E^rep` waits, `m` of them over `K` samples each stopping at
-  `k` accepted runs, rerun at most `m·k/ε` times in expectation against a run accepting with probability `ε`, and at
-  most `m·K` times.
+* `waitsProg`, `waits_amortized`: Flock's `E^rep` waits, `m` of them over `K` samples each stopping at `k` accepted
+  runs, rerun at most `m·k/ε` times in expectation against a run accepting with probability `ε`.
 * `NoHash`, `calls_le_of_noHash`: a program without SHA-512 calls of its own calls at most `t` times per rerun.
 -/
 
@@ -118,7 +117,6 @@ theorem sum_map_eq_count {ι : Type} [Fintype ι] [DecidableEq ι] (l : List ι)
   · intro i _ hi
     rw [List.count_eq_zero.2 (fun h => hi (List.mem_toFinset.2 h)), Nat.cast_zero, zero_mul]
 
-
 /-! ## Flock's waits -/
 
 /-- `E^rep`'s waits: `m` waits, each over `K` samples `ρ a` and stopping at `k` accepted runs, returning the first
@@ -155,14 +153,6 @@ theorem waits_amortized {D W Op : Type} [Fintype D] [Nonempty D] (H : Msg → Ms
     _ ≤ m * k := by
         simp only [Nat.cast_zero, sub_zero] at h0
         exact mul_le_mul_of_nonneg_left h0 (Nat.cast_nonneg _)
-
-/-- The waits rerun at most once per sample they hold. -/
-theorem waits_runs_le {D W Op : Type} (H : Msg → Msg) (run' : D → Trace) (m k K : ℕ) (opens : Seen → List Op)
-    (assemble : List Op → Option W) (check : W → Bool) (ρ : Fin m → Fin K → D) :
-    ((waitsProg m k K opens assemble check ρ).eval H run').2.2 ≤ m * K := by
-  refine (firstWait_runs_le H run' k opens assemble check _).trans_eq ?_
-  simp only [List.map_map, Function.comp_def, List.length_map, List.length_finRange, List.map_const',
-    List.sum_replicate, smul_eq_mul]
 
 /-! ## SHA-512 calls -/
 
@@ -214,6 +204,5 @@ theorem calls_le_of_noHash {R α : Type} (H : Msg → Msg) (run : R → Trace) (
     have := ht r
     rw [Nat.mul_succ]
     omega
-
 
 end Claims.Sampling

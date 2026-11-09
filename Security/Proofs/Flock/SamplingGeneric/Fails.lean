@@ -44,21 +44,25 @@ import Proofs.Flock.Claims.Sampling.Extract
 /-!
 # The sampled compiler: the extraction's failure event and its probability
 
-`Claims.Sampling`'s failure event and its bound (`Proofs.Flock.Claims.Sampling.KS`), for a compiled sampled verifier `L`
-over any proof system for proof blocks `A` (`Claims.SamplingGeneric.Compiled`). The extractor's coins at an accepted
-inner run are one `Compiled.BlockEC` per slot of the sample (`Compiled.SlotEC`), as `Claims.Sampling`'s are.
+The extraction's failure event and its bound, for a compiled sampled verifier `L` over any proof system for proof
+blocks `A` (`Claims.SamplingGeneric.Compiled`). The extractor's coins at an accepted inner run are one
+`Compiled.BlockEC` per slot of the sample (`Compiled.SlotEC`), of which a session reads its first slot's.
 
-* `Found`: a sampled proof block's extraction finds a witness in `A`'s relation at its session's statement, as
-  `Compiled.unitExt` runs it before its openings. `GoodAt`: the block, below `n_PU`, is at some slot of the sample, and
-  is found at that slot's coins.
+* `first_of_slot`, `leadOf`, `card_first_le`, `sum_first_le`: **a sample's sessions**. A slot holding a block below
+  `n_PU` is in a session whose first slot (`leadOf`) holds one too; first slots have distinct keys, so a sample has at
+  most `n_sess` sessions (`Sessions.keys`), and their slots are disjoint.
+* `Found`: a sampled proof block's session's extraction finds a witness in `A`'s relation at its statement, as
+  `Compiled.sessWit` runs it. `GoodAt`: the block, below `n_PU`, is at some slot of the sample, and the block at the
+  first slot of that slot's session is found at the first slot's coins.
 * `BadOuter`, `Fails`: an outer run is bad for a set `B` of proof blocks when its inner wait comes up short or keeps only
   runs at which no block of `B` is good; the extraction fails when the outer wait comes up short or, for some `B` of
   acceptance probability at most `δ` (`S₁`), keeps only runs bad for `B`. Both read the found event as a parameter.
 * `SessionKS`: the sessions' knowledge soundness at the found event, the form `A.KS` gives at the slot a selection
   picks: a weight `β` of each tape and first-stage coins, averaging at most `Pr[B]`, bounds the probability that the run
   accepts and the proof block at the picked slot is not found at the slot's coins by `κ_s + √(k(x)·γ_s·β)`.
-* `inner_bad_le`: at first-stage coins where the sample misses `B` with probability at most `esc`, the union bound at
-  the picked slot, the first holding a block of `B` (the sample's slots at most `n_PU`, `Sessions.slots`), gives
+* `pr_notGood_le`, `inner_bad_le`: at first-stage coins where the sample misses `B` with probability at most `esc`, the
+  union bound at the picked slot, the first slot of the session of the first slot holding a block of `B` (`leadSel`;
+  the sample's slots at most `n_PU`, `Sessions.slots`), gives
   `Pr[acc]·Pr[bad for B] ≤ 2k_in/K_in + e^{−k_in/8} + c·(esc + κ)` (`rpow_kIn_le_slack`: one set).
 * `outer_bad_le`: over the refused sets (at most `2^{n_PU}`, `n_PU ≤ n_out` by `Sessions.unions`, against the outer
   wait's slack, `rpow_kOut_le_slack`), with the sampling design's weights averaging at most `P_a(B) ≤ δ`.
@@ -99,6 +103,16 @@ theorem le_foldr_max {a : ℝ} : ∀ {l : List ℝ}, a ∈ l → a ≤ l.foldr m
 theorem le_maxBelow {n : ℕ} (f : ℕ → ℝ) {u : ℕ} (hu : u < n) : f u ≤ maxBelow n f :=
   le_foldr_max (List.mem_map.2 ⟨u, List.mem_range.2 hu, rfl⟩)
 
+theorem getElem?_of_mem_zip_finRange {β : Type} {k : ℕ} {l : List β} {j : Fin k} {a : β}
+    (h : (j, a) ∈ (List.finRange k).zip l) : l[j.val]? = some a := by
+  obtain ⟨i, hi⟩ := List.mem_iff_getElem?.1 h
+  obtain ⟨h1, h2⟩ := List.getElem?_zip_eq_some.1 hi
+  obtain ⟨hlt, hj⟩ := List.getElem?_eq_some_iff.1 h1
+  have hj' : (List.finRange k)[i] = j := hj
+  have hji : j.val = i := by rw [← hj']; simp
+  rw [hji]
+  exact h2
+
 namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
@@ -119,23 +133,201 @@ def ecoinsEquiv (L : Compiled Coin A) (x : Msg) :
   left_inv _ := rfl
   right_inv _ := rfl
 
+/-! ## A sample's sessions -/
+
+section Sessions
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+
+theorem mem_sessSlots {L : Compiled Coin A} {x : Msg} {l : List ℕ} {i j : ℕ} :
+    j ∈ L.sessSlots x l i ↔ ∃ u, l[j]? = some u ∧ u < L.nPU x ∧ L.skey x l j = L.skey x l i := by
+  unfold sessSlots
+  rw [List.mem_filter, List.mem_range, Bool.and_eq_true, beq_iff_eq]
+  constructor
+  · rintro ⟨-, h1, h2⟩
+    cases hu : l[j]? with
+    | none => rw [hu] at h1; exact absurd h1 Bool.false_ne_true
+    | some u =>
+      rw [hu, Option.any_some] at h1
+      exact ⟨u, rfl, of_decide_eq_true h1, h2⟩
+  · rintro ⟨u, hu, hlt, hk⟩
+    refine ⟨(List.getElem?_eq_some_iff.1 hu).1, ?_, hk⟩
+    rw [hu, Option.any_some]
+    exact decide_eq_true hlt
+
+theorem sessSlots_congr {L : Compiled Coin A} {x : Msg} {l : List ℕ} {i i' : ℕ} (h : L.skey x l i = L.skey x l i') :
+    L.sessSlots x l i = L.sessSlots x l i' := by
+  unfold sessSlots
+  rw [h]
+
+theorem self_mem_sessSlots {L : Compiled Coin A} {x : Msg} {l : List ℕ} {i u : ℕ} (hi : l[i]? = some u)
+    (hu : u < L.nPU x) : i ∈ L.sessSlots x l i :=
+  mem_sessSlots.2 ⟨u, hi, hu, rfl⟩
+
+theorem sessSlots_pairwise (L : Compiled Coin A) (x : Msg) (l : List ℕ) (i : ℕ) :
+    (L.sessSlots x l i).Pairwise (· < ·) :=
+  List.pairwise_lt_range.filter _
+
+/-- **The first slot of a sampled block's session**: slot `i`, its block below `n_PU`, is in a session whose first slot
+`i₀ ≤ i` holds a block below `n_PU`, has `i`'s key, and is its own session's first. -/
+theorem first_of_slot {L : Compiled Coin A} {x : Msg} {l : List ℕ} {i u : ℕ} (hi : l[i]? = some u)
+    (hu : u < L.nPU x) :
+    ∃ i₀ u₀, (L.sessSlots x l i).head? = some i₀ ∧ i₀ ≤ i ∧ l[i₀]? = some u₀ ∧ u₀ < L.nPU x ∧
+      L.skey x l i₀ = L.skey x l i ∧ (L.sessSlots x l i₀).head? = some i₀ := by
+  have hmem := self_mem_sessSlots hi hu
+  have hp := L.sessSlots_pairwise x l i
+  cases h : L.sessSlots x l i with
+  | nil => rw [h] at hmem; exact absurd hmem List.not_mem_nil
+  | cons i₀ t =>
+    have hi₀ : i₀ ∈ L.sessSlots x l i := by rw [h]; exact List.mem_cons_self
+    obtain ⟨u₀, hu₀, hlt, hk⟩ := mem_sessSlots.1 hi₀
+    refine ⟨i₀, u₀, rfl, ?_, hu₀, hlt, hk, ?_⟩
+    · rw [h] at hmem hp
+      rcases List.mem_cons.1 hmem with h' | h'
+      · exact h'.ge
+      · exact (List.rel_of_pairwise_cons hp h').le
+    · rw [sessSlots_congr hk, h, List.head?_cons]
+
+/-- Two sessions' first slots with one key are one slot. -/
+theorem first_eq_of_key {L : Compiled Coin A} {x : Msg} {l : List ℕ} {i j : ℕ}
+    (hi : (L.sessSlots x l i).head? = some i) (hj : (L.sessSlots x l j).head? = some j)
+    (hk : L.skey x l i = L.skey x l j) : i = j := by
+  rw [sessSlots_congr hk, hj] at hi
+  exact (Option.some.inj hi).symm
+
+/-- A session's first slot holds a block below `n_PU`. -/
+theorem of_first {L : Compiled Coin A} {x : Msg} {l : List ℕ} {i : ℕ} (h : (L.sessSlots x l i).head? = some i) :
+    ∃ u, l[i]? = some u ∧ u < L.nPU x := by
+  obtain ⟨u, hu, hlt, -⟩ := mem_sessSlots.1 (List.mem_of_mem_head? h)
+  exact ⟨u, hu, hlt⟩
+
+/-- The first slot of slot `i`'s session in the sample `l`; none when no slot of it holds a block below `n_PU`. -/
+def leadOf (L : Compiled Coin A) (x : Msg) (l : List ℕ) (i : Fin (L.nPU x)) : Option (Fin (L.nPU x)) :=
+  ((L.sessSlots x l i).head?).bind fun i₀ => if h : i₀ < L.nPU x then some ⟨i₀, h⟩ else none
+
+/-- A selection of the sample's slots, moved to the first slot of the picked slot's session. -/
+def leadSel (L : Compiled Coin A) (x : Msg) (sel : List ℕ → Option (Fin (L.nPU x))) (l : List ℕ) :
+    Option (Fin (L.nPU x)) :=
+  (sel l).bind (L.leadOf x l)
+
+theorem leadOf_some {L : Compiled Coin A} {x : Msg} {l : List ℕ} {i : Fin (L.nPU x)} {v : ℕ}
+    (hi : l[i.val]? = some v) (hv : v < L.nPU x) :
+    ∃ i₀ u₀ : Fin (L.nPU x), L.leadOf x l i = some i₀ ∧ l[i₀.val]? = some u₀.val := by
+  obtain ⟨i₀, u₀, hhead, hle, hu₀, hu₀lt, -, -⟩ := first_of_slot hi hv
+  have hi₀ : i₀ < L.nPU x := lt_of_le_of_lt hle i.isLt
+  refine ⟨⟨i₀, hi₀⟩, ⟨u₀, hu₀lt⟩, ?_, hu₀⟩
+  simp only [leadOf, hhead, Option.bind_some, dite_eq_left hi₀]
+
+/-- The first slot of slot `i`'s session has `i`'s key, so `i`'s session, of which it is the first. -/
+theorem of_leadOf {L : Compiled Coin A} {x : Msg} {l : List ℕ} {i i₀ : Fin (L.nPU x)}
+    (h : L.leadOf x l i = some i₀) :
+    L.skey x l i₀ = L.skey x l i ∧ L.sessSlots x l i₀ = L.sessSlots x l i ∧
+      (L.sessSlots x l i₀).head? = some i₀.val := by
+  unfold leadOf at h
+  obtain ⟨j, hj, h'⟩ := Option.bind_eq_some_iff.1 h
+  by_cases hjn : j < L.nPU x
+  · rw [dite_eq_left hjn, Option.some.injEq] at h'
+    subst h'
+    obtain ⟨-, -, -, hk⟩ := mem_sessSlots.1 (List.mem_of_mem_head? hj)
+    have hc : L.sessSlots x l j = L.sessSlots x l i := sessSlots_congr hk
+    show L.skey x l j = L.skey x l i ∧ L.sessSlots x l j = L.sessSlots x l i ∧ (L.sessSlots x l j).head? = some j
+    refine ⟨hk, hc, ?_⟩
+    rw [hc]
+    exact hj
+  · rw [dite_eq_right hjn] at h'
+    exact (Option.some_ne_none _ h'.symm).elim
+
+/-- **A sample's sessions hold at most its slots**: the sessions at distinct first slots are disjoint, and each is
+among the sample's slots. -/
+theorem sum_first_le (L : Compiled Coin A) (x : Msg) (l : List ℕ) :
+    ∑ i ∈ (Finset.univ : Finset (Fin (L.nPU x))).filter
+        (fun i : Fin (L.nPU x) => (L.sessSlots x l i.val).head? = some i.val),
+      (L.sessSlots x l i).length ≤ l.length := by
+  classical
+  set F := (Finset.univ : Finset (Fin (L.nPU x))).filter fun i : Fin (L.nPU x) =>
+    (L.sessSlots x l i.val).head? = some i.val
+  have hnd : ∀ i : Fin (L.nPU x), (L.sessSlots x l i).Nodup := fun i =>
+    (L.sessSlots_pairwise x l i).imp (fun h => Nat.ne_of_lt h)
+  have hdisj : (F : Set (Fin (L.nPU x))).PairwiseDisjoint fun i => (L.sessSlots x l i).toFinset := by
+    intro i hi j hj hij
+    refine Finset.disjoint_left.2 fun t hti htj => hij (Fin.ext ?_)
+    obtain ⟨-, -, -, hki⟩ := mem_sessSlots.1 (List.mem_toFinset.1 hti)
+    obtain ⟨-, -, -, hkj⟩ := mem_sessSlots.1 (List.mem_toFinset.1 htj)
+    exact first_eq_of_key (Finset.mem_filter.1 hi).2 (Finset.mem_filter.1 hj).2 (hki.symm.trans hkj)
+  calc ∑ i ∈ F, (L.sessSlots x l i).length
+      = ∑ i ∈ F, (L.sessSlots x l i).toFinset.card :=
+        Finset.sum_congr rfl fun i _ => (List.toFinset_card_of_nodup (hnd i)).symm
+    _ = (F.biUnion fun i => (L.sessSlots x l i).toFinset).card := (Finset.card_biUnion hdisj).symm
+    _ ≤ (Finset.range l.length).card := Finset.card_le_card fun t ht => by
+        obtain ⟨i, -, hti⟩ := Finset.mem_biUnion.1 ht
+        obtain ⟨u, hu, -⟩ := mem_sessSlots.1 (List.mem_toFinset.1 hti)
+        exact Finset.mem_range.2 (List.getElem?_eq_some_iff.1 hu).1
+    _ = l.length := Finset.card_range _
+
+/-- **Slots with distinct keys are their own sessions**: slot `i`, its block below `n_PU`, is its session's one slot. -/
+theorem sessSlots_eq_singleton {L : Compiled Coin A} {x : Msg} {l : List ℕ} {i u : ℕ}
+    (hk : ∀ p q, L.skey x l p = L.skey x l q → p = q) (hi : l[i]? = some u) (hu : u < L.nPU x) :
+    L.sessSlots x l i = [i] := by
+  have hmem : ∀ j ∈ L.sessSlots x l i, j = i := fun j hj => by
+    obtain ⟨-, -, -, h⟩ := mem_sessSlots.1 hj
+    exact hk _ _ h
+  have hself := self_mem_sessSlots hi hu
+  have hp := L.sessSlots_pairwise x l i
+  cases h : L.sessSlots x l i with
+  | nil => rw [h] at hself; exact absurd hself List.not_mem_nil
+  | cons a t =>
+    rw [h] at hmem hp
+    have ha : a = i := hmem a List.mem_cons_self
+    subst ha
+    cases t with
+    | nil => rfl
+    | cons b t' =>
+      have hb : b = a := hmem b (List.mem_cons_of_mem _ List.mem_cons_self)
+      have hlt : a < b := List.rel_of_pairwise_cons hp List.mem_cons_self
+      omega
+
+theorem sessBlocks_eq_singleton {L : Compiled Coin A} {x : Msg} {l : List ℕ} {i u : ℕ}
+    (hk : ∀ p q, L.skey x l p = L.skey x l q → p = q) (hi : l[i]? = some u) (hu : u < L.nPU x) :
+    L.sessBlocks x l i = [u] := by
+  simp only [sessBlocks, sessSlots_eq_singleton hk hi hu, List.filterMap_cons, hi, List.filterMap_nil]
+
+end Sessions
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+/-- **A sample has at most `n_sess` sessions**: their first slots have distinct keys (`first_eq_of_key`), each one of
+the sample's, which hold at most `n_sess` keys (`hkeys`, a contract's `keys`). -/
+theorem card_first_le {L : Compiled Coin A}
+    (hkeys : ∀ x r, ((Finset.range (L.checked x r).length).image (L.skey x (L.checked x r))).card ≤ L.nSess x)
+    (x : Msg) (r : Fin (L.V.k x) → Coin) :
+    ((Finset.univ : Finset (Fin (L.nPU x))).filter fun i : Fin (L.nPU x) =>
+      (L.sessSlots x (L.checked x r) i.val).head? = some i.val).card ≤ L.nSess x := by
+  refine (Finset.card_le_card_of_injOn (fun i : Fin (L.nPU x) => L.skey x (L.checked x r) i.val) ?_ ?_).trans
+    (hkeys x r)
+  · intro i hi
+    obtain ⟨u, hu, -⟩ := of_first (Finset.mem_filter.1 hi).2
+    exact Finset.mem_image.2 ⟨i.val, Finset.mem_range.2 (List.getElem?_eq_some_iff.1 hu).1, rfl⟩
+  · intro i hi j hj hij
+    exact Fin.ext (first_eq_of_key (Finset.mem_filter.1 hi).2 (Finset.mem_filter.1 hj).2 hij)
+
 /-! ## The failure event -/
 
-/-- **Proof block `u`'s extraction finds a witness** at the run `r'`, on the prover's runs `run'`: `r'` shows `u`'s
-session `(xS, vS)` at the block's shape, and `A`'s extractor at the session, as `unitExt` serves it, returns a witness
-in `A`'s relation at `xS`. -/
+/-- **Proof block `u`'s session's extraction finds a witness** at the run `r'`, on the prover's runs `run'`: `r'` shows
+`u`'s session `(xS, vS)` at the block's shape, and `A`'s extractor at the session, as `sessWit` serves it, returns a
+witness in `A`'s relation at `xS`. -/
 def Found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
     (u : Fin (L.nPU x)) (r' : Fin (L.V.k x) → Coin) (c : A.EC (L.sh x u)) : Prop :=
   ∃ xS vS, L.session x u (run' r').seen = some (xS, vS) ∧ ∃ h : A.shape xS = L.sh x u, ∃ w,
     ((serve (fun r'' => viewing (L.view x u) (L.place x u xS r' r''))
         (A.ext xS (L.coinsOf x u xS r') (cast (congrArg A.EC h.symm) c))).eval H run').1 = some w ∧ A.R xS w
 
-/-- Proof block `v`, below `n_PU`, is at some slot of the sample at `r'`, and `found` holds of it at the slot's coins
-in `uc`. -/
+/-- Proof block `v`, below `n_PU`, is at some slot of the sample at `r'`, and `found` holds of the block at the first
+slot of that slot's session (`leadOf`), at the first slot's coins in `uc`. -/
 def GoodAt (L : Compiled Coin A) (x : Msg)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) (r' : Fin (L.V.k x) → Coin)
     (v : ℕ) (uc : L.SlotEC x) : Prop :=
-  ∃ (i : Fin (L.nPU x)) (hv : v < L.nPU x), (L.checked x r')[i.val]? = some v ∧ found ⟨v, hv⟩ r' (uc i ⟨v, hv⟩)
+  ∃ i : Fin (L.nPU x), v < L.nPU x ∧ (L.checked x r')[i.val]? = some v ∧
+    ∃ i₀ u₀ : Fin (L.nPU x), L.leadOf x (L.checked x r') i = some i₀ ∧ (L.checked x r')[i₀.val]? = some u₀.val ∧
+      found u₀ r' (uc i₀ u₀)
 
 /-- **An outer run bad for `B`**, its second stage `g`: the inner wait comes up short, or no kept inner run has a
 proof block of `B` good. -/
@@ -229,11 +421,55 @@ end Numbers
 /-! ## The failure event's probability -/
 
 omit [Inhabited Coin] in
+/-- **No block of `B` good at an inner run**: at first-stage coins `r` where the sample misses every proof block of `B`
+(each below `n_PU`) with probability at most `esc`, the sample has at most `n_PU` slots, and the block at the slot any
+selection picks is not found with probability at most `κr`, the run accepts with no block of `B` good with probability
+at most `esc + κr`: the union bound at the first slot of the session of the first slot holding a block of `B`. -/
+theorem pr_notGood_le (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
+    (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) {B : Finset ℕ}
+    (hB : ∀ v ∈ B, v < L.nPU x) (hslots : ∀ r', (L.checked x r').length ≤ L.nPU x) (r : Fin (L.V.k x) → Coin)
+    {esc κr : ℝ} (hesc : Pr (fun d : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.stage2 x) r d), u ∉ B) ≤ esc)
+    (hsess : ∀ sel : List ℕ → Option (Fin (L.nPU x)),
+      Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
+        (run' (forkOn (L.stage2 x) r p.1)).out = .acc ∧
+          ∃ i, sel (L.checked x (forkOn (L.stage2 x) r p.1)) = some i ∧
+            ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.stage2 x) r p.1))[i.val]? = some u.val ∧
+              ¬ found u (forkOn (L.stage2 x) r p.1) (p.2 i u)) ≤ κr) :
+    Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
+      (run' (forkOn (L.stage2 x) r p.1)).out = .acc ∧
+        ∀ v ∈ B, ¬ L.GoodAt x found (forkOn (L.stage2 x) r p.1) v p.2) ≤ esc + κr := by
+  let sel : List ℕ → Option (Fin (L.nPU x)) := fun l =>
+    (List.finRange (L.nPU x)).find? fun i => decide (∃ v ∈ B, l[i.val]? = some v)
+  have hsel : ∀ l : List ℕ, l.length ≤ L.nPU x → ∀ v ∈ l, v ∈ B →
+      ∃ i, sel l = some i ∧ ∃ v ∈ B, l[i.val]? = some v := by
+    intro l hl v hvl hvB
+    obtain ⟨j, hj, hjv⟩ := List.getElem_of_mem hvl
+    have hjv' : l[(⟨j, lt_of_lt_of_le hj hl⟩ : Fin (L.nPU x)).val]? = some v := by
+      show l[j]? = some v
+      rw [List.getElem?_eq_getElem hj, hjv]
+    obtain ⟨i, hi⟩ := Option.isSome_iff_exists.1
+      ((List.find?_isSome (p := fun i : Fin (L.nPU x) => decide (∃ v ∈ B, l[i.val]? = some v))).2
+        ⟨⟨j, lt_of_lt_of_le hj hl⟩, List.mem_finRange _, decide_eq_true ⟨v, hvB, hjv'⟩⟩)
+    exact ⟨i, hi, of_decide_eq_true
+      (List.find?_some (p := fun i : Fin (L.nPU x) => decide (∃ v ∈ B, l[i.val]? = some v)) hi)⟩
+  have hmiss := (Pr_fst (β := L.SlotEC x) (fun d : Fin (L.V.k x) → Coin =>
+    ∀ u ∈ L.checked x (forkOn (L.stage2 x) r d), u ∉ B)).trans_le hesc
+  refine Pr_or_le (fun p hp => ?_) hmiss (hsess (L.leadSel x sel))
+  by_cases hm : ∃ v ∈ L.checked x (forkOn (L.stage2 x) r p.1), v ∈ B
+  · obtain ⟨v, hvl, hvB⟩ := hm
+    obtain ⟨i, hi, v', hv'B, hv'⟩ := hsel _ (hslots _) v hvl hvB
+    obtain ⟨i₀, u₀, hlead, hu₀⟩ := leadOf_some hv' (hB v' hv'B)
+    have hsel₀ : L.leadSel x sel (L.checked x (forkOn (L.stage2 x) r p.1)) = some i₀ := by
+      rw [leadSel, hi, Option.bind_some, hlead]
+    exact Or.inr ⟨hp.1, i₀, hsel₀, u₀, hu₀, fun hf => hp.2 v' hv'B ⟨i, hB v' hv'B, hv', i₀, u₀, hlead, hu₀, hf⟩⟩
+  · exact Or.inl fun v hvl hvB => hm ⟨v, hvl, hvB⟩
+
+omit [Inhabited Coin] in
 /-- **One outer run's inner wait**: at first-stage coins `r` where the sample misses every proof block of `B` (each
 below `n_PU`) with probability at most `esc`, the sample has at most `n_PU` slots, and the block at the slot any
 selection picks is not found with probability at most `κr`, the inner wait (times its acceptance) comes up short or
-keeps only runs at which no block of `B` is good with probability at most `2k_in/K_in + e^{−k_in/8} + c·(esc + κr)`:
-the union bound at the picked slot, the first holding a block of `B`. -/
+keeps only runs at which no block of `B` is good with probability at most `2k_in/K_in + e^{−k_in/8} + c·(esc + κr)`
+(`pr_notGood_le` at each inner run). -/
 theorem inner_bad_le (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) {B : Finset ℕ}
     (hB : ∀ v ∈ B, v < L.nPU x) (hslots : ∀ r', (L.checked x r').length ≤ L.nPU x) (r : Fin (L.V.k x) → Coin)
@@ -251,30 +487,8 @@ theorem inner_bad_le (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → 
   have hy : ∀ _u ∈ ({()} : Finset Unit),
       Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
         (run' (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-          ∀ v ∈ B, ¬ L.GoodAt x found (forkOn (L.stage2 x) r p.1) v p.2) ≤ esc + κr := by
-    intro _ _
-    let sel : List ℕ → Option (Fin (L.nPU x)) := fun l =>
-      (List.finRange (L.nPU x)).find? fun i => decide (∃ v ∈ B, l[i.val]? = some v)
-    have hsel : ∀ l : List ℕ, l.length ≤ L.nPU x → ∀ v ∈ l, v ∈ B →
-        ∃ i, sel l = some i ∧ ∃ v ∈ B, l[i.val]? = some v := by
-      intro l hl v hvl hvB
-      obtain ⟨j, hj, hjv⟩ := List.getElem_of_mem hvl
-      have hjv' : l[(⟨j, lt_of_lt_of_le hj hl⟩ : Fin (L.nPU x)).val]? = some v := by
-        show l[j]? = some v
-        rw [List.getElem?_eq_getElem hj, hjv]
-      obtain ⟨i, hi⟩ := Option.isSome_iff_exists.1
-        ((List.find?_isSome (p := fun i : Fin (L.nPU x) => decide (∃ v ∈ B, l[i.val]? = some v))).2
-          ⟨⟨j, lt_of_lt_of_le hj hl⟩, List.mem_finRange _, decide_eq_true ⟨v, hvB, hjv'⟩⟩)
-      exact ⟨i, hi, of_decide_eq_true
-        (List.find?_some (p := fun i : Fin (L.nPU x) => decide (∃ v ∈ B, l[i.val]? = some v)) hi)⟩
-    have hmiss := (Pr_fst (β := L.SlotEC x) (fun d : Fin (L.V.k x) → Coin =>
-      ∀ u ∈ L.checked x (forkOn (L.stage2 x) r d), u ∉ B)).trans_le hesc
-    refine Pr_or_le (fun p hp => ?_) hmiss (hsess sel)
-    by_cases hm : ∃ v ∈ L.checked x (forkOn (L.stage2 x) r p.1), v ∈ B
-    · obtain ⟨v, hvl, hvB⟩ := hm
-      obtain ⟨i, hi, v', hv'B, hv'⟩ := hsel _ (hslots _) v hvl hvB
-      exact Or.inr ⟨hp.1, i, hi, ⟨v', hB v' hv'B⟩, hv', fun hf => hp.2 v' hv'B ⟨i, hB v' hv'B, hv', hf⟩⟩
-    · exact Or.inl fun v hvl hvB => hm ⟨v, hvl, hvB⟩
+          ∀ v ∈ B, ¬ L.GoodAt x found (forkOn (L.stage2 x) r p.1) v p.2) ≤ esc + κr :=
+    fun _ _ => L.pr_notGood_le x run' found hB hslots r hesc hsess
   have hw := wait_bad_le (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.kIn x) (L.capIn x)
     (L.capIn_pos x) (L.kIn_pos x) ({()} : Finset Unit)
     (fun _ d uc => ∀ v ∈ B, ¬ L.GoodAt x found (forkOn (L.stage2 x) r d) v uc)

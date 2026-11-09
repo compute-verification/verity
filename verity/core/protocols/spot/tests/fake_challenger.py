@@ -24,7 +24,7 @@ from typing import Any, Mapping
 from verity.core.protocols.spot import (challenger as C, coins as T, remote as R, second_stage as SS,
                                                   service as S)
 from verity.core.protocols.spot.one_stage import draw as D, partition as P
-from verity.ml.circuits.codec import descriptor_id
+from verity.ml.circuits.codec import canonical_json, descriptor_id
 from verity.ml.commitments.identity import canonical_json_text
 from verity.ml.commitments.window import window_binding
 
@@ -62,6 +62,18 @@ def served_header(ref: Mapping[str, Any], rec: Mapping[str, Any], k: int, lo: in
                          "domain_ids": {p: r["domain"] for p, r in roots.items()},
                          "bindings": {p: window_binding(rec["program"], rec["partition"], roots[p]["port"], s,
                                                         roots[p]["leaves"], run).hex() for p, s in fv["schemas"].items()}}}
+
+
+def checked(statement: Mapping[str, Any], tables: int | None = 1) -> dict[str, Any]:
+    """What `flock-verify verify`'s verdict names of the session of second-stage statement `statement` it checked, which
+    round 2 holds the statement to (`second_stage.verified_of`): the SHA-512 of its header's canonical JSON, of its
+    registered reads' when it reads any, its sample, and the `tables` it set the session up as (one, as the verifier of
+    record runs it; None: a verdict naming no count)."""
+    names = {"public_header_sha512": hashlib.sha512(canonical_json(statement.get("header"))).hexdigest(),
+             "unit_draw": statement.get("draw"), **({} if tables is None else {"session_tables": tables})}
+    if statement.get("registered") is not None:
+        names["registered_sha512"] = hashlib.sha512(canonical_json(statement["registered"])).hexdigest()
+    return names
 
 
 class Challenger(T.ChallengerCoins):
