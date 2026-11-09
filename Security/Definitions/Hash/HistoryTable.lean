@@ -41,8 +41,8 @@ A history table holds rows that other units of the circuit output, each committe
 (`Hm96.commitString`) in the order the program's wiring gives, and computes the table's root itself: a frame-v3 tree of
 a fixed count whose leaf at rank `r` is the hm96 leaf over the string at `r` (`leaf`), the strings past the table's
 length all the placeholder's, the zero row under the zero salt (`placeholder`). No string is the prover's to choose,
-so the root is a function of what the units committed. The verifier's code is `Spot.HistoryTable` in the sampled proofs'
-service, which pins the count at `2^17`.
+so the root is a function of what the units committed. The verifier's code is `Spot.HistoryTable` in SPOT's service,
+which pins the count at `2^17`.
 
 * `string len bc ph r`: the string at rank `r`, `bc r` below the table's length `len` and `ph` past it;
 * `leaf`, `root`: rank `r`'s frame leaf over the hm96 leaf of the string at `r`, and the root of the tree over all of
