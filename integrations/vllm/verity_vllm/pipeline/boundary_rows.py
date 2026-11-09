@@ -70,6 +70,7 @@ from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import boundary_tables as BT
 from verity_vllm.records.boundary_commit import FILE as COMMIT, SCHEMA as FORMAT, BoundaryCommit
+from verity_vllm.records.boundary_tables import TableRoots
 
 SCHEMA = CS.SCHEMA_HM96_SHA512_ROW_V2
 INGRESS, EGRESS = "b.ingress", "b.egress"
@@ -398,9 +399,10 @@ def commit(spans: Sequence[Span], layout: Layout, window: int, *, salts: Mapping
 def table_roots(answer: Mapping[str, Any], layout: Layout) -> dict[str, bytes]:
     """Rank 0's answer to the class's `boundary_tables.assignment`: each table's root by name, refused unless it answers
     every table of the layout in order, at the layout's own domain, leaves and words, or says why it built none."""
-    if "error" in answer:
-        raise ValueError(f"rank 0 built no history tables: {answer['error']}")
-    got, ports = list(answer.get("tables") or ()), layout.ports()
+    r = TableRoots.of(answer, "rank 0's answer")
+    if r.error is not None:
+        raise ValueError(f"rank 0 built no history tables: {r.error}")
+    got, ports = list(r.tables or ()), layout.ports()
     if [e.get("value") for e in got] != list(layout.tables):
         raise ValueError(f"rank 0 answered tables {[e.get('value') for e in got][:2]}, not the class's {list(layout.tables)[:2]}")
     for e in got:

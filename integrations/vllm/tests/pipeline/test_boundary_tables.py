@@ -24,6 +24,7 @@ from verity.ml.windows import rows as CS
 from verity_vllm.commit import history_tables as H
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT
+from verity_vllm.records.boundary_tables import ROOTS
 
 RUN = "a" * 128
 PROGRAM = "cd" * 64
@@ -358,12 +359,17 @@ def test_a_class_registers_nothing_when_rank_0_built_no_tables_or_answered_other
     assert not list(tmp_path.rglob(BR.COMMIT))
     L = BR.Layout(PAIR, 0, 1, 8, 4, 1, RUN, layers=(0, 3), capacity=CAP)
     entries = [HT.HistoryTable(L.partition["program"], n, H.WORDS, CAP).entry() for n in L.tables]
-    assert BR.table_roots({"tables": entries}, L) == {e["value"]: bytes.fromhex(e["root"]) for e in entries}
+
+    def answer(tables):
+        return {"format": ROOTS, "window": 0, "run": RUN, "prompt": 8, "outputs": 4, "tables": tables}
+    assert BR.table_roots(answer(entries), L) == {e["value"]: bytes.fromhex(e["root"]) for e in entries}
     with pytest.raises(ValueError, match="not the class's"):
-        BR.table_roots({"tables": entries[::-1]}, L)
+        BR.table_roots(answer(entries[::-1]), L)
     for other in ({"leaves": 8}, {"domain": HT.domain(PROGRAM, L.tables[0], H.WORDS, CAP).domain_id.hex()}, {"root": "00"}):
         with pytest.raises(ValueError, match="isn't at the class's leaves, words and domain"):
-            BR.table_roots({"tables": [entries[0] | other, entries[1]]}, L)
+            BR.table_roots(answer([entries[0] | other, entries[1]]), L)
+    with pytest.raises(ValueError, match="'format' is None"):
+        BR.table_roots({"tables": entries}, L)
     with pytest.raises(ValueError, match="committed with their roots, not 0"):
         BR.commit([BR.Span("a", (1,) * 5, GREEDY, (2,) * 4, "stop")], L, 0)
 

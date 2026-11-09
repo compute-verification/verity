@@ -38,6 +38,7 @@ import numpy as np
 
 from verity.ml.commitments import history as HT
 from verity_vllm.commit import history_tables as H
+from verity_vllm.records.boundary_tables import ASSIGN, ROOTS, TableAssignment, TableRoots
 
 __all__ = ["ASSIGN", "CAPACITY", "KEY", "ROOTS", "WORDS", "Builder", "Channel", "Kept", "Latents", "LocalChannel", "StepHook",
            "assignment", "computed", "key", "layers_of", "mla_layers", "name", "private", "private_root"]
@@ -45,7 +46,6 @@ __all__ = ["ASSIGN", "CAPACITY", "KEY", "ROOTS", "WORDS", "Builder", "Channel", 
 #: a span's key in its tables' names (`history_tables.name`): the window's run, the class and the slot
 KEY = "{run}/p{prompt}-o{outputs}/s{slot}"
 WORDS, CAPACITY = H.WORDS, HT.CAPACITY
-ASSIGN, ROOTS = "verity-vllm/boundary-tables/assign/v1", "verity-vllm/boundary-tables/roots/v1"
 #: the KV cache dtypes under which an MLA layer's cache holds `WORDS` bf16 words a row (vLLM's ``fused_norm_rope``)
 BF16_CACHES = ("auto", "bfloat16")
 _LAYER = re.compile(r"(?:^|\.)layers\.(\d+)\.")
@@ -75,11 +75,10 @@ def computed(prompt: int, served: int, finish: str | None) -> tuple[int, int]:
 
 def assignment(window: int, run: str, program: str, prompt: int, outputs: int, layers: Sequence[int], capacity: int,
                spans: Sequence[tuple[str, int, int, str | None]]) -> dict[str, Any]:
-    """A class's request for its tables: each span's slot, its engine id, prompt and served lengths and finish
-    (``spans``, in slot order), and what every table's domain binds. Private: it names the engine's ids."""
-    return {"format": ASSIGN, "window": int(window), "run": run, "program": program, "prompt": int(prompt),
-            "outputs": int(outputs), "layers": [int(x) for x in layers], "capacity": int(capacity),
-            "spans": [{"engine_id": str(e), "prompt": int(p), "served": int(s), "finish": f} for e, p, s, f in spans]}
+    """A class's request for its tables (`TableAssignment`): each span's slot, its engine id, prompt and served lengths
+    and finish (``spans``, in slot order), and what every table's domain binds. Private: it names the engine's ids."""
+    return TableAssignment(int(window), run, program, int(prompt), int(outputs), tuple(int(x) for x in layers),
+                           int(capacity), tuple((str(e), int(p), int(s), f) for e, p, s, f in spans)).dump()
 
 
 def mla_layers(model: Any) -> dict[int, tuple[str, Any]]:
@@ -241,38 +240,35 @@ class Builder:
         return lambda p, n, w, c: HTD.Table(p, n, w, c, key=row_key, device=self.device)
 
     def build(self, doc: Mapping[str, Any]) -> dict[str, Any]:
-        """The class's tables' entries (`history.HistoryTable.entry`), or why there are none (``error``)."""
-        head = {"format": ROOTS, **{k: doc.get(k) for k in ("window", "run", "prompt", "outputs")}}
+        """The class's tables' entries (`history.HistoryTable.entry`), or why there are none (`TableRoots`)."""
+        head = {k: doc.get(k) for k in ("window", "run", "prompt", "outputs")}
         try:
-            return {**head, "tables": self._tables(doc)}
+            return TableRoots(**head, tables=tuple(self._tables(TableAssignment.of(doc, ASSIGN))), error=None).dump()
         except (ValueError, KeyError, TypeError, RuntimeError, OSError) as e:
             for s in doc.get("spans") or ():
                 self.latents.take(str(s.get("engine_id")))
-            if self.keep is not None:
-                self.keep.drop(*(head[k] for k in ("window", "run", "prompt", "outputs")))
-            return {**head, "error": f"{type(e).__name__}: {e}"}
+            if self.keep is not None and isinstance(head["run"], str):
+                self.keep.drop(*head.values())
+            return TableRoots(**head, tables=None, error=f"{type(e).__name__}: {e}").dump()
 
-    def _tables(self, doc: Mapping[str, Any]) -> list[dict[str, Any]]:
-        if doc.get("format") != ASSIGN:
-            raise ValueError(f"not a {ASSIGN} assignment")
+    def _tables(self, a: TableAssignment) -> list[dict[str, Any]]:
         if self.latents.failed:
             raise ValueError(f"rank 0's latent rows are incomplete: {self.latents.failed}")
-        if [int(x) for x in doc["layers"]] != list(self.latents.layers):
-            raise ValueError(f"the class's tables are at layers {doc['layers']}, rank 0 holds {list(self.latents.layers)}")
-        make, run, p, o, cap = self._maker(), doc["run"], int(doc["prompt"]), int(doc["outputs"]), int(doc["capacity"])
-        out = []
-        for r, s in enumerate(doc["spans"]):
-            rows = self.latents.take(str(s["engine_id"]))
-            lo, hi = computed(s["prompt"], s["served"], s["finish"])
+        if a.layers != self.latents.layers:
+            raise ValueError(f"the class's tables are at layers {list(a.layers)}, rank 0 holds {list(self.latents.layers)}")
+        make, out = self._maker(), []
+        for r, (engine_id, prompt, served, finish) in enumerate(a.spans):
+            rows = self.latents.take(engine_id)
+            lo, hi = computed(prompt, served, finish)
             n = len(rows[self.latents.layers[0]])
             if not lo <= n <= hi:
                 raise ValueError(f"slot {r}: rank 0 holds {n} positions of it, not the {lo} to {hi} its lengths and finish "
-                                 f"({s['finish']}) give")
+                                 f"({finish}) give")
             for x in self.latents.layers:
-                t = make(doc["program"], name(run, p, o, r, x), WORDS, cap)
+                t = make(a.program, name(a.run, a.prompt, a.outputs, r, x), WORDS, a.capacity)
                 t.append(rows[x])
                 if self.keep is not None:
-                    self.keep.write(int(doc["window"]), run, p, o, r, x, doc["program"], t)
+                    self.keep.write(a.window, a.run, a.prompt, a.outputs, r, x, a.program, t)
                 out.append(t.entry())
         return out
 
