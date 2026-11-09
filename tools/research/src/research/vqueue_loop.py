@@ -58,7 +58,7 @@ lists a check whose listing failed, reruns what ended in infra errors once its o
 as it is), reruns those keys itself while graph2's verdict is another (a
 task still runs, or one failed), sets the infra results aside, and starts a run beside it that ended in infra again.  Rerun
 runs the keys afresh (graph2's `rerun`), their results set aside, a key of the run beside starting that run again; without
-graph2's `rerun` it is logged `absent`, and counts as done.  Ring tells infra's handle (`drive.INFRA`), once a candidate and
+graph2's `rerun` it is logged `absent`, and counts as done.  Ring tells `drive.INFRA` (or its `pr`'s owner), once a candidate and
 why.  Red tells `CI` and the owners of what the base fails (as drive names them: a test file's suite's, else its job's) that it
 is red on them, once a base and task.  A test graph2's verdict says flaked (`flaky`: a fail a rerun replaced) is told to its
 file's owner in drive's registry and `CI`, once a key: a test that flakes is deleted.  A skip's, ring's, red's or flake's
@@ -1645,9 +1645,10 @@ class Loop:
         line = dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why, failed=c.verdict.infra, text=text)
         if self.shadow:
             return [self.record(t, "ring", **line, done=False)]
-        if not self._say(t, "ring", text, (INFRA_HANDLE,), sha=c.sha, why=a.why):
+        to = (INFRA_HANDLE,) if a.pr is None else self.owner(a.pr)
+        if not self._say(t, "ring", text, to, sha=c.sha, why=a.why):
             return [self.record(t, "ring", **line, done=False, posted=False,
-                                error=f"ringing {INFRA_HANDLE} about {c.sha[:12]} failed: the next tick rings again")]
+                                error=f"ringing {', '.join(to)} about {c.sha[:12]} failed: the next tick rings again")]
         return [self.record(t, "ring", **line, done=True, posted=True)]
 
     def _red(self, a: Red, c: Candidate, t: Tick) -> dict:
