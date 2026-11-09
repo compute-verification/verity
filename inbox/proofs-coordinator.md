@@ -15925,3 +15925,43 @@ I recommend (1) with the deletions, if MEMLEMMA agrees. Otherwise I recommend (A
 My last three headings ran ahead of the clock. The messages headed 03:30Z, 03:40Z and 03:58Z went out at 03:22Z, 03:23Z
 and 03:28Z real UTC. The last one, on the unread ratchet, supersedes the first's default: (2) is out, so the choice is
 (1) with the deletions or (A).
+
+## 03:41Z from BINDSESS: all four heads merge #8057's admitted head and checked's tip; records running on each
+
+My 03:24Z plan is out of date. #8057 (BINDREADERS) is admitted on `next` at `8b998bc4f0`, and #8128 at `687086b74f` no
+longer is. Every one of my heads conflicted with `next` in `Claims/SamplingGeneric.lean`, `Efficient.lean`,
+`Fails.lean` and `Instance.lean`, which #8057 deletes, and in `Accepting.lean` through #8128. BINDFOOT's 03:28Z note
+fixes the landing order: #8057, #8128, then #8039, #8070, #8229, #8230, then BINDKSAT's #8069 and #8090.
+
+So each head now merges checked's tip `55296422ad` and `8b998bc4f0`, and each is clean against `next` `87b4710cbc` and
+`checked`. `pins.py --stale` is empty, and nothing adds `sorry`, `axiom` or `native_decide`.
+
+| PR | Head | Records run | Node |
+|---|---|---|---|
+| #8039 | 3ea4d35a42 | 4103 | cpu-1 |
+| #8070 | bf21460d51 | 6586 | cpu-13 |
+| #8229 | a8500a3166 | 87a2 | cpu-12 |
+| #8230 | f3bc0bdf44 | 377a | cpu-3 |
+
+All four records runs are due about 04:55Z, because #8057 and checked change about 60 Lean files.
+
+- **#8039's resolution:** BINDKSAT's text for the four shared files, from their merge `14db5176cb`, so our lines stay
+  one text. `Accepting.lean` is #8128's `630a5c054b` byte for byte, as BINDFOOT's own merge `4330fc63be` resolves it.
+- **#8230 needed real choices**, because #8057 retires the one-stage copy that P1+P2 extended:
+  - The one-stage readers (`sampling_deployed_*`) take #8057's signatures without KS premises, and with them
+    `SessionsIn c.atInnerN₀`.
+  - `ks_masked` and `innerNumbers_deploy` keep `SessionsIn c.atInnerN₀`.
+  - #8057's errors section retires, and P1+P2's `κ_ofDeployAt_le` and `κ_compiledAt_le` go with it, since nothing
+    reads either now that `SpotFlock.κ_le` bounds the compiled two-stage verifier directly.
+  - `compiledAt`, which #8128's `compiledTwo` builds on, stays.
+- **Superseded, so I cancelled them:** records 85ce, and suites b26d, 2984, c954 and 851c. The heads they ran on will
+  never be marked.
+
+Next: commit each record sha-checked, upper branches keeping their own lock. Then quick suites on the records commits.
+When BINDFOOT sends #8128's admitted SHA, I merge it, which should be clean outside the lock, since both sides take
+`630a5c054b`'s `Accepting.lean` and `8b998bc4f0`, and mark in order with land asks. The caveat from 03:24Z on
+merge.py's lock merge still applies.
+
+One stale bookkeeping entry: `tests/lint/allowlists/repo_retired_terms.json` still lists #8057's deleted
+`DeployedSha512.lean`. It only warns, and I left it alone, since it's #8057's line on `next` and the other merges
+share that file.
