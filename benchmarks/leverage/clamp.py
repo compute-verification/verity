@@ -17,8 +17,8 @@ datasets' (`traffic.mixed`; Pile documents need `--with pyarrow`); --shard i/n s
 Parts (--part):
 
   calibrate  honest forwards over the calibration traffic (each text with its own greedy continuation of --new
-             tokens) and, in shard 0, --first-tokens tokens at position 0 (-1: the whole vocabulary, which covers
-             position 0 of any traffic, since a model's activations there are a function of the token alone). Writes
+             tokens) and --first-tokens tokens at position 0, split across shards (-1: the whole vocabulary, which
+             covers position 0 of any traffic, since a model's activations there are a function of the token alone). Writes
              stats.pt and, unsharded, boxes.pt and calibrate.json: per site and position class, the boxes against the
              site's RMS (how far an in-range fault reaches, in the units of experiment 1's sweeps), and the massive
              activations (an element's largest value against its site's median RMS, with the token it sits on).
@@ -135,11 +135,14 @@ class Stats:
         return hi
 
 
-def sweep_first(lm: LM, stats: Stats | None, n: int, seed: int, batch: int) -> None:
+def sweep_first(lm: LM, stats: Stats | None, n: int, seed: int, batch: int, part: str = "0/1") -> None:
     """n random tokens (n < 0: every token of the vocabulary), each alone at position 0, where a model's activations
-    are a function of the token alone: the whole vocabulary covers every position 0 of any traffic."""
+    are a function of the token alone: the whole vocabulary covers every position 0 of any traffic. `part` "i/k"
+    takes every k-th token from token i."""
     V = lm.spec.vocab
     toks = torch.arange(V) if n < 0 else torch.randperm(V, generator=torch.Generator().manual_seed(seed))[:n]
+    i, k = (int(x) for x in part.split("/"))
+    toks = toks[i::k]
     for i in range(0, len(toks), batch):
         ids = toks[i:i + batch, None]
         taps = {k: None for k in lm.sites()} if stats is not None else None
@@ -166,7 +169,8 @@ def quantiles(x: torch.Tensor) -> dict:
 
 
 def part_calibrate(lm: LM, tok, a) -> dict:
-    """The shard's texts and, in shard 0, the position-0 sweep; with one shard, the boxes too (else `merge` makes them)."""
+    """The shard's texts and its share of the position-0 sweep; with one shard, the boxes too (else `merge` makes
+    them)."""
     stats = Stats(lm, lm.special_ids() if a.special else [], a.window)
     t0 = time.time()
     texts = shard(traffic("calibration", a.mixed), a.shard)
@@ -177,9 +181,8 @@ def part_calibrate(lm: LM, tok, a) -> dict:
         stats.tokens[j] = ids
         stats.add(taps, torch.tensor([j]), torch.tensor([ids]))
         print(f"calibrate {j} {name}: {len(ids)} tokens, {time.time() - t0:.0f} s", file=sys.stderr, flush=True)
-    if a.shard.split("/")[0] == "0":
-        sweep_first(lm, stats, a.first_tokens, a.seed, a.batch)
-        print(f"calibrate: position-0 sweep, {time.time() - t0:.0f} s", file=sys.stderr, flush=True)
+    sweep_first(lm, stats, a.first_tokens, a.seed, a.batch, a.shard)
+    print(f"calibrate: position-0 sweep, {time.time() - t0:.0f} s", file=sys.stderr, flush=True)
     stats.save(a.out / "stats.pt")
     if a.shard.split("/")[1] != "1":
         return {"part": "calibrate", "shard": a.shard, "texts": len(texts), "positions": stats.n.tolist()}
