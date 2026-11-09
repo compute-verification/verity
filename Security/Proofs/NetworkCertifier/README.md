@@ -67,10 +67,12 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                period's runs (poolOpen, PoolChained), a check that pins the closing row
                                (CheckedClosing), the sequences accepted from an opened row (AcceptedCarried,
                                LeakAtCarried), accepted runs opening the roots the record rule names (CarriedRoots),
+                               the restarts serving picks among registered patterns (ResetsIn),
                                and the period's good event and named input (PooledGoodCarried, PeriodLeaksCarried,
-                               PoolColl)
-../../Definitions/NetworkCertifier/Guarantees/Carried.lean  trusted: the leak bound over a carried pool
-                               (PooledLeakCarried)
+                               PoolColl); one run: the sequences accepted from an opened row (AccSeqsCarried) and
+                               the leak relation at the rows its trace holds (OpensAtInputs, RLeakCarried)
+../../Definitions/NetworkCertifier/Guarantees/Carried.lean  trusted: the leak bounds over a carried pool
+                               (SampledLeakCarried, PooledLeakCarried)
 ../../Definitions/NetworkCertifier/PoolRoots.lean  trusted: a check that holds a run's opened and left rows to the
                                roots it registers (CheckedRoots)
 ../../Definitions/NetworkCertifier/Guarantees/PoolRoots.lean  trusted: the opened rows' roots from each run's checks
@@ -131,12 +133,16 @@ Checked.lean    the leak bounds with checked inputs: a sequence accepted with a 
                                          (encard_acceptedChecked_le, through rows_full), and RAcc gives the leak
                                          relation with a valid run except where the check misses
                                          (ksLinOn_rLeakChecked); sampledLeakChecked, pooledLeakChecked
-Carried.lean    the leak bound over a carried pool: by induction over the runs, a period's observations are
-                                         fixed by each run's inputs off its registered, checked and opening gates, the
-                                         held bits and its jitter, since each run opens the row the run before left
-                                         and reads only the runs before it (runsBefore_congr, carried_step,
-                                         encard_carried_le), and an opened row whose root matches but
-                                         whose bits don't is a collision (rowSeg_bind); pooledLeakCarried
+Carried.lean    the leak bounds over a carried pool: one run's relation at the rows its extracted trace
+                                         holds (rLeakCarried_of, ksLinOn_rLeakCarried) and its count from a fixed
+                                         opened row (encard_accSeqsCarried_le); by induction over the runs, a period's
+                                         observations are fixed by each run's inputs off its registered, checked and
+                                         opening gates, the held bits and its jitter, since each run opens the row the
+                                         run before left and reads only the runs before it (runsBefore_congr,
+                                         carried_step, encard_carried_le), and an opened row whose root matches but
+                                         whose bits don't is a collision (rowSeg_bind); restarts serving picks
+                                         from a registered set where every audit accepts multiply the count by its
+                                         size (encard_pooledCarried_le); sampledLeakCarried, pooledLeakCarried
 PoolRoots.lean  the opened rows' roots: a run's leak relation runs its check, so its opened and left rows have the
                                          roots it registers (digests_of_leakAt), and the record rule registers at a
                                          run's opening the root of the row poolOpen names (digest_open_of_leakAt);
@@ -148,7 +154,8 @@ Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypothes
                                          that accepts everything
 WitnessesChecked.lean  the nontrivial lemmas of SampledLeakChecked and PooledLeakChecked; their honest
                                          lemmas wait on a deployed check
-WitnessesCarried.lean  the nontrivial lemma of PooledLeakCarried; its honest lemma waits on a deployed check
+WitnessesCarried.lean  the nontrivial lemmas of SampledLeakCarried and PooledLeakCarried; their honest
+                                         lemmas wait on a deployed check
 WitnessesPoolRoots.lean  the nontrivial lemma of RootsOfChecked; its honest lemma waits on a deployed check
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
                                definitions above: six theorems, not guarantees (below)

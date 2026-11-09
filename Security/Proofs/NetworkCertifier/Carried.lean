@@ -38,10 +38,17 @@ import Proofs.Flock.Claims.Sampling.KS
 import Proofs.Hash.RowBinding
 import Proofs.NetworkCertifier.Counting
 import Proofs.NetworkCertifier.PooledLeak
+import Proofs.NetworkCertifier.SampledAuditAccepted
 import Proofs.NetworkCertifier.SampledLeak
 
 /-!
-# The leak bound over a carried pool
+# The leak bounds over a carried pool
+
+**One run's guarantee** (`sampledLeakCarried`). The class's run from the trace (`rLeakChecked_of`: the trace's inputs, and
+its values held at the incorrect set's committed gates) reads the trace's values at opening gates that are inputs and
+leaves the trace run's values at the closing gates (`rLeakCarried_of`), so `KSLinOn` moves to the relation at those rows
+as it moves to `RLeakChecked`. At a fixed opened row, a sequence accepted from it is accepted with the opening gates
+registered at its values, so the class's count there charges none of them (`encard_accSeqsCarried_le`).
 
 **One run's step** (`carried_step`). Two runs accepted with a valid run at one incorrect set, whose inputs agree off the
 checked ones and whose held values and jitter codes agree, see one observation sequence, by the class proof's induction
@@ -52,9 +59,11 @@ registered and opening gates, its held values and its jitter code. By induction 
 code open one row at each run: the row the record rule names, the run before's closing row (one row, by the induction)
 or `genesis`. The opening gates then read one row, so the runs' inputs agree off the checked gates and the step applies.
 
-**The monitoring period** (`pooledLeakCarried`). The count is `encard_pooledJoint_le` at that joint count. The escape bound
-is `pr_pooled_le` at each run's leak relation, its opening root, and no collision at its opening, which together give
-rows that chain (`Hash.BindingProofs.rowSeg_bind`).
+**The monitoring period** (`encard_pooledCarried_le`, `pooledLeakCarried`). At each pattern of restarts the count is
+`encard_pooledJoint_le` at that joint count, and the secrets whose audits all accept and that meet the good event at the
+pattern serving picked for them are in the union of those sets over the registered patterns. The escape bound is
+`pr_pooled_le` at each run's leak relation, its opening root, and no collision at its opening, which together give rows
+that chain at the pattern picked (`Hash.BindingProofs.rowSeg_bind`).
 -/
 
 @[expose] public section
@@ -215,6 +224,143 @@ theorem carried_step {L K S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay 
   rw [hrun, hrun']
   exact hcls _ p.1 p'.1 hf (by simp) hoff hsupp hv1 hv2
 
+/-! ### One run's guarantee -/
+
+/-- **A valid trace run gives the leak relation from the trace's rows**: `rLeakChecked_of`'s run (the trace's inputs, and
+its values held at the incorrect set's committed gates) reads the trace's values at opening gates that are inputs, and
+leaves the trace run's values at the closing gates. -/
+theorem rLeakCarried_of {Coin Col T : Type} (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ}
+    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) {δ : ℝ} (reg : AuditStatement → Finset ℕ)
+    (valid : AuditStatement → (ℕ → Bool) → Prop) (prow nrow : AuditStatement → List ℕ) (hopen : OpensAtInputs prow)
+    (Dj : ℕ) {x : Msg} (hx : ScopeAcc D lay k x) {w : Wit} {s : AuditStatement} {P : Partition}
+    (hs : D.parse x = some s) (hP : D.partition s = some P) (hRel : RelS H D.commit δ s P w)
+    (hdisj : Disjoint (faulty H D.commit s P w) (allSlots s.design P))
+    (hv : valid s (valOver s.prog (traceVal s.prog (w.val H D.commit s))
+      (heldAdv s.prog P (faulty H D.commit s P w) (w.val H D.commit s)))) :
+    RLeakCarried H D.commit D.parse D.partition L K S lay k δ reg valid prow nrow Dj x w := by
+  obtain ⟨⟨s₁, P₁, hs₁, hP₁, hin⟩, s₂, hs₂, hfit⟩ := hx
+  rw [hs] at hs₁ hs₂
+  obtain rfl := Option.some.inj hs₁
+  obtain rfl := Option.some.inj hs₂
+  rw [hP] at hP₁
+  obtain rfl := Option.some.inj hP₁
+  obtain ⟨ι, hι⟩ := SampledAuditProof.correct_of_not_faulty H D.commit s P w
+  have hF := faulty_mem_faultySets hRel hdisj
+  let a : ℕ → Bool := fun g =>
+    if g ∈ freeInputs s.prog (lay s) (k s) then traceVal s.prog (w.val H D.commit s) g else false
+  refine ⟨s, P, hs, hP, fun op o hcar hcov _ _ => ?_⟩
+  have hinp : valOver s.prog (traceVal s.prog (w.val H D.commit s))
+      (heldAdv s.prog P (faulty H D.commit s P w) (w.val H D.commit s)) =
+      valOver s.prog ((lay s).inputOf (k s) ((List.range (k s)).map fun i => op i (o.take i)) a)
+        (heldAdv s.prog P (faulty H D.commit s P w) (w.val H D.commit s)) :=
+    funext (valOver_congr_input s.prog _ fun i hi => by
+      rw [← inputOf_full hcar i]
+      exact inputOf_restrict s.prog (lay s) (k s) _ _ hi)
+  refine ⟨_, hF, a, ⟨fun g _ hg => if_pos hg, fun g hg => if_neg hg⟩,
+    heldAdv s.prog P (faulty H D.commit s P w) (w.val H D.commit s),
+    fun g b h => SampledAuditProof.faultyGate_of_heldAdv h, by rw [← hinp]; exact hv, ?_, by rw [← hinp], ?_⟩
+  · refine List.map_congr_left fun g hg => ?_
+    rw [← inputOf_full hcar g]
+    exact (inputOf_restrict s.prog (lay s) (k s) _ _ (hopen s g hg)).symm
+  · intro t ht
+    obtain ⟨h, hr, hst⟩ := SampledAuditProof.accepted_of hin.1 hin.2.1 hfit ι hι hcar hcov t ht
+    refine ⟨h, ?_, hst⟩
+    have hv' : valOver s.prog ((lay s).inputOf (k s) (ingressUpTo op o t) (traceVal s.prog (w.val H D.commit s)))
+        (heldAdv s.prog P (faulty H D.commit s P w) (w.val H D.commit s)) =
+        valOver s.prog ((lay s).inputOf (k s) (ingressUpTo op o t) a)
+          (heldAdv s.prog P (faulty H D.commit s P w) (w.val H D.commit s)) :=
+      funext (valOver_congr_input s.prog _ fun i hi => inputOf_restrict s.prog (lay s) (k s) _ _ hi)
+    rw [hr]
+    simp only [circuitProgram, hv']
+
+/-- **The leak relation from the trace's rows gives the leak relation**: a sequence accepted with a valid run from a row
+is accepted. -/
+theorem rLeak_of_rLeakCarried {H : Msg → Msg} {Cm : CommitmentScheme Bool} {parse : Msg → Option AuditStatement}
+    {partition : AuditStatement → Option Partition} {L K S : ℕ} {lay : AuditStatement → BoundaryGates L S}
+    {k : AuditStatement → ℕ} {δ : ℝ} {reg : AuditStatement → Finset ℕ} {valid : AuditStatement → (ℕ → Bool) → Prop}
+    {prow nrow : AuditStatement → List ℕ} {Dj : ℕ} {x : Msg} {w : Wit}
+    (h : RLeakCarried H Cm parse partition L K S lay k δ reg valid prow nrow Dj x w) :
+    RLeak H Cm parse partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj x w := by
+  obtain ⟨s, P, hs, hP, h⟩ := h
+  refine ⟨s, P, hs, hP, fun op o hC hCov hl hD => ?_⟩
+  obtain ⟨F, hF, a, ha, free, hfree, -, -, -, hacc⟩ := h op o hC hCov hl hD
+  exact ⟨hl, hD, F, hF, a, ha, free, hfree, hacc⟩
+
+/-- **`KSLinOn` moves from `RAcc δ` to the leak relation from the trace's rows**, on the statements where the check holds
+on the trace's run except with probability `εchk` (`CheckedWitness`), at `κ + εchk`: `ksLinOn_rLeakChecked`'s argument
+at `rLeakCarried_of`. -/
+theorem ksLinOn_rLeakCarried {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+    [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S)
+    (k : AuditStatement → ℕ) {δ : ℝ} (decode : List (ℕ × Col) → List T) (reg : AuditStatement → Finset ℕ)
+    (valid : AuditStatement → (ℕ → Bool) → Prop) (prow nrow : AuditStatement → List ℕ) (hopen : OpensAtInputs prow)
+    (εchk : Msg → ℝ) (Dj : ℕ)
+    (h : KSLinOn H D.V (ScopeAcc D lay k) (RAcc H D.commit D.parse D.partition L K S lay k δ) (E D decode) (κ D δ)
+      (γ D) (fun _ => 1) (Bext H D.V (E D decode))) :
+    KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D decode valid εchk x)
+      (RLeakCarried H D.commit D.parse D.partition L K S lay k δ reg valid prow nrow Dj)
+      (E D decode) (fun x => κ D δ x + εchk x) (γ D) (fun _ => 1) (Bext H D.V (E D decode)) := by
+  intro x hx Ω _ _ P
+  have h1 := h x hx.1 Ω P
+  have h2 := hx.2 Ω P
+  unfold PrBad at h1 ⊢
+  unfold PrCheckMiss at h2
+  refine (Claims.Sampling.Pr_or_le (fun r hr => ?_) h1 h2).trans (le_of_eq ?_)
+  · beta_reduce at hr ⊢
+    obtain ⟨hacc, hng⟩ := hr
+    generalize ((E D decode).eval H P x r.1 r.2.1 r.2.2).1 = ow at hng ⊢
+    rcases ow with _ | w
+    · exact Or.inl ⟨hacc, fun hR => by simp only [Rel.ext] at hR⟩
+    · by_cases hR : RAcc H D.commit D.parse D.partition L K S lay k δ x w
+      · obtain ⟨s, Pt, hs, hP, hRel, hdisj, -⟩ := hR
+        by_cases hv : valid s (valOver s.prog (traceVal s.prog (w.val H D.commit s))
+            (heldAdv s.prog Pt (faulty H D.commit s Pt w) (w.val H D.commit s)))
+        · exact absurd (rLeakCarried_of H D lay k reg valid prow nrow hopen Dj hx.1 hs hP hRel hdisj hv) hng
+        · exact Or.inr ⟨hacc, w, s, Pt, rfl, hs, hP, hdisj, hv⟩
+      · exact Or.inl ⟨hacc, hR⟩
+  · beta_reduce
+    ring
+
+/-- **The sequences accepted from a row number at most the class's count with the opening gates registered**: a sequence
+accepted from `rin` is accepted at the inputs pinned at `reg ∪ prow`, `prow`'s free inputs at `rin`'s values, so
+`encard_accSeqsChecked_le` there charges no free input of `prow`. -/
+theorem encard_accSeqsCarried_le {L K S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay : BoundaryGates L S) (n : ℕ)
+    (hfits : lay.Fits C n) (chk : Finset ℕ) (valid : (ℕ → Bool) → Prop) (hchk : CheckedUnique C P d lay n chk valid)
+    (reg : Finset ℕ) (ρ : ℕ → Bool) (prow nrow : List ℕ) (rin : Hash.Row) (δ : ℝ)
+    (op : ℕ → List (Obs L K S) → List Bool) (D : ℕ) :
+    (AccSeqsCarried C P d lay n (AsReg C lay n reg ρ) valid prow nrow rin δ op D).encard ≤
+      ((2 ^ (freeInputs C lay n \ (reg ∪ chk ∪ prow.toFinset)).card * (faultySets d P δ).card *
+        2 ^ ((faultySets d P δ).sup (faultyBits C P)) * D ^ n : ℕ) : ℕ∞) := by
+  classical
+  let ρ' : ℕ → Bool := fun g => if g ∈ prow then rin.getD (prow.idxOf g) false else ρ g
+  have hsub : AccSeqsCarried C P d lay n (AsReg C lay n reg ρ) valid prow nrow rin δ op D ⊆
+      AccSeqsChecked C P d lay n (AsReg C lay n (reg ∪ prow.toFinset) ρ') valid δ op D := by
+    rintro o ⟨hl, hD, F, hF, rout, a, ⟨hreg, hoff⟩, free, hfree, hv, hp, -, hacc⟩
+    refine ⟨hl, hD, F, hF, a, ⟨fun g hg hgf => ?_, hoff⟩, free, hfree, hv, hacc⟩
+    by_cases hgp : g ∈ prow
+    · have hlt : prow.idxOf g < prow.length := List.idxOf_lt_length_iff.2 hgp
+      simp only [ρ', if_pos hgp]
+      rw [← hp, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_eq_getElem hlt, List.getElem_idxOf hlt]
+      simp [inputOf_free (fun i => op i (o.take i)) a hgf]
+    · simp only [ρ', if_neg hgp]
+      rcases Finset.mem_union.1 hg with hr | hr
+      · exact hreg g hr hgf
+      · exact absurd (List.mem_toFinset.1 hr) hgp
+  calc _ ≤ (AccSeqsChecked C P d lay n (AsReg C lay n (reg ∪ prow.toFinset) ρ') valid δ op D).encard :=
+        Set.encard_le_encard hsub
+    _ ≤ _ := encard_accSeqsChecked_le C P d lay n hfits chk valid hchk (reg ∪ prow.toFinset) ρ' δ op D
+    _ = _ := by rw [Finset.union_right_comm]
+
+/-- **One carried run's leak bound, given `SampledAuditAccepted`**: `Guarantees.SampledLeakCarried`, from
+`ksLinOn_rLeakCarried` at `KSAccepted`'s bound and `encard_accSeqsCarried_le` on the statements whose layout fits. -/
+theorem sampledLeakCarried : Guarantees.SampledLeakCarried := by
+  intro hSA Coin Col T _ _ _ _ _ H D hks L K S lay k δ decode hδ hdec reg chk valid prow nrow hopen εchk Dj
+  refine ⟨ksLinOn_rLeakCarried H D lay k decode reg valid prow nrow hopen εchk Dj
+      (hSA H D L K S lay k hks δ decode hδ hdec), fun x hx s P hs hP hchk op ρ rin => ?_⟩
+  obtain ⟨s', hs', hfits⟩ := hx.2
+  rw [Option.some_injective _ (hs'.symm.trans hs)] at hfits
+  exact encard_accSeqsCarried_le s.prog P s.design (lay s) (k s) hfits (chk s) (valid s) hchk (reg s) ρ (prow s)
+    (nrow s) rin δ op Dj
+
 /-! ### The period -/
 
 /-- **Prefix stability across runs**: run `i`'s operator reads only the runs before it, so two observation sequences
@@ -365,24 +511,67 @@ theorem encard_carried_le {L K S m : ℕ} (lay : AuditStatement → BoundaryGate
             (Nat.pow_le_pow_right (by norm_num) (card_faultyGateSet_le _ _ _)))
         exact_mod_cast Finset.prod_le_prod h
 
-/-- **The leak through the network certifier over a monitoring period whose runs carry the pool**:
-`Guarantees.PooledLeakCarried`. The count is `encard_pooledJoint_le` at `encard_carried_le`, `b` the most committed bits
-of one of the period's proof blocks. The escape bound is `pr_pooled_le` at each run's leak relation and no collision at
-its opening: with the roots the record rule names (`CarriedRoots`), those give rows that chain, since equal roots are
-equal rows or a collision (`Hash.BindingProofs.rowSeg_bind`). -/
-theorem pooledLeakCarried : Guarantees.PooledLeakCarried := by
-  intro L K S G lay k reg chk valid prow nrow Dj m sw Pw ρ op n hchk hcls chains genesis hroot Ω _ _ Conn Cell Srv Dev
-    Z _ arr f tap run htrust cap Ss Zs schedOf srvOf dec hch acc W had rin rout e e' he q hq0 hq1 hesc hleak Fmax
+/-- **The count over a carried pool at one pattern of restarts**: at a sample of the coins, the secrets meeting the
+carried good event at the restarts `chains` and opened rows `genesis` number at most `PooledLeakCarried`'s count. It is
+`encard_pooledJoint_le` at `encard_carried_le`, `b` the most committed bits of one of the period's proof blocks. -/
+theorem encard_pooledCarried_le {L K S m : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
+    (reg chk : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop)
+    (prow nrow : AuditStatement → List ℕ) (Dj : ℕ) (sw : Fin m → AuditStatement) (Pw : Fin m → Partition)
+    (ρ : Fin m → ℕ → Bool) (op : Fin m → List (List (Obs L K S)) → ℕ → List (Obs L K S) → List Bool) (n : Fin m → ℕ)
+    (hchk : ∀ i, CheckedUnique (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i)) (valid (sw i)))
+    (hcls : ∀ i, CheckedClosing (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i)) (valid (sw i))
+      (nrow (sw i)))
+    (chains : Fin m → Bool) (genesis : Fin m → Hash.Row) {Ω Conn Cell Srv Dev Z : Type} [Fintype Conn]
+    (arr : Srv → Conn → Arrivals Cell) (f : RecordFormat Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
+    (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
+    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+    (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (Zs : Set Z)
+    (schedOf : Z → (Fin m → Ω) → CertifierSchedule Conn) (srvOf : Z → (Fin m → Ω) → Srv)
+    (dec : (Fin m → Ω) → (Conn → List (ℕ × CellView Cell)) → Z)
+    (hch : PeriodChannel f cap Ss Zs schedOf srvOf dec fun p => (run tap p).1)
+    (W : Z → (Fin m → Ω) → Fin m → Finset ℕ) (hWn : ∀ z ω i, W z ω i ⊆ range (n i)) (Fmax : ℕ) (ω : Fin m → Ω) :
+    {z | z ∈ Zs ∧ PooledGoodCarried lay k reg valid prow nrow Dj sw Pw ρ op chains genesis Fmax (W z ω)
+        (run tap (schedOf z ω, srvOf z ω)).2}.encard ≤
+      Ss.encard * (((∏ c, (cap c + 1)) * ((∑ i, n i) + 1) ^ Fmax *
+        2 ^ ((univ.sup fun i => (range (n i)).sup fun v => faultyBits (sw i).prog (Pw i) {v}) * Fmax) *
+        ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \
+            (reg (sw i) ∪ chk (sw i) ∪ (prow (sw i)).toFinset)).card * Dj ^ k (sw i)) : ℕ) : ℕ∞) := by
   obtain ⟨-, hfit, hs, hdz⟩ := hch
-  obtain ⟨hacc, hW, hWn⟩ := had
+  exact encard_pooledJoint_le
+    (fun F o => ∃ rin rout : Fin m → Hash.Row, PoolChained chains genesis rin rout ∧
+      ∀ i, LeakAtCarried lay k reg valid prow nrow Dj (sw i) (Pw i) (ρ i) (op i (runsBefore o i)) (rin i)
+        (rout i) (F i) (o i)) n
+    (univ.sup fun i => (range (n i)).sup fun v => faultyBits (sw i).prog (Pw i) {v})
+    (fun i => (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \
+      (reg (sw i) ∪ chk (sw i) ∪ (prow (sw i)).toFinset)).card)
+    (fun i => Dj ^ k (sw i)) (fun i F => faultyBits (sw i).prog (Pw i) F)
+    (fun i F hF => faultyBits_le_card_mul _ _ hF fun v hv =>
+      (Finset.le_sup (f := fun v => faultyBits (sw i).prog (Pw i) {v}) (mem_range.2 hv)).trans
+        (Finset.le_sup (f := fun i => (range (n i)).sup fun v => faultyBits (sw i).prog (Pw i) {v}) (mem_univ i)))
+    (fun F _ => encard_carried_le lay k reg chk valid prow nrow Dj sw Pw ρ op hchk hcls chains genesis F)
+    arr f tap run htrust cap Ss hfit Zs (fun z => schedOf z ω) (fun z => srvOf z ω) (fun z hz => hs z hz ω) (dec ω)
+    (fun z hz => hdz z hz ω) (fun z => W z ω) (fun z i => hWn z ω i) Fmax
+
+/-- **The leak through the network certifier over a monitoring period whose runs carry the pool**:
+`Guarantees.PooledLeakCarried`. The escape bound is `pr_pooled_le` at each run's leak relation and no collision at its
+opening, at the pattern serving picked. Where every audit accepts, the roots the record rule names there
+(`CarriedRoots`) and those two give rows that chain, since equal roots are equal rows or a collision
+(`Hash.BindingProofs.rowSeg_bind`). The secrets whose audits all accept and that meet the good event at the pattern
+picked for them are in the union over `Cs` of those meeting it at each pattern (`Finset.set_encard_biUnion_le`), each
+counted by `encard_pooledCarried_le`. -/
+theorem pooledLeakCarried : Guarantees.PooledLeakCarried := by
+  intro L K S G lay k reg chk valid prow nrow Dj m sw Pw ρ op n hchk hcls Ω _ _ Conn Cell Srv Dev Z _ arr f tap run
+    htrust cap Ss Zs schedOf srvOf dec hch Cs chains genesis acc hcs hroot W had rin rout e e' he q hq0 hq1 hesc hleak
+    Fmax
   refine ⟨fun z hz => ?_, fun ω => ?_⟩
-  · let obs : (Fin m → Ω) → Fin m → List (Obs L K S) := fun ω => (run tap (schedOf z ω, srvOf z ω)).2
+  · obtain ⟨hacc, hW, -⟩ := had
+    let obs : (Fin m → Ω) → Fin m → List (Obs L K S) := fun ω => (run tap (schedOf z ω, srvOf z ω)).2
     let Good : Fin m → (Fin m → Ω) → Prop := fun i ω =>
       LeakAtCarried lay k reg valid prow nrow Dj (sw i) (Pw i) (ρ i) (op i (runsBefore (obs ω) i)) (rin z ω i)
           (rout z ω i) (W z ω i) (obs ω i) ∧
-        ¬PoolColl G chains genesis (rin z ω) (rout z ω) i
+        ¬PoolColl G (chains z ω) (genesis z ω) (rin z ω) (rout z ω) i
     have hleak' : ∀ i, Pr (fun ω => acc z i ω (ω i) ∧ ¬Good i ω) ≤
-        e' i + Pr (fun ω => PoolColl G chains genesis (rin z ω) (rout z ω) i) := by
+        e' i + Pr (fun ω => PoolColl G (chains z ω) (genesis z ω) (rin z ω) (rout z ω) i) := by
       intro i
       refine Pr_or_le (fun ω h => ?_) (hleak z hz i) le_rfl
       obtain ⟨ha, hng⟩ := h
@@ -391,32 +580,28 @@ theorem pooledLeakCarried : Guarantees.PooledLeakCarried := by
       · exact Or.inr (Classical.byContradiction fun h2 => hng ⟨h1, h2⟩)
       · exact Or.inl ⟨ha, h1⟩
     calc Pr (fun ω => (∀ i, acc z i ω (ω i)) ∧
-          ¬PooledGoodCarried lay k reg valid prow nrow Dj sw Pw ρ op chains genesis Fmax (W z ω) (obs ω))
+          ¬PooledGoodCarried lay k reg valid prow nrow Dj sw Pw ρ op (chains z ω) (genesis z ω) Fmax (W z ω)
+            (obs ω))
         ≤ Pr (fun ω => (∀ i, acc z i ω (ω i)) ∧ ¬(∑ i, (W z ω i).card < Fmax ∧ ∀ i, Good i ω)) := by
           refine Pr_mono fun ω h => ⟨h.1, fun hg => h.2 ?_⟩
           obtain ⟨hlt, hgood⟩ := hg
-          have hd := hroot (obs ω) (W z ω) (rin z ω) (rout z ω) fun i => (hgood i).1
+          have hd := hroot z hz ω h.1 (obs ω) (W z ω) (rin z ω) (rout z ω) fun i => (hgood i).1
           exact ⟨hlt, rin z ω, rout z ω,
             fun i => (Hash.BindingProofs.rowSeg_bind G (hd i)).resolve_right (hgood i).2, fun i => (hgood i).1⟩
       _ ≤ (1 - q) ^ Fmax + ∑ i, e i +
-            ∑ i, (e' i + Pr (fun ω => PoolColl G chains genesis (rin z ω) (rout z ω) i)) :=
+            ∑ i, (e' i + Pr (fun ω => PoolColl G (chains z ω) (genesis z ω) (rin z ω) (rout z ω) i)) :=
           pr_pooled_le (acc z) (hacc z) (W z) (hW z) e
-            (fun i => e' i + Pr (fun ω => PoolColl G chains genesis (rin z ω) (rout z ω) i)) he q hq0 hq1
-            (hesc z hz) Good hleak' Fmax
+            (fun i => e' i + Pr (fun ω => PoolColl G (chains z ω) (genesis z ω) (rin z ω) (rout z ω) i)) he q hq0
+            hq1 (hesc z hz) Good hleak' Fmax
       _ = _ := by rw [Finset.sum_add_distrib]; ring
-  · exact encard_pooledJoint_le
-      (fun F o => ∃ rin rout : Fin m → Hash.Row, PoolChained chains genesis rin rout ∧
-        ∀ i, LeakAtCarried lay k reg valid prow nrow Dj (sw i) (Pw i) (ρ i) (op i (runsBefore o i)) (rin i)
-          (rout i) (F i) (o i)) n
-      (univ.sup fun i => (range (n i)).sup fun v => faultyBits (sw i).prog (Pw i) {v})
-      (fun i => (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \
-        (reg (sw i) ∪ chk (sw i) ∪ (prow (sw i)).toFinset)).card)
-      (fun i => Dj ^ k (sw i)) (fun i F => faultyBits (sw i).prog (Pw i) F)
-      (fun i F hF => faultyBits_le_card_mul _ _ hF fun v hv =>
-        (Finset.le_sup (f := fun v => faultyBits (sw i).prog (Pw i) {v}) (mem_range.2 hv)).trans
-          (Finset.le_sup (f := fun i => (range (n i)).sup fun v => faultyBits (sw i).prog (Pw i) {v}) (mem_univ i)))
-      (fun F _ => encard_carried_le lay k reg chk valid prow nrow Dj sw Pw ρ op hchk hcls chains genesis F)
-      arr f tap run htrust cap Ss hfit Zs (fun z => schedOf z ω) (fun z => srvOf z ω) (fun z hz => hs z hz ω) (dec ω)
-      (fun z hz => hdz z hz ω) (fun z => W z ω) (fun z i => hWn z ω i) Fmax
+  · let A : (Fin m → Bool) × (Fin m → Hash.Row) → Set Z := fun c =>
+      {z | z ∈ Zs ∧ PooledGoodCarried lay k reg valid prow nrow Dj sw Pw ρ op c.1 c.2 Fmax (W z ω)
+        (run tap (schedOf z ω, srvOf z ω)).2}
+    refine le_trans (Set.encard_le_encard (t := ⋃ c ∈ Cs, A c) fun z hz =>
+      Set.mem_iUnion₂.2 ⟨_, hcs z hz.1 ω hz.2.1, hz.1, hz.2.2⟩) ?_
+    refine (Finset.set_encard_biUnion_le Cs A).trans ((Finset.sum_le_card_nsmul Cs _ _ fun c _ => ?_).trans
+      (nsmul_eq_mul _ _).le)
+    exact encard_pooledCarried_le lay k reg chk valid prow nrow Dj sw Pw ρ op n hchk hcls c.1 c.2 arr f tap run htrust
+      cap Ss Zs schedOf srvOf dec hch W had.2.2 Fmax ω
 
 end NetTiming

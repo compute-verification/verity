@@ -92,9 +92,11 @@ check accepts is a run of the constant-rate Program under the declared advice, s
 trace carries the network certifier's registered rows outside the incorrect proof blocks, unless its openings collide with the
 network certifier's; `Period` counts with it. `Checked` proves the leak bounds with checked inputs (`SampledLeakChecked`,
 `PooledLeakChecked`): inputs a check pins cost no advice bits, and `WitnessesChecked` gives their nontrivial lemmas.
-`Carried` proves the leak bound over runs that carry the pool (`PooledLeakCarried`): an opened row costs no advice bits,
-since the chain fixes it unless two rows have one root, and `WitnessesCarried` gives its nontrivial lemma. `PoolRoots`
-gives its premise on the opened rows' roots (`CarriedRoots`) from each run's in-circuit checks and the record rule
+`Carried` proves the leak bounds over a carried pool (`SampledLeakCarried`, `PooledLeakCarried`): one
+run's relation at the rows its extracted trace holds, and the period's bound, where an opened row costs no advice bits,
+since the chain fixes it unless two rows have one root, and the restarts serving picks cost `log₂` of the patterns it may
+pick where every audit accepts. `WitnessesCarried` gives their nontrivial lemmas. `PoolRoots` gives the period bound's
+premise on the opened rows' roots (`CarriedRoots`) from each run's in-circuit checks and the record rule
 (`RootsOfChecked`), and `WitnessesPoolRoots` gives its nontrivial lemma.
 -/
 
@@ -170,6 +172,7 @@ theorem PooledIncorrectBlocksLe : NetTiming.Guarantees.PooledIncorrectBlocksLe :
 theorem PooledLeakAccepted : NetTiming.Guarantees.PooledLeakAccepted := NetTiming.pooledLeak
 theorem SampledLeakChecked : NetTiming.Guarantees.SampledLeakChecked := NetTiming.sampledLeakChecked
 theorem PooledLeakChecked : NetTiming.Guarantees.PooledLeakChecked := NetTiming.pooledLeakChecked
+theorem SampledLeakCarried : NetTiming.Guarantees.SampledLeakCarried := NetTiming.sampledLeakCarried
 theorem PooledLeakCarried : NetTiming.Guarantees.PooledLeakCarried := NetTiming.pooledLeakCarried
 theorem RootsOfChecked : NetTiming.Guarantees.RootsOfChecked := NetTiming.rootsOfChecked
 end NetTiming.SecurityProofs
