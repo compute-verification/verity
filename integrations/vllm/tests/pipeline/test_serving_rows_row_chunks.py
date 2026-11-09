@@ -133,7 +133,8 @@ def test_a_dsa_latent_row_chunk_commits_its_output_row_seg_under_table_reads(row
     in_rows, out_rows = CR.unit_rows(tp, table_reads=True)
     assert in_rows == CR.unit_rows(tp)[0] and out_rows == [(SEG, (0,))] and CR.unit_rows(tp)[1] == [(V2, (0,))]
     (rs,), _defs, counts = SRW.member_rows({"r0": {}}, [T])
-    off, on = (SRW.members([T], [rs], counts, {T: CAP}, table_reads=x) for x in (False, True))
+    per = 2
+    off, on = (SRW.members([T], [rs], counts, {T: per}, table_reads=x) for x in (False, True))
     assert [(m.name, m.rows, m.outs) for m in on] == [(m.name, m.rows, m.outs) for m in off]
     for a, b in zip(off, on, strict=True):
         assert dict(b.schemas) == {**dict(a.schemas), "o0": SEG} and b.row_schemas[-1] == [SEG, 16 * 576]
@@ -143,7 +144,7 @@ def test_a_dsa_latent_row_chunk_commits_its_output_row_seg_under_table_reads(row
         SRW.members([T], [rs], counts, {}, table_reads=True)
     T, *_ = rows("ResidualAdd_v1")
     (rs,), _defs, counts = SRW.member_rows({"r0": {}}, [T])
-    assert SRW.members([T], [rs], counts, {T: CAP}, table_reads=True) == SRW.members([T], [rs], counts, {T: CAP})
+    assert SRW.members([T], [rs], counts, {T: per}, table_reads=True) == SRW.members([T], [rs], counts, {T: per})
 
 
 def test_a_whole_attention_row_reads_its_tables_in_lookup_slots_and_an_rmsnorm_row_inline():

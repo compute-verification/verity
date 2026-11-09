@@ -38,15 +38,7 @@ from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_li
 
 def _spec_histogram(program) -> dict[str, int]:
     from verity.ml.circuits.codec import descriptor_id
-    h: dict[str, int] = {}
-    for n in program.fn.body.nodes:
-        if n.form in ("call", "primitive"):
-            k = descriptor_id(n.fn)
-            h[k] = h.get(k, 0) + 1
-        else:
-            k = f"{n.form}:{descriptor_id(n.fn)}"
-            h[k] = h.get(k, 0) + 1
-    return dict(sorted(h.items(), key=lambda kv: (-kv[1], kv[0])))
+    return _count(descriptor_id(n.fn) if n.form in ("call", "primitive") else f"{n.form}:{descriptor_id(n.fn)}" for n in program.fn.body.nodes)
 
 
 #: the builder's own sources (hashed into `construction_version`): the export shims, the meta instantiation / wrappers and its loader
@@ -403,8 +395,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
             from verity_vllm.program.frontend.export_compat import select_cuda_platform
             print(f"[derive_step] declared target {target.sm_arch} x{tp}: vLLM platform {select_cuda_platform(tp, device_name)}", file=sys.stderr)
         _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
-                   tp=tp, rank=rank, launch=launch, emit=emit, engine_args=engine_args, C=cached, dead_free=dead_free, stop=stop, batched=batched,
-                   table_reads=table_reads)
+                   tp=tp, rank=rank, launch=launch, emit=emit, engine_args=engine_args, C=cached, dead_free=dead_free, stop=stop, batched=batched, table_reads=table_reads)
     except _Refused:
         pass
     res = _finish(out, res, t_start)
@@ -432,13 +423,11 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         import torch
         from verity_vllm.program.frontend.derive import derive_report
         from verity_vllm.program.frontend.rules.vllm_bindings import (VLLM_BINDING_RULES, vllm_ruleset, observe_attention_impls, observe_export_facts, observe_batched_form,
-                                                            observe_target_profile, declared_derived_accounting, clear_observations, observe_allreduce_settings, observe_launch_context,
-                                                            observe_dsa_table_reads)
+                                                            observe_target_profile, declared_derived_accounting, clear_observations, observe_allreduce_settings, observe_launch_context)
         clear_observations()
         observe_target_profile(target)
         observe_launch_context(launch)
-        observe_batched_form(batched)
-        observe_dsa_table_reads(table_reads)
+        observe_batched_form(batched, table_reads)
         res["target"]["host"] = host_facts()
         t0 = time.time()
         with apply_target_profile(target):  # ONE application of the declared target for config, instantiation, export and derive

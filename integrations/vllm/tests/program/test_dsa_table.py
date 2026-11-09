@@ -2,7 +2,7 @@
 members' positions in ascending order, `DsaHistoryReads_v1{V,TOPK,H}` the history rows at given positions, and the two over a
 row's counted mask (`DsaTopKMaskCounted_v1`) read the rows the rows network routes for it: `DsaButterflyRowsPad_v1{T,N}` over the
 row's T history rows and its pad (`DsaButterflyRows_v1{N}` at T = N) at `DsaButterflySettings_v1{N}` of that mask.  The stand-ins
-are held to that until circuits registers its own Definitions of the two names."""
+are held to that until the registry holds word Definitions of the two names."""
 
 from __future__ import annotations
 

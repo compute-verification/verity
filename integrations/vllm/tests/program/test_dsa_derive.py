@@ -640,14 +640,13 @@ def test_the_batched_forms_rows_past_topk_select_each_among_its_own_keys_in_bloc
 
 @pytest.mark.parametrize("block", [256, 2])
 def test_the_batched_forms_rows_past_topk_read_their_history_by_table(served, monkeypatch, block):
-    """The call above under `observe_dsa_table_reads` (the Build's `--dsa-table-reads`): the indexer layer's block computes
-    `DsaTopKIndex_v1` of each row's counted mask in place of the settings, and each layer reads the row's TOPK history rows at
-    those positions from the block's N_b, `DsaHistoryReads_v1{V=N_b}` without a pad, the IndexShare layer at the indexer layer's
-    index.  The outputs are the reference's, as in the rows network's form."""
+    """The call above with table reads (`observe_batched_form`'s ``table_reads``, the Build's `--dsa-table-reads`): the indexer
+    layer's block computes `DsaTopKIndex_v1` of each row's counted mask in place of the settings, and each layer reads the row's
+    TOPK history rows at those positions from the block's N_b, `DsaHistoryReads_v1{V=N_b}` without a pad, the IndexShare layer at
+    the indexer layer's index.  The outputs are the reference's, as in the rows network's form."""
     monkeypatch.setattr(vllm_dsa, "BLOCK_KEYS", block)
     monkeypatch.setitem(PROFILES, BATCHED.name, BATCHED)
-    VB.observe_batched_form(True)
-    VB.observe_dsa_table_reads(True)
+    VB.observe_batched_form(True, table_reads=True)
     model = _model(topk=2, steps=((0, 2), (2, 3)))
     xs = _inputs(model)
     rep = _derive(model, xs, profile=BATCHED.name)

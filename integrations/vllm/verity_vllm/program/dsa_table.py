@@ -14,9 +14,9 @@ mask's settings (tests/program/test_dsa_table.py).  An indexer layer computes th
 reads its own history at it, so the index and the reads are two Calls.  Serving cuts a reads Call into TOPK reads of the
 (request, layer) history table, `EmbeddingRead_v1{V=2^17,H}` each, read j's ``tok`` wired to index output j.
 
-These are stand-ins for the word views of circuits' index units and read (`dsa_topk_reads`, `commitments.gates.embedding`, both
-on bits only), which the Program can't call: they move to `verity.ml.definitions.registry` with Boolean versions, and this module
-goes, when circuits registers them.
+These are stand-ins: the Boolean index units and table read (`commitments.gates.embedding`) are on bits only, with no word view a
+Program can call.  Once `verity.ml.definitions.registry` holds word Definitions of these two names with their Boolean versions, the
+Program calls those and this module goes.
 """
 from __future__ import annotations
 
