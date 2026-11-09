@@ -48,7 +48,6 @@
     {"file": "tests/engine/test_gen_ov_moe_padded.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 5},
     {"file": "tests/engine/test_gen_ov_moe_qwen3.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 8},
     {"file": "tests/engine/test_topp_pin.py", "kind": "S102", "symbol": "_vllm_module", "detail": "Use of `exec` detected"},
-    {"file": "tests/lint/test_p09_layering.py", "kind": "F541", "symbol": "file_violations", "detail": "f-string without any placeholders"},
     {"file": "tests/observe/test_fold_ov_sampling.py", "kind": "F401", "symbol": "<module>", "detail": "`verity_vllm.observe.events.RunHeader` imported but unused"},
     {"file": "tests/observe/test_fold_synthetic.py", "kind": "F541", "symbol": "test_fold_builds_program_and_is_deterministic", "detail": "f-string without any placeholders"},
     {"file": "tests/observe/test_fold_synthetic.py", "kind": "F841", "symbol": "step_events", "detail": "Local variable `ids_view` is assigned to but never used"},
