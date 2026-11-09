@@ -10,11 +10,13 @@ import Proofs.Flock.SpotFlock.Depths
 import Proofs.Flock.SpotFlock.Opens
 import Proofs.Flock.SpotFlock.Reads
 import Proofs.Flock.SpotFlock.RowsOpen
+import Proofs.Flock.Soundness.Discharge.Hidden.Public
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.Discharge.Layout.QSort
 import Proofs.Flock.Soundness.ExecDraw
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
+meta import Proofs.Flock.Soundness.Refine.Walk
 import Std.Data.TreeMap.Raw.Lemmas
 import Std.Data.TreeMap.Raw.WF
 import all Init.Data.Ord.String
@@ -30,6 +32,46 @@ the verifier draws from the population (`HmRow.drawn`) labels its `i`-th instanc
 first slot and positions (`ReadFields`), and round 2's `rowsOk` holds each position it reads to its unit's slot
 (`pos_of_rowsOk`).
 -/
+
+namespace SpotFlock.ReadsAt
+
+open Lean Meta in
+/-- A step of `ret_walk_inlining` on the goal `Ret m Q`: where `m` binds a join point whose parameter is named one of
+`names`, `m` with the join point inlined; none on any other goal. -/
+meta def inlineStep (names : Array Name) (g : MVarId) : MetaM (Option (List MVarId)) := g.withContext do
+  let ty ← instantiateMVars (← g.getType)
+  unless ty.isAppOfArity ``FlockSoundness.Refine.Ret 3 do return none
+  let .letE _ _ v b _ := (ty.getArg! 1).headBeta.consumeMData | return none
+  let .lam x _ _ _ := v.consumeMData | return none
+  unless names.contains x.eraseMacroScopes do return none
+  let g' ← mkFreshExprSyntheticOpaqueMVar
+    (mkApp3 (mkConst ``FlockSoundness.Refine.Ret) (ty.getArg! 0) (b.instantiate1 v) (ty.getArg! 2))
+  g.assign g'
+  return some [g'.mvarId!]
+
+open Lean Elab Tactic Meta in
+/-- `ret_walk_inlining [x, …] [c, …]` is `ret_walk [c, …]` but inlines each join point whose parameter is named one of
+the `x`s. `ret_walk` walks a join point's body once, at a value it knows nothing of; inlined, the body is walked at each
+jump, at the value the jump passes and with the equation the walk kept for it. -/
+elab "ret_walk_inlining" "[" xs:ident,* "]" "[" cs:ident,* "]" : tactic => do
+  let names := xs.getElems.map (·.getId)
+  let mut keep := #[]
+  for c in cs.getElems do keep := keep.push (← realizeGlobalConstNoOverloadWithInfo c)
+  let mut todo := (← getGoals)
+  let mut left := #[]
+  while true do
+    match todo with
+    | [] => break
+    | g :: rest =>
+      match ← inlineStep names g with
+      | some new => todo := new ++ rest
+      | none =>
+        match ← FlockSoundness.Refine.retStep keep g with
+        | some new => todo := new ++ rest
+        | none => left := left.push g; todo := rest
+  setGoals left.toList
+
+end SpotFlock.ReadsAt
 
 @[expose] public section
 
@@ -183,23 +225,10 @@ abbrev ReadFields (e : Json) (reg : _root_.Flock.Registered.Port) : Prop :=
     ∃ rs : Array Json, Spot.getD e "reads" = .arr rs ∧
       ∀ (k pos : ℕ), reg.readsRel[k]? = some (some pos) → rs[k]? = some (.num ⟨Int.ofNat pos, 0⟩)
 
-/-- A port's first slot as a `ports` file's entry gives it: `reads_from`'s, or `0` where the entry names none. -/
-theorem readsFrom_of {e : Json} {ctx : String} {rf : ℕ}
-    (h : (if _root_.Flock.J.has e _root_.Flock.Registered.READS_FROM_KEY = true then
-      _root_.Flock.J.nat e _root_.Flock.Registered.READS_FROM_KEY ctx else pure 0 : _root_.Flock.V ℕ) = .ok rf) :
-    (Spot.getD e "reads_from" = .null ∧ rf = 0) ∨ Spot.getD e "reads_from" = .num ⟨Int.ofNat rf, 0⟩ := by
-  by_cases hc : _root_.Flock.J.has e _root_.Flock.Registered.READS_FROM_KEY = true
-  · rw [if_pos hc] at h
-    exact .inr (HeaderRoots.getD_of_getObjVal (FlockComplete.JsonRT.nat_ok h))
-  · rw [if_neg hc] at h
-    cases h
-    exact .inl ⟨getD_of_not_has hc, rfl⟩
-
 /-- A port's reads as a `ports` file's entry gives them: each position read at its place in the entry's `reads`. -/
 theorem reads_of {e : Json} {ctx : String} {rs : Array Json} {reads : Array (Option ℕ)}
     {f : Json → _root_.Flock.V (Option ℕ)} (ha : _root_.Flock.J.arr e "reads" ctx = .ok rs)
-    (hm : rs.mapM f = .ok reads)
-    (hf : ∀ r v, f r = .ok v → v = none ∨ ∃ n, v = some n ∧ r = .num ⟨Int.ofNat n, 0⟩) :
+    (hm : rs.mapM f = .ok reads) (hf : ∀ r n, f r = .ok (some n) → r = .num ⟨Int.ofNat n, 0⟩) :
     ∃ rs : Array Json, Spot.getD e "reads" = .arr rs ∧
       ∀ (k pos : ℕ), reads[k]? = some (some pos) → rs[k]? = some (.num ⟨Int.ofNat pos, 0⟩) := by
   obtain ⟨hsz, hel⟩ := FlockSoundness.Discharge.Exec.array_mapM_ok_getElem hm
@@ -208,11 +237,12 @@ theorem reads_of {e : Json} {ctx : String} {rs : Array Json} {reads : Array (Opt
   have hk0 : k < rs.size := hsz ▸ hk1
   have hfk := hel k hk0 hk1
   rw [hk2] at hfk
-  rw [Array.getElem?_eq_getElem hk0]
-  rcases hf _ _ hfk with h0 | ⟨n, hn, hr⟩
-  · cases h0
-  · cases hn
-    rw [hr]
+  rw [Array.getElem?_eq_getElem hk0, hf _ _ hfk]
+
+/-- A number a `ports` file's entry states under key `k`, as it reads it. -/
+theorem getD_nat {e : Json} {k ctx : String} {n : ℕ} (h : _root_.Flock.J.nat e k ctx = .ok n) :
+    Spot.getD e k = .num ⟨Int.ofNat n, 0⟩ :=
+  HeaderRoots.getD_of_getObjVal (FlockComplete.JsonRT.nat_ok h)
 
 /-- **A `ports` file's ports read as its entries say** (`ReadFields`), each at an entry under its name. -/
 theorem portsOf_reads {j : Json} {own : Array _root_.Flock.Registered.Port}
@@ -230,20 +260,26 @@ theorem portsOf_reads {j : Json} {own : Array _root_.Flock.Registered.Port}
         fun kv => by
       obtain ⟨nm, e⟩ := kv
       dsimp (config := { zeta := false }) only
-      ret_walk [_root_.Flock.J.str, _root_.Flock.J.nat, _root_.Flock.J.arr, _root_.Flock.unhex, ite, Array.mapM]
-      all_goals exact ⟨rfl,
-        HeaderRoots.getD_of_getObjVal (FlockComplete.JsonRT.nat_ok ‹_root_.Flock.J.nat e "leaves" _ = .ok _›),
-        readsFrom_of ‹_›, reads_of ‹_root_.Flock.J.arr e "reads" _ = .ok _› ‹_› fun r v hv => by
-          try dsimp only at hv
-          split at hv
-          · cases hv
-            exact .inl rfl
-          · simp only [Functor.map, Except.map] at hv
+      by_cases hc : _root_.Flock.J.has e _root_.Flock.Registered.READS_FROM_KEY = true
+      · simp (config := { zeta := false }) only [if_pos hc]
+        ret_walk_inlining [readsFrom]
+          [_root_.Flock.J.str, _root_.Flock.J.nat, _root_.Flock.J.arr, _root_.Flock.unhex, Array.mapM]
+        all_goals exact ⟨rfl, getD_nat ‹_root_.Flock.J.nat e "leaves" _ = .ok _›,
+          .inr (getD_nat ‹_root_.Flock.J.nat e _root_.Flock.Registered.READS_FROM_KEY _ = .ok _›),
+          reads_of ‹_root_.Flock.J.arr e "reads" _ = .ok _› ‹_› fun r n hv => by
+            try dsimp only at hv
             split at hv
             · cases hv
-            · rename_i n hn
-              cases hv
-              exact .inr ⟨n, rfl, FlockComplete.JsonRT.asNat_ok hn⟩⟩
+            · exact FlockComplete.JsonRT.asNat_ok (map_some_ok hv)⟩
+      · simp (config := { zeta := false }) only [if_neg hc, pure_bind]
+        ret_walk_inlining [readsFrom]
+          [_root_.Flock.J.str, _root_.Flock.J.nat, _root_.Flock.J.arr, _root_.Flock.unhex, Array.mapM]
+        all_goals exact ⟨rfl, getD_nat ‹_root_.Flock.J.nat e "leaves" _ = .ok _›, .inl ⟨getD_of_not_has hc, rfl⟩,
+          reads_of ‹_root_.Flock.J.arr e "reads" _ = .ok _› ‹_› fun r n hv => by
+            try dsimp only at hv
+            split at hv
+            · cases hv
+            · exact FlockComplete.JsonRT.asNat_ok (map_some_ok hv)⟩
     refine ⟨_, by assumption, fun reg hreg => ?_⟩
     obtain ⟨⟨nm, e⟩, hkv, hn, hP⟩ := hall reg hreg
     obtain rfl : reg.name = nm := hn
@@ -317,45 +353,53 @@ theorem rowsOk_of_readOk {own : Spot.SecondStage.Own} {named : Bool} {p : Spot.S
     Spot.SecondStage.rowsOk own.sample.size p e units unit = true := by
   unfold Spot.SecondStage.readOk at h
   unfold armOf at ha
-  cases hv : Spot.getD e "value" <;> simp only [hv] at h ha
-  rename_i v
-  cases hl : Spot.SecondStage.linkOf own p.template port <;>
-    cases hw : Spot.SecondStage.wireOf own p.template port <;> simp only [hl, hw, Bool.and_eq_true] at h ha
-  · cases hx : (Spot.Record.byPort own.interior).find? (·.1 == v) with
-    | none => simp [hx] at ha
-    | some kx =>
-      obtain ⟨k, x⟩ := kx
-      simp only [hx, Option.map_some, Option.some.injEq, Prod.mk.injEq] at ha
-      obtain ⟨rfl, rfl⟩ := ha
-      simp only [hx, Bool.and_eq_true] at h
+  revert h ha
+  generalize Spot.getD e "value" = val
+  generalize Spot.SecondStage.linkOf own p.template port = lk
+  generalize Spot.SecondStage.wireOf own p.template port = wr
+  intro h ha
+  rcases val with _ | _ | _ | v | _ | _ <;> rcases lk with _ | l <;> rcases wr with _ | w <;>
+    simp only [Bool.and_eq_true, reduceCtorEq] at h ha
+  · obtain ⟨⟨k, x⟩, hkx, hval⟩ := Option.map_eq_some_iff.1 ha
+    simp only [Prod.mk.injEq] at hval
+    obtain ⟨rfl, rfl⟩ := hval
+    simp only [hkx, Bool.and_eq_true] at h
+    exact h.2
+  · obtain ⟨pw, hpw, hval⟩ := Option.map_eq_some_iff.1 ha
+    simp only [Prod.mk.injEq] at hval
+    obtain ⟨rfl, rfl⟩ := hval
+    obtain ⟨-, h⟩ := h
+    split at h
+    · have hw' := ‹Spot.SecondStage.writerOf own w = some _›
+      rw [hpw, Option.some.injEq] at hw'
+      subst hw'
+      simp only [Bool.and_eq_true] at h
       exact h.2
-  · cases hpw : Spot.SecondStage.writerOf own _ with
-    | none => simp [hpw] at ha
-    | some pw =>
-      simp only [hpw, Option.map_some, Option.some.injEq, Prod.mk.injEq] at ha
-      obtain ⟨rfl, rfl⟩ := ha
-      obtain ⟨-, h⟩ := h
-      split at h
-      · rename_i heq
-        simp only [hpw, Option.some.injEq] at heq
-        subst heq
-        simp only [Bool.and_eq_true] at h
-        exact h.2
-      · cases h
+    · cases h
   all_goals
-    cases hm : Spot.nat? (Spot.getD own.boundary "population") with
-    | none => simp [hm] at ha
-    | some m =>
-      simp only [hm, Option.map_some, Option.some.injEq, Prod.mk.injEq] at ha
-      obtain ⟨rfl, rfl⟩ := ha
-      obtain ⟨-, h⟩ := h
-      split at h
-      · rename_i heq
-        simp only [hm, Option.some.injEq] at heq
-        subst heq
-        simp only [Bool.and_eq_true] at h
-        exact h.2
-      · cases h
+    obtain ⟨m, hm, hval⟩ := Option.map_eq_some_iff.1 ha
+    simp only [Prod.mk.injEq] at hval
+    obtain ⟨rfl, rfl⟩ := hval
+    obtain ⟨-, h⟩ := h
+    split at h
+    · have hm' := ‹Spot.nat? (Spot.getD own.boundary "population") = some _›
+      rw [hm, Option.some.injEq] at hm'
+      subst hm'
+      simp only [Bool.and_eq_true] at h
+      exact h.2
+    · cases h
+
+/-- **A slot at a registered read's unit opens the read's position**: where `rowsOk` accepts the read's entry, a slot
+not sized, counting the arm's units under the roots and placing its unit at the arm's unit for slot `j`, opens at an
+entry of the read's leaf count the position the read reads at `j` (`pos_of_rowsOk`). -/
+theorem leafAt_of_rowsOk {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {units : ℕ} {unit : ℕ → Option ℕ}
+    (hrows : Spot.SecondStage.rowsOk q p e units unit = true) {reg : _root_.Flock.Registered.Port}
+    (hf : ReadFields e reg) {j pos : ℕ} (hj : reg.reads[j]? = some (some pos)) {roots : List Msg} {s : Slot}
+    (hs : s.sized = false) (hu : unitsAt roots s = units)
+    (hb : ∀ b, unit j = some b → s.pos + placeOf roots * s.stride = b) {en : Entry} (hl : en.leaves = reg.leaves) :
+    leafAt roots s en = pos := by
+  obtain ⟨hpos, b, hb', -, rfl⟩ := pos_of_rowsOk hrows hf hj
+  rw [leafAt, hu, if_neg (Nat.pos_iff_ne_zero.1 hpos), leavesAt, if_neg (by rw [hs]; decide), hl, hb b hb']
 
 /-- **A drawn session's unit labels**: where a public file whose header round 2's `populationOk` accepts for part `p`
 of a sample of `q` blocks loads `pop`, and the draw `d` gives `pub`, `pub` labels its instances with the slots of
@@ -366,7 +410,8 @@ theorem unitIndices_session {tags : _root_.Flock.Tags} {c : _root_.Flock.Circuit
     {p : Spot.SecondStage.Part} (hok : Spot.SecondStage.populationOk q p hdr = true) :
     ∃ D, _root_.Flock.Draw.UnitDraw.ofJson d = .ok D ∧ _root_.Flock.Registered.unitIndices pub =
       .ok (D.proved.map fun v => ((Array.range (q * p.n)).map (p.lo + ·)).getD v 0) := by
-  obtain ⟨h₀, hh₀, hhdr, -, m, hm⟩ := HeaderRoots.loadPublic_raw hpop
+  obtain ⟨h₀, hh₀, hhdr, -, m, hm⟩ :=
+    HeaderRoots.loadPublic_raw (FlockSoundness.Discharge.Hidden.loadPublic_nil hpop)
   rw [hH, Option.some.injEq] at hh₀
   subst hh₀
   have hmw : m.WF := by
@@ -493,7 +538,7 @@ theorem labelAt {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1) 
   obtain ⟨D', hD', hidx⟩ := ReadsAt.unitIndices_session hpop hH (hsome _ hrd) hpopOk
   rw [hD] at hD'
   cases hD'
-  obtain ⟨j, hj, hnj, -⟩ := Depths.loadPublic_counts hpop
+  obtain ⟨j, hj, hnj, -⟩ := Depths.loadPublic_counts (FlockSoundness.Discharge.Hidden.loadPublic_nil hpop)
   rw [hH, Option.some.injEq] at hj
   subst hj
   have hq := ReadsAt.n_pop (HeaderRoots.wf_of_headerOf hH) hnj hpopOk
@@ -549,5 +594,31 @@ theorem readPosAt {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1
   rw [← hrd]
   congr 1
   simp [hnD, hv]
+
+/-- **A registered read's slot opens the session header's position for the instance's row**: in an accepted run whose
+checked unit's session has one table and counts the unit's instance, a registered read `reg` at the circuit's port
+`p`, and a slot not sized that, under the roots, counts the units of the tree round 2 holds the read to (`armOf`) and
+places its unit at that tree's unit for the unit's slot (`harm`), the slot's leaf at an entry of `reg`'s leaf count is
+the position the header gives the instance's row of `p`'s table (`readPosAt`, `ReadsAt.leafAt_of_rowsOk`). -/
+theorem leafAt_reg {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1) (hcnt : r.Counted h)
+    {own : Array _root_.Flock.Registered.Port} {reg : _root_.Flock.Registered.Port}
+    (hown : r.ins.registered = some own) (hreg : reg ∈ own) {p : ℕ}
+    (hp : (List.range r.sts[0]!.c.ports.size).find? (fun q => r.sts[0]!.c.ports[q]!.name == reg.name) = some p)
+    {roots : List Msg} {s : Slot} (hs : s.sized = false)
+    (harm : ∀ st rec draw e (D : _root_.Flock.Draw.UnitDraw) (hn : r.n h < D.proved.size), decode r.x = some st →
+      jsonMsg r.m₁ = some rec → secondDraw h r.c₀ r.c₁ = some draw →
+      drawnOf ((FlockDeploy.readOf true (r.xS h)).bind (·.draw)) = D.proved.toList → ReadsAt.ReadFields e reg →
+      ∃ units unit, ReadsAt.armOf (ownOf h st rec draw r.c₀) (r.drawnPart h) reg.name e = some (units, unit) ∧
+        unitsAt roots s = units ∧
+        ∀ b, unit ((r.drawnPart h).lo + D.proved[r.n h]) = some b → s.pos + placeOf roots * s.stride = b)
+    {t : _root_.Flock.Tables} {positions : Array ℕ} {paths : Array ByteArray} (ht : r.sts[0]!.pub.tables = some t)
+    (hent : _root_.Flock.Registered.entry r.sts[0]!.pub reg = .ok (positions, paths)) {en : Entry}
+    (hl : en.leaves = reg.leaves) :
+    leafAt roots s en = positions.getD (_root_.Flock.Registered.ref t r.sts[0]!.c.ports.size p (r.n h)) 0 := by
+  obtain ⟨D, hdr, hn, -, hj⟩ := readPosAt h hr hc1 hcnt hown hreg hp ht hent
+  obtain ⟨-, -, -, hx, -, -, -, hok, hu, -, -, -, -, hset⟩ := hr
+  obtain ⟨st, rec, draw, e, hst, hrec, hdraw, hrd, hf⟩ := ReadsAt.regEntry h hx hok hu hset hown hreg
+  obtain ⟨units, unit, ha, hun, hb⟩ := harm st rec draw e D hn hst hrec hdraw hdr hf
+  exact ReadsAt.leafAt_of_rowsOk (ReadsAt.rowsOk_of_readOk hrd ha) hf hj hs hun hb hl
 
 end SpotFlock.CheckedRun
