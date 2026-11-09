@@ -150,7 +150,7 @@ theorem ins_of_registered {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (hw : w.in
     (hb : w.registered = some b) :
     ∃ j own, FlockDeploy.jsonOf "registered reads" b = .ok j ∧ _root_.Flock.Registered.ofJson j = .ok own ∧
       s.registered = some own := by
-  have hm := (ins_fields hw).1
+  have hm := (ins_reads_public hw).1
   rw [hb, Option.mapM_some] at hm
   obtain ⟨own, hx, hr⟩ := someMap_ok hm
   obtain ⟨j, hj, hoj⟩ := FlockSoundness.Refine.ebind_ok hx
@@ -180,7 +180,7 @@ theorem countOf_le {x m₁ m₂ : Msg} {s} {c₀ c₁ : FlockDeploy.Coin} {u : �
   have hwi := ins_of_setupOf hw hset
   obtain ⟨-, hSH, hSr, hSn⟩ := stmtJsonOf_fields h hS
   have hH : headerOf ins.read.I.publicFile = some S.header := by
-    rw [(ins_fields hwi).2]
+    rw [(ins_reads_public hwi).2]
     exact hSH
   obtain ⟨-, hpo, -, -, -, -, hrefs⟩ := Spot.SecondStage.stmtCodes_nil (List.isEmpty_iff.1 hc)
   obtain ⟨hdr, hhdr, hn, htab⟩ :=

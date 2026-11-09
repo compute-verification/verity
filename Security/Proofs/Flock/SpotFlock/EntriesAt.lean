@@ -306,7 +306,7 @@ theorem portsOf_of_ofJson {j : Json} {own : Array _root_.Flock.Registered.Port}
   | some nm => rw [hd] at h; cases h
   | none => rw [hd] at h; cases h; exact hps
 
-theorem ins_fields {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .ok s) :
+theorem ins_reads_public {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .ok s) :
     w.registered.mapM (fun b => do _root_.Flock.Registered.ofJson (← FlockDeploy.jsonOf "registered reads" b)) =
       .ok s.registered ∧ s.read.I.publicFile = w.publicFile := by
   unfold FlockDeploy.Raw.ins at h
@@ -328,7 +328,7 @@ theorem registered_of_ins {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (hw : w.in
     {own : Array _root_.Flock.Registered.Port} (ho : s.registered = some own) :
     ∃ b j, w.registered = some b ∧ FlockDeploy.jsonOf "registered reads" b = .ok j ∧
       _root_.Flock.Registered.ofJson j = .ok own := by
-  have hm := (ins_fields hw).1
+  have hm := (ins_reads_public hw).1
   rw [ho] at hm
   cases hr : w.registered with
   | none => rw [hr] at hm; cases hm
@@ -369,7 +369,7 @@ theorem map_some_ne_none {α : Type} {x : Except String α} (h : (some <$> x) = 
 /-- **The verifier has no registered reads only where its statement has no `registered reads` file.** -/
 theorem registered_none {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (hw : w.ins = .ok s) (hn : s.registered = none) :
     w.registered = none := by
-  have hm := (ins_fields hw).1
+  have hm := (ins_reads_public hw).1
   rw [hn] at hm
   cases hr : w.registered with
   | none => rfl
@@ -549,7 +549,7 @@ theorem interior_entry {x m₁ m₂ : Msg} {s} {c₀ c₁ : FlockDeploy.Coin} {u
   have hwi := ins_of_setupOf hw hset
   obtain ⟨hSt, hSH, hSr, hSn⟩ := stmtJsonOf_fields h hS
   have hH : headerOf ins.read.I.publicFile = some S.header := by
-    rw [(ins_fields hwi).2]
+    rw [(ins_reads_public hwi).2]
     exact hSH
   obtain ⟨rs, ds, hmem, hru, hdm, hdu⟩ := header_roots hset hsc hc1 hj hq hpop hH
   obtain ⟨-, -, hroots, -, -, -, -⟩ := Spot.SecondStage.stmtCodes_nil (List.isEmpty_iff.1 hc)
