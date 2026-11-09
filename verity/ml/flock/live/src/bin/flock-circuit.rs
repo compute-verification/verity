@@ -3867,6 +3867,20 @@ fn witness_uploaded(st: &Stmt, w: &Wit, mode: (bool, bool, bool, bool)) -> (WitD
     (wt, s)
 }
 
+thread_local!(static SPAN_RUN: std::cell::Cell<i64> = const { std::cell::Cell::new(-1) });
+
+/// FC_SPANS=1: one `SPAN` line on stderr per stage, its start in unix seconds, its length, and the session (`run`) of the
+/// thread that ran it.
+fn span(n: &str, t: Instant, x: Value) {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    if !*ON.get_or_init(|| std::env::var("FC_SPANS").as_deref() == Ok("1")) {
+        return;
+    }
+    let s = t.elapsed().as_secs_f64();
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64());
+    eprintln!("SPAN\t{}", json!({"n": n, "t0": now - s, "s": s, "pid": std::process::id(), "run": SPAN_RUN.with(|r| r.get()), "x": x}));
+}
+
 fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Plan, seed: ProverSeed) -> (Value, Vec<Vec<u8>>) {
     match session_proved(st, inst, t, plan, seed) {
         Ok(p) => session_finish(p),
@@ -3918,6 +3932,8 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let t0 = Instant::now();
     // registration done: the verifier samples the units (or none), and the statement is the sampled proof blocks', in the session's tables
     let reg = call(&t, Req::Register);
+    span("p.register", t0, Value::Null);
+    let t_tables = Instant::now();
     let draw = match &reg {
         Ok(Resp::Draw(d)) if !plan.ignore_draw => d.clone(),
         _ => "null".to_string(),
@@ -3938,6 +3954,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         Ok(x) => x,
         Err(e) => return Err((json!({"accepted": false, "why": e, "prover_stopped": format!("the drawn statement: {e}")}), Vec::new())),
     };
+    span("p.tables", t_tables, Value::Null);
     let st = &tabs.list[0].st;
     // the ZK server's proof files of record: the Lean session loop's finish on the session's statement, at the verifier's sample
     let lean_fin = match firewall_on(st).then(|| {
@@ -4018,13 +4035,21 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     // the transport before it. Not through the ZK server's Lean session loop
     let hello_ahead = (!plan.lean_session && plan.lean_frames.is_none() && std::env::var("FC_HELLO_AHEAD").as_deref() != Ok("0")).then(|| {
         let (t, h) = (t.clone(), hello.clone());
-        flock_live::spawn(move || call(&t, Req::Hello(h)))
+        let run = SPAN_RUN.with(|r| r.get());
+        flock_live::spawn(move || {
+            SPAN_RUN.with(|r| r.set(run));
+            let th = Instant::now();
+            let got = call(&t, Req::Hello(h));
+            span("p.hello", th, Value::Null);
+            got
+        })
     });
     // every table's witness. Rep 1 proves from rep 0's unless it has its own: the CPU prover consumes a witness, so rep 0 takes a
     // copy and rep 1 the original (two copies at most, never one per rep plus the original)
     let mut witness_s = 0.0;
     let mut witness_prebuilt_s: Option<f64> = None;
     let mut wits = Vec::new();
+    let t_wit = Instant::now();
     for (j, tb) in tabs.list.iter().enumerate() {
         // a witness built beside the previous session: its wait counts as this session's witness time
         let tw = Instant::now();
@@ -4053,6 +4078,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         witness_s += tw0 + tw1;
         wits.push((w0, Some(wt0), wt1));
     }
+    span("p.witness", t_wit, json!({"prebuilt": witness_prebuilt_s.is_some(), "witness_s": witness_s}));
     if after {
         salts_ahead = start_ahead();
     }
@@ -4064,8 +4090,11 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     };
     // the preparation's time past the witness build (what it adds to the session)
     let t_zk_pre_wait = tj.elapsed().as_secs_f64();
+    span("p.zkpre_wait", tj, Value::Null);
     // everything above is host work and the session's own; the device's reps wait for the previous session's
+    let t_turn = Instant::now();
     let device_wait_s = plan.turn.as_ref().map_or(0.0, |t| t.take());
+    span("p.turn_wait", t_turn, Value::Null);
     let mut prove_s = Vec::new();
     let mut buckets = Vec::new();
     let mut proofs: Vec<Vec<u8>> = Vec::new();
@@ -4441,6 +4470,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     }
     let e2e_s = t0.elapsed().as_secs_f64();
     let wait_e2e_s = t.lock().unwrap_or_else(PoisonError::into_inner).wait_s();
+    span("p.reps", tp0, json!({"calls": t.lock().unwrap_or_else(PoisonError::into_inner).stats().2, "wait_s": wait_e2e_s}));
     if let Some(h) = salts_ahead {
         let (tables, held, reuse, reused, threads, s) = h.join().unwrap_or_else(|e| panic!("the salts read ahead: {}", panic_msg(e)));
         let untaken: usize = tables.iter().map(|(a, _)| a.untaken()).sum();
@@ -4473,13 +4503,17 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
     }
     // the barrier (the public-circuit ZK proof's §2.3, line 12): a stream's proof exists only after its last coin, and every
     // proof leaves here, after every table's reps, so none before the session's last coin
+    let t_send = Instant::now();
     for (k, p) in sent.iter().enumerate().skip(early) {
         call(&t, Req::Proof { table: tabs.list[k / 2].name.clone(), rep: (k % 2) as u32, bytes: p.clone() }).unwrap();
     }
+    span("p.proofs_send", t_send, json!({"bytes": sent.iter().skip(early).map(Vec::len).sum::<usize>()}));
+    let t_fin = Instant::now();
     let v: Value = match call(&t, Req::Finish) {
         Ok(Resp::Verdict(v)) => serde_json::from_str(&v).unwrap(),
         other => json!({"accepted": false, "why": format!("{other:?}")}),
     };
+    span("p.finish_call", t_fin, Value::Null);
     let (ws, wr, calls) = t.lock().unwrap_or_else(PoisonError::into_inner).stats();
     let wait_s = t.lock().unwrap_or_else(PoisonError::into_inner).wait_s();
     // M0's seed opens at the end; under M2 and a plain coin-tree session every coin was checked against the commitment before
@@ -6627,18 +6661,28 @@ fn prove_jobs(mut jobs: Jobs, base: &Plan, warm: usize, verify_ahead: usize, fw:
             plan.lean_session = frames.is_some();
             plan.lean_frames = frames;
             running.push_back((run, label, flock_live::spawn(move || {
+                SPAN_RUN.with(|r| r.set(run as i64));
                 let _end = TurnEnd(Some(turn));
+                let tc = Instant::now();
                 let mut tcp = TcpTransport::connect(&addr).unwrap_or_else(|e| refuse(format!("the verifier at {addr}: {e}")));
                 let rtt = tcp.ping_rtt(30);
-                let (mut v, proofs) = match session_proved(&st, &inst, shared(tcp), &plan, seed) {
+                span("p.connect", tc, json!({"rtt_ms": rtt.0}));
+                let tp = Instant::now();
+                let proved = session_proved(&st, &inst, shared(tcp), &plan, seed);
+                span("p.proved", tp, Value::Null);
+                let tf = Instant::now();
+                let (mut v, proofs) = match proved {
                     Ok(p) => session_finish(p),
                     Err(stopped) => stopped,
                 };
+                span("p.finish", tf, Value::Null);
                 v["t_done_s"] = json!(t_start.elapsed().as_secs_f64());
                 ((v, proofs), rtt)
             })));
             // the next session's front starts once this one's reps do, or once it ended without them
+            let ts = Instant::now();
             let _ = start.recv();
+            span("p.start_wait", ts, json!({"run": run}));
             after = Some(end);
             while running.front().is_some_and(|(_, _, h)| h.is_finished()) {
                 let (r, label, h) = running.pop_front().expect("a finished session");
@@ -6830,18 +6874,37 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
         let mut r = BufReader::new(conn.try_clone().unwrap());
         let mut w = BufWriter::new(conn);
         let id = format!("l{:04}-{}", i, std::process::id());
+        let t_sess = Instant::now();
+        let mut kinds: BTreeMap<String, (u64, f64, f64)> = BTreeMap::new();
+        let (mut read_s, mut write_s, mut first_read_s) = (0.0, 0.0, None);
         loop {
+            let tr = Instant::now();
             let Ok(b) = read_frame(&mut r) else { break };
-            let resp = match (Req::decode(&b), log) {
+            read_s += tr.elapsed().as_secs_f64();
+            first_read_s.get_or_insert(tr.elapsed().as_secs_f64());
+            let th = Instant::now();
+            let req = Req::decode(&b);
+            let kind = req.as_ref().map_or_else(|_| "bad".to_string(), |q| seen(q)[0].as_str().unwrap_or("?").to_string());
+            let resp = match (req, log) {
                 (Ok(req), Some(log)) => log.handle(&mut s, &id, req),
                 (Ok(req), None) => s.handle(req),
                 (Err(e), _) => Resp::Refused(e),
             };
+            let h = th.elapsed().as_secs_f64();
+            let e = kinds.entry(kind).or_insert((0, 0.0, 0.0));
+            e.0 += 1;
+            e.1 += h;
+            e.2 = e.2.max(h);
             let done = matches!(resp, Resp::Verdict(_));
-            if write_frame(&mut w, &resp.encode()).is_err() || done {
+            let tw = Instant::now();
+            let wrote = write_frame(&mut w, &resp.encode());
+            write_s += tw.elapsed().as_secs_f64();
+            if wrote.is_err() || done {
                 break;
             }
         }
+        span("v.session", t_sess, json!({"sid": id, "kinds": kinds, "read_wait_s": read_s, "first_read_s": first_read_s, "write_s": write_s}));
+        let t_rec = Instant::now();
         let rec = s.record_json();
         let out = tag.get("out").and_then(Value::as_str).map_or_else(|| out.to_path_buf(), std::path::PathBuf::from);
         let d = out.join(&id);
@@ -6865,6 +6928,7 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
         let mut idx = std::fs::OpenOptions::new().create(true).append(true).open(out.join("index.jsonl")).unwrap();
         // one write per line: servers sharing `out` append to the same index
         idx.write_all(format!("{line}\n").as_bytes()).unwrap();
+        span("v.records", t_rec, json!({"sid": id}));
         println!("SESSION\t{line}");
     };
     std::thread::scope(|sc| {
@@ -6872,6 +6936,7 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
             if Some(i) == max {
                 break;
             }
+            let ts = Instant::now();
             {
                 let mut n = free.0.lock().unwrap_or_else(PoisonError::into_inner);
                 while *n == 0 {
@@ -6879,8 +6944,13 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
                 }
                 *n -= 1;
             }
+            let slot_s = ts.elapsed().as_secs_f64();
+            let tm = Instant::now();
             let Some((s, tag)) = make() else { break };
+            let make_s = tm.elapsed().as_secs_f64();
+            let ta = Instant::now();
             let (conn, _) = l.accept().unwrap();
+            span("v.accept", ts, json!({"i": i, "slot_s": slot_s, "make_s": make_s, "accept_s": ta.elapsed().as_secs_f64()}));
             let (one, free) = (&one, &free);
             flock_live::spawn_scoped(sc, move || {
                 // a session's panic stops the server
