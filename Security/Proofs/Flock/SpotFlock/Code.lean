@@ -127,19 +127,37 @@ def hexMsg : Json → Msg
   | .str r => ((_root_.Flock.unhex r).toOption.map (·.data.toList)).getD []
   | _ => []
 
-/-- **A record's port's entry**: four messages, the port's name, its root and its domain id (the bytes their hex
-names, empty where it names none), and its leaf count (`FlockDeploy.encNat`, `0` where it names none). These are what
-the deployed check reads of a registered port besides its schema, which is the port's row format, so a frame fixed
-before the run reads the port off the roots. -/
-def portEntry (e : String × Json) : List Msg :=
-  [e.1.toUTF8.data.toList, hexMsg (Spot.getD e.2 "root"), hexMsg (Spot.getD e.2 "domain"),
-    FlockDeploy.encNat ((Spot.nat? (Spot.getD e.2 "leaves")).getD 0)]
+/-- **A number's bytes**, little-endian, as many as it needs and at least one. -/
+def natMsg (n : ℕ) : Msg := (List.range (n.log2 / 8 + 1)).map fun i => (n / 256 ^ i).toUInt8
 
-/-- **A record's ports' roots**: each port's entry (`portEntry`), in its port order (`Record.byPort`). -/
-def portRoots (rec : Json) : List Msg := (Spot.Record.byPort rec).toList.flatMap portEntry
+/-- **An entry of a record**, of kind `k` (`0` a port, `1` a registered value): four messages, its name behind its
+kind, its root and its domain id (the bytes their hex names, empty where it names none), and its leaf count
+(`natMsg`, `0` where it names none). These are what the deployed check reads of a registered port besides its
+schema, which is the port's row format, so a frame fixed before the run reads the port off the roots. -/
+def portEntry (e : UInt8 × String × Json) : List Msg :=
+  [e.1 :: e.2.1.toUTF8.data.toList, hexMsg (Spot.getD e.2.2 "root"), hexMsg (Spot.getD e.2.2 "domain"),
+    natMsg ((Spot.nat? (Spot.getD e.2.2 "leaves")).getD 0)]
+
+/-- **A record's registered values**, each under its value's name, as round 2 finds a registered read's value among
+them (`SecondStage.registeredEntry`). -/
+def regList (rec : Json) : List (String × Json) :=
+  (match Spot.getD rec "registered" with | .arr es => es.toList | _ => []).filterMap fun e =>
+    match Spot.getD e "value" with
+    | .str v => some (v, e)
+    | _ => none
+
+/-- **A record's entries, each with its kind**: its ports (`0`), in its port order (`Record.byPort`), then its
+registered values (`1`). -/
+def tagged (rec : Json) : List (UInt8 × String × Json) :=
+  (Spot.Record.byPort rec).toList.map (0, ·) ++ (regList rec).map (1, ·)
+
+/-- **A record's roots**: whether it names its ports by template (`SecondStage.byTemplate`, as round 2 names a
+template's port), then its entries (`portEntry`). -/
+def portRoots (rec : Json) : List Msg :=
+  [if Spot.SecondStage.byTemplate rec then 1 else 0] :: (tagged rec).flatMap portEntry
 
 /-- **The run's statement**: the boundary registration's record, and the roots the boundary values are committed
-under, its ports' entries (`portRoots`). -/
+under, the record's (`portRoots`). -/
 structure Roots where
   record : Json
   roots : List Msg
@@ -155,7 +173,7 @@ def blocksOf (rec : Json) : List ℕ :=
   | _ => []
 
 /-- **Replay block `ρ`'s interior roots** as the round-1 message `m₁` states them: `ρ`'s place among the interior
-record's replay blocks, then the record's ports' entries (`portRoots`); none where `m₁` isn't JSON. -/
+record's replay blocks, then the record's roots (`portRoots`); none where `m₁` isn't JSON. -/
 def irootsOf (m₁ : Msg) (ρ : ℕ) : List Msg :=
   ((jsonMsg m₁).map fun rec => FlockDeploy.encNat ((blocksOf rec).idxOf ρ) :: portRoots rec).getD []
 
