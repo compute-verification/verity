@@ -1029,6 +1029,82 @@ def test_a_graph_lacking_a_job_main_waits_for_is_list_failed_marked_with_it_so_i
     assert loop.world.verdict(sha).verdict.state == PASS
 
 
+def _graph(sha: str, tasks: list[dict]) -> dict:
+    """A graph/v2 of ``sha`` holding ``tasks`` (each its `id`, `kind` and `inputs`, maybe its `key`, `reads` and `outputs`), in
+    the env `Env.listed` lists its tasks in."""
+    files = [*SPEC, *sorted({f for t in tasks for f in t["inputs"]})]
+    return {"schema": GRAPH_V2, "commit": sha, "files": {f: f"sha512:{f}" for f in files},
+            "envs": {"py": {"digest": "sha512:env", "spec": list(SPEC)}},
+            "tasks": [{"env": "py", "argv": ["t", t["id"]], "vars": {}, "reads": [],
+                       "outputs": [{"name": "out", "path": f"{t['id']}.out"}], **t} for t in tasks]}
+
+
+def test_a_kind_of_task_its_base_lists_and_it_lists_none_of_fails_its_listing_but_a_fail_of_its_own_still_fails(env):
+    """A family whose lister is gone lists no task and no error (`verity_graph.graph.listing`), and its job may still be
+    another family's (lean-lock's and lean-module's are lean-audit): a candidate whose graph lists no task of a kind on the
+    merge gate its base's graph lists is list-failed, marked `lacks kind K`, so the policy retries and rings it, a failure
+    it inherits included.  One of its own fails it, so its PR is ejected all the same."""
+    env.gates = ["pytest", "lean-audit"]
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(policy)
+    (built,) = loop.tick()
+    sha, main = built["sha"], built["base"]
+    lean = [{"id": "lean-module:M", "kind": "lean-module", "inputs": ["M.lean"], "key": "sha512:m"},
+            {"id": "lean-lock:L", "kind": "lean-lock", "inputs": ["L.json"], "key": "sha512:l"}]
+
+    def listed(at: str, key: str, *more: dict) -> None:
+        env.graph2.list_graph(f"ready:{at}", _graph(at, [{"id": "pytest:a", "kind": "test-file", "inputs": ["a.txt"],
+                                                          "key": key}, *more]))
+
+    listed(main, "sha512:a0", *lean)
+    listed(sha, "sha512:a1", lean[0])                   # as with families/lean_lock.py deleted
+    env.result("sha512:a1", "pytest:a", PASS)
+    env.result("sha512:m", "lean-module:M", PASS)
+    j = loop.world.verdict(sha, main)
+    assert (j.verdict.state, j.mark, j.lacks, j.note) == (LIST_FAILED, "lacks kind lean-lock", ("kind lean-lock",),
+                                                          "no task of kind lean-lock, which its base lists")
+    acts = [r for _ in range(3) for r in loop.tick()]
+    assert _acts(acts) == ["retry", "ring"] and acts[0]["mark"] == "lacks kind lean-lock" and env.main() != sha
+    env.result("sha512:a0", "pytest:a", FAIL)
+    listed(sha, "sha512:a0", lean[0])                   # `main`'s fail, inherited
+    assert loop.world.verdict(sha, main).verdict.state == LIST_FAILED
+    listed(sha, "sha512:a2", lean[0])
+    env.result("sha512:a2", "pytest:a", FAIL)
+    v = loop.world.verdict(sha, main).verdict
+    assert (v.state, [f.task for f in v.failed]) == (FAIL, ["pytest:a"])
+
+
+def test_the_after_lean_suites_test_files_reading_lean_build_s_outputs_stand_for_lean_suites_whose_kind_may_go(env):
+    """Listed as test-file tasks that read lean-build's outputs (its `build` among them), the test files of the suites check
+    runs after lean-build stand for lean-suites (`_job`): the graph lacks no job `main` waits for, and the lean-suites tasks
+    its base lists may go.  A candidate whose base's check isn't listed waits for it."""
+    env.gates = ["pytest", "lean-build", "lean-suites"]
+    lean, exe = "verity/core/service/flock", {"name": "flock-verify", "path": "verity/core/service/flock/.lake/build/bin/v"}
+    build, outs = f"lean-build:{lean}", [exe, {"name": "build", "path": f"{lean}/.lake/build.tar.gz"}]
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(policy)
+    (built,) = loop.tick()
+    sha, main, w = built["sha"], built["base"], loop.world
+    a = {"id": "pytest:a", "kind": "test-file", "inputs": ["a.txt"], "key": "sha512:a"}
+    env.graph2.list_graph(f"ready:{main}", _graph(main, [
+        a, {"id": build, "kind": "lean-build", "inputs": [f"{lean}/Main.lean"], "key": "sha512:b0", "outputs": [exe]},
+        {"id": "lean-suites:verity-flock", "kind": "lean-suites", "inputs": ["f/test_f.py"],
+         "reads": [{"task": build, "output": "flock-verify"}]}]))
+    env.graph2.list_graph(f"ready:{sha}", _graph(sha, [
+        a, {"id": build, "kind": "lean-build", "inputs": [f"{lean}/Main.lean"], "key": "sha512:b1", "outputs": outs},
+        {"id": "test-file:f/test_f.py", "kind": "test-file", "inputs": ["f/test_f.py"],
+         "reads": [{"task": build, "output": o["name"]} for o in outs]}]))
+    env.result("sha512:a", "pytest:a", PASS)
+    env.graph2.finish_result({"key": "sha512:b1", "task": build, "status": PASS,
+                              "outputs": {"flock-verify": "sha512:v", "build": "sha512:t"}})
+    _, made, _ = w._settled(w.tasks.graph_v2(f"ready:{sha}")[1])
+    env.result(made["test-file:f/test_f.py"], "test-file:f/test_f.py", PASS)
+    j = w.verdict(sha, main)
+    assert (j.verdict.state, j.lacks, j.mark, j.note) == (PASS, (), None, "")
+    j = w.verdict(sha, "f" * 40)
+    assert (j.verdict.state, j.unlisted, j.note) == (PENDING, "f" * 40, f"waiting for the base's listing: {L.UNLISTED}")
+
+
 def test_graph2_s_lean_agreement_task_gates_and_a_ratchet_gate_task_doesn_t(env):
     """graph2's lean-agreement task is on the merge gate, as it is in the run beside the check; ratchet-gate is off it: it
     judges each merge against its first parent, which a task keyed by its inputs can't."""

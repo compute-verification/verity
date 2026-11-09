@@ -25,16 +25,17 @@ each merge against its first parent, which a task keyed by its inputs can't) or 
 so graph2's lean-agreement gates as the run beside the check's does: a failed task an unexpired
 allowance of that policy covers passed, as drive reads it (`Driver._task_allowed`); else a failed or blocked task is fail,
 each failed task with its inputs (its own, its env's spec files and those of each task it reads), its failing tests
-(result/v1's `failed_tests` and those graph2's verdict names of it) and its key and failing tests in its base's graph as graph2
-listed it, where there are
-(`Failed.base_key`, `Failed.base_tests`), ended once no gating task runs but behind an infra error, and pending while those
-are to come: the base's check isn't listed (the loop enqueues it, once a base) or a task's key there waits on what it reads;
-else a task whose newest result is graph2's infra error (`detail.infra`; graph2's `tree` where `Failed` has one) is infra,
-else every gating task passed is pass once graph2's own verdict, where it has one, can be read and counts none pending
-(`World._held`, which an inherited fail's end waits on too), else pending.  No graph while graph2 says its listing failed
-(`verdict`, else its `ready_verdict` label), a graph that can't be read, a graph lacking a job `main` waits for
-(`drive.gating`) and failing nothing, or no graph of a candidate the log never enqueued is list-failed.  graph2's own
-verdict, where it has one, is compared and a disagreement logged.  With ``slim`` (`research.vqueue_slim`), the run beside the check of what
+(result/v1's `failed_tests` and those graph2's verdict names of it, or what a task's own fault names: `_fault_tests`) and its
+key and failing tests in its base's graph as graph2 listed it, where there are (`Failed.base_key`, `Failed.base_tests`),
+ended once no gating task runs but behind an infra error; else a task whose newest result is graph2's infra error
+(`detail.infra`; graph2's `tree` where `Failed` has one) is infra, else every gating task passed is pass once graph2's own
+verdict, where it has one, can be read and counts none pending (`World._held`, which an inherited fail's end waits on too),
+else pending.  It is pending while its base's check isn't listed (the loop enqueues it, once a base), or, with a failure, a
+task's key there waits on what it reads.  No graph while graph2 says its listing failed (`verdict`, else its
+`ready_verdict` label), a graph that can't be read, one lacking a job `main` waits for (`drive.gating`) or a kind of task on
+the merge gate its base's graph lists, unless that kind's job went to another kind (`World._gone`), and failing nothing of
+its own, or no graph of a candidate the log never enqueued is list-failed.  graph2's own verdict, where it has one, is
+compared and a disagreement logged.  With ``slim`` (`research.vqueue_slim`), the run beside the check of what
 graph2 doesn't check starts with its candidate's build, one beside each candidate's check (so up to `--depth` at once, on
 drive's machines), or once in the snapshot for a candidate on `main`'s chain the log holds no start of.  Pending until it
 ends, it is judged each tick, its record logged whenever it changes, and combined with the check's verdict: a candidate passes
@@ -95,13 +96,13 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from . import policy, vqueue
-from .drive import CI, JOB_OF_KIND, RATCHET_STEP, SLIM_STEPS, Driver, cancel_runs, gating, merge_thread_post
+from .drive import CI, JOB_OF_KIND, RATCHET_STEP, SLIM_STEPS, SUITES_KIND, Driver, cancel_runs, gating, merge_thread_post
 from .drive import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
 from .queue import (PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, base_drivers, flags_at, label_verifier,
                     lean_change, lowrisk, merged_tree, priority_list, queue_commit, review_owners, rules_at, unreviewed)
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Drop, Eject, Failed, Outcome,
-                     Ready, Red, Rerun, Retry, Ring, Snapshot, Verdict)
+                     Ready, Red, Rerun, Retry, Ring, Snapshot, Verdict, _inherited)
 
 #: graph2, infra's executor on the control pod: its argv before the subcommand
 GRAPH2 = ("python3.12", "/root/executor/infra/graph2.py", "--db", "/root/executor/graph2.db", "--events", "/root/executor/events")
@@ -408,7 +409,9 @@ class World:
         self._slim: Driver | None = None
         self._main: str | None = None
         #: while a snapshot reads the candidates' verdicts (`Loop.snapshot`), graph2's verdict of each sha read (`_verdict_of`)
+        #: and the graph graph2 listed of each check read (`_listing`)
         self._theirs: dict[str, dict | None] | None = None
+        self._listed: dict[str, tuple[str, dict] | None] | None = None
         #: what the last `ready` read: {number: the PR at its ready head}
         self.prs: dict[int, PR] = {}
 
@@ -570,7 +573,7 @@ class World:
         theirs = self._verdict_of(sha)
         said = theirs.get("state") if isinstance(theirs, dict) else None
         try:
-            got = self.tasks.graph_v2(check)
+            got = self._listing(check)
         except ValueError as e:
             return Judged(Verdict(LIST_FAILED), mark=f"unreadable {_digest(str(e))}", note=str(e), graph2=said, theirs=theirs)
         if got is None:
@@ -584,7 +587,7 @@ class World:
             self.log(f"research queue vqueue: {pol}: every job gates at {sha[:12]}")
             pol = policy.Policy()
         gates = [i for i, t in tasks.items() if t.get("gate", True) is not False
-                 and JOB_OF_KIND.get(t["kind"], t["kind"]) not in (RATCHET_STEP, *pol.off_gate)]
+                 and _job(t, tasks) not in (RATCHET_STEP, *pol.off_gate)]
         if not gates:
             return Judged(Verdict(LIST_FAILED), mark=f"empty {_digest(sorted(tasks))}", note="no task on the merge gate",
                           graph2=said, theirs=theirs)
@@ -605,11 +608,13 @@ class World:
         ran = all(states[i][0] != PENDING or closure.meets(i, erred) for i in gates)
         passed = all(states[i][0] == PASS or i in allowed for i in gates)
         ended = ran and held is None
-        jobs = {JOB_OF_KIND.get(t["kind"], t["kind"]) for t in tasks.values()}
+        jobs = {_job(t, tasks) for t in tasks.values()}
         lacks = tuple(s for s in gating(self.repo, sha) if s not in jobs and s not in SLIM_STEPS)
+        gone = self._gone(base, tasks, pol)
         based = self._base(base, set(bad), base_since) if bad else {}
-        waits = based if isinstance(based, str) else None
-        based = {} if waits is not None else based
+        waits = based if isinstance(based, str) else gone if isinstance(gone, str) else None
+        based, gone = {} if isinstance(based, str) else based, () if isinstance(gone, str) else gone
+        missing = (*lacks, *(f"kind {k}" for k in gone))
         tree = {e.get("task"): bool(e.get("tree")) for e in (theirs or {}).get("infra") or () if isinstance(e, dict)}
         named = _named(theirs)
         fail = () if waits is not None else tuple(
@@ -617,9 +622,9 @@ class World:
                      tests=_tests(states[i][1]) | named.get((i, keys[i]), frozenset()),
                      base_tests=based.get(i, (None, None))[1]) for i in dict.fromkeys(bad))
         down = tuple(_failure(i, keys[i], closure.inputs(i), tree=tree.get(i, False)) for i in infra)
-        if fail:
+        if fail and not (missing and all(_inherited(f) for f in fail)):    # a fail of its own ejects all the same
             mine = Verdict(FAIL, fail, down, ended=ended)
-        elif lacks:
+        elif missing:
             mine = Verdict(LIST_FAILED)
         elif waits is not None:
             mine = Verdict(PENDING)
@@ -629,17 +634,47 @@ class World:
             mine = Verdict(PASS)
         else:
             mine = Verdict(PENDING)
-        mark = (f"lacks {' '.join(lacks)}" if mine.state == LIST_FAILED else
+        mark = (f"lacks {' '.join(missing)}" if mine.state == LIST_FAILED else
                 f"infra {_digest(sorted((keys[i], len(seen.got.get(keys[i]) or ())) for i in infra))}" if mine.state == INFRA
                 else None)
         note = "; ".join([*([f"graph2 says {said}"] if said in vqueue.STATES and said != mine.state else []),
                           *([f"no task of {', '.join(lacks)}, which `main` waits for"] if lacks else []),
+                          *([f"no task of kind {', '.join(gone)}, which its base lists"] if gone else []),
                           *([f"waiting for the base's listing: {waits}"] if waits is not None else []),
                           *([f"held: {held}"] if held is not None and (mine.state == PENDING and passed
                                                                        or mine.state == FAIL and ran) else []),
                           *([f"allowed: {', '.join(sorted(allowed))}"] if allowed else [])])
-        return Judged(mine, mark=mark, note=note, graph2=said, lacks=lacks, theirs=theirs,
+        return Judged(mine, mark=mark, note=note, graph2=said, lacks=missing, theirs=theirs,
                       unlisted=base if waits == UNLISTED else None)
+
+    def _gone(self, base: str, tasks: dict[str, dict], pol: policy.Policy) -> tuple[str, ...] | str:
+        """The kinds of task on the merge gate in ``base``'s graph, as graph2 listed it, of which a candidate's ``tasks`` list
+        none: a family whose lister is gone lists no task and no error.  A kind may go where its job (`_job`) is now a kind's it
+        wasn't there, as lean-suites went to the test files of the suites that run on lean-build's outputs.  Why not yet while
+        `ready:<base>` isn't listed (`UNLISTED`); none for no base, or one whose listing failed or whose graph can't be read
+        (logged)."""
+        if not base:
+            return ()
+        try:
+            got = self._listing(f"ready:{base}")
+        except ValueError as e:
+            self.log(f"research queue vqueue: {base[:12]}'s graph can't be read, so no kind it lists is missed: {e}")
+            return ()
+        if got is None:
+            if isinstance(theirs := self._verdict_of(base), dict) and theirs.get("state") == LIST_FAILED:
+                self.log(f"research queue vqueue: ready:{base[:12]}'s listing failed, so no kind it lists is missed")
+                return ()
+            return UNLISTED
+
+        def kinds(ts: dict[str, dict]) -> dict[str, set[str]]:
+            out: dict[str, set[str]] = {}
+            for t in ts.values():
+                if t.get("gate", True) is not False and (j := _job(t, ts)) not in (RATCHET_STEP, *pol.off_gate):
+                    out.setdefault(j, set()).add(t["kind"])
+            return out
+
+        was, now = kinds({t["id"]: t for t in got[1]["tasks"]}), kinds(tasks)
+        return tuple(sorted(k for j, ks in was.items() if not now.get(j, set()) - ks for k in ks - now.get(j, set())))
 
     def _held(self, theirs: dict | None) -> str | None:
         """Why graph2's own verdict, from its database, keeps a candidate from passing (or from ending with only inherited
@@ -689,7 +724,7 @@ class World:
         if not base:
             return {}
         try:
-            got = self.tasks.graph_v2(f"ready:{base}")
+            got = self._listing(f"ready:{base}")
         except ValueError as e:
             self.log(f"research queue vqueue: {base[:12]}'s graph can't be read, so no failure on it is inherited: {e}")
             return {}
@@ -726,6 +761,15 @@ class World:
         docs = self.tasks.transport.results([key]).get(key) or ()
         return next((t for d in reversed(list(docs)) if isinstance(d, dict) and d.get("status") == FAIL
                      and (t := _tests(d))), frozenset())
+
+    def _listing(self, check: str) -> tuple[str, dict] | None:
+        """`Executor.graph_v2` of ``check``, read once while a snapshot keeps them (`_listed`): a candidate's graph is the base
+        of the one above it too."""
+        if self._listed is None:
+            return self.tasks.graph_v2(check)
+        if check not in self._listed:
+            self._listed[check] = self.tasks.graph_v2(check)
+        return self._listed[check]
 
     def _verdict_of(self, sha: str) -> dict | None:
         """`graph2_verdict` of ``sha``, read once while a snapshot keeps them (`_theirs`): a subprocess each, and a base's is
@@ -900,6 +944,15 @@ def _tests(doc: object) -> frozenset[str]:
     """The failing tests a result names (result/v1's `failed_tests`)."""
     got = (doc.get("detail") or {}).get("failed_tests") if isinstance(doc, dict) else None
     return frozenset(x for x in got if isinstance(x, str)) if isinstance(got, list) else frozenset()
+
+
+def _job(t: dict, tasks: dict[str, dict]) -> str:
+    """The job of check's that graph task ``t`` of ``tasks`` stands for (`drive.JOB_OF_KIND`, else its kind): a test file that
+    reads what lean-build built is of a suite check runs after lean-build (`drive.SUITES_KIND`), on its outputs."""
+    if t["kind"] == "test-file" and any(isinstance(r, dict) and (tasks.get(r.get("task")) or {}).get("kind") == "lean-build"
+                                        for r in t.get("reads") or ()):
+        return SUITES_KIND
+    return JOB_OF_KIND.get(t["kind"], t["kind"])
 
 
 def _said(theirs: dict | None) -> dict[str, dict]:
@@ -1100,7 +1153,7 @@ class Loop:
         def chained(sha: str, seen: tuple[str, ...] = ()) -> bool:
             return bases[sha] == main or bases[sha] in bases and sha not in seen and chained(bases[sha], (*seen, sha))
 
-        w._theirs = {}
+        w._theirs, w._listed = {}, {}
         try:
             for sha in sorted(mine):
                 p, b = whole if sha in older else past, builds[sha]
@@ -1115,7 +1168,7 @@ class Loop:
                 cands.append(Candidate(sha, base, prs, heads, j.verdict, p.tries(sha), reruns=p.reruns(sha),
                                        enqueued=p.enqueued(sha)))
         finally:
-            w._theirs = None
+            w._theirs = w._listed = None
         on = {c.sha: c.base for c in cands}
 
         def height(sha: str, seen: tuple[str, ...] = ()) -> int:
