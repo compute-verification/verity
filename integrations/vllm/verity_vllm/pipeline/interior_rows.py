@@ -508,10 +508,16 @@ class Table:
 
 @dataclass(frozen=True)
 class TableCommit:
-    """A `Table` committed under ``name``: its domain (`one_stage.history.domain`), every row's b || c, its tree's levels."""
-    name: str
+    """A `Table` committed as table ``value``: ``leaves`` its capacity, its domain (`one_stage.history.domain`), its rows
+    and salts, every row's b || c and its tree's levels. `table_reads` reads only ``value``, ``leaves``, ``domain``,
+    ``rows``, ``salts``, ``root`` and ``path``, the prover's view of any table kept in this format, so it opens a table
+    the serve committed as well as one the interior commits."""
+    value: str
     words: int
+    leaves: int
     domain: CommitmentDomain
+    rows: np.ndarray = field(repr=False)
+    salts: tuple[bytes, ...] = field(repr=False)
     bcs: tuple[bytes, ...] = field(repr=False)
     levels: tuple[tuple[bytes, ...], ...] = field(repr=False)
 
@@ -519,16 +525,17 @@ class TableCommit:
     def root(self) -> bytes:
         return self.levels[-1][0]
 
-    def path(self, position: int) -> list[bytes]:
+    def path(self, position: int) -> bytes:
+        """Position ``position``'s siblings, leaf level first, 64 bytes each (`gates.embedding`'s ``path``)."""
         out, i = [], int(position)
         for level in self.levels[:-1]:
             out.append(level[i ^ 1])
             i >>= 1
-        return out
+        return b"".join(out)
 
     def entry(self) -> dict[str, Any]:
         """Its registered entry (`registered.ENTRY_KEYS`)."""
-        return {"value": self.name, "root": self.root.hex(), "leaves": self.domain.count, "words": self.words,
+        return {"value": self.value, "root": self.root.hex(), "leaves": self.leaves, "words": self.words,
                 "domain": self.domain.domain_id.hex()}
 
 
@@ -555,7 +562,7 @@ def commit_table(t: Table, program: str, name: str) -> TableCommit:
     bcs = tuple(_HM.commit_string(_HM.default_key, sha512_row_seg_digest(r.astype("<u2").tobytes(), 16 * words), s)
                 for r, s in zip(rows, salts, strict=True))
     levels = tree_levels(dom, HT.leaves(dom, bcs, HT.placeholder(words)))
-    return TableCommit(name, words, dom, bcs, tuple(tuple(lv) for lv in levels))
+    return TableCommit(name, words, t.capacity, dom, rows, tuple(salts), bcs, tuple(tuple(lv) for lv in levels))
 
 
 def interior_tables(members: Members, n_rho: Cells, boundary: str, sample: Sequence[int], tables: Sequence[Table],
@@ -598,21 +605,25 @@ def _digests(words: np.ndarray) -> bytes:
     return np.asarray(words, dtype="<u2").view("<u8").astype(">u8").tobytes()
 
 
-def table_reads(tc: TableCommit, t: Table, toks: Sequence[int]) -> dict[str, dict[str, np.ndarray]]:
-    """Reads of committed table ``t`` (``tc``) at keys ``toks``, each in [0, capacity), as `interior` takes a read member's
-    rows and outputs: each key, the table's root and domain id, the key's row and salt (the zero row under the zero salt
-    past the table's rows) and its path; h the row, ok 1."""
-    n, H = t.rows.shape
+def _words(b: bytes) -> np.ndarray:
+    """Consecutive 64-byte digests as `Digest` words (`interface.digest_words`), concatenated."""
+    return np.concatenate([digest_words(b[i:i + 64]) for i in range(0, len(b), 64)])
+
+
+def table_reads(tc: TableCommit, toks: Sequence[int]) -> dict[str, dict[str, np.ndarray]]:
+    """Reads of committed table ``tc`` at keys ``toks``, each in [0, its leaves), as `interior` takes a read member's rows
+    and outputs: each key, the table's root and domain id, the key's row and salt (the zero row under the zero salt past
+    the table's rows) and its path; h the row, ok 1."""
+    n, H = len(tc.rows), tc.words
     cols: dict[str, list[np.ndarray]] = {p: [] for p in (*READ, "o0", "o1")}
     for k in (int(x) for x in toks):
-        if not 0 <= k < tc.domain.count:
-            raise ValueError(f"a read of {tc.name} at key {k}, outside its {tc.domain.count} leaves")
-        row = t.rows[k] if k < n else np.zeros(H, np.uint16)
-        salt = bytes(t.salts[k * _HM.salt_bytes:(k + 1) * _HM.salt_bytes]) if k < n else bytes(_HM.salt_bytes)
+        if not 0 <= k < tc.leaves:
+            raise ValueError(f"a read of {tc.value} at key {k}, outside its {tc.leaves} leaves")
+        row = np.asarray(tc.rows[k]) if k < n else np.zeros(H, np.uint16)
+        salt = bytes(tc.salts[k]) if k < n else bytes(_HM.salt_bytes)
         for p, v in (("tok", np.asarray([k & 0xFFFF, k >> 16])), ("root", digest_words(tc.root)),
-                     ("domain", digest_words(tc.domain.domain_id)), ("row", row),
-                     ("salt", np.concatenate([digest_words(salt[i:i + 64]) for i in range(0, len(salt), 64)])),
-                     ("path", np.concatenate([digest_words(s) for s in tc.path(k)])), ("o0", row), ("o1", np.ones(1))):
+                     ("domain", digest_words(tc.domain.domain_id)), ("row", row), ("salt", _words(salt)),
+                     ("path", _words(tc.path(k))), ("o0", row), ("o1", np.ones(1))):
             cols[p].append(np.asarray(v, dtype=np.uint16))
     rows = {p: np.stack(cols[p]) for p in READ}
     return {"rows": rows, "outs": {"o0": np.stack(cols["o0"]), "o1": np.stack(cols["o1"])}}
@@ -629,12 +640,12 @@ def _opened(m: CS.Member, d: Mapping[str, Mapping[str, np.ndarray]], cell: int, 
         what = f"{m.template}: read {u} (sampled span {u // cell}, key {tok})"
         root, dom = _digests(r["root"][u]), _digests(r["domain"][u])
         if root != tc.root or dom != tc.domain.domain_id:
-            raise ValueError(f"{what} takes a root or domain id other than its table's, {tc.name}'s")
+            raise ValueError(f"{what} takes a root or domain id other than its table's, {tc.value}'s")
         path = _digests(r["path"][u])
         h, ok = EMB.reference(V, tok, root, dom, [int(w) for w in r["row"][u]], _digests(r["salt"][u]),
                               [path[i:i + 64] for i in range(0, len(path), 64)])
         if ok != 1 or int(o["o1"][u][0]) != 1 or [int(w) for w in o["o0"][u]] != list(h):
-            raise ValueError(f"{what} does not open its table there: its row, salt and path are no opening of {tc.name}'s "
+            raise ValueError(f"{what} does not open its table there: its row, salt and path are no opening of {tc.value}'s "
                              "root at its key, or its h and ok are not the read's")
 
 

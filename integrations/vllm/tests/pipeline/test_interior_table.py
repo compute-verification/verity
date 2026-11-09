@@ -76,8 +76,7 @@ def _first():
 def _spans(digest: str, units, tables) -> list[IR.Span]:
     """Each sampled span's two reads, opened against its table as the interior commits it."""
     tcs = IR.interior_tables(MEMBER, CELLS, digest, units, tables)
-    return [IR.Span(f"s{s}", MEMBER, IR.table_reads(tc, t, TOKS[s]), [[0, CELLS]], "p" * 64)
-            for s, (tc, t) in enumerate(zip(tcs, tables, strict=True))]
+    return [IR.Span(f"s{s}", MEMBER, IR.table_reads(tc, TOKS[s]), [[0, CELLS]], "p" * 64) for s, tc in enumerate(tcs)]
 
 
 def _with(span: IR.Span, kind: str, port: str, unit: int, value) -> IR.Span:
