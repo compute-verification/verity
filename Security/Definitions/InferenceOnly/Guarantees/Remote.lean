@@ -1,11 +1,11 @@
-import Definitions.InferenceOnly.Guarantees.Dampener
+import Definitions.InferenceOnly.Guarantees.Slowdown
 import Definitions.InferenceOnly.Assumptions.Remote
 
 /-!
 # The compute dampener, remote protocol: the guarantees
 
 The remote dampener `1/ρ = s + (r̂ + ε' + JΔ/H + ν)/MFU₀` (`benchmarks/nci/tiers.py` at T1 and T2: `residual_share`,
-`fit.residual_with_lag`, and `benchmarks/rho`'s `theorem.multiple_bound`), with its two terms that `DampenerThreaded`
+`fit.residual_with_lag`, and `benchmarks/rho`'s `theorem.multiple_bound`), with its two terms that `SlowdownThreaded`
 takes inside its residual's hypothesis derived, and the two that sampled proofs and PoUW's deficit add:
 
 * `CertificateSlack` ([CERTIFICATE-SLACK]): over `N` windows, each certificate wrong with probability at most `p`
@@ -14,7 +14,7 @@ takes inside its residual's hypothesis derived, and the two that sampled proofs 
 * `VerdictLag` ([VERDICT-LAG]): under `TerminalDetection`, the declared work skipped between each identity's first
   detected faulty proof block and its halt `Δ` later is at most `(JΔ/H) C`, so all faulty blocks skip at most that plus
   what the blocks accepted before their identity's first detection (`escaped`) skip;
-* `DampenerRemote` composes them with `ThreadedThrottled`'s declared computation, charging the escaped blocks by
+* `SlowdownRemote` composes them with `ThreadedThrottled`'s declared computation, charging the escaped blocks by
   Markov's inequality on their expected work, at most `((1 − q)/q) B` per identity when each faulty block is caught with
   probability at least `q` whatever came before (`SampledDetection`), and PoUW's deficit `ε_W` through the certified
   work: with probability at least `1 − p/ε' − J ((1 − q)/q) B/(θ C)`,
@@ -26,7 +26,7 @@ takes inside its residual's hypothesis derived, and the two that sampled proofs 
 
 namespace InferenceOnly.Guarantees
 
-open Verity InferenceOnly.Dampener
+open Verity InferenceOnly.Slowdown
 
 /-- **The certificate slack** ([CERTIFICATE-SLACK]). PoUW certifies each of `N` windows, window `i` of capacity
 `c_i ≥ 0`, `∑ c_i ≤ C`, and each window's certificate is wrong with probability at most `p ≥ 0` under the outcomes'
@@ -59,7 +59,7 @@ their proof, under `TerminalDetection` at a lag `Δ`, skip `w_b ≥ 0` of declar
 within any span of `Δ`, `Φ H ≤ C`, as in `VerdictLag`, and at most `B` each; each faulty block with no earlier detection
 of its identity is detected with probability at least `q ∈ (0, 1]` whatever came before (`SampledDetection`), so those
 accepted before their identity's first detection skip at most `((1 − q)/q) B` per identity in expectation. Its counted
-multiplications `M` are as in `DampenerThreaded`, with no memory cap: unmonitored compute trains like the unconstrained
+multiplications `M` are as in `SlowdownThreaded`, with no memory cap: unmonitored compute trains like the unconstrained
 developer, at model-FLOP utilization `MFU₀ ∈ (0, 1]` (`M_U ≤ MFU₀ κ U/2`); the residual trains at full efficiency on the
 monitored compute outside the work certified correctly and run, at least `(1 − ε_W) W_cert` less the wrong windows'
 capacity and the skipped work, `ε_W` PoUW's deficit (`M_r ≤ κ (C − (1 − ε_W) W_cert + wrongCapacity + skipped)/2`); the
@@ -68,7 +68,7 @@ with no sampling. Then, at an escape slack `θ > 0`, with probability at least `
 `δ = p/ε' + J ((1 − q)/q) B/(θ C)`, the compute efficiency is at most
 `s + (1 − s)(r̂ + ε_W W_cert/C + ε' + JΔ/H + θ) + ν_T + χ`, and the hardware multiple the developer needs is at least
 `ρ = max(1, 1/(s + ((1 − s)(r̂ + ε_W W_cert/C + ε' + JΔ/H + θ) + ν_T + χ)/MFU₀))`, with `r̂ = 1 − W_cert/C`. -/
-def DampenerRemote : Prop :=
+def SlowdownRemote : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (μ : PMF Ω) (N : ℕ) (c : Fin N → ℝ) (wrong : Ω → Fin N → Prop) (p ε : ℝ)
     (β ι : Type) [DecidableEq ι] (bad detected : Ω → Finset β) (I : Finset ι) (ident : β → ι) (τ w : β → ℝ)
     (Φ Δ H q B θ εW : ℝ)
@@ -92,7 +92,7 @@ def DampenerRemote : Prop :=
           unmonitoredShare C U +
               (1 - unmonitoredShare C U) * (residualShare W C + εW * W / C + ε + lagShare I.card Δ H + θ) +
             declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ ∧
-        remoteDampener mfu (unmonitoredShare C U)
+        remoteSlowdown mfu (unmonitoredShare C U)
             ((1 - unmonitoredShare C U) * (residualShare W C + εW * W / C + ε + lagShare I.card Δ H + θ) +
               declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ) ≤
           hardwareMultiple mfu κ (M ω) C U)

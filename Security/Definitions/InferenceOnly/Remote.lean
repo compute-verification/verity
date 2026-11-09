@@ -1,4 +1,4 @@
-import Definitions.InferenceOnly.Dampener
+import Definitions.InferenceOnly.Slowdown
 
 /-!
 # The compute dampener, remote protocol: the vocabulary
@@ -22,12 +22,12 @@ PoUW's deficit `ε_W` (`CircuitCredit`'s `ε`) adds one more: a certificate that
 of its credited work that did not run, so the work certified correctly and run is at least `(1 − ε_W) W_cert`, and the
 residual read there is `r̂ + ε_W W_cert/C`.
 
-`remoteDampener` is the hardware multiple the bound gives, as `benchmarks/rho`'s `theorem.multiple_bound` computes it
+`remoteSlowdown` is the hardware multiple the bound gives, as `benchmarks/rho`'s `theorem.multiple_bound` computes it
 with `reference_efficiency=False` (`benchmarks/nci`'s compute dampener on `tiers.evaluate`'s terms);
 `hardwareMultiple` is the one a developer needs.
 -/
 
-namespace InferenceOnly.Dampener
+namespace InferenceOnly.Slowdown
 
 /-- **The probability of an event** `E` under a distribution `μ` on a finite outcome space, as a real number:
 `∑_{ω ∈ E} μ(ω)`. -/
@@ -62,6 +62,6 @@ noncomputable def hardwareMultiple (mfu κ M C U : ℝ) : ℝ := max 1 (mfu / ef
 /-- **The dampener** `ρ = max(1, 1/(s + x/MFU₀))` (`benchmarks/rho`'s `theorem.multiple_bound` with
 `reference_efficiency=False`; at `s = 0` it is `max(1, MFU₀/x)`): unmonitored compute, the share `s`, trains like the
 unconstrained developer, at `MFU₀`, and the other terms `x` are counted at peak. -/
-noncomputable def remoteDampener (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))
+noncomputable def remoteSlowdown (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))
 
-end InferenceOnly.Dampener
+end InferenceOnly.Slowdown
