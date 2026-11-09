@@ -62,6 +62,7 @@ verity_vllm.engine.pin_op      # one name a vLLM module or op namespace is calle
 verity_vllm.engine.stock      # a stock engine at the pin with no protocol on, which benchmarks/replay_determinism builds
 verity_vllm.engine.forward_pass      # the model runner's seam around each forward pass: general plugins add their observers to its SEAM
 verity_vllm.engine.stock_kernels      # vLLM's own kernels at the pin, the baselines kernels and compute accounting time against
+verity_vllm.engine.collectives.all_reduce      # the CUDA communicator's seam for its all-reduce: a general plugin adds its replacement to its SEAM
 # the protocol options, each module a root: the adapters are imported by name when a run enables their protocol
 # (protocol_options.adapter)
 verity_vllm.protocols
