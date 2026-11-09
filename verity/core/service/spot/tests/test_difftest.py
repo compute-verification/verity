@@ -3965,7 +3965,7 @@ def second_statements(j):
     replay `sample`, the `interior` and `boundary` records, the second stage's units `drawn`, the design's `links` and
     `wires` (each null for none derived), the reads the `verdicts` of record report (`audit.session_registered`) and
     what they name of the sessions they checked (`second_stage.verified_of`), and each template's reference header
-    (`refs`, `{template: header}`, null for none) and the registered reads its reference statement was verified against
+    (`refs`, `{template: header}`, null for none) and the registered reads the params give it, taken as given
     (`ref_reads`, `{template: registered}`, each null for none, null for no template's)."""
     j = _json(j)
     if not (isinstance(j, dict) and isinstance(j.get("allow"), bool)):
