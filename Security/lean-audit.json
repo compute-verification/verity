@@ -283,22 +283,22 @@
   },
   "NetTiming.MonitoringPeriodAdaptive": {
    "owner": "@proofs",
-   "digest": "40200a70f1ec7f8e05bfe30dd7c682921b0ddd02dfa5bbb84fcac9df0f1a9302",
+   "digest": "bc15e8cbd72ea81e1bfbd100bd2997a34aaf2fbfa445ba155567691bcbd02bde",
    "why": "The monitoring period's adaptivity: each window's acceptance and faulty set read only earlier windows' coins, the faulty set among the window's blocks, as PooledLeakAccepted takes them."
   },
   "NetTiming.MonitoringPeriodChannel": {
    "owner": "@proofs",
-   "digest": "8c6ab84db5822888dbb424f7714917139db8dc953d0c75f8c5a793ab68f95b53",
+   "digest": "07296f63b555d3b16b89a7486369e76cb4dc745281299361ac021ac00698f099",
    "why": "The monitoring period's channel: the certifier's schedules fit their record format, each secret's schedule is among Ss and its record decodes back to it, as PooledLeakAccepted takes them."
   },
   "NetTiming.MonitoringPeriodEscapes": {
    "owner": "@proofs",
-   "digest": "baad0537bc991640b1323abb15f816e64ccb17ca3f8d6541b3caee67d1b13522",
+   "digest": "b74a3daa712b86592e56b66a8f217b4cdf9b9f54bb3f8eae948b75255e037165",
    "why": "The layer below's guarantee at each window: the conditional escape that the live sampled soundness gives at each window's history, as PooledLeakAccepted takes it."
   },
   "NetTiming.MonitoringPeriodLeaksChecked": {
    "owner": "@proofs",
-   "digest": "727b29fa325435eeddaf8266d17571053bd61f3138f42a01a5d24a37aaef1837",
+   "digest": "b9c545b3c906015be8e2259858af2ea8b0f162fda4f5217f29b7faa65f7b2ef1",
    "why": "The layer below's guarantee at each window: the leak relation with checked inputs at the window's faulty set, which the live SampledLeakChecked gives."
   },
   "Pouw.NCP.Params.InstanceU": {
@@ -5219,17 +5219,17 @@
    "type_hash": "5caed7ee8a100a9d93ca89b56802ab4a910a4db1c88e5e7788023283170da941",
    "unfolded_hash": "a2a838db89880b0bf3af43c3b3898b6051639fa5cede12def2b935025e33ac45"
   },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateExecutionPhases": {
+   "type_hash": "bf019f29e81a2ee4fb75f97f2c78c8a977221e50cb54dae09c839e0aef1ccd8f",
+   "unfolded_hash": "efcc585fd54b5a678dad999de824fdf7d75e1f1e43826813c5d67b6df416ae92"
+  },
   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock": {
    "type_hash": "20fc39951575ab482c9cae2fd98b1f3227bada256f634044e929818e3bd26afb",
    "unfolded_hash": "a54ec225c26672a8a10bdb1a0869d890e235dbbd4521d10f3cda64fcb95c58b5"
   },
   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerExecutionPhase": {
-   "type_hash": "cb4edaa614fa554bf28260d3f2be7a97d1fbcc281c4d5289f1ed37f1867bbb6e",
+   "type_hash": "4d61555ddfea9cde332ffe7267ff404ab36332982f927c8b7e20b97a3b77e1f5",
    "unfolded_hash": "938b0fea5fbc73702642462f94e399329fd8e29f79d4be1ebe92c42365384c5f"
-  },
-  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateExecutionPhases": {
-   "type_hash": "0b1f8a5253756424c59436b951f35d3c27d1ad0a2e780734d7ce6d21b6af784a",
-   "unfolded_hash": "efcc585fd54b5a678dad999de824fdf7d75e1f1e43826813c5d67b6df416ae92"
   },
   "NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock": {
    "type_hash": "83702ebbd0d402a2f16e304ab599dcff7ea1f1557615b05a358e2b3caca1257d",
@@ -5252,7 +5252,7 @@
    "unfolded_hash": "1c2437d7c906e657664c85e96bfcfe62008ecb495a4802b6627bd340380844c0"
   },
   "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerExecutionPhase": {
-   "type_hash": "2b88be87e58fe0688ef1e94ad5860bf98c293951ab6fe4bafc6f32b45c155816",
+   "type_hash": "fbeab661126a7f7259e8b098cf5bd3be54ce529dfaaa3abf893499ef20129f51",
    "unfolded_hash": "728490cacb10a4d116eaa567e6d1c5b2495fc2b2dead03abe93c48afbef1a1e7"
   },
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled": "657c317522e5a4e8cb952c9be17bd49ad0133334cd5b944fe4c6809862fe943f",
@@ -5272,7 +5272,7 @@
    "type_hash": "50edf1fb52d78599b26fb54aca2b376fa475a86024556bb53ee80f3d695f1ce9",
    "missing": "honest",
    "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique) and a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check) (CIR-190, open to 30 Nov)",
-   "unfolded_hash": "b47d65cccae8757ba6d024a7f98e4df2611ef0c9227e527821200452ff1733fa"
+   "unfolded_hash": "ee66a7a8cbe35f180e710fb3137634831dc1ba3f3ed6990775e49eeabb3a278d"
   },
   "Pous.SecurityProofs.BandPubMeets14": {
    "type_hash": "cc0a571f0b841ecb8d43acbf6b871e6cc71d9c7f83d30199fc0e717b117175f9",
@@ -18484,6 +18484,22 @@
    "type_hash": "5caed7ee8a100a9d93ca89b56802ab4a910a4db1c88e5e7788023283170da941",
    "unfolded_hash": "a2a838db89880b0bf3af43c3b3898b6051639fa5cede12def2b935025e33ac45"
   },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateExecutionPhases": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateExecutionPhases :",
+    "  NetTiming.Guarantees.EncardAccSeqsLeConstantRateExecutionPhases"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "bf019f29e81a2ee4fb75f97f2c78c8a977221e50cb54dae09c839e0aef1ccd8f",
+   "unfolded_hash": "efcc585fd54b5a678dad999de824fdf7d75e1f1e43826813c5d67b6df416ae92"
+  },
   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock": {
    "owner": "@network-accounting",
    "signature": [
@@ -18500,11 +18516,11 @@
    "type_hash": "20fc39951575ab482c9cae2fd98b1f3227bada256f634044e929818e3bd26afb",
    "unfolded_hash": "a54ec225c26672a8a10bdb1a0869d890e235dbbd4521d10f3cda64fcb95c58b5"
   },
-  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow": {
+  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerExecutionPhase": {
    "owner": "@network-accounting",
    "signature": [
-    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow :",
-    "  NetTiming.Guarantees.EncardAccSeqsLeConstantRatePerWindow"
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerExecutionPhase :",
+    "  NetTiming.Guarantees.EncardAccSeqsLeConstantRatePerExecutionPhase"
    ],
    "assumptions": [],
    "premises": {
@@ -18513,23 +18529,8 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "cb4edaa614fa554bf28260d3f2be7a97d1fbcc281c4d5289f1ed37f1867bbb6e",
+   "type_hash": "4d61555ddfea9cde332ffe7267ff404ab36332982f927c8b7e20b97a3b77e1f5",
    "unfolded_hash": "938b0fea5fbc73702642462f94e399329fd8e29f79d4be1ebe92c42365384c5f"
-  },
-  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows : NetTiming.Guarantees.EncardAccSeqsLeConstantRateWindows"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "0b1f8a5253756424c59436b951f35d3c27d1ad0a2e780734d7ce6d21b6af784a",
-   "unfolded_hash": "efcc585fd54b5a678dad999de824fdf7d75e1f1e43826813c5d67b6df416ae92"
   },
   "NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock": {
    "owner": "@network-accounting",
@@ -18585,11 +18586,11 @@
    "type_hash": "39a3ef7e0a076cb6b30cd12c203a8efb190a4e1e7092c69f1647bbc6dbd6289b",
    "unfolded_hash": "1c2437d7c906e657664c85e96bfcfe62008ecb495a4802b6627bd340380844c0"
   },
-  "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow": {
+  "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerExecutionPhase": {
    "owner": "@network-accounting",
    "signature": [
-    "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow :",
-    "  NetTiming.Guarantees.EncardDecodableLeConstantRatePerWindow"
+    "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerExecutionPhase :",
+    "  NetTiming.Guarantees.EncardDecodableLeConstantRatePerExecutionPhase"
    ],
    "assumptions": [],
    "premises": {
@@ -18598,7 +18599,7 @@
     "open": ["NetTiming.AcceptedUpTo", "NetTiming.JitterBounded", "NetTiming.Regenerates"],
     "reads": []
    },
-   "type_hash": "2b88be87e58fe0688ef1e94ad5860bf98c293951ab6fe4bafc6f32b45c155816",
+   "type_hash": "fbeab661126a7f7259e8b098cf5bd3be54ce529dfaaa3abf893499ef20129f51",
    "unfolded_hash": "728490cacb10a4d116eaa567e6d1c5b2495fc2b2dead03abe93c48afbef1a1e7"
   },
   "NetTiming.SecurityProofs.EncardFifoGrids": {
@@ -18699,11 +18700,11 @@
    "type_hash": "bdbc1f954c6569542c9d89590e8f6797c070343487e075e38dd8a2e9a24d5f44",
    "unfolded_hash": "788c608f427e0d1178622df46f79422fac33d0510a59bb632c11b71b63edfd0c"
   },
-  "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow": {
+  "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerExecutionPhase": {
    "owner": "@network-accounting",
    "signature": [
-    "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow :",
-    "  NetTiming.Guarantees.EncardIngressObsDecodableLeContentsPerWindow"
+    "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerExecutionPhase :",
+    "  NetTiming.Guarantees.EncardIngressObsDecodableLeContentsPerExecutionPhase"
    ],
    "assumptions": [],
    "premises": {
@@ -18712,14 +18713,14 @@
     "open": ["NetTiming.Allocated", "NetTiming.JitterBounded", "NetTiming.Packed", "NetTiming.StatusComplete"],
     "reads": []
    },
-   "type_hash": "c8332f52fdcab8bc4e7465816cc451535a743eaf18a480d6dd14909cc8476545",
+   "type_hash": "86ad855d5ef178a60453acb69b4e4780b9cfae6a66529339a418898ca5616cdf",
    "unfolded_hash": "c2672a78e30e5cc8d00e7df5644099ed9a04f917858b3e91f3e285794c280e7e"
   },
-  "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow": {
+  "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase": {
    "owner": "@network-accounting",
    "signature": [
-    "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow :",
-    "  NetTiming.Guarantees.EncardIngressObsDecodableLePerWindow"
+    "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase :",
+    "  NetTiming.Guarantees.EncardIngressObsDecodableLePerExecutionPhase"
    ],
    "assumptions": [],
    "premises": {
@@ -18728,7 +18729,7 @@
     "open": ["NetTiming.Allocated", "NetTiming.JitterBounded", "NetTiming.Packed", "NetTiming.StatusComplete"],
     "reads": []
    },
-   "type_hash": "13ea83921034e1ee1dc0cb725f2a74c0c928d20fccf7e71f6d962b726f735fa1",
+   "type_hash": "efe0b2b2d0ca57ef28bb67e4088c966f572e128ea00c33743f343d551ca16f89",
    "unfolded_hash": "e5093edbc65b0920bf70c9ecc4178e858c845dad83735ddbce94696116ef46d0"
   },
   "NetTiming.SecurityProofs.ExpectedRowCausal": {
@@ -18744,9 +18745,11 @@
    "type_hash": "5677dc78b1098f4956a21084ff940de6f71c34bf2f38bc3f2950cd7abe39ed89",
    "unfolded_hash": "532e9836d412e1a43882bcc44bbaa46b7e89430752a9146a521d2ed437ff0e69"
   },
-  "NetTiming.SecurityProofs.PeriodLeakAccepted": {
+  "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted": {
    "owner": "@network-accounting",
-   "signature": ["NetTiming.SecurityProofs.PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted"],
+   "signature": [
+    "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted : NetTiming.Guarantees.MonitoringPeriodLeakAccepted"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -18759,8 +18762,8 @@
     ],
     "reads": []
    },
-   "type_hash": "eb1ecf1c9fd8c032de54cd8f6a7cfd92a6a3e04c65b54f8d8dfbe15a1e586b9b",
-   "unfolded_hash": "a85933f2ce75db26aab088e8a818dae42c192636418a23ca8feaa065d8cf727c"
+   "type_hash": "1af5ebd4c7e149600198539a16cce9712821d3cf8c439a62f76517cd999755bc",
+   "unfolded_hash": "1c1fa553af358e26cb6f5a7554ad99f6d5786f8ed0ccf7d19fb6048e60b1a1b9"
   },
   "NetTiming.SecurityProofs.PooledIncorrectBlocksLe": {
    "owner": "@network-accounting",
@@ -18795,16 +18798,16 @@
    "premises": {
     "assumptions": [],
     "domain": [
-     "NetTiming.PeriodAdaptive",
-     "NetTiming.PeriodChannel",
-     "NetTiming.PeriodEscapes",
-     "NetTiming.PeriodLeaksChecked"
+     "NetTiming.MonitoringPeriodAdaptive",
+     "NetTiming.MonitoringPeriodChannel",
+     "NetTiming.MonitoringPeriodEscapes",
+     "NetTiming.MonitoringPeriodLeaksChecked"
     ],
     "open": ["NetTiming.CheckedUnique", "Verity.Assumptions.TrustedHost"],
     "reads": []
    },
    "type_hash": "50edf1fb52d78599b26fb54aca2b376fa475a86024556bb53ee80f3d695f1ce9",
-   "unfolded_hash": "b47d65cccae8757ba6d024a7f98e4df2611ef0c9227e527821200452ff1733fa"
+   "unfolded_hash": "ee66a7a8cbe35f180e710fb3137634831dc1ba3f3ed6990775e49eeabb3a278d"
   },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "owner": "@proofs",
@@ -27799,16 +27802,16 @@
    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": {
     "instLENat.le n (instHMul.hMul W T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
+   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateExecutionPhases": {
+    "instLENat.le n (instHMul.hMul W T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "instLENat.le n (instHMul.hMul m T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock": {
     "Eq ss.size 1": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le n (instHMul.hMul W T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerExecutionPhase": {
     "instLENat.le (instHMul.hMul m T) (instHMul.hMul W T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateExecutionPhases": {
-    "instLENat.le n (instHMul.hMul W T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le n (instHMul.hMul m T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardAccSeqsSampledLe": {
     "instLEENat.le As.encard (instHPow.hPow 2 c).cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -30372,9 +30375,9 @@
    }
   },
   "Definitions.Accounting.JointBridge.CommOfMonitoringPeriodLeakAccepted": {
-   "digest": "ff897bb9e4b271648a587cbfd711c85c94c777016cb1c58da9b1923d61623088",
+   "digest": "49586804383a3989e2713693198e1646ddbf6e33c6979920319220d096905a82",
    "definitions": {
-    "Accounting.JointBridge.RealizesCommOfMonitoringPeriodLeakAccepted": "b6ffe6963cb9d6cd85f9f2ae2a639ba2d910ddb7010acfda3b4c767dc399b6f7",
+    "Accounting.JointBridge.RealizesCommOfMonitoringPeriodLeakAccepted": "105909780b48c9aaf03ca25157077456d7a9656372f5eb3cea225664c358f6b5",
     "Accounting.JointBridge.RealizesCommOfMonitoringPeriodLeakAccepted.Tape": "33ffcd0c715a1c87cf8691788e0005d6ebdc739df2dfaf476d003c4ad4d32e67",
     "Accounting.JointBridge.RealizesCommOfMonitoringPeriodLeakAccepted.prover": "95b2dd1646684d2f6d20d6902c770856a68385c5efbbd0460525fa48dfb587c9",
     "Accounting.JointBridge.RealizesCommOfMonitoringPeriodLeakAccepted.stmt": "13f78c31780ba67569de1e7958142f883b93f2d7b04c5b6ed3eb0ada62b5dc2e",
@@ -35607,17 +35610,17 @@
    }
   },
   "Definitions.NetworkCertifier.Checked": {
-   "digest": "e508976637578af3dfbb589572a60e932af04470098f91b8255c40d2b3960c4f",
+   "digest": "d2ad30d5fb54d170011871883bc354441f703d171b4c8bd1b934239f9df1de62",
    "definitions": {
     "NetTiming.AccSeqsChecked": "ac1aadc477fe573ca7ff699d4e9d8ecf33dc098a82666bd08cec8610b15af47f",
     "NetTiming.AcceptedChecked": "ebac90316af0d57620fc25928e0f8e5d597b0c036adc3dbcd6d283f30a152e3b",
     "NetTiming.CheckedUnique": "218ece8715ff8f148a45704d6bc053db2a90664ab894f097b57f4808b4a9c73c",
     "NetTiming.CheckedWitness": "28412f5adc56a733bb362068f91ff2202dd7694b8d3aeef5fb416cc866b20996",
     "NetTiming.LeakAtChecked": "64a76743e36db9e8358182afeec6cc60e3029f3fed9a01da8866be93c717abcb",
-    "NetTiming.PeriodAdaptive": "40200a70f1ec7f8e05bfe30dd7c682921b0ddd02dfa5bbb84fcac9df0f1a9302",
-    "NetTiming.PeriodChannel": "8c6ab84db5822888dbb424f7714917139db8dc953d0c75f8c5a793ab68f95b53",
-    "NetTiming.PeriodEscapes": "baad0537bc991640b1323abb15f816e64ccb17ca3f8d6541b3caee67d1b13522",
-    "NetTiming.PeriodLeaksChecked": "727b29fa325435eeddaf8266d17571053bd61f3138f42a01a5d24a37aaef1837",
+    "NetTiming.MonitoringPeriodAdaptive": "bc15e8cbd72ea81e1bfbd100bd2997a34aaf2fbfa445ba155567691bcbd02bde",
+    "NetTiming.MonitoringPeriodChannel": "07296f63b555d3b16b89a7486369e76cb4dc745281299361ac021ac00698f099",
+    "NetTiming.MonitoringPeriodEscapes": "b74a3daa712b86592e56b66a8f217b4cdf9b9f54bb3f8eae948b75255e037165",
+    "NetTiming.MonitoringPeriodLeaksChecked": "b9c545b3c906015be8e2259858af2ea8b0f162fda4f5217f29b7faa65f7b2ef1",
     "NetTiming.PooledGoodChecked": "b68ea6a853aabc8cda0a29c101aabf56941994a4a27e47eb33a55a5b44cd19bc",
     "NetTiming.PrCheckMiss": "a2c296036c865c672d96cfe9f22405786267e66e72b03fbc6cbc79bf2ade1d47",
     "NetTiming.RLeakChecked": "5cdb1b525980a275b042fab84c4d8c14d5398e9e1f023c9d74028fd3d8da38de"
@@ -35641,41 +35644,41 @@
    }
   },
   "Definitions.NetworkCertifier.Guarantees": {
-   "digest": "dbfe70f1e65020cbafdd88fe6372a2f53e385dc2c62a7a320d332ab9e3950db8",
+   "digest": "4c25132a71599df39b56973cee52bdd15b0ba04f3e95c213b812a71bab17b8b3",
    "definitions": {
     "NetTiming.Guarantees.CardCountsEqLe": "76cfdb78cd7740508d7036e568b2d06e1e8477270445c6b7d9d0c5ce450f39db",
     "NetTiming.Guarantees.CardFree": "95b62a6bd671c7766718290c0a9171f73ee9bc36bd85a95cf1e9dda413ca4153",
     "NetTiming.Guarantees.CardLeftPacked": "7653fe84ff0e09e8dd01c62937ace68f14424dde4e07900acc3b0d869a96d99c",
     "NetTiming.Guarantees.EncardAccSeqsLeConstantRate": "b519169913a7015c8d7e76a91676d4f5c4e31d9008d1b93ccfa1ddc38fc78919",
+    "NetTiming.Guarantees.EncardAccSeqsLeConstantRateExecutionPhases": "e9aa6904bc776fd55aab5e3766d09b8d2ffbc333dace5dc1fde3c34d604db690",
     "NetTiming.Guarantees.EncardAccSeqsLeConstantRateFixedClock": "93c31cd95d771eafd5f2ccf4647668f221401ecd830cf894831cbf44df253e69",
-    "NetTiming.Guarantees.EncardAccSeqsLeConstantRatePerWindow": "4730efb16d53a0ce553deff4de3eea25bfe57e4fa506fbfa8f992385f177f481",
-    "NetTiming.Guarantees.EncardAccSeqsLeConstantRateWindows": "7c950bc34144cd89f79445a1c6ddd56e4d1ba1adec0fd3786ed7033b03f373a2",
+    "NetTiming.Guarantees.EncardAccSeqsLeConstantRatePerExecutionPhase": "99c5179a17d6dd33df8d23f93f6599ca9f79e3bb76cdb3b8083de9d63f9ac17e",
     "NetTiming.Guarantees.EncardAccSeqsLeFixedClock": "8cbd2e1bdb724dec1911df60d98518e3b2de2a3de4be6a360a8e85dd99ac4ceb",
     "NetTiming.Guarantees.EncardAccSeqsLeSync": "1613a2d1d782c1606c0802e412999354e1783d8377ee34a109f97e0d79cca289",
     "NetTiming.Guarantees.EncardDecodableLeConstantRate": "2c7fddc75778661927f172ba424dfda819b4043b6e6c4e1a3b531c42387c39d1",
-    "NetTiming.Guarantees.EncardDecodableLeConstantRatePerWindow": "214d92020ff264de6c6d98358204f7622abe9878815abcf55da54d3f3aec0ef6",
+    "NetTiming.Guarantees.EncardDecodableLeConstantRatePerExecutionPhase": "1a7873c918c92ddec7bb8d929b8145441e05c769a2f5d441313331c46119fbdc",
     "NetTiming.Guarantees.EncardFifoGrids": "86ea321749434f1d29655b5a06b833fc54462d0abf395c9adde5b9ea406d42aa",
     "NetTiming.Guarantees.EncardFifoGridsLeOfAvailable": "628485a6510b139296104a67939d308fcd61b3a51833f59dd11e11fa3d3cf6c6",
     "NetTiming.Guarantees.EncardIngressDecodableLe": "701afa39b7723199d26d1dba9f53c680563db7d7d1b678f0c721fa8cd7a3ceb2",
     "NetTiming.Guarantees.EncardIngressDecodableLeContents": "2a968e876707f2bc0aee9c57e8afb4eaecbc7f6bcbb8744abb28a7d1689b2619",
     "NetTiming.Guarantees.EncardIngressObsDecodableLe": "1e662478183ed129f72b09125137820af5694fb59ac9ee9b93c618b2b61fc027",
     "NetTiming.Guarantees.EncardIngressObsDecodableLeContents": "8610085580040505e3d7f8408af73b916138fdb3ff34b6f8ef0ea9b365db7f85",
-    "NetTiming.Guarantees.EncardIngressObsDecodableLeContentsPerWindow": "460710ffcbbc13b8b6879879325220fafab040ee4505a620af6d8bf2e8c41664",
-    "NetTiming.Guarantees.EncardIngressObsDecodableLePerWindow": "5b1bd0d5f8bb2e14913a96a64d8191d46d6a171723f46c3acb5c806c54e8cfe7",
+    "NetTiming.Guarantees.EncardIngressObsDecodableLeContentsPerExecutionPhase": "f23e16df303eee20fc08ff91de3e52f1158d381baafee6cd6a45e99d9366139e",
+    "NetTiming.Guarantees.EncardIngressObsDecodableLePerExecutionPhase": "b3498c8c71a69a436a35c0eaf9965702dd7dfe1ff43240885ff14c5d3962f7f6",
     "NetTiming.Guarantees.ExpectedRowCausal": "85dd5fa499a040c042f939c9e4fd249e9375914a67193e9ea5cde5b7560689f3"
    }
   },
   "Definitions.NetworkCertifier.Guarantees.Checked": {
-   "digest": "66d0183268e2a01388507b31685b0508f8b147e85e5eee85cebe1783834c34cd",
+   "digest": "bc62ae8f611cf66f638119b7dcbdbb100d1f07bab510df9b697a4033fd516593",
    "definitions": {
-    "NetTiming.Guarantees.PooledLeakChecked": "d9667f0e9e9afaec9aca6ce4760f3f153c1eabfcc9da4f47c32277be57a1f486",
+    "NetTiming.Guarantees.PooledLeakChecked": "6b342b687439ef3370ce635c86ebee78877fdb47ebd4a4d84b003db93384bea7",
     "NetTiming.Guarantees.SampledLeakChecked": "5192aca8823e3059ad3ef655de817231a01b005ea93677c6927a6d68b0d594c5"
    }
   },
-  "Definitions.NetworkCertifier.Guarantees.Period": {
-   "digest": "4ead6e402b6e55388a74abf4fe5a31a7cb7d00cbf9ae5c3a8bf6d422bedc45dc",
+  "Definitions.NetworkCertifier.Guarantees.MonitoringPeriod": {
+   "digest": "903736ebdde9a099d7d2dbc5498c19869a3ec7e460891fc55cb0810889ea1309",
    "definitions": {
-    "NetTiming.Guarantees.PeriodLeakAccepted": "0804ccc2658b6117fd77640b8baef1f86e0ce0ed7199405b672d6630d8012da9"
+    "NetTiming.Guarantees.MonitoringPeriodLeakAccepted": "33fde6b72fefcfb2bc3cdd8db27528f6dff6cf9224c39269bbbfd0efb36a5bb6"
    }
   },
   "Definitions.NetworkCertifier.Guarantees.Pooled": {
@@ -35712,11 +35715,11 @@
     "NetTiming.rowFrames": "a1c2604aec04da7731fcbd03d5189d5e8c3d2915e7c3ad309dc1320af225403e"
    }
   },
-  "Definitions.NetworkCertifier.Period": {
-   "digest": "e481e04b015ab70cef8a0f759de0405dbe3aab6f5f8d4c83f548020b7ccce699",
+  "Definitions.NetworkCertifier.MonitoringPeriod": {
+   "digest": "474c368e31aca67ff1b94738bcbf6b904cf9ff7cf371ad5922fe3dd5202fc163",
    "definitions": {
-    "NetTiming.SameRegistration": "8429cc0f7aa35a113597b5d61becf814dd398483b71b3aa633f976567dc17395",
-    "NetTiming.WindowGood": "af8db0513d67462c431108d83b6b01ca6e45c5ca437af0e30110094be909a702"
+    "NetTiming.ExecutionPhaseGood": "c20385320775a41b35a2c55999d24fe65f2abeaf0b66b002b2291d548fe13d1f",
+    "NetTiming.SameRegistration": "8429cc0f7aa35a113597b5d61becf814dd398483b71b3aa633f976567dc17395"
    }
   },
   "Definitions.NetworkCertifier.PooledLeak": {
@@ -44441,7 +44444,7 @@
    }
   },
   "NetworkCheck.Certificate": {
-   "digest": "f21641eb9d2362ff2ca4a46c042428b92f6893a7b1320527181e82debc36d88b",
+   "digest": "1e1f15d3703632b624bf90924d625a26d87efd69109b60b93956d7804a5edf38",
    "definitions": {
     "NetworkCheck.Direction": "e813aeb54a2376b4bf209416ab40c706ec7d9e1f7e3095417b154cb5936eb65a",
     "NetworkCheck.Direction.casesOn": "dff3f33d1ef1b290170e95d0450f3fed861459d8c2f27f1803047eda00212056",
@@ -44453,13 +44456,13 @@
     "NetworkCheck.Direction.rec": "a6de6bd412f2241207d6f5a7d609b56bcf144b836977b909ae1c29f9edcaeebb",
     "NetworkCheck.Direction.value": "c8437fdf42bda28c9694235363747393eeb36aac65f6af29087f7f23e8afdf9c",
     "NetworkCheck.E": "4ad734c58aaee5cbdb240fabce9d2e283dfd075068bc1195f333df1da7b15ef8",
+    "NetworkCheck.attachmentBytes": "3cd17e4affcf21b5f1de88e16545b9601181b11ca82110ef281b0dcb2bf72bcc",
     "NetworkCheck.certificateMessage": "aceb41d0e97903a0476d8e12283fc23c91927edb502b883ba43eb8ab32f0a509",
     "NetworkCheck.digestBytes": "9e96e2d93df6c73e5e3af40dcfb3bf843f8d99f947a2017ee9f712058c6e6bf1",
     "NetworkCheck.field": "c9ed4f8a032e4cea279c4829e429669597349984b1ac08b21958a590938ca4c3",
     "NetworkCheck.instDecidableEqDirection": "6a95b630f694f173231aa9c2f59292c3e230e9baa82944366fe07f1990839f77",
-    "NetworkCheck.messageInput": "6ca62a65fef651f7f718efa20001aab79ce2da513838afafb5c8cb915288eaa6",
+    "NetworkCheck.messageInput": "adeee11f4c55abdfe6c6faa66435b86b243ce15d0fa50fdb8db866571fa6629d",
     "NetworkCheck.messageTag": "73ac5cabb661cb705c5eac81365fafc3fe82c3f3e3197e204d66d1a942eede3d",
-    "NetworkCheck.sessionBytes": "246136b62eaa85afee9d24912c51cc91426b118c1f5918482d5be78c3528728e",
     "NetworkCheck.text": "286c98c6a1d53c1800199c68914196e6bc48de720610d69011aa11a7fca6fce0",
     "NetworkCheck.uBE": "38d77111405981b7e835cb0fa472f2901f09c7cfd17c15cb472df79452673164"
    }
@@ -44479,7 +44482,7 @@
    }
   },
   "NetworkCheck.Period": {
-   "digest": "39dee9fca09c8660501e45b269ca5d8c5f4be38cd48808247a89764d7c257aff",
+   "digest": "02c48da71bd03d88a59d1dc98e8b6b0dff376da1aada9a4806ea7cec62ce40f9",
    "definitions": {
     "NetworkCheck.Period.Audit": "0d641bb152e911020e01f254af27bca6b76ff4e2cb57994e3121b4fcb8e976f4",
     "NetworkCheck.Period.Audit.bits": "e933e5e70e66fbf6d1a3f868d294c6a0cfc6be8b835a4d117602235327ee4af1",
@@ -44500,9 +44503,14 @@
     "NetworkCheck.Period.Commitment.audits": "8c04202f08dcecdb35f5ce70ecd6693187140c483e30c2630bebc82d43e650e6",
     "NetworkCheck.Period.Commitment.bytes": "d7629aa637b0b56546744d75d9c94b30c6d90a0979079502ccb3d422e9205e02",
     "NetworkCheck.Period.Commitment.windows": "479934c5312f05d931afaee50d70021407b33540d34d698efc8fc1a671bf7018",
-    "NetworkCheck.Period.Evidence": "b44d2740485d2e32c3c9662cf61d9165a21e0b8be23125bf030b081279d40200",
+    "NetworkCheck.Period.Evidence": "079fa754e5c1ba69a37fad885f802c83d40c106641883abe958b318528e993db",
     "NetworkCheck.Period.Evidence.audits": "6fc39375016df2bea388b5273672ecb5d726f91cd1de6708b2eead5e92ff3016",
-    "NetworkCheck.Period.Evidence.windows": "e0c9317f98c0176543fd18e0d1fdfe2f832f88bff61628e751db296df9fcab15",
+    "NetworkCheck.Period.Evidence.windows": "8b52467f8d82c54af09b85916486a10b581d86b08dbc1af8c7325d2ede3bacd6",
+    "NetworkCheck.Period.ExecutionPhase": "94615441ac1b761b5d40dba0c1ed51122d99b01092e6cb1d878a144fd24c033f",
+    "NetworkCheck.Period.ExecutionPhase.answer": "20b351698e38cbc0bafdb0219ab85c9212ba3b5228cb7fb93aaedf676a3b8d07",
+    "NetworkCheck.Period.ExecutionPhase.certificates": "56c6b3ecc8d1466fbf909bc0e45905fdf068cdef5aa6f4ee0febb37ba02971f0",
+    "NetworkCheck.Period.ExecutionPhase.clockDigest?": "5a2fc2abf8f86e2ff506bd3622ab3c73550490a465a7b502a0ffca103461fd0c",
+    "NetworkCheck.Period.ExecutionPhase.shown": "17591f9208cf922bbe6c537501817cefc602b3887149f43906c2c74b85be162c",
     "NetworkCheck.Period.Facts": "daafb1974019c10b98ef31658f187fa6702934e4657a8d33b22fe65c75d7fc03",
     "NetworkCheck.Period.Facts.delta": "f35e9a1dcb90d596fe1e77f9bf438f3fbb0d885baa2780e6db8c27e831465105",
     "NetworkCheck.Period.Facts.drawn": "3ffe3730023d35a0a69029c0674cadc8e774a3ff5b020337bea6a7574e1cd428",
@@ -44574,6 +44582,7 @@
     "NetworkCheck.Period.Schedule.digest": "f7a0937986bb90375bfa9449fcda29e70595290e7e2f0708fd8e95614da11a9a",
     "NetworkCheck.Period.Schedule.egressCells": "ab6af989bbb27b04199ad5d22ffcefc93500e361aa1f08a6b2431a4ff1de5615",
     "NetworkCheck.Period.Schedule.every": "efa3c1a3dbc45582812bbbdff3d45b95a9d9eefb38877ded6545f3af2340ecda",
+    "NetworkCheck.Period.Schedule.executionPhasePrograms": "075dbf7d8479b3afbcd605e2b6733d071de37e25aa9bc5f88256c3a9c6ba8036",
     "NetworkCheck.Period.Schedule.ingressBuckets": "846da6f8bcc70781f4e7102f3377378986b00f603acc2335e6c2fa033569192d",
     "NetworkCheck.Period.Schedule.ingressCells": "456a3747426711d5a8ee215e9940b5e215afe4f2a7fc065948cc9b0fc4b72707",
     "NetworkCheck.Period.Schedule.lanes": "b68f3d232cb0e96870b51ba24198630c47a2a0eaeed1df322ba2b189e88e6290",
@@ -44581,18 +44590,12 @@
     "NetworkCheck.Period.Schedule.queue": "a96d60c3c2db4d053f6a7b60056abb9e0fe36df597b184ecb8ce2ac68499d95b",
     "NetworkCheck.Period.Schedule.slots": "26d6f1253bf743fdaf535388059d269535fed30c9cc3be7cdb7557b3a6c18648",
     "NetworkCheck.Period.Schedule.window": "dce093e3dc053e8f2b807e669008a0e1430c9140331547c7d5c7f077a0931f55",
-    "NetworkCheck.Period.Schedule.windowPrograms": "c2dfb61a74a0db4e38daed09783a63fb99eb1da448da0492a1430e7986c9a3e7",
     "NetworkCheck.Period.Shown": "012cdf1ca8e80987207b681a2e53edae3ff06f50dc29275f0f56f88721ed4817",
     "NetworkCheck.Period.Shown.casesOn": "14afa6b248788db8ea2038873d241bf1b58ddd5182adf027fe41d43c48f4c7ef",
     "NetworkCheck.Period.Shown.clock": "b23c251830f17fa7cc9d31730ac39bbdbfde76d7d8ae1b3a661ba5daf743a42f",
     "NetworkCheck.Period.Shown.ctorIdx": "5bf0bd235d53ab9cb8fb8972941255ee3a1b0209842b98eb35881939f3bc765d",
     "NetworkCheck.Period.Shown.rec": "fc8d24bb1fcb4757a5c81e41dece0694de4d94313c8fc31fbfa1f49b3767507f",
     "NetworkCheck.Period.Shown.rows": "7528ffcf875903fe9c88b8c64e4f4398b40bb76e66514839fcb6e07320e64cae",
-    "NetworkCheck.Period.Window": "26c7a5b5708963ea994b94238419f899dbce5513e3fa007442f65bcf936a10c4",
-    "NetworkCheck.Period.Window.answer": "00390732eab8913ad7e5377503e55287fee81179876a09214472d5e7d6fab624",
-    "NetworkCheck.Period.Window.certificates": "c13b6486721ffd58b677003a30a05579663b2fdd8ea38d4ac7171c62132be725",
-    "NetworkCheck.Period.Window.clockDigest?": "caa6c899c077659811ed08fdfbf54a5b1321539e555685bc2c6e895ce70a1928",
-    "NetworkCheck.Period.Window.shown": "e9b4a4cf5feb82235cf1646cb370cca076cdc2f4a71d2d8e4ab5d9b9477b4584",
     "NetworkCheck.Period.answered": "9638a680336ebedac02aee59166b28aaa2675536353a7c7f8189033817a6f901",
     "NetworkCheck.Period.atMost": "3df31d5d5297b8a4f0576162646c9449346e9ceb4d2d2f5f49f6fc7693514a84",
     "NetworkCheck.Period.auditCheck": "49a5add6075b56213d317b125ea0d99100422b09b24333db9e5944a9badfa641",
@@ -44608,7 +44611,7 @@
     "NetworkCheck.Period.certificateOf": "23705d7deefcf043100fe1689acef9c6a8b0d778482d9a85000e184bab7636b9",
     "NetworkCheck.Period.certifies": "2803235f6ec55f07888c0a09fa51eace653cb90b35adadd4d5693235a1ee7ff5",
     "NetworkCheck.Period.certifiesOn": "171f63a57032e389c2374de9f1d7e2990ea02fb0b34ba10c7c82090bd40ab411",
-    "NetworkCheck.Period.check": "db55c676a6d2b03eba819f70dae93f4b87cf8f7e2409bfcc2e920dd3486c895a",
+    "NetworkCheck.Period.check": "438e4c8e76ade9163614a6d6291c10a7c28534f4c3ffa28ce6f479b815fe0bdd",
     "NetworkCheck.Period.clearClocks": "f3d5c8cc2493a8bbfa1d7bf161c066530730dbc6f6c6bf9575f1dfb6de5fcb34",
     "NetworkCheck.Period.clockDigest": "b00053981453a122c0cf6e04e51482c993365526c33520f49eb09ccb03fd4dde",
     "NetworkCheck.Period.clockTag": "dac49ad8ff6064134028a068f766570c10643c1261cf4667962a3c000a5bddcc",
@@ -44621,7 +44624,9 @@
     "NetworkCheck.Period.egressParams": "ea9cdedc049f493326d92d430445805d9484fe5bc751642907f15063b5138cb6",
     "NetworkCheck.Period.entriesPort": "dac774704dd8b773413017c7a67519dc2b573a62423347b1e6554a7eac286498",
     "NetworkCheck.Period.entriesPortName": "905c95f9938ddef046ed3860aa9672c0a5d1dd118cb489c77e63f82862c17744",
-    "NetworkCheck.Period.evidenceOf": "e8f6e493568352890d94bbb521e7b18642759c63699adc8ed13d37e4b4ae27e7",
+    "NetworkCheck.Period.evidenceOf": "43591ed8bfc00e14fcc04b8c6fbacb64ab1c5957fdd9ff22590f27039728f0e0",
+    "NetworkCheck.Period.executionPhaseCheck": "c0a15809129a3a6962af6cc3539a2b23232e2f93752cd5b391a2fa1a59b43c97",
+    "NetworkCheck.Period.executionPhaseOf": "3f00fe8ba5dc187fd4697e16e589e345a223caf63d6ba446b9584d29944fb4ee",
     "NetworkCheck.Period.factsJson": "0b9370f335852edb82939bc930cb9609c85bcbf85842a16a6285e5dad8228bea",
     "NetworkCheck.Period.factsOf": "5f445bdfec9198a00a1f2319913c154384e4304ecabaad26a017b50efc1b067a",
     "NetworkCheck.Period.failReasons": "cc1ad3bcbfb6304ed0d4a47f039163c708d692299a47dc0f88749419d2ff6432",
@@ -44645,7 +44650,7 @@
     "NetworkCheck.Period.ownReturns": "b157c4746adb3ccd6b5c38d92f9b1efb215363b39c1a5d3788e3888d39fbfc32",
     "NetworkCheck.Period.paramBits": "c895c360193391ca37103a6c86d6f829392998170fb13da461cf5f5420f15f1e",
     "NetworkCheck.Period.paramsKeys": "7d5b0e5d8d12289ceaf9defb3a2b927a08d97c2d83b049eb183fc5ed2b9ccf08",
-    "NetworkCheck.Period.paramsOf": "7af1894261d151a222a25e8b4dc5db0eb23c88497c3e74b2c45ae5b19623bcd5",
+    "NetworkCheck.Period.paramsOf": "8115289977d3d3c890864041bc60bd8f805e3cc170cbca7349d8be4eb3d16db4",
     "NetworkCheck.Period.partNames": "badc9758e4738275c12fc353b4c979c3926245c8c6b126e3201254f2202a8cd6",
     "NetworkCheck.Period.profileJson": "b0c58e63ca7fb149271c3d878ecee533a50ac8914e70e41797c9efec66f76736",
     "NetworkCheck.Period.progName": "2de5c3a902de67782695321a70c44a30ddbfd0c7d15c826607f2cec5049956e4",
@@ -44661,11 +44666,11 @@
     "NetworkCheck.Period.rowSchema": "a1a5e44b385ce16297a572071652cbec050cb040f1f6f2780fbcd2916d10135a",
     "NetworkCheck.Period.rowsCheck": "a31c8bc1377babb1f0dd5252dae9ef4a2a624b0af216181f87db49d24c449444",
     "NetworkCheck.Period.rowsDomain": "229246d4935196701515eb5d41f1203ec7dd033d7050b6ac1ecc9969d57b3bc7",
+    "NetworkCheck.Period.rowsExecutionPhaseCheck": "afb655ffcd546860c65d73d3f2e01870d7463e72d2dd3889d74cc0713adee352",
     "NetworkCheck.Period.rowsFormat": "11bdb728facbd45997a856117c021217687a3138f0cbbae7fdc6c328d2d9c8b1",
     "NetworkCheck.Period.rowsOf": "a03b4a5424b3b5c0a91dfb208af40eba73715763cce39ca221da34948c4a3d5f",
     "NetworkCheck.Period.rowsParamsKeys": "e0126b4ea0f80abeb35946a683b171b41fda04bacc51c24da1c1432931a0438f",
     "NetworkCheck.Period.rowsTerms": "fbf2a379452227f1aeb6bb34c5c6f4ffcde89e5ce09518927d9f6be1627b5fc1",
-    "NetworkCheck.Period.rowsWindowCheck": "a48cbe0542fbfd373d01d618c9a1cf81e614101fe7ad621db42eaaa2ff39e745",
     "NetworkCheck.Period.scanOf": "69a2daa621cf244a12b68bba548dc89973a441ec99dac9bcc8391127309bf6b0",
     "NetworkCheck.Period.scheduleOf": "1811e2c54500efbc82dd3ebb45c369f49a5a8692ad66d8fd0ef21c6071a6a859",
     "NetworkCheck.Period.scheduleTag": "28084b0aafd10b575d2d436378040a9933e44cad6d04b87bad0c22921c4c69bc",
@@ -44687,10 +44692,8 @@
     "NetworkCheck.Period.tiedIn": "c61a279d13da96e9f75ff03a75664ffcbdbe8c1709f4c79f26783c81d6ccb128",
     "NetworkCheck.Period.tiedOf": "0cb27c1b526a7ad3cff170900af018046f3700a280c9c23a5c49d32538bae6dd",
     "NetworkCheck.Period.unitLevel": "628450a5396d927976e8e4c9c94c1af776d9123759e78255c1aff8c85de87bb5",
-    "NetworkCheck.Period.windowCheck": "499fab8b39873a4e3d109fd9a1418eca3f6ba546168cfbe22552e9e4be900804",
-    "NetworkCheck.Period.windowOf": "482c0724699acb6de3ffe0f9d06f4e6875278d9d68ec4fda8e9a3c3375754c00",
-    "NetworkCheck.Period.wired": "9b78f6671b42638b3ac1c07c1d03a79acaee0b510ac6b95145d63615df0109b6",
-    "NetworkCheck.Period.wiredCheck": "1474526d3bdbda9609a0dd34149bec0f575969553767ed90b7d5cb06378332f9",
+    "NetworkCheck.Period.wired": "1078520469877638a725f7e355022a7e7e152da2bcc452158e13e3573f7b917c",
+    "NetworkCheck.Period.wiredCheck": "56f994bb917a4d7f5d4a033d373990bf7e8b95b7f50cf11c81b5abfc1e666de5",
     "NetworkCheck.Period.wiredChecks": "59f78b132c6d397f4e3dcc5fc85397caac15284d723cc4e5c15753df95305d80",
     "NetworkCheck.Period.written": "67cd6a8796fb7e066c58f82e620ed177629deadb88b830d0cacaeaefac8f760e",
     "_private.NetworkCheck.Period.0.NetworkCheck.Period.exactly": "1260ca0c995e11c44a5d65b092b00ab9a2538cf4233a028ce4278d38bb9a33fc",
