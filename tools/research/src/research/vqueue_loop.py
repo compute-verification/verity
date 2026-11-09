@@ -1455,9 +1455,10 @@ class Loop:
         line = dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why, failed=c.verdict.infra, text=text)
         if self.shadow:
             return [self.record(t, "ring", **line, done=False)]
-        if not self._say(t, "ring", text, (INFRA_HANDLE,), sha=c.sha, why=a.why):
+        to = (INFRA_HANDLE,) if a.pr is None else self.owner(a.pr)
+        if not self._say(t, "ring", text, to, sha=c.sha, why=a.why):
             return [self.record(t, "ring", **line, done=False, posted=False,
-                                error=f"ringing {INFRA_HANDLE} about {c.sha[:12]} failed: the next tick rings again")]
+                                error=f"ringing {', '.join(to)} about {c.sha[:12]} failed: the next tick rings again")]
         return [self.record(t, "ring", **line, done=True, posted=True)]
 
     def _red(self, a: Red, c: Candidate, t: Tick) -> dict:

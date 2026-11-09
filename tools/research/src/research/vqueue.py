@@ -15,7 +15,9 @@ as `next` is), pushed to `queue/<sha12>` and checked by graph2 as `ready:<sha>`.
              enqueues on (2 at most), in words that change only with the erring tasks, so the loop tells infra once for each
              set; a listing failure is handled alike.  With `tree_ejects`, infra errors graph2 saw on two or more nodes
              (`tree`) follow the tree: they are bisected like a fail, on the members whose files meet their inputs, else on
-             every member, and eject a lone member.  Without it, the default, they are retried and rung like any other
+             every member, and eject a lone member.  Without it, the default, infra that persists until infra is rung is
+             bisected the same way, ejecting nobody: a lone member whose check keeps erring is rung to its owner and set
+             aside behind the other PRs while any waits (`infra` outcome; set aside again, nobody is rung), else retried
     pending  wait; a check still pending `pending_s` after its first enqueue is enqueued again, and rung at twice that
 
 `decide` is the whole policy: a pure function from a `Snapshot` (what the refs, the labels and graph2's results say now) to
@@ -90,8 +92,8 @@ class Outcome:
     """A decided candidate, as the loop recorded it from a `Drop`: what bisecting and a red's ring read."""
     members: tuple[int, ...]
     heads: tuple[str, ...]
-    state: str                     # pass | fail
-    suspects: tuple[int, ...] = () # fail: the members its own failures (or its infra errors that follow the tree) suspect
+    state: str                     # pass | fail | infra: a lone member whose check kept erring, set aside behind the rest
+    suspects: tuple[int, ...] = () # fail: the members its own failures (or the infra errors it was bisected on) suspect
     base: str | None = None        # the candidate's base: of a fail, and of a pass with inherited failures
     inherited: tuple[Failed, ...] = ()  # its inherited failures, which its base fails too
 
@@ -163,9 +165,10 @@ class Rerun:
 @dataclass(frozen=True)
 class Ring:
     """Tell infra that ``sha``'s check keeps ending in infra errors or failing to list, or stays pending, or that its verdict is
-    malformed."""
+    malformed; or tell the owner of ``pr``, its lone member, that its check keeps erring."""
     sha: str
     why: str
+    pr: int | None = None
 
 
 @dataclass(frozen=True)
@@ -214,10 +217,29 @@ def decide(s: Snapshot) -> list[Action]:
             ejected = _failed(c1, ready, _outcomes(s, acts), acts)
             acts += [Drop(c.sha, BASE_FAILED) for c in chain[1:]]
             chain = []
-        elif reading == INFRA:
+        elif reading == INFRA and (s.tree_ejects or c1.tries < min(s.rings, 2)):
             acts.append(Retry(c1.sha))
             if c1.tries >= min(s.rings, 2):
                 acts.append(Ring(c1.sha, _ring_why(c1)))
+        elif reading == INFRA and len(c1.members) > 1:
+            acts.append(Ring(c1.sha, _ring_why(c1)))
+            ejected = _failed(c1, ready, _outcomes(s, acts), acts, tree=False)
+            acts += [Drop(c.sha, BASE_FAILED) for c in chain[1:]]
+            chain = []
+        elif reading == INFRA:
+            outcomes = _outcomes(s, acts)
+            aside, told = _waiting(s, ready, chain, landed, outcomes), _told(c1, outcomes)
+            if not aside:
+                acts.append(Retry(c1.sha))
+            if not (aside and told):
+                acts.append(Ring(c1.sha, _ring_why(c1)))
+            if not told:
+                acts.append(Ring(c1.sha, _owner_why(c1), c1.members[0]))
+            if aside:
+                acts.append(Drop(c1.sha, f"{_ring_why(c1)}, with only #{c1.members[0]} merged: it goes behind the PRs waiting, "
+                                         "and nobody is ejected for it", Outcome(c1.members, c1.heads, INFRA, c1.members, c1.base)))
+                acts += [Drop(c.sha, BASE_FAILED) for c in chain[1:]]
+                chain = []
         elif reading == PENDING and s.now is not None and c1.enqueued is not None:
             if s.now - c1.enqueued > s.pending_s and c1.tries == 1:
                 acts.append(Retry(c1.sha))
@@ -393,12 +415,13 @@ def _rerun(c1: Candidate, ready: dict[int, Ready]) -> Rerun | None:
     return Rerun(c1.sha, keys)
 
 
-def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], acts: list[Action]) -> set[int]:
+def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], acts: list[Action], tree: bool = True) -> set[int]:
     """What a failed lowest candidate calls for: the ring of the reds it shows, the ejection its own failures make (or, with
-    none, its infra errors that follow the tree), if any, and its drop; the PRs it ejects.  Only those suspect anyone."""
+    none, its infra errors that follow the tree; with ``tree`` False, every infra error of a check that keeps erring, which
+    ejects nobody), if any, and its drop; the PRs it ejects.  Only those suspect anyone."""
     v, heads = c1.verdict, dict(zip(c1.members, c1.heads))
     own = tuple(f for f in v.failed if not _inherited(f))
-    by_inputs = [m for m in c1.members if any(meets(ready[m].files, f.inputs) for f in own or _tree(v))]
+    by_inputs = [m for m in c1.members if any(meets(ready[m].files, f.inputs) for f in own or (_tree(v) if tree else v.infra))]
     eject = None
     if own and len(by_inputs) == 1:
         n = by_inputs[0]
@@ -410,7 +433,7 @@ def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], act
         eject = Eject(n, heads[n], f"{', '.join(f.task for f in own)} failed alone at {heads[n][:12]}{again}, and no failing "
                                    "task's inputs meet its files: if a test flaked, delete it (a test that flakes is deleted, "
                                    "not rerun)", own)
-    elif len(c1.members) == 1:
+    elif len(c1.members) == 1 and tree:
         n = c1.members[0]
         eject = Eject(n, heads[n], f"{_tree_why(c1)}, with only it merged on {c1.base[:12]}: a check that keeps erring on a "
                                    "change (an undeclared read, a hang, an untraced program) is the change's to fix", _tree(v))
@@ -418,7 +441,8 @@ def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], act
     acts += _red(c1, outcomes)
     if eject is not None:
         acts.append(eject)
-    why = f"failed: {', '.join(f.task for f in v.failed)}" if own else _tree_why(c1)
+    why = (f"failed: {', '.join(f.task for f in v.failed)}" if own else _tree_why(c1) if tree else
+           f"{_ring_why(c1)}, again after it was enqueued again: bisected on them, ejecting nobody")
     acts.append(Drop(c1.sha, why, Outcome(c1.members, c1.heads, FAIL, suspects, c1.base,
                                           tuple(f for f in v.failed if _inherited(f)))))
     return set() if eject is None else {eject.number}
@@ -432,6 +456,26 @@ def _ring_why(c: Candidate) -> str:
     return f"{c.sha[:12]}'s check ended in infra errors" + (f": {tasks}" if tasks else "")
 
 
+def _owner_why(c: Candidate) -> str:
+    erred = "failed to list" if c.verdict.state == LIST_FAILED else "ended in infra errors: " + ", ".join(
+        sorted({f.task for f in c.verdict.infra}))
+    return (f"#{c.members[0]}'s check, with only it merged on {c.base[:12]}, {erred}, again after it was enqueued again.  "
+            "Nobody is ejected for it: it waits behind the other PRs, enqueued again, until its check passes or a push "
+            "changes it (a hang, an out-of-memory kill and an undeclared read are a change's to fix)")
+
+
+def _told(c: Candidate, outcomes: list[Outcome]) -> bool:
+    """Whether ``c``'s lone member was set aside at its head before: its owner and infra were rung then."""
+    return any(o.state == INFRA and (c.members[0], c.heads[0]) in zip(o.members, o.heads) for o in outcomes)
+
+
+def _waiting(s: Snapshot, ready: dict[int, Ready], chain: list[Candidate], landed: set[int], outcomes: list[Outcome]) -> bool:
+    """Whether another PR waits behind the lowest candidate: in a candidate above it, or in the next batch."""
+    busy = landed | set(chain[0].members)
+    pool = sorted((r for r in ready.values() if r.number not in busy and not r.conflict), key=lambda r: (r.rank, r.number))
+    return len(chain) > 1 or bool(_batch(pool, outcomes, s.batch, s.lean))
+
+
 def _tree_why(c: Candidate) -> str:
     return f"{c.sha[:12]}'s check ended in infra errors on two or more nodes, which follow its tree: " + ", ".join(
         f.task for f in _tree(c.verdict))
@@ -439,17 +483,22 @@ def _tree_why(c: Candidate) -> str:
 
 def _batch(pool: list[Ready], outcomes: list[Outcome], size: int, lean: int) -> tuple[int, ...]:
     """The next batch from ``pool`` (in rank order): each PR whose cap allows it, while the batch is under its limit, with at
-    most ``lean`` Lean PRs.  A suspect's cap is half the suspects of the newest outcome holding it at its head, at least 1."""
+    most ``lean`` Lean PRs.  A suspect's cap is half the suspects of the newest outcome holding it at its head, at least 1;
+    a PR set aside (`infra`) comes after every other, alone, the longest set aside first."""
     newest = _newest(outcomes, {r.number: r.head for r in pool})
+    at = {id(o): i for i, o in enumerate(outcomes)}
     batch: list[int] = []
     limit, leans = size, 0
-    for r in pool:
+    for r in sorted(pool, key=lambda r: at[id(o)] if (o := newest.get(r.number)) is not None and o.state == INFRA else -1):
         if len(batch) >= limit:
             break
         o = newest.get(r.number)
         if (o is not None and o.state == PASS) or (r.lean and leans >= lean):
             continue
-        cap = max(1, len(o.suspects) // 2) if o is not None and o.state == FAIL and r.number in o.suspects else size
+        if o is not None and o.state == INFRA and batch:
+            break
+        cap = (max(1, len(o.suspects) // 2) if o is not None and o.state == FAIL and r.number in o.suspects else
+               1 if o is not None and o.state == INFRA else size)
         if len(batch) < cap:
             batch.append(r.number)
             limit, leans = min(limit, cap), leans + r.lean
