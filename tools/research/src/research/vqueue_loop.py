@@ -125,7 +125,8 @@ LOCK, LOG, STATE = Path("/data/vqueue/vqueue.lock"), Path("/data/vqueue/decision
 #: drive's priority list (its `--priority-file`)
 PRIORITY = Path("/data/drive/priority")
 #: a freeze's paths, one git pathspec a line (`#` lines skipped): while the file exists, a PR whose change renames or deletes a
-#: file under one waits, as does one that moves a word map there; ordinary edits don't
+#: file under one waits, as does one that moves a word map there; ordinary edits don't, nor do the PRs an `except N ...` line
+#: names, which the freeze's owner checked against the branch it protects
 FROZEN = Path("/data/vqueue/live/frozen")
 #: how far back the decision log is read
 WINDOW_S = 48 * 3600
@@ -566,9 +567,10 @@ class World:
                 held = (unreviewed(reviews, ()) or "").startswith("held")
                 if landing or not held and lowrisk(files[n], excludes):
                     took.append(n)
-            if specs := self._frozen():                     # a PR's own change: above `checked` while `main` doesn't hold it
+            specs, spared = self._frozen()
+            if specs:                                       # a PR's own change: above `checked` while `main` doesn't hold it
                 below = old if old and not self._ancestor(old, main) else main
-                took = [n for n in took if not self._frozen_out(below, entries[n].pr, specs)]
+                took = [n for n in took if n in spared or not self._frozen_out(below, entries[n].pr, specs)]
             new = any((entries[n].pr.head, main) not in self._judged for n in took)
             with base_drivers(self.repo, main) if new else contextlib.nullcontext(None) as cfg:   # once a tick, not a PR
                 chosen = {n: (files[n], *j)
@@ -600,11 +602,13 @@ class World:
         self.prs = {n: entries[n].pr for n in chosen}
         return [Ready(n, entries[n].pr.head, *chosen[n][:2], rank=i, conflict=chosen[n][2]) for i, n in enumerate(placed)]
 
-    def _frozen(self) -> list[str]:
-        """The freeze's pathspecs (`FROZEN`): none while its file is absent."""
+    def _frozen(self) -> tuple[list[str], set[int]]:
+        """The freeze's pathspecs and the PRs its `except` lines spare (`FROZEN`): none while its file is absent."""
         if self.frozen_file is None or not self.frozen_file.is_file():
-            return []
-        return [s for line in self.frozen_file.read_text().splitlines() if (s := line.strip()) and not s.startswith("#")]
+            return [], set()
+        lines = [s for line in self.frozen_file.read_text().splitlines() if (s := line.strip()) and not s.startswith("#")]
+        spared = {int(n.lstrip("#")) for s in lines if s.startswith("except ") for n in s.split()[1:]}
+        return [s for s in lines if not s.startswith("except ")], spared
 
     def _frozen_out(self, below: str, p: PR, specs: list[str]) -> bool:
         """Whether ``p``'s own change, above ``below``, renames or deletes a file under ``specs``, said once a head in the log."""
