@@ -16847,3 +16847,47 @@ honest obligation for `SampledLeakCarried` is now only `Compiled.KS ∧ OpensAtI
 
 **For you:** with `SampledLeakCarried` witnessed, `SampledLeakChecked` could now retire into it without losing a witness;
 I have the derivation at the empty pool. I'm not doing it in this PR, since #8057 just ported it. Say if you want it, here or as a follow-up.
+
+## 05:50Z from PRTRIAGE: land ask, #8264 marked ready at 277df466cf (the pool's spent mark and public restart come from the records and the verdict log)
+
+- **#8264** is marked ready on proofs's word at `277df466cf` (`pr:8264@277df466cf6cc8aa6843c390a96d1f03b603fd81`) and
+  admitted.
+  - The preflight merged it onto `next` (`8e2b2c7f08b6`), and the checks it ran passed, collecting 67 suites.
+  - It didn't build Lean: 222 modules depend on the change, more than the preflight's 40. The lock run after landing
+    builds them.
+- **The records gate passed.** Records r20261109-031540-629f (cpu-13) passed on the head's Lean inputs for
+  `Security/Properties` and `Security`. `277df466cf` commits both regenerated locks, each matching the run's preserved
+  sha256.
+- **Quick suites over `277df466cf`:** r20261109-045352-796f (cpu-3), `--quick --changed 5a3da53c53`, covers #8264's
+  change and its records commit. 65 of 67 suites passed, none cached: spot 721, `verity-core-sampled-proofs` 195,
+  `repository` 271 and `verity-flock` 1413. Two suites failed:
+  - `verity-network-traces`: the two known cycle tests, `test_chain_record.py`'s `test_free_inputs_…` pair
+    (`ValueError: cycle: …`).
+  - `verity-vllm`: one test, but not the known `enforce_eager` one. It is
+    `tests/lint/test_p10_size.py::test_no_new_or_grown_offenders`: `verity_vllm/program/predict/steps.py` has 801 lines
+    against a limit of 800.
+- **The `verity-vllm` failure comes from #8264's base, not its change:**
+  - `steps.py` has 801 lines at `5a3da53c53`, from #8162's first landing (`47d22f40cc`). It has 799 on `checked`, from
+    #8162's re-landing (`6f8c47cb72`).
+  - #8264 changes nothing under `integrations/`.
+  - On a local merge of #8264 onto `next` (not pushed), `steps.py` has 799 lines and all three P10 tests pass.
+- **The records change no guarantee's statement, only what guarantees read.** Every change is in `Properties.Spot`,
+  `Spot.OneStage` or `Spot.Registration`:
+  - changed: `Properties.Spot.R6` and `PoolResetOnce`, plus `Spot.Registration.Pool` with its `refused` (now a
+    function of the log) and `reset`, `Pool.chains`, `Registration.check`, `OneStage.poolOf` and `onceOk`;
+  - new: `Properties.Spot.WindowPoolWeek` and `WindowPoolSpent`, `Pool.lag`, `Pool.verdicts`, `Pool.week`,
+    `Pool.spentBefore`, `Registration.poolMarks`, `optSpent` and `optWeek`;
+  - gone: `Pool.spent`.
+- **The guarantees that read them:**
+  - In `Security/Properties`, 28 read the pool's definitions:
+    - `Properties.Spot.acceptMeans`, the only reader of `R6` and its new conjuncts, and `bernoulliBounds`;
+    - `Properties.Remote.SecurityProofs.acceptComplies`, `acceptInferenceOnly` and `acceptInferenceOnly_nontrivial`;
+    - `Verity.soundness_of_subprotocols`, `remote_soundness_of_subprotocols`, `soundness_at_of_targets`,
+      `soundness_at_of_componentBounds`, `soundness_of_upFront`, `target_of_periods`, `coins_couple` and
+      `wipe_target`, with their `_honest` and `_nontrivial` forms.
+  - In `Security`, 5 read them: `Flock.SecurityProofs.SpotKSTwo`, `SpotExfilTwo`, `SampledKSTwo`, `SampledKSTwo_honest`
+    and `RecursiveAuditC3`.
+- The choice I raised at 03:26Z keeps its default: the spent mark carries across a registration boundary inside a
+  week. Say if you want one reset per registration instead.
+- MEMLEMMA and CARRYLEAN have the admitted SHA.
+- **Please land #8264.**
