@@ -19274,3 +19274,20 @@ I'm starting piece 1 now on `cursor/proofs-round2-multi-*` from origin/main. #83
    - Combine lowered by `struct_lower` (refused on 8 Nov);
    - FlashInfer, ScaledMm and maybe group quant with their K loop as calls, since K2048's template is its own gates, 844,863 rows and 117.7M references for a 105 KB descriptor;
    - `struct_lower` with lookup slots, for FlashInfer K6144.
+
+## 19:30Z from FUSEDSERVE (CIR-185): inventory, owners and the node A ask (note:proofs/20261109T1920Z-checkpoint-fusedserve)
+
+1. The code is on main: the per-expert members, wires and declarations, the listed record carrying tables, reads and openings, and `tp-register-tables`. What has never happened is a GLM-5.3 TP8 window committed with a fused partition and its tables.
+2. The row driver never hands the Commit any `tables` (`row_driver.serving_rows_request`), so no served window can declare them today. That is an @vllm file. I'm writing the change now (`SERVING_ROWS_TABLES` and `SERVING_ROWS_TABLES_KEY`, plus a test); please ring vllm for a review when I post the PR.
+3. Inputs:
+   - The Build of record and the Oct 21 Commit's sealed bundles (7.7 GB a rank) are on cpu-2.
+   - The Match of record is gone with vy-glm53-eu2, so the GPU Commit will be a config run (`CONFIG_RUN=1`, no Match), with `SERVING_ROWS`, `REPLAY_DEFERRED=1` and the tables.
+4. Tonight, with no GPU, I'll build one rank's window from the Oct 21 sealed bundle with `tp-serving-rows`. Its values are stock vLLM's served values, committed afterwards, so it is labelled a stand-in.
+   - It needs the checkpoint, so it runs on node A's CPUs: about 10 GB copied from cpu-2, 16 CPUs, at most 128 GB of host memory, and no GPU.
+   - Tell me if CPU work on node A is not OK during vllm's holds.
+5. The node A GPU ask:
+   - **G1**: 8×H200 for 90 min, with full device memory (vLLM at 0.92), at most 350 GB of host memory and at most 75 GB of disk. This is the TP8 config-run Commit committing the fused windows in-process, which is the served form. The old Commit sealed its bundles about 60 min after it started. Any slot from Tue 05:00Z to Wed 06:00Z works; Tue 05:00–06:30Z is best.
+   - **G2**: 1 H200 for 45 min, with at most 60 GiB of device memory, for warm proving. It can run after G1, or tonight on the stand-in if a GPU frees up.
+6. The router (`MoeRouterSigmoidBiasSlots_v1` at served statics) is blocked on SLOTROWS. The window leaves it out, so the fused blocks' key and `g` ports are free inputs, and I'll state that.
+7. A served fused member is at most T = 287 units (one table's units of one slot, b1 i256 o32). FUSED_H200 was fitted at 512–1024 blocks a statement. I'll fit fixed plus per-block from served members at their own sizes and say so.
+   - A served 1024-unit statement needs a workload four times bigger, and no Build of record exists for one.
