@@ -19,6 +19,7 @@ from typing import Any
 import numpy as np
 
 from verity.ml.commitments import history as HT
+from verity.ml.commitments import hm96
 from verity_vllm.commit import row_tables_device as D
 
 __all__ = ["Hist", "SALT_TAG", "Table", "salt_key"]
@@ -90,7 +91,7 @@ class Table:
         self.rows: list[np.ndarray] = []
         self.salts: list[bytes] = []
         self.bcs: list[bytes] = []
-        pad = HT._INST.tree_leaf(HT._INST.default_key, HT.placeholder(words))
+        pad = hm96.SHA512.tree_leaf(hm96.SHA512.default_key, HT.placeholder(words))
         h = self._h = Hist()
         h.did[:] = D._words(self.domain.domain_id).tolist()
         h.pad[:] = D._words(pad).tolist()

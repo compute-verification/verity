@@ -60,7 +60,7 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
   ``RoPEHead_v1{D=..}``            every head of every ``RoPE_v1`` row: ``x``, ``cs`` -> ``out`` (D words each)
   ``GemmCoordinate_v1{K=..}``      every coordinate of the ``Gemm_v1`` rows of that K, as shared rows (M0's shared-row files): the
                                    ``x`` table (every token's input row), the ``w`` table (every weight row ``W[c, :]``) and ``y``,
-                                   the instances referencing them by ``verity/one-stage/gemm-grid/v0`` (:func:`grid`); the tables
+                                   the instances referencing them by ``verity/one-stage/gemm-grid/v0`` (`gemm_rows`); the tables
                                    are fixed by the layout, never by the values, so repeated rows stay separate table rows
   ``ScaledMmS8Coordinate_v1{K=..}``  every coordinate of the ``ScaledMmS8_v1`` rows of that K, A6's bit rows per instance:
                                    ``x`` (the token's s8 codes then its f32 scale, row-seg), ``w`` (``W[c, :]`` then ``sw[c]``,
@@ -107,11 +107,9 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    whole along the others (a GEMM coordinate: ``x`` whole, ``w[n]``) -> ``out.<member>``, the
                                    row's output element; packed ports, one index entry per row; chunked (``chunk_cap``), v2
                                    bit rows (`chunk_rows.unit_rows`) -> ``o0``
-  ``EmbeddingRead_v1{V=2^17,H=..}``  every history read of a ``DsaHistoryReads_v1`` row (``HISTORY``, `history_rows`) in a
-                                   window whose partition file says ``"histories": true``: ``in0`` the key, ``in1`` and ``in2``
-                                   its table's root and domain id, ``in3`` .. ``in5`` the table's row, salt and path there ->
-                                   ``o0``, ``o1`` (the row, its verdict); always chunked, v2 bit rows; its writer's
-                                   (``DsaLatentRow_v1``, chunked) ``o0`` row-seg, the table's leaves
+  ``EmbeddingRead_v1{V=2^17,H=..}``  every history read of a ``DsaHistoryReads_v1`` row where the partition file says
+                                   ``"histories": true`` (`history_rows`: its ports, and its writer's row-seg ``o0``); always
+                                   chunked, v2 bit rows
   any row's own Definition         every row of it, the row itself: ``in<g>`` per argument group -> ``out.<member>`` per
                                    committed member (``vu_export._decompose_row``'s port rule); chunked when the file's
                                    ``chunk_cap`` names it, v2 bit rows (`chunk_rows.unit_rows`, its MUFU table reads laid out
@@ -146,7 +144,7 @@ from verity_vllm.commit import history_tables as H, index as IX, row_tables as R
 from verity.ml.windows import interface as IF
 from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import chain_rows as CH, chunk_rows as CR, ingress_rows as IR
-from verity_vllm.pipeline import expert_rows as EX, history_rows as HR
+from verity_vllm.pipeline import expert_rows as EX, gemm_rows as GM, history_rows as HR
 from verity_vllm.pipeline import kchunk_rows as KC, part_rows as PR
 from verity_vllm.pipeline import s8_rows as S8, slice_rows as SL
 from verity_vllm.pipeline import split_rows as SP, stage_rows as ST, weight_rows as WT
@@ -261,7 +259,7 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
 
 
 def row_units(t: str, d: Mapping[str, Any]) -> int:
-    """How many of template ``t``'s units a row of description ``d`` holds; a GEMM's are its groups' (`grid`), not a row's."""
+    """How many of template ``t``'s units a row of description ``d`` holds; a GEMM's are its groups' (`gemm_rows.grid`), not a row's."""
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     tp = template(t)
@@ -281,7 +279,7 @@ def row_units(t: str, d: Mapping[str, Any]) -> int:
         return int(S["N"]) // coord_width(tp.word)
     if tp.layout in CHUNKED or tp.layout == "rope":
         return int(S["NHEADS" if tp.layout == "rope" else "N"])
-    raise ValueError(f"{t}: a {tp.layout} row's units are its group's, not its own (`grid`)")
+    raise ValueError(f"{t}: a {tp.layout} row's units are its group's, not its own (`gemm_rows.grid`)")
 
 
 def chunk_caps(tmpls: Sequence[str]) -> dict[str, int]:
@@ -330,7 +328,7 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
             D = int(d["statics"]["D"])
             m = CS.Member(t, (("x", D), ("cs", D)), (("out", D),), n, base)
         elif layout == "gemm":
-            K, groups = int(d["statics"]["K"]), grid(rs)
+            K, groups = int(d["statics"]["K"]), GM.grid(rs)
             rx, rw = sum(g["tokens"] for g in groups), sum(g["columns"] for g in groups)
             m = CS.Member(t, (("x", K), ("w", K)), (("y", 1),), sum(g["tokens"] * g["columns"] for g in groups), base,
                           tables=(("x", rx), ("w", rw)))
@@ -522,7 +520,7 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
     if layout == "part" and tp.packed:
         return PR.read_part(m, rows, store, weights, arrivals, _slices, _packed)
     if layout == "gemm":
-        return _read_gemm(m, rows, store, weights, arrivals)
+        return GM.read(m, rows, store, weights, arrivals, _operand)
     if layout == "coord":
         return PR.read_coord(m, rows, store, weights, arrivals, _slices, _packed)
     if layout in READERS:
@@ -585,54 +583,6 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
     if lo - m.base != m.n:
         raise ValueError(f"{m.key}: its rows hold {lo - m.base} units, not its {m.n} (a chunk is read with its template's others, `read_all`)")
     data = {"rows": {p: np.concatenate(cols[p]) for p, _ in m.rows}, "outs": {p: np.concatenate(cols[p]) for p, _ in m.outs}}
-    return data, entries
-
-
-def grid(rows: list[tuple[str, Any, dict, dict]]) -> list[dict[str, Any]]:
-    """``verity/one-stage/gemm-grid/v0``'s groups: one per GEMM site (op_path) in order of first appearance, each
-    ``{name, tokens, columns, x_base, w_base, rows}``; instance ``i`` of a group, ``j = i - base``, is token ``j div columns`` and
-    column ``j mod columns``, and reads ``x`` row ``x_base + j div columns`` and ``w`` row ``w_base + j mod columns``."""
-    by: dict[str, list] = {}
-    for x in rows:
-        by.setdefault(x[3]["op_path"], []).append(x)
-    out, xb, wb = [], 0, 0
-    for op, rs in by.items():
-        cols = int(rs[0][3]["statics"]["N"])
-        out.append({"name": op, "tokens": len(rs), "columns": cols, "x_base": xb, "w_base": wb, "rows": rs})
-        xb += len(rs)
-        wb += cols
-    return out
-
-
-def _read_gemm(m: CS.Member, rows: list[tuple[str, Any, dict, dict]], store: Any, weights: Callable,
-               arrivals: dict[str, int] | None) -> tuple[dict[str, Any], list[list[Any]]]:
-    """A GEMM member as shared rows: the ``x`` table (every token's input row, group by group), the ``w`` table (every weight row
-    ``W[c, :]``, read once per group), ``y`` (every output word, instance-major) and the refs of the grid rule."""
-    K = dict(m.rows)["x"]
-    xs, ws, ys, refs, entries = [], [], [], [], []
-    lo = m.base
-    for g in grid(rows):
-        T, N = g["tokens"], g["columns"]
-        rid0, pi0, r0, _d0 = g["rows"][0]
-        ws.append(np.asarray(_operand(pi0, store, weights, rid0, int((arrivals or {}).get(rid0, 0)), r0["args"][1]), dtype=np.uint16).reshape(N, K))
-        for rid, pi, r, d in g["rows"]:
-            if r["args"][1] != r0["args"][1]:
-                raise ValueError(f"row {r['i']}: {g['name']} reads another weight slice than its group's first row")
-            arrive = int((arrivals or {}).get(rid, 0))
-            xs.append(np.asarray(_operand(pi, store, weights, rid, arrive, r["args"][0]), dtype=np.uint16).reshape(1, K))
-            (member, width, _dt), = d["members"]
-            w, why = store.words(rid, arrive + d["step"], d["op_path"], member, d["row"] * int(width), (d["row"] + 1) * int(width))
-            if w is None:
-                raise LookupError(f"row {r['i']} output {member}: {why}")
-            ys.append(np.asarray(w, dtype=np.uint16).reshape(-1))
-            layer = _LAYER.search(d["op_path"])
-            entries.append([lo, lo + N, rid, arrive + int(d["step"]), int(layer.group(1)) if layer else None, d["op_path"], str(member),
-                            int(d["row"]), int(r["i"])])
-            lo += N
-        j = np.arange(T * N, dtype=np.int64)
-        refs.append(np.stack([g["x_base"] + j // N, g["w_base"] + j % N], axis=1))
-    data = {"rows": {"x": np.concatenate(xs), "w": np.concatenate(ws)}, "outs": {"y": np.concatenate(ys).reshape(-1, 1)},
-            "refs": np.concatenate(refs)}
     return data, entries
 
 
@@ -811,13 +761,10 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     (the committer's key with its table registration's program and nonces, `expert_rows.committer`) commit the per-expert
     cut's tables from the weights served (`expert_rows.commit_tables`), whose openings its reads read and whose roots and
     domain ids they read by reference (`interface.supplied`), their roots its ``registered_roots`` too.  A window of history
-    tables (its partition file's ``"histories": true``, `history_rows`) takes the committer's ``histories``
-    (`commit.history_tables.Histories`, kept across the run's windows): it appends the window's latent rows to their tables,
-    each from its edge, then reads the history reads against them, commits each latent row under its table's salt and string,
-    and records each table's root among its ``registered_roots``.  A
-    row-table layout takes the serving loop's ``row_tables``: ``{"context": <hex>, "key": <the run's row key>, "step_roots":
-    {engine step: root}}`` (`commit.row_tables.step_roots`), which the window's step roots must be.  It reads the committed values
-    and writes only ``out_dir``, ``circuit.json`` among its files: the window's circuit record (`circuit_record`), whose SHA-512
+    tables (``"histories": true``) takes the committer's ``histories`` (`commit.history_tables.Histories`, kept across the
+    run's windows), its tables' roots among its ``registered_roots`` (`window_values`).  A row-table layout takes the serving
+    loop's ``row_tables``: ``{"context": <hex>, "key": <the run's row key>, "step_roots": {engine step: root}}``
+    (`commit.row_tables.step_roots`), which the window's step roots must be.  It reads the committed values and writes only ``out_dir``, ``circuit.json`` among its files: the window's circuit record (`circuit_record`), whose SHA-512
     the provenance carries as ``circuit``.  For Programs a registered compiler made from advice, the provenance also carries ``binding``: the
     compiler's digest and the advice's hiding root (`pipeline.advice_windows.binding`)."""
     t0 = time.perf_counter()
