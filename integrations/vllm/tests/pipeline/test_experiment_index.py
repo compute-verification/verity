@@ -1,10 +1,15 @@
-"""[D88] spec.json is written once and never rewritten; experiment.json keeps the four records apart and references files, not copies."""
+"""[D88] spec.json is written once and never rewritten; experiment.json keeps the four records apart and references files, not copies.
+The code version (`experiment.code_version`) reads the run store's code directories, and falls back to git, then to unknown."""
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
+from verity_vllm.check import weights_of_record as WR
 from verity_vllm.pipeline import experiment as EXP
 from verity_vllm.pipeline import research_tools
 
@@ -127,3 +132,62 @@ def test_realized_consistency_names_the_phase_that_ignored_the_arrivals(tmp_path
     # the same census, fixed: consistent
     (run / "census" / "census.json").write_text(json.dumps({"steps": [{} for _ in range(38)], "realized": {"engine_steps": 38, "requests": reqs}}))
     assert EXP.realized_consistency(run)["status"] == "consistent"
+
+
+@pytest.mark.parametrize("export", ["[1, 2]", "{broken", '"a string"'])
+def test_code_version_falls_back_to_git_past_an_unusable_export_json(tmp_path: Path, monkeypatch, export: str):
+    (tmp_path / "EXPORT.json").write_text(export)
+    calls = []
+
+    def run(cmd, **kw):
+        calls.append(cmd[:2])
+        return subprocess.CompletedProcess(cmd, 0, stdout="abc123\n" if cmd[1] == "rev-parse" else " M verity_vllm/x.py\n", stderr="")
+
+    monkeypatch.setattr(EXP.subprocess, "run", run)
+    assert EXP.code_version(tmp_path) == {"source": "git", "commit": "abc123", "dirty": True}
+    assert calls == [["git", "rev-parse"], ["git", "status"]]
+
+
+def test_code_version_is_unknown_when_git_cannot_run(tmp_path: Path, monkeypatch):
+    def no_tree(cmd, **kw):
+        raise FileNotFoundError(2, "No such file or directory", str(kw["cwd"]))
+
+    monkeypatch.setattr(EXP.subprocess, "run", no_tree)
+    assert EXP.code_version(tmp_path / "no-such-tree") == {"source": "unknown"}
+
+    def timeout(cmd, **kw):
+        raise subprocess.TimeoutExpired(cmd, kw.get("timeout"))
+
+    monkeypatch.setattr(EXP.subprocess, "run", timeout)
+    assert EXP.code_version(tmp_path) == {"source": "unknown"}
+
+
+def test_provenance_code_is_the_shipped_commit_on_a_pod_tree_and_git_head_in_a_git_tree(tmp_path, monkeypatch):
+    """derived.code names the code that ran the derivation.  The release tree on a pod has NO .git (ship.sh writes
+    EXPORT.json with the shipped commit): the first pod records carried code null.  Now: EXPORT.json's commit first
+    (code_source 'EXPORT.json', the dirty-patch digest named when present), git HEAD in a git tree, null only when neither exists.
+    The git tree's git is a stand-in (`experiment.code_version`'s own git is the tests above)."""
+    import subprocess
+    import verity_vllm.pipeline.experiment as EX
+    root = os.path.abspath(os.path.join(os.path.dirname(WR.__file__), "..", ".."))
+    exp = os.path.join(root, "EXPORT.json")
+    if os.path.exists(exp):
+        pytest.skip("this tree carries an EXPORT.json already (a shipped pod tree)")
+
+    def git(cmd, **kw):
+        assert cmd[0] == "git", cmd
+        return subprocess.CompletedProcess(cmd, 0, stdout="d" * 40 + "\n" if cmd[1] == "rev-parse" else "", stderr="")
+    monkeypatch.setattr(EX.subprocess, "run", git)
+    dv = WR.derivation_provenance(str(tmp_path), str(tmp_path), None, ["x"])
+    assert dv["code"] == "d" * 40 and dv["code_source"] == "git"
+    try:
+        with open(exp, "w") as f:
+            json.dump({"commit": "a" * 40, "patch_sha256": "deadbeefcafe0000"}, f)
+        dv2 = WR.derivation_provenance(str(tmp_path), str(tmp_path), None, ["x"])
+        assert dv2["code"] == "a" * 40 and dv2["code_source"] == "EXPORT.json (dirty patch deadbeefcafe)"
+        with open(exp, "w") as f:
+            json.dump({"commit": "b" * 40}, f)
+        dv3 = WR.derivation_provenance(str(tmp_path), str(tmp_path), None, ["x"])
+        assert dv3["code"] == "b" * 40 and dv3["code_source"] == "EXPORT.json"
+    finally:
+        os.unlink(exp)

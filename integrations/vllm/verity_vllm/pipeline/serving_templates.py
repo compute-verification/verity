@@ -3,7 +3,7 @@ word link (:func:`template`), and the templates a Program row's Definition holds
 itself, a ``CUT`` family's batched members, a ``COORDS`` family's coordinates, a ``COLS`` family's column blocks, a ``PARTS``
 family's parts, a ``SLICES`` family's slices, a ``KCHUNKS`` row's K-chunks, a ``SPLITS`` row's split parts and combine, a
 ``CHAINS`` row's key blocks and end, a ``STAGES`` row's stages, and an ``EXPERTS`` row's per-expert blocks and table reads and a
-``SLOTS`` router row's slots)."""
+``SLOTS`` router row's slots), and the unit of one output word of a row (:func:`coordinate`)."""
 from __future__ import annotations
 
 import importlib
@@ -362,6 +362,27 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
             hit += ((descriptor_id(c), 1),)
     _UNITS[spec] = hit
     return hit
+
+
+def coordinate(spec: str) -> tuple[Any, int] | None:
+    """The unit of one output word of a Program row's Definition (its word view's ``spec``), and the row's output field that
+    word is one of: a ``PARTS`` part in ``COORDS`` returning one committed member, at the row's ``PART_STATICS`` and N = 1 (a
+    block-FP8 linear's GEMM, whose quantisation is a part of its own), else a ``COORDS`` family at N = 1, else a ``SLICES``
+    family of one axis at that axis 1; word c of the field is the unit's one output word at coordinate c. None for a row of
+    no such unit, whose own Definition is its unit."""
+    from verity_vllm.query.program_view import spec_base
+
+    base = spec_base(spec)
+    for fam, _reads, outs in PARTS.get(base, ()):
+        if (fam in COORDS and len(outs) == 1 and isinstance(outs[0], int)
+                and (c := _bind(spec, fam, **PART_STATICS.get(base, {}), N=1)) is not None):
+            return c, outs[0]
+    if base in COORDS and (c := _bind(spec, N=1)) is not None:
+        return c, 0
+    axes = SLICES.get(base, ((),))[0]
+    if len(axes) == 1 and (c := _bind(spec, **{axes[0]: 1})) is not None:
+        return c, 0
+    return None
 
 
 def fused_block(spec: str, n: int) -> Any:

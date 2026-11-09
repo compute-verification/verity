@@ -425,7 +425,7 @@ SLOTS_TIMEOUT_S = 60
 FULL_CHECK_S = 9000
 #: a lane's own test run, which no landing needs (a PR lands on review, and drive's full check decides what reaches `main`)
 LANE_RUN = ('`research run --on auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
-            'uv run tools/verity/check/suites.py --changed $(git rev-parse origin/main) --quick"`')
+            'uv run tools/verity/check/suites.py --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"`')
 #: what `--slots` runs on a machine as `python3 -`, after SLOT_SRC and LEAN_SRC: both `--status --json` documents as one object,
 #: each `{"error": ...}` when it can't be read there, and the seconds left until the machine's DEADLINE (null without one)
 SLOTS_PROGRAM = '''
@@ -2865,7 +2865,15 @@ def live_record(out: Path, run_dir: Path | None, sharded: dict | None, picked: l
     return LIVE.Live(out, run_id=run_id, put=put, commit=_rev("HEAD"), what=what)
 
 
-def main(argv: list[str]) -> int:
+def resync(argv: list[str]) -> None:
+    """Install the workspace into this fresh environment (`SUITES.SYNC`) and run check again with ``argv``, unless the sync left it
+    fresh (`SUITES.fresh`), which would sync again."""
+    print(f"check: {sys.prefix} holds none of the workspace yet: `{' '.join(SUITES.SYNC)}`", file=sys.stderr)
+    if subprocess.run(SUITES.SYNC, cwd=ROOT).returncode == 0 and not SUITES.fresh(env()):
+        os.execv(sys.executable, [sys.executable, sys.argv[0], *argv])
+
+
+def main(argv: list[str], script: bool = False) -> int:
     if argv == ["--agreement-files"]:
         from research.store.local import LocalStore
 
@@ -2991,8 +2999,11 @@ def main(argv: list[str]) -> int:
         print(__doc__.strip(), file=sys.stderr)
         return 2
     if away := SUITES.foreign(SUITES.members(), env()):
+        if script and SUITES.fresh(env()):
+            resync(argv)
         print(f"check: {sys.executable} would run this tree's steps against another checkout's code ({away}); run check with "
-              f"{ROOT}'s own environment: `uv run --extra torch-cpu python tools/verity/check/check.py` there", file=sys.stderr)
+              f"{ROOT}'s own environment: `{' '.join(SUITES.SYNC)} && uv run --extra torch-cpu python tools/verity/check/check.py` "
+              f"there", file=sys.stderr)
         return 2
     only = sharded["parts"] if sharded else None
     if only is None and OFF_GATE and cache and run_dir is not None:
@@ -3054,4 +3065,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main(sys.argv[1:], script=True))

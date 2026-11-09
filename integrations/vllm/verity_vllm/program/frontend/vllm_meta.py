@@ -29,6 +29,8 @@ import torch  # noqa: E402
 from torch import nn  # noqa: E402
 
 PIN = {"model": "HuggingFaceTB/SmolLM2-135M", "revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2", "dtype": "bfloat16"}
+#: the engine args a compiled `TargetProfile.engine_args()` adds for the execution it serves; `make_vllm_config` sets its own
+COMPILED_KEYS = ("enforce_eager", "compilation_config")
 
 
 def _free_port() -> int:
@@ -44,8 +46,11 @@ def make_vllm_config(model: str = PIN["model"], revision: str = PIN["revision"],
     """vLLM's own `EngineArgs.create_engine_config()` for the eager, bf16 profile at `tensor_parallel_size` (no engine, no GPU allocation).
     `attention_backend` is the TargetProfile's knob (`EngineArgs(attention_backend=AttentionBackendEnum[name])`; None = vLLM's
     selector) — the ONLY attention-backend input this vLLM pin reads (env `VLLM_ATTENTION_BACKEND` is not defined in its `envs`).
-    `tensor_parallel_size` is the row's TP structural input: the parallel layers shard from `parallel_config` + the TP group."""
+    `tensor_parallel_size` is the row's TP structural input: the parallel layers shard from `parallel_config` + the TP group.
+    The config is eager whatever the target executes: a compiled target's `COMPILED_KEYS` are its served engine's, which the Build
+    declares through `TargetProfile.modelled_engine()`, so they are left out here; its other engine args pass through."""
     from vllm.engine.arg_utils import EngineArgs
+    kw = {k: v for k, v in kw.items() if k not in COMPILED_KEYS}
     if attention_backend is not None:
         from vllm.v1.attention.backends.registry import AttentionBackendEnum
         kw["attention_backend"] = AttentionBackendEnum[attention_backend]

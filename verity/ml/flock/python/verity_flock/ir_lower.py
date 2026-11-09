@@ -267,8 +267,11 @@ def lower_gates(C: Circuit, gates, wires: dict[int, list], pieces: dict[str, Cal
 def _boolean_activation(g):
     """``(scope, build)``: the activation of a Boolean Definition that the gate ``g``'s scope chain reaches, and its builder on
     the activation's elements; or None. A Definition with statics takes them first (``build(C, S, *elements)``, as
-    `verity.ml.definitions.registry.sampling_boolean.traced_family` traces it)."""
+    `verity.ml.definitions.registry.sampling_boolean.traced_family` traces it). A folded Definition
+    (`verity.ml.circuits.boolean.trace.folded`) has no ``build``, so its caller's builder lowers it; only one no builder in the
+    chain holds is lowered by its own (``fold_build``)."""
     s = getattr(g, "scope", None)
+    folded = None
     while s is not None:
         d = getattr(s.spec, "defn", s.spec)
         build = getattr(d, "build", None)
@@ -276,7 +279,11 @@ def _boolean_activation(g):
             if getattr(d, "statics", ()):
                 return s, partial(lambda S, C, *e: build(C, S, *e), s.spec.S())
             return s, build
+        if folded is None and callable(getattr(d, "fold_build", None)):
+            folded = s
         s = s.parent
+    if folded is not None:
+        return folded, partial(folded.spec.defn.fold_build, folded.spec.S())
     return None
 
 

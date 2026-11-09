@@ -197,7 +197,7 @@ theorem conflict_succ_ge' {β P V : Type} (g : Game β) (s : Strategy g) (acc : 
 /-- **One wait's bound over samples, linearly, from the table's bound**: `oneWaitD` with level 0's conflict among the
 `k + 1` accepted runs left linear (`joint_acc_le_lin`) and then charged to the conflict finder at every `R`:
 `ε · Q/ε^k ≤ ε_c + N·ε/(e·k) + Pr[conflict finder] + (k+1)/(R+1)`. -/
-theorem oneWaitD_lin (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (tr : Dr → Trace) {s : Flock.Stmt}
+theorem oneWaitD_lin (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (tr : Dr → Transcript) {s : Flock.Stmt}
     (hs : D.parse x = some s) (h1 : s.tables = 1) (Ok : Msg → Col → Prop) (hz : Ok x 0)
     (hok : ∀ d q u, (tr d).out = .acc → q < N x → lookCol (D.cols (tr d).seen 0) q = some u → Ok x u)
     (εc : ℝ) (hεc : 0 ≤ εc)

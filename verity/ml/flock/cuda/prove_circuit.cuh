@@ -71,6 +71,10 @@ typedef struct {
     // (ligerito_zk.cuh); the proof stream ends in the zk section (fc_write_zk). zk_tamper: the negatives (LigZk::tamper).
     int zk_on; int zk_rep; int zk_t_pad; int zk_tamper;
     const uint64_t* zk_pads; const uint64_t* zk_extra;
+    // zk_words, where set, gives zk_pads and zk_extra once the host has them, and the prover asks for them only when level 0's
+    // commitment first reads them: the host fills them while the witness builds. Nonzero: the host could not
+    int (*zk_words)(void* ctx, const uint64_t** pads, const uint64_t** extra);
+    void* zk_words_ctx;
     // the units' slots are among the host slots (host0), so the unit kernel does not run (a deep unit's witness is the host's)
     int u_host;
     // rep 1 from rep 0's level-0 commitment (both reps bind one level-0 root): 1 keeps it for the next call with the same
@@ -1373,9 +1377,11 @@ static int fc_commit_l0_zk(const FlockCudaProveParams* P, const FlockCircuitPara
     CK(ffi_malloc(d_extra, (size_t)4 * l * sizeof(F128)));
     // queued in stream order: the caller's words (page-locked, gpu_circuit.rs Words) outlive the proof's last read, which waits
     // on the stream. Only the last batch reads the extra lanes, so their copy runs beside the witness lanes' transforms
-    CK(cudaMemcpyAsync(*d_pads, N->zk_pads, (size_t)(w + 4) * t_pad * sizeof(F128), cudaMemcpyHostToDevice, 0));
+    const uint64_t *pads = N->zk_pads, *extra = N->zk_extra;
+    if (N->zk_words && N->zk_words(N->zk_words_ctx, &pads, &extra) != 0) { printf("FFI circuit: the host's zk pads failed\n"); return 212; }
+    CK(cudaMemcpyAsync(*d_pads, pads, (size_t)(w + 4) * t_pad * sizeof(F128), cudaMemcpyHostToDevice, 0));
     FcSideCopy extra_in;
-    CK(extra_in.start(*d_extra, N->zk_extra, (size_t)4 * l * sizeof(F128)));
+    CK(extra_in.start(*d_extra, extra, (size_t)4 * l * sizeof(F128)));
     const TwiddleTable* tt;
     F128* d_tw;
     CK(get_cached_twiddles(k_code, tt, d_tw));

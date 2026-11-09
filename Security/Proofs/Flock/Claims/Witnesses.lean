@@ -9,6 +9,7 @@ public import Proofs.Flock.Claims.Witnesses.SamplingGenericZK
 public import Proofs.Flock.Claims.Witnesses.SamplingGenericCompiler
 public import Proofs.Flock.Claims.Witnesses.SamplingGenericKSAt
 public import Proofs.Flock.Claims.Witnesses.SamplingTwo
+public import Proofs.Flock.Claims.Witnesses.SamplingTwoKSAt
 public import Proofs.Flock.Claims.Witnesses.SamplingTwoWork
 public import Proofs.Flock.Claims.Witnesses.SamplingTwoCredit
 public import Proofs.Flock.Claims.Witnesses.SamplingGenericComplete
@@ -43,8 +44,8 @@ sampling `Binding`'s at the deployed sampling record (`SamplingDeploy.deploy`). 
 (`RecursionMeets`). A closed statement proved of every instance (the generic sampled compiler's, and `ZKOutLeak`) is
 under `claims.generic` with the guarantee that states it, which the lock's `witnesses` holds to an honest and a
 nontrivial lemma (`SamplingGenericCompiler`, `SamplingGenericComplete`, `SamplingTwo` for the two-stage compiler,
-`SamplingTwoRankin` for Rankin's bound on its count, `ZKOutLeak`, and the registered encodings' `EncodingsGeneric` at the
-toys of `Encodings`).
+`SamplingTwoKSAt` for its extractor's cost and its KS read at a time budget, `SamplingTwoRankin` for Rankin's bound on
+its count, `ZKOutLeak`, and the registered encodings' `EncodingsGeneric` at the toys of `Encodings`).
 -/
 
 @[expose] public section
