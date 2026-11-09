@@ -238,13 +238,15 @@ def stage_units(a, out: Path) -> list[dict]:
     plan = []
     for spec in a.units.split():
         tag = spec.lower().replace(":", "-").replace(",", "-").replace("=", "")
-        probe = stage_served(spec, 2, out / f"{tag}-probe")
-        per = (1 << probe["k_log"]) // (probe.get("vus_per_block") or 1)
-        full = max(1, MAX_BITS // per)
-        for size in a.sizes.split(","):
+        sizes = a.sizes.split(",")
+        # counts alone need no probe: it only sizes `full` and `half`
+        probe = None if all(s.isdigit() for s in sizes) else stage_served(spec, 2, out / f"{tag}-probe")
+        per = (1 << probe["k_log"]) // (probe.get("vus_per_block") or 1) if probe else 0
+        full = max(1, MAX_BITS // per) if probe else max(int(s) for s in sizes)
+        for size in sizes:
             want = {"full": full, "half": max(1, full // 2)}.get(size) or int(size)
             sd = out / f"{tag}-c{want}"
-            if want == probe["n"] and (out / f"{tag}-probe").is_dir():
+            if probe and want == probe["n"] and (out / f"{tag}-probe").is_dir():
                 sd.mkdir(parents=True, exist_ok=True)
                 (out / f"{tag}-probe").rename(sd / "stage")
                 st = probe
