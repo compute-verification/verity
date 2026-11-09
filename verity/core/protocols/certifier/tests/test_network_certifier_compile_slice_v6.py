@@ -426,18 +426,21 @@ def test_the_carried_pages(edge):
 
 
 def test_size(synth, asynth):
-    """What each unit costs at the demos' classes (`compile_slice_v6.size`). The compile slice is CompileWindow and the
-    calls row's check (a CallsEq a record), 13,242 and 14,334 ANDs. The pool window, 4,539,123 and 3,656,807, is
-    CompileSlice_v5's stream, bus and ragged keys (3,857,177 at the synchronous demo's class with NM = 8) with 8 more M
-    entries, the arrivals' counts, the two rows' digests (four compressions each at 2,641 bits), their ten keys' prints,
-    five open and five close steps and 16 copy steps. Its free input is the left row and the stream's witness."""
+    """What each unit costs at the demos' classes (`compile_slice_v6.size`). The compile slice is CompileCut (24 and 27
+    ANDs), CompileWindow with its edge (CompileEdge, 162 and 98) and the calls row's check (a CallsEq a record, the
+    edge's R = 2 among them), 13,466 and 14,497 ANDs, 224 and 163 more than without the edge. The pool window, 4,543,787
+    and 3,661,471, is CompileSlice_v5's stream, bus (the edge's two records at 2,322 each among them) and ragged keys
+    with 8 more M entries, the arrivals' counts, the two rows' digests (four compressions each at 2,641 bits), their ten
+    keys' prints, five open and five close steps (the close's source check 4 ANDs a block) and 16 copy steps. Its free
+    input is the left row, the blocks' sources (2 bits a block) and the stream's witness."""
     common = {"adv_bits": 8, "ing_bits": 27, "req_bits": 160, "srv_bits": 160, "res_bits": 208, "pin_bits": 512,
-              "pout_bits": 512, "coin_bits": 384, "prow_bits": 2641, "nrow_bits": 2641, "compile_free_bits": 8}
-    assert V6.size(**synth.st) == {**common, "compile_ands": 13242, "pool_ands": 4539123, "cout_bits": 160,
-                                   "calls_bits": 1984, "chk_bits": 34684, "pool_free_bits": 37325}
-    assert V6.size(**asynth.st) == {**common, "compile_ands": 14334, "pool_ands": 3656807, "cout_bits": 176,
-                                    "calls_bits": 2208, "chk_bits": 25084, "pool_free_bits": 27725}
-    assert ands(V6.chain_unit(**synth.st)) == 2 * (13242 + 4539123)
+              "pout_bits": 512, "coin_bits": 384, "prow_bits": 2641, "nrow_bits": 2641, "src_bits": 10,
+              "compile_free_bits": 8}
+    assert V6.size(**synth.st) == {**common, "compile_ands": 13466, "pool_ands": 4543787, "cout_bits": 160,
+                                   "calls_bits": 2032, "chk_bits": 34684, "pool_free_bits": 37335}
+    assert V6.size(**asynth.st) == {**common, "compile_ands": 14497, "pool_ands": 3661471, "cout_bits": 176,
+                                    "calls_bits": 2256, "chk_bits": 25084, "pool_free_bits": 27735}
+    assert ands(V6.chain_unit(**synth.st)) == 2 * (13466 + 4543787)
 
 
 def test_the_parts_price_the_units(synth, asynth):
