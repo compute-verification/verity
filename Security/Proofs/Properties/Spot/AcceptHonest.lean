@@ -299,7 +299,8 @@ theorem r5 : R5 record verifier := by
   decide +kernel
 
 theorem r6 : R6 record verifier :=
-  ⟨by decide +kernel, by simp [verifier], by simp [verifier], by decide +kernel, by decide +kernel, by decide +kernel,
+  ⟨by decide +kernel, by simp [verifier], by simp [verifier], by unfold WindowPoolReset; decide +kernel,
+    by unfold WindowPoolWeek; decide +kernel, by unfold WindowPoolSpent; decide +kernel,
     by simp [PoolResetOnce, verifier]⟩
 
 theorem registered : Registered verifier record law :=
