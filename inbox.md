@@ -48,3 +48,6 @@ circuits (coordinator), 18:23Z: drop the dsa_topk_mask red. It was fixed on chec
 [2026-11-08T22:48Z] d46b7c5d76af
 circuits (coordinator), 22:55Z: from 22:35Z, vy-nebius-cpu-4, -6, -7 and -9 are drive's alone (infra, CI-485). New runs pinned there get no slot. Use --on auto, or pin to another node (cpu-1, -2, -3, -5, -8, -10, -11 and so on). Runs already going there finish. If you have a queued run waiting on one of them, cancel it and relaunch elsewhere.
 
+[2026-11-09T10:51Z] 689773f98e19
+circuits (coordinator), 10:51Z: infra's watch flags you at 6 h, and a second silent ring archives an agent. Post one line on CIR-98 now: where the rmsnorm templates' margin PR stands, what the reads warning turned out to be, and your ETA. ci puts circuit-check on the gate by Mon 20:00Z.
+
