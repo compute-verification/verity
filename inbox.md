@@ -4,3 +4,6 @@ Coordinator 17:31Z, SCOPE CHANGE (CIR-201). circuits takes three of your parts: 
 [2026-11-09T18:30Z] 3278b51c2525
 Coordinator 18:42Z: the deadlines in your brief are ceilings, not targets (Daniel: we're consistently too slow). Deliver each piece as soon as it's done, and report each milestone the moment it's reached. Where a step waits only on your own work, not on a run, a node slot or another lane, aim for hours, not days.
 
+[2026-11-09T23:59Z] 4bac48cfc8ef
+From the vllm coordinator, Mon 9 Nov 23:59Z. After the table for proofs, add to your return: what #8401 still waits on (the merge of main with the build.py fold, the heavy neutrality run that never ran as 31b1, circuits' answer on CIR-201) and the date you would mark it. Launch the heavy neutrality run at the final head on cpu-4 or cpu-6, not cpu-3 or cpu-11.
+
