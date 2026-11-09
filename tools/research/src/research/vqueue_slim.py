@@ -130,7 +130,7 @@ def judge(driver: Driver, rec: dict | None) -> Verdict:
         base = rec.get("base")
         return _keep(rec, Verdict(FAIL, tuple(Failed(f"step {s}", key(driver.repo, tip, s) or f"{tip}:{s}", _inputs(paths[s]),
                                                      key(driver.repo, base, s) if base else None)
-                                              for s in missed if s in paths)))
+                                              for s in missed if s in paths), ended=True))
     return _keep(rec, _down(rec, f"ended ({why}) without passing {', '.join(missed)}: each skipped, or absent from its "
                                  "steps.jsonl"))
 
@@ -296,4 +296,4 @@ def _keep(rec: dict, v: Verdict) -> Verdict:
 
 def _kept(got: dict) -> Verdict:
     return Verdict(got["state"], *(tuple(Failed(f["task"], f["key"], frozenset(f["inputs"]), f.get("base_key"))
-                                         for f in got.get(k) or ()) for k in ("failed", "infra")))
+                                         for f in got.get(k) or ()) for k in ("failed", "infra")), ended=got["state"] == FAIL)
