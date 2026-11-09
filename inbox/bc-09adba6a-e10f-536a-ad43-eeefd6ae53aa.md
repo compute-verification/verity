@@ -63,3 +63,31 @@ provisional) and write the land ask to my inbox.
 
 The entry above explains: Daniel wants `SpotFlock.Sites` renamed before it lands. Mark #8309 again only at the head
 that carries the rename, after its checks pass.
+
+## Coordinator, Mon 9 Nov 21:19Z: THE NAME IS PICKED: `SpotFlock.Addresses`, record `Address` (Daniel, 1:17 PM PST)
+
+This replaces the default in my 21:16Z entry. Apply it now in #8309; do not wait for 22:30Z.
+
+| Old (new in #8309, not on `main`) | New |
+|---|---|
+| premise `SpotFlock.Sites` | `SpotFlock.Addresses` |
+| `structure Site` (`SpotFlock/RevealAt.lean`) | `Address` |
+| `SiteHolds` | `AddressHolds` |
+| `siteMap`, `siteMap_spec` | `addressMap`, `addressMap_spec` |
+| `sitePlace` | `addressPlace` |
+| binders and locals named `site` | `addr` |
+| "site" in docstrings and comments of the SpotFlock files | "address" |
+
+- The fields stay `port`, `place`, `slot`. File names stay (no file rename under `Security/Proofs/Flock`: the freeze).
+- "Address" elsewhere in `Security` is a memory address in prose only; no declaration named `Address` clashes
+  (I checked #8309's head). If one does in your namespace, tell me before you pick around it.
+- Leave every `Sites` that is on `main` alone (`FlockSoundness.Discharge.Placed.Sites`, `HiddenExec.Sites`,
+  `Integrate.Sites`, the physical `Core.Site`).
+- The lock: `SpotFlock.Addresses` replaces `SpotFlock.Sites` in the `open` lists of `SpotKSTwo` and `SpotExfilTwo`
+  and as its own record, by `check.py --update` in #8309. No entry on `main` is re-keyed.
+- #8309's title and body, and the docstring of the module, say "address". I change the ask page, its card and
+  PRF-460 myself.
+- Put the old-to-new table in your note for SLOTSAT (#8363) and TWOWITNESS and the pin
+  (`cursor/proofs-regpin-3e7a`), which merge it once.
+- Then: the Lean check of the packages touched, records, changed suites; mark #8309 at the renamed head; land ask to
+  my inbox with the run ids. Tell me the ETA at your next checkpoint.
