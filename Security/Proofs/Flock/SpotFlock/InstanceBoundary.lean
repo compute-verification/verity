@@ -220,7 +220,6 @@ theorem split0 : split1 "subset:1" ":" = ("subset", "1") := by
 
 @[expose] public section
 
-open Claims Claims.Sampling SamplingDeploy Properties.Spot
 open Lean (Json)
 
 set_option maxHeartbeats 0 -- the closed checks below leave the verifier's evaluation to the kernel
@@ -324,6 +323,8 @@ theorem flockLaw0 : Spot.Draw.flockLaw subsetJ 1 = .ok (.subset 1) := by
   unfold Spot.Draw.flockLaw
   simp (config := {iota := false}) only [Spot.keys?, Spot.sortStrings, QK.qsort_eq]
   kernel_rfl
+
+open Claims Claims.Sampling SamplingDeploy Properties.Spot
 
 /-- **The verifier's copies**: `program0`, `query0` and the law `subset:1`, with no work table, ports, anchors or
 earlier records. -/
