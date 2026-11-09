@@ -368,28 +368,6 @@ def stop_of(i: int, q: I1.RequestAdvice, T: int, ids: tuple[int, ...], max_token
         raise Unexpressible(f"request {i}: {e}") from None
 
 
-def check_sources(s: int, row: I1.Row, prompts: Mapping[int, tuple[int, ...]]) -> None:
-    """A cache hit's sources hold the KV of the request's own tokens: through each run, the source's certified prompt equals the
-    hitting request's (the KV at a position reads every token up to it). Refused otherwise, or where a run leaves a prompt. A
-    resume's run of its own KV is its own by I1's replay (the request computed those positions), past its prompt too."""
-    r, at = row.request, 0
-    for src in row.sources:
-        end, a, b = at + src.n, prompts.get(row.request), prompts.get(src.request)
-        if src.request == r and row.preempted:
-            at = end
-            continue
-        if a is None or b is None:
-            raise Unexpressible(f"request {r}: step {s}'s cache hit reads request {src.request}'s KV, and one of the two has no certified "
-                                f"prompt")
-        if end > min(len(a), len(b)):
-            raise Unexpressible(f"request {r}: step {s}'s cache hit reads request {src.request}'s KV at positions {at} … {end - 1}, past "
-                                f"a certified prompt (v0 checks sources against prompts only)")
-        if a[:end] != b[:end]:
-            raise Unexpressible(f"request {r}: a forged cache hit at step {s}: request {src.request}'s certified prompt differs from its "
-                                f"own before position {end}, so that KV isn't its own")
-        at = end
-
-
 Rows = list[tuple[int, int, I1.Row]]  # a request's rows as (step, index in the step, row), in step order
 Placed = tuple[tuple[int, int, int] | None, list[tuple[int, int]]]  # a row's part its Program holds, and its parts none holds
 
@@ -653,7 +631,7 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
         for row in step.rows:
             if row.sources:
                 try:
-                    check_sources(s, row, prompts)
+                    reads.check_sources(s, row, prompts)
                 except Unexpressible as e:
                     refuse(row.request, str(e))
     bs = int((phi0.engine or {}).get("block_size") or PP.DEFAULT_BLOCK_SIZE)
