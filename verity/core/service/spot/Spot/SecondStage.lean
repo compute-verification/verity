@@ -26,7 +26,7 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
     rule over the interior record's program, partition and that port's leaves): the verifier computes both, so the
     prover chooses neither;
   - `second-population`: its header's `units.indices` are not its part's slots in order, or its `instances` not their
-    count;
+    count, or more than `2^64` (`MAX_LEAVES`);
   - `second-roots`: its scheme is not the interior record's, or its `frame_v3` roots and `domain_ids`, its registered
     reads aside, are not the record's for its template's ports (port `p` of template `t` is the record's `t/p` when the
     record names its ports by template, else `p`), each of which it roots or reads;
@@ -381,10 +381,15 @@ def headerOk (own : Own) (named : Bool) (k : Nat) (t : String) (h : Json) : Bool
     | none => false
   | none => false
 
-/-- The header's `units.indices` are part `p`'s slots in order, and its `instances` their count. -/
+/-- The most leaves a tree a session reads may have: its positions are 64-bit. -/
+def MAX_LEAVES : Nat := 2 ^ 64
+
+/-- The header's `units.indices` are part `p`'s slots in order, and its `instances` their count, at most
+`MAX_LEAVES`. -/
 def populationOk (q : Nat) (p : Part) (h : Json) : Bool :=
   match getD (getD h "units") "indices", nat? (getD h "instances") with
-  | .arr is, some m => m == q * p.n && is.toList.map nat? == (List.range (q * p.n)).map fun i => some (p.lo + i)
+  | .arr is, some m =>
+    m == q * p.n && decide (m ≤ MAX_LEAVES) && is.toList.map nat? == (List.range (q * p.n)).map fun i => some (p.lo + i)
   | _, _ => false
 
 /-- The header's scheme is the interior record's, its `frame_v3` roots outside the ports `reads` reads are the record's
@@ -411,9 +416,6 @@ def ownDraw (q : Nat) (p : Part) (drawn : Array Nat) : Json :=
 /-- Value `v`'s entry among registration `rec`'s registered values. -/
 def registeredEntry (rec : Json) (v : String) : Option Json :=
   (match getD rec "registered" with | .arr es => es | _ => #[]).find? fun e => jsonStrIs (getD e "value") v
-
-/-- The most leaves a registered read's tree may have: a read's positions are 64-bit. -/
-def MAX_LEAVES : Nat := 2 ^ 64
 
 /-- Entry `e` names a leaf count of at most `MAX_LEAVES`. -/
 def leavesOk (e : Json) : Bool := match nat? (getD e "leaves") with

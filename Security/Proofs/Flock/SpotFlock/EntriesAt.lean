@@ -15,7 +15,7 @@ import all Lean.Data.Json.Basic
 
 `entriesAt_of`: `EntriesAt` holds where the ports a session reads are no deeper than the code's own (`DepthsAt`),
 which a code at least 64 levels deep has for the registered reads (`depthsAt_of`), leaving the published trees'
-(`RootedDepthsAt`). `frameIs_of` gives `FrameIs` from that and the reveal's slots (`SlotsAt`).
+(`RootedDepthsAt`, which `Depths` proves).
 
 * **The registered half** (`registered_entry`): in an accepted run, the entry round 2 reads each of a session's
   registered reads off (`readKeyAt`, under `readRoots`) has the read's root, leaf count and domain id, of at most
@@ -630,11 +630,5 @@ theorem entriesAt_of {c : Code} (hD : DepthsAt h c) : EntriesAt h c := by
     exact ⟨e, he, hr, hl, hdm, hDr own reg hown hreg⟩
   · obtain ⟨e, he, hr, hdm⟩ := interior_entry h (ρ := ρ) hx hok hu hset hj hc1 hq hnr hpop
     exact ⟨e, he, hr, hdm, hDp j hj q pop hc1 hq hnr hpop⟩
-
-/-- **`FrameIs` at a frame that reads its ports off the roots**, at a code at least 64 levels deep, from the reveal's
-slots (`SlotsAt`) and the published trees' depths (`RootedDepthsAt`). -/
-theorem frameIs_of {slot : ℕ → Option Slot} {c : Code} {L : Layout} (hf : h.frame = frameAt slot c)
-    (hS : SlotsAt h slot c L) (h64 : 64 ≤ depth c.own) (hP : RootedDepthsAt h c) : FrameIs h L :=
-  frameIs_frameAt h hf hS (entriesAt_of h (depthsAt_of h h64 hP))
 
 end SpotFlock

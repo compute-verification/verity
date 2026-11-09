@@ -62,7 +62,7 @@ LINKS_WHY = ("the replay block's Definition reads a parameter, or returns, other
              "one field each")
 INTERIOR_ORDER_WHY = "the interior record's replay sample (window.replay_sample) is not the verifier's own, in its order"
 STMT_KEYS = ["draw", "header", "registered", "template"]
-#: The most leaves a registered read's tree may have: a read's positions are 64-bit (`SecondStage.MAX_LEAVES`).
+#: The most leaves a tree a session reads may have: its positions are 64-bit (`SecondStage.MAX_LEAVES`).
 MAX_LEAVES = 2 ** 64
 #: The run's fields of a statement's header, each a path of keys: the only ones a header may differ from its template's
 #: reference placed in the run in, which other checks hold instead: ``second-population`` the first two, the session's
@@ -395,7 +395,7 @@ def _header_ok(own: Own, named: bool, k: int, t: str, h: Any) -> bool:
 
 def _population_ok(q: int, p: Part, h: Any) -> bool:
     indices, m = _get(_get(h, "units"), "indices"), _get(h, "instances")
-    return (isinstance(indices, list) and _nat(m) and m == q * p.n and len(indices) == q * p.n
+    return (isinstance(indices, list) and _nat(m) and m == q * p.n and m <= MAX_LEAVES and len(indices) == q * p.n
             and all(_nat(x) and x == p.lo + i for i, x in enumerate(indices)))
 
 
