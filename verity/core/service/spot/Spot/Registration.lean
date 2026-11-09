@@ -51,13 +51,18 @@ An output value the parameters give only a port (`{"port"}`, a window's history)
 log's last, which R6 holds `previous` to (`lastDigest`): the verifier names the record itself, so the value is held to the
 previous window's root and domain for that port, and with no previous record it is `R7-output`.
 
-A verifier with a pool (`pool`: the registered values a window opens its pool from and leaves it in, `pin` and `pout`, the
-empty pool's root `genesis`, and whether it accepted the window of the log's last record) holds each window to open the
-pool the previous window of record left (`Pool.chains`): its parameters give `pin` as the previous record's `pout`, reused
-(`OneStage.paramsParsed`). After a failed or refused window, at a registration boundary (a previous record of another
-program) and at a registration's first window the chain restarts from the empty pool: `pin` is filled from `genesis`, a
-fixed root. R7 refuses a record whose entry for `pin` is not the pool its window opens (`poolOpen`) by name
-(`R7-pool-chain`).
+A verifier with a pool (`pool`: the registered values a window opens its pool from and leaves it in, `pin` and `pout`,
+the empty pool's root `genesis`, and three bools, `refused`, `reset` and `spent`) holds each window to open the pool the
+previous window of record left (`Pool.chains`), whatever it made of that window: its parameters give `pin` as the
+previous record's `pout`, reused (`OneStage.paramsParsed`). The chain restarts from the empty pool, `pin` filled from
+`genesis`, a fixed root, by a public rule that takes no advice, at a registration's first window, at a registration
+boundary (a previous record of another program) and after the verifier refused the window `L` windows of record before
+(`refused`, `L` the fixed public lag at which serving learns a verdict), and by serving's own reset (`reset`), which an
+engine crash needs, at most one a week. The record's window names that reset (`pool_reset`; `R6-pool-reset` otherwise),
+and R6 refuses one where an earlier window of its week reset (`spent`; `R6-pool-reset-week`). It is serving's choice, so
+it is advice: the records name, of a week's n windows, the one serving reset at or none, log₂(n + 1) bits a week (log₂
+1009, 9.98 bits, for 600-second windows), which leakage charges. R7 refuses a record whose entry for `pin` is not the
+pool its window opens (`poolOpen`) by name (`R7-pool-chain`).
 -/
 module
 
@@ -99,14 +104,17 @@ inductive Earlier where
   | value (name : String)
   deriving Inhabited
 
-/-- The verifier's pool (Pool chain, `registration._pool`): the registered value a window opens its pool from (`pin`), the
-one it leaves the pool in (`pout`), the empty pool's root (`genesis`, lowercase hex of 64 bytes), and whether it accepted
-the window of the log's last record (`accepted`). -/
+/-- The verifier's pool (Pool chain, `registration._pool`): the registered value a window opens its pool from (`pin`),
+the one it leaves the pool in (`pout`), the empty pool's root (`genesis`, lowercase hex of 64 bytes), whether the
+verifier refused the window the public lag before this one (`refused`), the reset serving chose for this window, which
+its record names (`reset`, `pool_reset`), and whether an earlier window of its week reset so (`spent`). -/
 structure Pool where
   pin : String
   pout : String
   genesis : String
-  accepted : Bool
+  refused : Bool
+  reset : Bool
+  spent : Bool
   deriving Inhabited
 
 /-- The verifier's own copies that R1–R7 hold the record to. -/
@@ -152,7 +160,8 @@ structure Verifier where
   challenger's log (`Challenger.seedSaltOf`), which the window must name; none when it read none -/
   seedSalt : Option String := none
   /-- the pool its windows carry, whose `pin` its parameters add to `outputs` or `supplied` (`OneStage.paramsParsed`)
-  and R7 holds to the chain (`poolChained`); none for a program that carries none -/
+  and R7 holds to the chain (`poolChained`), and whose reset R6 holds the window to name, once a week; none for a
+  program that carries none -/
   pool : Option Pool := none
 
 /-- The programs the declarations declare for `day`, in the log's order. -/
@@ -172,6 +181,14 @@ def declaredCode (program : Json) : Option (Nat × Array (Nat × String)) → Op
 private def optStr : Option String → Json
   | some s => Json.str s
   | none => Json.null
+
+private def optReset : Option Pool → Json
+  | some p => Json.bool p.reset
+  | none => Json.null
+
+private def onceOk : Option Pool → Bool
+  | some p => !(p.reset && p.spent)
+  | none => true
 
 /-- The values whose domain leaves the window's open root out: `held`, then the pinned, supplied and output values. -/
 def fixedOf (v : Verifier) : Array String :=
@@ -331,18 +348,18 @@ def checkOutputs (c : Array String) (got : Json) (mine : V (Array Registered.Ent
     let (c, mine, held) := applyOutputs c mine held outputs log
     checkRegistered c got (.ok mine) held supplied rootOf
 
-/-- **Whether a window carries the previous window's pool** (`registration.pool_chains`): the verifier accepted the window
-of the log's last record, the previous window of record, and that record registered its program (`program`, its digest
-as R2 reads it). Otherwise the chain restarts from the empty pool, as a registration's first window opens it. -/
+/-- **Whether a window carries the previous window's pool** (`registration.pool_chains`): neither the verifier refused
+the window the public lag back (`refused`) nor serving reset it (`reset`), and the log's last record, the previous
+window of record, registered its program (`program`, its digest as R2 reads it). Otherwise it opens the empty pool. -/
 def Pool.chains (p : Pool) (log : Array Json) (program : String) : Bool :=
   match log.back? with
-  | some e => p.accepted && jeq (getD e "program") (Json.str program)
+  | some e => !p.reset && !p.refused && jeq (getD e "program") (Json.str program)
   | none => false
 
-/-- The domain and root of the pool the record's window opens (`registration.pool_open`): the previous record's entry for
-`pout` (its last naming it) when the window carries the previous window's pool (`Pool.chains`), else the empty pool's: the
-domain the verifier gives `pin` (`ownEntries`) and the root R7 recomputes for it filled from `genesis` (`Supplied.root`);
-none where there is none. -/
+/-- The domain and root of the pool the record's window opens (`registration.pool_open`): the previous record's entry
+for `pout` (its last naming it) when the window carries the previous window's pool (`Pool.chains`), else the empty
+pool's: the domain the verifier gives `pin` (`ownEntries`) and the root R7 recomputes for it filled from `genesis`
+(`Supplied.root`); none where there is none. -/
 def poolOpen (rec : Json) (v : Verifier) (p : Pool) : Option (String × String) :=
   if p.chains v.log (Flock.hexOf v.program.sha512) then
     match v.log.back?.map (getD · "registered") with
@@ -405,6 +422,10 @@ def PortIndex.find (ix : PortIndex) (p : String) : Option Json :=
 
 def PortIndex.has (ix : PortIndex) (p : String) : Bool := (ix.find p).isSome
 
+/-- The codes `c`, with `code` added unless `ok`. It names `c` once, where `if ok then c else addCode c code` names it
+twice, so `check_eq_checkRef`'s `simp`, which leaves it folded, doesn't copy the codes before it into both cases. -/
+def kept (ok : Bool) (c : Array String) (code : String) : Array String := if ok then c else addCode c code
+
 /-- `registration.check`'s failure codes, R1–R7 in order: empty when the record holds. -/
 def check (rec : Json) (v : Verifier) : Array String := Id.run do
   let v2 := !v.registered.isEmpty
@@ -463,14 +484,16 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
   if let some (stream, prover) := v.binding then
     if !jeq (getD (get "window") "stream") (Json.str stream) then c := addCode c "R6-stream"
     if !jeq (getD (get "window") "prover") (Json.str prover) then c := addCode c "R6-prover"
-  -- a term, not a statement: a statement's join point doubles what `check_eq_checkRef`'s `simp` unfolds
-  c := if jeq (getD (get "window") "seed_salt") (optStr v.seedSalt) then c else addCode c "R6-seed-salt"
+  -- `kept` terms, not statements: a statement's join point doubles what `check_eq_checkRef`'s `simp` unfolds
+  c := kept (jeq (getD (get "window") "seed_salt") (optStr v.seedSalt)) c "R6-seed-salt"
+  c := kept (jeq (getD (get "window") "pool_reset") (optReset v.pool)) c "R6-pool-reset"
+  c := kept (onceOk v.pool) c "R6-pool-reset-week"
   -- R7
   if v2 then
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
       v.outputs v.log
-    c := if poolChained rec v then c else addCode c "R7-pool-chain"
+    c := kept (poolChained rec v) c "R7-pool-chain"
   return c
 
 /-- `check` as first written, R3 quadratic in the ports: each root's port compared, re-canonicalized, with every port
@@ -534,13 +557,15 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
   if let some (stream, prover) := v.binding then
     if !jeq (getD (get "window") "stream") (Json.str stream) then c := addCode c "R6-stream"
     if !jeq (getD (get "window") "prover") (Json.str prover) then c := addCode c "R6-prover"
-  c := if jeq (getD (get "window") "seed_salt") (optStr v.seedSalt) then c else addCode c "R6-seed-salt"
+  c := kept (jeq (getD (get "window") "seed_salt") (optStr v.seedSalt)) c "R6-seed-salt"
+  c := kept (jeq (getD (get "window") "pool_reset") (optReset v.pool)) c "R6-pool-reset"
+  c := kept (onceOk v.pool) c "R6-pool-reset-week"
   -- R7
   if v2 then
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
       v.outputs v.log
-    c := if poolChained rec v then c else addCode c "R7-pool-chain"
+    c := kept (poolChained rec v) c "R7-pool-chain"
   return c
 
 /-! ## `check` is `checkRef` -/
