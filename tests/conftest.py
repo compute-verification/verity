@@ -24,6 +24,8 @@ BOOKKEEPING = {
                                     "test_no_retired_word_in_a_new_lean_name", "test_the_glossary_records_the_retired_terms",
                                     "test_spot_s_older_name_only_falls"),
     "tests/test_doc_paths.py": ("test_every_path_a_document_names_exists", "test_not_paths_are_current"),
+    "tests/test_documented_commands.py": ("test_every_documented_command_line_parses",
+                                          "test_known_lists_only_lines_that_still_fail"),
     "tests/test_glossary_lean_names.py": ("test_every_row_names_its_lean_or_says_it_has_none",
                                           "test_every_lean_name_in_the_symbol_table_exists",
                                           "test_every_lean_name_in_the_security_argument_exists"),
