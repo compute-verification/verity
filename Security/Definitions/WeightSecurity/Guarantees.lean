@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Assumptions.WeightSecurity
 public import Definitions.WeightSecurity.Assumptions
 public import Definitions.WeightSecurity.Faulted
 public import Definitions.WeightSecurity.Toy
@@ -31,8 +32,8 @@ network certifier and the dataflow discharge. Its witnesses
 
 `TheftFaulted` is the same deployment under SPOT's fault model (`Definitions.WeightSecurity.Faulted`): a fault is an
 input to the faulted circuit, not an overwrite of a release, so SPOT's part of the channel is the fault patterns, of
-sizes summing to at most `M`, and the reach of a fault drops out. What faults do to the weights' exposure is the model
-claim `FaultedUseHard` (λ), on a typical set of weights. `TheftServed` stays as the bound that takes no claim about
+sizes summing to at most `M`, and the reach of a fault drops out. What faults do to the weights' exposure is the named
+assumption `FaultedUseHard` (λ), on a typical set of weights. `TheftServed` stays as the bound that takes no claim about
 the model. Its witnesses `TheftFaultedHonest` and `TheftFaultedNontrivial` are at the toy deployment with faults
 (`Definitions.WeightSecurity.ToyFaulted`).
 

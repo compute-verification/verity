@@ -43,6 +43,10 @@
   "Pouw.CostModel.Hashless": {
    "owner": "@compute-accounting",
    "digest": "23a998fe437179f7d77d2a07c5b8adec774502aef2d11fa5fbd8e4f475f92939"
+  },
+  "WeightSecurity.Assumptions.FaultedUseHard": {
+   "owner": "@proofs",
+   "digest": "67a6d0c1f4669ce5af4420f2aa0be27b428459109e45ad675db4a45dafab2ff6"
   }
  },
  "domain": {
@@ -390,6 +394,16 @@
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e",
    "why": "The final pack's relation holds."
+  },
+  "WeightSecurity.Assumptions.HonestUseHard": {
+   "owner": "@proofs",
+   "digest": "ac9ed71d973e1db5d86647c7ab9ec3404e44567a2046211c8b0987b8084eed48",
+   "why": "The honest-use rate p the bound is stated relative to: every party of the class steals the weights from honest queries with probability at most p, which holds at p = p_hon by definition, so the bound counts what leaks beyond honest serving; the honest witnesses meet it at the toy deployments (TheftHonest, TheftServedHonest, TheftServedMinEntropyHonest, TheftFaultedHonest)."
+  },
+  "WeightSecurity.Assumptions.Simulable": {
+   "owner": "@proofs",
+   "digest": "0f793429e5101f9d09499a06c42130c425331c423049968423d474a22a279d29",
+   "why": "A condition on the class the honest-use rate is about: it holds the outsider with each covert string written in, which the class of all parties does; the honest witnesses meet it at the toy deployments (TheftHonest, TheftServedHonest, TheftFaultedHonest)."
   },
   "WeightSecurity.NoFault": {
    "owner": "@proofs",
@@ -3307,29 +3321,11 @@
    "issue": "LEAN-186",
    "due": "2026-11-07"
   },
-  "WeightSecurity.Assumptions.FaultedUseHard": {
-   "owner": "@proofs",
-   "digest": "67a6d0c1f4669ce5af4420f2aa0be27b428459109e45ad675db4a45dafab2ff6",
-   "issue": "PRF-413",
-   "due": "2026-11-10"
-  },
-  "WeightSecurity.Assumptions.HonestUseHard": {
-   "owner": "@proofs",
-   "digest": "ac9ed71d973e1db5d86647c7ab9ec3404e44567a2046211c8b0987b8084eed48",
-   "issue": "PRF-413",
-   "due": "2026-11-06"
-  },
   "WeightSecurity.Assumptions.LeaksThrough": {
    "owner": "@proofs",
    "digest": "3a2698362a1e14711580dd145fafd0556395f7956c8d950e365e49f1246a683e",
    "issue": "PRF-413",
-   "due": "2026-11-06"
-  },
-  "WeightSecurity.Assumptions.Simulable": {
-   "owner": "@proofs",
-   "digest": "0f793429e5101f9d09499a06c42130c425331c423049968423d474a22a279d29",
-   "issue": "PRF-413",
-   "due": "2026-11-06"
+   "due": "2026-11-17"
   }
  },
  "trust": {
@@ -25523,12 +25519,8 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
-    "open": [
-     "WeightSecurity.Assumptions.HonestUseHard",
-     "WeightSecurity.Assumptions.LeaksThrough",
-     "WeightSecurity.Assumptions.Simulable"
-    ],
+    "domain": ["WeightSecurity.Assumptions.HonestUseHard", "WeightSecurity.Assumptions.Simulable"],
+    "open": ["WeightSecurity.Assumptions.LeaksThrough"],
     "reads": []
    },
    "type_hash": "e9765a688f6dcb14a14db81583b5eef4eefb1b701eaa7af7e9cbc972256abad0",
@@ -25539,13 +25531,14 @@
    "signature": ["WeightSecurity.SecurityProofs.TheftFaulted : WeightSecurity.Guarantees.TheftFaulted"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": ["WeightSecurity.NoFault", "WeightSecurity.Served.UndetectedLe"],
-    "open": [
-     "WeightSecurity.Assumptions.FaultedUseHard",
+    "assumptions": ["WeightSecurity.Assumptions.FaultedUseHard"],
+    "domain": [
      "WeightSecurity.Assumptions.HonestUseHard",
-     "WeightSecurity.Assumptions.Simulable"
+     "WeightSecurity.Assumptions.Simulable",
+     "WeightSecurity.NoFault",
+     "WeightSecurity.Served.UndetectedLe"
     ],
+    "open": [],
     "reads": ["WeightSecurity.Assumptions.FaultBudget", "WeightSecurity.Assumptions.patternCount"]
    },
    "type_hash": "c97d64a78151d0cc29028512eab03c45b8819137d1d7b96344d6357124dba8ac",
@@ -25625,8 +25618,12 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["WeightSecurity.Served.UndetectedLe"],
-    "open": ["WeightSecurity.Assumptions.HonestUseHard", "WeightSecurity.Assumptions.Simulable"],
+    "domain": [
+     "WeightSecurity.Assumptions.HonestUseHard",
+     "WeightSecurity.Assumptions.Simulable",
+     "WeightSecurity.Served.UndetectedLe"
+    ],
+    "open": [],
     "reads": []
    },
    "type_hash": "3ba016bf392579018f28901a3762edbef405dcdecdff27caaccb6e9b4dcf4dd2",
@@ -25651,8 +25648,8 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["WeightSecurity.Served.UndetectedLe"],
-    "open": ["WeightSecurity.Assumptions.HonestUseHard"],
+    "domain": ["WeightSecurity.Assumptions.HonestUseHard", "WeightSecurity.Served.UndetectedLe"],
+    "open": [],
     "reads": []
    },
    "type_hash": "8b2f9f145e791c67699d3e5f661505469364bc71b0a9cc5d04383fc1768c2d05",
@@ -25708,8 +25705,12 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["WeightSecurity.Served.UndetectedLe"],
-    "open": ["WeightSecurity.Assumptions.HonestUseHard", "WeightSecurity.Assumptions.Simulable"],
+    "domain": [
+     "WeightSecurity.Assumptions.HonestUseHard",
+     "WeightSecurity.Assumptions.Simulable",
+     "WeightSecurity.Served.UndetectedLe"
+    ],
+    "open": [],
     "reads": []
    },
    "type_hash": "9aa3f44f0c9c3699c124835ba59dd0ab41dc4ab634a16922f2c4f8fbffbb9567",
