@@ -710,10 +710,9 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     if (wrapper, kind) not in WRAPPERS:
         raise Unexpressible(f"wrapper {wrapper!r} (have {sorted({w for w, _ in WRAPPERS})})")
     world, rank, C = int(phi.tp.get("world", 1)), int(phi.tp.get("rank", 0)), int(C)
-    if batched and (finish is not None or wrapper != "request" or not (world == 1 or dead_free)):
-        raise ValueError("batched is a request's registered compiler's form (dead_free at a tensor-parallel rank), without finish")
-    if table_reads and not batched:
-        raise ValueError("table_reads is the batched form's: DSA's long rows by table reads, with batched")
+    if (table_reads and not batched) or batched and (finish is not None or wrapper != "request" or not (world == 1 or dead_free)):
+        raise ValueError("batched is a request's registered compiler's form (dead_free at a tensor-parallel rank), without finish; "
+                         "table_reads (DSA's long rows by table reads) is the batched form's")
     dense = type(net) is _Decoder
     if C and (wrapper != "request" or not hasattr(net, "prefix_params") or (dense and (kind, world) != ("greedy", 1))):
         raise Unexpressible(f"vocabulary cannot express: a cached prefix on a {kind} {wrapper} at TP{world} of the {net.model_class} decoder "
