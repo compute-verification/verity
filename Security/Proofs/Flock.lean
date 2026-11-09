@@ -68,6 +68,7 @@ public import Proofs.Flock.SpotFlock.FrameIsAt
 public import Proofs.Flock.SpotFlock.FrameIsBuilt
 public import Proofs.Flock.SpotFlock.Instance
 public import Proofs.Flock.SpotFlock.InstanceBoundary
+public import Proofs.Flock.SpotFlock.InstanceRun
 public import Proofs.Flock.SpotFlock.RevealAt
 public import Proofs.Flock.SpotFlock.SlotsAt
 public import Proofs.Flock.SpotFlock.Jeq
