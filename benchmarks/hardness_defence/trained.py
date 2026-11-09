@@ -5,7 +5,9 @@ point: quality and the credited share of MACs under the exact rule and the gener
 
 The runs are trained.json's, per model: the bf16 arm and each trained arm (qat.py NAME), whose result.json is fetched
 to DIR/NAME/out/NAME/result.json (`research data fetch` of the run's record, `--path 'out/*'`), and each arm's pricing
-runs of its exported codes (jobs/8b-trained.txt; `research fetch RUN --all --on NODE` into --runs).
+runs of its exported codes (jobs/8b-trained.txt; `research fetch RUN --all --on NODE` into --runs). A control is
+pricing only: the untrained point's codes as qat.py exports them, priced by the same jobs, so the trained arms' credit
+is read against codes calibrated the same way.
 
 Quality: WikiText-2 over its 141 windows and FineWeb-Edu over its first 32 and all 512, served as trained, each arm's
 eval_before (the untrained point's codes, measured in the same run on the same noise draws) and eval_after, as ratios
@@ -84,11 +86,19 @@ def main(argv=None) -> int:
     def result(name):
         return json.loads((args.res / name / "out" / name / "result.json").read_text())
 
-    bf16 = windows(result(spec["bf16"]["name"])["eval_before"], None)
+    bf16 = windows(result(spec["bf16"]["name"])["eval_before"], None) if spec["arms"] else {}
     rows, out = [], {"model": args.model, "arms": {}}
     untrained = {"exact": credit(T.load(args.runs), args.model),
                  "generous": credit(T.load(args.runs, generous=True), args.model)}
     out["untrained_credit"] = untrained
+    out["controls"] = {}
+    for name, ctl in spec.get("controls", {}).items():
+        sources = [(run, pattern, args.model, {"target": 0.02}) for run, pattern in ctl["pricing"]]
+        out["controls"][name] = {"pricing": ctl["pricing"],
+                                 "credit": {"exact": credit(T.load(args.runs, sources), args.model),
+                                            "generous": credit(T.load(args.runs, sources, generous=True), args.model)}}
+        rows.append((f"{name}, untrained codes from qat.py (control)", {lbl: None for lbl, _s, _n in SETS},
+                     out["controls"][name]["credit"], f"pricing {', '.join(p[0] for p in ctl['pricing'])}"))
     for name, arm in spec["arms"].items():
         r = result(name)
         serve = r["config"]["serve"]
@@ -103,7 +113,8 @@ def main(argv=None) -> int:
              "generous": credit(T.load(args.runs, sources, generous=True), args.model)} if sources else None
         tr = r.get("train", {})
         out["arms"][name] = {"run": arm["run"], "pricing": arm["pricing"], "serve": serve, "quality": q, "credit": c,
-                             "config": {k: r["config"].get(k) for k in ("lora", "lr", "batch", "seq", "tokens", "recal")},
+                             "config": {k: r["config"].get(k) for k in ("lora", "lr", "batch", "seq", "train_seq", "tokens",
+                                                                        "recal", "train_min")},
                              "trained_tokens": tr.get("tokens"), "stopped_at": tr.get("stopped_at"),
                              "train_seconds": tr.get("seconds"), "peak_mem_gb": tr.get("peak_mem_gb"),
                              "kd_last": next((x["kd"] for x in reversed(tr.get("curve", [])) if "kd" in x), None)}
@@ -119,7 +130,8 @@ def main(argv=None) -> int:
     print()
     print("| book | rule | credited | under the line by kind | least over the leaf by kind |")
     print("|---|---|---|---|---|")
-    books = [("untrained", untrained)] + [(n, a["credit"]) for n, a in out["arms"].items() if a["credit"]]
+    books = ([("untrained", untrained)] + [(n, c["credit"]) for n, c in out["controls"].items()]
+             + [(n, a["credit"]) for n, a in out["arms"].items() if a["credit"]])
     for name, c in books:
         for rule in ("exact", "generous"):
             x = c[rule]
