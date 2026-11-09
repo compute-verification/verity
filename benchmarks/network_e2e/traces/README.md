@@ -1,8 +1,8 @@
 # vLLM scheduler traces under varied traffic
 
 Real vLLM V1 scheduler traces for network certification's advice: what serving made unpredictable, step by step, under
-Poisson traffic. Plain vLLM's OpenAI server on one RTX PRO 6000, with the integration's batch-invariant eager engine
-(bi-eager), or on a whole 8-GPU H200 node at TP8. `corpus.MODELS` lists the models: `llama32_1b` (unsloth/Llama-3.2-1B,
+Poisson traffic. Plain vLLM's OpenAI server on one GPU (an RTX PRO 6000 or an H200), with the integration's
+batch-invariant eager engine (bi-eager) and FlashAttention 2 (`corpus.FA2`), or on a whole 8-GPU H200 node at TP8. `corpus.MODELS` lists the models: `llama32_1b` (unsloth/Llama-3.2-1B,
 bf16), `llama31_8b_int8` (`verity-int8/Llama-3.1-8B-INT8` with the int8_exact linears, `--quantization verity_int8`)
 and `glm53` (GLM-5.3, block-FP8, at TP8 with vLLM's own kernels, at a rate given with `--rate`). A request stops on the
 checkpoint's end-of-text ids (`corpus.stop_ids`), which the corpus's meta.json records as `eos_token_ids`.
