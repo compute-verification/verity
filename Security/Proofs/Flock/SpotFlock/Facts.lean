@@ -33,7 +33,7 @@ open Properties.Spot (slotPartition slotDesign bitsProgs membersPart filesReplay
 
 /-- A run appends to its transcript: one more round puts the prover's message and the verifier's answer after `t`'s. -/
 theorem stepWith_succ_msgs {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out)
-    (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace) :
+    (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) :
     ∃ ext, (stepWith H P x ω vnext (n + 1) hist as t).msgs =
       t.msgs ++ (((P.next x hist ω).eval H).1, ((vnext (as ++ [((P.next x hist ω).eval H).1])).eval H).1) :: ext := by
   simp only [stepWith]
@@ -47,7 +47,7 @@ theorem stepWith_succ_msgs {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Ms
 alike on at most `m` prover messages give runs whose first `m + 1` prover messages agree. -/
 theorem stepWith_fst_take {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
     (vnext vnext' : List Msg → OC Out) (m : ℕ) (hv : ∀ as : List Msg, as.length ≤ m → vnext as = vnext' as) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), as.length = t.msgs.length →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), as.length = t.msgs.length →
       t.msgs.length ≤ m →
       ((stepWith H P x ω vnext n hist as t).msgs.map Prod.fst).take (m + 1) =
         ((stepWith H P x ω vnext' n hist as t).msgs.map Prod.fst).take (m + 1) := by
@@ -212,7 +212,7 @@ theorem ok_of_toOption {ε α : Type} {e : Except ε α} {a : α} (h : e.toOptio
 accepting had the verifier answer some `j` messages with other than a refusal. -/
 theorem stepWith_acc_at {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out)
     (j : ℕ) (hj : ∀ bs : List Msg, bs.length ≤ j → ((vnext bs).eval H).1 ≠ .acc) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), as.length < j →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), as.length < j →
       (stepWith H P x ω vnext n hist as t).out = .acc →
         ∃ bs : List Msg, bs.length = j ∧ ((vnext bs).eval H).1 ≠ .rej := by
   intro n

@@ -62,11 +62,11 @@ open Claims
 
 /-! ## `E*` reads an inner view only through its decision and its openings -/
 
-theorem rp_eval_bind_fst {R α β : Type} (H : Msg → Msg) (run : R → Trace) (p : RP R α) (f : α → RP R β) :
+theorem rp_eval_bind_fst {R α β : Type} (H : Msg → Msg) (run : R → Transcript) (p : RP R α) (f : α → RP R β) :
     ((p.bind f).eval H run).1 = ((f (p.eval H run).1).eval H run).1 :=
   (RP.eval_bind H run p f).1
 
-theorem waitAcc_rel {R Op : Type} (H : Msg → Msg) (run₁ run₂ : R → Trace) (opens : Seen → List Op) (k : ℕ)
+theorem waitAcc_rel {R Op : Type} (H : Msg → Msg) (run₁ run₂ : R → Transcript) (opens : Seen → List Op) (k : ℕ)
     (h : ∀ r, (run₁ r).seen.out = (run₂ r).seen.out ∧ opens (run₁ r).seen = opens (run₂ r).seen) :
     ∀ (rs : List R) (acc₁ acc₂ : List Seen), acc₁.length = acc₂.length → acc₁.flatMap opens = acc₂.flatMap opens →
       ((waitAcc k rs acc₁).eval H run₁).1.length = ((waitAcc k rs acc₂).eval H run₂).1.length ∧
@@ -88,7 +88,7 @@ theorem waitAcc_rel {R Op : Type} (H : Msg → Msg) (run₁ run₂ : R → Trace
         simp only [hv, hv', ↓reduceIte]
         exact waitAcc_rel H run₁ run₂ opens k h rs _ _ hl hf
 
-theorem firstWait_rel {R W Op : Type} (H : Msg → Msg) (run₁ run₂ : R → Trace) (opens : Seen → List Op) (k : ℕ)
+theorem firstWait_rel {R W Op : Type} (H : Msg → Msg) (run₁ run₂ : R → Transcript) (opens : Seen → List Op) (k : ℕ)
     (assemble : List Op → Option W) (check : W → Bool)
     (h : ∀ r, (run₁ r).seen.out = (run₂ r).seen.out ∧ opens (run₁ r).seen = opens (run₂ r).seen) :
     ∀ rss : List (List R), ((firstWait k opens assemble check rss).eval H run₁).1 =
@@ -103,7 +103,7 @@ theorem firstWait_rel {R W Op : Type} (H : Msg → Msg) (run₁ run₂ : R → T
       · exact firstWait_rel H run₁ run₂ opens k assemble check h rss
     · exact firstWait_rel H run₁ run₂ opens k assemble check h rss
 
-theorem erep_rel {D W Op : Type} (H : Msg → Msg) (run₁ run₂ : D → Trace) (m k K : ℕ) (opens : Seen → List Op)
+theorem erep_rel {D W Op : Type} (H : Msg → Msg) (run₁ run₂ : D → Transcript) (m k K : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) (d₀ : D) (ρ : Fin m → Fin K → D)
     (h : ∀ r, (run₁ r).seen.out = (run₂ r).seen.out ∧ opens (run₁ r).seen = opens (run₂ r).seen) :
     ((erep m k K opens assemble check d₀ ρ).eval H run₁).1 =
@@ -189,7 +189,7 @@ theorem Bound.run_nf (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (ms : L
     List.map_congr_left fun i hi => by
       rw [List.mem_range] at hi
       rw [Bd.nfMsgs_getD_lt x ms (by omega)]
-  simp only [Trace.seen, hpre, Bd.nfMsgs_getD_last x ms hk]
+  simp only [Transcript.seen, hpre, Bd.nfMsgs_getD_last x ms hk]
   rcases hf : Bd.final (ms.getD (Bd.DE.V.k x - 1) []) with _ | p
   · rw [Bd.rep_of_none hf]
   · exact Bd.openView_congr_final _ _ _ _ _ p ((Bd.final_rep _).trans hf) hf

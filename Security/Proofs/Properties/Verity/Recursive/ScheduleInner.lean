@@ -57,7 +57,7 @@ a run that accepts a round accepts (`stepWith_acc_out`).
 
 namespace Verity.Recursive.Schedule
 
-open Claims (Msg Out Prover Trace stepWith run coinSeq)
+open Claims (Msg Out Prover Transcript stepWith run coinSeq)
 open FlockDeploy (Coin)
 open RecDeploy
 
@@ -69,7 +69,7 @@ variable {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vn :
 
 /-- **A round before a run's last is answered by a message**: a run stops at the first round it accepts or refuses. -/
 theorem stepWith_mid :
-    ∀ (f i : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    ∀ (f i : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       t.msgs.length + i + 1 < (stepWith H P x ω vn f hist as t).msgs.length →
       ∃ a m, (stepWith H P x ω vn f hist as t).msgs[t.msgs.length + i]? = some (a, .msg m)
   | 0, i, hist, as, t, h => by
@@ -81,7 +81,7 @@ theorem stepWith_mid :
     | msg mm =>
       rw [stepWith_succ_msg H P x ω vn f hist as t hvb] at h ⊢
       set a₀ := ((P.next x hist ω).eval H).1
-      set t₁ : Trace :=
+      set t₁ : Transcript :=
         { t with msgs := t.msgs ++ [(a₀, .msg mm)], pLog := t.pLog ++ ((P.next x hist ω).eval H).2,
                  vLog := t.vLog ++ lo }
       have hl₁ : t₁.msgs.length = t.msgs.length + 1 := by simp [t₁]
@@ -107,7 +107,7 @@ theorem stepWith_mid :
 
 /-- **A run whose round is answered by a message runs on, or has used its rounds up.** -/
 theorem stepWith_full :
-    ∀ (f i : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace) (a m : Msg),
+    ∀ (f i : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) (a m : Msg),
       (stepWith H P x ω vn f hist as t).msgs[t.msgs.length + i]? = some (a, .msg m) →
       t.msgs.length + i + 1 < (stepWith H P x ω vn f hist as t).msgs.length ∨
         (stepWith H P x ω vn f hist as t).msgs.length = t.msgs.length + f
@@ -118,7 +118,7 @@ theorem stepWith_full :
     | msg mm =>
       rw [stepWith_succ_msg H P x ω vn f hist as t hvb] at h ⊢
       set a₀ := ((P.next x hist ω).eval H).1
-      set t₁ : Trace :=
+      set t₁ : Transcript :=
         { t with msgs := t.msgs ++ [(a₀, .msg mm)], pLog := t.pLog ++ ((P.next x hist ω).eval H).2,
                  vLog := t.vLog ++ lo }
       have hl₁ : t₁.msgs.length = t.msgs.length + 1 := by simp [t₁]
@@ -150,7 +150,7 @@ theorem stepWith_full :
 
 /-- **A run that accepts a round accepts.** -/
 theorem stepWith_acc_out :
-    ∀ (f i : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace) (a : Msg),
+    ∀ (f i : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) (a : Msg),
       (stepWith H P x ω vn f hist as t).msgs[t.msgs.length + i]? = some (a, .acc) →
       (stepWith H P x ω vn f hist as t).out = .acc
   | 0, i, _, _, t, a, h => by simp [stepWith] at h

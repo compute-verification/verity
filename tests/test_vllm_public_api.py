@@ -97,6 +97,19 @@ PUBLIC = {
     "verity_vllm.pipeline.tick_plugin": "I1: the certified tick (--admit tick) under vLLM's own OpenAI server: its general "
                                         "plugin (register) and ASGI middleware (TickFeed), configured by VERITY_TICK, which "
                                         "the trace corpus serves under",
+    "verity_vllm.pipeline.advice_code.codec": "I1: advice v1, the network certifier's advice code: its certified record, its "
+                                              "registration, and I1 v0's encode and decode against the scheduler replay, which "
+                                              "the compiler reads and benchmarks/network_e2e measures",
+    "verity_vllm.pipeline.advice_code.schedule": "I1: the scheduler replay's engine config, certified tick, steps and request "
+                                                 "states",
+    "verity_vllm.pipeline.advice_code.pool": "I1: the replay of vLLM's KV block pool, which the certifier's cache vectors are "
+                                             "held to",
+    "verity_vllm.pipeline.advice_code.replay": "I1: the replay of vLLM's scheduler, which the certifier's replay vectors and "
+                                               "the traces' admission are held to",
+    "verity_vllm.pipeline.advice_code.derived": "I1: advice v1's derived rules (the walk, the prefixes, the tie), which the "
+                                                "certifier's derived vectors are held to",
+    "verity_vllm.pipeline.advice_code.window_code": "I1: advice v1's window code and its codebook",
+    "verity_vllm.pipeline.advice_code.arith": "I1: the arithmetic coder advice v1's window code runs on",
     "verity_vllm.protocols.pouw.h1.commit": "I1: a served H1 window's Commit: its registration W (registration), the audited "
                                             "window's tables rebuilt as W's (reuse, reused) and the record H1 names (named)",
     "verity_vllm.protocols.pouw.h1.words": "I1: the words H1 commits a call's rows and a step's input ids as (chunk_words, "
@@ -149,6 +162,7 @@ KNOWN = frozenset({
     "verity_vllm.engine.int8_ranks",
     "verity_vllm.engine.int8_vllm",
     "verity_vllm.engine.profiles.dense_generic",
+    "verity_vllm.engine.profiles.engine_classes",
     "verity_vllm.engine.served",
     "verity_vllm.engine.vllm_adapter",
     "verity_vllm.llm",

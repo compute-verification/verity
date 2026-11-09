@@ -111,7 +111,7 @@ structure Verifier (Coin : Type) where
   next : Msg → List Msg → List Coin → OC Out
 
 /-- A run: the messages `(a_j, b_j)`, each party's `H` calls, and the decision. -/
-structure Trace where
+structure Transcript where
   msgs : List (Msg × Out)
   pLog : List (Msg × Msg)
   vLog : List (Msg × Msg)
@@ -122,19 +122,19 @@ structure Seen where
   msgs : List (Msg × Out)
   out : Out
 
-def Trace.seen (t : Trace) : Seen := ⟨t.msgs, t.out⟩
+def Transcript.seen (t : Transcript) : Seen := ⟨t.msgs, t.out⟩
 
 /-- Rounds against a verifier given by its next message `vnext` (from the prover's messages so far), from the history
 `hist` and the prover's messages `as`, with `n` rounds left. A verifier that has not decided when the rounds run out
 rejects. -/
 def stepWith {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out) :
-    ℕ → List (Msg × Msg) → List Msg → Trace → Trace
+    ℕ → List (Msg × Msg) → List Msg → Transcript → Transcript
   | 0, _, _, t => { t with out := .rej }
   | n + 1, hist, as, t =>
     let pa := (P.next x hist ω).eval H
     let as' := as ++ [pa.1]
     let vb := (vnext as').eval H
-    let t' : Trace := { t with msgs := t.msgs ++ [(pa.1, vb.1)], pLog := t.pLog ++ pa.2, vLog := t.vLog ++ vb.2 }
+    let t' : Transcript := { t with msgs := t.msgs ++ [(pa.1, vb.1)], pLog := t.pLog ++ pa.2, vLog := t.vLog ++ vb.2 }
     match vb.1 with
     | .msg m => stepWith H P x ω vnext n (hist ++ [(pa.1, m)]) as' t'
     | .acc => { t' with out := .acc }
@@ -174,7 +174,7 @@ def coinSeq {Coin : Type} [Inhabited Coin] {k : ℕ} (r : Fin k → Coin) (i : �
 
 /-- `run(P*, V, x)` at tape `ω` and coins `r`. -/
 def run {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin) (x : Msg) (ω : Ω)
-    (r : Fin (V.k x) → Coin) : Trace :=
+    (r : Fin (V.k x) → Coin) : Transcript :=
   stepWith H P x ω (fun as => V.next x as ((List.range as.length).map (coinSeq r))) (V.k x) [] [] ⟨[], [], [], .rej⟩
 
 /-! ## Probability: uniform averages over finite coin spaces
@@ -195,7 +195,7 @@ inductive RP (R α : Type) where
 
 /-- Run against `H` and the prover's runs `run`: the result, the SHA-512 calls (its own and every rerun's, both
 parties'), and the reruns. -/
-def RP.eval {R α : Type} (H : Msg → Msg) (run : R → Trace) : RP R α → α × ℕ × ℕ
+def RP.eval {R α : Type} (H : Msg → Msg) (run : R → Transcript) : RP R α → α × ℕ × ℕ
   | .ret a => (a, 0, 0)
   | .hash q k =>
     let e := RP.eval H run (k (H q))
@@ -414,7 +414,7 @@ structure VStar (Θ : Type) where
   next : Msg → List Msg → Θ → OC Out
 
 /-- The honest prover `P(w)` at tape `ω` against `V*` at tape `θ`. -/
-def runStar {Ω Θ : Type} (H : Msg → Msg) (P : Prover Ω) (Vs : VStar Θ) (x : Msg) (ω : Ω) (θ : Θ) : Trace :=
+def runStar {Ω Θ : Type} (H : Msg → Msg) (P : Prover Ω) (Vs : VStar Θ) (x : Msg) (ω : Ω) (θ : Θ) : Transcript :=
   stepWith H P x ω (fun as => Vs.next x as θ) (Vs.k x) [] [] ⟨[], [], [], .rej⟩
 
 /-- A simulator program: it may call `H` and ask the verifier (black box) its answer to any prover messages. -/
