@@ -2131,7 +2131,8 @@ def test_under_gate_check_a_candidate_whose_sharded_check_passed_advances_whatev
     if graph2 != "pending":
         keys = env.listed(sha, {"pytest:a": ["a.txt"]})
         env.result(keys["pytest:a"], "pytest:a", graph2)
-    assert _acts(loop.tick()) == ["slim"] and env.main() == main     # its own shards still run, whatever graph2 says
+    # its own shards still run, whatever graph2 says: a verdict of graph2's that came first is logged, for how long it took
+    assert _acts(loop.tick()) == ["slim", *(["graph2"] if graph2 != "pending" else [])] and env.main() == main
     assert not env.withdrawn and not env.posts
     runs.end(sha)
     logged = loop.tick()
@@ -2229,6 +2230,144 @@ def test_under_gate_check_a_run_started_while_graph2_gated_is_started_again_as_t
     assert (below["why"], started["why"]) == ("started again beside `main`", "started")
     assert [(c, kw["shard"]) for c, _, _, kw in runs.launches] == [(c, f"{k}/3") for c in (main, built["sha"]) for k in (1, 2, 3)]
     assert loop.tick() == [] and len(runs.launches) == 6
+
+
+def _landed(env: Env, monkeypatch, decide=vqueue.decide) -> tuple[Loop, Path, str, dict, list[str]]:
+    """Under `--gate check`, a candidate of #1 whose check passed 600 s after its launch and `main` advanced to while graph2,
+    which says its check runs, hadn't ended: the loop, graph2's script, the candidate, its drop's line, and each sha
+    `World.verdict` reads from here on."""
+    env.put(1, {"a.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch, decide)
+    script = env.graph2_script(loop, {"state": PENDING, "pending": 1})
+    _, built, _ = loop.tick()
+    env.clock += 600
+    runs.end(env.main())
+    runs.end(built["sha"])
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", "slim", "advance", "on_main", "drop"] and env.main() == built["sha"]
+    read: list[str] = []
+    verdict = loop.world.verdict
+    monkeypatch.setattr(loop.world, "verdict", lambda sha, *a, **k: read.append(sha) or verdict(sha, *a, **k))
+    return loop, script, built["sha"], logged[-1], read
+
+
+@pytest.mark.parametrize("graph2", ["pass", "fail"])
+def test_under_gate_check_the_graph2_check_of_a_candidate_main_advanced_to_runs_on_and_gets_its_one_compare_line_when_it_ends(
+        env, monkeypatch, graph2):
+    """graph2 takes longer than the check that gates, so most candidates advance first.  Its check of one isn't cancelled at
+    the drop, which logs what the check said; the loop reads it whole only once graph2's own verdict stops saying it runs,
+    and then logs the one line: graph2's verdict beside the check's at the advance, with how long each took."""
+    loop, script, sha, drop, read = _landed(env, monkeypatch)
+    assert (drop["cancel"], drop["graph2"]) == ("left running, in shadow", PENDING) and not Path(f"{script}.cancel").exists()
+    assert drop["follow"] == {"check": PASS, "said": PASS, "check_s": 600, "enqueued": L.stamp(T0)}
+    env.clock += 600
+    assert loop.tick() == [] and read == []                         # graph2 says it runs: no graph is read for it
+    keys = env.listed(sha, {"pytest:a": ["a.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", graph2)
+    Path(f"{script}.verdict").write_text(json.dumps({"state": graph2, "pending": 0}))
+    env.clock = T0 + 7200
+    (line,) = loop.tick()
+    assert read == [sha] and (line["action"], line["sha"], line["members"]) == ("compare", sha, [1])
+    assert line["why"] == {"pass": "agree: graph2 and the check pass",
+                           "fail": "disagree: graph2 fail (pytest:a), the check pass"}[graph2]
+    assert (line["graph2"], line["check"], line["graph2_s"], line["check_s"]) == (graph2, PASS, 7200, 600)
+    assert env.out[-1] == f"research queue vqueue: tick 4: {sha[:12]} graph2 in shadow: {line['why']}"
+    env.result(keys["pytest:a"], "pytest:a", "fail" if graph2 == "pass" else "pass")   # whatever graph2 says later
+    env.clock += 600
+    assert loop.tick() == [] and read == [sha]                      # one line a candidate, and it is read no more
+    assert not Path(f"{script}.cancel").exists() and not env.withdrawn
+
+
+@pytest.mark.parametrize("how", ["never ends", "can't be read"])
+def test_under_gate_check_a_followed_graph2_check_that_hasn_t_ended_a_day_after_its_enqueue_is_cancelled_and_unfinished(
+        env, monkeypatch, how):
+    """The loop gives up `FOLLOW_S` after the enqueue: it reads the check once more, cancels it and logs the candidate's one
+    line all the same, `unfinished`, with how long graph2 ran and how many tasks ended.  A read that raises stops no tick."""
+    loop, script, sha, _, read = _landed(env, monkeypatch)
+    keys = env.listed(sha, {"pytest:a": ["a.txt"], "pytest:b": ["b.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    if how == "can't be read":
+        Path(f"{script}.verdict").write_text(json.dumps({"state": PASS, "pending": 0}))
+
+        def broken(sha: str, *a, **k):
+            raise RuntimeError("the store is away")
+
+        monkeypatch.setattr(loop.world, "verdict", broken)
+    env.clock = T0 + L.FOLLOW_S - 1
+    assert loop.tick() == [] and read == [] and not Path(f"{script}.cancel").exists()
+    env.clock = T0 + L.FOLLOW_S
+    (line,) = loop.tick()
+    did = {"never ends": "1 of its 2 tasks on the merge gate ended",
+           "can't be read": "its read failed (RuntimeError: the store is away)"}[how]
+    assert line["why"] == f"unfinished: graph2 pending 86400 s after its enqueue ({did}), the check pass"
+    assert (line["action"], line["graph2"], line["check"], line["graph2_s"], line["check_s"], line["cancel"]) == (
+        "compare", "unfinished", PASS, 86400, 600, "cancelled")
+    assert line.get("tasks") == ([1, 2] if how == "never ends" else None) and read == ([sha] if how == "never ends" else [])
+    assert Path(f"{script}.cancel").read_text() == f"ready:{sha}\n"
+    env.result(keys["pytest:b"], "pytest:b", "pass")                 # it ends after all: nothing more
+    Path(f"{script}.verdict").write_text(json.dumps({"state": PASS, "pending": 0}))
+    env.clock += 3600
+    assert loop.tick() == [] and [r["graph2"] for r in env.lines() if r["action"] == "compare"] == ["unfinished"]
+
+
+def test_under_gate_check_a_dropped_candidate_s_graph2_check_is_cancelled_at_its_drop_and_gets_no_compare_line(env, monkeypatch):
+    """Only a candidate `main` advanced to is followed.  One whose check failed is dropped as before, its graph2 check
+    cancelled then, and the drop's line says how graph2 read; whatever graph2 would have said, no line compares it."""
+    main = env.main()
+    env.put(1, {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"})
+    loop, runs = _check(env, monkeypatch, policy)
+    script = env.graph2_script(loop, {"state": PENDING, "pending": 1})
+    _, built, _ = loop.tick()
+    sha = built["sha"]
+    runs.end(main)
+    runs.end(sha, 3, "pytest", rows=(_row(NEW),))
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", "slim", "eject", "drop"] and env.main() == main
+    assert (logged[-1]["cancel"], logged[-1]["graph2"]) == ("cancelled", PENDING) and "follow" not in logged[-1]
+    assert Path(f"{script}.cancel").read_text() == f"ready:{sha}\n"
+    keys = env.listed(sha, {"pytest:a": ["pkg/tests/test_x.py"]})
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    Path(f"{script}.verdict").write_text(json.dumps({"state": PASS, "pending": 0}))
+    for env.clock in (T0 + 600, T0 + L.FOLLOW_S):
+        assert loop.tick() == []
+    assert not [r for r in env.lines() if r["action"] in ("compare", "graph2")]
+
+
+@pytest.mark.parametrize("first", ["graph2", "the check"])
+def test_under_gate_check_a_compare_line_says_how_long_graph2_s_verdict_took_from_its_enqueue_and_the_check_s_from_its_launch(
+        env, monkeypatch, first):
+    """Each duration ends when its own verdict did, not when the line is written: the one that ended first is read from the
+    line that logged it then (graph2's `graph2` line, the run's judged record)."""
+    def decide(s: Snapshot) -> list:
+        return [] if s.candidates else [Build(tuple(x.number for x in s.ready), s.main, 5)]
+
+    env.put(1, {"a.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch, decide)
+    _, built, _ = loop.tick()
+    sha = built["sha"]
+    keys = env.listed(sha, {"pytest:a": ["a.txt"]})
+
+    def ends(what: str) -> list[dict]:
+        if what == "graph2":
+            env.result(keys["pytest:a"], "pytest:a", "pass")
+        else:
+            runs.end(env.main())
+            runs.end(sha)
+        return loop.tick()
+
+    env.clock = T0 + 300
+    logged = ends(first)
+    if first == "graph2":
+        assert _acts(logged) == ["graph2"] and (logged[0]["graph2"], logged[0]["graph2_s"]) == (PASS, 300)
+        assert logged[0]["why"] == "graph2, in shadow, ended before the check: pass" and loop.tick() == []
+    else:
+        assert _acts(logged) == ["slim", "slim"]
+    env.clock = T0 + 900
+    line = ends("the check" if first == "graph2" else "graph2")[-1]
+    assert (line["action"], line["why"]) == ("compare", "agree: graph2 and the check pass")
+    assert (line["graph2_s"], line["check_s"]) == ((300, 900) if first == "graph2" else (900, 300))
+    env.clock += 300
+    assert loop.tick() == []
 
 
 def test_the_gate_is_graph2_unless_the_command_says_check_which_needs_the_run_beside_each_check(capsys, tmp_path):
