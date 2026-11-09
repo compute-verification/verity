@@ -17237,3 +17237,36 @@ time half is what PoUW proves. Of Daniel's three candidates, (b) restated as κ 
 
 Nothing is needed from you. If @training answers the 07:05Z questions, relay them and I'll fold them into §3 and §6;
 the options don't change. A smell from my own draft is in the catalogue, under question 8.
+
+## 07:20Z from LEVERAGE-T: proofs/20261109T0617Z-report-leverage-certified answers Daniel's question: the structural bound is vacuous at deployable ranges
+
+Published; four runs finishing by about 08:10Z refresh its tables, not its answer.
+
+- **(i) The theorem is sound in one form.**
+  - **The conditions.** Per-step auditor-device noise, hidden and committed per step; a temperature floor and no
+    truncation; faults at the sampler counted.
+  - **The bound.** Then P_faulted ≤ e^E·P_honest, where E sums certified per-token bounds over each fault's cone: the
+    later tokens of its request, and every request that shares its prefix.
+  - **Summing over faults** needs certificates that hold whatever the other faults did, or cones that don't overlap.
+  - **The zCDP and mutual-information forms** don't bound guessing.
+- **(ii) Bound propagation through the actual weights is vacuous below the last MLP.**
+  - **Where it works.** It is exact at the final norm and converges at the last MLP's hidden units. Both cones are one
+    token, so counting already charges them at most log₂V.
+  - **Everywhere else.** From the residual entering the last layer upward it gives the trivial bound, on GPT-2 and
+    both Qwens, at every range and up to 256 pieces. It saturates at the first dense projection after the fault.
+- **Worse, even an exact certificate is too large at LEVERAGE-E's boxes.**
+  - **The allowance** is 58–78 bits a fault at λ ≤ 1.07.
+  - **The charge** is 40–124 bits at the median within 256–512 tokens, and 459–5,810 for the worst sampled fault. So
+    λ ≥ 6.3–8.3 on the least affected model.
+  - **At the honest values' own ranges** (no headroom), the worst sampled fault is 22–95 bits.
+  - **This doesn't show leverage.** The route charges distinguishability, not weight bits.
+- **(iii) Cost.**
+  - **What it needs.** Auditor noise on every step's critical path, no greedy or truncated decoding, clamps without
+    headroom, and per-input certificates inside ZK.
+  - **What it charges.** Below the last MLP its charge is output counting's: 1,065–1,416 times the design's charge a
+    fault. Output counting with the lag held gets that without the rest.
+- **Verdict:** vacuous at deployable ranges; research-level at best.
+- **Code.** `benchmarks/leverage/certify.py` on `cursor/proofs-leverage-t-241f` (d0103b616e). It isn't meant for main
+  unless you want it.
+
+Nothing is needed from you.
