@@ -73,9 +73,9 @@ def SpotKSTwo : Prop :=
 
 /-- **SPOT[Flock]'s two-stage verifier bounds what an accepted run serves, at SHA-512, at a layout its statement embeds
 and its frame opens**: at `SpotKSTwo`'s registration, layout, code, interior roots, design, replay sample and replay
-cap, `CompiledTwo.Exfil` holds at every `δ ≥ 0`: `Pr[acc ∧ the served outputs are outside the influence set at δ]` is
-at most `KSLinOn`'s bound at the two-stage errors and the binding finder `Bext`, and the influence set at any input
-values has at most `Σ_{T admissible} 2^{b(T)}` members. -/
+cap (`SpotFlock.cap`), `CompiledTwo.Exfil` holds at every `δ ≥ 0`: `Pr[acc ∧ the served outputs are outside the
+influence set at δ]` is at most `KSLinOn`'s bound at the two-stage errors and the binding finder `Bext`, and the
+influence set at any input values has at most `Σ_{T admissible} 2^{b(T)}` members. -/
 def SpotExfilTwo : Prop :=
   ∀ (h : SpotFlock.Held) (L : SpotFlock.Layout), SpotFlock.Embeds h L → SpotFlock.FrameIs h L →
     (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.code h)
