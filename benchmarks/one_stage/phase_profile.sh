@@ -13,7 +13,7 @@
 #          rep's PHASE (default t.ligerito) window, anchored at ANCHOR's launch (default lf_fold_base_pair)
 #   an     phase_profile.py again on AS's newest trace (KW/traces; PROVE_OUT: its session records, where they aren't beside it)
 #   session  session_profile.py on AS's newest trace (the tl step's): every phase of a session's prove time, ranked in ms a
-#          session
+#          session; with GAPS (ms), also the host's calls and the GPU's ops in that window around each rep's device windows
 #   peak   for each build (base and new) and each of PEAK_UNITS (default moe-w13's and gq's statements, `;` between them) at full,
 #          each staged once per KW (gq's stage takes about 50 min): a prover_is_deterministic selftest under Flock ZK and
 #          under Flock's circuit prover, and one Flock ZK dev session, each under nsys with its allocations traced
@@ -146,7 +146,7 @@ if has session; then
   T=$(ls -t $W/traces/tl-$AS-*.sqlite 2>/dev/null | head -1); T=${T%.sqlite}
   if [ -n "$T" ]; then
     $PY benchmarks/one_stage/session_profile.py --sqlite $T.sqlite --prove-out ${PROVE_OUT:-$T.prove.out} --skip 1 \
-      --json $O/session-$AS.json > $O/session-$AS.txt 2>&1
+      ${GAPS:+--gaps $GAPS} --json $O/session-$AS.json > $O/session-$AS.txt 2>&1
     sed "s/^/session-$AS /" $O/session-$AS.txt | tee -a $O/job.log
   else log "no trace of $AS under $W/traces"; fail=1; fi
 fi

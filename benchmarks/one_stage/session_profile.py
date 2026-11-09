@@ -3,8 +3,8 @@
 
     python benchmarks/one_stage/session_profile.py --sqlite P.sqlite --prove-out prove.out [--skip 1] [--json out.json]
         [--timeline PHASE]   # also PHASE's GPU ops in start order, in the first timed session's first rep that has it
-        [--gaps MS]          # also the prover thread's CUDA calls and the GPU's ops in the MS before each timed rep's device
-                             # windows and after them (the host around the device prover)
+        [--gaps MS]          # also the prover thread's CUDA and OS calls and the GPU's ops in the MS before each timed rep's
+                             # device windows and after them (the host around the device prover)
 
 A session's `prove_total_s` is its two reps' prove seconds. Each rep's device phases (the record's buckets ``t.witness``
 through ``t.ligerito``) run back to back, so each window is placed backward from Ligerito's phase mark (`phase_profile.py`'s,
@@ -68,22 +68,26 @@ def timeline(gpu, api, span, phase: str) -> None:
         print(f"  {(s - a) / 1e6:8.2f} {(e - s) / 1e6:7.2f} {busy / 1e6:7.2f} {n:4d} {mb}  {name} ({via})")
 
 
-def gaps(gpu, api, edges, span: int) -> None:
-    """The prover thread's CUDA calls and the GPU's ops in the `span` ns before each rep's first device window and after its
-    Ligerito, summed over the reps (ms a rep), the largest first."""
+def gaps(gpu, api, osrt, edges, span: int) -> None:
+    """The prover thread's CUDA and OS calls and the GPU's ops in the `span` ns before each rep's first device window and after
+    its Ligerito, summed over the reps (ms a rep), the largest first."""
     for side in ("before", "after"):
-        calls, ops = defaultdict(float), defaultdict(float)
+        calls, os_calls, ops = defaultdict(float), defaultdict(float), defaultdict(float)
         for _, start, end, tid in edges:
             a, b = (start - span, start) if side == "before" else (end, end + span)
             for s, e, n, _, t in api:
                 if t == tid and s < b and e > a:
                     calls[n.split("_v")[0]] += (min(e, b) - max(s, a)) / 1e6
+            for s, e, n, t in osrt:
+                if t == tid and s < b and e > a:
+                    os_calls[n] += (min(e, b) - max(s, a)) / 1e6
             for s, e, n, _, _, _ in gpu:
                 if s < b and e > a:
                     ops[n.removeprefix("void ").split("<")[0].split("(")[0]] += (min(e, b) - max(s, a)) / 1e6
         k = max(len(edges), 1)
         print(f"{side} the device windows ({span / 1e6:.0f} ms, {len(edges)} reps), ms a rep:")
         print("  CUDA calls: " + ", ".join(f"{n} {v / k:.2f}" for n, v in sorted(calls.items(), key=lambda kv: -kv[1])[:12]))
+        print("  OS calls: " + ", ".join(f"{n} {v / k:.2f}" for n, v in sorted(os_calls.items(), key=lambda kv: -kv[1])[:12]))
         print("  GPU ops: " + ", ".join(f"{n} {v / k:.2f}" for n, v in sorted(ops.items(), key=lambda kv: -kv[1])[:10]))
 
 
@@ -147,7 +151,7 @@ def main() -> int:
               f"{m['idle_sync_ms']:6.1f} {m['idle_host_ms']:6.1f} | " + ", ".join(f"{f} {v:.1f}" for f, v in fams)
               if dev else f"{'-':>7s} | (host; no device window)"))
     if a.gaps:
-        gaps(gpu, api, [e for e in edges if e[0] >= a.skip], int(a.gaps * 1e6))
+        gaps(gpu, api, osrt, [e for e in edges if e[0] >= a.skip], int(a.gaps * 1e6))
     if a.timeline:
         timeline(gpu, api, next(((s, e) for si, p, s, e in spans if p == a.timeline and si >= a.skip), None), a.timeline)
     if a.json:
