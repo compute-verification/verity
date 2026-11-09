@@ -57,28 +57,28 @@ scenarios register a policy as if it were a subprotocol.
 `lean/` is the Lake package `inference_only_check`, code that reads Programs with Flock's decoder (`Flock.Program`) and imports
 nothing else but Lean core and the core interface (`core_protocol`).
 
-- `nci-check` runs `InferenceOnlyCheck.Baseline.check`: `InferenceOnlyCheck.Desc.check`, which decides `InferenceOnly.CompliesRate c α` for a declared
+- `inference-only-check` runs `InferenceOnlyCheck.Baseline.check`: `InferenceOnlyCheck.Desc.check`, which decides `InferenceOnly.CompliesRate c α` for a declared
   division aligned to the root's Calls at the cost of the descriptor (one summary per Definition), then each θ entry's
   provenance against the deployment's registration log.
-- `nci-check --count` runs `InferenceOnlyCheck.Count.check`, the count of (c, k)-inference blocks: the declaration names its block
+- `inference-only-check --count` runs `InferenceOnlyCheck.Count.check`, the count of (c, k)-inference blocks: the declaration names its block
   Definitions by descriptor key, and the check gives each one's Boolean gates (from a per-primitive gate table), its
   fresh input bits outside θ and its blocks, multiplied through batches and scans, and the root's total against n.
   - Public: the judgment against n, `{"complies": true|false}`, or the refusal (`{"error": code}`, with a `message`
     for some codes).
   - Not public: the rows (each block Definition's gates, fresh bits and blocks), the total and which block failed.
-    `nci-check --count --detail` prints that whole verdict (`InferenceOnlyCheck.Count.checkDetail`) for the private record
+    `inference-only-check --count --detail` prints that whole verdict (`InferenceOnlyCheck.Count.checkDetail`) for the private record
     only.
 
   `InferenceOnlyCheck.Properties.DescCountsCK` (`Security/Properties/InferenceOnly/Count.lean`) states that a published `complies` means
-  `InferenceOnly.CompliesAtMost c k n`; it is not yet proved, and the lock lists it as an open piece. `nci-count-difftest` holds
+  `InferenceOnly.CompliesAtMost c k n`; it is not yet proved, and the lock lists it as an open piece. `inference-only-count-difftest` holds
   both forms to the Python reference's `check_count` and `check_count_detail` (`lean/scripts/inference_only_reference.py`), run by
   `../tests/test_inference_only_count_difftest.py`.
-- `nci-check --unrolled` runs the same with `InferenceOnlyCheck.check`, the check gate by gate, kept as the reference; its input
-  format is in `InferenceOnlyCheck.Check`'s docstring. `nci-check --policy` runs the policy's check alone, without θ's
+- `inference-only-check --unrolled` runs the same with `InferenceOnlyCheck.check`, the check gate by gate, kept as the reference; its input
+  format is in `InferenceOnlyCheck.Check`'s docstring. `inference-only-check --policy` runs the policy's check alone, without θ's
   provenance, which is what `benchmarks/verifier_cost` measures.
 - `inference-only id | check | serve` runs `InferenceOnlyCheck.Baseline.check` as the core protocol `verity/inference-only/v0`
   (`InferenceOnlyCheck.Protocol`), the subprotocol of onsite and remote.
-- `nci-difftest`, `nci-desc-difftest`, `nci-desc-liveness`, `nci-desc-fuzz` and `nci-baseline-difftest` hold them to
+- `inference-only-difftest`, `inference-only-desc-difftest`, `inference-only-desc-liveness`, `inference-only-desc-fuzz` and `inference-only-baseline-difftest` hold them to
   each other and to the Python reference `lean/scripts/inference_only_reference.py`, run by `../tests/test_inference_only_*.py`;
   `../tests/test_inference_only_protocol.py` holds `inference-only serve` to that reference behind the protocol's
   decoders.
@@ -91,7 +91,7 @@ literature index and the training algorithms' traits.
 
 ## Names
 
-The directory, the namespaces `InferenceOnly` and `InferenceOnlyCheck`, the `nci-*` executables, `benchmarks/nci` and the Lean's
+The directory, the namespaces `InferenceOnly` and `InferenceOnlyCheck`, the `inference-only-*` executables, `benchmarks/nci` and the Lean's
 docstrings keep the older names until they are renamed: "NCI" and "novel communication intensity" for the policy,
 "isolation unit" and "IU" for an inference block, "novel information" and `novelReads` for fresh input, and
 "baseline" for the registered information (`GLOSSARY.md`, Older names).
