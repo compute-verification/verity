@@ -37,7 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # Sampled proofs' sample in the claims' slots: it misses proof blocks no more often than `P_a` (`Spot.Slots.select`)
 
-The property of the challenger's sample as the claims read it (`Deploy.checked`, `Claims.Sampling.KS`'s `DrawLaw`): the
+The property of the challenger's sample as the claims read it (`Deploy.checked`, `Claims.Sampling.DrawLaw`): the
 sample `Slots.select` makes from `L` uniform bytes under a Spec's selection rule, over the verifier's own program and query,
 checks no proof block at a slot of `B` with probability at most the claims' acceptance probability
 `P_a(B)` of the design it samples, on the partition it samples over. It takes no premise: the sample is a function of its inputs
