@@ -182,12 +182,12 @@ def export(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int)
         raise ValueError("the design's links at the boundary window's ports are not the run's")
     irec = json.loads((run_out / "interior" / "registration.json").read_text())
     regs = {"boundary_names": (bw, brec), "interior_names": (ref, irec)}
-    names_of = {k: {"ports": list(expected_ports(w)), "values": []} for k, (w, _) in regs.items()}
-    for k, (_, rec) in regs.items():
+    names_of = {key: {"ports": list(expected_ports(w)), "values": []} for key, (w, _) in regs.items()}
+    for key, (_, rec) in regs.items():
         ran = {"ports": sorted(r["port"] for r in rec["roots"]),
                "values": sorted(e["value"] for e in rec.get("registered", []))}
-        if ran != {f: sorted(ns) for f, ns in names_of[k].items()}:
-            raise ValueError(f"the design's {k.replace('_', ' ')} are not the ones the run's record names")
+        if ran != {f: sorted(ns) for f, ns in names_of[key].items()}:
+            raise ValueError(f"the design's {key.replace('_', ' ')} are not the ones the run's record names")
     wires = SS.replay_wires(replay, key)
     part, prog = json.dumps(ref.partition, sort_keys=True).encode(), canonical_json(encode_program(ref.program))
     names, base = [m.template for m in ref.members], 0
