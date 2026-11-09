@@ -1215,6 +1215,39 @@ __global__ void fc_zk_interleave(F128* __restrict__ out, const F128* __restrict_
     out[pos * stride + off + (i - pos * width)] = src[i];
 }
 
+// A host-to-device copy on a stream of its own, after the default stream's work so far (the destination may be memory that work
+// releases); join() makes the default stream wait for it, as leaving the scope does. Without a stream of its own it is queued
+// on the default stream.
+struct FcSideCopy {
+    cudaStream_t s = nullptr;
+    cudaEvent_t done = nullptr;
+    cudaError_t start(void* dst, const void* src, size_t bytes) {
+        cudaEvent_t ready = nullptr;
+        if (cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking) != cudaSuccess
+            || cudaEventCreateWithFlags(&ready, cudaEventDisableTiming) != cudaSuccess
+            || cudaEventCreateWithFlags(&done, cudaEventDisableTiming) != cudaSuccess) {
+            cudaGetLastError();
+            if (ready) cudaEventDestroy(ready);
+            release();
+            return cudaMemcpyAsync(dst, src, bytes, cudaMemcpyHostToDevice, 0);
+        }
+        cudaEventRecord(ready, 0);
+        cudaStreamWaitEvent(s, ready, 0);
+        cudaEventDestroy(ready);
+        const cudaError_t e = cudaMemcpyAsync(dst, src, bytes, cudaMemcpyHostToDevice, s);
+        cudaEventRecord(done, s);
+        return e;
+    }
+    void join() { if (done) cudaStreamWaitEvent(0, done, 0); }
+    void release() {
+        if (done) cudaEventDestroy(done);
+        if (s) cudaStreamDestroy(s);
+        done = nullptr;
+        s = nullptr;
+    }
+    ~FcSideCopy() { join(); release(); }
+};
+
 // commit_zk on the device. The padding's upper half is not zero, so the transform runs every layer (M0's commit skips layer 0
 // by reading the message replicated); the witness's lanes go in four groups and the extra ones in a batch of their own (the
 // NTT's lane tiles are powers of two), each interleaved into the leaves as it's done, so only a quarter of the witness's lane
@@ -1229,9 +1262,10 @@ static int fc_commit_l0_zk(const FlockCudaProveParams* P, const FlockCircuitPara
     CK(ffi_malloc(d_pads, (size_t)(w + 4) * t_pad * sizeof(F128)));
     CK(ffi_malloc(d_extra, (size_t)4 * l * sizeof(F128)));
     // queued in stream order: the caller's words (page-locked, gpu_circuit.rs Words) outlive the proof's last read, which waits
-    // on the stream
+    // on the stream. Only the last batch reads the extra lanes, so their copy runs beside the witness lanes' transforms
     CK(cudaMemcpyAsync(*d_pads, N->zk_pads, (size_t)(w + 4) * t_pad * sizeof(F128), cudaMemcpyHostToDevice, 0));
-    CK(cudaMemcpyAsync(*d_extra, N->zk_extra, (size_t)4 * l * sizeof(F128), cudaMemcpyHostToDevice, 0));
+    FcSideCopy extra_in;
+    CK(extra_in.start(*d_extra, N->zk_extra, (size_t)4 * l * sizeof(F128)));
     const TwiddleTable* tt;
     F128* d_tw;
     CK(get_cached_twiddles(k_code, tt, d_tw));
@@ -1247,6 +1281,7 @@ static int fc_commit_l0_zk(const FlockCudaProveParams* P, const FlockCircuitPara
         fc_zk_interleave<<<(unsigned)((n * wg + 255) / 256), 256>>>(*d_cw0, cw_w, wg, g, w + 4, n);
         CK(cudaGetLastError());
     }
+    extra_in.join();
     fc_zk_lane_input<<<(unsigned)((n * 4 + 255) / 256), 256>>>(cw_x, *d_extra, 1, l, 2, n, l, *d_pads + (size_t)w * t_pad, t_pad);
     launch_ntt(cw_x, d_tw, *tt, 0, k_code, 4);
     fc_zk_interleave<<<(unsigned)((n * 4 + 255) / 256), 256>>>(*d_cw0, cw_x, 4, w, w + 4, n);
