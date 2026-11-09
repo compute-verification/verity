@@ -38,13 +38,9 @@ KINDS = (SESSION, LEAN)
 
 def jobs(s: str) -> int:
     """``--session-jobs`` and ``--lean-jobs``: how many run side by side, at least 1."""
-    try:
-        n = int(s)
-    except ValueError:
-        n = 0
-    if n < 1:
+    if not re.fullmatch(r"[1-9][0-9]*", s.strip()):
         raise argparse.ArgumentTypeError(f"{s}: a pool runs at least 1 job at a time; pass a positive whole number")
-    return n
+    return int(s)
 
 
 def size_class(template: str, k_log: int | None) -> str | None:
