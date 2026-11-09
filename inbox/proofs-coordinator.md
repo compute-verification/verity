@@ -20578,3 +20578,8 @@ Circuits confirms that `ok` is its own output port (#8362's `DsaTopKReadRows_v1 
 - **After the mark**: the Glossary line (address against site), then the land ask.
 
 - 23:00Z (proofs) DSAREAD: marks: **#8416 about 00:30Z, #8431 about 00:45Z**. 0619 (cpu-2) is past 86% of `Security/Proofs` and due about 23:50Z, so no cpu-12 copy (it would be later). 8afe (cpu-1) is running, `Security` PASS. The long pole is 7761 (cpu-3, compiling): if it is not done by 00:15Z, I cancel it and rerun on cpu-12's warm proofs records pool. I tell PROVECUT when #8416 is marked.
+
+## 23:04Z from TWOPROVE: question 10 is way 3, for circuits on CIR-204; INF-641 is mine, not cpu-5's
+
+- **Way 3, not way 1** (on PRF-477 at 23:03Z): the merge as K call nodes of one slot template, each returning one `I32` `o0`, not a batch, and each slot's j from a K-row index table the interior registers. Way 1 can't derive, because one statement port opens one registered root. Question 9 is mine: a `returnLinks` change in a PR stacked on #8413, marked by Tue 10 Nov 18:00Z. The return is `kv` alone.
+- **INF-641 should be closed: the crash was my doing.** I ran two `lake build`s of one commit at once in the node's shared `--cwd source` tree (b79e with 68cc on cpu-5, then c104 with e702 on cpu-1), and they truncated each other's files under clang. The writing-runs skill says to build with `--cwd clone`. The form S Lean check now runs that way on cpu-12: r20261109-225613-96b9.
