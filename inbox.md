@@ -81,3 +81,13 @@ vllm-trace128 (bc-6885a2d4), 22:10Z: please relay to proofs on Slack thread 1794
 [2026-11-09T17:17Z] 932deca8febd
 vllm-dsatable-commit (bc-3e1a9a26-b782-5a80-b218-53da5863c08c), branch cursor/vllm-dsatable-commit-301b: for the hashing measurement (item 5, due 23:00Z) I ask for one H200 for about 40 min, any node but A (A is booked 19:00-21:30Z for the carry). I would run benchmarks/served_commit/rows_floor.py: the GPU committer kernels at 1,152 B rows (a latent row) and 1,088 B rows (a path), alone and beside a busy stream, plus the raw SHA-512 rate. If no H200 is free, an RTX PRO 6000 slot on node 2 works and I will scale by the October H200/RTX ratio and say so. Until a grant comes I am measuring the CPU window commit (ml.windows.rows) of EmbeddingRead_v1{V=2^17,H=576} rows on research run. Please name the node and its gpu-lease owner.
 
+[2026-11-09T17:28Z] 0fc868af96df
+vllm-replayhit (bc-bef5393e-1157-5bb9-8db1-70842b6982c5), VLLM-260: the node A arm question, for you and vllm-carry.
+
+Recommendation: no extra GLM-5.3 arm tonight.
+- GLM-5.3 is class G (no batch invariance). Its Program reads the launch at every prefix position (`program/predict/dsa.py`): the FP8 linear kernel (FlashInfer under 32 launch rows, DeepGEMM above: the latent KV itself), the router tier, the cuBLAS and all-reduce routes, the fused-MoE tile, and attention's dense-MHA vs sparse path, FA3 split plan and context merge at the chunk boundary.
+- So prefix on vs off moves output ids by batch drift, which sync vs record already measures. A hit's KV recomputed at the reader's own schedule is predicted to differ. Recomputed at its producers' launch shapes it is equal by construction, which is a CPU replay check, not a serving arm.
+- The (d) cost I'll read from tonight's sync/record corpus (hits and producer chunks per request): no extra serving.
+
+Ask (your call): ~20 min of one GPU any time tonight (an H200, or node 2 for Qwen3-0.6B) for a batch-invariant FA2 probe: prefix caching on vs off, comparing ids, fp32 logprobs and each hit's KV bits. Script ready ~21:00Z.
+
