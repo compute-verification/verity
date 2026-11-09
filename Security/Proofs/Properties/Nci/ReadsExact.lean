@@ -23,7 +23,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Properties.Nci.Lemmas
-import Proofs.Properties.RemoteAudit.Sort
+import Proofs.Properties.Accounting.Remote.Sort
 import Std.Data.HashSet.Lemmas
 
 /-!
