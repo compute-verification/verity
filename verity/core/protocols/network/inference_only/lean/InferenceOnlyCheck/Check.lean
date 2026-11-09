@@ -7,10 +7,10 @@ public import Flock.Program
 # The inference-only policy's check of a declared division
 
 `InferenceOnly.CompliesRate Γ α` (`Security/Definitions/InferenceOnly.lean`) holds of a declaration `(D, θ)` when `D`'s computed gates
-divide into isolation units (IUs) of at most `Γ` gates, each reading at most `α` bits of novel information per gate:
+divide into inference blocks of at most `Γ` gates, each reading at most `α` bits of novel information per gate:
 `novelReads R = width(into(R) \ θ) ≤ α · size R`. The verifier's side is the check of one declared division: `evaluate`
-decides that it is a partition of the computed gates into IUs (`Verity.Partition`) and that every IU meets both bounds,
-and reports per IU its size and novel reads, and the first IU that fails, with the rule it fails.
+decides that it is a partition of the computed gates into inference blocks (`Verity.Partition`) and that every inference block meets both bounds,
+and reports per inference block its size and novel reads, and the first inference block that fails, with the rule it fails.
 
 ## The input, and how descriptor v1 is the definition's circuit
 
@@ -30,8 +30,8 @@ An instance is one JSON object:
   developer committed before the run, so an input bound per run (`Input<w>_v1`) is refused (`theta-not-registered`):
   in θ it would make any value the run brings, recommitted, free to read.
 * `owner`: the division, one entry per gate as Flock's partition check takes it (`Flock.Partition.Owner`): `"input"` for
-  an input gate, which is in no IU, and `u` for a computed gate of IU `u`. This is the definition's `Partition.unit`,
-  with `none` written `"input"`, so a gate in two IUs has no encoding. The IUs are `0 … n - 1`, `n` one more than the
+  an input gate, which is in no inference block, and `u` for a computed gate of inference block `u`. This is the definition's `Partition.unit`,
+  with `none` written `"input"`, so a gate in two inference blocks has no encoding. The inference blocks are `0 … n - 1`, `n` one more than the
   largest `u`, and each holds a gate (`empty-iu`): an empty unit has size and reads 0 and meets both bounds, so a
   division with empty units complies exactly when the one with them dropped and the rest renumbered does.
 * `gamma`: `Γ`, a natural number; `alpha`: `α` as `[num, den]`, naturals with `den > 0`. `novelReads R ≤ α · size R`
@@ -83,7 +83,7 @@ does, whether it is an input bound at registration. Refused at the first gate `g
 def circuitOf (P : Flock.Program.Prog) : Except String GateTable :=
   (List.range (P.defs[P.root]!).gates).foldlM (fun c g => c.push <$> gateOf P g) ⟨#[], #[], #[], #[]⟩
 
-/-- θ and the division, checked: θ as a set of gates, each gate's IU (`none` for an input gate), and the number of IUs. -/
+/-- θ and the division, checked: θ as a set of gates, each gate's IU (`none` for an input gate), and the number of inference blocks. -/
 structure Division where
   theta : Std.HashSet Nat
   owner : Array (Option Nat)
@@ -102,7 +102,7 @@ def isInputTag : Json → Bool
   | .str s => s == "input"
   | _ => false
 
-/-- Gate `g`'s owner entry `j`: `none` for `"input"`, `some u` for IU `u`. -/
+/-- Gate `g`'s owner entry `j`: `none` for `"input"`, `some u` for inference block `u`. -/
 def ownerOf (c : GateTable) (g : Nat) (j : Json) : Except String (Option Nat) := do
   let o ← if isInputTag j then pure none else match natOf? j with
     | some u => pure (some u)
@@ -111,11 +111,11 @@ def ownerOf (c : GateTable) (g : Nat) (j : Json) : Except String (Option Nat) :=
   if o.isNone && !c.isInput[g]! then throw "gate-in-no-iu"
   return o
 
-/-- The number of IUs: one more than the largest IU an owner names. -/
+/-- The number of inference blocks: one more than the largest inference block an owner names. -/
 def iuCount (own : Array (Option Nat)) : Nat :=
   own.foldl (fun m o => match o with | some u => max m (u + 1) | none => m) 0
 
-/-- The IUs an owner names. -/
+/-- The inference blocks an owner names. -/
 def usedOf (own : Array (Option Nat)) : Std.HashSet Nat :=
   own.foldl (fun s o => match o with | some u => s.insert u | none => s) {}
 
@@ -124,13 +124,13 @@ def divisionOf (c : GateTable) (theta owner : Array Json) : Except String Divisi
   if owner.size != c.N then throw "owner-length"
   let own ← (List.range c.N).foldlM (fun own g => own.push <$> ownerOf c g owner[g]!) #[]
   let n := iuCount own
-  -- more IUs than gates leaves one empty, and the check below stays as small as the circuit
+  -- more inference blocks than gates leaves one empty, and the check below stays as small as the circuit
   if n > c.N then throw "empty-iu"
   let used := usedOf own
   if !(List.range n).all used.contains then throw "empty-iu"
   return { theta := mask, owner := own, n }
 
-/-- Per IU `u`, in one pass over the gates: its number of gates, and the gates outside it that a gate of it reads,
+/-- Per inference block `u`, in one pass over the gates: its number of gates, and the gates outside it that a gate of it reads,
 `into(R)`. -/
 def tally (c : GateTable) (d : Division) : Array (Nat × Std.HashSet Nat) :=
   (List.range c.N).foldl (fun acc g => match d.owner[g]! with
@@ -138,11 +138,11 @@ def tally (c : GateTable) (d : Division) : Array (Nat × Std.HashSet Nat) :=
         (s + 1, c.reads[g]!.foldl (fun into a => if d.owner[a]! = some u then into else into.insert a) into)
     | none => acc) (Array.replicate d.n (0, {}))
 
-/-- Per IU `u`, with gates `R`: `(size R, novelReads R)`, `novelReads R` the width of the gates of `into(R)` not in θ. -/
+/-- Per inference block `u`, with gates `R`: `(size R, novelReads R)`, `novelReads R` the width of the gates of `into(R)` not in θ. -/
 def ius (c : GateTable) (d : Division) : Array (Nat × Nat) :=
   (tally c d).map fun (s, into) => (s, into.fold (fun x a => if d.theta.contains a then x else x + c.w[a]!) 0)
 
-/-- The first IU that breaks the policy, with the rule: `size` when it has more than `Γ` gates, else `inference_only` when its
+/-- The first inference block that breaks the policy, with the rule: `size` when it has more than `Γ` gates, else `inference_only` when its
 novel reads exceed `num/den` times its size. -/
 def failure (gamma num den : Nat) (r : Array (Nat × Nat)) : Option (Nat × String) :=
   (List.range r.size).findSome? fun u =>

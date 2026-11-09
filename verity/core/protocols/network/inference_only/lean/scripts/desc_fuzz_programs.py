@@ -848,7 +848,7 @@ def draw(rng: random.Random, seed: int) -> Spec:
 
 
 def _partitions(c: int):
-    """Every assignment of `c` nodes to IUs numbered from 0 in order of first use."""
+    """Every assignment of `c` nodes to inference blocks numbered from 0 in order of first use."""
     if c == 0:
         yield ()
         return
@@ -893,7 +893,7 @@ def seeds() -> list[dict]:
 
 
 def shared(seed: int) -> tuple[str, list[dict]]:
-    """Seed `seed`'s declaration, `decl` on parameters sampled at random (`draw`), and its IU assignments (`instances`)."""
+    """Seed `seed`'s declaration, `decl` on parameters sampled at random (`draw`), and its inference block assignments (`instances`)."""
     rng = random.Random(seed)
     text = decl(draw(rng, seed))
     return text, instances(rng, text)
