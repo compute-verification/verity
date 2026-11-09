@@ -164,11 +164,12 @@
 
 [[words_in]]
 # `Windows` names another sense in other files (its own group there), so it is renamed only in the guarantee's
-# files and the one whose prose names it.
+# files and the one whose prose names it. A file the move renames is named by a pattern that matches it before
+# and after the move (`Windows.lean`, `ServerBlocks.lean`), so the move runs again on its own commit.
 files = [
     "Security/Definitions/Accounting/Guarantees/Actual.lean",
     "Security/Definitions/Accounting/Guarantees/Actual/Threaded.lean",
-    "Security/Proofs/Accounting/Actual/Windows.lean",
+    "Security/Proofs/Accounting/Actual/[WS][ie][nr][dv]*.lean",
 ]
 words = { "Windows" = "ServerBlocks" }
 
@@ -184,7 +185,8 @@ words = { "onePeriod" = "oneMonitoringPeriod" }
 [[words_in]]
 # `Session` is also Spot's, the certifier's, the challenger's and the remote audit's code's (`RemoteAudit.Session`), so
 # Accounting's three (`Rate.Session`, `Remote.Draw.Session`, `Remote.Sketch.Session`, with the lemmas under them) are
-# renamed only in their files and those that spell a reference to them (the build's `.ilean` references).
+# renamed only in their files and those that spell a reference to them (the build's `.ilean` references). `RateAudit/Session.lean`,
+# which the move renames `Run.lean`, is named by a pattern that matches it under both names.
 files = [
     "Security/Definitions/Accounting/Assumptions/RemoteDraw.lean",
     "Security/Definitions/Accounting/Assumptions/RemoteSketch.lean",
@@ -199,7 +201,7 @@ files = [
     "Security/Definitions/Accounting/Remote/Fork.lean",
     "Security/Definitions/Accounting/Remote/Sketch.lean",
     "Security/Proofs/Accounting/Lemmas/RemoteBinding.lean",
-    "Security/Proofs/Accounting/RateAudit/Session.lean",
+    "Security/Proofs/Accounting/RateAudit/[SR][eu][sn]*.lean",
     "Security/Proofs/Accounting/RemoteHeld/Binding.lean",
     "Security/Proofs/Accounting/RemoteHeld/Draw.lean",
     "Security/Proofs/Accounting/RemoteHeld/DrawMeets.lean",
