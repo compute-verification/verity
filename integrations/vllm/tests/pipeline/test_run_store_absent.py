@@ -18,12 +18,13 @@ RUN_STORE = ("research", "research.pythonpath", "research.store", "research.stor
 
 @pytest.fixture
 def no_run_store(monkeypatch):
+    """`research` blocked, and the names already read from it forgotten: from the modules' dicts, since `hasattr` would run
+    their `__getattr__`, which is the refusal itself."""
+    for module, names in ((research_tools, research_tools.FROM_RESEARCH), (source_identity, source_identity.REEXPORTS)):
+        for name in vars(module).keys() & set(names):
+            monkeypatch.delitem(vars(module), name)
     for name in RUN_STORE:
         monkeypatch.setitem(sys.modules, name, None)
-    for name in research_tools.FROM_RESEARCH:
-        monkeypatch.delattr(research_tools, name, raising=False)
-    for name in source_identity.REEXPORTS:
-        monkeypatch.delattr(source_identity, name, raising=False)
 
 
 ENTRIES = {
