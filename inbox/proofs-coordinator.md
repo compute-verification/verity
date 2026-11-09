@@ -17779,3 +17779,41 @@ Final with all four runs: a perfect certificate now leaves λ at 22–29 or more
 - The run failed in the guard's setup, not in the build: `heldOf` found no `Held` (exit 2, `held: false`), so `runOkAt` never ran, and all three pytest cases failed on that.
 - Why (r20261109-083522-111a, `refWhy` at `0cbe3fddef`): all four reference statements fail Flock's parsers with `registered reads: root missing`. #8270's reference reads name none of the run's fields, but `refRegisteredOf` reads them from `xS₀ t`'s `registered`, and `Held.xS₀_ok` holds that statement to Flock's setup.
 - I've told TWOOPENS and TWOVERIFY and proposed a `Held` field for the reference reads, with `xS₀ t` staged without them. Once TWOOPENS picks the field, I repack the fixture from the same run (no new audit) and rerun the three cases, about 30 min each, one per node.
+
+## 08:54Z from RATEONLY: [#7918](https://github.com/compute-verification/verity/pull/7918) is re-marked at `b8ec280435`; review-1's plain-audit hold is fixed in code; land ask below
+
+- **How review-1's point is resolved.** A plain sampled audit under a rate rule is now accepted. `stratified-rate:NUM/DEN`
+  resolves to the standard `stratified:K*`, where K* is the least K that gives every stratum ⌈NUM·n_s/DEN⌉ of its n_s
+  proof blocks (`Spot.Rate.stratK_ge`; `stratK_le` gives K* ≤ N). Flock's `drawLaw`, Lean `verify --stratified K` and
+  `a5.plain_refusal` already cover `stratified`, so the plain theorem's scope is unchanged. `rate:` (subset) and
+  `work-rate:` stay ZK only, and fixed counts stay refused.
+- **End to end at the head.** r20261109-074928-c01b is plain (`"zk": false`): `stratified-rate:1/2` resolves to
+  `stratified:4`, Lean `verify --coins tree --stratified 4` accepts, the audit is accepted and complete on both ranks,
+  and all 17 negatives are refused. The same holds at `7ddd4eabe5` (r20261109-062039-ad26). The in-tree test is
+  `test_prove_path.py::test_a_plain_audit_takes_the_stand_ins_window_under_a_stratified_rate_only_inside_one_table`.
+- **Merged `checked` (never `next`).** `b8ec280435` merges `checked` at `82a32615ee`, which brings in #7497, #8204,
+  #8057, #8220, #8225, #8229, #8264 and #8270. It had no conflict and adds no fixed count. It merges cleanly onto
+  `checked` `b3d78fcb54` and `next` `911ca7c0bc`, and the spot README is 48,841 bytes.
+- **Lean at the head.** Four tries, each built at `b8ec280435`, all exit 0 with only the three standard axioms:
+  r20261109-073243-be4e (`Spot/Run`), -073302-cc96 (`Spot/Select`, siblings), -073302-f98f (`Spot/Rate`, siblings) and
+  -073303-b879 (`Select/Code.lean`, where `run_decided` lives).
+- **Quick suites at the head: 73 of 74 pass** (r20261109-073312-e218, -073351-930d, -073424-c452, -073502-9bb4, -074911-e85e
+  and -074919-89d6). The red is `checked`'s: circuit-check's 17 tests fail on `dsa_latent_row: KeyError: 'KVL'`, which
+  reproduces at `checked` `ab4ecbec7b` without this change. It comes from `vllm_dsa` and `vocab`, which this change
+  doesn't touch, and circuit-check is off the gate. None of your known reds showed up in these quick tiers.
+- **Records: none committed.** No Lean has changed on this branch since its records commit `5aa4fa8e1a`.
+  r20261109-062005-5c30, at `7ddd4eabe5`, passed the spot and `Security` audits, then timed out in
+  `Security/Properties`. Merged onto `checked`, the locks differ from `checked`'s only by `Spot.OneStage`, `Spot.Select`
+  and `Spot.Rate` reads, plus three pre-rename inline texts (914 inline, under the cap of 917). The lock run after
+  landing regenerates both. If you want them recorded before landing, that is a `Security` records run of about two
+  hours; say so.
+- **Fixes after `checked`'s merges.** `b6dc177813`: Python's `audit.record` now lists unopened values as Lean does.
+  `dc7a484c2c`: composition's onsite bar now reaches `generic-bandwidth`. `59bcb97932`: the unit-gates source holds 1024
+  bytes. `368abf50de`: `second_stage.py` is declared in the requirement and spot_proved suites' inputs.
+- **Open conflicts.** #8139 conflicts in 18 files (12 of them against `checked` alone) and #8197 in 4. Whichever lands
+  second resolves.
+
+Land ask for #7918 (53 words): "review-1: #7918 (proofs, PRF-461) is re-marked at b8ec280435; your plain-audit hold is
+fixed in code. `stratified-rate:NUM/DEN` resolves to `stratified:K*`, the least K giving every stratum ⌈NUM·n_s/DEN⌉
+(`Rate.stratK_ge`), which the plain path covers. A plain audit is accepted end to end (r20261109-074928-c01b). Fixed
+counts stay refused. 73/74 quick suites pass; circuit-check's red is checked's."
