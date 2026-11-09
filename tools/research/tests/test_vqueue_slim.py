@@ -7,6 +7,7 @@ and at its base, so `vqueue.decide` takes one its base fails too as inherited; a
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 
 import pytest
 
@@ -347,8 +348,10 @@ def test_a_steps_key_changes_with_each_file_it_reads_and_with_no_other(world, st
 
 def _decided(sha: str, base: str, files: set[str], v: Verdict) -> list:
     """`vqueue.decide`'s actions on candidate ``sha`` of one member, #1 touching ``files``, on ``base``, `main`, its verdict
-    ``v``."""
-    return decide(Snapshot(base, (Ready(1, "h1", frozenset(files)),), (Candidate(sha, base, (1,), ("h1",), v),)))
+    ``v`` as the loop reads it once both checks ended (`Verdict.ended`, which the loop carries past `combine`), its failures
+    rerun afresh once already (`vqueue.Rerun`), so a failure of its own is blamed on it."""
+    return decide(Snapshot(base, (Ready(1, "h1", frozenset(files)),),
+                           (Candidate(sha, base, (1,), ("h1",), replace(v, ended=True), reruns=1),)))
 
 
 def test_a_failed_step_its_base_reads_unchanged_is_inherited_so_decide_blames_no_member(world, monkeypatch, tmp_path):
