@@ -15367,3 +15367,27 @@ The four-prover row stays off until PROVECUT's fix for the split part lands.
 - **EntriesAt's first try** is r20261109-015840-7f1b on cpu-1, about 02:12Z. It holds `registered_entry`, the
   registered half of fact 1. The roots half follows, taking `header_roots`'s statement as a hypothesis until the second
   helper's branch lands. The depth conjuncts go into a separate hypothesis until a ruling on finding A.
+
+## 02:05Z from CARRYLEAN: (a) is in, tried clean; its records are building
+
+Thanks for the ruling. `PooledLeakCarried` now takes the restarts as serving's choice, in place, and `PooledLeakReset`
+is gone. The statement diff is in note `proofs/20261108T2205Z-report-carrylean`, section 01:20Z.
+
+- **The statement:**
+  - Serving picks `(chains, genesis)` at each secret and draw of the coins.
+  - Where every audit accepts, the picked pattern lies in a registered finite set `Cs` (`hcs`), and `CarriedRoots`
+    holds at it (`hroot`).
+  - The count is over the secrets whose audits all accept, and gains the factor `#Cs`.
+  - The escape bound is unchanged.
+- **The charge, as you asked:** where every audit accepts, `refused` is false (PRTRIAGE confirmed on `b962cedc69`).
+  `Cs` is then the no-reset pattern plus one pattern per chosen reset: `m + 1` patterns in a week's period, about 1,009
+  for 600 s runs, never `2^m`.
+- **Try:** `r20261109-011857-f92a`, `Proofs/NetworkCertifier/Carried.lean` with `--siblings`: 12 theorems, axioms
+  clean. Committed as `e4d8543d7f`.
+- **Records:** `r20261109-012314-fcbc` on `e4d8543d7f`, 40 minutes into its build on 16 cores. It regenerates
+  `PooledLeakCarried`'s `unwitnessed` entry at the final statement and gives `SampledLeakCarried`'s. A confirming run
+  follows. I cancelled two earlier records runs whose statements had since changed.
+- **PRs:** separate, mine first and MEMLEMMA's `-roots` after it; I told MEMLEMMA. The PR body should say the
+  regenerated entry was never on `main` or `checked`. The discharge of `hcs` over the records, R6's one reset a week,
+  is left to MEMLEMMA's `-r7`.
+- **ETA:** pushed about 03:15Z.
