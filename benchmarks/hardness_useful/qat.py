@@ -4,9 +4,11 @@ target Strassen overflow rate, then its quality and its exported codes.
 The student is the model with every block linear a `quant.QLinear` calibrated to --target (a Strassen level-1 overflow
 rate; `absmax` is stock per-channel int8, `bf16` evaluates the unquantized model and trains nothing). With --rotate
 each linear quantizes W·R and reads x·R (`rotation.py`). The teacher is the same model in bf16, frozen. The loss is the
-forward KL(teacher ‖ student) at temperature 1 over every position, on FineWeb-Edu packed into --seq windows in file
-order (`prep.py`); every arm reads the same tokens in the same order.
-AdamW (0.9, 0.95), no weight decay, linear warmup then cosine to 0, gradients clipped at 1. Every --recal steps each
+forward KL(teacher ‖ student) at temperature 1 over every position, on FineWeb-Edu packed into --train-seq windows
+(default --seq) in file order (`prep.py`); every arm reads the same tokens in the same order.
+AdamW (0.9, 0.95), no weight decay, linear warmup then cosine to 0, gradients clipped at 1; with --train-min the
+cosine runs over whichever is further along, the steps or the minutes, so a run slower than planned still ends with
+its rate decayed (each step's rate is in the curve). Every --recal steps each
 matrix's c is solved again, so the overflow stays at the target as the weights move. Every parameter trains, or with
 --lora R only a rank-R update B·A of each block linear's latent weight (`quant.add_lora`) and the RMSNorm gains, which
 fits an 8B student in fp32 on one GPU; B·A is merged into the latent weight before the final c, codes and evals.
@@ -221,7 +223,8 @@ def main(argv=None) -> int:
                     "zero-shot: MODE[/wF][:X+...][;MODE=X+...]... (`quant.Served`, `quant.set_served`)")
     ap.add_argument("--eval-modes", default=EVAL_MODES, help="more serving specs to measure perplexity under")
     ap.add_argument("--tokens", type=int, default=100_000_000, help="training tokens; 0 = no training")
-    ap.add_argument("--seq", type=int, default=2048)
+    ap.add_argument("--seq", type=int, default=2048, help="the perplexity windows' length, and training's by default")
+    ap.add_argument("--train-seq", type=int, default=None, help="training's sequence length (default --seq)")
     ap.add_argument("--batch", type=int, default=64, help="sequences a step")
     ap.add_argument("--micro", type=int, default=4, help="sequences a forward")
     ap.add_argument("--lr", type=float, default=1e-5)
@@ -247,7 +250,7 @@ def main(argv=None) -> int:
     ap.add_argument("--max-steps", type=int, default=None, help="stop after this many steps of the --tokens schedule (smoke tests)")
     ap.add_argument("--train-min", type=float, default=None,
                     help="end training after the step that passes this many minutes, so a GPU lease's limit leaves room "
-                         "for the final evals and the codes (recorded as train.stopped_at)")
+                         "for the final evals and the codes (recorded as train.stopped_at); the cosine decays by then")
     ap.add_argument("--codes", type=Path, default=None, help="write the codes to this safetensors file")
     ap.add_argument("--price", action="store_true", help="price the exported codes with price.py on the CPU")
     ap.add_argument("--price-workers", type=int, default=6)
@@ -299,11 +302,12 @@ def main(argv=None) -> int:
         assert args.device_map, "--calib reuses a frozen wrap's c"
         calib = json.loads(args.calib.read_text())["calibration_before"]
         res["calib"] = {"file": str(args.calib), "sha256": hashlib.sha256(args.calib.read_bytes()).hexdigest()}
-    total = 0 if args.target == "bf16" else args.tokens // (args.batch * args.seq)
+    tseq = args.train_seq or args.seq
+    total = 0 if args.target == "bf16" else args.tokens // (args.batch * tseq)
     steps = total if args.max_steps is None else min(total, args.max_steps)
     res["steps"], res["schedule_steps"] = steps, total
-    assert steps * args.batch * args.seq <= len(train_ids), \
-        f"{steps} steps need {steps * args.batch * args.seq} tokens, {args.data} has {len(train_ids)}: prep more shards"
+    assert steps * args.batch * tseq <= len(train_ids), \
+        f"{steps} steps need {steps * args.batch * tseq} tokens, {args.data} has {len(train_ids)}: prep more shards"
     if args.target != "bf16":
         res["calibration_before"] = quant.wrap(model, target, args.rotate, log, targets, frozen=bool(args.device_map),
                                                calib=calib)
@@ -347,14 +351,17 @@ def main(argv=None) -> int:
             torch.cuda.reset_peak_memory_stats()
         t0 = time.time()
         for step in range(steps):
-            lr = args.lr * min(1.0, (step + 1) / warm) * 0.5 * (1 + math.cos(math.pi * step / total))
+            done_frac = step / total
+            if args.train_min is not None:
+                done_frac = min(1.0, max(done_frac, (time.time() - t0) / (args.train_min * 60)))
+            lr = args.lr * min(1.0, (step + 1) / warm) * 0.5 * (1 + math.cos(math.pi * done_frac))
             for g in opt.param_groups:
                 g["lr"] = lr
             tot = 0.0
             for j in range(accum):
-                off = (step * args.batch + j * args.micro) * args.seq
-                x = torch.from_numpy(train_ids[off:off + args.micro * args.seq].astype(np.int64)
-                                     .reshape(args.micro, args.seq)).to(dev, non_blocking=True)
+                off = (step * args.batch + j * args.micro) * tseq
+                x = torch.from_numpy(train_ids[off:off + args.micro * tseq].astype(np.int64)
+                                     .reshape(args.micro, tseq)).to(dev, non_blocking=True)
                 with torch.no_grad(), torch.autocast(dev.type, dtype=torch.bfloat16):
                     tl = teacher(x.to(tdev)).logits.to(x.device)
                 with torch.autocast(dev.type, dtype=torch.bfloat16):
@@ -371,7 +378,7 @@ def main(argv=None) -> int:
                 ovs = sorted(v["strassen1"] for v in info.values())
                 recals.append({"step": step + 1, "min": ovs[0], "median": ovs[len(ovs) // 2], "max": ovs[-1]})
             rec = {"step": step + 1, "kd": tot, "lr": lr, "grad_norm": gn,
-                   "tok_s": (step + 1) * args.batch * args.seq / (time.time() - t0)}
+                   "tok_s": (step + 1) * args.batch * tseq / (time.time() - t0)}
             if (step + 1) % args.eval_every == 0 or step + 1 == steps:
                 rec["fineweb_val_64"] = perplexity(model, val_ids, args.seq, max_windows=64)["ppl"]
             curve.append(rec)
@@ -384,7 +391,7 @@ def main(argv=None) -> int:
                 log("step", f"stopping at {done} of {steps}: --train-min {args.train_min} passed")
                 break
         res["train"] = {"curve": curve, "recalibrations": recals, "seconds": time.time() - t0,
-                        "tokens": done * args.batch * args.seq, "stopped_at": done if done < steps else None,
+                        "tokens": done * args.batch * tseq, "stopped_at": done if done < steps else None,
                         "peak_mem_gb": torch.cuda.max_memory_allocated() / 2**30 if dev.type == "cuda" else None}
         del teacher, opt
         torch.cuda.empty_cache()
