@@ -59,9 +59,8 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   sync's own merge onto `next` is the only check before it joins, so a conflict there keeps it out, as a `hold` label
   does; a Markdown file over its cap only warns (trim it in your next PR). A PR from a fork, or by an author outside the
   organization but for the team's Apps and Daniel, is refused at its mark and at admission.
-- Before marking, run the Lean check of the packages you touched and the suites your change touches, `research run --on
-  auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py
-  --changed $(git rev-parse origin/main) --quick"`, plus a suite's slow tier when you changed its core. Prefer small PRs.
+- Before marking, run the Lean check of the packages you touched and the suites your change touches (the testing skill's
+  pre-mark run), plus a suite's slow tier when you changed its core. Prefer small PRs.
 - Drive stacks admitted PRs on `next`. Reviewers ci staffs, never the owner, record a verdict at
   the head (`research queue review N --land|--hold REASON --by LANE`); no other per-head grant exists. Drive
   fast-forwards `checked` (`land_into`) to the longest reviewed prefix whose merges are clean and whose `.py` files compile; each sync

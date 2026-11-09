@@ -92,7 +92,7 @@ Builds and tests run on the cluster's nodes, not on an agent VM. Ship the checko
 ~~~sh
 R="research run --on auto --cwd source -- bash -lc"
 $R "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py flock"            # one suite
-$R "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py --changed origin/main --quick"
+$R "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"
 $R "uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check"               # the whole check
 uv run tools/verity/check/suites.py --list                # each suite's inputs and whether a pass is cached (reads only)
 uv run tools/verity/check/suites.py --explain SUITE       # why a suite would run

@@ -463,9 +463,10 @@ def test_changed_origin_main_in_a_shipped_tree_without_it_fetches_it_or_names_th
     clone` the shipped tree, whose origin/main is a remote-tracking ref), takes a SHA as given, and otherwise names the fix."""
     bare, tree, main, head = _shipped(tmp_path)
     S = _suites(monkeypatch, tree)
-    with pytest.raises(S.Unresolved, match=r"nor could it be fetched from origin .*--changed \$\(git rev-parse origin/main\)"):
+    with pytest.raises(S.Unresolved, match=r"nor could it be fetched from origin .*--changed \$\(git fetch -q origin main && "
+                                           r"git merge-base HEAD FETCH_HEAD\)"):
         S.changed_base("origin/main")
-    assert S.main(["--list", "--changed", "origin/main"]) == 2 and "Pass main's SHA" in capsys.readouterr().err
+    assert S.main(["--list", "--changed", "origin/main"]) == 2 and "a fetched main" in capsys.readouterr().err
     assert S.changed_base(main) == S.changed_base(main[:12]) == main
     assert S.main(["--list", "--changed", main]) == 0
     assert f"the change from {main[:12]} touches 1: a" in capsys.readouterr().out
