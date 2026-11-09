@@ -114,7 +114,7 @@ def _select(mux: TM.Def | None = None, *, count: int = 16, segs=SEL_SEGS, base: 
 def test_a_run_of_calls_is_the_lowering_it_unrolls_to():
     v, r = _verdict(SB.SelectBf16, _select())
     assert (v, r["failures"]) == ("syntactic", [])
-    assert r["structural"]["template_calls"] == 1 and r["structural"]["template"]["live_ands"] == 16
+    assert r["structural"]["template_calls"] == 1 and r["structural"]["template"]["ands"] == 16
 
 
 def test_other_gates_computing_the_same_bits_pass_on_every_input_when_the_inputs_are_few():
@@ -223,6 +223,25 @@ def test_the_structural_lowering_is_its_definitions_lowering():
     assert _verdict(t, tm)[0] == "syntactic"
 
 
+def test_the_template_is_read_copy_by_copy_and_never_unrolled(monkeypatch):
+    """`_walk` places each Definition's copies as `tmpl.unroll` does without holding the unrolled rows, so a served unit
+    whose unroll is billions of references is checked in memory of its columns: on a GEMM scan's structural template (calls
+    within calls) its output bits on random inputs are the unroll's, and the check never unrolls it."""
+    S = pytest.importorskip("verity_flock.struct_lower")
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops.boolean import gemm as GB
+
+    t = bind(GB.GemmAccumulatorS8, K=128, DOT=GB.BlackwellS8ImmaDot32)
+    tm = S.lower(t)[0]
+    ins, outs, _pad = ST.ports(tm.groups)
+    n = sum(map(len, ins))
+    lanes = ST._lanes(n, False, 64, 1)
+    z = S.evaluate(TM.unroll(tm), lanes, n)
+    assert ST.evaluate_template(tm, lanes, 64) == [z[c] for p in outs for c in p]
+    monkeypatch.setattr(TM, "unroll", lambda *_a: pytest.fail("the check unrolled the template"))
+    assert _verdict(t, tm)[0] == "syntactic"
+
+
 def test_a_struct_lower_template_reading_a_table_is_its_lowering_by_construction(monkeypatch):
     """A toy library table read three times (of an input, of an XOR form and of a read's value; a fourth, of a constant,
     folded): `struct_lower` lays the read's rows out once as `ir_lower._Read` does, and the lowering reads each live table
@@ -324,7 +343,7 @@ def test_a_structural_stagers_unit_is_the_flat_unit_on_its_ports_by_construction
     r = ST.check_unit(t, rows, tm, name="unit/structural-test")
     s = r["structural"]
     assert (s["verdict"], s["unit"], r["failures"]) == ("syntactic", "unit/structural-test", [])
-    assert s["error_bound"]["M"] == 4 * (s["template"]["live_rows"] + s["lowering"]["live_ands"]) + 32 + 1
+    assert s["error_bound"]["M"] == 4 * (s["template"]["evaluated_rows"] + s["lowering"]["live_ands"]) + 32 + 1
     assert s["error_bound"]["log2"] < -400
     shifted = [(f"p{r}", [f"x[{r}]", f"wrow[{(r + 1) % 64}]"]) for r in range(64)]
     r = ST.check_unit(t, shifted, tm)
