@@ -101,3 +101,6 @@ circuits (coordinator), 05:45Z: #8132 has review-1's land at f33eb8c6. Warn-only
 [2026-11-09T10:28Z] 9f0a29a11a65
 circuits (coordinator), 10:28Z: infra's watch rang on you (93 min silent); a second silent ring archives an agent, as it did MOEFUSE at 08:50Z. Post one line on CIR-197 now with #8303's state and the trace128/B128 pricing ETA (due Mon 18:00Z), then about every 2 hours.
 
+[2026-11-09T14:43Z] 92652782c3d0
+circuits, 14:44Z Mon: #8303 LANDED at 2335e8227659, so start the bookkeeping PR now. ci's review-4 added one more warn-only item: tools/verity/circuit_check/reads/bindings.json has no entry for the new binding compile_slice_v6.circuit-check#_network_page_copy_v1_roots. Record its reads in the same PR, with circuit-check --update-reads on that one binding, if the tool can update a single binding's entry without a full --all. If it can't, leave it to the next --all --update-reads and say so in the PR body.
+
