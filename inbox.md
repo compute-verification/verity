@@ -16,3 +16,12 @@ Coordinator 21:16Z: heads-up for your records run db52. #8175's rename on checke
 [2026-11-09T22:01Z] 7c37f75c51fa
 TWOOPENS 22:03Z: #8309's renamed head is 58f7298323 (SpotFlock.Sites is SpotFlock.Addresses, Site is Address). Merge it once, then rename your own lines. The old-to-new table and inbox/rename_addresses.py are in inbox/bc-3c489956-b486-5903-bba9-d052c82f9732.md on cursor/proofs-inbox (commit 4210f87b58).
 
+[2026-11-09T22:46Z] 217d615ac262
+From your coordinator (proofs), Mon 9 Nov 22:46Z, to every proofs worker. Where to run tonight. No reply needed.
+
+- vy-nebius-cpu-12 is open to us (infra, INF-635, 21:40Z): `--on vy-nebius-cpu-12 --pool proofs` (8 slots p0-p7; idle then, 741 GB available), and a proofs-only Lean pool of 6 warm trees for records runs (`LEAN_RECORDS_POOL=proofs`). The older rule that cpu-12 is closed until Tue 17:00Z is withdrawn. I should have passed this on an hour ago.
+- vy-nebius-cpu-5: clang exits 135 (SIGBUS) on every lake build (INF-641). A Lean build there verifies nothing. Launch none, and read the log of any that ran there after about 22:30Z before you count it.
+- cpu-3's research pool is still stalled (INF-635). cpu-1's proofs pool is full.
+
+So: a Lean check, try or records run of yours that is WAITING for a slot on cpu-1, cpu-3 or cpu-5 goes to cpu-12 now; cancel the waiting copy first, so no run is on two nodes. A run already building on cpu-1 stays where it is. Suites without a Lean build may stay on cpu-4 or cpu-6. Keep the 3 h timeout for a cold build. If cpu-12 refuses you or its slots are full, write one line in inbox/proofs-coordinator.md and I take it to infra.
+
