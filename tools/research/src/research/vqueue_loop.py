@@ -33,16 +33,19 @@ verdict, where it has one, can be read and counts none pending (`World._held`, w
 else pending.  Whatever else it reads, it is pending while graph2's `verdict` lists a task it needs (on the gate, or read by
 one that is) as failed or infra that the loop read passed, at the key it made from what the task reads or by a label that
 says pass: graph2's word overrides a label only at graph2's key, and `--by executor` is self-asserted (`_disputed`), so it
-holds until the two agree.
-It is pending while its base's check isn't listed, or, with a failure, while graph2 says the base's listing
-failed, the graph it listed of the base can't be read, or a task there hasn't ended, unless it or what it reads there ended in
-an infra error (`World._base`): no failure is the candidate's own, so none ejects or bisects, until the base's keys say.  The
-loop enqueues such a base's check again each `BASE_RETRY_S` while a candidate waits on it for want of its graph, and rings
-`CI` and `drive.INFRA` about it (`Loop._bases`).  No graph while graph2 says its listing failed (`verdict`, else its
-`ready_verdict` label), a graph that can't be read, one lacking a job `main` waits for (`drive.gating`) or a kind of task on
-the merge gate its base's graph lists, unless that kind's job went to another kind (`World._gone`), and failing nothing of
-its own, or no graph of a candidate the log never enqueued is list-failed.  graph2's own verdict, where it has one, is
-compared and a disagreement logged.  With ``slim`` (`research.vqueue_slim`), the run beside the check of what
+holds until the two agree.  So too the base's side: a failure is inherited only while graph2's verdict on the base's check
+lists its task failed there at the key the loop read, with the failing tests that verdict names (`World._crossed`); one
+inherited on the loop's labels alone holds the candidate once graph2 says otherwise of it or ends without naming it, and
+waits on the base (`BASE_UNSAID`) until then.
+It is pending while its base's check isn't listed, or, with a failure, while graph2 says the base's listing failed, the
+graph it listed of the base can't be read, or a task there hasn't ended, unless it or what it reads there ended in an infra
+error (`World._base`): no failure is the candidate's own, so none ejects or bisects, until the base's keys say.  The loop
+enqueues such a base's check again each `BASE_RETRY_S` while a candidate waits on it for want of its graph or of graph2's
+word on it, and rings `CI` and `drive.INFRA` about it (`Loop._bases`).  No graph while graph2 says its listing failed
+(`verdict`, else its `ready_verdict` label), a graph that can't be read, one lacking a job `main` waits for (`drive.gating`)
+or a kind of task on the merge gate its base's graph lists, unless that kind's job went to another kind (`World._gone`), and
+failing nothing of its own, or no graph of a candidate the log never enqueued is list-failed.  graph2's own verdict, where
+it has one, is compared and a disagreement logged.  With ``slim`` (`research.vqueue_slim`), the run beside the check of what
 graph2 doesn't check starts with its candidate's build, one beside each candidate's check (so up to `--depth` at once, on
 drive's machines), or once in the snapshot for a candidate on `main`'s chain the log holds no start of.  Pending until it
 ends, it is judged each tick, its record logged whenever it changes, and combined with the check's verdict: a candidate passes
@@ -67,10 +70,11 @@ task still runs, or one failed), sets the infra results aside, and starts a run 
 runs the keys afresh (graph2's `rerun`), their results set aside, a key of the run beside starting that run again; without
 graph2's `rerun` it is logged `absent`, and counts as done.  Ring tells `drive.INFRA` (or its `pr`'s owner), once a candidate and
 why; a ring to an owner is held, only logged, while another candidate's check or the run beside `main`'s reads infra in the
-same tick, as in an outage (`Loop._outage`); a base candidates wait on for want of its graph is rung to `CI` and
-`drive.INFRA`, once a base and why: at once when its listing failed or its graph can't be read, and when it still isn't listed
-`BASE_RING_S` after it was first asked for (`Loop._bases`); a task a candidate is held on because graph2's verdict and the
-loop's reading disagree on it is rung to `CI` with both keys and both readings, once each (`Loop._disputes`).  Red tells
+same tick, as in an outage (`Loop._outage`); a base candidates wait on for want of its graph or of graph2's word on it is
+rung to `CI` and `drive.INFRA`, once a base and why: at once when its listing failed or its graph can't be read, and when
+graph2 still hasn't listed it or said `BASE_RING_S` after it was first asked for (`Loop._bases`); a task a candidate is held
+on because graph2's verdict and the loop's reading disagree on it, there or at its base, is rung to `CI` with both keys and
+both readings, once each (`Loop._disputes`).  Red tells
 `CI` and the owners of what the base fails (as drive names them: a test file's suite's, else its job's) that it is red on
 them, once a base and task.  A test graph2's verdict says flaked (`flaky`: a fail a rerun replaced) is told to its file's
 owner in drive's registry and `CI`, once a key: a test that flakes is deleted.  A skip's, ring's, red's or flake's message
@@ -150,11 +154,15 @@ LEAN_LOCK_FIX = (". The lock records of {pkgs} don't match the change: if it cha
                  "regenerate each package's records on it (`research run --on auto --mem-gb 32 --max-min 180 --project verity "
                  "--source . --cwd clone -- python3 tools/verity/lean/check.py --build --update PKG`, the lean-proofs skill's full "
                  "record), commit them, and mark it ready again")
-#: why a candidate's verdict waits on its base's check (`World._base`, `World._gone`; `BaseWait`): graph2 hasn't listed it,
-#: says its listing failed, or listed a graph that can't be read
+#: why a candidate's verdict waits on its base's check (`World._base`, `World._gone`, `World._crossed`; `BaseWait`): graph2
+#: hasn't listed it, says its listing failed, listed a graph that can't be read, or hasn't said that it fails what the
+#: candidate's failures are inherited from
 UNLISTED, BASE_LIST_FAILED, BASE_UNREADABLE = "its check isn't listed yet", "its listing failed", "its graph can't be read"
+BASE_UNSAID = "graph2 hasn't said it fails them yet"
+#: the waits on a base graph2 may still be getting to, rung only `BASE_RING_S` after its check was first asked for
+BASE_COMING = (UNLISTED, BASE_UNSAID)
 #: how long after the loop last enqueued a base's check it enqueues it again while a candidate waits on it, and how long after
-#: its first enqueue one still not listed is rung (`Loop._bases`)
+#: its first enqueue one still not listed, or not said, is rung (`Loop._bases`)
 BASE_RETRY_S, BASE_RING_S = 15 * 60, 30 * 60
 #: who ejects, as drive's ejections are by
 EJECTOR = "ci"
@@ -342,7 +350,8 @@ class Past:
 @dataclass(frozen=True)
 class BaseWait:
     """Why a candidate's verdict waits on its base's check where the loop acts on it (`Loop._bases`): ``why`` is `UNLISTED`,
-    `BASE_LIST_FAILED` or `BASE_UNREADABLE`, ``detail`` what graph2's verdict or the read of the graph said."""
+    `BASE_LIST_FAILED`, `BASE_UNREADABLE` or `BASE_UNSAID`, ``detail`` what graph2's verdict or the read of the graph said,
+    or the tasks graph2 hasn't said fail there."""
     why: str
     detail: str = ""
 
@@ -352,15 +361,28 @@ class BaseWait:
 
 @dataclass(frozen=True)
 class Dispute:
-    """A task graph2's `verdict` says ended ``said`` (fail or infra) at its key ``theirs`` that the loop's own reading passed at
-    the key it read, ``ours`` (`_disputed`): its candidate is held until the two agree, and `CI` is rung (`Loop._disputes`)."""
+    """A task graph2's `verdict` and the loop's own reading disagree on: on a candidate's check, graph2 says it ended ``said``
+    (fail or infra) at its key ``theirs`` and the loop read it passed at the key it read, ``ours`` (`_disputed`); on its
+    ``base``'s, the loop reads it failed there at ``ours``, so that the candidate's failure of it is inherited, and graph2's
+    verdict on the base says ``said`` of it at ``theirs`` (fail at another key, or infra), or names no fail of it (both
+    empty: `World._crossed`).  Its candidate is held until the two agree, and `CI` is rung (`Loop._disputes`)."""
     task: str
     said: str
     theirs: str
     ours: str
+    base: str | None = None
 
     def __str__(self) -> str:
-        return f"graph2 says {self.task} {self.said} at {self.theirs}, and the loop reads it {PASS} at {self.ours}"
+        if self.base is None:
+            return f"graph2 says {self.task} {self.said} at {self.theirs}, and the loop reads it {PASS} at {self.ours}"
+        says = f"says {self.task} {self.said} at {self.theirs}" if self.said else f"names no fail of {self.task}"
+        return f"graph2's verdict on its base {self.base[:12]} {says}, and the loop reads it {FAIL} there at {self.ours}"
+
+    def logged(self) -> dict:
+        """What a ring about it logs beside its text: the task, both readings at both keys, and the base's check."""
+        return dict(task=self.task, graph2={"state": self.said or None, "key": self.theirs or None},
+                    mine={"state": PASS if self.base is None else FAIL, "key": self.ours},
+                    **({} if self.base is None else {"check": f"ready:{self.base}"}))
 
 
 @dataclass
@@ -369,9 +391,10 @@ class Judged:
     ``graph2`` is graph2's own verdict (``theirs`` its whole JSON), ``lacks`` the jobs `main` waits for (`drive.gating`) that no
     task of the graph runs, which drive's `executor = "on"` path takes as no promotion and this verdict as list-failed, and
     `kind K` of each kind of task its base's graph lists that it lists none of (`World._gone`), ``waits_on`` the base whose
-    check its verdict waits on and why, where the loop acts on it (`BaseWait`), ``disputed`` the tasks it is held on, which
-    graph2's verdict says failed or erred and the loop read passed (`Dispute`), and ``slim`` the verdict of the run beside
-    the check (`vqueue_slim.judge` on its ``record``; pending until it starts), combined into ``verdict``."""
+    check its verdict waits on and why, where the loop acts on it (`BaseWait`), ``disputed`` what it is held on: the tasks
+    graph2's verdict says failed or erred and the loop read passed, or the loop reads its base failing and graph2's verdict on
+    the base doesn't (`Dispute`), and ``slim`` the verdict of the run beside the check (`vqueue_slim.judge` on its
+    ``record``; pending until it starts), combined into ``verdict``."""
     verdict: Verdict
     mark: str | None = None
     note: str = ""
@@ -646,7 +669,7 @@ class World:
                 base_since: dict[str, int] | None = None) -> Judged:
         """Candidate ``sha``'s verdict from graph2's results (see the module's docstring), each key's from its ``since``-th on,
         beside graph2's own, each failed task with its key and failing tests in its base ``base``'s graph (`_base`), read with
-        ``base_since``."""
+        ``base_since``, as graph2's verdict on the base bears them out (`_crossed`)."""
         check = f"ready:{sha}"
         theirs = self._verdict_of(sha)
         said = theirs.get("state") if isinstance(theirs, dict) else None
@@ -699,6 +722,10 @@ class World:
             _failure(i, keys[i], closure.inputs(i), base_key=based.get(i, (None, None))[0],
                      tests=_tests(states[i][1]) | named.get((i, keys[i]), frozenset()),
                      base_tests=based.get(i, (None, None))[1]) for i in dict.fromkeys(bad))
+        fail, crossed, unsaid = self._crossed(base, fail)
+        if unsaid is not None:
+            fail, waits = (), unsaid
+        disputed = (*disputed, *crossed)
         down = tuple(_failure(i, keys[i], closure.inputs(i), tree=tree.get(i, False)) for i in infra)
         if disputed:
             mine = Verdict(PENDING)
@@ -800,12 +827,12 @@ class World:
         """For each of tasks ``ids`` in ``base``'s graph, as graph2 listed it: its key there, where one is made (graph2 keys a
         task by all it reads, so a candidate's task at its base's key fails as it did there: `vqueue.Failed.base_key`), and its
         failing tests there, None unless it failed naming them, in its result or in graph2's verdict on ``base`` (read once a
-        tick: `_named`), each a test id of that task's (`vqueue.Failed.base_tests`).  Why not yet, while that is to come: a
-        task there hasn't ended, its key waiting on what it reads or its result to come, unless it or what it reads there ended
-        in an infra error; or `ready:<base>` has no graph to read the keys from (a `BaseWait`, which the loop acts on:
-        `Loop._bases`): it isn't listed (`UNLISTED`), graph2 says its listing failed (`BASE_LIST_FAILED`), or the graph it
-        listed can't be read (`BASE_UNREADABLE`).  No failure is the candidate's own until then: one `main` has too would be
-        blamed on each candidate built on it."""
+        tick: `_named`; `_crossed` keeps the verdict's alone), each a test id of that task's (`vqueue.Failed.base_tests`).  Why
+        not yet, while that is to come: a task there hasn't ended, its key waiting on what it reads or its result to come,
+        unless it or what it reads there ended in an infra error; or `ready:<base>` has no graph to read the keys from (a
+        `BaseWait`, which the loop acts on: `Loop._bases`): it isn't listed (`UNLISTED`), graph2 says its listing failed
+        (`BASE_LIST_FAILED`), or the graph it listed can't be read (`BASE_UNREADABLE`).  No failure is the candidate's own until
+        then: one `main` has too would be blamed on each candidate built on it."""
         if not base:
             return {}
         try:
@@ -828,6 +855,35 @@ class World:
         named = _named(theirs)
         return {i: (keys[i] or None, (_tests(states[i][1]) | named.get((i, keys[i]), frozenset()) or None)
                     if states[i][0] == FAIL else None) for i in ids if i in keys}
+
+    def _crossed(self, base: str, fail: tuple[Failed, ...]
+                 ) -> tuple[tuple[Failed, ...], tuple[Dispute, ...], BaseWait | None]:
+        """``fail`` checked against graph2's own verdict on ``base``'s check, as `_disputed` checks a candidate's: a fail there
+        counts toward a failure's being inherited (`vqueue._inherited`) only while graph2's verdict lists its task failed (a
+        fail, or its own fault) at the key the loop read there, and then with the failing tests graph2 names of it (`_named`),
+        not a label's: a result labelled `--by executor` is self-asserted, and a key's first fail is the one read
+        (`fold_results`).  One inherited on the loop's reading alone is held on (a `Dispute`) once graph2 says of the task
+        otherwise there (fail at another key, or infra) or its verdict on the base can be read and has ended
+        (`_held`) without naming it, and waits on the base (`BASE_UNSAID`) until then: the base's result is still to come.
+        As they were with no graph2 `verdict` to ask."""
+        if not fail or not base or not self.graph2 or "verdict" in self.absent:
+            return fail, (), None
+        theirs = self._verdict_of(base)
+        said, named, ended = _said(theirs), _named(theirs), self._held(theirs) is None
+        of = {d["task"]: (FAIL if d["status"] == FAIL else INFRA, k) for k, d in said.items()}
+        out, disputed, unsaid = [], [], []
+        for f in fail:
+            if (d := said.get(f.base_key or "")) is not None and d["status"] == FAIL and d["task"] == f.task:
+                out.append(replace(f, base_tests=named.get((f.task, f.base_key)) or None))
+                continue
+            out.append(f)
+            if not _inherited(f):
+                continue
+            if f.task in of or ended:
+                disputed.append(Dispute(f.task, *of.get(f.task, ("", "")), f.base_key or "", base))
+            else:
+                unsaid.append(f.task)
+        return tuple(out), tuple(disputed), BaseWait(BASE_UNSAID, ", ".join(unsaid)) if unsaid else None
 
     def counts(self, keys: Iterable[str]) -> dict[str, int]:
         """How many results each of graph2's ``keys`` has (`sha512:…`; a key of the run beside the check has none)."""
@@ -1779,15 +1835,17 @@ class Loop:
         return recs
 
     def _bases(self, t: Tick) -> list[dict]:
-        """Act on each base whose check a candidate's verdict waits on for want of its graph (`Judged.waits_on`: not listed
-        yet, its listing failed or its graph can't be read): its keys tell which failures the candidate inherits, and its kinds
-        which its graph must list.  `ready:<base>` is enqueued at the first such candidate's priority unless it was enqueued
-        less than `BASE_RETRY_S` ago, here or by its build or a retry where it is a candidate (`Past.base_enqueues`), so again
-        each `BASE_RETRY_S` while one waits on it: graph2 lists a check whose listing failed again, and leaves one it is
-        listing or has listed as it is.  One that fails to enqueue is enqueued by the next tick.  `CI` and `drive.INFRA` are
-        rung, naming it and the candidates on it, once a base and why (`Past.rung`): at once when its listing failed or its
-        graph can't be read, and when it still isn't listed `BASE_RING_S` after it was first asked for.  Nothing is ejected or
-        bisected on its account: its candidates wait, for as long as `vqueue.decide`'s `pending_s` retries and rings them."""
+        """Act on each base whose check a candidate's verdict waits on for want of its graph or graph2's word on it
+        (`Judged.waits_on`: not listed yet, its listing failed, its graph can't be read, or graph2's verdict on it hasn't said
+        it fails what the candidate's failures are inherited from): its keys and graph2's verdict tell which failures the
+        candidate inherits, and its kinds which its graph must list.  `ready:<base>` is enqueued at the first such candidate's
+        priority unless it was enqueued less than `BASE_RETRY_S` ago, here or by its build or a retry where it is a candidate
+        (`Past.base_enqueues`), so again each `BASE_RETRY_S` while one waits on it: graph2 lists a check whose listing failed
+        again, resumes a cancelled one, and leaves one it is listing or has listed as it is.  One that fails to enqueue is
+        enqueued by the next tick.  `CI` and `drive.INFRA` are rung, naming it and the candidates on it, once a base and why
+        (`Past.rung`): at once when its listing failed or its graph can't be read, and when graph2 still hasn't listed it or
+        said `BASE_RING_S` after it was first asked for (`BASE_COMING`).  Nothing is ejected or bisected on its account: its
+        candidates wait, for as long as `vqueue.decide`'s `pending_s` retries and rings them."""
         w, recs, rung, now = self.world, [], t.past.rung(), self.now()
         waiting: dict[str, list[Candidate]] = {}
         for c in t.snap.candidates:
@@ -1808,14 +1866,15 @@ class Loop:
                 else:
                     recs.append(self.record(t, "base", **line, enqueued=True, done=True))
             why = f"base {b[:12]}: {wait.why}"
-            if (b, why) not in rung and (wait.why != UNLISTED or first is not None and now - first >= BASE_RING_S):
+            if (b, why) not in rung and (wait.why not in BASE_COMING or first is not None and now - first >= BASE_RING_S):
                 recs.append(self._ring_base(t, b, wait, why, cands, first))
         return recs
 
     def _ring_base(self, t: Tick, base: str, wait: BaseWait, why: str, cands: list[Candidate], first: float | None) -> dict:
         """Ring `CI` and `drive.INFRA` that ``cands`` wait on ``base``'s check (`_bases`), keyed by ``why``: a post that fails
         is rung again by the next tick."""
-        since = f", {int(self.now() - first) // 60} min after it was first asked for" if wait.why == UNLISTED and first else ""
+        since = (f", {int(self.now() - first) // 60} min after it was first asked for" if wait.why in BASE_COMING and first
+                 else "")
         text = (f"the verified queue's base ready:{base} holds up {', '.join(f'ready:{c.sha[:12]}' for c in cands)}: {wait}"
                 f"{since}. They wait, and nothing is ejected or bisected for it; it is enqueued again every "
                 f"{BASE_RETRY_S // 60} min while they do")
@@ -1828,9 +1887,10 @@ class Loop:
         return self.record(t, "ring", **line, to=list(to), done=True, posted=True)
 
     def _disputes(self, t: Tick) -> list[dict]:
-        """Ring `CI` about each task a candidate is held on (`Judged.disputed`: graph2's `verdict` says it failed or erred,
-        and the loop read it passed), with the task, both keys and both readings: once each, across the candidates that share
-        it (`Past.rung`, by why).  A post that fails is rung again by the next tick; with --shadow it is only logged."""
+        """Ring `CI` about what a candidate is held on (`Judged.disputed`): a task graph2's `verdict` says failed or erred and
+        the loop read passed, or one the loop reads its base failing and graph2's verdict on the base doesn't, with the task,
+        both keys and both readings (and the base): once each, across the candidates that share it (`Past.rung`, by why).  A
+        post that fails is rung again by the next tick; with --shadow it is only logged."""
         recs, rung = [], {why for _, why in t.past.rung()}
         for c in t.snap.candidates:
             for d in t.judged[c.sha].disputed:
@@ -1838,10 +1898,10 @@ class Loop:
                     continue
                 rung.add(why)
                 text = (f"the verified queue holds ready:{c.sha} ({' '.join(f'#{n}' for n in c.members)}) while graph2's "
-                        f"verdict and the result labels it reads disagree: {why}. It waits until they agree. Each key's "
-                        "results: `research data labels task:<key> --key result --history`")
+                        f"verdict and the labels it reads disagree: {why}. It waits until they agree. Each key's results: "
+                        "`research data labels task:<key> --key result --history`")
                 line = dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=why, text=text, to=[CI],
-                            task=d.task, graph2={"state": d.said, "key": d.theirs}, mine={"state": PASS, "key": d.ours})
+                            **d.logged())
                 if self.shadow:
                     recs.append(self.record(t, "ring", **line, done=False))
                 elif not self._say(t, "ring", text, (CI,), sha=c.sha, why=why):
