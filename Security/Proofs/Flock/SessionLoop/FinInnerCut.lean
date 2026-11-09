@@ -191,7 +191,7 @@ theorem repCons_ofPad (C : Array (Array F128)) (st : _root_.Flock.Setup)
     pads ic vals extra lanePad salt tr 0 (r, tr') k' h).2 hk)
 
 /-- A verifier action lifted to the rep's rounds keeps the round. -/
-theorem liftTM_k {α : Type} {x : _root_.Flock.Transcript.TM α} {t : Transcript} {k : ℕ} {a : α} {t' : Transcript}
+theorem liftTM_k {α : Type} {x : _root_.Flock.Transcript.TM α} {t : Flock.Transcript} {k : ℕ} {a : α} {t' : Flock.Transcript}
     {k' : ℕ} (h : ((liftTM x : TMW (StateT ℕ V) α).run t).run k = .ok ((a, t'), k')) : k' = k := by
   change (monadLift (x t) : StateT ℕ V _).run k = _ at h
   rcases e : x t with _ | ⟨a', t''⟩
@@ -203,7 +203,7 @@ theorem liftTM_k {α : Type} {x : _root_.Flock.Transcript.TM α} {t : Transcript
 /-- **A squeeze answered by `asksPad C`** from round `k`, of `0 < n < 2^64` coins, returns round `k`'s coins and moves
 to round `k + 1`; inside `C`, round `k` holds `n` coins. -/
 theorem squeezeP_pad (C : Array (Array F128)) (kind : UInt8) {n : ℕ} (hn : n ≠ 0) (hn64 : n < 2 ^ 64)
-    {t : Transcript} {k : ℕ} {v : Array F128} {t' : Transcript} {k' : ℕ}
+    {t : Flock.Transcript} {k : ℕ} {v : Array F128} {t' : Flock.Transcript} {k' : ℕ}
     (h : ((_root_.Flock.Firewall.Finish.squeezeP (asksPad C) kind n).run t).run k = .ok ((v, t'), k')) :
     v = (Array.range n).map (padCoin C k) ∧ k' = k + 1 ∧ ∀ cs, C[k]? = some cs → cs.size = n := by
   change ((_root_.Flock.Firewall.Finish.squeezeP (asksPad C) kind n t).run k) = _ at h
@@ -218,7 +218,7 @@ theorem squeezeP_pad (C : Array (Array F128)) (kind : UInt8) {n : ℕ} (hn : n �
   exact Claims.ZKServer.Count.framed_count t kind hn64
 
 /-- A coin answered by `asksPad C` from round `k` is round `k`'s first, which inside `C` holds one coin. -/
-theorem sampleP_pad (C : Array (Array F128)) {t : Transcript} {k : ℕ} {a : F128} {t' : Transcript} {k' : ℕ}
+theorem sampleP_pad (C : Array (Array F128)) {t : Flock.Transcript} {k : ℕ} {a : F128} {t' : Flock.Transcript} {k' : ℕ}
     (h : ((_root_.Flock.Firewall.Finish.sampleP (asksPad C)).run t).run k = .ok ((a, t'), k')) :
     a = padCoin C k 0 ∧ k' = k + 1 ∧ ∀ cs, C[k]? = some cs → cs.size = 1 := by
   unfold _root_.Flock.Firewall.Finish.sampleP at h
@@ -232,8 +232,8 @@ theorem tauCommitmentWith_sv (hh : ByteArray → ByteArray) (tau : F128) (salt :
       pure (FlockComplete.Replay.InZ.tcOf hh tau salt) := rfl
 
 /-- `τ`'s commitment through SHA-512, lifted to the transcript, is `InZ.tcOf` and keeps the transcript and round. -/
-theorem tauLift_ok {hh : ByteArray → ByteArray} {tau : F128} {salt : ByteArray} {t : Transcript} {k : ℕ}
-    {tc : ByteArray} {t' : Transcript} {k' : ℕ}
+theorem tauLift_ok {hh : ByteArray → ByteArray} {tau : F128} {salt : ByteArray} {t : Flock.Transcript} {k : ℕ}
+    {tc : ByteArray} {t' : Flock.Transcript} {k' : ℕ}
     (h : ((StateT.lift (_root_.Flock.Zk.tauCommitmentWith
       (_root_.Flock.Hashes.ofSha512 hh : _root_.Flock.Hashes (StateT ℕ V)) tau salt) :
       TMW (StateT ℕ V) ByteArray).run t).run k = .ok ((tc, t'), k')) :
@@ -253,8 +253,8 @@ round `k + 1` held `|cons| + 3`, and its `τ` commitment is `InZ.tau` at the coi
 committed through SHA-512 under the pads' `τ` salt. -/
 theorem innerP_pad_tau (C : Array (Array F128)) (lay : _root_.Flock.Zk.PadLayout)
     (p : _root_.Flock.Firewall.Finish.PadsZk) (ic : _root_.Flock.Firewall.Finish.InnerCommit) (finalC : F128)
-    (cons : Array (String × _root_.Flock.Zk.Lin)) (hcs : cons.size + 3 < 2 ^ 64) {t : Transcript} {k : ℕ}
-    {ip : _root_.Flock.Zk.InnerProof} {t' : Transcript} {k' : ℕ}
+    (cons : Array (String × _root_.Flock.Zk.Lin)) (hcs : cons.size + 3 < 2 ^ 64) {t : Flock.Transcript} {k : ℕ}
+    {ip : _root_.Flock.Zk.InnerProof} {t' : Flock.Transcript} {k' : ℕ}
     (h : ((_root_.Flock.Firewall.Finish.innerP (asksPad C) (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) lay
       p ic finalC cons).run t).run k = .ok ((ip, t'), k')) :
     (∀ cs, C[k]? = some cs → cs.size = 1) ∧ (∀ cs, C[k + 1]? = some cs → cs.size = cons.size + 3) ∧
@@ -262,8 +262,8 @@ theorem innerP_pad_tau (C : Array (Array F128)) (lay : _root_.Flock.Zk.PadLayout
         (FlockComplete.Replay.InZ.tau lay p.toC cons (FlockComplete.SimInner.cutCoins (padCoin C) k)) p.tauSalt := by
   have hsz : ∀ e r s, (cons ++ _root_.Flock.Zk.triple lay e r s).size = cons.size + 3 := fun _ _ _ => by
     simp [_root_.Flock.Zk.triple]
-  have key : ∀ {c : ByteArray} {x : TMW (StateT ℕ V) _root_.Flock.Zk.InnerProof} {tr : Transcript} {k₀ : ℕ}
-      {a : _root_.Flock.Zk.InnerProof} {tr' : Transcript} {k₀' : ℕ},
+  have key : ∀ {c : ByteArray} {x : TMW (StateT ℕ V) _root_.Flock.Zk.InnerProof} {tr : Flock.Transcript} {k₀ : ℕ}
+      {a : _root_.Flock.Zk.InnerProof} {tr' : Flock.Transcript} {k₀' : ℕ},
       (x.run tr).run k₀ = .ok ((a, tr'), k₀') → Rets (fun ip : _root_.Flock.Zk.InnerProof => ip.tauCommit = c) x →
         a.tauCommit = c :=
     fun e hx => hx _ _ _ _ _ e

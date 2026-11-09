@@ -35,21 +35,12 @@ constant bit is bound to the unit's constant or to the caller's own column 0, wh
 What the unit loses against the unrolled lowering is counted, not hidden: the commits, and the gates of a callee's
 returns that no caller reads (a callee is lowered without its callers' liveness). :func:`unrolled_rows` gives the
 template's rows unrolled (``tmpl.unroll``) and :func:`evaluate` evaluates them, which :func:`check` holds to the unrolled
-lowering's evaluation on random inputs.
-
-    python -m verity_flock.struct_lower K [R C] [--support S] [--fold-cap N] [--first-appearance] [--scattered-returns]
-    [--out UNIT.tmpl] [--flat | --check]
-
-the H1 tile unit (``benchmarks/pouw/h1_prove/h1unit.Shape``): prints ``STRUCT {json}`` (the unrolled totals, multiplied
-through the calls, and the template's size) and writes the template, with each Definition's name in
-``UNIT.tmpl.names.json``; ``--flat`` counts the unrolled lowering instead, and
-``--check`` runs :func:`check`.
+lowering's evaluation on random inputs, and :func:`stats` and :func:`flat` count a template's rows and the unrolled
+lowering's alike.
 """
 from __future__ import annotations
 
-import json
 import sys
-import time
 from array import array
 from dataclasses import dataclass, field
 from functools import partial
@@ -740,49 +731,3 @@ def flat(target) -> dict:
             t["lookups"] += 1
     return {"flat": t}
 
-
-def main(argv: list[str]) -> int:
-    import argparse
-    import resource
-    from pathlib import Path
-
-    ap = argparse.ArgumentParser(prog="struct_lower")
-    ap.add_argument("shape", nargs="+", type=int)
-    ap.add_argument("--support", type=int, default=SUPPORT)
-    ap.add_argument("--fold-cap", type=int, default=FOLD_CAP)
-    ap.add_argument("--first-appearance", action="store_true", help="number a callee's inputs as its arguments name them")
-    ap.add_argument("--scattered-returns", action="store_true", help="return forms over a callee's columns where they lie")
-    ap.add_argument("--out")
-    ap.add_argument("--flat", action="store_true")
-    ap.add_argument("--check", action="store_true")
-    a = ap.parse_args(argv)
-    h1 = Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "h1_prove"
-    sys.path[:0] = [str(h1), str(h1.parent / "hidden_zk")]
-    import h1unit as U
-
-    shape = U.Shape(*a.shape)
-    t0 = time.time()
-    if a.flat:
-        out = flat(shape.unit())
-    elif a.check:
-        out = {"check": check(shape.unit(), a.support, fold_cap=a.fold_cap, column_order=not a.first_appearance,
-                             gather=not a.scattered_returns)}
-    else:
-        t, lw, top = lower(shape.unit(), a.support, f"h1-struct-{shape.k}", a.fold_cap, column_order=not a.first_appearance,
-                           gather=not a.scattered_returns)
-        size = None
-        if a.out:
-            text = T.write(t)
-            Path(a.out).write_text(text)
-            size = len(text)
-            Path(a.out + ".names.json").write_text(json.dumps([s.key[0] for s in lw.order] + ["(unit)"]))
-        out = stats(t, lw, top, size) | {"support": a.support, "fold_cap": a.fold_cap, "column_order": not a.first_appearance,
-                                               "gather": not a.scattered_returns}
-    out |= {"k": shape.k, "tile": [shape.r, shape.c], "seconds": round(time.time() - t0, 1),
-            "maxrss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}
-    print("STRUCT " + json.dumps(out), flush=True)
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
