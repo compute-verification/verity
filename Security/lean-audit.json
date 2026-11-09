@@ -4132,16 +4132,6 @@
    "nontrivial": "Nci.Cover.SecurityProofs.CoverTraining_nontrivial",
    "kind": "exclusion"
   },
-  "Nci.SecurityProofs.ActivationsBoundOn": {
-   "honest": ["Nci.SecurityProofs.ActivationsBoundOn_honest"],
-   "nontrivial": "Nci.SecurityProofs.ActivationsBoundOn_nontrivial",
-   "kind": "exclusion"
-  },
-  "Nci.SecurityProofs.ActivationsTrainingOn": {
-   "honest": ["Nci.SecurityProofs.ActivationsTrainingOn_honest"],
-   "nontrivial": "Nci.SecurityProofs.ActivationsTrainingOn_nontrivial",
-   "kind": "exclusion"
-  },
   "Nci.SecurityProofs.DampenerRemote": {
    "honest": ["Nci.SecurityProofs.DampenerRemote_honest"],
    "nontrivial": "Nci.SecurityProofs.DampenerRemote_nontrivial",
@@ -5150,10 +5140,6 @@
   "Nci.Hardness.SecurityProofs.FanOutBoundPriced_nontrivial": "1127e4fa79055afa6ffeab32154ecf50e5fe4fb2e51245dbffd2ab45c131231e",
   "Nci.Hardness.SecurityProofs.PricedOfActivationRate": "e59dfc57a8e4da1ee1b1fd2935a70e70aa1466d0a2ab14b85ecd1ad898d62ad7",
   "Nci.Hardness.SecurityProofs.PricedOfActivationRate_nontrivial": "ad4414676156185b1fbc2c7c9aec32d17513c974fa51c9f21046766941f7aa24",
-  "Nci.SecurityProofs.ActivationsReads": {
-   "type_hash": "b6654137b8f0a7371afc4bf0d99f4065db7f54641684a3c268a42173846a363a",
-   "unfolded_hash": "d6923da8f8152287b59b55fd48e58cec1efa21831035a7366abcc85413401ae3"
-  },
   "Nci.SecurityProofs.CoveringBound": {
    "type_hash": "d3f79b9bf0b40f087a3ff732e52168c9d455850f506d37f97e9d327daae4af5c",
    "unfolded_hash": "89e15dcf70554fc9470ba6917de8e61cc1559b41393895f0362bbf31ff6d8595"
@@ -16759,137 +16745,6 @@
    "type_hash": "e7a18d6079a11ae11f32255c6bb8e6c7ef16d33c5f1607672b3ff340a8ca0b9d",
    "unfolded_hash": "9b1dcdc2075ac89db26d189eb4996b17e04f8815d6066237a94e84252fed0f33"
   },
-  "Nci.SecurityProofs.ActivationsBoundOn": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ActivationsBoundOn : Nci.Guarantees.ActivationsBoundOn"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Nci.Assumptions.ActivationsIncompressibleAll",
-     "Nci.Assumptions.DrawsAtLeast",
-     "Nci.Assumptions.EntersAtMost",
-     "Nci.Assumptions.ThetaRegistered",
-     "Nci.CompliesRate"
-    ],
-    "reads": []
-   },
-   "type_hash": "7edf84dc2a0076401bda2f30d3c23d99ccd96e334f84aed639205270127497b1",
-   "unfolded_hash": "0f78191478968c6dd89cd0cb373282d4ab56875d3f55ddec0803abaa171edc7d"
-  },
-  "Nci.SecurityProofs.ActivationsBoundOn_honest": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ActivationsBoundOn_honest : Nci.Guarantees.ActivationsBoundOn_honest"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": [
-     "Nci.Assumptions.ActivationsIncompressibleAll",
-     "Nci.Assumptions.DrawsAtLeast",
-     "Nci.Assumptions.EntersAtMost",
-     "Nci.Assumptions.ThetaRegistered"
-    ]
-   },
-   "type_hash": "68c8943d77fa8da96c5f1349ad4d38bbed14e6424afaa0dd022f2d5d6f6f9fe0",
-   "unfolded_hash": "4d9298dfeee3886f712b327342a4d1066dcca4670c9af6fe38c3378edadfd547"
-  },
-  "Nci.SecurityProofs.ActivationsBoundOn_nontrivial": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ActivationsBoundOn_nontrivial : Nci.Guarantees.ActivationsBoundOn_nontrivial"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": [
-     "Nci.Assumptions.ActivationsIncompressibleAll",
-     "Nci.Assumptions.DrawsAtLeast",
-     "Nci.Assumptions.EntersAtMost",
-     "Nci.Assumptions.ThetaRegistered"
-    ]
-   },
-   "type_hash": "532cad3c55d54810a14483ad188abcee15b048dad9478edc12893f7330134f6a",
-   "unfolded_hash": "a255787647db52f10e4c03ae4d99bc20230eee513a998891ef5a0121d613ed02"
-  },
-  "Nci.SecurityProofs.ActivationsReads": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ActivationsReads : Nci.Guarantees.ActivationsReads"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Nci.Assumptions.ActivationsIncompressibleAll",
-     "Nci.Assumptions.DrawsAtLeast",
-     "Nci.Assumptions.EntersAtMost",
-     "Nci.Small"
-    ],
-    "reads": []
-   },
-   "type_hash": "b6654137b8f0a7371afc4bf0d99f4065db7f54641684a3c268a42173846a363a",
-   "unfolded_hash": "d6923da8f8152287b59b55fd48e58cec1efa21831035a7366abcc85413401ae3"
-  },
-  "Nci.SecurityProofs.ActivationsTrainingOn": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ActivationsTrainingOn : Nci.Guarantees.ActivationsTrainingOn"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Nci.Assumptions.ActivationsIncompressibleAll",
-     "Nci.Assumptions.Coverage",
-     "Nci.Assumptions.DrawsAtLeast",
-     "Nci.Assumptions.EntersAtMost",
-     "Nci.Assumptions.ThetaRegistered",
-     "Nci.CompliesRate"
-    ],
-    "reads": []
-   },
-   "type_hash": "c4eb9f6f3eb171da49c3706a625d10ba7bc90ac1ca1672a9aa0ed2131ae404ed",
-   "unfolded_hash": "782a135efff690a2c22cdf728cc53ce59792430ca58f3dec691bb76515b58102"
-  },
-  "Nci.SecurityProofs.ActivationsTrainingOn_honest": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ActivationsTrainingOn_honest : Nci.Guarantees.ActivationsTrainingOn_honest"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": [
-     "Nci.Assumptions.ActivationsIncompressibleAll",
-     "Nci.Assumptions.Coverage",
-     "Nci.Assumptions.DrawsAtLeast",
-     "Nci.Assumptions.EntersAtMost",
-     "Nci.Assumptions.ThetaRegistered"
-    ]
-   },
-   "type_hash": "e5656a74fd74b52718be2b714a138aec346cf124b2908d26cb5f38e775171ac6",
-   "unfolded_hash": "afd2703e4703c09b70c3c556372696a4280e5b5e5eb8c51b9d589c4014cba8c3"
-  },
-  "Nci.SecurityProofs.ActivationsTrainingOn_nontrivial": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ActivationsTrainingOn_nontrivial : Nci.Guarantees.ActivationsTrainingOn_nontrivial"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": [
-     "Nci.Assumptions.ActivationsIncompressibleAll",
-     "Nci.Assumptions.Coverage",
-     "Nci.Assumptions.DrawsAtLeast",
-     "Nci.Assumptions.EntersAtMost",
-     "Nci.Assumptions.ThetaRegistered"
-    ]
-   },
-   "type_hash": "a9ad535684fd0cf42011975ab4764f5c378ab6f3de6f832a4484879aa7dbbfdd",
-   "unfolded_hash": "b166c9299a69654217625928b0191ce6492fff6fbeaf9f7ef67810e8faafff28"
-  },
   "Nci.SecurityProofs.CapabilityFloor": {
    "owner": "@training",
    "signature": ["Nci.SecurityProofs.CapabilityFloor : Nci.Guarantees.CapabilityFloor"],
@@ -26328,9 +26183,6 @@
    "Nci.SecurityProofs.IncompressibleThreadedThrottledOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Definitions/Nci/Assumptions/Baseline.lean), under the named TrainingIncompressible (Security/Definitions/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.IncompressibleContainedMatMulOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Definitions/Nci/Assumptions/Baseline.lean), under the named TrainingIncompressible (Security/Definitions/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.IncompressibleContainedTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Definitions/Nci/Assumptions/Baseline.lean), under the named TrainingIncompressible (Security/Definitions/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ActivationsReads": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and links of that threading (Security/Definitions/Nci/Links.lean), under the named ActivationsIncompressibleAll (Security/Definitions/Nci/Assumptions/Activations.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ActivationsBoundOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and links of that threading (Security/Definitions/Nci/Links.lean) and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Definitions/Nci/Assumptions/Baseline.lean), under the named ActivationsIncompressibleAll (Security/Definitions/Nci/Assumptions/Activations.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ActivationsTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and links of that threading (Security/Definitions/Nci/Links.lean) and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Definitions/Nci/Assumptions/Baseline.lean), under the named ActivationsIncompressibleAll (Security/Definitions/Nci/Assumptions/Activations.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.CertificateSlack": "frozen (no-function): It is Markov's inequality over the windows of an arbitrary distribution on a finite outcome space, under the named PouwSound (Security/Definitions/Nci/Assumptions/Remote.lean) as a bound on each window's marginal, not from a function's acceptance; joining it to PoUW's verifier, whose rejection of a wrong certificate PouwSound bounds, is what would give it one.",
    "Nci.SecurityProofs.VerdictLag": "frozen (no-function): It bounds the declared work an arbitrary set of faulty proof blocks skips past the escaped ones, under the named TerminalDetection (Security/Definitions/Nci/Assumptions/Remote.lean) and a per-identity capacity bound taken as a hypothesis, not from a function's acceptance; joining it to the halt's verdict and the sampled proofs' verifier is what would give it one.",
    "Nci.SecurityProofs.DampenerRemote": "frozen (no-function): It composes the remote protocol's compute dampener from CertificateSlack, VerdictLag, the escape slack and CountHE bounding the declared source on its count verdict (Nci.CompliesAtMost), under the named PouwSound, TerminalDetection, SampledDetection (Security/Definitions/Nci/Assumptions/Remote.lean) and (H) and (E) (Nci.Cut.Assumptions.Hardness and Exports, Security/Definitions/Assumptions.lean), with the other sources' bounds as hypotheses, not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
@@ -27690,12 +27542,6 @@
    },
    "FlockSoundness.Audit.audit_work_whole_stratum": {
     "(FlockSoundness.Audit.Law.stratum σ s).Nonempty": "FlockSoundness.Audit.Law.stratum taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.ActivationsBoundOn": {
-    "Real.instLE.le (instHMul.hMul α Γ.cast) K": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.ActivationsTrainingOn": {
-    "Real.instLE.le (instHMul.hMul α Γ.cast) K": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Nci.SecurityProofs.CapabilityFloor": {
     "∀ (C : In → Accounting.Actual.Run L) (x : In), Set.instMembership.mem 𝒜 { fst := C, snd := x } → Core C x → instLENat.le Lc (cost (C x))": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion"

@@ -11,7 +11,6 @@ public import Definitions.Nci.Dampener
 public import Definitions.Nci.Reads
 public import Definitions.Nci.Assumptions.Threads
 public import Definitions.Nci.Assumptions.Baseline
-public import Definitions.Nci.Assumptions.Activations
 public import Definitions.Nci.Assumptions.Layered
 public import Definitions.Nci.Assumptions.Dampener
 public import Definitions.Nci.Assumptions.Training
@@ -140,42 +139,6 @@ def ThreadedThrottledDarkSlots_nontrivial : Prop :=
     ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
     T1.Threaded 2 0 1 0 ∧ Assumptions.WeightsIncompressibleSlots D T1 σ1 2 0 (1 / 2) (1 / 2) ∧
     ¬ ((T1.M.card : ℝ) ≤ Mθ.dark.card + 0 * T1.bound 0 (1 / 2) 1 0 * Dθ.D.size Dθ.D.computed / (1 / 2))
-
-/-- **`ActivationsBoundOn`'s premises hold together** at the toy, with `Γ = 2`, `α = 1/2`, `K = 1`, `b_w = b_a = 1/2`,
-`r = d = Toy.D`, the threading `T1` with no links, `dd = 1` and `e = 1`: the token enters one counted multiplication. -/
-def ActivationsBoundOn_honest : Prop :=
-  CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧
-    Assumptions.EntersAtMost T1 1 ∧ Assumptions.DrawsAtLeast (noLinks T1) 1 ∧
-    Assumptions.ActivationsIncompressibleAll D T1 (noLinks T1) 2 1 (1 / 2) (1 / 2)
-
-/-- **`ActivationsBoundOn` without `ThetaRegistered`**: `Dθ`, the toy with the token registered, complies at `α = 0`,
-and the bound `b_a #(M ∩ S) ≤ α Λ size(d)` fails, its right side `0` and gate `2` a counted multiplication `Dθ`
-computes. -/
-def ActivationsBoundOn_nontrivial : Prop :=
-  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) * 2 ≤ 1 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 0 Dθ ∧
-    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
-    Assumptions.EntersAtMost T1 1 ∧ Assumptions.DrawsAtLeast (noLinks T1) 1 ∧
-    Assumptions.ActivationsIncompressibleAll D T1 (noLinks T1) 2 1 (1 / 2) (1 / 2) ∧
-    ¬ ((1 / 2 : ℝ) * (T1.M ∩ Mθ.S).card ≤ 0 * T1.bound 1 (1 / 2) 1 1 * Dθ.D.size Dθ.D.computed)
-
-/-- **`ActivationsTrainingOn`'s premises hold together**: `ActivationsBoundOn_honest`'s instance at coverage `κ = 1`. -/
-def ActivationsTrainingOn_honest : Prop :=
-  CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧
-    Assumptions.EntersAtMost T1 1 ∧ Assumptions.DrawsAtLeast (noLinks T1) 1 ∧
-    Assumptions.ActivationsIncompressibleAll D T1 (noLinks T1) 2 1 (1 / 2) (1 / 2) ∧
-    Assumptions.Coverage 1 D (2 * T1.M.card)
-
-/-- **`ActivationsTrainingOn` without coverage**: at the threading `T0`, with `e = 0`, `κ = 1` is no coverage and the
-bound fails, `Λ` being `0` and no gate dark. -/
-def ActivationsTrainingOn_nontrivial : Prop :=
-  (0 : ℝ) ≤ 1 / 2 ∧ (1 / 2 : ℝ) * 2 ≤ 1 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 (1 / 2) D ∧
-    Assumptions.ThetaRegistered D D M1 ∧
-    Assumptions.EntersAtMost (T0 D) 0 ∧ Assumptions.DrawsAtLeast (noLinks (T0 D)) 1 ∧
-    Assumptions.ActivationsIncompressibleAll D (T0 D) (noLinks (T0 D)) 2 1 (1 / 2) (1 / 2) ∧
-    ¬ Assumptions.Coverage 1 D (2 * (T0 D).M.card) ∧
-    ¬ (1 * (1 / 2) * D.D.size D.D.computed ≤
-        2 * (1 / 2) * M1.dark.card +
-          2 * (1 / 2 : ℝ) * (T0 D).bound 1 (1 / 2) 1 0 * D.D.size D.D.computed)
 
 /-- **`LayeredTraining`'s premises hold together** at the toy, with `Γ = 2`, `α = 1/2`, `b_w = b_a = 1/2`, `κ = 1`, the
 threading `T1` keyed with no roots (`layered1`, `d = e = 1`, `eLk = 0`, `b = 2`) and `E = 0`. -/

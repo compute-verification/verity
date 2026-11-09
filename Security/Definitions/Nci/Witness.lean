@@ -3,7 +3,6 @@ module
 public import Definitions.Nci.Capability.Toy
 public import Definitions.Nci.Threads
 public import Definitions.Nci.Dark
-public import Definitions.Nci.Links
 public import Definitions.Nci.Fit
 public import Definitions.Nci.Layered
 public import Definitions.Nci.Packed
@@ -23,7 +22,7 @@ that nothing a proof block reads is fresh and the policy holds at read cap `0`.
   multiplication;
 * `T1`: the toy's threading, one counted multiplication (gate `2`) of the weight by the token, the token the one
   thread's value; `T0`, the threading of no counted multiplication; `σ1` and `σ0`, their one parameter slot;
-  `noLinks`, links with no sources; `layered0` and `layered1`, `T0` and `T1` keyed with no roots and no lookups;
+  `layered0` and `layered1`, `T0` and `T1` keyed with no roots and no lookups;
 * `mb0`, the cover theorem's multiplication blocks of no product on a registered circuit's bit view;
 * `OneWindow`: one PoUW window of capacity `2` over the outcomes `Bool`, its certificate `right` or `wrong` at every
   outcome, and no incorrect proof block (`bad`).
@@ -137,12 +136,6 @@ def σ1 : T1.Slots where
   p := 1
   slot _ := 0
   reuse_le := by decide
-
-/-- Links with no sources: every activation is computed from no counted multiplication. -/
-def noLinks {r : RegisteredCircuit} (T : Threading r) : T.Links where
-  src _ := ∅
-  src_M _ := empty_subset _
-  src_feeds _ _ h := absurd h (notMem_empty _)
 
 /-- `T0` keyed with no roots and no lookups. -/
 def layered0 (r : RegisteredCircuit) (d e eLk b : ℕ) : Layered (T0 r) d e eLk b where
