@@ -19759,3 +19759,61 @@ I'm starting PR 1 now, on a branch from `origin/main`.
 - The biggest lever is SLOTSAT's call. `pinOk` makes `xS` equal `R.x` but for the draw, registered reads and public file. If `xS` carries Flock registered reads, `R.x` needs a `verity/partition/v1` partition, `program_sha512` and a program to derive units, and `xS` a shared-row file with openings. That is A at `xS` of 1,100–1,800 lines; without registered reads, it is about 400–600.
 - Kernel cost: never `decide` a hash (`drawn`'s `publicDigest` took 38 minutes before), keep every root symbolic, use a list twin of `HmOut.delta`, and split the file walk (700 s today) and the trace (493 s today).
 - Dates: SLOTSAT's proposal by Tue 06:00Z holds. The freeze by Tue 18:00Z holds if SLOTSAT settles registered reads at `xS` by Tue 12:00Z. Wed 18:00Z holds for A's `R.x` half; the `xS` half is Thu 18:00Z. Fri 12:00Z for D holds only if A's `xS` half moves to SLOTSAT or shrinks; otherwise Fri 20:00Z to Sat 12:00Z. My branch is `cursor/proofs-twowitness-0d28` (at main 7af4d24fca). No runs yet.
+
+## TWOOPENS, 21:05Z: #8309 re-marked at `a59ab0b49b`; land ask for ci's review-1; the ask is cited; pin and fixture
+
+1. **Land ask (for review-1): please land #8309 at `a59ab0b49b`, marked at 21:06Z.**
+   - **The hold:** review-1 held #8309 at `b011973e5867` (thread 1794255306.746939), for the ask only.
+   - **The ask:** [the page](https://app.notion.com/p/Accept-SpotFlock-Sites-as-the-named-open-premise-of-SpotKSTwo-and-SpotExfilTwo-in-place-of-FrameIs--413399515d9e81c3bc11e345b40b81b7)
+     and card `db12b54a-08d9-4089-a8c2-fae66d5a3968`
+     ([#ask-daniel](https://computeverification.slack.com/archives/C0C5UCA0S0Z/p1794257221027419)). It is provisionally
+     decided A under Daniel's 19 Oct standing rule; the default applies Thu 12 Nov 12:00 PST.
+   - **The body** cites the page and the card, and says "Until `Sites` is proved at an instance, the two guarantees are
+     not shown non-vacuous". It gives the record-choice gap with its fix, a revised pin due Tue 10 Nov 12:00Z.
+   - **The new head:** `a59ab0b49b` is review-1's bookkeeping alone: SPOT in place of the retired term at
+     `TwoGuard.lean:7-8` and `guard_node.py:10` and `:35`.
+2. **What passed at `a59ab0b49b`:**
+   - **Suites** `r20261109-202801-f7c8` (cpu-1, `--changed b011973e58 --quick`): 3 of 3 passed, none cached
+     (`benchmarks/two_stage`, `repository`, `verity-graph`). No warnings; the retired-term tests pass.
+   - **Lean: the lock tool does not count the docstring edit as a changed input.** `TwoGuard.lean` is in no Lake package,
+     and `lean_changed.py --inputs-key` gives all 32 Lake packages the same key at `b011973e58` and `a59ab0b49b`. So no
+     Lean check is needed.
+   - **Earlier at `b011973e58`:** `r20261109-192812-42ec`, 8 of 8 suites passed.
+3. **The mark's two warnings. Neither blocks the mark.**
+   - **Security/Proofs has no stored pass on this head's Lean inputs.** At `b011973e58` the records gate took it from
+     `93b1` across the two lock-only commits. `a59ab0b49b` isn't lock-only, though it changes no Lean input. The gate took
+     Security from `4518` on this head's key.
+     - The lock run after landing builds and checks it. `4518` passed Security/Proofs with no record change on these same
+       Lean sources, so I expect no red.
+     - If you want the pass stored before landing, I'll run `--records Security/Proofs --update` (about 1 to 1.5 h on a
+       cpu-1 build slot). I didn't start it, to spare the contended Lean slots.
+   - **`verity/core/protocols/spot/README.md` is over its cap** at 49,181 bytes. That is `checked`'s growth, as at 19:40Z:
+     `checked` has 49,181 bytes and `main` 48,841. The preflight merged onto `next` at `15ab284aa5`, and its checks passed.
+4. **Land order.** #8406's base is `main`, and it holds #8309's commits through `b011973e58`, so landing #8406 first
+   would land #8309's held content. Land #8406 after #8309. #8363's base is the integration branch.
+5. **TWOVERIFY and SLOTSAT are told** (`cursor/proofs-inbox` at `c08953b5cc`, plus a pointer in each one's agent inbox).
+   - Neither needs to merge `a59ab0b49b` before its mark. It merges cleanly into #8406's `7b55288784` and #8363's
+     `ab8fe8f202`. #8406's `TwoGuard.lean` edits don't touch its lines, and #8363's base lacks `b011973e58` too.
+   - **SLOTSAT's question:** `readsInterior_own` serves `ReadsRegistered`. It is round 2's own-port arm of a registered
+     read: interior roots, key `.port v`. So the concrete `R` registers its own ports. I'm not supporting the
+     `ReadsInterior` route.
+6. **The pin beyond #8406's `recordsOk`.** `recordsOk` is the names half of the revision, so the pin drops its own name
+   lists and builds on `boundaryNames`, `interiorNames` and `recordsOk_spec`. It still needs two things:
+   - **The boundary-only read.** Otherwise a value only the interior registers is read under the interior's roots while
+     the program opens that input gate under the statement's, and `Sites` fails. The other way out, a premise that the
+     interior registers no values, is weaker. The instance registers none, so it doesn't need this either way.
+   - **The general `readsInterior_own`** on `recordsOk_spec`. Its premises are that no link names the port and that the
+     value is one of `Held`'s interior ports.
+   - **A conflict to carry:** the pin draft's deployed half (`SecondStage.lean`, `second_stage.py`, the difftest)
+     conflicts with #8413's rewrite. Whichever lands second ports it; if #8413 is on `checked` first, I rebuild the
+     boundary-only read on it.
+   - **The revised draft** is still due Tue 10 Nov 12:00Z, on `cursor/proofs-regpin-3e7a`, with #8406 merged in.
+7. **The fixture after #8413: I regenerate it, on the integration branch, the day #8413 is on `checked`.**
+   - The work: merge `checked` and #8406; add `Held.rows`, exported from `second_stage.replay_rows` as links and wires
+     are; set `rows` in `ownOf` and `ownOfAt` (so `readsOk_eq` stays `rfl`); and regenerate `guard.tar.xz` in a
+     `research run`, then the guard run.
+   - Until #8413 lands, the integration branch's fixture stands.
+   - #8339 (TWOGUARD) and #8406 (TWOVERIFY) carry their own copies of the fixture. Each needs the same change only if it
+     lands after #8413; TWOPROVE told TWOGUARD.
+8. **Runs:** none pending for #8309. Next I start the pin's revision. Its first Lean try (`readsInterior_own` over
+   #8406) goes out tonight, and I'll name its id and ETA here.
