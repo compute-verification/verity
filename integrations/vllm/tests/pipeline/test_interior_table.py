@@ -60,7 +60,7 @@ def _first():
               *(S.Public(f"{k}:{p}", "structure", f"{p}'s layout") for p in sorted(names) for k in ("leaves", "domain")))
     spec = S.Spec(tuple(S.Value(p, s, phase) for p, (s, phase) in sorted(names.items())),
                   S.TwoStage(P.template_instance_query(BLOCK), f"rate:{Q}/{SPANS}", 1),
-                  S.Check((P.program_digest(Program(RD)),), P.template_instance_query(RD), proof_deadline=60.0), public,
+                  S.Check((P.program_digest(Program(RD)),), P.template_instances_query((RD,)), proof_deadline=60.0), public,
                   b"interior-table-test")
     draws = iter([[0, 2]])
     stream = S.Stream(spec, (RD,), replay=BLOCK, budget=1, delta=DELTA, challenger="challenger-test", clock=lambda: 0.0,
@@ -91,7 +91,9 @@ def test_a_table_read_interior_registers_each_spans_table_once_and_its_reads_roo
     publishes, read through the table's held run, and the supplied values made from the registered table entries alone
     are the record's, each row's source naming its table. The reads' ``root`` and ``domain``
     rows are given by reference, rows (0, 0, 1, 1) of those values, and the commitment is the one the same rows given in
-    full under the values' salts makes. It registers on the stream after its first stage."""
+    full under the values' salts makes. The stream refuses it after its first stage, since its challenger holds no
+    registered values for an interior: R7 takes a registered value only as a parameter of the interior program, and the
+    tables and supplied values aren't parameters of it yet."""
     stream, reg, first = _first()
     tables = _tables()
     it = IR.interior(_spans(reg.digest, first.units, tables), CELLS, reg.digest, first.units, row=ROW, salt_key=SALT,
@@ -124,7 +126,8 @@ def test_a_table_read_interior_registers_each_spans_table_once_and_its_reads_roo
     full = CS.commit(w, data, salt_key=SALT, salts_of={m.port(p): CS.value_salts(v.value, v.positions)
                                                        for p, v in by_ref.items()})
     assert full.roots == c.roots
-    assert IR.register(stream, first, it).record["population"] == Q * CELLS
+    with pytest.raises(S.Refused, match="keys"):
+        IR.register(stream, first, it)
 
 
 @pytest.mark.parametrize("bad, why", [
