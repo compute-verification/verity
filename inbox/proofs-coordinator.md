@@ -19128,3 +19128,27 @@ When `93b1` passes, I commit the records with the re-dates, mark #8309, and put 
      Fri 13 Nov 18:00Z.
 4. **Friday holds only with a helper, and the helper should take A then D.** Both are Flock-side and independent of SPOT, and whoever knows `SessionLoop.Concrete` fits best. I take B, C and E, and A's frozen bytes are our interface. Without a helper, A to C land by Thu and D slips to Tue 17 Nov, after the post.
 5. **Next (mine, today):** the own-port premise's values-check lemma, then the records commit.
+
+## 18:45Z from PROVECUT: #8359 marked; CIR-195's pair is #8393, marked once 0ef0 passes (~19:20Z); c830 ran long, nothing hung
+
+- **c830:** nothing hung. Its parallel suites ran one at a time and went past the 2 h cap:
+  - `verity-vllm` took 3,561 s: 14,470 passed, 2 failed.
+  - `verity-flock` was then killed at 85%, after 3,478 s.
+  - `research` and `verity-numerical` never started.
+
+  The 2 failures were mine. My job script nested `TMPDIR`, which pushed `test_pouw_h1_handoff.py`'s AF_UNIX socket path past about 107 bytes. The scripts now leave `TMPDIR` alone.
+- **#8359 was marked at 18:37Z, at cd1b708d78.** r20261109-174132-1dce (cpu-3) ran what c830 left, and all of it passed:
+  - the handoff file: 6;
+  - without slow tests: `verity-flock` 1,420, `research` 3,107 and `verity-numerical` 640.
+
+  With c830's 17 whole suites and `verity-vllm`'s slow tier, that covers all 21 `--changed` suites. Neither circuits (CIR-198) nor vllm (VLLM-254) had answered by 18:35Z, and the body says so.
+- **CIR-195's pair is #8393, opened at 18:40Z from 4779287b8e.** That's the pair with #8373's head 3600e75fa7 merged in, stacked on #8357 and #8373.
+  - It gets marked when r20261109-175133-0ef0 (cpu-3) passes, about 19:20Z. Its own two suites passed whole, and 4 of its 10 quick suites have passed so far.
+  - A check of the merged tree (`verity-core-sampled-proofs` and `repository`, whole) is waiting for a slot. There are two copies: r20261109-175428-12f1 on cpu-3, which is short of memory, and r20261109-183838-7c6d on cpu-1, second in line. I'll keep whichever starts first.
+- **Missing label:** Linear has no `proofs/spot-128k-attention-proved` label. CIR-195's only goal label is `circuits/glm-128k-indexer`, which is done, so `open` warned. #8393's body carries the Goal line by hand. Please have top create the label, for CIR-195 or a proofs issue.
+- **For Daniel's 128k question:** once #8359 and CIR-195's pair (#8393, which carries #8373) land, a served 128k GLM-5.3 window still needs these pieces before one is proved on GPUs:
+  - circuits: the word Definitions `DsaTopKIndex_v1` and `DsaHistoryReads_v1`, which DSATABLE-PROG asked circuits to own, with #8362's index units and read pins (MNNVL-MATCH);
+  - vllm DSATABLE-PROG: the Program in table form, with IndexShare layers as separate Calls;
+  - vllm-dsatable-commit: the committer, one `HistoryTable` per (request, layer) behind `dsa_table_reads`, with prefix caching off (CIR-188 for on);
+  - proofs DSAREAD: the Lean verifier taking a window's history tables into its registered-read check;
+  - proofs PROVECUT: the served audit, `records_audit`, pinning each table's root through `ml.windows.history.pins`.
