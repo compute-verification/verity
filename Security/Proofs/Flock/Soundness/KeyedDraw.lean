@@ -614,14 +614,14 @@ def windowIdx (WS : List (List Part × PlanDraw.Stratum)) (k : Fin M → ℕ) (j
   swapIndex (PlanDraw.context (WS.getD x.1.val noStratum).1 (WS.getD x.1.val noStratum).2.name) x.2.val
 
 /-- The window sample on given streams, numbered as `windowIdx` numbers them. -/
-def windowOf (k : Fin M → ℕ) (streams : Fin (∑ p, k p) → ByteArray) : ℕ → ℕ → ByteArray := fun p i =>
+def executionPhaseOf (k : Fin M → ℕ) (streams : Fin (∑ p, k p) → ByteArray) : ℕ → ℕ → ByteArray := fun p i =>
   if h : p < M then (if hi : i < k ⟨p, h⟩ then streams (finSigmaFinEquiv ⟨⟨p, h⟩, ⟨i, hi⟩⟩) else ByteArray.empty)
   else ByteArray.empty
 
 /-- **The test A4 is taken for**: the window sample computed from the streams misses `B`. -/
 def windowTest (WS : List (List Part × PlanDraw.Stratum)) (k : Fin M → ℕ) (B : Finset (Fin n))
     (streams : Fin (∑ p, k p) → ByteArray) : Prop :=
-  ∃ D, KeyedDraw.drawOn (windowOf k streams) WS 0 = some D ∧ ∀ u ∈ B, u.val ∉ D
+  ∃ D, KeyedDraw.drawOn (executionPhaseOf k streams) WS 0 = some D ∧ ∀ u ∈ B, u.val ∉ D
 
 /-- **The live PoUW window sample as a sampling design**: `PlanDraw.window` on the key derived from the window's secret `sec ω` of
 `S` bytes, each swap's stream read to `L` bytes; a refused or short sample samples every unit. -/
@@ -666,7 +666,7 @@ theorem keyedWindow_escape_le (σ : Fin n → Fin M) (k : Fin M → ℕ) (hk : �
         refine ⟨D, ?_, fun u hu huD => Finset.disjoint_left.1 hd (Finset.mem_filter.2 ⟨Finset.mem_univ _, huD⟩) hu⟩
         unfold PlanDraw.window at hD
         split at hD
-        · rw [KeyedDraw.drawAll_eq, KeyedDraw.drawK_eq_drawOn key L (windowOf k fun j => stream key (windowIdx WS k j) L)
+        · rw [KeyedDraw.drawAll_eq, KeyedDraw.drawK_eq_drawOn key L (executionPhaseOf k fun j => stream key (windowIdx WS k j) L)
             WS 0 ?_] at hD
           · exact hD
           · intro j hj i hi
@@ -674,7 +674,7 @@ theorem keyedWindow_escape_le (σ : Fin n → Fin M) (k : Fin M → ℕ) (hk : �
             have hk' := (hW ⟨j, hjM⟩ hj).1
             have hiK : i < k ⟨j, hjM⟩ := hk' ▸ hi
             rw [Nat.zero_add]
-            simp only [windowOf, hjM, hiK, dite_true]
+            simp only [executionPhaseOf, hjM, hiK, dite_true]
             unfold windowIdx
             rw [Equiv.symm_apply_apply]
             simp only [List.getD_eq_getElem _ _ hj]
@@ -695,7 +695,7 @@ theorem keyedWindow_escape_le (σ : Fin n → Fin M) (k : Fin M → ℕ) (hk : �
       have hjM : j < M := hlen ▸ hj
       have hiK : i < k ⟨j, hjM⟩ := (hW ⟨j, hjM⟩ hj).1 ▸ hi
       rw [Nat.zero_add]
-      simp only [windowOf, windowStreams, KeyedDraw.streamsOf, hjM, hiK, dite_true]
+      simp only [executionPhaseOf, windowStreams, KeyedDraw.streamsOf, hjM, hiK, dite_true]
       simp only [e', Equiv.trans_apply, Equiv.arrowCongr_apply, Equiv.coe_refl, Function.comp_apply,
         Equiv.symm_apply_apply]
       rfl

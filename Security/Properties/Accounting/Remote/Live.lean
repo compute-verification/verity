@@ -8,7 +8,7 @@ public import RemoteAudit.Verifier
 The verifier's process (`RemoteAudit.Verifier`, `remote-audit-verifier`) doesn't run `Shared.run`: it takes a
 session's events one request at a time, each with the coin the challenger released for it (`Verifier.eventOn`: the coin
 set first, `withCoin`, and an event that read a coin never sent refused, `unset`), checks a window's openings on
-threads of their own when the driver asks (`verify`, `Verifier.windowCheck`: the frames read by `Wire.openingsOf`, the
+threads of their own when the driver asks (`verify`, `Verifier.executionPhaseCheck`: the frames read by `Wire.openingsOf`, the
 verdict `checkWindowChunked`'s), and applies that verdict to the session as it stands when the driver settles it
 (`settle`, `Session.verifyBy`), other events between. The driver's transcript records each event as it came and each
 settled window as a `verify` of its frames, read by the same `Wire.openingsOf`.
@@ -83,7 +83,7 @@ def step (chunk g : Nat) (p : Proc) : Req → Except String (Reply × Option Ses
     | some (w, drawn) =>
       pure (.spawned, none,
         { p with checks := p.checks ++
-          [{ id, t, frames, verdict := (Verifier.windowCheck chunk p.session w drawn frames).1 }] })
+          [{ id, t, frames, verdict := (Verifier.executionPhaseCheck chunk p.session w drawn frames).1 }] })
   | .settle id => do
     let some c := p.checks.find? (·.id == id) | throw s!"no check {id}"
     let (r, s) := Session.verifyBy p.session c.t fun _ => c.verdict

@@ -20,7 +20,7 @@ A spec-level reference for network accounting's timing channel:
   egress profile registered in order with an accepted outcome, and a rejected, late, missing or out-of-order window
   rejects the link;
 - a served link's counts (`served`, `LinkWindows(served=ServedProfile(F, F_in, windows, own))`), whose egress end has no
-  occupancy profile: N2's served proof block, `NetworkServedLinkWindow`, adds a Boolean Definition,
+  occupancy profile: N2's served proof block, `NetworkServedTransferBlocks`, adds a Boolean Definition,
   `NetworkServedCounts_v1` (678,795 ANDs at T = 600, F = 1024, F_in = 1, R = 6, R_in = 1), that holds the egress
   head's counts to the ones its ingress head's counts derive under the window's declared sync, the advice the audit
   already charges at log2 #Σ_sync bits a window. Each window starts empty and must end idle, so nothing carries
@@ -358,7 +358,7 @@ the declared sync), beside the proved timing bound (provisional). N3, the conten
 is retired, superseded by the step-indexed scan (`ingress_scan`, `egress`).
 
 N2's verifier, `LinkWindows.verify`, decides each execution phase on a `--zk` proof of N2's registered proof
-block (`NetworkLinkWindow` v5, served `NetworkServedLinkWindow` v4) and public inputs alone: its own run of Flock's Lean
+block (`NetworkTransferBlocks` v5, served `NetworkServedTransferBlocks` v4) and public inputs alone: its own run of Flock's Lean
 verifier accepts the proof, the proof's public row opens to its own copy of the proof block's public arguments, the
 output row's verdict and deadline bits are 1, the certificates verify on their public fields (`LinkWindows.certified`),
 and the window's sync is declared. It reads no head, salt or sibling. `benchmarks/network_traces/n2_zk.py` proves a
@@ -370,7 +370,7 @@ in-the-clear check, `LinkWindows.clear`, is a debug comparison, off by default. 
 - **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`LinkWindows.unproved_outcome`,
   its verdict `"decided_by": "clear"`), which is never zero-knowledge.
 
-`LinkWindows.verify`'s verdict of record on a plain, served or network certifier link is the Lean's, `NetworkCheck.LinkWindow`
+`LinkWindows.verify`'s verdict of record on a plain, served or network certifier link is the Lean's, `NetworkCheck.TransferBlocks`
 (`verity/core/protocols/network/lean`, the `link-window` function of `network-records verdicts`), by the one switch line
 `service.OF_RECORD`. `verify` runs both on every proof, and an execution phase where
 they differ in the accept bit, the public outputs or the digest, or which the Lean refuses, is rejected. The switch is at
@@ -393,8 +393,8 @@ they differ in the accept bit, the public outputs or the digest, or which the Le
   both reject, among them another network certifier's digest, and `unread`, a sync off Σ_sync that changes neither
   verdict.
 - the Python keeps running beside the Lean as the reference.
-- the Lean's verdict has its property in `Security/Properties/NetworkCertifier/Check/LinkWindow.lean`
-  (`Properties.NetworkCertifier.LinkWindowAcceptMeans`, proved): an accepted execution phase was proved, opened to the
+- the Lean's verdict has its property in `Security/Properties/NetworkCertifier/Check/TransferBlocks.lean`
+  (`Properties.NetworkCertifier.TransferBlocksAcceptMeans`, proved): an accepted execution phase was proved, opened to the
   word 0b11, certified on both ends and synced within Σ_sync (a network certifier link's syncs are not asked of), and
   its public outputs are verdict 1 and deadline 1.
 

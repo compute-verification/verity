@@ -41,7 +41,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 # The certifier device, proved: a complete record is the Program's
 
 A complete record's window has only clean ticks up to its close (`clean_of_complete`), so every frame handed in it was
-handed at its handing bucket (`window_hands`), and the certifier was unfaulted at each of its ticks, where its `queued`
+handed at its handing bucket (`executionPhase_hands`), and the certifier was unfaulted at each of its ticks, where its `queued`
 count is the Program's queue of the handing buckets so far (`hinv`). Each row is then the FIFO's release
 (`release`), which is `NetworkCertifier.expectedRow` of the frames handed through the record's publication.
 -/
@@ -84,7 +84,7 @@ theorem completeRows_proof : CompleteRows := by
   have htk : k / c.egress.buckets * c.egress.buckets + j ≤ k := by omega
   have hwin : (k / c.egress.buckets * c.egress.buckets + j) / c.egress.buckets = k / c.egress.buckets := by
     rw [Nat.add_comm, Nat.add_mul_div_right _ _ hT0, Nat.div_eq_of_lt hj, Nat.zero_add]
-  have hwh := window_hands hE hc hst (n + 1) le_rfl
+  have hwh := executionPhase_hands hE hc hst (n + 1) le_rfl
   have hWT : k / c.egress.buckets * c.egress.buckets + j <
       (pre c tr (n + 1)).shaper.syncs.size * c.egress.buckets := by
     have := Nat.mul_le_mul_right c.egress.buckets (show k / c.egress.buckets + 1 ≤ _ from hw)

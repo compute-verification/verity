@@ -2,7 +2,7 @@
 proved in its `Counting`, `Advice` and `Schedule`): `SecurityProofs.EncardLeProdOfBranching`,
 `SecurityProofs.EncardObsDecodableLe`, `SecurityProofs.EncardAccSeqsLeSync`, `SecurityProofs.EncardAccSeqsLeFixedClock`,
 and for the constant-rate Program `SecurityProofs.EncardAccSeqsLeConstantRate`,
-`SecurityProofs.EncardAccSeqsLeConstantRateFixedClock`, `SecurityProofs.EncardAccSeqsLeConstantRateWindows` and
+`SecurityProofs.EncardAccSeqsLeConstantRateFixedClock`, `SecurityProofs.EncardAccSeqsLeConstantRateExecutionPhases` and
 `SecurityProofs.ExpectedRowCausal`.
 
 The accepted observation sequences are the grids an accepted run can show. The tests enumerate every sender behaviour
@@ -97,7 +97,7 @@ def test_fractional_rate_count_le_sync_advice():
 
 
 def test_accepted_count_le_sync_per_window_opened():
-    """SecurityProofs.EncardAccSeqsLeConstantRateWindows: runs accepted on their first m windows show at most
+    """SecurityProofs.EncardAccSeqsLeConstantRateExecutionPhases: runs accepted on their first m windows show at most
     #Σ_sync^m grid prefixes, however many windows the advice covers."""
     sync_set = SyncSet((0, 1), (1, 2))
     windows = 2

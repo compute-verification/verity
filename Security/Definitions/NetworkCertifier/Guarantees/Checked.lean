@@ -45,8 +45,8 @@ whose observations the bound counts is a valid run, whose checked inputs the res
 bits. The incorrect proof blocks' committed bits are charged at the most any possible incorrect set commits, rather than
 at a bound the statement takes.
 
-The monitoring period's statement takes its inputs as `PooledLeakAccepted` does, named (`PeriodChannel`,
-`PeriodAdaptive`, `PeriodEscapes`, `PeriodLeaksChecked`), and bounds the escape by `(1 - q)^Fmax` itself, which is at most
+The monitoring period's statement takes its inputs as `PooledLeakAccepted` does, named (`MonitoringPeriodChannel`,
+`MonitoringPeriodAdaptive`, `MonitoringPeriodEscapes`, `MonitoringPeriodLeaksChecked`), and bounds the escape by `(1 - q)^Fmax` itself, which is at most
 `δ` at `Fmax ≥ ln(1/δ)/q`. It is conditional as `PooledLeakAccepted` is: its inputs are `Flock.Guarantees.SampledKSLive`
 and the live `SampledLeakChecked` at each window's history, neither discharged yet.
 -/
@@ -102,9 +102,9 @@ open Claims Claims.Sampling Finset
 its named inputs). Over `m` windows on independent live coins, window `i` registered as `sw i` (partition `Pw i`, values
 `ρ i` at the registered inputs, operator `op i`), with `n i` proof blocks, each window's check pinning its checked inputs
 (`CheckedUnique`); with the network certifier running its code by `trusted-host`, its one run giving the cells the client
-receives and its record of them, the windows' observations; a covert sender's channel (`PeriodChannel`), each window's
-acceptance and incorrect set reading only the earlier windows' coins (`PeriodAdaptive`), the conditional escape
-(`PeriodEscapes`) and the leak relation with a valid run at each window's own incorrect set (`PeriodLeaksChecked`):
+receives and its record of them, the windows' observations; a covert sender's channel (`MonitoringPeriodChannel`), each window's
+acceptance and incorrect set reading only the earlier windows' coins (`MonitoringPeriodAdaptive`), the conditional escape
+(`MonitoringPeriodEscapes`) and the leak relation with a valid run at each window's own incorrect set (`MonitoringPeriodLeaksChecked`):
 
 * for every secret, every audit accepts and the good event fails (`PooledGoodChecked`) with probability at most
   `(1 - q)^Fmax + Σ e + Σ e'`;
@@ -123,11 +123,11 @@ def PooledLeakChecked : Prop :=
     (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (Zs : Set Z)
     (schedOf : Z → (Fin m → Ω) → CertifierSchedule Conn) (srvOf : Z → (Fin m → Ω) → Srv)
     (dec : (Fin m → Ω) → (Conn → List (ℕ × CellView Cell)) → Z)
-    (hch : PeriodChannel f cap Ss Zs schedOf srvOf dec fun p => (run tap p).1)
+    (hch : MonitoringPeriodChannel f cap Ss Zs schedOf srvOf dec fun p => (run tap p).1)
     (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop) (W : Z → (Fin m → Ω) → Fin m → Finset ℕ)
-    (had : PeriodAdaptive n acc W) (e e' : Fin m → ℝ) (he : ∀ i, 0 ≤ e i) (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
-    (hesc : PeriodEscapes Zs acc W q e)
-    (hleak : PeriodLeaksChecked lay k reg valid Dj sw Pw ρ op Zs acc W
+    (had : MonitoringPeriodAdaptive n acc W) (e e' : Fin m → ℝ) (he : ∀ i, 0 ≤ e i) (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
+    (hesc : MonitoringPeriodEscapes Zs acc W q e)
+    (hleak : MonitoringPeriodLeaksChecked lay k reg valid Dj sw Pw ρ op Zs acc W
       (fun z ω => (run tap (schedOf z ω, srvOf z ω)).2) e')
     (Fmax : ℕ),
     (∀ z ∈ Zs, Pr (fun ω => (∀ i, acc z i ω (ω i)) ∧

@@ -39,7 +39,7 @@ difftest's `session` reads one, `Difftest.eventOf`):
 * `{"op": "openings", "node", "session", "t", "bytes": n}` and then n bytes: one frame of window t's openings as the
   wire carries them (`Wire.decodeOpenings`), kept until the window is verified;
 * `{"op": "verify", "node", "session", "t", "id"}`: window t's openings, every frame in the order it came, checked on
-  threads of their own (`windowCheck`), answered `{"spawned": true}` at once, or refused as `Session.verify`
+  threads of their own (`executionPhaseCheck`), answered `{"spawned": true}` at once, or refused as `Session.verify`
   refuses; when the check is done the process writes `{"done": id, "accepted": bool}` on a line of its own;
 * `{"op": "settle", "id"}`: that verdict applied to the session as it stands (`Session.verifyBy`), its result with
   the openings it read (`openings`) and the nanoseconds the check took (`ns`);
@@ -134,7 +134,7 @@ private def doneLine (id : Nat) (v : Verdict) : String :=
   "{\"accepted\":" ++ (if v == .accept then "true" else "false") ++ ",\"done\":" ++ toString id ++ "}"
 
 /-- Window `w`'s verdict on its frames `bodies` in session `s`, with the number of openings it read. -/
-def windowCheck (chunk : Nat) (s : Session.State) (w : WindowRecord) (drawn : Array (Nat × Nat))
+def executionPhaseCheck (chunk : Nat) (s : Session.State) (w : WindowRecord) (drawn : Array (Nat × Nat))
     (bodies : Array ByteArray) : Verdict × Nat :=
   let openings := Wire.openingsOf bodies
   (checkWindowChunked chunk s.reg s.digest s.appends w drawn openings, openings.size)
@@ -145,7 +145,7 @@ def spawnCheck (chunk : Nat) (s : Session.State) (w : WindowRecord) (drawn : Arr
     BaseIO (Task (Except IO.Error (Verdict × Nat × Nat))) :=
   IO.asTask (prio := .dedicated) do
     let t0 ← IO.monoNanosNow
-    let (v, n) := windowCheck chunk s w drawn bodies
+    let (v, n) := executionPhaseCheck chunk s w drawn bodies
     emit (doneLine id v)
     let t1 ← IO.monoNanosNow
     return (v, n, t1 - t0)

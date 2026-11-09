@@ -194,7 +194,7 @@ theorem finishStage_fifo (T : Nat) (s : Shaper) :
   rw [t2]
   by_cases hc : (s.t + 1) % T = 0
   · simp only [hc, ne_eq, not_true_eq_false, ↓reduceIte, false_implies, true_implies, true_and]
-    have hcl : ∀ (s' : Shaper), CertRel s.certifier.tick.1.closeWindow.1 s'.certifier → s'.certifier.fault = none →
+    have hcl : ∀ (s' : Shaper), CertRel s.certifier.tick.1.closeExecutionPhase.1 s'.certifier → s'.certifier.fault = none →
         s'.certifier.queue = s.certifier.tick.1.queue := by
       intro s' hr hf
       rw [hr.of_none hf]
@@ -209,7 +209,7 @@ theorem finishStage_fifo (T : Nat) (s : Shaper) :
       · rename_i hr
         refine ⟨by rw [(checkAdvice_rel _).2], by rw [(checkAdvice_rel _).2], fun hf =>
           ⟨hcl _ (checkAdvice_rel _).1 hf, Or.inr ?_⟩⟩
-        simp only [Certifier.closeWindow, t5] at hr
+        simp only [Certifier.closeExecutionPhase, t5] at hr
         cases hfs : s.certifier.fault with
         | none => rfl
         | some r => rw [hfs] at hr; exact absurd rfl (hr r)

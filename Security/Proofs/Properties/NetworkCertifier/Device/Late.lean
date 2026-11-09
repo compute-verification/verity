@@ -592,7 +592,7 @@ theorem clean_of_complete {c : Config} {tr : List Event} {n k backlog : Nat} (hE
 
 /-- **The handing buckets of a complete window**: every frame handed by its close at a bucket of the window was handed
 at its handing bucket. -/
-theorem window_hands {c : Config} {tr : List Event} {n k backlog : Nat} (hE : EgressAt c tr n k backlog)
+theorem executionPhase_hands {c : Config} {tr : List Event} {n k backlog : Nat} (hE : EgressAt c tr n k backlog)
     (hc : (k + 1) % c.egress.buckets = 0) (hso : statusOf c tr (k / c.egress.buckets) = .complete) :
     ∀ m ≤ n + 1, List.Forall₂ (fun h a => k / c.egress.buckets * c.egress.buckets ≤ a → h = a)
       (hlist c.egress.buckets (pre c tr (n + 1)).shaper.syncs (handed (init c) (tr.take m)))

@@ -61,7 +61,7 @@ def outcomeOf (j : Json) : Except String Json := do
     (Credit.Internal.outcome (← f "coin") (← f "stream") (← f "registration") (← f "receipt") (← f "layout") (← f "k")
       (← f "proofs"))
 
-def windowOf (j : Json) : Except String Json := do
+def executionPhaseOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j
   PouwCheck.Difftest.refusal (fun out => Json.mkObj [("credited", toJson out)])
     (Credit.window (← f "key") (← f "ledger") (← f "pins") (← f "main") (← f "window") (← f "session") (← f "salt")
@@ -117,7 +117,7 @@ def registeredFileOf (j : Json) : Except String Json := do
 
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("credit", creditOf), ("drawn", drawnOf), ("window-drawn", windowDrawnOf), ("outcome", outcomeOf),
-  ("window", windowOf), ("period", periodOf), ("a-link", aLinkOf), ("weights", weightsOf), ("registered-file", registeredFileOf), ("leaf-words", leafWordsOf)]
+  ("window", executionPhaseOf), ("period", periodOf), ("a-link", aLinkOf), ("weights", weightsOf), ("registered-file", registeredFileOf), ("leaf-words", leafWordsOf)]
 
 /-- `pouw-check-difftest`'s functions: `PouwCheck.Difftest.table`'s, then these. -/
 def all (name : String) : Option _root_.Difftest.Fn := PouwCheck.Difftest.table name <|> table name

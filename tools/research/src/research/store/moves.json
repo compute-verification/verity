@@ -1755,6 +1755,17 @@
         "Security/Proofs/Properties/Accounting/Remote/Window.lean": "Security/Proofs/Properties/Accounting/Remote/ExecutionPhase.lean",
         "Security/Properties/Accounting/JointBridge/WorkOfH1CheckedCreditPeriod.lean": "Security/Properties/Accounting/JointBridge/WorkOfH1CheckedCreditMonitoringPeriod.lean"
       }
+    },
+    {
+      "paths": {
+        "Security/Definitions/NetworkCertifier/Guarantees/Period.lean": "Security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriod.lean",
+        "Security/Definitions/NetworkCertifier/Period.lean": "Security/Definitions/NetworkCertifier/MonitoringPeriod.lean",
+        "Security/Proofs/NetworkCertifier/Period.lean": "Security/Proofs/NetworkCertifier/MonitoringPeriod.lean",
+        "Security/Proofs/NetworkCertifier/PeriodSum.lean": "Security/Proofs/NetworkCertifier/MonitoringPeriodSum.lean",
+        "Security/Proofs/Properties/NetworkCertifier/Check/LinkWindow.lean": "Security/Proofs/Properties/NetworkCertifier/Check/TransferBlocks.lean",
+        "Security/Properties/NetworkCertifier/Check/LinkWindow.lean": "Security/Properties/NetworkCertifier/Check/TransferBlocks.lean",
+        "verity/core/protocols/network/lean/NetworkCheck/LinkWindow.lean": "verity/core/protocols/network/lean/NetworkCheck/TransferBlocks.lean"
+      }
     }
   ]
 }

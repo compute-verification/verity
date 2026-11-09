@@ -6,7 +6,7 @@
     {"file": "Security/Definitions/Accounting/Served.lean", "count": 3},
     {"file": "Security/Definitions/Claims/Sampling.lean", "count": 26},
     {"file": "Security/Definitions/NetworkCertifier.lean", "count": 1},
-    {"file": "Security/Definitions/NetworkCertifier/Guarantees/Period.lean", "count": 1},
+    {"file": "Security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriod.lean", "count": 1},
     {"file": "Security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean", "count": 1},
     {"file": "Security/Definitions/NetworkCertifier/SampledAudit.lean", "count": 3},
     {"file": "Security/Definitions/NetworkCertifier/SampledCharge.lean", "count": 2},
