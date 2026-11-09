@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The compile slice (CompileSlice_v6) in zero knowledge, or plain (compile_slice_zk.py) on a CPU machine, on hidden_zk's
+# The compile slice (CompileSlice_v7) in zero knowledge, or plain (compile_slice_zk.py) on a CPU machine, on hidden_zk's
 # builds (its job.sh, sourced: Flock's flock-circuit and the Lean flock-verify) with the ZK server's Lean frame and the
 # sampled-proofs verifier built in the tree. From a clone, in one of the network pool's pinned slots, as a job of at
 # most 180 minutes:

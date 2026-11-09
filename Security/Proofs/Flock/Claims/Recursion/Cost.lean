@@ -94,7 +94,7 @@ theorem efficient_of_EO {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [In
 /-! ## `E_O`'s worst case -/
 
 /-- `collect` reruns at most as often as its programs together. -/
-theorem collect_runs_le {R α : Type} (H : Msg → Msg) (run : R → Trace) :
+theorem collect_runs_le {R α : Type} (H : Msg → Msg) (run : R → Transcript) :
     ∀ ps : List (RP R (Option α)), ((collect ps).eval H run).2.2 ≤ (ps.map fun p => (p.eval H run).2.2).sum
   | [] => by simp [collect, RP.eval]
   | p :: ps => by
@@ -108,7 +108,7 @@ theorem collect_runs_le {R α : Type} (H : Msg → Msg) (run : R → Trace) :
         simp only [RP.eval, add_zero]
         exact collect_runs_le H run ps
 
-theorem viewing_runs {R : Type} (H : Msg → Msg) (run : R → Trace) (f : Seen → Seen) (r : R) :
+theorem viewing_runs {R : Type} (H : Msg → Msg) (run : R → Transcript) (f : Seen → Seen) (r : R) :
     ((viewing f r).eval H run).2.2 = 1 := by
   simp [viewing, RP.eval]
 

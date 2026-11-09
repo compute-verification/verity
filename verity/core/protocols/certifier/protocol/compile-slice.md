@@ -14,9 +14,11 @@ that witness counts as free input at its width, so its charge is ℓ_w plus the 
 `CompileSlice_v5` (`compile_slice_v5`) is v4 at its window's activity: the keys are
 one a block the window keys, from a ragged token row registered with each slot's keyed block count, RB's touched list
 is the addresses the stream touches, and each running slot's request number is carried in the slot row ``cout``
-registers. Its charge is v4's, at its own checked witness's width.
-`CompileSlice_v6` (`compile_slice_v6`) is v1 charging
-the length terms too, `window_charge.ChargeLink_v2{D, 0, 0, K}` ([charge-chain.md](charge-chain.md), "The slice").
+registers. Its charge is v4's, at its own checked witness's width. `CompileSlice_v6` and `PoolWindow_v1`
+(`compile_slice_v6`) are v5 cut in two units with the block pool carried between windows: the pool window opens the
+pool row under the previous window's output root, registered before the window's coins, and commits the row its stream
+leaves as the next. Both are proved every window, and a chain restarts from the empty pool's root after a failed
+window. The charge is ℓ_w plus the pool window's checked rows (the left row and the stream's witness) at their widths.
 
 **The charge** is `charge_chain.ChargeLink_v1{D}` (`build_link`; [charge-chain.md](charge-chain.md)):
 - Its inputs:
@@ -42,6 +44,9 @@ the length terms too, `window_charge.ChargeLink_v2{D, 0, 0, K}` ([charge-chain.m
     false, `test_served_window.py`).
   - Order is 0 only under release-order serving, and 8eb1 wasn't served in release order. The order's charge is the
     I/O tie's (`io_tie`, a draft), outside the slice's proof.
+
+`CompileSlice_v7` (`compile_slice_v7`) is v1 with `window_charge.ChargeLink_v2{D, 0, 0, K}` in place of this charge, so
+it charges advice v1's length terms too ([charge-chain.md](charge-chain.md), "The slice").
 
 **What binds the charge's inputs** (the phase-14 attack: `ChargeCount_v1` on its own is faithful, but its enables, its bits
 and its carry are witness until the slice binds them):
@@ -100,7 +105,7 @@ held to its request's slot through ``map``.
   - With their own rows there, the proof block accepts them, and the native ``srv`` b‖c check refuses them.
 
 **In zero knowledge** (`benchmarks/network_traces/compile_slice_zk.py --slice w212`, and `--slice demo`), each proof
-block, a `CompileSlice_v6` unit, is proved by Flock `prove --zk` behind the Lean ZK server and held by Lean
+block, a `CompileSlice_v7` unit, is proved by Flock `prove --zk` behind the Lean ZK server and held by Lean
 `verify --zk`. The verifier opens only ``pub`` and the verdict, and runs the bindings, the carry chain's among them, on
 the proof blocks' b‖c. What the verifier received holds no witness piece: the ``wit`` and ``srv`` rows, every row's
 salt, and the ``cin`` and ``cout`` rows whole. With ``--plain`` the same statement is proved on Flock's plain path

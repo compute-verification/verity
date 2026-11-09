@@ -62,10 +62,10 @@ from verity_vllm.commit.served_record import BlockValues, base_id, served_rows, 
 from verity_vllm.pipeline.seal_process import SealFailed
 from verity_vllm.pipeline.serve_seal import GB, committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
 
-#: The compile slice the served windows are proved by, `compile_slice_v6.CompileSlice`'s id: CompileSlice_v1's statics,
+#: The compile slice the served windows are proved by, `compile_slice_v7.CompileSlice`'s id: CompileSlice_v1's statics,
 #: rows and schedule, charging the window's decisions and each certified arrival's output length. The serve path commits
 #: only the rows v1 and v4 share, ``srv`` (the served rows); the rest of v4's are the prover's.
-SERVED_SLICE = "CompileSlice_v6"
+SERVED_SLICE = "CompileSlice_v7"
 #: The compile slice's size class beside the engine's statics; R and P (with the engine's L and T, and IW) shape the rows.
 SERVED_CLASS = ("R", "W", "A", "IW", "Q", "D", "P", "K")
 

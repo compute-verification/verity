@@ -1,4 +1,4 @@
-"""compile_slice_zk proves w212 at its run's engine class, scheduler included; the slice it proves (CompileSlice_v6)
+"""compile_slice_zk proves w212 at its run's engine class, scheduler included; the slice it proves (CompileSlice_v7)
 charges each certified arrival's length term as code_v1 sends it; and its scan of what the verifier received judges
 every found witness piece and carry row by the lane's one rule (`leak_scan.scan`), with no byte-count exemption, each
 row shorter than the scan's 16-byte piece found whole. Nothing here lowers or proves (`compile_slice_zk.prove` does,
@@ -69,7 +69,7 @@ def test_the_proved_slices_charge_covers_its_length_terms():
     assert low.words["cert"] != honest.words["cert"] and tails.words["cert"] == honest.words["cert"]
     assert "max-tokens" in Z.CERT and "tails" not in Z.CERT
     with pytest.raises(ValueError, match="stops at its cap"):
-        Z.lowered(Z.V6.Slice(((0, 9, 8),), (), 1, (), (8,)))
+        Z.lowered(Z.V7.Slice(((0, 9, 8),), (), 1, (), (8,)))
 
 
 def test_w212s_unit_charges_code_v1s_window_with_its_length_tails():

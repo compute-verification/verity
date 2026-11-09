@@ -60,7 +60,8 @@ def tree_of_record(root: str | os.PathLike | None = None) -> dict:
     tree cannot pass as the tagged commit by git_head alone."""
     from verity_vllm.pipeline import research_tools, source_identity
     root = Path(root) if root is not None else source_identity.TREE
-    return {"source": "source_identity.code_identity", "root": str(root), "closure": list(research_tools.CLOSURE), **source_identity.code_identity(root)}
+    ident = source_identity.code_identity_of("the TP Commit's tree of record", root)
+    return {"source": "source_identity.code_identity", "root": str(root), "closure": list(research_tools.CLOSURE), **ident}
 
 
 def weights_as_loaded(pin: dict | None) -> partial | None:

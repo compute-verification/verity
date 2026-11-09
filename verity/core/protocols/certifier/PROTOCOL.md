@@ -988,7 +988,7 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network cert
 | The shipped schedule, over the first m windows | `A_c + min(W, m)·log2 #Σ_sync + n·log2 D` bits, for n ≤ min(W, m)·T steps | `SecurityProofs.EncardAccSeqsLeConstantRateWindows`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRate` |
 | The shipped schedule, per window | `A_c` once, then `log2 #Σ_sync + T·log2 D` bits per window over the run's first m whole windows (n = m·T ≤ W·T): 7 bits per window at 16 × 8 sync values under J. Cumulative: a later window may carry more, since content advice and an earlier window's sync can first show in it | `SecurityProofs.EncardAccSeqsLeConstantRatePerWindow`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRatePerWindow` |
 | The circuit's Program under a sampled audit of its step units, at δ | `c + log2 #(faulty sets) + Σ_{v faulty} committed bits + n·log2 D` bits, where the inputs other than the ingress take at most `2^c` values and an incorrect set is one `RAcc δ` allows (in `M_δ`, no unit sampled `All`). It holds on the runs an accepted audit gives, except with probability δ + ε_ks + ε_bind over the selection (`SampledAuditAccepted`), with c the unregistered ones, since `RAcc` pins the inputs to the trace. At δ ≥ miss(1) no unit may be faulty, and it is `c + n·log2 D` | `SecurityProofs.EncardAccSeqsSampledLe`, for a layout that fits the circuit (`Layout.Fits`); given `SampledAuditAccepted`, `SecurityProofs.SampledLeakAccepted` |
-| The network certifier (design v3): every byte re-framed into cells on a public schedule, a late cell fails its connection | `log2 #schedules + Σ_c log2(cells_c + 1)` bits besides the data, one fail choice per cell of each connection's lane or none. Over a monitoring period of sampled audits, plus each window's sampled charge (the row above) at the network certifier's rows | for a decoder of the client's view, under `trusted-host`, `Claims.Sampling.KS` and `Commitment.Binds`, `SecurityProofs.PeriodLeakAccepted` |
+| The network certifier (design v3): every byte re-framed into cells on a public schedule, a late cell fails its connection | `log2 #schedules + Σ_c log2(cells_c + 1)` bits besides the data, one fail choice per cell of each connection's lane or none. Over a monitoring period of sampled audits, plus each window's sampled charge (the row above) at the network certifier's rows | for a decoder of the client's view, under `trusted-host`, `Claims.SamplingGeneric.Compiled.KS` and `Commitment.Binds`, `SecurityProofs.PeriodLeakAccepted` |
 | A fixed clock, under J (D = 1) | 0 bits of timing | `SecurityProofs.EncardAccSeqsLeFixedClock`; for the shipped schedule, `SecurityProofs.EncardAccSeqsLeConstantRateFixedClock` |
 | Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link, under J (D = 1), statuses complete | `SecurityProofs.EncardIngressDecodableLe`, `SecurityProofs.EncardIngressObsDecodableLe` |
 | Ingress, content plus timing | `log2 #Cs` bits plus the ingress timing | `SecurityProofs.EncardIngressDecodableLeContents`, `SecurityProofs.EncardIngressObsDecodableLeContents` |
@@ -1650,10 +1650,10 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
   - The counting form and `code_v1`'s model (`ArithCountStep_v1`, `ArithCountFinish_v1` and `BookKT_v1`).
     Lowering an integer (the window's counts, each order entry and each shortfall) to its `Binned` symbols in
     the book's public tables isn't built, so the circuit charges the decisions only.
-  - The length terms' max_tokens in the slice. `CompileSlice_v6` reads every length slot from ``cert``, so none is free
+  - The length terms' max_tokens in the slice. `CompileSlice_v7` reads every length slot from ``cert``, so none is free
     witness, but what holds ``cert`` to the certified record is a stand-in, the honest cert row under the certifier's
     salt, until max_tokens is read from the certified body. The circuit bounds max_tokens only from above, so a lower
-    one the output still fits passes at a lower charge. `compile_slice_zk` proves `CompileSlice_v6` against that
+    one the output still fits passes at a lower charge. `compile_slice_zk` proves `CompileSlice_v7` against that
     stand-in (its ``max-tokens`` unit is refused by the b‖c check alone); a proof of the length rule is open
     (`send_lengths` stays on until one holds it).
 - `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns) as witness it bounds.
@@ -1678,7 +1678,7 @@ Its step rows are held to the committed ``srv`` row, which the verifier holds by
 registers before the sample (`served_rows`), so the phase-10 attack's six passes are refused; at G < P, the served rows'
 blocks, its P / G rows (`CompileSliceRowGroups_v1`, [protocol/served-statics.md](protocol/served-statics.md)). Its charge is
 `ChargeLink_v1{D}` over the decisions the window commits, from its carry-in to its carry-out in the session's carry
-chain. `CompileSlice_v6` (`compile_slice_v6`), the served windows' slice, is v1 charging the length terms too:
+chain. `CompileSlice_v7` (`compile_slice_v7`), the served windows' slice, is v1 charging the length terms too:
 `ChargeLink_v2{D, 0, 0, K}`, a length slot for each certified arrival, its certified max_tokens in ``cert``. In [protocol/compile-slice.md](protocol/compile-slice.md): the charge and what binds its inputs, why every
 advised window is proved, a served window at its engine's class (w212 under its AsyncScheduler, 1,021,302 ANDs, and
 857,866 at the sync class), and its `--zk` runs through `benchmarks/network_traces/compile_slice_zk.py`.
