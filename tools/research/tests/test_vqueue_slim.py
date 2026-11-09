@@ -2,7 +2,8 @@
 launches its run beside the executor's check (`Driver._start_slim`) and judged as drive judges it (`Driver._follow_slim`), on
 drive's own fakes: `Harness`'s launches, run states, evidence and clock, `_slim`'s ended run, and the lint log drive names a
 culprit by.  Pending while it launches or runs, infra when it registered no run, never ran, was lost or was killed, fail on a
-step on the gate it failed, pass on every one it passed; and `combine`'s table."""
+step on the gate it failed, pass on every one it passed; each failure keyed by the content the step reads at the candidate
+and at its base, so `vqueue.decide` takes one its base fails too as inherited; and `combine`'s table."""
 from __future__ import annotations
 
 import json
@@ -11,8 +12,9 @@ import pytest
 
 from research import merge
 from research.drive import ACTIVE, LAUNCH_LOST_S, LOST_AFTER_S, NOT_STARTED, SIGTERM_RC, step_paths, step_records, touches
-from research.vqueue import FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Failed, Verdict, meets
-from research.vqueue_slim import combine, judge, start
+from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
+                             Red, Snapshot, Verdict, decide, meets)
+from research.vqueue_slim import BUILD, WHOLE, combine, judge, key, reads, start
 from test_drive_executor import PREFLIGHTS, _slim
 from test_drive_policy import _policy
 from test_drive_review import GATED_TREE, _main, _move_main
@@ -23,6 +25,25 @@ from test_queue_drive import LINT_LOG, Harness
 OFF = ("circuit-check", "ratchet-gate")
 #: what drive's naming finds of `LINT_LOG`, a failed preflight-lints: its failing test and the path its failure names
 LINT_PATHS = frozenset({"tests/test_repository.py", "tools/research/src/research/store/README.md"})
+#: a graph build family declaring lean-agreement's reads in the shape the tree's does
+BUILD_SRC = ('VERIFIER = "verity/ml/flock/verifier"\nLEAN = "verity/core/service/flock"\n'
+             'CHECK_READS = (*(f"tools/verity/check/{m}" for m in ("check.py", "settings.py")),\n'
+             '               ".agents/skills/using-slack/registry.json")\n')
+ART = "art:" + "ab" * 32
+#: a `main` whose files each bounded step reads, beside one none of them does (docs/notes.md)
+KEYED = {BUILD: BUILD_SRC, "tools/verity/check/check.py": "# check\n", "tools/verity/check/settings.py": "# settings\n",
+         ".agents/skills/using-slack/registry.json": "{}\n", "uv.lock": "version = 1\n", "pyproject.toml": "[project]\n",
+         "tools/x/pyproject.toml": "[project]\n", "verity/ml/flock/verifier/ci.py": "# ci\n",
+         "verity/core/service/flock/Main.lean": "-- main\n", "fixtures/artifacts.json": json.dumps({ART: "fixtures/golden/a.json"}),
+         "fixtures/golden/a.json": "{}\n", "docs/notes.md": "notes\n"}
+#: each step the run judges whose reads are bounded, with files of `KEYED` it reads and files it doesn't
+BOUNDED = {"preflight-lock": (("uv.lock", "tools/x/pyproject.toml", "tools/verity/check/check.py", ".python-version"),
+                              ("verity/ml/flock/verifier/ci.py", "fixtures/golden/a.json")),
+           "lean-agreement": (("verity/ml/flock/verifier/ci.py", "verity/core/service/flock/Main.lean",
+                               "tools/verity/check/settings.py", ".agents/skills/using-slack/registry.json", "uv.lock"),
+                              ("tools/x/pyproject.toml", "fixtures/golden/a.json", "tools/verity/check/other.py")),
+           "preflight-fixtures": (("fixtures/artifacts.json", "fixtures/golden/a.json", "tools/research/src/research/x.py",
+                                   "tools/verity/check/check.py"), ("fixtures/golden/b.json", "tools/x/pyproject.toml"))}
 
 
 @pytest.fixture
@@ -42,19 +63,25 @@ class Drive(Harness):
         return self.got
 
 
-def _harness(world: World, monkeypatch, agreement: bool = False, off_gate: tuple[str, ...] = OFF,
-             **kw) -> tuple[Drive, str, str, list]:
-    """Drive's harness on `main` under policy.toml's ``off_gate``, candidate ``sha`` one commit above it in the queue's clone, and
-    the bases and commits lean-agreement's check asked of (`merge.required_steps`), which finds it changed with ``agreement``."""
-    _move_main(world, {**GATED_TREE, "tools/verity/check/policy.toml": _policy(off_gate=off_gate)})
+def _harness(world: World, monkeypatch, agreement: bool = False, off_gate: tuple[str, ...] = OFF, tree: dict | None = None,
+             change: dict | None = None, **kw) -> tuple[Drive, str, str, list]:
+    """Drive's harness on `main` (with ``tree``'s files) under policy.toml's ``off_gate``, candidate ``sha`` one commit above it
+    (``change``, else f.txt) in the queue's clone, and the bases and commits lean-agreement's check asked of
+    (`merge.required_steps`), which finds it changed with ``agreement``."""
+    _move_main(world, {**GATED_TREE, "tools/verity/check/policy.toml": _policy(off_gate=off_gate), **(tree or {})})
     asked: list[tuple[str, str, str]] = []
     monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: asked.append((base, commit, tool)) or (
         {"lean-agreement": ["verity/ml/flock/"]} if agreement else {}))
     h = Drive(world, monkeypatch, **kw)
     h.q._clone()
-    base, sha = _main(world), world.change({"f.txt": "1\n"})
+    base, sha = _main(world), world.change(change or {"f.txt": "1\n"})
     _git(h.q.workdir, "fetch", "-q", "origin", f"refs/dev/{sha}")
     return h, base, sha, asked
+
+
+def _failed(h: Drive, base: str, sha: str, step: str, inputs: frozenset[str] = frozenset()) -> Failed:
+    """The `Failed` of ``step`` failed at candidate ``sha`` on ``base``: keyed by the content it reads at each."""
+    return Failed(f"step {step}", key(h.q.workdir, sha, step), inputs, key(h.q.workdir, base, step))
 
 
 def _rewrite(d, **steps: dict | None) -> None:
@@ -193,7 +220,7 @@ def test_a_failed_preflight_fails_the_candidate_with_the_paths_drive_names_its_c
     d = _slim(h, tmp_path, preflight_lints=LINT_LOG)
     (st,) = [st for st in step_records(d) if st["status"] == "failed"]
     assert step_paths(d, st) == LINT_PATHS
-    assert judge(h.d, rec) == Verdict(FAIL, (Failed("step preflight-lints", f"{sha}:preflight-lints", LINT_PATHS),))
+    assert judge(h.d, rec) == Verdict(FAIL, (_failed(h, base, sha, "preflight-lints", LINT_PATHS),))
 
 
 def test_a_failures_absolute_paths_meet_the_files_drive_matches_them_to(world, monkeypatch, tmp_path):
@@ -218,7 +245,7 @@ def test_a_red_ratchet_gate_fails_the_candidate_only_on_the_gate(world, monkeypa
     rec = start(h.d, sha, base)
     _slim(h, tmp_path, ratchet_gate="  merge 1 (0123456789ab): failed: grows p01.json 2 -> 3 entries\n")
     assert judge(h.d, rec) == (Verdict(PASS) if "ratchet-gate" in off_gate else
-                               Verdict(FAIL, (Failed("step ratchet-gate", f"{sha}:ratchet-gate", frozenset()),)))
+                               Verdict(FAIL, (_failed(h, base, sha, "ratchet-gate"),)))
 
 
 @pytest.mark.parametrize("agreement", [True, False])
@@ -228,8 +255,7 @@ def test_lean_agreement_is_judged_only_when_the_run_ran_it(world, monkeypatch, t
     rec = start(h.d, sha, base)
     d = _slim(h, tmp_path, **({"lean_agreement": "lean-agreement: the verifiers disagree on 3 of 40 vectors\n"} if agreement else {}))
     assert ("lean-agreement" in {st["step"] for st in step_records(d)}) is agreement
-    assert judge(h.d, rec) == (Verdict(FAIL, (Failed("step lean-agreement", f"{sha}:lean-agreement", frozenset()),))
-                               if agreement else Verdict(PASS))
+    assert judge(h.d, rec) == (Verdict(FAIL, (_failed(h, base, sha, "lean-agreement"),)) if agreement else Verdict(PASS))
 
 
 @pytest.mark.parametrize("rc, why", [(NOT_STARTED, f"never ran or was stopped (done rc={NOT_STARTED})"),
@@ -287,8 +313,9 @@ def test_judge_keeps_its_verdict_in_the_record_and_reads_the_run_no_more(world, 
     rec = start(h.d, sha, base)
     _slim(h, tmp_path, preflight_lints=LINT_LOG)
     got = judge(h.d, rec)
-    assert rec["verdict"] == {"state": FAIL, "failed": [{"task": "step preflight-lints", "key": f"{sha}:preflight-lints",
-                                                         "inputs": sorted(LINT_PATHS)}]}
+    f = _failed(h, base, sha, "preflight-lints", LINT_PATHS)
+    assert rec["verdict"] == {"state": FAIL, "failed": [{"task": "step preflight-lints", "key": f.key, "inputs": sorted(LINT_PATHS),
+                                                         "base_key": f.base_key}]}
     saved = json.loads(json.dumps(rec))
     h.d.states = h.d.evidence = None
     assert judge(h.d, saved) == got == judge(h.d, rec)
@@ -301,6 +328,86 @@ def test_start_and_judge_write_nothing_of_drives(world, monkeypatch, tmp_path):
     _slim(h, tmp_path, preflight_lints=LINT_LOG)
     assert judge(h.d, rec).state == FAIL
     assert h.q.load_state() == before and h.posts == [] and h.cancelled == []
+
+
+# -- content keys
+
+
+@pytest.mark.parametrize("step", sorted(BOUNDED))
+def test_a_steps_key_changes_with_each_file_it_reads_and_with_no_other(world, step):
+    """Each bounded step's reads, as `BUILD`, the replica map and `uv lock --check` declare them at the commit keyed: a change
+    to any of them changes the key, a change elsewhere keeps it."""
+    _move_main(world, KEYED)
+    base = _main(world)
+    assert isinstance(reads(world.origin, base, step), frozenset)
+    touched, untouched = BOUNDED[step]
+    for f in (*touched, *untouched):
+        assert (key(world.origin, world.change({f: "changed\n"}), step) != key(world.origin, base, step)) is (f in touched), f
+
+
+def _decided(sha: str, base: str, files: set[str], v: Verdict) -> list:
+    """`vqueue.decide`'s actions on candidate ``sha`` of one member, #1 touching ``files``, on ``base``, `main`, its verdict
+    ``v``."""
+    return decide(Snapshot(base, (Ready(1, "h1", frozenset(files)),), (Candidate(sha, base, (1,), ("h1",), v),)))
+
+
+def test_a_failed_step_its_base_reads_unchanged_is_inherited_so_decide_blames_no_member(world, monkeypatch, tmp_path):
+    """The member touches nothing preflight-lock reads: its key at the candidate is its key at the base, which therefore fails it
+    too, and `decide` takes the failure as inherited: no member is suspected or ejected, and the candidate advances under top's
+    rule (a candidate whose every failure is inherited advances), its base ringing red before it."""
+    h, base, sha, _ = _harness(world, monkeypatch, tree=KEYED, change={"docs/notes.md": "more\n"})
+    rec = start(h.d, sha, base)
+    _slim(h, tmp_path, preflight_lock="error: the lock needs to be updated, but `--check` was provided\n")
+    v = judge(h.d, rec)
+    (f,) = v.failed
+    assert f == _failed(h, base, sha, "preflight-lock", f.inputs) and f.key == f.base_key
+    acts = _decided(sha, base, {"docs/notes.md"}, v)
+    (drop,) = [a for a in acts if isinstance(a, Drop) and a.sha == sha]
+    assert drop.outcome.inherited == (f,) and drop.outcome.suspects == ()
+    assert not [a for a in acts if isinstance(a, Eject)]
+    assert Advance(sha) in acts or [a.failed for a in acts if isinstance(a, Red)] == [(f,)]
+
+
+@pytest.mark.parametrize("touched", BOUNDED["preflight-lock"][0])
+def test_a_member_touching_what_the_failed_step_reads_owns_the_failure(world, monkeypatch, tmp_path, touched):
+    h, base, sha, _ = _harness(world, monkeypatch, tree=KEYED, change={touched: "changed\n"})
+    rec = start(h.d, sha, base)
+    _slim(h, tmp_path, preflight_lock="error: the lock needs to be updated, but `--check` was provided\n")
+    (f,) = (v := judge(h.d, rec)).failed
+    assert f.key != f.base_key is not None
+    (drop,) = [a for a in _decided(sha, base, {touched}, v) if isinstance(a, Drop) and a.sha == sha]
+    assert drop.outcome.inherited == () and drop.outcome.suspects == (1,)
+
+
+@pytest.mark.parametrize("step", ["preflight-lints", "ratchet-gate"])
+def test_a_step_read_whole_is_keyed_on_the_tree_so_its_failure_is_never_inherited(world, monkeypatch, tmp_path, step):
+    """preflight-lints' lints read every file, and ratchet-gate judges the merges above the base: a change to a file no
+    bounded step reads still changes their key, and the member is suspected."""
+    h, base, sha, _ = _harness(world, monkeypatch, off_gate=("circuit-check",), tree=KEYED, change={"docs/notes.md": "more\n"})
+    assert reads(h.q.workdir, sha, step) == WHOLE[step]
+    rec = start(h.d, sha, base)
+    _slim(h, tmp_path, **{step.replace("-", "_"): "failed\n"})
+    (f,) = (v := judge(h.d, rec)).failed
+    assert f == _failed(h, base, sha, step, f.inputs) and f.key != f.base_key is not None
+    (drop,) = [a for a in _decided(sha, base, {"docs/notes.md"}, v) if isinstance(a, Drop) and a.sha == sha]
+    assert drop.outcome.inherited == () and drop.outcome.suspects == (1,)
+
+
+@pytest.mark.parametrize("build", [None, BUILD_SRC.replace("CHECK_READS = (", "CHECK_READS = tuple(sorted(") + "))\n",
+                                   BUILD_SRC.replace('"settings.py"', "SETTINGS"), "VERIFIER = (\n"])
+def test_a_tree_not_declaring_lean_agreements_reads_as_plain_data_keys_every_step_on_the_whole_tree(world, build):
+    """Without `BUILD`'s declarations as plain data (none, a call, a name, a syntax error), what lean-agreement and check read
+    can't be bounded: each step is keyed on the whole tree, and nothing in the declaration is run."""
+    _move_main(world, {k: v for k, v in KEYED.items() if k != BUILD} | ({BUILD: build} if build else {}))
+    base = _main(world)
+    sha = world.change({"docs/notes.md": "more\n"})
+    for step in BOUNDED:
+        assert BUILD in reads(world.origin, base, step)
+        assert key(world.origin, sha, step) != key(world.origin, base, step)
+
+
+def test_a_key_is_none_for_a_commit_git_cant_read(world):
+    assert key(world.origin, "0" * 40, "preflight-lock") is None is key(world.origin, "0" * 40, "preflight-lints")
 
 
 # -- combine
