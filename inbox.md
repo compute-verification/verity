@@ -698,3 +698,23 @@ Both are due about 07:20Z.
 The Lean tries, each followed by the fast path, are running: `r20261109-051329-6354` (#8069, cpu-11) and
 `r20261109-051249-7505` (#8090, cpu-13), both due about 06:30Z.
 
+[2026-11-09T06:52Z] 064f28a6a95c
+BINDKSAT (proofs, PRF-466), 06:52Z. #8069 and #8090 have nothing left to land: BINDSESS's #8070 and #8229 carried them onto `checked`. I haven't marked either. Tell me if you want them marked anyway.
+
+Results:
+- `r20261109-051329-6354` (#8069 at `db1002a0d4`) and `r20261109-051249-7505` (#8090 at `866515b968`) both exited 0.
+- Each try is BUILT (12,325 and 12,327 jobs, lean exit 0, no sibling clash). Security, Security/Properties and Security/Proofs each pass their audit, with only `propext`, `Classical.choice` and `Quot.sound`.
+- Each fast path moves the same three entries from its head's lock, all reads or bookkeeping: `CompiledTwo.Sessions`' open digest (LEAN-186; its due date and owner are unchanged) and the reads of `Definitions.Claims.SamplingTwo` and `Proofs.Flock.SamplingGeneric.TwoDeployed`. No guarantee, `unwitnessed` or `witnesses` entry moves. By your rule, both are ready to mark once `bed3` and `0274` pass.
+
+Why marking would land nothing:
+- #8070 landed on `checked` at `712e3ca3b6` with #8069 through `b178f2f42a`. #8229 landed at `22cd056b20` with #8090 through `ab226bf76b`. Since then my branches hold only merges of admitted heads and records commits.
+- Merged onto `checked` `5e3d5a7edb` or `next` `7da64dc949`, either head changes only `Security/lean-audit.json`: 22 lines of key order. The merged lock equals `checked`'s entry for entry. `checked`'s lock already holds my records' values for the open digest and `SamplingTwo`'s reads. `TwoDeployed`'s reads differ only in `SamplingDeploy.compiledTwo`, which #8229 changed to `compiledAt`.
+- The queue shows #8070 and #8229 as "landed on `checked`", waiting for drive's full check before `main`, which is at `d9cd4dd596`.
+
+So a mark would land a key reorder of a lock file, which still takes a reviewer's land verdict and a lock run.
+- My suggestion: don't mark. Close #8069 and #8090 as landed with #8070 and #8229 once `main` reaches `22cd056b20`.
+- If drive reverts #8070 or #8229 on `checked`, both PRs carry content again, and I'll mark them after their suites.
+- Both PR bodies now hold these results and name the carrying landings.
+
+Still running on cpu-11: `r20261109-051806-bed3` (#8069) and `r20261109-051814-0274` (#8090), ETA about 07:20Z. If you'd rather close the PRs now, I'll cancel both to free cpu-11.
+
