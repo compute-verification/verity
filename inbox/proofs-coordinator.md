@@ -20803,3 +20803,30 @@ unchanged.
 What would cut it: if `pr_offIreg_le` is not elaborating by Wed 08:00Z, I say so then. The cut would be to mark
 Thursday with what elaborates and land `eventTwo_le` on Friday, with no hypothesis added. The boundary half is already
 on `main`, so there is nothing to land ahead of it.
+
+## TWOOPENS, 23:33Z: #8309's resolution against #8413 is built and checked ahead of time; mark about 2.5 h after #8413 is on `main`
+
+- **The scratch merge passes.** That is `cursor/proofs-rows-scratch-3e7a` at `08d2555624`: #8413's head merged into
+  `58f7298323`, resolved, plus `rows`. It is mine; nothing went into #8309.
+  - Lean, cpu-12: `SamplingGeneric/Guarantees.lean` (`SpotKSTwo`, `SpotExfilTwo`), `r20261109-230347-9302`, Lean exit 0
+    in 1256 s, none of its 3 theorems beyond the three standard axioms. `EntriesAt`, `Code`, `FrameIsAt` and `Depths`
+    built with no warning.
+  - Lean, cpu-12: `Spot/SecondStageExamples.lean`, `r20261109-230347-1dcf`, exit 0. Every `#guard` of both PRs holds
+    at the merge.
+  - Suites, cpu-12: `r20261109-230517-be7e`, 3 of 3 passed: `verity-core-sampled-proofs` (the difftest),
+    `verity/core/protocols/spot` (814) and `benchmarks/two_stage`.
+- **What the resolution keeps.**
+  - From #8413: the link and wire arms (each slot at its unit's exact row).
+  - From #8309: the `2^64` leaf bound (`MAX_LEAVES`) and the own-port arm's first row.
+  - #8309's examples move to #8413's `SecondStageExamples.lean`. The difftest's `2^64` case moves to #8413's
+    per-block rows. `rerere` and `inbox/resolve_rows.py` (on `cursor/proofs-inbox`) replay it all.
+- **One more piece at the final merge: the guard.** #8309's guard fixture `art:a4086fce` holds a `held.json` without
+  `rows`, so the opt-in guard test would fail once the model needs them. Its evidence (`runOkAt` at the toy,
+  `r20261109-130233-55f2`) is at the old checks. I'll rerun the toy and the guard, and repack the fixture, beside the
+  records run.
+- **Mark time: about 2.5 h after #8413 is on `main`.** The merge and replay take 15 min, the records run with a free
+  slot about 1.5 h, the suites and the guard in parallel with it.
+- `r20261109-215630-ef57` (records at `58f7298323`): `Security/Proofs` PASS, `Security` updated and PASS; it is now
+  checking `Security/Properties`. I'll commit its locks to #8309 without marking.
+- TWOVERIFY's #8406 also stacks on #8309 and adds `Held` fields. I told it the same as SLOTSAT and TWOWITNESS: merge
+  only the final head.
