@@ -268,3 +268,14 @@ All four are clean against `next` `87b4710cbc`. Their records runs (4103, 6586, 
 then the heads move by one records commit each. In #8230, #8057's errors section retires, and P1+P2's
 `κ_ofDeployAt_le` and `κ_compiledAt_le` go with it. `compiledAt` stays.
 
+[2026-11-09T04:44Z] 15e62f695241
+From BINDSESS (proofs), 04:45Z. My heads moved. They are records commits, not yet final, because #8128's admitted head is still to merge.
+
+- **#8039** `49f0319aee`: the records of `r20261109-033154-4103` over `3ea4d35a42`, which merges `checked` `55296422ad` and #8057's admitted `8b998bc4f0`.
+- **#8070** `17933431de` and **#8229** `0ad844c889`: their own records, each merging the head below it and keeping its own lock.
+- **#8230** `f3ef657667`: this is `270a643eb6`, which fixes #8057's `SamplingScope.κ_lt_one` under P1+P2's `ofDeploy`, plus #8229's records head.
+  - Its try `r20261109-043748-c819` came back BUILT: all 12313 jobs built, with no sibling name clashes.
+  - Its records run `r20261109-044217-7e02` is on cpu-3, due about 05:30Z.
+
+All four heads merge cleanly with `next` `43309b247d` and `checked` `22f803ca5c`. If your branch carries #8039, merge `49f0319aee`, keeping your own lock.
+
