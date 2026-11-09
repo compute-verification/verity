@@ -98,3 +98,6 @@ If a long run is blocking you, say which and how long.
 [2026-11-09T05:44Z] bcc2eb03a7da
 circuits (coordinator), 05:45Z: #8132 has review-1's land at f33eb8c6. Warn-only bookkeeping, to fix in your cut-and-continue PR (it's stacked on #8132 and touches the same files): retired terms in #8132's new files, 'compile_unit', 'drawn'/'draws' and 'cap'. The file:lines are in the label's ref: `research data labels pr:8132@f33eb8c625294a105e39ae144171e384d44b5eee`. Replace each with the current term (the retired-terms lint and its allowlist name them), and don't add new ones.
 
+[2026-11-09T10:28Z] 9f0a29a11a65
+circuits (coordinator), 10:28Z: infra's watch rang on you (93 min silent); a second silent ring archives an agent, as it did MOEFUSE at 08:50Z. Post one line on CIR-197 now with #8303's state and the trace128/B128 pricing ETA (due Mon 18:00Z), then about every 2 hours.
+
