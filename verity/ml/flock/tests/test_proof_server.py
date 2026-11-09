@@ -183,8 +183,9 @@ def test_provers_that_share_the_node_split_its_threads(binary, tmp_path, monkeyp
 def test_a_cgroup_quota_bounds_the_threads_the_provers_split(binary, tmp_path, monkeypatch, node):
     """With ``RAYON_NUM_THREADS`` unset, the provers split rayon's default pool, Rust's `available_parallelism`: the
     affinity, at most the least whole-CPU quota of the process's cgroup or any above it, and at least one. The quota is v2's
-    ``cpu.max``, or v1's ``cpu.cfs_quota_us`` over ``cpu.cfs_period_us``, a v1 cpu line taking precedence over the v2 one.
-    Counting the affinity alone, a quota pod's provers would split more threads than the pod gives them."""
+    ``cpu.max``, or v1's ``cpu.cfs_quota_us`` over ``cpu.cfs_period_us``, a v1 cpu line taking precedence over the v2 one; a
+    quota file that is there but doesn't parse raises. Counting the affinity alone, a quota pod's provers would split more
+    threads than the pod gives them."""
     root, cpu_max = node
     monkeypatch.delenv("RAYON_NUM_THREADS", raising=False)
     cpu_max("pod/job", "max 100000")
@@ -196,6 +197,9 @@ def test_a_cgroup_quota_bounds_the_threads_the_provers_split(binary, tmp_path, m
                               ("pod/job", "300000 100000", 3)]:
         cpu_max(level, text)
         assert PS._threads({}) == want, (level, text)
+    cpu_max("pod", "400000")
+    with pytest.raises(ValueError):
+        PS._threads({})
     v1 = root / "sys/fs/cgroup/cpu,cpuacct/job"
     v1.mkdir(parents=True)
     (v1 / "cpu.cfs_quota_us").write_text("200000\n")

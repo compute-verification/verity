@@ -136,13 +136,12 @@ def _quota(root: Path) -> int | None:
     period, rounded down, of its own cgroup (``/proc/self/cgroup``; a v1 line with the cpu controller over the v2 line)
     and each one above it, from ``cpu.max`` (v2) or ``cpu.cfs_quota_us`` and ``cpu.cfs_period_us`` (v1, at the standard
     mounts ``cpu`` and ``cpu,cpuacct`` only, not Rust's search of other mounts); at least one, and None where no cgroup
-    sets one."""
-    try:
-        lines = (root / "proc/self/cgroup").read_text().splitlines()
-    except OSError:
+    sets one. A cgroup without the file sets none; a file that is there but doesn't parse raises, where Rust skips it."""
+    cgroup = root / "proc/self/cgroup"
+    if not cgroup.is_file():
         return None
     own = None
-    for f in (line.split(":", 2) for line in lines):
+    for f in (line.split(":", 2) for line in cgroup.read_text().splitlines()):
         if len(f) == 3 and (f[1] == "" and own is None or "cpu" in f[1].split(",")):
             own = (f[1] == "", f[2].lstrip("/"))
     if own is None:
@@ -160,13 +159,14 @@ def _quota(root: Path) -> int | None:
     for d in [mount / path, *(mount / path).parents]:
         if d != mount and mount not in d.parents:
             break
-        try:
-            q, p = ((d / "cpu.max").read_text().split()[:2] if v2 else
-                    [(d / f"cpu.cfs_{k}_us").read_text().strip() for k in ("quota", "period")])
-        except (OSError, ValueError):
-            continue
-        if q.isdigit() and p.isdigit() and int(p) > 0:
-            quotas.append(int(q) // int(p))
+        if v2 and (d / "cpu.max").is_file():
+            q, p = (d / "cpu.max").read_text().split()[:2]
+            if q != "max":
+                quotas.append(int(q) // int(p))
+        elif not v2 and (d / "cpu.cfs_quota_us").is_file():
+            q, p = (int((d / f"cpu.cfs_{k}_us").read_text()) for k in ("quota", "period"))
+            if q >= 0:
+                quotas.append(q // p)
     return max(1, min(quotas)) if quotas else None
 
 
