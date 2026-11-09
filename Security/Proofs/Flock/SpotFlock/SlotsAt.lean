@@ -64,7 +64,7 @@ theorem colAt_lt {T : Model.Statement} (a : HiddenExec.AcceptedH T) {gi : ℕ} (
   · have hl : a.rows.w - 1 < a.rows.w := by omega
     have e : colAt a.st a.L.unit_built gi x = colAt a.st a.L.unit_built gi (a.rows.w - 1) := by
       unfold colAt
-      rw [if_neg (by omega), if_neg (by omega)]
+      rw [ite_eq_right (by omega), ite_eq_right (by omega)]
     have hc := (a.col hg ⟨_, hl⟩).isLt
     rw [col_val a hg ⟨_, hl⟩] at hc
     rw [e]
@@ -84,6 +84,7 @@ theorem wire_lt_of {xS : Msg} {p : Parsed} (hp : parseBytes (FlockDeploy.readOf 
   obtain ⟨hty, ⟨ls, hcc⟩, -⟩ := Hidden.Committed.check a.ht a.committed
   have hg0 : 0 < a.st.c.g := Hidden.check_g_pos hty hcc
   rw [← hk]
+  classical
   show ((firstStmt xS).map fun st =>
     if hb : Built (lunit st.c) then
       colAt st hb (rankAt h x m₁ xS u % st.c.g)
@@ -195,10 +196,12 @@ theorem blockOf_some (hr : r.Ok h) : (layoutFor h).blockOf [] r.m₁ (r.xS h) r.
   have hv : (layoutFor h).blockOf [] r.m₁ (unitStmt h r.m₂ r.u) r.u =
       some (rankAt h [] r.m₁ (unitStmt h r.m₂ r.u) r.u / r.sts[0].c.g % 2 ^ (r.sts[0].m - r.sts[0].c.kLog)) := by
     show (firstStmt (unitStmt h r.m₂ r.u)).map _ = _
-    rw [hfs] <;> rfl
+    rw [hfs]
+    rfl
   show (layoutFor h).blockOf [] r.m₁ (unitStmt h r.m₂ r.u) r.u =
     some (((layoutFor h).blockOf [] r.m₁ (unitStmt h r.m₂ r.u) r.u).getD 0)
-  rw [hv] <;> rfl
+  rw [hv]
+  rfl
 
 /-- **The layout's column for each gate of an accepted run's checked unit is one of its session's first table**: the
 session statement passes the scope check (`parsed_of_stmtOkAt`, `wire_lt_of`). -/
@@ -222,7 +225,7 @@ theorem slots (hr : r.Ok h) {site : ℕ → Option Site} (c₀ : Code) {g : ℕ}
   have hj := sts_pos hr
   have e0 : r.sts[0]! = r.sts[0] := getElem!_pos r.sts 0 hj
   refine ⟨r.β h, 0, r.wire h g, r.n h, S.port, blockOf_some hr, hj, by rw [← e0]; exact wire_lt hr g,
-    by rw [Nat.zero_mul, Nat.zero_add] <;> rfl, by rw [← e0]; exact hn,
+    by rw [Nat.zero_mul, Nat.zero_add]; rfl, by rw [← e0]; exact hn,
     r.opening h S g, r.open_mem hr hsS hg, rfl, rfl, r.roots_opening hr S g, r.row_opening hsS hR,
     r.salt_opening site c₀ S g, ?_⟩
   rw [← e0]
@@ -236,7 +239,7 @@ theorem slots (hr : r.Ok h) {site : ℕ → Option Site} (c₀ : Code) {g : ℕ}
     · rw [r.path_opening site c₀ S g]
       simp only [pathAt, hreg, ht, hent]
   · refine Or.inr ⟨hc1, hq, ?_, fun own hown reg hreg => ?_, fun pop hpop => ⟨?_, ?_⟩⟩
-    · rw [r.roots_opening hr S g, if_pos hint]
+    · rw [r.roots_opening hr S g, ite_eq_left hint]
     · have hnf : own.find? (fun reg => reg.name == (r.sts[0]!.c.ports[S.port]!).name) = none := by
         simpa [regNamed, hown] using hnone
       simpa using Array.find?_eq_none.1 hnf reg hreg

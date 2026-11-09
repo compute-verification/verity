@@ -53,10 +53,10 @@ theorem unesc_esc : ∀ a r : List UInt8, unesc (esc a ++ r) = (a, r)
   | [], [] => rfl
   | [], b :: r => by
     show unesc (0 :: b :: r) = ([], b :: r)
-    rw [unesc.eq_1, if_neg (show ¬ ((0 : UInt8) = 1) by decide)]
+    rw [unesc.eq_1, ite_eq_right (show ¬ ((0 : UInt8) = 1) by decide)]
   | b :: a, r => by
     show unesc (1 :: b :: (esc a ++ r)) = (b :: a, r)
-    rw [unesc.eq_1, if_pos rfl, unesc_esc a r]
+    rw [unesc.eq_1, ite_eq_left rfl, unesc_esc a r]
 
 /-- **An opening's data**: its row's bits, a byte each, then its salt, then its path. -/
 def dataOf (row : List Bool) (salt path : Msg) : Msg :=
@@ -136,7 +136,7 @@ theorem depth_revealOwn : depth revealOwn = 64 := by
   have h1 : Nat.log2 (2 ^ 64 - 1) = 63 := (Nat.log2_eq_iff (by norm_num)).2 ⟨by norm_num, by norm_num⟩
   have h2 : ¬ ((2 : ℕ) ^ 64 ≤ 1) := by norm_num
   show max (_root_.Flock.log2ceil (2 ^ 64)) 0 = 64
-  rw [_root_.Flock.log2ceil, if_neg h2, h1]
+  rw [_root_.Flock.log2ceil, ite_eq_right h2, h1]
   omega
 
 /-! ## The unit's instance -/
