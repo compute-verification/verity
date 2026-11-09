@@ -52,7 +52,8 @@ recorded segment roots (``tables.check_row_tables``).  ``write`` adds ``t<k>-pub
 (every row's ``b || c``) and ``t<k>-private.bin`` (rows, then salts; prover only).  A wired member (``Member.wired``) commits
 each wired input port as other units' output rows under their salts, which `wiring.check` holds across statements.  One with no
 wired trees (``Member.wired_trees`` false) commits no tree for a wired port: the port is its writer's output value, its rows
-leaves of its writer's tree (`Binding.held`), so each value is committed once.
+leaves of its writer's tree (`Binding.held`), so each value is committed once.  Its rows are then its writer's output rows,
+whole: a shared-row member's table of them, each unit's ref its writer's row, or one a unit in its writer's order.
 """
 from __future__ import annotations
 
@@ -231,7 +232,7 @@ class Member:
     link_units: tuple[int, ...] = ()             # a row-table member: per link, how many of its units (consecutive, in order) read it
     links: tuple[tuple[int, int], ...] = ()      # a row-table member: per row of its x table, the window's row table and rank it is
     wired: tuple[tuple[str, str, tuple[int, ...]], ...] = ()  # per wire (port, out, writers): unit i's port row is unit writers[i]'s out row (`wiring`)
-    wired_trees: bool = True                     # False: a wired port commits no tree, its rows its writer's tree's leaves (`Binding.held`)
+    wired_trees: bool = True                     # False: a wired port commits no tree, its rows its writer's output rows, whole (`Binding.held`)
 
     def __post_init__(self) -> None:
         if self.schemas and (sorted(p for p, _ in self.schemas) != sorted(p for p, _ in self.rows + self.outs)
@@ -351,9 +352,15 @@ class Binding:
         at = WI.bases(self.members)
         for m in self.members:
             for p, _o, ws in () if m.wired_trees else m.wired:
-                if len(WI._writers(self.members, ws, at)) != 1:
+                got = WI._writers(self.members, ws, at)
+                if len(got) != 1:
                     raise ValueError(f"{m.key}: its wired {p!r} rows are several members' outputs, which no one tree holds: "
                                      "give its wired ports trees of their own (Member.wired_trees)")
+                (wm, _mine, theirs), = got
+                if dict(m.tables).get(p, m.n) != wm.n if m.tables else not np.array_equal(theirs, np.arange(wm.n)):
+                    raise ValueError(f"{m.key}: its wired {p!r} port has no tree of its own, so its rows are {wm.key}'s {wm.n} "
+                                     f"output rows, whole: a table of {wm.n} rows (Member.tables), each unit's ref its writer's "
+                                     "row, or one row a unit in its writer's order")
         covered = [np.zeros(t.n, dtype=bool) for t in self.row_tables]
         for m in self.members:
             for t, r in m.links:
@@ -578,12 +585,16 @@ def _wire(m: Member, port: str) -> tuple[str, str, tuple[int, ...]]:
 def _by_reference(members: Sequence[Member], bases: np.ndarray, src: Any, ys: Mapping[str, bytes],
                   bc: Mapping[str, bytes]) -> tuple[bytes, bytes]:
     """A port given by reference (`commit`): its rows' salts and ``b || c``, its source's (a `ValueRows`' value's, or a wired
-    port's writers' output rows', from their committed ``ys`` and ``bc``); ``bases``, the members' (`wiring.bases`)."""
+    port's writers' output rows', from their committed ``ys`` and ``bc``: a wired port with no tree of its own, its writer's
+    whole, `Binding.held`); ``bases``, the members' (`wiring.bases`)."""
     if isinstance(src, ValueRows):
         v = src.value
         return (value_salts(v, src.positions) if src.salts is None else src.salts), b"".join(bytes(v.bcs[i]) for i in src.positions)
     m, port = src
     _p, o, ws = _wire(m, port)
+    if not m.wired_trees:
+        (wm, _mine, _theirs), = WI._writers(members, ws, bases)
+        return ys[wm.port(o)], bc[wm.port(o)]
     y, s = np.empty((m.n, SALT_BYTES), dtype=np.uint8), np.empty((m.n, BC_BYTES), dtype=np.uint8)
     for wm, mine, theirs in WI._writers(members, ws, bases):
         y[mine] = np.frombuffer(ys[wm.port(o)], dtype=np.uint8).reshape(wm.n, SALT_BYTES)[theirs]
@@ -593,7 +604,7 @@ def _by_reference(members: Sequence[Member], bases: np.ndarray, src: Any, ys: Ma
 
 class _Rows(Mapping):
     """A commit's rows by port (`commit`): the arrays given, and each port given by reference read off its source when it is
-    read (a value's rows, or a wired port's writers' output rows), never held."""
+    read (a value's rows, or a wired port's writers' output rows: its writer's whole with no tree of its own), never held."""
 
     def __init__(self, members: Sequence[Member], rows: Mapping[str, np.ndarray], refd: Mapping[str, Any], order: tuple[str, ...]):
         self._members, self._rows, self._refd, self._order = members, rows, refd, order
@@ -607,6 +618,9 @@ class _Rows(Mapping):
             return value_rows(src.value, src.positions)
         m, p = src
         _p, o, ws = _wire(m, p)
+        if not m.wired_trees:
+            (wm, _mine, _theirs), = WI._writers(self._members, ws, self._bases)
+            return self[wm.port(o)]
         out = np.empty((m.n, dict(m.rows)[p]), dtype=np.uint16)
         for wm, mine, theirs in WI._writers(self._members, ws, self._bases):
             out[mine] = self[wm.port(o)][theirs]
@@ -650,7 +664,8 @@ def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *,
     output rows) or a `ValueRows` (rows of a registered value). Their rows are never held or hashed: each row's salt and
     ``b || c`` are its source's, so the commitment is the one their rows given in full make, and the committed rows (`_Rows`)
     are read off the sources when a body is written. A wired port of a member with no wired trees (``Member.wired_trees``)
-    is given `WIRED` and gets no tree, domain or root: its writer's tree holds its rows (`Binding.held`)."""
+    is given `WIRED` and gets no tree, domain or root: its writer's tree holds its rows (`Binding.held`), and its rows,
+    salts and ``b || c`` are its writer's output rows', whole, a shared-row member's each unit's ref its writer's row."""
     t0 = time.perf_counter()
     ms = window.members
     if len(data) != len(ms) or sum(m.n for m in ms) != window.population:
@@ -700,6 +715,10 @@ def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *,
             bound = np.array([count[p] for p, _ in m.rows])
             if r.shape != (m.n, len(m.rows)) or (r < 0).any() or (r >= bound).any():
                 raise ValueError(f"{m.key}: refs {r.shape} are not {m.n} x {len(m.rows)} rows inside tables {dict(m.tables)}")
+            for i, (p, _w) in enumerate(m.rows):
+                if m.port(p) in held and not np.array_equal(r[:, i], window.held_leaves(m, p)):
+                    raise ValueError(f"{m.port(p)}: a wired port with no tree of its own is its writer's rows, so each unit's ref "
+                                     "is its writer's row (Binding.held_leaves)")
             own = np.repeat(np.arange(m.n, dtype=np.int64)[:, None], len(m.outs), axis=1)
             refs[k] = np.concatenate([r, own], axis=1).astype(np.uint32)
     if segment_roots is not None and row_salt_key is None:
@@ -975,7 +994,8 @@ class Bodies:
     """A written window's prover bodies (`write`), each made from the files that hold its rows and salts: a member's own
     ``m<k>-private.bin`` (its body less its ports ``value_rows`` and ``wired_rows`` name, in the body's own order), a
     registered value's ``v<j>-private.bin`` (the rows the window reads, in position order, then their salts) and, for a wired
-    port, its writers' own files (each row and salt its writer's output row's). Each file is read where a body reads it,
+    port, its writers' own files (each row and salt its writer's output row's; with no tree of its own, ``wired_trees``
+    false, its writer's output rows, whole: `Binding.held`). Each file is read where a body reads it,
     memory-mapped; a file not the size its ports make, a row no file holds and a writer whose output isn't the port's rows
     are refused."""
 
@@ -1069,6 +1089,9 @@ class Bodies:
         if self._bases is None:
             self._bases = np.array([m["base"] for m in self.members], dtype=np.int64)
         o, ws = self._wires[k, p]
+        if self.members[k].get("wired_trees", True) is False:
+            jj = int(np.searchsorted(self._bases, ws[0], side="right") - 1)
+            ws = self._bases[jj] + np.arange(int(self.members[jj]["n"]), dtype=np.int64)
         w = ws[at]
         j = np.searchsorted(self._bases, w, side="right") - 1
         out = np.empty((len(w), SALT_BYTES if salts else words), dtype=np.uint8 if salts else np.uint16)
@@ -1181,7 +1204,8 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
                         **({"wired_rows": [p for p, _ in m.rows if p in wired]} if wired else {}),
                         **({"shared_rows": {**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}} if m.tables else {}),
                         **({"row_links": [list(x) for x in m.links]} if m.links else {}),
-                        **({"wired": [{"port": p, "out": o, "writers": list(ws)} for p, o, ws in m.wired]} if m.wired else {})})
+                        **({"wired": [{"port": p, "out": o, "writers": list(ws)} for p, o, ws in m.wired]} if m.wired else {}),
+                        **({"wired_trees": False} if m.wired and not m.wired_trees else {})})
     values = {}
     for j, (name, (v, ats, yss)) in enumerate(sorted(read.items())):
         at, step = np.unique(np.concatenate(ats)), max(1, VALUE_CHUNK // (2 * v.words))

@@ -88,7 +88,7 @@ def test_the_challengers_stream_has_the_toys_cells_and_its_interior_program():
 def test_the_interior_is_template_major_and_wired_as_the_replay_blocks_edges(run):
     """Each instance's input reads its writer's (`toy.WRITERS`) one output in its span, one wire a port and one writer a
     wire, FLIP_B's two instances a span the same row, and a wired port commits no tree: its rows are its writer's tree's
-    leaves, one tree a value."""
+    leaves, one tree a value, its table the writer's output rows (their ``b || c``) and each unit's ref its writer's row."""
     win, c = run["it"].window, run["it"].committed
     assert [m.base for m in win.members] == T.offsets(Q) == [0, Q, 2 * Q, 3 * Q, 5 * Q]
     assert [m.n for m in win.members] == [Q * n for n in T.N_T] and win.population == Q * T.N_RHO
@@ -100,6 +100,8 @@ def test_the_interior_is_template_major_and_wired_as_the_replay_blocks_edges(run
         assert (p, o, writers) == (T.LAYOUT[t][0][0][0], "o0", tuple(T.offsets(Q)[w] + i for i in spans))
         assert win.held(m, p) == win.members[w].port("o0") and win.held_leaves(m, p) == spans
         assert m.port(p) not in c.roots and m.port(p) not in T.CS.expected_ports(win)
+        assert dict(m.tables)[p] == win.members[w].n == Q and tuple(c.refs[t][:, 0].tolist()) == spans
+        assert c.bc[m.port(p)] == c.bc[win.members[w].port("o0")]
     assert set(c.roots) == set(T.CS.expected_ports(win)) == {
         m.port(p) for m in win.members for p, _ in m.all_rows if win.held(m, p) == m.port(p)}
     WI.validate(win.members)
@@ -139,7 +141,7 @@ def test_every_other_port_reads_the_interior_record_at_its_own_leaves_or_its_wri
     roots = {r["port"]: r for r in irec["roots"]}
     head = json.loads((run["tmp"] / "interior" / "window.json").read_text())
     for t, m in enumerate(win.members):
-        assert m.tables == tuple((p, m.n) for p, _ in m.rows)
+        assert m.tables == tuple((p, m.n if T.WRITERS[t] is None else win.members[T.WRITERS[t]].n) for p, _ in m.rows)
         for p, words in m.all_rows:
             if p == T.link(t):
                 continue
@@ -149,10 +151,11 @@ def test_every_other_port_reads_the_interior_record_at_its_own_leaves_or_its_wri
             n = roots[value]["leaves"]
             assert (e["value"], e["root"], e["leaves"], e["domain"]) == (value, roots[value]["root"], n,
                                                                          roots[value]["domain"])
-            assert e["reads"] == header["positions"] == leaves and (e[REG.READS_FROM], e["words"]) == (m.base, words)
+            assert e["reads"] == leaves and (e[REG.READS_FROM], e["words"]) == (m.base, words)
+            assert header["positions"] == list(range(n)) == list(range(dict(m.tables).get(p, m.n)))
             held = rows_bc(c, value, n)
             assert all(REG.verify_read(c.domains[value], c.roots[value], i, held[i], bytes.fromhex(path), T.V2)
-                       for i, path in zip(leaves, header["paths"], strict=True))
+                       for i, path in zip(range(n), header["paths"], strict=True))
 
 
 def test_both_registrations_pass_the_verifiers_check_and_the_interior_follows_the_boundary(run):
