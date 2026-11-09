@@ -35,6 +35,7 @@ public import Proofs.NetworkCertifier.Checked
 public import Proofs.NetworkCertifier.WitnessesChecked
 public import Proofs.NetworkCertifier.Carried
 public import Proofs.NetworkCertifier.WitnessesCarried
+public import Proofs.NetworkCertifier.WitnessesPoolRoots
 public import Proofs.NetworkCertifier.PoolRoots
 public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Mathlib.Algebra.Order.Floor.Extended
@@ -94,7 +95,7 @@ network certifier's; `Period` counts with it. `Checked` proves the leak bounds w
 `Carried` proves the leak bound over runs that carry the pool (`PooledLeakCarried`): an opened row costs no advice bits,
 since the chain fixes it unless two rows have one root, and `WitnessesCarried` gives its nontrivial lemma. `PoolRoots`
 gives its premise on the opened rows' roots (`CarriedRoots`) from each run's in-circuit checks and the record rule
-(`RootsOfChecked`).
+(`RootsOfChecked`), and `WitnessesPoolRoots` gives its nontrivial lemma.
 -/
 
 @[expose] public section

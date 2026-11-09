@@ -32,7 +32,4 @@ def CheckedRoots {L S : ℕ} (G : Hash.Msg → Hash.Digest) (C : Prog) (P : Part
     Hash.RowSeg.digest G (prow.map (lay.inputOf n ins a)) = pin ∧
       Hash.RowSeg.digest G (nrow.map (valOver C (lay.inputOf n ins a) free)) = pout
 
-/-- **The run before run `i`**, for `0 < i`. -/
-def prevRun {m : ℕ} (i : Fin m) : Fin m := ⟨i.val - 1, lt_of_le_of_lt (Nat.sub_le i.val 1) i.isLt⟩
-
 end NetTiming

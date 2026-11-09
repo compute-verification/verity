@@ -17,6 +17,9 @@ namespace NetTiming
 
 open Claims Claims.Sampling
 
+/-- **The run before run `i`**, for `0 < i`. -/
+def prevRun {m : ℕ} (i : Fin m) : Fin m := ⟨i.val - 1, lt_of_le_of_lt (Nat.sub_le i.val 1) i.isLt⟩
+
 theorem exists_single_of_faultyGate {C : Prog} {P : Partition} {F : Finset ℕ} {g : ℕ} (h : FaultyGate C P F g) :
     ∃ v ∈ F, FaultyGate C P {v} g := by
   obtain ⟨v, hv, u, hu, hg, hb⟩ := h

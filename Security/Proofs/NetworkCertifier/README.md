@@ -71,6 +71,10 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                PoolColl)
 ../../Definitions/NetworkCertifier/Guarantees/Carried.lean  trusted: the leak bound over a carried pool
                                (PooledLeakCarried)
+../../Definitions/NetworkCertifier/PoolRoots.lean  trusted: a check that holds a run's opened and left rows to the
+                               roots it registers (CheckedRoots)
+../../Definitions/NetworkCertifier/Guarantees/PoolRoots.lean  trusted: the opened rows' roots from each run's checks
+                               and the record rule (RootsOfChecked, which concludes CarriedRoots)
 ../../Definitions/NetworkCertifier/Witness.lean  trusted: the audit the leak bounds' nontrivial lemmas fail at
                                (notProg, notStmt, notPart, notLay; atNot, a deployment at it)
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
@@ -133,6 +137,10 @@ Carried.lean    the leak bound over a carried pool: by induction over the runs, 
                                          and reads only the runs before it (runsBefore_congr, carried_step,
                                          encard_carried_le), and an opened row whose root matches but
                                          whose bits don't is a collision (rowSeg_bind); pooledLeakCarried
+PoolRoots.lean  the opened rows' roots: a run's leak relation runs its check, so its opened and left rows have the
+                                         roots it registers (digests_of_leakAt), and the record rule registers at a
+                                         run's opening the root of the row poolOpen names (digest_open_of_leakAt);
+                                         rootsOfChecked
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypotheses at the deployed
@@ -141,6 +149,7 @@ Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypothes
 WitnessesChecked.lean  the nontrivial lemmas of SampledLeakChecked and PooledLeakChecked; their honest
                                          lemmas wait on a deployed check
 WitnessesCarried.lean  the nontrivial lemma of PooledLeakCarried; its honest lemma waits on a deployed check
+WitnessesPoolRoots.lean  the nontrivial lemma of RootsOfChecked; its honest lemma waits on a deployed check
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
                                definitions above: six theorems, not guarantees (below)
 Accepted.lean   an accepted run of the network certificate check is a run of the constant-rate Program
