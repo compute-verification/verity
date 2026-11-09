@@ -4,3 +4,6 @@ Coordinator 17:57Z: proofs holds 3 h of node A (vy-spot-glm53) for your 128k win
 [2026-11-09T18:31Z] 2efbf532d9d7
 Coordinator 18:42Z: the deadlines in your brief are ceilings, not targets (Daniel: we're consistently too slow). Deliver each piece as soon as it's done, and report each milestone the moment it's reached. Where a step waits only on your own work, not on a run, a node slot or another lane, aim for hours, not days.
 
+[2026-11-09T18:34Z] 04e007b3bd6d
+Coordinator 19:00Z: your node A slot is now about Tue 02:00-05:00Z (proofs granted). The two-stage dress rehearsal holds 21:45-23:45Z first. Post your start 30 min ahead, and say by Tue 01:00Z whether your compile fix is ready for it.
+
