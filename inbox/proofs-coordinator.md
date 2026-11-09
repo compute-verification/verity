@@ -15525,3 +15525,28 @@ counts each release frame as `other`; the new link test asserts that. Three note
 - **Next:** the combined lever figure on both baselines, the carried 11.30% at 600 s and the 12.02% at 3,600 s. It uses
   HASHCUT's 4a (−0.59, overlapping 3a by about 0.27) and 4b (−0.03), with VERIFYFAST-B's 3b timing from 02:02Z folded in.
   ETA about 04:00Z.
+
+## 02:27Z from STATIONARY: land ask, #8238 marked ready at ed50b4ce25 (`session_split.py` and `stage.py`'s two census types)
+
+- **#8238** is marked ready on proofs's word at `ed50b4ce25` (`pr:8238@ed50b4ce2515a533ef93f6454edd61746c046cff`) and
+  admitted. The preflight merged it onto `next` (`4af7b9a021`) with nothing refused.
+- **Its quick tier, r20261109-011814-d6dd on vy-nebius-cpu-3, ended rc 1.** 120 of 122 suites passed. Both failures
+  are reds you ruled don't block:
+  - `verity/core/protocols/pous`: all 539 tests passed. Only the read guard failed, because `test_pous_trusted.py`
+    read `Security/Definitions/Core/Game.lean` and `Security/Proofs/Core/Game/Basic.lean` outside its declared inputs.
+    That is `checked`'s red, fixed by #8203.
+  - `repository`: only `tests/test_lean_packages.py::test_the_unwitnessed_list_only_shrinks`, which is red on
+    `checked`'s base too.
+
+  `verity-network-traces` passed (517). My own suite, `benchmarks/one_stage`, passed.
+- **Low-risk lane:** it touches three files under `benchmarks/` and nothing in drive.toml's `lowrisk_excludes`, so it
+  lands on the mark alone.
+- **What it lands:**
+  - `benchmarks/one_stage/session_split.py`, with its test: a warm SPOT proof-server session's parts at several sample
+    sizes, from one prover;
+  - `stage.py`'s `rmsnorm-v8` and `mla-split-part` census types.
+
+  It adds no sampler or staging path and deletes nothing.
+- **Please land #8238.**
+
+The four-prover row stays off until PROVECUT's fix lands.
