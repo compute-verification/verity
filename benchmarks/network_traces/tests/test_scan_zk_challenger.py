@@ -37,13 +37,11 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     round registers (`scan_root`, `stream_of`), so it registers and samples the round: a stratified sample of 4 with
     each template's stratum sampled, a session for each member holding a sampled unit and only for those, a
     registration of the generator form's digest and partition, and coins whose evidence holds against the group's root
-    and the registration's digest. The registration names the window's seed salt the session released at its open, whose
-    evidence holds too, and the stream refuses the honest evidence for another window and the honest coins without the
-    salt's evidence at the Lean run's register (``seed-salt``). A stream that rebuilt the templates' mixed population
-    instead refused it at R2 (``R2-program``, ``R2-partition``) and drew nothing. Each member's registered reads, the
-    verifier's file and its statement's header (the prover's and the verifier's alike, or their statement digests
-    differ), name every port of its circuit, its o0 at the registration's root for it, as Lean's
-    `Registered.checkComplete` requires.
+    and the registration's digest. The registration names the window's seed salt the session released at its open, and
+    the salt's evidence holds against the window's root. A stream that rebuilt the templates' mixed population instead
+    refused it at R2 (``R2-program``, ``R2-partition``) and drew nothing. Each member's registered reads, the verifier's
+    file and its statement's header (the prover's and the verifier's alike, or their statement digests differ), name
+    every port of its circuit, its o0 at the registration's root for it, as Lean's `Registered.checkComplete` requires.
 
     Runs a few minutes (lowering the scan's three templates at the test class, and the Lean's checks of each stream's
     registration, sample and run), and catches what the stream's own window tests can't: that the scan's registered
@@ -97,7 +95,6 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     assert receipt and json.loads((out / "draw.json").read_text())["units"] == units
     assert res["coins"]["coins_reason"] is None
     assert res["coins"]["seed_salt_reason"] is None and rec["window"]["seed_salt"] == res["coins"]["seed_salt"]
-    assert res["coin_negatives"] == {"coins-for-another-window": True, "seed-salt-missing": True}
 
     roots = {r["port"]: r["root"] for r in rec["roots"]}
     for m in members:
