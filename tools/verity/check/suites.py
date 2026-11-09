@@ -411,11 +411,15 @@ def foreign(pkgs: dict[str, str], env: dict[str, str], python: str = sys.executa
 SYNC = ("uv", "sync", "-q", "--all-packages", "--extra", "torch-cpu")
 
 
-def fresh() -> bool:
-    """Whether this Python is the tree's own environment holding neither the root's packages nor torch, as `uv run` of this script
-    leaves a freshly shipped tree, so `SYNC` replaces nothing anyone chose there (a GPU environment's torch)."""
-    return (Path(sys.prefix).resolve() == (ROOT / ".venv").resolve() and shutil.which("uv") is not None
-            and not any(importlib.util.find_spec(n) for n in [Path(p).name for p in shipped(".")] + ["torch"]))
+def fresh(env: dict[str, str]) -> bool:
+    """Whether this Python is the tree's own environment and, under ``env`` as `foreign` probes it (a launcher's shims on the
+    PYTHONPATH don't count), imports neither the root's packages nor torch, as `uv run` of this script leaves a freshly shipped
+    tree, so `SYNC` replaces nothing anyone chose there (a GPU environment's torch)."""
+    if Path(sys.prefix).resolve() != (ROOT / ".venv").resolve() or shutil.which("uv") is None:
+        return False
+    names = [Path(p).name for p in shipped(".")] + ["torch"]
+    r = subprocess.run([sys.executable, "-P", "-c", _ORIGINS, *names], env=env, capture_output=True, text=True)
+    return r.returncode == 0 and not any(json.loads(r.stdout.splitlines()[-1]).values())
 
 
 def resync(argv: list[str]) -> None:
@@ -2350,8 +2354,9 @@ def main(argv: list[str] | None = None) -> int:
     store_custody()
 
     pkgs, suites = members(), discover()
-    if not (a.list or a.explain) and (away := foreign(pkgs, dict(os.environ, PYTHONPATH=tests_pythonpath()))):
-        if script and not a.synced and fresh():
+    probing = dict(os.environ, PYTHONPATH=tests_pythonpath())
+    if not (a.list or a.explain) and (away := foreign(pkgs, probing)):
+        if script and not a.synced and fresh(probing):
             resync(sys.argv)
         print(f"suites: {sys.executable} would run this tree's tests against another checkout's code ({away}); run them with "
               f"{ROOT}'s own environment: `{' '.join(SYNC)} && uv run tools/verity/check/suites.py` there", file=sys.stderr)

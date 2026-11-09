@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import re
 import shutil
@@ -169,7 +170,7 @@ def test_a_fresh_trees_own_environment_installs_the_workspace_once_and_runs_agai
     _git(tmp_path, "init", "-q")
     S = _suites(monkeypatch, tmp_path)
     monkeypatch.setattr(S, "foreign", lambda pkgs, env: "verity from nowhere (not importable)")
-    monkeypatch.setattr(S, "fresh", lambda: True)
+    monkeypatch.setattr(S, "fresh", lambda env: True)
     resynced = []
     monkeypatch.setattr(S, "resync", resynced.append)
     monkeypatch.setattr(sys, "argv", ["tools/verity/check/suites.py", "--fresh", "pkg"])
@@ -194,15 +195,23 @@ def test_resync_installs_the_workspace_and_runs_the_command_again_marked_synced(
 
 
 def test_only_the_trees_own_environment_without_the_workspace_or_torch_is_fresh(tmp_path, monkeypatch):
-    (tmp_path / "pyproject.toml").write_text('[tool.hatch.build.targets.wheel]\npackages = ["no_such_root_pkg"]\n')
+    """Probed as `foreign` probes, under the tests' PYTHONPATH: a launcher's shim of the root package doesn't make a fresh tree's
+    environment look installed (r20261109-053655-afb9: research's pyshim held a `verity`)."""
+    (tmp_path / "pyproject.toml").write_text('[tool.hatch.build.targets.wheel]\npackages = ["src/rootpkg"]\n')
     S = _suites(monkeypatch, tmp_path)
     monkeypatch.setattr(S.shutil, "which", lambda name: "/usr/bin/uv")
-    monkeypatch.setattr(S.importlib.util, "find_spec", lambda name: None)
-    assert not S.fresh()
+    origins, probed = {"rootpkg": None, "torch": None}, []
+
+    def run(cmd, env, capture_output, text):
+        probed.append((cmd[4:], env))
+        return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(origins) + "\n")
+
+    monkeypatch.setattr(S.subprocess, "run", run)
+    assert not S.fresh({}) and probed == []
     monkeypatch.setattr(sys, "prefix", str(tmp_path / ".venv"))
-    assert S.fresh()
-    monkeypatch.setattr(S.importlib.util, "find_spec", lambda name: object() if name == "torch" else None)
-    assert not S.fresh()
+    assert S.fresh({"PYTHONPATH": "x"}) and probed == [(["rootpkg", "torch"], {"PYTHONPATH": "x"})]
+    origins["torch"] = "/venv/lib/python3.12/site-packages/torch/__init__.py"
+    assert not S.fresh({})
 
 
 def test_a_declared_build_output_keys_the_suite(tmp_path, monkeypatch):
