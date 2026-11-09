@@ -20,7 +20,7 @@ import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
 import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
 import Proofs.Flock.Soundness.Discharge.Tables.Headline
 import Proofs.Flock.Soundness.Discharge.ZkLink.Count
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 @[expose] public section
 

@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Audit.FlockPublic
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The end-to-end theorem: a skeleton, every gap a named hypothesis

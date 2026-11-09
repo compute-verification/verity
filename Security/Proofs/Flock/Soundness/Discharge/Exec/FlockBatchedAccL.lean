@@ -4,9 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.FlockBatchedL
 public import Proofs.Flock.Soundness.Discharge.Exec.SessionBatchAccL
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Audit.Circuit
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The batched Flock audit with the expected-time extractor (DESIGN.md §3)
