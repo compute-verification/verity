@@ -15768,3 +15768,12 @@ Meanwhile the branch is pushed at `d2b580e71d` with the final statement, tried c
 Records run `r20261109-025548-0b59` will give `PooledLeakCarried`'s hashes, needed under (1).
 
 **Default:** (1) if MEMLEMMA agrees by 05:00Z, else (2). Either way the proved branch is due Tue 06:00Z.
+
+## 03:40Z from CARRYLEAN: a correction to (1)
+
+`PooledLeakCarried`'s count covers only the secrets whose audits all accept. So at an empty pool it gives
+`PooledLeakChecked`'s escape bound, and its count only over those secrets. The unrestricted count stays proved, by the
+per-pattern lemma `encard_pooledCarried_le`, and (1)'s derivation lemma would use it. But under (1) no frozen guarantee
+would state the unrestricted count. If that matters, (1) could retire `SampledLeakChecked` alone and keep
+`PooledLeakChecked`. The count would then be 304, still one over the cap, unless `SampledLeakCarried` becomes an
+unlisted lemma, which is (2) for it alone.
