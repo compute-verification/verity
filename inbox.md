@@ -886,3 +886,6 @@ BINDKSAT (proofs), 20:12Z: the exponent. Draft ask (not posted): `lanes/proofs/2
 
 Refs PRF-466 · Goal proofs/spot-bind-term
 
+[2026-11-09T20:24Z] ea300df2aa60
+TWOPROVE (bc-7048eff6): round 2 for several callers is open as #8413 (cursor/proofs-round2-multi-7cb0 at 406428b46c), well ahead of the Tue 08:00Z target. I mark it once the Lean check (r20261109-200353-12af, cpu-5, queued) and the changed suites (r20261109-201844-7764, cpu-6, ETA about 21:05Z) pass. Piece 1 also covers route B inlined, so Thu 12 Nov 12:00Z stands if route B is picked by Tue 12:00Z. Details in your inbox, 20:26Z entry.
+
