@@ -1,6 +1,9 @@
-import Properties.Pous.EndToEnd
-import Proofs.Properties.Pous.TimedAudit
-import Proofs.Properties.Pous.MemoryChallenger
+module
+
+public import Properties.Pous.EndToEnd
+public import Proofs.Properties.Pous.TimedAudit
+public import Proofs.Properties.Pous.MemoryChallenger
+public import Proofs.Properties.Pous.Setup
 
 /-!
 # The composed check's property, proved
@@ -14,8 +17,10 @@ received. The table's leaves and `C*`'s have one root, so leaf by leaf they agre
 (`mth_binds`); a leaf's input then gives the row as `C*`'s block's row digest, and the block's input the answer as the
 block, or two of the run's strings collide.
 
-`runCertifies_of` composes it with the setup check's `AcceptsDecodes` and `PublishesRoot`, which are open.
+`runCertifies` composes it with the setup check's `acceptsDecodes` and `publishesRoot` (`Proofs.Properties.Pous.Setup`).
 -/
+
+@[expose] public section
 
 namespace Pous.EndToEnd.SecurityProofs
 
@@ -39,7 +44,7 @@ theorem need_ok {b : Bool} {reason : String} (h : Run.need b reason = .ok ()) : 
 
 /-- What an accepted `checkAt` checked, in its order. -/
 theorem checkAt_ok {schemes : Schemes} {pt : Run.Point} {trusted : List ByteArray} {pub : SetupProtocol.Public}
-    {digests : ByteArray} {r : Run.Session} {sid : ByteArray}
+    {digests : ByteArray} {r : Run.ChallengePhaseRecord} {sid : ByteArray}
     (h : Run.checkAt schemes pt trusted pub digests r sid = .ok ()) :
     pub.blocks = pt.params.blocks ∧ pub.salt.size = Run.SALT ∧ digests.size = pt.params.blocks * Merkle.DIGEST ∧
       Merkle.root (Run.rowLeaves pt.params pub.salt digests) = some pub.root ∧
@@ -261,8 +266,8 @@ theorem mem_table_leaf {pub : SetupProtocol.Public} {digests : ByteArray} {C : A
 /-! ## The theorem -/
 
 /-- What an accepted `check` checked, at the deployed point. -/
-theorem check_ok {trusted : List ByteArray} {pub : SetupProtocol.Public} {digests : ByteArray} {r : Run.Session}
-    {sid : ByteArray} (h : Run.check trusted pub digests r sid = .ok ()) :
+theorem check_ok {trusted : List ByteArray} {pub : SetupProtocol.Public} {digests : ByteArray}
+    {r : Run.ChallengePhaseRecord} {sid : ByteArray} (h : Run.check trusted pub digests r sid = .ok ()) :
     AuditsSetup pub r.commitment ∧ r.commitment.session = sid ∧ digests.size = q.blocks * Merkle.DIGEST ∧
       Merkle.root (Run.rowLeaves q pub.salt digests) = some pub.root ∧
       (verdict SCHEMES trusted (Run.expected q digests) r.signed r.commitment r.openings).accepted = true := by
@@ -376,12 +381,12 @@ theorem shaped_of {c : SetupProtocol.Commitment} {C : Array (Array ByteArray)} (
   obtain ⟨-, -, -, -, -, -, hb, -⟩ := (hseg s hs).2 v hv
   exact hb
 
-/-- `RunCertifies` from the setup check's two open properties: an accepted `C*` is of the point's shape and has the
-published root, which is all `runCheckAccepts` asks of it. -/
-theorem runCertifies_of (hd : AcceptsDecodes) (hp : PublishesRoot) : RunCertifies := by
+/-- `RunCertifies` from the setup check's two properties: an accepted `C*` is of the point's shape and has the published
+root, which is all `runCheckAccepts` asks of it. -/
+theorem runCertifies : RunCertifies := by
   intro trusted c C pub digests r sid dev ⟨hs, hc⟩
-  have hD := hd q c C ⟨pub, (), hs⟩
-  have hP := hp q c C pub () hs
+  have hD := PousCheck.Properties.SecurityProofs.acceptsDecodes q c C ⟨pub, (), hs⟩
+  have hP := PousCheck.Properties.SecurityProofs.publishesRoot q c C pub () hs
   obtain ⟨ha, hsid, htr, hrest⟩ := runCheckAccepts trusted pub digests r sid hc dev C
   have hroot : Merkle.root (leaves pub.salt C) = some pub.root := by rw [hP.2.2.1]; exact hP.1
   exact ⟨hD, hP, ha, hsid, htr, hrest (shaped_of hD) hroot⟩

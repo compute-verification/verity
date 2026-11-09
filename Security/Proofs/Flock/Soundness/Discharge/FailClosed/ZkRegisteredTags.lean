@@ -1,12 +1,34 @@
-import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered
+module
+
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
+import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
 /-!
 # The tags of a statement `verify --zk --registered F` accepts
 
 `ZkReg.AcceptsZKR` runs `checkRegistered` on every table's statement, and `Registered.check` with the verifier's own
-reads accepts only a statement over a shared-row public file (`ZkReg.check_tables`). At a record that carries a draw,
-each table's statement is drawn from the population the statement check loads (`pubZ I`), and drawing keeps its tables
+reads accepts only a statement over a shared-row public file (`ZkReg.check_tables`). At a record that carries a sample,
+each table's statement is sampled from the population the statement check loads (`pubZ I`), and sampling keeps its tables
 (`Layout.drawn_spec`), so `pubZ I` is a shared-row file (`tables_of_acceptsZKR`). The statement check passes a shared-row
 file only at `hiddenOutputs && registered` and `hm96-sha512/v1` leaves (`Checks.tables`, `ProvedScope.sharedRowsOk`):
 
@@ -14,6 +36,8 @@ file only at `hiddenOutputs && registered` and `hm96-sha512/v1` leaves (`Checks.
 * `hidden_of_acceptsZKR`, `tagsOkZHJ_of_acceptsZKR`: at one that passes `ScopeZR`, the statement has hidden outputs, and
   the hidden-output chain's tags `TagsOkZHJ` hold.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.FailClosed
 
@@ -24,7 +48,7 @@ open FlockSoundness.Discharge.ZkHidden (TagsOkZHJ)
 variable {I : Inputs} {own : Array Registered.Port} {t : Exec.Transcript} {d : Lean.Json}
 
 /-- **An accepted `--zk --registered` statement's population is a shared-row file**: at a transcript whose record
-carries a draw and that `AcceptsZKR` accepts, under a statement check that passes (with or without `--registered`), the
+carries a sample and that `AcceptsZKR` accepts, under a statement check that passes (with or without `--registered`), the
 public file the check loads has tables. -/
 theorem tables_of_acceptsZKR {reg : Bool} (hck : Checks (zkTags I) true I reg) (hd : recordDraw t.record = some d)
     (h : AcceptsZKR I own t) : ∃ tb, (pubZ I).tables = some tb := by
@@ -46,10 +70,22 @@ theorem tables_of_acceptsZKR {reg : Bool} (hck : Checks (zkTags I) true I reg) (
       obtain ⟨hsz, hst⟩ := ZkHidden.setupOf_tableJH hh hd hs
       have h0 : 0 < sts.size := by rw [hsz]; exact Composed.nTab_pos I
       have s := Hidden.setupHidden_spec' (hst 0 h0)
-      have hc0 := s.parse
-      rw [ZkHidden.parseH_tagsAt hty, hck.parseH hh'] at hc0
+      have hc0 : HmOut.loadPublic (zkTags I) sts[0].c I.publicFile = .ok (pubZ I) := by
+        cases hf : (circC (zkTags I) I).tmpl with
+        | none =>
+          have hp := hck.parseH hh' hf
+          have h1 := s.parseF ((tagsAt_isTmpl _ _ _).trans (HmOut.parse_isTmpl hp))
+          rw [ZkHidden.parseH_tagsAt hty, hp] at h1
+          rw [← Except.ok.inj h1]
+          exact hck.loadH hh'
+        | some tu =>
+          obtain ⟨-, -, hn, -⟩ := hck.templated hf
+          have h1 := s.parse
+          rw [show tagsAt (zkTags I) I.count 0 = zkTags I by simp [tagsAt, hn], hck.parseC hh'] at h1
+          rw [← Except.ok.inj h1]
+          exact hck.loadHC hh'
       obtain ⟨pop, hpop, -, hdr⟩ := s.pub
-      rw [ZkHidden.loadPublicH_tagsAt, ← Except.ok.inj hc0, hck.loadH hh'] at hpop
+      rw [ZkHidden.loadPublicH_tagsAt, hc0] at hpop
       obtain rfl := Except.ok.inj hpop
       exact ⟨{ sts[0].c with outPorts := #[] }, _, 0, h0, hdr _ rfl⟩
   obtain ⟨c', d', i, hi, hdr⟩ := key

@@ -1,9 +1,45 @@
-import Proofs.Flock.Claims.Prob
+module
+
+public import Definitions.Core.Interaction
+public import Proofs.Flock.Claims.Prob
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # `E^rep`: its reruns and its amplification
 
-`E^rep` replays the judged run and, if it accepted, makes `m` waits, each over `K` fresh coin draws and stopping at `k`
+`E^rep` replays the judged run and, if it accepted, makes `m` waits, each over `K` fresh coin samples and stopping at `k`
 accepted reruns; it returns the first assembled candidate that `check` accepts.
 
 * **Worst case** (`ERep_runs_le`): at most `1 + m·K` reruns, on every prover, tape and coin (the first half of
@@ -17,12 +53,14 @@ accepted reruns; it returns the first assembled candidate that `check` accepts.
   `f_ω ≤ 2·rate`, and any other has `ε_ω < a_ω/rate`.
 -/
 
+@[expose] public section
+
 namespace Claims
 
 /-! ## Rerun programs -/
 
 /-- Running a bound program: its result is the continuation's on the first part's result, and its reruns add. -/
-theorem RP.eval_bind {R α β : Type} (H : Msg → Msg) (run : R → Trace) (p : RP R α) (f : α → RP R β) :
+theorem RP.eval_bind {R α β : Type} (H : Msg → Msg) (run : R → Transcript) (p : RP R α) (f : α → RP R β) :
     ((p.bind f).eval H run).1 = ((f (p.eval H run).1).eval H run).1 ∧
       ((p.bind f).eval H run).2.2 = (p.eval H run).2.2 + ((f (p.eval H run).1).eval H run).2.2 := by
   induction p with
@@ -35,8 +73,8 @@ theorem RP.eval_bind {R α β : Type} (H : Msg → Msg) (run : R → Trace) (p :
     refine ⟨(ih _).1, ?_⟩
     rw [(ih _).2]; ring
 
-/-- A wait reruns the prover at most once per coin draw it holds. -/
-theorem waitAcc_runs_le {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) :
+/-- A wait reruns the prover at most once per coin sample it holds. -/
+theorem waitAcc_runs_le {R : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) :
     ∀ (rs : List R) (acc : List Seen), ((waitAcc k rs acc).eval H run).2.2 ≤ rs.length := by
   intro rs
   induction rs with
@@ -49,8 +87,8 @@ theorem waitAcc_runs_le {R : Type} (H : Msg → Msg) (run : R → Trace) (k : �
     · simp only [RP.eval, List.length_cons]
       exact Nat.add_le_add_right (ih _) 1
 
-/-- The waits rerun the prover at most once per coin draw they hold. -/
-theorem firstWait_runs_le {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (opens : Seen → List Op)
+/-- The waits rerun the prover at most once per coin sample they hold. -/
+theorem firstWait_runs_le {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) :
     ∀ rss : List (List R), ((firstWait k opens assemble check rss).eval H run).2.2 ≤ (rss.map List.length).sum := by
   intro rss
@@ -66,13 +104,13 @@ theorem firstWait_runs_le {R W Op : Type} (H : Msg → Msg) (run : R → Trace) 
       · exact ih
     · exact ih
 
-/-- What one wait over the coin draws `rs` yields: some candidate that `check` accepts. -/
-def WaitOk {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (opens : Seen → List Op)
+/-- What one wait over the coin samples `rs` yields: some candidate that `check` accepts. -/
+def WaitOk {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) (rs : List R) : Prop :=
   ∃ w, assemble (((waitAcc k rs []).eval H run).1.flatMap opens) = some w ∧ check w = true
 
 /-- The waits return only candidates `check` accepts. -/
-theorem firstWait_some {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (opens : Seen → List Op)
+theorem firstWait_some {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) :
     ∀ (rss : List (List R)) (w : W), ((firstWait k opens assemble check rss).eval H run).1 = some w →
       check w = true := by
@@ -91,7 +129,7 @@ theorem firstWait_some {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (k 
     · exact ih w h
 
 /-- The waits return nothing only if every wait failed. -/
-theorem firstWait_none {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (opens : Seen → List Op)
+theorem firstWait_none {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) :
     ∀ rss : List (List R), ((firstWait k opens assemble check rss).eval H run).1 = none →
       ∀ rs ∈ rss, ¬ WaitOk H run k opens assemble check rs := by
@@ -135,7 +173,7 @@ theorem ERep_runs_le (H : Msg → Msg) (V : Verifier Coin) (m k K : Msg → ℕ)
 noncomputable def accPr (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) : ℝ :=
   Claims.Pr fun r : Fin (V.k x) → Coin => (run H P V x ω r).out = .acc
 
-/-- `f_ω`: the probability that one of `E^rep`'s waits at tape `ω`, over `K` fresh coin draws, fails. -/
+/-- `f_ω`: the probability that one of `E^rep`'s waits at tape `ω`, over `K` fresh coin samples, fails. -/
 noncomputable def waitFail (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (k K : ℕ) (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool) : ℝ :=
   Claims.Pr fun ρ : Fin K → Fin (V.k x) → Coin =>
@@ -151,7 +189,7 @@ theorem ERep_bad_le (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (m k K : M
   simp only [← Pr_pi]
   rw [← Pr_indep]
   refine Pr_mono fun s ⟨hacc, hbad⟩ => ⟨hacc, fun i hok => hbad ?_⟩
-  simp only [Extractor.eval, ERep, RP.eval, Trace.seen, hacc, ↓reduceIte] at hbad ⊢
+  simp only [Extractor.eval, ERep, RP.eval, Transcript.seen, hacc, ↓reduceIte] at hbad ⊢
   generalize hres : ((firstWait (k x) opens (assemble x) (check x)
     ((List.finRange (m x)).map fun i => (List.finRange (K x)).map (s.2.2 i))).eval H (run H P V x s.1)).1 = res
     at hbad ⊢

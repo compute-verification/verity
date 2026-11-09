@@ -1,9 +1,10 @@
 """The memory challenger (`memory_challenger`): the coin tree's commit and openings, the signed session record, the
 verdict that fails closed, the whole block hashed under `sha512/row/v2`, a late round that ends the session with no retry,
-and the session log that refuses a used id.  Every clock is injected."""
+no garbage collection inside the rounds, and the session log that refuses a used id.  Every clock is injected."""
 from __future__ import annotations
 
 import dataclasses
+import gc
 import hashlib
 import os
 import tempfile
@@ -11,6 +12,7 @@ import tempfile
 import pytest
 
 import pous_test_signer as ts
+from pous_fakes import Clock
 from verity.ml.commitments import rowleaf
 from verity.ml.crypto import lms
 from verity.core.protocols.pous import memory_challenger as mc
@@ -31,22 +33,12 @@ def expected(i: int) -> bytes:
     return hashlib.sha512(rowleaf.sha512_row_v2_prefix(8 * BLOCK_BYTES) + block(i)).digest()
 
 
-class Clock:
-    """Time advances only when a responder spends it."""
-
-    def __init__(self) -> None:
-        self.now = 1_000_000
-
-    def __call__(self) -> int:
-        return self.now
-
-
 def coins(session: bytes = SESSION) -> mc.CoinTree:
     return mc.CoinTree.draw(SOURCE, session, BLOCKS, K, key=KEY, salts=SALTS)
 
 
 def session(respond=None, *, signer=None, clock=None, spend=lambda j: 20_000):
-    clock = clock or Clock()
+    clock = clock or Clock(1_000_000)
     signer = signer or ts.TestSigner(b"challenger key", height=2)
     c = mc.MemoryChallenger(coins(), signer, log=ts.session_log(), limit_ns=LIMIT, block_bytes=BLOCK_BYTES, binding=ROOT,
                             clock=clock)
@@ -158,7 +150,7 @@ def test_receipt_time_is_read_before_hashing(monkeypatch):
         return real(data)
 
     c = mc.MemoryChallenger(coins(), ts.TestSigner(b"k", height=1), log=ts.session_log(), limit_ns=LIMIT,
-                            block_bytes=BLOCK_BYTES, binding=ROOT, clock=Seen())
+                            block_bytes=BLOCK_BYTES, binding=ROOT, clock=Seen(1_000_000))
     i = c.challenge()
     monkeypatch.setattr(mc, "block_digest", digest)
     events.clear()
@@ -177,7 +169,7 @@ def test_a_rounds_digest_is_the_blocks_sha512_row_v2_digest_in_a_92_byte_record(
     assert mc.RECORD_SCHEMA == "pous/round-record/v2"
     assert all(len(r.value()) == 92 and r.value()[-64:] == expected(r.index) for r in signed.rounds)
     plain = mc.MemoryChallenger(coins(), signer, log=ts.session_log(), limit_ns=LIMIT, block_bytes=BLOCK_BYTES,
-                                binding=ROOT, clock=Clock())
+                                binding=ROOT, clock=Clock(1_000_000))
     while not plain.done:
         i = plain.challenge()
         plain.receive(block(i))
@@ -199,6 +191,18 @@ def test_a_late_round_ends_the_session_with_no_retry():
     assert judge(*on_time).accepted
 
 
+def test_no_collection_runs_inside_the_rounds() -> None:
+    seen: list[bool] = []
+    c, signed, signer = session(respond=lambda i: (seen.append(gc.isenabled()), block(i))[1])
+    assert len(seen) == K and not any(seen) and gc.isenabled() and judge(c, signed, signer).accepted
+    gc.disable()
+    try:
+        session()
+        assert not gc.isenabled()
+    finally:
+        gc.enable()
+
+
 def test_a_clock_that_runs_backwards_ends_the_session_late_as_the_verdict_judges_it():
     c, signed, signer = session(spend=lambda j: -1 if j == 2 else 20_000)
     assert signed.ended == mc.LATE and len(signed.rounds) == 3 and signed.rounds[-1].elapsed_ns == -1
@@ -216,7 +220,7 @@ def test_openings_must_match_the_revealed_indices():
 def test_refusals():
     def open_(**kw):
         return mc.MemoryChallenger(coins(), ts.TestSigner(b"k", height=1), log=ts.session_log(), limit_ns=LIMIT,
-                                   block_bytes=BLOCK_BYTES, clock=Clock(), **kw)
+                                   block_bytes=BLOCK_BYTES, clock=Clock(1_000_000), **kw)
 
     with pytest.raises(ValueError, match="coarser than 1000 ns"):
         open_(binding=ROOT, resolution_ns=10_000)
@@ -236,7 +240,7 @@ def test_refusals():
     with pytest.raises(lms.StateError, match="all 2\\^1 leaves are used"):
         signer.sign(SESSION, b"c")
     with pytest.raises(TypeError, match="log"):
-        mc.MemoryChallenger(coins(), signer, limit_ns=LIMIT, block_bytes=BLOCK_BYTES, binding=ROOT, clock=Clock())
+        mc.MemoryChallenger(coins(), signer, limit_ns=LIMIT, block_bytes=BLOCK_BYTES, binding=ROOT, clock=Clock(1_000_000))
 
 
 def test_a_session_id_is_used_once_and_on_disk_before_the_first_challenge(tmp_path, monkeypatch):
@@ -258,7 +262,7 @@ def test_a_session_id_is_used_once_and_on_disk_before_the_first_challenge(tmp_pa
 
     def open_(log: mc.SessionLog, session: bytes = SESSION) -> mc.MemoryChallenger:
         return mc.MemoryChallenger(coins(session), signer, log=log, limit_ns=LIMIT, block_bytes=BLOCK_BYTES,
-                                   binding=ROOT, clock=Seen())
+                                   binding=ROOT, clock=Seen(1_000_000))
 
     events.clear()
     c = open_(log)
@@ -302,10 +306,39 @@ def test_a_session_log_that_is_missing_unreadable_or_made_twice_is_refused(tmp_p
     assert not path.exists()
 
 
+def test_a_salt_log_holds_one_salt_an_audit_and_fails_closed(tmp_path):
+    """A salt is logged once for its audit, fsynced, and read back by every opening; a second for the audit is refused
+    and the first kept. A log made twice, missing, or whose lines are not whole entries of distinct audits refuses."""
+    path = tmp_path / "salts"
+    mc.SaltLog.create(path)
+    with pytest.raises(mc.SessionLogError, match="never made again"):
+        mc.SaltLog.create(path)
+    audit, commitment, salt = bytes(range(64)), bytes(range(64, 128)), bytes(range(24))
+    log = mc.SaltLog(path)
+    assert log.get(audit) is None
+    log.record(audit, commitment, salt)
+    for again in (log, mc.SaltLog(path)):
+        assert again.get(audit) == (commitment, salt)
+        with pytest.raises(mc.SessionLogError, match="draws one salt an audit, and a retry never redraws it"):
+            again.record(audit, commitment, bytes(24))
+    entry = f"{audit.hex()} {commitment.hex()} {salt.hex()}"
+    assert path.read_text() == f"{mc.SALT_LOG}\n{entry}\n"
+    with pytest.raises(ValueError, match="a salt 24"):
+        log.record(bytes(64), commitment, salt[:23])
+    for text in ("", f"{mc.SALT_LOG}", f"{mc.SESSION_LOG}\n", f"{mc.SALT_LOG}\n{entry}", f"{mc.SALT_LOG}\n{entry[:-2]}\n",
+                 f"{mc.SALT_LOG}\n{entry}\n{entry}\n", f"{mc.SALT_LOG}\n{entry.upper()}\n"):
+        bad = tmp_path / "bad"
+        bad.write_text(text)
+        with pytest.raises(mc.SessionLogError, match="unreadable"):
+            mc.SaltLog(bad)
+    with pytest.raises(mc.SessionLogError, match="missing"):
+        mc.SaltLog(tmp_path / "none")
+
+
 def test_the_test_signer_leaves_nothing_outside_basetemp(tmp_path_factory, monkeypatch):
     """`pous_test_signer`'s leaf states and session logs are made under the suite's basetemp (`DIR`, the conftest's), which
     the check removes when the suite ends, or in a directory the caller passes, and never in `$TMPDIR`, where nothing
-    removes them (`pous-session-log-*` and `pous-test-signer-*` held 82% of vy-nebius-2's /workspace inodes, 19 Oct);
+    removes them (`pous-session-log-*` and `pous-test-signer-*` held 82% of a GPU node's /workspace inodes);
     with neither, they refuse."""
     tmp = tmp_path_factory.mktemp("tmpdir")
     monkeypatch.setattr(tempfile, "tempdir", str(tmp))
@@ -314,9 +347,9 @@ def test_the_test_signer_leaves_nothing_outside_basetemp(tmp_path_factory, monke
     signer.sign(SESSION, b"a")
     log.claim(SESSION)
     assert list(tmp.iterdir()) == []
-    assert all(p.resolve().is_relative_to(basetemp) for p in (signer.state.path, log.path))
+    assert all(p.resolve().is_relative_to(basetemp) for p in (signer.state, log.path))
     own = tmp_path_factory.mktemp("own")
-    assert ts.session_log(own).path.parent.parent == ts.TestSigner(b"k", 1, own).state.path.parent.parent == own
+    assert ts.session_log(own).path.parent.parent == ts.TestSigner(b"k", 1, own).state.parent.parent == own
     monkeypatch.setattr(ts, "DIR", None)
     for make in (lambda: ts.TestSigner(b"k", height=1), ts.session_log):
         with pytest.raises(RuntimeError, match="in a directory the caller owns"):
@@ -355,7 +388,7 @@ def deployed_signer(tmp_path) -> mc.LmsSigner:
     I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()[:lms.DEPLOYED.N]
     key = lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))  # type: ignore[arg-type]
     lms.LeafState.create(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H)
-    return mc.LmsSigner(key, lms.LeafState(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H))
+    return mc.LmsSigner(key, tmp_path / "state")
 
 
 def test_an_lms_signed_session_is_accepted_under_the_deployed_scheme(tmp_path):

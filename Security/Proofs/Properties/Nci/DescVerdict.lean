@@ -1,13 +1,35 @@
-import Proofs.Properties.Nci
-import Properties.NciDesc.Verdict
+module
+
+public import Proofs.Properties.Nci
+public import Properties.Nci.Desc.Verdict
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Properties.Nci.Agrees
 
 /-!
 # What a verdict of the description-sized check carries, from `DescAgrees`
 
-Each statement of `Properties.NciDesc.Verdict` is its `Properties.Nci` counterpart carried to every expansion by
+Each statement of `Properties.Nci.Desc.Verdict` is its `Properties.Nci` counterpart carried to every expansion by
 `DescAgrees` (`onExpansions_of`): `descReports_of` and `descWitnesses_of` from `Reports` and `Witnesses`, and the four
 thread bounds from `Throttles` and its forms, which `Proofs.Nci.DescVerdict` (package `security_proofs`) supplies.
+`DescReports` and `DescWitnesses` are the guarantees, from `SecurityProofs.DescAgrees` (`Proofs.Properties.Nci.Agrees`).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs
 
@@ -29,6 +51,14 @@ theorem descReports_of (h : Properties.DescAgrees) : Properties.DescReports :=
 
 theorem descWitnesses_of (h : Properties.DescAgrees) : Properties.DescWitnesses :=
   fun _ _ hev => onExpansions_of h Witnesses hev
+
+/-- **The description-sized check's verdict is the definition's.** -/
+theorem DescReports : Properties.DescReports :=
+  descReports_of DescAgrees
+
+/-- **A verdict of compliance of the description-sized check witnesses the policy.** -/
+theorem DescWitnesses : Properties.DescWitnesses :=
+  descWitnesses_of DescAgrees
 
 theorem descThrottles_of (h : Properties.DescAgrees) (hT : Properties.Throttles) : Properties.DescThrottles :=
   fun _ _ hev => onExpansions_of h hT hev

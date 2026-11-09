@@ -1,29 +1,33 @@
-import Proofs.Flock.Recursive.AuditC3
-import Proofs.Flock.Recursive.ForkInnerC
-import Proofs.Flock.C3.Fork.Sound
-import Proofs.Flock.C3.Fork.Extract
-import Proofs.Flock.Recursive.ValueBridge
+module
+
+public import Proofs.Flock.Recursive.AuditC3
+public import Proofs.Flock.Recursive.ForkInnerC
+public import Proofs.Flock.C3.Fork.Sound
+public import Proofs.Flock.C3.Fork.Extract
+public import Proofs.Flock.Recursive.ValueBridge
 
 /-!
 # Recursion: gap 2 at the word the prover's runs open (the knowledge form)
 
-`RecursiveAuditC3`'s hidden statement is the word the transported prover's own runs open at R's level 0 against R's
-cap at each draw (`Flock.Guarantees.regStmt`), not a registrant's (`note:41519fce`). No registrant's openings are taken,
+`RecursiveAuditHolo`'s hidden statement is the word the transported prover's own runs open at R's level 0 against R's
+cap at each sample (`Flock.Guarantees.regStmt`), not a registrant's. No registrant's openings are taken,
 so a run that opens R's level 0 off a word (`RegClash`) is no collision by itself. It is one against another of the
-prover's runs at the same draw, the one whose opening defines the word at that position (`regWord`): two runs at one
-draw that open one position of R's level 0 to different rows against one cap conflict at R's stream's level-0 cap
+prover's runs at the same sample, the one whose opening defines the word at that position (`regWord`): two runs at one
+sample that open one position of R's level 0 to different rows against one cap conflict at R's stream's level-0 cap
 (`ClashCL`'s `op₀L` conflict at `OutHL.reg`), which `clashPickHL` reads (`ClashRunHL`), and two independent runs at a
-draw are the inner fork at round 0 (`forkG pick 0`, `StrictCR.twoRuns`).
+sample are the inner fork at round 0 (`forkG pick 0`, `StrictCR.twoRuns`).
 
 * `holo_runs_knowledge`: piece (a)'s runs (`holo_runs_sound`) with the clash split: two runs that clash against each
   other (`ClashRunHL`), a run that opens R's level 0 off the statement's word (`RegClash`), or the bound.
 * `zk_sessions_recursive_fork_reg`: `zk_sessions_recursive_fork_innerC` at `regStmt` and
   `clashPickHL`, with candidate 3's runs (`holo_runs_knowledge` at `holoAt st hp`, from the class checks) in place of
   `InnerSoundForkOn`. Its proof is the extraction: `zk_sessions_recursive_fork_innerC`'s, with
-  `innerAtLeavesL_of_forkOn`'s argument at each draw reading `holo_runs_knowledge`, where a leaf strategy's run that
-  `RegClash`es at `regWord` is a run of the transported prover at that draw, as is the run `regWord` reads at the
+  `innerAtLeavesL_of_forkOn`'s argument at each sample reading `holo_runs_knowledge`, where a leaf strategy's run that
+  `RegClash`es at `regWord` is a run of the transported prover at that sample, as is the run `regWord` reads at the
   position (`RunOpensReg`), so the two are an `InnerForkRec` at round 0.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 
@@ -79,7 +83,7 @@ variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {n : ℕ} {L : La
 
 /-- **Gap 2 at the word the prover's runs open** (the extraction, `C3/Fork/Extract.lean`).
 `zk_sessions_recursive_fork_innerC` at candidate 3's inner protocol, at a statement whose class checks pass, with the hidden statement the word the
-prover's runs open at R's level 0 against `cap` at each draw (`regStmt`) and the pick `clashPickHL`, which reads only
+prover's runs open at R's level 0 against `cap` at each sample (`regStmt`) and the pick `clashPickHL`, which reads only
 clashes of two runs: a registrant fork, a round fork, a session fork, an inner fork of `σ`'s own runs, or the bound
 with candidate 3's error. -/
 theorem zk_sessions_recursive_fork_reg {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
@@ -156,7 +160,7 @@ theorem zk_sessions_recursive_fork_regV {nT r : ℕ} (T : Fin nT → Type) (CT :
 /-- **`zk_sessions_recursive_fork_regV` at the typing `τv`**: everything at `τv`'s protocol
 (`holoInnerAtτ`, `regStmtτ`, `clashPickHL` at `holoAtτ`), the salts' level a free parameter `lv` (the audit reads it
 at `(holoAt st hp).rsch.sch.level₀`, which no typing changes), the held top's collision `TopColl` off the bridge as in
-`zk_sessions_recursive_fork_regV`, and the error `holoAt st hp`'s own (`innerAtLeavesL_regτ`). `RecursiveAuditC3`
+`zk_sessions_recursive_fork_regV`, and the error `holoAt st hp`'s own (`innerAtLeavesL_regτ`). `RecursiveAuditHolo`
 reads it at the registered typing `hp.τ`, which `_hbr`'s `τv` is wherever check 5 accepts the inner shape. -/
 theorem zk_sessions_recursive_fork_regVτ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] {st : Flock.Stmt} (hp : HoloParams) (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog))

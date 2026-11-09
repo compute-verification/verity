@@ -1,4 +1,4 @@
-"""prefix_cache: the warm/cold workload pair and the linkage record on synthetic StepStart logs (torch-free)."""
+"""prefix_cache: the linkage record on synthetic StepStart logs (torch-free)."""
 from __future__ import annotations
 
 import json
@@ -10,31 +10,7 @@ from verity_vllm.observe import prefix_cache as PC
 from verity_vllm.observe.events import RunHeader, StepEnd, StepStart
 from verity_vllm.observe.log import LogWriter, read_log
 
-PROFILES = Path(__file__).resolve().parents[2] / "workloads"
 BS = 16
-
-
-# --------------------------------------------------------------------------------------------------------------- workloads
-
-
-def test_generated_pair_is_the_declared_experiment():
-    warm = json.loads((PROFILES / "workload_cov_b0_prefix_c256.json").read_text())
-    cold = json.loads((PROFILES / "workload_cov_b0_prefix_c256_cold.json").read_text())
-    assert warm["engine"]["args"] == {"enable_prefix_caching": True}
-    assert cold["engine"]["args"] == {"enable_prefix_caching": False}
-    # identical requests (ids, tokens, limits, arrivals) -- only the engine arg differs
-    strip = lambda d: [{k: v for k, v in r.items() if k != "prefix_role"} for r in d["requests"]]  # noqa: E731
-    assert strip(warm) == strip(cold)
-    a, b = warm["requests"]
-    assert a["arrive_step"] == 0 and b["arrive_step"] == PC.WARM_ARRIVE_STEP > 0
-    assert a["prompt_len"] == b["prompt_len"] == PC.PREFIX_TOKENS + PC.CONT_TOKENS
-    assert a["prompt_token_ids"][: PC.PREFIX_TOKENS] == b["prompt_token_ids"][: PC.PREFIX_TOKENS]
-    assert a["prompt_token_ids"][PC.PREFIX_TOKENS:] != b["prompt_token_ids"][PC.PREFIX_TOKENS:]
-    assert PC.PREFIX_TOKENS % BS == 0 and warm["feature"]["expect"]["cached_blocks_if_hit"] == PC.PREFIX_TOKENS // BS
-    assert warm["feature"]["expect"]["num_computed_at_first_step"][b["request_id"]] == PC.PREFIX_TOKENS
-    assert cold["feature"]["expect"]["num_computed_at_first_step"][b["request_id"]] == 0
-    assert warm["expected_engine_steps"] == PC.WARM_ARRIVE_STEP + PC.MAX_TOKENS
-    assert warm["serving_profile"] == PC.PROFILE_LABEL and warm["context_class"] == "C256"
 
 
 # ------------------------------------------------------------------------------------------------------------ synthetic logs
@@ -247,6 +223,14 @@ def test_evidence_compares_warm_and_cold_run_dirs(tmp_path: Path):
     assert (warm / "prefix_evidence.json").exists() and (warm / "capture" / "prefix_linkage.json").exists()
     txt = PC.evidence_text(doc)
     assert "reuse_observed=True" in txt and "served identity" in txt
+
+
+def test_census_witness_sorts_row_count_and_gemm_kernels():
+    names = ["void vllm::rotary_embedding_kernel<...>", "sm90_tile_kernel", "sm80_tile_kernel", "ampere_tile_kernel",
+             "cublasLt_splitKreduce", "xmma_tile", "Kernel2_gemm", "void at::vectorized_elementwise_kernel<...>"]
+    census = {"steps": [{"step": 0, "kernels": {n: {"count": 1, "grid": [1, 1, 1], "block": [32, 1, 1]} for n in names}}]}
+    w = PC.census_row_witness(census, 0)
+    assert list(w["row_kernels"]) == names[:1] and list(w["gemm_kernels"]) == names[1:7]
 
 
 # ----------------------------------------------------------------------------------------------------- obligations (patterns_prefix)

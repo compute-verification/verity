@@ -30,9 +30,10 @@ from pathlib import Path
 from typing import Any
 
 from verity_bench import jobs, served_table
+from verity_bench.served_table import ms_cell
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.presets import expand_sweep, resolve_spec
-from verity_bench.vllm.runner import _summary
+from verity_bench.vllm.runner import summarize
 
 SCHEMA = "verity-bench/bandwidth-breakdown/v1"
 SPEC = "llama31-8b-fp8-1gpu-bandwidth-ablation"
@@ -115,13 +116,13 @@ def attribution(row: Mapping[str, Any]) -> dict[str, Any]:
         values["prefill steps"].append(sum(diff("eager", part) for part in set(audit["eager"]) | set(plain["eager"])))
         spanned = sum(values[name][-1] for name in names[:-1])
         values["outside every span"].append(tpot[AUDIT_OFF] - tpot[PLAIN_OFF] - spanned)
-    total = _summary(values["total"])
+    total = summarize(values["total"])
     rows = []
     for name in ["top-up contention", *names]:
-        summary = _summary(values[name])
+        summary = summarize(values[name])
         rows.append({"row": name, "ms_per_token": summary,
                      "share": summary["mean"] / total["mean"] if total["mean"] else None})
-    return {"credited": _summary(values["credited"]), "total": total, "rows": rows,
+    return {"credited": summarize(values["credited"]), "total": total, "rows": rows,
             "sum": sum(row["ms_per_token"]["mean"] for row in rows)}
 
 
@@ -173,13 +174,13 @@ def from_results(paths: Sequence[Path]) -> dict[str, Any]:
     return {"schema": SCHEMA, "spec": None, "points": points, "skipped": []}
 
 
-def collect(store: Any, *, pull: bool, spec: str = SPEC) -> dict[str, Any]:
+def collect(store: Any, *, spec: str = SPEC) -> dict[str, Any]:
     """The breakdown of the newest passing run of each point of `spec` that times every arm (`served_table`'s rule)."""
 
     skipped: list[dict[str, Any]] = []
     points = []
     for sweep_point in expand_sweep(resolve_spec(spec).sweep.id):
-        found = served_table._newest(store, spec, sweep_point.id, ARMS, pull, skipped)
+        found = served_table.newest_passing(store, spec, sweep_point.id, ARMS, skipped)
         if found is None:
             skipped.append({"spec": spec, "point": sweep_point.id, "run": None, "art": None, "why": "no passing run"})
             continue
@@ -190,18 +191,15 @@ def collect(store: Any, *, pull: bool, spec: str = SPEC) -> dict[str, Any]:
 
 def build(*, store: Any = None, root: Path | None = None, local_only: bool = False,
           added: Callable[[str], int] | None = None, log: Callable[[str], None] | None = None) -> dict[str, Any]:
-    """`collect` after pulling the remote's attempts started since the spec was added, unless `local_only`."""
+    """`collect` after pulling the remote's labels and its attempts started since the spec was added, unless
+    `local_only`."""
 
     root = root or jobs.repository_root()
     completion = jobs.StoreCompletion(store, root=root, local_only=local_only, log=log)
     if not local_only:
+        completion.pull_labels()
         completion.pull_since((added or (lambda spec: served_table.spec_added(root, spec)))(SPEC))
-    return collect(completion.store, pull=not local_only)
-
-
-def _ms(summary: Mapping[str, Any]) -> str:
-    ci = summary.get("ci95")
-    return f"{summary['mean']:.3f}" if ci is None else f"{summary['mean']:.3f} ± {(ci[1] - ci[0]) / 2:.3f}"
+    return collect(completion.store)
 
 
 def _opt(value: float | None, form: str) -> str:
@@ -212,7 +210,7 @@ def render(doc: Mapping[str, Any]) -> str:
     lines = [
         "# Where the bandwidth audit's time goes",
         "",
-        "Llama-3.1-8B FP8 on one RTX PRO 6000, memory accounting's encoded stack in vLLM. Each row is ms an output "
+        "Llama-3.1-8B FP8 on one RTX PRO 6000, the bandwidth audit's encoded stack in vLLM. Each row is ms an output "
         f"token, the mean over the point's paired reps ± its 95% half-width (Student t). `{AUDIT_SPANS}` over "
         f"`{PLAIN_SPANS}` is split into rows that sum to it: the top-up's contention from the arms with the top-up off, "
         "every other row a part of the spans arms with the top-up off. The credited lines' difference (spans off) is "
@@ -224,13 +222,13 @@ def render(doc: Mapping[str, Any]) -> str:
                  else f"result {source.get('result')}")
         lines += ["", f"## {entry['point']} ({where}, {source.get('reps')} reps)", "",
                   "| row | ms an output token | share |", "|---|---:|---:|",
-                  f"| `{AUDIT}` − `{PLAIN}` (credited lines, spans off) | {_ms(entry['credited'])} | |",
-                  f"| **`{AUDIT_SPANS}` − `{PLAIN_SPANS}`** | **{_ms(entry['total'])}** | 100% |"]
+                  f"| `{AUDIT}` − `{PLAIN}` (credited lines, spans off) | {ms_cell(entry['credited'])} | |",
+                  f"| **`{AUDIT_SPANS}` − `{PLAIN_SPANS}`** | **{ms_cell(entry['total'])}** | 100% |"]
         for row in entry["rows"]:
             name, part = row["row"], row["row"].removeprefix("decode ")
             label = f"{name}: {DECODE_ROWS[part]}" if part in DECODE_ROWS else name
             share = "—" if row["share"] is None else f"{row['share']:.0%}"
-            lines.append(f"| {label} | {_ms(row['ms_per_token'])} | {share} |")
+            lines.append(f"| {label} | {ms_cell(row['ms_per_token'])} | {share} |")
         lines.append(f"| sum of the rows | {entry['sum']:.3f} | |")
         arms = list(entry["arms"])
         for kind, title in (("graph", "decode steps (vLLM's CUDA graphs)"), ("eager", "prefill and mixed steps (eager)")):

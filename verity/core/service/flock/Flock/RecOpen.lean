@@ -10,7 +10,11 @@ order. The builder is `rec_open._steps` over `rec_open._Forms`, operation for op
 the consistency term is `rec_residuals.residual_forms` at `cons_structure(LANES)`, the climb SHA-512 of the row from the
 IV, then of each level's ordered pair. What its rows force is proved in the soundness package (`FlockVBridge`).
 -/
-import Flock.HmNets
+module
+
+public import Flock.HmNets
+
+@[expose] public section
 
 namespace Flock
 namespace RecOpen

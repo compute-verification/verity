@@ -1,14 +1,18 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
-import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 
 /-!
 # TT_OUT at W1 is TT_OUT at the cost model `W1.w1Priced`
 
 `W1.w1Priced` makes no oracle call, so it meets `CostModel.Queries` (`w1Priced_queries`), and each TT_OUT form at W1
 (`Definitions.Pouw.Assumptions.PearlC.TTOutW1`) is the abstract form at `CM := W1.w1Priced dv salt` (`ttOutW1_iff`,
-`ttOutTileW1_iff`). The `_of_w1` lemmas give the six named forms the γ readers' reductions take, so each reader at W1
+`ttOutTileW1_iff`). The `_of_w1` lemmas give the six named forms the g readers' reductions take, so each reader at W1
 is its reduction at that cost model.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.TTOutW1
 
@@ -24,13 +28,13 @@ theorem w1Priced_queries (dv : W1.W1Device) (salt : S → List ℕ) :
 
 variable [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
 
-theorem ttOutW1_iff (dv : W1.W1Device) (salt : S → List ℕ) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ : ℝ)
-    (ε : ℕ → ℕ → ℝ) : TTOutW1 dv salt P D γ₀ ε ↔ TTOut (W1.w1Priced dv salt) P D γ₀ ε :=
+theorem ttOutW1_iff (dv : W1.W1Device) (salt : S → List ℕ) (P : Protocol Q R S) (D : Layout → Prop) (g₀ : ℝ)
+    (δ : ℕ → ℕ → ℝ) : TTOutW1 dv salt P D g₀ δ ↔ TTOut (W1.w1Priced dv salt) P D g₀ δ :=
   ⟨fun h => ⟨w1Priced_queries dv salt, h⟩, fun h => And.right h⟩
 
 theorem ttOutTileW1_iff (dv : W1.W1Device) (salt : S → List ℕ) (P : Protocol Q R S) (TR : TileRules Q R S)
-    (D : Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) :
-    TTOutTileW1 dv salt P TR D γ₀ ε ↔ TTOutTile (W1.w1Priced dv salt) P TR D γ₀ ε :=
+    (D : Layout → Prop) (g₀ : ℝ) (δ : ℕ → ℕ → ℝ) :
+    TTOutTileW1 dv salt P TR D g₀ δ ↔ TTOutTile (W1.w1Priced dv salt) P TR D g₀ δ :=
   ⟨fun h => ⟨w1Priced_queries dv salt, h⟩, fun h => And.right h⟩
 
 theorem ttOutPearlCDev_of_w1 {dv : W1.W1Device} {salt : S → List ℕ} {d : PearlCDevice} {sem : PearlCSem Q R S}

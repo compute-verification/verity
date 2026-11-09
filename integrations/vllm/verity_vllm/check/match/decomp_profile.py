@@ -4,13 +4,13 @@ when `X09_PROFILE_OUT` names it."""
 from __future__ import annotations
 
 import collections
-import os
 import sys
 import time
 
+from verity_vllm import settings
 from verity_vllm.check.match import program_compare as C
 
-# [R18 x09, F-r18-x09-1] PHASE ACCOUNTING of the per-request leg.  `X09_PROFILE_OUT=<path>` writes one JSON sidecar beside the document
+# PHASE ACCOUNTING of the per-request leg.  `X09_PROFILE_OUT=<path>` writes one JSON sidecar beside the document
 # (never into it: the X-09 document's bytes are the record's) with, per request, wall seconds and counters for every phase of the leg --
 # projection build, shape, component load, compare_steps (sequence criterion), and the DAG diagnostic (live_cone A / P, dag_hashes A / P,
 # multiset diff) -- plus the sizes that drive them (instances, live-cone sizes, operand runs expanded, per-run fallbacks).  Inert unset.
@@ -18,14 +18,14 @@ from verity_vllm.check.match import program_compare as C
 # DAG path's cost can be measured on a PASS record; the verdict fields are computed exactly as before (`canonical_equal` = the same
 # expression), the extra `dag_multiset*` fields are then present where the record would have omitted them.
 PROFILE_ENV, FORCE_DAG_ENV = "X09_PROFILE_OUT", "X09_FORCE_DAG"
-_profile_counters = collections.Counter()   # process-local: per-run fallback / expansion counts (compare.Prog hooks below), per leg
+_profile_counters = collections.Counter()   # process-local: per-run fallback / expansion counts (compare.RootView hooks below), per leg
 
 
 def _profile_on() -> bool:
-    return bool(os.environ.get(PROFILE_ENV, "").strip())
+    return bool((settings.get(PROFILE_ENV) or "").strip())
 
 
-def _fast_stats():
+def _memo_stats():
     m = sys.modules.get("verity_vllm.check.match.global_match_fast")
     return getattr(m, "stats", None) if m is not None else None
 
@@ -38,14 +38,14 @@ class _Phase:
 
     def __enter__(self):
         self.t0 = time.time()
-        st = _fast_stats()
+        st = _memo_stats()
         self.s0 = dict(st) if st is not None else None
         self.c0 = dict(_profile_counters)
         return self
 
     def __exit__(self, *exc):
         d = {"seconds": round(time.time() - self.t0, 3)}
-        st = _fast_stats()
+        st = _memo_stats()
         if st is not None and self.s0 is not None:
             delta = {k: int(v - self.s0.get(k, 0)) for k, v in st.items() if v - self.s0.get(k, 0)}
             if delta:
@@ -58,10 +58,10 @@ class _Phase:
 
 
 def _install_profile_counters() -> None:
-    """Count the record's per-run fallbacks / progression expansions inside compare.Prog while profiling (content-neutral wrappers)."""
-    if getattr(C.Prog, "_x09_prof_installed", False):
+    """Count the record's per-run fallbacks / progression expansions inside compare.RootView while profiling (content-neutral wrappers)."""
+    if getattr(C.RootView, "_x09_prof_installed", False):
         return
-    orig_per_run, orig_srcP, orig_src = C.Prog._per_run, C.Prog._srcP, C.Prog._src
+    orig_per_run, orig_srcP, orig_src = C.RootView._per_run, C.RootView._srcP, C.RootView._src
 
     def _per_run(self, p, unfold):
         _profile_counters["per_run_progressions"] += 1
@@ -76,8 +76,8 @@ def _install_profile_counters() -> None:
         _profile_counters["src_calls"] += 1
         return orig_src(self, run, unfold)
 
-    C.Prog._per_run, C.Prog._srcP, C.Prog._src = _per_run, _srcP, _src
-    C.Prog._x09_prof_installed = True
+    C.RootView._per_run, C.RootView._srcP, C.RootView._src = _per_run, _srcP, _src
+    C.RootView._x09_prof_installed = True
 
 
 class _NoPhase:

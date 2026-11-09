@@ -1,5 +1,42 @@
-import Definitions.Claims
-import Flock.With.SimSetup
+module
+
+public import Batteries.Data.ByteArray
+public import Definitions.Core.Interaction
+public import Flock.With.SimSetup
+public import Mathlib.Control.Lawful
+public import Mathlib.NumberTheory.LucasLehmer
+import Flock.With.SimVerify
+import Flock.With.SimZk
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The verifier over `OC`: every SHA-512 call an oracle query
@@ -11,10 +48,12 @@ shipped (`Hashes.ofSha512`'s). Evaluated against `H : Msg → Msg`, a run of `ve
 of them (`verifyOC_eval`, `verifyOC_log`, `verifyOC_log_length`, and their `Zk` copies). So too the statement's setup:
 a run of `Stmt.setupTablesWith Hashes.oc` has the verdict of setup at `hOf H`, and makes `Stmt.setupCalls (hOf H)`
 queries (`setupOC_eval`, `setupOC_log`, `setupOC_log_length`). All of it is one simulation of `Flock.With.Sim` (`ocLog`)
-between `OCV` and the logging monad `LogV`, at #2105's `verifyWithM_sim` and at `setupTablesWith_sim` (`Flock.With.SimSetup`).
+between `OCV` and the logging monad `LogV`, at `verifyWithM_sim` and at `setupTablesWith_sim` (`Flock.With.SimSetup`).
 
 `hOf H` is `H` on byte arrays: `ByteArray` and `Msg = List UInt8` are the same bytes (`ofMsg_toMsg`).
 -/
+
+@[expose] public section
 
 namespace Claims
 

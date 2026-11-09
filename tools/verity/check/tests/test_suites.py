@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import re
 import shutil
@@ -50,6 +51,32 @@ def test_a_tree_is_discovered_and_keyed_from_gits_view_of_it(tmp_path, monkeypat
     assert S.object_ids(S.worktree(), ["pkg", "uv.lock"]) == before
     (tmp_path / "pkg" / "tests" / "test_a.py").write_text("def test_a():\n    assert True\n")     # uncommitted, and it counts
     assert S.object_ids(S.worktree(), ["pkg"])["pkg"] != before["pkg"]
+
+
+def test_a_clone_another_step_has_not_checked_out_yet_is_left_out_of_the_tree(tmp_path, monkeypatch):
+    (tmp_path / "a.py").write_text("a = 1\n")
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    before = S.object_ids(S.worktree(), ["a.py", "clone"])
+    (tmp_path / "clone").mkdir()
+    _git(tmp_path / "clone", "init", "-q")                     # a clone in flight: no commit checked out yet
+    (tmp_path / "a.py").write_text("a = 2\n")
+    after = S.object_ids(S.worktree(), ["a.py", "clone"])
+    assert after["clone"] == "absent" and after["a.py"] != before["a.py"], "the rest of the tree is still read"
+
+
+def test_any_other_error_of_git_add_is_raised_with_its_message(tmp_path, monkeypatch):
+    (tmp_path / "a.py").write_text("a = 1\n")
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    (tmp_path / ".git" / "objects").chmod(0o500)
+    try:
+        if os.access(tmp_path / ".git" / "objects", os.W_OK):
+            pytest.skip("this user writes through read-only modes (root)")
+        with pytest.raises(RuntimeError, match=r"git add -A.*\n.*"):
+            S.worktree()
+    finally:
+        (tmp_path / ".git" / "objects").chmod(0o700)
 
 
 def test_a_tree_that_is_not_a_checkout_is_refused(tmp_path, monkeypatch, capsys):
@@ -134,6 +161,59 @@ def test_suites_refuse_a_python_that_imports_the_trees_packages_from_elsewhere(t
     assert S.main(["--list"]) == 0 and len(probed) == 1
 
 
+def test_a_fresh_trees_own_environment_installs_the_workspace_once_and_runs_again(tmp_path, monkeypatch, capsys):
+    """`uv run tools/verity/check/suites.py` on a freshly shipped tree installs only the runner's dependencies; the runner syncs the
+    workspace and runs again in place of refusing, once, and an environment it can't fill is still refused."""
+    (tmp_path / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg"]\n')
+    (tmp_path / "pkg" / "tests").mkdir(parents=True)
+    (tmp_path / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S, "foreign", lambda pkgs, env: "verity from nowhere (not importable)")
+    monkeypatch.setattr(S, "fresh", lambda env: True)
+    resynced = []
+    monkeypatch.setattr(S, "resync", resynced.append)
+    monkeypatch.setattr(sys, "argv", ["tools/verity/check/suites.py", "--fresh", "pkg"])
+    assert S.main() == 2 and resynced == [["tools/verity/check/suites.py", "--fresh", "pkg"]]
+    monkeypatch.setattr(sys, "argv", ["tools/verity/check/suites.py", "--synced", "--fresh", "pkg"])
+    assert S.main() == 2 and len(resynced) == 1
+    assert f"`{' '.join(S.SYNC)} && uv run tools/verity/check/suites.py` there" in capsys.readouterr().err
+    assert S.main(["--fresh", "pkg"]) == 2 and len(resynced) == 1
+
+
+def test_resync_installs_the_workspace_and_runs_the_command_again_marked_synced(tmp_path, monkeypatch):
+    S = _suites(monkeypatch, tmp_path)
+    synced, ran = [], []
+    monkeypatch.setattr(S.subprocess, "run", lambda cmd, cwd: synced.append((cmd, cwd)) or subprocess.CompletedProcess(cmd, 0))
+    monkeypatch.setattr(S.os, "execv", lambda exe, args: ran.append((exe, args)))
+    S.resync(["tools/verity/check/suites.py", "--fresh", "pkg"])
+    assert synced == [(S.SYNC, tmp_path)]
+    assert ran == [(sys.executable, [sys.executable, "tools/verity/check/suites.py", "--synced", "--fresh", "pkg"])]
+    monkeypatch.setattr(S.subprocess, "run", lambda cmd, cwd: subprocess.CompletedProcess(cmd, 1))
+    S.resync(["tools/verity/check/suites.py"])
+    assert len(ran) == 1
+
+
+def test_only_the_trees_own_environment_without_the_workspace_or_torch_is_fresh(tmp_path, monkeypatch):
+    """Probed as `foreign` probes, under the tests' PYTHONPATH: a launcher's shim of the root package doesn't make a fresh tree's
+    environment look installed (r20261109-053655-afb9: research's pyshim held a `verity`)."""
+    (tmp_path / "pyproject.toml").write_text('[tool.hatch.build.targets.wheel]\npackages = ["src/rootpkg"]\n')
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S.shutil, "which", lambda name: "/usr/bin/uv")
+    origins, probed = {"rootpkg": None, "torch": None}, []
+
+    def run(cmd, env, capture_output, text):
+        probed.append((cmd[4:], env))
+        return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(origins) + "\n")
+
+    monkeypatch.setattr(S.subprocess, "run", run)
+    assert not S.fresh({}) and probed == []
+    monkeypatch.setattr(sys, "prefix", str(tmp_path / ".venv"))
+    assert S.fresh({"PYTHONPATH": "x"}) and probed == [(["rootpkg", "torch"], {"PYTHONPATH": "x"})]
+    origins["torch"] = "/venv/lib/python3.12/site-packages/torch/__init__.py"
+    assert not S.fresh({})
+
+
 def test_a_declared_build_output_keys_the_suite(tmp_path, monkeypatch):
     """Git ignores build outputs, so a suite whose tests run or skip on one declares it (`[tool.verity.tests] artifacts`), and
     its pass is reused only for the same build."""
@@ -203,7 +283,8 @@ def test_jobs_default_to_no_more_test_processes_than_available_memory_holds(tmp_
 
 
 def test_jobs_default_to_no_more_test_processes_than_the_runs_own_memory_limit_holds(tmp_path, monkeypatch):
-    """r20261019-045749-398f: an `--on auto` agent-test's 16 GiB scope on a node with 1.5 TB available started 32 processes."""
+    """The run's own memory limit, not the node's available memory, bounds the default jobs: an `--on auto` agent-test's
+    16 GiB scope on a node with 1.5 TB available would otherwise start 32 processes."""
     S = _suites(monkeypatch, tmp_path)
     monkeypatch.setattr(S, "cpus", lambda: 32)
     meminfo = tmp_path / "meminfo"
@@ -216,7 +297,7 @@ def test_jobs_default_to_no_more_test_processes_than_the_runs_own_memory_limit_h
 
 
 def test_a_research_run_reservation_bounds_the_run_where_no_cgroup_caps_it(tmp_path, monkeypatch):
-    """INF-118: on cpu-2 a `research run --mem-gb 32` is a reservation, not a cgroup cap; the quick tier sized itself to the node."""
+    """On a node with no cgroup cap, a `research run --mem-gb 32` is a reservation, not a cgroup cap; the quick tier sized itself to the node."""
     S = _suites(monkeypatch, tmp_path)
     monkeypatch.setattr(S, "cgroup_mem_gb", lambda: None)
     monkeypatch.delenv(S.SLOT_MEM_ENV, raising=False)
@@ -387,8 +468,8 @@ def test_changed_selects_the_suites_a_change_touches_by_path_runner_or_lock(tmp_
 
 
 def test_changed_from_a_main_the_branch_is_behind_is_the_branchs_own_change(tmp_path, monkeypatch):
-    """`--changed origin/main` on a branch behind main diffed main's own progress too (20 Oct: ~50 suites in a run): the change is
-    measured from the merge-base."""
+    """`--changed origin/main` on a branch behind main would diff main's own progress too, and select dozens of suites no
+    one changed: the change is measured from the merge-base."""
     _workspace(tmp_path)
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-q", "-m", "base")
@@ -431,14 +512,15 @@ def _shipped(tmp_path: Path) -> tuple[Path, Path, str, str]:
 
 
 def test_changed_origin_main_in_a_shipped_tree_without_it_fetches_it_or_names_the_fix(tmp_path, monkeypatch, capsys):
-    """proofs, 25 Oct (NCILIVE, WIRES): the pre-mark `--changed origin/main` in a shipped tree with no origin/main exited 128 in
-    `git diff` and ran no suite, ~50 min each. It fetches main from the tree's origin (the machine's repository, or for a `--cwd
+    """The pre-mark `--changed origin/main` in a shipped tree with no origin/main would exit 128 in `git diff` and run no
+    suite. It fetches main from the tree's origin (the machine's repository, or for a `--cwd
     clone` the shipped tree, whose origin/main is a remote-tracking ref), takes a SHA as given, and otherwise names the fix."""
     bare, tree, main, head = _shipped(tmp_path)
     S = _suites(monkeypatch, tree)
-    with pytest.raises(S.Unresolved, match=r"nor could it be fetched from origin .*--changed \$\(git rev-parse origin/main\)"):
+    with pytest.raises(S.Unresolved, match=r"nor could it be fetched from origin .*--changed \$\(git fetch -q origin main && "
+                                           r"git merge-base HEAD FETCH_HEAD\)"):
         S.changed_base("origin/main")
-    assert S.main(["--list", "--changed", "origin/main"]) == 2 and "Pass main's SHA" in capsys.readouterr().err
+    assert S.main(["--list", "--changed", "origin/main"]) == 2 and "a fetched main" in capsys.readouterr().err
     assert S.changed_base(main) == S.changed_base(main[:12]) == main
     assert S.main(["--list", "--changed", main]) == 0
     assert f"the change from {main[:12]} touches 1: a" in capsys.readouterr().out
@@ -460,9 +542,54 @@ def test_changed_origin_main_in_a_shipped_tree_without_it_fetches_it_or_names_th
     assert S.changed_base(main) == main
 
 
+def test_the_changed_refusals_advice_run_in_a_stale_checkout_gets_past_it(tmp_path, monkeypatch, capsys):
+    """The refusal's own advice, run as it says (in the lane's checkout, whose origin/main is as old as its snapshot), names a
+    base the shipped tree holds, and the change from it is the branch's alone; that checkout's `git rev-parse origin/main`
+    names an older main, whose diff takes in main's progress since."""
+    github, work = tmp_path / "github.git", tmp_path / "work"
+    _git(tmp_path, "init", "-q", "--bare", str(github))
+    work.mkdir()
+    _workspace(work)
+
+    def commit(path: str, body: str, msg: str) -> str:
+        (work / path).write_text(body)
+        _git(work, "add", "-A")
+        _git(work, "commit", "-q", "-m", msg)
+        return _git(work, "rev-parse", "HEAD")
+
+    _git(work, "add", "-A")
+    _git(work, "commit", "-q", "-m", "main")
+    _git(work, "push", "-q", str(github), "HEAD:refs/heads/main")
+    lane = tmp_path / "lane"
+    _git(tmp_path, "clone", "-q", str(github), str(lane))                         # the snapshot: origin/main as of then
+    fork = commit("b/tests/test_b.py", "def test_b():\n    assert 1\n", "main moves b")
+    head = commit("a/tests/test_a.py", "def test_a():\n    assert 1\n", "the branch moves a")
+    _git(work, "push", "-q", str(github), f"{fork}:refs/heads/main", f"{head}:refs/heads/topic")
+    _git(lane, "fetch", "-q", "origin", "topic:topic")
+    _git(lane, "-c", "advice.detachedHead=false", "checkout", "-q", "topic")
+
+    bare = tmp_path / "verity.git"                                                # the machine's repository, as `_shipped`
+    _git(tmp_path, "init", "-q", "--bare", str(bare))
+    _git(work, "push", "-q", str(bare), f"{head}:refs/research/ship")
+    tree = tmp_path / "src" / head
+    _git(tmp_path, "clone", "-q", "--shared", "--no-checkout", str(bare), str(tree))
+    _git(tree, "-c", "advice.detachedHead=false", "checkout", "-q", "--detach", head)
+    S = _suites(monkeypatch, tree)
+    with pytest.raises(S.Unresolved) as refused:
+        S.changed_base("origin/main")
+    advice = re.search(r"`--changed (\$\(.+?\))`", str(refused.value))[1]
+    stale = _git(lane, "rev-parse", "origin/main")
+    base = subprocess.run(["bash", "-c", f"echo {advice}"], cwd=lane, capture_output=True, text=True, check=True).stdout.strip()
+    assert base == fork != stale
+    assert S.main(["--list", "--changed", base]) == 0 and "touches 1: a" in capsys.readouterr().out
+    assert S.main(["--list", "--changed", stale]) == 0
+    assert "touches 2: a, b" in capsys.readouterr().out, "the stale base takes in main's own change to b"
+
+
 def test_markdown_rekeys_and_selects_only_the_suites_that_list_markdown(tmp_path, monkeypatch):
-    """#1594's 13 `.md` files picked 35 suites. A directory keys without its `*.md` unless its suite lists a `.md`, whose guard
-    then lets it read Markdown (test_guard.py holds the others to reading none)."""
+    """A change to a few `.md` files must not pick every suite whose directory holds them. A directory keys without its
+    `*.md` unless its suite lists a `.md`, whose guard then lets it read Markdown (test_guard.py holds the others to reading
+    none)."""
     _workspace(tmp_path)
     (tmp_path / "a" / "README.md").write_text("prose\n")
     _git(tmp_path, "add", "-A")
@@ -492,7 +619,7 @@ def test_markdown_rekeys_and_selects_only_the_suites_that_list_markdown(tmp_path
 
 
 def test_a_nested_suite_leaves_the_key_of_the_suite_around_it_unless_that_one_declares_it(tmp_path, monkeypatch):
-    """benchmarks/pouw's key held exact_kit, a suite of its own under it (16 Oct), so every edit to the kit re-ran pouw's tests.
+    """benchmarks/pouw's key held exact_kit, a suite of its own under it, so every edit to the kit re-ran pouw's tests.
     A suite under another's directory is out of the outer one's key and `--changed` selection until the outer one declares it;
     the repository's own suite, whose tests read the whole tree, keeps it."""
     _workspace(tmp_path)
@@ -702,6 +829,7 @@ def _shipped_workspace(root: Path, *, absent: bool) -> None:
 
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copy(HERE / "settings.py", root / "tools" / "verity" / "check" / "settings.py")
     shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg"]\n')
     (root / "pkg" / "tests" / "fixtures").mkdir(parents=True)
@@ -777,6 +905,7 @@ def _per_test_workspace(root: Path) -> None:
 
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copy(HERE / "settings.py", root / "tools" / "verity" / "check" / "settings.py")
     shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg"]\n')
     (root / "pkg" / "tests").mkdir(parents=True)
@@ -809,6 +938,7 @@ def _env_workspace(root: Path, members: dict[str, str]) -> None:
 
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copy(HERE / "settings.py", root / "tools" / "verity" / "check" / "settings.py")
     shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / "pyproject.toml").write_text(f'[tool.uv.workspace]\nmembers = {list(members)!r}\n'.replace("'", '"'))
     for path, test in members.items():
@@ -821,9 +951,9 @@ def _env_workspace(root: Path, members: dict[str, str]) -> None:
 
 
 def test_the_tests_get_neither_the_runners_research_variables_nor_its_pycache_prefix(tmp_path):
-    """Inside a `research run`, the run's RESEARCH_* and the machine's PYTHONPYCACHEPREFIX reached the tests, which check's steps
-    never get: test_remote_cwd's inner run inherited the prefix and wrote no bytecode where it looked (r20261008-010104-2b69,
-    passing with the prefix unset in r20261008-010441-bb7b). A VERITY_ switch still reaches them."""
+    """Inside a `research run`, the tests get neither the run's RESEARCH_* nor the machine's PYTHONPYCACHEPREFIX, which check's
+    steps never get either: an inner run that inherits the prefix writes no bytecode where test_remote_cwd looks for it. A
+    VERITY_ switch still reaches them."""
     root = tmp_path / "tree"
     _env_workspace(root, {"pkg": "import os\n\ndef test_env():\n    assert os.environ.get('VERITY_SWITCH') == '1'\n"
                                  "    assert not [k for k in os.environ if k.startswith('RESEARCH_') or k == 'PYTHONPYCACHEPREFIX']\n"})
@@ -833,9 +963,9 @@ def test_the_tests_get_neither_the_runners_research_variables_nor_its_pycache_pr
 
 
 def test_inside_a_research_run_the_tests_get_its_custody_key_and_require_the_store(tmp_path):
-    """The tests lose RESEARCH_*, the machine's store among them, so a fixture fetch skipped as "the evidence store is not
-    reachable" here and passed under a bare pytest (r20261024-030225-1ea6). With the run's custody key staged they get it as
-    check's steps do, and the store is required; with none, neither."""
+    """The tests lose RESEARCH_*, the machine's store among them, so a fixture fetch would skip as "the evidence store is not
+    reachable" here and pass under a bare pytest. With the run's custody key staged they get it as check's steps do, and the
+    store is required; with none, neither."""
     root = tmp_path / "tree"
     run = tmp_path / "research" / "runs" / "r1"
     custody = tmp_path / "research" / "requests" / "r1" / "custody"
@@ -854,8 +984,46 @@ def test_inside_a_research_run_the_tests_get_its_custody_key_and_require_the_sto
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
 
 
+def test_inside_a_research_run_the_fixture_fetch_gets_its_custody_key_and_fetches_a_fixture_only_the_store_has(tmp_path):
+    """A run carries no store config, so the runner's own fetch read the public export alone, and a fixture registered since it
+    was made failed its suite before any test, though the tests reach the store with the run's custody key.  The fetch gets
+    that key too, and the fixture comes from the store."""
+    import json
+
+    from research.store import fixtures as F
+    from research.store.local import LocalStore, manifest_key, object_key
+    from research.store.remote import FsRemote
+
+    origin, remote = LocalStore(tmp_path / "origin"), FsRemote(tmp_path / "remote")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "big.proof").write_bytes(b"in the store alone\n")
+    art = origin.put_artifact(F.FIXTURE_KIND, {}, None, file=tmp_path / "src" / "big.proof")
+    for h, _ in origin.get_manifest(art).blobs():
+        remote.put(object_key(h), origin.object_path(h))
+    remote.put(manifest_key(art.split(":", 1)[1]), origin.manifest_path(art.split(":", 1)[1]))
+    root = tmp_path / "tree"
+    _env_workspace(root, {"pkg": "from pathlib import Path\n\ndef test_reads_it():\n    assert (Path(__file__).parent / 'fixtures' / "
+                                 "'big.proof').read_bytes() == b'in the store alone\\n'\n"})
+    (root / "fixtures").mkdir()
+    (root / "fixtures" / "artifacts.json").write_text(json.dumps({art: "pkg/tests/fixtures/big.proof"}))
+    (root / ".gitignore").write_text("pkg/tests/fixtures/big.proof\n")                  # as the root's lists each fetched entry
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "registered")
+    run, custody = tmp_path / "research" / "runs" / "r1", tmp_path / "research" / "requests" / "r1" / "custody"
+    run.mkdir(parents=True)
+    custody.mkdir(parents=True)
+    extra = {"RESEARCH_RUN_ID": "r1", "RESEARCH_RUN_DIR": str(run), "RESEARCH_STORE_CONFIG": "", "RESEARCH_PUBLIC_URL": "",
+             "HOME": str(tmp_path / "home")}
+    p = _run_suite(root, tmp_path, "--fresh", extra=extra)
+    assert p.returncode == 1 and "its fixtures could not be fetched: pkg/tests/fixtures/big.proof" in p.stdout, p.stdout + p.stderr
+    (custody / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "remote"}"\n')
+    (custody / "cred.json").write_text("{}")
+    p = _run_suite(root, tmp_path, "--fresh", extra=extra)
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+
+
 def test_each_test_process_gets_its_share_of_the_cpus_for_its_thread_pools(tmp_path, monkeypatch):
-    """Sized to the whole node, each xdist worker of ten lane runs ran 159-191 threads (24 Oct, load 522 on cpu-5's 192 cores):
+    """Sized to the whole node, each xdist worker of every lane run would run a thread per core, overloading the node:
     each test process's OpenMP, MKL, OpenBLAS and numexpr pools get the CPUs divided by --jobs, and a size the caller set stays."""
     S = _suites(monkeypatch, tmp_path)
     monkeypatch.setattr(S, "cpus", lambda: 192)
@@ -874,7 +1042,7 @@ def test_each_test_process_gets_its_share_of_the_cpus_for_its_thread_pools(tmp_p
 
 
 def test_a_pass_earned_on_one_machine_is_reused_on_another_and_names_its_run(tmp_path):
-    """Daniel's CI update (7 Oct): a suite's pass is reused on any machine while its inputs, the base image and the check code
+    """A suite's pass is reused on any machine while its inputs, the base image and the check code
     are as they were.  Machine a's passes travel as a verdict pack; on machine b a change to one suite's inputs runs that suite
     alone, and the other is listed as reused, citing the run that earned its pass."""
     root = tmp_path / "tree"
@@ -921,7 +1089,7 @@ def test_the_suites_on_the_lean_verifier_run_after_its_build_as_inside_check(tmp
     assert p.returncode == 0 and not log.exists(), p.stdout
     p = _run_suite(root, tmp_path, "--fresh", extra=extra)
     assert p.returncode == 0 and "passed  verity-flock" in p.stdout and "passed  other" in p.stdout, p.stdout
-    assert log.read_text() == f"{root / 'verity' / 'core' / 'service' / 'flock'} build\n"
+    assert log.read_text() == f"{root / 'verity/core/service/flock'} build\n"
 
     p = _run_suite(root, tmp_path, "--fresh", extra={**extra, "FAKE_LAKE_RC": "1"})
     assert p.returncode == 1 and "failed  verity-flock" in p.stdout and "`lake build` in verity/core/service/flock exited 1" in p.stdout
@@ -936,7 +1104,7 @@ def _reused(tmp_path: Path) -> list[str]:
 
 
 def test_a_killed_suite_is_reported_by_its_signal_and_what_it_left_in_its_group_is_killed(tmp_path):
-    """A pytest the OOM killer ends wrote no report and left its forkserver running (network-accounting, #1202's tier): the
+    """A pytest the OOM killer ends wrote no report and left its forkserver running: the
     suite's own process group takes what it left with it, and the signal and peak RSS are said."""
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
     _per_test_workspace(root)
@@ -959,8 +1127,8 @@ def test_a_killed_suite_is_reported_by_its_signal_and_what_it_left_in_its_group_
 
 
 def test_a_suite_past_its_bound_is_killed_and_fails_as_timed_out(tmp_path):
-    """45fe's test_suites.py waited 82 min on a FIFO nobody wrote until it was killed by hand (7 Oct). Here the test blocks the
-    same way, so the run ends only by its bound, whenever that fires: its group is killed, it fails timed out, and no pass is
+    """A test that waits on a FIFO nobody writes would hold its suite until it is killed by hand. Here the test blocks that
+    way, so the run ends only by its bound, whenever that fires: its group is killed, it fails timed out, and no pass is
     kept."""
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
     _per_test_workspace(root)
@@ -1053,6 +1221,23 @@ def test_a_moved_suite_reuses_its_tests_passes_and_its_own_until_a_byte_changes(
     assert p.returncode == 0 and "cached  pkg" not in p.stdout and "5 passed" in p.stdout, p.stdout
 
 
+def test_a_failure_on_a_full_disk_is_not_kept_so_it_is_not_nondeterministic(tmp_path):
+    """A test that failed only because the machine's disk was full (ENOSPC) failed for the machine, not its inputs: its run
+    keeps no failure, so the pass beside it isn't flagged nondeterministic."""
+    import json
+
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_sibling.py").write_text(
+        "import errno, os\n\ndef test_sibling():\n    if os.environ.get('PKG_BREAK'):\n"
+        "        raise OSError(errno.ENOSPC, 'No space left on device')\n")
+    assert _run_suite(root, tmp_path).returncode == 0
+    out = tmp_path / "suites.json"
+    p = _run_suite(root, tmp_path, "--fresh", "--json", str(out), extra={"PKG_BREAK": "1"})
+    assert p.returncode == 1 and "NONDETERMINISTIC" not in p.stdout, p.stdout
+    assert not json.loads(out.read_text())[0].get("nondeterministic")
+
+
 def test_a_fresh_run_that_fails_what_a_kept_pass_answers_for_says_so(tmp_path):
     """The nightly cold check's signal: a key that misses an input shows as a fresh failure a cached pass contradicts."""
     import json
@@ -1075,8 +1260,8 @@ def test_a_fresh_run_that_fails_what_a_kept_pass_answers_for_says_so(tmp_path):
 
 
 def test_each_failed_suite_is_written_beside_the_json_as_it_fails(tmp_path):
-    """12 Oct: check cc39's repository suite had failed by 20:25Z, but under `--keep-going` the check ran to 20:55Z, and drive
-    knew only then; `suites.failed.json`, rewritten as each suite fails, is what drive reads of a check still running."""
+    """Under `--keep-going` a check runs on for many minutes after a suite fails, and drive would know only at its end;
+    `suites.failed.json`, rewritten as each suite fails, is what drive reads of a check still running."""
     import json
 
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
@@ -1396,6 +1581,7 @@ def _traced_workspace(root: Path) -> None:
 
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copy(HERE / "settings.py", root / "tools" / "verity" / "check" / "settings.py")
     shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / ".gitignore").write_text("__pycache__/\n")
     (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg", "lib"]\n')
@@ -1457,6 +1643,7 @@ def test_a_read_through_a_process_wide_cache_counts_for_every_module_that_uses_t
     root, lib = tmp_path / "tree", tmp_path / "tree" / "lib"
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copy(HERE / "settings.py", root / "tools" / "verity" / "check" / "settings.py")
     shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / ".gitignore").write_text("__pycache__/\n")
     (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg", "lib"]\n')
@@ -1556,6 +1743,24 @@ def test_the_tracer_names_what_a_key_narrowed_to_the_tests_reads_must_hold(tmp_p
     assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, None)) == [("X", sys.executable)]
 
 
+def test_a_dir_fd_relative_open_is_not_read_as_a_file_in_the_current_directory(tmp_path, monkeypatch):
+    """`shutil.rmtree` opens each entry by its bare name relative to a directory descriptor, which the `open` audit event
+    doesn't carry: a bare name missing from the current directory is no read of it, and one present there still is."""
+    spec = importlib.util.spec_from_file_location("reads_under_test", HERE / "guard" / "child" / "verity_suite_reads.py")
+    R = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(R)
+    (tmp_path / "present.txt").write_text("")
+    for k, v in {"VERITY_SUITE_ROOT": str(tmp_path), "VERITY_SUITE_READS": str(tmp_path / "reads"),
+                 "VERITY_SUITE_ALLOW": '["lib"]'}.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.chdir(tmp_path)
+    r = R.Reads()
+    r.seen("open", ("removed_piece", None, 0), "pkg/tests/test_x.py")
+    assert not (tmp_path / "reads").exists()
+    r.seen("open", ("present.txt", None, 0), "pkg/tests/test_x.py")
+    assert (tmp_path / "reads").read_text().splitlines() == ["O\tpkg/tests/test_x.py\tpresent.txt", "F\tpkg/tests/test_x.py\tpresent.txt"]
+
+
 def test_a_declared_build_output_is_traced_by_the_repository_paths_it_is_given(tmp_path, monkeypatch):
     """A Lean executable the suite declares under `artifacts` reads what its arguments name, so the tests that start it keep
     traced per-test keys: its run is the files it was given (a file with those beside it, a directory whole), outside the inputs
@@ -1598,8 +1803,8 @@ def _guard(monkeypatch):
 
 
 def test_a_passed_test_s_seconds_hold_its_setup_so_a_module_fixture_s_first_test_counts_as_heavy(monkeypatch):
-    """Ordering by call alone started `test_lean_witness`'s tests late behind 1,270-1,475 s of their `f1` setup per worker
-    (proofs, 12 Oct); the teardown is not counted, and a failed phase still drops the test."""
+    """Ordering by call alone started `test_lean_witness`'s tests late behind 1,270-1,475 s of their `f1` setup per worker;
+    the teardown is not counted, and a failed phase still drops the test."""
     from types import SimpleNamespace as R
 
     G = _guard(monkeypatch)
@@ -1689,6 +1894,32 @@ def test_a_parallel_suite_starts_the_test_its_kept_pass_says_is_longest(tmp_path
     assert "tests/test_z.py::test_zz" in first.values(), log.read_text()
 
 
+def test_a_run_of_some_files_starts_the_longest_test_it_collects(tmp_path):
+    """The guard gets more of the suite's longest kept tests than its `workers` (`HEAVY_CANDIDATES`), so a run of some of its
+    files that collects none of the `workers` longest still starts its own longest at the workers' heads, rather than two
+    back to back on one worker while the others sit idle."""
+    import json
+
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_z.py").write_text("".join(f"def test_{c}():\n    pass\n\n" for c in "abcd")
+                                     + "import os as _os, pytest as _pytest\n\n\n@_pytest.fixture(autouse=True)\n"
+                                     "def _order(request):\n    with open(_os.environ['ORDER_LOG'], 'a') as f:\n"
+                                     "        f.write(_os.environ.get('PYTEST_XDIST_WORKER', '-') + ' ' + request.node.nodeid + '\\n')\n")
+    kept = tmp_path / "cache" / "per-test" / "pkg"
+    kept.mkdir(parents=True)
+    (kept / "all--earlier.json").write_text(json.dumps({"when": "2026-10-25 00:00", "passed": {
+        "tests/test_heavy.py::test_heavy": 300.0, "tests/test_heavy.py::test_heavy_too": 200.0, "tests/test_z.py::test_d": 100.0}}))
+    log = tmp_path / "order.log"
+    p = _run_suite(root, tmp_path, "--jobs", "2", "--", "tests/test_z.py", extra={"ORDER_LOG": str(log)})
+    assert p.returncode == 0 and "on 2 workers" in p.stdout, p.stdout
+    first = {}
+    for line in log.read_text().splitlines():
+        worker, node = line.split(" ", 1)
+        first.setdefault(worker, node)
+    assert "tests/test_z.py::test_d" in first.values(), log.read_text()
+
+
 def test_a_change_under_a_name_git_quotes_selects_the_suite_that_owns_it(tmp_path, monkeypatch):
     """`git diff --name-only` quotes a name with bytes outside ASCII (`"a/\\303\\251.py"`), which is under no suite's inputs, so
     `--changed` (the quick tier `research queue ready` runs) skipped the suite owning such a file."""
@@ -1714,19 +1945,18 @@ def test_a_package_under_a_name_git_quotes_is_a_suite(tmp_path, monkeypatch):
 
 
 def test_a_parallel_suite_that_declares_worker_gb_runs_as_many_workers_as_mem_gb_holds(tmp_path, monkeypatch):
-    """16 Oct 13:53Z: check r20261016-133552-a7e9's pytest ran verity_ml_flock on 38 xdist workers of 15.6 GB each beside
-    circuit-check, and the OOM killer took its workers at the session's 600 GiB cap (CI-35)."""
+    """A suite whose workers each need `worker_gb` runs only as many as its memory holds, or the OOM killer takes them."""
     S = _suites(monkeypatch, tmp_path)
     heavy = S.Suite("flock", "f", (), (), parallel=True, worker_gb=16)
     assert S.wide_workers(heavy, 69, 350) == 21 and S.wide_workers(heavy, 8, 350) == 8 and S.wide_workers(heavy, 69, 10) == 1
     assert S.wide_workers(heavy, 69, None) == 69, "no --mem-gb: the lane's processes"
     assert S.wide_workers(S.Suite("light", "l", (), (), parallel=True), 69, 350) == 350 // S.TEST_PROCESS_GB, \
-        "no worker_gb: TEST_PROCESS_GB each (r20261016-140947-47fc: pous_check's undeclared workers reached 11 GB)"
+        "no worker_gb: TEST_PROCESS_GB each (pous_check's undeclared workers can reach 11 GB)"
 
 
 def test_parallel_suites_share_what_mem_gb_leaves_beside_the_one_process_suites(tmp_path, monkeypatch):
-    """17 Oct, cpu-2 (note:proofs/20261017T0625Z-friction-suites-mem-gb-concurrent): circuit_check's 53 workers and flock's 30
-    ran side by side, each sized to all of --mem-gb, and reached 800 GB together."""
+    """Two parallel suites side by side, each sized to all of --mem-gb, would together reach twice it (circuit_check's 53
+    workers and flock's 30 reached 800 GB)."""
     S = _suites(monkeypatch, tmp_path)
     assert S.wide_gb(480, 4) == 480 - 4 * S.TEST_PROCESS_GB and S.wide_gb(20, 4) == 0 and S.wide_gb(None, 4) is None
     flock = S.Suite("flock", "f", (), (), parallel=True, worker_gb=16)
@@ -1748,14 +1978,28 @@ def test_the_suites_in_one_process_get_the_fewest_slots_that_finish_them_with_th
 
 
 def test_the_suites_in_one_process_get_no_more_slots_than_the_memory_holds(tmp_path, monkeypatch):
-    """18 Oct: a 16 GiB agent-test job on 48 CPUs started 44 test processes, which only the parallel suites' workers were sized
-    against memory for, and the OOM killer took the whole scope."""
+    """A 16 GiB agent-test job on 48 CPUs would start 44 test processes if only the parallel suites' workers were sized
+    against memory, and the OOM killer took the whole scope."""
     S = _suites(monkeypatch, tmp_path)
     assert S.serial_slots([5.0] * 48, 0, 48, 16) == 1, "16 GiB holds one process at TEST_PROCESS_GB"
     assert S.serial_slots([5.0] * 48, 0, 48, 64) == 64 // S.TEST_PROCESS_GB
     assert S.serial_slots([100.0] * 40, 1, 32, 1000) == 31 and S.serial_slots([100.0] * 40, 1, 32, None) == 31
     assert S.serial_slots([100.0] * 40, 1, 32, 2) == 1, "even a job smaller than one process runs its suites, one at a time"
     assert S.serial_slots([], 3, 32, 16) == 0
+
+
+def test_the_suites_in_one_process_leave_the_parallel_suites_half_the_memory(tmp_path, monkeypatch):
+    """A parallel suite's workers are fixed when it starts, which is before the one-process suites finish: 16 serial lanes at
+    TEST_PROCESS_GB took 144 of a 150 GB check's GB for the whole run, and flock ran on one 16 GB worker. Half of 150 GB holds
+    8 serial lanes (72 GB), so flock gets 78 // 16 = 4 workers, and the two together still fit in --mem-gb."""
+    S = _suites(monkeypatch, tmp_path)
+    flock = S.Suite("flock", "f", (), (), parallel=True, worker_gb=16)
+    assert S.serial_slots([100.0] * 8 + [50.0] * 16, 4, 90) == 16
+    r = S.serial_slots([100.0] * 8 + [50.0] * 16, 4, 90, 150)
+    assert r == 8 and S.wide_gb(150, r) == 150 - 8 * S.TEST_PROCESS_GB
+    assert S.wide_workers(flock, 90 - r, S.wide_gb(150, r)) == 4 and S.wide_workers(flock, 74, S.wide_gb(150, r)) == 4
+    assert r * S.TEST_PROCESS_GB + 4 * 16 <= 150
+    assert S.serial_slots([5.0] * 48, 0, 48, 150) == 150 // S.TEST_PROCESS_GB, "with no parallel suite they may take all of it"
 
 
 def test_a_parallel_suite_runs_beside_the_others_on_the_slots_they_leave(tmp_path):
@@ -1775,8 +2019,8 @@ def test_a_parallel_suite_runs_beside_the_others_on_the_slots_they_leave(tmp_pat
 
 
 def test_mem_gb_defaults_to_the_check_slots_memory(tmp_path, monkeypatch):
-    """17 Oct 11:21Z, cpu-2: a quick tier in a 480 GB pool slot ran circuit_check's suite on 94 workers (784 GB), since only
-    `check` passed `--mem-gb`."""
+    """A quick tier in a 480 GB pool slot would run circuit_check's suite on a worker per CPU (784 GB) if only `check`
+    passed `--mem-gb`."""
     S = _suites(monkeypatch, tmp_path)
     monkeypatch.setenv(S.SLOT_MEM_ENV, "480")
     assert S.slot_mem_gb() == 480.0
@@ -1786,8 +2030,8 @@ def test_mem_gb_defaults_to_the_check_slots_memory(tmp_path, monkeypatch):
 
 
 def test_mem_gb_falls_back_to_the_jobs_cgroup_limit(tmp_path, monkeypatch):
-    """17 Oct 13:02Z, vy-nebius-1: two queued `suites.py verity-flock --fresh` runs, in no check slot, were OOM-killed in
-    their queue scopes."""
+    """A queued `suites.py verity-flock --fresh` run in no check slot sizes itself to its queue scope, which would OOM-kill
+    it otherwise."""
     S = _suites(monkeypatch, tmp_path)
     root = tmp_path / "fs"
     (root / "proc/self").mkdir(parents=True)
@@ -1802,8 +2046,8 @@ def test_mem_gb_falls_back_to_the_jobs_cgroup_limit(tmp_path, monkeypatch):
 
 
 def test_the_verifiers_lake_build_holds_the_trees_build_lock_so_two_runs_of_one_tree_build_in_turn(tmp_path, monkeypatch):
-    """CI-147: on a node every run of a commit shares its source tree, and a train's check and its touched-suites run built the
-    verifier's `.lake` there at once (21 Oct: 4430e936c3d8's link of flock-verify found its output gone).  `lake` runs under
+    """On a node every run of a commit shares its source tree, so two runs could build the verifier's `.lake` there at once.
+    `lake` runs under
     `.lake/verity-build.lock`, so a second build of the tree waits for the first."""
     mod = _suites(monkeypatch, tmp_path)
     lean = tmp_path / "verity" / "core" / "service" / "flock"
@@ -1819,3 +2063,56 @@ def test_the_verifiers_lake_build_holds_the_trees_build_lock_so_two_runs_of_one_
     log = tmp_path / "lean-build.log"
     assert mod.lean_build(log) is None
     assert log.read_text().strip() == "locked"
+
+
+def test_a_fetch_that_prints_no_report_names_its_error_and_keeps_its_own_log(tmp_path, monkeypatch, capsys):
+    """check's pytest and lean-suites steps fetch into one logs directory: each call's log stays its own, and a fetch that
+    crashed says why in the step's output."""
+    S = _suites(monkeypatch, tmp_path)
+    crash = subprocess.CompletedProcess([], 1, "", "research data fetch-fixtures: [Errno 2] No such file or directory: 'x/.tmp-a'\n")
+    monkeypatch.setattr(S.subprocess, "run", lambda *a, **k: crash)
+    first, second = tmp_path / "fetch-fixtures-1.log", tmp_path / "fetch-fixtures-2.log"
+    assert S.fetch_fixtures({"f/a.bin": "art:" + "0" * 64}, first) == {"f/a.bin"}
+    out = capsys.readouterr().out
+    assert f"fetch-fixtures failed (rc 1); log: {first}" in out and "[Errno 2] No such file or directory" in out
+    ok = subprocess.CompletedProcess([], 0, '{"entries": [], "fetch": {"blobs": {"fetched": 0, "bytes": 0}}}', "")
+    monkeypatch.setattr(S.subprocess, "run", lambda *a, **k: ok)
+    assert S.fetch_fixtures({"f/a.bin": "art:" + "0" * 64}, second) == set()
+    assert "Errno 2" in first.read_text() and "Errno 2" not in second.read_text()
+
+
+def test_a_failure_red_on_main_is_reported_failed_and_says_whether_it_failed_for_more_than_its_tests(tmp_path):
+    """End to end: `suites.py --changed MAIN` reports `pkg`, whose `test_sibling` fails on `main` too, as failed, exit 1: the
+    runner reports each suite's real verdict, and whether a failure may stay red is drive's policy. Its row says which tests
+    failed and that it failed for nothing besides them (`beyond_tests`), what an allowance of a test needs."""
+    import json
+    import shutil
+
+    root = tmp_path / "tree"
+    _per_test_workspace(root)
+    shutil.copy(HERE / "plan.py", root / "tools" / "verity" / "check" / "plan.py")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "plan")
+    main = _git(root, "rev-parse", "HEAD")
+    (root / "pkg" / "tests" / "test_shared.py").write_text("X = 1\n\ndef test_shared():\n    assert X\n")
+    _git(root, "commit", "-q", "-am", "the PR")
+    out = tmp_path / "out.json"
+    p = _run_suite(root, tmp_path, "--changed", main, "--json", str(out))
+    assert p.returncode == 1 and "known red" not in p.stdout, p.stdout + p.stderr
+    [row] = json.loads(out.read_text())
+    assert (row["status"], row["failed_tests"], row["beyond_tests"]) == ("failed", ["tests/test_sibling.py::test_sibling"], False)
+    [failed] = json.loads(out.with_name(f"{out.stem}.failed.json").read_text())
+    assert (failed["failed_tests"], failed["beyond_tests"]) == (["tests/test_sibling.py::test_sibling"], False)
+
+
+def test_a_report_a_dying_pytest_left_empty_or_cut_short_is_no_report(monkeypatch, tmp_path):
+    """A suite whose pytest dies in its session finish leaves its report empty or half-written; reading it must not raise,
+    which would take the invocation's other suites down before they report."""
+    S = _suites(monkeypatch, tmp_path)
+    report = tmp_path / "report.json"
+    assert S.read_report(report) is None
+    for text in ("", '{"reads": {', "[]", "null"):
+        report.write_text(text)
+        assert S.read_report(report) is None, text
+    report.write_text('{"reads": {}, "outside": {}}')
+    assert S.read_report(report) == {"reads": {}, "outside": {}}

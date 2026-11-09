@@ -14,14 +14,14 @@ from verity_vllm.program.frontend.correspond import CorrespondenceReport, corres
 from verity_vllm.program.frontend.provenance import DerivationRule, RuleApplication, registry_version  # noqa: F401
 
 try:
-    import torch as _torch  # noqa: F401
-except ImportError:  # pure-IR use (no torch): the analyses above are still available
+    import torch as _torch
+except ImportError:  # pure-circuit use (no torch): the analyses above are still available
     _torch = None
 else:
     from verity_vllm.program.frontend.errors import CODES, DeadGateWarning, FrontendError  # noqa: F401
     from verity_vllm.program.frontend.program_identity import check_identity  # noqa: F401
     from verity_vllm.program.frontend.schemas import Arr, Dep, Tup  # noqa: F401
     from verity_vllm.program.frontend.torch_frontend import (Bound, ExportReport, Function, Ops, Prim, Registered,  # noqa: F401
-                                                             batch, bind, definition_digest, export, export_report, function,
+                                                             batch, bind, export, export_report, function,
                                                              ops, scan)
     from verity_vllm.program.frontend.value_types import type_of  # noqa: F401

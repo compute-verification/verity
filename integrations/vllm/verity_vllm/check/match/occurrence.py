@@ -4,11 +4,11 @@ each request's instances with the shared ones of its engine steps merged in (`sh
 
 from __future__ import annotations
 
-SHARED = "*weight-only*"   # owner sentinel of a weight-only instance (F-r19-int-15); never a request id
+SHARED = "*weight-only*"   # owner sentinel of a weight-only instance; never a request id
 
 
 def is_weight_only(r: dict, weights_nodes: frozenset, shared_nodes: set, compact: bool) -> bool:
-    """[R19, F-r19-int-15] True when every node operand of fold instance `r` is a shared weight or an earlier weight-only instance (node id
+    """True when every node operand of fold instance `r` is a shared weight or an earlier weight-only instance (node id
     in `shared_nodes`) and there is at least one: the instance carries no request's data (gemma2's RMSNorm scale `1 + w`).  The rule
     `decompose` and GM-01 (global_match.check, G2) apply after the meta channel and before the row-count rule -- one definition."""
     if compact:
@@ -27,7 +27,7 @@ def is_weight_only(r: dict, weights_nodes: frozenset, shared_nodes: set, compact
 
 
 def shared_legs(per_req: dict, shared_idx: list, steps: dict) -> dict:
-    """[R19, F-r19-int-15] Each request's instance list with the weight-only instances of every engine step the request has rows in
+    """Each request's instance list with the weight-only instances of every engine step the request has rows in
     (StepStart / logits rows) merged in, in node order: the request's own derive computes that node inside its forward at that step.
     A request with no rows in the step does not see it.  Request order is preserved."""
     present: dict[int, set[str]] = {s: {r for r, _ in st.get("rows", [])} | {r for r, _ in st.get("logits_rows", [])} for s, st in steps.items()}
@@ -49,8 +49,8 @@ def attribute(meta: dict, st: dict) -> tuple[str | None, str]:
         return (st["rows"][row][0], "token") if row < n_tok else (None, "row-out-of-range")
     if rows == n_log:
         return (st["logits_rows"][row][0], "logits") if row < n_log else (None, "row-out-of-range")
-    # [R14 moe] fused-MoE expert instances (MoeExpertGemm / SiluMul / MoeExpertGemmW) run over the TOPK*tokens pair rows, pair-major
-    # p = t*TOPK + k (the Program's addressing, independent of the sorted block schedule): row p belongs to token p // TOPK.  The R13 MoE
+    # fused-MoE expert instances (MoeExpertGemm / SiluMul / MoeExpertGemmW) run over the TOPK*tokens pair rows, pair-major
+    # p = t*TOPK + k (the Program's addressing, independent of the sorted block schedule): row p belongs to token p // TOPK.  The MoE
     # X-09 rule; without it every MoE-block instance is "attributed to no request" (OLMoE b1: 110 208 of 165 950).
     if n_tok and rows > n_tok and rows % n_tok == 0:
         k = rows // n_tok

@@ -1,10 +1,44 @@
-import Proofs.Flock.Claims.ZK.Layout
-import Proofs.Flock.Claims.Sampling.Deployed
+module
+
+public import Proofs.Flock.Claims.ZK.Layout
+public import Proofs.Flock.Claims.Sampling.Deployed
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # Sampling's zero knowledge by sequential composition
 
-The masked sampled run is a first part whose messages the framing fixes (the registration and the draw), then `M`
+The masked sampled run is a first part whose messages the framing fixes (the registration and the sample), then `M`
 sessions back to back, each a complete run of one session protocol (Flock's masked record: its own `Hello`, coin tree
 and coins) at the statement the router puts it under, on a tape of its own. Its zero knowledge is the sessions' by
 sequential composition (`zkmalAt_layout` at `c = 0`): the first part costs nothing, since the router fixes its
@@ -16,7 +50,7 @@ messages from `(x, hist)` (`zkmalAt_public`), and `M` sessions cost `Σ_{j < M} 
 * `Framing.Routed`: the router puts each round in its part, and each session under the statement of its first
   history. `Framing.prover_flat`: then the prover sends the composed prover's messages and makes at least its calls
   (`Framing.honestSeq`, `HonestSeq`).
-* `Framing.SessionWit`: with no faulty unit, the openings a session reveals make a witness in the session's relation,
+* `Framing.SessionWit`: with no incorrect proof block, the openings a session reveals make a witness in the session's relation,
   at every history that starts it. `Seq.RelOnAt` is then a theorem (`Framing.relOnAt`), from `Rhon` and the reveal's
   facts (`Reference.found_opens`, `found_val`, `found_covers`).
 * `Framing.Shaped`: at every history that starts session `j`, the session protocol's rounds are the slot's, its
@@ -31,6 +65,8 @@ messages from `(x, hist)` (`zkmalAt_public`), and `M` sessions cost `Σ_{j < M} 
 The simulator is given the published leaf layer and doesn't read it: what the prover sends outside the sessions is a
 function of `(x, hist)`.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 
@@ -56,11 +92,11 @@ def StepZ.said : StepZ → Msg
 witness encoding (`Reference.refP`'s); the router by slot (`step`); and the parts' rounds: `k₀ x` before the sessions,
 `n x j` in session `j`. -/
 structure Framing where
-  parse : Msg → Option Stmt
-  partition : Stmt → Option Partition
-  commit : Commitment Bool
-  reads : Stmt → Msg → List ℕ
-  wit : Stmt → Msg → List (Opening Bool) → Claims.Flock.Wit
+  parse : Msg → Option AuditStatement
+  partition : AuditStatement → Option Partition
+  commit : CommitmentScheme Bool
+  reads : AuditStatement → Msg → List ℕ
+  wit : AuditStatement → Msg → List (Opening Bool) → Claims.Flock.Wit
   step : Msg → List (Msg × Msg) → StepZ
   k₀ : Msg → ℕ
   n : Msg → ℕ → ℕ
@@ -128,7 +164,7 @@ def Routed (M : ℕ) (x : Msg) : Prop :=
     ∀ j < M, ∀ hist : List (Msg × Msg), F.parts.start x j ≤ hist.length → hist.length < F.parts.start x (j + 1) →
       F.step x hist = .session j (F.step x (hist.take (F.parts.start x j))).stmt (hist.drop (F.parts.start x j))
 
-/-- **An honest unit's openings make a witness in its session's relation** `RF` at `x`: with no faulty unit, at every
+/-- **An honest unit's openings make a witness in its session's relation** `RF` at `x`: with no incorrect proof block, at every
 history that starts session `j < M`, openings that pass the commitment's check under the roots, are the committed
 values `Wit.val` reads, and cover every position the session reads under its statement that has a committed value,
 encode (`wit`) a witness in the statement's relation. `SessionWit`'s form at the masked router, at every history
@@ -152,7 +188,7 @@ def Shaped (kF : Msg → ℕ) (SF : Simulator) (εF γF : Msg → ℝ) (CB : ℕ
 
 /-- **The prover sends the composed prover's messages**, and makes at least its calls, at every history within `M`
 sessions, on the flat tape: the first part's prover, then session `j` at the history before it. -/
-theorem prover_flat (H : Msg → Msg) {TS : Type} (PS : Claims.Flock.Wit → Prover TS) (M : ℕ) {x : Msg} {s : Stmt}
+theorem prover_flat (H : Msg → Msg) {TS : Type} (PS : Claims.Flock.Wit → Prover TS) (M : ℕ) {x : Msg} {s : AuditStatement}
     (hs : F.parse x = some s) (hr : F.Routed M x) (w : Wit) (hist : List (Msg × Msg))
     (ω : (Unit × Unit) × (ℕ → TS)) (hh : hist.length < F.parts.start x M) :
     (((F.prover PS w).next x hist ω.2).eval H).1 = ((((F.lay H).prover F.sayP PS M w).next x hist ω).eval H).1 ∧
@@ -173,7 +209,7 @@ theorem prover_flat (H : Msg → Msg) {TS : Type} (PS : Claims.Flock.Wit → Pro
 /-- **`HonestSeq`**: the prover on the flat tape `flatten` reads sends the nested composed prover's messages
 (`iterProver` at the parts, the composition `zkmalAt_iterG` reads), and makes at least its calls. -/
 theorem honestSeq (H : Msg → Msg) {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
-    (PS : Claims.Flock.Wit → Prover (NB × ΩB)) (M : ℕ) {x : Msg} {s : Stmt} (hs : F.parse x = some s)
+    (PS : Claims.Flock.Wit → Prover (NB × ΩB)) (M : ℕ) {x : Msg} {s : AuditStatement} (hs : F.parse x = some s)
     (hr : F.Routed M x) (w : Wit) (hist : List (Msg × Msg)) (t : unitTape.at 0 NB ΩB M)
     (hh : hist.length < F.parts.start x M) :
     (((F.prover PS w).next x hist (Layout.flatten unitTape 0 NB ΩB M t).2).eval H).1 =
@@ -320,7 +356,7 @@ part, the record's reference prover on the masked tape sends the composed prover
 calls, at every history within its rounds. -/
 theorem deployZ_honestSeq (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (c : Code) (step : Msg → List (Msg × Msg) → StepZ) (k₀ : Msg → ℕ) (n : Msg → ℕ → ℕ) (M : ℕ)
-    {CoinF ColF TF : Type} (DF : Claims.Flock.ZkDeploy CoinF ColF TF) {x : Msg} {s : Stmt}
+    {CoinF ColF TF : Type} (DF : Claims.Flock.ZkDeploy CoinF ColF TF) {x : Msg} {s : AuditStatement}
     (hs : c.parse x = some s) (hV : c.V.k x = (framing c step k₀ n).parts.start x M)
     (hr : (framing c step k₀ n).Routed M x) (w : Wit) (hist : List (Msg × Msg))
     (t : unitTape.at 0 DF.Nonce DF.Rest M) (hh : hist.length < (deployZ rel c step k₀ n DF).V.k x) :

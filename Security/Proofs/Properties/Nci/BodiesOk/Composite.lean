@@ -1,4 +1,25 @@
-import Proofs.Properties.Nci.BodiesOk.Decode
+module
+
+public import Proofs.Properties.Nci.BodiesOk.Decode
+import Batteries.Tactic.OpenPrivate
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Properties.Nci.BodiesOk.Basic
 
 /-!
 # `composite`'s step
@@ -12,6 +33,8 @@ fuel.
 The decoder is a `do` block whose join points Lean inlines once a step applies them to the decoder state, so each step
 names them first (`st_get_bind`, `lift_lets`, `extract_lets`) and splits each `if` and `match` once.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program
@@ -412,11 +435,25 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
   · replace h := st_bind h; obtain ⟨a, s7, h1, -⟩ := h
     exact absurd h1 (by intro h; injection h)
   rename_i hcnt
+  replace h := st_bind h; obtain ⟨st, s7, h1, h⟩ := h
+  obtain ⟨rfl, rfl⟩ := st_get h1
+  generalize hwalk : EStateM.run _ _ = r at h
+  rcases r with ⟨_ | m, w⟩ | ⟨e, w⟩
+  all_goals dsimp only at h
+  rotate_left
+  · replace h := st_bind h; obtain ⟨a, s8, h1, -⟩ := h
+    exact absurd h1 (by intro h; injection h)
+  · replace h := st_bind h; obtain ⟨a, s8, h1, -⟩ := h
+    exact absurd h1 (by intro h; injection h)
+  replace h := st_bind h; obtain ⟨u, s8, h1, h⟩ := h
+  injection h1 with h1; injection h1 with hu h1; subst h1
   obtain ⟨rfl, rfl⟩ := st_pure h
   have hv := Walk.parsePartsIn_valid _ _ (earlier_ok _ _ _ _ hn5) _ _ _ hret
   have hsz : nodes.size = outs.size := by omega
   have hout : ∀ k < nodes.size, (nodes[k]!).out = outs[k]! := fun k hk => (hn5 k hk).2.2.1
-  refine ⟨hs5, pre_trans hp3 hp5, ⟨⟨fun h => absurd h (by simp), fun _ => ⟨rfl, ?_, rfl⟩⟩, ?_, ?_, ?_⟩⟩
+  refine ⟨inv_congr ?_ ?_ hs5, pre_trans hp3 hp5, ⟨⟨fun h => absurd h (by simp), fun _ => ⟨rfl, ?_, rfl⟩⟩, ?_, ?_, ?_⟩⟩
+  · rfl
+  · rfl
   · simpa using hcnt
   · intro k hk
     obtain ⟨h1, h2, -, h4⟩ := hn5 k hk

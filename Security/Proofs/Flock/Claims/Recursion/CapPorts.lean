@@ -1,5 +1,39 @@
-import Proofs.Flock.Claims.Recursion.RowsCover
-import Proofs.Flock.Claims.Recursion.SchedDense
+module
+
+public import Proofs.Flock.Claims.Recursion.LayoutBTops
+public import Proofs.Flock.Claims.Recursion.RowsCover
+public import Proofs.Flock.Claims.Recursion.SchedDense
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # RecCap's part has its port `top` (`CapPorts`), from the reader's check
@@ -12,6 +46,8 @@ have RecCap's port `top`, the one fact `heldB_layoutBTops` still takes at round 
 `capPorts`: `CapPorts` at every shape. `ksLin2_deployed_caps` is `ksLin2_deployed_rows` with it discharged, and
 with the schedule at the dense shape (`schedMatches_dense`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -41,7 +77,7 @@ theorem capPorts (shape : Claims.Recursion.Form → Prop) : CapPorts shape := by
 /-- **`KSLin2` at the deployment's dense statements, at `layoutBTops`, with the rows' and RecCap's ports discharged**:
 `ksLin2_deployed_rows` with `CapPorts` from `capPorts` and the schedule from `schedMatches_dense`. What stays at the
 dense form is the last round's pieces (`FinPieces`, which holds at `finOpen`: `finPieces_finOpen`), and `VstarShowsB`,
-`PartChecksB`, `PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. This bounds no number by
+`PartChecksBV`, `PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. This bounds no number by
 itself: those premises are open, and `VstarShowsB` with `HeldB` leaves no accepted run (`vstarShowsB_deployed_rejects`),
 so they hold only where no honest run is accepted. `ksLin2_deployed_staged` reads the staging off the run instead. -/
 theorem ksLin2_deployed_caps (b : Brings) (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
@@ -60,7 +96,7 @@ theorem ksLin2_deployed_caps (b : Brings) (fin : Msg → List (ℕ × List (Msg 
           (cmt : Msg → ℕ → Msg → Msg),
           (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
             decC shows cmt) ∧
-          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+          (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
             L shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
             L shape shows cmt s) ∧

@@ -1,4 +1,4 @@
-"""[R17 tp D90, rev F-r17-03] tp2_match `check` part 2 (provenance over the stored coll.rank<r>.step<s>.pt tensors) BINDS every stored
+"""tp2_match `check` part 2 (provenance over the stored coll.rank<r>.step<s>.pt tensors) BINDS every stored
 tensor to its recorder row by digest: sha256(part_k) == row.part_sha256 and sha256(out_k) == row.out_sha256 per (rank, step, k), FAIL by
 name; the record exports the recorder files' digests + the count of tensors digested.  Needs torch (skipped without)."""
 from __future__ import annotations

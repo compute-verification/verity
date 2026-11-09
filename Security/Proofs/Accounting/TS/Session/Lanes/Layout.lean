@@ -1,10 +1,12 @@
-import Proofs.Accounting.TS.Session.Lanes.Layer
-import PouwWindow.Lanes
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.Layer
+public import PouwWindow.Lanes
 
 /-!
 # A leaf's 33 statements' ports at the served tile
 
-`PouwWindow.Lanes` (INT-TIE's layout, held to `h1zy.statement_ports` by its difftest) states, at a leaf's tile and
+`PouwWindow.Lanes` (the statements' layout, held to `h1zy.statement_ports` by its difftest) states, at a leaf's tile and
 contraction, which port of each of the 33 statements holds each of the Definition's inputs and its output, at which
 bits of the port's row, and where the verifier opens that row (`Source`). At the served 32 × 32 leaf (`servedTile K`):
 
@@ -21,6 +23,8 @@ The leaf and the receipt are the ones the registrants' rows of `a`, `b`, `zy` an
 decode it alike (`Lanes.Partials`' `read_bits`). The known values' content is flock-verify's known-content and
 known-read checks' (`Lanes.KnownRead`).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Lanes
 
@@ -62,35 +66,5 @@ theorem lanePorts_b (K : ℕ) (l : Fin 32) (t : Fin 8) :
   refine List.mem_map.2 ⟨t.val, List.mem_range.2 t.isLt, ?_⟩
   try dsimp only
   rw [servedTile_colOf] <;> rfl
-
-/-- Lane `l`'s last five ports: the admit bits and its public inputs at known content, the leaf's record at `zy`'s
-row, its partials row at row `l` of `partials`, and its `ok` at `ok<l>`. -/
-theorem lanePorts_tail (K : ℕ) (l : ℕ) :
-    ∀ p ∈ ([⟨"admit", .known "admit", fieldsFrom 0 [("admit", 32)], false⟩,
-      ⟨"zy", .read "zy" 0, fieldsFrom 0 [("zy.z", 32 * 32 * 32), ("zy.y", 16 * 32 * 32)], false⟩,
-      ⟨"partials", .read "partials" l, fieldsFrom 0 [("partials", 32 * (servedTile K).nw)], false⟩,
-      ⟨"pub", .known s!"pub{l}", fieldsFrom 0 [("salt", digestBits), ("position", positionBits),
-        ("roots", 2 * digestBits), ("lane", laneBits)], false⟩,
-      okPort l] : List Port), p ∈ lanePorts (servedTile K) l := by
-  intro p hp
-  unfold lanePorts
-  exact List.mem_append_right _ hp
-
-/-- The combine's port `p<x>` is opened at row `x` of the registered `partials`. -/
-theorem combinePorts_p (K : ℕ) (x : Fin 32) :
-    (⟨s!"p{x.val}", .read "partials" x.val, fieldsFrom 0 [(s!"partials[{x.val}]", 32 * (servedTile K).nw)], false⟩ :
-      Port) ∈ combinePorts (servedTile K) := by
-  unfold combinePorts
-  apply List.mem_append_left
-  exact List.mem_map.2 ⟨x.val, List.mem_range.2 (by rw [servedTile_lanes]; exact x.isLt), rfl⟩
-
-/-- The combine's last two ports: the leaf's receipt at `receipt`'s row, and its `ok` at `ok32`. -/
-theorem combinePorts_tail (K : ℕ) :
-    ∀ p ∈ ([⟨"receipt", .read "receipt" 0, fieldsFrom 0 [("receipt", 32 * (servedTile K).nw)], false⟩, okPort 32] :
-      List Port), p ∈ combinePorts (servedTile K) := by
-  intro p hp
-  unfold combinePorts
-  rw [servedTile_lanes]
-  exact List.mem_append_right _ hp
 
 end Accounting.TS.Lanes

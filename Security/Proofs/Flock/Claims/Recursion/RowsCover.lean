@@ -1,5 +1,41 @@
-import Proofs.Flock.Claims.Recursion.LayoutBTops
+module
+
+public import Proofs.Flock.Claims.Recursion.LayoutBTops
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.Reps.RoundLinks
+import Proofs.Flock.C3.VStarList.Shape
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
 # Every absorbing stream round is a part's row (`RowsCover`), from the verifier's checks
@@ -15,6 +51,8 @@ by some part through a port under its `rec-c<k>` (`heldRows`). Two checks give i
 
 `rowsCover`: `RowsCover` at every shape. `ksLin2_deployed_rows` is `ksLin2_deployed_tops` with it discharged.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -42,6 +80,7 @@ theorem roundsListed_of_statements {i : RecVStar.Inner} {ss : Array VStar.Stmt}
   obtain ⟨t, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨A, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨C, -, h⟩ := FlockC3.VStarList.eok_bind h
+  obtain ⟨L, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨K0, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨u, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨u', -, h⟩ := FlockC3.VStarList.eok_bind h
@@ -70,7 +109,8 @@ circuit has RecCap's port `top` (`capPorted`). -/
 theorem readX_listed {x : Msg} {r : XR} (h : readX x = some r) :
     ∃ vs, RecVStar.statements r.shape = .ok vs ∧ r.w.parts.length = vs.size ∧ portsNamed r.w.parts vs = true ∧
       capPorted r.w.parts = true := by
-  unfold readX at h
+  replace h := readXPre_of_readX h
+  unfold readXPre at h
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
   obtain ⟨w, -, ri, -, sh, -, pa, -, dims, -, vs, hvs, h⟩ := h
   split_ifs at h with hl
@@ -166,7 +206,7 @@ theorem rowsCover (shape : Claims.Recursion.Form → Prop) : RowsCover shape := 
 /-- **`KSLin2` at the deployment's dense statements, at `layoutBTops`, with the rows' ports discharged**:
 `ksLin2_deployed_tops` with `RowsCover` from `rowsCover`. What stays at the dense form is the schedule (`SchedMatches`),
 RecCap's port (`CapPorts`), the last round's pieces (`FinPieces`, which holds at `finOpen`: `finPieces_finOpen`), and
-`VstarShowsB`, `PartChecksB`, `PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. This bounds no
+`VstarShowsB`, `PartChecksBV`, `PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. This bounds no
 number by itself: those premises are open.
 -/
 theorem ksLin2_deployed_rows (b : Brings) (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
@@ -185,7 +225,7 @@ theorem ksLin2_deployed_rows (b : Brings) (fin : Msg → List (ℕ × List (Msg 
           (cmt : Msg → ℕ → Msg → Msg),
           (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
             decC shows cmt) ∧
-          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+          (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
             L shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
             L shape shows cmt s) ∧

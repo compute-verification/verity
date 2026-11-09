@@ -1,4 +1,4 @@
-"""One-stage audit, run A2: A1 with the serving commit taken from serving itself. vllm-serving-commit commits #101's RoPE
+"""One-stage audit, run A2: A1 with the serving commit taken from serving itself. vllm-serving-commit commits the Llama-3.2-1B row's RoPE
 heads at serving time in the circuit prover's row format and hands over the registration, the verifier's public file,
 the prover's file and the unit index; nothing else changes.
 
@@ -11,7 +11,7 @@ the prover's file and the unit index; nothing else changes.
 * **The verifier's own copies.** It builds the population program and the partition itself, recomputes every served
   domain (`registration.window_domain`) from the record's program, partition and `window.run`, composes the bound circuit
   itself and holds the public file's pin and bindings to it. N is taken from the registration (the served index); the
-  verifier doesn't yet derive it from #101's program, and the audit record says so.
+  verifier doesn't yet derive it from the row's program, and the audit record says so.
 * **`--unbind`.** After checking serving's files as received (R1-R6, the pin, the bindings), the session runs on the
   verifier's own re-headered copies for the circuit prover's unbound statement (no `units.classes`, the unbound
   circuit's pin): the leaf layer, every `b || c` and output word, is byte for byte serving's, so the roots are
@@ -34,8 +34,9 @@ sys.path.insert(0, str(HERE))
 import a0  # noqa: E402
 import r2_population as R2  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity_numerical.bench.input_sets import InputSet  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity_flock.input_sets import InputSet  # noqa: E402
+from verity_flock import circuit as FC  # noqa: E402
+from verity.core.protocols.spot.one_stage import audit, draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 
 
 def unbound_copy(st: dict, header: dict, n: int, a, out: Path) -> tuple[dict, dict]:
@@ -57,8 +58,8 @@ def unbound_copy(st: dict, header: dict, n: int, a, out: Path) -> tuple[dict, di
         if made.get("class_sha512"):
             head["units"]["classes"] = [made["class_sha512"]] * n
         head["circuit_sha512"] = pin
-        with open(ub / name, "wb") as f:
-            f.write(json.dumps(head, sort_keys=True).encode() + b"\n" + body)
+        (ub / name).write_bytes(FC.public_file(head, body) if name.startswith("pub-")
+                                else json.dumps(head, sort_keys=True).encode() + b"\n" + body)
     text = (ub / "circuit.txt").read_text()
     new = {"dir": ub, "meta": json.loads(text.split("\n", 2)[1][5:]), "pin": pin}
     return new, a0.public_header(ub, n)
@@ -87,7 +88,7 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     rec = json.loads((served / "registration.json").read_text())
     n = int(rec["population"])
-    law = D.parse_law(f"subset:{a.k}")
+    law = D.parse_design(f"subset:{a.k}")
     template = InputSet.open(a.template_set).subcircuit.definition()
     program = P.population_program(template, n)
     query = P.template_instance_query(template)
@@ -141,7 +142,7 @@ def main() -> int:
         print("A2 " + json.dumps({"refused_before_draw": summary["checks_before_draw"]}))
         return 1
 
-    # the draw, the session, the verifiers, the audit record
+    # the sample, the session, the verifiers, the audit record
     if a.unbind:
         st, header = unbound_copy(st, header, n, a, out)
         summary["unbound"] = {"pin": st["pin"], "rule": "leaf layer byte for byte serving's; the statement no longer binds the partition"}
@@ -150,7 +151,7 @@ def main() -> int:
     summary["session_s"] = round(time.time() - t, 1)
     result = a0.audit_session(rec, receipt, st, header, law, record, live, a.lean, a.lean, out / "session", a.delta)
     result["checks_before_draw"] = checks
-    result["n_from"] = "registration (the served index); the verifier does not yet derive N from #101's program"
+    result["n_from"] = "registration (the served index); the verifier does not yet derive N from the served row's program"
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True))
 
     neg: dict[str, dict] = {}

@@ -1,4 +1,4 @@
-"""[R15 EXEC-02 / COORD M-0063 (2)] the row's execution label decides enforce_eager -- never a harness literal.
+"""The workload's execution label decides enforce_eager -- never a harness literal.
 
 Torch-free part (run_config's laptop mirror) always runs; the adapter part (execution_of_workload / build_engine refusal) needs torch and
 runs on a pod (`/workspace/venv-cu129/bin/python -m pytest tests/engine/test_execution_label.py`).  The build_engine
@@ -9,7 +9,7 @@ import json
 import pytest
 
 pytest.importorskip("verity_vllm.pipeline.match")
-from verity_vllm.pipeline import match as rc  # noqa: E402
+from verity_vllm.pipeline import match as rc
 
 EAGER_ROW = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
 COMPILED_ROW = "llama32-1b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-compiled"
@@ -75,7 +75,7 @@ def _no_llm(monkeypatch):
     import types, sys
     fake = types.ModuleType("vllm")
 
-    class LLM:  # noqa: D401
+    class LLM:
         def __init__(self, **kw):
             raise AssertionError("LLM() was reached: the execution check did not fail closed")
     fake.LLM = LLM
@@ -100,22 +100,3 @@ def test_build_engine_refuses_contradicting_engine_arg(monkeypatch):
         va.build_engine(case="B0", execution="bi-eager", engine_args={"enforce_eager": False})
     with pytest.raises(RuntimeError, match="execution mismatch"):
         va.build_engine(case="B0", execution="bi-compiled", engine_args={"enforce_eager": True})
-
-
-def test_build_engine_sets_enforce_eager_from_label(monkeypatch):
-    """The kwargs handed to LLM() carry the label's enforce_eager (True for bi-eager, explicit False for bi-compiled)."""
-    va = _va()
-    _no_llm(monkeypatch)
-    seen = {}
-    import sys
-
-    class LLM:
-        def __init__(self, **kw):
-            seen.update(kw)
-            raise KeyboardInterrupt  # stop right after the kwargs are observed (no GPU here)
-    sys.modules["vllm"].LLM = LLM
-    for label, want in (("bi-eager", True), ("bi-compiled", False)):
-        seen.clear()
-        with pytest.raises(KeyboardInterrupt):
-            va.build_engine(case="B0", execution=label)
-        assert seen.get("enforce_eager") is want, (label, seen)

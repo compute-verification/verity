@@ -1,6 +1,27 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Inst
-import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
-import Proofs.Flock.Soundness.Discharge.Inst.KeysRow
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Inst
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Sites
+public import Proofs.Flock.Soundness.Discharge.Inst.KeysRow
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Headline
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.Layout.QSort
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -42,7 +63,7 @@ theorem checkFactsH : CheckFacts c := by
   exact check_facts P.typed hls
 
 include hpub in
-/-- **The site fact at a drawn table under hidden outputs**, `tableH_bcSiteS` with the template instance's bound from
+/-- **The site fact at a sampled table under hidden outputs**, `tableH_bcSiteS` with the template instance's bound from
 the check (`Layout.vu_lt_pow2_of`) in place of the unit returning the outputs. -/
 theorem tableH_bcSiteI {S : Finset (Fin n)} (x : DrawSetupH I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
     BcSiteH (x.table.acc ht hc hrf) pub (x.table.o u h) (x.table.vu u h) u.val := by
@@ -77,17 +98,17 @@ theorem sitesAtH_bcSiteI :
 
 include ht hc x₀ in
 /-- **`InstKeysRow` at the session's circuit**, from the parse once `wiresAcyclic` passed (`Inst.instKeysRow_of_parse`,
-at the layout of the statement the draw `x₀` sets up). -/
+at the layout of the statement the sample `x₀` sets up). -/
 theorem instKeysRowH (hU : Built c.unit) (hpr : Layout.PortReads c hU) (hw : ProvedScope.wiresAcyclic c = true) :
     InstKeysRow c (portRowW c) := by
-  have hcx : x₀.st.c = c := Except.ok.inj ((setupHidden_parseC x₀.h).symm.trans hc)
-  have L := Hidden.hidden_layout ht x₀.h
+  have hcx : x₀.st.c = c := setupHidden_c_of_parse hc x₀.h
+  have L := flat_layout ht x₀.h
   subst hcx
-  exact instKeysRow_of_parse L (parse_untyped ht hc).1 hpr hw
+  exact instKeysRow_of_parse (st := Hidden.flatTwin x₀.st) L (parse_untyped ht hc).1 hpr hw
 
 /-- **`pp` at the hidden tables, at `instProg`** (`SitesH.progPlaces_instProg` at `sitesAtH`). -/
 noncomputable abbrev ppHI : ProgPlaces (instProg c n) (outsOfI c n) (planAtH (Reg := Reg) dj x₀) (tabAtH dj x₀) :=
-  SitesH.progPlaces_instProg (sitesAtH_parse ht hc hrf dj x₀) hrf.1 (outsOfI c n)
+  SitesH.progPlaces_instProg (sitesAtH_c ht hc hrf dj x₀) hrf.1 (outsOfI c n)
 
 /-- **`lay` at the hidden tables, at `instProg`**: `instLayoutH` at `sitesAtH`, the program's outputs the output words'
 bits, the registration the population's public file. -/
@@ -95,25 +116,25 @@ noncomputable abbrev layAtHI :
     Binding.Layout ((instProg c n).partition (outsOfI c n)) (planAtH (Reg := Reg) dj x₀) (tabAtH dj x₀)
       (((instProg c n).partition (outsOfI c n)).placeDecoder (planAtH dj x₀) (tabAtH dj x₀)
         (ppHI ht hc hrf dj x₀).derived.place) :=
-  instLayoutH (sitesAtH_parse ht hc hrf dj x₀) hrf (outsOfI c n) (fun _ => pub)
+  instLayoutH (sitesAtH_c ht hc hrf dj x₀) hrf (outsOfI c n) (fun _ => pub)
 
 /-- **`rs` at the hidden tables, at `instProg`**: `instRowsH` at `sitesAtH`, with `hsite` from `sitesAtH_bcSiteI` and
 `InstKeysRow` from `instKeysRowH`. -/
 noncomputable abbrev rsAtHI (hU : Built c.unit) (hpr : Layout.PortReads c hU) (hw : ProvedScope.wiresAcyclic c = true) :
     Binding.HmRowsX (layAtHI ht hc hrf dj x₀ (pub := pub) (Reg := Reg)) :=
-  instRowsH (sitesAtH_parse ht hc hrf dj x₀) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
+  instRowsH (sitesAtH_c ht hc hrf dj x₀) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
     (sitesAtH_bcSiteI ht hc hrf dj x₀ hpub) (instKeysRowH ht hc dj x₀ hU hpr hw)
 
 /-- **`hHm` at the hidden tables, at `instProg`** (`instRowsH_computes`, a unit per VU from the check). -/
 theorem rsAtHI_computes (hU : Built c.unit) (hpr : Layout.PortReads c hU) (hw : ProvedScope.wiresAcyclic c = true) :
     (rsAtHI ht hc hrf dj x₀ hpub hU hpr hw (Reg := Reg)).Computes :=
-  instRowsH_computes (sitesAtH_parse ht hc hrf dj x₀) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
+  instRowsH_computes (sitesAtH_c ht hc hrf dj x₀) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
     (checkFactsH ht hc).upv_pos (sitesAtH_bcSiteI ht hc hrf dj x₀ hpub) (instKeysRowH ht hc dj x₀ hU hpr hw)
 
 /-- **The headline at the executable over hidden-output sessions, at the template instance's program.**
 `flock_headline_exec_hidden` with the production program `instProg c n`, the program of the whole template instance (the
 unit's copies, the stage nets and the lookup slots, wired), and its outputs the output words' bits (`outsOfI`): against
-any live prover `τ`, flock-verify accepts with at least `K` wrong units of `instProg c n`, at the simulated prover's
+any live prover `τ`, flock-verify accepts with at least `K` incorrect proof blocks of `instProg c n`, at the simulated prover's
 committed values (1 on the constant's gate, 0 on the zero's, the plurality of its openings elsewhere), with probability
 at most `miss(K) + ε_ks + δ_link`.
 
@@ -166,8 +187,8 @@ theorem flock_headline_exec_hidden_inst {Lp : Merkle.Leaf (List FlockLevel3.GF12
             (rsAtHI_computes ht hc hrf dj x₀ hpub hU hpr hw)) k Rw M ρ t' :=
   flock_headline_hidden dj x₀ (instProg c n) (outsOfI c n) σs ks hks St hS Kd pop Lb src hA3
     (ppHI ht hc hrf dj x₀)
-    {instOneG (c := c) (n := n)} (constCols_instProgH (sitesAtH_parse ht hc hrf dj x₀) hrf.1 (outsOfI c n))
-    {instZeroG (c := c) (n := n)} (zeroCols_instProgH (sitesAtH_parse ht hc hrf dj x₀) hrf.1 (outsOfI c n))
+    {instOneG (c := c) (n := n)} (constCols_instProgH (sitesAtH_c ht hc hrf dj x₀) hrf.1 (outsOfI c n))
+    {instZeroG (c := c) (n := n)} (zeroCols_instProgH (sitesAtH_c ht hc hrf dj x₀) hrf.1 (outsOfI c n))
     (layAtHI ht hc hrf dj x₀ (pub := pub)) (rsAtHI ht hc hrf dj x₀ hpub hU hpr hw)
     (rsAtHI_computes ht hc hrf dj x₀ hpub hU hpr hw) hk hRw hM hρ hr ht' K wr opn dg dec one fin capOf N hdec τ hCR hKS
 

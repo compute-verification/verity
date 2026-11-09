@@ -6,7 +6,13 @@ slot's rows, at an input port no wire or leaf cut fills, and at a row or output 
 With hidden outputs those circuits are in scope (`scopeOkI`), with public outputs not (`scopeOk`). `proved_scope.rs`'s
 `wires_are_lean_acyclic` and `hidden_outputs_take_the_general_instance_form` run the same circuits.
 -/
-import Flock.ProvedScope
+module
+
+public import Flock.HmRow
+public import Flock.ProvedScope
+meta import Flock.ProvedScope
+
+@[expose] public section
 
 namespace Flock.Test.Wires
 

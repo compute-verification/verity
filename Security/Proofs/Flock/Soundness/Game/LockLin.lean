@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Game.Lock
-import Proofs.Flock.Soundness.LinkFinder
+module
+
+public import Proofs.Flock.Soundness.Game
+public import Proofs.Flock.Soundness.LinkFinder
 
 /-!
 # The compiled table bound, linearly: a link finder at each slot
@@ -25,6 +27,8 @@ uniform position:
   is linear, so the average over the prefixes needs no Jensen. `Lock.nodeE_linkCost_le`: over the prefixes, the finder
   costs at most two compiled runs.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 
@@ -119,7 +123,7 @@ theorem expect_linkG [Nonempty P] (g : Game α) (s : Strategy g) (M : ℕ) (F : 
       (∑ p, expect (fun x => F (p, x)) (LinkFinder.finderG g M) (LinkFinder.finderStrat g s M)) /
         Fintype.card P := by
   unfold linkG linkStrat
-  rw [expect_bind, expect_draw]
+  rw [expect_bind, Verity.Game.expect_draw]
   congr 1
   exact Finset.sum_congr rfl fun p _ => expect_map _ _ _ _
 
@@ -239,21 +243,6 @@ theorem nodeE_mono (plur : Chooser T D β) (slot : ℕ) {Ψ Ψ' : D → (g : Gam
       split_ifs
       · exact h _ _ _
       · exact nodeE_mono plur slot h _ σ'.2
-
-theorem nodeE_nonneg (plur : Chooser T D β) (slot : ℕ) {Ψ : D → (g : Game β) → Strategy g → ℝ}
-    (hΨ : ∀ d g σ, 0 ≤ Ψ d g σ) :
-    ∀ {i : I} {g : Game α} {g' : Game β} (L : Lock T D get R i g g') (σ' : Strategy g'),
-      0 ≤ nodeE plur slot Ψ L σ'
-  | _, _, _, .ret _, _ => le_rfl
-  | _, _, _, @Lock.coin _ _ _ _ _ _ _ _ C _ _ _ _ L, σ' => by
-      simp only [nodeE]
-      exact div_nonneg (Finset.sum_nonneg fun c _ => nodeE_nonneg plur slot hΨ (L c) (σ' c)) (Nat.cast_nonneg _)
-  | _, _, _, .send _ L, σ' => nodeE_nonneg plur slot hΨ (L σ'.1) σ'.2
-  | _, _, _, @Lock.table _ _ _ _ _ _ _ _ s _ _ k' _ _ _ L, σ' => by
-      simp only [nodeE]
-      split_ifs
-      · exact hΨ _ _ _
-      · exact nodeE_nonneg plur slot hΨ _ σ'.2
 
 /-- **A continuation's expectation at the slot is at most the run's**: for a nonnegative leaf function, the node's
 continuation is the rest of the run. -/

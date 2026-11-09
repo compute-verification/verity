@@ -1,6 +1,6 @@
-"""The fixture of C-Flock's forged-proof negatives (`verity/ml/flock/tests/test_lean_forged_proofs.py`): M0 `--zk` sessions on
-one small A8 unit, staged by C-Flock's `UnitStager` bound to a template query's partition as A8's members are, N instances
-with every unit drawn (subset:N), each case's statement on the one circuit:
+"""The fixture of Flock's forged-proof negatives (`verity/ml/flock/tests/test_lean_forged_proofs.py`): M0 `--zk` sessions on
+one small A8 unit, staged by Flock's `UnitStager` bound to a template query's partition as A8's members are, N instances
+with every unit sampled (subset:N), each case's statement on the one circuit:
 
     honest                      the honest statement                                              M0 and Lean accept
     wrong-output-word           bit 0 of every instance's first output word flipped before        refused in the proof
@@ -41,7 +41,7 @@ from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E40
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
+from verity.core.protocols.spot.one_stage import partition as P  # noqa: E402
 
 #: A8's LlBf16DotprodGemm unit (K=6144 there) at the smallest K: x then w, K bf16 leaves each, one row of both
 K = 128

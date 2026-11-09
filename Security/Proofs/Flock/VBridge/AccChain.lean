@@ -1,5 +1,23 @@
-import Proofs.Flock.VBridge.Compiled
-import Proofs.Flock.VBridge.Inputs
+module
+
+public import Proofs.Flock.VBridge.Compiled
+public import Proofs.Flock.VBridge.Inputs
+public import Proofs.Flock.VBridge.Algebra.Ligerito
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # VBridge G item 4: the running sums `rec-acc` chain into E's `hacc`
@@ -27,6 +45,8 @@ running sums before and after its openings (`Chain.rep_ends`), the message eleme
   not needed.
 * `accChains_of_units`: `AccChains`, from the same facts at every accepted outer proof.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.AccChain
 
@@ -171,7 +191,7 @@ theorem verifierRows_kappa {sh : Shape} {rounds : Array (Array F128)} {extras : 
     kappa.size = sh.sched.levels.size ∧
       ∀ ℓ < sh.sched.levels.size, ∀ r < 2, ((kappa[ℓ]!)[r]!).size = levelLanes sh ℓ := by
   unfold verifierRows at hrows
-  cases hl : residualLins sh (Coins.ofRounds rounds) extras with
+  cases hl : residualLins sh (CoinSource.ofRounds rounds) extras with
   | error e => rw [hl] at hrows; cases hrows
   | ok q =>
     obtain ⟨lins, info'⟩ := q

@@ -6,9 +6,9 @@
 * `rules/vllm_dsa.py` derives an indexer layer and an IndexShare layer over a prefill and a decode step: per token the norms and
   RoPEs, `DsaIndexerKRow_v1` and `DsaIndexerQ_v1`, per row `DsaMqaLogits_v3{N}` and `DsaTopKShortRow_v1`, and either the explicitly
   pinned `SparseMla_v1{T=n}` or default `SparseMlaSplit_v1{T=n,NS}` over the layer's first n history rows;
-* past TOPK keys the settings of a Waksman network over the row's history are a field of the `run` input, `DsaTopKOrder_v1`
-  checks the order they route (`DsaWaksmanOrder_v1`) against the row's logits (one of the Program's checks, an output after the
-  source's), and sparse MLA reads the rows `DsaWaksmanRows_v1` routes at them;
+* past TOPK keys, at the row's class (its keys rounded up to a multiple of TOPK), `DsaTopKMask_v1` marks the row's top-TOPK set
+  from its logits, `DsaButterflySettings_v1` computes the concentrator's settings for it, and sparse MLA reads the rows
+  `DsaButterflyRows_v1` routes at them (`DsaButterflyRowsPad_v1` below the class), in ascending index order;
 * a layer with a dense-MHA prefill backend serves a prefill (above the decode threshold, at most TOPK keys) by dense MHA: the shim
   exports `forward_mha`'s body and `vllm_iface.dsa_dense_mha`, and `rules/vllm_dsa_dense.py` derives per row
   `Attention_v4{T=i+1,...,MASKED_FROM}` over the call's own k and v, opening the history the decode step after it reads;
@@ -33,10 +33,10 @@ import torch.fx.traceback as fxt
 import torch.nn as nn
 
 from verity.ml.circuits import codec
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.refs import Affine, runs
-from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits.defs import bind, composite
+from verity.ml.circuits.refs import Affine, Coll, concat, runs
 from verity.ml.circuits.types import Array, Value
+from verity.ml.circuits.evaluation import evaluate
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.export_compat import dsa_leaves
@@ -46,12 +46,13 @@ from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3, PROFILES, Vocabulary
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.kernels.serve3_reference import materialize
-from verity_vllm.program.registry import b1, cublas_bf16, dsa, dsa_norm, dsa_topk, fa3_check_inf, fa3_split, hopper, sparse_mla
-from verity_vllm.program.registry import sparse_mla_split
-from verity_vllm.program.registry import bf16_gemm_check as BC
-from verity_vllm.program.registry.boolean_rope import RoPEHeadGptJV2
-from verity_vllm.program.registry.sparse_mla_split import launch_num_splits
+from verity.ml.definitions.numerics.serve3_reference import materialize
+from verity.ml.definitions.registry import b1, cublas_bf16, dsa, dsa_norm, dsa_topk, dsa_topk_mask, fa3_check_inf, fa3_split, hopper
+from verity.ml.definitions.registry import sparse_mla
+from verity.ml.definitions.registry import sparse_mla_split
+from verity.ml.definitions.registry import bf16_gemm_check as BC
+from verity.ml.definitions.registry.boolean_rope import RoPEHeadGptJV2
+from verity.ml.definitions.registry.sparse_mla_split import launch_num_splits
 
 H200 = TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False, moe_backend="triton")
 NH, P, R, L, V, NQ = 2, 16, 16, 16, 16, 16   # heads, nope, rope, latent, value, q_lora
@@ -71,6 +72,19 @@ STANDIN = Vocabulary("dsa-standin", "profile", "dsa-standin",
                      kinds={**PROFILE_B1_EAGER_V3.kinds, "dsa_rmsnorm": lambda N, EPS: bind(b1.RMSNormTriton, N=N, EPS=EPS),
                             "batched_gemm": lambda B, K, N, DOT: bind(cublas_bf16.BatchedGemmWord, B=B, K=K, N=N, DOT=DOT)},
                      notes=dict(PROFILE_B1_EAGER_V3.notes))
+
+
+@composite("StandinLatentRow", 1, ["KVL", "R", "EPS"], dsa_norm._sig_latent)
+def _StandinLatentRow(B, S, kv, w, cs):
+    """`DsaLatentRow_v1` over the stand-in norm, which the reference computes the row with."""
+    kvc = B.call(bind(b1.RMSNormTriton, N=S.KVL, EPS=S.EPS), kv[0:S.KVL], w)
+    kpe = B.call(bind(RoPEHeadGptJV2, D=S.R), kv[S.KVL:S.KVL + S.R], cs)
+    return Coll(Array(S.KVL + S.R, Value(16)), concat([kvc.refs, kpe.refs]))
+
+
+BATCHED = Vocabulary("dsa-standin-batched", "profile", "dsa-standin-batched",
+                     kinds={**STANDIN.kinds, "dsa_latent_row": lambda KVL, R, EPS: bind(_StandinLatentRow, KVL=KVL, R=R, EPS=EPS)},
+                     notes=dict(STANDIN.notes))
 
 
 def _unpatched(*a, **k):
@@ -549,45 +563,77 @@ def test_an_indexer_and_an_indexshare_layer_derive_over_prefill_and_decode(serve
     assert roles["layers.0.W_UK_T"]["role"] == "mla.absorb" and roles["layers.0.indexer.k_norm.bias"]["role"] == "dsa.indexer.k_norm.bias"
 
 
-@pytest.mark.slow
-def test_a_row_past_topk_reads_the_runs_settings_checks_their_order_against_its_logits_and_reads_its_rows(served):
-    """TOPK 2: the decode row at position 2 has 3 keys.  The indexer layer reads the 3 settings of a Waksman network over its 3
-    rows from the `run` input's one field, routes the row indices through them (`DsaWaksmanOrder_v1{N=3,TOPK=2}`) and checks that
-    order by `DsaTopKOrder_v1{N=3,TOPK=2}` (the Program's last output, 1 exactly when it is a permutation of the logits' top-2
-    set), and both layers' `SparseMla_v1{T=2}` read the rows `DsaWaksmanRows_v1{N=3,K=2}` routes at the same settings, in that
-    order.  Every one of the 8 settings is evaluated."""
+def test_a_row_past_topk_selects_its_top_k_from_its_logits_and_reads_its_rows_in_index_order(served):
+    """TOPK 2: the decode row at position 2 has 3 keys, so its class is 4 (`vllm_dsa.long_row_keys`).  The indexer layer marks
+    the top-2 set of its 3 logits and one `PAD_SCORE` (a slice of the Program's one block of it: `DsaTopKMask_v1{N=4,TOPK=2}`)
+    and computes the concentrator's settings for it (`DsaButterflySettings_v1{N=4,K=2}`), and both layers' `SparseMla_v1{T=2}`
+    read the rows `DsaButterflyRowsPad_v1{T=3,N=4,K=2}` routes at those settings over the 3 history rows and one zero row: the
+    Program has no `run` input and no checks, and its outputs are the reference's over the set in ascending index order."""
     model = _model(topk=2)
     xs = _inputs(model)
     rep = _derive(model, xs)
     assert rep.program is not None, rep.unsupported
-    assert dsa_topk.waksman_switches(3, 2) == 3
-    assert rep.provenance["run_inputs"] == {"param": len(xs), "name": "run", "fields": [
-        {"name": f"{NAMES[0]}/topk_switches[t=2]", "type": repr(Array(3, Value(1))), "offset": 0, "leaves": 3}]}
-    assert rep.provenance["checks"]["accept"] == 1 and len(rep.provenance["checks"]["of"]) == 1
-    routed = bind(dsa_topk.DsaWaksmanOrder, N=3, TOPK=2).id
-    check = bind(dsa_topk.DsaTopKOrder, N=3, TOPK=2).id
-    rows = bind(dsa_topk.DsaWaksmanRows, N=3, K=2, W=L + R, E=16).id
+    assert "run_inputs" not in rep.provenance and "checks" not in rep.provenance and vllm_dsa.long_row_keys(3, 2) == 4
+    assert len(rep.program.fn.signature()[0]) == len(xs) + 1, "the inputs, then the weights"
+    mask = bind(dsa_topk_mask.DsaTopKMask, N=4, TOPK=2).id
+    settings = bind(dsa_topk_mask.DsaButterflySettings, N=4, K=2).id
+    rows = bind(dsa_topk_mask.DsaButterflyRowsPad, T=3, N=4, K=2, W=L + R, E=16).id
     attn2 = bind(sparse_mla.SparseMla, T=2, NH=NH, DR=R, DV=L, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE).id
-    assert [i for i in _ids(rep) if i in (routed, check, rows, attn2)] == [attn2, attn2, routed, check, rows, attn2, rows, attn2]
+    assert [i for i in _ids(rep) if i in (mask, settings, rows, attn2)] == [attn2, attn2, mask, settings, rows, attn2, rows, attn2]
+    nodes = rep.program.fn.body.nodes
+    (m,) = [n for n in nodes if n.fn.id == mask]
+    (lg, pad) = runs(m.args[0].refs)
+    assert nodes[lg[1]].fn.id == bind(dsa.DsaMqaLogitsV3, N=3, H=H, D=D).id and lg[2:] == (0, 3)
+    assert (nodes[pad[1]].form, nodes[pad[1]].fn.id, nodes[pad[1]].n, pad[2:]) == ("batch", f"Const32[0x{vllm_dsa.PAD_SCORE:08x}]_v1", 1, (0, 1))
     (app,) = [a for a in rep.provenance["applications"] if a["rule"] == "DsaIndexerAttn[vllm-dsa]_v1"
               and a["preconditions_checked"]["indexer"] and a["preconditions_checked"]["past_topk"]]
     assert app["preconditions_checked"]["past_topk"] == [2]
 
     logits = _index_logits(model, xs)[2]
     assert len(set(logits)) == 3
-    top = set(dsa_topk.topk_set(logits, 2))
-    accepted = []
-    for bits in range(8):
-        sw = [bits >> i & 1 for i in range(3)]
-        order = dsa_topk.waksman_apply(sw, [0, 1, 2], 2)
-        out = _run(rep, model, xs, sw)
-        assert out[-1] == int(set(order) == top), (sw, order)
-        if out[-1]:
-            assert out[:-1] == _reference(model, xs, orders={2: order}), order
-            accepted.append(tuple(order))
-    assert sorted(accepted) == sorted({tuple(sorted(top)), tuple(sorted(top, reverse=True))})
-    for order in (sorted(top), sorted(top, reverse=True)):
-        assert _run(rep, model, xs, dsa_topk.waksman_settings(order, 3))[-1] == 1
+    top = sorted(dsa_topk.topk_set(logits, 2))
+    assert top != [0, 1], "the selection is not the first rows, which a wrong mask would also read"
+    assert _run(rep, model, xs) == _reference(model, xs, orders={2: top})
+
+
+@pytest.mark.parametrize("block", [256, 2])
+def test_the_batched_forms_rows_past_topk_select_each_among_its_own_keys_in_blocks(served, monkeypatch, block):
+    """Class G's batched form (`observe_batched_form`, the Build's `--batched`) at TOPK 2: a prefill of two, then a call of three
+    rows of 3, 4 and 5 keys.  Each token's latent row is one `dsa_latent_row`, and the call's rows go in blocks
+    (`vllm_dsa.long_row_blocks`): one of 5 keys at the served block, or blocks of 4 and 5 keys at a block of 2.  A block's rows read
+    its keys' logits, then their own key counts, `DsaTopKMaskCounted_v1` at the block's class and the settings, each op over the
+    block's rows in turn, and both layers' sparse MLA reads the rows routed from the block's history.  The outputs are the
+    reference's over each row's own top-2 in ascending index order, so no row selects a key past its own."""
+    monkeypatch.setattr(vllm_dsa, "BLOCK_KEYS", block)
+    monkeypatch.setitem(PROFILES, BATCHED.name, BATCHED)
+    VB.observe_batched_form(True)
+    model = _model(topk=2, steps=((0, 2), (2, 3)))
+    xs = _inputs(model)
+    rep = _derive(model, xs, profile=BATCHED.name)
+    assert rep.program is not None, rep.unsupported
+    blocks = {256: [(5, [0, 1, 2])], 2: [(4, [0, 1]), (5, [2])]}[block]
+    assert vllm_dsa.long_row_blocks([3, 4, 5], 2) == blocks
+    assert _ids(rep).count(bind(_StandinLatentRow, KVL=L, R=R, EPS=EPS).id) == 2 * 5
+
+    def rows(Nb: int, N: int) -> str:
+        if N > Nb:
+            return bind(dsa_topk_mask.DsaButterflyRowsPad, T=Nb, N=N, K=2, W=L + R, E=16).id
+        return bind(dsa_topk_mask.DsaButterflyRows, N=N, K=2, W=L + R, E=16).id
+
+    attn2 = bind(sparse_mla.SparseMla, T=2, NH=NH, DR=R, DV=L, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE).id
+    select, routed = [], []
+    for Nb, rs in blocks:
+        N = vllm_dsa.long_row_keys(Nb, 2)
+        select += [bind(dsa.DsaMqaLogitsV3, N=Nb, H=H, D=D).id] * len(rs) + [bind(dsa_topk_mask.DsaTopKMaskCounted, N=N, TOPK=2).id] * len(rs)
+        select += [bind(dsa_topk_mask.DsaButterflySettings, N=N, K=2).id] * len(rs)
+        routed += [rows(Nb, N)] * len(rs)
+    kept = set(select) | set(routed) | {attn2}
+    assert [i for i in _ids(rep) if i in kept] == [attn2, attn2] + select + routed + [attn2] * 3 + routed + [attn2] * 3
+    nodes = rep.program.fn.body.nodes
+    counted = [n for n in nodes if n.fn.id.startswith("DsaTopKMaskCounted_v1{")]
+    assert [nodes[runs(n.args[1].refs)[0][1]].fn.id for n in counted] == [f"Const32[0x{n:08x}]_v1" for n in (3, 4, 5)]
+    orders = {p: sorted(dsa_topk.topk_set(lg, 2)) for p, lg in _index_logits(model, xs).items() if p >= 2}
+    assert _run(rep, model, xs) == _reference(model, xs, orders=orders)
 
 
 class _LargeMlaAbsorb(nn.Module):

@@ -1,5 +1,7 @@
-import Definitions.Pous.P2.Cost
-import Definitions.Pous.P2.Rounds
+module
+
+public import Definitions.Pous.P2.Cost
+public import Definitions.Pous.P2.Rounds
 
 /-!
 # P2's open steps in the ring model (named assumptions)
@@ -12,6 +14,8 @@ through `Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure` and the graded boun
 statement takes, and `P2RingReducesToM1p`, the reduction the spec states, which implies it through the proved `m1p`
 row: `Pous.SecurityProofs.P2RingAuditSecureOfReduces`).
 -/
+
+@[expose] public section
 
 namespace Pous.P2.Assumptions
 
@@ -32,9 +36,10 @@ independent ideal permutations, once a responder may not finish a root within th
 (`PrimeP16448`; both refutations read only the `AuditSecureOn` conjunct of `MeetsOn` and `ε ≤ 2^-128`), it is false at
 `D ≥ 32,894` with `Q ≥ 2` and `L ≥ 65,789` (`PousP2Ring.tight_p16448`: the responder recomputes the roots), at every
 `k`. Its form at `k ≤ 88` is false at `L ≥ 2^30` (`PousP2Ring.not_meetsOn_b19_k88`: a responder that stores truncated
-roots and recomputes the dropped bits); at `k = 105` the same attack needs about 167 dropped bits per block, which no
-theorem here refutes or rules out. So it is a hypothesis only at the `(D, Q, L)` a deadline gives. Those two theorems
-are its falsification tests. It follows from the per-round form `P2RingRoundSecure p ε₀ D Q L` whenever
+roots and recomputes the dropped bits), and at `k = 105` it is false at `L ≥ 2^169` with `D ≥ 2` and `Q ≥ 2`
+(`Pous.Period.SecurityProofs.not_p2RingAuditSecure_trunc`: the same attack with 168 dropped bits per block). So it is
+a hypothesis only at the `(D, Q, L)` a deadline gives, as `Pous.Period.PeriodHeldDeployed` takes it at
+`(16,446, 2^20, 2^64)`. Those three theorems are its falsification tests. It follows from the per-round form `P2RingRoundSecure p ε₀ D Q L` whenever
 `(1 − p)^105 + 105·ε₀ ≤ 1% + 2^-129 + 2^-130` (`Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure`). -/
 def P2RingAuditSecure (D Q L : ℕ) : Prop :=
   AuditSecureOn (p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) .sequential
@@ -114,10 +119,26 @@ def P2RingRoundSecure (p ε₀ : ℝ≥0∞) (D Q L : ℕ) : Prop :=
           pr (fun x => varPassesOn _ k (j + 1) W A₁ A₂ x ∧ ¬ bad x) ≤
             (1 - p) * pr (fun x => varPassesOn _ k j W A₁ A₂ x ∧ ¬ bad x)
 
+/-- **`P2RingRoundSecure` to `2^27` blocks (conjectured; unchecked in `N` above `2^25`).** The same statement as
+`P2RingRoundSecure`, at every block count from `2^19` to `2^27`, so that it reaches the demo's store, `1038·2^16 ≈
+2^26.02` blocks (139.7 GB of payload). Nobody has checked the `ε₀` a proof would give against `N` above `2^25`: that
+analysis is pending. Its range contains `P2RingRoundSecure`'s, so it
+implies that one (`Pous.SecurityProofs.roundSecure_of_wide`) and every refutation of that one refutes it: the
+falsification tests there (`PousP2Rounds.round_tight`, `PousP2Rounds.round_trunc`) and its scaled-point test. -/
+def P2RingRoundSecureWide (p ε₀ : ℝ≥0∞) (D Q L : ℕ) : Prop :=
+  ∀ (N : ℕ) [NeZero N], 2 ^ 19 ≤ N → N ≤ 2 ^ 27 →
+    ∀ (Sz : ℕ → ℕ) (k : ℕ) (W : Bits (p2ring N 16448 (2 ^ 16448 - 21065) 16432).n)
+      (A₁ : Preprocessor (p2ring N 16448 (2 ^ 16448 - 21065) 16432) (Sz 0))
+      (A₂ : VarResponderOn (p2ring N 16448 (2 ^ 16448 - 21065) 16432) Sz D Q L),
+      ∃ bad : Outcome (p2ring N 16448 (2 ^ 16448 - 21065) 16432) k → Prop, pr bad ≤ k * ε₀ ∧
+        ∀ j < k, Sz j ≤ (p2ring N 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ →
+          pr (fun x => varPassesOn _ k (j + 1) W A₁ A₂ x ∧ ¬ bad x) ≤
+            (1 - p) * pr (fun x => varPassesOn _ k j W A₁ A₂ x ∧ ¬ bad x)
+
 /-- **`statistical-hiding` (open in Lean): the memory challenger's coin commitments hide its indices, up to `ε`.**
 `com s c I` is what the challenger publishes about the indices `I` before a session `s`, from its fresh coins `c`
 (for the deployed code, `Pous.EndToEnd.coinView`: the coin tree's root and its hm96 key). For every session, and every
-event `E` of a quantity `a` drawn independently of the coins and indices (a server's whole view apart from them), the
+event `E` of a quantity `a` sampled independently of the coins and indices (a server's whole view apart from them), the
 event holds with the published commitment and the indices it commits to at most `ε` more often than with the
 commitment to independent indices `I'`. Unbounded `E`: the hiding is statistical.
 

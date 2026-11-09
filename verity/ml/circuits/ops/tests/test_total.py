@@ -17,7 +17,7 @@ import pytest
 
 from verity.ml.circuits.silicon.cast import f32_to_bf16_word
 from verity.ml.circuits.silicon.errors import InvalidArtifact
-from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, tc_dot
+from verity.ml.circuits.silicon.models import AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, tc_dot
 from verity.ml.circuits.silicon.total import (
     AMPERE_BF16_DOT16_TOTAL,
     FP32_CANONICAL_NAN,
@@ -247,7 +247,7 @@ def test_mma_campaign_records_target_words() -> None:
             )
 
 
-# --- Hopper: veritor.tensor-core.hopper_bf16_wgmma_k16@1 (lane HP, gpu/tc-hopper) ------------------------
+# --- Hopper: veritor.tensor-core.hopper_bf16_wgmma_k16@1 (veritor's H100 campaign, gpu/tc-hopper) -------
 
 HP = HOPPER_BF16_WGMMA_K16
 HDATA = FIXTURES / "tc-hopper-2026-09-07"

@@ -1,4 +1,42 @@
-import Proofs.Flock.Claims.KS.ZkBoundJ
+module
+
+public import Proofs.Flock.Claims.KS.ZkBoundJ
+public import Proofs.Flock.Claims.KS.ZkKS
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployTables
+import Proofs.Flock.Claims.KS.Mixture
+import Proofs.Flock.Soundness.Discharge.ZkLink.Inh
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Every masked table's bound from the live sessions' bound at the deployed tables
@@ -16,12 +54,14 @@ no column of table `j` off `C`, a verdict on each table's output the decoder is 
 and table `j`'s no level-0 opening off `C` unless it self-clashes, and table `j`'s events bounding its `Adv`s and
 self-clash. It gives `ZkSessJ` (`zkSessJ_of_liveJ`), so every table's bound (`zk_tableBoundJAt_of_liveJ`).
 
-At the deployed masked record, `T j` is C-Flock ZK's padded table of the statement's table `j` (`zkTabs`, `zkTab` at
-table `j`'s layout, link layout and `Zk.schedule`'s schedule), at C-Flock ZK's parameters (`zkTab_m1`) and
+At the deployed masked record, `T j` is Flock ZK's padded table of the statement's table `j` (`zkTabs`, `zkTab` at
+table `j`'s layout, link layout and `Zk.schedule`'s schedule), at Flock ZK's parameters (`zkTab_m1`) and
 committed to table `j`'s model statement (`zkTab_committed`; together, `zk_atTabs`). `ZkLiveJ x` is `ZkLiveAtJ` there
 at every layout, and `Flock.KS` at the deployed relation follows from it at every statement some run accepts and
 `ExtendJ` (`zk_KS_of_liveJ`), at every number of tables.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -293,7 +333,7 @@ theorem zk_tableBoundJAt_of_liveJ {K D Sl : Type} [Field K] [Fintype K] [Decidab
 
 /-! ## The deployed masked tables -/
 
-/-- **C-Flock ZK's padded tables of a setup** `sts`: at each table `j`, `zkTab` at its layout `L j`, link layout at
+/-- **Flock ZK's padded tables of a setup** `sts`: at each table `j`, `zkTab` at its layout `L j`, link layout at
 `PT_LOCAL` and `Zk.schedule`'s schedule (past the last table, table 0's). -/
 noncomputable def zkTabs {sts : Array Stmt} {mPts : ℕ} (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -317,7 +357,7 @@ def stJ {sts : Array Stmt} (h0 : 0 < sts.size) (j : ℕ) : Stmt :=
   if h : j < sts.size then sts[j] else sts[0]
 
 /-- **The live sessions' bound at a masked statement of any number of tables**: `ZkLiveAtJ` at the deployed hashes
-(`hs512`) and tables of full-width columns, at C-Flock ZK's padded tables of the setup (`zkTabs`), wherever the
+(`hs512`) and tables of full-width columns, at Flock ZK's padded tables of the setup (`zkTabs`), wherever the
 verifier sets up the tables `sts`, at their every layout and link layout at `PT_LOCAL`. -/
 def ZkLiveJ (x : Claims.Msg) : Prop :=
   ∀ (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (_ : setupOf true x = some (ins, spec, sts))
@@ -331,10 +371,10 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **C-Flock ZK's padded tables at a statement in scope**: where the statement parses in scope and sets up at least
-one table, each table `j` has C-Flock ZK's `m`, `k_log`, a layout and a link layout (`zk_scopeJ`), and `Zk.schedule`
+/-- **Flock ZK's padded tables at a statement in scope**: where the statement parses in scope and sets up at least
+one table, each table `j` has Flock ZK's `m`, `k_log`, a layout and a link layout (`zk_scopeJ`), and `Zk.schedule`
 accepts its `m` (`zk_schedule_ok`), so `zkTabs` there has every property `zk_tableBoundJAt_of_liveJ` asks of the
-masked tables: table `j` of the setup is `stJ h0 j`, `zkTab` is at C-Flock ZK's parameters (`zkTab_m1`), and a table
+masked tables: table `j` of the setup is `stJ h0 j`, `zkTab` is at Flock ZK's parameters (`zkTab_m1`), and a table
 of full-width columns that does not extract table `j` is not committed to it (`zk_not_committedJ`,
 `zkTab_committed`). -/
 theorem zk_atTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
@@ -386,10 +426,10 @@ theorem zk_atTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
 
 end Gen
 
-/-- **C-Flock ZK's padded tables at a statement in scope**: where the statement parses in scope and sets up at least
-one table, each table `j` has C-Flock ZK's `m`, `k_log`, a layout and a link layout (`zk_scopeJ`), and `Zk.schedule`
+/-- **Flock ZK's padded tables at a statement in scope**: where the statement parses in scope and sets up at least
+one table, each table `j` has Flock ZK's `m`, `k_log`, a layout and a link layout (`zk_scopeJ`), and `Zk.schedule`
 accepts its `m` (`zk_schedule_ok`), so `zkTabs` there has every property `zk_tableBoundJAt_of_liveJ` asks of the
-masked tables: table `j` of the setup is `stJ h0 j`, `zkTab` is at C-Flock ZK's parameters (`zkTab_m1`), and a table
+masked tables: table `j` of the setup is `stJ h0 j`, `zkTab` is at Flock ZK's parameters (`zkTab_m1`), and a table
 of full-width columns that does not extract table `j` is not committed to it (`zk_not_committedJ`,
 `zkTab_committed`). -/
 theorem zk_atTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
@@ -416,7 +456,7 @@ theorem zk_atTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hset := hset) (h0 := h0) (B := B) (hB := hB)
 
 /-- **Every masked table's bound at a statement in scope, from the live sessions' bound**: at tables of full-width
-columns, where the statement parses in scope and sets up at least one table, `zk_tableBoundJAt_of_liveJ` at C-Flock
+columns, where the statement parses in scope and sets up at least one table, `zk_tableBoundJAt_of_liveJ` at Flock
 ZK's padded tables (`zk_atTabs`). -/
 theorem zk_tableBoundJAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
@@ -438,7 +478,7 @@ theorem zk_tableBoundJ_live (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x
     zk_tableBoundJAt_live hs hin hset h0 (hl x hno)
 
 /-- **The deployed masked verifier: KS**, at SHA-512 at the deployed relation, at every number of tables, from the live
-sessions' bound at C-Flock ZK's padded tables at the statements some run accepts (`ZkLiveJ`) and `ExtendJ` at
+sessions' bound at Flock ZK's padded tables at the statements some run accepts (`ZkLiveJ`) and `ExtendJ` at
 full-width columns. -/
 theorem zk_KS_of_liveJ (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveJ x)
     (hext : Claims.Flock.ExtendJ (deployZk Readable.relation) (wordLenJ true) (wideJ true)) :

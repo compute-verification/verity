@@ -8,21 +8,30 @@ from typing import Any, Mapping
 from verity.core.protocols.pouw import verifier
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.coins import Challenger
-from verity.core.protocols.sampled_proofs.challenger import LiveRecord
+from verity.core.protocols.spot.challenger import LiveRecord
 
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 from verity_vllm.protocols.pouw.h1 import window as PHW
+from verity_vllm.protocols.pouw import pearl_c as PPD
 
-#: The schemes whose coins the auditor host's challenger can draw (the setting ``challenger``): H1's salt and rounds,
-#: ncp-v2's salt
-CHALLENGED = (PH.SCHEME, "ncp-v2")
+#: The schemes whose coins the auditor host's challenger can sample (the setting ``challenger``): H1's salt and rounds,
+#: ncp-v2's and Pearl-C's salt
+CHALLENGED = (PH.SCHEME, "ncp-v2", *PPD.SCHEMES)
+#: The challenged schemes whose install opens the session the gate reserved itself (``session`` the gate's reserve
+#: answer, ``gate`` its open), by the root it opens it on, the one its salt coin follows
+OPENS = {PH.SCHEME: "its window-open root (salt.window_open_root, over round 0's request table)",
+         **dict.fromkeys(PPD.SCHEMES, "its salt epoch's root (salt.epoch_open_root, over the weights' root)")}
+#: H1's setting ``unit``, the window Program's tile unit at each K (`pouw_h1_served.unit_of`): v1's per-unit noise
+#: (`h1tile.PouwH1Tile`, the default) or J10-R's one noise stream a call (`h1tile.PouwH1Tile5`)
+UNITS = ("v1", "j10r")
 
 
 def of(raw: Mapping[str, Any]) -> tuple[Any, ...]:
     """The settings ``rows``, ``steps``, ``runner``, ``rounds``, ``challenger``, ``session``, ``admission``, ``gate``,
-    ``served`` and ``graphs`` of `raw`, in that order; ValueError names the first bad one."""
+    ``served``, ``graphs``, ``period``, ``unit``, ``ks``, ``draw_session`` and ``commit_record`` of `raw`, in that order
+    (``ks`` sorted, each once); ValueError names the first bad one."""
     rows, steps = raw.get("rows"), raw.get("steps")
     if rows is not None and (not isinstance(rows, int) or isinstance(rows, bool) or rows < 32 or rows % 32):
         raise ValueError("pouw setting 'rows' is a positive multiple of 32 (H1's T: vLLM's max_num_batched_tokens)")
@@ -48,7 +57,7 @@ def of(raw: Mapping[str, Any]) -> tuple[Any, ...]:
     gate = raw.get("gate")
     if gate is not None and not callable(gate):
         raise ValueError("pouw setting 'gate' is gate(session, root): the challenger gate's open of the reserved "
-                         "session on the window's open root (pouw_h1_window.Gate)")
+                         "session on the root the window's salt follows (pouw_h1_window.Gate)")
     served = raw.get("served")
     if served is not None:
         from verity_vllm.protocols.pouw.h1 import served as SV
@@ -59,7 +68,20 @@ def of(raw: Mapping[str, Any]) -> tuple[Any, ...]:
     if not (isinstance(graphs, (list, tuple))
             and all(isinstance(z, int) and not isinstance(z, bool) and z > 0 for z in graphs)):
         raise ValueError("pouw setting 'graphs' is the engine's CUDA-graph capture sizes, positive integers (none when eager)")
-    return rows, steps, runner, rounds, challenger, session, admission, gate, served, tuple(graphs)
+    unit, ks = raw.get("unit"), raw.get("ks")
+    if unit is not None and unit not in UNITS:
+        raise ValueError(f"pouw setting 'unit' is one of {', '.join(UNITS)} (H1's tile unit at each K)")
+    if ks is not None and not (isinstance(ks, (list, tuple)) and ks
+                               and all(isinstance(k, int) and not isinstance(k, bool) and k > 0 for k in ks)):
+        raise ValueError("pouw setting 'ks' is the contractions K whose linears H1 records, a non-empty list of positive "
+                         "integers (unset: every linear)")
+    commit_record = raw.get("commit_record")
+    if commit_record is not None and not callable(commit_record):
+        raise ValueError("pouw setting 'commit_record' is commit_record(run): at the window's close its registration and "
+                         "the record reusing its tables that it names as its Commit record (pouw_h1_commit.CommitRecord)")
+    return (rows, steps, runner, rounds, challenger, session, admission, gate, served, tuple(graphs),
+            PHW.period_setting(raw.get("period")), unit, None if ks is None else tuple(sorted(set(ks))),
+            PHW.reserved_of(raw.get("draw_session"), "draw_session"), commit_record)
 
 
 def fills(scheme: str, settings: Mapping[str, Any]) -> tuple[str, ...]:
@@ -79,14 +101,14 @@ def fills(scheme: str, settings: Mapping[str, Any]) -> tuple[str, ...]:
 
 def from_engine(scheme: str, settings: Mapping[str, Any], llm: Any, epoch: int = 0) -> dict[str, Any]:
     """`fills`' settings from the built ``vllm.LLM`` ``llm``: its in-process model runner, where the scheduler's admissions
-    arrive (`engine_profile.get_model_runner`; RuntimeError on an engine without one), and epoch ``epoch``'s coins held in
-    this process, the Lean verifier of record's entropy (`verifier.coins`): its salt coin and ``steps`` round coins.
+    arrive (`engine.handle.model_runner`; RuntimeError on an engine without one), and epoch ``epoch``'s coins held in
+    this process, the Lean verifier's entropy (`verifier.coins`): its salt coin and ``steps`` round coins.
     Coins held in the serving process credit nothing (`pouw_h1.IN_PROCESS`)."""
     keys = fills(scheme, settings)
     out: dict[str, Any] = {}
     if "runner" in keys:
-        from verity_vllm.engine.engine_profile import get_model_runner
-        out["runner"] = get_model_runner(llm)
+        from verity_vllm.engine.handle import model_runner
+        out["runner"] = model_runner(llm)
     if "coins" in keys:
         out["coins"] = Challenger(epoch, verifier.coins)
     if "rounds" in keys:
@@ -113,12 +135,28 @@ def refusals(scheme: str, settings: Any, stage: str, filled: tuple[str, ...] = (
     elif scheme != PH.SCHEME and (settings.runner is not None or settings.rounds is not None
                                   or settings.admission is not None or settings.served is not None):
         out.append(f"{scheme}: the pouw settings 'runner', 'rounds', 'admission' and 'served' are H1's ({PH.SCHEME})")
+    if scheme != PH.SCHEME and (settings.unit is not None or settings.ks is not None):
+        out.append(f"{scheme}: the pouw settings 'unit' and 'ks' are H1's ({PH.SCHEME})")
+    if settings.commit_record is not None and (scheme != PH.SCHEME or settings.served is None):
+        out.append(f"{scheme}: the pouw setting 'commit_record' names H1's ({PH.SCHEME}) Commit record, one reusing the "
+                   "tables its 'served' registers")
     if scheme not in CHALLENGED and settings.challenger is not None:
-        out.append(f"{scheme}: the pouw setting 'challenger' is {' and '.join(CHALLENGED)}'s")
+        out.append(f"{scheme}: the pouw setting 'challenger' is for {', '.join(CHALLENGED)} only")
     if (settings.session is not None or settings.gate is not None) and settings.challenger is None:
         out.append(f"{scheme}: the pouw setting 'session' is the session of the challenger at 'challenger'")
     if scheme in CHALLENGED and settings.challenger is not None:
-        out += PHW.refusals(scheme, settings, stage, opens=scheme == PH.SCHEME)
+        out += PHW.refusals(scheme, settings, stage, opens=OPENS.get(scheme))
+    if settings.draw_session is not None and (scheme != PH.SCHEME or settings.challenger is None):
+        out.append(f"{scheme}: the pouw setting 'draw_session' is the draw session of H1's window ({PH.SCHEME}) on the "
+                   "challenger at 'challenger'")
+    elif scheme == PH.SCHEME and settings.challenger is not None and stage != "capture" and settings.draw_session is None:
+        out.append(f"{scheme}: {PHW.NO_DRAW_SESSION}")
+    if scheme in PPD.SCHEMES and settings.challenger is not None and settings.session is not None:
+        why = PHW.period_reason(settings.period, settings.session)
+        out += [] if why is None else [f"{scheme}: {why}"]
+    elif settings.period is not None:
+        out.append(f"{scheme}: the pouw setting 'period' is the lane's open period that a Pearl-C install's reserved "
+                   f"session joins, so it goes with 'challenger' and 'session', for {', '.join(PPD.SCHEMES)} only")
     if scheme == PH.SCHEME and settings.rounds is not None and settings.steps is not None:
         have = settings.rounds.challenger.commitment.family(settings.rounds.label) - len(settings.rounds.roots)
         if have < settings.steps:
@@ -127,4 +165,4 @@ def refusals(scheme: str, settings: Any, stage: str, filled: tuple[str, ...] = (
     return out
 
 
-__all__ = ["CHALLENGED", "fills", "from_engine", "of", "refusals"]
+__all__ = ["CHALLENGED", "OPENS", "UNITS", "fills", "from_engine", "of", "refusals"]

@@ -1,4 +1,6 @@
-import Definitions.Nci.Assumptions.Covering
+module
+
+public import Definitions.Nci.Assumptions.Covering
 
 /-!
 # The covering bound's two assumptions at two costs: `c_w` a weight, `c_a` an activation
@@ -8,9 +10,9 @@ one cost `c = r · b`. Here each has its own: parameter-hardness at a weight cos
 activation-chaining at an activation cost `c_a` (`ActivationChainedAt`), over the same vocabulary (`Nci.Covering`). At
 `c_w = c_a = r · b` they are `ParameterHard` and `ActivationChained`.
 
-**Why two costs** (training's realism input, thread message 1792662617.028409). One shared `c` is at most both what an
+**Why two costs.** One shared `c` is at most both what an
 updated weight costs to rebuild and an activation's width, `c_a ≤ 16` at bf16, 8 at FP8, 4 at FP4. An updated weight
-compresses far below that, so one `c` charges every activation the weights' entropy. In training's fine-tuning numbers the
+compresses far below that, so one `c` charges every activation the weights' entropy. At fine-tuning's measured costs the
 slowdown bound is `ρ` about 45 with two costs against 1.1 with one.
 
 **What an updated weight is.** The weight index is abstract, so each reading is an instance; it only decides which `c_w`
@@ -19,6 +21,8 @@ slot and `c_w = H(θ'_{t0} | θ)`, what training added since the commitment, whi
 training step's version, `c_w` is at most one step's increment entropy: on an exact Pythia resume about 1.1-1.7 bits a
 weight at bf16, 0.2-0.3 at FP8, 0.03-0.05 at FP4.
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 
@@ -33,7 +37,7 @@ than it carries beyond `θ`. Read as a parameter slot from a step `t0` after the
 `c_w = H(θ'_{t0} | θ)` (the module doc). It fails when a block rebuilds the weights it uses from fewer bits: a registered
 base that an update stacks on, a low-rank update narrower than the weights it updates, or an update small enough for a
 block of `s` gates to compute itself. -/
-def ParameterHardAt (d : Declaration) (B : MulBlocks d) (s : ℕ) (cw : ℝ) : Prop :=
+def ParameterHardAt (d : RegisteredCircuit) (B : MulBlocks d) (s : ℕ) (cw : ℝ) : Prop :=
   ∀ S : Subcircuit d.D, S.gates.card ≤ s → cw * (B.weightsCompleted S).card ≤ (S.ins \ d.θ).card
 
 /-- **Activation-chaining at activation cost `c_a`** `(D, c_a)` of the multiplication block `m_{i,j}`, `p = (i, j)`:
@@ -47,7 +51,7 @@ so `c_a` is about an activation's width, 16 at bf16, 8 at FP8, 4 at FP4, whateve
 guarantee asks is `c_w · D > k`: at `k ≈ 10⁷` bits and `c_w` about a bit, `D ≈ 10⁷`, which a token's activation crosses at
 layer 1's attention output, whose Q, K and V weights number about `8 · 10⁷` in a 70B model (`d = 8192`, eight KV heads).
 So, as at one cost, only layer 1's Q/K/V products are not chained. -/
-def ActivationChainedAt (d : Declaration) (B : MulBlocks d) (D : ℕ) (ca : ℝ) (p : Fin B.nw × Fin B.nt) : Prop :=
+def ActivationChainedAt (d : RegisteredCircuit) (B : MulBlocks d) (D : ℕ) (ca : ℝ) (p : Fin B.nw × Fin B.nt) : Prop :=
   p ∈ B.P ∧ ∃ (A : Finset (Fin d.D.N)) (W : Finset (Fin B.nw)),
     A ⊆ B.T p.2 ∧ (∀ a ∈ A, ∃ g ∈ B.m p, a ∈ d.D.reads g) ∧ D ≤ W.card ∧
     (∀ i' ∈ W, (i', p.2) ∈ B.P ∧ B.m (i', p.2) ⊆ B.T p.2 ∧
@@ -56,7 +60,7 @@ def ActivationChainedAt (d : Declaration) (B : MulBlocks d) (D : ℕ) (ca : ℝ)
 
 open Classical in
 /-- `𝓜*` at activation cost `c_a`: the multiplication blocks chained at `(D, c_a)`. -/
-noncomputable def chainedBlocksAt (d : Declaration) (B : MulBlocks d) (D : ℕ) (ca : ℝ) :
+noncomputable def chainedBlocksAt (d : RegisteredCircuit) (B : MulBlocks d) (D : ℕ) (ca : ℝ) :
     Finset (Fin B.nw × Fin B.nt) :=
   B.P.filter (ActivationChainedAt d B D ca)
 

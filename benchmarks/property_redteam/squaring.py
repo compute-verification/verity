@@ -1,26 +1,27 @@
-"""Squaring mod p1024 in 6b's circuit model, measured in budgeted units: the attack on `EncodeChainHardness`.
+"""Squaring mod p1024 in 6b's circuit model, measured in budgeted and nonlinear units: the attack on `SquaringFloor`.
 
-**The target** (`Security/Definitions/Accounting/Assumptions/EncodeChain.lean`). The encode bound rests on
-`EncodeChainHardness F k B E ε`: a restricted circuit computing `q` words of the codec, less parity, on more than `ε` of
-the draws costs `q·E` budgeted units less a word-per-run-bit discount. Its headline is `E = k·S·e`, `e = L − d(ε)` a
-squaring, `L = n/8 = 128`, `d = d₀ + ⌈log₂(1/ε)/8⌉`, `d₀ = 4`: `e = 119` at `ε = 2^−40` (`E = 364,497` a word), `e = 121`
-at `ε = 2^−20` (`E = 370,623`). A squaring circuit under `e` budgeted units on more than `ε` of its inputs falsifies it.
+**The target** (`Security/Definitions/Accounting/Assumptions/SquaringChain.lean`). The encode bound rests on
+`SquaringFloor F e ε`, a squaring costs `e` nonlinear units (`Gates.nonlinear`: budgeted units plus data products, an
+`mma` lane whose two multiplicands both depend on run or coin data, one unit whatever their range), and `ChainSum`, a
+word's `k·S` chained squarings cost their sum, so `E = k·S·e`. `e = (2L − 1) + (L − d(ε))`, `L = n/8 = 128`,
+`d = d₀ + ⌈log₂(1/ε)/8⌉`, `d₀ = 4`: `e = 374` at `ε = 2^−40` (`E = 1,145,562` a word), `e = 376` at `ε = 2^−20`
+(`E = 1,151,688`). A squaring circuit under `e` nonlinear units on more than `ε` of its inputs falsifies
+`SquaringFloor`. They replace `EncodeChainHardness` (`EncodeChain.lean`), the two at once in budgeted units, which
+`bitwise_codec.py` falsified.
 
-**What this module ports.** A scalar (Python-int, so p1024-sized) port of `Security/Definitions/Accounting/Gates/Model.lean`
-as 6b's #2459 has it (`cursor/circuit-encode-declared-6cd3` @ 8225774747): `Op` (a gather with its table-read `low`),
-`Gate`, `gatherAt`, `raw`, `out`, `Ok`/`InWindow`, `derive`/`intervals` (a gather's interval the hull of its column's and
-0), `Proven`, `DeclaredHold`, `OperandBits`, `dynamic`, `indexBits`, `units` (fresh index bits per index gate and kind)
-and `budgeted`, plus `Restricted` (`Codec.lean`). `units(..., fixed=True)` is that count; `fixed=False` keeps the count
-before #2420, `Nat.clog 2 (args.length − 1)` index bits a range gather.
+**The model.** The circuits are built in `gates.py`, Model.lean (at 8225774747) on the canonical circuit: a `Program`
+the circuits IR's reference evaluator runs, Python ints so p1024-sized, with its window, interval analysis, `Proven`,
+`OperandBits`, `units` and `nonlinear`. `units(..., fixed=True)` is that count; `fixed=False` keeps the earlier count,
+`Nat.clog 2 (args.length − 1)` index bits a range gather. This module adds the cost model's knobs and the constructions.
 
-**Two Lean-only holes, both closed.** (A) Before #2420 a gather whose column is one constant word cost `Nat.clog 2 1 = 0`
-units and returns `c·[idx ≤ 0]`, a free comparison of any s32 value, so carries are free: `free_square` builds a whole
-squaring mod p1024 at **0 units** as that count reads, and `free_codec.py` the whole codec word (no budgeted gate, right
-on every draw). #2420 (on main) charges it one unit, and `free_square` costs 6,014. (B) Until #2459 `Gate.derive`
-returned a gather's declared interval, so a gather at a fixed index (wiring, 0 units) re-declared a free affine
-remainder `T_m − 256·⌊T_m/256⌋` into `[0, 255]`, and `holeb_square` squared at 128 units, one carry a limb. #2459
-derives the hull of the column's intervals and 0, and `Proven` refuses it: the gather's derived interval leaves its
-declared one, and the next squaring's `mma` operands leave u8. Hole B stays open on main until #2459 lands.
+**Two Lean-only holes, both closed.** (A) Under the earlier count a gather whose column is one constant word cost
+`Nat.clog 2 1 = 0` units and returns `c·[idx ≤ 0]`, a free comparison of any s32 value, so carries are free:
+`free_square` builds a whole squaring mod p1024 at **0 units** as that count reads, and `free_codec.py` the whole codec
+word (no budgeted gate, right on every sample). The current count charges it one unit, and `free_square` costs 6,014. (B) While `IntGate.derive`
+returned a gather's declared interval, a gather at a fixed index (wiring, 0 units) re-declared a free affine
+remainder `T_m − 256·⌊T_m/256⌋` into `[0, 255]`, and `holeb_square` squared at 128 units, one carry a limb. `IntGate.derive`
+now derives the hull of the column's intervals and 0, and `Proven` refuses it: the gather's derived interval leaves its
+declared one, and the next squaring's `mma` operands leave u8.
 
 **The constructions,** measured here (units, all `Restricted 128`, `Proven`, `DeclaredHold` on their inputs, and right):
 
@@ -32,9 +33,9 @@ declared one, and the next squaring's `mma` operands leave u8. Hole B stays open
   fixup group with no carry; wrong with probability ≈ `105·c_top / 256^8` ≈ 2^−44.
 * `seam_square` **160**, the cheapest: group 0's carry is computed first, the pass over limbs 4..127 ends in the top carry
   `c_top`, and limbs 0..3 are emitted last from `f_0 + 105·c_top`, so the fold needs no fixup. Wrong only when
-  `105·c_top` bumps group 0's carry (`seam_fails`): measured 25 in 131,072 inputs on a node (2^−12.4, run
-  r20261018-030322-ffbd; 2^−12.3 modeled from `c_top`'s mean 8,193), so a 3,063-squaring word is right ≈55% of the time.
-* `holeb_square` 128 as Model.lean read before #2459, refused under it.
+  `105·c_top` bumps group 0's carry (`seam_fails`): measured 25 in 131,072 inputs on a node (2^−12.4;
+  2^−12.3 modeled from `c_top`'s mean 8,193), so a 3,063-squaring word is right ≈55% of the time.
+* `holeb_square` 128 under a `derive` that returns the declared interval, refused under the hull.
 
 **Why 160 holds.** 160 = 128 byte gates + 32 group carries. Each output byte is an s8-family operand of the next
 squaring, so a gate whose derived interval lies in a byte: a budgeted gate (one unit), or a free gate over narrower
@@ -44,456 +45,43 @@ operands are columns or adjacent pairs `f_p + 256·f_{p+1}` within s32, the carr
 (balanced) digits and from any seam limb, under `OperandBits 128`: none uses fewer than 32 groups (u8 columns are 30 bits
 at limb 0 down to 23 at limb 127, s8 a bit narrower, and five columns fit only near the top, where merges are too
 few to save a group). The margin is small but real: a 31-group plan first appears at `OperandBits 130` (s8, merged) to
-136 (u8, unmerged) (run r20261018-060115-4966), so the 128-bit rule is what holds 160. Lazy reduction can't skip bytes, since each product's operands must be bytes. Nothing beats
-`e = 119` (121 at 2^−20): the 128 bytes alone exceed it, and the conjecture survives by 41 units a squaring. Numbers are
-*measured* by building and running the circuits here unless marked modeled.
+136 (u8, unmerged), so the 128-bit rule is what holds 160. Lazy reduction can't skip bytes, since each product's operands must be bytes. Nothing beats
+the renormalization floor `L − d(ε) = 119` (121 at 2^−20): the 128 bytes alone exceed it, by 41 units a squaring. In
+nonlinear units every construction also pays its column sums, `L² = 16,384` data products (`column_sums`), so
+`seam_square` costs 16,544 against `e = 374`. Numbers are *measured* by building and running the circuits here unless
+marked modeled.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Callable
 
+from gates import S8, S32_MAX, S32_MIN, U8, Builder, Iv, clog2, iv_add, iv_scale, operand_bits, proven
 from verity.core.protocols.remote_bandwidth import codec
-
-S32_MIN, S32_MAX = -(2 ** 31), 2 ** 31 - 1
 
 F = codec.P1024
 P = F.p
 N_LIMBS = F.word_bytes  # 128 at p1024
 DELTA = (1 << F.n) - P  # 256^128 − p = 105: the fold constant, 256^128 ≡ DELTA (mod p)
 
-# An s8-family operand's format, as `Int8Fmt` (Model.lean).
-S8 = (-128, 127)
-U8 = (0, 255)
-
-
-def clog2(n: int) -> int:
-    """`Nat.clog 2 n`: the least `k` with `n ≤ 2^k` (`clog2 0 = clog2 1 = 0`)."""
-    return 0 if n <= 1 else (n - 1).bit_length()
-
-
-# ---- the model: Model.lean's gates, values, window, interval analysis and units ------------------------------------------
-
-
-@dataclass(frozen=True)
-class Op:
-    """`Op ι`: an `input` slot by its binding, a `const`, an `affine` map `c + Σ coeff·v`, an s8-family `mma` coordinate
-    (`C + Σ a_i·b_i`, clamped or wrapped to s32), a `gather` (`col.getD (gatherAt low idx) 0`: at `idx.toNat`, or for a
-    table read, `low = n`, at `idx mod 2^n`), or a `budgeted` primitive of class `cls` (any function of its operands)."""
-
-    kind: str
-    binding: str = "registered"  # input: registered | coin | run
-    slot: int = -1
-    c: int = 0  # const
-    coeff: tuple[int, ...] = ()  # affine
-    fa: tuple[int, int] = S8  # mma operand formats
-    fb: tuple[int, int] = S8
-    k: int = 0  # mma products
-    sat: bool = True  # mma: satfinite clamp, else wrap
-    cls: str = "rounding"  # budgeted class
-    low: int | None = None  # gather: a table read of the index's low `low` bits
-    f: Callable[[list[int]], int] | None = field(default=None, compare=False)
-
-    @property
-    def is_derived(self) -> bool:
-        """`Op.IsDerived`: a const, affine map, s8-family step or gather, whose interval analysis derives."""
-        return self.kind in ("const", "affine", "mma", "gather")
-
-    @property
-    def charged(self) -> bool:
-        """`Op.charged`: a run input, a gather or a budgeted gate."""
-        return self.kind in ("gather", "budgeted") or (self.kind == "input" and self.binding == "run")
-
-    @property
-    def budget(self) -> str | None:
-        """`Op.budget`: its budgeted class, if any."""
-        return "gather" if self.kind == "gather" else self.cls if self.kind == "budgeted" else None
-
-
-@dataclass(frozen=True)
-class Gate:
-    """`Gate ι`: an operation, its operands (earlier gates, by index), and its declared interval `[lo, hi]`."""
-
-    op: Op
-    args: tuple[int, ...]
-    lo: int
-    hi: int
-
-    @property
-    def size(self) -> int:
-        """`Gate.size`: the values its declared interval holds."""
-        return max(0, self.hi + 1 - self.lo)
-
-    @property
-    def bits(self) -> int:
-        """`Gate.bits = Nat.clog 2 size`."""
-        return clog2(self.size)
-
-    def index_bits(self, fixed: bool = False) -> int:
-        """`Gate.indexBits`: `n` for a table read of the index's low `n` bits, else `Nat.clog 2 args.length`,
-        `⌈log₂(V + 1)⌉` for a column of `V` words (the `V` words and the out-of-range 0). `fixed=False` is the count
-        before #2420, `Nat.clog 2 (args.length − 1)`, under which a one-word column cost 0."""
-        if self.op.low is not None:
-            return self.op.low
-        return clog2(len(self.args)) if fixed else clog2(len(self.args) - 1)
-
-
-def clamp_s32(z: int) -> int:
-    return max(S32_MIN, min(S32_MAX, z))
-
-
-def wrap_s32(z: int) -> int:
-    return (z - S32_MIN) % 2 ** 32 + S32_MIN
-
-
-def raw(op: Op, x: dict[int, int], v: list[int]) -> int:
-    """`Op.raw`: the exact value before an s8-family step's clamp or wrap."""
-    if op.kind == "input":
-        return x[op.slot]
-    if op.kind == "const":
-        return op.c
-    if op.kind == "affine":
-        return op.c + sum(cf * val for cf, val in zip(op.coeff, v))
-    if op.kind == "mma":
-        head = v[0] if v else 0
-        tail = v[1:]
-        return head + sum(tail[i] * tail[op.k + i] for i in range(op.k))
-    if op.kind == "gather":
-        idx = v[0] if v else 0
-        col = v[1:]
-        t = gather_at(op.low, idx)
-        return col[t] if t < len(col) else 0
-    assert op.f is not None
-    return op.f(v)
-
-
-def gather_at(low: int | None, z: int) -> int:
-    """`gatherAt`: the column position a gather reads at index `z`, `z.toNat` or a table read's `(z mod 2^n).toNat`."""
-    return max(z, 0) if low is None else z % 2 ** low
-
-
-def out(op: Op, z: int) -> int:
-    """`Op.out`: an s8-family step clamps (`satfinite`) or wraps to s32; every other op passes its exact value."""
-    if op.kind != "mma":
-        return z
-    return clamp_s32(z) if op.sat else wrap_s32(z)
-
-
-def operands(g: Gate, vs: list[int]) -> list[int]:
-    return [vs[j] if j < len(vs) else 0 for j in g.args]
-
-
-def value(g: Gate, x: dict[int, int], vs: list[int]) -> int:
-    return out(g.op, raw(g.op, x, operands(g, vs)))
-
-
-def values(C: list[Gate], x: dict[int, int]) -> list[int]:
-    vs: list[int] = []
-    for g in C:
-        vs.append(value(g, x, vs))
-    return vs
-
-
-def val(C: list[Gate], x: dict[int, int], i: int) -> int:
-    return values(C, x)[i]
-
-
-def operands_ok(g: Gate, vs: list[int]) -> bool:
-    """`Op.OperandsOk`: an s8-family step's `2k + 1` operands lie in their formats; other ops ask nothing."""
-    if g.op.kind != "mma":
-        return True
-    o = operands(g, vs)
-    if len(o) != 2 * g.op.k + 1:
-        return False
-    a, b = o[1:1 + g.op.k], o[1 + g.op.k:1 + 2 * g.op.k]
-    return all(g.op.fa[0] <= z <= g.op.fa[1] for z in a) and all(g.op.fb[0] <= z <= g.op.fb[1] for z in b)
-
-
-def ok(g: Gate, x: dict[int, int], vs: list[int]) -> bool:
-    """`Gate.Ok`: the exact value in its declared interval, an s8-family step's operands in their formats and its
-    declared interval within s32."""
-    r = raw(g.op, x, operands(g, vs))
-    if not (g.lo <= r <= g.hi and operands_ok(g, vs)):
-        return False
-    if g.op.kind == "mma":
-        return S32_MIN <= g.lo and g.hi <= S32_MAX
-    return True
-
-
-def in_window(C: list[Gate], x: dict[int, int]) -> bool:
-    """`InWindow`: every gate `Ok` on `x`."""
-    vs: list[int] = []
-    good = True
-    for g in C:
-        good = good and ok(g, x, vs)
-        vs.append(value(g, x, vs))
-    return good
-
-
-def declared_hold(C: list[Gate], x: dict[int, int]) -> bool:
-    """`DeclaredHold`: every non-derived gate's raw value lies in its declared interval."""
-    vs: list[int] = []
-    good = True
-    for g in C:
-        if not g.op.is_derived:
-            r = raw(g.op, x, operands(g, vs))
-            good = good and g.lo <= r <= g.hi
-        vs.append(value(g, x, vs))
-    return good
-
-
-# ---- interval analysis (Model.lean's `derive`, `intervals`, `Proven`) ----------------------------------------------------
-
-Iv = tuple[int, int]
-
-
-def iv_add(a: Iv, b: Iv) -> Iv:
-    return (a[0] + b[0], a[1] + b[1])
-
-
-def iv_scale(c: int, a: Iv) -> Iv:
-    return (c * a[0], c * a[1]) if c >= 0 else (c * a[1], c * a[0])
-
-
-def iv_mul(a: Iv, b: Iv) -> Iv:
-    ps = (a[0] * b[0], a[0] * b[1], a[1] * b[0], a[1] * b[1])
-    return (min(ps), max(ps))
-
-
-def iv_within(a: Iv, lo: int, hi: int) -> bool:
-    return lo <= a[0] and a[1] <= hi
-
-
-def iv_join(a: Iv, b: Iv) -> Iv:
-    return (min(a[0], b[0]), max(a[1], b[1]))
-
-
-def derive(g: Gate, ivs: list[Iv]) -> Iv:
-    """`Gate.derive`: the interval of a const, affine map or s8-family step from its operands' intervals, a gather's
-    hull of its column's intervals and 0, and every other gate's declared interval."""
-    a = [ivs[j] if j < len(ivs) else (0, 0) for j in g.args]
-    op = g.op
-    if op.kind == "const":
-        return (op.c, op.c)
-    if op.kind == "affine":
-        acc = (op.c, op.c)
-        for cf, iv in zip(op.coeff, a):
-            acc = iv_add(acc, iv_scale(cf, iv))
-        return acc
-    if op.kind == "mma":
-        acc = a[0] if a else (0, 0)
-        tail = a[1:]
-        for i in range(op.k):
-            acc = iv_add(acc, iv_mul(tail[i], tail[op.k + i]))
-        return acc
-    if op.kind == "gather":
-        acc = (0, 0)
-        for iv in a[1:]:
-            acc = iv_join(acc, iv)
-        return acc
-    return (g.lo, g.hi)
-
-
-def intervals(C: list[Gate]) -> list[Iv]:
-    ivs: list[Iv] = []
-    for g in C:
-        ivs.append(derive(g, ivs))
-    return ivs
-
-
-def proven(C: list[Gate]) -> list[str]:
-    """`Proven`: each derived gate's (a gather's among them) derived interval within its declared one, each affine map's
-    declared interval within s32, and each s8-family step's `2k + 1` operands within their formats and its declared
-    interval within s32. Returns the violations, so `[]` means proven."""
-    errs: list[str] = []
-    ivs: list[Iv] = []
-    for i, g in enumerate(C):
-        d = derive(g, ivs)
-        if g.op.is_derived and not iv_within(d, g.lo, g.hi):
-            errs.append(f"gate {i} ({g.op.kind}): derived {d} outside declared [{g.lo}, {g.hi}]")
-        if g.op.kind == "affine" and not (S32_MIN <= g.lo and g.hi <= S32_MAX):
-            errs.append(f"gate {i} (affine): declared [{g.lo}, {g.hi}] outside s32")
-        if g.op.kind == "mma":
-            if len(g.args) != 2 * g.op.k + 1:
-                errs.append(f"gate {i} (mma): {len(g.args)} operands, not 2k+1={2 * g.op.k + 1}")
-            if not (S32_MIN <= g.lo and g.hi <= S32_MAX):
-                errs.append(f"gate {i} (mma): declared [{g.lo}, {g.hi}] outside s32")
-            a = g.args[1:1 + g.op.k]
-            b = g.args[1 + g.op.k:1 + 2 * g.op.k]
-            for j in a:
-                if j < len(ivs) and not iv_within(ivs[j], g.op.fa[0], g.op.fa[1]):
-                    errs.append(f"gate {i} (mma): operand {j} {ivs[j]} outside format {g.op.fa}")
-            for j in b:
-                if j < len(ivs) and not iv_within(ivs[j], g.op.fb[0], g.op.fb[1]):
-                    errs.append(f"gate {i} (mma): operand {j} {ivs[j]} outside format {g.op.fb}")
-        ivs.append(d)
-    return errs
-
-
-def operand_bits(B: int, C: list[Gate]) -> bool:
-    """`OperandBits B`: every budgeted gate's operands' declared bits sum to at most `B` (a gather is exempt)."""
-    return all(sum(C[j].bits for j in g.args if j < len(C)) <= B for g in C if g.op.kind == "budgeted")
-
-
-def restricted(B: int, C: list[Gate]) -> bool:
-    """`Restricted B = Proven ∧ OperandBits B`."""
-    return not proven(C) and operand_bits(B, C)
-
-
-def dynamic(C: list[Gate]) -> list[bool]:
-    """`dynamic`: whether each gate's value depends on a run or coin input."""
-    ds: list[bool] = []
-    for g in C:
-        if g.op.kind == "input":
-            ds.append(g.op.binding != "registered")
-        else:
-            ds.append(any(ds[j] for j in g.args if j < len(ds)))
-    return ds
-
-
-def units(C: list[Gate], i: int, *, fixed: bool = False, dyn: list[bool] | None = None) -> int:
-    """`units`: a budgeted gate is one unit when it reads a dynamic value; a gather is its fresh index bits (its
-    `indexBits` less the most any earlier gather of the same index gate and kind paid) plus one when its column is
-    dynamic too."""
-    if dyn is None:
-        dyn = dynamic(C)
-    g = C[i]
-    if g.op.kind == "budgeted":
-        return 1 if any(dyn[j] for j in g.args) else 0
-    if g.op.kind == "gather":
-        j = g.args[0]
-        if not dyn[j]:
-            return 0
-        kind = g.op.low is not None
-        prior = max((C[h].index_bits(fixed) for h in range(i)
-                     if C[h].op.kind == "gather" and (C[h].op.low is not None) == kind
-                     and C[h].args and C[h].args[0] == j), default=0)
-        col_dyn = any(dyn[a] for a in g.args[1:])
-        return max(0, g.index_bits(fixed) - prior) + (1 if col_dyn else 0)
-    return 0
-
-
-def budgeted(C: list[Gate], *, fixed: bool = False) -> int:
-    """`budgeted`: the circuit's total units."""
-    dyn = dynamic(C)
-    return sum(units(C, i, fixed=fixed, dyn=dyn) for i in range(len(C)))
-
-
-# ---- a builder that keeps intervals, dynamic and the gather dedup incrementally (O(1) a gate) ----------------------------
-
-
-class Builder:
-    """Appends gates in canonical order, deriving a free gate's declared interval as `Proven` requires, and keeping the
-    intervals, the `dynamic` flags and the gather dedup so a large free circuit builds and measures in linear time."""
-
-    def __init__(self) -> None:
-        self.gates: list[Gate] = []
-        self.ivs: list[Iv] = []
-        self.dyn: list[bool] = []
-        self._lean: list[int] = []  # each gate's Lean units
-        self._fixed: list[int] = []
-        self._gmax: dict[tuple[int, bool], int] = {}  # (index gate, kind) -> max pre-#2420 indexBits so far
-        self._gmaxf: dict[tuple[int, bool], int] = {}
-        self._consts: dict[int, int] = {}
-
-    def _append(self, op: Op, args: tuple[int, ...], lo: int, hi: int) -> int:
-        i = len(self.gates)
-        if op.kind == "input":
-            self.dyn.append(op.binding != "registered")
-        else:
-            self.dyn.append(any(self.dyn[j] for j in args))
-        g = Gate(op, args, lo, hi)
-        self.ivs.append(derive(g, self.ivs))
-        self.gates.append(g)
-        lean = fixed = 0
-        if op.kind == "budgeted":
-            lean = fixed = 1 if any(self.dyn[j] for j in args) else 0
-        elif op.kind == "gather":
-            j = args[0]
-            if self.dyn[j]:
-                key = (j, op.low is not None)
-                col_dyn = any(self.dyn[a] for a in args[1:])
-                ib, ibf = g.index_bits(False), g.index_bits(True)
-                lean = max(0, ib - self._gmax.get(key, 0)) + (1 if col_dyn else 0)
-                fixed = max(0, ibf - self._gmaxf.get(key, 0)) + (1 if col_dyn else 0)
-                self._gmax[key] = max(self._gmax.get(key, 0), ib)
-                self._gmaxf[key] = max(self._gmaxf.get(key, 0), ibf)
-        self._lean.append(lean)
-        self._fixed.append(fixed)
-        return i
-
-    def inp(self, slot: int, lo: int, hi: int, binding: str = "coin") -> int:
-        return self._append(Op("input", binding=binding, slot=slot), (), lo, hi)
-
-    def const(self, c: int) -> int:
-        if c not in self._consts:
-            self._consts[c] = self._append(Op("const", c=c), (), c, c)
-        return self._consts[c]
-
-    def affine(self, c: int, terms: list[tuple[int, int]]) -> int:
-        """`c + Σ coeff·gate`, its declared interval the derived one (so `Proven`); asserts it within s32."""
-        args = tuple(j for _, j in terms)
-        op = Op("affine", c=c, coeff=tuple(cf for cf, _ in terms))
-        lo, hi = derive(Gate(op, args, 0, 0), self.ivs)
-        assert S32_MIN <= lo and hi <= S32_MAX, f"affine [{lo}, {hi}] outside s32"
-        return self._append(op, args, lo, hi)
-
-    def mma(self, head: int, a: list[int], b: list[int], fa: tuple[int, int], fb: tuple[int, int]) -> int:
-        """`head + Σ a_i·b_i`, its declared interval the derived one; asserts within s32."""
-        assert len(a) == len(b)
-        op = Op("mma", fa=fa, fb=fb, k=len(a))
-        args = (head, *a, *b)
-        lo, hi = derive(Gate(op, args, 0, 0), self.ivs)
-        assert S32_MIN <= lo and hi <= S32_MAX, f"mma [{lo}, {hi}] outside s32"
-        return self._append(op, args, lo, hi)
-
-    def gather(self, idx: int, column: list[int], lo: int | None = None, hi: int | None = None,
-               low: int | None = None) -> int:
-        """`column[gatherAt low idx]`, declared `[lo, hi]`, or by default its derived hull (so `Proven`)."""
-        op = Op("gather", low=low)
-        args = (idx, *column)
-        if lo is None or hi is None:
-            lo, hi = derive(Gate(op, args, 0, 0), self.ivs)
-        return self._append(op, args, lo, hi)
-
-    def budgeted(self, f: Callable[[list[int]], int], args: list[int], lo: int, hi: int, cls: str = "rounding") -> int:
-        return self._append(Op("budgeted", cls=cls, f=f), tuple(args), lo, hi)
-
-    # -- measures, from the incremental caches --
-    @property
-    def lean_units(self) -> int:
-        return sum(self._lean)
-
-    @property
-    def fixed_units(self) -> int:
-        return sum(self._fixed)
-
-    def evaluate(self, x: dict[int, int]) -> tuple[list[int], bool, bool]:
-        """Run on input `x`: the gates' values, and whether the window (`InWindow`) and `DeclaredHold` hold."""
-        vs: list[int] = []
-        window = hold = True
-        for g in self.gates:
-            window = window and ok(g, x, vs)
-            if not g.op.is_derived:
-                r = raw(g.op, x, operands(g, vs))
-                hold = hold and g.lo <= r <= g.hi
-            vs.append(value(g, x, vs))
-        return vs, window, hold
-
-
 # ---- the costed knobs ----------------------------------------------------------------------------------------------------
 
 
-def e_per_squaring(log2_inv_eps: int) -> int:
-    """6b's conjectured floor `e = L − d(ε)`, `d = d₀ + ⌈log₂(1/ε)/8⌉`, `d₀ = 4` (EncodeChain.lean)."""
+def renorm_floor(log2_inv_eps: int) -> int:
+    """Lemma R's floor on a squaring's budgeted units, `L − d(ε)`, `d = d₀ + ⌈log₂(1/ε)/8⌉`, `d₀ = 4`."""
     return N_LIMBS - 4 - -(-log2_inv_eps // 8)
+
+
+def e_per_squaring(log2_inv_eps: int) -> int:
+    """`SquaringFloor`'s conjectured price in nonlinear units, `e = (2L − 1) + (L − d(ε))`: a data product for each of
+    the square's `2L − 1` column sums, and Lemma R's carries (SquaringChain.lean)."""
+    return 2 * N_LIMBS - 1 + renorm_floor(log2_inv_eps)
 
 
 def counting_floor(log2_inv_eps: int) -> int:
     """The byte-gate floor on a squaring's budgeted units, modeled (not a theorem): if every output byte is a budgeted
-    gate or a constant guess (#2459's premise, with hole B closed: a derived value of width 255 reads only gates that
-    narrow, and a gather's hull is its column's while it pays each index bit it reads fresh), a squaring right on `ε` of
+    gate or a constant guess (the gather hull's premise, with hole B closed: a derived value of width 255 reads only
+    gates that narrow, and a gather's hull is its column's while it pays each index bit it reads fresh), a squaring right on `ε` of
     inputs guesses at most `⌊log₂(1/ε)/8⌋` bytes, so `U ≥ ⌈(8L − log₂(1/ε))/8⌉`: 126 at `ε = 2^−20`, 123 at `2^−40`."""
     return -(-(8 * N_LIMBS - log2_inv_eps) // 8)
 
@@ -507,8 +95,8 @@ ROUNDS = codec.DEFAULT.rounds  # 3
 
 def column_sums(b: Builder, a: list[int], fmt: tuple[int, int] = U8) -> list[int]:
     """The 255 columns of `a²` for 128 limbs `a` of format `fmt` (u8, or s8 balanced digits), each an s8-family step from
-    `C = 0`, then the top 127 folded into the bottom by `256^128 ≡ DELTA`: 128 free `mma`/`affine` gates a column, all
-    within s32. Returns the 128 folded column gates `f_0 … f_127`."""
+    `C = 0`, then the top 127 folded into the bottom by `256^128 ≡ DELTA`, all within s32: no budgeted unit, and
+    `L² = 16,384` data products, a lane each. Returns the 128 folded column gates `f_0 … f_127`."""
     zero = b.const(0)
     cols: list[int] = []
     for m in range(2 * N_LIMBS - 1):
@@ -556,7 +144,7 @@ def _carry_pass_free(b: Builder, f: list[int]) -> tuple[list[int], int]:
     carry = b.const(0)
     for m in range(N_LIMBS):
         u = b.affine(0, [(1, f[m]), (1, carry)])
-        nbits = max(8, b.gates[u].hi.bit_length())
+        nbits = max(8, b.hi[u].bit_length())
         low, carry = free_split(b, u, nbits, 8)
         out.append(low)
     return out, carry
@@ -601,7 +189,7 @@ def _carry_fn(weights: tuple[int, ...], w: int) -> Callable[[list[int]], int]:
 
 
 def _fhi(b: Builder, g: int) -> int:
-    return b.gates[g].hi
+    return b.hi[g]
 
 
 def _emit_group(b: Builder, out: list[int], base: int, carry: int, carry_hi: int, cols: list[int],
@@ -825,8 +413,8 @@ def column_intervals(fmt: tuple[int, int] = U8) -> list[Iv]:
 
 def _holeb_limb(b: Builder, t: int, carry_out: int | None = None) -> tuple[int, int]:
     """One limb under hole B: the carry `h = ⌊t/256⌋` a budgeted gate (or `carry_out`, already paid), and the byte
-    `t − 256·h`, a free affine map, re-declared `[0, 255]` by a gather at the fixed index 0 (wiring: 0 units). Model.lean
-    before #2459 derived a gather's declared interval, so the next squaring's `mma` took it as a u8 operand; #2459
+    `t − 256·h`, a free affine map, re-declared `[0, 255]` by a gather at the fixed index 0 (wiring: 0 units). A `derive`
+    that returns a gather's declared interval lets the next squaring's `mma` take it as a u8 operand; Model.lean
     derives the hull of its column and 0, the affine map's wide interval, and `Proven` refuses it."""
     if carry_out is None:
         carry_out = b.budgeted(lambda v: v[0] >> 8, [t], 0, _fhi(b, t) >> 8)
@@ -835,8 +423,8 @@ def _holeb_limb(b: Builder, t: int, carry_out: int | None = None) -> tuple[int, 
 
 
 def holeb_square(b: Builder, a: list[int]) -> tuple[list[int], int]:
-    """**Hole B** (Lean-only, open on main after #2420, closed by #2459's gather hull): one budgeted unit a limb, 128 a
-    squaring, and refused by `Proven` under #2459. Every byte is its limb's `T_m − 256·⌊T_m/256⌋`, free, re-declared
+    """**Hole B** (Lean-only, closed by the gather hull): one budgeted unit a limb, 128 a
+    squaring, and refused by `Proven` under the hull. Every byte is its limb's `T_m − 256·⌊T_m/256⌋`, free, re-declared
     into `[0, 255]` by a fixed-index gather, so only the carries pay. The seam
     is `seam_square`'s: group 0's carry `c_4` first (one gate over `f_0 … f_3`), a ripple over limbs 4..127 to `c_top`,
     then limbs 0..3 from `f_0 + 105·c_top`, the last of them closed by `c_4` itself (no gate). Wrong exactly when
@@ -903,11 +491,12 @@ def measure(name: str, inputs: list[int]) -> dict:
         right += all(0 <= v <= 255 for v in o) and output_value(o) % P == x * x % P
         window += w
         hold += h
-    budgeted_gates = [g for g in b.gates if g.op.kind == "budgeted"]
-    return {"lean_units": b.lean_units, "fixed_units": b.fixed_units, "gates": len(b.gates),
-            "budgeted_gates": len(budgeted_gates), "gathers": sum(g.op.kind == "gather" for g in b.gates),
-            "proven": proven(b.gates) == [], "operand_bits_128": operand_bits(128, b.gates),
-            "max_operand_bits": max((sum(b.gates[j].bits for j in g.args) for g in budgeted_gates), default=0),
+    budgeted_gates = [i for i, kind in enumerate(b.kinds) if kind == "budgeted"]
+    return {"lean_units": b.lean_units, "fixed_units": b.fixed_units, "products": b.products,
+            "nonlinear_units": b.nonlinear_units, "gates": len(b),
+            "budgeted_gates": len(budgeted_gates), "gathers": b.kinds.count("gather"),
+            "proven": proven(b) == [], "operand_bits_128": operand_bits(128, b),
+            "max_operand_bits": max((sum(b.bits(j) for j in b.args[i]) for i in budgeted_gates), default=0),
             "inputs": len(inputs), "right": right, "in_window": window, "declared_hold": hold}
 
 
@@ -947,15 +536,16 @@ def main() -> None:
                 "column_bits": [_iv_bits(iv) for iv in cols]}
     best = rows["seam_square"]["fixed_units"]
     result = {
-        "model": "Security/Definitions/Accounting/Gates/Model.lean @ 8225774747 (#2459), ported scalar; lean_units is "
-                 "the count before #2420",
+        "model": "Security/Definitions/Accounting/Gates/Model.lean @ 8225774747 on the canonical circuit (gates.py); "
+                 "lean_units is the count before the gather fix",
         "constructions": rows,
         "seam": {"samples": args.seam_samples, "fails": fails, "c_top_mean": sum(ctops) / len(ctops),
                  "c_top_max": max(ctops), "model_rate": DELTA * (sum(ctops) / len(ctops)) / 2 ** 32},
-        "column_bits": [clog2(b.gates[g].hi + 1) for g in f], "greedy_widths": widths,
+        "column_bits": [clog2(b.hi[g] + 1) for g in f], "greedy_widths": widths,
         "group_plans": plans,
         "conjecture": {f"2^-{t}": {"e": e_per_squaring(t), "E": ROUNDS * SQUARINGS * e_per_squaring(t),
-                                   "counting_floor": counting_floor(t)} for t in (20, 40)},
+                                   "renorm_floor": renorm_floor(t), "counting_floor": counting_floor(t)}
+                       for t in (20, 40)},
         "best": {"per_squaring": best, "per_word_k_S_e": ROUNDS * SQUARINGS * best},
         "hole_b_before_2459": {"per_squaring": rows["holeb_square"]["fixed_units"],
                                "proven": rows["holeb_square"]["proven"]},

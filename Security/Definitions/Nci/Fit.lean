@@ -1,13 +1,15 @@
-import Definitions.Nci.Threads
+module
+
+public import Definitions.Nci.Threads
 
 /-!
 # NCI over windows: the fit bound's vocabulary
 
-The fit bound ("The fit bound", Notion) divides the reference circuit `c` into windows, a partition of its computed gates
-(`Verity.Partition`): in the accounting model, one server's time from a wipe through whole wipe periods. When no window
-can hold a model that reaches the target loss, each thread's work spans several windows, and every window that works on
-a thread other than the one that starts it reads some of that thread's state. Over a `Threading` of `c`, a partition `P`
-into `k` windows and the window `start t` that starts each thread `t`:
+The fit bound divides the reference circuit `c` into windows, a partition of its computed gates (`Verity.Partition`): in
+the accounting model, one server's time from a wipe through whole wipe periods. When no window can hold a model that
+reaches the target loss, each thread's work spans several windows, and every window that works on a thread other than
+the one that starts it reads some of that thread's state. Over a `Threading` of `c`, a partition `P` into `k` windows
+and the window `start t` that starts each thread `t`:
 
 * `threadWeights R t`: the weights thread `t` uses inside `R`, those of which `R` holds a counted multiplication of `t`.
 * `visits P t`: the windows that do some of thread `t`'s counted multiplications.
@@ -21,13 +23,15 @@ carrying a parameter across steps is counted once for it:
 * `Slots.threadSlots R t`: the slots of the weights thread `t` uses inside `R`.
 -/
 
+@[expose] public section
+
 namespace Nci.Threading
 
 open Verity Finset
 
 section
 
-variable {c : Declaration} (T : Threading c)
+variable {c : RegisteredCircuit} (T : Threading c)
 
 /-- The weights thread `t` uses inside `R`: those of which `R` holds a counted multiplication of thread `t`. -/
 def threadWeights (R : Finset (Fin c.D.N)) (t : Fin T.m) : Finset (Fin c.D.N) :=
@@ -47,7 +51,7 @@ end
 versions of one slot number at most `reuse`, as `T.reuse_le` has it for one weight. A thread that uses one version of
 each parameter (a token at one optimizer step, forward and backward) meets it, and so does one whose forward and
 backward read different versions, each at most `reuse` times in all. -/
-structure Slots {c : Declaration} (T : Threading c) where
+structure Slots {c : RegisteredCircuit} (T : Threading c) where
   /-- The number of parameter slots. -/
   p : ℕ
   /-- The slot of each weight gate: the parameter it is a version of. -/
@@ -56,7 +60,7 @@ structure Slots {c : Declaration} (T : Threading c) where
 
 namespace Slots
 
-variable {c : Declaration} {T : Threading c} (σ : T.Slots)
+variable {c : RegisteredCircuit} {T : Threading c} (σ : T.Slots)
 
 /-- The slots `R` uses: those of the weights it uses. -/
 def slotsUsed (R : Finset (Fin c.D.N)) : Finset (Fin σ.p) := (T.weightsUsed R).image σ.slot

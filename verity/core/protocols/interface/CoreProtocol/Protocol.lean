@@ -2,7 +2,7 @@
 The interface every core protocol implements (PoUW, PoUS, the network certificate check, sampled proofs' one-stage
 audit, the composition).
 
-* `params`: the protocol's public parameters (k, Δ, the law, ...), canonical JSON;
+* `params`: the protocol's public parameters (k, Δ, the sampling design, ...), canonical JSON;
 * `commitment`: what the prover committed to before the challenge, and the digest that binds it;
 * `evidence`: everything else the check reads (the session record, transcript, proofs, certificate);
 * `check`: one total function from those three to an `Outcome`;
@@ -12,9 +12,14 @@ audit, the composition).
 parameters, runs the check, and turns every decoding failure into a rejection, so every input gets a verdict.
 `Answer.toJson` is the outcome's one canonical form, the one the difftests compare and a composition reads.
 -/
-import Lean.Data.Json
-import Flock.Bytes
-import Flock.Canon
+module
+
+public import Flock.Canon
+public import Lean.Data.Json.Parser
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core
 
@@ -75,9 +80,11 @@ structure Answer where
   published : Option Json
   profile : Option Json
 
-/-- Canonical JSON: UTF-8 that `Flock.canon` writes back byte for byte. The parameters must be canonical, and a protocol
-whose commitment or evidence is JSON reads it with this too. -/
+/-- Canonical JSON: text that `Flock.canon` writes back byte for byte. `canon` escapes every character outside printable
+ASCII, so a canonical text has no byte at or above `0x7f`, and one holding one is refused before it is parsed. The
+parameters must be canonical, and a protocol whose commitment or evidence is JSON reads it with this too. -/
 def canonicalJson (b : ByteArray) : V Json := do
+  unless b.data.all (· < 0x7f) do throw "not ASCII without DEL (a byte at or above 0x7f)"
   let some s := String.fromUTF8? b | throw "not UTF-8"
   let j ← match Json.parse s with
     | .ok j => pure j

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Binding.E2E
-import Proofs.Flock.Soundness.Registered.Binding
+module
+
+public import Proofs.Flock.Soundness.Binding.E2E
+public import Proofs.Flock.Soundness.Registered.Binding
 
 /-!
 # The end-to-end theorem with registered reads
@@ -14,9 +16,11 @@ leaf, so the committed values there are the rows the registrant committed (`Read
 
 They take, beyond the forms they extend, the layout's registered reads (`rd : Reads`) and `hchk`: on every outcome the
 executable accepts, the registered check held at the prover's registration, through that outcome's paths. `hchk` is
-`check_ok`'s conclusion read at the model's leaves, the same link from the executable's openings to the model's (R11) that
-`bc_registered` and `tr` name.
+`check_ok`'s conclusion read at the model's leaves, the same link from the executable's openings to the model's (the
+refinement `ExecRefines`) that `bc_registered` and `tr` name.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Registered
 
@@ -26,7 +30,7 @@ open scoped ENNReal
 /-- The executable's field. -/
 local notation "𝔽" => FlockLevel3.GF128
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)

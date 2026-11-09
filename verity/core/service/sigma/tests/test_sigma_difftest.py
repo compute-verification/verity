@@ -1,5 +1,5 @@
 """`Flock.Sigma.check`, the Lean verifier's check that a Boolean Program is σ of its word Program, held to the Python that
-mirrors it, `verity_vllm.program.boolean.sigma_check`.
+mirrors it, `verity.ml.definitions.boolean.sigma_check`.
 
 The reference decodes both descriptors (`codec.decode_program`), checks the Boolean descriptor's `word` link, σ's table and the
 input streams as the Lean does, then runs `sigma_check` itself on the two roots seen as Definitions: each root's Calls in
@@ -25,6 +25,7 @@ import pytest
 from hypothesis import strategies as st
 
 import verity_difftest as D
+import verity.ml.definitions.boolean as BB
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.codec import decode_program, descriptor_id, encode_program, program_digest
 from verity.ml.circuits.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind
@@ -32,11 +33,10 @@ from verity.ml.circuits.ops import fp32 as W
 from verity.ml.circuits.ops import prims as MP
 from verity.ml.circuits.program import Program, input_id, is_input
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, coll_concat
-from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Type, Value
-from verity_vllm.program import boolean as BB
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry.catalog import load as load_registry
-from verity_vllm.program.replay import replayer
+from verity.ml.circuits.types import Array, RecordType, Tuple as TupleT, Type, Value
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry.catalog import load as load_registry
+from verity.ml.definitions.replay import replayer
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -164,7 +164,7 @@ def reference(case: dict) -> dict:
 
 # ---- the corpus --------------------------------------------------------------------------------------------------------------
 
-PARAMS = (("x", Array(4, F32)), ("y", Array(2, Array(4, F32))), ("weights", Record(("s", F32), ("t", Array(3, BF16)), ("u", Array(2, F32)))))
+PARAMS = (("x", Array(4, F32)), ("y", Array(2, Array(4, F32))), ("weights", RecordType(("s", F32), ("t", Array(3, BF16)), ("u", Array(2, F32)))))
 FNS = {"add": W.F32AddFtz, "mul": W.F32MulFtz, "cast": MP.F2fpBf16, "max": W.F32Max, "guard": W.GuardNegInfZero}
 
 
@@ -324,7 +324,7 @@ _TYPES = st.recursive(
     st.integers(1, 40).map(Value),
     lambda t: st.one_of(st.tuples(st.integers(0, 3), t).map(lambda a: Array(*a)),
                         st.lists(t, max_size=3).map(lambda fs: TupleT(*fs)),
-                        st.lists(t, max_size=3).map(lambda fs: Record(*((f"f{i}", f) for i, f in enumerate(fs))))),
+                        st.lists(t, max_size=3).map(lambda fs: RecordType(*((f"f{i}", f) for i, f in enumerate(fs))))),
     max_leaves=8)
 
 

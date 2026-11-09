@@ -14,15 +14,14 @@ from verity_vllm.observe.fold.tree import TreeNode
 
 
 def kv_group_of(ctx: StepContext, layer: str | None) -> dict | None:
-    """[r8 E-cleanup 2026-09-18, hybrid KV cache] The KV-cache group whose block tables / slot mapping address `layer`'s
+    """Hybrid KV cache: the KV-cache group whose block tables / slot mapping address `layer`'s
     KV rows, or None when the step has a single group (the legacy `StepStart.block_tables` / `slot_mapping` are complete).
 
     vLLM's hybrid KV-cache manager gives layers of different attention kinds separate groups -- Gemma-2: the sliding-window
     (even) layers and the global (odd) layers -- each with its own block tables and slot mapping into the SAME physical KV
     tensors (layers 2k and 2k+1 share one tensor).  Modelling every layer with group 0's tables puts the even layers' rows
     at the odd layers' cells: prefill still replays (reads resolve by provenance to the same step's mis-addressed writes)
-    but decode reads the neighbour layer's K/V (Gemma-2 B1 C256 recapture 10:28Z: 18/18 tier-A failures = even-layer
-    decode, outputs outside the span of the gathered V).  With several groups a layer whose group is unknown is a
+    but decode reads the neighbour layer's K/V.  With several groups a layer whose group is unknown is a
     GeometryError (never a guess)."""
     groups = getattr(ctx.start, "kv_groups", None)
     if not groups or len(groups) <= 1:

@@ -9,7 +9,7 @@ Part unit (row, h, s) reads ``in0`` = ``q_nope[h]``, ``in1`` = ``q_rope[h]`` and
 stores: the reader computes every split's with the twin (`sparse_mla_split_twins.part_rows`) and holds the twin's combine of
 them to the row's served output.  Combine unit (row, h) reads ``in0.s`` = split s's ``lse`` and ``in1.s`` = its partial for each
 split s, and returns ``o0`` = the served head h.  The window wires each of those rows to the output row of the part unit that
-wrote it (`wire`, `commit.wiring`), so a drawn combine's inputs are the committed outputs of its parts."""
+wrote it (`wire`, `commit.wiring`), so a sampled combine's inputs are the committed outputs of its parts."""
 from __future__ import annotations
 
 import re
@@ -55,26 +55,18 @@ def units(tp: Template, statics: dict[str, Any]) -> int:
     return int(statics["NH"]) * (1 if combine(tp) else len(positions(tp, statics)))
 
 
-def unit_rows(tp: Template) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
-    """Template ``tp``'s rows as `UnitStager` stages them: a part's ``in<g>``, one v2 row per parameter, a combine's ``in<g>.<s>``,
-    one v2 row per split s of parameter g (its row s, which the window wires to a part's output row); then one v2 output row
-    ``o<j>`` per return field (with hidden outputs the proved scope takes output rows of one port each)."""
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-
-    params, ret = tp.fn.signature()
-    if combine(tp):
-        ins = [(f"in{g}.{s}", V2, sum(ty.elem.leaf_widths()), [f"{nm}[{s}]"]) for g, (nm, ty) in enumerate(params) for s in range(ty.n)]
-    else:
-        ins = [(f"in{g}", V2, sum(ty.leaf_widths()), [nm]) for g, (nm, ty) in enumerate(params)]
-    return ins, [(V2, (j,)) for j in range(len(getattr(ret, "fields", None) or (ret,)))]
+def cuts(tp: Template) -> dict[str, int] | None:
+    """Template ``tp``'s cuts (`interface.Layout.cut`): a combine's every parameter one row per split s (its row s, which the
+    window wires to a part's output row), a part's none."""
+    return {nm: ty.n for nm, ty in tp.fn.signature()[0]} if combine(tp) else None
 
 
 def _twins(statics: dict[str, Any], what: str) -> tuple[Callable, Callable, float]:
     """A row's dot step, inverse and scale; ``statics`` as a binding holds them or as the record spells them (every value a string,
     SCALE ``{"f64":"<hex>"}``)."""
-    from verity_vllm.program.kernels import derived_rows as D
-    from verity_vllm.program.kernels.ir_rows import f64_statics
-    from verity_vllm.program.kernels.kernel_registry import prim_static
+    from verity.ml.definitions.numerics import derived_rows as D
+    from verity.ml.definitions.numerics.ir_rows import f64_statics
+    from verity.ml.definitions.numerics.kernel_registry import prim_static
 
     dot, inv = prim_static(statics, "DOT", what), prim_static(statics, "INV", what)
     if dot not in D.TC_DOT16_BY_PRIM or inv not in D.INV_SUM_BY_PRIM:
@@ -85,7 +77,7 @@ def _twins(statics: dict[str, Any], what: str) -> tuple[Callable, Callable, floa
 def splits(qn: np.ndarray, qr: np.ndarray, kv: np.ndarray, statics: dict[str, Any], what: str) -> tuple[np.ndarray, np.ndarray]:
     """A row's split ends by the twin: q_nope (NH, DV), q_rope (NH, DR), kv (T, DV + DR) bf16 words -> (o_partial (NH, NSPLIT, DV),
     lse (NH, NSPLIT)) f32 words, each split's `part_rows` on its own keys; refused where a dot reads a non-finite operand."""
-    from verity_vllm.program.kernels.sparse_mla_split_twins import part_rows
+    from verity.ml.definitions.numerics.sparse_mla_split_twins import part_rows
 
     DR, DV, BN = (int(statics[k]) for k in ("DR", "DV", "BN"))
     dot16, inv, scale = _twins(statics, what)
@@ -104,7 +96,7 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
          slices: Callable) -> tuple[dict[str, Any], list[list[Any]]]:
     """Member ``m``'s units (the module's order and ports), every port its elements' bytes in u16 words, the row's argument groups
     read by ``slices`` (`serving_rows._slices`); one index entry per row."""
-    from verity_vllm.program.kernels.sparse_mla_split_twins import combine_rows
+    from verity.ml.definitions.numerics.sparse_mla_split_twins import combine_rows
 
     tp = template(m.template)
     names = [q for q, _ in m.rows + m.outs]

@@ -1,4 +1,4 @@
-"""verity_vllm/ops/epoch_row.sh: every stop of a row -- a stage deadline, STOP_AFTER, a signal, the custody guard -- ends inside the job
+"""verity_vllm/ops/epoch_row.sh: every stop of a workload -- a stage deadline, STOP_AFTER, a signal, the custody guard -- ends inside the job
 the same way: the Build and records stored, `research data preserved` on them, then END.
 
 CPU only: the script runs from this tree with stand-ins for the stage runner (`verity-vllm row run ...` and `epoch word-check`; every
@@ -113,7 +113,7 @@ def _stored_then_preserved(env: dict[str, str]) -> None:
 
 
 def test_script_parses() -> None:
-    for name in ("epoch_row.sh", "epoch_store.sh", "epoch_failfast.sh"):
+    for name in ("epoch_row.sh", "epoch_store.sh", "store_trees.sh", "epoch_failfast.sh"):
         r = subprocess.run([BASH, "-n", str(SCRIPT.parent / name)], capture_output=True, text=True)
         assert r.returncode == 0, (name, r.stderr)
 

@@ -1,4 +1,4 @@
-"""Pearl-C's debit replay (`pearl_c_debit`, red team F1): `Skip.wordFlags` against 448 of P1's Lean-checked word vectors,
+"""Pearl-C's debit replay (`pearl_c_debit`): `Skip.wordFlags` against 448 of P1's Lean-checked word vectors,
 checked from scratch on skips, additive over a tile's words, and over the cap on the aligned-spike tile."""
 
 from __future__ import annotations
@@ -12,9 +12,9 @@ import pytest
 
 from verity.ml.circuits.silicon.models import HOPPER_E4M3_K32
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_debit as D
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c_debit as D
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 
 VECTORS = Path(__file__).parent / "vectors"
 #: P1's conformance vectors, one word per
@@ -87,7 +87,7 @@ def test_aligned_spike_tile_is_over_the_cap(spike):
     """The negative control: the R = 300 aligned-spike tile, formed by the scheme's own `encode`, passes the domain and has
     74.6% of its atom-words flagged, about 15x the cap; without spikes the debit is far below it."""
     k, t = 4096, 4
-    s = C.PearlC(k_min=128, tile=(t, t), forming="v1")
+    s = C.PearlC(k_min=128, tile=(t, t), forming="v1", hashing="h0")
     ctx = Context(b"\x11" * 32, Matmul(0, Shape(t, k, t), 0), b"\x22" * 32, b"\x33" * 32)
     ops = s.encode(ctx, s.noise(ctx), spiked_rows(k, t, 100, spike), spiked_rows(k, t, 900, spike),
                    Tile(tuple(range(t)), tuple(range(t))))

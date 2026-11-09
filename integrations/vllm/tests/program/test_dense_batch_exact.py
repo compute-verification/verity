@@ -1,10 +1,10 @@
 """The call boundaries' host evaluation off the per-instance path: the same words, computed in batches.
 
 A gemma2-9b B8 Commit evaluates its call boundaries on the host while it holds the leased GPU, and the GPU idles at 0% until each step's
-words are hashed.  cov-gm192 (B8 1024/128 stoch) spent 1,747 s of its 1,919 s lease in `work.pair0.instrumented` (other models take
+words are hashed.  A B8 1024/128 stochastic workload spent 1,747 s of its 1,919 s lease in `work.pair0.instrumented` (other models take
 7-16 s): about 1,250 s in the logits `Gemm_v2{K=3584,N=256000,DOT=HopperBF16WgmmaDot16_v1}`, kernel-only, evaluated one row at a time
 (2.9 s a row, the 917,504,000-word W read and scanned for finiteness on every row, numpy's k16 chain keeping ~3 of 8 threads busy), and
-about 475 s in the 168 GemmaRMSNorm bodies a step, each instance a Python call (`MeanTriton` per row, the IR reference for the scalar
+about 475 s in the 168 GemmaRMSNorm bodies a step, each instance a Python call (`MeanTriton` per row, the reference evaluator for the scalar
 add and the rsqrt).  Now the chain is `cpp/k16_chain.cpp` in integers (each W row read once for all of a step's rows, the GIL
 released), and every dense kernel and `Gemm_v2` has a batch form; on 4 CPUs a decode step's call boundaries take 3.3 s instead of 13.2.
 
@@ -24,11 +24,11 @@ from verity.ml.circuits.evaluation.batch import type_shape
 from verity.ml.circuits.evaluation.reference import signature_of, statics_of
 from verity.ml.circuits.defs import bind
 from verity_vllm.acquire.sources import call_boundary_plan as CP
-from verity_vllm.program.kernels import dense_rows as DR
-from verity_vllm.program.kernels import derived_rows as D
-from verity_vllm.program.kernels import kernel_registry as KR
-from verity_vllm.program.kernels import rows
-from verity_vllm.program.registry import b1, hopper
+from verity.ml.definitions.numerics import dense_rows as DR
+from verity.ml.definitions.numerics import derived_rows as D
+from verity.ml.definitions.numerics import kernel_registry as KR
+from verity.ml.definitions.numerics import rows
+from verity.ml.definitions.registry import b1, hopper
 
 K = 64
 DOTS = {"AmpereBF16TcDot16_v2": b1.P.AmpereBF16TcDot16, "HopperBF16WgmmaDot16_v1": hopper.HopperBF16WgmmaDot16}

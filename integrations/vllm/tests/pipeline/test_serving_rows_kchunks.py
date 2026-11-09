@@ -2,7 +2,7 @@
 the first, middle and last ``MoeExpertFp8CoordinateChunk`` templates at every chunk width, and a window of the three:
 
 * reads each unit's operands off the row and its ``acc`` off the twin's chain, so the chunk Definition on each chunk's rows, parsed
-  as C-Flock's stager parses them, is its committed output, and the last chunk's is the row's served word;
+  as Flock's stager parses them, is its committed output, and the last chunk's is the row's served word;
 * wires every ``acc`` row to the output row of the chunk before it (chunk c - 1 of the same row and coordinate), commits it under
   that row's salt, so the verifier's check on the public bodies holds, and refuses a wire to another unit, an ``acc`` row that is
   not its writer's output, and a partition that leaves out a writer's template.
@@ -19,10 +19,12 @@ from verity.ml.windows import wiring as WI
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import kchunk_rows as KC
 from verity_vllm.pipeline import serving_rows as SRW
-from verity_vllm.program.kernels import fp8_moe_rows as FR
-from verity_vllm.program.kernels.derived_rows import f2fp_bf16
-from verity_vllm.program.registry import boolean_fp8_moe as BFM
-from verity_vllm.program.registry import fp8_moe_experts as X
+from verity.ml.definitions.numerics import fp8_moe_rows as FR
+from verity.ml.definitions.numerics.derived_rows import f2fp_bf16
+from verity.ml.commitments.gates import embedding as EMB
+from verity.ml.definitions.registry import boolean_fp8_moe as BFM
+from verity.ml.definitions.registry import fp8_moe as FM
+from verity.ml.definitions.registry import fp8_moe_experts as X
 
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
@@ -97,7 +99,7 @@ def pairs(monkeypatch):
 def window(rows, tmpls=TMPLS):
     ms = KC.wire(SRW.members(tmpls, [rows] * len(tmpls), None, CAPS), tmpls, [rows] * len(tmpls))
     defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in tmpls]
-    return CS.Window(*CS.population_program(defs, several=True), {"law": "subset", "k": 2}, "ab" * 32, tuple(ms))
+    return CS.Binding(*CS.population_program(defs, several=True), {"law": "subset", "k": 2}, "ab" * 32, tuple(ms))
 
 
 def test_a_w13_row_holds_its_first_middle_and_last_chunks_at_each_width():
@@ -106,7 +108,13 @@ def test_a_w13_row_holds_its_first_middle_and_last_chunks_at_each_width():
                                                                        DOT=HopperE4m3MmaV2Dot32)), N),
                                         (chunk(True, False, 64, False), N), (chunk(False, True, 64, False), N),
                                         (chunk(True, False, 32, False), N), (chunk(False, False, 32, False), N * (C - 2)),
-                                        (chunk(False, True, 32, False), N))
+                                        (chunk(False, True, 32, False), N),
+                                        (descriptor_id(bind(FM.MoeExpertFp8BlockGemmV3, K=K, N=1, G=G, KB=KB, SWAP=False,
+                                                            DOT=HopperE4m3MmaV2Dot32)), N),
+                                        (descriptor_id(EMB.read(E, K // 2)), N),
+                                        (descriptor_id(bind(BFM.MoeExpertFp8ReadGemmV1, READ=EMB.read(E, K // 2), K=K, N=1, G=G, KB=KB,
+                                                            SWAP=False, DOT=BG.HopperE4m3MmaV2Dot32)), N),
+                                        (descriptor_id(EMB.read(E, 2 * K // G)), NB))
     assert [(SRW.template(t).layout, SRW.template(t).word) for t in TMPLS] == [
         ("kchunk", chunk(f, la, boolean=False)) for f, la in ((True, False), (False, False), (False, True))]
     with pytest.raises(ValueError, match="no chunk cap"):

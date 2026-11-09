@@ -10,9 +10,9 @@ import types
 from collections import Counter
 
 from verity.ml.circuits.types import Tuple
-from verity.core.protocols.pouw.circuit import leaves as L
-from verity.core.protocols.pouw.circuit import reference as R
-from verity.core.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.circuit import leaves as L
+from verity.ml.protocols.pouw.circuit import reference as R
+from verity.ml.protocols.pouw.schemes import pearl_c as C
 
 
 def f32(x: float) -> int:
@@ -45,7 +45,7 @@ def tile_digests(tile: tuple[int, int], c, u) -> tuple[int, ...]:
     for rs in range(len(c) // tm):
         for cs in range(len(c[0]) // tn):
             part = lambda x: [list(x[rs * tm + i][cs * tn:(cs + 1) * tn]) for i in range(tm)]   # noqa: E731
-            digest = C.leaf(types.SimpleNamespace(c=part(c), u=part(u)))
+            digest = C.leaf(types.SimpleNamespace(c=part(c), u=part(u)), hashing="h0")
             out += [int.from_bytes(digest[4 * w:4 * w + 4], "little") for w in range(8)]
     return tuple(out)
 
@@ -66,7 +66,7 @@ def check_ports(fn, ports: dict, derivations: dict, k: int, reads: dict[str, int
     parameter and every public output an output.  Each committed row's port bits are exactly its schema's words
     (`leaves.ROW_WORDS`, at depth k, or ``ks[schema]`` for a segment's row), so no bit of a committed row is outside the
     unit's ports (an ok row's word too, `pc4.ok_word`): a port a unit reads ``reads[name]`` rows of counted for one row,
-    and an output port zero-padded to whole u16 words, as C-Flock commits it (`class_statement.unit_lowering`).  Each
+    and an output port zero-padded to whole u16 words, as Flock commits it (`class_statement.unit_lowering`).  Each
     region is a parameter, in the unit's parameter order, whose every leaf has its anchor's width (``derivations``), and
     its leaves unpacked fill whole 128-bit words."""
     params, out = fn.signature()

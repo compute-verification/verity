@@ -1,6 +1,8 @@
-import Definitions.Pouw.PearlC.WholeCircuit4
-import Definitions.Pouw.PearlC.TileCheck
-import Definitions.Pouw.PearlC.RowSem
+module
+
+public import Definitions.Pouw.PearlC.WholeCircuit4
+public import Definitions.Pouw.PearlC.TileCheck
+public import Definitions.Pouw.PearlC.DeviceFp4
 
 /-!
 # `pc4`'s tile check (definitions only)
@@ -24,6 +26,8 @@ units', with
 The Program needs whole tiles and `64 ∣ k` (`pc4.Shape.check`); at another shape the table is still defined, and L3 is
 stated on whole-tile layouts.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.WholeCircuit
 
@@ -96,7 +100,7 @@ def tileCheck4 (ops : RowOps)
   anchorsOf H s U u act := fun g => BitVec.ofNat _ (anchors4 (lines H s U u act) g.val)
   anchorsOK _ _ _ _ _ := True
   rowsOf U u c := fun g => BitVec.ofNat _
-    (rows4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k 64 64 c.act (U.weight (U.layout.wid u))
+    (rows4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k 64 64 c.act (U.fixed (U.layout.fixedId u))
       c.ticket c.useful g.val)
   Collides _ _ _ _ _ _ := False
 

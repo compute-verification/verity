@@ -1,7 +1,17 @@
-import Proofs.Flock.Soundness.TmplFoldTree
+module
+
+public import Flock.TmplFold
+public import Proofs.Flock.Level3.GF128Field
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.FoldedBase
+import Proofs.Flock.Level3.Nodes
+import Proofs.Flock.Soundness.SparseRows
+import Proofs.Flock.Soundness.TmplFoldDef
+import Proofs.Flock.Soundness.TmplFoldRef
 
 /-!
-# A class's fold, valued (PRF-133, part 3, stage 2)
+# A class's fold, valued
 
 `foldDef` builds a class's `Out` by `Out.ref` and `Out.add` steps. Each step adds a known term to one of two linear
 valuations of `Out`, at slot `s`:
@@ -13,6 +23,8 @@ valuations of `Out`, at slot `s`:
 
 `ref_exp`, `ref_sum`, `add_exp` and `add_sum` are those steps.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128
 

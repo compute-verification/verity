@@ -1,9 +1,9 @@
-"""C-Flock lowering of ``silu-mul-v2`` (SiluMul_v2, vLLM's served ``_C.silu_and_mul``): I identical units read off the IR graph,
+"""Flock lowering of ``silu-mul-v2`` (SiluMul_v2, vLLM's served ``_C.silu_and_mul``): I identical units read off the IR graph,
 each one ``SiluMulBf16_v2`` over (gate[i], up[i]).
 
 ``SiluMulBf16_v2`` differs from ``SiluMul_v1``'s primitive on NaN (0x7FFF, not 0x7FC0), on the up word (``+ 0.0f`` turns -0 into
 +0), on gate -inf (NaN, not -0), on the gates whose ``expf(-g)`` overflows (g <= -89: -0, not a tiny nonzero) and on gate -0
-(kept, not +0).  C-Flock has no piece of its own for it: the unit is the registered Boolean Definition whose word is
+(kept, not +0).  Flock has no piece of its own for it: the unit is the registered Boolean Definition whose word is
 ``SiluMulBf16_v2``, ``boolean_silu.SiluMulBf16Expf`` (``SiluMulBf16_v4``), run as its builder (``ir_lower._boolean_build``).
 That circuit is exact arithmetic on g's fields off a band of exponents and a constant table on it, so it is half
 ``silu-mul``'s 16-bit lookup in ANDs (1,380 against 2,606).
@@ -20,7 +20,7 @@ CIRCUIT_PINS = {1536: "861aaba839ead11166bd84e3f028a39988fc033022aab8f85494838a1
 
 
 def definition(subcircuit):
-    import verity_vllm.program.registry.boolean_silu  # noqa: F401  (registers SiluMulBf16_v4, the unit's builder)
+    import verity.ml.definitions.registry.boolean_silu  # noqa: F401  (registers SiluMulBf16_v4, the unit's builder)
 
     return subcircuit.definition()
 

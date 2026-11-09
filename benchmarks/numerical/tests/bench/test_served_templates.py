@@ -1,4 +1,4 @@
-"""The templates of every served workload beyond #101 (``bench.templates``): FA3 attention, greedy token select, embedding row, the
+"""The templates of every served workload beyond row 101 (``bench.templates``): FA3 attention, greedy token select, embedding row, the
 MoE router (with and without renormalisation), expert coordinates (plain and weighted), MoE sum, the FP8 block-scaled GEMM, bias-add,
 the bf16 scalar multiply, the served SiLU·mul (SiluMul_v2) and RMSNorms (the width-8 CUDA kernels), and the registered compiler's
 dead-free RMSNormTriton_v5 and AttentionHead_v18.  Each evaluation path equals its subcircuit's own Definition, and every
@@ -12,14 +12,15 @@ import pytest
 
 from verity_numerical.bench import census
 from verity_numerical.bench import generate as G
-from verity_numerical.bench import input_sets as IS
-from verity_numerical.bench import templates as TM
+from verity_flock import synthetic as SY
+from verity_flock import input_sets as IS
+from verity_flock import subcircuit_templates as TM
 
 pytest.importorskip("verity_vllm", reason="these templates evaluate through the vLLM integration's Definitions")
 
 
 def _draws(sub: TM.Subcircuit, n: int, seed: int = 0) -> list[TM.Draw]:
-    key = G.key_for(sub, seed)
+    key = SY.key_for(sub, seed)
     return [sub.draw(key, j) for j in range(n)]
 
 
@@ -27,13 +28,18 @@ def _eval(sub: TM.Subcircuit, draws: list[TM.Draw]) -> dict[str, list[np.ndarray
     return sub.evaluate({p.name: [d.inputs[p.name] for d in draws] for p in sub.inputs}, [d.instance_statics for d in draws])
 
 
-def test_every_bound_subcircuit_id_is_the_spines():
-    from verity_numerical.bench import headline as H
+def _bound(mix: dict) -> str | None:
+    """The census subcircuit a workload mix entry binds: its template at exactly its parameters."""
+    return next((s.id for s in census.SUBCIRCUITS.values()
+                 if s.template == mix["subcircuit_template"] and vars(s.parameters) == (mix["subcircuit_parameters"] or {})), None)
 
+
+def test_every_bound_subcircuit_id_is_the_spines():
     for w in census.raw("workloads"):
-        for g in H.groups(w):
-            sub = TM.parse_subcircuit_id(g["subcircuit"])
-            assert (sub.id, sub.display) == (g["subcircuit"], census.SUBCIRCUITS[g["subcircuit"]].display)
+        for m in w["template_mix"]:
+            sid = _bound(m)
+            sub = TM.parse_subcircuit_id(sid)
+            assert (sub.id, sub.display) == (sid, census.SUBCIRCUITS[sid].display)
 
 
 def test_fa3_head_equals_its_definition():
@@ -172,6 +178,15 @@ def test_fp8_block_coordinate_reads_its_scales():
     assert all(np.array_equal(draws[i].inputs["xq"], draws[0].inputs["xq"]) for i in range(8))
 
 
+@pytest.mark.parametrize("fam", ["ScaledMmFp8BlockSharedScale_v1", "ScaledMmFp8Block_v1"])
+def test_fp8_block_identifies_the_exporters_relation(fam):
+    """The FP8 coordinate relation the vLLM exporter writes (`ScaledMmFp8BlockSharedScale_v1`, `vu_export`), and the one input
+    sets written before it carry, identify as the coordinate template."""
+    rel = {"subcircuit": "ScaledMmFp8BlockCoordinate<256,128>", "definition": fam, "dot": "HopperE4m3QgmmaDot32_v1",
+           "statics": {"K": 256, "G": 128}}
+    assert TM.identify(rel).id == TM.subcircuit("scaled-mm-fp8-block-coordinate", K=256, G=128).id
+
+
 def test_scale_words_are_pinned():
     r = np.array([0, 0x7FFFFF, 0x00800000, 0xFFFFFFFF], dtype=np.uint32)
     got = TM.scale_words(r)
@@ -183,10 +198,8 @@ def test_scale_words_are_pinned():
 def test_workloads_suite(tmp_path):
     suite = G.workload_suite((39, 57, 60, 67, 73, 74))
     sids = {TM.subcircuit(t, **p).id for t, p, _n in suite}
-    from verity_numerical.bench import headline as H
-
-    want = {g["subcircuit"] for w in census.raw("workloads") if (w.get("source") or {}).get("row") in (39, 57, 60, 67, 73, 74)
-            for g in H.groups(w)}
+    want = {_bound(m) for w in census.raw("workloads") if (w.get("source") or {}).get("row") in (39, 57, 60, 67, 73, 74)
+            for m in w["template_mix"]}
     assert sids == want and len(suite) == len(sids) == 45
     fa3 = next(p for t, p, _n in suite if p.get("semantics") == "sm90.fa3.bf16")
     rng = census.SUBCIRCUITS["attention-head/d128-bn128/sm90-fa3-bf16"].variable_ranges.T

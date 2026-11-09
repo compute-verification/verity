@@ -1,6 +1,40 @@
-import Definitions.Accounting.Headline
-import Definitions.Pouw.FpG1
-import Definitions.Accounting.Assumptions.Sheet
+module
+
+public import Definitions.Accounting.Assumptions.Sheet
+public import Definitions.Accounting.Headline.Sm120Measured
+public import Definitions.Pouw.FpG1
+public import Definitions.Pouw.FpG1.H1
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # FP8-g1's and W4A8-g1's headlines on sm_120 (trusted)
@@ -11,10 +45,10 @@ are but binding's, over proof layers whose values carry the round's operand leav
 other values in a free `W` as the record's `V`, with at least one proof a round, and one premise more, that every leaf
 the layer commits is g1's on H1's grids (`Leaves.Fp8 Grids.h1`, `Leaves.W4a8 Grids.h1`).
 
-Binding is #2855's `ProofLayer.BindingAt` at `δ_bind`, the form (I8)'s pieces take (`ProofsSoundOfPinned`), where the
+Binding is `ProofLayer.BindingAt` at `δ_bind`, the form (I8)'s pieces take (`ProofsSoundOfPinned`), where the
 record takes its fork form at `δ_fork` (`BindingForkAt`) and reads it at `√δ_fork` (`BindingOfFork`). So the budget
 reads `δ_bind` where the record's reads `√δ_fork`, a fork-form bound `δ_fork` meets the premise at `δ_bind = √δ_fork`
-(`Proofs.Accounting.Headline.Whole`'s `moved_le_sqrt`), and no number moves (RT4-LOGIC-8).
+(`Proofs.Accounting.Headline.Whole`'s `moved_le_sqrt`), and no number moves.
 
 The credit is the record's, `T_cred = B_♭/f_max` of H1's floor program: it counts the int8 GEMM's MACs, which on a
 g1 window carry the FP8 (or FP4) model's products as integers `R + b`. Whether those MACs are the model's useful work
@@ -26,7 +60,7 @@ empty reading nor an empty proof layer meets it: a layer that commits an H1 weig
 (`Proofs.Accounting.Headline.FpG1`'s `offGrid_premises`). It narrows the windows the statement covers, and no
 more: the g1 premise does no work in the bound. The conclusion reads no operand value, so the bound is the record's,
 and a layer may carry on-grid leaves that no relation reads, which is why this statement is the record's bound at
-g1's windows (RT2-FP-13 found the same of #2770's first g1 statements).
+g1's windows.
 
 What is g1's is that the premises hold at an honest g1 window: `Proofs.Accounting.Headline.FpG1`'s
 `sm120FpG1_honest_applies` and `sm120W4a8G1_honest_applies` discharge every premise at an honest window whose layer
@@ -38,7 +72,7 @@ The measured twins are the same at `Sm120MeasuredHeadline` (H1 + fx1 on sm_120's
 `1 − 0.591%` outside `2^-40`): its conclusion and every premise as they are but binding's, read the same way. Their
 0.591% rests on the measured record's premises, (I3) at `9/8` (`ScalarRoute`) among them, which is assumed and not
 proved, as it is for the record itself: at A6's proved `½` floor the same bound on the same vector is 7.791%
-(RT3-LOGIC-2, `Sm120MeasuredHeadline`'s docstring). Beside the g1 premise, which narrows the windows covered, they take
+(`Sm120MeasuredHeadline`'s docstring). Beside the g1 premise, which narrows the windows covered, they take
 no premise the measured record doesn't: binding at `δ_bind` is what the record's fork form gives at `√δ_fork`.
 `Proofs.Accounting.Headline.FpG1Measured` has their honest witnesses on the measured data and the off-grid twin.
 
@@ -49,6 +83,8 @@ The statements:
   to 9.
 * `Sm120FpG1MeasuredHeadline`, `Sm120W4a8G1MeasuredHeadline`: the same two on the measured vector, at `1 − 0.591%`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.FpG1
 

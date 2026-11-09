@@ -22,10 +22,10 @@ from verity.ml.circuits.ops.fp32 import F32DivV2, F32FmaV2, F32MulV2
 from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, I32Le, SelectI32
 from verity.ml.circuits.silicon.models import HOPPER_BF16_WGMMA_K16
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, PoUWScheme, Shape, Tile
-from verity.core.protocols.pouw.schemes import get
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_debit as D
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import get
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c_debit as D
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 
 # the clear audit is a reference tool (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
@@ -107,7 +107,7 @@ def test_peel_is_four_bf16_atoms_into_c():
 
 
 def instance(case: str, shape=(16, 128, 16), index=3, weight=9, salt=b"salt"):
-    s = C.PearlC(k_min=32, tile=(16, 16))
+    s = C.PearlC(k_min=32, tile=(16, 16), hashing="h0")
     ctx = Context(hashlib.sha256(salt).digest(), Matmul(index, Shape(*shape), weight), hashlib.sha256(b"root_a").digest(),
                   hashlib.sha256(b"root_b").digest())
     a, b = CV.rows(case, "A", shape[0], shape[1]), CV.rows(case, "B", shape[2], shape[1])
@@ -157,8 +157,8 @@ def test_peel_factors_are_pinned():
 
 def test_seeds_are_keyed_as_the_design_says():
     """E_A reads (salt, root_A, root_B, index); F_A, E_B and F_B read (salt, root_B) only: per job.  A duplicated unit
-    under another index gets fresh E_A and fresh C̃ (X-PC-5)."""
-    s = C.PearlC(k_min=32, tile=(16, 16))
+    under another index gets fresh E_A and fresh C̃."""
+    s = C.PearlC(k_min=32, tile=(16, 16), hashing="h0")
 
     def ctx(index=3, salt=b"s", ra=b"a", rb=b"b"):
         return Context(salt * 32, Matmul(index, Shape(16, 128, 16), 9), ra * 32, rb * 32)
@@ -255,7 +255,7 @@ def test_registry_and_domain():
 
 def test_the_census_k_is_in_v1s_domain_only():
     """The H100 record's census k = 256 (GLM-5.3's down projections per TP8 rank) is in -h3 v1's domain, where a row's cap
-    is 4ρ (card a6872606), and no other k under 1,024 is; v0, h0 and sm_120's record have no census k."""
+    is 4ρ, and no other k under 1,024 is; v0, h0 and sm_120's record have no census k."""
     h3 = get("pearl-c-h100-v1-h3")
     params = dict(h3.certificate.parameters)
     assert h3.census_ks == (256,) and params["census_ks"] == (256,) and params["census_row_cap"] == "1/100"
@@ -270,7 +270,7 @@ def test_the_census_k_is_in_v1s_domain_only():
         assert "census_row_cap" not in dict(get(name).certificate.parameters)
         with pytest.raises(DomainError, match="1024 <= k"):
             get(name).check(Matmul(0, Shape(64, 256, 6144), 1))
-    assert C.PearlC(k_min=32, tile=(16, 16), forming="v1").census_ks == ()
+    assert C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h0").census_ks == ()
 
 
 @pytest.mark.parametrize("case", [c["case"] for c in PINNED["cases"]])
@@ -293,7 +293,7 @@ def test_lifecycle_on_a_test_instance():
     from verity.core.protocols.pouw.audit import Epoch, Workload
     from clear_audit import Prover, Sampled, Verifier
 
-    s, k = C.PearlC(k_min=32, tile=(16, 16)), 128
+    s, k = C.PearlC(k_min=32, tile=(16, 16), hashing="h0"), 128
     rows_a, rows_b = CV.rows("life", "A", 32, k), CV.rows("life", "B", 16, k)
     work = Workload((Matmul(3, Shape(32, k, 16), 9),))
     prover = Prover(s, {9: rows_b})
@@ -332,7 +332,7 @@ def test_v1_rho_reads_every_eighth_position_only():
 
 
 def v1_instance(case: str, shape=(16, 128, 16), index=3, weight=9):
-    s = C.PearlC(k_min=32, tile=(16, 16), forming="v1")
+    s = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h0")
     ctx = Context(hashlib.sha256(b"salt").digest(), Matmul(index, Shape(*shape), weight), hashlib.sha256(b"root_a").digest(),
                   hashlib.sha256(b"root_b").digest())
     a, b = CV.rows_f32(case, "A", shape[0], shape[1]), CV.rows_f32(case, "B", shape[2], shape[1])
@@ -523,7 +523,7 @@ def test_v1_registry_and_cost():
     v0, v1 = get("pearl-c-h100-v0").wref(sh), s.wref(sh)
     assert v0 - v1 == (C.FORMING_V0_UNITS - C.H100_PRICES.forming) * 128 * 2048
     with pytest.raises(ValueError):
-        C.PearlC(forming="v2")
+        C.PearlC(forming="v2", hashing="h0")
     with pytest.raises(ValueError):
         get("pearl-c-h100-v0").credit_of(sh)
 
@@ -536,7 +536,7 @@ def wref_of(m: int, k: int, n: int, fs: int = 64, qa: int = 4, add: int = 32, bf
     return mkn + mkn * add / 128 - add * m * n + m * k * 32 + 2 * bf16 * 32 * m * n + fs * m * k + qa * m * k
 
 
-#: sm_120's measured W1 rates (node 2, locked 2,100 MHz; `r20260930-063213-c94a`, `r20260930-061717-3e84`), per SM per
+#: sm_120's measured W1 rates (node 2, locked 2,100 MHz), per SM per
 #: clock: the unit, a dense E4M3 `mma.sync` MAC with FP32 accumulation; FADD in the measured 64-add loop, and alone
 #: (issue-bound, from the two-loop fit); FFMA alone; and the BF16 MAC's and the E4M3 cast's prices (alone, and in the
 #: packing loop)
@@ -567,13 +567,13 @@ def test_prices_are_per_device_and_sm120s_are_the_measured_ones():
     assert D.debit_units(1, 1, zeros=0) == 40 + 64 and D.debit_units(0, 0, s, zeros=1) == 8
     assert D.debit_units(0, 0, zeros=1) == 32
     with pytest.raises(ValueError):
-        C.PearlC(forming="v0", prices=s)
+        C.PearlC(forming="v0", prices=s, hashing="h0")
 
 
 @pytest.mark.parametrize("m", [1, 32, 128, 2048])
 @pytest.mark.parametrize("k,n", [(128, 128), (1024, 64), (3584, 4608), (3584, 37888), (18944, 3584), (65536, 16)])
 def test_wref_is_leans_wref_of(m, k, n):
-    """Red team F2: W_ref is Lean's `wrefOfRev1` on every unit shape, and the credit its `creditOfRev1`; the weight side
+    """W_ref is Lean's `wrefOfRev1` on every unit shape, and the credit its `creditOfRev1`; the weight side
     is not in either, at any m."""
     s = get("pearl-c-h100-v1")
     sh = Shape(m, k, n)
@@ -582,11 +582,11 @@ def test_wref_is_leans_wref_of(m, k, n):
 
 
 def test_lifecycle_work_has_no_weight_side():
-    """Red team F2: two calls on one weight give W = the two units' `wrefOfRev1`; the weight side is `job_cost`, apart."""
+    """Two calls on one weight give W = the two units' `wrefOfRev1`; the weight side is `job_cost`, apart."""
     from verity.core.protocols.pouw.audit import Epoch, Workload
     from clear_audit import Prover, Verifier
 
-    s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1"), 128
+    s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h0"), 128
     work = Workload((Matmul(0, Shape(32, k, 16), 9), Matmul(1, Shape(16, k, 16), 9)))
     epoch = Epoch.unverified(work, Prover(s, {9: CV.rows_f32("job", "B", 16, k)}).weight_roots, b"beacon")
     assert Verifier(s, epoch).work == s.wref(Shape(48, k, 16)) == wref_of(48, k, 16)
@@ -597,7 +597,7 @@ def test_v1_lifecycle_on_a_test_instance():
     from verity.core.protocols.pouw.audit import Epoch, Workload
     from clear_audit import Prover, Sampled, Verifier
 
-    s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1"), 128
+    s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h0"), 128
     rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
     work = Workload((Matmul(3, Shape(32, k, 16), 9),))
     prover = Prover(s, {9: rows_b})
@@ -617,6 +617,25 @@ def test_each_hashing_format_is_on_the_scheme():
     for bad in ("h1", "h2", "h3s", "h4"):
         with pytest.raises(ValueError):
             C.PearlC(hashing=bad)
+
+
+def test_h3_is_the_default_and_h0_and_sha256_are_named():
+    """One hash: what leaves its hashing format or tree hash unnamed gets h3's (SHA-512, hm96-sha512 trees), and h0's
+    SHA-256 trees are taken only by name: Pearl-C's h0 schemes, and NCP and Pearl's port, whose 32-byte tile digests
+    hm96 tile trees don't take.  A name with no hashing suffix still means h0."""
+    from verity.core.protocols.pouw import audit
+    from verity.ml.protocols.pouw.circuit import pc8
+    from verity.ml.protocols.pouw.schemes import pearl_c4
+    from verity.core.protocols.pouw.serving import SchemeId
+
+    assert C.PearlC(forming="v1").hashing == pearl_c4.PearlC4().hashing == "h3"
+    assert C.leaf(C.Checked([[0]], [[0]])) == C.leaf(C.Checked([[0]], [[0]]), "h3")
+    assert SchemeId("pearl-c", "h100", "v1", "e4m3").name == "pearl-c-h100-v1-h3"
+    assert [get(n).hashing for n in ("pearl-c-h100-v1", "pearl-c-sm120-v1", "pearl-c-nvfp4-v0")] == ["h0"] * 3
+    assert {get(n).commitment_hash for n in ("ncp-v1", "pearl-fp8-v4")} == {"sha256"}
+    d = audit.rows_domain(b"\0" * 64, -2, 4)
+    assert isinstance(d, audit.Hm96Domain) and d.hash == "sha512"
+    assert pc8.templates(128, (1, 1), "sm120", True)["tile"].defn is pc8.Pc8TileHiddenH3Def
 
 
 def test_h3_is_sha512_throughout():
@@ -717,7 +736,7 @@ def test_h3_lifecycle_commits_hm96_sha512_trees():
     opening = prover.open(epoch, 0)
     bad = replace(opening, a=(replace(opening.a[0], value=opening.a[0].value[:-1] + b"\0"),) + opening.a[1:])
     assert Verifier(s, epoch).check_tile(tr, bad).reason == "activation opening"
-    h0 = Verifier(C.PearlC(k_min=32, tile=(16, 16), forming="v1"), epoch).check_tile(tr, opening)
+    h0 = Verifier(C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h0"), epoch).check_tile(tr, opening)
     assert not h0.ok and h0.reason == "activation opening"
 
 
@@ -755,7 +774,7 @@ def test_v1_liveness_is_per_row_on_the_exact_statistic():
     just_below = list(three)
     just_below[3] = f32w(P.f32_of_bits(f32w(8.0)) - 2.0 ** -20)
     assert C.live_row(just_below)
-    s = C.PearlC(k_min=32, tile=(16, 16), forming="v1")
+    s = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h0")
     ctx = CV.ctx_of("liveness", (16, k, 16), 3, 9)
     noise = s.noise(ctx)
     rows_a = [C.f32_row(base)] * 15 + [C.f32_row(three)]
@@ -782,14 +801,14 @@ def tolerant_kernel(scheme, ctx, noise, a, b, tiles):
 @pytest.mark.parametrize("clause", [None, "finite", "live", "floor"])
 def test_check_tile_refuses_a_weight_row_outside_the_rules(clause):
     """`check_tile` refuses a tile one of whose weight rows fails a clause of `OperandOK`, as Lean's `TileCheck.Accepts`
-    asks each of the tile's weight rows to pass the protocol's `weightOK` (`PearlCSem.RowOK`). One row per clause: a
+    asks each of the tile's weight rows to pass the protocol's `fixedOK` (`PearlCSem.RowOK`). One row per clause: a
     non-finite word (Lean's `rowOK8_nonFinite`), three of 128 words `8.0` among `1.0`s (`rowOK8_notLive`), and every 8th
     word `2¹²⁶`, so ρ is not finite and the floor is 0 (`pc8Sem_squaresOverflow`). The tile beside it, whose weight rows
     pass, is accepted, and so are both on the honest weight."""
     from verity.core.protocols.pouw.audit import Epoch, Workload
     from clear_audit import Prover, Verifier
 
-    s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1"), 128
+    s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h0"), 128
     rows_a, rows_b = CV.rows_f32("weight-rule", "A", 16, k), CV.rows_f32("weight-rule", "B", 32, k)
     row = list(C.parse_f32_row(rows_b[0], k))
     if clause == "finite":
@@ -820,7 +839,7 @@ def test_domain_needs_whole_promotion_groups():
 @pytest.mark.parametrize("name", ["pearl-c-h100-v0", "pearl-c-h100-v1", "pearl-c-h100-v1-h3", "pearl-c-sm120-v1",
                                   "pearl-c-sm120-v1-h3"])
 def test_the_domain_has_lean_s_n_floor(name):
-    """Lean's `pearlCDomainDev` takes `64 <= n` and `64 | n` (CMP-77: a 1 x (n mod 64) edge tile's words can be guessed
+    """Lean's `pearlCDomainDev` takes `64 <= n` and `64 | n` (a 1 x (n mod 64) edge tile's words can be guessed
     whole); the 64-column tile is that floor, and it keeps GLM-5.3's n = 512 w13 and gate_up and n = 256 router at TP8."""
     s = get(name)
     assert s.tile[1] == 64

@@ -1,5 +1,5 @@
 """Modeled two-machine p(tau) for 4 KiB answers from GPU memory, with both ends' receive CPUs awake: each condition's
-on-node server time (its honest answer path's local cell) convolved with a 4 KiB host-memory answer's network leg
+on-node server time (its honest answer path's local cell) convolved with a 4 KiB host-memory answer's network path
 (elapsed - server) from irqpin's `on` cells (challenger on its receive-interrupt CPU) and, for comparison, `off` cells.
 
     python model_awake.py IRQPIN_RUN_DIR --runs RUNS --json model-awake.json

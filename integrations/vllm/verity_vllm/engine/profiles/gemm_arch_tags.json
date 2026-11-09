@@ -1,0 +1,4 @@
+{
+ "note": "the architecture tags cuBLAS and CUTLASS kernel names carry (lowered), each marking a profiler kernel a GEMM (observe.prefix_cache.census_row_witness)",
+ "tags": ["sm90", "sm80", "ampere"]
+}

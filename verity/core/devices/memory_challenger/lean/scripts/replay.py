@@ -11,10 +11,10 @@ Each file is a `bench-result.json` of `benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu`
 today's code verifies.  The timed audit's sessions are also judged under `live.signature_control`'s two edits (a signature
 bit flipped, a receipt time moved after signing), as that gate judges them.
 
-A record from before `live.py` kept C's digests at the revealed blocks (`witness.expected`) holds no table of them: `live.py`
-read `DIGESTS.bin` and kept, per answer, only whether its digest was that block's (`answers[j].correct`, `r.digest ==
+A record from before `live.py` kept C's digests at the revealed labels (`witness.expected`) holds no table of them: `live.py`
+read `DIGESTS.bin` and kept, per answer, only whether its digest was that label's (`answers[j].correct`, `r.digest ==
 expected(r.index)`).  `verdict` reads `expected` only through that equality, so the replay rebuilds `expected` at the
-revealed blocks from those bits: a correct round's digest is the block's, and a block whose rounds were all wrong gets a
+revealed labels from those bits: a correct round's digest is the label's, and a label whose rounds were all wrong gets a
 digest none of them has.  Every other input is the record's own:
 the signed session, the commitment, the openings and the signer's public key, as `live.py` passed them."""
 
@@ -48,7 +48,7 @@ TS = _load("pous_test_signer", ROOT / "verity/core/protocols/pous/tests/pous_tes
 
 
 def expected_of(rec: dict[str, Any], signed: mc.SignedSession):
-    """C's digests at the revealed blocks: the record's own, else rebuilt from its per-answer `correct` bits (module
+    """C's digests at the revealed labels: the record's own, else rebuilt from its per-answer `correct` bits (module
     docstring)."""
     if "expected" in rec["witness"]:
         return {int(i): bytes.fromhex(h) for i, h in rec["witness"]["expected"].items()}.get

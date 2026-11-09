@@ -1,19 +1,35 @@
-import Proofs.Flock.C3.Compose.HoloStageCoins
+module
+
+public import Proofs.Flock.C3.Compose.HoloStageCoins
+public import Proofs.Flock.C3.Reps.RepCoins
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # `LaterCoins` from the inner session's records
 
 `coinsAt_held`: a stage's `CoinsAt` from custody's coins half, at any stage whose coin steps are the coins the verifier
-holds of one stream at rounds `ks` that the history's rounds from `j` on draw in order (`coinsAt_rep` is a rep's, its
+holds of one stream at rounds `ks` that the history's rounds from `j` on sample in order (`coinsAt_rep` is a rep's, its
 rounds the record's). `StageHeld` names that of a stage, and `coinsAt_stageHeld` gives its `CoinsAt`.
 `linkPoints_of_custody`: the link points are the history's first coin, from custody's third conjunct (the session
 record's points are the map's at the first coin) where the map's points are the first coin's coordinate
 (`PointsEncoded`) and the run's points are the record's.
-`laterCoins_of_held` (`LaterHeldW.lean`, beside the word-level `StageHeldW` its sparse phases take): `LaterCoins` from
-those.
 `stageHeld_repsOfVals`: the reps' stages are `StageHeld` at `repsOfVals`, rep 0's from round 1 and rep 1's after it,
-from their rounds' custody (`RepRoundsHeld`) and draws (`RepsDrawn`).
+from their rounds' custody (`RepRoundsHeld`) and samples (`RepsDrawn`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 
@@ -28,8 +44,8 @@ open FlockSoundness.Assumptions (InnerRecordMap heldCoins InnerRecordCustody)
 variable {r : ℕ} {CT : Fin r → Type}
 
 /-- **A stage's coins are the history's from round `j` on**, at any stage: its coin steps are the coins `g q` the
-verifier holds of stream `s` at round `ix q`, `q` over `ks` (`hts`, `hd`), and the history's round `j + p` draws the
-`p`-th of them (`hdr`), which custody holds. The draws are read at any selector `sel` within the map's (`hsel`), where
+verifier holds of stream `s` at round `ix q`, `q` over `ks` (`hts`, `hd`), and the history's round `j + p` samples the
+`p`-th of them (`hdr`), which custody holds. The samples are read at any selector `sel` within the map's (`hsel`), where
 the map's coins are the history's (`henc`): candidate 3's map's are, where a stream round takes one history round. -/
 theorem coinsAt_held {Cm : Type} {t : List (Cm × ((k : Fin r) → CT k))} {ts : List Step} {ks : List ℕ}
     {g : ℕ → Array Flock.F128} {wr : List (Cm × ((k : Fin r) → CT k)) → Lean.Json × String}
@@ -51,9 +67,9 @@ theorem coinsAt_held {Cm : Type} {t : List (Cm × ((k : Fin r) → CT k))} {ts :
   show coinArr FlockSoundness.Refine.fOf (g q) = _
   rw [hround, List.map_take, henc i hi s (ix q) (t.map Prod.snd) hc hs]
 
-/-- **Hypothesis: a stage's coins are one stream's, drawn in order from the history's round `j` on**: its coin steps
+/-- **Hypothesis: a stage's coins are one stream's, sampled in order from the history's round `j` on**: its coin steps
 are the coins `g q` the verifier holds of a stream `s` at round `ix q`, `q` over `ks`, and the history's round `j + p`
-draws round `ix q` of `s`, `q` the `p`-th of `ks`, below `r`. -/
+samples round `ix q` of `s`, `q` the `p`-th of `ks`, below `r`. -/
 def StageHeld {Cm : Type} (t : List (Cm × ((k : Fin r) → CT k)))
     (wr : List (Cm × ((k : Fin r) → CT k)) → Lean.Json × String)
     (held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits) (selC : ℕ → String → ℕ → Prop)
@@ -85,7 +101,7 @@ theorem linkPoints_of_custody {Cm P : Type} {t : List (Cm × ((k : Fin r) → CT
     {wr : List (Cm × ((k : Fin r) → CT k)) → Lean.Json × String}
     {held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits} {sparse : Option Flock.RecSparse.Shape}
     {m : InnerRecordMap Cm ((k : Fin r) → CT k)} {pts : Array (Array Flock.F128) → P} {spec : Flock.SessionSpec}
-    {sess : Flock.Session} {u : P}
+    {sess : Flock.RunRecord} {u : P}
     (hcus : InnerRecordCustody wr held sparse m) (henc : PointsEncoded pts m.points)
     (hdec : Flock.Record.decode spec (wr t).2 = .ok sess) (hu : pts sess.points = u) (hr : 0 < r)
     (ht : 0 < t.length) : (coinSteps CT 0 (t.map Prod.snd)).head? = some ⟨P, u⟩ := by
@@ -131,9 +147,9 @@ local notation "ℐ" => holoInnerAt T CT st hp
 
 /-- **The reps' stages are `StageHeld`**, rep 0's from the history's round 1 on and rep 1's after it: rep `i`'s coin
 steps are its consumed rounds' coins (`repIdx`, from its steps' weave), each the coins the verifier holds of stream
-`s i` at its round (`RepRoundsHeld`, through `ProofOfVals`' coins), drawn in order from `repStart` (`RepsDrawn`). A
+`s i` at its round (`RepRoundsHeld`, through `ProofOfVals`' coins), sampled in order from `repStart` (`RepsDrawn`). A
 sparse phase's and R's stage take the same four parts: the coin steps' rounds from the stage's weave, the rounds held of
-its stream, and the draws from where the stage before it ends. -/
+its stream, and the samples from where the stage before it ends. -/
 theorem stageHeld_repsOfVals
     (halg : AlgebraDecodes (I := ℐ) zs dg N k Rw sh rep) (hacc : AccChains (I := ℐ) zs dg N k Rw sh rep)
     (hpr : ProofOfVals zs dg N k Rw sh rep vals)

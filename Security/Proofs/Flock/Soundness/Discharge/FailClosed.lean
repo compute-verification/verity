@@ -1,15 +1,18 @@
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
-import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
-import Proofs.Flock.Soundness.Discharge.FailClosed.Composed
-import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHidden
-import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered
-import Proofs.Flock.Soundness.Discharge.FailClosed.Exec
-import Proofs.Flock.Soundness.Discharge.FailClosed.General
-import Proofs.Flock.Soundness.Discharge.FailClosed.PlainRegistered
-import Proofs.Flock.Soundness.Discharge.FailClosed.One
-import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegisteredTags
-import Proofs.Flock.Soundness.Discharge.FailClosed.Numeric
-import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
+module
+
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Composed
+public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHidden
+public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Exec
+public import Proofs.Flock.Soundness.Discharge.FailClosed.General
+public import Proofs.Flock.Soundness.Discharge.FailClosed.PlainRegistered
+public import Proofs.Flock.Soundness.Discharge.FailClosed.One
+public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegisteredTags
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Numeric
+public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1
+public import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
 
 /-!
 # The headlines over what the verifier accepts
@@ -32,3 +35,5 @@ corollary without `--zk` (`flock_verify_sound_205`): each table's term is `2^-20
 `FailClosed/PublicTies.lean` (`flock_verify_public_ties`) states, deterministically, what the verifier's check of the
 public file (`checkPublic`) ties its header's frame-v3-sha512 roots, domains and schemas to.
 -/
+
+@[expose] public section

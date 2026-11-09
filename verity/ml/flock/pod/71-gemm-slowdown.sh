@@ -6,6 +6,7 @@
 # env: PREFLIGHT=1 (0: skip the preflight check; GATE= is its old name)  WARM=1 RUNS=3  BATCH_ANDS=2^32
 #      MAX_STATEMENT_BITS=2^34  ITERS=100
 #      DEFS=verity/ml/flock/pod/gemm-coordinates.defs.json (the Call counts: gemm-coordinates-4k fills 256 tiles of K = 2048)
+#      RESOLVER=MODULE:FUNC (70-class-sweep.sh's: binds DEFS's ids, which it refuses without)
 #      GPUS="4 5 6 7" (on a machine with /run/gpu-lease: take the first free of these, as gpu-lease does)
 #      any other KEY=VALUE reaches the prover's environment (FC_NATIVE_SHA=0, FC_HOST_PINNED=0, ...)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -35,28 +36,7 @@ export FLOCK_STAGE_CACHE=${FLOCK_STAGE_CACHE:-${FLOCK_WORK:-/workspace}/stage-ca
 # threads are the job's vCPUs
 unset CARGO_TARGET_DIR
 [ -n "${RAYON_NUM_THREADS:-}" ] || export RAYON_NUM_THREADS=${OMP_NUM_THREADS:-$(nproc)}
-# CUDA 13.3 (upstream Flock's clmad needs its ptxas) where it isn't installed and can't be, without root: its packages unpacked
-# under FLOCK_WORK (apt-get download needs no root); no compat library: an R580 driver runs 13.3 by minor-version compatibility
-for c in ${FLOCK_WORK:-/workspace}/cuda-root /workspace/cache/flock/cuda-root; do
-  [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ] && [ -x $c/usr/local/cuda-13.3/bin/nvcc ] && export CUDA_TK=$c/usr/local/cuda-13.3
-done
-if [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ]; then
-  CR=${FLOCK_WORK:-/workspace}/cuda-root; export CUDA_TK=$CR/usr/local/cuda-13.3
-  if [ ! -x $CUDA_TK/bin/nvcc ]; then
-    # the 13-3 packages' dependency closure, from apt-cache show (a pinned-out package has no candidate for apt-cache depends)
-    todo="cuda-nvcc-13-3 cuda-cudart-dev-13-3"; seen=
-    while [ -n "$todo" ]; do
-      set -- $todo; q=$1; shift; todo="$*"
-      case " $seen " in *" $q "*) continue ;; esac
-      seen="$seen $q"
-      todo="$todo $(apt-cache show $q 2>/dev/null | awk '/^Depends:/ {sub(/^Depends: /, ""); print; exit}' | tr ',' '\n' \
-        | sed 's/(.*//; s/|.*//; s/ //g' | grep -E -- '-13-3$' | tr '\n' ' ')"
-    done
-    mkdir -p $CR/debs && (cd $CR/debs && apt-get download $(for q in $seen; do echo "$q=$(apt-cache show $q | awk '/^Version:/ {print $2; exit}')"; done)) \
-      && for d in $CR/debs/*.deb; do dpkg-deb -x $d $CR; done
-    [ -x $CUDA_TK/bin/nvcc ] || { echo "CUDA 13.3 unpack failed"; exit 1; }
-  fi
-fi
+. verity/ml/flock/pod/cuda-13.3.sh
 { nvidia-smi --query-gpu=index,name,driver_version,memory.total --format=csv; nproc; echo "cuda_visible=${CUDA_VISIBLE_DEVICES:-}"; } | tee $R/out/host.txt
 # cores busy outside this attempt every 30 s (Builds overlapping it: ov.noisy)
 python3 verity/ml/flock/pod/gemm_slowdown.py sample --pgid $(ps -o pgid= $$ | tr -d ' ') --out $R/out/others_cores.txt &

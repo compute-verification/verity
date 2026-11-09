@@ -1,4 +1,21 @@
-import Proofs.Flock.C3.Opening.Read
+module
+
+public import Proofs.Flock.C3.Opening.Read
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.VBridge.Algebra.Sizes
 
 /-!
@@ -18,6 +35,8 @@ begins with the opening's steps on w's ring switches.
 * `run_shift`: over F, raising each claim's value raises its ring switch's residual by as much; the rest is unchanged.
 * `run_of_inline`: `RecCoins.opening`'s run, which also returns Ligerito's points, is `RecOpening.run`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Opening
 
@@ -454,7 +473,7 @@ theorem ringSwitch_shift (M : Messages F128) (g : Nat → F128) (claims : Array 
 /-- **Raising the claims' values raises their ring switches' residuals** by as much, over F: the rest of
 `RecOpening.run` does not read the claims' values. -/
 theorem run_shift {sh : Shape} {M : Messages F128} {claims : Array (AClaim F128)} {g : Nat → F128}
-    (hn : claims.size ≠ 0) (hg : ∀ i, claims.size ≤ i → g i = 0) {k k' : Nat} {src : RecAlgebra.Coins} {rs : Array F128}
+    (hn : claims.size ≠ 0) (hg : ∀ i, claims.size ≤ i → g i = 0) {k k' : Nat} {src : RecAlgebra.CoinSource} {rs : Array F128}
     (h : RecOpening.run sh M claims k src = .ok (rs, k')) :
     RecOpening.run sh M (shiftC g 0 claims.toList).toArray k src = .ok (shiftA g 0 rs, k') := by
   unfold RecOpening.run at h ⊢
@@ -489,7 +508,7 @@ theorem claimO_eq {c : Fin 2 → AClaim Lin} (hc : ∀ i, (c i).value = Val.zero
 the symbolic messages and two claims of value zero at some coins, the residuals at a w are `RecOpening.run` over F at
 those coins, on the messages w holds and on the claims with w's `claim` elements for values, when w's running sums
 differ by the consistency sums weighted by the passes' `kappa` (`hacc`). -/
-theorem residuals_eq_runO {c : Fin 2 → AClaim Lin} {src : RecAlgebra.Coins} {lins : Array Lin} {k : Nat}
+theorem residuals_eq_runO {c : Fin 2 → AClaim Lin} {src : RecAlgebra.CoinSource} {lins : Array Lin} {k : Nat}
     {res : Array Res} {st : BSt} (hcl : sh.claims = 2) (hc : ∀ i, (c i).value = Val.zero)
     (hrun : RecOpening.run sh (symbolic sh) #[c 0, c 1] 0 src = .ok (lins, k))
     (hb : (RecOpening.buildAll sh lins.toList 0).run { kappa := kappa0 sh } = .ok (res, st))
@@ -548,7 +567,7 @@ theorem openingRead_of_rows (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) {d
     (hrows : F.AtAccepted dg N k Rw fun R ω t Lb =>
       let u := F.run R ω t Lb
       ∃ (sh : Flock.Shape) (w : Array F128) (cons : ℕ → ℕ → F128) (c : Fin 2 → RecAlgebra.AClaim RecAlgebra.Lin)
-        (src : RecAlgebra.Coins) (lins : Array RecAlgebra.Lin) (k₁ : ℕ) (res : Array RecAlgebra.Res)
+        (src : RecAlgebra.CoinSource) (lins : Array RecAlgebra.Lin) (k₁ : ℕ) (res : Array RecAlgebra.Res)
         (bs : RecAlgebra.BSt) (rs : Array F128) (ρ : Fin 2 → Fin 7 → GF128) (γ : Fin 2 → GF128),
         RecOpening.shape? (holoAt st hp).cls.shape.mReg 2 = some sh ∧ (∀ i, (c i).value = RecAlgebra.Val.zero) ∧
         RecOpening.run sh (RecAlgebra.symbolic sh) #[c 0, c 1] 0 src = .ok (lins, k₁) ∧

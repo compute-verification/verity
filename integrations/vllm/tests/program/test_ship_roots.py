@@ -1,4 +1,4 @@
-"""[R17 rel2 2026-09-21, rel M-1320] `data/hf_configs` holds every configuration the profiles read.
+"""`data/hf_configs` holds every configuration the profiles read.
 
 The configuration-derived profiles (`profiles.generic` since P6; before it gen_moe_olmoe, gen_dense2_*, gen_ln_*, dense_generic) and their tests read
 `data/hf_configs/<ROLE>.config.json` from the tree."""

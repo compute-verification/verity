@@ -1,5 +1,10 @@
+module
+
+public import Definitions.Pous.Guarantees.StreamedWipe
+import Mathlib.Basic.ENNReal.Inv
+import Mathlib.Data.Fintype.BigOperators
 import Proofs.Pous.StreamedWipe.Count
-import Definitions.Pous.Guarantees.StreamedWipe
+import Proofs.Pous.Prob
 
 /-!
 # The streamed-label wipe: the bound
@@ -7,6 +12,8 @@ import Definitions.Pous.Guarantees.StreamedWipe
 `win_count` divided by the number of runs `2^q · N^k · 2^(b·N)` is `bound` (`win_ideal_le`); the real game is the
 ideal one plus the PRF's advantage against the game's distinguisher (`streamed_wipe`).
 -/
+
+@[expose] public section
 
 namespace PousStreamedWipe
 
@@ -21,7 +28,7 @@ theorem card_runs (N k b q : ℕ) :
 theorem win_ideal_le {N k b q M E : ℕ} (P : Prover N k b q M E) (g : ℕ) :
     winIdeal P ≤ bound N k b q M E g := by
   classical
-  unfold winIdeal pr bound
+  unfold winIdeal bound; simp only [Pous.pr_eq_card]
   rw [card_runs]
   by_cases hN : N ^ k = 0
   · have h0 : (univ.filter (wipeDistinguisher P)).card = 0 := by

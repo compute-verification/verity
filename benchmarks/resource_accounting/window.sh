@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # The timed window's legs under one lease, from the run tree's root (--cwd clone: the PoUS and joint legs build Lean in it):
-#   research run --on vy-nebius-2 --project verity --campaign resource-accounting --source <tree> --cwd clone --no-sampler \
-#     --env GPU_LEASE_WHO=<id> --env LEGS=A,B,C,F [--env AT=2026-10-12T15:00Z --env RELEASE='<its booking's text>'] -- \
+#   GPU_LEASE_WHO=<id> LEGS=A,B,C,F [AT=<the booking's start, UTC> RELEASE='<its booking's text>'] \
 #     bash benchmarks/resource_accounting/window.sh
 # Each leg (`leg` below) is run.sh into $OUT/<leg> with that leg's env, and TUNED for the tuned arms:
 #  1. every leg's PHASE=prepare, over one scratch, on the CPUs: the ship, the PoUS verdict and the tagger, each built once; a
@@ -18,7 +17,7 @@
 set -euo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run, or give OUT}/out}; mkdir -p "$OUT"
 LEGS=${LEGS:-A,B,C,F}; LEASE=${LEASE:-8 --wait --timed}; MINUTES=${MINUTES:-60}; HOST_CPUS=${HOST_CPUS-128-159}
-# TUNED: art:8c62b39115de880aaaf5383f56863c48b04999ee65f6e60427fa03d991819a53's build where node 2 keeps it (a workload has no
+# TUNED: the tuned harness library's build where node 2 keeps it (a workload has no
 # store remote to fetch it from)
 CHAIN_GPU=${CHAIN_GPU-4}; TUNED=${TUNED:-/workspace/pouw/harness/build/05a44c565456c043}
 WINDOWS=${GPU_LEASE_WINDOWS:-/workspace/pouw/fill/windows}

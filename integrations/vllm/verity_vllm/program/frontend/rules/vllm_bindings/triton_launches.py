@@ -11,14 +11,14 @@ from verity_vllm.program.frontend.derive import Alloc
 from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import shape_of
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, norm_kind, rows_of, shape
+from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, norm_kind, row_value, rows_of, shape
 from verity_vllm.program.frontend.rules.profile import BF16, _bias_shape
 from verity_vllm.program.frontend.rules.triton_iface import launch_meta, launch_tensor, triton_launch
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value, _strides, _untransposed
+from verity_vllm.program.frontend.rules.vllm_bindings.operands import _strides, _untransposed
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import (GEMM_PINS, QKV_RMS_PINS, RMS_PINS, _pins_ok, _target_kinds, active_gemm_target, gemm_bias_role,
                                                                    gemm_pins_for, lookup_key)
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
-from verity_vllm.program.registry.dsa_norm import check_block
+from verity.ml.definitions.registry.dsa_norm import check_block
 
 
 # -- direct Triton launches -----------------------------------------------------------------------------------------------
@@ -50,7 +50,7 @@ class TritonRmsNormRule(InPlaceRule):
         x, w, out = (launch_tensor(node, meta, n) for n in ("input_ptr", "weight_ptr", "output_ptr"))
         if x is None or w is None or out is None:
             return "tensor arguments input_ptr/weight_ptr/output_ptr not all present"
-        r = _row_value(ctx, x, "input") or _row_value(ctx, w, "weight")
+        r = row_value(ctx, x, "input") or row_value(ctx, w, "weight")
         if r:
             return r
         if not isinstance(ctx.val(out), (Alloc, Coll)):
@@ -62,7 +62,7 @@ class TritonRmsNormRule(InPlaceRule):
             return f"shapes input {xs} weight {shape(ctx, w)} output {shape(ctx, out)}"
         if sc.get("n_cols") != xs[1]:
             return f"n_cols {sc.get('n_cols')} vs N={xs[1]}"
-        # [R13 MOE-01, R12 F-moe-01 B-QNORM-STRIDE] the kernel reads row r at `input_ptr + r*input_row_stride` (columns contiguous) and writes
+        # the kernel reads row r at `input_ptr + r*input_row_stride` (columns contiguous) and writes
         # `output_ptr + r*output_row_stride`: the launch's strides must be the OPERANDS' row strides, which need not be N -- OLMoE's q_norm /
         # k_norm normalise column slices of the fused qkv GEMM output ([M, 2048] rows of stride 6144).  The operand's value collection is the
         # strided view's, so the emitted rows are exactly the rows the kernel reads; only the stride facts are checked here.
@@ -157,7 +157,7 @@ class FusedQKvRmsNormRule(InPlaceRule):
             return "q_out and kv_out are not two tensors apart from the inputs"
         T = None
         for (name, _, _, _, in_stride, out_stride, size_key), (x, out, w) in zip(QKV_ARGS, tensors):
-            r = _row_value(ctx, x, name) or _row_value(ctx, w, f"{name} weight")
+            r = row_value(ctx, x, name) or row_value(ctx, w, f"{name} weight")
             if r:
                 return r
             if not isinstance(ctx.val(out), Alloc) or not dtype_is(ctx, out, BF16):
@@ -242,7 +242,7 @@ class TritonGemmRule(InPlaceRule):
         a, b, c = (launch_tensor(node, meta, n) for n in ("a_ptr", "b_ptr", "c_ptr"))
         if a is None or b is None or c is None:
             return "tensor arguments a_ptr/b_ptr/c_ptr not all present"
-        r = _row_value(ctx, a, "a") or _row_value(ctx, b, "b")
+        r = row_value(ctx, a, "a") or row_value(ctx, b, "b")
         if r:
             return r
         if not isinstance(ctx.val(c), (Alloc, Coll)):
@@ -274,7 +274,7 @@ class TritonGemmRule(InPlaceRule):
         rows, lead = rows_of(ac)
         K, N = shape_of(bc.type)[0]
         w_nk = _untransposed(ctx, b, K, N, ctx.hint_name(node) + "/W")  # b = W.t(): the kind's W is [N, K] — a reference rearrangement
-        accepted, dot = _target_kinds()   # [R13 hopper] the target's registered k16 step selects Gemm_v1 (accepted) or Gemm_v2{DOT}
+        accepted, dot = _target_kinds()   # the target's registered k16 step selects Gemm_v1 (accepted) or Gemm_v2{DOT}
         pouw = _pouw_scheme(node)
         bias_role = ("pouw_linear_row_bias", {}) if pouw is not None else gemm_bias_role()
         fused = _bias_add_reader(node, c, ctx, len(rows), N) if bias_role is not None else None
@@ -331,9 +331,9 @@ def module_type(cls) -> type | None:
 
 def _pouw_scheme(node) -> str | None:
     """The PoUW scheme a launch is lowered under: the active target's ``pouw:<scheme>`` when that scheme has a circuit
-    (`verity.core.protocols.pouw.circuit.SCHEMES`) and the launch belongs to a linear layer (`linear_types`, by the class of the innermost
+    (`verity.ml.protocols.pouw.circuit.SCHEMES`) and the launch belongs to a linear layer (`linear_types`, by the class of the innermost
     module in the node's module stack)."""
-    from verity.core.protocols.pouw import circuit
+    from verity.ml.protocols.pouw import circuit
 
     entries = dict(e.split(":", 1) for e in (active_target_profile().protocols or ()))
     scheme = entries.get("pouw")

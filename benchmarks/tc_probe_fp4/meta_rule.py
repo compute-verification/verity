@@ -8,11 +8,11 @@ Part A, the map (one-hot, exact): row config (stored slot s, nibble m) puts one 
 s // 4's nibble; B's column n is nonzero only at logical k = 8 c' + n for one chunk c' per tile; C = +0.  Each word is then
 weight x a x b x the scale of one block, and the scales are distinct powers of two per block (A's in variant ``a``, B's in
 variant ``b``), spaced so that (weight, block) decode uniquely for weights 1..15.  All 64 x 16 configs meet all 16 chunks c',
-so the word at (config, k) says whether slot s lands at logical k under m.  Variant ``b`` also permutes the rows, draws the
+so the word at (config, k) says whether slot s lands at logical k under m.  Variant ``b`` also permutes the rows, samples the
 other chunks' nibbles from all 16, and changes the codes' values and signs, so its agreement with ``a`` shows that the map
 depends on the nibble alone.
 
-Part B, the arithmetic: random codes, B nonzero everywhere, random scales and accumulators, nibbles drawn per row and chunk
+Part B, the arithmetic: random codes, B nonzero everywhere, random scales and accumulators, nibbles sampled per row and chunk
 from every nibble Part A found to be a gather (each slot at most one logical k, weight 1), against the pinned dense model
 (``sparse.PINNED``) on the stored A and, per row, the B codes its nibbles gather (``gather_dense`` extended to all 16 nibbles).
 Part B2 is the same with one metadata row per tile, against the dense ``mma.sync`` on the gathered B (hardware against
@@ -34,6 +34,7 @@ import numpy as np
 
 import probe as P
 import sparse as S
+from verity_config.settings import SHARED
 
 INSTRUCTIONS = {"sp_nvf4_meta": "sp_nvf4", "sp_mxf4_meta": "sp_mxf4"}
 K_STORED, K_LOGICAL, CHUNKS = S.K_STORED, S.K_LOGICAL, S.CHUNKS
@@ -113,7 +114,7 @@ def evaluate(pool, instr, As, Bg, SFA, SFB, C, procs: int):
 
 class FakeMeta:
     """CPU stand-in (``--fake-silicon pairs_from_bits``): the pinned dense step on the B each nibble gathers under
-    ``pairs_from_bits``; refused under a research run."""
+    ``pairs_from_bits``; refused with ``RESEARCH_RUN_ID`` set."""
 
     tcgen05 = False
 
@@ -125,7 +126,7 @@ class FakeMeta:
 
     def identity(self) -> dict:
         return {"device": f"FAKE SILICON ({self.model_name})", "compute_capability": "fake", "driver": None, "gpu_uuid": "GPU-fake",
-                "backend": "fake", "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES")}
+                "backend": "fake", "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES}
 
     def clocks(self, uuid):
         return None
@@ -301,8 +302,8 @@ def main(args) -> int:
     arch = args.arch or "sm_120a"
     if args.chain != 1:
         raise SystemExit("--chain is not defined for the sparse rows")
-    if args.fake_silicon and os.environ.get("RESEARCH_RUN_ID"):
-        raise SystemExit("--fake-silicon is a dry run and never publishes: not under a research run")
+    if args.fake_silicon and SHARED.RESEARCH_RUN_ID:
+        raise SystemExit("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     if args.fake_silicon and not P.shutil.which(P.nvcc_bin()):
         so, nvcc = None, "not built (fake silicon)"
     else:
@@ -441,7 +442,7 @@ def main(args) -> int:
     results["clocks_end"] = dev.clocks(identity.get("gpu_uuid"))
     results["rule"] = {str(m): offs for m, offs in sorted(rule.items())}
     rc = finish()
-    run_id = os.environ.get("RESEARCH_RUN_ID")
+    run_id = SHARED.RESEARCH_RUN_ID
     if run_id:
         pa = results["part_a"]
         result = {

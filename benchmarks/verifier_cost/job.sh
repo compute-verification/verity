@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verifier_cost on a CPU node: build the verifier COMMAND measures (`measure`: the NCI check, `nci-check`; `partition`:
+# verifier_cost on a CPU node: build the verifier COMMAND measures (`measure`: the inference-only check, `nci-check`; `partition`:
 # the one-stage pieces, `sampled-proofs-difftest`) and run `run.py COMMAND` into $OUT. Run from a clone (the build
 # writes .lake):
 #   research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool proofs --cwd clone -- \
@@ -12,7 +12,7 @@ cmd=${1:?usage: job.sh measure|partition [ARGS...]}
 shift
 case $cmd in
   measure) pkg=verity/core/protocols/network/nci/lean exe=nci-check ;;
-  partition) pkg=verity/core/service/sampled_proofs exe=sampled-proofs-difftest ;;
+  partition) pkg=verity/core/service/spot exe=sampled-proofs-difftest ;;
   *) echo "job.sh: COMMAND is measure or partition, not $cmd" >&2; exit 2 ;;
 esac
 uv sync -q --all-packages --extra torch-cpu

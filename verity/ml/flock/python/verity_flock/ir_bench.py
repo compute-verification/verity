@@ -39,7 +39,7 @@ def relation(template: str) -> str:
 
 
 def _lowering(template: str, input_set):
-    from verity_numerical.bench import lowerings
+    from verity_flock import lowerings
 
     mod = lowerings.registry("C-Flock").module(template)
     if hasattr(mod, "lowering_for_set"):
@@ -366,7 +366,7 @@ def serve_plan(a, low, input_set, plan: list[int], out: Path, net: Path, pin: st
 
 
 def main(argv=None) -> int:
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock.input_sets import InputSet
 
     ap = argparse.ArgumentParser(prog="verity_flock.ir_bench")
     ap.add_argument("--template", required=True)
@@ -393,7 +393,7 @@ def main(argv=None) -> int:
     if input_set.subcircuit.template.id != a.template:
         print(f"input set {input_set.name} is not a {a.template} set", file=sys.stderr)
         return 2
-    from verity_numerical.bench import lowerings
+    from verity_flock import lowerings
 
     out = Path(a.out_dir)
     out.mkdir(parents=True, exist_ok=True)

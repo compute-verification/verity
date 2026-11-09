@@ -1,9 +1,42 @@
-import Proofs.Flock.Claims.Witnesses.Recursion
+module
+
+public import Proofs.Flock.Claims.Recursion.Assumptions.PlainLeaves
+public import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
+public import Proofs.Flock.Claims.Recursion.DeployChecked
+public import Proofs.Flock.Claims.Recursion.DeployComplete
+public import Proofs.Flock.Claims.Recursion.DeployStop
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployEfficient
-import Proofs.Flock.Claims.Recursion.DeployComplete
-import Proofs.Flock.Claims.Recursion.DeployStop
-import Proofs.Flock.Claims.Recursion.DeployChecked
-import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
 
 /-!
 # Antecedent witnesses: the ZK-recursion compiler's claims at the deployed record
@@ -20,7 +53,7 @@ read:
   over (`Efficient` is stated at one decoder, this one);
 * `KSFlock_meets`, `BitsFlock_meets`: so do the inner radius decoder at the deployed plain record and the outer one;
 * `KSBound_meets`, `KSPrivBound_meets`: at the deployed bound record (`RecDeploy.bdCover`, `RecDeploy.bdDeployed` at
-  `γ`'s weight `RecDeploy.wCover` at `IVStar`, `coverW` of the trimmed plain record's weight (ASK-72); its element-level
+  `γ`'s weight `RecDeploy.wCover` at `IVStar`, `coverW` of the trimmed plain record's weight; its element-level
   Flock is the trimmed plain record `FlockDeploy.deployPlainTrim` with only its verifier's steps, columns and weight
   replaced), the inner radius decoder meets the spec, and so does the outer one at the deployed `--zk` record;
 * `Inner.KS_meets`, `Inner.KSAbort_meets`: the inner radius decoder meets the spec at the deployed plain record, the
@@ -30,27 +63,30 @@ read:
   `FlockDeploy.listWithin_zkTrim`), where the recursion's KS theorems sit;
 * `ZK_meets`, `ZKPriv_meets`: the deployed outer record is masked;
 * `ZKStop_meets`: the deployed outer record is masked, and the compiled verifier's record with its stop
-  (`RecDeploy.deployRecStop`) is one whose prover `ZKStop` reads is `refPStop` on the tape each statement draws
+  (`RecDeploy.deployRecStop`) is one whose prover `ZKStop` reads is `refPStop` on the tape each statement samples
   (`RecDeploy.prover_deployRecStop`), which sends the empty message wherever its stop has fired
   (`RecDeploy.refPStop_halted`), and whose stop fires at the first round on every statement out of scope or whose
   inner statement the inner verifier can't accept (`RecDeploy.halted_of_statement`), and nowhere before the staging
   round at an inner-ready statement in scope where every answer is a coin's bytes and none a bad inner coin
   (`RecDeploy.halted_live`);
 * `ZKStop_meets_ready`: where that leaves the stop live. The inner statement `RecDeploy.PlainLeavesAdmitted` names
-  (#2468's) is in Flock's scope and true, and at every statement in scope carrying it the reference prover runs every
+  is in Flock's scope and true, and at every statement in scope carrying it the reference prover runs every
   round before the staging round where every answer is a coin's bytes and none a bad inner coin
   (`RecDeploy.ready_of_admitted`); so it does wherever the inner statement's size, its regions and its honest record
   fit, which in scope are the inner readiness the stop reads (`RecDeploy.ready_inScope_iff`);
 * `ScopeMatches_meets`: the deployed inner Flock's readable scope is its scope check (`FlockDeploy.scopeMatches_plain`),
   which `Flock.RecScope.scopeMatches_deployed` reads;
-* `Complete_meets`, `Nontrivial_meets`: the readable scope holds a statement of each kind the compiled verifier accepts,
-  dense, holo and sparse (candidate 3's shape: `m = 25`, `k_log = 22`, three regions, RecSparse `(18, 13, 6, 0)` and R
-  at `(23, 2)`), each with a V* session that draws every unit (`inScope_kinds`);
+* `Complete_meets`, `Nontrivial_meets`: the readable scope holds a statement of the one kind the compiled verifier
+  accepts, the dense form (candidate 3's inner table: `m = 25`, `k_log = 22`, three regions), with a V* session that
+  samples every unit, and none of the holo or sparse ones it refuses (RecSparse `(18, 13, 6, 0)` and R at `(23, 2)`)
+  (`inScope_kinds`);
 * `Complete_meets_deployed`: the compiled verifier's record (`RecDeploy.deployRec`) states an error below `1` on every
   statement it can accept (`RecDeploy.readyRec`) whose inner session is one the numbers are stated at
   (`FlockDeploy.PlainIn`), whose V* statements are of tables at `m ≤ 35`, at most `2^64` of them
   (`RecDeploy.δcRec_lt_one`).
 -/
+
+@[expose] public section
 
 namespace Claims.Witness.Recursion
 
@@ -58,40 +94,45 @@ open Claims Claims.Recursion
 
 /-! ## The readable scope's kinds -/
 
-/-- A V* session's full draw over four units. -/
-def fullDraw4 : Recursion.Draw := ⟨some 4, 4, [0, 1, 2, 3], []⟩
+/-- A V* session's full sample over four units. -/
+def fullDraw4 : Recursion.DrawRecord := ⟨some 4, 4, [0, 1, 2, 3], []⟩
 
 /-- A statement at candidate 3's inner table (`m = 25`, `k_log = 22`, three regions, eight claims), its circuits private
-or not (`holo`), with no RecSparse phase and no R, and one V* session that draws every unit. -/
-def denseStmt (holo : Bool) : Recursion.Stmt :=
-  ⟨[], none, none, ⟨25, 22, 3, 8, holo, none, none, false⟩, [some fullDraw4]⟩
+or not (`holo`), with no RecSparse phase and no R, and one V* session that samples every unit. -/
+def denseStmt (holo : Bool) : Recursion.CompiledStatement :=
+  ⟨[], none, none, ⟨25, 22, 3, 8, holo, none, none, false⟩, [some fullDraw4], none⟩
 
 /-- Candidate 3's sparse statement: its inner table, the RecSparse phase `(18, 13, 6, 0)`, R at `(23, 2)`, the inner
-statement's dimensions the form's, its unit range inside the block, and one V* session that draws every unit. -/
-def sparseStmt (holo : Bool) : Recursion.Stmt :=
-  ⟨[], some (25, 22, 3), none, ⟨25, 22, 3, 8, holo, some (18, 13, 6, 0), some (23, 2), true⟩, [some fullDraw4]⟩
+statement's dimensions the form's, its unit range inside the block, and one V* session that samples every unit. -/
+def sparseStmt (holo : Bool) : Recursion.CompiledStatement :=
+  ⟨[], some (25, 22, 3), none, ⟨25, 22, 3, 8, holo, some (18, 13, 6, 0), some (23, 2), true⟩, [some fullDraw4], none⟩
 
 theorem draws_full : ∀ d ∈ [some fullDraw4], ∃ e, d = some e ∧ e.Full := by
   intro d hd
   rw [List.mem_singleton] at hd
   exact ⟨fullDraw4, hd, rfl, rfl, rfl⟩
 
-theorem denseStmt_inScope (holo : Bool) : InScope (denseStmt holo) :=
-  ⟨rfl, show 22 ≤ 25 by decide, show 25 ≤ 35 by decide, show 6 ≤ 22 by decide, rfl, Or.inl ⟨rfl, rfl⟩, draws_full⟩
+theorem denseStmt_inScope : InScope (denseStmt false) :=
+  ⟨rfl, show 22 ≤ 25 by decide, show 25 ≤ 35 by decide, show 6 ≤ 22 by decide, rfl, ⟨rfl, rfl, rfl⟩, draws_full⟩
 
-theorem sparseStmt_inScope (holo : Bool) : InScope (sparseStmt holo) := by
-  have hp : pLog 13 = 5 := by decide
-  refine ⟨rfl, show 22 ≤ 25 by decide, show 25 ≤ 35 by decide, show 6 ≤ 22 by decide, rfl, Or.inr ⟨18, 13, 6, rfl,
-    show 1 ≤ 18 by decide, show 6 ≤ 13 by decide, show 13 ≤ 22 by decide, rfl, rfl, ?_, ?_⟩, draws_full⟩
-  · simp [sparseStmt, hp]
-  · rw [hp]
-    decide
+/-- The holo form is out of scope: the compiled verifier refuses it (`RecSetup.denseOnly`). -/
+theorem denseStmt_holo_out : ¬ InScope (denseStmt true) := by
+  rintro ⟨-, -, -, -, -, ⟨hh, -, -⟩, -⟩
+  simp [denseStmt] at hh
 
-/-- **The readable scope holds each kind of inner shape the compiled verifier accepts**: dense, holo, and candidate 3's
-sparse phase with public or private circuits, each with a V* session that draws every unit. -/
+/-- The sparse form is out of scope, public or private circuits: the compiled verifier refuses it
+(`RecSetup.denseOnly`). -/
+theorem sparseStmt_out (holo : Bool) : ¬ InScope (sparseStmt holo) := by
+  rintro ⟨-, -, -, -, -, ⟨-, hs, -⟩, -⟩
+  simp [sparseStmt] at hs
+
+/-- **The readable scope holds the dense form, and only it**: a dense statement with a V* session that samples every unit
+is in scope, and the holo form and candidate 3's sparse phase, which the compiled verifier refuses
+(`RecSetup.denseOnly`), are not. -/
 theorem inScope_kinds :
-    InScope (denseStmt false) ∧ InScope (denseStmt true) ∧ InScope (sparseStmt false) ∧ InScope (sparseStmt true) :=
-  ⟨denseStmt_inScope false, denseStmt_inScope true, sparseStmt_inScope false, sparseStmt_inScope true⟩
+    InScope (denseStmt false) ∧ ¬ InScope (denseStmt true) ∧ ¬ InScope (sparseStmt false) ∧
+      ¬ InScope (sparseStmt true) :=
+  ⟨denseStmt_inScope, denseStmt_holo_out, sparseStmt_out false, sparseStmt_out true⟩
 
 /-! ## The witnesses -/
 
@@ -192,7 +233,7 @@ theorem ZKPriv_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readab
   rfl
 
 /-- `ZKStop`'s checkable antecedents at the deployment: the deployed outer record is masked; the prover `ZKStop` reads
-at the compiled verifier's record with its stop is `refPStop` on the tape `tapeOf x` draws, and `refPStop` sends the
+at the compiled verifier's record with its stop is `refPStop` on the tape `tapeOf x` samples, and `refPStop` sends the
 empty message wherever the stop has fired; the stop fires at the first round on every statement out of scope or whose
 inner statement the inner verifier can't accept, and, at an inner-ready statement in scope, nowhere before the staging
 round where every answer is a coin's bytes and no prefix of the transcript holds a bad inner coin. -/
@@ -233,8 +274,8 @@ theorem ZKStop_meets {N Ω : Msg → Type} [∀ x, Fintype (N x)] [∀ x, Nonemp
   (`FlockComplete.RecordFitsAt`), the same: in scope, those three facts are exactly the inner readiness the stop reads
   (`RecDeploy.ready_inScope_iff`).
 
-No statement in scope is exhibited: the scope check and Flock's setup read the statement's JSON with `Lean.Json.parse`,
-a `partial` function the kernel can't unfold (as at Flock, `Claims.Flock.scope_meets_plain`), and the honest record's
+No statement in scope is exhibited: the scope check and Flock's setup read the statement's circuit file, whose rows
+`HmRow.parse` reads by regenerating the `hm96` nets, beyond what the kernel evaluates (as at Flock, `Claims.Flock.scope_meets_plain`), and the honest record's
 size (`RecordFitsAt`) is a bound with no proof here. -/
 theorem ZKStop_meets_ready {N Ω : Msg → Type} [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)] [∀ x, Fintype (Ω x)]
     [∀ x, Nonempty (Ω x)] (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
@@ -259,7 +300,7 @@ theorem ZKStop_meets_ready {N Ω : Msg → Type} [∀ x, Fintype (N x)] [∀ x, 
           (RecDeploy.deployRecStop IV ivScope b tapeOf SO nAt innerMsg).halted H (RecDeploy.stopRounds IV x) x ms =
             false := by
   refine ⟨fun hA => ?_, fun H x ms hs hl hfit hlen hc hb => ?_⟩
-  · obtain ⟨inner, hr, -, hS, hR⟩ := RecDeploy.ready_of_admitted hA
+  · obtain ⟨inner, hr, hS, hR⟩ := RecDeploy.ready_of_admitted hA
     refine ⟨inner, hS, hR, fun H x ms hs hx hlen hc hb => ?_⟩
     exact RecDeploy.halted_live IV ivScope b tapeOf SO nAt innerMsg H x ms hs (by rw [hx]; exact hr) hlen hc hb
   obtain ⟨s, spec, sts, hset, -, hiff⟩ := RecDeploy.ready_inScope_iff hs
@@ -272,9 +313,11 @@ theorem ScopeMatches_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     Claims.Flock.ScopeMatches (FlockDeploy.deployPlain rel) :=
   FlockDeploy.scopeMatches_plain rel
 
-/-- `Complete`'s antecedent: the readable scope holds a statement of each kind the compiled verifier accepts. -/
+/-- `Complete`'s antecedent: the readable scope holds a statement of the one kind the compiled verifier accepts, and
+none of the kinds it refuses. -/
 theorem Complete_meets :
-    InScope (denseStmt false) ∧ InScope (denseStmt true) ∧ InScope (sparseStmt false) ∧ InScope (sparseStmt true) :=
+    InScope (denseStmt false) ∧ ¬ InScope (denseStmt true) ∧ ¬ InScope (sparseStmt false) ∧
+      ¬ InScope (sparseStmt true) :=
   inScope_kinds
 
 /-- **`Complete`'s error is below `1` at the deployed record**: `deployRec`'s error (`RecDeploy.δcRec`, the inner
@@ -292,9 +335,11 @@ theorem Complete_meets_deployed (IV : Verifier FlockDeploy.Coin) (ivScope : Msg 
       (RecDeploy.deployRec IV ivScope b).δc H x < 1 :=
   ⟨RecDeploy.δcRec_le b.st H hin hready hm, RecDeploy.δcRec_lt_one b.st H hin hready hm hn⟩
 
-/-- `Nontrivial`'s antecedent: the readable scope holds a statement of each kind the compiled verifier accepts. -/
+/-- `Nontrivial`'s antecedent: the readable scope holds a statement of the one kind the compiled verifier accepts, and
+none of the kinds it refuses. -/
 theorem Nontrivial_meets :
-    InScope (denseStmt false) ∧ InScope (denseStmt true) ∧ InScope (sparseStmt false) ∧ InScope (sparseStmt true) :=
+    InScope (denseStmt false) ∧ ¬ InScope (denseStmt true) ∧ ¬ InScope (sparseStmt false) ∧
+      ¬ InScope (sparseStmt true) :=
   inScope_kinds
 
 end Claims.Witness.Recursion

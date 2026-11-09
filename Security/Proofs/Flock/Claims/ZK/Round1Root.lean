@@ -1,11 +1,48 @@
-import Proofs.Flock.Claims.ZK.Round1Pads
-import Proofs.Flock.Claims.ZK.ExeLayout
+module
+
+public import Proofs.Flock.Claims.ZK.Round1Pads
+public import Proofs.Flock.Claims.ZK.ExeLayout
+public import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Zk.InnerGo
+import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
+import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # Round `1` of the masked session: the pads root at the executable's layout
 
-The masked session's second body binds table `0`'s rep `0` pads root (`Masked.liveRun_round1`), `innerCommitP`'s root
-of the tape's pads. Here that root is the model's:
+The masked session's second body absorbs table `0`'s rep `0` pads root (`FlockComplete.sessionPZk_go_round1`),
+`innerCommitP`'s root of the tape's pads. Here that root is the model's:
 
 * `FlockComplete.innerCommitP_root_layerOf`: `innerCommitP`'s root is `layerOf`'s, of the leaves
   `H(H(c_h(p) ‖ c_μ(p)), salt p)`, where `c_h`, `c_μ` are the codes of `h ‖ pad_h` and `μ ‖ pad_μ` at `X = p + 1`
@@ -19,6 +56,8 @@ of the tape's pads. Here that root is the model's:
 * `Masked.innerRoot_exe`: the root of the tape's pads is `layerOf`'s of the cut's pads leaves by tree position
   (`Masked.leafAtP`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

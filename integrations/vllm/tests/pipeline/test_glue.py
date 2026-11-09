@@ -11,7 +11,8 @@ import pytest
 
 from verity_vllm import glue as G
 from verity_vllm.config import UsageError
-from verity_vllm.engine.profiles import dense_generic, generic
+from verity_vllm.engine.profiles import dense_generic
+from verity_vllm.observe.fold.profiles import generic
 
 GLM = "zai-org/GLM-5.3"
 DSV4 = "deepseek-ai/DeepSeek-V4-Pro"
@@ -27,7 +28,7 @@ def test_every_marker_names_a_pinned_model_and_both_seeds_are_marked(marks):
     pinned = G.known()
     assert {m for ms in marks.values() for m in ms} <= pinned
     assert {GLM, DSV4} <= {m for ms in marks.values() for m in ms}
-    assert marks["verity_vllm/program/registry/dsa.circuit-check.py"] == marks["verity_vllm/program/registry/dsa.py"] == (GLM,)
+    assert marks["verity/ml/definitions/registry/dsa.circuit-check.py"] == marks["verity/ml/definitions/registry/dsa.py"] == (GLM,)
 
 
 def test_a_models_inventory_joins_its_marked_modules(marks, tmp_path, monkeypatch):
@@ -43,7 +44,7 @@ def test_a_models_inventory_joins_its_marked_modules(marks, tmp_path, monkeypatc
 
     monkeypatch.setenv("HF_HOME", str(tmp_path))
     dsv4 = G.inventory(DSV4, marks, sql=None, fetch=None)
-    assert "verity_vllm/program/registry/mhc.py" in {f["path"] for f in dsv4["files"]}
+    assert "verity/ml/definitions/registry/mhc.py" in {f["path"] for f in dsv4["files"]}
     assert "deepseek-v4-eager-hopper-tp8-v0" in {m["id"] for m in dsv4["capture_maps"]}
     assert dsv4["model_type"] == "deepseek_v4"
     assert generic.structural_refusal(json.loads(DSV4_CONFIG.read_text())) is None
@@ -87,6 +88,18 @@ def test_hours_run_from_the_checkpoints_staging_event_to_the_first_pass_record()
     assert G.hours(None, [], sql) == {"checkpoint": None, "staged": None, "record": None, "hours": None} and len(asked) == 2
     assert "no staging event on ckpt:x" in G.render({**G.inventory(GLM, {}, sql=None, fetch=None),
                                                       "hours": {"checkpoint": "ckpt:x", "staged": None, "record": None, "hours": None}})
+
+
+def test_a_definition_is_tied_by_the_manifest_and_carries_no_marker(marks, tmp_path, monkeypatch):
+    verity = G.VERITY_HOME / "verity"
+    assert not [p for p in verity.rglob("*.py") if "__pycache__" not in p.parts and G.marked(p, G.VERITY_HOME)]
+    rows = json.loads(G.DEFINITIONS.read_text())["models"]
+    assert rows and all(marks[rel] == tuple(ms) and not G.marked(G.source(rel), G.VERITY_HOME) for rel, ms in rows.items())
+    stale = tmp_path / "definitions.json"
+    stale.write_text(json.dumps({"models": {"verity_vllm/gone.py": [GLM]}}))
+    monkeypatch.setattr(G, "DEFINITIONS", stale)
+    with pytest.raises(ValueError, match="gone.py, which is not a module"):
+        G.markers()
 
 
 @pytest.mark.parametrize("src", ["__models__ = 'zai-org/GLM-5.3'\n", "__models__ = ()\n", "__models__ = (REPO,)\n"])

@@ -1,6 +1,9 @@
-import Definitions.Accounting.Guarantees.Responder
-import Proofs.Accounting.Actual.Confidence
-import Proofs.Accounting.Memory
+module
+
+public import Definitions.Accounting.Guarantees.Responder
+public import Proofs.Accounting.Actual.Confidence
+public import Proofs.Accounting.Memory
+import Proofs.Pous.Prob
 
 /-!
 # B2, proved
@@ -24,8 +27,10 @@ same next tick (`next_tick_eq`), so the same window, `acts` and answer, and the 
 `mem_X(t_j) + 1 + τ + H ≤ N` is on time and one the responder answers correctly. The deployed forms get `TicksIn`
 from a fixed first tick (`ticksIn_of_start`: on time, challenge `j`'s tick is in `[t₀, t₀ + j·span]`).
 `B2Determines` reads `z` back with a left inverse of the length code (`decodeLen`). `B2_fixed` and `B2Audit_fixed`
-check that the fixed-schedule statements of #1857 are the case `t x = t`, `τ = 0`.
+check that the fixed-schedule statements are the case `t x = t`, `τ = 0`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs
 
@@ -52,7 +57,7 @@ theorem LengthCode : Guarantees.LengthCode := by
 
 theorem pr_mono {β : Type} [Fintype β] {P Q : β → Prop} (h : ∀ x, P x → Q x) : Pous.pr P ≤ Pous.pr Q := by
   classical
-  unfold Pous.pr
+  simp only [Pous.pr_eq_card]
   refine ENNReal.div_le_div_right ?_ _
   exact_mod_cast Finset.card_le_card fun x hx => by
     simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hx ⊢
@@ -71,7 +76,7 @@ theorem TimelyTicks : Guarantees.TimelyTicks := by
 
 namespace Responder
 
-/-- What `X` does during `[t, u)`, `t < u`, fixes its state at `u` as seen (v2.6: its state at the end of the window's
+/-- What `X` does during `[t, u)`, `t < u`, fixes its state at `u` as seen (its state at the end of the window's
 last tick is among what it does). -/
 theorem image_state_eq_of_acts {L : Type*} [LinearOrder L] {Ω : Type*} {S : Ω → Actual.Run L} {X : Finset L}
     {t u : ℕ} (htu : t < u) {r r' : Ω} (h : (S r).acts X (Set.Ico t u) = (S r').acts X (Set.Ico t u)) :
@@ -208,7 +213,7 @@ theorem exists_code {β α : Type*} [Finite β] (help : β → α) {H : ℕ}
 
 
 theorem seqAnswers_eq {I : Pous.IdealModel} {ℓ N B : ℕ} (f : I.Qry → I.Ans)
-    (step : ℕ → Pous.Bits N → Fin B → Pous.Prog I (Pous.Bits ℓ × Pous.Bits N)) (k : ℕ) (σ : ℕ → Pous.Bits N)
+    (step : ℕ → Pous.Bits N → Fin B → Pous.OracleAlgorithm I (Pous.Bits ℓ × Pous.Bits N)) (k : ℕ) (σ : ℕ → Pous.Bits N)
     (a : ℕ → Pous.Bits ℓ) (is : ℕ → Fin B)
     (h : ∀ j < k, ((step j (σ j) (is j)).run f).1 = a j ∧
       (j + 1 < k → ((step j (σ j) (is j)).run f).2 = σ (j + 1))) :
@@ -235,7 +240,7 @@ theorem seqAnswers_eq {I : Pous.IdealModel} {ℓ N B : ℕ} (f : I.Qry → I.Ans
       exact ih (m + 1) (by omega)
 
 theorem seqState_append {I : Pous.IdealModel} {ℓ N B : ℕ} (f : I.Qry → I.Ans)
-    (step : ℕ → Pous.Bits N → Fin B → Pous.Prog I (Pous.Bits ℓ × Pous.Bits N)) (i : Fin B) :
+    (step : ℕ → Pous.Bits N → Fin B → Pous.OracleAlgorithm I (Pous.Bits ℓ × Pous.Bits N)) (i : Fin B) :
     ∀ (l : List (Fin B)) (m : ℕ) (σ : Pous.Bits N), Pous.Sampled.seqState f step m (l ++ [i]) σ =
       ((step (m + l.length) (Pous.Sampled.seqState f step m l σ) i).run f).2 := by
   intro l
@@ -247,7 +252,7 @@ theorem seqState_append {I : Pous.IdealModel} {ℓ N B : ℕ} (f : I.Qry → I.A
     rw [ih, show m + 1 + l.length = m + (l.length + 1) by omega]
 
 theorem seqState_eq {I : Pous.IdealModel} {ℓ N B : ℕ} (f : I.Qry → I.Ans)
-    (step : ℕ → Pous.Bits N → Fin B → Pous.Prog I (Pous.Bits ℓ × Pous.Bits N)) (k : ℕ) (σ : ℕ → Pous.Bits N)
+    (step : ℕ → Pous.Bits N → Fin B → Pous.OracleAlgorithm I (Pous.Bits ℓ × Pous.Bits N)) (k : ℕ) (σ : ℕ → Pous.Bits N)
     (idx : Fin k → Fin B)
     (h : ∀ j (hj : j + 1 < k), ((step j (σ j) (idx ⟨j, by omega⟩)).run f).2 = σ (j + 1)) :
     ∀ j < k, Pous.Sampled.seqState f step 0 ((List.ofFn idx).take j) (σ 0) = σ j := by
@@ -295,7 +300,7 @@ noncomputable def out (j : ℕ) (σ : Pous.Bits N) (i : Fin sch.B) : Pous.Bits s
 /-- The responder: `out`, with no query. -/
 noncomputable def resp : Pous.SeqResponderOn sch N 0 0 0 where
   step _ _ j σ i := .ret (out sch S X t ans help span M τ H N c ct j σ i)
-  bounded _ _ _ _ _ := fun _ => by simp [Pous.Prog.mulDepth, Pous.Prog.keyWork, Pous.Prog.ringWork]
+  bounded _ _ _ _ _ := fun _ => by simp [Pous.OracleAlgorithm.mulDepth, Pous.OracleAlgorithm.keyWork, Pous.OracleAlgorithm.ringWork]
 
 variable {sch W S X t ans help span M τ H N c ct}
 
@@ -372,7 +377,7 @@ theorem seqAnswers_resp (hset : SetupFixed W S X t help) (x : Pous.Outcome sch k
     (sch.enc W x.1 x.2.1).1) k (stateOf sch S X t help M τ H N c ct x)
     (fun j => ans j ((S x).acts X (window (t x) j))) is
     (fun j hj => by
-      simp only [resp, Pous.Prog.run, is, dite_eq_left hj]
+      simp only [resp, Pous.OracleAlgorithm.run, is, dite_eq_left hj]
       exact out_spec hc hinc hin har hct hcode hN x hx j hj (hl j hj)) k 0 (by omega)
   rw [pre_spec hset x]
   simp only [Nat.zero_add] at key
@@ -391,7 +396,7 @@ theorem seqState_resp (hset : SetupFixed W S X t help) (x : Pous.Outcome sch k) 
       stateOf sch S X t help M τ H N c ct x j := by
   rw [pre_spec hset x]
   refine seqState_eq _ _ k (stateOf sch S X t help M τ H N c ct x) x.2.2 (fun j hj => ?_) j hj
-  simp only [resp, Pous.Prog.run]
+  simp only [resp, Pous.OracleAlgorithm.run]
   exact (out_spec hc hinc hin har hct hcode hN x hx j (by omega)
     ((Actual.content_length_le _ _ _).trans (hm ⟨j, by omega⟩))).2 hj
 
@@ -420,7 +425,7 @@ theorem B2Audit : Guarantees.B2Audit := by
     exact congrArg List.ofFn (funext hp)
   · let A₂ : Pous.SeqResponderOn sch N 0 0 0 :=
       { step := fun _ _ _ σ _ => .ret (fun _ => false, σ)
-        bounded := fun _ _ _ _ _ _ => by simp [Pous.Prog.mulDepth, Pous.Prog.keyWork, Pous.Prog.ringWork] }
+        bounded := fun _ _ _ _ _ _ => by simp [Pous.OracleAlgorithm.mulDepth, Pous.OracleAlgorithm.keyWork, Pous.OracleAlgorithm.ringWork] }
     refine (pr_mono fun x hx => ?_).trans (hsec W (fun _ _ _ _ _ => false) A₂)
     rcases Nat.eq_zero_or_pos k with hk | hk
     · subst hk
@@ -467,14 +472,14 @@ theorem B2AddsP2Ring : Guarantees.B2AddsP2Ring := by
     (fun z => ticksIn_of_start (hinc z) (h0 z) hτ) hcount htime hm hζ
   rwa [Nat.cast_ofNat] at this
 
-/-! ### #1857's statements, on a fixed schedule
+/-! ### The fixed-schedule statements
 
-A fixed schedule `t : ℕ → ℕ` is the case `t x = t` for every outcome, with `span = t k` and `τ = 0`; each of #1857's six
-statements is proved here from its restatement, word for word as it read there (its `Passes` is `PassesFixed`). -/
+A fixed schedule `t : ℕ → ℕ` is the case `t x = t` for every outcome, with `span = t k` and `τ = 0`; each of the six
+fixed-schedule statements is proved here, word for word, from its restatement (its `Passes` is `PassesFixed`). -/
 
 namespace Responder
 
-/-- #1857's `Passes`, on a fixed schedule `t`. -/
+/-- `Passes` on a fixed schedule `t`. -/
 def PassesFixed {L : Type*} {I : Pous.IdealModel} (sch : Pous.Scheme I) {k : ℕ} (W : Pous.Bits sch.n)
     (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ) (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ)
     (x : Pous.Outcome sch k) : Prop :=
@@ -513,7 +518,7 @@ end
 end Responder
 
 open Responder in
-/-- **#1857's `B2`**, from `B2` at `t x = t`, `span = t k` and `τ = 0`. -/
+/-- **`B2` on a fixed schedule**, from `B2` at `t x = t`, `span = t k` and `τ = 0`. -/
 theorem B2_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (k : ℕ)
     (W : Pous.Bits sch.n) (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
     (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.Outcome sch k → α) (M H N : ℕ)
@@ -533,7 +538,7 @@ theorem B2_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pou
   exact ⟨A₁, A₂, fun x hm => hA x (fixed_timely ht k) hm⟩
 
 open Responder in
-/-- **#1857's `B2Audit`**, from `B2Audit` at `t x = t`, `span = t k` and `τ = 0`. -/
+/-- **`B2Audit` on a fixed schedule**, from `B2Audit` at `t x = t`, `span = t k` and `τ = 0`. -/
 theorem B2Audit_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p))
     (N k : ℕ) (δ ε : ℝ≥0∞) (hsec : Pous.AuditSecureOn sch .sequential N 0 0 0 k δ ε)
     (W : Pous.Bits sch.n) (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
@@ -549,7 +554,7 @@ theorem B2Audit_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch 
     (B2Audit sch N k δ ε hsec W S X (fun _ => t) (t k) ans help 0 H hc (fun _ j => ht (Nat.lt_succ_self j))
       (fixed_setup hset) (fixed_ingress hin) fixed_arrival fixed_ticksIn hcount)
 
-/-- **#1857's `B2P2Ring`**, from `B2Audit_fixed`. -/
+/-- **`B2P2Ring` on a fixed schedule**, from `B2Audit_fixed`. -/
 theorem B2P2Ring_fixed :
   Pous.P2.Assumptions.P2RingAuditSecure 0 0 0 →
     ∀ {L : Type*} [LinearOrder L] (W : Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).n)
@@ -572,7 +577,7 @@ theorem B2P2Ring_fixed :
   exact B2Audit_fixed _ _ _ _ _ hsec W S X t ans help H hc ht hset hin hcount
 
 open Responder in
-/-- **#1857's `B2Determines`**, from `B2Determines` at `t z x = t`, `span = t k` and `τ = 0`. -/
+/-- **`B2Determines` on a fixed schedule**, from `B2Determines` at `t z x = t`, `span = t k` and `τ = 0`. -/
 theorem B2Determines_fixed :
   ∀ {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (k q : ℕ)
     (W : Pous.Bits sch.n) (S : Pous.Bits q → Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
@@ -600,7 +605,7 @@ theorem B2Determines_fixed :
     (fun _ => fixed_ticksIn) hcount (fun _ _ => fixed_timely ht k) hm hζ
 
 open Responder in
-/-- **#1857's `B2Adds`**, from `B2Adds` at `t z x = t`, `span = t k` and `τ = 0`. -/
+/-- **`B2Adds` on a fixed schedule**, from `B2Adds` at `t z x = t`, `span = t k` and `τ = 0`. -/
 theorem B2Adds_fixed :
   ∀ {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (N c : ℕ)
     (δ ε : ℝ≥0∞), Pous.AuditSecureOn sch .sequential N 0 0 0 c δ ε →
@@ -623,7 +628,7 @@ theorem B2Adds_fixed :
       (fun _ _ j => ht (Nat.lt_succ_self j)) (fun z => fixed_setup (hset z)) (fun z => fixed_ingress (hin z))
       (fun _ => fixed_arrival) (fun _ => fixed_ticksIn) hcount (fun _ _ => fixed_timely ht c) hm hζ)
 
-/-- **#1857's `B2AddsP2Ring`**, from `B2Adds_fixed`. -/
+/-- **`B2AddsP2Ring` on a fixed schedule**, from `B2Adds_fixed`. -/
 theorem B2AddsP2Ring_fixed :
   Pous.P2.Assumptions.P2RingAuditSecure 0 0 0 →
     ∀ {L : Type*} [LinearOrder L] (q k : ℕ) (W : Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).n)

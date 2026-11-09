@@ -1,5 +1,42 @@
-import Mathlib
+module
+
+public import Definitions.Accounting.Guarantees.RateAudit
+public import Mathlib.Algebra.Group.End
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.RateAudit.Audit
+import Std.Tactic.BVDecide.Normalize.Prop
+import Proofs.Pous.Prob
 
 /-!
 # The rate audit over `n` windows: the proof
@@ -11,6 +48,8 @@ class, played on the store and window `i`'s own coins (`pr_short_le`). Markov's 
 windows (`mul_pr_le_sum`) gives the guarantee.
 -/
 
+@[expose] public section
+
 namespace Accounting.Rate
 
 open Pous (Bits pr)
@@ -20,7 +59,7 @@ open scoped ENNReal
 theorem pr_le_of_fiber {X Y : Type} [Fintype X] [Fintype Y] (P : X × Y → Prop) (ε : ℝ≥0∞)
     (h : ∀ y, pr (fun x => P (x, y)) ≤ ε) : pr P ≤ ε := by
   classical
-  unfold pr at h ⊢
+  simp only [Pous.pr_eq_card] at h ⊢
   refine ENNReal.div_le_of_le_mul ?_
   have hy : ∀ y, ((Finset.univ.filter (fun x => P (x, y))).card : ℝ≥0∞) ≤ ε * Fintype.card X := by
     intro y
@@ -44,7 +83,7 @@ theorem pr_le_of_fiber {X Y : Type} [Fintype X] [Fintype Y] (P : X × Y → Prop
 theorem pr_equiv {X Y : Type} [Fintype X] [Fintype Y] (e : X ≃ Y) (P : X → Prop) :
     pr P = pr (fun y => P (e.symm y)) := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   rw [card_filter_equiv e P, Fintype.card_congr e]
 
 open Classical in
@@ -52,7 +91,7 @@ open Classical in
 the sum of their probabilities. -/
 theorem mul_pr_le_sum {Ω ι : Type} [Fintype Ω] [Fintype ι] (P : ι → Ω → Prop) (m : ℕ) :
     (m : ℝ≥0∞) * pr (fun x => m ≤ (Finset.univ.filter (fun i => P i x)).card) ≤ ∑ i, pr (P i) := by
-  unfold pr
+  simp only [Pous.pr_eq_card]
   rw [← ENNReal.sum_div, ← mul_div_assoc]
   refine ENNReal.div_le_div_right ?_ _
   have key : ∀ T : Finset Ω, (∀ x ∈ T, m ≤ (Finset.univ.filter (fun i => P i x)).card) →
@@ -73,7 +112,7 @@ theorem mul_pr_le_sum {Ω ι : Type} [Fintype Ω] [Fintype ι] (P : ι → Ω �
 variable {n N b h ρ S L q s : ℕ}
 
 /-- Window `i` was accepted within the compute budget with its footprint short of the floor `fl`. -/
-def Short (A : Windows n N b h ρ S L q s) (cTag cEnc F fl : ℕ) (i : Fin n) (x : Store N b × (Fin n → Coins N b h ρ s)) :
+def Short (A : Devices n N b h ρ S L q s) (cTag cEnc F fl : ℕ) (i : Fin n) (x : Store N b × (Fin n → Coins N b h ρ s)) :
     Prop :=
   (A.dev i x.2).Accepts x.1 (x.2 i).1 (x.2 i).2.1 (x.2 i).2.2 ∧
     (A.dev i x.2).compute cTag cEnc x.1 (x.2 i).1 (x.2 i).2.1 ≤ F ∧
@@ -82,7 +121,7 @@ def Short (A : Windows n N b h ρ S L q s) (cTag cEnc F fl : ℕ) (i : Fin n) (x
 open Classical in
 /-- Footprints summing short of `n + 1 − m` floors, in windows all accepted within the budget, leave at least `m`
 windows short. -/
-theorem le_card_short (A : Windows n N b h ρ S L q s) (cTag cEnc F fl m : ℕ)
+theorem le_card_short (A : Devices n N b h ρ S L q s) (cTag cEnc F fl m : ℕ)
     (x : Store N b × (Fin n → Coins N b h ρ s))
     (hall : ∀ i, (A.dev i x.2).Accepts x.1 (x.2 i).1 (x.2 i).2.1 (x.2 i).2.2 ∧
       (A.dev i x.2).compute cTag cEnc x.1 (x.2 i).1 (x.2 i).2.1 ≤ F)
@@ -107,7 +146,7 @@ theorem le_card_short (A : Windows n N b h ρ S L q s) (cTag cEnc F fl m : ℕ)
   omega
 
 /-- Window `i` is accepted short with at most `RateAudit`'s error, at every device the other windows' coins pick. -/
-theorem pr_short_le (A : Windows n N b h ρ S L q s) (cTag cEnc F k lam : ℕ) (i : Fin n) :
+theorem pr_short_le (A : Devices n N b h ρ S L q s) (cTag cEnc F k lam : ℕ) (i : Fin n) :
     pr (Short A cTag cEnc F (floor b ρ S L F cTag cEnc k lam) i) ≤
       (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam := by
   classical
@@ -120,7 +159,7 @@ theorem pr_short_le (A : Windows n N b h ρ S L q s) (cTag cEnc F k lam : ℕ) (
     (SecurityProofs.RateAudit N b h ρ S L q s k F cTag cEnc lam (A i ω'))
   have hω : ((Equiv.funSplitAt i (Coins N b h ρ s)).symm (x.2, ω')) i = x.2 := by simp
   have hd : A.dev i ((Equiv.funSplitAt i (Coins N b h ρ s)).symm (x.2, ω')) = A i ω' := by
-    simp only [Windows.dev]
+    simp only [Devices.dev]
     congr 1
     funext j
     simp [j.2]

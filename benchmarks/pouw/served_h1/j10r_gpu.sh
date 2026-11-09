@@ -6,9 +6,12 @@
 #           (TIME_ARGS its extra flags), into $OUT/junit.xml and $OUT/j10r_time.json
 #   window  a served Llama-3.1-8B int8 window over J10-R's tile unit with each call's receipt@<c> from the units kernel
 #           (pouw_h1_gpu.py --workload fill --served --commit --negatives --receipts --j10r; DECLARE its --declare,
-#           RECEIPTS=cubin noise.cu's torch chain in the units kernel's place, NOISE=v1 the window over v1's unit)
+#           RECEIPTS=cubin noise.cu's torch chain in the units kernel's place, NOISE=v1 the window over v1's unit,
+#           COMMIT=0 the fill window alone, without --commit --negatives, WINDOW_ARGS its extra flags: --ks 2048 H1 over
+#           the linears at K 2048 alone, --base-role LLAMA32_1B --role LLAMA32_1B_INT8 --repo
+#           verity-int8/Llama-3.2-1B-INT8 serve-openai's model)
 #
-#   research run --on vy-nebius-2 --pool research --mem-gb 96 --cwd source --source . --as LANE --env JOB=window \
+#   research run --on MACHINE --pool research --mem-gb 96 --cwd source --source . --as LANE --env JOB=window \
 #     -- bash benchmarks/pouw/served_h1/j10r_gpu.sh
 set -euo pipefail
 PY=${PY:-/workspace/jobs/venv312/bin/python}
@@ -16,13 +19,14 @@ NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
 : "${OUT:?research run gives the run its OUT}"
 ROOT=$(pwd)
 if [ -z "${J10R_GPU_S:-}" ]; then
+  . "$(dirname "$0")/arch.sh"
   S=$(mktemp -d)
   trap 'rm -rf "$S"' EXIT
-  nice -n 10 "$NVCC" -O3 -std=c++17 --expt-relaxed-constexpr -gencode arch=compute_120a,code=sm_120a -Xcompiler -fPIC \
+  nice -n 10 "$NVCC" -O3 -std=c++17 --expt-relaxed-constexpr -gencode "$GENCODE" -Xcompiler -fPIC \
     -shared -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 -o "$S/h1u_hbc.so" benchmarks/hash/dither/h1u.cu \
     > "$OUT/build-hbc.log" 2>&1 || { echo "j10r_gpu: NVCC_FAIL h1u.cu"; tail -30 "$OUT/build-hbc.log"; exit 11; }
-  nice -n 10 "$NVCC" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -I benchmarks/codec_tensor -cubin \
-    -o "$S/noise.cubin" benchmarks/pouw/served_h1/noise.cu > "$OUT/build-noise.log" 2>&1 \
+  nice -n 10 "$NVCC" -O3 -std=c++17 -I verity/ml/kernels -gencode "$GENCODE" -cubin \
+    -o "$S/noise.cubin" integrations/vllm/verity_vllm/protocols/pouw/pouw_cuda/noise.cu > "$OUT/build-noise.log" 2>&1 \
     || { echo "j10r_gpu: NVCC_FAIL noise.cu"; tail -30 "$OUT/build-noise.log"; exit 11; }
   sha256sum "$S/h1u_hbc.so" "$S/noise.cubin" | tee "$OUT/builds.txt"
   lease=$(command -v gpu-lease || echo /workspace/pouw/infra/bin/gpu-lease)
@@ -32,7 +36,7 @@ if [ -z "${J10R_GPU_S:-}" ]; then
   exit $rc
 fi
 S=$J10R_GPU_S
-export PYTHONPATH="$ROOT:$ROOT/integrations/vllm" HF_HOME=${HF_HOME:-/workspace/hf}
+export PYTHONPATH="$ROOT:$ROOT/tools/config:$ROOT/integrations/vllm" HF_HOME=${HF_HOME:-/workspace/hf}
 nvidia-smi --query-gpu=index,name,memory.used,utilization.gpu --format=csv | tee "$OUT/gpu.txt"
 case "${JOB:-tests}" in
   tests)
@@ -52,10 +56,12 @@ case "${JOB:-tests}" in
     [ "${RECEIPTS:-units}" = cubin ] && so="$S/noise.cubin"
     j10r=--j10r
     [ "${NOISE:-j10r}" = v1 ] && j10r=
+    commit="--commit --negatives"
+    [ "${COMMIT:-1}" = 0 ] && commit=
     cd integrations/vllm
     # shellcheck disable=SC2086
-    "$PY" -m tests.protocols.pouw_h1_gpu --workload fill --served --commit --negatives --receipts "$so" $j10r \
-      --declare "${DECLARE:-32,3,32,4}" --out "$OUT" --at 2026-10-24T00:00:00Z --by compute-accounting 2>&1 \
+    "$PY" -m tests.protocols.pouw_h1_gpu --workload fill --served $commit --receipts "$so" $j10r \
+      --declare "${DECLARE:-32,3,32,4}" ${WINDOW_ARGS:-} --out "$OUT" --at 2026-10-24T00:00:00Z --by compute-accounting 2>&1 \
       | tee "$OUT/window.log"
     exit "${PIPESTATUS[0]}" ;;
   *) echo "j10r_gpu: JOB is tests or window, not ${JOB}"; exit 2 ;;

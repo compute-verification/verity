@@ -328,6 +328,43 @@ def _simp(head: str, names: list[str]) -> list[str]:
     return _wrap(f"{head} [{', '.join(names)}]", "  ", "      ")
 
 
+#: what a sheet's proofs elaborate with beyond `Accounting.TS.Sheet`, which imports these privately: the `norm_num`
+#: extensions and instances its `decide` and `norm_num` steps find
+SHEET_IMPORTS = (
+    "import Mathlib.Algebra.Order.Floor.Extended",
+    "import Mathlib.Algebra.Order.Interval.Basic",
+    "import Mathlib.Analysis.Complex.UpperHalfPlane.Basic",
+    "import Mathlib.Analysis.SpecialFunctions.Bernstein",
+    "import Mathlib.Analysis.SpecialFunctions.Gamma.Basic",
+    "import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp",
+    "import Mathlib.Combinatorics.Enumerative.DyckWord",
+    "import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal",
+    "import Mathlib.Data.NNRat.Floor",
+    "import Mathlib.Data.Nat.Choose.Multinomial",
+    "import Mathlib.Geometry.Euclidean.Altitude",
+    "import Mathlib.NumberTheory.Chebyshev",
+    "import Mathlib.NumberTheory.Height.NumberField",
+    "import Mathlib.NumberTheory.Height.Projectivization",
+    "import Mathlib.NumberTheory.LucasLehmer",
+    "import Mathlib.NumberTheory.SelbergSieve",
+    "import Mathlib.RingTheory.Radical.NatInt",
+    "import Mathlib.Tactic.Echelon.Zsqrtd",
+    "import Mathlib.Tactic.NormNum.Irrational",
+    "import Mathlib.Tactic.NormNum.IsCoprime",
+    "import Mathlib.Tactic.NormNum.IsSquare",
+    "import Mathlib.Tactic.NormNum.LegendreSymbol",
+    "import Mathlib.Tactic.NormNum.ModEq",
+    "import Mathlib.Tactic.NormNum.NatFib",
+    "import Mathlib.Tactic.NormNum.NatLog",
+    "import Mathlib.Tactic.NormNum.NatSqrt",
+    "import Mathlib.Tactic.NormNum.Ordinal",
+    "import Mathlib.Tactic.NormNum.Parity",
+    "import Mathlib.Tactic.NormNum.Prime",
+    "import Mathlib.Tactic.NormNum.RealSqrt",
+    "import Mathlib.Topology.Sheaves.Init",
+)
+
+
 def lean(s: Sheet, data: Path) -> str:
     """The Lean module `s.lean`: the sheet's constants with their sources, `sheet : Sheet Kind Pipe`, the DS census, the
     theorem that the sheet's machine is that census, and the figures' lemmas."""
@@ -340,7 +377,8 @@ def lean(s: Sheet, data: Path) -> str:
     peak = {ty: f"peak{_camel(ty)}" for ty in types}
     width = {q: f"width{_camel(q)}" for q in pipes}
     clock = {c: f"{c}MHz" for c in s.clocks}
-    out = ["import Definitions.Accounting.TS.Sheet", "", "/-!", f"# The {s.name}'s data sheet (generated)", ""]
+    out = ["module", "", "public import Definitions.Accounting.TS.Sheet", *SHEET_IMPORTS, "", "/-!",
+           f"# The {s.name}'s data sheet (generated)", ""]
     out += _wrap(f"The data-sheet machine (`Accounting.TS.Sheet.machine`) at the {s.gpu}'s vendor values: each constant "
                  "with the axiom that reads it, its value, its grade and its source, and the census of the machine "
                  f"model's `{s.vector}` vector, which `machine_eq_census` proves the machine is, line for line. Each "
@@ -350,13 +388,13 @@ def lean(s: Sheet, data: Path) -> str:
     out += [""] + _wrap("Scope: the machine is one GPU's own SMs. Work a peer GPU on the node does over NVLink or "
                         "NVSwitch and sends back (whole tiles as 64-byte digests) is outside it: the sheet bounds what "
                         "the credited GPU's SMs compute, not which GPU computed a tile, and `Device.lean`'s side "
-                        "channels don't list NVLink peer offload (RT-SCOPE-1, note:20261019T0455Z-draft-rt-scope).", "")
+                        "channels don't list NVLink peer offload.", "")
     out += [""] + _wrap(f"`uv run machine-model --device {device} sheet --lean` prints this file from `{_rel(s)}`, and "
-                        "the machine model's tests hold it to that output. The grades, and where the sm_120 sheet's "
-                        "structure doesn't fit this device: note:20261019T0511Z-draft-mm-sheets.", "")
-    out += ["-/", "", f"namespace Accounting.TS.Sheets.{s.name}", "", "noncomputable section", ""]
+                        "the machine model's tests hold it to that output.", "")
+    out += ["-/", "", "@[expose] public section", "", f"namespace Accounting.TS.Sheets.{s.name}", "",
+            "noncomputable section", ""]
     # Not `deriving Fintype`: Mathlib's handler for an enumeration fails its own `rw [Finset.mem_mk, …]` under this
-    # toolchain (r20261019-053835-0e45), so each instance lists the constructors.
+    # toolchain, so each instance lists the constructors.
     out += [*_doc(f"The classes of the `{epoch}` census (its kinds)."), "inductive Kind", *(f"  | {k}" for k in kinds),
             "  deriving DecidableEq", "", "instance instFintypeKind : Fintype Kind :=",
             *_wrap(f"Fintype.ofList [{', '.join(f'.{k}' for k in kinds)}]", "  ", "    "),
@@ -448,7 +486,7 @@ def lean(s: Sheet, data: Path) -> str:
             "  | .smem, _ => 0",
             ""]
     # One lemma a row, so that each row's case split has a declaration's heartbeats to itself: the whole census in one
-    # proof ran out of them (r20261019-053835-0e45).
+    # proof ran out of them.
     unfold = ["Sheet.machine", "sheet", "census"]
     out += [*_doc(f"The issue row: every class holds it for 1, on the sheet as in the census. A2 (a SMSP issues one warp "
                   f"instruction a SMSP-cycle). Grade: {s.issue.grade}. Source: {s.issue.source}. A2u (a uniform "
@@ -457,7 +495,7 @@ def lean(s: Sheet, data: Path) -> str:
             "theorem machine_issue (k : Kind) : sheet.machine.a .issue k = census .issue k := by",
             "  simp [Sheet.machine, census]", ""]
     # The tensor row's case split unfolds `Kind.form` in every class's case, so its cost grows with the square of the
-    # class count: 200000 ran out at 50 classes on sm_90 and 52 on sm_100 (r20261020-053329-30da).
+    # class count: 200000 ran out at 50 classes on sm_90 and 52 on sm_100.
     out += ["-- the case split unfolds `Kind.form` in every class's case: its cost grows with the square of the class "
             "count",
             "set_option maxHeartbeats 1000000 in",

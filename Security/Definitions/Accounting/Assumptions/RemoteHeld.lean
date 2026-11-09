@@ -1,4 +1,6 @@
-import Definitions.Accounting.Remote.Held
+module
+
+public import Definitions.Accounting.Remote.Held
 
 /-!
 # What the memory line held under the remote audit assumes (trusted)
@@ -37,10 +39,13 @@ completing.
 * `LiveCoins W δ`: except with probability `δ`, the credited passes' wrong receipts are at most `W`: each window's
   openings, from a live coin released after its roots, are uniform over its receipts, and pooled over the session they
   bound the wrong ones (`audit.pooled`). It is derived from the deployed opening draw (`Accounting.Remote.Draw`) for
-  every `W` at least the record's pooled bound (`Accounting.Guarantees.Remote.LiveCoinsDrawn`), under the draw's own
+  every `W` at least the record's pooled bound (`Accounting.Guarantees.Remote.LiveCoinsSampled`), under the draw's own
   premises (`Accounting.Remote.Draw.Assumptions`), at `δ` plus the sampler's rejections plus the coin function's
-  advantage plus the coin commitment's hiding terms (`Accounting.Remote.Draw.Committed.hide`, hm96's).
+  advantage plus the receipts' binding term (`Accounting.Remote.Draw.Receipts.binding`: an opened receipt moved off
+  the row its root holds, a SHA-512 collision between its held and presented openings).
 -/
+
+@[expose] public section
 
 namespace Accounting.Remote.Held.Assumptions
 
@@ -105,6 +110,6 @@ def SketchBound (T : Trace Ω) (δ : ℝ) : Prop :=
 
 /-- **Live coins**: except with probability `δ` when the audit accepts, the credited passes' wrong receipts of
 registered blocks are at most `W`, the openings' pooled bound. -/
-def LiveCoins (T : Trace Ω) (W δ : ℝ) : Prop := T.Holds δ fun ω => (T.wrong ω : ℝ) ≤ W
+def LiveCoins (T : Trace Ω) (W δ : ℝ) : Prop := T.Holds δ fun ω => (T.incorrect ω : ℝ) ≤ W
 
 end Accounting.Remote.Held.Assumptions

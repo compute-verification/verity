@@ -1,4 +1,13 @@
-import Proofs.Flock.Soundness.Discharge.Aliased.Keys
+module
+
+public import Proofs.Flock.Level3.Placed
+public import Proofs.Flock.Soundness.Compose
+public import Properties.Flock.Circuit.Keys
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import VCVio.Prelude.Core
 
 /-!
 # A template instance's rows over every net, joined by Δ's wires
@@ -19,6 +28,8 @@ and its input padding rows. `order` appends, pass by pass, every column whose ro
 the rows are `Ordered` (`logical_ordered`) whatever the wires are: a column on a cycle of wires, or one that reads a
 column with no row, never enters the order. `instRows` is `Rows.compose` of them.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

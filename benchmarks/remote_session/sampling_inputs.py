@@ -1,19 +1,19 @@
-"""The remote bandwidth audit's inputs to a joint sampling plan (PoUW and the memory claim under one partition): the
+"""PoUB's inputs to a joint sampling plan (PoUW and the memory claim under one partition): the
 memory line's ε against the openings proved, the pass rate and pacing, and the window; the rebuilds the plan leaves in
 the line; and the serving cost of passes and of proved openings, at three served operating points.
 
     python sampling_inputs.py --verifier VERIFIER_JSON --cost-model COST_MODEL_JSON --out DIR
 
-`VERIFIER_JSON` is a run's `verifier.json` with accepted paced sessions (#2612's `ledger.paced`). The script recomputes
+`VERIFIER_JSON` is a run's `verifier.json` with accepted paced sessions (`ledger.paced`). The script recomputes
 every recorded stretch from the session's groups and refuses to go on unless the ledger's figures come back, then checks
 the closed form below against the same arithmetic on uniform sessions, and only then tabulates the closed form.
-`COST_MODEL_JSON` is a `sampled_proofs.costfit` record whose observations include `BlockOpeningCheck_v1`'s sessions.
+`COST_MODEL_JSON` is a `spot.costfit` record whose observations include `BlockOpeningCheck_v1`'s sessions.
 
 With o openings proved a second, d of them a group of k passes at r passes a second, and β = B/d, where
 B = −S·expm1(ln δ/S) ≈ ln(1/δ) is `audit.pooled`'s budget over S draws, the line loses this many blocks over a span
 Θ, as a fraction of the store's N blocks:
 
-    sampling, snapshot        B / S_Θ                                     S_Θ the openings drawn over Θ
+    sampling, snapshot        B / S_Θ                                     S_Θ the openings sampled over Θ
     sampling, held over time  (B/o + min(1, β)·(L_max − k/r)) / Θ
     rebuilds, held over time  2·L_max·(X_r + I)·(Θ + 2·L_max) / (Θ·N)
 
@@ -31,7 +31,7 @@ so every stretch but the last ends at the next coin: L_max = k/r, the coin's per
 below, k/r ≥ k·t_pass + c (k passes, then the root's and the next coin's round trips). c there is each point's own,
 `--one-flight-c POINT=S` (measured), else modeled as the recorded f = 2 c.
 
-One openings coin over g groups is the code's (`audit.Params.groups_per_coin`): d = s/g at s draws a coin. The script
+One openings coin over g groups is the code's (`audit.Params.groups_per_coin`): d = s/g at s flips a coin. The script
 solves each point's plan at g = 1, 2, 4, 8 and holds each to the code's reading (`coin_check`: `audit.pooled` on a
 record naming g), refusing to go on unless the closed form agrees.
 """
@@ -49,24 +49,22 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
 from verity.core.protocols.remote_bandwidth import audit, timing  # noqa: E402
-from verity.core.protocols.sampled_proofs import costfit  # noqa: E402
+from verity.core.protocols.spot import costfit  # noqa: E402
 
-import wire  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import wire  # noqa: E402
 
 LN = -math.log(audit.DELTA)
 BLOCK = 4096
 STATEMENT = 512
-"""Openings a statement: C-Flock's ceiling, m = k_log + nbl ≤ 35, at the unit's k_log 26."""
+"""Openings a statement: Flock's ceiling, m = k_log + nbl ≤ 35, at the unit's k_log 26."""
 FLOOR_GPU_S = 0.0799
-"""An opening's GPU device phase at a full statement, firewall on: note:20261018T1937Z-report-zk-openings
-(r20261018-211523-93ec), measured."""
+"""An opening's GPU device phase at a full statement, ZK server on: measured."""
 DEPLOYED_EXTRA_ANDS = (45.4e6 - 20.3e6) + 5e6
-"""p1024/k3/masked's decode over p512/k2's, and the deployed trees' depths, per opening: the same note's caveats,
-modeled."""
+"""p1024/k3/masked's decode over p512/k2's, and the deployed trees' depths, per opening: modeled."""
 MEMSAT = {"run": "r20261018-222953-fbf1", "plain": 4260.0, "codec": 3271.0,
           "arms": [(65.84, 5.91e-3, 0.9689, 1999.0), (29.81, 6.18e-3, 0.9862, 2669.0),
                    (14.90, 3.87e-3, 0.9934, 3083.0)]}
-"""int8 Llama-3.1-8B on one GPU at saturation (note:hash/20261018T1935Z-draft-memsat): output tokens/s plain and with
+"""int8 Llama-3.1-8B on one GPU at saturation (memsat): output tokens/s plain and with
 the codec, and per receipts arm (passes/s, serving s a pass, γ at spec R, tokens/s)."""
 
 
@@ -81,7 +79,7 @@ def groups_of(seen: list[dict]) -> SimpleNamespace:
 
 def span_line(g: SimpleNamespace, lo: int, hi: int, *, wrong: float, blocks: int, per_ns: float, chip: float,
               burst: float = 0.0) -> dict:
-    """`paced_line`'s arithmetic (#2612's verifier.py) over groups [lo, hi), group hi the one after them: the span (from
+    """`paced_line`'s arithmetic (`verifier.py`) over groups [lo, hi), group hi the one after them: the span (from
     the first group's end when lo is 0), L_max, and the blocks lost in both forms, `per_ns` the rebuild and ingress
     ceilings in blocks a ns, `chip` the chip's blocks and `burst` the routes' bursts in blocks (a record from before
     they were charged has none)."""
@@ -105,7 +103,7 @@ def span_line(g: SimpleNamespace, lo: int, hi: int, *, wrong: float, blocks: int
 
 def record_of(windows: list[tuple[int, int]], per_coin: int = 1) -> SimpleNamespace:
     """What `audit.pooled` reads of a record: each window's receipts and draws, and the windows an openings coin
-    draws over (`groups_per_coin`)."""
+    selects over (`groups_per_coin`)."""
     return SimpleNamespace(groups_per_coin=per_coin, windows=[SimpleNamespace(receipts=u, profile=SimpleNamespace(
         delta=audit.DELTA, drawn={"receipt": d})) for u, d in windows])
 
@@ -179,7 +177,7 @@ def reproduce(v: dict, ingress_bytes_per_s: float) -> list[dict]:
 
 def check_closed_form() -> list[dict]:
     """The closed form against `span_line` on uniform sessions, a group spilling into the rest (β > 1) and not, and
-    one openings coin drawing over m groups (d = s/m), at two groups in flight and at one (each root c after its coin,
+    one openings coin sampling over m groups (d = s/m), at two groups in flight and at one (each root c after its coin,
     the next coin a period after it). It holds while the wrong receipts fit in the stretch (β < G)."""
     out = []
     for s, m, G, W, k, r, c, N, f in ((1, 1, 40, 3, 1, 8.0, 0.057, 10_000, 2), (2, 1, 40, 3, 2, 12.0, 0.03, 10_000, 2),
@@ -237,7 +235,7 @@ def points(recorded: list[dict]) -> dict:
                    "weights_bytes": 8 * 65_525_514_240, "c_s": max(x["c_s"] for x in recorded), "xi": xi,
                    "chip": rec["chip_blocks"],
                    "tokens_per_s": 1000.0, "codec_loss": None,
-                   "source": "W2 round 5 (note:20261018T0720Z-report-north-star-node; r20261018-200634-12c0): store, "
+                   "source": "W2 round 5 (r20261018-200634-12c0): store, "
                              "weights, c measured; tokens/s the offered load, not saturation"},
         "8B x8": {"label": "Llama-3.1-8B int8, an engine a GPU, 8 GPUs", "blocks": 8 * 2_359_296, "gpus": 8,
                   "shard_bytes": 9_663_676_416, "weights_bytes": 8 * (6.98e9 + 2 * 1.05e9),
@@ -248,7 +246,7 @@ def points(recorded: list[dict]) -> dict:
                   "shard_bytes": 9_663_676_416, "weights_bytes": 6.98e9 + 2 * 1.05e9, "c_s": 0.072 - 2 / 51.7,
                   "xi": xi, "chip": rec["chip_blocks"], "tokens_per_s": MEMSAT["codec"],
                   "codec_loss": 1 - MEMSAT["codec"] / MEMSAT["plain"],
-                  "source": "memsat (note:hash/20261018T1935Z-draft-memsat; r20261018-222953-fbf1), measured"},
+                  "source": "memsat (r20261018-222953-fbf1), measured"},
     }
 
 
@@ -307,10 +305,10 @@ def solve(p: dict, prices: dict, eps: float, *, theta: float, line_rule: bool, f
     2·k/r + c) k/r ≤ τ/2 and k/r·(β + min(1, β)) + min(1, β)·c ≤ ε·Θ; at one (L_max = k/r) k/r ≤ τ + c and k/r·β ≤
     ε·Θ, and r is also at most k / `least_period`, the chain's.
 
-    A group is a window of `audit.pooled`'s, and a window it draws nothing from may be wrong throughout, so d ≥ 1.
-    `shared` lets one openings coin draw over m groups' receipts after all their roots (d = 1/m, m ≤ 512): no session
+    A group is a window of `audit.pooled`'s, and a window it samples nothing from may be wrong throughout, so d ≥ 1.
+    `shared` lets one openings coin select over m groups' receipts after all their roots (d = 1/m, m ≤ 512): no session
     has run it, so it is modeled, with the same closed form. `per_coin` is the code's (`audit.Params.groups_per_coin`,
-    g): one openings coin over g groups, the pooled bound's window a draw of g groups, so d is s/g at s ≥ 1 draws a
+    g): one openings coin over g groups, the pooled bound's window a sample of g groups, so d is s/g at s ≥ 1 flips a
     coin."""
     tau = eps * p["blocks"] / (2 * p["xi"]) if line_rule else math.inf
     t_s, c = pass_s(p), c_at(p, flight)
@@ -343,10 +341,10 @@ def solve(p: dict, prices: dict, eps: float, *, theta: float, line_rule: bool, f
 
 
 def coin_check(p: dict, s: dict) -> dict:
-    """A plan `s` drawn g = `s["per_coin"]` groups a coin, read by the code: its closed form's held-over-time sampling
+    """A plan `s` sampled g = `s["per_coin"]` groups a coin, read by the code: its closed form's held-over-time sampling
     term against `span_line`'s arithmetic on the uniform session it describes (whole coins over Θ, then one more),
     whose wrong receipts are `audit.pooled`'s on a record of each group's receipts and draws naming `groups_per_coin`
-    (all of a coin's draws on its last group, as `Session.close` may share them: the code pools them over the coin's
+    (all of a coin's draws on its last group, as `AuditRun.close` may share them: the code pools them over the coin's
     groups). At one group in flight (`s["flight"]` 1) each group's root comes `least_period` after its coin, before the
     next coin as a record naming f = 1 must have it. Refuses to go on unless they agree."""
     g, k, r, N, f = s["per_coin"], s["k"], s["r"], p["blocks"], s.get("flight", 2)

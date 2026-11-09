@@ -1,15 +1,15 @@
 """(b) [T1] Fold / decomposition hashes reproduce: per request `canonical_sha256{a,b}` (a = the derived component, b = the record's
 projection), `derived_digest`, `n_instances`, the shape facts (LP, T, sampling events, steps, prefill chunks), the cross-request reads and the
 attribution table (`how`, unattributed, row-rule disagreements) of `match_decomp.json`, recomputed over the Match record with the v2 path --
-`verity_vllm.observe.contract.iter_observations` (the stream) -> `verity_vllm.correspondence.resolve` (occurrence resolution: the request channel wraps
-batch_decomp's meta / dataflow / weight-only / rows rules) -> `verity_vllm.correspondence.resolve_decomp.decompose` (the per-request projection and the
+`verity_vllm.observe.contract.iter_observations` (the stream) -> `verity_vllm.check.match.resolve` (occurrence resolution: the request channel wraps
+batch_decomp's meta / dataflow / weight-only / rows rules) -> `verity_vllm.check.match.resolve_decomp.decompose` (the per-request projection and the
 canonical hash are v1's own `batch_decomp.Projection` / `compare.compare_steps`, wrapped).  STRONG: a value attributed to another request,
 a missed weight-only value, a request-relative step cut elsewhere -- each moves a hash or a count.
 
 Inputs: `match/program.json` (0.3-1.4 GB) + `match/instances.jsonl` (0.6-5.8 GB) -- pinned by sha256 in `global_match.json.impl.fold_load`
 and checked here as read (`fold_record_pins`) -- the row's request Programs (`build_request*/instances.json.gz`), and `match/capture/log.jsonl.gz`
-when it is beside the record (the R19 rows archived it to the vault, F-r19-int-14: without it the rows channel and the meta-vs-rows cross-check
-are unavailable and the result says so; every row of an R19 record is stamped, so attribution itself does not need it).  100-500 s, 10-40 GB
+when it is beside the record (the reference rows archived it to the vault: without it the rows channel and the meta-vs-rows cross-check
+are unavailable and the result says so; every row of a reference record is stamped, so attribution itself does not need it).  100-500 s, 10-40 GB
 RAM: a pod.  No B=1 row has a decomposition (`match_decomp.json` absent on #11, #39).
 """
 from __future__ import annotations
@@ -85,7 +85,7 @@ def actual(row: resolver.Row) -> dict:
             fl = ((json.load(open(gm)).get("impl") or {}).get("fold_load") or {})
             pins = next(({k: v for k, v in n.items() if k.endswith("sha256")} for n in fl.values() if isinstance(n, dict)), None)
         return dict(lift(d, pins=pins), source="candidate")
-    # the fold record of record: program.json + instances.jsonl beside each other under match/ (not frozen in fixtures.toml: multi-GB;
+    # the fold record of record: program.json + instances.jsonl beside each other under match/ (not frozen in files.toml: multi-GB;
     # tied to the record by the sha256 pins of global_match.json, compared below)
     pj = row.path("match/program.json", verify=False)
     inst = row.path("match/instances.jsonl", verify=False)
@@ -96,7 +96,7 @@ def actual(row: resolver.Row) -> dict:
     if progs is None:
         raise resolver.NotResolvable(f"{row.key}: no request Programs (build_request*/instances.json.gz) reachable here")
     dirs = _derived_dirs(progs)
-    from verity_vllm.correspondence import resolve_decomp as RD
+    from verity_vllm.check.match import resolve_decomp as RD
     doc = RD.decompose(match_dir, dirs)
     notes = doc.get("fold_load") or {}
     pins = {k: v for k, v in notes.items() if k.endswith("sha256")} or None

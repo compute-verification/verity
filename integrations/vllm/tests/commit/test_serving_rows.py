@@ -1,6 +1,6 @@
-"""The opt-in serving rows (`ml.windows.rows`): M0's serving row leaf vector byte for byte, core's frame-v3-sha512 / hm96-sha512
+"""The opt-in serving rows (`ml.windows.rows`): Flock's circuit prover's serving row leaf vector byte for byte, core's frame-v3-sha512 / hm96-sha512
 reference on the batch and parallel paths for a two-member population, ChaCha20 salts, core's served-domain rule, the registration
-(core's v1 record, accepted by `registration.check` against the verifier's own copies) and M0's per-member file layout, every output
+(core's v1 record, accepted by `registration.check` against the verifier's own copies) and Flock's circuit prover's per-member file layout, every output
 a hidden row (no output word in a public body).  `serving_row_leaf_vector.json` is flock-netlist's vector (notes-asset
 flock-netlist/serving-row-leaf-vector.json, sha256 92aa7f77...)."""
 
@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import random
 from pathlib import Path
 
 import numpy as np
@@ -22,15 +21,15 @@ from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf,
                                            sha512_row_layout, sha512_row_seg_digest, sha512_row_v2_digest)
 from verity.ml.circuits.defs import REGISTRY, bind
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R
 from verity.ml.windows import flock_inputs as FI, rows as SR
 from verity_vllm.commit import index as IX
-from verity_vllm.program.registry import b1  # noqa: F401  (registers RoPEHead_v1 and SiluMul_v1)
+from verity.ml.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1 and SiluMul_v1)
 
 VECTOR = json.loads((Path(__file__).parent / "serving_row_leaf_vector.json").read_text())
 DEFS = (bind(REGISTRY["RoPEHead_v1"], D=64), bind(REGISTRY["SiluMul_v1"], I=64))
 TEMPLATES = [P.template_id(d) for d in DEFS]
-LAW = D.parse_law("subset:1")
+LAW = D.parse_design("subset:1")
 RUN = "ab" * 32
 
 
@@ -39,12 +38,12 @@ def population(n0: int, n1: int) -> tuple[SR.Member, SR.Member]:
             SR.Member(TEMPLATES[1], (("in0", 128), ("in1", 64)), (("out.0", 128), ("out.1", 3)), n1, n0))
 
 
-def window(n0: int, n1: int, run: str = RUN) -> SR.Window:
+def window(n0: int, n1: int, run: str = RUN) -> SR.Binding:
     program, query = SR.population_program([(DEFS[0], n0), (DEFS[1], n1)])
-    return SR.Window(program, query, LAW, run, population(n0, n1))
+    return SR.Binding(program, query, LAW, run, population(n0, n1))
 
 
-def data(w: SR.Window, seed: int = 3) -> list[dict[str, dict[str, np.ndarray]]]:
+def data(w: SR.Binding, seed: int = 3) -> list[dict[str, dict[str, np.ndarray]]]:
     rng = np.random.default_rng(seed)
     gen = lambda n, k: rng.integers(0, 1 << 16, size=(n, k), dtype=np.uint16)  # noqa: E731
     return [{"rows": {p: gen(m.n, k) for p, k in m.rows}, "outs": {p: gen(m.n, k) for p, k in m.outs}} for m in w.members]
@@ -63,17 +62,6 @@ def reference(c: SR.Committed) -> dict[str, bytes]:
         assert b"".join(bcs) == c.bc[p]
         roots[p] = fv.root(p, [row_leaf(c.domains[p], i, inst.tree_leaf(key, bcs[i]), SR.ROW_SCHEMA) for i in range(len(rows))])
     return roots
-
-
-def test_chacha20_is_rfc8439():
-    key, nonce = bytes(range(32)), bytes.fromhex("000000090000004a00000000")
-    assert SR.chacha20(key, nonce, 64, counter=1).hex() == (
-        "10f1e7e4d13b5915500fdd1fa32071c4c7d1f4c733c068030422aa9ac3d46c4e"
-        "d2826446079faa0914c2d705d98b02a2b5129cd1de164eb9cbd083e8a2503c4e")
-    crypto = pytest.importorskip("cryptography.hazmat.primitives.ciphers")
-    k, nc = random.Random(1).randbytes(32), random.Random(2).randbytes(12)
-    enc = crypto.Cipher(crypto.algorithms.ChaCha20(k, (0).to_bytes(4, "little") + nc), mode=None).encryptor()
-    assert SR.chacha20(k, nc, 200_003) == enc.update(bytes(200_003))
 
 
 def test_m0_serving_row_leaf_vector():
@@ -116,9 +104,9 @@ def test_population_is_the_partitions():
     w = window(6, 2)
     assert (w.population, [m.base for m in w.members]) == (8, [0, 6])
     with pytest.raises(ValueError, match="partition's units"):
-        SR.Window(w.program, w.query, LAW, RUN, population(6, 3))
+        SR.Binding(w.program, w.query, LAW, RUN, population(6, 3))
     with pytest.raises(ValueError, match="partition's units"):
-        SR.Window(w.program, w.query, LAW, RUN, population(6, 2)[::-1])
+        SR.Binding(w.program, w.query, LAW, RUN, population(6, 2)[::-1])
     bad = data(w)
     bad[1]["rows"]["in0"] = bad[1]["rows"]["in0"][:1]
     with pytest.raises(ValueError, match="SiluMul_v1"):
@@ -129,11 +117,12 @@ def test_the_registration_is_cores_v1_record_over_served_domains(tmp_path):
     w = window(9, 4)
     c = SR.commit(w, data(w), salt_key=bytes(32))
     idx = IX.index_doc(w.members, [[[0, 9, "r0", 3, 0, "model.layers.0.self_attn.rotary_emb", "0", 0, 768]], []], RUN)
-    win = SR.write(c, tmp_path, {"row": 101, "commitment": "vllm-v1"}, idx, registrar=R)
+    win = SR.write(c, tmp_path, {"row": 101, "commitment": "rows-sha512"}, idx, registrar=R)
     rec = json.loads((tmp_path / "registration.json").read_text())
     assert (rec["format"], rec["population"], rec["partition"], rec["window"]["kind"], rec["window"]["run"]) == (
         R.FORMAT, 13, w.partition_digest, "served", RUN)
-    assert rec["window"]["index"] == hashlib.sha512((tmp_path / "index.json").read_bytes()).hexdigest() == win["index_sha512"]
+    ib, salt = (tmp_path / "index.json").read_bytes(), (tmp_path / SR.INDEX_SALT).read_bytes()
+    assert rec["window"]["index_leaf"] == SR.index_leaf(ib, salt).hex() == win["index_leaf"] and "index" not in rec["window"]
     assert win["registration_digest"] == R.digest(rec) and rec["program"] == P.program_digest(w.program)
     leaves = {r["port"]: r["leaves"] for r in rec["roots"]}
     assert leaves == {f"{TEMPLATES[0]}/{p}": 9 for p in ("x", "cs", "out")} | {f"{TEMPLATES[1]}/{p}": 4 for p in ("in0", "in1", "out.0", "out.1")}
@@ -160,6 +149,35 @@ def test_the_registration_is_cores_v1_record_over_served_domains(tmp_path):
     assert (stand["window"]["kind"], stand["window"]["run"], stand["roots"]) == ("stand-in", RUN, rec["roots"])
     with pytest.raises(ValueError, match="window kind 'replayed'"):
         SR.registration(c, {}, kind="replayed", registrar=R)
+
+
+def test_the_index_is_the_provers_and_the_registration_binds_its_hiding_leaf(tmp_path):
+    """``index.json`` names what was served (a request, its engine step, its token row), so the registration binds its
+    hiding leaf and never a digest of it: the leaf opens under ``index-salt.bin``, a given salt fixes it, a fresh one or
+    another index moves it, no public file holds the index's SHA-512, and the index and its salt are the owner's alone,
+    a rewrite over a world-readable index included."""
+    w = window(9, 4)
+    c = SR.commit(w, data(w), salt_key=bytes(32))
+    idx = IX.index_doc(w.members, [[[0, 9, "r0", 3, 0, "model.layers.0.self_attn.rotary_emb", "0", 0, 768]], []], RUN)
+    ib, salt = SR.index_bytes(idx), bytes(range(SR.SALT_BYTES))
+    (tmp_path / "d").mkdir()
+    (tmp_path / "d" / "index.json").write_text("{}")
+    (tmp_path / "d" / "index.json").chmod(0o644)
+    wins = {d: SR.write(c, tmp_path / d, {"row": 101}, idx, registrar=R, index_salt=salt if d < "c" else None) for d in "abcd"}
+    leaves = {d: win["index_leaf"] for d, win in wins.items()}
+    assert leaves["a"] == leaves["b"] == SR.index_leaf(ib, salt).hex() and len(set(leaves.values())) == 3
+    other = IX.index_doc(w.members, [[[0, 9, "r1", 3, 0, "model.layers.0.self_attn.rotary_emb", "0", 0, 768]], []], RUN)
+    assert SR.index_leaf(SR.index_bytes(other), salt) != SR.index_leaf(ib, salt)
+    for d, leaf in leaves.items():
+        out = tmp_path / d
+        assert (out / "index.json").read_bytes() == ib
+        assert SR.index_leaf(ib, (out / SR.INDEX_SALT).read_bytes()).hex() == leaf
+        assert json.loads((out / "registration.json").read_text())["window"]["index_leaf"] == leaf
+        assert {f: (out / f).stat().st_mode & 0o777 for f in ("index.json", SR.INDEX_SALT)} == {"index.json": 0o600, SR.INDEX_SALT: 0o600}
+        public = "".join((out / f).read_text() for f in ("registration.json", "window.json"))
+        assert hashlib.sha512(ib).hexdigest() not in public and hashlib.sha512(SR.INDEX_TAG + ib).hexdigest() not in public
+    with pytest.raises(ValueError, match="an index's salt is 192 bytes"):
+        SR.write(c, tmp_path / "e", {"row": 101}, idx, registrar=R, index_salt=salt[:-1])
 
 
 def test_flock_input_files_wrap_each_members_bodies(tmp_path):
@@ -198,7 +216,7 @@ def test_flock_input_files_wrap_each_members_bodies(tmp_path):
 
 
 def test_a_members_public_file_alone_then_its_provers_file_are_the_files_its_circuits_text_gives(tmp_path):
-    """The audit stages every member's public file before the draw and a drawn member's prover's file after it, from the
+    """The audit stages every member's public file before the sample and a sampled member's prover's file after it, from the
     circuit read and hashed once (`flock_circuit`) and the window's files read once: byte for byte what the circuit's text gives."""
     w = window(4, 3)
     c = SR.commit(w, data(w), salt_key=bytes(32))
@@ -234,7 +252,7 @@ def test_a_shared_row_member_commits_its_tables_and_writes_m0s_shared_row_body(t
     y = rng.integers(0, 1 << 16, size=(15, 1), dtype=np.uint16)
     gemm = bind(REGISTRY["GemmCoordinate_v1"], K=64)
     m = SR.Member(P.template_id(gemm), (("x", 64), ("w", 64)), (("y", 1),), 15, 0, tables=(("x", 3), ("w", 5)))
-    w = SR.Window(*SR.population_program([(gemm, 15)]), LAW, RUN, (m,))
+    w = SR.Binding(*SR.population_program([(gemm, 15)]), LAW, RUN, (m,))
     assert SR.port_leaves(m) == {"x": 3, "w": 5, "y": 15}
     assert {p: e["leaves"] for p, e in SR.expected_ports(w).items()} == {m.port("x"): 3, m.port("w"): 5, m.port("y"): 15}
     c = SR.commit(w, [{"rows": tables, "outs": {"y": y}, "refs": refs}], salt_key=bytes(32))
@@ -257,12 +275,12 @@ def test_a_shared_row_member_commits_its_tables_and_writes_m0s_shared_row_body(t
     assert head["shared_rows"] == {"x": 3, "w": 5, "y": 15} and head["instances"] == 15
 
 
-def s8_window(chunks: list[tuple[int, int]], n: int = 5) -> tuple[SR.Window, list[SR.Member]]:
+def s8_window(chunks: list[tuple[int, int]], n: int = 5) -> tuple[SR.Binding, list[SR.Member]]:
     """``ScaledMmS8Coordinate_v1{K=64}``'s ``n`` units as bit-row members ``(base, size)``, under ``TemplatePopulations``."""
     t = bind(REGISTRY["ScaledMmS8Coordinate_v1"], K=64, DOT=REGISTRY["BlackwellS8ImmaDot32_v1"])
     ms = [SR.Member(P.template_id(t), (("x", 34), ("w", 34)), (("o0", 1),), size, base, name=f"{P.template_id(t)}/c{j}",
                     schemas=(("x", SEG), ("w", V2), ("o0", V2))) for j, (base, size) in enumerate(chunks)]
-    return SR.Window(*SR.population_program([(t, n)], several=True), D.parse_law("stratified:2"), RUN, tuple(ms)), ms
+    return SR.Binding(*SR.population_program([(t, n)], several=True), D.parse_design("stratified:2"), RUN, tuple(ms)), ms
 
 
 def test_bit_row_chunks_commit_each_port_under_its_schema_and_tile_their_template(tmp_path):

@@ -1,12 +1,34 @@
-import Proofs.Properties.Nci
-import Properties.NciDesc
+module
+
+public import Proofs.Properties.Nci
+public import Properties.Nci.Desc
+import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Std.Data.HashSet.Lemmas
 
 /-!
 # `NciCheck.Desc.evaluate` agrees with `NciCheck.evaluate`
 
 `descAgrees_of` proves `Properties.DescAgrees` from two statements about the decoder and the description-sized analysis,
-each a named `Prop` here, the first proved (`Walk.gatesLocated_of`, from `Resolve.bodiesOk`) and the second open
-(`Novel.novelExact_of`, from `Novel.ReadsExact`):
+each a named `Prop` here, both proved: the first by `Walk.gatesLocated_of`, from `Resolve.bodiesOk`, and the second by
+`Novel.novelExact_of`, from `Novel.readsExact`:
 
 * `GatesLocated`: on a Program the decoder returns and `Desc.evaluate` reads (topological by `Prog.orderViolation`, its
   root laid out, its input nodes the root's, `Desc.walkable`, and `Desc.analyze` resolving its references), every gate of
@@ -20,6 +42,8 @@ when it is an input node (`gate_input`, through `Prog.gate`'s walk and `inputsAt
 expansion, and that on each the unrolled check accepts θ and the owners, counts the same IUs, and the same sizes
 (`sizes_eq_tally`).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.DescAgree
 
@@ -45,7 +69,7 @@ def nodeOwnerFold (P : Prog) (owner : Array Json) : Except String (Array (Option
     Desc.ownerStep (inputs P)[k]! ((rootOffs P)[k + 1]! - (rootOffs P)[k]! > 0) owner[k]!) #[]
 
 theorem descEvaluate_ok (j out : Json) (h : Desc.evaluate j = .ok out) :
-    ∃ i P reads mask own, parse j = .ok i ∧ Flock.Program.decode i.program.toUTF8 = .ok P ∧
+    ∃ i P reads mask own, parse j = .ok i ∧ decodeProgram i.program = .ok P ∧
       P.orderViolation = none ∧ Desc.rootLaidOut P = true ∧ Desc.inputsAtRoot P = true ∧ Desc.walkable P = true ∧
       Desc.analyze P = .ok reads ∧ nodeThetaFold P i.theta = .ok mask ∧ i.owner.size = nodeCount P ∧
       nodeOwnerFold P i.owner = .ok own ∧ iuCount own ≤ nodeCount P ∧ (∀ u < iuCount own, u ∈ usedOf own) ∧
@@ -58,7 +82,7 @@ theorem descEvaluate_ok (j out : Json) (h : Desc.evaluate j = .ok out) :
   unfold Desc.evaluate at h
   rcases h1 : parse j with e | i <;> simp only [h1, bind, Except.bind] at h
   · cases h
-  rcases h2 : Flock.Program.decode i.program.toUTF8 with e | P <;> simp only [h2] at h
+  rcases h2 : decodeProgram i.program with e | P <;> simp only [h2] at h
   · cases h
   simp only [pure, Except.pure] at h
   by_cases h3 : P.orderViolation.isSome = true
@@ -526,11 +550,11 @@ end DescAgree
 
 open DescAgree
 open Lean (Json toJson)
-open Flock.Program (Prog)
+open Flock.Program (Prog GateTable)
 
-/-! ## The open statements -/
+/-! ## The statements `descAgrees_of` takes -/
 
-/-- **Open: the layout is located.** On a Program the decoder returns that `Desc.evaluate` reads (topological, its root
+/-- **The layout is located.** On a Program the decoder returns that `Desc.evaluate` reads (topological, its root
 laid out, its input nodes the root's, `Desc.walkable`, and its references resolved by `Desc.analyze`), every gate of the
 canonical layout is located and reads only earlier gates. Without `Desc.walkable` it is false: `Prog.gate` walks at most
 `Flock.Steps.FUEL` steps to an operand, and a nested scan of `2^32 × 2^32` identity steps needs `2^64`. -/
@@ -539,13 +563,13 @@ def GatesLocated : Prop :=
     Desc.rootLaidOut P = true → Desc.inputsAtRoot P = true → Desc.walkable P = true →
     (∃ reads, Desc.analyze P = .ok reads) → ∀ g < gates P, GateOk P g
 
-/-- **Open: the novel reads by node are the gates'.** On such a Program, and a division `dv` of its layout whose IUs are
+/-- **The novel reads by node are the gates'.** On such a Program, and a division `dv` of its layout whose IUs are
 unions of root nodes (root node `k`'s gates all in `own[k]`, θ every gate of the nodes `mask` marks, input nodes, in no
 IU), `Desc.novelWidth` of what `Desc.intoOf` collects per IU from `Desc.analyze`'s reads is `NciCheck.ius`'s novel
 reads. -/
 def NovelExact : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (reads : Array (Array Desc.Seg)) (mask : Array Bool) (own : Array (Option ℕ))
-    (c : Circuit) (dv : Division),
+    (c : GateTable) (dv : Division),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
     Desc.inputsAtRoot P = true → Desc.walkable P = true → Desc.analyze P = .ok reads → circuitOf P = .ok c →
     mask.size = nodeCount P → own.size = nodeCount P → dv.owner.size = gates P →
@@ -573,16 +597,17 @@ theorem iuCount_eq (a b : Array (Option ℕ))
       omega
   omega
 
-theorem ius_fst (c : Circuit) (dv : Division) {u : ℕ} (hu : u < dv.n) : (ius c dv)[u]!.1 = (tally c dv)[u]!.1 := by
+theorem ius_fst (c : GateTable) (dv : Division) {u : ℕ} (hu : u < dv.n) : (ius c dv)[u]!.1 = (tally c dv)[u]!.1 := by
   have hs := (tally_spec c dv).1
   rw [getElem!_pos (ius c dv) u (by simp [ius, hs, hu]), getElem!_pos (tally c dv) u (by rw [hs]; exact hu)]
   simp [ius]
 
-/-- **`Desc.evaluate` agrees with `evaluate`, given the open statements.** -/
+/-- **`Desc.evaluate` agrees with `evaluate`, given `GatesLocated` and `NovelExact`.** -/
 theorem descAgrees_of (hG : GatesLocated) (hN : NovelExact) : Properties.DescAgrees := by
   intro j out hev
-  obtain ⟨i, P, reads, mask, own, hpar, hdec, hov, hlo, hin, hwk, han, hθ, hos, hof, hn, hused, rfl⟩ :=
+  obtain ⟨i, P, reads, mask, own, hpar, hdp, hov, hlo, hin, hwk, han, hθ, hos, hof, hn, hused, rfl⟩ :=
     descEvaluate_ok j out hev
+  have hdec := (decodeProgram_ok _ _).1 hdp
   have hi : Parses j i := (parse_ok j i).1 hpar
   have hgl := hG _ P hdec hov hlo hin hwk ⟨reads, han⟩
   obtain ⟨c, hc⟩ := (circuitOf_isOk P).2 hgl
@@ -650,7 +675,7 @@ theorem descAgrees_of (hG : GatesLocated) (hN : NovelExact) : Properties.DescAgr
       rw [hk] at h1
       obtain rfl := Option.some.inj h1
       obtain ⟨hlt, hinp⟩ := hcls k h2 _ hg
-      have hreg : IsRegistered P ((thetaGates P i.theta)[t]'(by omega)) := by
+      have hreg : IsBoundAtRegistration P ((thetaGates P i.theta)[t]'(by omega)) := by
         obtain ⟨p, ops, w, ⟨⟨sc, hgate⟩, -, -⟩, -⟩ := hgl _ hlt
         have hp := gate_input_fn P hlo hgate h2 ((hng _ _).1 hg) h3
         refine ⟨p, ops, sc, hgate, (isRegisteredId_iff _).1 ?_⟩
@@ -738,7 +763,7 @@ theorem descAgrees_of (hG : GatesLocated) (hN : NovelExact) : Properties.DescAgr
           obtain ⟨t, ht, rfl⟩ := List.getElem_of_mem hm
           exact ⟨t, by omega, hget t (by omega)⟩⟩)
       hneq
-    rw [(evaluate_ok j' _).2 ⟨_, P, c, dv, (parse_ok j' _).2 hpar', hdec, hc, hdv, rfl⟩]
+    rw [(evaluate_ok j' _).2 ⟨_, P, c, dv, (parse_ok j' _).2 hpar', hdp, hc, hdv, rfl⟩]
     have hr : (Array.range (iuCount own)).map (fun u => ((Desc.sizes (rootOffs P) own (iuCount own))[u]!,
         Desc.novelWidth (Desc.intoOf (rootOffs P) own mask reads (iuCount own))[u]!)) = ius c dv := by
       apply Array.ext

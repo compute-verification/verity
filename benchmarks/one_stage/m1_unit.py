@@ -1,9 +1,9 @@
-"""M1: one step family's unit through C-Flock, timed: the Definition a Program row names (its ``spec``) as M0's `UnitStager`
+"""M1: one step family's unit through Flock, timed: the Definition a Program row names (its ``spec``) as M0's `UnitStager`
 statement on the serving rows' ports (an input row per parameter and an output row per returned field, each a
 ``hm96-sha512/row/v2`` row of its u16 words), flat (`ir_lower`; ``--reads slots``: its MUFU reads in lookup slots,
 `read_slots`) or structural (``--structural``: `struct_lower`'s template, the flat unit never built), and with ``--bin`` and ``--lean`` one round of ``--n`` units staged on finite bf16 values (every
 parameter of a bf16 family; a stand-in for the served values, which only the window reads), proved by M0 under ``--zk``
-(`a0.session`: serve and prove, the verifier's subset draw of all of them) and verified by the Lean verifier of record
+(`a0.session`: serve and prove, the verifier's subset sample of all of them) and verified by the Lean verifier
 (`a0.lean_verify`).  A coordinate template (`serving_rows.COORDS`: the expert-indexed pair GEMMs and FlashInfer's FP8 linear at
 N = 1) with ``--call-n N``
 stages instead the ``--units`` of a synthetic Call at N read through the serving rows' split (`split_call`), each held to the
@@ -24,9 +24,15 @@ A V-chunk of greedy token selection (`b1.TokenSelectChunk_v1`) or its combine (`
 stages the ``--units`` chunks, or the combine, of a synthetic logits row of V (`vchunk_call`), the combine's token held to
 `TokenSelect_v1{V}` on the whole row and each staged output to its word Definition's.
 
+A structural statement proved with ``--bin`` takes ``--tmpl-unit-bin``: flock-tmpl-unit places its unit's rows for the prover
+(`a11.templated`), and Lean verifies it as the templated statement.  Proved on the default rows, the unit is bound to a
+population Program of its one Definition at ``--n`` instances and that Program's partition (`partition.mixed_population_program`,
+as `verifier_cost/flock_served.py` binds a served kind), which Lean's verify reads (``--program``, ``--partition``); without a
+Program it refuses every session once its checks pass.
+
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
-      python benchmarks/one_stage/m1_unit.py --spec 'RMSNormFusedCudaVector8_v1{N=6144,EPS=...,BLOCK=256}' --out DIR \\
-      [--structural iv/hybrid/4 | --reads slots] [--bin flock-circuit --lean flock-verify] [--n 1]
+      python benchmarks/one_stage/m1_unit.py --spec 'RMSNormFusedCudaVector8_v3{N=6144,EPS=...,BLOCK=256}' --out DIR \\
+      [--structural iv/hybrid/4 [--tmpl-unit-bin flock-tmpl-unit] | --reads slots] [--bin flock-circuit --lean flock-verify] [--n 1]
 
 Prints ``M1U {json}`` per phase: the build's seconds and peak RSS, the unit's ANDs and rows, k_log, vus_per_block and
 chunk_cap (`a6.chunk_cap`'s rule), then the stage, the session and Lean's verdict.
@@ -84,8 +90,8 @@ def split_call(tp, n_call: int, rng: np.random.Generator) -> dict:
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.evaluation import evaluate_batch
     from verity_vllm.pipeline import serving_rows as SRW
-    from verity_vllm.program.kernels import deepgemm_twins as DT
-    from verity_vllm.program.kernels import fp8_moe_rows as FR
+    from verity.ml.definitions.numerics import deepgemm_twins as DT
+    from verity.ml.definitions.numerics import fp8_moe_rows as FR
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     S = {**SRW.COORDS[spec_base(tp.word)], **spec_statics(tp.word)}
@@ -151,9 +157,9 @@ def cols_call(tp, w_call: int, rng: np.random.Generator) -> dict:
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.evaluation import evaluate_batch
     from verity_vllm.pipeline import serving_rows as SRW
-    from verity_vllm.program.kernels import rows as KR
-    from verity_vllm.program.registry import tp_allreduce as TA
-    from verity_vllm.program.registry import tp_allreduce_check as TAC
+    from verity.ml.definitions.numerics import rows as KR
+    from verity.ml.definitions.registry import tp_allreduce as TA
+    from verity.ml.definitions.registry import tp_allreduce_check as TAC
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     axis, S = SRW.COLS[spec_base(tp.word)], spec_statics(tp.word)
@@ -197,9 +203,9 @@ def parts_call(tp, row: str, rng: np.random.Generator) -> dict:
     template's word on every unit's rows."""
     from verity.ml.circuits.codec import descriptor_id
     from verity_vllm.pipeline import serving_rows as SRW
-    from verity_vllm.program.kernels import deepgemm_twins as DT
-    from verity_vllm.program.registry import tp_allreduce_check as TAC
-    from verity_vllm.program.registry.fp8 import FP8_BLOCK
+    from verity.ml.definitions.numerics import deepgemm_twins as DT
+    from verity.ml.definitions.registry import tp_allreduce_check as TAC
+    from verity.ml.definitions.registry.fp8 import FP8_BLOCK
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     S, p = spec_statics(row), SRW.part(tp.word, row)
@@ -267,8 +273,8 @@ def slice_call(tp, row: str, rng: np.random.Generator) -> dict:
     from verity.ml.circuits.evaluation import evaluate_batch
     from verity_vllm.pipeline import serving_rows as SRW
     from verity_vllm.pipeline import slice_rows as SL
-    from verity_vllm.program.kernels import cublas_gemm_rows as CGR
-    from verity_vllm.program.kernels import glm53_rows as GR
+    from verity.ml.definitions.numerics import cublas_gemm_rows as CGR
+    from verity.ml.definitions.numerics import glm53_rows as GR
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     fn, S = SRW._bind(row), spec_statics(row)
@@ -344,8 +350,8 @@ def chunk_call(tp, k_call: int, rng: np.random.Generator) -> dict:
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation import evaluate_batch
     from verity_vllm.pipeline import serving_rows as SRW
-    from verity_vllm.program.kernels import fp8_moe_rows as FR
-    from verity_vllm.program.registry import fp8_moe_experts as X
+    from verity.ml.definitions.numerics import fp8_moe_rows as FR
+    from verity.ml.definitions.registry import fp8_moe_experts as X
     from verity_vllm.query.program_view import spec_statics
 
     S = spec_statics(tp.word)
@@ -380,7 +386,7 @@ def vchunk_call(tp, v_call: int, rng: np.random.Generator) -> dict:
     `TokenSelect_v1{V}`, which is the first of the two largest words."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation import evaluate_batch
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.registry import b1
     from verity_vllm.query.program_view import spec_statics
 
     def ev(fn, *xs):
@@ -405,12 +411,13 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--structural", default=None, metavar="LAYOUT", help="the structural stager at this layout mode (iv/hybrid/4)")
     ap.add_argument("--reads", choices=("inline", "slots"), default="inline",
-                    help="a flat unit's MUFU table reads: inline rows of the unit, or C-Flock lookup slots (read_slots)")
+                    help="a flat unit's MUFU table reads: inline rows of the unit, or Flock lookup slots (read_slots)")
     ap.add_argument("--stage-ands", type=lambda v: v if v in ("auto", "none") else int(v), default="auto", metavar="N|auto|none",
                     help="with --reads slots: at most N ANDs a net, the caps whose nets take the fewest cells (auto), or no cap "
                          "(read_slots.split's stage_ands)")
     ap.add_argument("--bin", default=None, help="M0's flock-circuit: prove one round")
     ap.add_argument("--lean", default=None, help="the Lean verifier of record (flock-verify)")
+    ap.add_argument("--tmpl-unit-bin", default=None, help="with --structural and --bin: flock-tmpl-unit, which places the unit's rows")
     ap.add_argument("--n", type=int, default=1)
     ap.add_argument("--port", type=int, default=7611)
     ap.add_argument("--seed", type=int, default=1)
@@ -448,13 +455,29 @@ def main() -> int:
 
     d = out / "stage"
     t = time.time()
+    held, bind, base = {}, {}, 0
+    if a.bin and not (a.call_n or a.chunk_k or a.call_w or a.row or a.vchunks):
+        from verity.core.protocols.spot.one_stage import partition as P
+        from verity.ml.circuits.codec import canonical_json, encode_program
+
+        program, query = P.mixed_population_program([(fn, a.n)]), P.template_instances_query([fn])
+        part = P.partition(program, query)
+        (_, base, _), = P.ranges(program, query)
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "partition.json").write_text(json.dumps(part, sort_keys=True))
+        (d / "program.json").write_bytes(canonical_json(encode_program(program)))
+        held = {"partition_file": d / "partition.json", "program_file": d / "program.json"}
+        bind = {"bind": {"partition": P.digest(part), "program": part["program"]}}
     with K.no_cyclic_gc():
         st = CS.UnitStager(fn, f"m1/{K.family(fn.id)}", rows, K.out_rows(n_out), circuit=d / "circuit.txt", reads=a.reads,
-                           stage_ands=None if a.stage_ands == "none" else a.stage_ands,
+                           stage_ands=None if a.stage_ands == "none" else a.stage_ands, **bind,
                            **({"layout": a.structural, "structural": True} if a.structural else {}))
     m, c = st.meta, getattr(st.low, "counts", None) or st.low.layout.counts
     cap = int(m["vus_per_block"]) << (M_MAX - int(m["k_log"])) if M_MAX - int(m["k_log"]) >= 3 else 0
-    say("built", seconds=round(time.time() - t, 1), structural=a.structural, reads=a.reads, ands=c["ands"], unit_rows=c.get("rows"),
+    tm = getattr(st.low, "template", None)
+    own = None if tm is None else {"defs": len(tm.defs), "rows": sum(len(df.rows) for df in tm.defs),
+                                   "refs": sum(len(x) + len(y) for df in tm.defs for _c, x, y in df.rows)}
+    say("built", seconds=round(time.time() - t, 1), structural=a.structural, reads=a.reads, template=own, ands=c["ands"], unit_rows=c.get("rows"),
         nnz=c.get("nnz_a", 0) + c.get("nnz_b", 0), lookups=m.get("per_vu", {}), k_log=m["k_log"], unit_log=m["unit_log"],
         vus_per_block=m["vus_per_block"], chunk_cap=cap, pin=st.pin, circuit_bytes=(d / "circuit.txt").stat().st_size,
         domain=st.low.domain, stage_ands=getattr(st.low, "caps", None))
@@ -527,7 +550,7 @@ def main() -> int:
         vals = {r: bf16_rows(rng, a.n, b // 16) for r, _s, b, _p in rows}
     t = time.time()
     with K.no_cyclic_gc():
-        got = st.stage(vals, d, os.urandom(32))
+        got = st.stage(vals, d, os.urandom(32), **({"indices": range(base, base + a.n)} if held else {}))
     for f in ("inst", "pub"):
         (d / f"{f}.bin").rename(d / f"{f}-{a.n}.bin")
     IL.write_tables(d / "tables")
@@ -540,15 +563,21 @@ def main() -> int:
     if calls is False:
         return 1
     pin = st.pin
+    if a.structural:
+        from a11 import templated
+
+        form = templated(st, d, a.tmpl_unit_bin)
+    else:
+        form = {}
     del st, got
     say("released", rss_now_gb=release())
 
     t = time.time()
-    record, live = a0.session(a.bin, {"dir": d, "pin": pin}, a.n, f"subset:{a.n}", a.port, out / "session", zk=True)
+    record, live = a0.session(a.bin, {"dir": d, "pin": pin, **form}, a.n, f"subset:{a.n}", a.port, out / "session", zk=True)
     say("proved", seconds=round(time.time() - t, 1), accepted=(live or {}).get("accepted"), why=(live or {}).get("why"),
         **{k: (live or {}).get(k) for k in ("k_log", "nbl", "dense_m", "prove_total_s", "witness_s", "proof_bytes", "units")},
         verdict=(record or {}).get("verdict"))
-    v = a0.lean_verify(a.lean, {"dir": d}, a.n, out / "session", zk=True)
+    v = a0.lean_verify(a.lean, {"dir": d, **form, **held}, a.n, out / "session", zk=True)
     say("verified", **v)
     return 0 if (live or {}).get("accepted") and v["accepted"] else 1
 

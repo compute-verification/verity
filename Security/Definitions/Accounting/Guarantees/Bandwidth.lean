@@ -1,4 +1,12 @@
-import Definitions.Accounting.Bandwidth
+module
+
+public import Definitions.Accounting.Bandwidth
+public import Definitions.Accounting.Bandwidth.Interactive
+public import Definitions.Accounting.Bandwidth.Joint
+public import Definitions.Accounting.Bandwidth.Relay
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.Fintype.Prod
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The bandwidth audit v0: what an accepted device read
@@ -9,6 +17,8 @@ No named assumption: the device's bounds (on-chip state `S`, side-source bits `c
 the measurement that falsifies each (`bandwidth-s-chip`, `bandwidth-side-cap`, `bandwidth-regen-time`) and what the
 model takes on trust (`random-oracle` for the tag, `bandwidth-instantiation` for the stored blocks).
 -/
+
+@[expose] public section
 
 namespace Bandwidth.Guarantees
 
@@ -44,16 +54,6 @@ def AuditRO : Prop :=
         Accepts A x.1 x.2.1 x.2.2 ∧ A.ingress x.1 x.2.1 + S + c + G * b + lam < k * b)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
 
-/-- **Completeness of `AuditRO`: an honest device is accepted, and its ingress is exactly the store.** For every `N`,
-`b` and `h` there is a device with no on-chip state, no side sources and no regeneration that makes `N` oracle queries
-(a `Device N b h 0 0 0 N`) whose tags are accepted on every store, oracle and sample, and whose ingress is exactly `N·b`
-bits. The device reads every block once and queries the oracle at it. Against `AuditRO` at `S = c = G = 0` and `q = N`,
-the honest `N·b` sits above the floor `k·b − λ` by the sample's slack `(N − k)·b`, about `ε_s·N·b`, plus `λ`. Proof:
-`Bandwidth.SecurityProofs.HonestPasses`. -/
-def HonestPasses : Prop :=
-  ∀ N b h : ℕ, ∃ A : Device N b h 0 0 0 N,
-    ∀ (E : Store N b) (O : Oracle N b h) (s : ℕ) (I : Fin s → Fin N), Accepts A E O I ∧ A.ingress E O = N * b
-
 /-- **The bandwidth audit v0 with relayed tags, in the random-oracle model.** `AuditRO` for a `RelayDevice`, whose side
 sources may depend on the oracle: a peer holding a copy of the store can compute tags after the seed and relay them,
 and every bit the chip reads from it counts against `c`. For every `m`, the probability that the verifier accepts while
@@ -84,11 +84,10 @@ the oracle and every bit sent so far. `c` bounds only the side bits the chip rea
 bits the chip sends, and however they depend on the seed, the deficit is `S + c + m·b + G·b + λ`, as for a relay
 device.
 
-In the actual-circuit model (`note:console/20261012T0645Z-draft-actual-circuit-model`, section 6), the rest of the
-prover answers the cores as such a source. So the bandwidth audit's help term is the side bits the cores read in the
-window, `β_side·(T + RTT)`, not `2^e` times it for `e` seed-dependent bits sent. Proof:
-`Bandwidth.SecurityProofs.AuditInteractive`, from `AuditRelay`: such a device is a relay device whose side source is
-addressed by what was sent and where.
+In the actual-circuit model, the rest of the prover answers the cores as such a source. So the bandwidth audit's help
+term is the side bits the cores read in the window, `β_side·(T + RTT)`, not `2^e` times it for `e` seed-dependent bits
+sent. Proof: `Bandwidth.SecurityProofs.AuditInteractive`, from `AuditRelay`: such a device is a relay device whose side
+source is addressed by what was sent and where.
 
 Frozen (no-function, hash): a bound in the random-oracle model over an abstract chip program, which no Lean function of
 the bandwidth audit's code computes. -/
@@ -124,11 +123,10 @@ Read with `cert_bw = k·b − S − c − G·b − λ`, the bits of ingress `Aud
 `n ≤ ingress − cert_bw` except with `AuditRO`'s error and no extra slack, so whatever else the chip's view must
 determine in the window, it reads on top of what the audit certifies, up to what it held or got another way. The
 proof is `AuditRO`'s, with the compression run over the pair (store, `z`): the chip's state, the bits it read and which
-`k` of its queries named blocks determine those `k` blocks and `z`, `n` bits more than the store's alone. This is Mbw
-of `note:console/20261012T0645Z-draft-actual-circuit-model` (section 5) for a device of this game; for the chip as a
-tick transducer whose view in the window determines `z`, it is `Bandwidth.SecurityProofs.Ticked.audit_joint`, and for
-the chip of a strategy causal from every tick, `Bandwidth.SecurityProofs.Causal.audit_joint`. Proof:
-`Bandwidth.SecurityProofs.AuditJoint`.
+`k` of its queries named blocks determine those `k` blocks and `z`, `n` bits more than the store's alone. This is the
+actual-circuit model's Mbw for a device of this game; for the chip as a tick transducer whose view in the window
+determines `z`, it is `Bandwidth.SecurityProofs.Ticked.audit_joint`, and for the chip of a strategy causal from every
+tick, `Bandwidth.SecurityProofs.Causal.audit_joint`. Proof: `Bandwidth.SecurityProofs.AuditJoint`.
 
 Frozen (no-function, hash): as `AuditRO`. -/
 def AuditJoint : Prop :=

@@ -1,23 +1,33 @@
-"""`Value<w>` and tensors: a dtype's width, the `Type` of a tensor or pytree, its maximal tensor chunks, and a collection of
-references split into and joined from those chunks. Width only; numerical interpretation belongs to functions (IR §3.1)."""
+"""`Value<w>` and tensors: a dtype's width, the `Type` of a tensor or pytree, its maximal tensor chunks, a collection of
+references split into and joined from those chunks, and `Alloc`, a typed allocation no rule has written yet. Width only;
+numerical interpretation belongs to functions."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Sequence
 
 import torch
 
 from verity.ml.circuits.refs import Coll, Refs, concat
-from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Type, Value
+from verity.ml.circuits.types import Array, RecordType, Tuple as TupleT, Type, Value
 from verity_vllm.program.frontend.errors import FrontendError
 
 WIDTH_OF_DTYPE = {torch.bool: 1, torch.uint8: 8, torch.int8: 8, torch.int16: 16, torch.uint16: 16, torch.bfloat16: 16,
                   torch.float16: 16, torch.int32: 32, torch.uint32: 32, torch.float32: 32, torch.int64: 64,
                   torch.uint64: 64, torch.float64: 64,
-                  # [R15 fp8] the OCP FP8 words of a block-scaled checkpoint (e4m3 weights/activations, UE8M0 scale bytes): 8-bit
+                  # the OCP FP8 words of a block-scaled checkpoint (e4m3 weights/activations, UE8M0 scale bytes): 8-bit
                   # VALUES, carried as uint8 (`CARRIER[8]`); their arithmetic is the registered Definitions' (registry.fp8, .marlin_moe)
                   torch.float8_e4m3fn: 8, torch.float8_e5m2: 8, torch.float8_e8m0fnu: 8}
 CARRIER = {1: torch.bool, 8: torch.uint8, 16: torch.bfloat16, 32: torch.float32, 64: torch.int64}
+
+
+@dataclass(eq=False)
+class Alloc:
+    """An uninitialised allocation (`empty`, `empty_like`, `new_empty`): the write target of an in-place rule.
+    Reading it before a rule writes it is refused."""
+    type: Type
+    node: Any
 
 
 def width_of(dtype: torch.dtype, where: str | None = None) -> int:
@@ -35,13 +45,13 @@ def type_of_tensor(t: torch.Tensor) -> Type:
 
 
 def type_of(obj: Any, where: str | None = None) -> Type:
-    """Tensor -> Array<..., Value<w>>; tuple -> Tuple; dict -> Record; list -> Array<n, T> (homogeneous)."""
+    """Tensor -> Array<..., Value<w>>; tuple -> Tuple; dict -> RecordType; list -> Array<n, T> (homogeneous)."""
     if isinstance(obj, torch.Tensor):
         return type_of_tensor(obj)
     if isinstance(obj, tuple):
         return TupleT(*[type_of(o, where) for o in obj])
     if isinstance(obj, dict):
-        return Record(*[(k, type_of(v, where)) for k, v in obj.items()])
+        return RecordType(*[(k, type_of(v, where)) for k, v in obj.items()])
     if isinstance(obj, list):
         if not obj:
             raise FrontendError("E_SHAPE", "an empty list has no element type", where)
@@ -71,7 +81,7 @@ def flat_types(T: Type) -> list[Type]:
         return [T]
     if isinstance(T, TupleT):
         return [c for f in T.fields for c in flat_types(f)]
-    if isinstance(T, Record):
+    if isinstance(T, RecordType):
         return [c for _, f in T.fields for c in flat_types(f)]
     assert isinstance(T, Array)
     return [c for _ in range(T.n) for c in flat_types(T.elem)]
@@ -83,7 +93,7 @@ def tensors_of(T: Type, device: str = "meta") -> Any:
         return torch.empty(shape, dtype=CARRIER[w], device=device)
     if isinstance(T, TupleT):
         return tuple(tensors_of(f, device) for f in T.fields)
-    if isinstance(T, Record):
+    if isinstance(T, RecordType):
         return {k: tensors_of(f, device) for k, f in T.fields}
     assert isinstance(T, Array)
     return [tensors_of(T.elem, device) for _ in range(T.n)]
@@ -97,7 +107,7 @@ def unflatten(T: Type, flat: list[torch.Tensor]) -> Any:
             return next(it)
         if isinstance(t, TupleT):
             return tuple(go(f) for f in t.fields)
-        if isinstance(t, Record):
+        if isinstance(t, RecordType):
             return {k: go(f) for k, f in t.fields}
         return [go(t.elem) for _ in range(t.n)]
 
@@ -111,7 +121,7 @@ def split_coll(c: Coll) -> list[Coll]:
     T = c.type
     if is_tensor_type(T):
         return [c]
-    if isinstance(T, (TupleT, Record)):
+    if isinstance(T, (TupleT, RecordType)):
         return [p for i in range(len(T.fields)) for p in split_coll(c[i])]
     return [p for i in range(T.n) for p in split_coll(c[i])]
 
@@ -127,7 +137,7 @@ def join_coll(T: Type, flats: Sequence[Coll]) -> Coll:
             return next(it).refs
         if isinstance(t, TupleT):
             return concat([go(f) for f in t.fields])
-        if isinstance(t, Record):
+        if isinstance(t, RecordType):
             return concat([go(f) for _, f in t.fields])
         assert isinstance(t, Array)
         return concat([go(t.elem) for _ in range(t.n)])

@@ -1,10 +1,50 @@
-import Proofs.Flock.Claims.Complete.Json
+module
+
+public import Proofs.Flock.Claims.Complete.Json
+public import Proofs.Flock.Claims.Complete.Skeleton
+import all Init.Data.Array.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Discharge
+import Proofs.Flock.Claims.Complete.Json.Goals
+import Proofs.Flock.Claims.Complete.Json.Stmt
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The honest session runs
 
-`sessionRuns_of`: the goal `SessionRuns`, under `JsonSpec` (`stmtOk`: no keyed coin tree, so the record's `hello` is
-the statement's) and `ProverRuns`: at every good case's table, each rep returns, on the level-0 commitment and the extra
+`sessionRuns_of`: the goal `SessionRuns`, from `stmtOk` (no keyed coin tree, so the record's `hello` is the
+statement's) and `ProverRuns`: at every good case's table, each rep returns, on the level-0 commitment and the extra
 claims at the link's points, from any sends (`proverRuns`, in `Reps`). The level-0 commitment returns (`commitP_ok`:
 through `Hashes.ofSha512` every leaf and node hash is a `pure`), and so do the extra claims (`extraClaims_ok`), since
 `ready` asks that the regions fit (`RegionsFit`).
@@ -12,6 +52,8 @@ through `Hashes.ofSha512` every leaf and node hash is a `pure`), and so do the e
 `Runs y l P`: `y` returns from the sends `l`, with `P` of its value and the sends after; `Runs.bind`, `Runs.forIn_array`
 and `Runs.mapM_singleton` walk the session.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 
@@ -178,10 +220,10 @@ def ProverRuns (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readab
       (Transcript.init #[] d)).go l = (.ok pt, l')
 
 /-- **The session runs** where the reps return: the goal `SessionRuns`. -/
-theorem sessionRuns_of (S : Claims.JsonSpec printJ Flock.canon) (hR : ProverRuns H rel) : SessionRuns H rel := by
+theorem sessionRuns_of (hR : ProverRuns H rel) : SessionRuns H rel := by
   intro c
   obtain ⟨st, hst, hsp, hm1, hm2, -⟩ := c.table
-  obtain ⟨hct, -, -, -⟩ := stmtOk S c
+  obtain ⟨hct, -, -, -⟩ := stmtOk c
   have ht : c.spec.tables = #[st.tags.table] := by rw [hsp]; rfl
   obtain ⟨sch, hsch⟩ := Option.isSome_iff_exists.1 (fast100_isSome (m := (Setup.ofCircuit st).m) hm1 hm2)
   have hRep := hR c st sch hst hsch

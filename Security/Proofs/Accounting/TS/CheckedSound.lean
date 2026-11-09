@@ -1,13 +1,51 @@
-import Proofs.Accounting.TS.Session.Checked.Guarantees
-import Proofs.Accounting.TS.SessionSound
+module
+
+public import Proofs.Accounting.TS.Session.Checked.Guarantees
+public import Proofs.Accounting.TS.SessionSound
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.SoundAtBridge
+import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+import Proofs.Flock.Soundness.Game
 
 /-!
-# A checked unit's proof layer is sound through its C-Flock sessions (the proof)
+# A checked unit's proof layer is sound through its Flock sessions (the proof)
 
 `Accounting.SecurityProofs.TS.CheckedSessionSound`. `AcceptedLive` holds by the layer's definition. `ServedChecksHold`
 takes the value layer itself as the relation's assignment: `RowsSession.RowsAt` says the circuit's evaluation agrees
-with it on each drawn unit's wires. `ServedRootsLinked` at `0` is the window's law at an event of probability `0` in
-every session's game: under `kd = n` the draw is every unit (`RowsSession.draw_full`, from `subset_spec`), so at an
+with it on each sampled proof block's wires. `ServedRootsLinked` at `0` is the window's sampling design at an event of probability `0` in
+every session's game: under `kd = n` the sample is every unit (`RowsSession.sample_full`, from `subset_spec`), so at an
 accepted outcome whose units are right `Flock.SecurityProofs.ServedRowsLinked` makes every registered read of the
 value layer the committed row (`RowsSession.servedEv_false`). `SoundAt δ` is then
 `Accounting.SecurityProofs.TS.SessionSoundAt` at `δs = 0`.
@@ -16,9 +54,11 @@ This module imports `Proofs.Flock.SoundAtBridge` (through `Proofs.Accounting.TS.
 a token, so `Proofs/Accounting.lean` imports it.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Audit.Law
 
-/-- **A `subset` live draw that runs is `Flock.Draw.subset` on its stream.** -/
+/-- **A `subset` live sample that runs is `Flock.Draw.subset` on its stream.** -/
 theorem runOS_subset {L : Fin 1 → ℕ} {f : (i : Fin 1) → Fin (L i) → Fin 256} {k n : ℕ} {d : Flock.Draw.UnitDraw}
     (hd : runOS f (.subset k) n = some d) : Flock.Draw.subset k n (streamOf (f 0)) = some d.units := by
   unfold runOS at hd
@@ -45,12 +85,10 @@ namespace Accounting.TS.Checked
 
 open Flock.SoundAtBridge
 
-/-- **The checked unit's port conditions at `ok`**: the circuit names each port once, and has a port named `ok` that
-`own` registers a port of. `CheckedSessionSound` takes them of every session; `checkedOn_soundAt` only of a session
+/-- **The checked unit's port conditions at `ok`**: the circuit has a port named `ok` that `own` registers a port of. `CheckedSessionSound` takes them of every session; `checkedOn_soundAt` only of a session
 that meets a setup predicate implying them, such as flock-verify's known-read check at known content naming `ok`. -/
 abbrev PortsOk (ok : String) (s : RowsSession) : Prop :=
-  (∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s.c.ports[q'].name → q = q') ∧
-    ((∃ q : Fin s.c.ports.size, s.c.ports[q].name = ok) ∧ ∃ pt ∈ s.own, pt.name = ok)
+  (∃ q : Fin s.c.ports.size, s.c.ports[q].name = ok) ∧ ∃ pt ∈ s.own, pt.name = ok
 
 open Classical in
 /-- **An assignment's registered reads at a session `P` holds of**: `rowsReg` where `P s`, else the committed rows
@@ -83,7 +121,7 @@ theorem perm_onto_range (π : Equiv.Perm ℕ) {n : ℕ} (hπ : ∀ t < n, π t <
   exact ⟨i, Finset.mem_range.1 hi, he⟩
 
 /-- **The live audit's event of probability `0`** (`auditLive`, unfolded): an event whose probability is `0` in the
-live session at every registration `R` and draw coin `ω` has probability `0` at every strategy. -/
+live session at every registration `R` and sampling coin `ω` has probability `0` at every strategy. -/
 theorem prob_audit_eq_zero {n : ℕ} (L : Law n) (Reg : Type)
     (live : Finset (Fin n) → Reg → Game Discharge.Exec.Transcript)
     (p : Reg × Finset (Fin n) × Discharge.Exec.Transcript → Prop)
@@ -101,9 +139,9 @@ namespace RowsSession
 
 variable (s : RowsSession)
 
-/-- **Under full checking the draw is every unit**: at `kd = n` the subset draw, when it runs, is `n` distinct units
-below `n` (`subset_spec`), and when it doesn't the law draws every unit. -/
-theorem draw_full (hk : s.kd = s.n) (ω : s.L.Ω) : s.L.draw ω = Finset.univ := by
+/-- **Under full checking the sample is every unit**: at `kd = n` the subset sample, when it runs, is `n` distinct units
+below `n` (`subset_spec`), and when it doesn't the sampling design samples every unit. -/
+theorem sample_full (hk : s.kd = s.n) (ω : s.L.Ω) : s.L.draw ω = Finset.univ := by
   show (match Law.runOS (s.src ω) (.subset s.kd) s.n with
     | some d => Finset.univ.filter fun u : Fin s.n => u.val ∈ d.units
     | none => Finset.univ) = Finset.univ
@@ -115,16 +153,14 @@ theorem draw_full (hk : s.kd = s.n) (ω : s.L.Ω) : s.L.draw ω = Finset.univ :=
     exact perm_onto_range π hπ u.val u.isLt
   · rfl
 
-/-- **`ServedRootsLinked`'s event at a session**: flock-verify accepts, every drawn unit is right at its owned reads,
+/-- **`ServedRootsLinked`'s event at a session**: flock-verify accepts, every sampled proof block is right at its owned reads,
 and the value layer's registered reads aren't the committed rows. -/
 def ServedEv (o : s.Out) : Prop :=
   LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.WrongAt u ∧ s.RowsAt o u) ∧ rowsReg s s.Xv ≠ openedReg s
 
-/-- **No outcome of the audit meets `ServedEv`** under full checking, at a circuit that names each port once and
-every unit's served roots registered: every unit is drawn, so `Flock.SecurityProofs.ServedRowsLinked` puts the
+/-- **No outcome of the audit meets `ServedEv`** under full checking, at every unit's served roots registered: every unit is sampled, so `Flock.SecurityProofs.ServedRowsLinked` puts the
 committed row at each of its registered reads. -/
 theorem servedEv_false (hk : s.kd = s.n)
-    (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s.c.ports[q'].name → q = q')
     (hS : ∀ u, s.ServedRegistered u) (R : s.Reg) (ω : s.L.Ω)
     (o : LiveOutJ (planZHJ (Reg := s.Reg) s.dj s.y₀ (s.L.draw ω) R).length (mPtsOf s.c.g (s.kd / nTab s.I))) :
     ¬ s.ServedEv (R, s.L.draw ω, s.wr (s.L.draw ω) R o) := by
@@ -134,33 +170,30 @@ theorem servedEv_false (hk : s.kd = s.n)
   dsimp only [rowsReg, openedReg, regRead]
   split_ifs with h1 h2
   all_goals first
-    | have hu : (⟨a, h1.1⟩ : Fin s.n) ∈ s.L.draw ω := by rw [s.draw_full hk ω]; exact Finset.mem_univ _
-      exact congrArg some (Flock.SecurityProofs.ServedRowsLinked s hN (s.L.draw ω) R o ⟨a, h1.1⟩ hacc hu (hS _)
+    | have hu : (⟨a, h1.1⟩ : Fin s.n) ∈ s.L.draw ω := by rw [s.sample_full hk ω]; exact Finset.mem_univ _
+      exact congrArg some (Flock.SecurityProofs.ServedRowsLinked s (s.L.draw ω) R o ⟨a, h1.1⟩ hacc hu (hS _)
         (hD _ hu).2 _ h2.1 h2.2)
     | rfl
 
-/-- **`ServedEv` has probability `0` in the session's game** under full checking, port uniqueness and registered
-served roots. -/
+/-- **`ServedEv` has probability `0` in the session's game** under full checking and registered served roots. -/
 theorem prob_servedEv (hk : s.kd = s.n)
-    (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s.c.ports[q'].name → q = q')
     (hS : ∀ u, s.ServedRegistered u) : prob s.ServedEv s.G s.τ = 0 :=
   prob_audit_eq_zero s.L s.Reg (liveOfZJ s.dg (planZHJ s.dj s.y₀) s.N s.wr) s.ServedEv (fun R ω s' => by
     refine (prob_map (fun t => s.ServedEv (R, s.L.draw ω, t)) (s.wr (s.L.draw ω) R) _ s').trans ?_
-    exact nonpos_iff_eq_zero.1 ((prob_mono (fun o ho => s.servedEv_false hk hN hS R ω o ho) _ _).trans
+    exact nonpos_iff_eq_zero.1 ((prob_mono (fun o ho => s.servedEv_false hk hS R ω o ho) _ _).trans
       (prob_false _ _).le)) s.τ
 
-/-- **`ServedEv` at `rowsOn P` has probability `0`** where `P` of the session gives full checking, port uniqueness
-and registered served roots: where `P` holds it is `ServedEv` (`prob_servedEv`), and where it fails `rowsOn P` is the
+/-- **`ServedEv` at `rowsOn P` has probability `0`** where `P` of the session gives full checking and registered
+served roots: where `P` holds it is `ServedEv` (`prob_servedEv`), and where it fails `rowsOn P` is the
 committed rows. -/
 theorem prob_servedOn (P : RowsSession → Prop)
-    (hN : P s → s.kd = s.n ∧ (∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s.c.ports[q'].name → q = q') ∧
-      ∀ u, s.ServedRegistered u) :
+    (hN : P s → s.kd = s.n ∧ ∀ u, s.ServedRegistered u) :
     prob (fun o => LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.WrongAt u ∧ s.RowsAt o u) ∧
       rowsOn P s s.Xv ≠ openedReg s) s.G s.τ = 0 := by
   by_cases hp : P s
   · have e : rowsOn P s s.Xv = rowsReg s s.Xv := if_pos hp
     simp only [e]
-    exact s.prob_servedEv (hN hp).1 (hN hp).2.1 (hN hp).2.2
+    exact s.prob_servedEv (hN hp).1 (hN hp).2
   · have e : rowsOn P s s.Xv = openedReg s := if_neg hp
     exact nonpos_iff_eq_zero.1 ((prob_mono (fun o ho => ho.2.2 e) _ _).trans (prob_false _ _).le)
 
@@ -169,10 +202,10 @@ end RowsSession
 end Flock.SoundAtBridge
 
 open Accounting.TS Accounting.TS.Checked Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg in
-/-- **A checked unit's proof layer is sound at `δ` through its C-Flock sessions**
+/-- **A checked unit's proof layer is sound at `δ` through its Flock sessions**
 (`Accounting.Guarantees.TS.CheckedSessionSound`). -/
 theorem Accounting.SecurityProofs.TS.CheckedSessionSound : Accounting.Guarantees.TS.CheckedSessionSound := by
-  intro Ω _ S nπ sess out ok right δ hCR hLaw hk hN hS hok hδ hδ0
+  intro Ω _ S nπ sess out ok right δ hCR hLaw hk hS hok hδ hδ0
   have hAcc : Accounting.Assumptions.TS.AcceptedLive (checkedLayer sess out ok right) sess out :=
     fun _ _ _ h => h
   have hChk : Accounting.Assumptions.TS.ServedChecksHold (checkedLayer sess out ok right) sess out rowsReg :=
@@ -180,7 +213,7 @@ theorem Accounting.SecurityProofs.TS.CheckedSessionSound : Accounting.Guarantees
   have hLink : Accounting.Assumptions.TS.ServedRootsLinked (checkedLayer sess out ok right) sess out rowsReg 0 := by
     intro w i
     refine (hLaw w i fun s o => s.ServedEv o).trans (avg_le _ le_rfl fun x => le_of_eq ?_)
-    exact (congrArg ENNReal.toReal (RowsSession.prob_servedEv (sess x w i) (hk x w i) (hN x w i) (hS x w i))).trans
+    exact (congrArg ENNReal.toReal (RowsSession.prob_servedEv (sess x w i) (hk x w i) (hS x w i))).trans
       ENNReal.toReal_zero
   refine ⟨hAcc, hChk, hLink, ?_⟩
   simpa only [zero_add] using
@@ -205,12 +238,12 @@ noncomputable def checkedOnLayer {Ω : Type} {S nπ : ℕ} (sess : Paths Ω S �
   right _ _ := True
 
 /-- **The checked layer is sound at `δ` where `P` holds**, at `CheckedSessionSound`'s hypotheses with full checking,
-port uniqueness, the `ok` port (`PortsOk`) and registered served roots asked only of a session `P` holds of:
+the `ok` port (`PortsOk`) and registered served roots asked only of a session `P` holds of:
 `SessionSoundAt` at `rows := rowsOn P`, which reads the value layer where `P` holds (`CheckedSessionSound`'s argument)
 and the committed rows where it fails, so nothing is asked there (`prob_servedOn`). -/
 theorem checkedOn_soundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (ok : String) (P : RowsSession → Prop) (δ : ℝ)
-    (hCR : ∀ x w i, (sess x w i).CR) (hLaw : Accounting.Assumptions.TS.WindowLaw sess out)
+    (hCR : ∀ x w i, (sess x w i).CR) (hLaw : Accounting.Assumptions.TS.WindowDesign sess out)
     (hP : ∀ s, P s → PortsOk ok s ∧ s.kd = s.n ∧ ∀ u, s.ServedRegistered u)
     (hδ : ∀ x w i, ((sess x w i).n : ℝ≥0∞) * (sess x w i).bound ≤ ENNReal.ofReal δ) (hδ0 : 0 ≤ δ) :
     (checkedOnLayer sess out ok P).SoundAt δ := by
@@ -222,13 +255,13 @@ theorem checkedOn_soundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} (sess : Paths �
     intro hp
     have e : rowsOn P (sess x w i) (sess x w i).Xv = rowsReg (sess x w i) (sess x w i).Xv := if_pos hp
     rw [e]
-    exact ⟨(hP _ hp).1.2, (sess x w i).Xv, rfl, fun u hu g hg => ((hD u hu).2 g hg).2.symm⟩
+    exact ⟨(hP _ hp).1, (sess x w i).Xv, rfl, fun u hu g hg => ((hD u hu).2 g hg).2.symm⟩
   have hLink : Accounting.Assumptions.TS.ServedRootsLinked (checkedOnLayer sess out ok P) sess out (rowsOn P) 0 := by
     intro w i
     refine (hLaw w i fun s o => LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.WrongAt u ∧ s.RowsAt o u) ∧
       rowsOn P s s.Xv ≠ openedReg s).trans (avg_le _ le_rfl fun x => le_of_eq ?_)
     exact (congrArg ENNReal.toReal (RowsSession.prob_servedOn (sess x w i) P
-      (fun hp => ⟨(hP _ hp).2.1, (hP _ hp).1.1, (hP _ hp).2.2⟩))).trans ENNReal.toReal_zero
+      (fun hp => ⟨(hP _ hp).2.1, (hP _ hp).2.2⟩))).trans ENNReal.toReal_zero
   simpa only [zero_add] using
     Accounting.SecurityProofs.TS.SessionSoundAt (checkedOnLayer sess out ok P) sess out (rowsOn P) 0 δ hCR hAcc hLaw
       hChk hLink hδ hδ0

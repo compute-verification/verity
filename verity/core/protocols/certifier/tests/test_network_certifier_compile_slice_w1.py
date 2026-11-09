@@ -1,5 +1,5 @@
-"""The compile slice (`compile_slice.CompileSlice_v1`) on an async served window: window 1 of vLLM's run
-r20261024-141912-8eb1, requests 4 to 7 of the session, 3 decisions and 38 units, whose sync schedule isn't the served one
+"""The compile slice (`compile_slice.CompileSlice_v1`) on an async served window: window 1 of a vLLM run,
+requests 4 to 7 of the session, 3 decisions and 38 units, whose sync schedule isn't the served one
 (the encodings' `test_served_window.py`). `fixtures/compile_slice_w1.json` is the window at its own statics (R, W, A) =
 (4, 1, 5), Q 4, D 3, P 38, K 4, and `fixtures/compile_slice_w1_class.json` at the engine's public class (8, 1, 9), Q 4,
 D 32, P 54, K 4, both under its async scheduling, AS = 1 (`replay_vectors.py --slice 1 --AS 1`). The charge is from the

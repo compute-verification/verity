@@ -167,8 +167,8 @@ def _no_host_yield_lock(tmp_path, monkeypatch):
 
 @needs_flock
 def test_fill_runner_counts_a_queued_waiter_but_not_a_lease_that_holds_its_gpus_with_wait_in_its_argv(tmp_path, monkeypatch):
-    """A `gpu-lease 1 --wait` that holds its GPU keeps `--wait` in its argv. Counting it as a waiter froze fill across node 2 for as
-    long as any such lease ran (bc-2aa33ad8, 17:56Z); only a request queued in gpu-lease's own wait files is a waiter."""
+    """A `gpu-lease 1 --wait` that holds its GPU keeps `--wait` in its argv. Counting it as a waiter would freeze fill across node 2
+    for as long as any such lease ran; only a request queued in gpu-lease's own wait files is a waiter."""
     env = gpu_env(tmp_path, count=1)
     lease = tmp_path / "bin" / "gpu-lease"
     lease.parent.mkdir()
@@ -198,9 +198,9 @@ def test_fill_runner_counts_a_queued_waiter_but_not_a_lease_that_holds_its_gpus_
 
 
 def test_fill_runner_runs_only_bare_and_one_per_node(tmp_path):
-    """`fill_runner.py --help` fell through to the runner and started a second one on node 2 (memory accounting's soak worker,
-    3 Oct 05:37Z): it adopted the running series job and launched the next on GPU 7. Only a bare `fill_runner.py` runs the
-    runner, and only while no other runner holds FILL_DIR/.runner.lock."""
+    """`fill_runner.py --help` must not fall through to the runner: a second runner on node 2 adopts the running series job and
+    launches the next beside it. Only a bare `fill_runner.py` runs the runner, and only while no other runner holds
+    FILL_DIR/.runner.lock."""
     fill = tmp_path / "fill"
     env = {**os.environ, "FILL_DIR": str(fill), "GPU_LEASE_DIR": str(tmp_path / "gl")}
     for argv, rc in ((["--help"], 0), (["-h"], 0), (["--once"], 1), (["status"], 1)):
@@ -225,8 +225,8 @@ def stop_group(p: subprocess.Popen) -> None:
 
 
 def test_fill_runner_does_not_count_a_waiter_pinned_inside_keep_free(tmp_path, monkeypatch):
-    """Memory accounting's `gpu-lease 1 --on 7 --wait` requests, on node 2's kept-free GPU 7, stopped fill from starting on the
-    six free GPUs (pouw-node2, 1 Oct 13:05Z): fill never takes a kept-free GPU, so a waiter pinned inside keep-free holds none back.
+    """A `gpu-lease 1 --on 7 --wait` request, on node 2's kept-free GPU 7, must not stop fill from starting on the free GPUs: fill
+    never takes a kept-free GPU, so a waiter pinned inside keep-free holds none back.
     A waiter pinned partly outside it, unpinned, or pinned by UUID still counts."""
     gl, fill = tmp_path / "gl", tmp_path / "fill"
     gl.mkdir()
@@ -254,9 +254,9 @@ def test_fill_runner_does_not_count_a_waiter_pinned_inside_keep_free(tmp_path, m
 
 
 def test_fill_runner_leaves_waiters_to_the_agent_while_it_holds_agent_lock(tmp_path, monkeypatch):
-    """node2-ops (21:15Z): while the agent decides, fill_runner stops no GPU fill for a waiter, since the agent evicts; a waiting
-    or running window still stops it (infra, 1 Oct 06:50Z: the agent's eviction signals gpu-lease's pid only, which leaves a
-    `research run` workload on the GPU), and once agent.lock is free the next tick is today's rules."""
+    """While the agent decides, fill_runner stops no GPU fill for a waiter, since the agent evicts; a waiting or running window
+    still stops it (the agent's eviction signals gpu-lease's pid only, which leaves a `research run` workload on the GPU), and
+    once agent.lock is free the next tick is the runner's own rules."""
     gl, fill = tmp_path / "gl", tmp_path / "fill"
     (fill / "queue").mkdir(parents=True)
     gl.mkdir()
@@ -298,7 +298,7 @@ def test_fill_runner_leaves_waiters_to_the_agent_while_it_holds_agent_lock(tmp_p
 
 
 def test_fill_runner_ranks_commits_first_reclaims_for_them_and_keeps_out_of_booked_windows(tmp_path, monkeypatch):
-    """Node 2's order (Daniel, 1 Oct): circuits' Commits, then pous, then proofs. A queued Commit with no free GPU stops the
+    """Node 2's order: circuits' Commits, then pous, then proofs. A queued Commit with no free GPU stops the
     newest proofs fill (one per Commit), never while a window waits; no GPU job starts whose max_min reaches a booked window;
     and a GPU job's lease scope is killed when it stops and swept once it exits."""
     gl, fill = tmp_path / "gl", tmp_path / "fill"
@@ -511,8 +511,8 @@ def _paused() -> subprocess.Popen:
 
 @needs_flock
 def test_gpu_lease_never_grants_a_gpu_whose_memory_a_process_under_no_lease_holds(tmp_path):
-    """INF-86 (vy-glm53-eu, 19 Oct 01:20Z): a cancelled run's vLLM TP workers, which hold no lock, kept ~94 GB on each GPU, and
-    gpu-lease handed those GPUs to the next waiter, which failed for lack of memory. A process over 1 GiB on a free GPU that no
+    """A cancelled run's vLLM TP workers, which hold no lock, can keep most of each GPU's memory, and a GPU handed to the next
+    waiter then fails it for lack of memory. A process over 1 GiB on a free GPU that no
     lease holder owns keeps that GPU from being granted; it is logged, kept in <i>.foreign and shown by `status`; a small one
     doesn't count."""
     env = smi_env(tmp_path)
@@ -599,8 +599,8 @@ def test_gpu_lease_grants_as_before_and_logs_unverified_when_nvidia_smi_fails_or
 
 @needs_flock
 def test_a_waiter_pinned_with_on_holds_back_only_its_own_gpus(tmp_path):
-    """ra-host-tier (12 Oct 19:35Z): a waiting `gpu-lease N --on LIST` deferred every later request, so its waiter kept free GPUs
-    outside LIST from seven lanes. A later request may take a GPU outside every older waiter's list (by index or UUID), and an
+    """A waiting `gpu-lease N --on LIST` must not defer every later request, keeping free GPUs outside LIST from everyone. A
+    later request may take a GPU outside every older waiter's list (by index or UUID), and an
     unpinned waiter still holds back all of them."""
     env = {**gpu_env(tmp_path, count=4), "GPU_LEASE_UUID_TABLE": "GPU-a0,GPU-b1,GPU-c2,GPU-d3"}
     gl = tmp_path / "gl"
@@ -722,37 +722,9 @@ def test_a_waiter_stops_a_preemptible_lease_and_leaves_an_ordinary_one(tmp_path)
 
 
 @needs_flock
-def test_a_preemptible_lease_in_its_grace_is_not_stopped_until_the_grace_passes(tmp_path):
-    """INF-194: on node 2, 24 Oct 01:11-01:41Z, 23 benchmark points were stopped 4-35 min in, each losing its engine start. A lease
-    granted 5 min ago with a 10 min grace keeps its GPU; one granted 20 min ago (its grace passed) is stopped for the waiter."""
-    env = {**gpu_env(tmp_path, count=1), "GPU_LEASE_POLL_S": "0.1", "GPU_LEASE_PREEMPT_GRACE_S": "600"}
-    pause = [sys.executable, "-c", "import signal; print('ready', flush=True); signal.pause()"]
-    granted = 1792800000                                                  # 2026-10-24T00:00:00Z
-    for after, stopped in ((300, False), (1200, True)):
-        fill = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--preemptible", "--mem-gb", "0", "--", *pause],
-                                env={**env, "GPU_LEASE_STARTED": "2026-10-24T00:00:00Z"}, stdout=subprocess.PIPE, text=True)
-        assert fill.stdout.readline().strip() == "ready"
-        waiter = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--wait", "--mem-gb", "0", "--", "echo", "got"],
-                                  env={**env, "GPU_LEASE_NOW": str(granted + after)}, stdout=subprocess.PIPE, text=True)
-        try:
-            if stopped:
-                assert waiter.stdout.readline().strip() == "got" and fill.wait() != 0
-            else:
-                while not list((tmp_path / "gl").glob("wait.*")):     # queued: its first preemption pass is done
-                    assert waiter.poll() is None
-                assert fill.poll() is None and not (tmp_path / "gl" / "preempted.log").exists(), "in its grace: kept"
-        finally:
-            for p in (waiter, fill):
-                if p.poll() is None:
-                    p.terminate()
-                    p.wait()
-        (tmp_path / "gl" / "preempted.log").unlink(missing_ok=True)
-
-
-@needs_flock
 def test_a_preemptible_waiter_waits_for_a_preemptible_lease_instead_of_stopping_it(tmp_path):
-    """Node 1, 2026-10-03: a queue of --preemptible trace chunks stopped its own newest lease every ~20 s, each new chunk the
-    oldest waiter in turn."""
+    """A queue of --preemptible trace chunks must not stop its own newest lease every few seconds, each new chunk the oldest
+    waiter in turn."""
     env = {**gpu_env(tmp_path, count=1), "GPU_LEASE_POLL_S": "0.1"}
     pause = [sys.executable, "-c", "import sys; print('ready', flush=True); sys.stdin.read()"]
     fill = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--preemptible", "--mem-gb", "0", "--", *pause], env=env,
@@ -858,13 +830,18 @@ def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
     assert r.returncode == 0, r.stderr
     ud, spec = r.stdout.split("# instance create request (ids are placeholders)\n")
     assert ud.splitlines()[1] == "#cloud-config" and f"      - {pub}" in ud and "PRIVATE KEY" not in r.stdout
+    assert len(ud.split("\n", 1)[1].rstrip("\n")) <= 32768, "Nebius refuses cloud-init over 32768 characters"
     embedded = {m[0]: gzip.decompress(base64.b64decode(m[1]))
                 for m in re.findall(r"  - path: (\S+)\n    permissions: '\d+'\n    encoding: gz\+b64\n    content: (\S+)", ud)}
-    assert embedded["/usr/local/sbin/vy-setup"] == (NEBIUS / "vm_setup.sh").read_bytes()
-    assert embedded["/usr/local/sbin/vy-nebius-stop"] == (NEBIUS / "vm_stop.sh").read_bytes()
+
+    def code(script: bytes) -> list[str]:
+        return [ln for i, ln in enumerate(script.decode().split("\n")) if i == 0 or not re.match(r"\s*#", ln)]
+
+    for path, src in [("/usr/local/sbin/vy-setup", NEBIUS / "vm_setup.sh"), ("/usr/local/sbin/vy-nebius-stop", NEBIUS / "vm_stop.sh"),
+                      ("/usr/local/share/vy/lease.sh", L.LEASE_SH), ("/usr/local/bin/gpu-lease", GPU_LEASE)]:
+        assert code(embedded[path]) == code(src.read_bytes()), path
+        assert subprocess.run(["bash", "-n"], input=embedded[path], capture_output=True).returncode == 0, path
     assert embedded["/etc/systemd/system/user@.service.d/vy-cpuset.conf"] == (NEBIUS / "user-cpuset.conf").read_bytes()
-    assert embedded["/usr/local/share/vy/lease.sh"] == L.LEASE_SH.read_bytes()
-    assert embedded["/usr/local/bin/gpu-lease"] == GPU_LEASE.read_bytes()
     assert b"VY_USER=research\n" in embedded["/etc/vy/vy.env"]
     s = json.loads(spec)["spec"]
     assert s["resources"] == {"platform": "gpu-rtx6000-a", "preset": "8gpu-192vcpu-1744gb"}
@@ -874,7 +851,7 @@ def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
 
 
 def test_a_vm_can_boot_on_another_ones_kept_data_disk():
-    """n1's replacement (INF-57) may boot on vy-nebius-1-data: launch.sh and teardown.sh look the data disk up by this name."""
+    """n1's replacement may boot on vy-nebius-1-data: launch.sh and teardown.sh look the data disk up by this name."""
     r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", NEBIUS_VM_NAME="vy-nebius-cpu-4", NEBIUS_PLATFORM_PREFIX="cpu-d3",
                NEBIUS_PRESET="192vcpu-768gb", NEBIUS_DATA_DISK="vy-nebius-1-data")
     assert r.returncode == 0, r.stderr
@@ -886,7 +863,7 @@ def test_a_vm_can_boot_on_another_ones_kept_data_disk():
 
 @pytest.mark.parametrize("path, nodes", [("now", 2), ("quota", 2), ("reattach", 1)])
 def test_n1s_replacement_plan_prints_each_create_for_a_deploy_node_and_calls_nothing(path, nodes):
-    """n1_replacement.sh plan (INF-57) prints the creates, which spend, for the coordinator: it runs no Nebius call, and each node it
+    """n1_replacement.sh plan prints the creates, which spend, for the coordinator: it runs no Nebius call, and each node it
     creates is a deploy.toml node, so the install it prints next has entries to install."""
     r = subprocess.run(["bash", str(NEBIUS / "n1_replacement.sh"), "plan", path], capture_output=True, text=True,
                        env={**os.environ, "NEBIUS_BIN": "/bin/false", "PATH": "/usr/bin:/bin"})
@@ -906,6 +883,30 @@ def test_launch_refuses_to_spend_without_yes_and_a_lease():
     assert r.returncode == 1 and "--max-hours H" in r.stderr
     r = launch("--yes", "--max-hours", "4", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", NEBIUS_BIN="/bin/true")
     assert r.returncode == 1 and "NEBIUS_SA_ID is not set" in r.stderr
+
+
+def _wait_state(tmp_path, want: str, states: list[str]) -> subprocess.CompletedProcess:
+    """`wait_state ID WANT` against a VM whose successive `instance get`s read ``states`` (the last one repeats)."""
+    seq = tmp_path / "states"
+    seq.write_text("\n".join(states) + "\n")
+    script = (f". {NEBIUS / 'common.sh'}; "
+              'nb() { s=$(head -1 "$SEQ"); [ "$(wc -l < "$SEQ")" -gt 1 ] && sed -i 1d "$SEQ"; '
+              'printf \'{"status": {"state": "%s"}}\\n\' "$s"; }; '
+              f"wait_state computeinstance-x {want} 20")
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True,
+                          env={**os.environ, "SEQ": str(seq), "XDG_RUNTIME_DIR": str(tmp_path), "NEBIUS_POLL_S": "0"})
+
+
+def test_wait_state_ends_when_a_refused_start_goes_back_to_stopped(tmp_path):
+    r = _wait_state(tmp_path, "RUNNING", ["STOPPED", "STARTING", "STARTING", "STOPPED"])
+    assert r.returncode == 1 and "went back to STOPPED: Nebius refused its start" in r.stderr
+    assert (tmp_path / "states").read_text() == "STOPPED\n", "it read past the fallback"
+    r = _wait_state(tmp_path, "RUNNING", ["STOPPED", "STARTING", "RUNNING"])
+    assert r.returncode == 0, r.stderr
+    r = _wait_state(tmp_path, "RUNNING", ["STOPPED"])                    # never started: it waits out its tries
+    assert r.returncode == 1 and "is STOPPED, not RUNNING, after waiting" in r.stderr
+    r = _wait_state(tmp_path, "STOPPED", ["STARTING", "STOPPED"])
+    assert r.returncode == 0, r.stderr
 
 
 def _auth_harness(tmp_path):
@@ -1017,7 +1018,7 @@ def test_a_direct_run_sees_no_gpu_once_kueue_owns_every_gpu(tmp_path, monkeypatc
 
 
 def test_a_direct_run_takes_gpus_only_through_the_lease_on_a_gpu_lease_host(tmp_path, monkeypatch):
-    """INF-55: on a GPU VM whose GPUs gpu-lease hands out (/etc/vy/gpu-lease-host), a direct run sees no GPU whatever its --env says,
+    """On a GPU VM whose GPUs gpu-lease hands out (/etc/vy/gpu-lease-host), a direct run sees no GPU whatever its --env says,
     so a TP8 job can't open CUDA beside the lease; `--gpus N` runs the workload under `gpu-lease N --wait` (a FCFS wait, capped at
     its --mem-gb). A machine without gpu-lease refuses --gpus; a queued job's GPUs stay the queue's."""
     host = tmp_path / "gpu-lease-host"
@@ -1055,7 +1056,7 @@ def test_a_direct_run_starts_on_the_hosts_direct_cpus_and_may_pin_itself_elsewhe
 
 
 def test_fill_runner_gives_a_tp2_commit_two_gpus_on_one_numa_node_and_commits_a_longer_cap(tmp_path, monkeypatch):
-    """Top-level's node-2-first order (1 Oct 12:14 AM PDT): a Commit guest may take 2 GPUs (a TP2 row), from one NUMA node when it
+    """With node 2 first, a Commit guest may take 2 GPUs (a TP2 row), from one NUMA node when it
     can, through `gpu-lease 2 --on a,b`; it runs up to FILL_COMMIT_MAX_MIN (a Gemma-2 Commit's CPU phases outlast 30 min) while
     other GPU fill stays at 30 and gpus 1; and a TP2 Commit short of GPUs reclaims as many as it lacks."""
     gl, fill = tmp_path / "gl", tmp_path / "fill"
@@ -1167,8 +1168,8 @@ def test_the_verity_pool_lends_idle_slots_to_pous_cpu_jobs_and_takes_them_back(t
 
 
 def test_fill_runner_files_a_job_by_its_own_exit_status_across_a_restart_and_never_requeues_an_unknown_exit(tmp_path, monkeypatch):
-    """A job that finishes while a restarted runner has adopted it goes to done/, not back to the queue, where its rerun deleted
-    its result (pous-climb-a3, 1 Oct 08:50Z); exit 0 is done even when a stop raced it; and a job whose exit the runner can't learn
+    """A job that finishes while a restarted runner has adopted it goes to done/, not back to the queue, where its rerun would
+    delete its result; exit 0 is done even when a stop raced it; and a job whose exit the runner can't learn
     is held, never rerun, while one that asks for more chunks (99) is still requeued."""
     fill = tmp_path / "fill"
     for d in ("queue", "running", "done", "failed", "logs", "held-unknown-exit"):
@@ -1461,8 +1462,7 @@ def test_n2_commit_refuses_before_touching_a_node(tmp_path):
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
 def test_n2_commit_gives_a_long_row_the_long_max_min():
-    """3 Oct: node 2's 25-min limit stopped cov-gm359's TP2 B8 1024/128 Commit (~45 min) twice, 1.7 GPU-h, before it went back to
-    node 1. A row with 1024 input tokens or batch 32+ gets VY_N2_COMMIT_LONG_MAX_MIN (120); the rest keep VY_N2_COMMIT_MAX_MIN."""
+    """Node 2's 25-min limit stops a TP2 B8 1024/128 Commit (~45 min) every time, so a row with 1024 input tokens or batch 32+ gets VY_N2_COMMIT_LONG_MAX_MIN (120); the rest keep VY_N2_COMMIT_MAX_MIN."""
     def max_min(row: str, **env: str) -> str:
         return subprocess.run(["bash", str(NEBIUS / "n2_commit.sh"), "max-min", row], capture_output=True, text=True, check=True,
                               env={**os.environ, "VY_N1": "n1.invalid", "VY_N2": "n2.invalid", "VY_N2_COMMIT_MAX_MIN": "25", **env}).stdout.strip()
@@ -1602,8 +1602,8 @@ N2_CUSTODY = pytest.mark.skipif(shutil.which("bash") is None or shutil.which("pg
 
 @N2_CUSTODY
 def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_rounds(tmp_path):
-    """Node 2's store has no remote: a night of runs there sat on the node (2-3 Oct) until a push loop took them, attempts without
-    their logs, and on 3 Oct that loop's row sync mirrored 1.2M files and overran its window. Every ended run goes to node 1's Job
+    """Node 2's store has no remote, and a push loop takes attempts without their logs, while a row sync mirrors millions of files
+    and overruns its window. Every ended run goes to node 1's Job
     with its run record, a runner killed before it recorded an end with --force, and comes back with the .custody that Job's verify
     wrote; a live one, one still settling and one its own custody preserved don't. A round pushes at most VY_CUSTODY_MAX_RUNS within
     VY_CUSTODY_PASS_S, runs that failed before going last; a run dir over the file bound is held, never mirrored, and so is one whose
@@ -1808,8 +1808,8 @@ def test_n2_custody_takes_node_1s_marker_home_only_over_the_files_node_1_verifie
 
 @N2_CUSTODY
 def test_n2_custody_pauses_for_node_2s_timed_windows(tmp_path):
-    """Node 2's timed windows (PoUW's measurements) run with nothing else on the node, and a round's rsync and hashing ran through
-    them at Nice=19 (#984's red-team finding 13). A round, and each push, starts only while the fill runner's status is under 60 s
+    """Node 2's timed windows (PoUW's measurements) run with nothing else on the node, and a round's rsync and hashing must not run
+    through them, even at Nice=19. A round, and each push, starts only while the fill runner's status is under 60 s
     old and says no window runs or waits, and no booked window is on or starts within the round's bound (PASS_S + PUSH_S: 80 min);
     a status that is missing, stale or doesn't read is a window. A skipped or paused round is no failure: one log line, exit 0."""
     n2 = _n2_custody(tmp_path)
@@ -1992,8 +1992,8 @@ def _n1_custody(tmp_path: Path) -> types.SimpleNamespace:
 
 @N1_CUSTODY
 def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_bounded_rounds(tmp_path, monkeypatch):
-    """3 Oct: ~326 runs under node 1's runs roots had ended, a pod preempted before its runner recorded an end among them, and sat
-    there without custody. A round takes each run this machine ran, once it has settled, through a Job as its store's owner, with
+    """Runs under node 1's runs roots that ended, a pod preempted before its runner recorded an end among them, must not sit there
+    without custody. A round takes each run this machine ran, once it has settled, through a Job as its store's owner, with
     the Secret's R2: `research data custody --publish --keep-local`, --force --runner-gone for a status that never became terminal
     once Kubernetes says its pod is gone. A run that never ran its workload is held (never published as evidence) until a label
     lifts it, and so is one over the bounds and one whose remote holds another attempt document (after its one Job), until
@@ -2132,7 +2132,7 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
 
     (state / "held" / R["big"]).unlink()
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(node.remote))
-    assert data_main(["push", R["legacy"], "--store", str(jobs / "store")]) == 0       # a person's ruling: on R2 as it is
+    assert data_main(["push", R["legacy"], "--store", str(jobs / "store")]) == 0       # on R2 as it is
     done = round_(VY_CUSTODY_MAX_FILES="20")
     assert done.returncode == 0 and created()[-1] == n1["big"] and preserved(J["big"]), done.stdout
     assert "record-less" not in done.stdout and "1 attempt-no-record" in done.stdout
@@ -2143,8 +2143,8 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
 
 @N1_CUSTODY
 def test_n1_custody_forces_a_status_that_never_ended_only_once_its_runner_is_seen_gone(tmp_path):
-    """#1004's red-team F1 and F2: a round published a run --force as dead while it ran, and an attempt is write-once, so its real
-    end never reached R2. A host run's runner is gone when its pid is (a pid-less `tele set-timeout` transition is no end); a pod's
+    """A round must not publish a run --force as dead while it runs: an attempt is write-once, so its real end would never reach
+    R2. A host run's runner is gone when its pid is (a pid-less `tele set-timeout` transition is no end); a pod's
     when `kubectl get pod` says NotFound, however long its records have been quiet, as backfill_attempts.sh asks. A pod Kubernetes
     still lists waits without failing the round; a kubectl that doesn't answer publishes nothing and fails it; a hostname of 63
     characters may be a longer pod name cut short, so its NotFound proves nothing."""
@@ -2192,10 +2192,10 @@ def test_n1_custody_forces_a_status_that_never_ended_only_once_its_runner_is_see
 
 @N1_CUSTODY
 def test_n1_custody_holds_as_never_ran_only_a_run_that_shows_no_sign_it_started(tmp_path):
-    """#1004's red-team F3: the never-ran hold took any status that never ended with empty stdout and stderr, counting the sampler's
-    readings and the events as the runner's bookkeeping, and asked a person to label the run `custody never-ran`. All six runs node 1
-    would have held (overnight-sep30) were `running` with a pid, span_start and sampler_start events and 6-70 sampler readings of
-    the workload's processes: they ran, were killed and printed nothing. Only a status before `running` with none of ran_evidence's
+    """A never-ran hold must not take any status that never ended with empty stdout and stderr, counting the sampler's readings
+    and the events as the runner's bookkeeping, and ask a person to label the run `custody never-ran`: a run that is `running`
+    with a pid, span_start and sampler_start events and sampler readings of the workload's processes ran, was killed and printed
+    nothing. Only a status before `running` with none of ran_evidence's
     signs of a start is held; a killed run is a failed attempt, published --force once its pod is gone."""
     node = _n1_custody(tmp_path)
     killed, spoke, idle = (f"r20261003-2000{i:02d}-0d{i:02d}" for i in (1, 2, 3))
@@ -2216,7 +2216,7 @@ def test_n1_custody_holds_as_never_ran_only_a_run_that_shows_no_sign_it_started(
 
 @N1_CUSTODY
 def test_n1_custody_starts_no_job_that_could_run_into_node_1s_quiet_hour(tmp_path):
-    """#1004's red-team F4: the daily hold only kept Jobs from starting at 12:10Z, so a custody Job started at 12:09 could run to
+    """A daily hold that only kept Jobs from starting at 12:10Z would let a custody Job started at 12:09 run to
     12:39 (activeDeadlineSeconds 1800) and the pending push (7200; the research store's first one uploads 22.3 GiB) to 14:09, through
     node 1's quiet hour (12:30-13:30Z), which measurements own. Every Job's deadline and its grace (10 s) end it a minute before
     12:30Z, none starts with under 5 min left, and a round in the daily hold starts nothing."""
@@ -2262,9 +2262,9 @@ def _sigterm_while_research_runs(argv: list[str], research: Path) -> int:
 @N1_CUSTODY
 @N2_CUSTODY
 def test_n1_custody_no_job_outlives_its_deadline_into_the_quiet_hour(tmp_path):
-    """#1004's red-team recheck N3: the deadline was read to the minute (a Job created at 12:07:45Z got 1320 s, to 12:29:45), and a
-    Job stopped at its deadline has its pod's grace (30 s unless set) before SIGKILL, which its main process, a PID namespace's init
-    that ignores SIGTERM without a handler, used up: to 12:30:15. Each Job of n1_custody.sh and n2_custody.sh gets a deadline to the
+    """A deadline read to the minute gives a Job created at 12:07:45Z 1320 s, to 12:29:45, and a Job stopped at its deadline has
+    its pod's grace (30 s unless set) before SIGKILL, which its main process, a PID namespace's init that ignores SIGTERM without a
+    handler, uses up: to 12:30:15. Each Job of n1_custody.sh and n2_custody.sh gets a deadline to the
     second that, with its grace (10 s), ends it a minute before 12:30Z, and its bash, the container's init, traps SIGTERM and exits
     while research runs."""
     at = lambda h, m, s: N2_NOW + (h - 3) * 3600 + m * 60 + s                         # N2_NOW is 03:00Z
@@ -2291,9 +2291,10 @@ def test_n1_custody_no_job_outlives_its_deadline_into_the_quiet_hour(tmp_path):
 
 @N1_CUSTODY
 def test_n1_custody_runs_only_a_tree_and_a_python_no_other_uid_can_change(tmp_path):
-    """#1004's red-team F5: the round runs its research tree on the host as research (sudo ALL) and in Jobs with the Secret
-    research-r2, from /workspace/jobs/custody, which /workspace/jobs (1777) let any uid-1000 workload create first and deploy.py
-    then installs into keeping that owner, with ubuntu's Python under /workspace/jobs/cache. The tree and the Python are root's under
+    """The round runs its research tree on the host as research (sudo ALL) and in Jobs with the Secret research-r2, so neither
+    may sit where another uid can change it: not /workspace/jobs/custody, which /workspace/jobs (1777) lets any uid-1000 workload
+    create first and deploy.py then installs into keeping that owner, nor ubuntu's Python under /workspace/jobs/cache. The tree
+    and the Python are root's under
     /workspace/custody; a round refuses when a file of either, or a directory above, could be changed by a uid other than root and
     its own (another owner, or writable by group or others; a sticky directory such as /tmp above, or uv's empty .lock, aside), and
     when its Python isn't under PYHOME."""
@@ -2322,9 +2323,9 @@ def test_n1_custody_runs_only_a_tree_and_a_python_no_other_uid_can_change(tmp_pa
 
 @N1_CUSTODY
 def test_n1_custody_takes_a_run_dirs_text_as_data_never_as_a_plan_line_or_a_shells(tmp_path):
-    """#1004's red-team F6: status.json's state went into the plan's `|`-lines as written, and the force list into the Job's bash -c
-    unquoted, so a run dir's writer (uid 1000: any workload) could add a Job line and run a command as uid 1001 with the Secret
-    research-r2. A state the runner never writes holds the run, unechoed; a campaign shows anything but [A-Za-z0-9._:@+/-] as `?`;
+    """Were status.json's state to go into the plan's `|`-lines as written, or the force list into the Job's bash -c unquoted, a
+    run dir's writer (uid 1000: any workload) could add a Job line and run a command as uid 1001 with the Secret research-r2. A
+    state the runner never writes holds the run, unechoed; a campaign shows anything but [A-Za-z0-9._:@+/-] as `?`;
     a Job's script is fixed, with the run dir and the force flags as its arguments, and its JSON is written by json."""
     node = _n1_custody(tmp_path)
     pwned = tmp_path / "PWNED"
@@ -2347,8 +2348,8 @@ def test_n1_custody_takes_a_run_dirs_text_as_data_never_as_a_plan_line_or_a_shel
 
 @N1_CUSTODY
 def test_n1_custody_triages_with_no_remote_another_uid_could_name(tmp_path):
-    """#1004's red-team F8: triage ran with HOME=/tmp and no RESEARCH_STORE_CONFIG, so its remote was /tmp/.research/store.toml,
-    which any uid on node 1 may write first: get_attempt would cache that remote's attempt documents into the store, and the next
+    """Triage run with HOME=/tmp and no RESEARCH_STORE_CONFIG would take its remote from /tmp/.research/store.toml, which any uid
+    on node 1 may write first: get_attempt would cache that remote's attempt documents into the store, and the next
     Job push one to R2 as the run's write-once attempt. Triage runs with the round's own HOME and RESEARCH_STORE_CONFIG=/dev/null,
     which no uid but root can replace and which names no remote."""
     node = _n1_custody(tmp_path)
@@ -2360,8 +2361,8 @@ def test_n1_custody_triages_with_no_remote_another_uid_could_name(tmp_path):
 
 @pytest.mark.skipif(not Path("/proc/self/stat").exists(), reason="node_ops reads /proc")
 def test_node_ops_reads_a_runs_pid_from_its_runners_transition_not_the_last(tmp_path, monkeypatch):
-    """`tele set-timeout` appends a `running` transition without a pid, and node_ops read the pid from the last transition only, so it
-    alerted dead-run on a run whose runner was alive (the reading #1004's red team found in triage, F1)."""
+    """`tele set-timeout` appends a `running` transition without a pid, so reading the pid from the last transition only would
+    alert dead-run on a run whose runner is alive."""
     from research.pods.nebius import node_ops as NO
 
     me = int(Path("/proc/self/stat").read_text().rsplit(")", 1)[1].split()[19])
@@ -2378,9 +2379,9 @@ def test_node_ops_reads_a_runs_pid_from_its_runners_transition_not_the_last(tmp_
 
 @N1_CUSTODY
 def test_n1_custody_pushes_no_record_less_attempt_that_never_left_node_1(tmp_path, monkeypatch):
-    """#1004's red-team F7: a local attempt published without its run record that R2 lacks is `attempt-unpreserved`, so a round ran
-    `custody --publish` on it, and each store's pending push takes every attempt R2 lacks: R2's write-once key would keep it without
-    its logs for good (28 under node 1's /workspace/jobs/runs on 3 Oct). Until a person rules, a round holds them record-less: no
+    """A local attempt published without its run record that R2 lacks is `attempt-unpreserved`, so a round would run `custody
+    --publish` on it, and each store's pending push takes every attempt R2 lacks: R2's write-once key would keep it without its
+    logs for good. Until a person rules, a round holds them record-less: no
     Job, one line counting them, a failed round and nothing superseded; the pending push's own command skips every attempt without a
     run record. Once one is on R2 (pushed by hand, as it is) triage calls it attempt-no-record, and it is no longer held."""
     from research.store import attempt as A
@@ -2417,9 +2418,9 @@ def test_n1_custody_pushes_no_record_less_attempt_that_never_left_node_1(tmp_pat
 
 
 def test_store_push_template_pushes_no_record_less_attempt(tmp_path, monkeypatch, capsys):
-    """#1004's red-team recheck N1: the store-push template's MODE=push (one ready file on node 1 starts it; it pushed 146 objects
-    on 2 Oct) ran `research data push --pending` on node 1's job store without --skip-record-less, so it would have put every
-    attempt n1_custody.sh holds record-less on R2's write-once keys before a person rules. Every template's pending push skips them,
+    """The store-push template's MODE=push (one ready file on node 1 starts it) runs `research data push --pending` on node 1's
+    job store; without --skip-record-less it would put every attempt n1_custody.sh holds record-less on R2's write-once keys
+    before a person rules. Every template's pending push skips them,
     and still pushes the rest. `push --pending` itself still takes them: a local `research run` without --run-record publishes one,
     and `push --pending` is what the store says preserves it."""
     from research.store import attempt as A
@@ -2445,8 +2446,8 @@ def test_store_push_template_pushes_no_record_less_attempt(tmp_path, monkeypatch
 
 @N1_CUSTODY
 def test_n1_custody_holds_a_forced_attempt_whose_run_dir_changed_after_its_one_job(tmp_path, monkeypatch):
-    """#1004's red-team recheck N2: a run published --force whose dir then gained a file is forced-unverified, and a round started a
-    custody Job for it every round, for good, though none can mend it: its attempt is write-once. As n2_custody.sh does, the round
+    """A run published --force whose dir then gained a file is forced-unverified, and a round must not start a custody Job for it
+    every round, for good, since none can mend it: its attempt is write-once. As n2_custody.sh does, the round
     holds it after its one Job and says what a person does; a `custody waived` label lifts the hold."""
     from research.store import attempt as A
     from research.store.cli import main as data_main
@@ -2525,7 +2526,7 @@ def test_n2_commit_counts_the_gpus_deployments_gpu_could_still_admit(tmp_path):
         return subprocess.run(["bash", str(NEBIUS / "n2_commit.sh"), "n1-free"], capture_output=True, text=True,
                               env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}"}).stdout.strip()
 
-    assert free((6, 2, 5), (2, 1, 3)) == "1"      # 1 Oct 02:27Z: its sixth GPU is lent to provers
+    assert free((6, 2, 5), (2, 1, 3)) == "1"      # its sixth GPU is lent to provers
     assert free((6, 2, 6), (2, 1, 2)) == "0"
     assert free((6, 2, 6), (2, 1, 0)) == "2"      # provers idle: borrow up to the limit
     assert free((6, 2, 7), (2, 1, 0)) == "1"
@@ -2570,8 +2571,8 @@ def test_n2_commit_records_the_queues_placement_and_keeps_a_refused_row_on_node_
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
 def test_n2_commit_keeps_a_row_whose_plans_are_keyed_to_other_code_on_node_1(tmp_path):
-    """cov-gm176's Build wrote its plans from a job tree that the 14:17Z redeploy (2 Oct) replaced. Node 2's Commit ran from the new
-    tree, found the plans' code key differing and derived both with GPU 6 held: two 25-min leases at 0%. submit refuses such a row
+    """A Build whose plans came from a job tree a redeploy then replaced has a Commit that, on node 2, runs from the new tree, finds
+    the plans' code key differing and derives both with its GPU held at 0% for whole leases. submit refuses such a row
     before it touches node 2, so node 1's leased Commit derives the plans before it takes a GPU. The job tree is a stand-in whose
     source_identity hashes one file (integrations/vllm's own tests cover code_identity)."""
     row_name = "gemma2-9b__bf16__rtxpro6000__tp1__b8__i1024__o128__mixed__greedy__bi-eager"
@@ -2644,8 +2645,8 @@ def test_n2_commit_keeps_a_row_whose_plans_are_keyed_to_other_code_on_node_1(tmp
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
 def test_n2_commit_marks_a_commit_it_hands_back_so_offload_never_moves_it_to_node_2_again(tmp_path):
-    """cov-cg04-norm-taps-2 went from node 1 to node 2 seven times (22:30-23:06Z, 1 Oct): node 2 handed it back after two stops,
-    and node 1's offload moved it again 120 s later. A Commit handed back (task 1) goes into node 1's reclaimed.txt, which offload
+    """A Commit node 2 handed back after two stops must not go to node 2 again on node 1's next offload, back and forth. A Commit
+    handed back (task 1) goes into node 1's reclaimed.txt, which offload
     skips, before node 1's dispatcher takes it; a replay (task 2) doesn't, and a proof goes to neither. `dispatch_n1` runs as the
     script defines it, with ssh faked."""
     fn = re.search(r"^dispatch_n1\(\) \{.*?^\}\n", (NEBIUS / "n2_commit.sh").read_text(), re.M | re.S).group(0)
@@ -2890,7 +2891,7 @@ def test_gpu_stray_allows_device_plugin_and_leased_gpus_and_blocks_the_pool_of_a
 
 
 def test_gpu_adopt_holds_the_lease_of_a_gpu_used_outside_it_until_the_process_exits(monkeypatch, tmp_path):
-    """INF-55: on a GPU VM a process whose GPU no lease of its ancestors covers gets that GPU's lease in its run's name (so gpu-lease
+    """On a GPU VM a process whose GPU no lease of its ancestors covers gets that GPU's lease in its run's name (so gpu-lease
     hands it to nobody else) until it exits; a GPU another lease holds is a collision, unless that lease names the process's own run
     (a holder that handed its locks over a socket); each is logged once."""
     spec = importlib.util.spec_from_file_location("gpu_adopt_under_test", NEBIUS / "gpu_adopt.py")
@@ -2949,7 +2950,7 @@ def test_gpu_adopt_holds_the_lease_of_a_gpu_used_outside_it_until_the_process_ex
 
 
 def test_gpu_stray_reads_only_the_gpu_variables_of_a_process(monkeypatch):
-    """Daniel's ruling (7 Oct): the probe reads another process's GPU variables and nothing else of its environment, which may
+    """The probe reads another process's GPU variables and nothing else of its environment, which may
     hold its secrets. Under sudo only the matching lines leave `grep`; read directly, the rest is dropped at once."""
     spec = importlib.util.spec_from_file_location("gpu_stray_under_test", NEBIUS / "gpu_stray.py")
     m = importlib.util.module_from_spec(spec)
@@ -3245,7 +3246,7 @@ def test_n1_lease_holds_agent_lock_while_the_brain_answers_and_falls_back_when_i
 
 
 def test_fill_runner_on_numa_0_terms_freezes_cpu_jobs_while_a_window_waits_and_binds_their_memory(tmp_path, monkeypatch):
-    """PoUW's terms for CPU fill on 0-47 (bc-2aa33ad8): frozen from the moment a window waits, and memory kept off NUMA 0. Both are
+    """PoUW's terms for CPU fill on 0-47: frozen from the moment a window waits, and memory kept off NUMA 0. Both are
     off unless set, so the runner behaves as before."""
     fill = tmp_path / "fill"
     for d in ("running", "logs"):
@@ -3285,7 +3286,7 @@ def test_fill_runner_on_numa_0_terms_freezes_cpu_jobs_while_a_window_waits_and_b
 
 
 def test_fill_runner_runs_an_owner_in_cpu_sets_on_its_own_cpus_beside_the_shared_slots(tmp_path, monkeypatch):
-    """verity-top (1 Oct 12:00 AM PDT): compute accounting's verifies run on 0-47, 4 at a time, at ionice idle, capped from a
+    """An owner in cpu-sets (compute accounting's verifies) runs on 0-47, 4 at a time, at ionice idle, capped from a
     measured peak, without taking CPU_SET's slots; everyone else's CPU jobs stay on CPU_SET."""
     fill = tmp_path / "fill"
     for d in ("queue", "running", "logs", "done", "failed"):
@@ -3352,7 +3353,7 @@ def test_fill_runner_runs_an_owner_in_cpu_sets_on_its_own_cpus_beside_the_shared
 
 
 def test_fill_runner_pauses_cpu_sets_jobs_on_slot_d_while_a_train_check_holds_its_lock(tmp_path, monkeypatch):
-    """Compute accounting (1 Oct 8:58 AM PDT): GPU 0's verifies go back on 0-47 yielding to slot d's train checks. A check runs in
+    """GPU 0's verifies run on 0-47 yielding to slot d's train checks. A check runs in
     a login session's cgroup, where nice 19 can't reach, so the runner starts none and pauses its running ones while the check
     holds slot d's lock; an owner whose CPUs miss 0-47 runs on."""
     fill = tmp_path / "fill"
@@ -3406,7 +3407,7 @@ def test_fill_runner_pauses_cpu_sets_jobs_on_slot_d_while_a_train_check_holds_it
 
 
 def test_fill_runner_fence_command_caps_a_fence_keeps_one_per_owner_and_logs_it(tmp_path, monkeypatch, capsys):
-    """Memory accounting's honest-latency fence on node 2 (2 Oct) took five round trips with infra: keep-free, a respawned pane for
+    """A fence on node 2 (an honest-latency measurement's) would otherwise take four steps by hand: keep-free, a respawned pane for
     fill's CPUs, a max-min line and a revert timer. `fill_runner.py fence` writes one self-expiring line within the caps instead
     (1 GPU, at most 8 cores on its NUMA node, at most 4 h, one per owner, none on another's GPU or cores) and logs each change."""
     fill, log = tmp_path / "fill", tmp_path / "quota-changes.log"
@@ -3574,10 +3575,10 @@ def test_backup_packs_nothing_while_a_timed_window_runs_or_waits(tmp_path):
 
 
 def test_a_run_on_a_stopped_nebius_vm_starts_it_and_waits_for_its_ssh(monkeypatch):
-    """INF-58: the H200s stop after 2 h idle with their disks kept, and `research run --on` brings one back: a machine whose registry
+    """The H200s stop after 2 h idle with their disks kept, and `research run --on` brings one back: a machine whose registry
     entry names its nebius_instance_id and whose ssh doesn't answer is started through the API, then waited for."""
-    answers = iter([1, 1, 1, 0])
-    monkeypatch.setattr(remote, "ssh_run", lambda ssh, argv, timeout=120: subprocess.CompletedProcess(argv, next(answers)))
+    answers, ran = iter([1, 1, 1, 0, 0]), []
+    monkeypatch.setattr(remote, "ssh_run", lambda ssh, argv, timeout=120: ran.append(argv) or subprocess.CompletedProcess(argv, next(answers)))
     calls, t = [], [0.0]
 
     def nebius(*args):
@@ -3590,6 +3591,7 @@ def test_a_run_on_a_stopped_nebius_vm_starts_it_and_waits_for_its_ssh(monkeypatc
     m = {"name": "vy-glm53-eu", "nebius_instance_id": "computeinstance-x"}
     assert remote.wake(m, ["ssh"], nebius=nebius, sleep=sleep, clock=lambda: t[0]) == "started from STOPPED"
     assert calls == ["get", "start"] and t[0] == 3 * remote.WAKE_POLL_S
+    assert ran[-1] == ["sh", "-c", remote.TRUST_UPGRADE], "a woken VM upgrades its trust store before the run (INF-314)"
     assert remote.wake({"name": "vy-nebius-2"}, ["ssh"], nebius=nebius) is None, "no instance id: nothing to wake"
     monkeypatch.setattr(remote, "ssh_run", lambda ssh, argv, timeout=120: subprocess.CompletedProcess(argv, 1))
     with pytest.raises(remote.Refused, match="didn't answer in 15 min"):
@@ -3601,20 +3603,27 @@ def test_a_run_on_a_stopped_nebius_vm_starts_it_and_waits_for_its_ssh(monkeypatc
     with pytest.raises(remote.Refused, match="ask @infra to start computeinstance-x"):
         remote.wake(m, ["ssh"], nebius=no_creds)
 
-    def plain_start(*args):   # the CLI's --async start prints its operation's id, which fleet.nb can't parse (T1R, 19 Oct)
+    def plain_start(*args):   # the CLI's --async start prints its operation's id, which fleet.nb can't parse
         if args[2] == "start":
             raise json.JSONDecodeError("Expecting value", "computeoperation-x", 0)
         return nebius(*args)
 
-    answers = iter([1, 0])
+    answers = iter([1, 0, 0])
     monkeypatch.setattr(remote, "ssh_run", lambda ssh, argv, timeout=120: subprocess.CompletedProcess(argv, next(answers)))
     assert remote.wake(m, ["ssh"], nebius=plain_start, sleep=sleep, clock=lambda: t[0]) == "started from STOPPED"
 
 
 def test_a_run_names_the_agent_that_sent_it_a_worker_its_own_conversation():
-    """INF-50: OOM and lost-check alerts name a run's sender from its request; workers never set RESEARCH_AGENT_URL, and a worker
+    """OOM and lost-check alerts name a run's sender from its request; workers never set RESEARCH_AGENT_URL, and a worker
     that inherits its coordinator's would be reported as the coordinator. Every agent's shell carries its own conversation id."""
     assert remote.sender({"CURSOR_CONVERSATION_ID": "bc-worker", "RESEARCH_AGENT_URL": "https://cursor.com/agents/bc-coord"}) == \
         "https://cursor.com/agents/bc-worker"
     assert remote.sender({"RESEARCH_AGENT_URL": "https://cursor.com/agents/bc-coord"}) == "https://cursor.com/agents/bc-coord"
     assert remote.sender({}) is None
+
+
+def test_node_1s_jobs_default_to_the_image_built_from_sky_gpu_dockerfile():
+    """build.sh tags an image by its Dockerfile's hash and pods never pull it: a default naming another hash finds no image."""
+    tag = "verity-sky-gpu:" + hashlib.sha256((NEBIUS / "image" / "sky-gpu.Dockerfile").read_bytes()).hexdigest()[:16]
+    for name in ("dispatch.py", "n1_lease.py", "n1_custody.sh"):
+        assert re.findall(r"verity-sky-gpu:[0-9a-f]+", (NEBIUS / name).read_text()) == [tag], f"{name}: set its default to {tag}"

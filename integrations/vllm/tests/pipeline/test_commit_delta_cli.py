@@ -1,12 +1,11 @@
-"""[R15 rel, rev-cb BLOCKER M-0662] commit_delta's argument parser must BUILD.
+"""commit_delta's argument parser must BUILD.
 
-MAN-09 8432f36ef added a second `ap.add_argument("--checkpoints", ...)` to commit_delta.main(); argparse refuses duplicate option strings,
-so every invocation of the r15-int-5 candidate 6227bde01 (positives, negatives, pod_ready's readiness collection) died with
-`argparse.ArgumentError: conflicting option string: --checkpoints` before any engine work.  The unit suites never build that parser
-(main() constructs it inline and the module imports vllm/torch lazily but heavily), so the defect was only found live (same class as M-0236).
+argparse refuses duplicate option strings, so a second `ap.add_argument("--checkpoints", ...)` in commit_delta.main() makes every
+invocation die with `argparse.ArgumentError: conflicting option string: --checkpoints` before any engine work.  The unit suites never
+build that parser (main() constructs it inline and the module imports vllm/torch lazily but heavily).
 
 This test builds the parser from the SOURCE, torch-free: it extracts every `option(...)` field of the Commit's `Options` with `ast`, replays
-them on a fresh argparse.ArgumentParser and asserts that (a) it builds, (b) no option string is declared twice, (c) the MAN-09 flags and the
+them on a fresh argparse.ArgumentParser and asserts that (a) it builds, (b) no option string is declared twice, (c) the weights-pin flags and the
 pre-existing --checkpoints are all present exactly once.  Constant-only arguments are replayed verbatim; keyword values that reference
 names (type=int, default=SOME_CONST, ...) are replaced by placeholders -- only the option strings and their multiplicity are under test.
 """
@@ -55,7 +54,7 @@ def test_commit_delta_parser_builds_and_declares_every_option_once():
         # the option strings and their multiplicity are what is under test; argparse raises ArgumentError on a duplicate right here
         ap.add_argument(*opts, **kw)
     dups = sorted(o for o, n in seen.items() if n > 1)
-    assert dups == [], "option strings declared twice in commit_delta.main(): %s (argparse.ArgumentError at parse time, M-0662)" % dups
+    assert dups == [], "option strings declared twice in commit_delta.main(): %s (argparse.ArgumentError at parse time)" % dups
     for must in ("--checkpoints", "--checkpoint-dir", "--weights-of-record", "--program-digest", "--program-dir", "--programs-root",
                  "--match-dir", "--replay-challenge"):
         assert seen[must] == 1, "%s declared %d times" % (must, seen[must])

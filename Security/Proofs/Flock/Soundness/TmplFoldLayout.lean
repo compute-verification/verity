@@ -1,15 +1,23 @@
-import Proofs.Flock.Soundness.TmplFoldPos
-import Proofs.Flock.Soundness.TmplLayOk
-import Proofs.Flock.Soundness.TmplWf
+module
+
+public import Proofs.Flock.Soundness.TmplFoldClassOk
+public import Proofs.Flock.Soundness.TmplFoldPos
+public import Proofs.Flock.Soundness.TmplLayOk
+public import Proofs.Flock.Soundness.TmplWf
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
 
 /-!
-# The template fold is its reference on `layoutM`'s layouts (PRF-133, part 3, stage 2)
+# The template fold is its reference on `layoutM`'s layouts
 
 `fold_eq_foldRef` with its layout hypotheses discharged by `layoutM` (`layouts_defPos`, `layouts_lanes`), and then
 (`fold_eq_foldRef_wf`) with the template's discharged by `Tmpl.wellFormed`, which `parse` checks: each call's binding of
 its callee's inputs, its callee earlier and its copies inside the caller, the root's facts, and the column and call counts
 below `2^64` that `locate`'s halving assumes. What remains is the lane count against the transcript's `rho` and `r`.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128
 
@@ -31,7 +39,8 @@ theorem fold_eq_foldRef_layout {t : Tmpl} {mode : Mode} {lays : Array Lay} {alph
     (hfit : ∀ d, ∀ r ∈ (t.defs.getD d default).rows.toList, r.1 < (t.defs.getD d default).cols)
     (hf1 : lanes t lays (t.defs.size + 1) t.root ≤ 6 + rho.size) (hf2 : lanes t lays (t.defs.size + 1) t.root ≤ 6 + r.size)
     {s : ℕ} (hs : s < 64) : of P[s]! = of P'[s]! :=
-  fold_eq_foldRef hP hP' ⟨hbound, layouts_lanes (layoutM_layouts hL) fun d hd i hi => (hcall d hd i hi).2⟩ hins hcols
+  fold_eq_foldRef hP hP' ⟨hbound, layouts_lanes (layoutM_layouts hL) fun d hd i hi => (hcall d hd i hi).2,
+      layouts_defPos (layoutM_layouts hL) hcall hsmall⟩ hins hcols
     hfit hf1 hf2 (layouts_defPos (layoutM_layouts hL) hcall hsmall) hroot hs
 
 theorem fold_eq_foldRef_wf {t : Tmpl} {mode : Mode} {lays : Array Lay} {alpha : F128} {lw rho r P P' : Array F128}

@@ -1,4 +1,4 @@
-"""`verity_vllm.program.registry.gumbel_boolean`: the Boolean Gumbel select agrees with its word Definitions (`trace.word_of`).
+"""`verity.ml.definitions.registry.gumbel_boolean`: the Boolean Gumbel select agrees with its word Definitions (`trace.word_of`).
 `NvLogf_v3` agrees with `NvLogf_v2`, and the log1pf builder with `nv_log1pf_gpu`, on every special word, every exponent of
 both signs, the sweeps around their branch points, and random words. The uniform and noise of a Philox word agree on its
 edges (0, all ones, the floor, the f32 rounding of large words). `GumbelStreamKey_v2` agrees with `GumbelStreamKey_v1`;
@@ -28,10 +28,10 @@ from verity.ml.circuits.cut import separable
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import Circuit
-from verity_vllm.program.registry import gumbel_boolean as GB
-from verity_vllm.program.registry import sampling as SM
-from verity_vllm.program.registry import sampling_boolean as SB
-from verity_vllm.query import word as W
+from verity.ml.definitions.registry import gumbel_boolean as GB
+from verity.ml.definitions.registry import sampling as SM
+from verity.ml.definitions.registry import sampling_boolean as SB
+from verity.ml.definitions import word as W
 
 F32 = GB.F32
 
@@ -207,7 +207,7 @@ RandNoise = TR.definition("RandNoise", 1, lambda C, w: GB.gumbel_noise(C, GB.tl_
 
 @pytest.mark.slow
 def test_uniform_and_noise_of_a_philox_word() -> None:
-    """The words a random lane almost never draws: 0 and all ones (``tl.rand``'s zero, floored at 2^-31'), the words beside
+    """The words a random lane almost never samples: 0 and all ones (``tl.rand``'s zero, floored at 2^-31'), the words beside
     every power of two of both signs (the f32 rounding of the 31-bit integer, the uniform's top), and random words; the
     restatement is `noise_lane`'s on random lanes."""
     rng = _rng("rand-noise")

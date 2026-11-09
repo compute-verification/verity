@@ -1,4 +1,4 @@
-description = "co32c-u32 (FRONTIER): Dither-2S's served values with the weights capped for a narrow peeled U on [-32, 32] (co32c's committed strip digits, U of width 65 instead of 129): linears and lm_head weights dithered within +-95 (served [-94, 95]), activations dithered on 8 bits; Q K^T both dithered on 8 bits (last checked word served); P V as in adopted-bd-lm"
+description = "co32c-u32: Dither-2S's served values with the weights capped for a narrow peeled U on [-32, 32] (co32c's committed strip digits, U of width 65 instead of 129): linears and lm_head weights dithered within +-95 (served [-94, 95]), activations dithered on 8 bits; Q K^T both dithered on 8 bits (last checked word served); P V as in adopted-bd-lm"
 
 [[linear]]
 step = "smooth"

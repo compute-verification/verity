@@ -1,13 +1,60 @@
-import Proofs.Flock.Claims.KS.PlainDraw
-import Proofs.Flock.Claims.KS.DecodeHidden
-import Proofs.Flock.Claims.KS.PlainDrawK
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawK
+public import Proofs.Flock.Claims.KS.PlainDrawKDefs
+public import Proofs.Flock.Soundness.Discharge.Exec.Rounds
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.Entries
+import Proofs.Flock.Claims.KS.LevelZero
+import Proofs.Flock.Claims.KS.LevelZeroAcc
+import Proofs.Flock.Claims.KS.OffSC
+import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
+import Proofs.Flock.Soundness.Refine.Seam
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# flock-verify's acceptance at a draw value, through `keep`
+# flock-verify's acceptance at a sample value, through `keep`
 
 The acceptance lemmas the deployed plain decoders read take `Exec.Accepts`, and read it only as a setup that succeeds
-and `verify`'s acceptance against it, with the record's draw only an argument of `Stmt.setupTables`. So each holds at
-`AcceptsAtDK keep I dr`, the setup at a draw value `dr`, with `dr` for the record's draw, by its proof on the walkers of
+and `verify`'s acceptance against it, with the record's sample only an argument of `Stmt.setupTables`. So each holds at
+`AcceptsAtDK keep I dr`, the setup at a sample value `dr`, with `dr` for the record's sample, by its proof on the walkers of
 `verifyWithMK keep` at SHA-512 (`verifyK_ok_tables`, `verifyK_one_ok`) and of `Record.decodeWithK keep`
 (`decodeWithK_points`, `decodeWithK_roundsWF`, `decodeWithK_allRetained`), each lemma's session the one the record
 decodes to through `keep`. At `keep := id` they are `PlainDrawAcc`'s:
@@ -22,9 +69,11 @@ decodes to through `keep`. At `keep := id` they are `PlainDrawAcc`'s:
 * `accepts_repsOneDLfK`, `accepts_repsOneDK`: `accepts_reps` and `accepts_repsH` at once, the one table's statement
   `setupOne`'s at `dr`, where each table's verdict accepts at `lf`, and at `leaf512` under `hm96-sha512/v1`.
 * `drawSetup_of_acceptsDK`, `tableAt_of_acceptsDK`, `drawSetupH_of_acceptsDK`, `tableAtH_of_acceptsDK`:
-  `drawSetup_of_accepts`, `tableAt_of_accepts`, `drawSetupH_of_accepts`, `tableAtH_of_acceptsI` at the draw `some d`,
-  with no premise on a record's draw.
+  `drawSetup_of_accepts`, `tableAt_of_accepts`, `drawSetupH_of_accepts`, `tableAtH_of_acceptsI` at the sample `some d`,
+  with no premise on a record's sample.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.AtDraw
 
@@ -54,7 +103,7 @@ theorem accepts_oneAnyDK (keep : Bool → Bool) {I : Exec.Inputs} {dr : Option J
 /-- **flock-verify's acceptance at `dr`, round by round** (`accepts_rep_roundsAny`). -/
 theorem accepts_rep_roundsAnyDK (keep : Bool → Bool) {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript}
     (hr : I.tags.retainRounds = true) (h : AcceptsAtDK keep I dr t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
       Record.decodeWithK keep With.std spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         RepRounds spec (Setup.ofCircuit sts[j]) sch sess j 0 t.proofs[2 * j]! ∧
@@ -75,7 +124,7 @@ theorem accepts_rep_roundsAnyDK (keep : Bool → Bool) {I : Exec.Inputs} {dr : O
 /-- **flock-verify's acceptance at `dr` makes each table's salted verdict accept** (`accepts_verdict_hm96Any`). -/
 theorem accepts_verdict_hm96AnyDK (keep : Bool → Bool) {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript}
     (hl : I.tags.merkleLeaf = "hm96-sha512/v1") (h : AcceptsAtDK keep I dr t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
       Record.decodeWithK keep With.std spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m),
@@ -124,7 +173,7 @@ theorem accepts_verdict_hm96AnyDK (keep : Bool → Bool) {I : Exec.Inputs} {dr :
 `accepts_verdict_hm96AnyDK` gives at `leaf512` and `accepts_verdict_plainAnyDK` at `leafPlain`. -/
 def TableVerdictsDK (keep : Bool → Bool) (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512) (I : Exec.Inputs)
     (dr : Option Json) (t : Exec.Transcript) : Prop :=
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
       Record.decodeWithK keep With.std spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m),
@@ -191,7 +240,7 @@ open Lean (Json)
 /-- **An accepted rep at `dr` requests level 0 first** (`accepts_req0`). -/
 theorem accepts_req0DK (keep : Bool → Bool)
     {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtDK keep I dr t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
       Record.decodeWithK keep With.std spec t.record = .ok sess ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m) (r : ℕ), r < 2 →
@@ -256,7 +305,7 @@ theorem accepts_req0DK (keep : Bool → Bool)
 reps' deployed entries** (`accepts_opens₀L`). -/
 theorem accepts_opens₀LDLfK (keep : Bool → Bool) (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512)
     {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtDK keep I dr t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
       Record.decodeWithK keep With.std spec t.record = .ok sess ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec)
@@ -344,7 +393,7 @@ theorem accepts_opens₀LDLfK (keep : Bool → Bool) (lf : Merkle.Leaf (List �
 `accepts_opens₀LDLfK` at `leaf512`. -/
 theorem accepts_opens₀LDK (keep : Bool → Bool)
     {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtDK keep I dr t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
       Record.decodeWithK keep With.std spec t.record = .ok sess ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec)
@@ -398,7 +447,7 @@ accepts at the model leaf `lf`**, the one table's statement `st` `setupOne`'s at
 theorem accepts_repsOneDLfK (keep : Bool → Bool) (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512)
     {I : Inputs} {dr : Option Json} {t : Exec.Transcript} (hrr : I.tags.retainRounds = true) (hc1 : I.count ≤ 1)
     (hv : TableVerdictsDK keep lf I dr t) (h : AcceptsAtDK keep I dr t) :
-    ∃ (st : Flock.Stmt) (spec : SessionSpec) (sess : Session) (sch : Flock.Schedule),
+    ∃ (st : Flock.Stmt) (spec : SessionSpec) (sess : RunRecord) (sch : Flock.Schedule),
       setupOne I.tags I.circuitFile I.publicFile I.coins I.tables dr I.partition I.program = .ok st ∧
       setupAtD I dr = .ok (spec, #[st]) ∧ Record.decodeWithK keep With.std spec t.record = .ok sess ∧
       Flock.fast100 st.m = some sch ∧
@@ -460,7 +509,7 @@ the one table's statement `st` `setupOne`'s at `dr` under either tag: `accepts_r
 theorem accepts_repsOneDK (keep : Bool → Bool)
     {I : Inputs} {dr : Option Json} {t : Exec.Transcript} (hrr : I.tags.retainRounds = true)
     (hl : I.tags.merkleLeaf = "hm96-sha512/v1") (hc1 : I.count ≤ 1) (h : AcceptsAtDK keep I dr t) :
-    ∃ (st : Flock.Stmt) (spec : SessionSpec) (sess : Session) (sch : Flock.Schedule),
+    ∃ (st : Flock.Stmt) (spec : SessionSpec) (sess : RunRecord) (sch : Flock.Schedule),
       setupOne I.tags I.circuitFile I.publicFile I.coins I.tables dr I.partition I.program = .ok st ∧
       setupAtD I dr = .ok (spec, #[st]) ∧ Record.decodeWithK keep With.std spec t.record = .ok sess ∧
       Flock.fast100 st.m = some sch ∧
@@ -494,8 +543,8 @@ open Flock FlockLevel3 Refine
 open FlockSoundness.Discharge.Exec (Inputs verifyK_one_ok)
 open FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.HiddenExec
 
-/-- **A draw flock-verify accepts at sets up**: `drawSetup_of_accepts` at `AcceptsAtDK keep I (some d)`, with no
-premise on the record's draw. -/
+/-- **A sample flock-verify accepts at sets up**: `drawSetup_of_accepts` at `AcceptsAtDK keep I (some d)`, with no
+premise on the record's sample. -/
 theorem drawSetup_of_acceptsDK (keep : Bool → Bool)
     {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {d : Lean.Json} {c : Flock.Circuit}
     (ht : I.tags.typed = false) (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
@@ -510,8 +559,8 @@ theorem drawSetup_of_acceptsDK (keep : Bool → Bool)
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec hdr
   exact ⟨st, D, hst, hD, fun hS hm => drawSetup_of_setupH ht hc ho hst hf hD hS hm⟩
 
-/-- **At a draw flock-verify accepts at, the headline's table is `stmtOf` of the statement it accepted**:
-`tableAt_of_accepts` at `AcceptsAtDK keep I (some (dj S))`, with no premise on the record's draw. -/
+/-- **At a sample flock-verify accepts at, the headline's table is `stmtOf` of the statement it accepted**:
+`tableAt_of_accepts` at `AcceptsAtDK keep I (some (dj S))`, with no premise on the record's sample. -/
 theorem tableAt_of_acceptsDK (keep : Bool → Bool) {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {c : Flock.Circuit}
     (ht : I.tags.typed = false) (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
     (hh : I.tags.hiddenOutputs = false) (hc1 : I.count ≤ 1) (dj : Finset (Fin n) → Lean.Json)
@@ -527,8 +576,8 @@ theorem tableAt_of_acceptsDK (keep : Bool → Bool) {I : Inputs} {mPts n : ℕ} 
   obtain ⟨y, hy, e⟩ := tableAt_stmtOf ht dj x₀ x
   exact ⟨x.st, hst, hy ▸ ⟨y.wf.1, e⟩⟩
 
-/-- **A draw flock-verify accepts at under hidden outputs sets up**: `drawSetupH_of_accepts` at
-`AcceptsAtDK keep I (some d)`, with no premise on the record's draw. -/
+/-- **A sample flock-verify accepts at under hidden outputs sets up**: `drawSetupH_of_accepts` at
+`AcceptsAtDK keep I (some d)`, with no premise on the record's sample. -/
 theorem drawSetupH_of_acceptsDK (keep : Bool → Bool)
     {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {d : Lean.Json} {c : Flock.Circuit}
     (ht : I.tags.typed = false) (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)
@@ -543,8 +592,8 @@ theorem drawSetupH_of_acceptsDK (keep : Bool → Bool)
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { st.c with outPorts := #[] }) hdr
   exact ⟨st, D, hst, hD, fun hS hm => drawSetupH_of_setupHiddenI ht hc hst hf hD hS hm⟩
 
-/-- **At a draw flock-verify accepts at under hidden outputs, the hidden table is `stmtOf` of the statement it
-accepted**: `tableAtH_of_acceptsI` at `AcceptsAtDK keep I (some (dj S))`, with no premise on the record's draw. -/
+/-- **At a sample flock-verify accepts at under hidden outputs, the hidden table is `stmtOf` of the statement it
+accepted**: `tableAtH_of_acceptsI` at `AcceptsAtDK keep I (some (dj S))`, with no premise on the record's sample. -/
 theorem tableAtH_of_acceptsDK (keep : Bool → Bool) {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {c : Flock.Circuit}
     (ht : I.tags.typed = false) (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)
     (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1) (dj : Finset (Fin n) → Lean.Json)

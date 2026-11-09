@@ -1,4 +1,4 @@
-// Dither-2S's linear (decision 79; SKIP's arm adopted-bd-lm, note:20261017T0340Z-draft-skip Result 4) on sm_120a, on the
+// Dither-2S's linear (SKIP's arm adopted-bd-lm, Result 4) on sm_120a, on the
 // honest Dither-1S kernel's mainloop (egemm.cu's e_l7qs: duo every 32 steps, absorbs 7 MMAs behind, consumers asleep on
 // the stage barrier) with no tail stage.
 //

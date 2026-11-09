@@ -2,18 +2,18 @@
 
 Libraries: `--lib NAME=PATH` for a prototype (`tcsq.cu`, `nttsq.cu`: `fd_config`, `fd_decode` with mode 0 = D(c) and mode 1
 = d(c), and the TC builds' `fd_keys`), `--cgbn NAME=PATH` for a `libp2v1.so` (`p2_v1/p2v1.cu`, the CUDA-core decode in use,
-or its generic CGBN path at another width). Every width a library names gets `--bytes` of uniformly random canonical blocks
+or its generic CGBN path at another width). Every width a library names gets `--bytes` of uniformly random canonical labels
 (at least the ten edge values of `c` first) under v4's keys of a fixed setup at that width (`reference.expand_prefix` frames
-the width's prime), with the payload profile of the block less two bytes.
+the width's prime), with the payload profile of the label less two bytes.
 
 For each library, in this order, nothing timed before its gate passed:
-- the gate: on the pseudo-random picks and the edge blocks, mode 1 equals `reference.d(c)` and mode 0 equals
-  `reference.decode` under `reference.keys` (whose K and t rows the device's expansion must equal), every block of mode 0
+- the gate: on the pseudo-random picks and the edge labels, mode 1 equals `reference.d(c)` and mode 0 equals
+  `reference.decode` under `reference.keys` (whose K and t rows the device's expansion must equal), every label of mode 0
   equals the first library's at the width, and no flag is raised; a failing pick records which limbs differ and whether the
   output is the expected value's negation, its unreduced form or the square without the parity negation;
-- `keys_s` (once a width): the counter-mode SHA-512 expansion of every block's K and t; `sq_s`: mode 1 (one squaring with
+- `keys_s` (once a width): the counter-mode SHA-512 expansion of every label's K and t; `sq_s`: mode 1 (one squaring with
   its fold, loads and stores); `kernel_s`: mode 0 on keys expanded beforehand; `decode_s`: keys, then mode 0;
-  `one_cta_square_ns` (prototypes): mode 1 on 256 blocks by a single CTA, per block, which bounds from above the latency of
+  `one_cta_square_ns` (prototypes): mode 1 on 256 labels by a single CTA, per label, which bounds from above the latency of
   one squaring mod p on one SM (what a sequential root would pay there), its output checked against the full grid's.
 GB/s is payload bytes over the median time.
 
@@ -33,13 +33,23 @@ import subprocess
 import sys
 from pathlib import Path
 
+from verity.core.protocols.pous.schemes.p2 import POINT, P2Params
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE))
+sys.path.append(str(HERE.parents[2]))
 
 import algo  # noqa: E402
+from benchmarks.word_codec import cuda_lib  # noqa: E402
+from p2_v1 import gpu as G  # noqa: E402
 from p2_v1 import reference as R  # noqa: E402
 
+_v, _u = ctypes.c_void_p, ctypes.c_uint32
+FD = {   # the prototypes' functions (fd_keys is p2v1_keys' signature)
+    "fd_decode": [_v, _v, _v, _v, _u, _u, _v, ctypes.c_int, _v],
+    "fd_decode_grid": [_v, _v, _v, _v, _u, _u, _v, ctypes.c_int, _v, ctypes.c_int],
+}
 SALT = hashlib.sha256(b"verity-pous/bench/fast-decode/salt").digest()
 MODEL = hashlib.sha512(b"verity-pous/bench/fast-decode/model").digest()
 LATENCY_BLOCKS = 256
@@ -49,7 +59,7 @@ CONFIG_FIELDS = ("per", "depth", "limbs", "bytes", "q", "nt", "qb", "nops", "sme
 
 def params_of(per: int) -> R.Params:
     w = algo.Width(per)
-    return R.Params(w.w, w.c0, w.n - 2)
+    return R.Params.of(P2Params(w.w, w.c0, POINT[2]))
 
 
 def per_of_bits(bits: int) -> int:
@@ -63,28 +73,22 @@ class Lib:
     """One library through ctypes: `kind` is "fd" (the prototypes' API) or "cgbn" (`p2v1_*`)."""
 
     def __init__(self, name: str, path: str, kind: str) -> None:
-        v, u, q = ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint64
         self.name, self.path, self.kind = name, path, kind
-        self.so = ctypes.CDLL(path)
         if kind == "fd":
+            self.so = cuda_lib.load(path, FD, {"fd_keys": G.BUILT["p2v1_keys"]})
             cfg = (ctypes.c_int * 12)()
             rc = self.so.fd_config(cfg)
             if rc:
                 raise RuntimeError(f"{name}: fd_config error {rc}")
             self.config = dict(zip(CONFIG_FIELDS, list(cfg)))
             self.per = self.config["per"]
-            self.so.fd_decode.argtypes = [v, v, v, v, u, u, v, ctypes.c_int, v]
-            self.so.fd_decode_grid.argtypes = [v, v, v, v, u, u, v, ctypes.c_int, v, ctypes.c_int]
             self.has_keys = hasattr(self.so, "fd_keys")
-            if self.has_keys:
-                self.so.fd_keys.argtypes = [ctypes.c_char_p, ctypes.c_int, q, u, q, v, v, v]
-                if self.so.fd_keys_version() != 4:
-                    raise RuntimeError(f"{name}: keys are not v4's")
+            if self.has_keys and self.so.fd_keys_version() != 4:
+                raise RuntimeError(f"{name}: keys are not v4's")
         else:
+            self.so = cuda_lib.load(path, G.ABI, G.BUILT)
             self.per = per_of_bits(self.so.p2v1_width_bits())
             self.config = {"per": self.per, "width_bits": self.so.p2v1_width_bits()}
-            self.so.p2v1_decode.argtypes = [v, v, v, v, u, u, v, v]
-            self.so.p2v1_keys.argtypes = [ctypes.c_char_p, ctypes.c_int, q, u, q, v, v, v]
             self.has_keys = self.so.p2v1_keys_version() == 4
         self.mode1 = kind == "fd"
 
@@ -140,7 +144,7 @@ def diagnose(got: bytes, want: int, c: int, P: R.Params) -> dict:
 
 
 class Width:
-    """One width's blocks, keys and reference rows on the device."""
+    """One width's labels, keys and reference rows on the device."""
 
     def __init__(self, torch, per: int, nbytes: int, gate: int, keys_lib: Lib) -> None:
         self.P = P = params_of(per)

@@ -9,7 +9,7 @@ import pytest
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import gemm as OG
-from verity.core.protocols.sampled_proofs.one_stage import partition as P
+from verity.core.protocols.spot.one_stage import partition as P
 from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import serving_rows as SRW
 
@@ -89,6 +89,6 @@ def test_a_coordinate_reads_a6s_rows_off_the_rows_operands(monkeypatch):
     assert np.concatenate([g[0]["outs"]["o0"] for g in got]).reshape(-1).tolist() == np.concatenate(y).tolist()
     assert [len(g[0]["rows"]["x"]) for g in got] == [4, 2]
     assert [[e[:2] for e in g[1]] for g in got] == [[[0, 3], [3, 6]], [[3, 6]]]
-    w = CS.Window(*CS.population_program([(bind(OG.ScaledMmS8Coordinate, K=K, **OG.GEMM_SM120_S8), 6)], several=True),
+    w = CS.Binding(*CS.population_program([(bind(OG.ScaledMmS8Coordinate, K=K, **OG.GEMM_SM120_S8), 6)], several=True),
                   {"law": "stratified", "k": 2}, "ab" * 32, tuple(ms))
     assert CS.commit(w, [g[0] for g in got], salt_key=bytes(32)).window.population == 6

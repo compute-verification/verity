@@ -47,7 +47,7 @@ def test_a_rank_registers_what_the_driver_exported_when_it_imports_the_module(re
 
 
 def test_the_rank_extension_imports_the_module():
-    from verity_vllm.engine import rank_worker as RW
+    from verity_vllm.pipeline.tp import rank_worker as RW
     assert RW.int8_ranks is IR
     mod, _, cls = IR.EXTENSION.rpartition(".")
     assert mod == IR.__name__ and getattr(IR, cls) is IR.Int8Ranks

@@ -15,7 +15,7 @@ compared with what the Build traced:
 A unit the vocabulary cannot express is scored `unexpressible` with the fact that stops it; a unit over `max_rows` (LP + T) is
 `over_budget`; a Build dir without a Program (the Build refused or failed) is `no_trace`.  Outputs go wherever `--out` says and
 `score` refuses an output path inside the rows root: a score is never written into a Build row (a switched row's AOT Build is
-`aot.emit`'s, run by its own Build stage).
+`aot.emit`'s, run by its own Build phase).
 """
 
 from __future__ import annotations
@@ -167,37 +167,40 @@ def _workload_task(task: dict) -> dict:
     return out
 
 
-def request_component(r, canon: dict):
-    """A predicted request Program as GP-01's component (`program.workload.request_component`), its definitions shared through
-    `canon` (one dict a composition)."""
-    from verity.ml.circuits.defs import REGISTRY
+def request_component(r):
+    """A predicted request Program (a `BuildResult`) as GP-01's component (`program.workload.program_component`): its own root,
+    whose definitions are this process's, so nothing is decoded."""
+    from verity.ml.circuits.codec import descriptor_id
     from verity_vllm.program import workload as W
-    from verity_vllm.program.registry.catalog import load as load_registry
-    load_registry()
     params = [(name, repr(t)) for name, t in r.program.fn.signature()[0]]
-    return W.request_component(r.desc, REGISTRY, params, canon=canon, digest=r.digest)
+    fn = getattr(r.program, "program_fn_id", None) or descriptor_id(r.program.fn)
+    return W.program_component(r.program.root, r.digest, fn, params)
 
 
-def predict_workload(phi: Phi, comps: dict | None = None, canon: dict | None = None) -> dict:
+def predict_workload(phi: Phi, comps: dict | None = None) -> dict:
+    """`workload_program`'s digest, function id, root node count and lag."""
+    wl = workload_program(phi, comps)
+    return {"digest": wl.digest, "function": wl.fn.id[:300], "n_root_nodes": len(wl.program.root.body.nodes), "lag": wl.lag}
+
+
+def workload_program(phi: Phi, comps: dict | None = None):
     """GP-01's composition (`program.workload.WorkloadProgram`) over the predicted request components, manifest order, with the
-    lag the declared target resolves (`TargetProfile.lag()`); `comps` holds components already built under `canon`
-    (`request_component`), by (LP, T), so a caller that has each request's Program need not hold them all."""
+    lag the declared target resolves (`TargetProfile.lag()`); `comps` holds components already built (`request_component`), by
+    (LP, T), so a caller that has each request's Program need not hold them all."""
     from verity_vllm.pipeline.global_program import request_id_of
     from verity_vllm.program import workload as W
     reqs = phi.requests
     if any(int(r.get("n") or 1) != 1 for r in reqs):
         raise Unexpressible("a request with n > 1 (parallel sampling) in the workload")
-    canon = {} if canon is None else canon
     comps = dict(comps or {})
     for LP, T in phi.request_shapes():
         if (LP, T) not in comps:
-            comps[(LP, T)] = request_component(build_program(phi, "request", LP=LP, T=T), canon)
+            comps[(LP, T)] = request_component(build_program(phi, "request", LP=LP, T=T))
     wreqs = []
     for i, q in enumerate(reqs):
         lp, cap = int(q["prompt_len"]), int(q["max_tokens"])
         wreqs.append(W.WorkloadRequest(request_id_of(i), i, lp, cap, int(q.get("arrive_step") or 0), comps[(lp, cap - 1)], T=cap - 1))
-    wl = W.WorkloadProgram(wreqs, manifest_digest=None, lag=int(phi.target_profile().lag()))
-    return {"digest": wl.digest, "function": wl.fn.id[:300], "n_root_nodes": len(wl.program.root.body.nodes), "lag": wl.lag}
+    return W.WorkloadProgram(wreqs, manifest_digest=None, lag=int(phi.target_profile().lag()))
 
 
 # ------------------------------------------------------------------------------------------------------------------- divergence
@@ -262,7 +265,7 @@ def equivalence(pred_program, traced_desc: dict) -> dict:
     from verity.ml.circuits.codec import decode_program
     from verity.ml.circuits.defs import REGISTRY
     from verity_vllm.program import descriptor_equivalence as DE
-    from verity_vllm.program.registry.catalog import load as load_registry
+    from verity.ml.definitions.registry.catalog import load as load_registry
     load_registry()
     t0 = time.time()
     try:

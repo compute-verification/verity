@@ -1,21 +1,23 @@
 """`protocol_options.pouw_h1_served`: an H1 window that mixes K, served under compute accounting's window Program
 (`h1window.program` on vllm's 32 × 32 tile, one template per K), registers its tables as its calls are recorded: each
-step's A table of K ``a/<K>@<s>`` (VLLM-77: M slot rows of each of the step's calls of K, call after call, each row its
-codes then its f32 s_a) at the step's last call of K, each call's z table ``zy@<c>`` (one z/y record a unit, in tile
+step's A table of K ``a/<K>@<s>`` (M slot rows of each of the step's calls of K, call after call, each row its
+codes then its f32 s_a) at the step's last call of K, each call's z table ``zy@<c>`` (one z/y record a proof block, in tile
 order), and the weights' ``b/<K>`` (each linear's rows once, codes then s_w), as ``hm96-sha512/row/v2`` trees whose rows
 and roots recompute here from the served tensors, under domains bound to the window's open root. Each root is in the
 manifest row of the call that completes it, so its round's root commits it before the round's coin. A call's statement file
-(`h1window.table_reads_file`) resolves each of its units' ports (`h1window.window_ports`, each K's own; ``a_k<K>`` →
+(`h1window.table_reads_file`) resolves each of its proof blocks' ports (`h1window.window_ports`, each K's own; ``a_k<K>`` →
 ``a_k<K>_0`` for a tile of one row, ``b_k<K>`` → ``b_k<K>_0`` for one column) to its own tables and the weights', and no
-other call's unit reads them; a read opened with another row is refused. A weight that changes, blocks that aren't one
+other call's proof block reads them; a read opened with another row is refused. A weight that changes, blocks that aren't one
 per linear, an odd K, n off C and a served call with no z/y record register nothing; a second window reusing the first's
 key is refused (R7-held). Every window of a period declares one Program (the period's prefix), its call tables its own
-through their window-bound domains, and its ``b/<K>`` the period's registered weights (VLLM-71), which a window serving
-another code or s_w is refused for. A stand-in tile unit of the zy unit's parameter shape (`h1zy.ROW` rows, its `h1zy.RECORD`, a
+through their window-bound domains, and its ``b/<K>`` the period's registered weights, which a window serving
+another code or s_w is refused for. A stand-in tile proof block of the zy proof block's parameter shape (`h1zy.ROW` rows, its `h1zy.RECORD`, a
 receipt sink and ``ok``) keeps the Program small."""
 from __future__ import annotations
 
 import hashlib
+import io
+import pickle
 from types import SimpleNamespace
 
 import numpy as np
@@ -28,15 +30,15 @@ from verity.core.protocols.pouw import credit as CR  # noqa: E402
 from verity.core.protocols.pouw import salt as PS  # noqa: E402
 from verity.core.protocols.pouw import weights as Wt  # noqa: E402
 from verity.core.protocols.pouw.audit import hm96_salt  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1tile as HT  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1zy as Z  # noqa: E402
-from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1tile as HT  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1window as HW  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1zy as Z  # noqa: E402
+from verity.ml.protocols.pouw.circuit import seeds as SD  # noqa: E402
+from verity.core.protocols.spot.one_stage import partition as P, registered as G  # noqa: E402
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind  # noqa: E402
 from verity.ml.circuits.ports import In, Out, Ports  # noqa: E402
 from verity.ml.circuits.refs import Coll, coll_concat  # noqa: E402
-from verity.ml.circuits.types import Array, Record, Value  # noqa: E402
+from verity.ml.circuits.types import Array, RecordType, Value  # noqa: E402
 from verity.ml.commitments import hm96  # noqa: E402
 from verity.ml.commitments.merkle import tree_levels  # noqa: E402
 from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest  # noqa: E402
@@ -61,9 +63,9 @@ XOR1 = PrimitiveDefinition("H1ServedTestXor1", 1, (("a", V1), ("b", V1)), V1, la
 LOW1 = PrimitiveDefinition("H1ServedTestLow1", 1, (("v", V16),), V1, lambda v: v & 1, register=False)
 FOLD1 = PrimitiveDefinition("H1ServedTestFold1", 1, (("key", V1), ("x", V1)), V1, lambda key, x: key ^ x,
                             register=False, ports=Ports(params={"key": In(kind="coin")}, ret=Out(sink=True)))
-#: the stand-in's receipt: 16 bits, one u16 word a unit (a receipt is bits, as the tile's u32 words are)
+#: the stand-in's receipt: 16 bits, one u16 word a proof block (a receipt is bits, as the tile's u32 words are)
 RECEIPT = Array(16, V1)
-OUT = Record(("receipt", RECEIPT), ("ok", V1))
+OUT = RecordType(("receipt", RECEIPT), ("ok", V1))
 
 
 def _sig(S):
@@ -126,18 +128,21 @@ def _period(ws, shapes=SHAPES, modules=MODULES, blocks=BLOCKS, defn=StandIn):
 
 def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=SHAPES, blocks=BLOCKS, steps=STEPS,
             served=1, changed=None, modules=MODULES, tile=TILE, rows=T, no_z=False, ws=None, weights=None, receipts=None,
-            order=None, defn=StandIn):
+            order=None, defn=StandIn, device=None):
     """A window: its first ``served`` steps serve 5 rows each, q and k on one input x, o on another, every step with the
     same weights ``ws`` (`_weights` of ``seed`` by default; step 1's q on ``changed`` when given), each call's z/y records
     `scaled_mm_zy`'s over its T slots, its linears called in ``order`` (module order by default); the later steps are
-    empty. With ``weights`` (`_period`) its ``b/<K>`` are the period's. Its units are ``defn``'s (`StandInJ10R` for a
-    J10-R window). Returns the run, each linear's weight and scales, and each served call's (a, s_a, z, y) by its index,
-    z its exact product and y its served y."""
+    empty. With ``weights`` (`_period`) its ``b/<K>`` are the period's. Its proof blocks are ``defn``'s (`StandInJ10R` for a
+    J10-R window). With ``device`` the arm's tensors are there (each weight moved once), so its records are too. Returns
+    the run, each linear's weight and scales, and each served call's (a, s_a, z, y) by its index on the host, z its exact
+    product and y its served y."""
     rng = np.random.default_rng(seed)
     run = PH.H1Run("t", SALT, modules, shapes, rows, steps, key=bytes([seed + 1]) * 32,
                    served=SV.Served(tile, _unit(tile, defn), blocks, window=served_key or key, weights=weights,
                                     receipts=receipts))
     ws = _weights(seed, shapes) if ws is None else ws
+    on = (lambda t: t) if device is None else (lambda t: t.to(device))
+    held, moved = [(on(c), on(s)) for c, s in ws], None if changed is None else on(changed)
     got = {}
     for s in range(served):
         xs = {}
@@ -145,13 +150,15 @@ def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=S
             xs[b] = xs[b] if b in xs else _codes(rng, SERVED, k)
         inputs = [xs[b] for b in blocks]
         for w in range(len(inputs)) if order is None else order:
-            a, (wt, sw) = inputs[w], ws[w]
-            wt = changed if (s, w) == (1, 0) and changed is not None else wt
+            a, (wt, _sw), (dw, ds) = inputs[w], ws[w], held[w]
+            if (s, w) == (1, 0) and changed is not None:
+                wt, dw = changed, moved
             n = wt.shape[0]
             s_a = torch.rand(SERVED) + 0.5
-            y, zy = OPS.scaled_mm_zy(a, s_a, wt, sw, rows) if n % PH.TILE[1] == 0 else (None, None)
-            call = run.record(w, a, s_a, wt, sw, z=None if no_z else zy)
-            got[call.index] = (a, s_a, a.to(torch.int32) @ wt.to(torch.int32).T, y)
+            da, dsa = on(a), on(s_a)
+            y, zy = OPS.scaled_mm_zy(da, dsa, dw, ds, rows) if n % PH.TILE[1] == 0 else (None, None)
+            call = run.record(w, da, dsa, dw, ds, z=None if no_z else zy)
+            got[call.index] = (a, s_a, a.to(torch.int32) @ wt.to(torch.int32).T, None if y is None else y.cpu())
     run.close()
     return run, ws, got
 
@@ -192,7 +199,7 @@ def test_each_call_registers_its_tables_as_it_is_recorded():
     """Each step's A table of K is the Program's `h1window.table` value ``a/<K>@<s>``: M rows of K/2 + 2 words for each of
     the step's calls of K, call after call (`credit.step_tables`), the j-th call's rows from row M·j
     (`h1window.step_of`), registered at the step's last call of K and in that call's manifest row only. Each call's z
-    table is one record of 3 R C words a unit. Both are under the registered-value domain of the Program's digest bound
+    table is one record of 3 R C words a proof block. Both are under the registered-value domain of the Program's digest bound
     to the window's open root; their roots recompute from the served tensors (an empty call's from zeros), so the round's
     root is over them."""
     run, ws, got = _window(W1)
@@ -227,10 +234,53 @@ def test_each_call_registers_its_tables_as_it_is_recorded():
         assert RQ.step_digest(run.salt, r, run._rows([c for c in run.calls if c.step == r])).hex() == log["calls"]
 
 
+class _Hashing:
+    """A z table's hash still running, as `pouw_h1_registered_device.Hashing` is: never ready, so only a wait reads it."""
+
+    def __init__(self, value: str, events: list[tuple[str, str]]) -> None:
+        self.value, self.events = value, events
+
+    def ready(self) -> bool:
+        return False
+
+    def result(self) -> tuple:
+        self.events.append(("read", self.value))
+        return ()
+
+
+def test_a_z_table_hashing_on_the_gpu_is_read_at_its_rounds_close_and_registers_what_a_waited_one_does(monkeypatch):
+    """A z or public table whose hash is left running (`pouw_h1_registered.commit`'s ``later``, the GPU path) keeps its
+    place in the registration order and is read only when its round closes, after its step's later calls were recorded:
+    the window's trees, entries, digest, manifest roots and round roots are the ones it registers when each hash is waited
+    for."""
+    torch.manual_seed(0)
+    waited, *_ = _window(W1)
+    events, commit = [], NR.commit
+
+    def later(*args, later=False, **kw):
+        reg = commit(*args, **kw)
+        if not later:
+            return reg
+        events.append(("hashing", reg.value))
+        return NR.Later(_Hashing(reg.value, events), lambda: reg)
+
+    monkeypatch.setattr(NR, "commit", later)
+    torch.manual_seed(0)
+    run, *_ = _window(W1)
+    zy, pub = ([SV.PREFIX + f"{t}@{c}" for c in range(len(run.calls))] for t in ("zy", "pub"))
+    order = [[zy[3 * s], zy[3 * s + 1], pub[3 * s], pub[3 * s + 1], zy[3 * s + 2], pub[3 * s + 2]] for s in range(STEPS)]
+    assert events == [(e, v) for vs in order for e in ("hashing", "read") for v in vs]
+    assert all(isinstance(r, G.Registered) for r in run.served.registered.values())
+    assert list(run.served.registered) == list(waited.served.registered)
+    assert run.served.roots() == waited.served.roots() and run.served.entries() == waited.served.entries()
+    assert (run.tables, run.round_log) == (waited.tables, waited.round_log)
+    assert (run.served.digest(), run.calls_root()) == (waited.served.digest(), waited.calls_root())
+
+
 @pytest.mark.parametrize("steps", [2, 3])
 def test_b_is_each_linears_weight_once_a_window(steps):
     """b/<K> is Σn rows of K's linears, codes then s_w, whatever the window's steps, registered at the call that completes
-    K's weights in step 0 and in that call's manifest row only; every step's units read the same rows."""
+    K's weights in step 0 and in that call's manifest row only; every step's proof blocks read the same rows."""
     run, ws, _got = _window(W1, steps=steps, served=2)
     served, pre = run.served, SV.PREFIX
     b16, b32 = served.registered[pre + "b/16"], served.registered[pre + "b/32"]
@@ -299,7 +349,7 @@ def test_each_expert_gemm_registers_its_tables_as_a_dense_linears_call_does():
 def test_a_calls_statement_reads_its_units_rows_at_its_tables_and_refuses_another_row():
     """Each call's file names its K's ports, ``a_k<K>_0`` .. ``a_k<K>_31``, ``b_k<K>_0`` .. ``b_k<K>_31`` and ``zy``, each in
     row/v2 with its tree's value, root, rows, width and domain (the window's): the A ports at its step's A table of K,
-    the record at the call's z table, B at the weights'. Only the call's units read them, at the rows
+    the record at the call's z table, B at the weights'. Only the call's proof blocks read them, at the rows
     `h1window.table_reads` gives (its A rows from its call's offset in the step table), and each read opens its tree at
     its row, while the same path with another row is refused."""
     run, _ws, _got = _window(W1)
@@ -336,9 +386,9 @@ def test_a_calls_statement_reads_its_units_rows_at_its_tables_and_refuses_anothe
 
 @pytest.mark.parametrize("tile, lone", [((1, 32), "a"), ((32, 1), "b")], ids=["R=1", "C=1"])
 def test_a_tile_of_one_row_or_column_maps_its_lone_read_to_port_0(tile, lone):
-    """With R = 1 `registered.reads` and `h1window.table_reads` both key a unit's lone A row by its parameter's bare name
+    """With R = 1 `registered.reads` and `h1window.table_reads` both key a proof block's lone A row by its parameter's bare name
     ``a_k<K>`` (`h1window.row_key`), and the window's ports map it to ``a_k<K>_0`` with no ``[0]`` alias; likewise B's
-    with C = 1. Each call's file names its K's port, read by each of its units."""
+    with C = 1. Each call's file names its K's port, read by each of its proof blocks."""
     run, _ws, _got = _window(W1, shapes=[(32, 16), (32, 16), (32, 32)], steps=1, tile=tile, rows=32)
     served = run.served
     ports = served.ports()
@@ -469,6 +519,44 @@ def test_a_periods_program_and_digest_given_are_not_declared_again(monkeypatch):
     assert taken == digest == served.declare(SHAPES, MODULES, T, STEPS) and served.calls == list(decl.fn.bindings["CALLS"])
 
 
+def test_a_window_without_a_unit_takes_each_ks_tile_unit_on_its_cards_arch(monkeypatch):
+    """Without ``unit``, `declared` takes `h1window.tile_unit` on ``arch``, the serving card's H1 record, whose domain
+    refuses a K that card's kernels don't serve: K 16 and 32 on sm_90 (K >= 384 and 512 | K), before any tile is built.
+    It hands each K and the tile to `tile_unit` with that arch, as does a `Served` of that arch, and one with no arch keeps
+    `tile_unit`'s own (sm_120's, which states no domain). The real proof blocks' Program is the same on sm_90 and sm_120 (the
+    record's step is one function); a stand-in of their parameter shape keeps it small here."""
+    with pytest.raises(ValueError, match="outside H1's domain on sm_90"):
+        SV.declared(SHAPES, MODULES, T, STEPS, TILE, BLOCKS, arch="sm_90")
+    asked, stand_in = [], _unit()
+
+    def tile_unit(k, tile, definition=None, arch="sm_120"):
+        asked.append((k, tuple(tile), definition, arch))
+        return stand_in(k)
+
+    monkeypatch.setattr(SV.HW, "tile_unit", tile_unit)
+    decl = SV.declared(SHAPES, MODULES, T, STEPS, TILE, BLOCKS, arch="sm_90")
+    assert sorted(asked) == [(16, TILE, None, "sm_90"), (32, TILE, None, "sm_90")]
+    assert P.program_digest(decl) == P.program_digest(SV.declared(SHAPES, MODULES, T, STEPS, TILE, BLOCKS, unit=stand_in))
+    asked.clear()
+    SV.Served(TILE, None, BLOCKS, arch="sm_90").declare(SHAPES, MODULES, T, STEPS)
+    assert sorted(asked) == [(16, TILE, None, "sm_90"), (32, TILE, None, "sm_90")]
+    asked.clear()
+    SV.Served(TILE, None, BLOCKS).declare(SHAPES, MODULES, T, STEPS)
+    assert sorted(asked) == [(16, TILE, None, "sm_120"), (32, TILE, None, "sm_120")]
+
+
+@pytest.mark.parametrize("capability, arch", [((9, 0), "sm_90"), ((12, 0), "sm_120"), ((8, 9), None)])
+def test_card_arch_is_the_cards_h1_record(monkeypatch, capability, arch):
+    """`card_arch` names the current card by its H1 record (`h1device.DEVICES`): an H200's compute capability 9.0 is
+    sm_90's, the RTX PRO 6000's 12.0 sm_120's, and a card with no record (8.9) is refused."""
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda device=None: capability)
+    if arch is None:
+        with pytest.raises(ValueError, match="no device record for 'sm_89'"):
+            SV.card_arch()
+    else:
+        assert SV.card_arch() == arch
+
+
 def test_a_replayed_windows_values_are_refused_through_their_window_bound_domains():
     """Two windows of a period share every name, so a window's call tables are its own only through their domains, which
     bind its open root: window 1's, presented as window 2's, are not under the domains window 2's root gives them
@@ -500,7 +588,7 @@ def test_a_replayed_windows_values_are_refused_through_their_window_bound_domain
 
 
 def test_the_periods_weights_are_registered_once_and_every_window_registers_them():
-    """VLLM-71: each K's ``b/<K>`` is K's linears' rows in order, each its K codes then its f32 s_w, registered once under
+    """Each K's ``b/<K>`` is K's linears' rows in order, each its K codes then its f32 s_w, registered once under
     the period's declared Program with no window and salts from the period's key; `Weights.root` is
     `credit.weights_root` of their roots, and every window of the period registers those same entries, its open root
     over that root."""
@@ -521,7 +609,7 @@ def test_the_periods_weights_are_registered_once_and_every_window_registers_them
 
 
 def test_the_periods_weights_under_the_registrations_key_are_the_auditors_registration():
-    """VLLM-72: the auditor registers a model's b/<K> with core's `weights.weights_roots` (infra's ``model-register``)
+    """The auditor registers a model's b/<K> with core's `weights.weights_roots` (``model-register``)
     under its own salt key, and the served path registers the served rows under that key (``model-key``,
     `register_weights`): the same rows, salts and domains, so each K's root, entry and the weights' root are the
     registration's."""
@@ -539,7 +627,7 @@ def test_the_periods_weights_under_the_registrations_key_are_the_auditors_regist
 
 @pytest.mark.parametrize("edit", ["s_w", "code"])
 def test_a_window_serving_other_weights_than_the_periods_is_refused(edit):
-    """VLLM-71: a window serves the weights its period registered before its salt. One row's s_w, or one code, other than
+    """A window serves the weights its period registered before its salt. One row's s_w, or one code, other than
     the period's refuses the window at the call that completes its K (`Served.commit`, `Weights.matches`: vllm's own
     check), with no table from then on, and `trees` says why."""
     ws = _weights()
@@ -553,6 +641,45 @@ def test_a_window_serving_other_weights_than_the_periods_is_refused(edit):
     assert any("codes or s_w are not their rows of the period's registered" in r for r in run.served.refused)
     with pytest.raises(ValueError, match="trees were refused"):
         SV.trees(run)
+
+
+def test_a_weight_is_copied_to_the_host_and_held_to_its_periods_rows_once_a_process(monkeypatch):
+    """`host_weight` copies a weight once while it is the same tensor, unwritten: read-only, sharing no memory with it. The
+    period registered from those copies (`weights_of`) never compares them to its rows again, and its windows register
+    what windows of a period registered from fresh arrays do. A weight written in place is copied again and refused."""
+    ws = _weights()
+    got = SV.weights_of([SimpleNamespace(weight=c, weight_scale=s) for c, s in ws])
+    w, s = got[1]
+    assert all(a is b for a, b in zip(SV.host_weight(*ws[1]), got[1]))
+    assert not (w.flags.writeable or s.flags.writeable) and not np.shares_memory(w, ws[1][0].numpy())
+    assert (s.dtype, s.shape) == (np.dtype("<f4"), (32,)) and np.array_equal(s, ws[1][1].numpy().reshape(-1))
+    a = np.zeros((2, 2), np.int8)
+    assert SV.host_weight(a, np.ones(2))[0] is not SV.host_weight(a, np.ones(2))[0] and a.flags.writeable
+    gone = torch.zeros(2, 2, dtype=torch.int8)
+    SV.host_weight(gone, torch.ones(2))
+    i = id(gone)
+    del gone
+    assert i not in SV._HOST
+
+    period, fresh = SV.register_weights(_period(ws).circuit, SHAPES, got, WKEY), _period(ws)
+    assert (period.root(), period.entries()) == (fresh.root(), fresh.entries()) and sorted(period.held) == [0, 1, 2]
+    compared, real = [], SV.chunk_words
+    monkeypatch.setattr(SV, "chunk_words", lambda codes, *x: (compared.append(codes), real(codes, *x))[1])
+    windows, checked = [], []
+    for weights in (period, period, fresh, fresh):
+        compared.clear()
+        torch.manual_seed(0)
+        run, _ws, _got = _window(W1, ws=ws, weights=weights)
+        assert not run.served.refused
+        windows.append((run.served.entries(), run.served.digest(), run.round_log, run.calls_root()))
+        checked.append(sorted(w for w, (h, _s) in got.items() if any(c is h for c in compared)))
+    assert windows[1:] == windows[:-1] and checked == [[], [], [0, 1, 2], []]
+
+    with torch.no_grad():
+        ws[1][0][3, 5] ^= 1
+    assert SV.host_weight(*ws[1])[0] is not w
+    run, _ws, _got = _window(W1, ws=ws, weights=period)
+    assert any("linears [1]' codes or s_w are not their rows of the period's registered" in r for r in run.served.refused)
 
 
 def test_round_r_lists_step_rs_a_tables_whole_under_its_root():
@@ -571,7 +698,7 @@ def test_round_r_lists_step_rs_a_tables_whole_under_its_root():
 
 
 class _Receipts(dict):
-    """A stand-in receipt producer: each unit of the call one receipt of the stand-in's width (one u16 word), drawn from
+    """A stand-in receipt producer: each proof block of the call one receipt of the stand-in's width (one u16 word), sampled from
     the call's served codes and weight, kept by call (with the codes it was given, and the order it was asked in) so a
     test recomputes each table from them."""
 
@@ -598,13 +725,13 @@ def test_receipt_words_are_each_u32_word_little_endian_low_half_first():
 
 def test_each_calls_receipts_are_its_receipt_table_once_its_roots_are_registered():
     """With a receipt producer, each call's ``receipt@<c>`` (BRIDGE2) is registered at its step's last call of its K, after
-    the roots its units' seeds take (its step's ``a/<K>@<s>`` and ``b/<K>``), the producer asked for each of the step's
-    calls of K in call order with that call's own served codes: one ``row/v2`` row a unit of the call in its tile order,
-    the unit's receipt (the stand-in's 16 bits, one u16 word), its root recomputed here from the call's receipts under row
+    the roots its proof blocks' seeds take (its step's ``a/<K>@<s>`` and ``b/<K>``), the producer asked for each of the step's
+    calls of K in call order with that call's own served codes: one ``row/v2`` row a proof block of the call in its tile order,
+    the proof block's receipt (the stand-in's 16 bits, one u16 word), its root recomputed here from the call's receipts under row
     j's salt at `RECEIPT_NONCE` + c, its domain the registered-value domain of the Program's digest bound to the window's
     open root (as ``zy@<c>``'s), and its root in the manifest row of the call that registered it. Round r lists step r's
     calls' receipt tables whole under its root, which core's `credit._a_link` ties to the call's round, `tables` lists
-    every call's, and each call's ``--registered`` file names it at its output row o0 (`h1window.RECEIPT_PORT`), unit u
+    every call's, and each call's ``--registered`` file names it at its output row o0 (`h1window.RECEIPT_PORT`), proof block u
     of its t-th tile at row t."""
     made = _Receipts()
     run, _ws, got = _window(W1, receipts=made)
@@ -650,7 +777,7 @@ def test_each_calls_public_table_and_the_ok_rows_are_the_ones_credit_builds_and_
     open root and its Program salt: the same value, root, rows, words and domain, row t `core_check.public_words` of the
     salt, u0 + t and the call's two roots under `core_check.public_row_salt` of the open root; and the call's
     ``--registered`` file is credit's, the verifier-built ok rows (o1) included, every pub row opening credit's root. A table with one row off, under the
-    same salts, has another root, which `credit._verified` refuses a session for, and its row opens none of credit's.
+    same salts, has another root, which `credit._verified` refuses a release for, and its row opens none of credit's.
     At close the window commits its ok rows (`Served.ok`, o1) at credit's root, in no entry: a window whose entries
     name them is refused. Its linears' K are 32 and 64: credit's layout refuses a tile at a K its proof doesn't cover
     (``tile-k``, K a multiple of 32)."""
@@ -694,6 +821,7 @@ def test_each_calls_public_table_and_the_ok_rows_are_the_ones_credit_builds_and_
                                  SV.V2) for u in range(u0, u0 + n))
     assert served.ok.value == pre + "ok" and served.ok.value not in [e["value"] for e in served.entries()]
     assert [list(row) for row in served.ok.rows] == [list(CC.OK_ROW)] * served.ok.leaves
+    assert served.ok.salts.at(range(served.ok.leaves)) == b"".join(CC.ok_salt(served.root, u) for u in range(served.ok.leaves))
     assert CR.registered_file(program, lay, shape, 0, {**roots, served.ok.value: [served.ok.root.hex()]}, served.root,
                               served.steps, run._salt.hex())[1][0] == "registration"
 
@@ -760,10 +888,10 @@ class _Staged(_Prepared):
 
 
 def test_a_producer_with_stage_is_handed_each_served_calls_device_rows_before_its_asked_them(monkeypatch):
-    """A receipt producer with a ``stage`` is handed each served call and its rows ``a`` where they are on a CUDA device
-    (kernels' device codes, note:kernels-rcpt/20261024T0430Z-draft-served-device-codes): the engine's tensor itself, in call
-    order, before any of its step's calls of K are asked; each receipt table is still the producer's ask's words. Rows on
-    the host stage nothing, and a ``stage`` that refuses refuses the window, naming the call."""
+    """A receipt producer with a ``stage`` is handed each served call and its rows ``a`` where they are on a CUDA
+    device: the engine's tensor itself, in call order, before any of its step's calls of K are asked; each receipt table
+    is still the producer's ask's words. Rows on the host stage nothing, and a ``stage`` that refuses refuses the
+    window, naming the call."""
     commit, seen = SV.Served.commit, {}
 
     def on_device(self, run, call, a, *rest):
@@ -792,7 +920,7 @@ def test_a_producer_with_stage_is_handed_each_served_calls_device_rows_before_it
 
 def test_zy_words_are_record_words_of_the_records_split():
     """`zy_words` is `record_words` of `pouw_h1_records.split`: the records' own words where the Program's tile is their
-    unit and they cover every slot, taken apart otherwise (fewer rows than slots, another tile)."""
+    proof block and they cover every slot, taken apart otherwise (fewer rows than slots, another tile)."""
     from verity_vllm.protocols.pouw.h1 import records as ZR
 
     rng = np.random.default_rng(3)
@@ -802,11 +930,33 @@ def test_zy_words_are_record_words_of_the_records_split():
         assert got.dtype == np.uint16 and np.array_equal(got, SV.record_words(*ZR.split(records, rows, n), slots, tile))
 
 
+@pytest.mark.parametrize("mode", ["numpy", "gpu"])
+def test_an_empty_calls_z_table_is_record_words_of_no_rows(monkeypatch, mode):
+    """An empty call's z table (`Served._empty_zy`) is `record_words` of no rows: zeros on the host, and on the GPU a CUDA
+    u16 tensor of the same words, made on the hash's stream; a window whose last step is empty registers it either way."""
+    if mode == "gpu":
+        from verity_vllm.protocols.pouw.h1 import registered_device as D
+
+        if not D.available():
+            pytest.skip("no CUDA device the kernels build for")
+    monkeypatch.setattr(NR, "MODE", mode)
+    run, *_ = _window(W1)
+    served = run.served
+    assert not served.refused and [c.m for c in run.calls][-len(SHAPES):] == [0] * len(SHAPES)
+    for n in sorted({n for n, _k in SHAPES}):
+        want = SV.record_words(np.zeros((0, n), "<i4"), np.zeros((0, n), np.int16), served.m, served.tile)
+        got = served._empty_zy(n)
+        if mode == "gpu":
+            assert got.is_cuda and str(got.dtype) == "torch.uint16"
+            got = got.cpu().view(torch.uint8).numpy().view(np.uint16)
+        assert got.dtype == np.uint16 and got.shape == want.shape and np.array_equal(got, want)
+
+
 def test_a_forward_out_of_module_order_lays_out_each_step_table_and_its_receipts_in_call_order():
-    """VLLM-81: GLM-5.3's DSA attention runs a step's linears out of module order. Here each step calls k before q, which
+    """GLM-5.3's DSA attention runs a step's linears out of module order. Here each step calls k before q, which
     share K = 16, then o: each step's A table of K is still its calls' rows in call order, registered at the call that
     completes it (q's, the last of K to come, not k's, the last in call order), and the producer is handed, then asked,
-    that step's calls of K in call order there, each receipt table after the roots its units' seeds take."""
+    that step's calls of K in call order there, each receipt table after the roots its proof blocks' seeds take."""
     made = _Prepared()
     run, _ws, got = _window(W1, served=2, receipts=made, order=(1, 0, 2))
     served, prog = run.served, run.served.program
@@ -829,7 +979,7 @@ def test_a_forward_out_of_module_order_lays_out_each_step_table_and_its_receipts
 
 
 def test_receipts_off_the_units_receipt_width_are_refused():
-    """Receipts of another width than the tile unit's receipt (u32 words where the stand-in's is one u16 word) register
+    """Receipts of another width than the tile proof block's receipt (u32 words where the stand-in's is one u16 word) register
     nothing, and `trees` says why."""
     run, _ws, _got = _window(W1, receipts=_Receipts(np.uint32, 2))
     assert any("its receipts are 4 rows of 4 u16 words, not its 4 units' receipts of 1" in r for r in run.served.refused)
@@ -867,34 +1017,66 @@ def test_chunk_words_are_the_specs_leaf_bytes(k, n):
         SV.chunk_words(codes, scales, 3 if k % 3 else 7)
 
 
+@pytest.mark.parametrize("k", [64, 5120, 16384])
+def test_a_step_tables_words_are_each_calls_rows_padded_to_m_in_call_order(k):
+    """`chunk_words` over ``slots`` is `row_words` of the rows padded with zero codes of scale 0, and into ``out`` it writes
+    exactly those words, every byte of ``out`` and nothing beside it; `Served`'s step table of K (`_a_rows`), its calls
+    recorded out of call order, is their `a_words` in call order, taken once the last call is in."""
+    rng = np.random.default_rng(k)
+    n, m, k2 = Wt.chunks(k), 5, k // (2 * Wt.chunks(k)) + 2
+    rows = [(rng.integers(-128, 128, (r, k), dtype=np.int8), (rng.random(r) + 0.5).astype("<f4")) for r in (3, 0, 5)]
+
+    def padded(codes, scales):
+        full, sc = np.zeros((m, k), np.int8), np.zeros(m, "<f4")
+        full[:len(codes)], sc[:len(codes)] = codes, scales
+        return SV.row_words(full.reshape(n * m, k // n), np.repeat(sc, n))
+
+    want = [padded(*r) for r in rows]
+    got = SV.chunk_words(*rows[0], n, m)
+    assert got.dtype == np.uint16 and np.array_equal(got, want[0])
+    out = np.full((3 * n * m, k2), 0xABCD, np.uint16)
+    SV.chunk_words(*rows[0], n, m, out[n * m:2 * n * m])
+    assert np.array_equal(out[n * m:2 * n * m], want[0]) and (out[:n * m] == 0xABCD).all() and (out[2 * n * m:] == 0xABCD).all()
+    with pytest.raises(ValueError, match="over 2 slots"):
+        SV.chunk_words(*rows[0], n, 2)
+    with pytest.raises(ValueError, match="contiguous u16 array"):
+        SV.chunk_words(*rows[0], n, m, out[:n * m - 1])
+    served, call = SV.Served(), lambda c: SimpleNamespace(index=c, k=k)
+    served.m = m
+    mine = [4, 7, 9]
+    assert served._a_rows(call(9), "a", mine, *rows[2]) is None and served._a_rows(call(4), "a", mine, *rows[0]) is None
+    table = served._a_rows(call(7), "a", mine, *rows[1])
+    assert table.dtype == np.uint16 and np.array_equal(table, np.concatenate(want)) and not served._a
+
+
 def test_k_up_to_4096_roots_are_unchanged():
     """SPLITK leaves every K <= 4096 as it was: the mixed-K window's A tables and ``b/<K>`` (K = 16 and 32), served
-    from a seeded torch, have the roots they had before chunk rows (pinned from 12afaa3f69, #3509's head, without this
-    change)."""
+    from a seeded torch, have the roots they had before chunk rows. Every root is registered under the declared Program's
+    digest, so a change to the window's layout repins them."""
     with torch.random.fork_rng():
         torch.manual_seed(0)
         ws = _weights()
         period = _period(ws)
         run, _ws, _got = _window(W1, weights=period)
     got = {v: r.root.hex()[:32] for v, r in run.served.registered.items() if "/a/" in v or "/b/" in v}
-    assert period.root().hex()[:32] == "b13d326fd1047f67c7981396b4b65156"
+    assert period.root().hex()[:32] == "1ece0ea710f8c4eb2928eab685ffb566"
     assert got == {SV.PREFIX + v: h for v, h in {
-        "a/16@0": "5f173d832fee3e3bd52ff128b2c32023", "a/16@1": "f1e0c408b7c261e2bdfdba32dfe500d6",
-        "a/32@0": "fc273f9145df0611d6daf4d4633ed36e", "a/32@1": "8b0fc9c2aaefbf95fcd4ebe001d312c1",
-        "b/16": "743121b755ff9a0b55d5a101e86a0f1a", "b/32": "46ce3580838d89e8869932d15afc0ac2"}.items()}
+        "a/16@0": "c8b921b78bada773a56c50d86e4b18e5", "a/16@1": "8b4037635004312a565d50e90ad1d1f1",
+        "a/32@0": "717c4bda4f5b9a14963d83c2f4684b97", "a/32@1": "6aefc8db5b8a0da8ceea92ba37934975",
+        "b/16": "a226c1160a24925da82ea5fcdf038552", "b/32": "434e13142ae61afb78f47ce2b04661c7"}.items()}
 
 
-#: kernels' SPLITK vectors (#3467's ``tests/vectors/splitk_rows.json`` at 7f83d860b6, `splitk_rows_vectors`): their
+#: kernels' SPLITK vectors (``tests/vectors/splitk_rows.json``, `splitk_rows_vectors`): their
 #: inputs from SHAKE256 of `VECTORS_LABEL`, each case (case, value, K, rows, nonce, binds the window) and its pinned
 #: (leaves, words, domain, root)
 VECTORS_LABEL = b"verity/pouw/splitk-rows-vectors/v1"
 VECTORS = [
     ("a-14336-s0", "a/14336@0", 14336, 64, (1 << 61) + (1 << 42), True, 256, 1794,
-     "8acce5e4bf00be8d31e84814e2b349dd5e0906103d55748662898e15e1501c93a50a993b29b5add3c21e89a8e984942ec4a943b0ee4df17e5ea4e239bee20e56",
-     "b2e05799b4fad2b3795b165d5e262d2b35e8776ef3d41eabc132aa160a0fbed537e53927727063f844054ddcce12cb1a5e0e941e4442a4ba50231f7ab72cc369"),
+     "6b893709e728b3f92b578c12d0ef87fc8f452525fc8742e26264a9a32d4d0ca72f0d34fdb8e228219ce52bb896177aa7cac27431f19b823fc069478905b6d88a",
+     "45186fd0067bd7687af889999cedf0c93c5e95816b72aebdd0a51ff2946a59c11cfbc7560c9206ea05c359def2f4aeb39c819ec390c6a004a31b469efa62855b"),
     ("b-6144", "b/6144", 6144, 64, Wt.B_NONCE, False, 128, 1538,
-     "ee06cb8014a9ea97fa6e3c319a61ac9094dfa6727b6a8bca92c9c6daf8098080499f505edeb236c03264fb695e79f2f2c9985ae9250712ae33de36591fbf5358",
-     "f93f07478d0900b061ffc2a6d6b24aa342a7b0247380bd95b2aa3f80fffc8567bed58d4be497b41321d288a33bdd910062e394dbf70444582a7e8f014b49e7ad"),
+     "b8a8b4de9a55053ef37e5d61c493fd54247c43ea3078bcee2be05bb8bfd56f2efe269ec5a09273cb5281c4ce529d62d83b0b5114e5f5ff8240ef8ee89df45195",
+     "2ffd8e4b05f031a1ae596a63248734f1a7f57188cfeaeba0fe24cde018e25e1df52d6258cfa2f54aaa3744e5bf5e5ccc0191681c5f3341ab5bb0c8fc68c6e983"),
 ]
 
 
@@ -912,7 +1094,7 @@ def _vector_rows(case: str, k: int, rows: int) -> tuple[np.ndarray, np.ndarray]:
 
 @pytest.mark.parametrize("case", VECTORS, ids=[c[0] for c in VECTORS])
 def test_the_served_paths_chunk_leaves_are_kernels_vectors(case):
-    """kernels' two SPLITK vectors (#3467) through the served path's own code: ``a/14336@0`` (64 rows, n = 4) is
+    """Two SPLITK test vectors through the served path's own code: ``a/14336@0`` (64 rows, n = 4) is
     `Served.a_words` of the rows over a 64-slot table, committed as `Served` commits a step's A table (at call 0's A
     nonce, `nonce`, binding the window), and ``b/6144`` (64 rows, n = 2) is `register_weights`' ``b/<K>`` (at `B_NONCE`,
     binding none); each has the vectors' leaves, words, domain and root."""
@@ -932,7 +1114,7 @@ def test_the_served_paths_chunk_leaves_are_kernels_vectors(case):
 
 def _llama(ws=None, edit=None, defn=StandIn):
     """`LLAMA`'s window over its period's weights (`_period`), down_proj's served codes ``edit`` of them when given, its
-    units ``defn``'s."""
+    proof blocks ``defn``'s."""
     ws = _weights(0, LLAMA["shapes"]) if ws is None else ws
     period = _period(ws, defn=defn, **LLAMA)
     served = ws if edit is None else [ws[0], edit(ws[1])]
@@ -974,6 +1156,29 @@ def test_a_chunked_llama_window_registers_chunk_leaves_and_core_credit_ties_it()
         "weights", CR.other_weights_entry(pre + "b/14336", 14336, 32))
 
 
+#: one Llama-3.2-1B decoder layer's int8 linears (n, K): qkv, o and gate_up at the hidden size, down_proj at the
+#: intermediate size
+LLAMA_1B = {"qkv_proj": (3072, 2048), "o_proj": (2048, 2048), "gate_up_proj": (16384, 2048), "down_proj": (2048, 8192)}
+
+
+@pytest.mark.slow
+def test_the_pouw_setting_j10r_over_one_k_declares_the_form_a_periods_guarantee_covers():
+    """serve-openai's ``{"pouw": {"unit": "j10r", "ks": [2048]}}`` (`unit_of`, the linears at K = 2048): the Program it
+    declares over a Llama-3.2-1B layer at T 64, S 1 has its units at one K, each J10-R's, as credit reads the descriptor
+    (`credit.shape_of`): the form a PoUW period's guarantee covers. Unset (v1) its unit takes per-unit noise, and J10-R
+    with down_proj's K = 8192 beside it has units at two K's. Its three declarations are real (up to a minute together):
+    the stand-in tests hold the setting's plumbing, and only a real one gives the descriptor credit reads."""
+    def tiles(names, unit):
+        shapes = [LLAMA_1B[n] for n in names]
+        raw = SV.descriptor(SV.declared(shapes, dict(enumerate(names)), 64, 1, unit=SV.unit_of(unit)))
+        return {k: t["j10r"] for k, t in CR.shape_of(raw)["tiles"].items()}
+
+    one_k = [n for n, (_n, k) in LLAMA_1B.items() if k == 2048]
+    assert tiles(one_k, "j10r") == {2048: True}
+    assert tiles(one_k, None) == {2048: False}
+    assert tiles(list(LLAMA_1B), "j10r") == {2048: True, 8192: True}
+
+
 def _last_chunk_code(w):
     codes = w[0].clone()
     codes[3, 14335] ^= 1
@@ -992,10 +1197,10 @@ def test_a_chunked_window_serving_a_code_off_its_periods_weights_is_refused(defn
 
 
 def test_a_j10r_llama_window_at_k_14336_is_credited_at_its_whole_k_and_core_ties_it():
-    """J10-R over chunk rows: `LLAMA`'s window over J10-R units (`StandInJ10R`, as `h1zy.PouwH1TileZyChunks_v2` presents
+    """J10-R over chunk rows: `LLAMA`'s window over J10-R proof blocks (`StandInJ10R`, as `h1zy.PouwH1TileZyChunks_v2` presents
     J10-R's tile at a chunked K) has down_proj at K = 14336 in 4 chunk rows a row, and credit reads it as J10-R (`shape_of`'s
     ``j10r``, n = 4). Each call's ``--registered`` file is the one credit builds from the descriptor, its 4 R A chunk
-    ports included, and its public rows hold each unit's call and blocks at the call's whole K (`core_check.j10r_blocks`
+    ports included, and its public rows hold each proof block's call and blocks at the call's whole K (`core_check.j10r_blocks`
     of K = 14336, one noise stream a call): a public table at a chunk's K (3584) has another root and opens none of
     credit's rows. Core's credit ties the window (`_a_link`, `_weights` at the period's root) and refuses ``b/14336``
     registered as whole rows."""
@@ -1044,3 +1249,40 @@ def test_a_j10r_llama_window_at_k_14336_is_credited_at_its_whole_k_and_core_ties
              for e in served.entries()]
     assert CR._weights(window, layout, whole, requests.hex(), session, served.program_digest, pre)[1] == (
         "weights", CR.other_weights_entry(pre + "b/14336", 14336, 32))
+
+
+@pytest.mark.parametrize("j10r", [False, True])
+def test_a_public_table_is_built_again_on_read_and_registers_what_its_held_rows_and_salts_do(j10r):
+    """Each call's ``pub@<c>`` holds no rows or salts but how to build them (`PublicRows`, `PublicSalts`, in a window and a
+    J10-R Llama window): read whole, in any order or one at a time, on the host or as a torch tensor, they are its rows
+    and core's salts, and committing them held, as bytes, registers its root, strings and levels; it pickles as it is,
+    with no tensor, so a window's saved state holds it."""
+    from verity_vllm.protocols.pouw.h1 import handoff as HO
+
+    run = _llama(defn=StandInJ10R)[0] if j10r else _window(W1)[0]
+    served, pre = run.served, SV.PREFIX
+    assert not served.refused and HW.is_j10r(served.program) == j10r
+    for c, (u0, n) in enumerate(HW.call_units(served.program)):
+        r = served.registered[pre + f"pub@{c}"]
+        rows, salts = r.rows, r.salts
+        assert isinstance(rows, SV.PublicRows) and isinstance(salts, NR.PublicSalts) and len(rows) == len(salts) == n
+        words = rows.words(np.arange(n))
+        assert words.dtype == np.uint16 and words.shape == (n, r.words)
+        assert np.array_equal(rows.tensor(torch.device("cpu")).numpy(), words)
+        assert np.array_equal(rows.at([n - 1, 0]), words[[n - 1, 0]]) and np.array_equal(rows[1:], words[1:])
+        assert rows[-1] == tuple(int(v) for v in words[-1])
+        assert salts.at(range(n)) == b"".join(salts) == b"".join(CC.public_row_salt(served.root, u0 + t) for t in range(n))
+        held = NR.commit(served.program_digest, r.value, words, run._key, 0, True, b"".join(salts), window=served.root)
+        assert (held.root, held.bcs, held.levels, held.domain) == (r.root, r.bcs, r.levels, r.domain)
+        buf = io.BytesIO()
+        HO._HostOnly(buf, protocol=5).dump(r)
+        again = pickle.loads(buf.getvalue())
+        assert (again.rows, again.salts, again.root) == (rows, salts, r.root)
+        with pytest.raises(IndexError):
+            rows.at([n])
+        with pytest.raises(IndexError):
+            salts.at([n])
+    with pytest.raises(ValueError, match="u64"):
+        NR.PublicSalts(b"h", (1 << 64) - 1, 2)
+    with pytest.raises(ValueError, match="public row"):
+        SV.PublicRows(SALT[:63], (bytes(64), bytes(64)), 0, 1)

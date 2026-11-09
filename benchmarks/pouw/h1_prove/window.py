@@ -29,7 +29,7 @@
         and entry), a receipt changed re-commits the receipt tree (SERVED.json); the input rows a prover of it holds are
         PRIV's
     python window.py open PRIV SALT_HEX UNIT,... OUT_DIR [--tamper-a | --unregistered-ok]
-        the drawn units' rows (their public row's and ok row's too) and salts for staging, and each A row's, B row's,
+        the sampled proof blocks' rows (their public row's and ok row's too) and salts for staging, and each A row's, B row's,
         record's and ok row's registered value, position and path (OUT_DIR/rows.npz, the prover's: ``v_``, ``r_`` and
         ``p_`` of its port), and their opening (OUT_DIR/opening.json: each committed row's b || c and its path to its tree's
         root). The ok row is the one word 1 under its public salt (`h1unit.ok_salt`), row u of the verifier's registered
@@ -139,7 +139,7 @@ def cmd_commit(a) -> int:
     if a.program_sha512:
         prog = a.program_sha512
     else:
-        from verity.core.protocols.sampled_proofs.one_stage import partition as P
+        from verity.core.protocols.spot.one_stage import partition as P
         prog = P.program_digest(shape.window([(c["name"], c["n"]) for c in out_calls], m)[0])
     ZY = window_records(com, A, SA, B, SB)
     wa, nc = U.row_words(A, SA), len(out_calls)
@@ -203,8 +203,8 @@ def _serve_one(u: int, d_word: bool = False, xa_flip: bool = False) -> tuple[int
     bit xa (A = 127 with dither bit 1). ``d_word``: as a kernel whose lane 0 made its D_1 entry 0 one too large, folded and
     recombined like the honest words, so z and the receipt agree with each other. ``xa_flip``: v3's z with one entry's xa
     flipped (`_xa_target`), the receipt the honest one."""
-    from verity.core.protocols.pouw.circuit import h1tile as H
-    from verity.core.protocols.pouw.circuit import seeds as SD
+    from verity.ml.protocols.pouw.circuit import h1tile as H
+    from verity.ml.protocols.pouw.circuit import seeds as SD
     a, b, _sa, _sw = _rows(_W["priv"], _W["com"], u)
     roots_ = roots(_W["com"])
     a, b = [[int(x) & 0xFF for x in r] for r in a], [[int(x) & 0xFF for x in r] for r in b]

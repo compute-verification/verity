@@ -1,5 +1,5 @@
-"""Descriptor codec: nested-static dependency discovery (frontend rulings §8.3), identity conflicts (§8.1),
-and digest stability of the v0 encoding for programs whose encoding did not change."""
+"""Descriptor codec: nested-static dependency discovery, identity conflicts, and digest stability of the v0 encoding for
+programs whose encoding did not change."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import pytest
 from verity.ml.circuits import Array, Program, Value, bind, composite, decode_program, encode_program, program_digest, REGISTRY
 from verity.ml.circuits.codec import IdentityConflict
 from verity.ml.circuits.defs import CompositeDefinition
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 from tests.program.test_running_example import Add16, Dot, Id16, Mul16, Relu16, make_program
 
@@ -41,7 +41,7 @@ def LinearOps(B, S, x, W):
 @composite("TwoLinears", 1, ["M", "opsA", "opsB"],
            lambda S: ((("x", A2), ("W", Array(S.M, A2))), Array(2, Array(S.M, V16))))
 def TwoLinears(B, S, x, W):
-    """`bind(Row, ops=opsA)` and `bind(Row, ops=opsB)` coexist in one program (ruling §8.3)."""
+    """`bind(Row, ops=opsA)` and `bind(Row, ops=opsB)` coexist in one program."""
     a = B.call(bind(LinearOps, M=S.M, ops=S.opsA), x, W)
     b = B.call(bind(LinearOps, M=S.M, ops=S.opsB), x, W)
     return B.call(bind(Stack2, M=S.M), a, b)
@@ -142,7 +142,7 @@ def _dot_body_b(B, S, x, w):
 
 
 def test_two_bodies_for_one_fully_qualified_specialization_are_rejected():
-    """Ruling §8.1: within one program a fully qualified specialization resolves to one body; a conflicting
+    """Within one program a fully qualified specialization resolves to one body; a conflicting
     definition is an `IdentityConflict`, never first-wins."""
     da, db = _dot_like(_dot_body_a), _dot_like(_dot_body_b)
     top = CompositeDefinition("TopConflict", 1, (), lambda S: ((("x", A2), ("w", A2)), Array(2, V16)),
@@ -167,7 +167,7 @@ def test_two_bodies_for_one_fully_qualified_specialization_are_rejected():
 
 
 def test_duplicate_definition_objects_are_identity_checked_once_per_object(monkeypatch):
-    """[R15 moe GP01-DUP] A body that calls the SAME re-decoded definition object from many nodes (a workload Program composed
+    """A body that calls the SAME re-decoded definition object from many nodes (a workload Program composed
     from separately decoded request components: every node of the second component refers to a duplicate object) is identity-
     checked once per distinct duplicate object, not once per calling node -- the OLMoE B2 GP-01 compose re-encoded 95 definitions
     146,523 times (> 45 min; 8 s deduplicated); the descriptor and digest are unchanged, and a conflicting duplicate is still refused."""
@@ -180,10 +180,10 @@ def test_duplicate_definition_objects_are_identity_checked_once_per_object(monke
 
     def decoded_dot(desc):                                                      # the DotConflict_v1 definition object of one decode
         root = decode_program(desc, REGISTRY).root
-        return next(n.fn for n in root.body.nodes if C._spec_id(n.fn) == "DotConflict_v1")
+        return next(n.fn for n in root.body.nodes if C.descriptor_id(n.fn) == "DotConflict_v1")
     r1, r2 = decoded_dot(desc_a), decoded_dot(desc_a)                            # two decodes: two objects, one id
     rid = "DotConflict_v1"
-    assert r1 is not r2 and C._spec_id(r1) == C._spec_id(r2) == rid
+    assert r1 is not r2 and C.descriptor_id(r1) == C.descriptor_id(r2) == rid
 
     def body(B, S, x, w):
         return array_of([B.call(r1, x, w)] + [B.call(r2, x, w) for _ in range(N)])
@@ -193,15 +193,15 @@ def test_duplicate_definition_objects_are_identity_checked_once_per_object(monke
     orig = C._encode_definition
 
     def counting(fn, *a, **k):
-        if not a and not k and C._spec_id(fn) == rid:                        # the identity check's self-contained (v0) encodes
-            v0_checks.append(C._spec_id(fn))
+        if not a and not k and C.descriptor_id(fn) == rid:                        # the identity check's self-contained (v0) encodes
+            v0_checks.append(C.descriptor_id(fn))
         return orig(fn, *a, **k)
     monkeypatch.setattr(C, "_encode_definition", counting)
     desc = encode_program(P)
     assert len(v0_checks) == 2, v0_checks                                    # one duplicate object -> one comparison (2 encodes), not N
     assert desc["definitions"][rid]["form"] == "composite"
     root_nodes = decode_program(desc, REGISTRY).root.body.nodes
-    assert sum(1 for n in root_nodes if n.form == "call" and C._spec_id(n.fn) == rid) == N + 1      # every call survived the dedup
+    assert sum(1 for n in root_nodes if n.form == "call" and C.descriptor_id(n.fn) == rid) == N + 1      # every call survived the dedup
     monkeypatch.setattr(C, "_encode_definition", orig)
     assert program_digest(desc) == program_digest(encode_program(P))          # deterministic; the dedup does not enter the descriptor
     # the same shape with a CONFLICTING re-decoded duplicate (same id, other body) is still refused
@@ -210,7 +210,7 @@ def test_duplicate_definition_objects_are_identity_checked_once_per_object(monke
     def body_conflict(B, S, x, w):
         return array_of([B.call(r1, x, w)] + [B.call(r3, x, w) for _ in range(N)])
     topc = CompositeDefinition("TopManyDupConflict", 1, (), lambda S: ((("x", A2), ("w", A2)), Array(N + 1, V16)), body_conflict, register=False)
-    assert r3 is not r1 and C._spec_id(r3) == rid
+    assert r3 is not r1 and C.descriptor_id(r3) == rid
     with pytest.raises(IdentityConflict, match="DotConflict"):
         encode_program(Program(bind(topc)))
 
@@ -247,7 +247,7 @@ def test_unbound_composite_as_a_static_value_is_not_encodable():
         encode_program(Program(bind(TopUnbound, f=NeedsK)))
 
 
-# -- zero-stride broadcasts (ruling §8.5): `[z, z, z]` compacts, `[z0, z1, z2]` does not -------------------------
+# -- zero-stride broadcasts: `[z, z, z]` compacts, `[z0, z1, z2]` does not -------------------------
 
 def test_concat_normalises_repeated_references_to_one_value_into_a_zero_stride_strided():
     from verity.ml.circuits.refs import Affine, Concat, Strided, concat, is_broadcast

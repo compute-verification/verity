@@ -1,7 +1,7 @@
 """The auditor host's service (`auditor.py`) on a test key, with the gate's root steps (chown, systemctl) and the clock injected:
 a window is reserved, then opened at its root (one session a root), its entries signed before serve.py runs; the session's end entry seals its out/
 and counts the coins each family released; a session whose pin moved doesn't run; the gate refuses what it can't check; and the
-reference check refuses a ledger that was edited, cut, reordered or given a second session for a root. The red team's
+reference check refuses a ledger that was edited, cut, reordered or given a second session for a root. The
 witnesses against v1 are `test_auditor_rt4.py`'s."""
 
 from __future__ import annotations
@@ -18,8 +18,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.sampled_proofs import challenger as C
-from verity.core.protocols.sampled_proofs import remote as R
+from verity.core.protocols.spot import challenger as C
+from verity.core.protocols.spot import remote as R
 from verity.ml.crypto import lms
 
 HERE = Path(__file__).resolve().parent
@@ -38,6 +38,7 @@ FAMILIES = [["positions", 2], ["replay", 1]]
 def host(tmp_path) -> A.Host:
     (tmp_path / "var" / "sessions").mkdir(parents=True)
     (tmp_path / "peers").write_text("# peers\nvy-challenger-1 research@10.0.0.1\nvy-nebius-1 research@10.0.0.2\n")
+    (tmp_path / "coin-ports").write_text("# peer, its certifier coin link's ports\nvy-nebius-1 7811-7899\n")
     (tmp_path / "pins.jsonl").write_text(A.pin_line(PIN, "d" * 40, "2026-10-20T09:00:00Z") + "\n")
     return A.Host(root=tmp_path / "var", peers=tmp_path / "peers", pins=tmp_path / "pins.jsonl")
 
@@ -159,8 +160,6 @@ def test_a_session_serves_from_the_pinned_tree_and_its_end_entry_seals_its_out(h
     session = json.loads(open_window(host, signer)[1])["session"]
     body = A.sessions_of(A.read_ledger(host.ledger))[session]["open"]["body"]
     argv = A.serve_argv(host, session, body)
-    i = argv.index("--peer")
-    del argv[i:i + 2]
     argv[argv.index("--port") + 1] = "0"
     argv = [sys.executable, str(HERE / "stub_serve.py"), *argv[2:], "--params", "4,4", "--keygen-workers", "1"]
     out = host.sessions / session / "out"
@@ -181,8 +180,6 @@ def test_a_session_serves_from_the_pinned_tree_and_its_end_entry_seals_its_out(h
     body = A.sessions_of(A.read_ledger(host.ledger))[session]["open"]["body"]
     argv = A.serve_argv(host, session, body)
     assert argv[argv.index("--root") + 1] == "cd" * 64 and argv[argv.index("--secret-file") + 1].endswith(f"{session}/secret")
-    i = argv.index("--peer")
-    del argv[i:i + 2]
     argv[argv.index("--port") + 1] = "0"
     argv = [sys.executable, str(HERE / "stub_serve.py"), *argv[2:], "--params", "4,4", "--keygen-workers", "1"]
     out = host.sessions / session / "out"
@@ -276,6 +273,42 @@ def test_a_pin_is_logged_append_only_in_the_verifiers_form_or_refused(tmp_path):
     assert len(A.read_pins(log)) == 2 and len(sealed) == 2
 
 
+def test_the_pins_log_takes_the_pin_that_fills_its_cap_and_refuses_the_next(tmp_path):
+    """v2 refuses a pins log past `MAX_PINS` lines (`coins.LIMITS`), so `record_pin` logs the pin that fills it and
+    refuses the next, writing nothing, so pin.sh doesn't move `current`."""
+    log, sealed = tmp_path / "pins.jsonl", []
+    log.write_text("x\n" * (C.MAX_PINS - 1))
+    A.record_pin(log, PIN, "d" * 40, T0, seal=sealed.append)
+    with pytest.raises(A.Refused, match=f"holds {C.MAX_PINS} lines, the most v2 reads"):
+        A.record_pin(log, "e" * 40, "f" * 40, T1, seal=sealed.append)
+    pins = A.read_pins(log)
+    assert len(pins) == C.MAX_PINS and pins[-1] == C.pin_line(PIN, "d" * 40, "2026-10-20T09:30:00Z") and sealed == [log]
+
+
+def test_the_ledger_takes_the_entry_that_fills_each_cap_and_refuses_past_it(host, signer):
+    """v2 refuses a ledger with a line past `MAX_LEDGER_LINE` characters or past `MAX_LEDGER_LINES` lines
+    (`coins.LIMITS`), so `append` writes the entry that fills either and refuses, writing nothing, one past it: the
+    line count before it signs."""
+    I, sign, _ = signer
+    session = "s20261020T093000Z-0000"
+    A.append(host, "end", session, lambda ls: {"pad": ""}, I, sign)
+    base = len(A.read_ledger(host.ledger)[0])
+    A.append(host, "end", session, lambda ls: {"pad": "x" * (C.MAX_LEDGER_LINE - base)}, I, sign)
+    with pytest.raises(A.Refused, match=f"past the {C.MAX_LEDGER_LINE} v2 reads"):
+        A.append(host, "end", session, lambda ls: {"pad": "x" * (C.MAX_LEDGER_LINE - base + 1)}, I, sign)
+    lines = A.read_ledger(host.ledger)
+    assert [len(ln) for ln in lines] == [base, C.MAX_LEDGER_LINE]
+
+    host.ledger.write_bytes(b"x\n" * (C.MAX_LEDGER_LINES - 2) + lines[-1] + b"\n")
+    A.append(host, "end", session, lambda ls: {}, I, sign)
+    state = (host.key / "state.json").read_bytes()
+    with pytest.raises(A.Refused, match=f"the ledger holds {C.MAX_LEDGER_LINES} lines, the most v2 reads"):
+        A.append(host, "end", session, lambda ls: {}, I, sign)
+    lines = A.read_ledger(host.ledger)
+    assert len(lines) == C.MAX_LEDGER_LINES and json.loads(lines[-1])["seq"] == C.MAX_LEDGER_LINES - 1
+    assert (host.key / "state.json").read_bytes() == state
+
+
 @pytest.mark.parametrize("bad, why", [
     (["--commit", COMMIT], "unrecognized arguments: --commit"),
     (["--peer", "vy-challenger-1"], "--peer"),
@@ -303,6 +336,40 @@ def test_the_gate_refuses_a_reserve_it_cant_check(host, signer, bad, why):
                      reserve=lambda s: pytest.fail("reserved"))
     assert rc == 3 and why in json.loads(out)["refused"]
     assert A.read_ledger(host.ledger) == [] and list(host.sessions.iterdir()) == []
+
+
+@pytest.mark.parametrize("ports", [None, "", "vy-nebius-2 7811-7899\n", "vy-nebius-1\n", "vy-nebius-1 7811-7899 x\n",
+                                   "vy-nebius-1 7810-7820\n", "vy-nebius-1 7890-7900\n", "vy-nebius-1 7820-7811\n",
+                                   "vy-nebius-1 78a1\n"])
+def test_a_reserve_for_a_peer_without_a_certifier_coin_link_is_refused(host, signer, ports):
+    """A window's coins reach its peer only through the peer's certifier coin link (`CoinsConfidential`), so a peer
+    with no line of /etc/vy/coin-ports, or one whose ports aren't the gate's, gets no window."""
+    if ports is None:
+        host.coin_ports.unlink()
+    else:
+        host.coin_ports.write_text(ports)
+    rc, out = call(host, signer, RESERVE)
+    assert rc == 3 and "has no certifier coin link" in json.loads(out)["refused"] and A.read_ledger(host.ledger) == []
+
+
+def test_an_open_takes_a_port_of_its_peers_coin_link_and_its_serve_py_opens_no_tunnel(host, signer):
+    host.coin_ports.write_text("vy-nebius-1 7850-7851\n")
+    live: set[str] = set()
+    for token, commit, port in (("ab12", COMMIT, 7850), ("cd34", "cd" * 64, 7851)):
+        rc, out = open_window(host, signer, token=token, commit=commit, active=live.__contains__)
+        assert rc == 0 and json.loads(out)["port"] == port
+        live.add(json.loads(out)["session"])
+    session = min(live)
+    rc, out = open_window(host, signer, token="ef56", commit="ef" * 64, active=live.__contains__)
+    assert rc == 3 and "every port of 7850..7851 has a live session" in json.loads(out)["refused"]
+
+    argv = A.serve_argv(host, session, A.sessions_of(A.read_ledger(host.ledger))[session]["open"]["body"])
+    assert argv[argv.index("--port") + 1] == "7850" and not {"--peer", "--peers"} & set(argv) and "--root" in argv
+
+    reserved = reserve(host, signer, token="0a0b")
+    host.coin_ports.write_text("")
+    rc, out = call(host, signer, ["open", "--session", reserved, "--root", "0a" * 64])
+    assert rc == 3 and "has no certifier coin link" in json.loads(out)["refused"]
 
 
 @pytest.mark.parametrize("bad, why", [

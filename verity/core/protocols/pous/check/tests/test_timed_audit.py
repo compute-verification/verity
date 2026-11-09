@@ -1,6 +1,6 @@
-"""`timed_audit.py`: `pous-timed-audit` gives `memory_challenger.verdict`'s verdict on every generated record and its
-negative controls, a difference is reported, on the deployment's record (eight segments, twenty audits) and on the strict
-memory challenger's own documents; and a replay names what a run's record lacks."""
+"""`timed_audit.py`: `pous-timed-audit` gives the memory challenger's `timed_audit.verdict`'s verdict on every generated
+record and its negative controls, a difference is reported, on the deployment's record (eight segments, twenty audits)
+and on the strict memory challenger's own documents; and a replay names what a run's record lacks."""
 
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ def test_a_difference_is_reported(compared, capsys):
 @pytest.mark.slow
 def test_the_deployments_record_agrees_from_its_files():
     """The record the GPU run writes at the certificate's point: eight segments (2^19 leaves) and twenty audits of 105,
-    judged from files as the harness keeps them; and one wrong block in the last audit rejects it both ways."""
+    judged from files as the harness keeps them; and one wrong label in the last audit rejects it both ways."""
     from verity.core.protocols.pous.schemes import p2 as P2
 
     s = ta.Store(P2.P2Params(*P2.POINT, segments=P2.CERT_BLOCKS // P2.POINT[2]), b"deployment")
@@ -71,13 +71,14 @@ def test_the_deployments_record_agrees_from_its_files():
 
 
 def _live(tmp_path, limit_ns: int, wrong=lambda i: False):
-    """`memory_challenger.py --strict`'s document of `p2-16448/v4` at its registered point (one segment) against a responder
-    whose blocks match the leaves (but for the indices `wrong` picks, answered with zeros), with its ready file and leaves."""
+    """The memory challenger's `timed_audit.py --strict`'s document of `p2-16448/v4` at its registered point (one
+    segment) against a responder whose labels match the leaves (but for the indices `wrong` picks, answered with zeros),
+    with its ready file and leaves."""
     import hashlib
 
     sys.path.insert(0, str(ta.ROOT / "benchmarks" / "pous"))
     from band_gpu import harness as H
-    from band_gpu import memory_challenger as live
+    from verity.core.devices.memory_challenger import timed_audit as live
 
     from verity.core.protocols.pous import schemes
     from verity.core.protocols.pous.verifier import VerifierKey, leaf_hash
@@ -122,7 +123,7 @@ def test_the_strict_memory_challengers_documents_are_judged_alike(tmp_path):
 
 @pytest.fixture(scope="module")
 def strict_doc(tmp_path_factory):
-    """The strict memory challenger's accepted document at the RTT cap, and the same with one answer's block flipped,
+    """The strict memory challenger's accepted document at the RTT cap, and the same with one answer's label flipped,
     which both verdicts reject."""
     from verity.core.protocols.pous.schemes import p2
 

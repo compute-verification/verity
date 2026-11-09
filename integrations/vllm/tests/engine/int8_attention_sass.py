@@ -1,4 +1,4 @@
-"""VLLM-87's two Triton kernels (`int8_attention_triton.kv_rows` and `lut_rows`) held to Int8KvQuant_v1 and
+"""The int8 attention's two Triton kernels (`int8_attention_triton.kv_rows` and `lut_rows`) held to Int8KvQuant_v1 and
 Int8LutAttentionRow_v1 at the PTX and SASS level, as `int8_fused.ptx_check` holds the fused linears at the PTX level and
 benchmarks/pouw/harness/sass_gate.py holds the PoUW kernels' SASS.  Each kernel is compiled by Triton for sm_120 and sm_90
 (no GPU needed: Triton's own ptxas and nvdisasm) under `int8_fused.OPTS`, the options it is launched with, or taken from a

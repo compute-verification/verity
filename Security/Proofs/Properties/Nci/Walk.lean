@@ -1,4 +1,24 @@
-import Proofs.Properties.Nci.DescAgree
+module
+
+public import Proofs.Properties.Nci.DescAgree
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 
 /-!
 # `Prog.gate`'s walk, within `Desc.walkable`
@@ -24,6 +44,8 @@ from `Resolve.BodiesOk`) and `OperandsEarlier` (every operand the walk locates i
 `Resolve.operandsEarlier_of` proves it from `Resolve.BodiesOk`), and `Resolve.bodiesOk` proves `Resolve.BodiesOk`.
 `descAgrees_of_gaps` gives `DescAgrees` from those two and `NovelExact`.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.Walk
 
@@ -974,7 +996,7 @@ theorem gate_reads_of (P : Prog) (hb : Desc.bodiesLaidOut P = true) {g p : ℕ} 
     show (P.defs[a'.d]!).prim = false
     rw [hd']; exact hp
 
-/-- **Open: operands resolve on the walk.** On a Program `Desc.evaluate` reads, in every activation `Prog.gate`'s walk
+/-- **Operands resolve on the walk.** On a Program `Desc.evaluate` reads, in every activation `Prog.gate`'s walk
 visits, every primitive node's members' operands resolve (`Flock.Program.resolve` within its fuel, past no scan of no
 iterations). Only a primitive node's: `Prog.gate` resolves no other node's operands, and a composite node's arguments
 may name a scan of no iterations that no gate reads. -/
@@ -986,7 +1008,7 @@ def OperandsResolve : Prop :=
         ∀ m < ((P.defs[sc.d]!).body.nodes[k]!).members, ∀ e,
           Flock.Program.operands P sc ((P.defs[sc.d]!).body.nodes[k]!) m ≠ .error e
 
-/-- **Open: every operand is an earlier gate.** On such a Program, each operand `Prog.gate` locates for a gate is a gate
+/-- **Every operand is an earlier gate.** On such a Program, each operand `Prog.gate` locates for a gate is a gate
 before it. -/
 def OperandsEarlier : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), Flock.Program.decode bytes = .ok P → P.orderViolation = none →

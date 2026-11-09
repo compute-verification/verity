@@ -18,8 +18,8 @@ import torch
 
 from tests.properties import glm53_bf16_gemm_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
-from verity_vllm.program.registry import bf16_gemm_check as BC
-from verity_vllm.program.registry import mla_check as MK
+from verity.ml.definitions.registry import bf16_gemm_check as BC
+from verity.ml.definitions.registry import mla_check as MK
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 DOTPROD = {"kind": "dotprod", "BS": 32, "VEC": 8}
@@ -150,7 +150,7 @@ def test_the_profiler_record_pins_grid_split_count_and_reduction() -> None:
 
 
 def test_a_trace_with_no_kernels_fails_the_launch() -> None:
-    """r20261014-082004-e35b: the scan's in-process profiler sessions left Kineto returning empty traces to all 77 later
+    """The scan's in-process profiler sessions left Kineto returning empty traces to all 77 later
     per-launch sessions, and the empty profile passed `ok` while silently dropping the served split-K override, so the
     comparisons modeled serial chains against split-K kernels.  Every GEMM launches at least one kernel: an empty trace is a
     broken profiler and fails the launch, never a quiet model downgrade."""
@@ -194,6 +194,95 @@ def test_the_route_table_covers_every_decode_batch_once() -> None:
         lo = 17 if key.startswith("router") else 1
         assert [r[0] for r in runs] == [lo] + [r[1] + 1 for r in runs[:-1]] and runs[-1][1] == top, key
         assert all(r[0] <= r[1] and (r[2] is None or 1 < r[2] <= int(key.split()[1]) // 16) for r in runs), key
+
+
+def _table_scans(cut: int = 700) -> list[dict]:
+    """The committed route table as `--scan-run` processes write it: one served-default scan.json document per model and tabled
+    phase, the linear ones cut again at M = `cut` (a run across it ends in one document and resumes in the next), and a bmm
+    case beside them, which the table does not hold."""
+    cond = BC.ROUTE_CONDITIONS
+    config = {k: cond[k] for k in ("torch", "cublas_version", *X.REDUCED, "preferred_blas_library", "env")} | {"ok": True}
+    device = {k: cond[k] for k in ("device", "compute_capability", "multiprocessors")}
+    docs = []
+    for model, m in X.MODELS.items():
+        for phase in X.TABLED:
+            names = ["mlp.gate"] if phase == "router" else [n for n, _, _ in getattr(m, phase)]
+            for lo, hi in ([(1, cut), (cut + 1, None)] if phase == "linear" else [(1, None)]) if names else []:
+                cases = {f"{model}/{phase}/{n}": {"ok": True, "routes": [
+                    [max(r[0], lo), r[1] if hi is None else min(r[1], hi), r[2]]
+                    for r in BC.CUBLAS_ROUTES["routes"][X.route_key(model, phase, n)] if r[1] >= lo and (hi is None or r[0] <= hi)]}
+                    for n in names}
+                docs.append({"ok": True, "served_default": True, "errors": {}, "switch": dict(config), "switch_after": dict(config),
+                             "device": dict(device), "cases": cases})
+    docs[0]["cases"]["glm53/bmm/q_nope_absorb"] = {"ok": True, "routes": [[1, 3, None]]}
+    return docs
+
+
+def test_the_route_writer_rebuilds_the_committed_table_from_its_scans() -> None:
+    docs = _table_scans()
+    assert len(docs) == 7 and sum("/linear/" in k for d in docs for k in d["cases"]) == 8
+    assert X.route_table(docs, BC.CUBLAS_ROUTES["run_record"]) == BC.CUBLAS_ROUTES
+    assert X.route_table(docs[::-1], BC.CUBLAS_ROUTES["run_record"]) == BC.CUBLAS_ROUTES
+
+
+def _router_runs(docs):
+    (case,) = [d["cases"][k] for d in docs for k in d["cases"] if k == "dsv4-pro/router/mlp.gate"]
+    return case["routes"]
+
+
+def _drop_a_run(docs):
+    del _router_runs(docs)[1]
+
+
+def _router_from_1(docs):
+    _router_runs(docs)[0][0] = 1
+
+
+def _one_shape_short(docs):
+    _router_runs(docs)[-1][1] -= 1
+
+
+@pytest.mark.parametrize("break_it, why", [
+    (_drop_a_run, "a gap or an overlap"),
+    (lambda d: d.append(copy.deepcopy(d[0])), "a gap or an overlap"),
+    (_router_from_1, "router 7168 384: a run starts at M=1 where M=17 is next"),
+    (_one_shape_short, "the shapes' runs stop at different M"),
+    (lambda d: d[2].update(ok=False), "scan 2 is not ok"),
+    (lambda d: d[2].update(served_default=False), "split-K-off switch"),
+    (lambda d: d[3]["switch"].update(torch="2.14.0+cu130") or d[3]["switch_after"].update(torch="2.14.0+cu130"), "scan 3 ran under"),
+    (lambda d: d[1]["switch_after"].update(cublas_version=120902), "configuration moved during the scan"),
+    (lambda d: d.clear(), "no scan holds"),
+])
+def test_the_route_writer_refuses_scans_that_are_not_one_tiling_under_one_set_of_conditions(break_it, why) -> None:
+    docs = _table_scans()
+    break_it(docs)
+    with pytest.raises(ValueError, match=why.replace("(", r"\(")):
+        X.route_table(docs, BC.CUBLAS_ROUTES["run_record"])
+
+
+def test_write_routes_writes_the_table_the_loader_reads(tmp_path) -> None:
+    paths = []
+    for i, doc in enumerate(_table_scans(cut=1200)):
+        (p := tmp_path / f"s{i}" / "scan.json").parent.mkdir()
+        p.write_text(json.dumps(doc))
+        paths.append(str(p))
+    rr = BC.CUBLAS_ROUTES["run_record"]
+    assert X.main(["--write-routes", *paths, "--run-record", rr, "--out", str(tmp_path)]) == 0
+    text = (tmp_path / "cublas_routes.json").read_text()
+    assert json.loads(text) == BC.CUBLAS_ROUTES and len(text.splitlines()) == 8 + len(BC.CUBLAS_ROUTES["routes"])
+    with pytest.raises(ValueError, match="not an art: id"):
+        X.main(["--write-routes", *paths, "--run-record", "r20261107-000000-0000", "--out", str(tmp_path)])
+    with pytest.raises(SystemExit):
+        X.main(["--write-routes", *paths, "--out", str(tmp_path)])
+
+
+def test_a_scan_with_no_case_is_refused_before_it_starts(tmp_path) -> None:
+    """DeepSeek-V4-Pro has no absorb bmm: a scan process of that model and phase alone is refused, rather than writing a
+    scan of no case that the route writer then refuses as not ok."""
+    with pytest.raises(SystemExit):
+        X.main(["--scan-run", "--served-default", "--models", "dsv4-pro", "--only", "bmm", "--out",
+                str(tmp_path / "s")])
+    assert not (tmp_path / "s").exists()
 
 
 def test_the_default_cublas_route_does_not_confuse_unrecorded_with_non_split() -> None:
@@ -274,7 +363,7 @@ def test_scan_regimes_end_where_the_signature_or_the_words_change() -> None:
 
 
 def test_the_sweep_takes_one_case_per_model_class_plus_the_envelope() -> None:
-    """r20261014-082004-e35b: the box cycles through tens of kernel regimes across 256..1024 (114 on the glm53 gate), but
+    """The box cycles through tens of kernel regimes across 256..1024 (114 on the glm53 gate), but
     their words follow four models (splits 2, 3 and 4, and the serial chain).  The sweep takes each class's first M past the
     covered 256, not both sides of all 113 boundaries, plus the endpoint."""
     regimes = [{"m0": 256, "m1": 256, "split": 3}, {"m0": 257, "m1": 400, "split": 4}, {"m0": 401, "m1": 500, "split": 3},
@@ -377,7 +466,7 @@ def test_each_model_runs_its_own_gemms() -> None:
 
 def test_the_base_cases_and_their_word_counts_are_conserved() -> None:
     """The scan only adds cases: the unswept expected set and each case's compared words stay the base capture's, pinned to
-    the GO run r20261013-222550-f31c (0 of 18,734,624 words different, 7,040 dotprod words), so a collection refactor that
+    a GO run (0 of 18,734,624 words different, 7,040 dotprod words), so a collection refactor that
     drops, shrinks or re-models a previously-GO case fails here without a GPU."""
     words, dotprod = {}, {}
     for model, phase, case, M in X.cases(False, set(X.PHASES), list(X.MODELS)):
@@ -754,7 +843,7 @@ def test_the_scan_extends_the_sweep_through_main(tmp_path, monkeypatch) -> None:
 
 
 def test_the_scan_runs_in_its_own_process(tmp_path, monkeypatch) -> None:
-    """r20261014-082004-e35b: the scan's profiler sessions in the capture process left every later per-launch session an empty
+    """The scan's profiler sessions in the capture process left every later per-launch session an empty
     trace.  The scan process gets `--scan-run`, the variant flag and the same models and phases, and its scan.json comes back
     with the subprocess's exit code; a process that left no scan.json is a failed scan, never a quiet pass."""
     seen = {}

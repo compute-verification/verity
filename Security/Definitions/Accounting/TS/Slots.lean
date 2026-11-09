@@ -1,10 +1,45 @@
-import Mathlib
+module
+
+public import Mathlib.Algebra.Order.Archimedean.Real.Basic
+public import Mathlib.Data.Finset.Card
+public import Mathlib.Data.Fintype.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # Slot writes, heads and a steered consumer (trusted)
 
-The counting objects of EPS1-TENSOR's T1 (note:20261017T0321Z-draft-eps1-tensor §3), EPS1-SPEC's Lemma 2 (§1.3) and
-SAMPLING's LIN-STEER (note:20261017T0608Z-draft-eps1-sampling):
+The counting objects of EPS1-TENSOR's T1 (§3), EPS1-SPEC's Lemma 2 (§1.3) and
+SAMPLING's LIN-STEER:
 
 * a tensor run's slot writes: an instruction of form `i` writes `w i` slots and holds its pipe `c i` cycles, and the
   family's best slots per pipe cycle is `ρ_T = max_i w i / c i` (`rhoT`);
@@ -13,6 +48,8 @@ SAMPLING's LIN-STEER (note:20261017T0608Z-draft-eps1-sampling):
 * a consumer dot product of a lever row, with its noise-active coordinates and its least work once some of them are
   zeroed (`Consumer`).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS
 

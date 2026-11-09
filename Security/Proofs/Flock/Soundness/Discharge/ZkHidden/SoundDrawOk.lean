@@ -1,20 +1,42 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
-import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 
 /-!
-# The challenger's draw at every draw of the live law, at hidden-output `--zk`
+# The challenger's sample at every sample of the live law, at hidden-output `--zk`
 
-`zk_session_soundH` takes `DrawOkZKH I dj mPts` at each of `Law.execOS`'s draws: the draw file `dj S` proves `S`'s units,
+`zk_session_soundH` takes `DrawOkZKH I dj mPts` at each of `Law.execOS`'s samples: the sample file `dj S` proves `S`'s units,
 and setupHidden, under the `--zk` tags, sets up at `mPts` link points. As at public outputs (`ZkLink/DrawOk.lean`), the
 first half is custody (`DrawFileZK`) and the second is flock-verify's own arithmetic.
 
-* `setupHidden_mPts_drawn`, `setupHidden_mPts_of_proved`: setupHidden's `m_pts` at a draw is `mPtsOf` of the circuit's
-  `g` and the units the draw proves, as setupH's (`Exec.setupH_mPts_drawn`, `Exec.setupH_mPts_of_proved`), from
-  `Hidden.setupHidden_spec`.
-* `drawOkZKH_of_exec`: from `DrawFileZK` at the live law's own stratified law, `DrawOkZKH` at every draw of
-  `Law.execOS`, at `mPtsOf c.g (∑ s, ks s)`: `ZkLink.drawOkZK_of_exec`'s proof at setupHidden.
+* `setupHidden_mPts_drawn`, `setupHidden_mPts_of_proved`: setupHidden's `m_pts` at a sample is `mPtsOf` of the circuit's
+  `g` and the units the sample proves, as setupH's (`Exec.setupH_mPts_drawn`, `Exec.setupH_mPts_of_proved`), from
+  `Hidden.setupHidden_spec`. `setupHidden_mPts_of_provedG` reads `g` off the session, and
+  `setupHidden_mPts_of_provedSt` off the statement circuit (`HmOut.parseStmt`, a templated file's template unrolled).
+* `drawOkZKH_of_exec`: from `DrawFileZK` at the live law's own stratified sampling design, `DrawOkZKH` at every sample of
+  `Law.execOS`, at `mPtsOf c.g (∑ s, ks s)`: `ZkLink.drawOkZK_of_exec`'s proof at setupHidden. `drawOkZKH_of_execG` is
+  it at any `g` every session has, and `drawOkZKH_of_execSt` at the statement circuit's.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 
@@ -24,7 +46,7 @@ open Lean (Json)
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {partition : Option Json} {program : Option ByteArray} {st : Flock.Stmt}
 
-/-- **`m_pts` at a drawn hidden-output session** is `mPtsOf` of the circuit's `g` and the number of units the draw
+/-- **`m_pts` at a sampled hidden-output session** is `mPtsOf` of the circuit's `g` and the number of units the sample
 proves. -/
 theorem setupHidden_mPts_drawn {d : Json}
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) :
@@ -36,22 +58,57 @@ theorem setupHidden_mPts_drawn {d : Json}
   rw [s.mPts, s.nbl, s.blocksReal, s.n, hn]
   rfl
 
-/-- **`m_pts` from the circuit and the draw's proved count**: at a draw `d` whose decoding proves `N₀` units, every
+/-- **`m_pts` from the circuit and the sample's proved count**: at a sample `d` whose decoding proves `N₀` units, every
 statement `setupHidden` accepts has `m_pts = mPtsOf c.g N₀`, `c` the circuit file's `HmOut.parse`. -/
 theorem setupHidden_mPts_of_proved {c : Circuit} {d : Json} {N₀ : ℕ} (hc : HmOut.parse tags cf tables = .ok c)
     (hD : ∀ D, Draw.UnitDraw.ofJson d = .ok D → D.proved.size = N₀)
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) : st.mPts = mPtsOf c.g N₀ := by
   obtain ⟨ud, hud, hm⟩ := setupHidden_mPts_drawn h
-  have e := setupHidden_parseC h
-  rw [hc] at e
-  rw [hm, ← Except.ok.inj e, hD ud hud]
+  rw [hm, setupHidden_c_of_parse hc h, hD ud hud]
+
+/-- `setupHidden_mPts_of_proved` at the session's own `g`. -/
+theorem setupHidden_mPts_of_provedG {g : ℕ} {d : Json} {N₀ : ℕ} (hg : st.c.g = g)
+    (hD : ∀ D, Draw.UnitDraw.ofJson d = .ok D → D.proved.size = N₀)
+    (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) : st.mPts = mPtsOf g N₀ := by
+  obtain ⟨ud, hud, hm⟩ := setupHidden_mPts_drawn h
+  rw [hm, hg, hD ud hud]
+
+/-- `setupHidden_mPts_of_proved` at the statement circuit (`HmOut.parseStmt`), on untyped tags. -/
+theorem setupHidden_mPts_of_provedSt {c : Circuit} {d : Json} {N₀ : ℕ} (ht : tags.typed = false)
+    (hc : HmOut.parseStmt tags cf tables = .ok c) (hD : ∀ D, Draw.UnitDraw.ofJson d = .ok D → D.proved.size = N₀)
+    (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) : st.mPts = mPtsOf c.g N₀ :=
+  setupHidden_mPts_of_provedG (stmt_g_of_setupHidden ht hc h).symm hD h
 
 variable {n : ℕ}
 
-/-- **The challenger's draw is `DrawOkZKH` at every draw of the live law.** On tags whose circuit file `HmOut.parse`
-accepts under the `--zk` tags as `c`, with the executable strata `St` describing `σs`'s, each drawing `ks s` of its
-units: when the record's draw file is the verifier's draw under the live law's own stratified law (`DrawFileZK`),
-`DrawOkZKH` holds at `mPtsOf c.g (∑ s, ks s)` link points at every draw of `Law.execOS`, the run that reads past the
+/-- **The challenger's sample is `DrawOkZKH` at every sample of the live law, at any `g` every session under the `--zk`
+tags has.** With the executable strata `St` describing `σs`'s, each sampling `ks s` of its units: when the record's sample
+file is the verifier's sample under the live law's own stratified sampling design (`DrawFileZK`), `DrawOkZKH` holds at
+`mPtsOf g (∑ s, ks s)` link points at every sample of `Law.execOS`, the run that reads past the source's bytes (every
+unit) included. -/
+theorem drawOkZKH_of_execG (I : Inputs) {g : ℕ}
+    (hg : ∀ {d : Json} {st : Flock.Stmt}, Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables
+      (some d) I.partition I.program = .ok st → st.c.g = g)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Audit.Law.stratum σs s).card)
+    (St : Fin m → Draw.Stratum) (hS : Audit.Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
+    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.stratified Kd (Array.ofFn St)) pop) (ω : Ω) :
+    DrawOkZKH I dj (mPtsOf g (∑ s, ks s))
+      ((Audit.Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) := by
+  refine ⟨fun D hD u hu => ?_, fun st hst => ?_⟩
+  · rw [hdj _ D hD, drawOf_proved, drawOf_mem]
+    exact ⟨u, hu, rfl⟩
+  · rw [setupHidden_mPts_of_provedG (hg hst) (fun D hD => by rw [hdj _ D hD, drawOf_proved, drawOf_size]) hst]
+    rcases execOS_draw_card_or σs ks St hS Kd pop src ω with hcard | huniv
+    · rw [hcard]
+    · obtain ⟨ud, hud, -⟩ := setupHidden_mPts_drawn hst
+      rw [hdj _ ud hud, huniv] at hud
+      rw [huniv, card_univ, Fintype.card_fin, sum_ks_of_univ σs ks hks St hS Kd pop hud]
+
+/-- **The challenger's sample is `DrawOkZKH` at every sample of the live law.** On tags whose circuit file `HmOut.parse`
+accepts under the `--zk` tags as `c`, with the executable strata `St` describing `σs`'s, each sampling `ks s` of its
+units: when the record's sample file is the verifier's sample under the live law's own stratified sampling design (`DrawFileZK`),
+`DrawOkZKH` holds at `mPtsOf c.g (∑ s, ks s)` link points at every sample of `Law.execOS`, the run that reads past the
 source's bytes (every unit) included. -/
 theorem drawOkZKH_of_exec (I : Inputs) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
@@ -60,15 +117,21 @@ theorem drawOkZKH_of_exec (I : Inputs) {c : Flock.Circuit}
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.stratified Kd (Array.ofFn St)) pop) (ω : Ω) :
     DrawOkZKH I dj (mPtsOf c.g (∑ s, ks s))
-      ((Audit.Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) := by
-  refine ⟨fun D hD u hu => ?_, fun st hst => ?_⟩
-  · rw [hdj _ D hD, drawOf_proved, drawOf_mem]
-    exact ⟨u, hu, rfl⟩
-  · rw [setupHidden_mPts_of_proved hc (fun D hD => by rw [hdj _ D hD, drawOf_proved, drawOf_size]) hst]
-    rcases execOS_draw_card_or σs ks St hS Kd pop src ω with hcard | huniv
-    · rw [hcard]
-    · obtain ⟨ud, hud, -⟩ := setupHidden_mPts_drawn hst
-      rw [hdj _ ud hud, huniv] at hud
-      rw [huniv, card_univ, Fintype.card_fin, sum_ks_of_univ σs ks hks St hS Kd pop hud]
+      ((Audit.Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) :=
+  drawOkZKH_of_execG I (fun h => congrArg Flock.Circuit.g (setupHidden_c_of_parse hc h)) σs ks hks
+    St hS Kd pop Lb src dj hdj ω
+
+/-- `drawOkZKH_of_exec` at the statement circuit (`HmOut.parseStmt`, a templated file's template unrolled), on untyped
+tags. -/
+theorem drawOkZKH_of_execSt (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    (hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Audit.Law.stratum σs s).card)
+    (St : Fin m → Draw.Stratum) (hS : Audit.Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
+    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.stratified Kd (Array.ofFn St)) pop) (ω : Ω) :
+    DrawOkZKH I dj (mPtsOf c.g (∑ s, ks s))
+      ((Audit.Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) :=
+  drawOkZKH_of_execG I (fun h => (stmt_g_of_setupHidden ((zkTags_typed I).trans ht) hc h).symm) σs ks hks
+    St hS Kd pop Lb src dj hdj ω
 
 end FlockSoundness.Discharge.ZkHidden

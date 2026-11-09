@@ -1,6 +1,42 @@
-import Proofs.Flock.Claims.Sampling.Binding
-import Proofs.Flock.Verifier.Registered
-import Proofs.Properties.NetworkCertifier.Bytes
+module
+
+public import Proofs.Flock.Verifier.Registered
+public import Proofs.Flock.Bytes
+public import Batteries.Data.ByteArray
+public import Definitions.Claims.Sampling
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Sampling.Cost
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The registered path check binds (frame-v3-sha512)
@@ -20,10 +56,12 @@ is as an oracle program that queries the code's own frames in the code's order (
 * `regPath_sha512`: at `H` = SHA-512 (`sha512Msg`), the program accepts exactly when the verifier's own
   `Flock.Registered.opensLeaf` does at that port.
 * `pathCommit`, `pathCommit_binds`: the trace's commitment by leaves (a leaf that refuses fails the opening) and a path
-  check binds (`Commitment.Binds`) when its leaf binds the value (`LeafBinds`) and its path check binds the leaf
+  check binds (`CommitmentScheme.Binds`) when its leaf binds the value (`LeafBinds`) and its path check binds the leaf
   (`PathBinds`). `Binding_of_regPath`: the claims' `Binding` for a commitment whose path check is the registered one,
   from its leaf's binding; at the hm96 leaf, `Sampling.Leaf`.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 
@@ -269,7 +307,7 @@ index that the roots and `pos` name (`at_`); its leaf is computed from its value
 `none` when it refuses), then checked there through the path its data carries (`path`, `π`). -/
 def pathCommit (at_ : List Msg → ℕ → Option (Msg × ℕ)) (leaf : Opening Bool → OC (Option Msg))
     (π : Opening Bool → Msg) (path : Msg → ℕ → Msg → Msg → OC Bool)
-    (layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg) : Commitment Bool where
+    (layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg) : CommitmentScheme Bool where
   opens roots o :=
     match at_ roots o.pos with
     | some ri => ocBind (leaf o) fun l => match l with
@@ -291,7 +329,7 @@ theorem pathCommit_binds {H : Msg → Msg} {at_ : List Msg → ℕ → Option (M
     {layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg} (hleaf : LeafBinds H leaf)
     (hpath : PathBinds H path) : (pathCommit at_ leaf π path layer).Binds H := by
   intro roots o o' hpos hne h h'
-  unfold Commitment.Opens at h h'
+  unfold CommitmentScheme.Opens at h h'
   simp only [pathCommit] at h h' ⊢
   rw [← hpos] at h' ⊢
   cases ha : at_ roots o.pos with

@@ -21,7 +21,7 @@ import pytest
 from tests.observe.test_fold_glm53_defaults import BMM_OUT_SCHEMA, CUDA, FAR_SCHEMA, H200, view
 from verity_vllm.check.match import global_match_fast as GF
 from verity_vllm.check.match import program_compare as CMP
-from verity_vllm.engine.profiles import generic as G
+from verity_vllm.observe.fold.profiles import generic as G
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepEnd, StepStart, StorageAlloc, TritonLaunch, ViewDesc
 from verity_vllm.observe.fold.fold import fold
 from verity_vllm.observe.fold.patterns import dsa as DSA
@@ -159,7 +159,7 @@ class _Rank:
             self.dirs[which, form] = str(d)
         return self.dirs[which, form]
 
-    def load(self, which: str, form: str, compact: bool | None = None) -> CMP.Prog:
+    def load(self, which: str, form: str, compact: bool | None = None) -> CMP.RootView:
         """A fresh load (`compact` defaults to the form's); its `LOAD_NOTES` entry is dropped, which global-match documents carry whole."""
         d = self.dir(which, form)
         try:
@@ -167,7 +167,7 @@ class _Rank:
         finally:
             CMP.LOAD_NOTES.pop(d, None)
 
-    def prog(self, which: str, form: str) -> CMP.Prog:
+    def prog(self, which: str, form: str) -> CMP.RootView:
         if (which, form) not in self.progs:
             self.progs[which, form] = self.load(which, form)
         return self.progs[which, form]

@@ -1,9 +1,16 @@
-import Proofs.Flock.Soundness.ExecRows
+module
+
+public import Flock.NetAt
+public import Properties.Flock.Circuit.Rows
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Soundness.Audit.Circuit
 import Proofs.Flock.Soundness.ExecParse
-import Flock.NetAt
+import Proofs.Flock.Soundness.SparseRows
 
 /-!
-# A net committed at a position map holds exactly when its logical net does (PRF-133, part 3)
+# A net committed at a position map holds exactly when its logical net does
 
 `Net.ofRowsAt` (`Flock.NetAt`) commits the logical rows `Net.ofRows` checked at positions `pos`: committed row `pos[x]`
 is logical row `x` with every reference `v` read as `pos[v]`, and every other row of the slot is empty. So column values
@@ -13,6 +20,8 @@ rows are the audit's `Rows.ofNet` (`ofRowsAt_rowsSat`), and what the soundness p
 committed net read through `pos`. No verifier path reads `ofRowsAt` yet.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness
 
 open Flock Audit
@@ -20,7 +29,7 @@ open Flock Audit
 /-- **A net's first `w` rows hold at `z`**: each row's column is the AND of its `A` and `B` rows' XOR sums under `z`
 (`Rows.Sat`'s equation, read off the net's matrices). -/
 def NetSat (m : Net) (w : ℕ) (z : ℕ → Bool) : Prop :=
-  ∀ p < w, z p = (xorSum (m.a.row p).toList z && xorSum (m.b.row p).toList z)
+  ∀ p < w, z p = (Verity.Boolean.xorSum (m.a.row p).toList z && Verity.Boolean.xorSum (m.b.row p).toList z)
 
 /-- **The committed system is the logical one permuted.** For a net `ofRowsAt` built from the logical net `n`, `z`
 satisfies all of its slot's rows iff `z ∘ pos` satisfies `n`'s useful rows and `z` is zero off `pos`'s image. -/
@@ -44,13 +53,13 @@ theorem ofRowsAt_sat {name : String} {useful constPos : ℕ} {ig og : Array Grou
     rw [hl]
     exact Nat.le_trans (le_two_pow_log2ceil _) (Nat.pow_le_pow_right (by decide) (Nat.le_max_right _ _))
   have hat : ∀ x, x < useful →
-      (xorSum (n'.a.row (pos.getD x 0)).toList z && xorSum (n'.b.row (pos.getD x 0)).toList z) =
-        (xorSum (n₀.a.row x).toList (z ∘ (pos.getD · 0)) && xorSum (n₀.b.row x).toList (z ∘ (pos.getD · 0))) := by
+      (Verity.Boolean.xorSum (n'.a.row (pos.getD x 0)).toList z && Verity.Boolean.xorSum (n'.b.row (pos.getD x 0)).toList z) =
+        (Verity.Boolean.xorSum (n₀.a.row x).toList (z ∘ (pos.getD · 0)) && Verity.Boolean.xorSum (n₀.b.row x).toList (z ∘ (pos.getD · 0))) := by
     intro x hx
     rw [rowA', rowB', Net.placed_at hp ra hx, Net.placed_at hp rb hx, rowA, rowB, Array.toList_map,
       Array.toList_map, xorSum_map, xorSum_map]
   have hgap : ∀ p, (∀ x, x < useful → pos.getD x 0 ≠ p) →
-      (xorSum (n'.a.row p).toList z && xorSum (n'.b.row p).toList z) = false := by
+      (Verity.Boolean.xorSum (n'.a.row p).toList z && Verity.Boolean.xorSum (n'.b.row p).toList z) = false := by
     intro p hg
     rw [rowA', rowB', Net.placed_gap hp ra hg, Net.placed_gap hp rb hg]
     rfl
@@ -80,7 +89,7 @@ theorem rowsSat_of_netSat {net : Net} (hB : Built net) (hu : net.unitLog ≤ 32)
     omega
   have e := hs _ (Nat.lt_of_lt_of_le hc hw)
   show z ((Rows.ofNet hB).comp i).val =
-    (xorSum ((Rows.ofNet hB).a i) (z ∘ Fin.val) && xorSum ((Rows.ofNet hB).b i) (z ∘ Fin.val))
+    (Verity.Boolean.xorSum ((Rows.ofNet hB).a i) (z ∘ Fin.val) && Verity.Boolean.xorSum ((Rows.ofNet hB).b i) (z ∘ Fin.val))
   rw [← xorSum_map, ← xorSum_map, Rows.ofNet_a hB hu i, Rows.ofNet_b hB hu i]
   exact e
 

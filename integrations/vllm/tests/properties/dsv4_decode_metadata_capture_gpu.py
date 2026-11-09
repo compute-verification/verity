@@ -87,8 +87,8 @@ from tests.properties import dsv4_flashmla_capture_gpu as FX
 from tests.properties import dsv4_indices_capture_gpu as IX
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.program.kernels import dsv4_decode_metadata_twin as T
-from verity_vllm.program.registry import dsv4_decode_metadata as R
+from verity.ml.definitions.numerics import dsv4_decode_metadata_twin as T
+from verity.ml.definitions.registry import dsv4_decode_metadata as R
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-decode-metadata-capture/v1"
@@ -244,7 +244,7 @@ def swa_requests(case: str, kind: str, seed: int) -> dict[str, Any]:
 def c128_edge_positions(case: str, n: int, rng) -> np.ndarray:
     """n int64 positions: each giving q = (position + 1) // 128 at the lane counts' edges (0, 1, the block and its neighbours, the
     row's last lanes, past the width where the row holds the width) at both ends of its R, the int64 ends (INT64_MAX - 1 and 2^40,
-    whose rows are full, where the row holds the width; INT64_MAX's position + 1 wraps negative), then draws."""
+    whose rows are full, where the row holds the width; INT64_MAX's position + 1 wraps negative), then samples."""
     st = statics(case, "edge")
     W, R, BS, NB = st["W"], st["R"], st["BS"], st["NB"]
     top = min(W, BS * NB)

@@ -1,4 +1,4 @@
-"""GLM-5.3's down projections as one TP8 rank's Pearl-C B rows at k = 256 (Daniel's ASK-91): does every row of every rank's
+"""GLM-5.3's down projections as one TP8 rank's Pearl-C B rows at k = 256: does every row of every rank's
 256-wide slice pass TT_OUT's per-row rules, the noise floor ρ·α ≥ 1 and liveness (at most k/64 = 4 entries with
 x² ≥ 64ρ², ρ the RMS over every 8th entry)?
 
@@ -28,8 +28,8 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 
 TP, K, BLOCK = 8, 256, 128
 NAME = re.compile(r"model\.layers\.(\d+)\.mlp\.(?:experts\.(\d+)|shared_experts)\.down_proj\.weight$")

@@ -1,6 +1,8 @@
-import Definitions.Pouw.Receipt.Duo
-import Definitions.Pouw.Receipt.Li
-import Definitions.Pouw.Receipt.Fx1
+module
+
+public import Definitions.Pouw.Receipt.Duo
+public import Definitions.Pouw.Receipt.Li
+public import Definitions.Pouw.Receipt.Fx1
 
 /-!
 # The receipt folds duo's, fx1's and li's binding (trusted)
@@ -19,7 +21,7 @@ What is proved about duo's words (`Definitions/Pouw/Receipt/Duo.lean`), at every
   multiplier.
 * `DuoRunWordInjective`: a run of any length binds each of its words at every start state when the others are
   fixed, for odd multipliers: Lemma B's (Inj) with the full state committed (LEDGER's case (a),
-  note:20261017T1723Z-draft-ledger §1.3).
+  §1.3).
 * `DuoWindowNoKernel`: four words with `DuoQuadNoKernel`'s keys have no all-state kernel anywhere in a run, whatever
   the words and keys before and after them. So in a run whose every four consecutive positions have those keys, two
   runs with the same final states on every start state differ, if at all, at two words at least four positions apart.
@@ -66,7 +68,6 @@ group. `duoWordSpread` (the receipt's XOR between two start states) is equal for
 That is the half of binding a constant kernel would break. The other half fails: at a state, the receipt keeps only `n`
 of the state's `2n` bits, so two words can reach one receipt.
 
-* `DuoReceiptNotInjective`: at width 32 with the served word 0's keys, one start state and two words give one receipt.
 
 So a receipt a thread a window is not a full-state commitment, and a chain that absorbed a wrong word can match the honest
 receipt; the checkpoint a segment of the chains' full states (`Accounting.Guarantees.TS.DuoSegmentsBind`) can't.
@@ -76,8 +77,6 @@ flipping the top bit of all three words moves the receipt by one constant (`benc
 
 The whole state binds one word at a state (`DuoRunWordInjective`), and no more than that for every choice of words:
 
-* `DuoPairAtStateNotInjective`: at width 32 with the keys of the served chain 0's first two words, one start state and
-  two word pairs give one state.
 * `DuoRunAtStateNotInjective`: at every width `n > 0`, every run of three or more words, with any keys, from any start
   state, has two different word sequences with one final state: `2^(nL)` runs reach `2^(2n)` states.
 
@@ -97,6 +96,8 @@ chain's segment has the rotations `(6, 20, 3, 17)` or `(13, 27, 10, 24)` (`fgemm
 one parity), so `r₁ + r₃ mod 32 ∈ {5, 9, 19, 23}`, off that family; three and four words have no statement here. fx1
 has the same (`Fx1PairXorNoKernel`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.Receipt
 
@@ -241,22 +242,6 @@ rotation `0 < r < n` and receipt rotation `0 < h < n`, two words whose receipts 
 constant on every start state (equal `duoWordSpread`s) are equal. -/
 def DuoWordProjNoKernel : Prop :=
   ∀ (n : ℕ) (k : BitVec n) (a : OddKey n) (r h : Rotation n), Function.Injective (duoWordSpread k a.1 r.1 h.1)
-
-/-- **The served receipt is not injective in a word at a state.** At width 32, with the XOR key `0x6d403793`, multiplier
-`0x9e43d96b` and rotation 6 of the served word 0 (`fgemm.cu`'s `key_xor(0, 0)`, `key_mul(0, 0)`, `rot_of(DUO, 0, 0)`) and
-receipt rotation 16, from the state `(0x247a23f6, 0xc48c9971)` the words `0x1632c` and `0x2237a` give the receipt
-`0x26d90889`. -/
-def DuoReceiptNotInjective : Prop :=
-  ¬ Function.Injective (fun d : BitVec 32 =>
-    duoReceipt 16 (duoWord (0x6d403793#32) (0x9e43d96b#32) 6 (0x247a23f6#32, 0xc48c9971#32) d))
-
-/-- **Two duo words are not bound at a state.** At width 32, with the keys of the served chain 0's first two words
-(`fgemm.cu`'s `key_xor(0, t)`, `key_mul(0, t)`, `rot_of(DUO, 0, t)` at `t = 0` and `t = 2`: `(0x6d403793, 0x9e43d96b, 6)`
-and `(0x5cc85cac, 0x5e95a543, 20)`), from the state `(0x247a23f6, 0xc48c9971)` the word pairs `(0x40156b95, 0x0)` and
-`(0xb4d85e5c, 0x375f7285)` reach one state. -/
-def DuoPairAtStateNotInjective : Prop :=
-  ¬ Function.Injective (fun d : BitVec 32 × BitVec 32 =>
-    duoPair (0x6d403793#32) (0x9e43d96b#32) 6 (0x5cc85cac#32) (0x5e95a543#32) 20 d (0x247a23f6#32, 0xc48c9971#32))
 
 /-- **No whole state binds three duo words at a state.** For every width `n + 1`, every run of `L + 3` words with any
 keys and every start state, two different runs reach one final state: `2^((n+1)(L+3))` runs, `2^(2(n+1))` states. -/

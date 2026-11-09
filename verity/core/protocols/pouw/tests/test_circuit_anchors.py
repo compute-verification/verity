@@ -1,5 +1,5 @@
-"""The anchored inputs' anchors (`verity.core.protocols.pouw.circuit.anchors`): the verifier builds them, refuses a prover's that differ,
-and refuses a repeated call index in a window or across a salt's windows (the red team's X-SPC-72); a tile check's are public input regions, their
+"""The anchored inputs' anchors (`verity.ml.protocols.pouw.circuit.anchors`): the verifier builds them, refuses a prover's that differ,
+and refuses a repeated call index in an execution phase or across a salt's execution phases; a tile check's are public input regions, their
 values unpacked into whole words."""
 from __future__ import annotations
 
@@ -12,9 +12,9 @@ import pytest
 import circuit_fixtures as F
 import pouw_regions_vectors as RV
 from verity.ml.crypto.blake3 import blake3, keyed
-from verity.core.protocols.pouw.circuit import ncp2, pc4, pc8, traced_as
-from verity.core.protocols.pouw.circuit import reference as R
-from verity.core.protocols.pouw.circuit.anchors import (ANCHORED, Anchors, Ledger, Receipt, SaltWindows, public_ports, region_bytes,
+from verity.ml.protocols.pouw.circuit import ncp2, pc4, pc8, traced_as
+from verity.ml.protocols.pouw.circuit import reference as R
+from verity.ml.protocols.pouw.circuit.anchors import (ANCHORED, Anchors, Ledger, Receipt, SaltWindows, public_ports, region_bytes,
                                                         region_words)
 from verity.core.protocols.pouw.protocol import DomainError
 
@@ -93,7 +93,7 @@ def test_pinned_region_vectors():
             assert e["bytes"] == bytes(b for x in raw for n in (x & 0xF, x >> 4) for b in (n, 0)).hex()
 
 
-#: each anchor's rule id, as META's ``derivation`` names it: part of C-Flock's circuit pin, so a changed rule is a new version
+#: each anchor's rule id, as META's ``derivation`` names it: part of Flock's circuit pin, so a changed rule is a new version
 RULES = {"pc4": {a: f"verity/pouw/anchor/pearl-c4/{a}/v2" for a in ANCHORED},
          "pc8": {a: f"verity/pouw/anchor/pearl-c/{a}/v1" for a in ANCHORED}}
 
@@ -116,7 +116,7 @@ def test_an_anchor_names_its_rule_not_its_function():
 
 @pytest.mark.parametrize("case", RV.CASES, ids=[c[0] for c in RV.CASES])
 def test_the_public_inputs_file_is_c_flocks(case):
-    """`TileAnchors.public_inputs` is C-Flock's ``verity/flock-public-inputs/v1``: a key-sorted JSON header line naming each
+    """`TileAnchors.public_inputs` is Flock's ``verity/flock-public-inputs/v1``: a key-sorted JSON header line naming each
     port's words, seed (the scheme's label) and derivation function, as META does, then each instance's regions, u16 LE,
     instance-major, the ports in the unit's parameter order; a tile, which has no region, or no instance is refused."""
     t = RV.anchors(*case)
@@ -142,8 +142,8 @@ def test_the_public_inputs_file_is_c_flocks(case):
 
 def test_the_public_inputs_file_is_in_parameter_leaf_order():
     """The verifier's file holds each region in the unit's parameter leaf order, and its check refuses any other order:
-    F_B in read order (transposed, code p of line t at word p·k + t, as C-Flock's staging first read it) or two instances
-    swapped, every word otherwise right, is refused at its first differing word, as C-Flock's Lean verifier refuses it."""
+    F_B in read order (transposed, code p of line t at word p·k + t, as Flock's staging first read it) or two instances
+    swapped, every word otherwise right, is refused at its first differing word, as Flock's Lean verifier refuses it."""
     t = RV.anchors("pc4-64", "pc4", 64, None)
     own = t.public_inputs("row_a", (0, 1))
     t.check_public_inputs("row_a", (0, 1), own)
@@ -180,9 +180,9 @@ def test_a_window_refuses_a_repeated_call_index():
 
 
 def test_a_salt_s_windows_share_no_call_index():
-    """A call's noise key reads the salt and its call index, so a call index names one call across every window of a
-    salt: a later window that lists one an earlier window listed is refused before its ledger opens, a window under
-    another salt is refused, and the next window's forwards start after the last one used."""
+    """A call's noise key reads the salt and its call index, so a call index names one call across every execution phase of a
+    salt: a later execution phase that lists one an earlier execution phase listed is refused before its ledger opens, an execution phase under
+    another salt is refused, and the next execution phase's forwards start after the last one used."""
     call = F.call(32, 64, 32)
 
     def receipt(*forwards, salt=call.salt):

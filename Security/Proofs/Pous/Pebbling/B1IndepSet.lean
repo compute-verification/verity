@@ -1,11 +1,13 @@
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Combinatorics.SimpleGraph.Clique
-import Mathlib.Combinatorics.SimpleGraph.Finite
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
+module
+
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Combinatorics.SimpleGraph.Clique
+public import Mathlib.Combinatorics.SimpleGraph.Finite
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
 
 /-!
 # B1: independent sets under a degree bound
@@ -13,6 +15,8 @@ import Proofs.Pous.Accounting.Numbers
 The draft `PousProofs.b1_indep_set`, stated verbatim and proved. A maximum independent set `s` dominates the graph:
 a vertex outside `s` with no neighbour in `s` could be added to it. So `n ≤ |s| + Σ_{u ∈ s} deg u ≤ (Δ + 1)|s|`.
 -/
+
+@[expose] public section
 
 namespace PousPebbling
 
@@ -43,22 +47,5 @@ theorem b1_indep_set (n Δ : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
 
 `construction-paths.md` §4 names the corollary only in prose: "the free fraction under local re-derivation". This is
 one reading of it, for review. -/
-
-/-- The free fraction under local re-derivation. In a loop-free digraph on `n` vertices where every vertex has at
-most `Δ` neighbours (parents and children together), some set `S` of at least `n/(Δ + 1)` vertices spans no edge.
-Every vertex of `S` then has all its parents outside `S`, so an adversary that stores every label outside `S`
-re-derives all of `S` in one parallel round. -/
-theorem b1_free_fraction (n Δ : ℕ) (E : Fin n → Fin n → Prop) [DecidableRel E] (hirr : ∀ v, ¬ E v v)
-    (hΔ : ∀ v, (Finset.univ.filter fun u => E u v ∨ E v u).card ≤ Δ) :
-    ∃ S : Finset (Fin n), (∀ u ∈ S, ∀ v ∈ S, ¬ E u v) ∧ n ≤ (Δ + 1) * S.card := by
-  classical
-  obtain ⟨s, hs, hcard⟩ := b1_indep_set n Δ (SimpleGraph.fromRel E) fun v => by
-    refine le_trans (Finset.card_le_card fun u hu => ?_) (hΔ v)
-    rw [SimpleGraph.mem_neighborFinset, SimpleGraph.fromRel_adj] at hu
-    simpa [or_comm] using hu.2
-  refine ⟨s, fun u hu v hv huv => ?_, hcard⟩
-  by_cases h : u = v
-  · exact hirr u (h ▸ huv)
-  · exact hs hu hv h ((SimpleGraph.fromRel_adj _ _ _).2 ⟨h, Or.inl huv⟩)
 
 end PousPebbling

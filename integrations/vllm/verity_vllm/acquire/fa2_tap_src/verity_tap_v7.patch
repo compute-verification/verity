@@ -7,7 +7,7 @@ index f0215b3..3cf3719 100644
  
  namespace FLASH_NAMESPACE {
 +
-+// ---- Verity R8 lane B-kernel: in-kernel tap configuration (see verity_tap.h).
++// ---- Verity: in-kernel tap configuration (see verity_tap.h).
 +// Present in every tapped build so that VERITY_TAP=0 ("disabled") and VERITY_TAP>0 share one
 +// Flash_fwd_params layout; inert unless the kernel was compiled with VERITY_TAP > 0.
 +struct Verity_tap {
@@ -16,7 +16,7 @@ index f0215b3..3cf3719 100644
 +    float *diag_ptr;      // P0: flat fp32 diagnostic buffer (tiny inputs only)
 +    int mode;             // 0 off, 1 P1, 2 P0 (+P1)
 +    int H, M, N, NB;      // P0 caps (heads, queries, keys, key blocks); M1: H = b*h slabs, M = seqlen_q cap, NB = key-block cap
-+    int tag;              // R9 cmt-hidden: per-launch tag (layer / step id), bound into every leaf header
++    int tag;              // v7: per-launch tag (layer / step id), bound into every leaf header
 +};
 +extern Verity_tap g_verity_tap;          // host-side config, defined in fa2_torch_lib_verity.cpp
 +extern int64_t g_verity_tap_skipped;     // launches where the tap had to be disabled
@@ -29,7 +29,7 @@ index f0215b3..3cf3719 100644
      bool unpadded_lse;  // For varlen paths: LSE is in [nheads, total_seqlen_q] format instead of [b, nheads, seqlen_q].
      bool seqlenq_ngroups_swapped;  // q has been transposed from (b, 1, (nheads_kv ngroups), d) to (b, ngroups, nheads_kv, d).
 +
-+    Verity_tap vt;      // Verity R8 tap (copied from g_verity_tap in run_flash_splitkv_fwd)
++    Verity_tap vt;      // Verity tap (copied from g_verity_tap in run_flash_splitkv_fwd)
  };
  
  ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,7 +41,7 @@ index 7b43d72..5bf5a2b 100644
  #include "mask.h"
  #include "dropout.h"
  #include "rotary.h"
-+#include "verity_tap.h"   // Verity R8 lane B-kernel tap (inert unless VERITY_TAP > 0)
++#include "verity_tap.h"   // Verity tap (inert unless VERITY_TAP > 0)
  
  namespace FLASH_NAMESPACE {
  
@@ -49,9 +49,9 @@ index 7b43d72..5bf5a2b 100644
  
  ////////////////////////////////////////////////////////////////////////////////////////////////////
  
-+// ---- Verity R8 lane B-kernel tap macros (expand to nothing unless VERITY_TAP > 0). See verity_tap.h.
++// ---- Verity tap macros (expand to nothing unless VERITY_TAP > 0). See verity_tap.h.
 +#if defined(VERITY_TAP) && VERITY_TAP == 3
-+  // ---- R9 cmt-hidden M1: materialise the selected hidden classes to HBM (see verity_tap.h)
++  // ---- M1: materialise the selected hidden classes to HBM (see verity_tap.h)
 +  #define VERITY_MAT(...) if (params.vt.mode != 0 && params.vt.diag_ptr != nullptr) { __VA_ARGS__; }
 +  #define VERITY_TAP_INIT() \
 +    Verity_mat_ctx vmat(params.vt, bidb, params.h, bidh, m_block, tidx, kNWarps, binfo.actual_seqlen_q); \
@@ -71,7 +71,7 @@ index 7b43d72..5bf5a2b 100644
 +    if constexpr (VERITY_MAT_SRC & 32) { VERITY_MAT(vmat.fin(softmax.row_sum, softmax.tap_inv_sum, softmax.row_max, lse)) }
 +  #define VERITY_TAP_EPILOGUE()
 +#elif defined(VERITY_TAP) && VERITY_TAP == 4
-+  // ---- R9 cmt-hidden H1: per-thread SHA-256 leaf per visited 128-key block (see verity_tap.h)
++  // ---- H1: per-thread SHA-256 leaf per visited 128-key block (see verity_tap.h)
 +  #define VERITY_SHA(...) if (params.vt.mode != 0) { __VA_ARGS__; }
 +  #define VERITY_TAP_INIT() \
 +    Verity_sha_ctx vsha(params.vt, bidb, params.h, bidh, m_block, tidx, kNWarps, binfo.actual_seqlen_q, binfo.actual_seqlen_k, n_block_max); \
@@ -271,16 +271,16 @@ index 96b7238..20fd691 100644
      const int num_m_block = (params.seqlen_q + Kernel_traits::kBlockM - 1) / Kernel_traits::kBlockM;
      dim3 grid(num_m_block, params.num_splits > 1 ? params.num_splits : params.b, params.num_splits > 1 ? params.b * params.h : params.h);
 +#if defined(VERITY_TAP) && VERITY_TAP > 0
-+    // Verity R8 tap: pick up the host-side configuration for this launch. Split > 1 is not tapped.
++    // Verity tap: pick up the host-side configuration for this launch. Split > 1 is not tapped.
 +    params.vt = g_verity_tap;
 +    if (params.vt.mode != 0) {
 +#if VERITY_TAP == 3
-+        // R9 cmt-hidden M1: the host-declared caps (H = b*h slabs, M = seqlen_q rows, NB = key blocks) must cover this launch
++        // M1: the host-declared caps (H = b*h slabs, M = seqlen_q rows, NB = key blocks) must cover this launch
 +        const int need_nb = (params.seqlen_k + Kernel_traits::kBlockN - 1) / Kernel_traits::kBlockN;
 +        const bool ok = params.num_splits <= 1 && Kernel_traits::kBlockN == 128 && params.vt.diag_ptr != nullptr && params.b * params.h <= params.vt.H
 +                        && params.seqlen_q <= params.vt.M && need_nb <= params.vt.NB;
 +#elif VERITY_TAP == 4
-+        // R9 cmt-hidden H1: one 32-byte digest per (slab, m_block, key block, thread)
++        // H1: one 32-byte digest per (slab, m_block, key block, thread)
 +        const int need_nb = (params.seqlen_k + Kernel_traits::kBlockN - 1) / Kernel_traits::kBlockN;
 +        const long need_words = (long)params.b * params.h * num_m_block * params.vt.NB * Kernel_traits::kNWarps * 32 * 8;
 +        const bool ok = params.num_splits <= 1 && Kernel_traits::kBlockN == 128 && params.vt.acc_ptr != nullptr && need_nb <= params.vt.NB && need_words <= params.vt.acc_cap_words;
@@ -347,7 +347,7 @@ index 0000000..7296275
 +++ b/csrc/flash_attn/src/verity_tap.h
 @@ -0,0 +1,661 @@
 +/******************************************************************************
-+ * Verity R8 lane B-kernel: in-kernel tap for the FA2 split-KV forward.
++ * Verity: in-kernel tap for the FA2 split-KV forward.
 + *
 + *   VERITY_TAP          0 = compiled out (should be SASS-identical to pinned kernel
 + *                           up to kernel-parameter offsets)
@@ -606,7 +606,7 @@ index 0000000..7296275
 +}
 +#endif
 +
-+// ================================================================ R9 lane cmt-hidden additions (v7)
++// ================================================================ v7 additions: the hidden classes
 +//
 +//   VERITY_TAP == 3  "M1" materialising tap: the hidden classes selected by VERITY_MAT_SRC are written, in canonical
 +//                    (slab = bidb*h + bidh, row, col | block, lane | d) positions, to a preallocated flat u32 buffer

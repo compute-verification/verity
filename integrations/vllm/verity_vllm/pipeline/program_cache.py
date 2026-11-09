@@ -21,13 +21,15 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.config import workload_file
+
 SCHEMA = "verity-vllm/program-cache-entry/v1"
 #: the workload's `sweep` fields a derive reads
 DERIVE_INPUTS = ("sampling", "sampling_params", "batch", "sampling_seeds")
 
 
 def derive_inputs(workload: str | Path) -> dict[str, Any]:
-    wl = json.loads(Path(workload).read_text())
+    wl = json.loads(workload_file(workload).read_text())
     sw = wl.get("sweep") or {}
     return {**{k: sw.get(k) for k in DERIVE_INPUTS}, "requests": len(wl.get("requests") or [])}
 

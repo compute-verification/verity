@@ -1,19 +1,19 @@
 """Core credit's statement steps over a served H1 window with receipts on (SERVEH1): `pouw_h1_gpu.py --credit`'s check.
 
-A window's ``receipt@<c>``, ``pub@<c>`` and ok rows are bound only where credit verifies a drawn call's statement
+A window's ``receipt@<c>``, ``pub@<c>`` and ok rows are bound only where credit verifies a sampled call's statement
 (`credit._verified`): on the ``--registered`` file credit builds itself from the descriptor and the window's entries
 (`credit.registered_file`: port o0 at the call's registered receipt table, ``pub`` and o1 at rows of known content
 credit computes), then `credit._proved` and `credit._registration` over the outcomes. `verdict` runs those steps, after
 `credit._a_link` and (with the Commit) `credit._arow`, as `credit._window` orders them, over the window's own evidence.
 
-The verifier of record is a stand-in (`StandIn`), as in core's `test_pouw_credit_statements.py`: there is no C-Flock
-proof of a served K = 4096 unit here. A session's "proof" is the prover's openings of each drawn unit's ``pub``, o0 and
+The verifier is a stand-in (`StandIn`), as in core's `test_pouw_credit_statements.py`: there is no Flock
+proof of a served K = 4096 unit here. A session's "proof" is the prover's openings of each sampled proof block's ``pub``, o0 and
 o1 rows (each row's b || c, its path and, for o0, its salt) from the prover's own tables (`Prover`). The stand-in
 accepts a session only when each opening verifies against the root credit's file gives that port, at the row the file
 reads (`registered.verify_read`, the check Lean makes of a registered port), and the opened o0 and o1 rows are the
 unit's outputs: o0 `h1tile.reference`'s receipt of its A and B rows seeded from credit's public row, o1 the one word 1
 under its public ok salt. The A and B rows are the serving GPU's (`operands`), whose binding is `_arow`'s and the
-weights', not the stand-in's. Units are chosen by the caller: in-process coins draw none.
+weights', not the stand-in's. Units are chosen by the caller: in-process coins select none.
 
 The negatives tamper with the prover's tables after an honest window (`NEGATIVES`): a receipt word flipped (the table
 re-registered and re-listed under its round's root, so the round roots commit it), the same with the round roots left
@@ -31,9 +31,9 @@ import numpy as np
 
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity.core.protocols.spot.one_stage import proofs as PF
+from verity.core.protocols.spot.one_stage import registered as G
 
 from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1 import served as SV
@@ -115,12 +115,12 @@ def of_run(h1: Any, served: Any) -> Window:
                   h1.session or SV.LOCAL_SESSION)
 
 
-#: ``(call, A [M, K] s8, B [N, K] s8)``: a drawn call's operands, as the serving GPU held them
+#: ``(call, A [M, K] s8, B [N, K] s8)``: a sampled call's operands, as the serving GPU held them
 Operands = Callable[[int], tuple[np.ndarray, np.ndarray]]
 
 
 class StandIn:
-    """The stand-in verifier of record (the module docstring): `__call__` is `credit._verified`'s ``run``."""
+    """The stand-in verifier (the module docstring): `__call__` is `credit._verified`'s ``run``."""
 
     def __init__(self, w: Window, operands: Operands):
         self.w, self.operands = w, operands
@@ -146,12 +146,15 @@ class StandIn:
                 return f"unit {u}'s {name} row does not open {port['value']} at the file's root"
         if bytes.fromhex(opened[CR.PUB_PORT][0]) != bc_of(pub["known"]["rows"][t], bytes.fromhex(pub["known"]["salts"][t])):
             return f"unit {u}'s public row is not credit's"
-        salt, position, roots = _fields(pub["known"]["rows"][t])
+        salt, position, roots, j10r = _fields(pub["known"]["rows"][t])
         a, b = self.operands(c)
         r, cc = self.w.layout["tile"]
         i, j = divmod(t, b.shape[0] // cc)
-        _z, receipt = HT.reference((a[r * i:r * (i + 1)].view(np.uint8)).tolist(),
-                                   (b[cc * j:cc * (j + 1)].view(np.uint8)).tolist(), salt, position, roots, pairs=[(0, 0)])
+        ta, tb = (a[r * i:r * (i + 1)].view(np.uint8)).tolist(), (b[cc * j:cc * (j + 1)].view(np.uint8)).tolist()
+        if j10r is None:
+            _z, receipt = HT.reference(ta, tb, salt, position, roots, pairs=[(0, 0)])
+        else:
+            _z, receipt = HT.j10r_reference(ta, tb, salt, position, roots, *j10r, pairs=[(0, 0)])
         want = SV.receipt_words(np.array([receipt], np.uint32))[0]
         if bytes.fromhex(opened[CR.RECEIPT_PORT][0]) != bc_of(want, bytes.fromhex(opened[CR.RECEIPT_PORT][2])):
             return f"unit {u}'s o0 row is not the receipt it computes"
@@ -178,18 +181,21 @@ class StandIn:
         return out, None
 
 
-def _fields(words: Any) -> tuple[bytes, int, tuple[bytes, bytes]]:
-    """A public row's salt, position and (root(A), root(B)) (`core_check.public_words` inverted; a J10-R row's call and
-    blocks after them dropped)."""
+def _fields(words: Any) -> tuple[bytes, int, tuple[bytes, bytes], tuple[int, tuple[int, int]] | None]:
+    """A public row's salt, position, (root(A), root(B)) and a J10-R row's (call, blocks), None for a v1 row
+    (`core_check.public_words` inverted)."""
     x = b"".join(int(v).to_bytes(2, "little") for v in words)
     x = b"".join(x[i:i + 4][::-1] for i in range(0, len(x), 4))
-    x = x[:CC.PUBLIC_ROW_BITS // 8]
-    s = len(x) - 8 - 128
-    return x[:s], int.from_bytes(x[s:s + 8], "big"), (x[s + 8:s + 72], x[s + 72:])
+    v1, s = x[:CC.PUBLIC_ROW_BITS // 8], CC.PUBLIC_ROW_BITS // 8 - 8 - 128
+    j10r = None
+    if len(x) * 8 == CC.PUBLIC_ROW_J10R_BITS:
+        call, b0, b1 = (int.from_bytes(x[len(v1) + 8 * i:len(v1) + 8 * (i + 1)], "big") for i in range(3))
+        j10r = call, (b0, b1)
+    return v1[:s], int.from_bytes(v1[s:s + 8], "big"), (v1[s + 8:s + 72], v1[s + 72:]), j10r
 
 
 def statements(w: Window, units: list[int], to: Path) -> tuple[list[dict], dict[str, str]]:
-    """The prover's statements of ``units`` (one a drawn call, its session's openings from the prover's tables) under
+    """The prover's statements of ``units`` (one a sampled call, its session's openings from the prover's tables) under
     ``to``, and the period-open's circuit files (``{k<K>: SHA-512}``) of the stand-in's circuit files."""
     files, out, by_call = {}, [], {}
     for u in sorted(units):
@@ -215,7 +221,7 @@ def statements(w: Window, units: list[int], to: Path) -> tuple[list[dict], dict[
 
 
 def verdict(w: Window, units: list[int], operands: Operands) -> dict[str, Any]:
-    """Credit's steps over ``w``, ``units`` drawn: ``{step: None or (code, why)}`` in `credit._window`'s order, the first
+    """Credit's steps over ``w``, ``units`` sampled: ``{step: None or (code, why)}`` in `credit._window`'s order, the first
     refusal stopping the rest, and ``accepted`` when none refused."""
     out: dict[str, Any] = {"a_link": CR._a_link(w.rounds, w.entries, len(w.layout["calls"]))}
     if w.commit is not None and out["a_link"] is None:
@@ -253,7 +259,7 @@ def _relist(w: Window, value: str, reg: Any, own: int) -> list[dict[str, Any]]:
 
 
 def tampered(w: Window, kind: str, u: int, receipts: Callable[[int], np.ndarray], key: bytes) -> Window:
-    """``w`` with the prover's tables changed at drawn unit ``u`` (`NEGATIVES`): ``receipt-word``, its call's receipt table
+    """``w`` with the prover's tables changed at sampled proof block ``u`` (`NEGATIVES`): ``receipt-word``, its call's receipt table
     with u's first word flipped, re-registered under its nonce and re-listed under its round's root (``receipts(c)`` the
     call's honest receipt words, ``key`` the run's); ``receipt-word-after-round``, the same table with the round roots
     left honest; ``pub-other-root``, its call's public table built under another step's A table of its K;
@@ -309,7 +315,7 @@ class _Bcs:
 
 def check(w: Window, units: list[int], operands: Operands, receipts: Callable[[int], np.ndarray], key: bytes,
           at: int | None = None) -> dict[str, Any]:
-    """`verdict` of the honest window and of each of `NEGATIVES` at drawn unit ``at`` (default ``units[0]``): ``ok`` when
+    """`verdict` of the honest window and of each of `NEGATIVES` at sampled proof block ``at`` (default ``units[0]``): ``ok`` when
     the honest window is accepted and every negative refused."""
     honest = verdict(w, units, operands)
     u = units[0] if at is None else at

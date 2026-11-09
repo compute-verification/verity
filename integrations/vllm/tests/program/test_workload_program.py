@@ -1,4 +1,4 @@
-"""GP-01: the workload Program composes request Programs (as descriptors) hierarchically, with weights once, a deterministic
+"""The workload Program composes request Programs (as descriptors) hierarchically, with weights once, a deterministic
 global address space and a declared chronology. Toy request Programs stand in for derive_step's request wrappers: the same
 lowering (`Program(fn)` -> Input batches + body), the same descriptor codec."""
 
@@ -8,7 +8,7 @@ from verity.ml.circuits.codec import SCHEMA_V1, _encode_body, _Tables, encode_pr
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, REGISTRY
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import coll_concat
-from verity.ml.circuits.types import Array, Record, Value
+from verity.ml.circuits.types import Array, RecordType, Value
 from verity_vllm.program import workload as W
 
 _ADD = PrimitiveDefinition("GpTestAdd16", 1, (("a", Value(16)), ("b", Value(16))), Value(16), lambda a, b: (a + b) & 0xFFFF)
@@ -159,10 +159,10 @@ def test_a_growing_key_value_sequence_composes_to_the_same_workload_through_its_
 
 
 def test_record_weights_lower_to_several_input_batches_shared_as_one_group():
-    """The real wrapper's `weights` is a mixed-width Record (bf16 tensors + an f32 rotary table), which lowers to one Input
+    """The real wrapper's `weights` is a mixed-width RecordType (bf16 tensors + an f32 rotary table), which lowers to one Input
     batch per field (a homogeneous record would be one batch): the group is shared as a whole either way."""
     def sig(S):
-        return ((("prompt", Array(S.LP, Value(16))), ("weights", Record(("wa", Array(2, Value(16))), ("wb", Array(3, Value(32)))))),
+        return ((("prompt", Array(S.LP, Value(16))), ("weights", RecordType(("wa", Array(2, Value(16))), ("wb", Array(3, Value(32)))))),
                 Array(1, Value(16)))
 
     def body(B, S, prompt, weights):
@@ -231,7 +231,7 @@ def test_a_workload_without_registered_values_keeps_its_digest():
 
 
 def test_theta_registered_binds_the_weights_at_registration_and_moves_only_the_workload_digest():
-    """NCI's baseline reads only registered inputs as θ (nci-check's `theta-not-registered`): `theta_registered` lowers the
+    """The inference-only check reads only registered inputs as θ (nci-check's `theta-not-registered`): `theta_registered` lowers the
     weights as `RegisteredInput<w>_v1`, still θ, and every other input as before. The components are the same Definitions, so
     their request digests stand and only the workload digest moves; off, it is the digest pinned above."""
     from verity.ml.circuits.constants import REGISTRATION, RUN
@@ -261,7 +261,7 @@ def test_theta_registered_binds_the_weights_at_registration_and_moves_only_the_w
 
 def test_theta_registered_keeps_a_tp_rank_programs_peers_bound_per_run():
     """A TP rank workload (B1's shape: `peers_*` before the weights, at shifting positions): only the weights move to
-    registration; every request's prompt and peers stay `Input<w>_v1`, the inputs NCI counts against the limit."""
+    registration; every request's prompt and peers stay `Input<w>_v1`, the inputs the inference-only check counts against the limit."""
     from verity.ml.circuits.program import INPUT_ID, REGISTERED_ID
     ca = W.request_component(encode_program(Program(_toy_rank_request(3, 2))), REGISTRY, _WP_rank(3, 2))
     cb = W.request_component(encode_program(Program(_toy_rank_request(5, 0))), REGISTRY, _WP_rank(5, 0))
@@ -274,7 +274,7 @@ def test_theta_registered_keeps_a_tp_rank_programs_peers_bound_per_run():
 
 
 def _toy_rank_request(LP: int, T: int):
-    """A TP rank Program's shape (tp M-0314): `(prompt, peers_0..peers_T, weights)` -- one received collective value per step, so
+    """A TP rank Program's shape: `(prompt, peers_0..peers_T, weights)` -- one received collective value per step, so
     the number of request-local inputs BEFORE the shared group depends on T and the weights group shifts per component."""
     def sig(S):
         peers = tuple((f"peers_{k}", Array(1, Value(16))) for k in range(S.T + 1))
@@ -298,7 +298,7 @@ def _WP_rank(LP, T):
 
 
 def test_tp_rank_components_share_weights_at_shifting_positions_and_tp1_digests_are_unchanged():
-    """tp M-0314 option (B): request-local `peers_*` inputs before the shared group shift its positions per component; the shared
+    """Request-local `peers_*` inputs before the shared group shift its positions per component; the shared
     group is still the same Input batches once, each request's peers are its own inputs; a non-request-local group at a shifting
     position is still refused. The uniform (TP1) static form is untouched, so every existing workload digest stands."""
     ca = W.request_component(encode_program(Program(_toy_rank_request(3, 2))), REGISTRY, _WP_rank(3, 2))   # weights at 4
@@ -404,6 +404,109 @@ def test_chronology_is_declared_and_bounded():
     assert "observed" in ch["observed_time"]
 
 
+_ROWS = ("prefix", "prefix_ik", "prefix_iks")
+
+
+def _toy_edge_request(LP: int, C: int, E: int, last: bool, checks: bool = False):
+    """`GpTestEdge{LP,C,E,LAST,CHK}`: a request after a history of C rows of each group (`prefix`, `prefix_ik`, `prefix_iks`, and
+    with LAST its `last_token`) that samples one token reading the history's last scale, and with E returns its rows [0, E) of each
+    group after its sample (and with CHK a check after it), the history's then its own, as `build_program(edge=)` does."""
+    V = Value(16)
+
+    def params(S):
+        return [("prompt", Array(S.LP, V)), *((g, Array(S.C, V)) for g in _ROWS * bool(S.C)),
+                *([("last_token", Array(1, V))] if S.LAST else []), ("weights", Array(4, V))]
+
+    def sig(S):
+        return tuple(params(S)), W.TupleT(Array(1, V), *[Array(1, V)] * S.CHK, *[Array(S.E, V)] * 3) if S.E else Array(1, V)
+
+    def body(B, S, *args):
+        a = dict(zip([n for n, _ in params(S)], args))
+        s = B.call(_ADD, a["last_token"][0] if S.LAST else a["prompt"][0], a["weights"][0])
+        sample = coll_concat(Array(1, V), [B.call(_ADD, s, a["prefix_iks"][S.C - 1]) if S.C else s])
+        if not S.E:
+            return sample
+        rows = [coll_concat(Array(S.E, V), [*([a[g]] if S.C else []), *(B.call(_ADD, a["prompt"][j % S.LP], a["weights"][1 + k])
+                                                                       for j in range(S.C, S.E))]) for k, g in enumerate(_ROWS)]
+        check = [coll_concat(Array(1, V), [B.call(_ADD, s, a["weights"][3])])] * S.CHK
+        return coll_concat(sig(S)[1], [sample, *check, *rows])
+
+    d = REGISTRY["GpTestEdge_v1"] if "GpTestEdge_v1" in REGISTRY else CompositeDefinition("GpTestEdge", 1, ("LP", "C", "E", "LAST", "CHK"),
+                                                                                         sig, body)
+    return d.bind(LP=LP, C=C, E=E, LAST=last, CHK=int(checks))
+
+
+def _edge_wl(units: dict, edge: W.Edge) -> W.WorkloadProgram:
+    reqs = []
+    for i, shape in units.items():
+        fn = _toy_edge_request(*shape)
+        c = W.request_component(encode_program(Program(fn)), REGISTRY, [(n, repr(t)) for n, t in fn.signature()[0]])
+        reqs.append(W.WorkloadRequest(f"r{i}", i, shape[0], 1, 0, c, T=0))
+    return W.WorkloadProgram(reqs, lag=0, edge=edge)
+
+
+def _groups(E: int, LP: int = 3) -> tuple:
+    return (*((g, E, 16) for g in _ROWS), *((("last_token", 1, 16),) if E >= LP else ()))
+
+
+def test_a_window_edge_is_registered_values_its_carried_requests_read_and_output_ports_in_close_order():
+    """GP-01 at a Commit window's edges (`Edge`, `Workload_v2`): window w leaves r1 inside its 3-token prompt (rows [0, 2), no last
+    token) and r2 past it (rows [0, 4) and its last sample), its out-ports each a tuple of their fields in close order after the
+    requests' outputs, r1's and r2's their samples; window w+1 takes those ports as registered parameters, r1 and r2 reading
+    their history from their fields, never from Inputs of their own, r3 idle passing its fields through to the edge it leaves
+    beside r1. Evaluated, every out-port field is its request's rows (its history's, then its own) or the idle one's in-port
+    field; R1 (`check.batch.separable` over `predict.batch.workload_labels`) holds each field its request's own, and a field
+    handed to another request is the crossing it names."""
+    from verity.ml.circuits.evaluation.reference import evaluate
+    from verity_vllm.check.batch import SHARED, Fields, own, separable
+    from verity_vllm.program.predict.batch import workload_labels
+    out = _edge_wl({0: (3, 0, 0, False), 1: (3, 0, 2, False), 2: (3, 0, 4, False)}, W.Edge(outs=((1, _groups(2)), (2, _groups(4)))))
+    params, ret = out.fn.signature()
+    assert out.fn.id.startswith("Workload_v2{") and out.registered == () and [n for n, _ in params][1:] == [f"request[r{i}].prompt" for i in range(3)]
+    V = Value(16)
+    assert ret == W.TupleT(*[Array(1, V)] * 3, *[W.TupleT(Array(2, V), Array(4, V))] * 3, W.TupleT(Array(1, V)))
+    o = evaluate(out.fn, [1, 2, 3, 4], [10, 11, 12], [20, 21, 22], [30, 31, 32])
+    assert o[:3] == (11, 21, 31) and o[3:9] == (22, 23, 32, 33, 34, 32) and o[-1] == 31   # r1's, then r2's latent rows; r2's sample
+    edge = W.Edge(ins=((1, _groups(2)), (2, _groups(4)), (3, _groups(1))), outs=((1, _groups(5)), (3, _groups(1))))
+    wl = _edge_wl({1: (3, 2, 5, False), 2: (3, 4, 0, True)}, edge)
+    params, ret = wl.fn.signature()
+    assert wl.registered == wl.ports == ("edge.kv", "edge.ik", "edge.iks", "edge.last") and [n for n, _ in params] == [
+        "shared.weights", *wl.ports, "request[r1].prompt", "request[r2].prompt"]
+    assert dict(params)["edge.kv"] == W.TupleT(Array(2, V), Array(4, V), Array(1, V)) and dict(params)["edge.last"] == W.TupleT(Array(1, V))
+    assert ret == W.TupleT(Array(1, V), Array(1, V), *[W.TupleT(Array(5, V), Array(1, V))] * 3, W.TupleT(Array(1, V)))
+    kv, ik, iks = ([100 * k + j for j in range(7)] for k in (1, 2, 3))
+    o = evaluate(wl.fn, [1, 2, 3, 4], kv, ik, iks, [40], [10, 11, 12], [20, 21, 22])
+    assert o[:2] == (10 + 1 + 301, 40 + 1 + 305)                     # each sample reads its own history's last scale
+    assert o[2:8] == (100, 101, 12 + 2, 10 + 2, 11 + 2, 106)        # r1's latent rows, its 2 carried then its own 3; r3's passed on
+    assert o[8:20:6] == (200, 300) and o[-1] == o[0]
+    am = {i["name"]: i for i in wl.address_map()["requests"][1]["inputs"]}
+    assert am["prefix"]["global"] == "edge.kv[1]" and am["last_token"]["global"] == "edge.last[0]" and am["prompt"]["global"] == "request[r2].prompt"
+    assert wl.artifact()["edge"]["ports"] == {"in": list(wl.ports), "out": ["edge.kv", "edge.ik", "edge.iks", "edge.last"]}
+    labels, held = workload_labels(wl)
+    assert labels == (SHARED, *[Fields((own(1), own(2), own(3)))] * 3, Fields((own(2),)), own(1), own(2))
+    assert held.labels[2:] == (*[Fields((own(1), own(3)))] * 3, Fields((own(1),))) and separable(wl.fn, labels, held) == []
+    crossed = separable(wl.fn, (*labels[:3], Fields((own(2), own(1), own(3))), *labels[4:]), held)
+    assert {(c.owner, c.param, c.holder) for c in crossed} == {(1, "edge.iks", 2), (2, "edge.iks", 1)}
+    with pytest.raises(ValueError, match=r"request 2's history Inputs aren't its in-port fields"):
+        _edge_wl({2: (3, 4, 0, True)}, W.Edge(ins=((2, _groups(3)),)))
+    with pytest.raises(ValueError, match=r"request 3 leaves with .* nor came in so"):
+        _edge_wl({1: (3, 0, 2, False)}, W.Edge(outs=((1, _groups(2)), (3, _groups(1)))))
+
+
+def test_an_edge_request_returning_checks_keeps_them_its_output():
+    """A request Program whose rows read past INDEX_TOPK returns its samples, then its checks, then its edge rows (`with_checks`,
+    then `build_program(edge=)`): GP-01's output for it is (samples, checks), as for a request no edge carries, and its out-port
+    fields are the rows after them."""
+    from verity.ml.circuits.evaluation.reference import evaluate
+    V = Value(16)
+    wl = _edge_wl({0: (3, 0, 0, False), 1: (3, 0, 2, False, True)}, W.Edge(outs=((1, _groups(2)),)))
+    assert wl.fn.signature()[1] == W.TupleT(Array(1, V), W.TupleT(Array(1, V), Array(1, V)), *[W.TupleT(Array(2, V))] * 3)
+    o = evaluate(wl.fn, [1, 2, 3, 4], [10, 11, 12], [20, 21, 22])
+    assert o == (11, 21, 21 + 4, 20 + 2, 21 + 2, 20 + 3, 21 + 3, 20 + 4, 21 + 4)
+    with pytest.raises(ValueError, match=r"request 1's Program doesn't return its samples \(and checks\), then its rows"):
+        _edge_wl({1: (3, 0, 2, False, True)}, W.Edge(outs=((1, _groups(2)[:2]),)))
+
+
 def test_population_partitions_the_gates():
     wl = _wl([(3, 2), (5, 0), (3, 2)])
     p = wl.population()
@@ -439,7 +542,7 @@ def _stepped_request(LP: int, T: int, step_name: str = "GpTestStep"):
 
 
 def test_canon_is_per_compose_conflicts_refused_inside_one_never_across_composes():
-    """[R15 global, rev-pm M-0123 F(1)] the shared-definition canon belongs to ONE compose: two request Programs of one workload that
+    """The shared-definition canon belongs to ONE compose: two request Programs of one workload that
     disagree on a definition under the same id are refused (E_IDENTITY, fail closed); a LATER compose in the same process with its own
     canon is compared against its own components only, never against an earlier compose's definitions."""
     import copy
@@ -467,12 +570,13 @@ def test_canon_is_per_compose_conflicts_refused_inside_one_never_across_composes
 
 
 def test_repointing_keeps_every_id_and_refuses_a_substitute_of_another_id():
-    """`_repoint` swaps a callee and a function-valued static for its canonical object only when that object has the same id:
-    a complete specialization formats its id once, so `Outer{F=..}`'s would go stale under a substitute of another id. Such
-    a substitute is refused (E_IDENTITY, naming both ids) before anything is re-pointed, through the callee or the static."""
+    """`shared_definitions.repoint` swaps a callee and a function-valued static for its canonical object only when that object has
+    the same id: a complete specialization formats its id once, so `Outer{F=..}`'s would go stale under a substitute of another id.
+    Such a substitute is refused (E_IDENTITY, naming both ids) before anything is re-pointed, through the callee or the static."""
     import re
-    from verity.ml.circuits.codec import _spec_id
+    from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.defs import IdentityConflict, SpecializedDefinition
+    from verity_vllm.program.shared_definitions import repoint
 
     def sig(S):
         return (("a", Value(16)),), Value(16)
@@ -481,23 +585,23 @@ def test_repointing_keeps_every_id_and_refuses_a_substitute_of_another_id():
     outer = CompositeDefinition("GpTestRepointOuter", 1, ("F",), sig, lambda B, S, a: B.call(S.F, a), register=False)
     holder = CompositeDefinition("GpTestRepointHolder", 1, ("OPS",), sig, lambda B, S, a: B.call(_ADD, a, a), register=False)
     f, same, other = inner.bind(K=4), SpecializedDefinition(inner, {"K": 4}, ()), inner.bind(K=8)
-    assert same is not f and _spec_id(same) == _spec_id(f) != _spec_id(other)
+    assert same is not f and descriptor_id(same) == descriptor_id(f) != descriptor_id(other)
 
     o, h = SpecializedDefinition(outer, {"F": f}, ()), SpecializedDefinition(holder, {"OPS": {"f": f}}, ())
-    before = [(fn.id, _spec_id(fn), [_spec_id(n.fn) for n in fn.body.nodes]) for fn in (o, h)]
-    W._repoint(o, {_spec_id(f): same})
-    W._repoint(h, {_spec_id(f): same})
+    before = [(fn.id, descriptor_id(fn), [descriptor_id(n.fn) for n in fn.body.nodes]) for fn in (o, h)]
+    repoint(o, {descriptor_id(f): same})
+    repoint(h, {descriptor_id(f): same})
     assert o.bindings["F"] is o.body.nodes[-1].fn is same and h.bindings["OPS"]["f"] is same
-    assert [(fn.id, _spec_id(fn), [_spec_id(n.fn) for n in fn.body.nodes]) for fn in (o, h)] == before
+    assert [(fn.id, descriptor_id(fn), [descriptor_id(n.fn) for n in fn.body.nodes]) for fn in (o, h)] == before
     assert (o.id, h.id) == (SpecializedDefinition(outer, dict(o.bindings), ()).id,
                             SpecializedDefinition(holder, dict(h.bindings), ()).id)
 
-    why = re.escape(f"{_spec_id(f)!r} would be re-pointed to a definition of another id, {_spec_id(other)!r}")
+    why = re.escape(f"{descriptor_id(f)!r} would be re-pointed to a definition of another id, {descriptor_id(other)!r}")
     for fn, held, was in ((SpecializedDefinition(outer, {"F": f}, ()), lambda fn: fn.bindings["F"], before[0][0]),
                           (SpecializedDefinition(holder, {"OPS": {"f": f}}, ()), lambda fn: fn.bindings["OPS"]["f"], before[1][0])):
         assert fn.body.nodes and fn.id == was
         with pytest.raises(IdentityConflict, match="E_IDENTITY: " + why):
-            W._repoint(fn, {_spec_id(f): other})
+            repoint(fn, {descriptor_id(f): other})
         assert held(fn) is f and fn.id == was
 
 
@@ -520,9 +624,9 @@ def _derived_like(LP: int, T: int, src: dict):
 
 
 def test_two_requests_with_one_root_id_over_different_bodies_compose_by_digest():
-    """[R16 global, llama B64 1024/128 Build FAIL 07:09Z] a manifest with two requests of the same prompt length and different caps
-    (LP11: T24 and T36) derives two request Programs whose roots share derive's id `Root[Derived[vLLMRequest[..]]_v1{SRC=..}]` (SRC does
-    not name T) with different bodies and different digests; the compose compared the ROOTS under that id and refused the workload
+    """A manifest with two requests of the same prompt length and different caps (LP11: T24 and T36, as in the llama B64 1024/128
+    workload) derives two request Programs whose roots share derive's id `Root[Derived[vLLMRequest[..]]_v1{SRC=..}]` (SRC does not
+    name T) with different bodies and different digests; comparing the ROOTS under that id would refuse the workload
     (E_IDENTITY). The root is never shared -- the component's identity is its program digest -- so it is exempt from the shared-definition
     canon; every callee stays under the fail-closed rule (the test above)."""
     src = {"class": "LlamaForCausalLM", "mode": "profile", "inputs": [[3]], "config_sha256": "c" * 16}

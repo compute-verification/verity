@@ -1,4 +1,20 @@
-import Proofs.Flock.C3.Compose.Decoder
+module
+
+public import Proofs.Flock.C3.Compose.Decoder
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.C3.Compose.Plays
 
 /-!
 # n7: `SrcOK`'s decode fixed point
@@ -13,6 +29,8 @@ The outputs are needed, not only the plays: `decodeRun` copies each play's outpu
 game reads it. A sparse phase that plays on the run's own steps to `x` decodes to the claim `x`
 (`claim_of_decodeRun`), so `SrcSparseOK`'s `∃ x` gives the fixed point only where `x` is the run's claim.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

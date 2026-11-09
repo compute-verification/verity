@@ -1,4 +1,10 @@
-import Proofs.Flock.Soundness.ExecPlacement
+module
+
+public import Proofs.Flock.Soundness.ExecPlacement
+public import Flock.HmRow
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
 
 /-!
 # What `HmRow.check` accepted
@@ -8,6 +14,8 @@ ranges inside the block, pairwise apart, in slots of their nets' rows; the unit 
 `vus_per_block × units_per_vu` slots and a group of 16-bit leaf ports; the row slots' ports; every net range's slots per
 template instance; one range per net; the wires' and leaf cuts' bounds; the leaf maps.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 
@@ -450,7 +458,7 @@ theorem check_facts {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed =
     g_pow2 := by simpa using hgp }
 
 
-/-- **What `HmRow.check` accepted, for a typed template** (`c.typed = some tb`, #277): the ranges' common facts, one range
+/-- **What `HmRow.check` accepted, for a typed template** (`c.typed = some tb`): the ranges' common facts, one range
 of `G · per_vu` slots per circuit, the root one slot per template instance, each placed layout's circuit one slot per part, its slot size
 its range's, and a forced-zero row in the root's slot. -/
 structure CheckFactsT (c : Circuit) (tb : TypedBlock) : Prop where

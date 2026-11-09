@@ -1,4 +1,4 @@
-"""The closure-draw plan (`verity.core.protocols.pouw.circuit.plan`): closures, the law seam, openings and the profile."""
+"""The closure-draw plan (`verity.ml.protocols.pouw.circuit.plan`): closures, the sampling design seam, openings and the profile."""
 from __future__ import annotations
 
 from fractions import Fraction
@@ -8,8 +8,8 @@ import pytest
 from verity.core.protocols.profile import Stratified, Stratum
 from verity.ml.randomness import derive
 
-from verity.core.protocols.pouw.circuit import ncp2
-from verity.core.protocols.pouw.circuit import plan as PL
+from verity.ml.protocols.pouw.circuit import ncp2
+from verity.ml.protocols.pouw.circuit import plan as PL
 
 
 def _key(tag: bytes = b"r"):
@@ -37,7 +37,7 @@ def test_the_strata_are_the_verifiers_own():
     """One stratum per template, its units as merged ranges, in the order of their first unit (`Flock/Draw.lean` `strataOf`
     over core's evaluation of the partition query), covering the population exactly."""
     from verity.ml.circuits import partition_object as PO
-    from verity.core.protocols.pouw.circuit import partition as P
+    from verity.ml.protocols.pouw.circuit import partition as P
 
     shape = ncp2.Shape(32, 64, 32)
     lay = PL.layout(shape)
@@ -69,8 +69,8 @@ def test_the_work_law_sizes_tiles_by_work_and_the_rest_at_its_floor():
 
 
 def test_the_work_law_is_roots_rule():
-    """#362's rule, k_s = min(n_s, max(f_s, ⌈K·W_s/W⌉)): T0 has 3 units of work 3 and T2 4 units of work 0, and `work:2`
-    draws 2 and 1; a floor of 3 on T2 draws 3. #362's own example also gives work to a second template (T1, 3 units of
+    """The work rule, k_s = min(n_s, max(f_s, ⌈K·W_s/W⌉)): T0 has 3 units of work 3 and T2 4 units of work 0, and `work:2`
+    samples 2 and 1; a floor of 3 on T2 samples 3. The rule's own example (`Flock/Draw.lean`) also gives work to a second template (T1, 3 units of
     work 1), which a call's table may not (`hone`, `check_work_strata`), so the verifier refuses it."""
     import pytest
 
@@ -83,7 +83,7 @@ def test_the_work_law_is_roots_rule():
 
 
 def test_the_record_budget_is_27713():
-    """(1 − 0.001)^K ≤ 2⁻⁴⁰ first at K = 27,713 (#362's `record_sizing`); 27,712 misses (`record_sizing_one_fewer`)."""
+    """(1 − 0.001)^K ≤ 2⁻⁴⁰ first at K = 27,713 (`record_sizing`); 27,712 misses (`record_sizing_one_fewer`)."""
     assert PL.record_k(Fraction(1, 1000), Fraction(1, 2 ** 40)) == PL.RECORD_K == 27_713
     assert 999 ** 27_712 * 2 ** 40 > 1000 ** 27_712
     assert PL.record_k(Fraction(1, 1000), Fraction(1, 100)) == 4_603
@@ -100,47 +100,47 @@ def test_a_plan_proves_each_drawn_tile_with_its_closure_once():
     assert len(tiles) == 2 and len(plan.drawn) == 2 + len(lay.strata) - 1   # each other stratum at its floor of one
 
 
-def test_the_work_table_and_law_object_are_362s():
+def test_the_work_table_and_design_object_are_362s():
     """`work_table` is the verifier's `--work-table` (W_ref per tile, 0 elsewhere, and each template's floor f_s);
-    `law_object` is the law `flock-verify draw --work K` derives from it (`Draw.deriveWork`, `Law.toJson`). A floor from the
-    verifier's table raises a zero-work stratum's draws to it (X-SPC-81)."""
+    `design_object` is the sampling design `flock-verify draw --work K` derives from it (`Draw.deriveWork`, `Law.toJson`). A floor from the
+    verifier's table raises a zero-work stratum's samples to it."""
     lay = PL.layout(ncp2.Shape(32, 64, 32))
     tile, deq = _by_role(lay)["tile"], _by_role(lay)["dequant"]
     table = PL.work_table(lay)
     assert table == {s.name: {"work": lay.tile_work() if s is tile else 0, "floor": 1} for s in lay.strata}
-    law = PL.law_object(lay, PL.WorkLaw(3))
+    law = PL.design_object(lay, PL.WorkLaw(3))
     assert law == {"law": "work", "k": 3, "strata": [{"template": s.name, "units": s.ranges(), "work": table[s.name]["work"],
                                                       "floor": 1, "k": 3 if s is tile else 1} for s in lay.strata]}
     floored = PL.WorkLaw(3, floors=((deq.name, 5),))
     assert PL.work_table(lay, floored)[deq.name] == {"work": 0, "floor": 5}
-    assert {s["template"]: (s["floor"], s["k"]) for s in PL.law_object(lay, floored)["strata"]}[deq.name] == (5, 5)
+    assert {s["template"]: (s["floor"], s["k"]) for s in PL.design_object(lay, floored)["strata"]}[deq.name] == (5, 5)
 
 
 def test_openings_are_one_leaf_per_row():
-    """A and the weight are committed a leaf per row (X-SPC-57): a proved strip opens exactly its 16 rows."""
+    """A and the weight are committed a leaf per row: a proved strip opens exactly its 16 rows."""
     lay = PL.layout(ncp2.Shape(32, 64, 32))
     by_role = {u.role: u for u in lay.units if u.role == "form_x"}
     assert PL.openings(lay, [by_role["form_x"].index]) == tuple(("a", r) for r in range(16 * by_role["form_x"].where[0],
                                                                                          16 * by_role["form_x"].where[0] + 16))
     assert PL.openings(lay, [], [1]) == (*(("b", r) for r in range(16, 32)), ("y", 1))   # the weight Program's Y unit 1,
-    # and the call's Y input at its strip beside that unit's output (X-SPC-95)
+    # and the call's Y input at its strip beside that unit's output
 
 
 def test_the_profile_is_stratified_over_the_tile_strata():
     lay = PL.layout(ncp2.Shape(32, 64, 32))
     tile = _by_role(lay)["tile"]
     assert PL.profile(lay, {tile.name: 1}) == Stratified((Stratum(tile.name, 4, 1),))
-    # one draw of four tiles at δ = 1/4: three unsound tiles escape with probability exactly 1/4
+    # one sample of four tiles at δ = 1/4: three unsound tiles escape with probability exactly 1/4
     bound = PL.unsound_work_bound(lay, {tile.name: 1}, 0.25)
     assert 3 * lay.tile_work() <= bound < 3.01 * lay.tile_work()
 
 
 def test_traced_as_is_the_compositions_entry_point():
-    """What #311's PoUW adapter calls: the circuit for `ncp-v2`, nothing for a scheme without one."""
+    """What the vLLM integration's PoUW adapter calls: the circuit for `ncp-v2`, nothing for a scheme without one."""
     import pytest
 
-    from verity.core.protocols.pouw.circuit import partition as P
-    from verity.core.protocols.pouw.circuit import traced_as
+    from verity.ml.protocols.pouw.circuit import partition as P
+    from verity.ml.protocols.pouw.circuit import traced_as
     from verity.core.protocols.pouw.protocol import DomainError
 
     t = traced_as("ncp-v2-shift24", 32, 64, 32)
@@ -154,8 +154,8 @@ def test_traced_as_is_the_compositions_entry_point():
 
 
 def test_the_default_work_law_draws_a_calls_share_of_the_windows_budget():
-    """K = 27,713 is a window's budget (X-SPC-83): alone, a call is capped at its units instead of raising; in a window each
-    call draws ⌈K·W_c/W_window⌉, so C equal calls draw about K between them, not C·K."""
+    """K = 27,713 is an execution phase's budget: alone, a call is capped at its units instead of raising; in an execution phase each
+    call samples ⌈K·W_c/W_window⌉, so C equal calls sample about K between them, not C·K."""
     lay = PL.layout(ncp2.Shape(32, 64, 32))
     tile = _by_role(lay)["tile"]
     assert PL.WorkLaw().sizes(lay.strata) == {s.name: 4 if s is tile else 1 for s in lay.strata}   # K capped at its units
@@ -163,17 +163,17 @@ def test_the_default_work_law_draws_a_calls_share_of_the_windows_budget():
     assert laws[0].budget(lay.strata) == -(-PL.RECORD_K // 10_000) == 3
     deq = _by_role(lay)["dequant"]                                   # y's floor ⌈K_y·1,024/(10,000·1,024)⌉ (option B)
     assert laws[0].sizes(lay.strata) == {s.name: 3 if s in (tile, deq) else 1 for s in lay.strata}
-    assert PL.law_object(lay, laws[0])["k"] == 3                     # #362's law at the call's share
+    assert PL.design_object(lay, laws[0])["k"] == 3                     # the work sampling design at the call's share
     assert sum(law.sizes(lay.strata)[tile.name] for law in laws) <= PL.RECORD_K + 10_000 * len(lay.strata)
 
 
 
 def test_y_is_drawn_at_root_s_option_b_floors_over_the_window():
-    """Root's option B on X-SPC-105: each call's dequantization stratum has floor f_c = ⌈K_y·n_c/N⌉ in its own work table, N
-    the window's y cells and K_y = K = 27,713, so k_c = min(n_c, f_c) meets k_c·N ≥ K_y·n_c or proves the stratum, and the
-    window draws at most K_y + C y cells. The other zero-work templates keep floor 1, and the tiles' K_c don't move. A call
-    alone proves all its y cells up to K_y. Over the window the escape of b_c wrong cells in each call is at most
-    (1 − ∑b_c/N)^K_y (weighted AM–GM, root's §1), the bound the window pin states."""
+    """y's floors over the execution phase: each call's dequantization stratum has floor f_c = ⌈K_y·n_c/N⌉ in its own work table, N
+    the execution phase's y cells and K_y = K = 27,713, so k_c = min(n_c, f_c) meets k_c·N ≥ K_y·n_c or proves the stratum, and the
+    execution phase samples at most K_y + C y cells. The other zero-work templates keep floor 1, and the tiles' K_c don't move. A call
+    alone proves all its y cells up to K_y. Over the execution phase the escape of b_c wrong cells in each call is at most
+    (1 − ∑b_c/N)^K_y (weighted AM–GM, root's §1), the bound the execution phase pin states."""
     import random
 
     shapes = [ncp2.Shape(32, 64, 32)] * 3 + [ncp2.Shape(64, 64, 64)] * 2 + [ncp2.Shape(48, 64, 32)]
@@ -192,7 +192,7 @@ def test_y_is_drawn_at_root_s_option_b_floors_over_the_window():
         assert k_c == min(n_c, f_c) and (k_c * big_n >= PL.RECORD_K * n_c or k_c == n_c)
         tile = _by_role(lay)["tile"].name
         assert law.sizes(lay.strata)[tile] == tiled.sizes(lay.strata)[tile]
-        assert PL.law_object(lay, law)["strata"][[s.name for s in lay.strata].index(deq.name)]["floor"] == f_c
+        assert PL.design_object(lay, law)["strata"][[s.name for s in lay.strata].index(deq.name)]["floor"] == f_c
         ks.append(k_c)
     assert PL.RECORD_K <= sum(ks) <= PL.RECORD_K + len(lays)
     rng = random.Random(105)
@@ -208,9 +208,9 @@ def test_y_is_drawn_at_root_s_option_b_floors_over_the_window():
 
 
 def test_a_work_table_with_a_calls_work_in_two_strata_is_refused():
-    """The window pin's `covers_window` holds only when each call's work is in one stratum (`hone`): with the cap K_c ≤ N_c,
-    root's counterexample (4 units at work 2 and 2 at work 5, K = 8) draws 3 of the first where covering needs 3.6. The
-    verifier's own layouts give work to the tile template only (X-SPC-84), and `work_table`, `WorkLaw` and `window_laws`
+    """The execution phase pin's `covers_window` holds only when each call's work is in one stratum (`hone`): with the cap K_c ≤ N_c,
+    a counterexample (4 units at work 2 and 2 at work 5, K = 8) samples 3 of the first where covering needs 3.6. The
+    verifier's own layouts give work to the tile template only, and `work_table`, `WorkLaw` and `window_laws`
     refuse any layout that doesn't."""
     import dataclasses
 
@@ -223,11 +223,11 @@ def test_a_work_table_with_a_calls_work_in_two_strata_is_refused():
     two = dataclasses.replace(lay, strata=tuple(dataclasses.replace(s, work=len(s.units)) if s is deq else s
                                                  for s in lay.strata))
     for refused in (lambda: PL.work_table(two), lambda: PL.WorkLaw().sizes(two.strata), lambda: PL.window_laws([lay, two]),
-                    lambda: PL.law_object(two, PL.WorkLaw()), lambda: PL.draw(_key(), two, PL.WorkLaw())):
+                    lambda: PL.design_object(two, PL.WorkLaw()), lambda: PL.draw(_key(), two, PL.WorkLaw())):
         with pytest.raises(ValueError, match="one stratum"):
             refused()
     a, b = PL.StratumSpec("a", "tile", (0, 1, 2, 3), 2 * 4), PL.StratumSpec("b", "tile", (4, 5), 5 * 2)
-    assert -(-6 * a.work // (a.work + b.work)) == 3 and 3 * 18 < 8 * a.work       # 3 drawn, 8·2·4/18 ≈ 3.6 needed
+    assert -(-6 * a.work // (a.work + b.work)) == 3 and 3 * 18 < 8 * a.work       # 3 sampled, 8·2·4/18 ≈ 3.6 needed
     with pytest.raises(ValueError, match="one stratum"):
         PL.WorkLaw(8).sizes((a, b))
     tile = _by_role(lay)["tile"]                                                 # a call's tiles split over two templates
@@ -239,10 +239,10 @@ def test_a_work_table_with_a_calls_work_in_two_strata_is_refused():
 
 
 def test_the_red_team_s_capped_window_is_refused():
-    """The red team's window (20260929T1622Z): call 0 has 1,000 units at work 2 and 10 at work 1,000, call 1 100,000 at
+    """A capped execution phase: call 0 has 1,000 units at work 2 and 10 at work 1,000, call 1 100,000 at
     work 0 and 1 at work 1, and K = 5,000. Call 0's share 5,000 is capped at its 1,010 units, so its work-2 stratum would
-    draw 169 of 1,000 (834 uncapped), and ten wrong units there escape with 0.156 where the window bound claims
-    (1 − 20/12,001)^5,000 ≈ 2.4·10⁻⁴. `window_laws` refuses the window: call 0 does work in two strata."""
+    sample 169 of 1,000 (834 uncapped), and ten incorrect proof blocks there escape with 0.156 where the execution phase bound claims
+    (1 − 20/12,001)^5,000 ≈ 2.4·10⁻⁴. `window_laws` refuses the execution phase: call 0 does work in two strata."""
     from math import comb
 
     import pytest
@@ -264,8 +264,8 @@ def test_the_red_team_s_capped_window_is_refused():
 
 
 def test_a_window_that_does_no_work_is_refused():
-    """The window pin's `hW`, 0 < W: `window_laws` refuses a window whose calls do no work (every stratum at work 0), so
-    it is never drawn or accepted; one call's work is enough."""
+    """The execution phase pin's `hW`, 0 < W: `window_laws` refuses an execution phase whose calls do no work (every stratum at work 0), so
+    it is never sampled or accepted; one call's work is enough."""
     import pytest
 
     shape = ncp2.Shape(16, 64, 16)
@@ -280,7 +280,7 @@ def test_a_window_that_does_no_work_is_refused():
 
 
 def test_a_window_with_no_y_cells_is_refused():
-    """The window pin's `hN`, 0 < N: `window_laws` refuses a window with no dequantization units, so its y term is never
+    """The execution phase pin's `hN`, 0 < N: `window_laws` refuses an execution phase with no dequantization units, so its y term is never
     claimed over an empty population; the verifier's own layouts always have them."""
     import pytest
 
@@ -294,7 +294,7 @@ def test_a_window_with_no_y_cells_is_refused():
     assert len(PL.window_laws([lay, lay])) == 2
 
 def test_the_window_law_is_the_window_pin_s():
-    """#418's `Audit/Window.lean` definitions, recomputed on ℕ from their formulas on random small windows, against
+    """`Audit/Window.lean`'s definitions, recomputed on ℕ from their formulas on random small execution phases, against
     `window_laws`: `callK` = min(N_c, max(1, ⌈K·W_c/W⌉)) is `WorkLaw.budget`, `windowK` = workRule(K_c, w_s, n_s, W_c, f_s)
     is `WorkLaw.sizes`, and the pin's hypotheses hold: `hone` (each call's work in one stratum), `hfy` (y's floors, v = 1 on
     the dequantization strata) and so `Covers` of w at K and of v at K_y, which `audit_window_split_of_record` reads."""
@@ -339,26 +339,26 @@ def test_the_window_law_is_the_window_pin_s():
 
 
 def test_a_tiles_closure_contains_the_tile_itself():
-    """A drawn tile is proved itself, not only what it reads: `t ∈ cl t`, as Lean's `Layout.cl` inserts the tile's own unit.
-    Without it a wrong tile over right strips would count as zero harm (the Flock red team's C1 on #390)."""
+    """A sampled tile is proved itself, not only what it reads: `t ∈ cl t`, as Lean's `Layout.cl` inserts the tile's own unit.
+    Without it a wrong tile over right strips would count as zero harm."""
     for shape in (ncp2.Shape(32, 64, 32), ncp2.Shape(48, 64, 32)):
         lay = PL.layout(shape)
         tiles = {u.index for u in lay.units if u.role == "tile"}
         assert set(lay.closure) == tiles
         assert all(lay.closure[t][0] == t for t in tiles)
-        plan = PL.draw(_key(), lay, PL.WorkLaw(len(tiles)))                 # every tile drawn
+        plan = PL.draw(_key(), lay, PL.WorkLaw(len(tiles)))                 # every tile sampled
         assert tiles <= set(plan.drawn) <= set(plan.proved)
         assert all(set(lay.closure[t]) <= set(plan.proved) for t in tiles)
 
 
 def test_a_prover_s_layout_mapping_a_tile_to_its_x_strip_is_refused():
-    """The Layout theorems hold only for the window's own layout, so the verifier derives each tile's own unit and its
+    """The Layout theorems hold only for the execution phase's own layout, so the verifier derives each tile's own unit and its
     closure from the shape (`Traced.layout`) and never takes a prover's. A layout mapping a tile to its X strip, C1 again,
     is refused, as a closure headed by the X strip or as the X strip in the tile stratum: by the verifier's comparison
     (`Traced.check_layout`) and by `draw`'s own check."""
     from dataclasses import replace
 
-    from verity.core.protocols.pouw.circuit import traced_as
+    from verity.ml.protocols.pouw.circuit import traced_as
     from verity.core.protocols.pouw.protocol import DomainError
 
     t = traced_as("ncp-v2-shift24", 32, 64, 32)
@@ -379,20 +379,20 @@ def test_a_prover_s_layout_mapping_a_tile_to_its_x_strip_is_refused():
 
 
 def _anchors(call, **kw):
-    from verity.core.protocols.pouw.circuit.anchors import Anchors
+    from verity.ml.protocols.pouw.circuit.anchors import Anchors
 
     f = {"forward": call.forward, "layer": call.layer, "site": call.site, **kw}
     return Anchors(call.salt, f["forward"], f["layer"], f["site"], call.weight, tuple(call.rowids), tuple(call.colids))
 
 
 def _window(t, anchors, source=bytes(range(32)), commitments=None):
-    """A window over ``anchors`` (each of ``t``'s shape, with a commitment of its own unless ``commitments`` gives them):
-    its `Receipt`, and the `Ledger` opened from it, with the fresh source replaced by ``source`` so the draws are
+    """An execution phase over ``anchors`` (each of ``t``'s shape, with a commitment of its own unless ``commitments`` gives them):
+    its `Receipt`, and the `Ledger` opened from it, with the fresh source replaced by ``source`` so the samples are
     reproducible."""
     import hashlib
     from unittest import mock
 
-    from verity.core.protocols.pouw.circuit import anchors as A
+    from verity.ml.protocols.pouw.circuit import anchors as A
 
     cs = commitments or [hashlib.sha512(repr(an).encode()).digest() for an in anchors]
     receipt = A.Receipt(tuple((an, t.shape, c) for an, c in zip(anchors, cs)))
@@ -401,11 +401,11 @@ def _window(t, anchors, source=bytes(range(32)), commitments=None):
 
 
 def test_equal_calls_under_one_key_draw_different_tiles():
-    """Each stratum's subset is keyed by the call's index, (forward, position), with its template (X-SPC-96): equal calls of
-    a window, under its one key, draw different tiles, and one call draws the same tiles under that key every time. The
-    strata stay one per template of the call's partition (X-SPC-84); only the randomness is per call."""
+    """Each stratum's subset is keyed by the call's index, (forward, position), with its template: equal calls of
+    an execution phase, under its one key, sample different tiles, and one call samples the same tiles under that key every time. The
+    strata stay one per template of the call's partition; only the randomness is per call."""
     import circuit_fixtures as F
-    from verity.core.protocols.pouw.circuit import traced_as
+    from verity.ml.protocols.pouw.circuit import traced_as
 
     call = F.call(64, 64, 64)
     t, law = traced_as("ncp-v2-shift24", 64, 64, 64), PL.WorkLaw(4)
@@ -419,12 +419,12 @@ def test_equal_calls_under_one_key_draw_different_tiles():
 
 
 def test_the_verifier_draws_over_its_own_layout():
-    """`Traced.draw(law, anchors, ledger)` takes no layout and no key: it is `plan.draw` over `Traced.layout()` (X-SPC-97)
+    """`Traced.draw(law, anchors, ledger)` takes no layout and no key: it is `plan.draw` over `Traced.layout()`
     under the ledger's key."""
     import inspect
 
     import circuit_fixtures as F
-    from verity.core.protocols.pouw.circuit import Traced, traced_as
+    from verity.ml.protocols.pouw.circuit import Traced, traced_as
 
     call = F.call(32, 64, 32)
     t = traced_as("ncp-v2-shift24", 32, 64, 32)
@@ -435,18 +435,18 @@ def test_the_verifier_draws_over_its_own_layout():
 
 
 def test_a_repeated_call_index_is_refused_before_any_draw(monkeypatch):
-    """The window pin takes a window's per-call draws as independent (M1), and each call's subsets are keyed by its index
-    under the one window key. A receipt lists each call index once, and `Traced.draw` admits the call to the window's
-    `Ledger` before it draws: a call index already drawn, even with another weight id, is refused before `plan.draw`
-    runs. A draw without a ledger is refused."""
+    """The execution phase pin takes an execution phase's per-call samples as independent (M1), and each call's subsets are keyed by its index
+    under the one execution phase key. A receipt lists each call index once, and `Traced.draw` admits the call to the execution phase's
+    `Ledger` before it samples: a call index already sampled, even with another weight id, is refused before `plan.draw`
+    runs. A sample without a ledger is refused."""
     import hashlib
 
     import pytest
 
     import circuit_fixtures as F
-    from verity.core.protocols.pouw.circuit import plan as plan_module
-    from verity.core.protocols.pouw.circuit import traced_as
-    from verity.core.protocols.pouw.circuit.anchors import Anchors, Receipt
+    from verity.ml.protocols.pouw.circuit import plan as plan_module
+    from verity.ml.protocols.pouw.circuit import traced_as
+    from verity.ml.protocols.pouw.circuit.anchors import Anchors, Receipt
     from verity.core.protocols.pouw.protocol import DomainError
 
     call = F.call(32, 64, 32)
@@ -473,7 +473,7 @@ def test_a_repeated_call_index_is_refused_before_any_draw(monkeypatch):
 
 
 def test_the_window_key_is_derived_from_the_complete_receipt(monkeypatch):
-    """Root's C1: the window's key comes after every call's commitment. A `Receipt` lists every call of the window with its
+    """Root's C1: the execution phase's key comes after every call's commitment. A `Receipt` lists every call of the execution phase with its
     shape and commitment, and is immutable; `Ledger.open` derives the key from it alone, under `DRAW_DOMAIN` with
     {"receipt": digest}, and `Traced.draw` refuses a ledger not opened from a receipt and a call the receipt doesn't list
     (another index, the same index with other anchors, or another shape), before `plan.draw` runs. The digest binds each
@@ -484,9 +484,9 @@ def test_the_window_key_is_derived_from_the_complete_receipt(monkeypatch):
     import pytest
 
     import circuit_fixtures as F
-    from verity.core.protocols.pouw.circuit import anchors as A
-    from verity.core.protocols.pouw.circuit import plan as plan_module
-    from verity.core.protocols.pouw.circuit import traced_as
+    from verity.ml.protocols.pouw.circuit import anchors as A
+    from verity.ml.protocols.pouw.circuit import plan as plan_module
+    from verity.ml.protocols.pouw.circuit import traced_as
     from verity.core.protocols.pouw.protocol import DomainError
 
     call = F.call(32, 64, 32)
@@ -527,13 +527,13 @@ def test_the_window_key_is_derived_from_the_complete_receipt(monkeypatch):
 
 
 def test_a_caller_built_ledger_has_no_key():
-    """The red team's first probe: a ledger built with a key from a caller-chosen source. `Ledger` takes no receipt, key
-    or source, and sets none afterwards, so only `Ledger.open` makes one that draws."""
+    """A ledger built with a key from a caller-chosen source. `Ledger` takes no receipt, key
+    or source, and sets none afterwards, so only `Ledger.open` makes one that samples."""
     import pytest
 
     import circuit_fixtures as F
-    from verity.core.protocols.pouw.circuit import traced_as
-    from verity.core.protocols.pouw.circuit.anchors import Ledger
+    from verity.ml.protocols.pouw.circuit import traced_as
+    from verity.ml.protocols.pouw.circuit.anchors import Ledger
     from verity.core.protocols.pouw.protocol import DomainError
 
     call = F.call(32, 64, 32)
@@ -552,12 +552,12 @@ def test_a_caller_built_ledger_has_no_key():
 
 
 def test_an_opened_ledger_s_key_cannot_be_reassigned():
-    """The red team's second probe: an opened ledger whose key is reassigned. The key is set once, in `Ledger.open`, and
-    `Traced.draw` reads it from the ledger, so a caller's key never reaches a draw."""
+    """An opened ledger whose key is reassigned. The key is set once, in `Ledger.open`, and
+    `Traced.draw` reads it from the ledger, so a caller's key never reaches a sample."""
     import pytest
 
     import circuit_fixtures as F
-    from verity.core.protocols.pouw.circuit import traced_as
+    from verity.ml.protocols.pouw.circuit import traced_as
 
     call = F.call(32, 64, 32)
     t, an = traced_as("ncp-v2-shift24", 32, 64, 32), _anchors(call)
@@ -571,16 +571,16 @@ def test_an_opened_ledger_s_key_cannot_be_reassigned():
 
 
 def test_an_opened_ledger_s_receipt_cannot_be_swapped():
-    """The red team's third probe: an opened ledger whose receipt is swapped for a larger one after the key exists, so a
-    call committed after the key would be drawn under it. The receipt is set once, in `Ledger.open`, and the later call
+    """An opened ledger whose receipt is swapped for a larger one after the key exists, so a
+    call committed after the key would be sampled under it. The receipt is set once, in `Ledger.open`, and the later call
     is refused."""
     import hashlib
 
     import pytest
 
     import circuit_fixtures as F
-    from verity.core.protocols.pouw.circuit import traced_as
-    from verity.core.protocols.pouw.circuit.anchors import Receipt
+    from verity.ml.protocols.pouw.circuit import traced_as
+    from verity.ml.protocols.pouw.circuit.anchors import Receipt
     from verity.core.protocols.pouw.protocol import DomainError
 
     call = F.call(32, 64, 32)
@@ -596,7 +596,7 @@ def test_an_opened_ledger_s_receipt_cannot_be_swapped():
 
 
 def test_openings_are_checked_against_the_receipt_s_commitment():
-    """The red team's tier-3 item: the call's A-row openings are checked against its commitment as the opened ledger's
+    """The call's A-row openings are checked against its commitment as the opened ledger's
     receipt lists it, by call index (`Ledger.commitment`), never one supplied with the openings. The prover's own rows
     under the receipt's commitment pass; rows committed under any other commitment, a missing row, a row opened twice,
     or a call the receipt doesn't list are refused."""
@@ -604,17 +604,17 @@ def test_openings_are_checked_against_the_receipt_s_commitment():
 
     import circuit_fixtures as F
     from verity.core.protocols.pouw import audit
-    from verity.core.protocols.pouw.circuit import traced_as
-    from verity.core.protocols.pouw.circuit.anchors import Ledger
+    from verity.ml.protocols.pouw.circuit import traced_as
+    from verity.ml.protocols.pouw.circuit.anchors import Ledger
     from verity.core.protocols.pouw.protocol import DomainError
 
     call = F.call(32, 64, 32)
     t, an = traced_as("ncp-v2-shift24", 32, 64, 32), _anchors(call)
     rows = [bytes(v & 0xFF for v in r) for r in call.a]
     binding = audit.activation_binding(call.salt, 7)
-    domain = audit.rows_domain(binding, 7, len(rows))
-    tree = audit.commit_rows(binding, 7, rows)
-    other = audit.commit_rows(binding, 7, [bytes(len(r)) for r in rows])
+    domain = audit.rows_domain(binding, 7, len(rows), audit.HM96)
+    tree = audit.commit_rows(binding, 7, rows, salt_key=bytes(32), nonce=7)
+    other = audit.commit_rows(binding, 7, [bytes(len(r)) for r in rows], salt_key=bytes(32), nonce=7)
     _receipt, window = _window(t, [an], commitments=[tree.commitment.root])
     assert window.commitment(an) == tree.commitment.root
     plan = t.draw(PL.WorkLaw(2), an, window)
@@ -632,14 +632,14 @@ def test_openings_are_checked_against_the_receipt_s_commitment():
 
 
 def test_the_record_keeps_the_source_once_the_draw_is_sent():
-    """The red team's answer to question 2: the audit record keeps the window's source and receipt digest once its draw
-    is sent, so a third party re-derives the key (`replay_key`) and so the draw. Before it is sent the record is refused,
-    and after it the window draws nothing more. What the record can't show is that the source was fresh."""
+    """The audit record keeps the execution phase's source and receipt digest once its sample
+    is sent, so a third party re-derives the key (`replay_key`) and so the sample. Before it is sent the record is refused,
+    and after it the execution phase samples nothing more. What the record can't show is that the source was fresh."""
     import pytest
 
     import circuit_fixtures as F
-    from verity.core.protocols.pouw.circuit import traced_as
-    from verity.core.protocols.pouw.circuit.anchors import replay_key
+    from verity.ml.protocols.pouw.circuit import traced_as
+    from verity.ml.protocols.pouw.circuit.anchors import replay_key
     from verity.core.protocols.pouw.protocol import DomainError
 
     call = F.call(32, 64, 32)
@@ -661,14 +661,14 @@ def test_the_record_keeps_the_source_once_the_draw_is_sent():
 
 
 def test_each_window_s_source_is_fresh():
-    """Root's C2: A4 models one fresh uniform source per derivation. `Ledger.open` takes no source: it draws 32 fresh bytes
-    from the operating system's CSPRNG (`secrets`) for each window, once the receipt is complete, so two windows, even
-    over one receipt, get independent keys, and no window's key is a function of another's."""
+    """Root's C2: A4 models one fresh uniform source per derivation. `Ledger.open` takes no source: it samples 32 fresh bytes
+    from the operating system's CSPRNG (`secrets`) for each execution phase, once the receipt is complete, so two execution phases, even
+    over one receipt, get independent keys, and no execution phase's key is a function of another's."""
     import inspect
 
     import circuit_fixtures as F
-    from verity.core.protocols.pouw.circuit import anchors as A
-    from verity.core.protocols.pouw.circuit import traced_as
+    from verity.ml.protocols.pouw.circuit import anchors as A
+    from verity.ml.protocols.pouw.circuit import traced_as
 
     call = F.call(32, 64, 32)
     t = traced_as("ncp-v2-shift24", 32, 64, 32)
@@ -680,14 +680,14 @@ def test_each_window_s_source_is_fresh():
 
 
 def test_the_call_s_y_is_linked_to_the_weight_program():
-    """The call reads its weight's Y strips and c₀ as inputs, so the plan opens them at each drawn tile's column strip
-    beside the weight Program's outputs there, and the verifier compares the two (`Traced.check_link`, X-SPC-95). Another
+    """The call reads its weight's Y strips and c₀ as inputs, so the plan opens them at each sampled tile's column strip
+    beside the weight Program's outputs there, and the verifier compares the two (`Traced.check_link`). Another
     weight's Y, or one c₀ changed, is refused."""
     import pytest
 
     import circuit_fixtures as F
     from verity.ml.circuits.evaluation import evaluate
-    from verity.core.protocols.pouw.circuit import ncp2, traced_as
+    from verity.ml.protocols.pouw.circuit import ncp2, traced_as
     from verity.core.protocols.pouw.protocol import DomainError
 
     call = F.call(32, 64, 32)

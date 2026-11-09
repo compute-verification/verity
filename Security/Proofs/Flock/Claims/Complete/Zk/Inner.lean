@@ -1,4 +1,8 @@
-import Proofs.Flock.Claims.Complete.Zk.Ligerito
+module
+
+public import Flock.With.Zk
+public import Proofs.Flock.Claims.Complete.Zk.Ligerito
+public import Proofs.Flock.Claims.Complete.Zk.Tape
 
 /-!
 # The masked prover's inner proof
@@ -15,6 +19,8 @@ it.
   at `0`, as upstream does), `Y = (h ‖ pad_h) + β (μ ‖ pad_μ)`, and the opened columns at the query coins with their
   salts and paths.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

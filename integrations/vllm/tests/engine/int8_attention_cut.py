@@ -25,7 +25,7 @@ import numpy as np
 
 from tests.engine.moe_scope_cut import _views, write
 from verity_vllm.check.fold_compare import SnapshotStore, _storage_indices
-from verity_vllm.engine.profiles import profile_for_case
+from verity_vllm.observe.fold.profiles import profile_for_case
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Event, Note, Root, RunHeader, StepEnd, StepStart, TritonLaunch, ViewDesc
 from verity_vllm.observe.fold.patterns.int8 import Int8AttentionScope
 from verity_vllm.observe.fold.patterns.kv_cache import kv_layer_of

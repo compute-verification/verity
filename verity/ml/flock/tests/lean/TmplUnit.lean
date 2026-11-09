@@ -1,14 +1,14 @@
 import Flock
 
 /-!
-The prover's side of a templated statement (PRF-133): its unit's rows at the positions the verifier folds them at. It
-unrolls the unit (`Tmpl.posMap`), which no verifier of record may do (`tests/test_verifier_cost.py`), so it is its own
+The prover's side of a templated statement: its unit's rows at the positions the verifier folds them at. It
+unrolls the unit (`Tmpl.posMap`), which no verifier may do (`tests/test_verifier_cost.py`), so it is its own
 executable, built beside `flock-verify` by `pod/90-tmpl-unit.sh` (`lean_exe flock-tmpl-unit`, root `TmplUnit`).
 
     flock-tmpl-unit TMPL --layout MODE [--out F]
 
-A `flock-ir-tmpl/v2` template read at layout `MODE` (`Tmpl.modeOf`) as a templated statement's META reads it
-(`TmplUnit.read`). One `TMPL` line: the logical and committed sizes and the slot's log. With `--out`, the committed net's
+A `flock-ir-tmpl/v2` template read at layout `MODE` (`Tmpl.modeOf`) as a templated statement's template section and META
+`layout` are read (`TmplUnit.read`). One `TMPL` line: the logical and committed sizes and the slot's log. With `--out`, the committed net's
 `flock-ir-unit/v2` rows, then an `ORDER` line, `Tmpl.posMap`: the prover's unit, committed where the verifier folds it
 (`flock-circuit --tmpl-unit F`).
 -/

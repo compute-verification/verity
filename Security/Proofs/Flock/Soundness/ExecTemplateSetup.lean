@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.ExecTemplatePlace
+module
+
+public import Proofs.Flock.Soundness.ExecTemplatePlace
 
 /-!
 # A typed template's layout, from `Stmt.setupH` (1e for templates, T3)
@@ -8,6 +10,8 @@ file derives them from what `Stmt.setupH` accepted for a template (`setupH_spec_
 `parse_facts_tmpl`, `check_facts_typed`, `delta_typed`) and what `Typed.read` built it from (`read_template`,
 `templateOf_spec`, `blockOf_spec`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 
@@ -649,17 +653,6 @@ theorem tmpl_net_facts {tags : Tags} {c : Circuit} (P : ParseFactsT tags t c)
 
 /-! ## An input's message bit is a column of the block -/
 
-theorem nested_getElem! {α : Type} [Inhabited α] (xs : Array (Array α)) (p k : ℕ) :
-    (xs[p]!)[k]! = default ∨ ∃ w ∈ xs.toList, (xs[p]!)[k]! ∈ w.toList := by
-  by_cases hp : p < xs.size
-  · rw [getElem!_pos xs p hp]
-    by_cases hk : k < xs[p].size
-    · exact Or.inr ⟨xs[p], Array.getElem_mem_toList hp, by rw [getElem!_pos _ k hk]; exact Array.getElem_mem_toList hk⟩
-    · exact Or.inl (getElem!_neg _ k hk)
-  · left
-    rw [getElem!_neg xs p hp]
-    exact getElem!_neg _ k (by show ¬ k < (#[] : Array α).size; simp)
-
 /-- **The rows' circuits fit their slots and their input ports lie in their input rows**: they are the file's own text
 nets or lookup slots, past the template's (`CheckFactsT.rows_after`). -/
 theorem rows_netOK {tags : Tags} {t : Typed.Template} {c : Circuit} (P : ParseFactsT tags t c)
@@ -902,8 +895,8 @@ theorem setupH_templateLayout (ht : tags.typed = true)
   obtain ⟨name, ty, htm⟩ := Typed.read_template hr
   exact ⟨hcls, P'.typed, templateLayout_of P' C' htm k.hd (read_held hr) rfl hpin hda hdb hm hk⟩
 
-/-- **The unit's shape, from `deriveChecked`**: its constant row and order (#404's `unit_const_row`, `order_cols`), its
-inputs (`unit_inputs`), and its parts' reads (#411's `part_reads`, `callee_prod`). -/
+/-- **The unit's shape, from `deriveChecked`**: its constant row and order (`unit_const_row`, `order_cols`), its
+inputs (`unit_inputs`), and its parts' reads (`part_reads`, `callee_prod`). -/
 theorem unitShape_of_class (k : Typed.Class) : UnitShape k.done (k.done.getD k.unit default) :=
   unitShape_of k.hd (unit_const_row k.hd) (order_cols k.hd) (fun _ hp _ hc => part_reads k.hd hp hc)
     (fun _ hp _ hc _ hr => callee_prod k.hd hp hc hr)
@@ -1069,7 +1062,7 @@ theorem copy_sum (y s j : ℕ) :
   · simp [hj, Ne.symm hj]
 
 /-- **An input of template instance `g` copies its message bit**: the block rows at its position read exactly
-`copySrc g w`, in `A` and in `B` (#277's input copies, over the unit's self input rows). -/
+`copySrc g w`, in `A` and in `B` (the input copies, over the unit's self input rows). -/
 theorem input_rows (hd : deriveChecked types ls info words unit = .ok done) (T : TemplateLayout st tb words done 𝒖)
     (U : UnitShape done 𝒖) {g w : ℕ} (hg : g < st.c.g) (hw : w < 𝒖.inCols.size) (j : ℕ) :
     rangesEntry st (slotEntryA st) (Typed.col st.c tb g 𝒖.inCols[w]) j +

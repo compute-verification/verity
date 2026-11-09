@@ -1,6 +1,8 @@
-import Definitions.Accounting.RateAudit
-import Definitions.Accounting.RateAuditJoint
-import Definitions.Accounting.RateAuditInteractive
+module
+
+public import Definitions.Accounting.RateAudit
+public import Definitions.Accounting.RateAuditJoint
+public import Definitions.Accounting.RateAuditInteractive
 
 /-!
 # The rate audit: what an accepted device held and read (trusted)
@@ -14,9 +16,8 @@ registry names, for a deployed device, the measurement or conjecture that carrie
 `bandwidth-instantiation` for the stored words).
 
 * `RateAudit`: in one window, an accepted device's footprint (residency) and ingress (bandwidth) reach the floor except
-  with probability `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ`.
-* `RateHonest`: an honest device that reads every word once is accepted on every coin, with footprint and ingress
-  exactly `N·b`.
+  with probability `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ`; its honest device is a lemma, `RateHonest`
+  (`Security/Proofs/Accounting/Lemmas/RateAudit.lean`).
 * `RateAuditWindows`: over `n` windows on one store, the time-averaged footprint.
 * `RateOfAudit`: in a joint run, the bandwidth account's reads, with the rebuilds charged as compute, so a compute
   account that did `W` of work leaves `F·T − W` for them.
@@ -26,6 +27,8 @@ registry names, for a deployed device, the measurement or conjecture that carrie
 * `RateOfAuditInteractive` and `RateOfAuditInteractiveRO`: `RateOfAudit` for a joint run whose bandwidth audit an
   interactive device plays.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 
@@ -51,15 +54,15 @@ least `(1 − μ)·|E|` bits, except with probability `ε = (1 − ε_s)^s + s·
   `μ = ε_s + (S + c_free + λ)/|E| + (F − tagging)/(N·c_enc)`,
 
 `c_free = L − ρ` is the side capacity the certified stream leaves free and `tagging = k·c_tag`. Against the
-actual-circuit model's B3 (`note:console/20261012T0645Z-draft-actual-circuit-model`, v2.4, at `e = 0`), whose chip reads
-at least `k·b − M_chip − c − λ` bits from HBM with `c = β_side·(T + RTT)`: `S` is `M_chip`, `L` is `c` with no `2^e`
-factor, the certified stream (certified ingress) takes `ρ` of it, and DMA into HBM during the window is side traffic.
-The footprint is the distinct device-memory bits the window read, so device memory held at least that much of the
-store's information (residency; the on-chip `S` is on the device too and counts against reads, not residency); the
-ingress counts every read, so it is at least the footprint (bandwidth). `(F − tagging)/(N·c_enc)` is `μ_rebuild`: with
-`x = N·c_enc/F`, the encode time of one pass's data in units of the window's compute, it is `(1 − τ)/x` when tagging
-takes the fraction `τ` of `F`, and in a joint run `F` is the compute residual (`RateOfAudit`). The bound holds at every
-`F`; a device whose compute is within `F` on every run has the conjunct always.
+actual-circuit model's B3 (at `e = 0`), whose chip reads at least `k·b − M_chip − c − λ` bits from HBM with
+`c = β_side·(T + RTT)`: `S` is `M_chip`, `L` is `c` with no `2^e` factor, the certified stream (certified ingress) takes
+`ρ` of it, and DMA into HBM during the window is side traffic. The footprint is the distinct device-memory bits the
+window read, so device memory held at least that much of the store's information (residency; the on-chip `S` is on the
+device too and counts against reads, not residency); the ingress counts every read, so it is at least the footprint
+(bandwidth). `(F − tagging)/(N·c_enc)` is `μ_rebuild`: with `x = N·c_enc/F`, the encode time of one pass's data in units
+of the window's compute, it is `(1 − τ)/x` when tagging takes the fraction `τ` of `F`, and in a joint run `F` is the
+compute residual (`RateOfAudit`). The bound holds at every `F`; a device whose compute is within `F` on every run has
+the conjunct always.
 
 **The proof** (`Accounting.SecurityProofs.RateAudit`) generalizes `Bandwidth.Guarantees.AuditRO`'s. A sampled word
 passes either because the device queried the oracle at its contents under the stream, or by a guessed tag (`2^-h` per
@@ -72,38 +75,22 @@ it at least `k·b + ρ − S − L − λ` bits of footprint and rebuilt words, 
 so the link's bits that carried them carried nothing about the store. Its completeness is `RateHonest`.
 
 The game's `rebuild j` is all-or-nothing: it returns the whole word at `c_enc`. Completing part of a word from the rest
-(the red team's F27: at one codec round with the payload known, a lattice completes a word's bottom third far below
-its per-bit price) is outside this game; `RateAuditPartial` (`RateAuditPartial.lean`) puts it inside, at this floor
-and error, under the named assumption `Accounting.Assumptions.WorkHardness` (`rate-codec-work` in partial-completion
-form, for codecs with `k ≥ 2` rounds).
+(at one codec round with the payload known, a lattice completes a word's bottom third far below its per-bit price) is
+outside this game; `RateAuditPartial` (`RateAuditPartial.lean`) puts it inside, at this floor and error, under the named
+assumption `Accounting.Assumptions.WorkHardness` (`rate-codec-work` in partial-completion form, for codecs with `k ≥ 2`
+rounds).
 
 Frozen (no-function, hash): a bound in the random-oracle model over an abstract chip program, which no Lean function of
 the rate audit's code computes. -/
 def RateAudit : Prop :=
-  ∀ (N b h ρ S L q s k F cTag cEnc lam : ℕ) (A : Rate.Device N b h ρ S L q),
+  ∀ (N b h ρ S L q s k F cTag cEnc lam : ℕ) (A : Rate.Prover N b h ρ S L q),
     pr (fun x : Store N b × Coins N b h ρ s =>
         A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
           A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b ρ S L F cTag cEnc k lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
 
-/-- **Completeness of `RateAudit`: an honest device that reads every word once is accepted on every coin.** For every
-`N`, `b`, `h` and `ρ` there is a device with no on-chip state and no free side sources, whose link carries exactly the
-certified stream (`L = ρ`) and which makes `N` oracle queries (a `Device N b h ρ 0 ρ N`), that is accepted on every
-store, stream, oracle and sample, so with probability 1; its footprint and its ingress are exactly the store, `N·b`
-bits, and its compute is `N·c_tag`, with nothing rebuilt. It reads the stream, then reads every word once and queries
-the oracle at it under the stream. Against `RateAudit` at `S = 0`, `L = ρ` (so `c_free = 0`), `q = N` and
-`F = N·c_tag`, the honest `N·b` sits above the floor `k·b − λ − (N − k)·c_tag·b/c_enc` by the sample's slack
-`(N − k)·b`, about `ε_s·N·b`, plus `λ` and the tagging the sample's slack leaves unspent. Proof:
-`Accounting.SecurityProofs.RateHonest`.
-
-Frozen (completeness): the honest device's acceptance, which shows that `RateAudit`'s event is not vacuous. -/
-def RateHonest : Prop :=
-  ∀ N b h ρ : ℕ, ∃ A : Rate.Device N b h ρ 0 ρ N,
-    ∀ (cTag cEnc : ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) (s : ℕ) (I : Fin s → Fin N),
-      A.Accepts E R O I ∧ A.footprint E R O = N * b ∧ A.ingress E R O = N * b ∧ A.compute cTag cEnc E R O = N * cTag
-
 /-- **The rate audit over `n` windows: time-averaged residency.** Over a uniform store and `n` windows, each with its
-own uniform stream, oracle and sample, played by devices of `RateAudit`'s class (`Rate.Windows`: window `i`'s device
+own uniform stream, oracle and sample, played by devices of `RateAudit`'s class (`Rate.Devices`: window `i`'s device
 and its layout any function of the other windows' coins, earlier or later), and for every `m`: `m` times the
 probability that every window is accepted with its compute within `F` while the footprints, summed over the windows,
 fall short of `n + 1 − m` floors,
@@ -121,7 +108,7 @@ coins.
 
 Frozen (no-function, hash): like `RateAudit`, a bound in the random-oracle model over abstract chip programs. -/
 def RateAuditWindows : Prop :=
-  ∀ (n N b h ρ S L q s k F cTag cEnc lam m : ℕ) (A : Windows n N b h ρ S L q s),
+  ∀ (n N b h ρ S L q s k F cTag cEnc lam m : ℕ) (A : Devices n N b h ρ S L q s),
     (m : ℝ≥0∞) * pr (fun x : Store N b × (Fin n → Coins N b h ρ s) =>
         (∀ i, (A.dev i x.2).Accepts x.1 (x.2 i).1 (x.2 i).2.1 (x.2 i).2.2 ∧
           (A.dev i x.2).compute cTag cEnc x.1 (x.2 i).1 (x.2 i).2.1 ≤ F) ∧
@@ -146,9 +133,9 @@ window and `T_bw` the bandwidth window's length. A bandwidth window that spans t
 `F·T − W` for every other account, the rebuilds and tags among them: `μ_rebuild = (F·T − W − tagging)/(N·c_enc)`, which
 is `(1 − τ)/x` with `τ = (W + tagging)/(F·T)` and `x = N·c_enc/(F·T)`. The compute audit's certificate is what makes `W`
 hold: a per-run compute guarantee bounding the probability that the compute audit accepts with the compute account's
-work below `W` by `ε_W` (lane `ra-per-run`'s `ComputeSoundPerRun`) gives, by a union bound, the probability that both
+work below `W` by `ε_W` (`Run.ComputeSoundPerRun`) gives, by a union bound, the probability that both
 audits accept and the bandwidth account read short of the floor at most `ε + ε_W`. Unlike `BandwidthOfAudit`, this is
-a per-run reading: the event is about the reads at the coins drawn. A `RealizesRate` for a deployed run must put the
+a per-run reading: the event is about the reads at the coins flipped. A `RealizesRate` for a deployed run must put the
 deadline and a round trip, `T + RTT`, inside `T_bw`, and every rebuild in the bandwidth window must fall in the compute
 window's work of the other accounts (`compute_le`). Proof: `Accounting.SecurityProofs.RateOfAudit`, from `RateAudit`.
 
@@ -167,21 +154,20 @@ def RateOfAudit : Prop :=
           (((d.rate .oracle * (r.win .bandwidth).len).choose k : ℕ) : ℝ≥0∞) / 2 ^ lam
 
 /-- **The rate audit with interactive side sources that ignore the oracle.** `RateAudit`'s bound, at its floor and its
-error, for an `InteractiveDevice` (`Security/Definitions/Accounting/RateAuditInteractive.lean`): its chip may send any
+error, for an `InteractiveProver` (`Security/Definitions/Accounting/RateAuditInteractive.lean`): its chip may send any
 number of bits, however they depend on the seed, to side sources that answer each read as any function of the store,
 the certified stream and every bit sent so far, but not of the oracle. `L` bounds what came in over the side link (side
 bits and stream bits together); sends are free. The rebuild charge `(F − k·c_tag)·b` and the stream's `ρ` are
 `RateAudit`'s.
 
-**The reading.** In the actual-circuit model (`note:console/20261012T0645Z-draft-actual-circuit-model`, section 6), the
-rest of the prover answers the chip as such a source: localization's table of replies, keyed by what the chip sent, is
-a side source addressed by what was sent, and the chip reads only its own entry. When nothing the chip sends depends on
-the seed (`e = 0`), the rest can't evaluate the tag at the fresh seed, so its answers ignore the oracle. The certified
-ingress of the HBM link (and the residency it implies) is then `RateAudit`'s `(1 − μ)·|E|`, with `L` the side links'
-signals in the window, `β_side·(T + RTT)`, and no `2^e` factor: the compression behind `RateAudit` encodes the bits
-the chip read, not what its sources hold, so a table of any size costs only what the chip read of it. A source may see
-the certified stream as well (the host that sends it, a tap on the link): the stream is fresh, so whatever the chip
-learns of it still came in over the link.
+**The reading.** In the actual-circuit model, the rest of the prover answers the chip as such a source: localization's
+table of replies, keyed by what the chip sent, is a side source addressed by what was sent, and the chip reads only its
+own entry. When nothing the chip sends depends on the seed (`e = 0`), the rest can't evaluate the tag at the fresh seed,
+so its answers ignore the oracle. The certified ingress of the HBM link (and the residency it implies) is then
+`RateAudit`'s `(1 − μ)·|E|`, with `L` the side links' signals in the window, `β_side·(T + RTT)`, and no `2^e` factor:
+the compression behind `RateAudit` encodes the bits the chip read, not what its sources hold, so a table of any size
+costs only what the chip read of it. A source may see the certified stream as well (the host that sends it, a tap on the
+link): the stream is fresh, so whatever the chip learns of it still came in over the link.
 
 Proof: `Accounting.SecurityProofs.RateAuditInteractiveRO`: an interactive device is a device whose side source,
 addressed by what was sent and where, may depend on the store and the stream, and `RateAudit`'s argument holds for such
@@ -189,14 +175,14 @@ a device.
 
 Frozen (no-function, hash): as `RateAudit`, a bound in the random-oracle model over an abstract chip program. -/
 def RateAuditInteractiveRO : Prop :=
-  ∀ (N b h ρ S L q s k F cTag cEnc lam : ℕ) (A : Rate.InteractiveDevice N b h ρ S L q),
+  ∀ (N b h ρ S L q s k F cTag cEnc lam : ℕ) (A : Rate.InteractiveProver N b h ρ S L q),
     (∀ E R O O', A.side E R O = A.side E R O') →
     pr (fun x : Store N b × Coins N b h ρ s =>
         A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
           A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b ρ S L F cTag cEnc k lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
 
-/-- **The rate audit with interactive side sources, in the random-oracle model.** For every `InteractiveDevice` of
+/-- **The rate audit with interactive side sources, in the random-oracle model.** For every `InteractiveProver` of
 `RateAudit`'s class, whose side sources may answer as any function of the store, the certified stream, the oracle and
 every bit sent so far, and for every `m`: the probability that the verifier accepts, the run's compute is within `F`,
 and its footprint falls short of the floor at `k − m` words,
@@ -222,7 +208,7 @@ oracle from at most `L` bits read.
 
 Frozen (no-function, hash): as `RateAudit`, a bound in the random-oracle model over an abstract chip program. -/
 def RateAuditInteractive : Prop :=
-  ∀ (N b h ρ S L q s k m F cTag cEnc lam : ℕ) (A : Rate.InteractiveDevice N b h ρ S L q),
+  ∀ (N b h ρ S L q s k m F cTag cEnc lam : ℕ) (A : Rate.InteractiveProver N b h ρ S L q),
     pr (fun x : Store N b × Coins N b h ρ s =>
         A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
           A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b ρ S L F cTag cEnc (k - m) lam)

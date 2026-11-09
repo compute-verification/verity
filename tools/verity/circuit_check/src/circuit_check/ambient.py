@@ -10,7 +10,7 @@ and of nothing else they could read. Two fresh interpreters lower every target:
              next: a global, a mutable closure, a memo keyed by less than what it caches);
 
 and every text must be one text. In both, each read of the environment (``os.environ``, so ``os.getenv``), of a clock (the
-`time` module's) and each unseeded draw (`random`'s functions and an unseeded `random.Random`, ``os.urandom`` and so
+`time` module's) and each unseeded sample (`random`'s functions and an unseeded `random.Random`, ``os.urandom`` and so
 `secrets`, `numpy.random`'s global functions and an unseeded ``default_rng``) made while a lowering runs is recorded with
 where in this tree's code it was made, and is a failure whatever its value. Not seen: state both interpreters hold alike (a
 file a builder reads, a value an import computed from such state), a perturbation that by chance changes nothing a builder
@@ -77,7 +77,7 @@ def _wrap(owner: Any, name: str, what: str, when: Any = None) -> None:
 
 
 def _install() -> None:
-    """Record the reads (`_note`) of the environment, the clocks and unseeded draws, from here on."""
+    """Record the reads (`_note`) of the environment, the clocks and unseeded samples, from here on."""
     import random
     import time
 
@@ -216,8 +216,11 @@ def check(targets: list[str], *, path: tuple[str, ...] = ()) -> list[dict]:
 
 def ambiguous_words() -> dict[str, list[str]]:
     """Each word primitive that registered Boolean Definitions build with two or more different builders, and that
-    `ir_lower.PIECES` lowers by one of them (no piece of its own): their ids, in registration order. Every registry is
-    loaded first (`targets.load_registries`)."""
+    `ir_lower.PIECES` lowers by one of them (no piece of its own; a piece the Boolean export's tracer wrapped, as it wraps
+    each one once the process exports, is the one it wraps): their ids, in registration order. Every registry is loaded
+    first (`targets.load_registries`)."""
+    import inspect
+
     from verity_flock import ir_lower as IL
 
     from verity.ml.circuits.defs import REGISTRY
@@ -234,7 +237,7 @@ def ambiguous_words() -> dict[str, list[str]]:
     out = {}
     for word, ds in by.items():
         builds = {id(d.build) for d in ds}
-        if len(builds) > 1 and id(IL.PIECES.get(word)) in builds:
+        if len(builds) > 1 and id(inspect.unwrap(IL.PIECES.get(word))) in builds:
             out[word] = [d.id for d in ds]
     return out
 

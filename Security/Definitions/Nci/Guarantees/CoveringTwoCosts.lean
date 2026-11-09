@@ -1,4 +1,6 @@
-import Definitions.Nci.Assumptions.CoveringTwoCosts
+module
+
+public import Definitions.Nci.Assumptions.CoveringTwoCosts
 
 /-!
 # The covering bound at two costs: `c_w` a weight, `c_a` an activation
@@ -7,6 +9,8 @@ import Definitions.Nci.Assumptions.CoveringTwoCosts
 parameter-hardness `c_w` bounds the weights a block completes, the activation-chaining `c_a` bounds its tokens. It is a
 statement beside `CoveringBound`, which is it at `c_w = c_a = r · b`.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 
@@ -23,11 +27,11 @@ completed by it. The completed ones have their weight in `θ'_S`, `|θ'_S| ≤ k
 outside `θ'_S` and so has at least `c_a` gates. `c_w D > k` makes `c_w` positive; `c_a > 0` is needed, since at
 `c_a ≤ 0` every cut is wide enough and the bound's `k / c_a` is not a count.
 
-With training's fine-tuning numbers, one shared `c` is capped by the weights' entropy and gives `ρ` about 1.1; the two
+At fine-tuning's measured costs, one shared `c` is capped by the weights' entropy and gives `ρ` about 1.1; the two
 costs give about 45 (`Definitions.Nci.Assumptions.CoveringTwoCosts`). The count is stated multiplied out, with no division by
 `(k / c_w)(k / c_a) + k`, so it says something when `k = 0`; in the slowdown form a division by zero is zero. -/
 def CoveringBoundTwoCosts : Prop :=
-  ∀ (d : Declaration) (B : MulBlocks d) (s k D : ℕ) (cw ca : ℝ) (n : ℕ) (I : Fin n → Subcircuit d.D),
+  ∀ (d : RegisteredCircuit) (B : MulBlocks d) (s k D : ℕ) (cw ca : ℝ) (n : ℕ) (I : Fin n → Subcircuit d.D),
     (k : ℝ) < cw * D → 0 < ca → Assumptions.ParameterHardAt d B s cw → Covers d s k I →
       ((Assumptions.chainedBlocksAt d B D ca).card : ℝ) ≤ n * (k / cw * (k / ca) + k) ∧
       ((Assumptions.chainedBlocksAt d B D ca).card : ℝ) / d.D.N * s / (k / cw * (k / ca) + k) ≤ s * n / d.D.N

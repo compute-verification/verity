@@ -1,7 +1,11 @@
-import Definitions.Accounting.BoundReceipt
-import Definitions.Pouw.Assumptions.Game
-import Definitions.Pouw.Assumptions.NCP.RouteUAssumptions
-import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+module
+
+public import Definitions.Accounting.BoundReceipt
+public import Definitions.Assumptions.Pouw
+public import Definitions.Pouw.Assumptions.Game
+public import Definitions.Pouw.Assumptions.NCP.RouteUAssumptions
+public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Receipts bound to the matmul: co-location and the link relay (trusted)
@@ -30,6 +34,8 @@ PoUW's game (`TileUnpredictable`), from PoUW's named assumptions.
 * `TileUnpredictablePearlCOfTTOut`: an assumption of Pearl-C's `TT_OUT` shape at W1, at any Pearl-C protocol, gives the
   same hypothesis in Pearl-C's game at W1 (`TileUnpredictablePearlC` at `W1.w1Priced`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 
@@ -90,20 +96,20 @@ that came in from the rest and its rebuilds: a block whose contents came over th
 relayed block costs `min(|z|, |E|)` bits on a link, and the GPU's HBM held the rest (`BoundReceiptShare`). Against
 `RateAudit`, binding the receipts to `z` takes the rest's mix out of the floor: without it, the rest makes every
 receipt from the store it holds, and nothing crosses a link. In bits the event's complement is the remote statement's
-`CoLocated` route (lane ra-remote-theorem) in this game: `k·b ≤ footprint + S + rebuilt·b + L + (L_z + λ + z_out)·b/a
+`CoLocated` route in this game: `k·b ≤ footprint + S + rebuilt·b + L + (L_z + λ + z_out)·b/a
 + λ`, the GPU's reads, its state and rebuilds, the bits in at `1:1` and the bits out and the tile outputs the rest
 made by tile work (`z_out = F_z·a/w`) at `|E|/|z|`.
 
 **What the game takes.** Each block's receipt binds a tile output of its own (the game's `z` is one independent value
 per block), so one shipped tile output unlocks one block; a binding shared by `n` receipts unlocks `n`. The mix is a
 random oracle on the whole of `E_j` and `z_j`, so a location makes a receipt only holding both; the deployed receipt
-hashes an inner-product sketch of `E_j` against a matrix expanded from `z_j`, for which lane ra-bound-receipt proves
+hashes an inner-product sketch of `E_j` against a matrix expanded from `z_j`, for which `BoundSketchRelay` gives
 `½·min(|z|, |E|)` bits per relayed block, by Lindsey's lemma: the deployed bound is up to `2×` weaker than this game's.
 The rest's tile work stands for every way it gets a tile output without the link, the activations' route among them:
-its information is free here and only its work counts. The node is fixed before the mix is drawn: its state and memory
+its information is free here and only its work counts. The node is fixed before the mix is sampled: its state and memory
 are functions of the store and the tile outputs, never of the mix. Over a window's passes that is a mix derived afresh
 each pass from the chained seed; a mix (or a sketch matrix) fixed for the window lets a location keep, from one pass,
-a digest of each block that makes the next pass's receipts without it (red team F29), which this game doesn't cover.
+a digest of each block that makes the next pass's receipts without it, which this game doesn't cover.
 
 Proof: `Accounting.SecurityProofs.BoundReceiptLink`, from `RateAudit`'s compression on each location (the GPU's view at
 each tile output and mix, the rest's at each store and mix), with the GPU's mix at the tile outputs and the rest's at
@@ -124,7 +130,7 @@ def BoundReceiptLink : Prop :=
 every `InteractiveNode` whose answers between the locations reach the mix only through the node's queries
 (`QueryDetermined`), with `BoundReceiptLink`'s parameters and its hypothesis on `m`: the probability that the verifier
 accepts, the GPU's compute is within `F`, the rest's tile work within `F_z`, and the GPU's HBM footprint short of
-`RateAudit`'s floor at `k − m` blocks, each under the node at the drawn mix, is at most
+`RateAudit`'s floor at `k − m` blocks, each under the node at the sampled mix, is at most
 
   `((k − 1)/N)^s + 2s/2^h + C(q, k − m)/2^λ + C(q_z, m + 1)/2^λ`.
 
@@ -165,13 +171,13 @@ so at most `|E|/min(|z|, |E|)` times the links' bits each way with the slack, pl
 
   `(L + m·b)·min(a, b)·w ≤ b·((L + L_z + λ)·w + F_z·a)`.
 
-**The reading.** Divide the first by `a·w`: `L + m·b ≤ L + (L_z + λ + z_out)·b/a` with `z_out = F_z·a/w`, the
-remote statement's `inBits + (outBits + zOut)·b/z_b` (`CoLocated`'s link part, lane ra-remote-theorem) at `z_b = a`.
-Divide the second by `min(a, b)·w` and by the store's bits the window reads, `k·b`, which at a window `T` is `ΣR·T`:
-the share of the floor the links take is `μ_link ≤ ((L + L_z)/T)/ΣR · |E|/min(|z|, |E|)` plus `λ`'s and the rest's
-tile work's `F_z/(w·k)`, with `(L + L_z)/T` the link's capacity, both directions. At `|z| ≥ |E|` a relayed block costs
-its contents, and the link's share is `RateAudit`'s `c_free/|E|`; at tile binding, `|z|/|E| = 4m/k` for a batch of `m`
-rows and a reduction of `k`, it is `k/(4m)` times that on the outbound side.
+**The reading.** Divide the first by `a·w`: `L + m·b ≤ L + (L_z + λ + z_out)·b/a` with `z_out = F_z·a/w`, the remote
+statement's `inBits + (outBits + zOut)·b/z_b` (`CoLocated`'s link part) at `z_b = a`. Divide the second by `min(a, b)·w`
+and by the store's bits the window reads, `k·b`, which at a window `T` is `ΣR·T`: the share of the floor the links take
+is `μ_link ≤ ((L + L_z)/T)/ΣR · |E|/min(|z|, |E|)` plus `λ`'s and the rest's tile work's `F_z/(w·k)`, with `(L + L_z)/T`
+the link's capacity, both directions. At `|z| ≥ |E|` a relayed block costs its contents, and the link's share is
+`RateAudit`'s `c_free/|E|`; at tile binding, `|z|/|E| = 4m/k` for a batch of `m` rows and a reduction of `k`, it is
+`k/(4m)` times that on the outbound side.
 
 Proof: `Accounting.SecurityProofs.BoundReceiptShare`, by division.
 
@@ -206,9 +212,10 @@ def TileUnpredictable {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fi
     A.Bounded U T q → ∀ u : ℕ, T / (1 - γ₀) < credit (U.layout.shape u) →
       Pouw.pr (fun x : (Q → R) × S => u ∈ Pouw.checkedSet P U x.1 x.2 (A.transcript U x.1 x.2)) ≤ ε q U.layout.N
 
-/-- **PoUW's `TT` gives `TileUnpredictable` at the unit's work `m·k·n`.** For every cost model, protocol, domain,
-target and error: `Pouw.Assumptions.TT CM P D γ₀ ε` implies `TileUnpredictable CM P Wmm D γ₀ ε`. A checked unit whose
-work is above `T/(1 − γ₀)` puts the checked units' total work above it.
+/-- **PoUW's `TT` gives `TileUnpredictable` at the unit's work `m·k·n`.** For every cost model that hashes nothing
+(`Pouw.CostModel.Hashless`, so that TT's event, which excludes a run that breaks SHA-512, is the tile game's), protocol,
+domain, target and error: `Pouw.Assumptions.TT CM P D γ₀ ε` implies `TileUnpredictable CM P Wmm D γ₀ ε`. A checked
+unit whose work is above `T/(1 − γ₀)` puts the checked units' total work above it.
 
 Proof: `Accounting.SecurityProofs.TileUnpredictableOfTT`.
 
@@ -217,21 +224,22 @@ to one unit, about no Lean function of the protocol's code. -/
 def TileUnpredictableOfTT : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.CostModel Q R S)
     (P : Pouw.Protocol Q R S) (D : Pouw.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ),
-    Pouw.Assumptions.TT CM P D γ₀ ε → TileUnpredictable CM P (fun sh => (sh.Wmm : ℝ)) D γ₀ ε
+    CM.Hashless → Pouw.Assumptions.TT CM P D γ₀ ε → TileUnpredictable CM P (fun sh => (sh.Wmm : ℝ)) D γ₀ ε
 
 /-- **NCP's `TT_NCP_U` gives `TileUnpredictable` on route U at the stacked product's work `3·m·k·n`.** For every bias
-`β`, cost model, NCP parameters, domain on which `γ₀ ≥ P.d/(3k)`, target and error:
-`Pouw.NCP.Assumptions.TTNCP_U β CM P D γ₀ ε` implies `TileUnpredictable CM (P.toProtocolU β) (3·Wmm) D γ₀ ε`.
+`β`, cost model that hashes nothing, NCP parameters, domain on which `g₀ ≥ P.d/(3k)`, target and error:
+`Pouw.NCP.Assumptions.TTNCP_U β CM P D g₀ δ` implies `TileUnpredictable CM (P.toProtocolU β) (3·Wmm) D g₀ δ`.
 
 Proof: `Accounting.SecurityProofs.TileUnpredictableOfNCPU`.
 
 Frozen (conjecture, no-function, hash): as `TileUnpredictableOfTT`, for NCP's named conjecture on route U. -/
 def TileUnpredictableOfNCPU : Prop :=
   ∀ (β : ℤ) (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.CostModel Q R S)
-    (P : Pouw.NCP.Params Q R S) (D : Pouw.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ),
-    (∀ U : Pouw.Workload, U.InDomain D → ∀ u < U.layout.N, (P.d : ℝ) ≤ γ₀ * (3 * (U.layout.shape u).k)) →
-    Pouw.NCP.Assumptions.TTNCP_U β CM P D γ₀ ε →
-      TileUnpredictable CM (P.toProtocolU β) (fun sh => 3 * (sh.Wmm : ℝ)) D γ₀ ε
+    (P : Pouw.NCP.Params Q R S) (D : Pouw.Layout → Prop) (g₀ : ℝ) (δ : ℕ → ℕ → ℝ),
+    CM.Hashless →
+    (∀ U : Pouw.Workload, U.InDomain D → ∀ u < U.layout.N, (P.d : ℝ) ≤ g₀ * (3 * (U.layout.shape u).k)) →
+    Pouw.NCP.Assumptions.TTNCP_U β CM P D g₀ δ →
+      TileUnpredictable CM (P.toProtocolU β) (fun sh => 3 * (sh.Wmm : ℝ)) D g₀ δ
 
 /-- The protocol `P` comparing only those of its entries in `keep`: the partial accumulators a receipt binds. NCP's
 checked values are its running sums at the block ends `min((t + 1)·d, 3k)` (`Pouw.NCP.Params.YU` on route U), so at
@@ -243,23 +251,23 @@ def boundEntries {Q R S : Type} (P : Pouw.Protocol Q R S) (keep : Pouw.Shape →
 
 /-- **`TileUnpredictable` in Pearl-C's game**, for a Pearl-C protocol `P` whose ticket words are what the receipt binds
 (the k-slice accumulators, inside Pearl-C's domain `D`): for every in-domain workload, every adversary within compute
-`T` and `q` oracle calls, and every unit `u` whose credit is more than `T/(1 − γ₀)`, the probability over the oracle and
-the salt that `u` is correct (`Pouw.PearlC.correctSet`) is at most `ε(q, N)`. It is the hypothesis `TileUnpredictable`
+`T` and `q` oracle calls, and every unit `u` whose credit is more than `T/(1 − g₀)`, the probability over the oracle and
+the salt that `u` is correct (`Pouw.PearlC.correctSet`) is at most `δ(q, N)`. It is the hypothesis `TileUnpredictable`
 is, for a named assumption on those accumulators to discharge: `TileUnpredictablePearlCOfTTOut` derives it at W1 from
 one of `TT_OUT`'s shape at W1 at that protocol. -/
 def TileUnpredictablePearlC {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : Pouw.PearlC.CostModel Q R S) (P : Pouw.PearlC.Protocol Q R S) (credit : Pouw.PearlC.Shape → ℝ)
-    (D : Pouw.PearlC.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
+    (D : Pouw.PearlC.Layout → Prop) (g₀ : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Pouw.PearlC.Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
-    ∀ A : Pouw.PearlC.Adversary CM, A.Bounded U T q → ∀ u : ℕ, T / (1 - γ₀) < credit (U.layout.shape u) →
+    ∀ A : Pouw.PearlC.Adversary CM, A.Bounded U T q → ∀ u : ℕ, T / (1 - g₀) < credit (U.layout.shape u) →
       Pouw.pr (fun x : (Q → R) × S => u ∈ Pouw.PearlC.correctSet P U x.1 x.2 (A.transcript U x.1 x.2)) ≤
-        ε q U.layout.N
+        δ q U.layout.N
 
 /-- **An assumption of `TT_OUT`'s shape at W1 gives `TileUnpredictablePearlC` at W1.** For every W1 device `dv`, salt
 bytes `salt`, Pearl-C protocol `P`, domain, target, error and credit per shape: if every correct unit's credit in `P`
 (`P.credit` on its committed activations and the realized noise) is nonnegative and at least `credit` of its shape,
-`Pouw.PearlC.Assumptions.TTOutW1 dv salt P D γ₀ ε` implies
-`TileUnpredictablePearlC (W1.w1Priced dv salt) P credit D γ₀ ε`. A correct unit whose credit is above `T/(1 − γ₀)` puts
+`Pouw.PearlC.Assumptions.TTOutW1 dv salt P D g₀ δ` implies
+`TileUnpredictablePearlC (W1.w1Priced dv salt) P credit D g₀ δ`. A correct unit whose credit is above `T/(1 − g₀)` puts
 the correct units' total credit above it. It is generic in `P`, so it takes rev1 (`TTOutPearlCDevRev1W1`, `TTOutW1` at
 `pearlCProtocolDevRev1`) and an assumption of `TTOutW1`'s shape at a protocol whose tickets are the k-slice
 accumulators.
@@ -271,11 +279,11 @@ Pearl-C protocol. -/
 def TileUnpredictablePearlCOfTTOut : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : Pouw.PearlC.W1.W1Device)
     (salt : S → List ℕ) (P : Pouw.PearlC.Protocol Q R S) (credit : Pouw.PearlC.Shape → ℝ)
-    (D : Pouw.PearlC.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ),
+    (D : Pouw.PearlC.Layout → Prop) (g₀ : ℝ) (δ : ℕ → ℕ → ℝ),
     (∀ (H : Q → R) (s : S) (U : Pouw.PearlC.Workload) (u : ℕ) (c : Pouw.PearlC.Commit),
       Pouw.PearlC.Correct P U H s u c → 0 ≤ P.credit H s U u c.act ∧ credit (U.layout.shape u) ≤ P.credit H s U u c.act) →
-    Pouw.PearlC.Assumptions.TTOutW1 dv salt P D γ₀ ε →
-      TileUnpredictablePearlC (Pouw.PearlC.W1.w1Priced dv salt) P credit D γ₀ ε
+    Pouw.PearlC.Assumptions.TTOutW1 dv salt P D g₀ δ →
+      TileUnpredictablePearlC (Pouw.PearlC.W1.w1Priced dv salt) P credit D g₀ δ
 
 /-- **`TileUnpredictable` carries to more compared entries and less credit.** For every cost model, protocols `P` and
 `P'` with the same checked values, `P'` comparing at every shape every entry `P` compares, and credits

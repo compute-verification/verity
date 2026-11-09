@@ -1,14 +1,18 @@
 /-
-PROTOCOL.md §16.1, §16.2, §16.5: the circuit statement, set up from its `Tags`, its row leaf (`RowLeaf`), the pinned
+The circuit statement (its file: `Flock.Circuit`), set up from its `Tags`, its row leaf (`RowLeaf`), the pinned
 circuit file and the public file: Δ, the regions and their claims, the lincheck fold, the statement digest, Σ and `Hello`.
 Nothing here evaluates the computation: the region values are the layout's constants, the public digests and outputs, and
 hashes of pinned padding constants.
 -/
-import Flock.RowLeaf
-import Flock.Piop
-import Flock.Merkle
-import Flock.Record
-import Flock.TmplSplit
+module
+
+public import Flock.RowLeaf
+public import Flock.Piop
+public import Flock.Merkle
+public import Flock.Record
+public import Flock.TmplSplit
+
+@[expose] public section
 
 namespace Flock
 
@@ -28,7 +32,7 @@ def pin (c : Circuit) (leaf : RowLeaf) : V Nat := do
   if p ≥ 2 ^ c.kLog then throw "the pinned constant column is outside the block"
   return p
 
-/-- Δ (§16.1), `(row, col)` pairs XORed into A and into B, in the order the statement digest binds: per range and slot,
+/-- Δ, `(row, col)` pairs XORed into A and into B, in the order the statement digest binds: per range and slot,
 the slot's constant wired to the pin, then the row leaf's own entries for its slots; then every unit's leaf bits copied from
 the message bits that hash them (a zero leaf from a forced-zero row); then every META wire. -/
 def delta (c : Circuit) (leaf : RowLeaf) (pin : Nat) : V (Array (Nat × Nat) × Array (Nat × Nat)) := do
@@ -167,18 +171,19 @@ theorem checkRegionBytes_ok (nbl : Nat) (regions : Array Region) :
     simp only [throw, throwThe, MonadExceptOf.throw, reduceCtorEq, false_iff]
     exact fun h' => h (hall.2 h')
 
-/-- The coin source named in `Hello` (§7). -/
+/-- The coin source named in `Hello` (`Flock.Draw`). -/
 inductive Coins where
-  | os
+  /-- upstream's committed seed: a plain session without a challenger, which `verify` refuses once every check has passed
+  (`ProvedScope.servedForm`) -/
   | seed
   /-- the verifier's keyed coin tree (`Flock.CoinTree`): `Hello`'s `coins` is its spec, with the prover's nonce -/
   | tree (spec : CoinTree.Spec)
   deriving BEq, Inhabited
 
-/-- The tags a session on `coins` is verified under: on `os` coins, a statement whose prover names its coin mode
-(`Tags.liveOs`) binds the live-OS identity (`Tags.liveOsIdentity`) in its statement digest; otherwise the tags as they are. -/
-def Tags.withCoins (t : Tags) (coins : Coins) : Tags :=
-  if coins == .os && t.liveOs then { t with identity := Tags.liveOsIdentity t.identity } else t
+/-- The keyed coin tree the coins name, which `Hello`'s `coins` carries (`helloOf`); none for a seed's. -/
+def Coins.tree? : Coins → Option CoinTree.Spec
+  | .tree s => some s
+  | .seed => none
 
 /-- Everything a session needs about the statement. -/
 structure Stmt where
@@ -198,10 +203,16 @@ structure Stmt where
   digest : ByteArray
   sigma : ByteArray
   hello : String
+  /-- the keyed coin tree `hello` names, from the setup's coins (`Coins.tree?`) -/
+  coinTree : Option CoinTree.Spec
   merkle : MerkleScheme
   /-- what the statement check established about the partition (`HmRow.PartitionFinding`), for the verdict; null before e51e2b86 -/
   partition : Json := Json.null
   deriving Inhabited
+
+/-- The identity's bytes a statement digest hashes: upstream's `serde_json::to_vec(&sorted(identity))` (`Stmt::new`), strings
+in UTF-8 (`canonUtf8`). Canonical JSON (`canon`) would escape what upstream writes raw, and the `--zk` hooks carry `§`. -/
+def identityBytes (identity : Json) : V ByteArray := return (← canonUtf8 identity).toUTF8
 
 /-- `Hello`, the session parameters S2 compares. A keyed coin tree's `coins` has an empty nonce here: R7 puts the prover's
 in (`CoinTree.checkHello`). -/
@@ -212,11 +223,10 @@ def helloOf (tags : Tags) (sigma : ByteArray) (mPts : Nat) (coins : Coins) (tabl
   let base := match coins with
     | .seed => base ++ [("coins", Json.str tags.coinScheme)]
     | .tree s => base ++ [("coins", s.coins "")]
-    | .os => base
   let base := if tags.hm96Rows then base ++ [("digests", Json.str "sha512")] else base
   canon (Json.mkObj (if tags.retainRounds then base ++ [("rounds", Json.str "bytes retained")] else base))
 
-/-- `setup` (§3 step 1): parse and check everything, then derive the statement. -/
+/-- `setup` (`Flock.Verify` step 1): parse and check everything, then derive the statement. -/
 def Stmt.setup (tags : Tags) (leaf : RowLeaf) (circuitFile publicFile : ByteArray) (coins : Coins)
     (tables : List (String × ByteArray) := []) : V Stmt := do
   let c ← Circuit.parse tags circuitFile tables
@@ -232,7 +242,7 @@ def Stmt.setup (tags : Tags) (leaf : RowLeaf) (circuitFile publicFile : ByteArra
   let pin ← c.pin leaf
   let (da, db) ← c.delta leaf pin
   let regions := (← leaf.regions c pub).push (← c.outRegion pub)
-  let mut h := tags.statement.toUTF8 ++ leaf.comp.digest ++ c.sha ++ leaf.key c ++ (← canon tags.identity).toUTF8
+  let mut h := tags.statement.toUTF8 ++ leaf.comp.digest ++ c.sha ++ leaf.key c ++ (← identityBytes tags.identity)
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
     h := pushLe64 h d.size
@@ -240,7 +250,8 @@ def Stmt.setup (tags : Tags) (leaf : RowLeaf) (circuitFile publicFile : ByteArra
   let digest := Sha256.hash h
   let sigma := Sha256.hash (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
   let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
-  return { tags, leaf, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma, hello, merkle }
+  return { tags, leaf, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma, hello,
+           coinTree := coins.tree?, merkle }
 
 namespace Stmt
 
@@ -248,7 +259,7 @@ namespace Stmt
 def spec (st : Stmt) : SessionSpec :=
   { tables := #[st.tags.table], domain := fun _ r => st.tags.domain r, sigma := st.sigma, hello := st.hello, mPts := st.mPts,
     retainRounds := st.tags.retainRounds, unitDraw := (st.pub.header.getObjVal? "unit_draw").toOption, instances := st.n,
-    sha512Digests := st.tags.hm96Rows, coinTree := CoinTree.ofHello st.hello }
+    sha512Digests := st.tags.hm96Rows, coinTree := st.coinTree }
 
 /-- `e[s + 64·u] = lw[s] · eq(ρ, u)` for `u < 2^|ρ|`. -/
 def tensor (lw : Array F128) (rho : Array F128) : Array F128 :=
@@ -368,7 +379,7 @@ def foldRanges (st : Stmt) (alpha : F128) (lw rho : Array F128) :
 def addDelta (w : Nat → F128) (pairs : List (Nat × Nat)) (out : Array F128) : Array F128 :=
   pairs.foldl (fun o ic => o.modify ic.2 (· + w ic.1)) out
 
-/-- The lincheck fold (§10, §16.1): `α·A_0ᵀe + B_0ᵀe` for `e = lw ⊗ eq(ρ)`. A slot of `2^sl` bits at position `q` sees
+/-- The lincheck fold (`Flock.Piop`): `α·A_0ᵀe + B_0ᵀe` for `e = lw ⊗ eq(ρ)`. A slot of `2^sl` bits at position `q` sees
 `e[(q << sl) | c] = e_lo[c] · eq(ρ[sl−6 ..], q)` with `e_lo = lw ⊗ eq(ρ[.. sl−6])`, so each slot type is folded once on
 `e_lo` and scaled per slot; Δ's entries are added on `e`. -/
 def fold (st : Stmt) (alpha : F128) (lw : Array F128) (rho : Array F128) : V (Array F128) := do
@@ -477,7 +488,7 @@ def folded (st : Stmt) (alpha beta : F128) (lw rho ts : Array F128) : V (Array F
 
 def circuitFold (st : Stmt) : CircuitFold := { kLog := st.c.kLog, pin := st.pin, fold := st.fold, folded := st.folded }
 
-/-- The region's point in `F^m` for a link point `r ∈ F^{m_pts}` (§16.2). -/
+/-- The region's point in `F^m` for a link point `r ∈ F^{m_pts}`. -/
 def regionPoint (st : Stmt) (reg : Region) (r : Array F128) : Array F128 := Id.run do
   let kl := st.c.kLog
   let mut p : Array F128 := (Array.range st.m).map fun j =>
@@ -503,7 +514,7 @@ def regionValue (st : Stmt) (reg : Region) (r : Array F128) : V F128 := do
     acc := acc + eb[b]! * s
   return acc
 
-/-- The extra claims (§16.2): region-major, then point 0 before point 1. -/
+/-- The extra claims: region-major, then point 0 before point 1. -/
 def extraClaims (st : Stmt) (pts : Array (Array F128)) : V (Array Claim) := do
   let mut out := #[]
   for reg in st.regions do

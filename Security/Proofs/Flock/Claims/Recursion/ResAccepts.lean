@@ -1,6 +1,38 @@
-import Proofs.Flock.Claims.Recursion.PartAccepts
-import Proofs.Flock.Claims.Recursion.VStarPartsB
-import Proofs.Flock.Claims.Recursion.VStarLinks
+module
+
+public import Proofs.Flock.Claims.Recursion.PartAccepts
+public import Proofs.Flock.Claims.Recursion.VStarPartsB
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The circuit at a staged part, from `PartAccepts`
@@ -21,6 +53,8 @@ What is left of a residuals piece's `hlow` is not the circuit's: the input tie (
 messages' rows and the coins' coefficients) and the output tie (the residuals there give the piece).
 -/
 
+@[expose] public section
+
 namespace RecDeploy
 
 open Claims (Msg)
@@ -40,7 +74,7 @@ theorem partAccepts_staged {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} 
       _root_.Flock.Readable.parseBytes readOfO xO = some p ∧ p.tags.typed = false ∧ p.publicInputs = none ∧
       readX x = some r ∧ (∃ ss, _root_.Flock.RecVStar.statements r.shape = .ok ss ∧ ss[s]? = some sv) ∧
       0 < p.sts.size ∧ _root_.Flock.Readable.StmtCopies sv p w ∧ L.Agrees cmt x s w xO ms ∧
-      (∀ e ∈ L.calls x s w, H e.1 = e.2) ∧ (Claims.findColl (L.calls x s w)).isSome = false ∧
+      (∀ e ∈ L.calls x s w, H e.1 = e.2) ∧ (Claims.findColl (L.calls x s w ++ vcallsAt H D xO)).isSome = false ∧
       showsTr untr s x xO c := by
   obtain ⟨-, xO, w, hck, hT, hc, hs, hh, hp, hm, hrw⟩ := h
   obtain ⟨p, r, sv, hx, ht, hpi, hr, hss, hsz, htab⟩ := stagedReads hs
@@ -64,7 +98,7 @@ theorem partAccepts_inner {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {
     {j : ℕ} {nm : String} {pt : VStar.Part} (hsv : ss[s]? = some (.inner j nm pt)) :
     ∃ (xO : Msg) (w : Claims.Flock.Wit) (p : _root_.Flock.Readable.Parsed),
       _root_.Flock.Readable.parseBytes readOfO xO = some p ∧ 0 < p.sts.size ∧ L.Agrees cmt x s w xO ms ∧
-      (∀ e ∈ L.calls x s w, H e.1 = e.2) ∧ (Claims.findColl (L.calls x s w)).isSome = false ∧
+      (∀ e ∈ L.calls x s w, H e.1 = e.2) ∧ (Claims.findColl (L.calls x s w ++ vcallsAt H D xO)).isSome = false ∧
       showsTr untr s x xO c ∧
       ∀ t (ht : t < p.sts.size) (o g u : ℕ), o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog) → g < p.sts[t].c.g →
         u < p.sts[t].c.upv →

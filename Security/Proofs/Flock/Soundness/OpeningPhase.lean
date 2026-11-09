@@ -1,9 +1,17 @@
+module
+
+public import Definitions.Core.Game
+public import Definitions.Flock.Defs
+public import Mathlib.Algebra.MvPolynomial.Degrees
+public import Proofs.Flock.Soundness.Game
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Data.Nat.Bitwise
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.Defs
-import Proofs.Flock.Soundness.Game.Poly
-import Proofs.Flock.Soundness.Game.Union
+import Proofs.Core.Game.Poly
 
 /-!
-# The opening phase: ring switching and batching (PROTOCOL.md §12)
+# The opening phase: ring switching and batching (`Flock.Opening`)
 
 From a doomed start (for every codeword near the committed table, some claim handed to the
 opening is false), the opening ends doomed (no codeword near the table has the batched value)
@@ -24,6 +32,8 @@ The argument, per codeword `M` with witness `z` (paper Appendix B):
 * **The batch.** A nonzero linear form in the batching coins vanishes with probability at most
   `1/|F|` (`prCoin_batch_le`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 
@@ -124,7 +134,7 @@ theorem prCoin_eqSum_le [CharP F 2] {n : ℕ} (d : Fin (2 ^ n) → F) (u₀ : Fi
       = prCoin (fun r : Fin n → F => MvPolynomial.eval r (eqPoly d) = 0) := by
         congr 1; funext r; rw [eval_eqPoly]
     _ ≤ ((eqPoly d).totalDegree : ℝ≥0∞) / Fintype.card F :=
-        prCoin_mvEval_eq_zero_le _ (eqPoly_ne_zero d u₀ hd)
+        Verity.Game.prCoin_mvEval_eq_zero_le _ (eqPoly_ne_zero d u₀ hd)
     _ ≤ (n : ℝ≥0∞) / Fintype.card F := by
         gcongr; exact_mod_cast totalDegree_eqPoly_le d
 
@@ -150,7 +160,7 @@ theorem prCoin_batch_le {n : ℕ} (d : Fin n → F) (k₀ : Fin n) (hd : d k₀ 
   calc prCoin (fun γ : Fin n → F => ∑ k, γ k * d k = 0)
       = prCoin (fun γ : Fin n → F => MvPolynomial.eval γ Q = 0) := by
         congr 1; funext γ; rw [hevalQ]
-    _ ≤ (Q.totalDegree : ℝ≥0∞) / Fintype.card F := prCoin_mvEval_eq_zero_le _ hQ
+    _ ≤ (Q.totalDegree : ℝ≥0∞) / Fintype.card F := Verity.Game.prCoin_mvEval_eq_zero_le _ hQ
     _ ≤ 1 / Fintype.card F := by gcongr; exact_mod_cast hdeg
 
 
@@ -168,7 +178,7 @@ def addr128 {m : ℕ} (hm : 7 ≤ m) (y : Fin (2 ^ (m - 7))) (v : Fin 128) : Fin
   ⟨128 * y.val + v.val, by
     rw [two_pow_eq_mul hm]; have := y.isLt; have := v.isLt; omega⟩
 
-/-- The honest ring-switching message for a claim on a witness (§12.2):
+/-- The honest ring-switching message for a claim on a witness (`Flock.Opening`):
 `ŝ[v] = Σ_y eq(x', y)·z[128y + v]`. -/
 def shat {m : ℕ} (hm : 7 ≤ m) (c : Claim F m) (z : Witness m) : Fin 128 → F :=
   fun v => ∑ y : Fin (2 ^ (m - 7)), eqAt (c.tail hm) y.val * ((z (addr128 hm y v)).val : F)
@@ -194,7 +204,7 @@ theorem eqAt_split {m : ℕ} (hm : 7 ≤ m) (x : Fin (m - 6) → F) (y b : ℕ) 
       rw [Nat.testBit_succ]; congr 1; omega
     rw [htb]
 
-/-- **The claim's value from the honest message** (§12.2): `Σ_v w[v]·ŝ[v]`. -/
+/-- **The claim's value from the honest message** (`Flock.Opening`): `Σ_v w[v]·ŝ[v]`. -/
 theorem claim_eval_eq {m : ℕ} (hm : 7 ≤ m) (c : Claim F m) (z : Witness m) :
     c.eval z = ∑ v : Fin 128, packedWeight c hm v * shat hm c z v := by
   classical
@@ -271,7 +281,7 @@ end Packing
 
 /-! ## Ring switching -/
 
-/-- **The ring-switching identity** (§12.3–§12.4, paper Appendix B). If the witness's packed
+/-- **The ring-switching identity** (`Flock.Opening`, paper Appendix B). If the witness's packed
 element `y` is `f y` (bit `v` of `f y` is `z[128y + v]`), the verifier's recombination of the
 honest message is the inner product of `f` with `Φ_{r''}(eq(x', ·))`. -/
 theorem recombine_shat (A : Arith F K) (hA : A.Correct) {m : ℕ} (hm : 7 ≤ m) (c : Claim F m)

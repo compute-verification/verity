@@ -1,12 +1,12 @@
 """The templated statement (``flock-circuit/tmpl``, `circuit.compose`'s ``layout``): the flat statement with its unit given as
-the unit's ``flock-ir-tmpl/v2`` template, META ``template`` its lines and ``layout`` the mode, and no ``CIRCUIT unit``
-section, which the Lean verifier reads with ``HmOut.parseTmpl`` (PRF-133).
+the unit's ``flock-ir-tmpl/v2`` template, in its own section right after META (`circuit.template_section`), META ``layout``
+the mode, and no ``CIRCUIT unit`` section, which the Lean verifier reads with ``HmOut.parseTmpl``.
 
 `tmpl.layout`, the mirror of ``Tmpl.layoutM`` that puts the unit's range at its committed slot, is held to
 ``Flock.Test.TmplLayout``'s vectors and to a Definition two call paths reach, which is where the modes differ. The Boolean
 toy's templated statement unrolls to its flat unit and differs from the flat statement's META in the templated keys alone.
 The Lean verifier derives from it the class `circuit.class_digest` computes and the regions, Δ and partition check it
-derives from the flat statement. Until the templated statement's proof lands it is outside the verifier's ``Tags.all``, and
+derives from the flat statement. It is outside the verifier's ``Tags.all``, in its own list (``Tags.templated``), and
 the Lean test skips unless the verifier knows it, as TMPL1's does (``FLOCK_VERIFY_TMPL``: its flock-verify)."""
 from __future__ import annotations
 
@@ -20,8 +20,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 from test_class_statement_unit_stager import _toy
+from test_struct_lower import TOY_READS, toy_reads  # noqa: F401
+from verity.ml.circuits.defs import bind
+from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity_config.settings import of
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
+from verity_flock import struct_lower as S
 from verity_flock import tmpl as T
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
@@ -48,6 +53,8 @@ def _map(t: T.Tmpl, mode: str) -> tuple[int, list[int]]:
 
 def _sections(text: str) -> dict[str, list[str]]:
     lines, out, at = text.split("\n"), {}, 2
+    if lines[at].startswith(f"{FC.TMPL_SECTION} "):
+        at += 1 + int(lines[at].split(" ")[1])
     while at < len(lines) and lines[at]:
         _c, name, n = lines[at].split(" ")
         out[name] = lines[at + 1:at + 1 + int(n)]
@@ -92,18 +99,18 @@ def test_a_layout_mode_is_one_the_verifier_reads():
 @pytest.mark.slow
 def test_the_templated_statement_is_the_flat_one_with_its_unit_as_its_template(monkeypatch):
     """The toy's templated statement: format and statement the templated ones, META the flat statement's but for ``format``,
-    ``statement``, ``template`` (the unit's template, which `tmpl.unroll` takes to the flat file's unit section line for line)
-    and ``layout``; its sections the flat file's but the unit's; its unit range's slot the laid-out unit's (a layout one
-    column past the flat unit's slot moves ``unit_log`` and the range to the next); and a unit class's ``definition`` is
-    refused."""
+    ``statement`` and ``layout``; its template section the unit's template, which `tmpl.unroll` takes to the flat file's
+    unit section line for line; its other sections the flat file's but the unit's; its unit range's slot the laid-out unit's
+    (a layout one column past the flat unit's slot moves ``unit_log`` and the range to the next); and a size class's
+    ``definition`` is refused."""
     args, _rows, _kw = _toy(0)
     flat, tm = CS.UnitStager(*args), CS.UnitStager(*args, layout=MODE)
     assert tm.text.split("\n", 1)[0] == f"{FC.TMPL_FORMAT} {args[1]}" and flat.text.split("\n", 1)[0] == f"{FC.FORMAT} {args[1]}"
     assert (tm.meta["format"], tm.meta["statement"], tm.meta["layout"]) == (FC.TMPL_FORMAT, FC.TMPL_STATEMENT, MODE)
-    assert sorted(k for k in set(flat.meta) | set(tm.meta) if flat.meta.get(k) != tm.meta.get(k)) == ["format", "layout", "statement", "template"]
+    assert sorted(k for k in set(flat.meta) | set(tm.meta) if flat.meta.get(k) != tm.meta.get(k)) == ["format", "layout", "statement"]
     sections = _sections(flat.text)
     assert _sections(tm.text) == {k: v for k, v in sections.items() if k != "unit"}
-    t = T.parse("\n".join(tm.meta["template"]) + "\n")
+    t = T.parse(FC.template_of(tm.text))
     assert T.flat_lines(T.unroll(t)) == sections["unit"]
     size = T.layout(t, MODE)[t.root].size
     unit = [r for r in tm.meta["ranges"] if r["net"] == "unit"]
@@ -127,19 +134,20 @@ def test_the_templated_statement_is_the_flat_one_with_its_unit_as_its_template(m
 
 
 def test_the_pin_and_class_hash_the_file_a_chunk_at_a_time(monkeypatch):
-    """`circuit.digest` and `circuit.class_digest`, which hash a templated file's META (most of the file) in chunks rather
-    than whole copies, are SHA-512 of the file and of the file with META's binding keys removed and re-serialized, across
-    chunk boundaries anywhere, a non-ASCII section included."""
+    """`circuit.digest` and `circuit.class_digest`, which hash a templated file (its template section most of it) in chunks
+    rather than whole copies, are SHA-512 of the file and of the file with META's binding keys removed and re-serialized,
+    across chunk boundaries anywhere, a non-ASCII section included; `circuit.template_of` reads the template section back."""
     import hashlib
 
-    meta = {"format": FC.TMPL_FORMAT, "template": [f"{i} 1 {i} 1 {i + 1}" for i in range(50)], "partition": {"digest": "p"},
-            "program_sha512": "q", "z": "é"}
-    text = f"{FC.TMPL_FORMAT} u\nMETA {json.dumps(meta)}\nCIRCUIT hm96 1\nÿ 0\n"
+    meta = {"format": FC.TMPL_FORMAT, "layout": MODE, "partition": {"digest": "p"}, "program_sha512": "q", "z": "é"}
+    lines = "".join(f"{i} 1 {i} 1 {i + 1}\n" for i in range(50))
+    rest = f"{FC.template_section(lines)}CIRCUIT hm96 1\nÿ 0\n"
+    text = f"{FC.TMPL_FORMAT} u\nMETA {json.dumps(meta)}\n{rest}"
     kept = {k: v for k, v in meta.items() if k not in FC.BINDING_KEYS}
     want = (hashlib.sha512(text.encode()).hexdigest(),
             hashlib.sha512((f"{FC.TMPL_FORMAT} u\nMETA {json.dumps(kept, sort_keys=True, separators=(',', ':'))}\n"
-                            "CIRCUIT hm96 1\nÿ 0\n").encode()).hexdigest())
-    assert FC.meta_of(text) == meta
+                            f"{rest}").encode()).hexdigest())
+    assert FC.meta_of(text) == meta and FC.template_of(text) == lines and rest.startswith(f"{FC.TMPL_SECTION} 50\n")
     for chunk in (1, 7, 64, 1 << 24):
         monkeypatch.setattr(FC, "_HASH_CHUNK", chunk)
         assert (FC.digest(text), FC.class_digest(text)) == want
@@ -147,19 +155,21 @@ def test_the_pin_and_class_hash_the_file_a_chunk_at_a_time(monkeypatch):
 
 @pytest.mark.slow
 def test_a_structural_stager_writes_the_templated_statement_of_struct_lowers_template(tmp_path):
-    """`UnitStager`'s ``structural`` on the toy: META ``template`` is `struct_lower`'s template on the stager's ports (the
+    """`UnitStager`'s ``structural`` on the toy: its template section is `struct_lower`'s template on the stager's ports (the
     flat unit never built), ordered, its unit range that template's slot; the outputs a round stages and META ``dummy`` are
-    the flat stager's, from the template (`TmplLowering.evaluate`); META is the emitted templated statement's but for the
-    template, the unit's slot and the pins that read them; and a structural stager without a layout is refused."""
+    the flat stager's, from the template (`TmplLowering.evaluate`); it is the emitted templated statement but for the
+    template section, the unit's slot and META's pins that read them; and a structural stager without a layout is
+    refused."""
     args, rows, _kw = _toy(0)
     flat, tm = CS.UnitStager(*args, layout=MODE), CS.UnitStager(*args, layout=MODE, structural=True)
     assert tm.low.circuit is None and isinstance(tm.low, CS.TmplLowering)
-    t = T.parse("\n".join(tm.meta["template"]) + "\n")
+    t = T.parse(FC.template_of(tm.text))
     assert T.write(t) == T.write(tm.low.template) and T.ordered(t)["ok"]
     assert tm.meta["unit_log"] == FC._slot_log(T.layout(t, MODE)[t.root].size)
     assert tm.meta["dummy"] == flat.meta["dummy"]
     diff = sorted(k for k in set(flat.meta) | set(tm.meta) if flat.meta.get(k) != tm.meta.get(k))
-    assert set(diff) <= {"template", "unit_sha256", "partition", "unit_log", "k_log", "ranges", "vus_per_block"} and "template" in diff
+    assert set(diff) <= {"unit_sha256", "partition", "unit_log", "k_log", "ranges", "vus_per_block"}
+    assert FC.template_of(tm.text) != FC.template_of(flat.text)
     a, b = flat.stage(rows, tmp_path / "flat", b"k" * 32), tm.stage(rows, tmp_path / "struct", b"k" * 32)
     assert all(np.array_equal(a["outs"][o], b["outs"][o]) for o in a["outs"])
     assert (tmp_path / "struct" / "circuit.txt").read_text() == tm.text
@@ -167,7 +177,80 @@ def test_a_structural_stager_writes_the_templated_statement_of_struct_lowers_tem
         CS.UnitStager(*args, structural=True)
 
 
-#: the auditor's host runs the lowering on numpy and C-Flock's Python alone
+def _structural_is_flat(args: tuple, rows: dict, out: Path) -> CS.UnitStager:
+    """The structural stager's statement of ``args`` against the flat stager's at the same layout: its template ordered and
+    computing the flat lowering's bits on random inputs (`struct_lower.check`), META the flat one's but for the template and
+    what reads it, and the outputs a round stages on ``rows`` the flat ones. circuit-check's structural check
+    (``--structural``) holds a template to the flat proof block gate for gate."""
+    flat, tm = CS.UnitStager(*args, layout=MODE), CS.UnitStager(*args, layout=MODE, structural=True)
+    assert isinstance(tm.low, CS.TmplLowering) and T.ordered(tm.low.template)["ok"]
+    assert tm.meta["dummy"] == flat.meta["dummy"]
+    diff = sorted(k for k in set(flat.meta) | set(tm.meta) if flat.meta.get(k) != tm.meta.get(k))
+    assert set(diff) <= {"template", "unit_sha256", "partition", "unit_log", "k_log", "ranges", "vus_per_block"}
+    a, b = flat.stage(rows, out / "flat", b"k" * 32), tm.stage(rows, out / "struct", b"k" * 32)
+    assert all(np.array_equal(a["outs"][o], b["outs"][o]) for o in a["outs"])
+    assert S.check(args[0])["mismatched_bits"] == 0
+    return tm
+
+
+@pytest.mark.slow
+@pytest.mark.usefixtures("toy_reads")
+def test_a_structural_stager_lays_a_table_read_out_as_the_flat_stager_does(tmp_path):
+    """`test_struct_lower`'s toy, whose unit reads a library table three times, as a structural statement (beside a row
+    spanning SHA-512 blocks, as a composed circuit needs one): the flat statement's by `_structural_is_flat`, with the read's
+    rows once in the template, in the table-reading primitive's one definition."""
+    from verity.ml.circuits.boolean import BIT
+    from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity.ml.circuits.types import Array, Value
+
+    unit = bind(CompositeDefinition("TmplToyReads", 1, (), lambda _S: ((("x", Value(8)), ("y", Value(8)), ("w", Array(2048, BIT))),
+                                                                       Array(4, Value(8))),
+                                    lambda B, _S, x, y, w: B.call(TOY_READS, x, y), register=False))
+    args = (unit, "unit/struct-reads", [("xy", V2, 16, ["x", "y"]), ("w", V2, 2048, ["w"])], [(V2, (0,))])
+    rng = np.random.default_rng(5)
+    rows = {"xy": rng.integers(0, 1 << 16, (5, 1), dtype=np.uint16), "w": rng.integers(0, 1 << 16, (5, 128), dtype=np.uint16)}
+    t = _structural_is_flat(args, rows, tmp_path).low.template
+    refs = [sum(len(a) + len(b) for _c, a, b in d.rows) for d in t.defs]
+    read = max((e for e in range(len(t.defs)) if e != t.root), key=refs.__getitem__)
+    assert sum(c.count for d in t.defs for c in d.calls if c.e == read) == 3
+
+
+#: the served types struct_lower lays out at small statics: FlashInfer's FP8 linear (two rcp reads a group), SparseMla's
+#: combine (ex2 and rcp), the fused RMSNorm (rsq) and the multimem all-reduce (none); each has a row of at least 2,048 bits,
+#: since a statement needs a row whose SHA-512 compresses a block before its last
+def _served(name: str):
+    from verity.ml.definitions.registry import cuda_rmsnorm, deepgemm, hopper, sparse_mla_split, tp_allreduce
+
+    return {"FlashInferFp8Linear": lambda: bind(deepgemm.FlashInferFp8Linear, K=128, N=1),
+            "SparseMlaCombine": lambda: bind(sparse_mla_split.SparseMlaCombine, NSPLIT=2, DV=32, INV=hopper.Fa3InvSum),
+            "RMSNormFusedCudaVector8": lambda: bind(cuda_rmsnorm.RMSNormFusedCudaVector8, N=64, EPS=1e-5, BLOCK=8),
+            "AllReduceMultimem": lambda: bind(tp_allreduce.AllReduceMultimem, WORLD=2, SIZE=64, TREES=((0, 1), (0, 1)),
+                                              FTZ=False)}[name]()
+
+
+SERVED = ("FlashInferFp8Linear", "SparseMlaCombine", "RMSNormFusedCudaVector8", "AllReduceMultimem")
+
+
+@pytest.mark.skipif(not of(__file__).VERITY_FLOCK_STRUCT_TYPES,
+                    reason="stages each served type flat and structural, the MUFU reads' 2^23- and 2^24-word tables inline: "
+                           "about ten minutes and 40 GB; set VERITY_FLOCK_STRUCT_TYPES=1")
+@pytest.mark.parametrize("name", SERVED)
+def test_a_served_type_reading_tables_is_staged_structurally_as_its_flat_statement(name, tmp_path):
+    """Each served type in `SERVED`, at small statics (`_served`): its structural statement is its flat one
+    (`_structural_is_flat`), a parameter a row of its u16 words, on finite bf16 rows and random ones."""
+    fn = _served(name)
+    params, ret = fn.signature()
+    in_rows = [(nm, V2, sum(t.leaf_widths()), [nm]) for nm, t in params]
+    assert all(b % 16 == 0 for _r, _s, b, _p in in_rows)
+    outs = [(V2, (j,)) for j in range(len(ret.fields) if hasattr(ret, "fields") else 1)]
+    rng = np.random.default_rng(11)
+    rows = {r: np.concatenate([rng.integers(0, 1 << 16, (2, b // 16), dtype=np.uint16),
+                               (rng.standard_normal((3, b // 16)).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)])
+            for r, _s, b, _p in in_rows}
+    _structural_is_flat((fn, f"unit/struct-{name}", in_rows, outs), rows, tmp_path)
+
+
+#: the auditor's host runs the lowering on numpy and Flock's Python alone
 NO_TORCH = """
 import importlib.abc, sys
 class _Block(importlib.abc.MetaPathFinder):
@@ -191,6 +274,7 @@ CS.UnitStager(d, "unit/tmpl-no-torch", [("ab", V2, 32, ["a", "b"]), ("w", V2, 20
 """
 
 
+@pytest.mark.slow
 def test_the_templated_statement_is_written_without_torch(tmp_path):
     """`UnitStager`'s templated statement, the file the auditor's lowering writes on a host with numpy and no torch, is
     written with torch (and the numerical benchmarks) unimportable, byte for byte the file it writes with them."""
@@ -205,13 +289,14 @@ def test_the_templated_statement_is_written_without_torch(tmp_path):
 
 def test_a_unit_past_k_max_is_refused_before_its_template_is_written(monkeypatch, tmp_path):
     """A templated unit whose block passes ``K_MAX`` is refused before compose writes its template's text, which for a
-    served lane is gigabytes (the K=14336 lane's 16.5M lines took a refused compose from 12.8 to 15.1 GiB)."""
+    served lane is gigabytes (the K=14336 lane's 16.5M lines took a refused compose from 12.8 to 15.1 GiB). At 19, below
+    every block's 2^20 and above the unit's own slot, the refusal is compose's, not `UnitStager`'s before lowering."""
     def written(_t):
         raise AssertionError("the template was written before the block was checked")
 
-    monkeypatch.setattr(FC, "K_MAX", 10)
+    monkeypatch.setattr(FC, "K_MAX", 19)
     monkeypatch.setattr(T, "write", written)
-    with pytest.raises(ValueError, match="unit/tmpl-no-torch: an instance needs a block of 2\\^\\d+ bits \\(at most 2\\^10\\)"):
+    with pytest.raises(ValueError, match="unit/tmpl-no-torch: an instance needs a block of 2\\^\\d+ bits \\(at most 2\\^19\\)"):
         exec(WRITE, {"OUT": tmp_path / "c.txt", "MODE": MODE})
 
 
@@ -230,7 +315,7 @@ def verifier() -> Path:
     p = subprocess.run([str(b), "statement", "--statement", FC.TMPL_STATEMENT, "--circuit", os.devnull, "--public", os.devnull],
                        capture_output=True, text=True)
     if "unknown statement" in p.stderr:
-        pytest.skip(f"{b} does not know {FC.TMPL_STATEMENT} (outside Tags.all until its proof lands; FLOCK_VERIFY_TMPL: TMPL1's flock-verify)")
+        pytest.skip(f"{b} does not know {FC.TMPL_STATEMENT} (not in its Tags.templated; FLOCK_VERIFY_TMPL: TMPL1's flock-verify)")
     return b
 
 
@@ -249,7 +334,7 @@ def test_lean_reads_the_templated_statement_as_the_flat_one(verifier, bound, tmp
     units derived from the verifier's own copy of the Program): the templated statement is the templated tags', its class
     `circuit.class_digest`'s (``HmRow.classOf`` of its canonical META and the rest), and its instance count, regions, Δ,
     partition and partition check the flat statement's."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
     from verity.ml.circuits.codec import canonical_json, encode_program
 
     args, rows, _kw = _toy(0)

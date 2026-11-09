@@ -1,15 +1,15 @@
-"""Front F6's prover column: the inner C-Flock prover's wall time and peak memory per session at each bucket's nonzero
+"""Front F6's prover column: the inner Flock prover's wall time and peak memory per session at each bucket's nonzero
 bound, fitted from recorded prover runs, and where a session stops fitting on one node.
 
     python -m verity_numerical.bench.unit_costs_prover --inventory unit-costs.json --out DIR
 
 **Source runs** (:data:`SOURCE`): every ``flock-circuit prove --zk`` record of ``benchmarks/pouw/hidden_zk`` on the Nebius
-nodes (CPU prover, Rust, Flock b684b12 with C-Flock's patches; Intel Xeon 6776P, 192 CPUs, 1,716 GiB): the session's
+nodes (CPU prover, Rust, upstream Flock b684b12 with Flock's patches; Intel Xeon 6776P, 192 CPUs, 1,716 GiB): the session's
 instances, its block ``2^k_log`` bits per instance and ``D = 2^dense_m`` bits in all, the circuit text's bytes (one unit
 netlist shared by the instances, plus the SHA-512 and hm96 glue), the prove's median time, the prover process's wall time
 (circuit load included) and peak RSS (GiB), and the prover's threads.
 
-**The law** (:func:`fit`): each of RSS, prove time and process wall time is affine in (D / 2^30, circuit bytes / GiB), by
+**The sampling design** (:func:`fit`): each of RSS, prove time and process wall time is affine in (D / 2^30, circuit bytes / GiB), by
 least squares: RSS over every record, unweighted; the times over the 32-thread records, weighted by 1 / y² (relative
 residuals). The fitted coefficients and every residual are in the output.
 
@@ -20,7 +20,7 @@ by the SHA-512, hm96 and lookup ranges (every recorded block is at least 2^22); 
 types), each at :data:`BYTES_PER_NNZ` per nonzero of what the circuit text holds (:func:`netlists`): a registered type's one
 unit (GEMM's tc-step: 263,933 nonzeros, shared by its K/16 units), a token-select tree's distinct members, a generic type's
 whole subcircuit; never more than Z nonzeros. ρ is the least nonzeros per committed row among the bucket's types (the
-inventory's ``nnz / committed``). A block is at most 2^:data:`K_LOG_MAX` bits (``Stmt.InRange``), so a session needing more
+inventory's ``nnz / committed``). A block is at most 2^:data:`K_MAX` bits (``Stmt.InRange``), so a session needing more
 is out of range: flock-circuit refuses it.
 
 **Per workload** (:func:`audit`): the padding table's body in its dp4 buckets at B = 16 and its tail at B = 1
@@ -29,15 +29,15 @@ the prover time per audit, Σ sessions x session time (with the slot sumcheck be
 largest power of two Z at which a B = 16 session at the workload's least ρ is in range and fits one node's memory
 (:data:`NODE_GIB`; :data:`GPU_GIB` for one GPU's, the CPU law taken as a bound on the CUDA prover's). A unit over the cap
 is split below the subcircuit into ceil(z / cap) pieces, its pieces in a bucket of their own at the cap (sessions
-ceil(p X / B) for X of its units drawn); every other unit keeps its dp4 bucket.
+ceil(p X / B) for X of its units sampled); every other unit keeps its dp4 bucket.
 
 **dp4t** (:func:`menu_t`): dp4 places on nonzeros alone, so a rare unregistered type in a bucket of registered ones pads
 every session's slots to its template. dp4t keys the body's buckets by (template class, Z): registered types by their
 registered unit's template (every GEMM tc step one class, at every K), generic types by their whole subcircuit's, each
-class within a factor of two; at most :data:`BUCKETS_T` buckets, the dp on Z within each class. A class drawn fewer than
+class within a factor of two; at most :data:`BUCKETS_T` buckets, the dp on Z within each class. A class sampled fewer than
 :data:`RARE_DRAWS` times per audit is rare: each of its types a bucket of its own, at B = 1 or 16, with the public count at
 its 1 − 2⁻⁴⁰ quantile, like the tail. The menu stays fixed per model. The caps are dp4's (the cap search's session holds
-the workload's largest templates). The what-if registers every generic body type drawn at least :data:`RARE_DRAWS` times
+the workload's largest templates). The what-if registers every generic body type sampled at least :data:`RARE_DRAWS` times
 as a tc-step-like unit.
 
 **Staging** (:func:`staging`), once per template shape, apart from proving: building the circuit text and the instances
@@ -45,7 +45,7 @@ as a tc-step-like unit.
 staging ladder (:data:`STAGING`); a registered type lowers one unit, at least the measured registered staging
 (:data:`REGISTERED_STAGING`), a generic type its whole subcircuit, a tree its distinct members.
 
-**The slot sumcheck** (:data:`SLOT_SUMCHECK`; candidate 3, ``note:proofs/20261010T0250Z-draft-f4-bitsumcheck``): V* runs
+**The slot sumcheck** (:data:`SLOT_SUMCHECK`; candidate 3): V* runs
 the slot sumcheck's verifier and opens the committed bits, so each session's prover adds, apart from Flock's prove, K1 ns
 per entry per rep x entries x reps seconds. A slot's entries are its type's *template*, the registered table: the
 nonzeros of what the circuit text holds for the type (:func:`netlists`: a registered type's one unit, a tree's distinct
@@ -66,6 +66,8 @@ import math
 from collections import defaultdict
 from typing import Any, Mapping, Sequence
 
+from verity.ml.windows.interface import K_MAX
+
 from . import unit_costs_padding as P
 
 #: vy-nebius-1 and vy-nebius-2: ``free -g`` total (GiB)
@@ -80,18 +82,16 @@ BYTES_PER_NNZ = 6.04
 #: Pc4RowATail_v1{K=256,KS=64} of 5,280 ANDs
 GLUE_BYTES = 55_911_585
 K_MIN_LOG = 22
-#: ``Stmt.InRange``'s block bound (``live/src/circuit.rs``'s ``IN_RANGE_K_LOG``; ``verity_flock.circuit.K_MAX``)
-K_LOG_MAX = 27
 POW2 = tuple(range(16, 33))
 CAP_SEARCH = tuple(range(16, 41))
 #: ρ for the power-of-two table: RoPE's and RMSNorm's registered layouts (GEMM's is 27.9, attention's 27.9-29.6)
 RHO_TABLE = 26.5
 MENU_K = 4
-#: ``dp4t``: at most this many body buckets, keyed by (template class, Z); a class drawn fewer than :data:`RARE_DRAWS` times
+#: ``dp4t``: at most this many body buckets, keyed by (template class, Z); a class sampled fewer than :data:`RARE_DRAWS` times
 #: per audit (mean) is rare, each of its types a bucket of its own at B = 1 or 16 (whichever costs less at the public count)
 BUCKETS_T = 8
 RARE_DRAWS = 16
-#: candidate 3's slot sumcheck, measured by proofs' K1 on vy-nebius-2's 32 threads (r20261010-093619-c3ee; upper bounds,
+#: candidate 3's slot sumcheck, measured by proofs' K1 on vy-nebius-2's 32 threads (upper bounds,
 #: Lean builds loaded the node): ns per entry per rep at ν = 20 and 28, the middle of wide-Morton (the band's low end) and
 #: uniform columns (its high end, the worst case); reps; the committed bits' bytes per entry (8; 64 encoded at rate 1/8);
 #: and the working set per entry (peak RSS 37 GiB at ν = 28). F4's estimate before it: 13 ns (10-16) at ν = 20.
@@ -221,10 +221,10 @@ def lstsq(xs: Sequence[Sequence[float]], ys: Sequence[float], ws: Sequence[float
     return _solve(A, b)
 
 
-#: each law's features (0: D / 2^30, 1: circuit bytes / GiB, 2: one block's bits, 2^k_log / 2^30); prove time leaves out the
+#: each sampling design's features (0: D / 2^30, 1: circuit bytes / GiB, 2: one block's bits, 2^k_log / 2^30); prove time leaves out the
 #: circuit text, whose coefficient fitted with it is negative and below its error
 LAWS = {"rss_gib": (0, 1, 2), "prove_s": (0, 2), "wall_s": (0, 1, 2)}
-#: the column as posted at b41137f42: every law over (D, circuit bytes), fitted on :data:`HIDDEN_ZK`
+#: the column as posted at b41137f42: every sampling design over (D, circuit bytes), fitted on :data:`HIDDEN_ZK`
 POSTED_LAWS = {"rss_gib": (0, 1), "prove_s": (0, 1), "wall_s": (0, 1)}
 
 
@@ -305,7 +305,7 @@ def session(Z: float, rho: float, coef: Mapping[str, Sequence[float]], slots: in
     held = [full] * slots if nets is None else sorted(nets, reverse=True)[:slots]
     cb = glue + sum(min(n, full) for n in held)
     x = features(D, cb, 2.0 ** k_log)
-    s = {"Z": Z, "slots": slots, "rho": rho, "rows": rows, "k_log": k_log, "in_range": k_log <= K_LOG_MAX, "D": D,
+    s = {"Z": Z, "slots": slots, "rho": rho, "rows": rows, "k_log": k_log, "in_range": k_log <= K_MAX, "D": D,
          "circuit_bytes": cb, **{k: _at(c, x) for k, c in coef.items()}}
     T = slots if nets is None else max(len(nets), 1)
     s["template"] = max((min(n, full) / bytes_per_nnz for n in held), default=Z)
@@ -368,7 +368,7 @@ def staging_fit(ladder: Sequence[tuple] = STAGING) -> dict[str, list[float]]:
 
 def staging(net: Mapping[str, Any], law: Mapping[str, Sequence[float]],
             registered: Sequence[tuple] = REGISTERED_STAGING) -> dict[str, float]:
-    """One template shape's staging: the law at the ANDs it lowers, a registered type's at least its measured staging."""
+    """One template shape's staging: the sampling design at the ANDs it lowers, a registered type's at least its measured staging."""
     out = {k: _at(c, [net["ands"] / 1e6]) for k, c in law.items()}
     if net["kind"] == "registered" and registered:
         out = {"wall_s": max(out["wall_s"], *(r[4] for r in registered)),
@@ -422,7 +422,7 @@ def _cost(mean: float, public: float, s: Mapping[str, Any]) -> dict[str, float]:
 
 def pieces_pmf(N: int, K: int, groups: Mapping[int, int]) -> list[float]:
     """The pmf of Y = Σ_p p X_p, X_p ~ Hypergeometric(N, n_p, K) for ``groups`` {p: n_p}, convolved as independent (the
-    draw without replacement correlates them negatively, so this overstates Y's upper tail)."""
+    sample without replacement correlates them negatively, so this overstates Y's upper tail)."""
     y = [1.0]
     for p, n in sorted(groups.items()):
         k0, pmf = P.hyper(N, n, K)
@@ -484,7 +484,7 @@ def menu_t(N: int, K: int, units: Sequence[P.Unit], nets: Mapping[str, Mapping[s
            budget: int = BUCKETS_T, rare: float = RARE_DRAWS) -> tuple[list[tuple[tuple[str, int], float, list[P.Unit]]],
                                                                        list[P.Unit]]:
     """``dp4t``: the body's buckets keyed by (template class, Z), and its rare types. Every GEMM tc step shares one class
-    (one registered unit at every K). A class drawn at least ``rare`` times per audit gets one bucket, and the rest of
+    (one registered unit at every K). A class sampled at least ``rare`` times per audit gets one bucket, and the rest of
     ``budget`` go one at a time to the class whose :func:`~unit_costs_padding.menu_dp` gains most in padded nonzeros
     (Σ Z_b W_b); the other classes' types are rare."""
     classes: dict[tuple[str, int], list[P.Unit]] = defaultdict(list)
@@ -552,7 +552,7 @@ def workload(inv: Mapping[str, Any], name: str, coef: Mapping[str, Sequence[floa
              slaw: Mapping[str, Sequence[float]] | None = None, menu: str = "dp4", register_bulk: bool = False,
              **kw: Any) -> dict[str, Any]:
     """One workload's audit under ``menu``, unsplit and at each cap. ``register_bulk``: a what-if with every generic body
-    type drawn at least :data:`RARE_DRAWS` times per audit registered as a GEMM tc-step-like unit (its template, circuit
+    type sampled at least :data:`RARE_DRAWS` times per audit registered as a GEMM tc-step-like unit (its template, circuit
     text and staging those of one tc step)."""
     K = int(inv["K"])
     N, units, skipped = P.units_of(inv, name)
@@ -618,7 +618,7 @@ def prover(inv: Mapping[str, Any], law: Mapping[str, Any] | None = None,
     kw["slot"] = slot
     names = list(dict.fromkeys(r["workload"] for r in inv["rows"]))
     return {"format": "verity/f6-prover/v3", "K": inv["K"], "slots": SLOTS, "menu": f"dp{MENU_K}", "node_gib": NODE_GIB,
-            "gpu_gib": GPU_GIB, "bytes_per_nnz": BYTES_PER_NNZ, "glue_bytes": GLUE_BYTES, "k_log_max": K_LOG_MAX, "fit": law,
+            "gpu_gib": GPU_GIB, "bytes_per_nnz": BYTES_PER_NNZ, "glue_bytes": GLUE_BYTES, "k_log_max": K_MAX, "fit": law,
             "slot_sumcheck": None if slot is None else {
                 **slot, "entries": "slots x the session's largest template (its type's registered table, at most Z)"},
             "staging_fit": {"coef": slaw, "ladder": [dict(zip(("run", "G", "ands", "wall_s", "peak_gib"), r)) for r in STAGING],
@@ -743,7 +743,7 @@ def render(pr: Mapping[str, Any]) -> str:
     sc = pr["staging_fit"]["coef"]
     law = lambda k: " + ".join(f"{v:.4g}{t}" for v, t in zip(c[k], ("", "·D/2^30", "·cb/GiB", "·2^k_log/2^30")) if v)  # noqa: E731
     L = [f"# F6 prover column: sessions of {pr['slots']} slots, {pr['menu']} buckets, K = {pr['K']}", "",
-         "C-Flock's CPU ZK prover (`flock-circuit prove --zk`, 32 threads, Xeon 6776P), fitted on the source runs below. D: "
+         "Flock's CPU ZK prover (`flock-circuit prove --zk`, 32 threads, Xeon 6776P), fitted on the source runs below. D: "
          "the session's bits (slots x 2^k_log); cb: its circuit text, the netlists of its distinct unit types at "
          f"{pr['bytes_per_nnz']} B per nonzero (a registered type's one unit, a generic type's whole subcircuit, a tree's "
          f"distinct members) plus {pr['glue_bytes'] / 1e6:.0f} MB of glue. A block is at most 2^{pr['k_log_max']} bits "

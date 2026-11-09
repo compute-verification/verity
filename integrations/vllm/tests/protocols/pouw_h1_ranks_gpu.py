@@ -6,15 +6,15 @@ otherwise it builds N tensor-parallel ranks × M pipeline stages on the multipro
 greedy requests plain, then under the window, and writes its tokens, the window's record (``pouw-h1-calls.json``) and a
 summary to ``--out``.
 
-Both draw their in-process coins from one fixed stream (`entropy`) and use one fixed hm96 key (`KEY`), a measurement that
+Both flip their in-process coins from one fixed stream (`entropy`) and use one fixed hm96 key (`KEY`), a measurement that
 credits nothing (the coins aren't a challenger's) but makes the two windows' commitments comparable bit for bit.
 ``--compare ONE_DIR OTHER_DIR`` (no GPU) holds the served tokens equal and both layouts static and complete (every one of
 the window's steps × linears called). At one TP (pipeline stages only) the layout is the same, so it also holds every
 call's (index, step, linear, module, m, k, n, base, rows) equal in count and order, and each call's A and z table roots,
-every round's root and coin, the calls root and the draw root equal. Across TPs the linears are shards, so it holds the
+every round's root and coin, the calls root and the sample root equal. Across TPs the linears are shards, so it holds the
 window's MACs a step equal instead (each linear's shard n·K summed over the ranks).
 
-``--commit`` (TP N > 1, PP 1; ROOTS1 across ranks, VLLM-81 item 2) serves the window with ``served`` and the Commit on every
+``--commit`` (TP N > 1, PP 1; ROOTS1 across ranks) serves the window with ``served`` and the Commit on every
 rank (`pouw_h1_ranks.install`'s ``commit``) in place of the bare one, each window into ``<out>/<name>/``, and holds each to
 core's ROOTS1 steps (`pouw_h1_gpu.core_tie`: one manifest under calls_root, each table committed by its round, each the
 Commit's value of its rows). With ``--negatives`` each `NEGATIVES` window hands H1 other codes than the arm's on rank
@@ -56,7 +56,7 @@ def entropy(label: str) -> Callable[[int], bytes]:
 def coins(steps: int) -> tuple[Any, Any]:
     from verity.core.protocols.pouw import window as Wd
     from verity.core.protocols.pouw.coins import Challenger
-    from verity.core.protocols.sampled_proofs.challenger import LiveRecord
+    from verity.core.protocols.spot.challenger import LiveRecord
     return Challenger(0, entropy("salt")), LiveRecord(Wd.live_challenger(0, steps, entropy("rounds")), Wd.ROUND)
 
 

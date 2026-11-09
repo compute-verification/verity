@@ -1,5 +1,5 @@
-"""The control pod's dead-man's switch (INF-131): a Vercel function that reads the heartbeat the watchers supervisor upserts into
-Neon (`store_private.control_heartbeat`, one row per host) and says in #agent-alerts, naming @infra, when it has gone stale: the
+"""The control pod's dead-man's switch: a Vercel function that reads the heartbeat the watchers supervisor upserts into
+Neon (`store_private.control_heartbeat`, one row per host) and says in #agent-alerts, naming infra, when it has gone stale: the
 pod, or the supervisor on it, stopped, and with it every watcher. It also reads the cloud watch's last pass from the same row
 (`cloud_watch_t`), since the cloud watch can't watch itself.
 

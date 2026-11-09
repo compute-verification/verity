@@ -32,12 +32,14 @@ from typing import Any, Iterable, Sequence
 
 import numpy as np
 
+from verity.ml.circuits.codec import definition_digest
 from verity.ml.circuits.defs import bind
 
 from verity_vllm.config import option
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.pipeline.vu_export import template_of
-from verity_vllm.query import word as word_query
+from verity.ml.definitions.encoding import encode_specialization, word_values
+from verity.ml.definitions import word as word_query
 from verity_vllm.query.program_view import ProgramView, _read_instance_header, from_instances, iter_instance_rows, spec_base, spec_statics
 
 SCHEMA = "vllm-program-graph/v1"
@@ -446,30 +448,6 @@ def fold_hints(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
 _specialization = word_query.specialization
 
 
-def _encoded(fn) -> tuple[str, dict[str, dict[str, Any]]]:
-    """(the specialization's id, every definition it uses in the codec's v0 form): `verity.ml.circuits.codec.encode_program` of a one-node
-    Program that calls it, keeping the definitions reachable from it (not the wrapper, its lowered root or their Input gates)."""
-    from verity.ml.circuits.codec import SCHEMA_V0, encode_program
-    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
-    from verity.ml.circuits.program import Program
-    if isinstance(fn, PrimitiveDefinition):
-        return fn.id, {fn.id: {"form": "primitive", "id": fn.id}}
-    params, ret = fn.signature()
-    shell = CompositeDefinition(f"Show[{fn.id}]", 1, (), lambda S: (tuple(params), ret), lambda B, S, *a: B.call(fn, *a), register=False)
-    desc = encode_program(Program(shell), schema=SCHEMA_V0)
-    defs = desc["definitions"]
-    top = next(n["fn"] for n in defs[desc["root"]]["body"]["nodes"] if n["form"] != "primitive" and n["fn"] in defs
-               and defs[n["fn"]].get("form") == "composite")
-    keep, todo = {}, [top]
-    while todo:
-        k = todo.pop()
-        if k in keep or k not in defs:
-            continue
-        keep[k] = defs[k]
-        todo += [n["fn"] for n in (defs[k].get("body") or {}).get("nodes", [])]
-    return top, keep
-
-
 def definitions(roots: Iterable[tuple[str, dict[str, Any]]]) -> tuple[dict[str, dict[str, Any]], list[str | None]]:
     """Every specialization the roots use, down to primitives, in the codec's v0 node form, each composite with its fold hints, and
     each root's specialization id (None when the registry cannot bind it; recorded as `unresolved` with the reason)."""
@@ -483,7 +461,7 @@ def definitions(roots: Iterable[tuple[str, dict[str, Any]]]) -> tuple[dict[str, 
             continue
         memo[key] = None
         try:
-            fid, defs = _encoded(_specialization(fam, st))
+            fid, defs = encode_specialization(_specialization(fam, st))
         except (KeyError, TypeError, ValueError, AttributeError) as e:
             out[key] = {"form": "unresolved", "id": fam, "why": f"{type(e).__name__}: {e}"[:300]}
             ids.append(None)
@@ -519,22 +497,6 @@ def with_definitions(g: dict[str, Any]) -> dict[str, Any]:
     return g
 
 
-#: a varying group with more values than this is partitioned at fewer: with a key-block size BN (attention's T), at its first values and
-#: every multiple of BN with the value before it and the three after it -- a head's unit count is affine in T between those, its gates
-#: and committed words nearly so (the k16 PV steps; within 0.1 % of the exact count on #101) -- else at WORD_SAMPLES values; the rest
-#: are interpolated
-WORD_EXACT = 320
-WORD_SAMPLES = 12
-
-
-def _word_values(vals: list[int], block: int | None = None) -> list[int]:
-    if len(vals) <= WORD_EXACT:
-        return vals
-    if block:
-        return sorted(set(vals[:4]) | {vals[-1]} | {v for v in vals if v % block in (block - 1, 0, 1, 2, 3)})
-    return sorted({vals[round(i * (len(vals) - 1) / (WORD_SAMPLES - 1))] for i in range(WORD_SAMPLES)})
-
-
 def _interp(xs: list[int], ys: list[float], x: int) -> float:
     k = int(np.searchsorted(xs, x))
     if k < len(xs) and xs[k] == x:
@@ -561,7 +523,7 @@ _WORD_FIELDS = ("units_per_call", "gates", "committed_interior_words", "free_gat
 def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0, *, log=None, substitute: dict[str, Any] | None = None,
                     max_gates: str | None = None) -> dict[str, Any]:
     """`g` with each group's `Q_word_v1` rule (`word_query.unit_rule` of its specialization: units, gates, free gates and committed
-    interior words per Call, the unit classes -- kind, first boundary gate's primitive and activation, gates per unit, |out(S)|, the
+    interior words per Call, the size classes -- kind, first boundary gate's primitive and activation, gates per unit, |out(S)|, the
     primitives of one unit -- and the violations) and the row's totals, with `taps`: every committed interior value class of the row by
     (activation family, primitive), its words and bytes, where serving commits it today (`word_query.committed_today`) or the kernel a
     new tap goes in.  A varying group (attention's T) is partitioned at every recorded value, or at its key-block boundaries with the
@@ -586,7 +548,7 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
             calls = {int(v): k for v, k in x["varying_calls"].items()}
             vals = sorted(calls)
             bn = x["statics"].get("BN") if a == "T" else None
-            pts = _word_values(vals, int(bn) if isinstance(bn, int) else None)
+            pts = word_values(vals, int(bn) if isinstance(bn, int) else None)
             rules = {v: word_query.unit_rule(spec(x, dict(x["statics"], **{a: v})), X, W, extras, memo=memo, max_gates=limits)
                      for v in pts}
             per = {f: [float(rules[v].get(f, 0)) for v in pts] for f in _WORD_FIELDS}
@@ -636,7 +598,7 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
                       "by_template": {k: dict(v) for k, v in sorted(by_template.items()) if v["units"]}, "violations": dict(viol),
                       "taps": tap_rows, "substituted": {k: v.id for k, v in sub.items()} or None}
     g.setdefault("rules", {})["q_word_v1"] = (
-        "verity_vllm.query.word, no recomputes: each gate and each value is computed in exactly one unit; a value read across units is "
+        "verity.ml.definitions.word, no recomputes: each gate and each value is computed in exactly one unit; a value read across units is "
         "committed once at serving (the Call's inputs are committed; a program's values, its weights, constants and tables and a request's "
         "data and parameters, are registered or run inputs, committed under hiding leaves; only an operation's own constant bits and "
         "wiring are structure); outputs of <= X "
@@ -645,12 +607,6 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
         "gates per unit, out bits, count per Call, the primitives of one unit), committed interior values; per row: taps, every committed "
         "interior value class with where serving commits it today or the kernel a new tap goes in")
     return g
-
-
-def definition_digest(d: dict[str, Any]) -> str:
-    """sha256 of a definition's canonical JSON (`verity.ml.circuits.codec.canonical_json`), fold hints excluded."""
-    from verity.ml.circuits.codec import canonical_json
-    return hashlib.sha256(canonical_json({k: v for k, v in d.items() if k != "fold"})).hexdigest()
 
 
 def _full_roots(x: dict[str, Any]) -> list[dict[str, Any]]:
@@ -686,7 +642,7 @@ def catalog(graph_dir: str | Path) -> dict[str, Any]:
         defs, ids = definitions(roots)
         dig: dict[str, str] = {}
         for k, d in defs.items():
-            h = dig[k] = definition_digest(d)
+            h = dig[k] = definition_digest({f: v for f, v in d.items() if f != "fold"})  # the fold hints are the graph's, not the entry's
             shards.setdefault(h[:2], {})[h] = {"id": k, "definition": d}
             e = index.setdefault(k, {"digest": h, "form": d.get("form"), "rows": []})
             if row not in e["rows"]:
@@ -704,7 +660,7 @@ def catalog(graph_dir: str | Path) -> dict[str, Any]:
         with gzip.open(root / "definitions" / f"{p2}.json.gz", "wt") as fh:
             json.dump(m, fh, separators=(",", ":"))
     (root / "definitions" / "index.json").write_text(json.dumps({"schema": f"{SCHEMA}/definitions", "shard": "definitions/<digest[:2]>.json.gz",
-                                                                 "digest": "sha256 of the definition's canonical JSON (verity.ml.circuits.codec.canonical_json), fold hints excluded",
+                                                                 "digest": "the definition's digest (verity.ml.circuits.codec.definition_digest, PROTOCOL.md 4.8)",
                                                                  "definitions": index}, separators=(",", ":")) + "\n")
     return index
 

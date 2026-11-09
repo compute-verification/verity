@@ -17,7 +17,7 @@ import tempfile
 import threading
 import urllib.error
 import urllib.parse
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
 
@@ -32,7 +32,7 @@ BOT = "B0VERITY"
 BOT_USER = "U0VERITYBOT"                                 # the bot's user, as auth.test names it
 COORD, ALERTS = "CCOORD", "CALERTS"
 HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "compute-research", "memory-accounting", "network-accounting",
-           "console", "ci", "lean", "comms", "top", "vllm", "benchmarks", "kernels", "training"]
+           "console", "dashboard", "ci", "lean", "comms", "top", "vllm", "benchmarks", "kernels", "training", "soundness"]
 
 
 class FakeSlack:
@@ -263,13 +263,35 @@ def test_the_old_channel_name_still_selects_ask_daniel_and_an_alias_may_not_shad
 
 
 def test_every_handle_names_exactly_one_holder_and_a_predecessor_goes_in_its_lineage(registry):
-    """Reach PR 9: two holders in one handle split its doorbells and the watch's view (two compute-accounting
-    coordinators answering one chat, 21 Oct; 18.2 h held, F5).  A handover's outgoing id goes in `lineage`."""
+    """Two holders in one handle split its doorbells and the watch's view (two coordinators would answer one chat).  A
+    handover's outgoing id goes in `lineage`."""
     reg = json.loads(REAL_REGISTRY.read_text())
     many = {h["handle"]: slack.AGENT_ID_RE.findall(h.get("holder") or "") for h in reg["handles"]}
     assert {h: ids for h, ids in many.items() if len(ids) != 1} == {}, "one agent per handle: a second lane gets its own handle"
     with pytest.raises(slack.SlackError, match="lineage"):
         slack.check_registry({**reg, "handles": [{**reg["handles"][0], "lineage": ["gen-3"]}, *reg["handles"][1:]]}, "r")
+
+
+@pytest.mark.parametrize("holder", [
+    "the proofs coordinator (bc-a26cefd0-716d-595d-bf02-8f8a47a711bd, generation 4, up 17:33Z on 19 Oct)",
+    "bc-a26cefd0-716d-595d-bf02-8f8a47a711bd, bc-8f4b652b-17bc-5055-a120-b56940b7c7a9",
+    "bc-a26cefd0", "proofs", "", None])
+def test_a_holder_is_one_agent_id_with_no_prose(registry, holder):
+    reg = json.loads(REAL_REGISTRY.read_text())
+    with pytest.raises(slack.SlackError, match=r"@infra's holder .*its coordinator's agent id alone .*--poster BC_ID"):
+        slack.check_registry({**reg, "handles": [{**reg["handles"][0], "holder": holder}, *reg["handles"][1:]]}, "r")
+    for ok in ("bc-a26cefd0-716d-595d-bf02-8f8a47a711bd", "f7772a12-d61f-4bbb-8c4f-e79e8d6d30dc"):   # a desktop agent's UUID too
+        slack.check_registry({**reg, "handles": [{**reg["handles"][0], "holder": ok}, *reg["handles"][1:]]}, "r")
+
+
+@pytest.mark.parametrize("key", ["charter", "remit"])
+def test_a_charter_or_remit_never_cites_an_agents_store(registry, key):
+    """An agent's store is its scratch (AGENTS.md "Where writing goes"): nobody else can open it."""
+    reg = json.loads(REAL_REGISTRY.read_text())
+    store = "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)"
+    with pytest.raises(slack.SlackError, match=rf"@infra's {key} cites an agent store \(/cursor/stores/...\).*cite a note \(note:<id>\)"):
+        slack.check_registry({**reg, "handles": [{**reg["handles"][0], key: store}, *reg["handles"][1:]]}, "r")
+    assert not any(slack.STORE_PATH in h[k] for h in reg["handles"] for k in ("charter", "remit"))
 
 
 def test_a_handles_examples_are_a_few_one_line_questions(registry):
@@ -385,7 +407,7 @@ def test_no_token_and_no_cursor_identity_is_an_error_and_dry_run_sends_nothing(f
 
 
 DRY_RUNS = [
-    ["ask", "--as", "memory-accounting", "--to", "infra", "--text", "x"], ["announce", "--as", "infra", "--text", "x"],
+    ["ask", "--as", "memory-accounting", "--to", "infra", "--text", "x"], ["send", "--kind", "announce", "--as", "infra", "--text", "x"],
     ["reply", "--as", "memory-accounting", "--thread", "1.0", "--text", "x"], ["pickup", "--thread", "1.0"],
     ["close", "--as", "memory-accounting", "--thread", "1.0", "--declined", "no"],
     ["roster", "--thread", "1.0"], ["read", "--since", "1.0"],
@@ -534,8 +556,8 @@ def test_broker_failures_are_clear_exit_2_and_never_show_the_identity(broker, re
 
 
 def test_a_long_thread_is_paged_by_oldest_so_no_reply_at_a_page_boundary_is_lost():
-    """Slack's cursor for conversations.replies skipped the message at each page boundary: a doorbell in a 204-reply inbox
-    read was lost (18 Oct)."""
+    """Slack's cursor for conversations.replies skips the message at each page boundary, so paging by cursor would lose a
+    doorbell in a long inbox read."""
     replies = [{"ts": f"1700000000.{i:06d}"} for i in range(1, 6)]
     asked = []
 
@@ -552,7 +574,7 @@ def test_a_long_thread_is_paged_by_oldest_so_no_reply_at_a_page_boundary_is_lost
 
 
 def test_a_rate_limited_call_waits_as_asked_then_succeeds(broker, monkeypatch):
-    """A burst of doorbells draws a 429 from Slack; giving up there left the last handles unrung (15 Oct review)."""
+    """A burst of doorbells gets a 429 from Slack; giving up there would leave the last handles unrung."""
     waits: list[float] = []
     monkeypatch.setattr(slack, "_sleep", waits.append)
     broker.fails = [http_error(429, {"error": "rate_limited"}, Retry_After="2"), http_error(429, {"error": "rate_limited"}, Retry_After="99")]
@@ -561,8 +583,8 @@ def test_a_rate_limited_call_waits_as_asked_then_succeeds(broker, monkeypatch):
 
 
 def test_a_read_cut_short_reset_or_timed_out_is_retried_with_backoff_and_fails_clearly_once_retries_run_out(monkeypatch):
-    """The control pod's agent-watch relay died twice on 19 Oct when conversations.replies came back truncated
-    (http.client.IncompleteRead, which is no OSError, so it escaped as a traceback instead of a SlackError)."""
+    """conversations.replies can come back truncated (http.client.IncompleteRead, which is no OSError), and the control
+    pod's agent-watch relay must see a SlackError then, never a traceback."""
     waits: list[float] = []
     monkeypatch.setattr(slack, "_sleep", waits.append)
     fails = [http.client.IncompleteRead(b"x" * 10, 90), ConnectionResetError(104, "reset"),
@@ -669,7 +691,7 @@ def test_manifest_diff_skips_a_false_default_one_side_omits():
 
 def test_the_app_manifest_keeps_the_live_request_urls_and_events():
     """apply replaces the whole manifest, so one without the interactivity URL (the #ask-daniel card buttons) or the event
-    subscriptions (the events service) would switch them off (infra caught it on 19 Oct and merged the live blocks in)."""
+    subscriptions (the events service) would switch them off, so the repository's manifest carries the live blocks."""
     m = json.loads(REAL_MANIFEST.read_text())
     assert m["settings"]["interactivity"]["is_enabled"] and m["settings"]["interactivity"]["request_url"].startswith("https://")
     ev = m["settings"]["event_subscriptions"]
@@ -677,7 +699,7 @@ def test_the_app_manifest_keeps_the_live_request_urls_and_events():
     assert {"message.channels", "message.groups", "team_join"} <= set(ev["bot_events"])
 
 def test_the_app_manifest_s_bot_scopes_cover_every_method_this_module_calls():
-    """A silent scope swap (19 Oct: channels:history replaced by groups:history) fails here, naming the scope."""
+    """A silent scope swap (channels:history replaced by groups:history) fails here, naming the scope."""
     called = set(re.findall(r"\.(?:call|paged)\(\s*\"([a-z]+(?:\.[A-Za-z]+)+)\"", Path(slack.__file__).read_text())) - set(slack.APP_METHODS)
     assert not called - METHOD_SCOPES.keys(), f"map {sorted(called - METHOD_SCOPES.keys())} to the bot scopes they need in METHOD_SCOPES"
     manifest = json.loads(REAL_MANIFEST.read_text())
@@ -734,8 +756,10 @@ def app_config(tmp_path, monkeypatch, registry):
     fake = FakeAppConfig(live)
     monkeypatch.setattr(slack, "post", fake)
     monkeypatch.setattr(slack, "_epoch", lambda: fake.now)
-    monkeypatch.setenv(slack.APP_STATE_ENV, str(tmp_path / "app" / "slack-app-token.json"))
-    monkeypatch.setenv(slack.APP_SEED_ENV, "dummy-seed")
+    state = tmp_path / "app" / "slack-app-token.json"
+    monkeypatch.setenv(slack.APP_STATE_ENV, str(state))
+    state.parent.mkdir()
+    slack._write_private(state, {"refresh_token": "dummy-seed"})                # as a person writes a new pair on the pod
     return fake
 
 
@@ -745,14 +769,13 @@ def app(capsys, *argv) -> tuple[int, str, str]:
     return rc, out, err
 
 
-def test_the_configuration_token_is_seeded_from_the_env_and_rotated_near_its_exp(app_config, capsys, monkeypatch):
+def test_the_configuration_token_is_read_from_the_pods_state_file_and_rotated_near_its_exp(app_config, capsys, monkeypatch):
     state = slack.app_state_path()
     assert app(capsys, "export")[0] == 0
     assert app_config.methods() == ["tooling.tokens.rotate", "apps.manifest.export"]
     assert app_config.calls[0][1] == {"refresh_token": "dummy-seed"}
     assert oct(state.stat().st_mode & 0o777) == "0o600"
     assert json.loads(state.read_text()) == {"token": "dummy-config-1", "refresh_token": "dummy-refresh-1", "exp": T0 + 43200, "rotated": T0}
-    monkeypatch.setenv(slack.APP_SEED_ENV, "dummy-seed-spent")                   # the file exists: the seed is never read again
     app_config.now = T0 + 43200 - slack.ROTATE_BEFORE_S - 1
     assert app(capsys, "export")[0] == 0 and app_config.methods()[2:] == ["apps.manifest.export"]
     app_config.now += 2                                                          # within 10 min of exp: rotate first
@@ -764,20 +787,26 @@ def test_the_configuration_token_is_seeded_from_the_env_and_rotated_near_its_exp
 
 def test_a_spent_refresh_token_says_how_to_get_a_new_pair(app_config, capsys, monkeypatch):
     state = slack.app_state_path()
-    state.parent.mkdir()
     slack._write_private(state, {"token": "dummy-config-old", "refresh_token": "dummy-refresh-old", "exp": T0 - 1})
     before = state.read_text()
     rc, _, err = app(capsys, "export")
     assert rc == 2 and "tooling.tokens.rotate: invalid_refresh_token" in err and "works once" in err
-    assert slack.APP_SEED_ENV in err and str(state) in err and slack.APP_TOKENS_PAGE in err
+    assert "on the control pod" in err and str(state) in err and slack.APP_TOKENS_PAGE in err
     assert "dummy-refresh-old" not in err and state.read_text() == before and app_config.methods() == ["tooling.tokens.rotate"]
     state.chmod(0o644)
     rc, _, err = app(capsys, "export")
     assert rc == 2 and f"chmod 600 {state}" in err
     state.unlink()
-    monkeypatch.delenv(slack.APP_SEED_ENV)
+    monkeypatch.setenv("SLACK_APP_CONFIG_REFRESH_TOKEN", "dummy-seed-env")      # an agent's old secret seeds nothing
     rc, _, err = app(capsys, "export")
-    assert rc == 2 and f"{slack.APP_SEED_ENV} is unset" in err
+    assert rc == 2 and f"{state} is absent" in err and "no environment variable seeds it" in err and not state.exists()
+    assert app_config.methods() == ["tooling.tokens.rotate"]
+
+
+def test_slack_app_runs_only_where_the_state_file_is_named(app_config, capsys, monkeypatch):
+    monkeypatch.delenv(slack.APP_STATE_ENV)
+    rc, _, err = app(capsys, "export")
+    assert rc == 2 and f"${slack.APP_STATE_ENV} is unset" in err and "control pod" in err and app_config.methods() == []
 
 
 def test_slack_app_needs_an_app_id(app_config, registry, capsys):
@@ -806,7 +835,7 @@ def test_slack_app_diff_names_each_key_path_and_exits_1_on_drift(app_config, cap
 
 def test_slack_app_apply_validates_refuses_update_in_dry_run_and_names_the_install_page_when_scopes_change(app_config, capsys):
     url = f"https://api.slack.com/apps/{APP}/install-on-team"
-    app_config.live["oauth_config"]["scopes"]["bot"].remove("channels:history")     # 19 Oct's swap, live
+    app_config.live["oauth_config"]["scopes"]["bot"].remove("channels:history")     # a scope swap, live
     rc, out, _ = app(capsys, "apply", "--dry-run")
     assert rc == 0 and "dry-run: would call apps.manifest.update" in out and "bot +channels:history" in out and url in out
     assert "apps.manifest.update" not in app_config.methods() and app_config.methods()[-1] == "apps.manifest.validate"
@@ -892,6 +921,12 @@ def test_oidc_token_asks_the_cursor_socket_for_the_brokers_audience(identity_soc
             slack.oidc_token(slack.BROKER)
 
 
+def test_oidc_token_asks_for_the_nonce_it_is_given(identity_socket):
+    """A label's authentication binds the token to the label through its `nonce` claim (`research.labelauth`)."""
+    assert slack.oidc_token("urn:verity:label-auth", nonce="ab" * 64) == OIDC
+    assert identity_socket["seen"] == [("/v1/tokens/oidc", {"aud": "urn:verity:label-auth", "nonce": "ab" * 64})]
+
+
 def test_oidc_token_asks_again_when_the_socket_drops_the_connection(identity_socket, monkeypatch, tmp_path):
     waits: list[float] = []
     identity_socket["drop"] = 2
@@ -911,17 +946,17 @@ def test_oidc_token_asks_again_when_the_socket_drops_the_connection(identity_soc
 
 def test_announce_to_all_or_some_with_verify_and_pins(fake, registry, capsys):
     sha = "a" * 64
-    rc, _, err = run(capsys, "announce", "--as", "infra", "--text", "curl the new helper and install it", "--verify", "helper --version")
+    rc, _, err = run(capsys, "send", "--kind", "announce", "--as", "infra", "--text", "curl the new helper and install it", "--verify", "helper --version")
     assert rc == 2 and "pin it" in err
-    rc, _, err = run(capsys, "announce", "--as", "infra", "--text", "x", "--ships", "https://x/y.py")
+    rc, _, err = run(capsys, "send", "--kind", "announce", "--as", "infra", "--text", "x", "--ships", "https://x/y.py")
     assert rc == 2 and "--ships" in err
     assert not fake.calls
-    assert run(capsys, "announce", "--as", "infra", "--text", "Install the broker helper.", "--verify", "git ls-remote origin HEAD",
+    assert run(capsys, "send", "--kind", "announce", "--as", "infra", "--text", "Install the broker helper.", "--verify", "git ls-remote origin HEAD",
                "--ships", f"https://x/verity-github.py#sha256={sha}")[0] == 0
     m = fake.messages[COORD][-1]
     assert m["text"].startswith(":mega: *Announcement* from @infra to every handle")
     assert slack.SAFE_POINT in m["text"] and "`git ls-remote origin HEAD`" in m["text"] and sha in m["text"]
-    assert run(capsys, "announce", "--as", "infra", "--to", "@compute-accounting", "circuits", "--text", "node 2 reboots at 22:00Z")[0] == 0
+    assert run(capsys, "send", "--kind", "announce", "--as", "infra", "--to", "@compute-accounting", "circuits", "--text", "node 2 reboots at 22:00Z")[0] == 0
     m = fake.messages[COORD][-1]
     assert m["text"].split("\n")[0].endswith("to @compute-accounting @circuits") and slack.SAFE_POINT not in m["text"]
     assert slack.audience(m["text"], slack.load_registry(registry)) == ["circuits", "compute-accounting"]
@@ -1008,7 +1043,7 @@ def test_the_ask_lifecycle_pickup_reply_done_and_decline(fake, registry, capsys)
 
 
 def test_an_announcements_status_lines_and_roster(fake, registry, capsys):
-    run(capsys, "announce", "--as", "infra", "--to", "@compute-accounting", "@circuits", "@proofs", "--text", "node 2 reboots at 22:00Z")
+    run(capsys, "send", "--kind", "announce", "--as", "infra", "--to", "@compute-accounting", "@circuits", "@proofs", "--text", "node 2 reboots at 22:00Z")
     t = fake.messages[COORD][-1]["ts"]
     assert run(capsys, "close", "--as", "compute-accounting", "--thread", t)[0] == 0
     assert run(capsys, "close", "--as", "circuits", "--thread", t, "--declined", "a job runs until 7 Oct 23:00Z")[0] == 0
@@ -1030,7 +1065,7 @@ def test_an_announcements_status_lines_and_roster(fake, registry, capsys):
 
 
 def test_roster_of_an_announcement_to_all_expects_every_other_handle(fake, registry, capsys):
-    run(capsys, "announce", "--as", "memory-accounting", "--text", "Friday: freeze main at 18:00Z")
+    run(capsys, "send", "--kind", "announce", "--as", "memory-accounting", "--text", "Friday: freeze main at 18:00Z")
     t = fake.messages[COORD][-1]["ts"]
     rc, out, _ = run(capsys, "roster", "--thread", t, "--json")
     assert rc == 1 and [r["handle"] for r in json.loads(out)] == [h for h in HANDLES if h != "memory-accounting"]
@@ -1046,6 +1081,21 @@ def test_read_since_and_thread_oldest_first_across_pages(fake, registry, capsys)
     assert rc == 0 and [line.split(": ", 1)[1] for line in out.splitlines()] == ["second", "third"]
     rc, out, _ = run(capsys, "read", "--thread", a["ts"], "--json")
     assert [m["text"] for m in json.loads(out)] == ["first", "reply"]
+
+
+def test_read_shows_a_user_group_as_its_handle_a_doorbell_s_bare_id_included(fake, registry, capsys):
+    reg = json.loads(registry.read_text())
+    for h in reg["handles"]:
+        if h["handle"] == "infra":
+            h["usergroup"] = group = "S0INFRA0001"
+    registry.write_text(json.dumps(reg))
+    start = fake.add(COORD, text="before", user="U1")
+    fake.add(COORD, text=f"<!subteam^{group}> is node 2 free?", username="top", bot_id=BOT)
+    fake.add(COORD, text=f"from top, thread 1.2: @{group} the check", username="router", bot_id=BOT)
+    rc, out, _ = run(capsys, "read", "--since", start["ts"])
+    assert rc == 0 and [line.split(": ", 1)[1] for line in out.splitlines()] == ["@infra is node 2 free?",
+                                                                                  "from top, thread 1.2: @infra the check"]
+    assert slack.plain(f"<!subteam^{group}> hi") == f"@{group} hi"                 # no registry: the id, as before
 
 
 def test_read_thread_since_reads_only_the_replies_after_ts(fake, registry, capsys):
@@ -1086,7 +1136,28 @@ def test_a_post_carries_slack_date_tokens_and_read_shows_both_zones(fake, regist
     assert "note:20260930T2020Z-handoff-infra" in posted and "`--since 2026-11-01T09:30Z`" in posted
     fake.messages[COORD][0]["ts"] = "1793525400.000100"
     rc, out, _ = run(capsys, "read", "--thread", "1793525400.000100")
-    assert rc == 0 and out.startswith("1793525400.000100 @infra: @memory-accounting freeze 1:30 AM PST (09:30Z), see note:")
+    assert rc == 0 and out.startswith("1793525400.000100 09:30:00Z @infra: @memory-accounting freeze 1:30 AM PST (09:30Z), see note:")
+
+
+@pytest.mark.parametrize("text,stamped", [
+    ("compute-research 13:07Z: outcome 1 MET", "compute-research 13:07Z (sent 13:22Z): outcome 1 MET"),
+    ("*compute-accounting 11:45Z* (quiet): x", "*compute-accounting 11:45Z* (sent 13:22Z) (quiet): x"),
+    ("top 00:15Z, how this works", "top 00:15Z (sent 13:22Z), how this works"),
+    ("<!subteam^S1|@ci> infra 13:00Z: free", "<!subteam^S1|@ci> infra 13:00Z (sent 13:22Z): free"),       # --to's tag first
+    ("@top comms 13:21Z: on track", None),                                     # within 2 min of the send
+    ("can node 2 take a job by 20:00Z?", None), ("infra, outcomes by 18:40Z:", None),   # deadlines, not headers
+    ("The 13:00Z checkpoint is late", None), ("comms 23:59Z: late", "comms 23:59Z (sent 13:22Z): late"),
+])
+def test_a_hand_typed_header_time_gets_the_real_send_time_beside_it(text, stamped):
+    """Hand-typed times in posts run up to 15 min off and misorder posts, so a header time that far off shows the real one."""
+    now = datetime(2026, 10, 26, 13, 22, 10, tzinfo=timezone.utc)
+    assert slack.stamp_time(text, now) == (stamped or text)
+
+
+def test_send_stamps_a_hand_typed_header_time(fake, registry, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime(2026, 10, 26, 13, 22, 10, tzinfo=timezone.utc))
+    assert run(capsys, "send", "--as", "infra", "--to", "@ci", "--kind", "fyi", "--text", "infra 13:00Z: node 2 is free")[0] == 0
+    assert "infra 13:00Z (sent 13:22Z): node 2 is free" in fake.messages[COORD][-1]["text"]
 
 
 def test_verify_author_fetches_the_message_and_fails_closed(fake, registry, capsys):
@@ -1150,13 +1221,13 @@ def test_the_registry_checks_its_collaborators(registry):
 
 def test_a_collaborators_ask_rings_its_lane_but_never_them_and_authorizes_nothing(fake, registry, routes_dirs, capsys, monkeypatch):
     """A collaborator posts like a named human: its leading names ring and nothing rings it.  verify-author lets it ask,
-    and --authorizes, the check before a Slack request to spend or delete, refuses it and passes only Daniel."""
+    and --authorizes, the check before a Slack request to spend or delete, refuses it and passes only the named human."""
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     with_collaborator(registry)
     box = inbox(fake, routes_dirs, "circuits")
     ask = fake.add(COORD, text="@circuits can you rerun the TP8 sweep on node 2?", user="UADA")
     assert run(capsys, "deliver", "--ts", ask["ts"])[0] == 0
-    assert [b["text"] for b in bells(fake, box)] == [f"from ada, thread {ask['ts']}: @circuits can you rerun the TP8 sweep on node 2?"]
+    assert [b["text"] for b in bells(fake, box)] == [f"from ada (a person, waiting 1 min), thread {ask['ts']}: @circuits can you rerun the TP8 sweep on node 2?"]
     reply = fake.add(COORD, text="on it after the train lands", username="circuits", bot_id=BOT, thread_ts=ask["ts"])
     reg = slack.load_registry(registry)
     assert slack.poster(ask, reg) == "ada" and slack.route_targets(reply, ask, reg) == ["ada"]
@@ -1187,7 +1258,7 @@ OPENED = datetime(2026, 10, 19, 17, 30, tzinfo=timezone.utc)
 
 
 def chat_users(fake) -> None:
-    """The workspace's users: Luke, Daniel, Cursor's app's bot (and a deleted older one), and another app's bot."""
+    """The workspace's users: Luke, the named human (UDANIEL), Cursor's app's bot (and a deleted older one), and another app's bot."""
     fake.users = [{"id": "U0GRAFANA", "name": "grafana", "real_name": "Grafana", "is_bot": True, "profile": {}},
                   {"id": "U0OLDCURSOR", "name": "cursor", "real_name": "Cursor", "is_bot": True, "deleted": True, "profile": {}},
                   {"id": CURSOR_BOT, "name": "cursor-agent", "real_name": "Cursor", "is_bot": True, "profile": {}},
@@ -1237,7 +1308,7 @@ def test_chat_open_by_slack_id_makes_a_private_channel_pins_two_lines_and_publis
     reg = slack.load_registry(registry)
     assert reg["collaborators"] == [{"name": "Luke Example", "slack_user": LUKE, "note": "a visiting researcher (COMM-52)",
                                      "email": "luke@example.org"}]
-    assert slack.chat_channels(reg)["chat-luke"]["id"] == c["id"] and slack.subscribers(reg, "chat-luke") == ["top"]
+    assert slack.chat_channels(reg)["chat-luke"]["id"] == c["id"] and slack.subscribers(reg, "chat-luke") == []
 
     rc, out, _ = run(capsys, "chat", "open", "luke", "--user", LUKE)
     assert rc == 0 and f"#chat-luke {c['id']}: reused" in out and out.count(": already in") == 2
@@ -1271,17 +1342,17 @@ def test_people_d_s_open_chats_join_the_collaborators_but_not_a_named_human_or_a
     (people_d / "odd.json").write_text(json.dumps(chat_person("chat-even", "UODD", "Odd One")))     # its key isn't its name's
     reg = slack.load_registry(registry)
     assert [p["name"] for p in reg["collaborators"]] == ["Luke Example"]
-    assert sorted(slack.chat_channels(reg)) == ["chat-daniel", "chat-gun", "chat-luke"]           # @top's name: no author
+    assert sorted(slack.chat_channels(reg)) == ["chat-daniel", "chat-gun", "chat-luke"]           # its person's first name is a handle: no author
     assert slack.person({"user": "UDANIEL"}, reg)[1] == "human" and slack.person({"user": LUKE}, reg)[1] == "collaborator"
     assert slack.person({"user": "UGUN"}, reg) is None
     bare = slack.load_registry(registry, people=False)
     assert bare["collaborators"] == [] and "chat_people" not in bare
 
 
-def test_chat_open_by_email_invites_through_slack_connect_or_names_daniels_one_step(fake, registry, people_d, capsys):
+def test_chat_open_by_email_invites_through_slack_connect_or_names_the_one_step_left(fake, registry, people_d, capsys):
     """By email: someone in the workspace is found and invited; someone outside it gets a Slack Connect invite, and once they
     accept, a rerun records their Slack id.  Where Slack refuses Connect (a plan without it, a scope not yet approved), the
-    rest is done anyway and the last line is the one step Daniel takes."""
+    rest is done anyway and the last line is the one step a workspace admin takes."""
     chat_users(fake)
     rc, out, _ = run(capsys, "chat", "open", "luke", "--email", "luke@example.org")
     assert rc == 0 and fake.channels["CCHAT1"]["members"][-1] == LUKE and not fake.shared
@@ -1352,7 +1423,7 @@ def test_chat_dry_run_prints_the_plan_and_changes_nothing(fake, registry, people
 
 def test_chat_expect_publishes_someone_invited_with_no_channel_and_open_takes_them_over(fake, registry, people_d, capsys,
                                                                                        monkeypatch):
-    """Daniel invites a newcomer to the workspace: `expect` publishes them as expected, with no channel and no Slack call,
+    """Someone invites a newcomer to the workspace: `expect` publishes them as expected, with no channel and no Slack call,
     which `chat list` shows and no command routes by.  Once they join, `open` (the Slack events service's, at team_join)
     makes their chat and the record becomes an open one, keeping the note."""
     rc, out, err = run(capsys, "chat", "expect", "luke", "--email", "luke@example.org", "--note", "a visiting researcher")
@@ -1387,6 +1458,32 @@ def test_chat_expect_publishes_someone_invited_with_no_channel_and_open_takes_th
     assert slack.ChatPeople().expected() == [] and slack.person({"user": LUKE}, slack.load_registry(registry))[1] == "collaborator"
     rc, _, err = run(capsys, "chat", "expect", "luke", "--email", "luke@example.org")
     assert rc == 2 and "#chat-luke is open already (Luke Example)" in err
+
+
+def test_chat_lane_records_the_lane_a_person_usually_works_with_checked_against_the_handles(fake, registry, people_d, capsys):
+    """`--lane HANDLE` (expect, open) records the lane the person usually works with, which must be a handle; a rerun or
+    `open` taking an expected person over keeps it, `--lane ''` clears it, and `list` shows it.  `usual_lane` reads it
+    for that person's own posts in their chat only."""
+    rc, _, err = run(capsys, "chat", "expect", "luke", "--email", "luke@example.org", "--lane", "@nobody")
+    assert rc == 2 and "unknown handle @nobody; the registry has @infra" in err and not people_d.exists()
+    assert run(capsys, "chat", "expect", "luke", "--email", "luke@example.org", "--lane", "@circuits")[0] == 0
+    assert json.loads((people_d / "luke.json").read_text())["lane"] == "circuits"
+    chat_users(fake)
+    assert run(capsys, "chat", "open", "luke", "--user", LUKE)[0] == 0
+    rec = json.loads((people_d / "luke.json").read_text())
+    assert rec["lane"] == "circuits" and rec["channel"]["id"] == "CCHAT1"
+    assert run(capsys, "chat", "list")[1].endswith(", usual lane @circuits\n")
+    reg = slack.load_registry(registry)
+    assert slack.usual_lane({"user": LUKE, "text": "x"}, reg, "chat-luke") == "circuits"
+    assert slack.usual_lane({"user": "UDANIEL", "text": "x"}, reg, "chat-luke") is None              # not his post
+    assert slack.usual_lane({"user": LUKE, "text": "x"}, reg, "ask-the-team") is None                # not his chat
+    assert run(capsys, "chat", "open", "luke", "--user", LUKE, "--lane", "kernels")[0] == 0
+    assert json.loads((people_d / "luke.json").read_text())["lane"] == "kernels"
+    assert run(capsys, "chat", "open", "luke", "--user", LUKE, "--lane", "")[0] == 0
+    assert "lane" not in json.loads((people_d / "luke.json").read_text())
+    assert slack.usual_lane({"user": LUKE, "text": "x"}, slack.load_registry(registry), "chat-luke") is None
+    rc, _, err = run(capsys, "chat", "open", "luke", "--user", LUKE, "--lane", "nobody")
+    assert rc == 2 and "unknown handle @nobody" in err and "lane" not in json.loads((people_d / "luke.json").read_text())
 
 
 def test_an_expected_person_is_closed_without_an_archive_and_the_newer_copy_counts():
@@ -1441,9 +1538,9 @@ def test_without_a_notes_clone_a_person_is_published_and_listed_through_githubs_
 
 def test_a_chat_post_rings_its_leading_names_else_its_thread_s_lanes_else_top_and_its_doorbell_carries_no_text(
         fake, registry, routes_dirs, people_d, tmp_path, capsys, monkeypatch):
-    """A person's post in a chat goes through no `research msg`, so @top's watcher hands it to `deliver --channel chat-NAME
+    """A person's post in a chat goes through no `research msg`, so the admin's watcher hands it to `deliver --channel chat-NAME
     --event -`.  The names it starts with ring; a reply that names no one rings the lanes that posted in its thread; anything
-    else rings @top; each once.  A doorbell names the person and the thread but not the text (the inboxes are in the front
+    else rings the admin (`top`); each once.  A doorbell names the person and the thread but not the text (the inboxes are in the front
     door; the chat is private), and `read --channel chat-NAME --thread T` reads it, from a clone without its person too."""
     chat_users(fake)
     assert run(capsys, "chat", "open", "luke", "--user", LUKE)[0] == 0
@@ -1452,7 +1549,7 @@ def test_a_chat_post_rings_its_leading_names_else_its_thread_s_lanes_else_top_an
     rung = lambda n: [b["text"] for b in bells(fake, boxes[n])]  # noqa: E731
 
     def private(thread: str, reply: str | None = None) -> str:
-        return (f"from luke, #chat-luke thread {thread}{', reply ' + reply if reply else ''}: (a post in a private channel: "
+        return (f"from luke (a person, waiting 1 min), #chat-luke thread {thread}{', reply ' + reply if reply else ''}: (a post in a private channel: "
                 f"research msg read --channel chat-luke --thread {thread})")
 
     def deliver(m):
@@ -1480,9 +1577,9 @@ def test_a_chat_post_rings_its_leading_names_else_its_thread_s_lanes_else_top_an
     assert rc == 0 and "how do I read a PoUW receipt?" in out and "@proofs: it proves the sum" in out and "and the Lean side?" in out
     late = fake.add("CCHAT1", text="is anyone there?", user=LUKE)
     rc, _, err = run(capsys, "match", "--as", "top", "--event", json.dumps({"channel": "CCHAT1", **late}), "--why")
-    assert rc == 0 and "top-level post in #chat-luke, which @top subscribes to" in err
+    assert rc == 1                                    # no channel subscription: the post reaches top as a doorbell in its inbox
     out = run(capsys, "subscriptions", "--as", "top")[1]
-    assert 'subscribe_slack_channel(channelId="CCHAT1", topLevelOnly=true' in out and "# #chat-luke" in out
+    assert "CCHAT1" not in out and "#chat-luke" not in out                    # a private chat the subscription tool can't join
 
     published = tmp_path / slack.PEOPLE_DIR                                             # the routes' sibling
     assert slack.ChatPeople().base == f"file://{published}/"
@@ -1497,7 +1594,7 @@ def test_a_chat_post_rings_its_leading_names_else_its_thread_s_lanes_else_top_an
 def test_deliver_rings_explicit_names_in_place_of_the_rule_and_a_reminder_once_per_reason(fake, registry, routes_dirs, people_d,
                                                                                           capsys, monkeypatch):
     """The Slack events service rings through `deliver`: `names` replace the rule's (a post in #ask-the-team that names no
-    one rings no one by the rule, and the service sends it to @top), and its watchdog's `reminder` rings a name this post
+    one rings no one by the rule, and the service sends it to the admin), and its watchdog's `reminder` rings a name this post
     already rang again, once per reason, with the reason leading the doorbell's body."""
     chat_users(fake)
     assert run(capsys, "chat", "open", "luke", "--user", LUKE)[0] == 0
@@ -1510,18 +1607,49 @@ def test_deliver_rings_explicit_names_in_place_of_the_rule_and_a_reminder_once_p
     plain_post = {"ts": "1700000050.000001", "text": "what is the TP8 status?", "user": "UDANIEL"}
     assert slack.deliver(api, reg, routes, team, plain_post) == [] and rung("top") == []
     assert slack.deliver(api, reg, routes, team, plain_post, names=["top"]) == ["@top: rang"]
-    assert rung("top") == ["from daniel, #ask-the-team thread 1700000050.000001: what is the TP8 status?"]
+    assert rung("top") == ["from daniel (a person, waiting under a minute), #ask-the-team thread 1700000050.000001: what is the TP8 status?"]
 
     ask = fake.add("CCHAT1", text="@circuits is the TP8 sweep done?", user=LUKE)
     assert slack.deliver(api, reg, routes, "CCHAT1", ask) == ["@circuits: rang"]
     for _ in range(2):
-        slack.deliver(api, reg, routes, "CCHAT1", ask, reminder="no 👀 or lane reply in 15 min")
+        slack.deliver(api, reg, routes, "CCHAT1", ask, reminder="no :eyes: or lane reply in 15 min")
     slack.deliver(api, reg, routes, "CCHAT1", ask, names=["top"], reminder="no lane reply in 60 min")
-    where = f"from luke, #chat-luke thread {ask['ts']}: "
+    where = f"from luke (a person, waiting 1 min), #chat-luke thread {ask['ts']}: "
     read = f"(a post in a private channel: research msg read --channel chat-luke --thread {ask['ts']})"
-    assert rung("circuits") == [where + read, where + "reminder (no 👀 or lane reply in 15 min): " + read]
+    assert rung("circuits") == [where + read, where + "reminder (no :eyes: or lane reply in 15 min): " + read]
     assert rung("top")[1:] == [where + "reminder (no lane reply in 60 min): " + read]
     assert all(slack.DOORBELL_RE.match(t) for n in boxes for t in rung(n))
+
+
+def test_a_persons_doorbell_says_how_long_they_have_waited_and_still_rings_once(fake, registry, routes_dirs, people_d, capsys,
+                                                                                 monkeypatch):
+    """A doorbell for a person's post leads with them and how long they have waited since posting; a lane's doesn't.  The
+    once-per-post check, the hourly cap's count and `read --as`'s urgent-first order read it as any other doorbell."""
+    chat_users(fake)
+    assert run(capsys, "chat", "open", "luke", "--user", LUKE)[0] == 0
+    now = [1700001090.0]                                                                  # 18 min 10 s after the post
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(now[0], UTC))
+    box = inbox(fake, routes_dirs, "top")
+    reg, routes, api = slack.load_registry(registry), slack.Routes(), slack.Slack(TOKEN)
+    ask = fake.add("CCHAT1", ts="1700000000.000100", text="is anyone there?", user=LUKE)
+    read = f"(a post in a private channel: research msg read --channel chat-luke --thread {ask['ts']})"
+    assert slack.deliver(api, reg, routes, "CCHAT1", ask) == ["@top: rang"]
+    now[0] += 300
+    assert slack.deliver(api, reg, routes, "CCHAT1", ask) == []                            # once per post
+    slack.deliver(api, reg, routes, "CCHAT1", ask, urgent=True, reminder="no lane reply in 60 min")
+    slack.deliver(api, reg, routes, "CCHAT1", ask, urgent=True, reminder="no lane reply in 60 min")
+    texts = [b["text"] for b in bells(fake, box)]
+    assert texts == [f"from luke (a person, waiting 18 min), #chat-luke thread {ask['ts']}: {read}",
+                     f"from luke (a person, waiting 23 min) (URGENT), #chat-luke thread {ask['ts']}: "
+                     f"reminder (no lane reply in 60 min): {read}"]
+    assert all(slack._rang(t, ask["ts"], "chat-luke") and slack._mentions_thread(t, ask["ts"], "chat-luke")
+               and slack._from(t, "luke") and slack.doorbell_channel(t) == "chat-luke" for t in texts)
+    assert [slack.urgent_doorbell(b, reg) for b in bells(fake, box)] == [False, True]
+    rc, out, _ = run(capsys, "read", "--as", "top", "--peek")
+    assert rc == 0 and out.index("(URGENT)") < out.index("waiting 18 min")
+    lane = fake.add(COORD, text="@top the sweep is done", username="circuits", bot_id=BOT)
+    assert slack.deliver(api, reg, routes, COORD, lane) == ["@top: rang"]
+    assert bells(fake, box)[-1]["text"] == f"from circuits, thread {lane['ts']}: @top the sweep is done"
 
 
 def test_groups_sync_plans_by_default_then_creates_updates_enables_and_records_ids(fake, registry, capsys):
@@ -1559,16 +1687,16 @@ def test_groups_sync_disables_a_retired_names_group_and_leaves_other_groups_alon
 
 
 def test_groups_sync_never_sets_a_groups_members(fake, registry, capsys):
-    """Agent-role groups are routing labels with no members, so a mention notifies no person (Daniel, 19 Oct: the old groups
-    had him as their only member). sync creates and updates without a member list and never calls usergroups.users.*."""
+    """Agent-role groups are routing labels with no members, so a mention notifies no person. sync creates and updates
+    without a member list and never calls usergroups.users.*."""
     fake.groups = [{"id": "SINFRA", "name": "infra", "handle": "infra", "description": "old", "date_delete": 0}]
     assert run(capsys, "groups", "sync", "--apply")[0] == 0
     calls = [(m, p) for m, p in fake.calls if m.startswith("usergroups.")]
     assert calls and not any(m.startswith("usergroups.users.") or "users" in p for m, p in calls)
 
 def test_a_retired_group_id_still_routes_and_groups_sync_never_re_enables_it_or_a_group_with_members(fake, registry, capsys):
-    """19 Oct: the seven old groups, whose only member was Daniel, were renamed aside and disabled for empty ones. Posts from
-    old checkouts still tag the old ids, so a handle's retired_usergroups still route; and sync must never re-enable a group
+    """A retired group is renamed aside, and disabled once empty. Posts from old checkouts still tag the old ids, so a
+    handle's retired_usergroups still route; and sync must never re-enable a group
     that has members (that would notify them without touching membership), nor touch a retired one at all."""
     reg = json.loads(registry.read_text())
     infra = next(h for h in reg["handles"] if h["handle"] == "infra")
@@ -1620,11 +1748,10 @@ ASK = "C0C5UCA0S0Z"
 
 
 class FakeRoute:
-    """The site's /api/agent-approvals: `fields` (the card's fields are deployed) or `old` (only {title, text, link, requested_by},
-    and a 400 for anything without a title); `resolve` is deployed or answers 404. `statuses` are what successive GETs return."""
+    """The site's /api/agent-approvals; `resolve` is deployed or answers 404. `statuses` are what successive GETs return."""
 
     def __init__(self):
-        self.mode, self.resolve, self.requests, self.statuses, self.answer = "fields", False, [], [], None
+        self.resolve, self.requests, self.statuses, self.answer = False, [], [], None
         self.auths, self.valid = [], OIDC
 
     def handle(self, method: str, path: str, body: dict | None, auth: str) -> tuple[int, dict]:
@@ -1635,11 +1762,13 @@ class FakeRoute:
         if auth != f"Bearer {self.valid}":
             return 401, {"error": "invalid_identity"}
         if method == "POST" and path == "/api/agent-approvals":
-            if self.mode == "old" and not body.get("title"):
-                return 400, {"error": "title_required"}
-            return 200, {"id": "42", "ts": "1790800000.000100", **({"channel": ASK} if self.mode == "fields" else {})}
+            return 200, {"id": "42", "ts": "1790800000.000100", "channel": ASK}
         if method == "POST" and path.endswith("/resolve"):
             return (200, {"status": "decided", "choice": body["choice"], "source": "thread"}) if self.resolve else (404, {"error": "not_found"})
+        if method == "POST" and path.endswith("/extend"):
+            return 200, {"status": "pending", "deadline": body["deadline"], "held": False}
+        if method == "POST" and path.endswith("/withdraw"):
+            return 200, {"status": "withdrawn", "deadline": None, "held": False}
         if method == "GET":
             return 200, self.statuses.pop(0) if len(self.statuses) > 1 else self.statuses[0]
         return 404, {"error": "not_found"}
@@ -1654,7 +1783,7 @@ def route(identity_socket, monkeypatch):
             n = int(self.headers.get("Content-Length") or 0)
             body = json.loads(self.rfile.read(n)) if n else None
             status, out = state.handle(self.command, self.path, body, self.headers.get("Authorization", ""))
-            raw = json.dumps(out).encode()
+            raw = out.encode() if isinstance(out, str) else json.dumps(out).encode()      # a str: a page that is no JSON
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(raw)))
@@ -1696,7 +1825,7 @@ def test_ask_daniel_posts_the_cards_fields_with_the_routes_identity(route, regis
                     "default": "yes", "deadline": "2026-09-30T22:00:00Z", "link": PAGE_URL, "requested_by": "infra",
                     "agent_url": "https://cursor.com/agents/bc-test"}
     assert route.identity["seen"][0] == ("/v1/tokens/oidc", {"aud": slack.ASK_DANIEL})
-    assert "the card's fields" in err and f"threadTs=1790800000.000100" in err and OIDC not in out + err
+    assert "threadTs=1790800000.000100" in err and OIDC not in out + err
 
 
 def test_ask_daniel_mentions_him_on_the_card_so_slack_notifies_him(route, fake, registry, capsys):
@@ -1715,20 +1844,6 @@ def test_send_to_daniel_mentions_him_and_nobody_posts_as_him(fake, registry, cap
     assert run(capsys, "send", "--as", "daniel", "--to", "@infra", "--text", "x")[0] == 2
 
 
-def test_a_route_without_the_fields_gets_the_old_shape_with_the_card_in_its_text(route, registry, capsys):
-    route.mode = "old"
-    rc, out, err = run(capsys, *card_argv())
-    assert rc == 0 and out.split()[:2] == ["42", "1790800000.000100"] and ASK in out            # the registry's channel id
-    assert [r[2].get("title") for r in route.requests] == [None, "Test: does the #ask-daniel card render correctly?"]
-    old = route.requests[1][2]
-    assert set(old) == {"title", "text", "link", "requested_by"} and old["requested_by"] == "infra"
-    assert old["text"].splitlines()[:5] == ["*DEFAULT*", "*Why:* First live card; checks the format.", "*Options:*",
-                                            "\u2022 `yes`: Looks right (recommended)", "\u2022 `no`: Needs changes"]
-    assert "*Default:* Looks right (`yes`), which applies at the deadline" in old["text"]
-    assert "*Deadline:* 3:00 PM PDT, Wed 30 Sep" in old["text"] and "reply in the thread" in old["text"]
-    assert "HTTP 400 title_required" in err and "the old shape" in err and "`yes` applies, and you record it" in err
-
-
 def test_a_card_polled_past_its_identitys_life_gets_a_new_one(route, monkeypatch):
     issued = iter(["t1", "t2"])
     monkeypatch.setattr(slack, "oidc_token", lambda aud: next(issued))
@@ -1740,10 +1855,14 @@ def test_a_card_polled_past_its_identitys_life_gets_a_new_one(route, monkeypatch
     assert route.auths == ["Bearer t1", "Bearer t1", "Bearer t2"]
 
 
-def test_only_a_400_falls_back(route, registry, capsys):
-    route.answer = (401, {"error": "invalid_identity"})
+@pytest.mark.parametrize("answer, says", [
+    ((400, {"error": "invalid_request"}), "the route answered HTTP 400 invalid_request"),
+    ((401, {"error": "invalid_identity"}), "rejected this agent's Cursor identity (HTTP 401 invalid_identity)"),
+])
+def test_a_refused_card_is_one_request_and_says_why(route, registry, capsys, answer, says):
+    route.answer = answer
     rc, _, err = run(capsys, *card_argv())
-    assert rc == 2 and "rejected this agent's Cursor identity (HTTP 401 invalid_identity)" in err and len(route.requests) == 1
+    assert rc == 2 and says in err and len(route.requests) == 1
 
 
 @pytest.mark.parametrize("change, says", [
@@ -1818,7 +1937,7 @@ def test_wait_gives_up_after_the_deadline_and_its_grace(route, registry, capsys,
 @pytest.mark.parametrize("argv", [card_argv("--wait", "--every", "600", kind="blocking", deadline="2:45 PM"),
                                   ["ask-daniel", "status", "42", "--wait", "--every", "600"]], ids=["post", "status"])
 def test_wait_stops_at_twenty_minutes_with_the_card_pending_and_says_how_to_check_back(route, registry, capsys, monkeypatch, argv):
-    """No tool call may block more than 20 minutes (Daniel, 19 Oct); a card's deadline can be a week away."""
+    """No tool call may block more than 20 minutes; a card's deadline can be a week away."""
     from research import waitcap
 
     slept: list[float] = []
@@ -1842,7 +1961,7 @@ def test_status_reads_the_decision_and_exits_0_only_once_decided(route, registry
 
 
 def test_a_decided_card_rings_tops_inbox_once_with_its_question_outcome_and_asker(route, fake, registry, routes_dirs, capsys, monkeypatch):
-    """Leads filed TOP issues only to get Daniel's decisions logged (eight on 17 Oct; COMM-34)."""
+    """A decided card reaches the admin's inbox, which keeps the decisions log, so no lead files an issue just to log one."""
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     top = inbox(fake, routes_dirs, "top")
     card = fake.add(ASK, text="No objection by the deadline, so the default applies.", username="Verity", bot_id=BOT, blocks=[
@@ -1860,12 +1979,18 @@ def test_a_decided_card_rings_tops_inbox_once_with_its_question_outcome_and_aske
     assert run(capsys, "ask-daniel", "status", "43")[0] == 1 and len(bells(fake, top)) == 1          # pending rings no one
 
 
-def test_status_404_says_no_card_has_that_id(route, registry, capsys):
+def test_status_404_says_no_card_has_that_id_and_a_prefix_is_looked_up_in_ask_daniel(route, fake, registry, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     route.answer = (404, {"error": "not_found"})
     rc, _, err = run(capsys, "ask-daniel", "status", "1790800000.000100")
-    assert rc == 2 and "HTTP 404: no card has that ID" in err and "not the card's Slack ts" in err and "prefix" not in err
+    assert rc == 2 and "HTTP 404: no card has that ID" in err and "not the card's Slack ts" in err
     rc, _, err = run(capsys, "ask-daniel", "status", "81f010d2")
-    assert rc == 2 and "looks up no prefix" in err and "its mention in the card's thread also ends with" in err
+    assert rc == 2 and "no card in #ask-daniel's last 14 days has an ID starting 81f010d2" in err
+    whole = "81f010d2-1111-2222-3333-444455556666"
+    card = fake.add(ASK, text="a decision for you", username="infra", bot_id=BOT, reply_count=1)
+    fake.add(ASK, text=f"<@UDANIEL> a decision for you: ship it? `{whole}`", username="infra", bot_id=BOT, thread_ts=card["ts"])
+    run(capsys, "ask-daniel", "status", "81f010d2")                                   # posts show a card's first 8 hex
+    assert route.requests[-1][:2] == ("GET", f"/api/agent-approvals/{whole}")
 
 
 def test_resolve_records_a_thread_answer_and_says_clearly_when_there_is_no_such_card(route, registry, capsys):
@@ -1886,11 +2011,38 @@ def test_resolve_records_a_thread_answer_and_says_clearly_when_there_is_no_such_
     assert rc == 2 and "only a card's own asker" in err
 
 
-def test_ask_daniels_dry_run_prints_both_shapes_and_sends_nothing(route, registry, capsys):
+def test_extend_moves_a_cards_deadline_and_withdraw_takes_it_back(route, registry, capsys):
+    rc, out, _ = run(capsys, "ask-daniel", "extend", "42", "--deadline", "2026-09-30T23:00:00Z", "--note", "revising the page")
+    assert rc == 0 and out == "pending 2026-09-30T23:00:00Z False\n"
+    assert route.requests[-1] == ("POST", "/api/agent-approvals/42/extend",
+                                  {"deadline": "2026-09-30T23:00:00Z", "note": "revising the page"})
+    rc, out, _ = run(capsys, "ask-daniel", "withdraw", "42", "--note", "events overtook it")
+    assert rc == 0 and out == "withdrawn - False\n"
+    assert route.requests[-1] == ("POST", "/api/agent-approvals/42/withdraw", {"note": "events overtook it"})
+    n = len(route.requests)
+    rc, _, err = run(capsys, "ask-daniel", "extend", "42", "--deadline", "2026-09-30T23:00:00Z", "--dry-run")
+    assert rc == 0 and len(route.requests) == n and 'dry-run: POST' in err and '/42/extend {"deadline": "2026-09-30T23:00:00Z"}' in err
+    for argv, says in ((["extend", "42"], "ask-daniel extend needs --deadline"),
+                       (["withdraw", "42"], "ask-daniel withdraw needs --note"),
+                       (["extend", "42", "--deadline", "soon"], "--deadline 'soon'")):
+        rc, _, err = run(capsys, "ask-daniel", *argv)
+        assert rc == 2 and says in err, (argv, err)
+    route.answer = (409, {"error": "already_decided"})
+    rc, _, err = run(capsys, "ask-daniel", "withdraw", "42", "--note", "late")
+    assert rc == 2 and "the card is closed (HTTP 409" in err and "ask-daniel status ID" in err
+    route.answer = (404, {"error": "not_found"})
+    rc, _, err = run(capsys, "ask-daniel", "extend", "42", "--deadline", "2026-09-30T23:00:00Z")
+    assert rc == 2 and "ask-daniel extend 42: HTTP 404: no card has that ID" in err
+    route.answer = (404, "<!DOCTYPE html><title>404: This page could not be found.</title>")         # the route isn't deployed
+    rc, _, err = run(capsys, "ask-daniel", "withdraw", "42", "--note", "events overtook it")
+    assert rc == 2 and "HTTP 404 with no error code: the route has no withdraw endpoint yet" in err and "no card" not in err
+
+
+def test_ask_daniels_dry_run_prints_the_card_and_sends_nothing(route, registry, capsys):
     rc, out, err = run(capsys, *card_argv("--dry-run"))
     assert rc == 0 and not out and not route.requests and not route.identity["seen"]
-    new, old = [json.loads(line[line.index("{"):]) for line in err.splitlines()]
-    assert new["kind"] == "default" and old["title"] == new["question"]
+    (card,) = [json.loads(line[line.index("{"):]) for line in err.splitlines()]
+    assert card["kind"] == "default" and card["question"] == "Test: does the #ask-daniel card render correctly?"
 
 
 class FakeNotion:
@@ -1956,6 +2108,8 @@ The format is new.
 $$
 \\gamma \\le 0.01
 $$
+## The design the rules want
+Option A.
 ## Options
 ### A. Yes (recommended)
 ## Why the lane recommends A
@@ -2003,6 +2157,9 @@ def test_page_checks_the_template_and_the_area_before_anything_is_sent(route, no
     page.write_text(PAGE_MD.replace("## Options\n", ""))
     rc, _, err = run(capsys, *card_argv("--page", str(page), "--area", "Process", link=None))
     assert rc == 2 and "lacks ## Options" in err and "asking-daniel/SKILL.md" in err
+    page.write_text(PAGE_MD.replace("## The design the rules want\n", ""))
+    rc, _, err = run(capsys, *card_argv("--page", str(page), "--area", "Process", link=None))
+    assert rc == 2 and "lacks ## The design the rules want" in err
     page.write_text(PAGE_MD.replace("## Sources\n- none\n", "").replace("## The problem\n", "## Sources\n- none\n## The problem\n"))
     rc, _, err = run(capsys, *card_argv("--page", str(page), "--area", "Process", link=None))
     assert rc == 2 and "the template's order" in err
@@ -2125,8 +2282,8 @@ def inbox(fake, routes_dirs, name, where="local", **kw):
 
 
 def test_a_token_that_may_post_but_not_read_still_rings_the_names_a_post_starts_with(fake, registry, routes_dirs, capsys, monkeypatch):
-    """19 Oct 15:40Z: the bot lost channels:history, so every inbox read answered missing_scope and no doorbell rang
-    (COMM-48).  Unread, an inbox is rung unchecked; any other failure still marks the name NOT RUNG."""
+    """A bot without channels:history gets missing_scope on every inbox read, and must still ring.  Unread, an inbox is
+    rung unchecked; any other failure still marks the name NOT RUNG."""
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     first, second = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "proofs")
     real, error = slack.post, ["missing_scope"]
@@ -2166,6 +2323,40 @@ def test_a_doorbell_that_fails_leaves_the_others_ringing_and_deliver_rings_it_la
     assert (len(bells(fake, first)), len(bells(fake, second))) == (1, 1)
 
 
+def test_a_route_that_cannot_be_read_is_not_rung_and_a_handle_with_no_route_has_no_inbox(fake, registry, routes_dirs, monkeypatch):
+    """With no clone (the Slack events service has none), a name's route is its published copy.  One that can't be read,
+    or reads as no JSON, is a failure to try again, NOT RUNG like a failed post, not a name with no inbox.  A name with no
+    published copy (a 404) was read, and has no inbox.  Read again, it rings, once."""
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, UTC))
+    top = inbox(fake, routes_dirs, "top", where="remote")
+    down = {"top"}
+
+    def get(url: str) -> bytes | None:
+        if any(url.endswith(f"/{n}.json") for n in down):
+            raise slack.SlackError(f"{url}: HTTP 503")
+        return slack.http_get(url)
+
+    reg, api = slack.load_registry(registry), slack.Slack(TOKEN)
+    post = {"ts": "1700000050.000001", "text": "what is the TP8 status?", "user": "UDANIEL"}
+    out = io.StringIO()
+    lines = slack.deliver(api, reg, slack.Routes(get=get), ASK_TEAM, post, names=["top", "console"], log=out)
+    assert lines == [f"@top: NOT RUNG (its route couldn't be read: {slack.Routes().base}top.json: HTTP 503)",
+                     "@console: no inbox; its holder opens one with `research msg names open --as console`",
+                     "1 doorbell(s) didn't ring (@top): `research msg deliver --channel ask-the-team --ts "
+                     "1700000050.000001 (or --event, where the bot can't read it)` rings only the ones still missing"]
+    assert bells(fake, top) == [] and "route @top: NOT RUNG" in out.getvalue()
+    good = (routes_dirs[1] / "top.json").read_text()
+    down.clear()
+    (routes_dirs[1] / "top.json").write_text(good[:20])                                # cut short: not JSON
+    unread = "@top: NOT RUNG (its route couldn't be read: its published copy is not JSON)"
+    assert slack.deliver(api, reg, slack.Routes(get=get), ASK_TEAM, post, names=["top"], log=out)[0] == unread
+    (routes_dirs[1] / "top.json").write_text(good)
+    routes = slack.Routes(get=get)
+    for _ in range(2):
+        slack.deliver(api, reg, routes, ASK_TEAM, post, names=["top"], log=out)
+    assert routes.unread("top") is None and len(bells(fake, top)) == 1
+
+
 def test_deliver_rings_for_a_persons_typed_post_once(fake, registry, routes_dirs, capsys, monkeypatch):
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     box = inbox(fake, routes_dirs, "circuits")
@@ -2174,41 +2365,47 @@ def test_deliver_rings_for_a_persons_typed_post_once(fake, registry, routes_dirs
     for _ in range(2):
         assert run(capsys, "deliver", "--ts", post["ts"])[0] == 0
     (bell,) = bells(fake, box)
-    assert bell["text"].startswith(f"from daniel, thread {post['ts']}: @circuits is node 2 free?")
+    assert bell["text"].startswith(f"from daniel (a person, waiting 1 min), thread {post['ts']}: @circuits is node 2 free?")
 
 
 ASK_TEAM = "C0CA1JZSYNR"
 
 
-def test_traffic_replay_reads_the_people_s_channels_and_keeps_a_chat_s_text_out(fake, registry, routes_dirs, people_d, capsys):
-    """19-23 Oct the Slack events service routed nothing in the people's channels while five daily replays were clean:
-    the replay read only the front door (COMM-61)."""
-    people_d.mkdir()
-    (people_d / "luke.json").write_text(json.dumps(chat_person("chat-luke", LUKE, "Luke Example")))
-    chat = "CCHATLUKE"
-    circuits, top = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "top")
-    human = json.loads(registry.read_text())["humans"][0]["slack_user"]
-    missed = fake.add(ASK_TEAM, text="@circuits when does the sweep land?", user=human)
-    rang = fake.add(ASK_TEAM, text="@circuits is node 2 free?", user=human)
-    fake.add(COORD, text=slack.doorbell("daniel", rang["ts"], rang["ts"], rang["text"], channel="ask-the-team"),
-             username="router", bot_id=BOT, thread_ts=circuits)
-    lost = fake.add(ASK_TEAM, text="what is the TP8 status?", user=human)              # names no one, and nothing rang
-    secret = fake.add(chat, text="the private question, no lane named", user=LUKE)
-    routed = fake.add(chat, text="another one, no lane named", user=LUKE)
-    fake.add(COORD, text=slack.doorbell("luke", routed["ts"], routed["ts"], "", channel="chat-luke", private=True),
-             username="router", bot_id=BOT, thread_ts=top)
-    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay", "--json")
-    rep = {(x.get("channel"), x["ts"]): x for x in json.loads(out)["replay"]}
-    assert rc == 0 and set(rep) == {("ask-the-team", missed["ts"]), ("ask-the-team", lost["ts"]), ("chat-luke", secret["ts"])}
-    assert rep[("ask-the-team", missed["ts"])]["missed"] == ["circuits"] and rep[("ask-the-team", lost["ts"])]["missed"] == ["top"]
-    assert rep[("chat-luke", secret["ts"])] == {"ts": secret["ts"], "by": "luke", "channel": "chat-luke", "missed": ["top"],
-                                                "extra": [], "first": ""}
-    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay")
-    assert f"REPLAY #chat-luke {secret['ts']} by @luke: missed @top (private)" in out and "private question" not in out
+def test_traffic_volume_counts_each_posters_words_in_the_window_threads_included_and_inboxes_aside(fake, registry, capsys):
+    since, now = 1700088400, 1700092000                                       # --hours 1
+    bot = {"bot_id": BOT}
+    old = fake.add(COORD, ts="1700050000.000001", text="infra: the old question", username="infra", reply_count=2,
+                   latest_reply="1700090000.000001", **bot)
+    fake.add(COORD, ts="1700060000.000001", text="before the window", username="ci", thread_ts=old["ts"], **bot)
+    fake.add(COORD, ts="1700090000.000001", text="the check passed on main", username="ci", thread_ts=old["ts"], **bot)
+    brief = fake.add(COORD, ts="1700089000.000001", text="top 06:55Z: " + "word " * 88, username="top", reply_count=3,
+                     latest_reply="1700091000.000001", **bot)                  # 90 words: over
+    fake.add(COORD, ts="1700089500.000001", text="<!subteam^SINFRA|@top> on it", username="infra", thread_ts=brief["ts"], **bot)
+    fake.add(COORD, ts="1700090500.000001", text="done, #4800", username="infra", thread_ts=brief["ts"], **bot)
+    fake.add(COORD, ts="1700091000.000001", text="thanks", user="UDANIEL", thread_ts=brief["ts"])
+    bells = fake.add(COORD, ts="1700080000.000001", text=f"{slack.INBOX_HEAD}infra", username="infra", reply_count=1,
+                     latest_reply="1700090200.000001", **bot)
+    fake.add(COORD, ts="1700090200.000001", text="a doorbell copying a post", username="router", thread_ts=bells["ts"], **bot)
+    fake.add(COORD, ts="1700070000.000001", text="earlier, no replies", username="ci", **bot)
+    fake.add(COORD, ts="1700093000.000001", text="after the window", username="ci", **bot)
+    rc, out, _ = run(capsys, "traffic", "--volume", "--hours", "1", "--now", str(now), "--json")
+    rep = json.loads(out)
+    assert rc == 0 and (rep["since"], rep["now"]) == (since, now)
+    assert rep["posters"] == [{"poster": "infra", "posts": 2, "median": 2, "p90": 3, "max": 3, "over": 0},
+                              {"poster": "ci", "posts": 1, "median": 5, "p90": 5, "max": 5, "over": 0},
+                              {"poster": "daniel", "posts": 1, "median": 1, "p90": 1, "max": 1, "over": 0},
+                              {"poster": "top", "posts": 1, "median": 90, "p90": 90, "max": 90, "over": 1}]
+    assert rep["totals"] == {"posts": 5, "words": 101, "over": 1, "median": 3}
+    assert [(t["ts"], t["by"], t["replies"]) for t in rep["threads"]] == [(brief["ts"], "top", 3), (old["ts"], "infra", 1)]
+    rc, out, _ = run(capsys, "traffic", "--volume", "--hours", "1", "--now", str(now))
+    lines = out.splitlines()
+    assert rc == 0 and lines[0].endswith(": 5 posts, 101 words (median 3), 1 over 80 words")
+    assert lines[2].split() == ["@infra", "2", "2", "3", "3", "0"] and lines[5].split() == ["@top", "1", "90", "90", "90", "1"]
+    assert lines[7].startswith(f"    {brief['ts']} by @top: 3 replies: top 06:55Z: word")
 
 
 def unreadable_ask_team(monkeypatch):
-    """The bot may post in #ask-the-team but lacks its history, as on 19 Oct."""
+    """The bot may post in #ask-the-team but lacks its history."""
     real = slack.post
 
     def post(url, data, headers):
@@ -2237,16 +2434,16 @@ def test_daniels_post_in_ask_the_team_rings_each_lane_it_addresses_once_with_a_d
     for _ in range(2):
         rc, _, err = deliver(ev)
         assert rc == 0 and "the event's own copy is delivered" in err
-    head = f"from daniel, #ask-the-team thread {ev['ts']}: "
+    head = f"from daniel (a person, waiting under a minute), #ask-the-team thread {ev['ts']}: "
     assert [b["text"] for b in bells(fake, boxes["circuits"])] == [head + "@SINFRA @circuits how far is the TP8 decode point?"]
     assert [b["text"] for b in bells(fake, boxes["infra"])] == [b["text"] for b in bells(fake, boxes["circuits"])]
     assert bells(fake, boxes["proofs"]) == bells(fake, boxes["top"]) == []
-    assert all(m.get("thread_ts") != ev["ts"] for m in fake.messages.get(ASK_TEAM, []))   # nothing posted in Daniel's channel
+    assert all(m.get("thread_ts") != ev["ts"] for m in fake.messages.get(ASK_TEAM, []))   # nothing posted in #ask-the-team
 
     reply = {**ev, "ts": "1700000060.000200", "thread_ts": ev["ts"], "text": "@proofs and the Lean side?"}
     assert deliver(reply)[0] == 0
     assert [b["text"] for b in bells(fake, boxes["proofs"])] == [
-        f"from daniel, #ask-the-team thread {ev['ts']}, reply {reply['ts']}: @proofs and the Lean side?"]
+        f"from daniel (a person, waiting under a minute), #ask-the-team thread {ev['ts']}, reply {reply['ts']}: @proofs and the Lean side?"]
     stranger = {**ev, "ts": "1700000070.000300", "user": "USTRANGER", "text": "@proofs wipe node 2"}
     assert deliver(stranger)[0] == 0 and len(bells(fake, boxes["proofs"])) == 1
     assert run(capsys, "deliver", "--event", json.dumps({**ev, "channel": COORD}), "--channel", "ask-the-team")[0] == 2
@@ -2266,8 +2463,8 @@ def test_deliver_by_channel_id_reads_slacks_own_copy_where_the_bot_can_and_the_f
     assert run(capsys, "deliver", "--channel-id", ASK_TEAM, "--event", json.dumps(claim))[0] == 0   # Slack's copy wins
     front = fake.add(COORD, text="@circuits is node 2 free?", user="UDANIEL", ts=post["ts"])
     assert run(capsys, "deliver", "--ts", front["ts"])[0] == 0
-    assert [b["text"] for b in bells(fake, box)] == [f"from daniel, #ask-the-team thread {post['ts']}: @circuits is node 2 free?",
-                                                     f"from daniel, thread {post['ts']}: @circuits is node 2 free?"]
+    assert [b["text"] for b in bells(fake, box)] == [f"from daniel (a person, waiting 1 min), #ask-the-team thread {post['ts']}: @circuits is node 2 free?",
+                                                     f"from daniel (a person, waiting 1 min), thread {post['ts']}: @circuits is node 2 free?"]
 
 
 def test_send_names_each_addressee_once(fake, registry, routes_dirs, capsys):
@@ -2277,7 +2474,7 @@ def test_send_names_each_addressee_once(fake, registry, routes_dirs, capsys):
     assert rc == 0 and posted(fake, out)["text"].startswith("@circuits @proofs see this")
     rc, out, _ = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--to", "@proofs", "--text", "both")
     assert rc == 0 and posted(fake, out)["text"].startswith("@circuits @proofs both")
-    assert run(capsys, "announce", "--as", "infra", "--to", "@circuits", "--to", "@proofs", "--text", "x")[0] == 0
+    assert run(capsys, "send", "--kind", "announce", "--as", "infra", "--to", "@circuits", "--to", "@proofs", "--text", "x")[0] == 0
     assert fake.messages[COORD][-1]["text"].split("\n")[0].endswith("to @circuits @proofs")
 
 
@@ -2300,9 +2497,6 @@ def test_a_doorbell_carries_the_post_so_its_reader_needs_no_second_read(fake, re
     head = f"from infra, thread {root['ts']}, reply {reply['ts']}: node 2 is free <from 3 PM>, see the plan (https://x/y) and https://x/z\n\naaa"
     assert bell["text"].startswith(head) and bell["text"].endswith(f"\u2026 (the rest: `research msg read --thread {root['ts']}`)")
     assert len(bell["text"]) < len(head) + slack.DOORBELL_MAX
-    old = "from infra: https://x/p1700000001000001 @circuits hi\n\n_posted by <https://cursor.com/agents/bc-x|@infra's agent> \u00b7 ask_"
-    assert slack.tags_of(old) == ["ask"]
-    assert slack.plain(old) == "from infra: https://x/p1700000001000001 @circuits hi"
     rc, out, _ = run(capsys, "read", "--as", "circuits")
     assert rc == 0 and out.split("\n", 1)[1].strip() == "- " + re.sub(r"\n(?=.)", "\n  ", slack.plain(bell["text"]))
 
@@ -2322,9 +2516,9 @@ def test_an_ask_rings_the_owners_doorbell_once_and_the_doorbell_cannot_route(fak
 
 
 def test_a_reply_under_an_announcement_rings_only_the_names_it_starts_with(fake, registry, routes_dirs, capsys, monkeypatch):
-    """Reach PR 7: replies to announcements to every handle were about 3,000 doorbells a week, most by inferring PR owners
-    from the numbers a reply named.  Now a reply rings only its leading names, and of its status lines only a decline rings
-    the announcer."""
+    """Inferring PR owners from the numbers a reply names would make the replies to an announcement to every handle
+    thousands of doorbells a week.  A reply rings only its leading names, and of its status lines only a decline rings the
+    announcer."""
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     boxes = {n: inbox(fake, routes_dirs, n, branch_suffixes=["8c79"] if n == "circuits" else []) for n in ("circuits", "proofs", "infra")}
     root = fake.add(COORD, text="\U0001f4e3 *Announcement* from @infra to every handle\nmerge thread", username="infra", bot_id=BOT)
@@ -2337,15 +2531,6 @@ def test_a_reply_under_an_announcement_rings_only_the_names_it_starts_with(fake,
     assert len(bells(fake, boxes["infra"])) == 0                                      # done: roster reads it
     assert run(capsys, "close", "--as", "proofs", "--thread", root["ts"], "--declined", "past the budget line")[0] == 0
     assert len(bells(fake, boxes["infra"])) == 1                                      # a decline wants the announcer
-
-def test_a_successors_pr_finds_its_handle_through_the_inbox_route_with_no_registry_edit(fake, registry, routes_dirs):
-    """drive names a PR's owner from its branch: a successor's suffix, and its predecessor's, come from the route."""
-    root_box = fake.add(COORD, text=f"{slack.INBOX_HEAD}compute-accounting. pointers", username="compute-accounting", bot_id=BOT)
-    add_route(routes_dirs[0], "compute-accounting", root_box["ts"], holder="bc-abcdef12-0000-0000-0000-00000000c0de",
-              branch_suffixes=["zz99"])
-    reg = slack.with_routes(json.loads(registry.read_text()), slack.Routes())
-    assert slack.branch_owners("cursor/new-lead-zz99", reg) == ["compute-accounting"]
-    assert slack.branch_owners("cursor/other-c0de", reg) == ["compute-accounting"]
 
 def test_names_open_succeeds_records_the_working_branch_and_keeps_the_predecessors_suffix(fake, registry, routes_dirs, tmp_path, capsys, monkeypatch):
     notes_clone(tmp_path)
@@ -2376,9 +2561,33 @@ def test_names_open_keeps_a_suffix_the_published_route_doesnt_show_yet(fake, reg
     assert json.loads((routes_dirs[0] / "memory-accounting.json").read_text())["branch_suffixes"] == ["93c1", "6cd3"]
 
 
+def test_names_close_refuses_poster_and_revoke_removes_one_poster_keeping_the_inbox_open(fake, registry, routes_dirs, tmp_path,
+                                                                                         capsys, monkeypatch):
+    """`close --poster` once closed a whole name when one worker's grant was meant: close refuses an option it doesn't read,
+    and `revoke` takes one agent off the name's posters while its inbox stays open."""
+    notes_clone(tmp_path)
+    monkeypatch.setenv("RESEARCH_NOTES_CITE_CHECK", "0")
+    holder, lane, other = ("bc-1f5fcd84-768c-5ac6-a73e-0e3a950e61ef", "bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac",
+                           "bc-0ddba11c-0000-4000-8000-000000000001")
+    box = inbox(fake, routes_dirs, "vllm", holder=holder)
+    for d in routes_dirs:
+        add_route(d, "vllm", box, holder=holder, posters=[lane, other])
+    path = routes_dirs[0] / "vllm.json"
+    rc, _, err = run(capsys, "names", "close", "--as", "vllm", "--poster", lane)
+    assert rc == 2 and "names close takes no --poster, and did nothing" in err and "names revoke --as NAME --poster" in err
+    assert json.loads(path.read_text()).get("closed") is None
+    rc, _, err = run(capsys, "names", "close", "--as", "vllm", "--peek")
+    assert rc == 2 and "--peek is for `names read`" in err
+    rc, out, _ = run(capsys, "names", "revoke", "--as", "vllm", "--poster", lane)
+    r = json.loads(path.read_text())
+    assert rc == 0 and "no longer post as it" in out and r["posters"] == [other] and r.get("closed") is None
+    rc, _, err = run(capsys, "names", "revoke", "--as", "vllm", "--poster", lane)
+    assert rc == 2 and f"@vllm has no poster {lane}" in err
+
+
 def test_names_open_poster_lets_another_agent_post_as_it_and_a_successor_keeps_it(fake, registry, routes_dirs, tmp_path, capsys, monkeypatch):
-    """compute-accounting's research lane posts as it, which the registry's holder line said until 18 Oct: its route's
-    `posters` say it now, so it may post `--as` it and its PRs find their owner by its id, and a successor keeps it."""
+    """Another agent (a lane of the holder's) posts as a handle when its route's `posters` name it, so it may post `--as`
+    it, and a successor keeps it."""
     notes_clone(tmp_path)
     monkeypatch.setenv("RESEARCH_NOTES_CITE_CHECK", "0")
     monkeypatch.setattr(slack, "_branch_suffix", lambda: None)
@@ -2394,8 +2603,6 @@ def test_names_open_poster_lets_another_agent_post_as_it_and_a_successor_keeps_i
     monkeypatch.setenv("RESEARCH_AGENT_URL", f"https://cursor.com/agents/{lane}")
     assert run(capsys, "send", "--as", "compute-accounting", "--text", "the sweep is done")[0] == 0
     assert run(capsys, "send", "--as", "infra", "--text", "x")[0] == 2
-    reg = slack.with_routes(json.loads(registry.read_text()), slack.Routes())
-    assert slack.branch_owners("cursor/relative-security-e9ac", reg) == ["compute-accounting"]
     successor = "bc-99999999-2222-3333-4444-666666666666"
     assert run(capsys, "names", "open", "--as", "compute-accounting", "--holder", successor, "--succeeds")[0] == 0
     r = json.loads(path.read_text())
@@ -2494,7 +2701,8 @@ def test_a_reply_rings_the_root_poster_and_a_quiet_one_rings_no_one(fake, regist
 
 def test_a_long_post_goes_out_whole_with_its_rest_as_quiet_replies(fake, registry, routes_dirs, capsys):
     box = inbox(fake, routes_dirs, "infra")
-    lines = [f"*@infra:* row {i} " + "x" * 90 for i in range(80)] + ["see <!date^1791361800^{time}|1:30 AM PDT (08:30Z)> -> " + "y " * 900]
+    lines = [f"*@infra:* row {i} " + "x" * 370 for i in range(8)] + ["see <!date^1791361800^{time}|1:30 AM PDT (08:30Z)> -> "
+                                                                     + ("y" * 150 + " ") * 20]
     assert run(capsys, "send", "--as", "circuits", "--to", "@infra", "--text", "\n".join(lines))[0] == 0
     root = fake.messages[COORD][1]
     rest = [m for m in fake.messages[COORD] if m.get("thread_ts") == root["ts"]]
@@ -2508,6 +2716,103 @@ def test_a_long_post_goes_out_whole_with_its_rest_as_quiet_replies(fake, registr
     assert len(bells(fake, box)) == 1
 
 
+def words(n: int) -> str:
+    return " ".join(f"w{i}" for i in range(n))
+
+
+def posts(fake) -> list[dict]:
+    return [p for m, p in fake.calls if m == "chat.postMessage"]
+
+
+def test_a_61_word_reply_posts_with_a_note_naming_the_count_the_limit_and_the_fix(fake, registry, capsys):
+    root = fake.add(COORD, text="@infra is node 2 free?", username="circuits", bot_id=BOT)
+    rc, _, err = run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--text", words(60))
+    assert rc == 0 and "words" not in err
+    rc, _, err = run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--text", words(61))
+    assert rc == 0 and "61 words, past the 60" in err and "research msg linear comment ISSUE --file BODY.md --as ME" in err
+    assert len(posts(fake)) == 2 and slack.plain(posts(fake)[-1]["text"]) == words(61)
+
+
+def test_a_reply_with_a_retired_term_posts_with_a_note_naming_what_to_write(fake, registry, capsys):
+    root = fake.add(COORD, text="@infra is node 2 free?", username="circuits", bot_id=BOT)
+    rc, _, err = run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--text", "the draw's coins and a faulty block")
+    assert rc == 0 and len(posts(fake)) == 1
+    assert "retired term(s), posted anyway: 'draw': write the sample" in err and "'faulty block': write incorrect proof block" in err
+    rc, _, err = run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--text", 'the sample, `firewall/` and "leg"')
+    assert rc == 0 and "retired" not in err and len(posts(fake)) == 2
+
+
+def test_the_retired_terms_name_what_to_write_and_skip_code_and_quoted_mentions():
+    """`research msg` reads the table from tests/test_retired_terms.py, its one home."""
+    from research import vocabulary
+    doc = vocabulary.table()["DOC_TERMS"]
+    service = "proof " + "service"                                   # the tree's own scan refuses the term written whole
+    assert vocabulary.retired(f"two legs, the NCI, a commit period and the {service}") == [
+        (service, "proof system"), ("legs", doc["leg"]), ("NCI", doc["NCI, novel communication intensity"]),
+        ("commit period", doc["sampling period, sampling block, PoUW's commit period"])]
+    assert vocabulary.retired('a proof block, `drawn.py` and "draw"') == []
+    assert vocabulary.instead("nothing like it") == "see GLOSSARY.md's older names"
+    assert "no/such/table.py" in vocabulary.table(Path("no/such/table.py"))["error"] and vocabulary.retired("a draw", {}) == []
+    assert "skipped" not in vocabulary.table()
+
+
+def test_a_121_word_reply_is_refused_with_the_fix_and_nothing_is_posted(fake, registry, capsys):
+    root = fake.add(COORD, text="@infra is node 2 free?", username="circuits", bot_id=BOT)
+    for dry in ((), ("--dry-run",)):
+        rc, _, err = run(capsys, "reply", "--as", "infra", "--thread", root["ts"], *dry, "--text", words(121))
+        assert rc == 2 and "121 words, past twice the 60" in err and "nothing was posted" in err
+        assert "research msg linear comment ISSUE --file BODY.md --as ME" in err and "dry-run: chat.postMessage" not in err
+    assert posts(fake) == []
+
+
+def test_a_machine_report_is_held_to_no_length(fake, registry, capsys):
+    """Drive and the merge train post their reports (a red suite's failing lines, a revert) through `send` and `reply`."""
+    root = fake.add(COORD, text="@infra is node 2 free?", username="circuits", bot_id=BOT)
+    for verb in ("send", "reply"):
+        rc, _, err = run(capsys, verb, "--as", "infra", "--thread", root["ts"], "--quiet", "--report", "--text", words(400))
+        assert rc == 0 and "words" not in err
+    assert len(posts(fake)) == 2
+
+
+def test_an_announcement_of_200_words_posts_with_a_note_and_one_of_301_is_refused(fake, registry, capsys):
+    head = len(slack.plain(slack.announcement({"handle": "infra"}, [], "", None, [])).split())   # its header's words count too
+    rc, _, err = run(capsys, "send", "--kind", "announce", "--as", "infra", "--text", words(200 - head))
+    assert rc == 0 and "200 words, past the 150" in err and len(posts(fake)) == 1
+    rc, _, err = run(capsys, "send", "--kind", "announce", "--as", "infra", "--text", words(301 - head))
+    assert rc == 2 and "301 words, past twice the 150" in err and "nothing was posted" in err
+    assert len(posts(fake)) == 1
+    rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@ci", "--kind", "fyi", "--text", words(150))
+    assert rc == 2 and "past twice the 60" in err                                        # 150 is an announcement's alone
+
+
+def test_a_long_post_outside_the_front_door_and_a_status_line_are_untouched(fake, registry, capsys):
+    rc, _, err = run(capsys, "reply", "--as", "top", "--channel", "ask-the-team", "--thread", "1700000050.000001",
+                     "--text", words(400))
+    assert rc == 0 and "words" not in err
+    rc, _, err = run(capsys, "send", "--as", "infra", "--channel", "agent-alerts", "--text", words(400))
+    assert rc == 0 and "words" not in err
+    root = fake.add(COORD, text="@infra is node 2 free?", username="circuits", bot_id=BOT)
+    rc, _, err = run(capsys, "close", "--as", "infra", "--thread", root["ts"], "--note", words(400))
+    assert rc == 0 and "words" not in err
+    assert [p["channel"] for p in posts(fake)] == ["C0CA1JZSYNR", ALERTS, COORD]
+
+
+def test_a_filed_ask_whose_root_is_its_first_line_and_link_passes_however_long_its_brief(fake, registry, capsys, monkeypatch):
+    from research import linear
+
+    filed = []
+    monkeypatch.setattr(linear, "ask_issue", lambda team, sender, body, **kw: filed.append(body) or (
+        {"identifier": "INF-9", "url": "https://linear.app/x/issue/INF-9", "project": None, "projectMilestone": None}, None))
+    brief = "4 GPUs on node 2 for 6 h\n" + words(400)
+    rc, _, err = run(capsys, "ask", "--as", "compute-accounting", "--to", "@infra", "--dry-run", "--text", brief)
+    assert rc == 0 and "would file the ask in Linear team INF" in err and "words" not in err and filed == []
+    rc, _, err = run(capsys, "ask", "--as", "compute-accounting", "--to", "@infra", "--text", brief)
+    assert rc == 0 and "words" not in err and filed == [brief]
+    assert slack.plain(posts(fake)[-1]["text"]) == "@infra 4 GPUs on node 2 for 6 h\nLinear: INF-9 (https://linear.app/x/issue/INF-9)"
+    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@console", "--text", brief)   # no team: it would go out whole
+    assert rc == 2 and "past twice the 60" in err and filed == [brief] and len(posts(fake)) == 1
+
+
 def test_send_refuses_a_post_that_names_only_its_author(registry, capsys):
     rc, _, err = run(capsys, "send", "--as", "infra", "--dry-run", "--text", "<!subteam^SINFRA|@infra> steward: is exit 1 harmless?")
     assert rc == 2 and "never wakes its own inbox's holder" in err
@@ -2516,9 +2821,9 @@ def test_send_refuses_a_post_that_names_only_its_author(registry, capsys):
 
 def test_a_handover_s_outgoing_generation_rings_the_holder_and_the_holder_never_rings_itself(fake, registry, routes_dirs,
                                                                                            capsys, monkeypatch):
-    """20 Oct 00:12Z: proofs gen 3, kept as a poster after gen 4 took the inbox, posted 7 asks for gen 4 as @proofs, and
-    none rang gen 4, since a post never rang its author's handle (COMM-54).  What counts is the agent: a post by an agent
-    other than the inbox's holder rings it."""
+    """A handover's outgoing generation, kept as a poster after the incoming one took the inbox, posts as the handle, and
+    its asks must reach the incoming one.  What counts is the agent: a post by an agent other than the inbox's holder
+    rings it."""
     monkeypatch.setattr(slack, "acting_as", ACTING_AS)
     gen3, gen4 = "bc-8f4b652b-17bc-5055-a120-b56940b7c7a9", "bc-a26cefd0-1111-2222-3333-444444444444"
     box = inbox(fake, routes_dirs, "proofs", holder=gen4, posters=[gen3])
@@ -2549,26 +2854,35 @@ def test_an_announcement_to_every_handle_refuses_leading_names(registry, capsys)
     assert rc == 2 and "pass them as --to" in err
     assert run(capsys, "send", "--as", "infra", "--kind", "announce", "--dry-run", "--text", "Daily wasters. @lean, yours")[0] == 0
     assert run(capsys, "send", "--as", "infra", "--kind", "announce", "--to", "@lean", "@ci", "--dry-run", "--text", "daily")[0] == 0
-    assert run(capsys, "announce", "--as", "infra", "--dry-run", "--text", "@lean @ci daily wasters")[0] == 2
 
 
-def test_a_handle_named_past_the_start_is_refused_since_nothing_rings_it(registry, capsys):
+def test_a_handle_named_past_the_start_posts_with_a_note_that_it_isnt_rung(registry, capsys):
+    """Refusing such a post would cost a re-send; it posts, and the sender is told which names weren't woken."""
     reply = ["reply", "--as", "top", "--thread", "1700000000.000001", "--dry-run", "--text"]
     rc, _, err = run(capsys, *reply, "@proofs stack point is 4. @lean, rebase onto it")
-    assert rc == 2 and "names @lean past its start" in err and "Move them to the start" in err
+    assert rc == 0 and "names @lean past its start, so they aren't rung" in err and "move them to the start" in err
     rc, _, err = run(capsys, *reply, "@proofs two things:\ncompute-accounting: your ask is open\n- @lean: rebase")
-    assert rc == 2 and "names @lean @compute-accounting past its start" in err
-    for bad in ("@proofs compute-accounting: 98c5 is yours", "@proofs the slot is #1574 (9987, 2000). lean: stack on 8cf4. done"):
-        assert run(capsys, *reply, bad)[0] == 2, bad
-    assert run(capsys, "send", "--as", "top", "--to", "@ci", "--dry-run", "--text", "can @ci rebuild? not @lean")[0] == 2
+    assert rc == 0 and "names @lean @compute-accounting past its start" in err
+    for late in ("@proofs compute-accounting: 98c5 is yours", "@proofs the slot is #1574 (9987, 2000). lean: stack on 8cf4. done"):
+        rc, _, err = run(capsys, *reply, late)
+        assert rc == 0 and "aren't rung" in err, late
+    rc, _, err = run(capsys, "send", "--as", "top", "--to", "@ci", "--dry-run", "--text", "can @ci rebuild? not @lean")
+    assert rc == 0 and "names @lean past its start" in err
     for ok in ("@proofs @lean stack point is 4", "@proofs stack point is 4; lean rebases onto it",
                "@proofs run `research msg read --as @lean`", "@proofs\n> @lean said 4\nagreed", "top: @top is me",
                "@proofs mail a@lean.example", "@proofs @lean stack point is 4. @lean, rebase", "lean: stack point is 4",
                "@proofs note: the slot is 4"):
-        assert run(capsys, *reply, ok)[0] == 0, ok
-    assert run(capsys, "send", "--as", "top", "--to", "@ci", "--dry-run", "--text", "can @ci rebuild?")[0] == 0
-    assert run(capsys, "ask", "--as", "top", "--to", "@ci", "--dry-run", "--text", "@ci, can you rebuild")[0] == 0
-    assert run(capsys, "ask", "--as", "top", "--to", "@ci", "--dry-run", "--text", "rebuild for @lean")[0] == 2
+        rc, _, err = run(capsys, *reply, ok)
+        assert rc == 0 and "aren't rung" not in err, ok
+    rc, _, err = run(capsys, "ask", "--as", "top", "--to", "@ci", "--dry-run", "--text", "rebuild for @lean")
+    assert rc == 0 and "names @lean past its start" in err
+
+
+def test_an_ask_with_two_to_owners_is_refused_with_the_send_that_reaches_both(registry, capsys):
+    """`ask --to @a --to @b` would keep only @b, so it is refused."""
+    rc, _, err = run(capsys, "ask", "--as", "top", "--to", "@ci", "--to", "@lean", "--dry-run", "--text", "rebuild")
+    assert rc == 2 and "an ask goes to one owner" in err and "send --as ME --to @ci @lean" in err
+    assert run(capsys, "ask", "--as", "top", "--to", "@ci", "--dry-run", "--text", "rebuild")[0] == 0
 
 
 def test_an_fyi_from_the_starter_wakes_only_its_to_names(fake, registry, routes_dirs, capsys):
@@ -2650,6 +2964,7 @@ def test_http_get_reads_the_private_notes_raw_files_with_the_notes_token(monkeyp
         return Reply(b'{"name": "x"}')
 
     monkeypatch.setattr(slack.urllib.request, "urlopen", urlopen)
+    monkeypatch.delenv("VERCEL_OIDC_TOKEN", raising=False)
     monkeypatch.setenv("RESEARCH_NOTES_TOKEN", "t0k")
     assert slack.http_get(f"{slack.ROUTES_RAW}x.json") == b'{"name": "x"}'
     assert slack.http_get("https://example.invalid/routes.d/x.json") == b'{"name": "x"}'
@@ -2657,6 +2972,85 @@ def test_http_get_reads_the_private_notes_raw_files_with_the_notes_token(monkeyp
     assert slack.http_get(f"{slack.ROUTES_RAW}x.json") == b'{"name": "x"}'
     assert seen == [(f"{slack.ROUTES_RAW}x.json", "Bearer t0k"), ("https://example.invalid/routes.d/x.json", None),
                     (f"{slack.ROUTES_RAW}x.json", None)]
+
+
+def test_without_a_notes_token_the_service_asks_the_broker_for_one_by_its_oidc_identity(monkeypatch, capsys):
+    """The Slack events service holds no notes token of its own: the broker mints one for its Vercel OIDC identity, kept until
+    shortly before it expires, ahead of $RESEARCH_NOTES_TOKEN, which serves only while the broker refuses (asked again a
+    minute later); with neither, the notes are read unauthenticated."""
+    seen, answers = [], []
+
+    class Reply(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return None
+
+    def http_json(method, url, data, headers):
+        seen.append((url, method, headers.get("Authorization"), data))
+        assert url == slack.NOTES_TOKEN_URL
+        a = answers.pop(0)
+        if isinstance(a, Exception):
+            raise a
+        return a
+
+    def urlopen(req, timeout):
+        seen.append((req.full_url, req.get_method(), req.get_header("Authorization"), req.data))
+        return Reply(b'{"name": "x"}')
+
+    monkeypatch.setattr(slack, "http_json", http_json)
+    monkeypatch.setattr(slack.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(slack, "_notes_token", {})
+    monkeypatch.delenv("RESEARCH_NOTES_TOKEN", raising=False)
+    monkeypatch.setenv("VERCEL_OIDC_TOKEN", "oidc-1")
+    answers.append({"token": "minted", "expires_at": "2026-11-02T06:00:00Z"})
+    now = slack._iso_epoch("2026-11-02T05:00:00Z")
+    assert slack.notes_token(now) == "minted" and slack.notes_token(now + 600) == "minted"      # kept
+    assert seen == [(slack.NOTES_TOKEN_URL, "POST", "Bearer oidc-1", b'{"scope": "notes"}')]
+    answers.append({"token": "minted-2"})                                                         # no stated expiry
+    assert slack.notes_token(now + 3600) == "minted-2" and len(seen) == 2                       # renewed before 06:00Z
+    monkeypatch.setattr(slack.time, "time", lambda: now + 3600)                                 # http_get reads the clock
+    assert slack.http_get(f"{slack.ROUTES_RAW}x.json") == b'{"name": "x"}' and seen[-1][2] == "Bearer minted-2"
+    monkeypatch.setenv("RESEARCH_NOTES_TOKEN", "t0k")
+    assert slack.notes_token(now + 3600) == "minted-2" and slack._notes_token["source"] == "broker"   # the broker wins
+    monkeypatch.setattr(slack, "_notes_token", {})
+    answers.append(slack.urllib.error.HTTPError(slack.NOTES_TOKEN_URL, 403, "Forbidden", {},
+                                                io.BytesIO(b'{"error": "identity_refused", "claim": "project_id"}')))
+    assert slack.notes_token(now) == "t0k" and "the broker gave no notes token (403)" in capsys.readouterr().err
+    assert slack._notes_token["source"] == "env"                                                # refused: the old token
+    assert slack.notes_token_why() == "the broker refused (403: identity_refused project_id)"     # its stated reason
+    assert slack.notes_token(now + 30) == "t0k" and len(seen) == 4                              # not asked again so soon
+    answers.append({})
+    assert slack.notes_token(now + 61) == "t0k" and "has no `token`" in capsys.readouterr().err
+    monkeypatch.delenv("RESEARCH_NOTES_TOKEN")
+    answers.append(slack.urllib.error.URLError("down"))
+    assert slack.notes_token(now + 122) is None and slack._notes_token["source"] is None
+    monkeypatch.delenv("VERCEL_OIDC_TOKEN")
+    assert slack.notes_token(now) is None
+    with pytest.raises(slack.SlackError, match="no notes token: set RESEARCH_NOTES_TOKEN, or run where the broker mints one"):
+        slack.notes_api("GET", "people.d/x.json")
+
+
+def test_a_cursor_agent_without_research_notes_token_reads_the_notes_with_the_agents_broker_token(monkeypatch):
+    """A Cursor agent has no Vercel identity: its notes reads (routes, machines.d) take `notes_sync.notes_token`'s, which the
+    agents' GitHub broker mints, so they keep working once RESEARCH_NOTES_TOKEN is gone."""
+    from research import notes_sync
+
+    def minted():
+        os.environ.update({notes_sync.TOKEN_ENV: "agent-minted", notes_sync.SOURCE_ENV: "broker"})
+        return "agent-minted"
+
+    for k in (notes_sync.TOKEN_ENV, notes_sync.SOURCE_ENV, "VERCEL_OIDC_TOKEN"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setattr(slack, "_notes_token", {})
+    monkeypatch.setattr(notes_sync, "notes_token", minted)
+    assert slack.notes_token() == "agent-minted"
+    assert slack.notes_token_source() == "agent-broker" and slack.notes_token_why() == "no OIDC identity"
+    monkeypatch.setenv(notes_sync.TOKEN_ENV, "t0k")
+    monkeypatch.delenv(notes_sync.SOURCE_ENV)
+    monkeypatch.setattr(notes_sync, "notes_token", lambda: "t0k")
+    assert slack.notes_token() == "t0k" and slack.notes_token_source() == "env"
 
 
 def notes_clone(tmp_path) -> Path:
@@ -2743,7 +3137,7 @@ def test_read_as_since_rereads_the_doorbells_after_ts_and_never_moves_the_mark_b
 
 
 def test_a_clone_holding_a_closed_route_rings_the_reopened_published_one(fake, registry, routes_dirs, capsys):
-    """console's inbox reopened at 21:38Z on 16 Oct; senders whose clone still held it closed rang no one (17 Oct review)."""
+    """An inbox reopened since this clone was pulled: a sender whose clone still holds it closed rings the published route."""
     root = fake.add(COORD, text=f"{slack.INBOX_HEAD}console. pointers", username="console", bot_id=BOT)
     add_route(routes_dirs[0], "console", root["ts"], closed="2026-10-14T22:45Z")                   # this clone: closed
     add_route(routes_dirs[1], "console", root["ts"], holder="f7772a12-d61f-4bbb-8c4f-e79e8d6d30dc",
@@ -2753,7 +3147,7 @@ def test_a_clone_holding_a_closed_route_rings_the_reopened_published_one(fake, r
 
 
 def test_a_clone_holding_an_open_route_follows_the_published_close_and_its_forward(fake, registry, routes_dirs, capsys):
-    """@hash closed into @kernels at 16:47Z on 18 Oct: a clone not pulled since still held it open, an inbox nobody reads."""
+    """A handle closed into another: a clone not pulled since still holds it open, an inbox nobody reads."""
     old, new = inbox(fake, routes_dirs, "hash"), inbox(fake, routes_dirs, "kernels")
     add_route(routes_dirs[1], "hash", old, closed="2026-10-18T16:47Z", forward_to="kernels")       # published: closed
     rc, _, err = run(capsys, "send", "--as", "ci", "--to", "@hash", "--text", "is SHA-512 batched yet?")
@@ -2761,10 +3155,11 @@ def test_a_clone_holding_an_open_route_follows_the_published_close_and_its_forwa
     assert (len(bells(fake, old)), len(bells(fake, new))) == (0, 1)
 
 
-def test_a_forward_target_is_read_as_published_and_one_that_cannot_be_read_is_unreachable(fake, registry, routes_dirs, capsys):
+def test_a_forward_target_is_read_as_published_and_one_that_cannot_be_read_is_not_rung(fake, registry, routes_dirs, capsys):
     """`resolve` reads each forward target's published copy as `deliver` reads the names it starts from: a target this
     clone holds open, published closed into another name, rings that name; a target the clone lacks whose published copy
-    can't be read is unreachable, and the post's other names still ring."""
+    can't be read resolves to no route, but `unread` says why, so `deliver` counts it NOT RUNG (to try again) rather than
+    unreachable, and the post's other names still ring."""
     local, remote = routes_dirs
     stale, box = inbox(fake, routes_dirs, "old-b"), inbox(fake, routes_dirs, "circuits")
     add_route(local, "old-a", "1.0", closed="2026-10-18T16:00Z", forward_to="old-b")
@@ -2783,7 +3178,10 @@ def test_a_forward_target_is_read_as_published_and_one_that_cannot_be_read_is_un
     assert slack.unreachable("old-c", to, r) == "it forwards to @gone, which has no inbox: see `research msg names list`"
     lines = slack.deliver(slack.client(argparse_ns()), slack.load_registry(registry), slack.Routes(get=get), COORD,
                           {"text": "@old-c @circuits a question", "ts": "1700000000.900000", "username": "ci", "bot_id": BOT})
-    assert lines == ["@old-c: it forwards to @gone, which has no inbox: see `research msg names list`", "@circuits: rang"]
+    gone = f"{slack.Routes().base}gone.json: HTTP 503"
+    assert lines == [f"@old-c: NOT RUNG (its route couldn't be read: {gone})", "@circuits: rang",
+                     "1 doorbell(s) didn't ring (@old-c): `research msg deliver --ts 1700000000.900000` rings only the ones "
+                     "still missing"]
 
 
 def test_of_a_routes_two_copies_the_newer_counts():
@@ -2808,6 +3206,8 @@ def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(
     fake.add(COORD, text="@no-such-lane hello", username="infra", bot_id=BOT)
     retired = fake.add(COORD, text="<!subteam^SRETIRED> how does Daniel like reports?", username="top", bot_id=BOT,
                        ts="1600000000.000004")                     # a retired name's group, tagged by its id alone
+    alert = fake.add(COORD, text="@ci @top main hasn't moved for 6 h", username="vy-monitors", bot_id=BOT,
+                     ts="1600000000.000005")                       # a machine's alert: no one owes it an answer
     rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--json")
     rep = json.loads(out)
     assert rc == 0 and [x for x in rep["inboxes"] if x["doorbells"]] == [{"name": "circuits", "doorbells": 1, "peak_per_hour": 1, "paused": 0}]
@@ -2816,52 +3216,34 @@ def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(
     rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000")
     assert f"UNANSWERED {retired['ts']} by @top to no one it can ring" in out and out.count(": Slack, no record: no reply or reaction") >= 2
     stale = [s["ts"] for s in rep["unanswered"]]
-    assert old["ts"] in stale and fyi["ts"] not in stale and bare["ts"] not in stale
+    assert old["ts"] in stale and fyi["ts"] not in stale and bare["ts"] not in stale and alert["ts"] not in stale
 
 
-def test_traffic_replay_names_each_post_whose_doorbells_differ_from_route_targets(fake, registry, routes_dirs, capsys):
-    box = inbox(fake, routes_dirs, "circuits")
-    rung = posted(fake, run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "rang as it should")[1])
-    typed = fake.add(COORD, text="@circuits sent by a client that never delivered", username="proofs", bot_id=BOT)
-    stray = fake.add(COORD, text="for no one in particular", username="lean", bot_id=BOT)
-    fake.add(COORD, text=slack.doorbell("lean", stray["ts"], stray["ts"], stray["text"]), username="router", bot_id=BOT, thread_ts=box)
-    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay", "--json")
-    rep = {x["ts"]: x for x in json.loads(out)["replay"]}
-    assert rc == 0 and rung["ts"] not in rep
-    assert (rep[typed["ts"]]["missed"], rep[typed["ts"]]["extra"]) == (["circuits"], [])
-    assert (rep[stray["ts"]]["missed"], rep[stray["ts"]]["extra"]) == ([], ["circuits"])
-    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay")
-    assert f"REPLAY {typed['ts']} by @proofs: missed @circuits: @circuits sent by a client" in out and "replayed: 2 post(s)" in out
-
-
-def test_traffic_replay_skips_a_long_posts_later_pieces(fake, registry, routes_dirs, capsys, monkeypatch):
-    """`_post`'s later pieces (`(2/3) ...`, quiet) wake nobody by design; one naming a PR read as a miss in the 19 Oct replay."""
-    inbox(fake, routes_dirs, "circuits")
-    monkeypatch.setattr(slack, "route_targets", lambda *a, **k: ["circuits"])
-    piece = fake.add(COORD, text=f"(2/2) the rest, about #12{slack._footer((slack.QUIET,))}", username="proofs", bot_id=BOT)
-    plain_post = fake.add(COORD, text="a post the rule would ring", username="proofs", bot_id=BOT)
-    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay", "--json")
-    rep = {x["ts"]: x for x in json.loads(out)["replay"]}
-    assert rc == 0 and piece["ts"] not in rep and rep[plain_post["ts"]]["missed"] == ["circuits"]
-
-
-def test_traffic_replay_takes_a_posters_ring_of_its_own_handle_as_called_for_and_an_external_posters_miss(fake, registry,
-                                                                                                         routes_dirs, capsys):
-    """21 Oct: compute-accounting's research lane, a poster, rang its holder's inbox by naming the handle (#2904), and the
-    replay called each an extra doorbell; Codex's asks, posted through the bot without `research msg`, rang no one."""
-    box = inbox(fake, routes_dirs, "compute-accounting")
-    circuits = inbox(fake, routes_dirs, "circuits")
-    lane = fake.add(COORD, text="compute-accounting: today's outcome is done", username="compute-accounting", bot_id=BOT)
-    fake.add(COORD, text=slack.doorbell("compute-accounting", lane["ts"], lane["ts"], lane["text"]), username="router",
-             bot_id=BOT, thread_ts=box)
-    reg = json.loads(registry.read_text())
-    reg["external_posters"] = ["Codex"]
-    registry.write_text(json.dumps(reg))
-    codex = fake.add(COORD, text="@circuits who owns the launch?", username="Codex", bot_id=BOT)
-    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay", "--json")
-    rep = {x["ts"]: x for x in json.loads(out)["replay"]}
-    assert rc == 0 and lane["ts"] not in rep and bells(fake, circuits) == []
-    assert (rep[codex["ts"]]["by"], rep[codex["ts"]]["missed"]) == ("codex", ["circuits"])
+def test_traffic_counts_a_repeated_machine_alert_once_as_an_alert_to_its_addressees_not_an_unanswered_ask(
+        fake, registry, routes_dirs, capsys):
+    """vy-monitors mirrors each alert into the front door, and a repeat with new numbers links a new #agent-alerts post."""
+    def alert(text: str, link: str, ts: str, **kw) -> dict:
+        return fake.add(COORD, text=f"{text} (alert: <https://x.slack.com/archives/CALERTS/{link}>)\n\n_alert_",
+                        username="vy-monitors", bot_id=BOT, ts=ts, **kw)
+    late = "<!subteam^SINFRA> @top main has gone {} h without a passing post-landing check: its last verified commit is 41be424eb069"
+    alert(late.format(28), "p1", "1600000000.000001")
+    alert(late.format(28), "p1", "1600000100.000001")                                          # the same link again
+    last = alert(late.format(29), "p2", "1600003600.000001")                                   # a new link, the same alert
+    disk = alert("@infra vy-nebius-cpu-1: /workspace at 91%", "p3", "1600000050.000001", reactions=[{"name": "eyes"}])
+    ask = fake.add(COORD, text="@proofs a real ask", username="infra", bot_id=BOT, ts="1600000000.000009")
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--json")
+    rep = json.loads(out)
+    assert rc == 0 and [s["ts"] for s in rep["unanswered"]] == [ask["ts"]] and rep["answered"] == []
+    assert rep["alerts"] == [
+        {"to": ["infra"], "posts": 1, "links": 1, "latest": disk["ts"], "picked_up": True, "title": "vy-nebius-cpu-1: /workspace at 91%",
+         "link": "https://x.slack.com/archives/CALERTS/p3"},
+        {"to": ["infra", "top"], "posts": 3, "links": 2, "latest": last["ts"], "picked_up": False,
+         "title": late.format(29).split("> @top ")[1], "link": "https://x.slack.com/archives/CALERTS/p2"}]
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000")
+    assert out.count("UNANSWERED") == 1 and f"UNANSWERED {ask['ts']} by @infra to @proofs" in out
+    assert [ln for ln in out.splitlines() if "ALERT" in ln][1] == (
+        "  ALERT to @infra @top: main has gone 29 h without a passing post-landing check: its last verified commit is 41be424eb069 "
+        f"(3 post(s), the latest {slack.both(last['ts'])}, not picked up): https://x.slack.com/archives/CALERTS/p2")
 
 
 @pytest.mark.parametrize("bad", [["circuits"], ["router"], ["two words"], "Codex", [7]])
@@ -2872,8 +3254,8 @@ def test_external_posters_are_usernames_no_handle_or_router_has(registry, bad):
         slack.check_registry({**reg, "external_posters": bad}, "r")
 
 def test_traffic_asks_origin_main_before_dropping_an_unknown_group(fake, registry, routes_dirs, capsys, monkeypatch):
-    """A stale analysis checkout must not report a fresher sender's group mentions as dropped (14 Oct: three false
-    DROPPED lines for groups created that morning); a group origin/main doesn't know either still drops."""
+    """A stale analysis checkout must not report a fresher sender's group mentions as dropped (a group created since would
+    show as a false DROPPED line); a group origin/main doesn't know either still drops."""
     inbox(fake, routes_dirs, "circuits")
     fake.add(COORD, text="<!subteam^SNEWGROUP> teams exist", username="comms", bot_id=BOT, ts="1600000000.000001")
     fake.add(COORD, text="<!subteam^SNOWHERE> hello", username="comms", bot_id=BOT, ts="1600000000.000002")
@@ -3029,9 +3411,9 @@ def test_notion_page_id_reads_each_url_shape_and_nothing_else():
 
 def test_traffic_reads_each_asks_record_first_and_says_which_record_answered(fake, registry, routes_dirs, notion, capsys, monkeypatch):
     """An ask lives in one record, and answered is that record's state: a handle's linked ask by its Linear issue, whatever its
-    thread shows; Daniel's card by its page's Status, whatever its thread or reactions show; and Slack's reply or reaction only
+    thread shows; an #ask-daniel card by its page's Status, whatever its thread or reactions show; and Slack's reply or reaction only
     for an ask with no record.  A card that links no page isn't counted, and a page Notion can't read leaves its card unchecked,
-    neither answered nor unanswered: a missing key is one finding, not a false alert per ask (INF-150)."""
+    neither answered nor unanswered: a missing key is one finding, not a false alert per ask."""
     from research import linear
     inbox(fake, routes_dirs, "proofs")
     linked = "@proofs the opening's soundness error?\nLinear: <https://linear.app/x/issue/PRF-1|PRF-1>"
@@ -3080,11 +3462,11 @@ def test_traffic_reads_each_asks_record_first_and_says_which_record_answered(fak
     assert {backlog["ts"], moved["ts"], lost["ts"]} <= {x["ts"] for x in rep["unchecked"]}
 
 
-def test_traffic_latency_times_daniels_cards_by_their_pages_and_a_linked_ask_by_its_issue_or_the_lanes_reply(fake, registry, routes_dirs,
+def test_traffic_latency_times_ask_daniel_cards_by_their_pages_and_a_linked_ask_by_its_issue_or_the_lanes_reply(fake, registry, routes_dirs,
                                                                                                             notion, capsys, monkeypatch):
-    """Daniel's card is answered when its page's Status leaves Waiting on Daniel, timed at the page's last edit (Notion keeps no
+    """An #ask-daniel card is answered when its page's Status leaves Waiting on Daniel, timed at the page's last edit (Notion keeps no
     property history); a status reached after --now doesn't count.  A lane's reply under a linked ask answers it even while
-    its issue sits in Backlog (19 Oct: top answered TOP-70 in its thread).  A machine's alert asks nothing.  Without $NOTION_API_KEY the cards count unanswered, and the report says why."""
+    its issue sits in Backlog.  A machine's alert asks nothing.  Without $NOTION_API_KEY the cards count unanswered, and the report says why."""
     from research import linear
     proofs = inbox(fake, routes_dirs, "proofs")
     now = T0 + 86400
@@ -3220,9 +3602,9 @@ def test_owners_answers_as_origin_main_does_from_a_stale_checkout(registry, tmp_
 
 
 def test_a_stale_checkout_and_clone_ring_a_handle_added_and_an_inbox_reopened_since(fake, registry, routes_dirs, tmp_path, capsys, monkeypatch):
-    """18 Oct: senders on old checkouts rang nobody for handles added since; 17 Oct: old notes clones rang nobody for an
-    inbox reopened since.  An announcement to every handle from a checkout without @newbie and a clone without its route,
-    and holding @console's closed, rings both."""
+    """A sender on an old checkout must still ring a handle added since, and one on an old notes clone an inbox reopened
+    since.  An announcement to every handle from a checkout without @newbie and a clone without its route,
+    and holding `console`'s closed, rings both."""
     monkeypatch.delenv("RESEARCH_SLACK_FRESH_CHECK")
     path, change = stale_checkout(tmp_path, registry)
     change(new_handle("newbie"))
@@ -3269,7 +3651,8 @@ def test_a_single_file_carries_the_wait_cap_research_waitcap_states():
 @pytest.mark.parametrize("v", json.loads(VECTORS.read_text())["doorbells"]["cases"], ids=lambda v: v["name"])
 def test_a_doorbell_matches_every_doorbell_vector(v):
     where = v.get("channel")
-    bell = slack.doorbell(v["author"], v["thread"], v["ts"], v["text"], v["urgent"], where, v.get("private", False))
+    bell = slack.doorbell(v["author"], v["thread"], v["ts"], v["text"], v["urgent"], where, v.get("private", False),
+                          v.get("reminder"), v.get("waited"))
     assert bell == v["doorbell"] and (not v.get("private") or slack.plain(v["text"]) not in bell) and slack._rang(bell, v["ts"], where) and not slack._rang(bell, "1.000000", where)
     assert slack._mentions_thread(bell, v["thread"], where) and slack._from(bell, v["author"]) and not bell.startswith("@")
     assert slack.doorbell_channel(bell) == where and bool(slack.DOORBELL_RE.match(bell)[2]) == v["urgent"]
@@ -3350,18 +3733,7 @@ def test_a_single_file_in_a_checkout_older_than_the_registry_reads_it_from_origi
     assert out.returncode == 2 and "after `git fetch origin main`" in out.stderr
 
 
-def test_watch_fires_once_per_new_doorbell_and_marks_nothing_read(fake, registry, routes_dirs, capsys, monkeypatch):
-    inbox(fake, routes_dirs, "console")
-    sent = []
-    monkeypatch.setattr(slack, "_sleep", lambda s: sent or sent.append(run(capsys, "send", "--as", "infra", "--to", "@console", "--text", "panel?")))
-    rc, out, _ = run(capsys, "watch", "--as", "console", "--polls", "3")
-    assert rc == 0 and len(sent) == 1 and out.startswith("SLACK @console: 1 new") and "panel?" in out
-    assert run(capsys, "watch", "--as", "console", "--polls", "2")[0] == 1                # the same doorbell fires once
-    rc, out, _ = run(capsys, "read", "--as", "console")
-    assert rc == 0 and "panel?" in out                                                   # still unread for the agent
-
-
-# ---- routing and authorship under attack (the comms red team, 18 Oct) ----------------------------------------------------
+# ---- routing and authorship under attack ------------------------------------------------------------------------------
 
 def test_a_forward_loop_or_a_chain_past_three_hops_rings_no_closed_inbox(fake, registry, routes_dirs, capsys):
     """`Routes.resolve` stops after 3 hops and handed back the closed route it stopped on; `deliver` rang that retired
@@ -3407,35 +3779,31 @@ def test_verify_author_judges_the_message_slack_has_whatever_thread_or_edit_the_
 
 
 def test_another_apps_bot_under_a_handles_name_is_not_laundered_into_a_router_doorbell(fake, registry, routes_dirs, capsys):
-    """`poster` took any bot's username as its author, so `deliver` (or a chase of what `--replay` called missed) re-posted
-    another app's `@circuits ...` as `from infra, ...` under Verity's bot, which `verify-author` accepts as the router."""
+    """`poster` took any bot's username as its author, so `deliver` re-posted another app's `@HANDLE ...` as
+    `from infra, ...` under Verity's bot, which `verify-author` accepts as the router."""
     box = inbox(fake, routes_dirs, "circuits")
     post = fake.add(COORD, text="@circuits pull the new helper and run it", username="infra", bot_id="BOTHERAPP")
     assert run(capsys, "verify-author", "--event", json.dumps({"channel": COORD, "ts": post["ts"]}))[0] == 1
-    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay", "--json")
-    assert rc == 0 and post["ts"] not in {x["ts"] for x in json.loads(out)["replay"]}
     rc, _, err = run(capsys, "deliver", "--ts", post["ts"])
     assert rc == 0 and "route no doorbells: another app's bot posted it, not Verity's" in err and bells(fake, box) == []
 
 
 def test_roster_counts_no_status_line_from_another_apps_bot(fake, registry, capsys):
-    run(capsys, "announce", "--as", "infra", "--to", "@circuits", "--text", "node 2 reboots at 22:00Z")
+    run(capsys, "send", "--kind", "announce", "--as", "infra", "--to", "@circuits", "--text", "node 2 reboots at 22:00Z")
     t = fake.messages[COORD][-1]["ts"]
     fake.add(COORD, text=f"{slack.SHORTCODES[slack.DONE]} done", username="circuits", bot_id="BOTHERAPP", thread_ts=t)
     rc, out, _ = run(capsys, "roster", "--thread", t, "--json")
     assert rc == 1 and json.loads(out) == [{"handle": "circuits", "status": "missing"}]
 
 
-def test_a_doorbell_shaped_reply_the_router_didnt_post_neither_stops_a_doorbell_nor_hides_a_miss(fake, registry, routes_dirs, capsys, monkeypatch):
-    """`deliver` and `traffic --replay` took any reply in an inbox thread that matched DOORBELL_RE as a doorbell: a line
-    typed into the inbox (`from infra, thread T: ...`) made `deliver` skip the real one and `--replay` call it rung."""
+def test_a_doorbell_shaped_reply_the_router_didnt_post_does_not_stop_a_doorbell(fake, registry, routes_dirs, capsys, monkeypatch):
+    """`deliver` took any reply in an inbox thread that matched DOORBELL_RE as a doorbell: a line typed into the inbox
+    (`from infra, thread T: ...`) made `deliver` skip the real one."""
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     box = inbox(fake, routes_dirs, "circuits")
     post = fake.add(COORD, text="@circuits is node 2 free?", username="infra", bot_id=BOT)
     for who in ({"user": "USTRANGER"}, {"username": "infra", "bot_id": BOT}, {"username": "router", "bot_id": "BOTHERAPP"}):
         fake.add(COORD, text=f"from infra, thread {post['ts']}: @circuits is node 2 free?", thread_ts=box, **who)
-    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay", "--json")
-    assert rc == 0 and {x["ts"]: x["missed"] for x in json.loads(out)["replay"]}.get(post["ts"]) == ["circuits"]
     rc, out, _ = run(capsys, "traffic", "--latency", "--hours", "1e6", "--now", "1700100000", "--json")
     assert rc == 0 and json.loads(out)["asks"] == []
     assert run(capsys, "deliver", "--ts", post["ts"])[0] == 0
@@ -3480,7 +3848,7 @@ def test_a_long_quiet_reply_is_quiet_from_its_first_piece(fake, registry, routes
     the one delivered, then rang the root's poster."""
     circuits = inbox(fake, routes_dirs, "circuits")
     root = fake.add(COORD, text="@infra a long one", username="circuits", bot_id=BOT)
-    body = "\n".join(f"row {i} " + "x" * 90 for i in range(60))
+    body = "\n".join(f"row {i} " + "x" * 400 for i in range(15))
     assert run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--quiet", "--text", body)[0] == 0
     assert len([m for m in fake.messages[COORD] if m.get("thread_ts") == root["ts"]]) >= 2 and bells(fake, circuits) == []
 
@@ -3536,8 +3904,8 @@ def test_traffic_does_not_count_the_askers_own_comment_as_taken_when_linear_writ
 
 
 def test_a_reply_in_a_channel_the_bot_cannot_read_posts_in_the_thread_it_was_given(fake, registry, capsys, monkeypatch):
-    """#ask-the-team: the bot may post there but lacks channels:history, so finding a reply's thread failed the whole post
-    (top, 19 Oct). A refused read keeps the thread as given; any other failure still stops it."""
+    """#ask-the-team: the bot may post there but lacks channels:history, so finding a reply's thread must not fail the whole
+    post. A refused read keeps the thread as given; any other failure still stops it."""
     root = fake.add(COORD, text="a question from Daniel", username="daniel", bot_id=BOT)
     real, error = slack.post, ["missing_scope"]
 

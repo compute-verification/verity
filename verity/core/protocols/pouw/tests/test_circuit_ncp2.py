@@ -1,4 +1,4 @@
-"""`ncp-v2`'s Program (`verity.core.protocols.pouw.circuit.ncp2`) evaluates to the native reference, which is the MVP's own arithmetic on
+"""`ncp-v2`'s Program (`verity.ml.protocols.pouw.circuit.ncp2`) evaluates to the native reference, which is the MVP's own arithmetic on
 the two-level key's noise."""
 from __future__ import annotations
 
@@ -8,10 +8,10 @@ import pytest
 
 import circuit_fixtures as F
 from verity.ml.circuits.evaluation import evaluate
-from verity.core.protocols.pouw.circuit import ncp2
-from verity.core.protocols.pouw.circuit import reference as R
+from verity.ml.protocols.pouw.circuit import ncp2
+from verity.ml.protocols.pouw.circuit import reference as R
 from verity.core.protocols.pouw.protocol import DomainError
-from verity.core.protocols.pouw.schemes.ncp import assemble, checked_route_u, shift_perm
+from verity.ml.protocols.pouw.schemes.ncp import assemble, checked_route_u, shift_perm
 
 
 def _outputs(shape, call, kind="shift24"):
@@ -49,7 +49,7 @@ def test_the_root_is_rfc6962_over_the_strip_digests():
 
 def test_index_binding_separates_identical_strips():
     """Two identical A strips (a request batched twice, or padding) get different noise and different words, because the
-    global row index is in E₁'s key (X-SPC-30)."""
+    global row index is in E₁'s key."""
     strip = tuple(tuple((7 * i + j) % 128 - 64 for j in range(64)) for i in range(16))
     call = F.call(32, 64, 32, a=strip + strip)
     ref = R.evaluate(call)
@@ -69,7 +69,7 @@ def test_the_key_binds_every_anchored_field():
 
 @pytest.mark.parametrize("kind", ["shift24", "word"])
 def test_the_program_evaluates_to_the_reference(kind):
-    """Both P's: `ncp-v2`'s word P and `ncp-v2-shift24`'s shift by 24 (X-SPC-98)."""
+    """Both P's: `ncp-v2`'s word P and `ncp-v2-shift24`'s shift by 24."""
     shape = ncp2.Shape(32, 64, 32)
     call = F.call(32, 64, 32)
     ref = R.evaluate(call, kind)

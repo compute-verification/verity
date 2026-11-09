@@ -8,7 +8,7 @@ import hashlib
 import pytest
 
 from verity_vllm.engine.profiles import dense_generic as dg
-from verity_vllm.engine.profiles import profile_for_case
+from verity_vllm.observe.fold.profiles import profile_for_case
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, ViewDesc
 from verity_vllm.observe.fold.patterns.int8 import Int8AttentionScope, Int8RowQuant, Int8ScaledMm
 from verity_vllm.observe.fold.resolver import Compute, Const, GatherMany, Group, PerRow, Shared, StepContext, Unsupported, spec_label

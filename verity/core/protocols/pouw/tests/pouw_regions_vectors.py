@@ -1,12 +1,12 @@
 """Pinned vectors for the tile checks' public input regions (`anchors.TileAnchors.regions`), the `--public-inputs` content a
-verifier derives for one unit, against which C-Flock's file is mapped: ``uv run python
+verifier derives for one unit, against which Flock's file is mapped: ``uv run python
 verity/core/protocols/pouw/tests/pouw_regions_vectors.py`` rewrites ``tests/vectors/pouw_regions.json``.  A change to that file is a
 change to a region's layout or derivation and needs a reason in the PR.
 
 Inputs are derived, not stored: a case's salt, root_A and root_B are SHA-256("verity/pouw/regions-vectors/v1", case, part),
 its matmul index 3 and weight id 9, and the scheme's `noise` gives the seeds.  Each region is pinned by the SHA-256 of its
 bytes (`anchors.region_bytes`: its u16 words little-endian), and an E region by its bytes too; each `--public-inputs` file
-(`TileAnchors.public_inputs`, C-Flock's ``verity/flock-public-inputs/v1``) by its header line and its body's SHA-256.
+(`TileAnchors.public_inputs`, Flock's ``verity/flock-public-inputs/v1``) by its header line and its body's SHA-256.
 ``row_k_cases`` pins the cut's shapes (`rowk`, ``Shape.row_k``): each piece's regions, a form's its segment of F_A and F_B
 under the slice rule."""
 
@@ -16,12 +16,12 @@ import hashlib
 import json
 from pathlib import Path
 
-from verity.core.protocols.pouw.circuit import pc4, pc8, rowk
-from verity.core.protocols.pouw.circuit.anchors import TileAnchors, region_bytes
+from verity.ml.protocols.pouw.circuit import pc4, pc8, rowk
+from verity.ml.protocols.pouw.circuit.anchors import TileAnchors, region_bytes
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
-from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c4 as F
+from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES
 
 OUT = Path(__file__).with_name("vectors") / "pouw_regions.json"
 ROWS, COLS = (7, 300), (2, 41)
@@ -44,8 +44,8 @@ def part(case: str, name: str) -> bytes:
 def anchors(case: str, circuit: str, k: int, dev: str | None, row_k: int | None = None) -> TileAnchors:
     ctx = Context(part(case, "salt"), Matmul(3, Shape(2, k, 2), 9), part(case, "root_a"), part(case, "root_b"))
     if circuit == "pc4":
-        return TileAnchors.of(F.PearlC4("nvfp4"), ctx, pc4.Shape(2, k, 2, tile=(1, 1), row_k=row_k), ROWS, COLS)
-    return TileAnchors.of(C.PearlC(forming="v1", device=DEVICES[dev]), ctx,
+        return TileAnchors.of(F.PearlC4("nvfp4", hashing="h0"), ctx, pc4.Shape(2, k, 2, tile=(1, 1), row_k=row_k), ROWS, COLS)
+    return TileAnchors.of(C.PearlC(forming="v1", device=DEVICES[dev], hashing="h0"), ctx,
                           pc8.Shape(2, k, 2, tile=(1, 1), dev=dev, row_k=row_k), ROWS, COLS)
 
 

@@ -1,7 +1,7 @@
-"""A row of record is done only at its public cap (Daniel's ruling on ASK-39): its file declares ``sampling.ignore_eos`` and every
-request a ``max_tokens``, and a row file, the row precheck and GP-01 refuse it by name otherwise, before any GPU time.  A research
-row keeps its EOS stops, and the generator writes each as before.  What makes a row of record is the circuit database's index
-(``config.RECORDS``)."""
+"""A workload of record is done only at its public cap: its file declares ``sampling.ignore_eos`` and every
+request a ``max_tokens``, and its row file, the row precheck and GP-01 refuse it by name otherwise, before any GPU time.  A
+research workload keeps its EOS stops, and the generator writes each as before.  What makes a workload of record is the circuit
+database's index (``config.RECORDS``)."""
 from __future__ import annotations
 
 import json
@@ -16,7 +16,7 @@ from verity_vllm import config as C
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import global_program as gp
 
-#: A research row whose request 0 stops by EOS before its cap.
+#: A research workload whose request 0 stops by EOS before its cap.
 EOS_ROW = "olmoe-1b-7b__bf16__l40s__tp1__b2__i32__o32__mixedstop__greedy__bi-eager"
 SINGLE = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
 

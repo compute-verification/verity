@@ -1,9 +1,44 @@
-import Mathlib
+module
+
+public import Mathlib
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Mathlib.Algebra.Order.Archimedean.Real.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The tensor–scalar machine (trusted)
 
-EPS1's tensor–scalar (TS) model (note:20261017T0324Z-draft-eps1-spec §0.1–§0.3, §1.1): instruction classes `K`,
+EPS1's tensor–scalar (TS) model (§0.1–§0.3, §1.1): instruction classes `K`,
 facets `R`, each facet a row `a r : K → ℝ` (the cycles of facet `r` one instruction of class `k` occupies, per SMSP),
 SM-clocked or fixed-clock, and the highest SM clock `fmax` any program runs at (P1: 2,430 MHz on sm_120).
 
@@ -14,6 +49,8 @@ SM-clocked or fixed-clock, and the highest SM clock `fmax` any program runs at (
   `π · n = Σ_r λ_r a_r · n` (`Machine.price`), and of a route's per-facet demand `d` it is `Σ_r λ_r d_r`
   (`demandPrice`).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS
 

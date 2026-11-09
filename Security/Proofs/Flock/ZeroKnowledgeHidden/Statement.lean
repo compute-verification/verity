@@ -1,16 +1,33 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.View
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.View
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
-# C-Flock's one-stage audit under hidden outputs is zero knowledge (trusted)
+# Flock's one-stage audit under hidden outputs is zero knowledge (trusted)
 
 `ZeroKnowledgeHidden` is the zero-knowledge half of `EndToEndHidden`, on the same plan: the verifier's joint view of the
 `J` tables of a hidden-output `--zk` session is simulatable. Its proof is
 `Flock.SecurityProofs.ZeroKnowledgeHidden : Flock.Guarantees.ZeroKnowledgeHidden`.
 
-C-Flock's definitions are still in its proofs package, so this module imports
-`Proofs.Flock.Soundness.Discharge.ZkHidden.View`, and `Models.lean`, which the `security` package builds without
+Flock's definitions are still in its proofs package, so this module imports
+`Proofs.Flock.Soundness.Discharge.ZkHidden.View`, and `Definitions.lean`, which the `security` package builds without
 `security_proofs`, does not import it: `Proofs.Flock.ZeroKnowledgeHidden` does.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 
@@ -18,9 +35,9 @@ open FlockSoundness FlockSoundness.Discharge.Exec FlockSoundness.Refine FlockSou
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.DecodeZL
 open scoped ENNReal
 
-/-- **C-Flock's one-stage audit under hidden outputs is zero knowledge, at the coins the prover doesn't refuse, on runs
+/-- **Flock's one-stage audit under hidden outputs is zero knowledge, at the coins the prover doesn't refuse, on runs
 its self-check doesn't stop.** At
-every draw `S` at which `verify --zk` sets every one of the session's `J = nTab I` tables up (`ys`), and every
+every sample `S` at which `verify --zk` sets every one of the session's `J = nTab I` tables up (`ys`), and every
 registration `R`, the joint view of the session's plan `planZHJ dj y₀` (the plan `EndToEndHidden` is sound on), table
 `j` at its executable statement, is within `Σ_j 2·|Hid_j|·δ_{K*}` of the per-table simulators' joint view, both ways
 (`ZkViewAtJ`): at any coin vector per table that the honest prover doesn't refuse (`CoinedSetup.Admits`), for any
@@ -36,7 +53,7 @@ valid witness and admitted coins it never fires if the clear protocol is complet
 which `inner_complete` takes as a hypothesis), and nothing here proves that.
 
 Which verifiers: honest-verifier zero knowledge at each fixed coin vector, a zerocheck outer coin `1` among the refused.
-A verifier that chooses its coins is `Claims.Flock.ZK`'s (`Definitions/Claims.lean`, `ZKmalR`): zero knowledge against
+A verifier that chooses its coins is `Claims.Flock.ZK`'s (`Definitions/Claims.lean`, at `Definitions/Core/Interaction.lean`'s `ZKmalR`): zero knowledge against
 every malicious verifier of the deployed interaction's rounds, the masked verifier committing to every coin at `Hello`
 before the prover's first message, with a coin opened two ways charged to a collision among the honest prover's SHA-512 calls
 in two real runs (`Fork`).
@@ -46,20 +63,17 @@ in two real runs (`Fork`).
 Nothing here proves it small for `K*`: it is below `2^-193` for all but `2^-64` of keys (`CROnly.hm96_sha512_tail`), and
 that `K*` is not one of the others is unproved. No premise is taken on the key or on SHA-512.
 
-One hypothesis no check implies yet: every table's statement avoids the mask slot (`avoidsMask`), until the
-verifier's D11 refusal in `Net.ofRows` discharges it. The rest are an untyped statement and `EndToEndHidden`'s
-reference setup `y₀`: table 0's, at `mPts` link points, at some draw `d₀`, which every draw flock-verify accepts gives
-(`Flock.SecurityProofs.EndToEndHidden_refSetup`). -/
+Its hypotheses are an untyped statement and `EndToEndHidden`'s reference setup `y₀`: table 0's, at `mPts` link points,
+at some sample `d₀`, which every sample flock-verify accepts gives (`Flock.SecurityProofs.EndToEndHidden_refSetup`). Every
+table's statement avoids the mask slot, since `verify --zk` refuses one that meets it
+(`FailClosed.DrawSetupZHJ.avoidsMask`). -/
 def ZeroKnowledgeHidden : Prop :=
   ∀ (n : ℕ) (Reg : Type) (P : LigProver)
-    -- the session's statement, the record's draw file, and the reference setup
+    -- the session's statement, the record's sample file, and the reference setup
     (I : Inputs) (_ht : I.tags.typed = false)
     (mPts : ℕ) (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
-    -- every table's statement avoids the mask slot
-    (_hdm : ∀ (S : Finset (Fin n)) (j : Fin (nTab I))
-      (y : DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)), avoidsMask y.x.st = true)
-    -- a draw at which `verify --zk` sets every table up, and a registration
+    -- a sample at which `verify --zk` sets every table up, and a registration
     (S : Finset (Fin n)) (R : Reg)
     (ys : ∀ j : Fin (nTab I), DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)),
     ZkViewAtJ (fun j => coinedOf P ((planZHJ (Reg := Reg) dj y₀ S R).get

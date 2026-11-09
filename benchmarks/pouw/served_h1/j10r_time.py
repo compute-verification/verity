@@ -14,7 +14,7 @@ Each time is CUDA events around the work on torch's stream, the median over ``--
 J10-R units-kernel receipts are held to the torch chain's over hashlib's stream, word for word, and noise.cu's J10-R
 stream to hashlib's. Writes ``--out`` (JSON) and prints a line a linear.
 
-    research run --on vy-nebius-2 --pool research --mem-gb 48 --cwd source --source . --as LANE --env JOB=tests -- \
+    research run --on MACHINE --pool research --mem-gb 48 --cwd source --source . --as LANE --env JOB=tests -- \
       bash benchmarks/pouw/served_h1/j10r_gpu.sh
 """
 from __future__ import annotations
@@ -35,10 +35,10 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import producer as P  # noqa: E402
-import receipts as RC  # noqa: E402
 
-from verity.core.protocols.pouw.circuit import h1tile as HT  # noqa: E402
-from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1tile as HT  # noqa: E402
+from verity.ml.protocols.pouw.circuit import seeds as SD  # noqa: E402
+from verity_vllm.protocols.pouw.h1 import receipts as RC  # noqa: E402
 
 #: Llama-3.1-8B's linears (name, n, K)
 LLAMA = [("qkv", 6144, 4096), ("o", 4096, 4096), ("gate_up", 28672, 4096), ("down", 4096, 14336)]
@@ -73,8 +73,8 @@ def main(argv: list[str] | None = None) -> int:
     if not units.j10r:
         ap.error(f"{a.so} has no J10-R units (kh_units_multi_j10r)")
     gen = torch.Generator(device=dev).manual_seed(20261024)
-    rec_v1 = torch.from_numpy(P.seed_record(SALT, RA, RB)).to(dev)
-    rec_j = torch.from_numpy(P.seed_record(SALT, RA, RB, j10r=True)).to(dev)
+    rec_v1 = torch.from_numpy(RC.seed_record(SALT, RA, RB)).to(dev)
+    rec_j = torch.from_numpy(RC.seed_record(SALT, RA, RB, j10r=True)).to(dev)
     out: dict = {"slot": a.slot, "rows": a.rows, "layers": a.layers, "reps": a.reps, "so": a.so, "cubin": a.cubin,
                  "device": torch.cuda.get_device_name(dev), "load": os.getloadavg(), "linears": {}}
     ok = True
@@ -135,7 +135,7 @@ def main(argv: list[str] | None = None) -> int:
                 forms = [f for f in ("v1", "j10r") if f"{pair}_{f}" in work]
                 for f in (forms if rep % 2 == 0 else forms[::-1]):
                     times[f"{pair}_{f}"].append(_clock(work[f"{pair}_{f}"]))
-        del full_v1, sink_v1
+        full_v1 = sink_v1 = None
         torch.cuda.empty_cache()
         row = {"n": n, "k": k, "units": u, "blocks_v1": u * nb_v1, "blocks_j10r": nb_j,
                "same_stream": same_stream, "same_receipts": same_receipts, "times": {}}

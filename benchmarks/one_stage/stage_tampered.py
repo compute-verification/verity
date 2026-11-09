@@ -1,5 +1,5 @@
 """Stage an input set for the circuit prover with bit 0 of every instance's first output word flipped: the registered
-roots then commit wrong outputs, so the proof of any drawn unit must be refused. Run in the circuit prover's tree (its
+roots then commit wrong outputs, so the proof of any sampled proof block must be refused. Run in the circuit prover's tree (its
 `verity_flock`).
 
     python stage_tampered.py --input-set DIR --n N --out DIR [--partition H --program H --unit-indices FILE]
@@ -12,7 +12,7 @@ import json
 import numpy as np
 
 from verity_flock import circuit as FC
-from verity_numerical.bench.input_sets import InputSet
+from verity_flock.input_sets import InputSet
 
 
 class Flipped:

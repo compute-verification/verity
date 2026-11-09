@@ -32,8 +32,8 @@ this (r20) each request opened its own TLS connection: 259,030 blobs / 46 GB too
 the bounded thread pool `put_many` runs on; `LocalStore.push` brings its own pool, of
 the same size, over `put`.
 
-MEASURED (2026-09-23, runpod pod vyv-v2cpu3 -> R2, 10k x 4 KiB blobs pushed through `LocalStore.push`, then re-pushed, then fetched,
-plus one 512 MiB blob; `tools/research/bench` figures in the r20 report):
+MEASURED (a RunPod pod -> R2, 10k x 4 KiB blobs pushed through `LocalStore.push`, then re-pushed, then fetched, plus one 512 MiB
+blob; `tools/research/bench`):
 
     client              first push        re-push (all skipped)   get           512 MiB put / get
     old (TLS/request)   21.1 blobs/s       85 blobs/s              55 blobs/s     25 MB/s / 43 MB/s
@@ -105,8 +105,8 @@ MIN_UPLOAD_RATE = 8 * 1024       # the same for a request body (a PUT from the l
 STALL_WINDOW_S = 120.0           # a part PUT is cut off when a window this long passes with under STALL_MIN_BYTES of its body sent,
 STALL_MIN_BYTES = 1 << 20        # or (body sent) with no response: its whole-body deadline above is hours for a 256 MiB part
 GET_STALL_MIN_BYTES = 32 << 20   # a GET body is cut off (and the GET retried) when a STALL_WINDOW_S window brings under this much (~280
-                                 # KB/s): a stalled stream that still trickles kept a 16 GiB part going at 13-170 KB/s for an hour while a
-                                 # fresh connection on the same node got 45-70 MB/s (INF-214); its whole-body deadline was 73 h
+                                 # KB/s): a stalled stream that still trickles can keep a 16 GiB part going at 13-170 KB/s for an hour
+                                 # while a fresh connection on the same node gets 45-70 MB/s, under a whole-body deadline of 73 h
 HEAD_DEADLINE_S = 30.0           # a HEAD carries no body: a much shorter deadline, and HEAD_RETRIES tries after the first
 HEAD_RETRIES = 1
 RETRIES = 3                     # transient 5xx / 429 / connection errors: 4 tries, 1 s, 2 s, 4 s backoff (or the service's Retry-After)
@@ -723,8 +723,8 @@ class S3Remote:
                        expires_s, self.session_token)
 
     def delete(self, key: str) -> bool:
-        """Remove `key` (True) or find it absent already (False).  Not part of the `Remote` protocol -- the store never deletes a
-        replica; the bench (`bench/<ts>/...`) and an operator cleaning a throwaway prefix do."""
+        """Remove `key` (True) or find it absent already (False).  Not part of the `Remote` protocol: only the store's GC (README §7.4),
+        the bench (`bench/<ts>/...`) and an operator cleaning a throwaway prefix delete."""
         try:
             with self._request("DELETE", key):
                 pass

@@ -1,4 +1,4 @@
-// Dither-C's P.V (`pv`: note:20261017T0030Z-draft-checked-strip part P, `checked_strip.pv_words` and `pv_served`) on
+// Dither-C's P.V (`pv`, `checked_strip.pv_words` and `pv_served`) on
 // sm_120a, unit by unit, on cgemm.cu's GEMM (e_l7qs's mainloop and duo receipts).
 //
 // Attention's P.V for H query heads sharing kvh = H / rep KV heads, s tokens, head dimension 128. P (P_prob - 64, in

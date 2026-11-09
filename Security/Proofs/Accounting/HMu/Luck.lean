@@ -1,5 +1,8 @@
-import Definitions.Accounting.Guarantees.HMu
-import Proofs.Accounting.Tag.LittlewoodOfford
+module
+
+public import Definitions.Accounting.Guarantees.HMu
+public import Proofs.Accounting.Tag.LittlewoodOfford
+public import Proofs.Accounting.Lemmas.HMu
 
 /-!
 # Lemma B, and (H-μ) from the coins
@@ -8,6 +11,8 @@ import Proofs.Accounting.Tag.LittlewoodOfford
 vectors at each committed `ω₀`: Erdős's Littlewood–Offord bound (`Accounting.TagProofs.card_level_le_choose`, moved
 from `Fin u` to any finite index), or the pairing of each bit vector with the one that flips a bit of nonzero weight.
 -/
+
+@[expose] public section
 
 namespace Accounting.HMuProofs
 
@@ -19,7 +24,7 @@ variable {Ω : Type} [Fintype Ω]
 
 theorem prob_eq_card (p : Ω → Prop) [DecidablePred p] :
     prob p = ((univ.filter p).card : ℝ) / Fintype.card Ω := by
-  unfold prob
+  unfold prob Claims.prUniform
   congr
 
 theorem prob_nonneg (p : Ω → Prop) : 0 ≤ prob p := by

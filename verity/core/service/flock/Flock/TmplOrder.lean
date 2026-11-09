@@ -1,5 +1,5 @@
 /-
-`Tmpl.ordered`, the order a templated unit's description is checked for (PRF-133), gives the order `Net.checkOrder`
+`Tmpl.ordered`, the order a templated unit's description is checked for, gives the order `Net.checkOrder`
 checks on the rows it unrolls to (`rows_ordered`): every row from the input rows to the constant reads, in A and in B,
 the constant or an earlier column that is not input padding (`FlockSoundness.RowOrder`, stated here as it reads), given
 the input port bits' self rows `Net.ofRows` checks (`Net.inputsOk`). So a reader that checks the description need not walk
@@ -7,7 +7,11 @@ the unrolled rows for their order. The proof is an induction over the copies `pl
 of an ordered Definition, its inputs bound to the constant or to earlier columns (port bits if input columns), writes only
 rows that read such columns (`place_good`); a copy in the input rows writes only there (`place_local`).
 -/
-import Flock.Tmpl
+module
+
+public import Flock.Tmpl
+
+@[expose] public section
 
 namespace Flock.TmplOrder
 

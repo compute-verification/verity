@@ -1,7 +1,7 @@
 """`audit.Registry` held to the verifier's registry in Lean (`RemoteAudit.Registry`, the definition, served by
 `remote-audit-difftest`): at most one live registration a node, a second refused and counted, sessions over the live
 one as its k-th, their events, `close` counting each session as it stands, R (`drawn`), and `registry/v0` written and
-read back. Drawn cases are calls over a few nodes from an empty registry or one read back, with now and then a field
+read back. Sampled cases are calls over a few nodes from an empty registry or one read back, with now and then a field
 either side refuses; recorded ones run a recorded session (`ra_cases.SCENARIOS`) through the registry, so that `close`
 counts the outcome the definition gives it."""
 
@@ -71,8 +71,8 @@ def event_op(draw, n: str) -> dict:
 
 
 def session_op(draw, index: int | None) -> dict:
-    """A session over the registration drawn `index`-th in the case, or over one given in full that no registry drew;
-    now and then its two windows drawn on one openings coin (`groups_per_coin` 2)."""
+    """A session over the registration sampled `index`-th in the case, or over one given in full that no registry drew;
+    now and then its two windows sampled on one openings coin (`groups_per_coin` 2)."""
     windows = draw(st.integers(1, 2))
     pace = {"k": draw(st.integers(1, 2)), "window_ns": 5} if windows == 2 and rare(draw, 4) else None
     g = 2 if windows == 2 and rare(draw, 3) else 1
@@ -136,8 +136,8 @@ def script(draw, n: str, k: int) -> list[dict]:
 @st.composite
 def registry_inputs(draw) -> dict:
     """Calls over the nodes: most often a registration with a session over it and a few of its events, else one call
-    alone. The strategy keeps which nodes are live, so that a session names a registration drawn in the case by its
-    place among those drawn."""
+    alone. The strategy keeps which nodes are live, so that a session names a registration sampled in the case by its
+    place among those sampled."""
     registry = read_back(draw) if draw(st.integers(0, 2)) == 0 else None
     live = {n: (None, 0) for n in (registry or {}).get("live", ())}
     ops, drawn = [], []
@@ -175,8 +175,8 @@ def test_registry(server) -> None:
 
 
 def recorded(name: str, cut: int | None = None) -> dict:
-    """Scenario `name`'s session, its first `cut` events, run through the registry: its registration drawn as the
-    scenario's store was (`ra_cases.SOURCE`, a zero nonce), a second refused, the first closed, and a third drawn."""
+    """Scenario `name`'s session, its first `cut` events, run through the registry: its registration sampled as the
+    scenario's store was (`ra_cases.SOURCE`, a zero nonce), a second refused, the first closed, and a third sampled."""
     case, _ = M.recorded(name)
     reg = case["registration"]
     register = {"op": "register", "nonce": ZERO} | {k: reg[k] for k in (
@@ -208,8 +208,8 @@ def test_a_recorded_session_is_counted_at_close_as_the_lean_ends_it(server, name
 
 def test_a_registration_that_binds_tiles_is_refused_as_the_lean_refuses_it(server) -> None:
     """A registration that would bind PoUW's tile outputs: for a node with one live, refused and counted, as any second
-    registration is; for one with none, refused by both registries outright (the Lean covers receipts of blocks
-    alone), drawing nothing."""
+    registration is; for one with none, refused by both registries outright (the Lean covers receipts of chunks
+    alone), sampling nothing."""
     v = recorded("honest")
     bound = v["ops"][0] | {"bind": True}
     assert D.replay(PORT, {"source": M.SOURCE.hex(), "registry": None, "ops": [bound]}, server)[0] == "reject"

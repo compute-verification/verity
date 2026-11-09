@@ -1,15 +1,33 @@
-import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Statements
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Statements
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Exec.Rounds
 
 /-!
 # flock-verify's acceptance at table `j`, rep by rep
 
-`accepts_reps_at`: `DecodeZL.accepts_reps` at any table `j` of the session, at any `count`. e2e-exec's
+`accepts_reps_at`: `DecodeZL.accepts_reps` at any table `j` of the session, at any `count`. `Discharge/Exec`'s
 `accepts_verdict_hm96` and `accepts_rep_rounds` already speak of every table `j < sts.size`: table `j`'s streams
 `spec.tables[j]/rep r`, its proof files `2j + r`, its root `root_B[j]` and the session's shared link points.
 
 `planJ_get`, `tableJ_of`: table `j` of `planJ` is `tableJ` at part `j`, and wherever a `SetupJ` exists it is the
 `SetupJ.spec` of one with the same statement.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.DecodeZLJ
 
@@ -25,7 +43,7 @@ its run on the stream's coins with the proof's messages, its stream's rounds ret
 salted verdict on the two runs at `capOfRoot` of `root_B[j]` and `opnOf` of proof files `2j`, `2j + 1`. -/
 theorem accepts_reps_at {I : Inputs} {t : Exec.Transcript} (hh : I.tags.hiddenOutputs = false)
     (hrr : I.tags.retainRounds = true) (hl : I.tags.merkleLeaf = "hm96-sha512/v1") (h : Accepts I t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session),
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord),
       setupOf I t.record = .ok (spec, sts) ∧ Record.decode spec t.record = .ok sess ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (_hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m), ∃ pend : Fin 2 → PendL 𝔽 Dig,
@@ -90,7 +108,7 @@ theorem planJ_length (T₀ : TabSpec mPts) (dj : Finset (Fin n) → Json) (S : F
     (planJ ht T₀ dj S R).length = I.count :=
   List.length_ofFn
 
-/-- **Table `j` where flock-verify sets it up**: `tableJ` at a draw with a `SetupJ` is the `SetupJ.spec` of one with
+/-- **Table `j` where flock-verify sets it up**: `tableJ` at a sample with a `SetupJ` is the `SetupJ.spec` of one with
 the same statement. -/
 theorem tableJ_of {T₀ : TabSpec mPts} {d : Json} {j : ℕ} (x : SetupJ I mPts j (partJson d I.count j)) :
     ∃ y : SetupJ I mPts j (partJson d I.count j), y.st = x.st ∧ tableJ ht T₀ d j = y.spec ht := by

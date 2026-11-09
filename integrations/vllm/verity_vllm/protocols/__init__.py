@@ -4,8 +4,9 @@ A run enables a set of ``name:scheme`` entries (`config.parse_protocols`), off b
 ``protocols=`` and fills the settings an adapter takes from the built engine (`engine_fills`, `from_engine`); a row takes it from ``PROTOCOLS`` (``verity-vllm row --protocols``) or its workload target, and every stage
 reads it as the target's ``protocols`` (`TargetProfile.protocols`), so the Build, the Commit and the Check read one copy.
 A row refuses a set it cannot run before any stage starts (`at_row`); the Commit checks it again before its engine exists
-(`commit_guard`).  Each protocol has one adapter module here (`interface`), imported only when it is enabled.  The
-protocol logic is its package's (`verity.core.protocols.pouw`, `verity.core.protocols.pous`, `verity.core.protocols.sampled_proofs`), never this package's.
+(`commit_guard`).  Each protocol has one adapter module here (`interface`), imported only when it is enabled; PoUB, which
+serving drives by flag rather than as an option, is imported by name too (`driver`), only under its flag.  The
+protocol logic is its package's (`verity.core.protocols.pouw`, `verity.core.protocols.pous`, `verity.core.protocols.spot`), never this package's.
 
 **Order.**  The nesting at each site is stated in `SITES`.  Adapters install in `config.PROTOCOLS` order, innermost
 first, and uninstall in reverse:
@@ -39,7 +40,7 @@ Program describes: POUS's decode is bit-identical and leaves the circuit untouch
 protocol package has a circuit for its scheme (``traced_as``).
 
 **Circuits.**  What sampled proofs traces an executor's computation as is its protocol package's (`CIRCUITS`: for PoUW,
-`verity.core.protocols.pouw.circuit`, whose ``SCHEMES`` have a circuit and whose ``traced_as(scheme, m, k, n)`` is the circuit of one
+`verity.ml.protocols.pouw.circuit`, whose ``SCHEMES`` have a circuit and whose ``traced_as(scheme, m, k, n)`` is the circuit of one
 executed call).  The selector admits an executor beside sampled proofs only for a scheme with a circuit, and `traced_as`
 gives the Commit the circuit of each executed call.
 """
@@ -49,7 +50,7 @@ import dataclasses
 import hashlib
 import importlib
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -58,14 +59,18 @@ from verity_vllm import config
 from verity_vllm.engine import hooks
 from verity_vllm.protocols.interface import Context, Installed, Option, Target
 
-__all__ = ["ADAPTERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Refused", "Target", "adapter",
+__all__ = ["ADAPTERS", "DRIVERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Refused", "Target",
+           "adapter", "driver",
            "WeightsView", "at_capture", "at_commit", "at_row", "capture_context", "commit_context", "commit_guard", "engine_fills",
            "from_engine", "install", "into_verdict", "load_settings",
            "parse", "refusals", "register_weights", "requires_build", "undeclared", "weights_view", "CIRCUITS", "circuit_registry",
            "traced_as"]
 
 #: protocol -> its adapter module in this package
-ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "sampled_proofs"}
+ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "spot"}
+#: protocol -> its package here that serving drives by flag rather than as an option (`driver`): PoUB's session
+#: (``--remote-verifier``) and the Commit's memory map (``--memory-map``)
+DRIVERS = {"remote-bandwidth": "remote_bandwidth"}
 #: Each hook site and who is at it, outermost first; the last may execute there (``EXECUTES``, or per scheme the adapter's
 #: ``executes(scheme)``: PoUW's H1 executes nowhere, since the int8_exact arm serves its own y), the others wrap.  At a
 #: linear layer's ``apply`` POUS hands the decoded weight inward and PoUW replaces the GEMM.  Sampled proofs commits at the
@@ -74,7 +79,7 @@ ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "sampled_proofs"}
 SITES = {"LinearBase.quant_method.apply": ("pous", "pouw")}
 #: protocol -> the module of its protocol package that says what sampled proofs traces its executed computation as:
 #: ``SCHEMES`` (the schemes with a circuit) and ``traced_as(scheme, m, k, n)`` (one executed call's circuit, None without one)
-CIRCUITS = {"pouw": "verity.core.protocols.pouw.circuit"}
+CIRCUITS = {"pouw": "verity.ml.protocols.pouw.circuit"}
 RECORD_SCHEMA = "verity-vllm/protocol-composition/v0"
 
 parse = config.parse_protocols
@@ -88,17 +93,29 @@ class Refused(ValueError):
         super().__init__("protocol options refused: " + "; ".join(self.reasons))
 
 
+def _imported(name: str, module: str, what: str) -> ModuleType:
+    try:
+        return importlib.import_module(module)
+    except ModuleNotFoundError as e:
+        here = e.name is not None and e.name.startswith(f"{__name__}.") and f"{module}.".startswith(f"{e.name}.")
+        why = "is not on this tree" if here else f"needs {e.name}, which is not installed"
+        raise Refused([f"{name}: its {what} {module} {why}"]) from e
+
+
 def adapter(name: str) -> ModuleType:
     """The adapter module of protocol ``name``; `Refused` when the protocol is unknown or its adapter cannot be imported
     on this tree (not landed yet, or its protocol package missing)."""
     if name not in ADAPTERS:
         raise Refused([f"unknown protocol {name!r} (known: {', '.join(ADAPTERS)})"])
-    module = f"{__name__}.{ADAPTERS[name]}"
-    try:
-        return importlib.import_module(module)
-    except ModuleNotFoundError as e:
-        why = "is not on this tree" if e.name == module else f"needs {e.name}, which is not installed"
-        raise Refused([f"{name}: its adapter {module} {why}"]) from e
+    return _imported(name, f"{__name__}.{ADAPTERS[name]}", "adapter")
+
+
+def driver(name: str, part: str) -> ModuleType:
+    """Module ``part`` of protocol ``name``'s driver (`DRIVERS`); `Refused` when the protocol has none or the module cannot
+    be imported on this tree."""
+    if name not in DRIVERS:
+        raise Refused([f"no driver of protocol {name!r} (known: {', '.join(DRIVERS)})"])
+    return _imported(name, f"{__name__}.{DRIVERS[name]}.{part}", "driver")
 
 
 def load_settings(value: str | Path | Mapping[str, Any] | None) -> dict[str, dict[str, Any]]:
@@ -125,7 +142,7 @@ def circuit_registry(name: str) -> ModuleType | None:
 
 def traced_as(entry: str, m: int, k: int, n: int) -> Any:
     """The circuit sampled proofs traces for one executed call of ``entry`` (``pouw:ncp-v2``) of shape m × k → n: its
-    Definition, partition query, served outputs and draw layout.  None when the scheme has no circuit; a shape outside the
+    Definition, partition query, served outputs and sampling layout.  None when the scheme has no circuit; a shape outside the
     circuit raises the protocol package's ``DomainError``."""
     name, _, scheme = entry.partition(":")
     reg = circuit_registry(name)
@@ -222,7 +239,7 @@ def refusals(ctx: Context) -> tuple[str, ...]:
             executors.setdefault(site, entry)
         if sites and ctx.scheme("sampled-proofs") is not None and not _has_circuit(name, scheme, out):
             out.append(f"{entry}: executes {', '.join(sites)}, and the Program has no Definition for what it computes there, so "
-                       f"sampled proofs would trace it as the stock computation (refused until the option names one: traced_as)")
+                       f"SPOT would trace it as the stock computation (refused until the option names one: traced_as)")
         if ctx.scheme("pous") is not None and name != "pous" and getattr(mod, "keeps_weight_copy", lambda s, c: False)(scheme, ctx):
             out.append(f"{entry}: keeps a weight-derived copy resident across forwards, so with pous on its GEMMs would not read "
                        f"what POUS stores (prepare its weight operands per forward from the weight it is handed)")
@@ -254,16 +271,24 @@ class Composition:
             raise ValueError(f"no bindable option {name!r} in {list(self.entries)}")
         opt.commits.update(commitment)
 
+    def unhook(self) -> None:
+        """Every option's hooks off the model, newest first, each release left to `close` (which may run on another thread,
+        the model touched no more).  The first error is raised once every option's hooks were tried."""
+        self._each(lambda opt: opt.hooks.uninstall())
+
     def close(self) -> None:
         """Close every option, newest first.  Idempotent; an option whose close raises does not keep the older ones
         installed (the first error is raised once all are closed)."""
         if self.closed:
             return
         self.closed = True
+        self._each(lambda opt: opt.close())
+
+    def _each(self, act: Callable[[Any], Any]) -> None:
         err: BaseException | None = None
         for opt in reversed(self.installed):
             try:
-                opt.close()
+                act(opt)
             except BaseException as e:  # noqa: BLE001
                 err = err or e
         if err is not None:
@@ -413,22 +438,25 @@ def at_row(knob: Any, workload: Mapping[str, Any], *, world: int = 1) -> tuple[s
 def own_auditor(config: str | Path | Mapping[str, Any] | None, profile: Any) -> dict[str, dict[str, Any]]:
     """The protocols config (`load_settings`) of a pipeline that is its run's own auditor (the Commit, a Match capture):
     PoUW's ``coins`` a challenger of the epoch held in this process when ``profile`` declares PoUW (`pouw.challenged`),
-    unless the config names the auditor host's ``challenger``, H1's one coin source."""
+    unless the config names the auditor host's ``challenger``, the coins' one source."""
     from verity_vllm.protocols import pouw
-    settings = load_settings(config)
-    if "challenger" in settings.get(pouw.NAME, {}):
-        return settings
-    return pouw.challenged(settings, getattr(profile, "protocols", None))
+    return pouw.challenged(load_settings(config), getattr(profile, "protocols", None))
 
 
-def commit_guard(profile: Any, *, world: int = 1, hot: bool = False, installs: bool = True, settings: Any = None) -> Any:
+def commit_guard(profile: Any, *, world: int = 1, hot: bool = False, installs: bool = True, settings: Any = None,
+                 commit_scheme: str | None = None) -> Any:
     """The Commit's check before its engine is built: ``profile`` back unchanged when the Commit can run its set, else
     exit 3 (fail-closed) with every reason printed.  ``hot`` is a hot Commit worker and ``installs`` False a Commit that
-    installs no options (the TP Commit): both refuse any declared set."""
+    installs no options (the TP Commit): both refuse any declared set.  ``commit_scheme``, the committer's
+    (``--commit-scheme``), must be the one sampled proofs is declared with."""
     try:
         ctx = commit_context(profile, world=world, settings=settings)
         if ctx is not None and (hot or not installs):
             raise Refused([f"this Commit ({'the hot worker' if hot else 'TP'}) installs no protocol options yet"])
+        declared = ctx.scheme("sampled-proofs") if ctx is not None else None
+        if commit_scheme is not None and declared is not None and declared != commit_scheme:
+            raise Refused([f"sampled-proofs:{declared} is what the target declares the Commit commits under, but its committer "
+                           f"commits under {commit_scheme}: run it with --commit-scheme {declared}"])
     except Refused as e:
         print(f"[delta] REFUSE (fail-closed): {e}", flush=True)
         raise SystemExit(3) from None

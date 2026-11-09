@@ -1,4 +1,4 @@
-"""[R16 fp8] Sampled exact replay of the block-scaled FP8 linear (Qwen3-4B-FP8's `Fp8GroupQuant_v1 -> ScaledMmFp8Block_v1` under one
+"""Sampled exact replay of the block-scaled FP8 linear (Qwen3-4B-FP8's `Fp8GroupQuant_v1 -> ScaledMmFp8BlockSharedScale_v1` under one
 LinearBase module): the e4m3 `weight` and the f32 `weight_scale_inv` are REGISTERED inputs read in their declared widths (`Value<8>`,
 `Value<32>` -- a mixed-width `weights` struct), the activation words and group scales are INTERIOR (composed from the committed bf16
 row, two ports read as two arg slices), the GEMM row is the VU.  Positive on a tiny honest Program (twins = the Definitions,
@@ -74,12 +74,12 @@ def _program_fp8():
             ln = add(f"RMSNormTriton_v1{{N={H},EPS={EPS}}}", f"model.model.layers.0.input_layernorm/triton_launch_{s}[{k}]",
                      [[["n", e, 0, H]], W("model.model.layers.0.input_layernorm.weight")])
             q1 = add(f"Fp8GroupQuant_v1{{K={H},G={G}}}", f"model.model.layers.0.mlp.gate_up_proj/per_token_group_fp8_quant_{s}[{k}]", [[["n", ln, 0, H]]])
-            gu = add(f"ScaledMmFp8Block_v1{{K={H},N={2 * I},G={G}}}", f"model.model.layers.0.mlp.gate_up_proj/cutlass_scaled_mm_{s}[{k}]",
+            gu = add(f"ScaledMmFp8BlockSharedScale_v1{{K={H},N={2 * I},G={G}}}", f"model.model.layers.0.mlp.gate_up_proj/cutlass_scaled_mm_{s}[{k}]",
                      [[["n", q1, 0, H]], [["n", q1, H, H + H // G]], W("model.model.layers.0.mlp.gate_up_proj.weight"),
                       W("model.model.layers.0.mlp.gate_up_proj.weight_scale_inv")])
             act = add(f"SiluMul_v1{{I={I}}}", f"model.model.layers.0.mlp.act_fn/silu_and_mul_{s}[{k}]", [[["n", gu, 0, 2 * I]]])
             q2 = add(f"Fp8GroupQuant_v1{{K={I},G={G}}}", f"model.model.layers.0.mlp.down_proj/per_token_group_fp8_quant_{s}[{k}]", [[["n", act, 0, I]]])
-            dn = add(f"ScaledMmFp8Block_v1{{K={I},N={H},G={G}}}", f"model.model.layers.0.mlp.down_proj/cutlass_scaled_mm_{s}[{k}]",
+            dn = add(f"ScaledMmFp8BlockSharedScale_v1{{K={I},N={H},G={G}}}", f"model.model.layers.0.mlp.down_proj/cutlass_scaled_mm_{s}[{k}]",
                      [[["n", q2, 0, I]], [["n", q2, I, I + I // G]], W("model.model.layers.0.mlp.down_proj.weight"),
                       W("model.model.layers.0.mlp.down_proj.weight_scale_inv")])
             nm = add(f"RMSNormFusedCuda_v2{{N={H},EPS={EPS}}}", f"model.model.norm/fused_add_rms_norm_{s}[{k}]",
@@ -201,7 +201,7 @@ def test_honest_fp8_program_replays_bit_exactly_the_gemm_rows_are_vus_the_quant_
     assert rep["result"] is True and rep["grade"] == "complete", json.dumps(rep, indent=1, default=str)[:3000]
     assert rep["sample"]["mismatch_n"] == 0 and rep["sample"]["evaluated"] == rep["sample"]["picked"] > 0
     fams = set(rep["population"]["by_family"])
-    assert "ScaledMmFp8Block_v1" in fams and "RMSNormFusedCuda_v2" in fams and "SiluMul_v1" in fams
+    assert "ScaledMmFp8BlockSharedScale_v1" in fams and "RMSNormFusedCuda_v2" in fams and "SiluMul_v1" in fams
     assert "Fp8GroupQuant_v1" not in fams                                               # interior: no VU of its own
     interior = [k for k in rep["population"]["not_evaluable_by_family"] if k.startswith("Fp8GroupQuant_v1 (interior")]
     assert interior and rep["population"]["not_evaluable_by_family"][interior[0]] == 2 * 2 * (LP + T)   # 2 quants x 2 requests x rows
@@ -209,19 +209,19 @@ def test_honest_fp8_program_replays_bit_exactly_the_gemm_rows_are_vus_the_quant_
     gemm_strata = {k: v for k, v in rep["strata"].items() if k.startswith("ScaledMmFp8Block")}
     assert gemm_strata and all(v["evaluated"] >= 1 for v in gemm_strata.values())
     assert {k.split("|")[4].rsplit(".", 1)[-1] for k in gemm_strata} == {"gate_up_proj", "down_proj"}
-    assert rep["evaluators"]["ScaledMmFp8Block_v1"].startswith("verity_vllm.program.kernels.derived_rows.scaled_mm_fp8_block_row")
-    assert rep["evaluators"]["Fp8GroupQuant_v1"].startswith("verity_vllm.program.kernels.derived_rows.fp8_group_quant_row")
-    # [rev M-0100] the twins name what pinned them: fixture sha256 (the file in the tree), kernels, device, date, tests
+    assert rep["evaluators"]["ScaledMmFp8BlockSharedScale_v1"].startswith("verity.ml.definitions.numerics.derived_rows.scaled_mm_fp8_block_row")
+    assert rep["evaluators"]["Fp8GroupQuant_v1"].startswith("verity.ml.definitions.numerics.derived_rows.fp8_group_quant_row")
+    # the twins name what pinned them: fixture sha256 (the file in the tree), kernels, device, date, tests
     import hashlib
     from pathlib import Path
     prov = rep["evaluator_provenance"]
-    assert set(prov) == {"Fp8GroupQuant_v1", "ScaledMmFp8Block_v1"}
-    npz = Path(__file__).resolve().parents[2] / prov["ScaledMmFp8Block_v1"]["fixture"]
-    assert hashlib.sha256(npz.read_bytes()).hexdigest() == prov["ScaledMmFp8Block_v1"]["fixture_sha256"]
-    assert "cp-h100" in prov["ScaledMmFp8Block_v1"]["device"] and prov["ScaledMmFp8Block_v1"]["captured_utc"] == "2026-09-19"
+    assert set(prov) == {"Fp8GroupQuant_v1", "ScaledMmFp8BlockSharedScale_v1"}
+    npz = Path(__file__).resolve().parents[2] / prov["ScaledMmFp8BlockSharedScale_v1"]["fixture"]
+    assert hashlib.sha256(npz.read_bytes()).hexdigest() == prov["ScaledMmFp8BlockSharedScale_v1"]["fixture_sha256"]
+    assert "cp-h100" in prov["ScaledMmFp8BlockSharedScale_v1"]["device"] and prov["ScaledMmFp8BlockSharedScale_v1"]["captured_utc"] == "2026-09-19"
     assert "Embedding_v1" not in prov                                                    # registry-own evaluators carry no twin provenance
     # the record names the composition: the GEMM VU's inputs are the interior quant (from the committed norm / act row) + 8- and 32-bit weights
-    ev = [e for e in rep.get("evaluated_examples", []) if e.get("family") == "ScaledMmFp8Block_v1"] if isinstance(rep.get("evaluated_examples"), list) else []
+    ev = [e for e in rep.get("evaluated_examples", []) if e.get("family") == "ScaledMmFp8BlockSharedScale_v1"] if isinstance(rep.get("evaluated_examples"), list) else []
     if ev:
         kinds = [(x["kind"], x.get("family"), x.get("bits")) for x in ev[0]["inputs"]]
         assert ("interior", "Fp8GroupQuant_v1", None) in kinds and ("weights", None, 8) in kinds and ("weights", None, 32) in kinds
@@ -251,7 +251,7 @@ def test_flipped_fp8_gemm_output_word_fails_named(fp8_world):
     bmap, committed = fp8_world.bmap_and_reader(mutate=mutate)
     rep = SR.sampled_replay(_programs(fp8_world), bmap, committed, fp8_world.read, per_stratum=2, seed=5, workers=0)
     assert rep["result"] is False
-    assert any("ScaledMmFp8Block_v1 r0 step 1 model.layers.0.mlp.down_proj/out" in str(m.get("why")) for m in rep["mismatch"])
+    assert any("ScaledMmFp8BlockSharedScale_v1 r0 step 1 model.layers.0.mlp.down_proj/out" in str(m.get("why")) for m in rep["mismatch"])
 
 
 def test_perturbed_block_scale_fails_the_gemm_vu_a_load_bearing_registered_input(fp8_world):
@@ -271,7 +271,7 @@ def test_perturbed_block_scale_fails_the_gemm_vu_a_load_bearing_registered_input
 
 
 def test_weight_field_provided_in_the_wrong_width_is_refused_by_name_never_cast(fp8_world):
-    """A provider handing a Value<8> field as 16-bit words (the pre-R16 `np.uint16` cast) is an unresolved input, not a silent evaluation."""
+    """A provider handing a Value<8> field as 16-bit words (the older `np.uint16` cast) is an unresolved input, not a silent evaluation."""
     def read16(field, lo, hi):
         a = fp8_world.fields[field][lo:hi]
         return a.astype(np.uint16) if a.dtype == np.uint8 else a

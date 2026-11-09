@@ -1,21 +1,39 @@
-import Proofs.Flock.VBridge.Climb
+module
+
+public import Proofs.Flock.VBridge.Climb
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Hm.Commit
+import Proofs.Flock.Verifier.Hash
 
 /-!
 # V*'s opening: the row's leaf climbs to the top
 
-`_climb` of `verity_flock.rec_open`'s `RecOpen_v3` (rec-step3) and `RecOpen_v4` (#1347), which share it, as the
+`_climb` of `verity_flock.rec_open`'s `RecOpen_v3` and `RecOpen_v4`, which share it, as the
 verifier's builder (`Flock.HmNets`) states it: the leaf is plain SHA-512 of the row's bits from the IV (the inner
 statement's `flock-leaf/sha512-unsalted`), it climbs `H` levels through the siblings in `aux` (512 bits each, bottom up)
 at the directions `d` (`climbFrom`), and `out` is the node reached and 512 zero bits.
 
 `sound_climbRow`: whenever the rows hold, if the row's forms carry its bytes, `aux`'s sibling forms carry 64-byte siblings
-and the directions are the position's low bits, `out` carries the verifier of record's climb of the row's leaf,
+and the directions are the position's low bits, `out` carries the verifier's climb of the row's leaf,
 `Flock.climb ms (SHA-512(row))`, then 64 zero bytes: `rec_open.expected` of that node.
 
 `out` is half of `_steps`; the other half, `acc_out` (the opening's share of the consistency sums, `cons_structure`), is
 `rec_residuals.residual_forms` at `cons_structure(LANES)` and waits on that gadget's statement.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 

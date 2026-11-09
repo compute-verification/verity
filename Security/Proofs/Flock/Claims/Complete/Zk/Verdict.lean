@@ -1,5 +1,40 @@
-import Proofs.Flock.Claims.Complete.Verdict
-import Proofs.Flock.Claims.Complete.Zk.Session
+module
+
+public import Proofs.Flock.Claims.Complete.Verdict
+public import Proofs.Flock.Claims.Complete.Zk.Session
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
 # The masked verdict accepts when each of its checks passes
@@ -16,6 +51,8 @@ composes into acceptance. B's checks are the plain ones (`checks_ok`, generic in
 * **The masked verdict** (`zk_verifyWith_ok`): `verifyWith_ok`'s checks, the keyed coin tree, and each table's `--zk`
   schedule (`zkSchedsOf`) in place of fast100's.
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy Transcript
 
@@ -36,7 +73,7 @@ def repConsZk (rp : Zk.Replayed) (p : Proof) : Array (String × Zk.Lin) :=
 
 /-- **A masked rep accepts** when each of its checks passes, each from the transcript the previous one left. -/
 theorem zk_verifyRepWith_ok (hs : Flock.Hashes V) (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : ℕ)
-    (sess : Session) (i r : ℕ) (bytes : ByteArray) {stream : StreamRec} {extras : Array Claim} {zp : Zk.ZkProof}
+    (sess : RunRecord) (i r : ℕ) (bytes : ByteArray) {stream : StreamRec} {extras : Array Claim} {zp : Zk.ZkProof}
     {rp : Zk.Replayed} {T : F128} {sws : Array Switched} {rec : Zk.L0Rec} {lg : Array (String × Zk.Lin)}
     {t₁ t₂ t₃ t₄ : Transcript}
     (hS : sess.streams.find? (·.name == s!"{spec.tables[i]!}/rep{r}") = some stream)
@@ -81,7 +118,7 @@ def zkSchedsOf (tabs : Array Setup) : Array (Schedule × ℕ) := tabs.map fun st
 
 /-- **The masked verdict accepts** when each of its checks passes. -/
 theorem zk_verifyWith_ok (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup) (record : String)
-    (proofs : Array ByteArray) {sess : Session}
+    (proofs : Array ByteArray) {sess : RunRecord}
     (hT : (tabs.size != spec.tables.size || tabs.size == 0) = false)
     (hCT : spec.coinTree.isNone = false)
     (hD : Record.decodeWith (Flock.Hashes.ofSha512 h : Flock.Hashes V) spec record = Except.ok sess)

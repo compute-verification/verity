@@ -1,8 +1,41 @@
-import Mathlib
-import Proofs.Pouw.RelativeSecurity
+module
+
+public import Proofs.Pouw.RelativeSecurity
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Topology.Sheaves.Init
 
 /-!
-# Attention's noise at every operand value (ATTN-NOISE)
+# Attention's noise at every operand value
 
 On the design `dP`/`dX` (`Definitions.Pouw.RelativeSecurity`): the peeled side `P̃ = P + U`, `U` of period `L` per
 row from the planes `β_p(i, j)` at weights `w`, and the served side `X = V + b` with a fresh coin per entry. Adopted
@@ -10,7 +43,7 @@ P·V (H1's `peel`: `P̃ = P_prob − 64 + U(·, κ mod 32)`, `X = V + b`) is thi
 
 * `pairDiff_dPrefix_operands`: a committed prefix word's second differences don't read the operands, so every floor
   the chain lemma (`chain_products_ge`, `chainBound_gProd`) gives holds at every `P` and `V` alike: the zero instance,
-  a one-hot or uniform `P`, `V = 0`. A cheater gains nothing on the words by choosing operands, so RT-COMPOSE's B3
+  a one-hot or uniform `P`, `V = 0`. A cheater gains nothing on the words by choosing operands, so the zero-operand case
   (`K = V = 0` for one KV head) leaves the words' floor whole.
 * `dPrefix_split`: the word at `(P, V)` is the noise's own product's word (the word at `P = 0`) plus the clean
   product `Σ P X` (`dClean`), which is bit-affine (`crossRankLe_dClean`: cross rank 0). The peel, the noise's own
@@ -20,6 +53,8 @@ P·V (H1's `peel`: `P̃ = P_prob − 64 + U(·, κ mod 32)`, `X = V + b`) is thi
   every word is bit-affine and no chain bound holds, for any class of products and any factor: B3's collapse is
   exactly the one-sided case.
 -/
+
+@[expose] public section
 
 namespace Pouw.RelativeSecurity
 

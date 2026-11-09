@@ -6,11 +6,14 @@ A Build vouches for its own device only.  What the served Program binds is the d
     (wgmma), on cc 10.0 (tcgen05.mma kind::f16, silicon `sm100.tcgen05.mma.bf16`) and on cc 12.0 (mma.sync m16n8k16, silicon
     `sm120.mma.m16n8k16.bf16`): the same pipeline;
   * the attention kernel, FLASH_ATTN at the version `ATTENTION` names for the step family: vLLM's selection at its defaults on cc 9.0
-    (FA3, `fa3_launch`) and cc 12.0 (FA2, `fa2_launch`); on cc 10.0, where vLLM's default is FLASHINFER, the row declares FLASH_ATTN
+    (FA3, `fa3_launch`) and cc 12.0 (FA2, `fa2_launch`); on cc 10.0, where vLLM's default is FLASHINFER, the workload declares FLASH_ATTN
     FA2 (`engine.args`, with its `engine.reasons`), whose mma.sync m16n8k16 there is the same pipeline (`sm100.mma.m16n8k16.bf16`);
   * the Triton kernels' compile target (`inductor_templates.FLAGS`).
 
-A device without one of them is refused with every missing binding by name (`device_of`), never bound to another device's.
+A device without one of them is refused with every missing binding by name (`device_of`), never bound to another device's.  A served
+target is held to its card file first (`card_of`: `engine.profiles.devices.CARD`, `verity.hardware`): a device whose compute
+capability or SM count is not its card's is refused, naming each field, both values and the card file.  Only a target
+`engine.profiles.devices.NO_CARD` lists is held to none, and any other is refused.
 
 FA2 (vllm-flash-attn 506341a1 `mha_varlen_fwd`, at the `num_splits = 0` vLLM's FA2 metadata passes) runs a launch whose every
 sequence has one query row as a non-causal swapped decode (a GQA model's query heads as rows), its split count `fa2_num_splits` at the
@@ -21,6 +24,7 @@ kernel's tile unsplit (`Attention_v5`, kBlockN `fa2_split_kblock_n`, FA2's causa
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -28,17 +32,19 @@ import numpy as np
 
 from verity_vllm.acquire import inductor_templates as T
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
+from verity_vllm.engine.profiles.devices import CARD, NO_CARD
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget, gemm_target_for
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.kernels import fa3_model as FA3
-from verity_vllm.program.registry import attention_vocab
-from verity_vllm.program.registry import fa2_check_inf as F2
-from verity_vllm.program.registry import fa2_split as W
-from verity_vllm.program.registry import fa3_check_inf as F3
-from verity_vllm.program.registry import inductor as IR
-from verity_vllm.program.registry.hopper import Fa3InvSum
-from verity_vllm.program.registry.prims import Fa2InvSum
+from verity.hardware import load
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.numerics import fa3_model as FA3
+from verity.ml.definitions.registry import attention_vocab
+from verity.ml.definitions.registry import fa2_check_inf as F2
+from verity.ml.definitions.registry import fa2_split as W
+from verity.ml.definitions.registry import fa3_check_inf as F3
+from verity.ml.definitions.registry import inductor as IR
+from verity.ml.definitions.registry.hopper import Fa3InvSum
+from verity.ml.definitions.registry.prims import Fa2InvSum
 
 #: the FLASH_ATTN version each step family's served attention Definitions model
 ATTENTION = {"hopper": 3, "blackwell_consumer": 2, "blackwell": 2}
@@ -46,9 +52,9 @@ BACKEND = "FLASH_ATTN"
 
 
 @dataclass(frozen=True)
-class Device:
-    """A served Build's device: its compute capability and SM count, its GEMMs' k16 step, its attention kernel ("FA3" | "FA2") and,
-    under FA2, the max_model_len a FULL graph's split count reads."""
+class DeviceBindings:
+    """A served Build's device bindings: its compute capability and SM count, its GEMMs' k16 step, its attention kernel
+    ("FA3" | "FA2") and, under FA2, the max_model_len a FULL graph's split count reads."""
     cc: tuple[int, int]
     sms: int
     dot: Any
@@ -63,11 +69,15 @@ class Device:
                 "attention": self.attention, "max_model_len": self.max_model_len}
 
 
-def device_of(cc: Any, sms: int, *, attention: list[dict[str, Any]] | None = None, max_model_len: int | None = None) -> Device:
-    """The Device of compute capability `cc`; `attention` the attention kernels the serving engine selected (`served_match.facts_of`:
-    [{"backend", "fa_version"}]), held to the device's when a process reports them.  Raises `Unmodelled` naming every binding the
-    device lacks."""
+def device_of(cc: Any, sms: int, *, card: str | None = None, attention: list[dict[str, Any]] | None = None,
+              max_model_len: int | None = None) -> DeviceBindings:
+    """The device bindings of compute capability `cc`; `card` the SKU of the card the served target is registered on (`card_of`), whose
+    compute capability and SM count the device must have; `attention` the attention kernels
+    the serving engine selected (`served_match.facts_of`: [{"backend", "fa_version"}]), held to the device's when a process reports
+    them.  Raises `Unmodelled` naming each field that is not the card's, else every binding the device lacks."""
     cc = (int(cc[0]), int(cc[1]))
+    if card is not None:
+        check_card(cc, int(sms), card)
     missing, dot, fam = [], None, None
     try:
         gt = gemm_target_for(cc, batch_invariant=False)
@@ -85,7 +95,31 @@ def device_of(cc: Any, sms: int, *, attention: list[dict[str, Any]] | None = Non
         missing.append("max_model_len (FA2's full-graph split count reads it)")
     if missing:
         raise Unmodelled(f"cc {cc[0]}.{cc[1]}: no binding for " + "; ".join(missing))
-    return Device(cc, int(sms), dot, f"FA{want}", max_model_len)
+    return DeviceBindings(cc, int(sms), dot, f"FA{want}", max_model_len)
+
+
+def card_of(name: str) -> str | None:
+    """The SKU of the card the served target `name` (the name its device reports) is registered on; None for a target `NO_CARD`
+    lists.  Any other name is refused."""
+    if name in CARD:
+        return CARD[name]
+    if name in NO_CARD:
+        return None
+    raise Unmodelled(f"device {name!r} is in neither engine.profiles.devices.CARD ({sorted(CARD)}) nor NO_CARD ({sorted(NO_CARD)}): "
+                     "add its card under verity/hardware/cards/ and map it in CARD")
+
+
+def check_card(cc: tuple[int, int], sms: int, sku: str) -> None:
+    """Refuse a device whose compute capability or SM count is not that of card `sku` (its `arch` and `sm.count`)."""
+    c = load(sku)
+    arch = re.fullmatch(r"sm_(\d+)(\d)[af]?", c["arch"])
+    if arch is None:
+        raise Unmodelled(f"verity/hardware/cards/{sku}.toml: arch {c['arch']!r} names no compute capability")
+    fields = (("compute capability", f"{cc[0]}.{cc[1]}", f"{arch[1]}.{arch[2]}"),
+              ("SM count", str(sms), str(c["sm"]["count"]["value"])))
+    off = [f"{name} {got}, the card's {want}" for name, got, want in fields if got != want]
+    if off:
+        raise Unmodelled(f"the device is not its registered card verity/hardware/cards/{sku}.toml: " + "; ".join(off))
 
 
 # ------------------------------------------------------------------------------------------------------------- FA3 (cc 9.0)
@@ -95,7 +129,7 @@ def fa3_splits(qlens: list[int], klens: list[int], *, NH: int, KVH: int, D: int,
     blocks per split = ceil(total m x n blocks x 1.1 x KVH / SMs) in f32 with div.full)."""
     g = NH // KVH
     max_q, max_k = max(qlens), max(klens)
-    BM, BN = FA3.kblock_m_for(D, max_q, g), FA3.kblock_n_for(D, max_q, g)
+    BM, BN = FA3.modelled_tile(D, max_q, g)
     nmb = [-(-(q * g) // BM) for q in qlens]
     nnb = [-(-k // BN) for k in klens]
     if split_cap > 0:
@@ -149,7 +183,7 @@ def fa2_attention_rows(qlen: int, klen: int, launch: dict[str, Any], *, NH: int,
     return [bound(W.Fa2AttentionSplit, T=klen, NS=NS, NH=NH, KVH=KVH, D=D, BN=BN, DOT=dot, INV=Fa2InvSum, MASKED_FROM=mf)]
 
 
-def launch(device: Device, qlens: list[int], klens: list[int], heads: tuple[int, int, int], *, mode: str, padded: int, split_cap: int,
+def launch(device: DeviceBindings, qlens: list[int], klens: list[int], heads: tuple[int, int, int], *, mode: str, padded: int, split_cap: int,
            capture_sizes: list[int]) -> tuple[list[int], list[list[dict[str, Any]]], dict[str, Any]]:
     """One step's attention launch on `device`: each request's split count and row Definitions, and the plan's record of the launch
     (its key "fa3" or "fa2")."""

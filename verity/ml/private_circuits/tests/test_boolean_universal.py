@@ -1,5 +1,5 @@
-"""`verity.ml.private_circuits.universal`: the universal unit agrees with `interpret` on random netlists (in range and not), through the
-plain-integer reference and the bit-sliced evaluator; padding leaves a netlist's outputs unchanged; the unit is a function of its
+"""`verity.ml.private_circuits.universal`: the universal unit agrees with `interpret` on random private circuits (in range and not), through the
+plain-integer reference and the bit-sliced evaluator; padding leaves a private circuit's outputs unchanged; the unit is a function of its
 class alone, pinned by gate counts and program digest, with exactly `and_count` ANDs."""
 from __future__ import annotations
 
@@ -59,7 +59,7 @@ def test_the_ands_are_the_closed_form(cls) -> None:
 
 @pytest.mark.parametrize("cls", sorted(PINS), ids=str)
 def test_the_unit_is_a_function_of_its_class(cls) -> None:
-    """Its circuit is pinned by digest: no netlist enters it but as the values of op, src and out."""
+    """Its circuit is pinned by digest: no private circuit enters it but as the values of op, src and out."""
     ands, xors, nots, digest = PINS[cls]
     target = _unit(*cls)
     assert BL.is_boolean(target) and target is _unit(*cls)
@@ -96,8 +96,8 @@ def _decode(op, src, out, G: int, N_IN: int, N_OUT: int) -> U.Netlist:
 
 
 def test_every_program_bit_flip_is_another_netlist_on_the_same_circuit() -> None:
-    """Each netlist one program bit away from a random one, run by the one circuit of the class, gives the outputs `interpret`
-    gives for that netlist: program bits are values only."""
+    """Each private circuit one program bit away from a random one, run by the one circuit of the class, gives the outputs
+    `interpret` gives for that private circuit: program bits are values only."""
     cls = G, N_IN, N_OUT = 16, 16, 8
     rng = random.Random(11)
     target = _unit(*cls)

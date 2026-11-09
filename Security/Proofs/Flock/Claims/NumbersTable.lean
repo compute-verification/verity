@@ -1,5 +1,21 @@
-import Proofs.Flock.Soundness.Discharge.FailClosed.Numeric
-import Proofs.Flock.Soundness.Discharge.ZkSession.Numbers
+module
+
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Numeric
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Accounting.Numbers
 
 /-!
 # Flock's table error at the deployed parameters: `ε_table ≤ 2^{−205}`, with and without `--zk`
@@ -10,13 +26,15 @@ most `2^{−205}` per table, at every statement in scope:
 * without `--zk`, at every `fast100` schedule (`22 ≤ m ≤ 35`) and every shape in `Stmt.InRangeWide`, the shapes of every
   table flock-verify plans (`εtable_plain`, `tableError_le_205_wide`); the rational bound's worst case is `2^{−205.011}`,
   at `m = 34`;
-* with `--zk`, at C-Flock ZK's parameters (`TabZK.M1`: the padded level 0 of `m1Schedule m`, `25 ≤ m ≤ 35`, and the
+* with `--zk`, at Flock ZK's parameters (`TabZK.M1`: the padded level 0 of `m1Schedule m`, `25 ≤ m ≤ 35`, and the
   inner proof with 168 queries, `N ≤ 2^13` and `δ ≥ 7/16`), `padLinkError + (padRepError + εInner)² ≤ 2^{−205}`
   (`εtable_zk`). `TabZK.bound_le_m1` gave `2^{−203}`, from `(a + b)² ≤ 2a² + 2b²`; here the square is kept, with
   `εInner ≤ (2^13 + 3)/2^128 + (9/16)^168 ≈ 2^{−115}` (`innerUp`, `εInner_le_innerUp`) next to
   `padRepError ≲ 2^{−102.5}`, and one kernel check per `m` (`m1_check_zk`). Its worst case is `2^{−205.008}`, at
   `m = 34`.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock.Numbers
 
@@ -26,13 +44,13 @@ open scoped ENNReal NNReal
 /-! ## Without `--zk` -/
 
 /-- **`ε_table ≤ 2^{−205}` without `--zk`**: at every `fast100` schedule and every shape of a planned table. -/
-theorem εtable_plain {m : ℕ} {s : Schedule} (hs : fast100 m = some s) (st : Stmt) (hst : st.InRangeWide) :
-    tableError s st ≤ (2 : ℝ) ^ (-(205 : ℝ)) :=
+theorem εtable_plain {m : ℕ} {s : Schedule} (hs : fast100 m = some s) (st : FlockSoundness.Accounting.Stmt)
+    (hst : st.InRangeWide) : tableError s st ≤ (2 : ℝ) ^ (-(205 : ℝ)) :=
   tableError_le_205_wide hs st hst
 
 /-! ## With `--zk` -/
 
-/-- The inner proof's error at C-Flock ZK's parameters, rationally: `(2^13 + 3)/2^128 + (9/16)^168`. -/
+/-- The inner proof's error at Flock ZK's parameters, rationally: `(2^13 + 3)/2^128 + (9/16)^168`. -/
 def innerUp : ℚ := (2 ^ 13 + 3) / 2 ^ 128 + (9 / 16) ^ 168
 
 theorem innerUp_nonneg : (0 : ℝ) ≤ (innerUp : ℝ) := by
@@ -89,8 +107,9 @@ theorem m1_check_zk (m : ℕ) (h1 : 25 ≤ m) (h2 : m ≤ 35) :
   · exact m1_check_zk_34_35 m (by omega) h2
 
 /-- `padRepError ≤ padRepUp` at any schedule of two levels or more. -/
-theorem padRepError_le_of (s : Schedule) (st : Stmt) (hst : st.InRange) (t e : ℕ) (sbar : ℚ)
-    (h2 : 2 ≤ s.levels.length) (hp : PadNumOK (s.levels.headD default) t sbar) (hok : ∀ l ∈ s.levels, l.Ok) :
+theorem padRepError_le_of (s : Schedule) (st : FlockSoundness.Accounting.Stmt) (hst : st.InRange) (t e : ℕ)
+    (sbar : ℚ) (h2 : 2 ≤ s.levels.length) (hp : PadNumOK (s.levels.headD default) t sbar)
+    (hok : ∀ l ∈ s.levels, l.Ok) :
     padRepError s st t e ≤ (padRepUp s t e sbar : ℝ) := by
   obtain ⟨m, k0, levels, ext⟩ := s
   rcases levels with _ | ⟨l₀, _ | ⟨l₁, rest⟩⟩
@@ -98,7 +117,7 @@ theorem padRepError_le_of (s : Schedule) (st : Stmt) (hst : st.InRange) (t e : �
   · simp at h2
   · exact padRepError_le m k0 l₀ l₁ rest ext t e sbar hp (fun l hl => hok l (List.mem_cons_of_mem _ hl)) st hst
 
-/-- **`ε_table ≤ 2^{−205}` with `--zk`**: a `--zk` table's bound at C-Flock ZK's parameters. -/
+/-- **`ε_table ≤ 2^{−205}` with `--zk`**: a `--zk` table's bound at Flock ZK's parameters. -/
 theorem εtable_zk {F : Type} [Field F] [Fintype F] [DecidableEq F] {mPts : ℕ} (hF : Fintype.card F = 2 ^ 128)
     (T : TabZK F mPts) (hT : T.M1) : T.bound ≤ ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) := by
   obtain ⟨m, h1, h2, hsch, ht, he, hst, hN, hq, hδ⟩ := hT

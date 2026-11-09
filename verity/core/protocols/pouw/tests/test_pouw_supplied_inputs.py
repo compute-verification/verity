@@ -1,11 +1,10 @@
-"""CMP-38 and SERVE-H1's W-a, W-c and W-d: the H1 tile's seed inputs are the verifier's. A compiled Program's `pouw.roots`,
+"""The H1 tile's seed inputs are the verifier's. A compiled Program's `pouw.roots`,
 `pouw.salt` and `pouw.positions` are registered values the one-stage verifier fills itself (`registered.supplied_root`):
 each seed group's roots from the roots the record names for its operands (A's committed tap, B's registered weights,
 which the verifier pins to the root recorded before the salt), the salt from its coin bound to its stream, the prover
-and the record's window, and each unit's position after every unit of the log's earlier records. A registration that names any other commitment of
-them is refused (`R7-supplied`), so the red team's witnesses (`benchmarks/rate_redteam/pouw_roots_unbound.py`, roots fixed
-at zero and A = -b under them; `h1_position_replay.py`, one computed unit at one position under one salt credited twice)
-no longer have a tile to serve."""
+and the record's execution phase, and each unit's position after every unit of the log's earlier records. A registration that names any other commitment of
+them is refused (`R7-supplied`), so the two attacks (roots fixed at zero and A = -b under them; one computed unit at one
+position under one salt credited twice) no longer have a tile to serve."""
 from __future__ import annotations
 
 import hashlib
@@ -19,17 +18,17 @@ from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.types import Array
-from verity.core.protocols.pouw.circuit import compile as C
-from verity.core.protocols.pouw.circuit import h1tile as H
-from verity.core.protocols.pouw.circuit import seeds as SD
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G, registration as R
+from verity.ml.protocols.pouw.circuit import compile as C
+from verity.ml.protocols.pouw.circuit import h1tile as H
+from verity.ml.protocols.pouw.circuit import seeds as SD
+from verity.core.protocols.spot.one_stage import partition as P, registered as G, registration as R
 
-pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment, E2E-120) are not on this tree")
+pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment) are not on this tree")
 I8 = Array(8, BL.BIT)
 COIN = hashlib.sha512(b"the window's coin").hexdigest()
 SCHEME = "frame-v3-sha512/hm96-sha512"
 LAW = {"law": "subset", "k": 1}
-#: the verifier's binding (its stream's digest and the prover's registered identity), which the record's window names
+#: the verifier's binding (its stream's digest and the prover's registered identity), which the record's execution phase names
 BINDING = {"stream": hashlib.sha512(b"the stream").hexdigest(), "prover": "a0" * 32}
 WINDOW = {"kind": "served", "row": 1, "run": "r-pouw-supplied", **BINDING}
 
@@ -48,7 +47,7 @@ GRID = CompositeDefinition("PouwSuppliedGrid", 1, ("R", "C", "K"),
 
 def sources(c: C.Compiled) -> dict:
     """The verifier's sources of the seed inputs: A is the served port `x` and B the registered weights `w` (one seed
-    group), the salt its coin bound to its binding and the record's window, and unit u's position `u.slot` after the log's units."""
+    group), the salt its coin bound to its binding and the record's execution phase, and unit u's position `u.slot` after the log's units."""
     return {C.ROOTS: [[{"port": "x"}, {"value": "w"}]], C.SALT: [[{"window": COIN}]],
             C.POSITIONS: [[{"position": str(u.slot)}] for u in c.units]}
 
@@ -56,7 +55,7 @@ def sources(c: C.Compiled) -> dict:
 @pytest.mark.slow
 def test_the_verifier_fills_the_seed_inputs_the_compiled_program_reads():
     """On a compiled 4 x 16 H1 tile at K = 64: the rows the verifier fills are the leaves `Compiled.inputs` gives the Program
-    for the record's roots, the window's salt and positions after the log's, each unit reads its own row, the honest record
+    for the record's roots, the execution phase's salt and positions after the log's, each unit reads its own row, the honest record
     passes R7 with `w` pinned, and the witness's zero roots are `R7-supplied`. Slow (about 2 min: the compile, and each
     check's program digest and population over the tile's SHA-512 gates); it is the only test that the verifier fills
     the leaves the compiled Program's seeds read, which `test_registered` checks on a small composite only."""
@@ -92,7 +91,7 @@ def test_the_verifier_fills_the_seed_inputs_the_compiled_program_reads():
 
 
 def test_the_roots_witness_no_longer_cancels_the_noise():
-    """The red team's roots witness fixes roots r0 and sets A = -b(seed(salt, position, r0)), so X = A + b is zero and the
+    """The roots witness fixes roots r0 and sets A = -b(seed(salt, position, r0)), so X = A + b is zero and the
     receipt is the same at every B. With `pouw.roots` the roots the operands open (here x's root a function of A, standing in
     for its frame-v3 root), the noise is seeded from A's own commitment: X is not zero, and the receipt moves with B."""
     r, c_, k, pos = 4, 8, 64, 0
@@ -111,9 +110,9 @@ def test_the_roots_witness_no_longer_cancels_the_noise():
 
 
 def test_the_replay_witness_gets_no_second_receipt():
-    """The red team's replay witness serves one A and B twice at one position under one salt, and the second receipt is a
+    """The replay witness serves one A and B twice at one position under one salt, and the second receipt is a
     copy of the first. With the verifier's positions and salts, the second serving is a later record of the log (its
-    positions after the first's population), another window (its own salt), or the same window in another stream or for
+    positions after the first's population), another execution phase (its own salt), or the same execution phase in another stream or for
     another prover (whose log starts its positions over, but whose salt is bound to it): each time another seed, a fresh
     receipt."""
     rng = random.Random(3)

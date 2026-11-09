@@ -1,7 +1,42 @@
-import Proofs.Flock.Claims.Recursion.PartsCompose
+module
+
+public import Proofs.Flock.Claims.Recursion.PartsCompose
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import all Init.Data.Array.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Json.Decode
-import Proofs.Flock.Soundness.Refine.Exec
-import Std.Data.TreeMap.Raw.AdditionalOperations
 
 /-!
 # The deployed plain verifier with the record's coins read from the live coins (`nextCs`)
@@ -10,7 +45,7 @@ The plain verifier's custody (`FlockDeploy.custody`) compares the coins the reco
 and its verdict (`verdictM`) reads the coins off the record. `nextCs` is the plain verifier's step with the record's
 coins substituted after parsing: at a decision whose record parses to `j`, it runs the verdict (`verifyJWithM`) and
 custody's reading (`liveOfJ`) at `coinSubJ spec c₁ mids j`, `j` with its coins replaced by the live coins, while the
-statement and draw checks and S0 (`RecordText.check`) read the record's text as the plain verifier does. A record that
+statement and sample checks and S0 (`RecordText.check`) read the record's text as the plain verifier does. A record that
 is not JSON is decided as the plain verifier decides it.
 
 * **Reading at a parsed value** (`liveOfJ`, `verdictJM`, `checksJ`, `decisionJ`): the plain verifier's readers after
@@ -30,7 +65,7 @@ Three facts, and custody:
   (`verifyJWithM`) covers it.
 * **The coin text is not read** (`decisionCsAt_coinBlind`, `nextCs_coinBlind`): two decisions whose records are in
   their canonical text (S0 passes, `RecordText.check_of`) and parse to values equal once their coins are erased, with
-  the same statement, proofs and draw, step alike.
+  the same statement, proofs and sample, step alike.
 * **Custody holds by construction** (`liveOfJ_points`, `liveOfJ_coins`, `custody_coinSubJ`): at the substituted value
   custody's points are the first coin's and, at rep streams of distinct names, every recorded round it pairs with a
   round message carries the first `n` of that message's coin (`f128s_map`, the hex round trip), so custody is its
@@ -39,6 +74,8 @@ Three facts, and custody:
 A coin is answered as the plain verifier answers it (`nextCs_coin`), so `bdDeployed` at `nextCs` splits as at `next`
 (`RecDeploy.decompB_nextCs`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 
@@ -74,7 +111,7 @@ def liveOfJ (spec : SessionSpec) (j : Json) : Flock.V Live := do
   let streams ← spec.repStreams.mapM fun (_, _, name) => streamJ recs name
   pure ⟨rootB, publics, points, streams⟩
 
-theorem liveOf_of_parse (spec : SessionSpec) {record : String} {j : Json} (h : Json.parse record = .ok j) :
+theorem liveOf_of_parse (spec : SessionSpec) {record : String} {j : Json} (h : Flock.JsonParse.parse record = .ok j) :
     liveOf spec record = liveOfJ spec j := by
   unfold liveOf
   rw [h]
@@ -87,12 +124,12 @@ def verdictJM {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT
 
 theorem verdictM_of_parse {M : Type → Type} [Monad M] [LawfulMonad M] [MonadExceptOf String M] [MonadLiftT Flock.V M]
     (zk : Bool) (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) {record : String} {j : Json}
-    (proofs : Array ByteArray) (h : Json.parse record = .ok j) :
+    (proofs : Array ByteArray) (h : Flock.JsonParse.parse record = .ok j) :
     verdictM zk hs spec tabs record proofs = verdictJM zk hs spec tabs j proofs := by
   unfold verdictM verdictJM
   rw [verifyWithM_of_parse hs spec tabs proofs h, Zk.verifyWithM_of_parse hs spec tabs proofs h]
 
-/-- `checks` with custody reading the parsed value `j`; the statement and draw checks and S0 read the record's text. -/
+/-- `checks` with custody reading the parsed value `j`; the statement and sample checks and S0 read the record's text. -/
 def checksJ (zk : Bool) (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List ByteArray × List ByteArray)
     (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : Final) (j : Json) : Flock.V Unit := do
   Record.check (f.stmt == x) "live: the last message's statement is not the statement"
@@ -100,12 +137,12 @@ def checksJ (zk : Bool) (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : 
     "live: the record's draw is not the statement's"
   custody spec (← liveOfJ spec j) link c₁ mids
   s.read.check
-  (if s.read.draw.isNone then ProvedScope.drawLaw zk s.read.tags none else pure ())
+  (if s.read.draw.isNone then ProvedScope.drawLaw zk s.read.tags false none else pure ())
   RecordText.check f.record
 
 theorem checks_of_parse (zk : Bool) (s : Ins) (spec : SessionSpec) (x : Claims.Msg)
     (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) {f : Final} {j : Json}
-    (h : Json.parse f.record = .ok j) : checks zk s spec x link c₁ mids f = checksJ zk s spec x link c₁ mids f j := by
+    (h : Flock.JsonParse.parse f.record = .ok j) : checks zk s spec x link c₁ mids f = checksJ zk s spec x link c₁ mids f j := by
   unfold checks checksJ
   rw [liveOf_of_parse spec h]
 
@@ -118,7 +155,7 @@ def decisionJ (zk : Bool) (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x :
 
 theorem decisionAt_of_parse (zk : Bool) (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Claims.Msg)
     (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) {f : Final} {j : Json}
-    (h : Json.parse f.record = .ok j) :
+    (h : Flock.JsonParse.parse f.record = .ok j) :
     decisionAt zk s spec sts x link c₁ mids f = decisionJ zk s spec sts x link c₁ mids f j := by
   unfold decisionAt decisionJ
   rw [verdictM_of_parse zk _ spec _ _ h, checks_of_parse zk s spec x link c₁ mids h]
@@ -229,7 +266,7 @@ decided as the plain verifier decides it. -/
 def decisionCsAt (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Claims.Msg)
     (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : Final) :
     Claims.OCV Unit :=
-  match Json.parse f.record with
+  match Flock.JsonParse.parse f.record with
   | .ok j => decisionJ false s spec sts x link c₁ mids f (coinSubJ spec c₁ mids j)
   | .error _ => decisionAt false s spec sts x link c₁ mids f
 
@@ -263,7 +300,7 @@ theorem nextCs_decide {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {
 checks at `coinSubJ spec c₁ mids j`. -/
 theorem decisionCsAt_parse (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Claims.Msg)
     (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) {f : Final} {j : Json}
-    (hj : Json.parse f.record = .ok j) :
+    (hj : Flock.JsonParse.parse f.record = .ok j) :
     decisionCsAt s spec sts x link c₁ mids f = decisionJ false s spec sts x link c₁ mids f (coinSubJ spec c₁ mids j) := by
   simp only [decisionCsAt, hj]
 
@@ -271,14 +308,14 @@ theorem decisionCsAt_parse (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x 
 decision is the plain one. -/
 theorem decisionCsAt_canonical (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Claims.Msg)
     (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) {f : Final} {j : Json}
-    (hj : Json.parse f.record = .ok j) (hk : coinSubJ spec c₁ mids j = j) :
+    (hj : Flock.JsonParse.parse f.record = .ok j) (hk : coinSubJ spec c₁ mids j = j) :
     decisionCsAt s spec sts x link c₁ mids f = decisionAt false s spec sts x link c₁ mids f := by
   rw [decisionCsAt_parse s spec sts x link c₁ mids hj, hk, decisionAt_of_parse false s spec sts x link c₁ mids hj]
 
 /-- **Plain acceptance carries over** at the decision: at a record that parses to a value the substitution fixes at
 every session, `decisionCs` is the plain `decision`. -/
 theorem decisionCs_canonical (s : Ins) (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-    (mids : List (Claims.Msg × Coin)) {f : Final} {j : Json} (hj : Json.parse f.record = .ok j)
+    (mids : List (Claims.Msg × Coin)) {f : Final} {j : Json} (hj : Flock.JsonParse.parse f.record = .ok j)
     (hk : ∀ spec, coinSubJ spec c₁ mids j = j) : decisionCs s x link c₁ mids f = decision false s x link c₁ mids f := by
   unfold decisionCs decision
   congr 1
@@ -290,15 +327,15 @@ theorem decisionCs_canonical (s : Ins) (x : Claims.Msg) (link : List ByteArray �
 session, `nextCs` is the plain `next`. -/
 theorem nextCs_canonical {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
-    {j : Json} (h : act false x as cs = .decide s spec sts link c₁ mids f) (hj : Json.parse f.record = .ok j)
+    {j : Json} (h : act false x as cs = .decide s spec sts link c₁ mids f) (hj : Flock.JsonParse.parse f.record = .ok j)
     (hk : ∀ spec', coinSubJ spec' c₁ mids j = j) : nextCs x as cs = next false x as cs := by
   simp only [nextCs, next, h, decisionCs_canonical s x link c₁ mids hj hk]
 
 /-- **The coin text is not read** at a session: two records in their canonical text that parse to values equal once
-their coins are erased, with the same statement, proofs and draw, are decided alike. -/
+their coins are erased, with the same statement, proofs and sample, are decided alike. -/
 theorem decisionCsAt_coinBlind (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Claims.Msg)
     (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) {f₁ f₂ : Final}
-    {j₁ j₂ : Json} (hj₁ : Json.parse f₁.record = .ok j₁) (hj₂ : Json.parse f₂.record = .ok j₂)
+    {j₁ j₂ : Json} (hj₁ : Flock.JsonParse.parse f₁.record = .ok j₁) (hj₂ : Flock.JsonParse.parse f₂.record = .ok j₂)
     (he : eraseCoins j₁ = eraseCoins j₂) (hst : f₁.stmt = f₂.stmt) (hp : f₁.proofs = f₂.proofs)
     (hd : FlockSoundness.Discharge.Exec.recordDraw f₁.record = FlockSoundness.Discharge.Exec.recordDraw f₂.record)
     (hc₁ : RecordText.printT j₁ = f₁.record) (hc₂ : RecordText.printT j₂ = f₂.record) :
@@ -308,12 +345,12 @@ theorem decisionCsAt_coinBlind (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
 
 /-- **The coin text is not read**: two decisions on the same session, link, first coin and round messages whose
 records are in their canonical text and parse to values equal once their coins are erased, with the same statement,
-proofs and draw, step alike. -/
+proofs and sample, step alike. -/
 theorem nextCs_coinBlind {x : Claims.Msg} {as₁ as₂ : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec₁ spec₂ : SessionSpec} {sts₁ sts₂ : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f₁ f₂ : Final} (h₁ : act false x as₁ cs = .decide s spec₁ sts₁ link c₁ mids f₁)
     (h₂ : act false x as₂ cs = .decide s spec₂ sts₂ link c₁ mids f₂) {j₁ j₂ : Json}
-    (hj₁ : Json.parse f₁.record = .ok j₁) (hj₂ : Json.parse f₂.record = .ok j₂) (he : eraseCoins j₁ = eraseCoins j₂)
+    (hj₁ : Flock.JsonParse.parse f₁.record = .ok j₁) (hj₂ : Flock.JsonParse.parse f₂.record = .ok j₂) (he : eraseCoins j₁ = eraseCoins j₂)
     (hst : f₁.stmt = f₂.stmt) (hp : f₁.proofs = f₂.proofs)
     (hd : FlockSoundness.Discharge.Exec.recordDraw f₁.record = FlockSoundness.Discharge.Exec.recordDraw f₂.record)
     (hc₁ : RecordText.printT j₁ = f₁.record) (hc₂ : RecordText.printT j₂ = f₂.record) :
@@ -720,10 +757,10 @@ theorem decompB_nextCs (H : Msg → Msg)
     (rel' : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings) (L : LayoutB)
     (IV : Claims.Verifier Coin) (shape : Claims.Recursion.Form → Prop) {Col' T' : Type}
     (DO : Claims.Flock.Deploy Coin Col' T') (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
-    (hR : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hR : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ r ∈ LS.checks (Claims.Recursion.xI (recBound rel' b L IV) x), ∀ s, ownR x r = some s →
         s < (recBound rel' b L IV).nS x)
-    (hrest : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hrest : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ q ∈ ivChecks (bdDeployed rel nextCs colsE wE join rowIn final w)
           (deploySplit H rel nextCs colsE wE join rowIn final w (nextCs_coin H) LS)
           (Claims.Recursion.xI (recBound rel' b L IV) x),

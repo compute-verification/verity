@@ -1,6 +1,21 @@
-import Proofs.Flock.C3.Opening.SessionCoins
-import Proofs.Flock.C3.Opening.SessionPartsL
-import Proofs.Flock.C3.Opening.SessionAcc
+module
+
+public import Proofs.Flock.C3.Opening.SessionCoins
+public import Proofs.Flock.C3.Opening.SessionPartsL
+public import Proofs.Flock.C3.Opening.SessionAcc
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # n4 from V*'s sessions: `OpeningRead` but the claim tie and the tape prefix
@@ -22,6 +37,8 @@ coins', with no decoder (`SessionAt`):
 builds, `coinClaim`) and the tape prefix (item 4, at the messages w holds with those consistency sums).
 -/
 
+@[expose] public section
+
 namespace FlockC3.Opening
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
@@ -41,7 +58,7 @@ at its `coef` with `acc`'s rows at its chain position before and after (`OpensAt
 (`RecCoins.coefAt` at `o`'s `kappa`), and w's `acc0`, `acc1` are `acc`'s rows at R's ends. -/
 def SessionAt (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : Fin nS) → (Vs s).Bits) (sh : Flock.Shape)
     (unit : String) (c3 : Flock.RecCoins.C3) (w : Array F128) (ops : FlockVBridge.AccChain.Openings) : Prop :=
-  ∃ o : Flock.RecCoins.Opening, Flock.RecCoins.opening c3 unit = .ok o ∧ o.sh = sh ∧
+  ∃ o : Flock.RecCoins.RegisteredOpening, Flock.RecCoins.opening c3 unit = .ok o ∧ o.sh = sh ∧
     w.size = Flock.RecOpening.nw sh ∧
     (∃ (S : Flock.RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)) (sess : ℕ → Fin nS)
         (un : (p : ℕ) → Fin (Vs (sess p)).nv) (cp : ℕ → ℕ),

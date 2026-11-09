@@ -1,40 +1,95 @@
 """A frozen instance set's range as the Flock prover and verifier read it, with its frame-v3 statement commitments.
 
-The instances are B-Ligero's synthetic sets (``archive/direct/ligero/relations.py``: the recipe the frozen
-``bench-instances-bf16-hopper/v1``, ``bench-instances-fp8-ada/v1`` and ``bench-instances-fp8-hopper/v1`` tiers name),
-drawn exactly as ``relchain._instance_np`` draws them, with the model-recorded accumulators. The statement commits them
-as B-Ligero's ``+blake3`` configuration does: tree ``a`` over the x rows and ``b`` over the W columns
-(``blake3-keyed/row/v2`` row leaves), tree ``y`` over the output words (a word leaf of ``y_public`` of the final
-accumulator), each under the ``hashauth.binding_digest`` domain of the set and range. So a Flock cell and a B-Ligero
-cell on the same line bind the same three roots.
-
-File (``flock-pure-instances/v1``): one JSON header line, then x rows, W columns (``row_bytes`` each, words
-little-endian), the accumulators (``units`` u32 LE per VU), the circuit's output word per VU (u32 LE: the BF16 word for
-an epilogue relation, else the FP32 accumulator) and the committed y word per VU (u32 LE).
+The instances are B-Ligero's synthetic sets (the recipe the frozen ``bench-instances-bf16-hopper/v1``,
+``bench-instances-fp8-ada/v1`` and ``bench-instances-fp8-hopper/v1`` tiers name; :func:`_relations`), sampled exactly as its
+chain prover drew them, with the model-recorded accumulators, written as `instance_file`'s instance file
+(``flock-pure-instances/v1``) and committed as it commits a spine input set. So a Flock cell binds the same three roots as a
+B-Ligero cell on the same line did.
 """
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
-import sys
+from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 
-from .lowering import PIPES
+from .instance_file import (FORMAT, OWNER, SCHEMES, Y_WORD, _chain_rows, _frame_v3, _row_digests, _write_file, binding_digest,
+                         word_schema, write_set)
+from .lowering import PIPES, _model
 
-FORMAT = "flock-pure-instances/v1"
 K = 1536
-_DIRECT = Path(__file__).resolve().parents[5] / "archive" / "direct"
 
 
-def _ligero():
-    if str(_DIRECT) not in sys.path:
-        sys.path.insert(0, str(_DIRECT))
-    from ligero import auth, hashauth
-    from ligero.relations import relation
-    return relation, hashauth, auth
+@dataclass(frozen=True)
+class Relation:
+    """A relation's instance set: the model its accumulators are chained under, its operand words and chain-end word, and
+    the dataset, tier, seed and recipe its frozen tier names."""
+    name: str
+    word_dtype: str
+    y_bits: int
+    y_public: Callable[[int], int]
+    operands: Callable
+    instances_dataset: str
+    instances_tier: str
+    instance_seed: int
+    instances_recipe: str | None = None
+    frozen_tier: str | None = None
+
+    @property
+    def model(self):
+        return _model(PIPES[self.name].model)
+
+    @property
+    def k(self) -> int:
+        return self.model.k
+
+    @property
+    def steps(self) -> int:
+        return K // self.k
+
+
+def _bf16_operands(rng: np.random.Generator, shape) -> np.ndarray:
+    """Finite BF16 words with exponent fields in [96, 160) (a K=1536 chain stays finite), one in ten a signed zero, one in
+    ten a subnormal."""
+    sign = rng.integers(0, 2, size=shape, dtype=np.int64) << 15
+    t = rng.integers(96, 160, size=shape, dtype=np.int64)
+    f = rng.integers(0, 128, size=shape, dtype=np.int64)
+    kind = rng.integers(0, 10, size=shape)
+    w = sign | (t << 7) | f
+    w = np.where(kind == 0, sign, w)
+    w = np.where(kind == 1, sign | np.maximum(f, 1), w)
+    return w
+
+
+@functools.cache
+def _relations() -> dict[str, Relation]:
+    from verity.ml.circuits.silicon.cast import f32_to_bf16_word
+    from verity_numerical.bench import contract as C
+
+    e4m3 = "synthetic (uniform finite E4M3 bytes, model-recorded accumulators)"
+    return {r.name: r for r in (
+        Relation("bf16-hopper", "<u2", 16, f32_to_bf16_word, _bf16_operands, C.BF16_HOPPER_INSTANCES_DATASET,
+                 C.BF16_HOPPER_INSTANCES_TIER, C.BF16_HOPPER_INSTANCES_SEED,
+                 "bf16-hopper synthetic (random_finite_bf16: finite BF16 words incl. subnormals and exact zeros, "
+                 "model-recorded accumulators)"),
+        Relation("fp8-hopper", "<u1", *Y_WORD["fp8-hopper"], _e4m3_operands, C.FP8_HOPPER_INSTANCES_DATASET,
+                 C.FP8_HOPPER_INSTANCES_TIER, C.FP8_HOPPER_INSTANCES_SEED, f"fp8-hopper {e4m3}"),
+        Relation("fp8-ada", "<u1", *Y_WORD["fp8-ada"], _e4m3_operands, C.FP8_ADA_INSTANCES_DATASET, C.FP8_ADA_INSTANCES_TIER,
+                 C.FP8_ADA_INSTANCES_SEED, f"fp8-ada {e4m3}"),
+        Relation("bf16-ampere", "<u2", 16, f32_to_bf16_word, _bf16_operands, C.INSTANCES_DATASET, "vu-k1536", 0,
+                 frozen_tier="vu-k1536"))}
+
+
+def _relation(name: str) -> Relation:
+    try:
+        return _relations()[name]
+    except KeyError:
+        raise SystemExit(f"no instance set for relation {name!r}; known: {sorted(_relations())}") from None
 
 
 def _frozen(rel):
@@ -46,17 +101,15 @@ def _frozen(rel):
 
 
 def instances_digest(name: str, n: int) -> str:
-    relation, _, _ = _ligero()
-    rel = relation(name)
+    rel = _relation(name)
     fz = _frozen(rel)
     if fz is not None:
         return fz.manifest_sha256(fz.DEFAULT_ROOT)
     return hashlib.sha256(f"{rel.name} synthetic|seed={rel.instance_seed}|n={n}|K={K}".encode()).hexdigest()
 
 
-def instances_ref(name: str, total: int) -> dict:
-    relation, _, _ = _ligero()
-    rel = relation(name)
+def input_set_ref(name: str, total: int) -> dict:
+    rel = _relation(name)
     if rel.frozen_tier:
         return {"dataset": rel.instances_dataset, "tier": rel.instances_tier, "range": [0, total],
                 "manifest_sha256": instances_digest(name, total)}
@@ -68,7 +121,7 @@ def instances_ref(name: str, total: int) -> dict:
 
 
 def _e4m3_operands(rng: np.random.Generator, shape) -> np.ndarray:
-    """``ligero.fp8.witness.random_finite_operands`` (whose module imports torch), byte for byte."""
+    """Uniform E4M3 bytes without the NaN codes (0x7f / 0xff become 0x77 / 0xf7, the largest finite, sign kept)."""
     w = rng.integers(0, 256, size=shape, dtype=np.int64)
     nan = (w & 0x7F) == 0x7F
     w[nan] = w[nan] & ~0x08
@@ -77,9 +130,8 @@ def _e4m3_operands(rng: np.random.Generator, shape) -> np.ndarray:
 
 def _draw(args):
     name, seed, lo, hi = args
-    from verity.ml.circuits.silicon.silicon import tc_dot
-    relation, _, _ = _ligero()
-    rel = relation(name)
+    from verity.ml.circuits.silicon.models import tc_dot
+    rel = _relation(name)
     operands = _e4m3_operands if rel.word_dtype == "<u1" else rel.operands
     xs, ws, accs = [], [], []
     for i in range(lo, hi):
@@ -98,8 +150,7 @@ def _draw(args):
 
 def draw(name: str, total: int, procs: int = 1, cache: str | Path | None = None, lo: int = 0, hi: int | None = None):
     """``(x, w, accs)`` of the set's VUs ``[lo, hi)`` (default: the first ``total``)."""
-    relation, _, _ = _ligero()
-    rel = relation(name)
+    rel = _relation(name)
     hi = total if hi is None else hi
     fz = _frozen(rel)
     if fz is not None:
@@ -133,9 +184,6 @@ def draw(name: str, total: int, procs: int = 1, cache: str | Path | None = None,
     return x, w, accs
 
 
-SCHEMES = {"blake3": "blake3-keyed/row/v2", "sha256": "sha256/row/v1"}
-
-
 def statement(name: str, x, w, accs, total: int | None = None, lo: int = 0, leaf: str = "blake3") -> dict:
     """The three frame-v3 roots (and their domains) over the set's VUs ``[lo, lo + len(x))`` of a ``total``-VU batch (one
     sub-batch's trees, bound to that range)."""
@@ -144,18 +192,17 @@ def statement(name: str, x, w, accs, total: int | None = None, lo: int = 0, leaf
     from verity.ml.commitments.merkle import CommitmentDomain
     from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, blake3_row_digest, sha256_row_digest
 
-    relation, hashauth, auth = _ligero()
-    rel = relation(name)
+    rel = _relation(name)
     n = len(x)
     total = n if total is None else total
     word_bits = 16 if rel.word_dtype == "<u2" else 8
-    ysch, ybytes = hashauth.word_schema(rel.y_bits)
+    ysch, ybytes = word_schema(rel.y_bits)
     manifest = instances_digest(name, total)
     counts = {"a": n, "b": n, "y": n}
     schemas = {"a": SCHEMES[leaf], "b": SCHEMES[leaf], "y": ysch}
-    bind = {t: hashauth.binding_digest(dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=manifest,
+    bind = {t: binding_digest(dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=manifest,
                                        lo=lo, hi=lo + n, K=K, tree=t, schema=schemas[t]) for t in "aby"}
-    dom = {n: CommitmentDomain(bind[n], auth.OWNER[n], RangeIndexedDomain(0, counts[n])) for n in "aby"}
+    dom = {n: CommitmentDomain(bind[n], OWNER[n], RangeIndexedDomain(0, counts[n]), hash="sha256") for n in "aby"}
     fv = FrameV3({"a": Port(dom["a"], RowLeaf(leaf, ROLE_X, word_bits, K)),
                   "b": Port(dom["b"], RowLeaf(leaf, ROLE_W, word_bits, K)), "y": Port(dom["y"], WordLeaf(ysch, ybytes))})
     if leaf == "sha256":
@@ -177,62 +224,24 @@ def statement(name: str, x, w, accs, total: int | None = None, lo: int = 0, leaf
               "y": [fv.tree_leaf("y", r, fv.leaf_layout("y", r).digest(v.to_bytes(ybytes, "big"))) for r, v in enumerate(y)]}
     return {"roots": {n: fv.root(n, leaves[n]).hex() for n in "aby"},
             "domain_ids": {n: dom[n].domain_id.hex() for n in "aby"},
-            "bindings": {n: bind[n].hex() for n in "aby"}, "owners": dict(auth.OWNER), "schemas": schemas,
+            "bindings": {n: bind[n].hex() for n in "aby"}, "owners": dict(OWNER), "schemas": schemas,
             "y_bytes": ybytes, "y": y}
 
 
-def statement_vllm_v1(name: str, x, w, accs, total: int | None = None, lo: int = 0) -> dict:
-    """The three ``vllm-v1`` roots over the set's VUs ``[lo, lo + len(x))``: position-leaf trees of the x rows, the W
-    columns and the output words' ``y_bytes`` little-endian bytes, each root the step-root binding of its port's
-    ``StepDomain`` (PROTOCOL.md §4, §5). The domains are B-Ligero's (``ligero.vllm_tree``: ctx = the set and range per
-    port), so a Flock cell and a B-Ligero ``+vllm-v1`` cell on the same line bind the same three roots."""
-    from verity.ml.commitments import vllm_v1 as core
-
-    relation, _, _ = _ligero()
-    from ligero import vllm_tree
-    rel = relation(name)
-    n = len(x)
-    total = n if total is None else total
-    word_bits = 16 if rel.word_dtype == "<u2" else 8
-    yb = vllm_tree.y_bytes_of(rel.y_bits)
-    manifest = instances_digest(name, total)
-    y = [int(rel.y_public(int(a[-1]))) for a in accs]
-    rb = "<u2" if word_bits == 16 else "u1"
-    values = {"a": [np.ascontiguousarray(r.astype(rb)).tobytes() for r in x],
-              "b": [np.ascontiguousarray(r.astype(rb)).tobytes() for r in w],
-              "y": [v.to_bytes(yb, "little") for v in y]}
-    roots, digests, ctx = {}, {}, {}
-    for t in "aby":
-        ctx[t] = vllm_tree.ctx_digest(dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=manifest, lo=lo,
-                                      hi=lo + n, tree=t)
-        dom = vllm_tree.domain(t, ctx[t], n, K=K, word_bits=word_bits, y_bytes=yb)
-        roots[t] = dom.bind(core.fold([core.pos_leaf(v) for v in values[t]]))
-        digests[t] = core.domain_digest(dom)
-    return {"scheme": core.NAME, "roots": {t: roots[t].hex() for t in "aby"}, "domain_digests": {t: digests[t].hex() for t in "aby"},
-            "ctx": {t: ctx[t].hex() for t in "aby"}, "leaf": "pos-leaf", "y_bytes": yb, "y": y}
-
-
 def write(path: str | Path, name: str, total: int, procs: int = 1, cache: str | Path | None = None, lo: int = 0,
-          hi: int | None = None, scheme: str = "frame-v3", leaf: str = "blake3") -> dict:
-    """Write VUs ``[lo, hi)`` (default all) of the set's first ``total`` and their statement as a ``flock-pure-instances/v1``
-    file; returns the header. A sub-batch's instance reference keeps the whole batch's manifest and names its own range.
-    ``scheme`` is the commitment scheme the header's roots are under: ``frame-v3`` or ``vllm-v1``. ``fp4-nvf4`` reads the frozen
-    NVFP4 set (:func:`write_fp4`); a spine input set is :func:`write_set`."""
+          hi: int | None = None, leaf: str = "blake3") -> dict:
+    """Write VUs ``[lo, hi)`` (default all) of the set's first ``total`` and their frame-v3 statement as a
+    ``flock-pure-instances/v1`` file; returns the header. A sub-batch's instance reference keeps the whole batch's manifest
+    and names its own range. A spine input set is :func:`write_set`."""
     from verity.ml.circuits.silicon.cast import f32_to_bf16_word
 
-    if name == "fp4-nvf4":
-        if scheme != "frame-v3":
-            raise ValueError("fp4-nvf4 rows are frame-v3 NVFP4 row leaves")
-        return write_fp4(path, total, lo, hi, leaf)
-
-    relation, _, _ = _ligero()
-    rel = relation(name)
+    rel = _relation(name)
     pipe = PIPES[name]
     hi = total if hi is None else hi
     x, w, accs = draw(name, total, procs, cache, lo, hi)
-    st = statement(name, x, w, accs, total, lo, leaf) if scheme == "frame-v3" else statement_vllm_v1(name, x, w, accs, total, lo)
+    st = statement(name, x, w, accs, total, lo, leaf)
     out = np.asarray([f32_to_bf16_word(int(a[-1])) if pipe.epilogue else int(a[-1]) for a in accs], dtype="<u4")
-    ref = instances_ref(name, total)
+    ref = input_set_ref(name, total)
     ref["range"] = [lo, hi]
     header = {"format": FORMAT, "relation": name, "vus": hi - lo, "k": K, "word_bits": pipe.word_bits, "units": rel.steps,
               "row_bytes": K * pipe.word_bits // 8, "epilogue": pipe.epilogue, "instances": ref,
@@ -247,119 +256,8 @@ def write(path: str | Path, name: str, total: int, procs: int = 1, cache: str | 
     return header
 
 
-def _frame_v3(dataset: str, tier: str, manifest: str, lo: int, K_: int, schema_row: str, digests_a, digests_b, y, y_bits: int) -> dict:
-    """frame-v3 roots over given row digests and output words, bound like :func:`statement` (``hashauth.binding_digest`` of the
-    set, range, K, tree and schema)."""
-    from verity.ml.commitments.frame_v3 import FrameV3, Port, WordLeaf
-    from verity.ml.commitments.indexed import RangeIndexedDomain
-    from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
-
-    _, hashauth, auth = _ligero()
-    n = len(y)
-    ysch, ybytes = hashauth.word_schema(y_bits)
-    schemas = {"a": schema_row, "b": schema_row, "y": ysch}
-    bind = {t: hashauth.binding_digest(dataset=dataset, tier=tier, manifest_sha256=manifest, lo=lo, hi=lo + n, K=K_, tree=t,
-                                       schema=schemas[t]) for t in "aby"}
-    dom = {t: CommitmentDomain(bind[t], auth.OWNER[t], RangeIndexedDomain(0, n)) for t in "aby"}
-    fv = FrameV3({"y": Port(dom["y"], WordLeaf(ysch, ybytes))})
-    leaves = {"a": [dom["a"].leaf(r, r, schema_row, d) for r, d in enumerate(digests_a)],
-              "b": [dom["b"].leaf(r, r, schema_row, d) for r, d in enumerate(digests_b)],
-              "y": [fv.tree_leaf("y", r, fv.leaf_layout("y", r).digest(int(v).to_bytes(ybytes, "big"))) for r, v in enumerate(y)]}
-    return {"roots": {t: tree_levels(dom[t], leaves[t])[-1][0].hex() for t in "aby"},
-            "domain_ids": {t: dom[t].domain_id.hex() for t in "aby"}, "bindings": {t: bind[t].hex() for t in "aby"},
-            "owners": dict(auth.OWNER), "schemas": schemas, "y_bytes": ybytes, "y": [int(v) for v in y]}
-
-
-def _write_file(path, header: dict, row_x: bytes, row_w: bytes, accs, out, y) -> dict:
-    with open(path, "wb") as f:
-        f.write(json.dumps(header, sort_keys=True).encode() + b"\n")
-        f.write(row_x)
-        f.write(row_w)
-        f.write(np.ascontiguousarray(np.asarray(accs, dtype="<u4")).tobytes())
-        f.write(np.asarray(out, dtype="<u4").tobytes())
-        f.write(np.asarray(y, dtype="<u4").tobytes())
-    return header
-
-
-def _row_digests(rows_bytes: list[bytes], leaf: str, role: int) -> list[bytes]:
-    from verity.ml.commitments.rowleaf import blake3_row_key
-    if leaf == "sha256":
-        raise ValueError("sha256 row digests need the row's word width: use _row_digests_words")
-    import blake3
-    key = blake3_row_key(role)
-    return [blake3.blake3(b, key=key).digest() for b in rows_bytes]
-
-
-def write_set(path: str | Path, relation: str, set_dir: str | Path, lo: int = 0, hi: int | None = None, leaf: str = "blake3",
-              procs: int = 1, y_model: bool = False) -> dict:
-    """VUs ``[lo, hi)`` of a spine input set (``vllm-vu-set/v1`` or ``input-set/v1``; its manifest's ports name the files:
-    ``x.u16`` / ``w.u16`` with ``y.u16`` for BF16, ``x.u8`` / ``w.u8`` with ``y.u32``, the FP32 accumulator word, for E4M3)
-    as a ``flock-pure-instances/v1`` file for ``relation`` (a :data:`lowering.PIPES` entry: its unit model chains each row, and
-    the set's recorded y must equal the epilogue of the last accumulator, or the last accumulator itself; the committed y
-    word is the relation's ``y_public`` of it). Rows are written per VU (the unshared statement,
-    root's ruling 2026-09-26 02:30Z); the instance reference names the set and its ``content_digest``. ``y_model``: the set
-    was captured on other silicon, so y is the relation's own chain output (a distinct tier; the reference counts the words
-    that differ from the set's recorded y)."""
-    from concurrent.futures import ProcessPoolExecutor
-    from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_BLAKE3_ROW, SCHEMA_SHA256_ROW, sha256_row_digest
-    from verity.ml.circuits.silicon.cast import f32_to_bf16_word
-
-    d = Path(set_dir)
-    man = json.loads((d / "manifest.json").read_text())
-    pipe = PIPES[relation]
-    ports = man.get("ports") or {}
-    dts = {"u8": "u1", "u16": "<u2", "u32": "<u4"}
-    port = {r: (ports.get(r) or {"file": f"{r}.u16", "dtype": "u16"}) for r in "xwy"}
-    wb = {"u1": 8, "<u2": 16}[dts[port["x"]["dtype"]]]
-    if wb != pipe.word_bits or port["w"]["dtype"] != port["x"]["dtype"]:
-        raise ValueError(f"{d.name}: {port['x']['dtype']} rows; {relation} takes {pipe.word_bits}-bit words")
-    K_ = int(port["x"].get("words") or (man.get("relation") or {}).get("statics", {}).get("K"))
-    x_all = np.fromfile(d / port["x"]["file"], dtype=dts[port["x"]["dtype"]]).reshape(-1, K_)
-    n_set = x_all.shape[0]
-    hi = n_set if hi is None else hi
-    if hi > n_set:
-        raise ValueError(f"{d.name} holds {n_set} instances; [{lo}, {hi}) would repeat instances")
-    x = x_all[lo:hi]
-    w = np.fromfile(d / port["w"]["file"], dtype=dts[port["w"]["dtype"]]).reshape(-1, K_)[lo:hi]
-    y_rec = np.fromfile(d / port["y"]["file"], dtype=dts[port["y"]["dtype"]])[lo:hi]
-    step = max(1, len(x) // max(1, 4 * procs))
-    jobs = [(relation, x[i:i + step], w[i:i + step]) for i in range(0, len(x), step)]
-    if procs > 1:
-        with ProcessPoolExecutor(procs) as ex:
-            accs = np.asarray([r for part in ex.map(_chain_rows, jobs) for r in part], dtype=np.uint32)
-    else:
-        accs = np.asarray([r for j in jobs for r in _chain_rows(j)], dtype=np.uint32)
-    final = [f32_to_bf16_word(int(a[-1])) for a in accs] if pipe.epilogue else [int(a[-1]) for a in accs]
-    bad = sum(int(f != int(v)) for f, v in zip(final, y_rec))
-    if bad and not y_model:
-        raise ValueError(f"{d.name}: {bad} recorded outputs differ from the {relation} model chain")
-    digest = man.get("content_digest")
-    if leaf == "sha256":
-        da = [sha256_row_digest(r.tolist(), wb, ROLE_X) for r in x]
-        db = [sha256_row_digest(r.tolist(), wb, ROLE_W) for r in w]
-        schema = SCHEMA_SHA256_ROW
-    else:
-        da = _row_digests([np.ascontiguousarray(r).tobytes() for r in x], leaf, ROLE_X)
-        db = _row_digests([np.ascontiguousarray(r).tobytes() for r in w], leaf, ROLE_W)
-        schema = SCHEMA_BLAKE3_ROW
-    dataset, tier = man.get("set", d.name), f"{man.get('schema', 'input-set/v1')}:{man.get('set', d.name)}"
-    if y_model:
-        tier += f":y={relation}"
-    rel = _ligero()[0](relation) if not pipe.epilogue else None
-    y_pub = [int(rel.y_public(v)) for v in final] if rel is not None else final
-    st = _frame_v3(dataset, tier, digest, lo, K_, schema, da, db, y_pub, rel.y_bits if rel is not None else 16)
-    ref = {"dataset": dataset, "tier": tier, "range": [lo, hi], "manifest_sha256": digest, "set_schema": man.get("schema"),
-           "source": (man.get("provenance") or {}).get("source") or ("captured" if man.get("schema") == "vllm-vu-set/v1" else None),
-           **({"y": {"source": f"{relation} model chain", "differ_from_set": bad}} if y_model else {})}
-    if y_model:
-        ref["source"] = f"{ref['source'] or 'set'} inputs, model y"
-    header = {"format": FORMAT, "relation": relation, "vus": hi - lo, "k": K_, "word_bits": wb, "units": accs.shape[1],
-              "row_bytes": wb * K_ // 8, "epilogue": pipe.epilogue, "instances": ref, **{k: v for k, v in st.items() if k != "y"}}
-    return _write_file(path, header, np.ascontiguousarray(x).tobytes(), np.ascontiguousarray(w).tobytes(), accs, final, st["y"])
-
-
 def write_synth(path: str | Path, relation: str, K_: int, lo: int, hi: int, leaf: str = "blake3", procs: int = 1) -> dict:
-    """VUs ``[lo, hi)`` of the synthetic E4M3 stream at ``K_`` words (``rng([seed, i])``, two draws per VU, as
+    """VUs ``[lo, hi)`` of the synthetic E4M3 stream at ``K_`` words (``rng([seed, i])``, two samples per VU, as
     :func:`_draw`) for an 8-bit relation with no spine input set, chained with its unit model. The manifest names the
     recipe, not a count, so every sub-batch of a batch binds the same one."""
     from concurrent.futures import ProcessPoolExecutor
@@ -367,7 +265,7 @@ def write_synth(path: str | Path, relation: str, K_: int, lo: int, hi: int, leaf
 
     if leaf != "blake3":
         raise ValueError("the chunked 8-bit layouts commit keyed-BLAKE3 rows")
-    rel = _ligero()[0](relation)
+    rel = _relation(relation)
     pipe = PIPES[relation]
     if pipe.word_bits != 8:
         raise ValueError(f"{relation}: the synthetic stream at any K is the E4M3 one")
@@ -398,59 +296,6 @@ def write_synth(path: str | Path, relation: str, K_: int, lo: int, hi: int, leaf
     return _write_file(path, header, x.tobytes(), w.tobytes(), accs, out, st["y"])
 
 
-def _chain_rows(args):
-    relation, x, w = args
-    from verity.ml.circuits.silicon.silicon import tc_dot
-    from .lowering import _model
-    pipe = PIPES[relation]
-    model, k = _model(pipe.model), pipe.k
-    out = []
-    for a, b in zip(x, w):
-        al, bl, c, row = a.tolist(), b.tolist(), 0, []
-        for s in range(len(al) // k):
-            c = tc_dot(model, c, al[k * s:k * s + k], bl[k * s:k * s + k])
-            row.append(c)
-        out.append(row)
-    return out
-
-
-def write_fp4(path: str | Path, total: int, lo: int = 0, hi: int | None = None, leaf: str = "blake3") -> dict:
-    """VUs ``[lo, hi)`` of the frozen NVFP4 set (``bench-instances-nvfp4-sm120/v1``: ``ligero.fp4.chain.instances_fp4``, seed
-    20260922, model-recorded accumulators) as ``flock-pure-instances/v1``: 864-byte ``nvfp4_row_bytes`` rows under
-    ``blake3-keyed/row-nvfp4/v1`` or ``sha256/row-nvfp4/v1`` and a u32 word leaf of the final FP32 accumulator (``out`` = y)."""
-    import types
-    sys.modules.setdefault("torch", types.ModuleType("torch"))
-    _ligero()
-    from ligero.fp4.chain import INSTANCE_SEED, instances_digest as fp4_digest, instances_fp4
-    from verity.ml.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_BLAKE3_ROW_NVFP4, SCHEMA_SHA256_ROW_NVFP4, blake3_row_nvfp4_digest,
-                                            nvfp4_row_bytes, sha256_row_nvfp4_digest)
-    from verity_numerical.bench import contract
-
-    hi = total if hi is None else hi
-    data = instances_fp4(hi - lo, start=lo)
-    rows = {0: [], 1: []}
-    codes = {0: [], 1: []}
-    for A, B, _, _ in data:
-        for r, M in ((0, A), (1, B)):
-            c = [int(v) for s in M for v in s[:64]]
-            sc = [int(v) for s in M for v in s[64:68]]
-            codes[r].append((c, sc))
-            rows[r].append(nvfp4_row_bytes(c, sc))
-    accs = np.asarray([dd[2] for dd in data], dtype="<u4")
-    y = [int(a[-1]) for a in accs]
-    schema, dig = ((SCHEMA_SHA256_ROW_NVFP4, sha256_row_nvfp4_digest) if leaf == "sha256" else
-                   (SCHEMA_BLAKE3_ROW_NVFP4, blake3_row_nvfp4_digest))
-    da = [dig(c, sc, ROLE_X) for c, sc in codes[0]]
-    db = [dig(c, sc, ROLE_W) for c, sc in codes[1]]
-    manifest = fp4_digest(total)
-    st = _frame_v3(contract.NVFP4_INSTANCES_DATASET, contract.NVFP4_INSTANCES_TIER, manifest, lo, K, schema, da, db, y, 32)
-    ref = {"dataset": contract.NVFP4_INSTANCES_DATASET, "tier": contract.NVFP4_INSTANCES_TIER, "range": [lo, hi],
-           "manifest_sha256": manifest, "seed": INSTANCE_SEED}
-    header = {"format": FORMAT, "relation": "fp4-nvf4", "vus": hi - lo, "k": K, "word_bits": 4, "units": 24, "row_bytes": 864,
-              "epilogue": False, "instances": ref, **{k: v for k, v in st.items() if k != "y"}}
-    return _write_file(path, header, b"".join(rows[0]), b"".join(rows[1]), accs, y, y)
-
-
 if __name__ == "__main__":
     import argparse
 
@@ -460,7 +305,6 @@ if __name__ == "__main__":
     ap.add_argument("out")
     ap.add_argument("--procs", type=int, default=1)
     ap.add_argument("--cache")
-    ap.add_argument("--scheme", choices=["frame-v3", "vllm-v1"], default="frame-v3")
     ap.add_argument("--leaf", choices=sorted(SCHEMES), default="blake3", help="frame-v3 row-leaf schema of trees a and b")
     ap.add_argument("--set", default=None, help="a spine input set directory (x.u16 / w.u16 / y.u16): its first TOTAL VUs")
     ap.add_argument("--y-model", action="store_true", help="with --set: y is the relation's chain output, not the set's")
@@ -468,6 +312,6 @@ if __name__ == "__main__":
     a = ap.parse_args()
     h = (write_set(a.out, a.relation, a.set, 0, a.total, a.leaf, a.procs, a.y_model) if a.set else
          write_synth(a.out, a.relation, a.k, 0, a.total, a.leaf, a.procs) if a.k else
-         write(a.out, a.relation, a.total, a.procs, a.cache, scheme=a.scheme, leaf=a.leaf))
+         write(a.out, a.relation, a.total, a.procs, a.cache, leaf=a.leaf))
     print(json.dumps({"relation": h["relation"], "vus": h["vus"], "roots": h["roots"],
                       "manifest_sha256": h["instances"]["manifest_sha256"]}))

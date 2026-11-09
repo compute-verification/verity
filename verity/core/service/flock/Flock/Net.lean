@@ -1,9 +1,15 @@
 /-
-PROTOCOL.md §16.5: an expanded circuit in `flock-ir-unit/v2` form (a unit, a tail stage, or a lookup slot built from its
+`Flock.Circuit`: an expanded circuit in `flock-ir-unit/v2` form (a unit, a tail stage, or a lookup slot built from its
 table), and the text helpers its parser uses.
 -/
-import Lean.Data.Json
-import Flock.Comp
+module
+
+public import Flock.Comp
+public import Flock.Scan
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 
@@ -94,12 +100,15 @@ def checkOrder (name : String) (inCols constPos : Nat) (ra rb : Array (Array Nat
       if c ≥ r then throw s!"{name}: row {r} reads column {c}, not an earlier one"
       if padding c then throw s!"{name}: row {r} reads column {c}, an input padding column"
 
-private def num (h : Array String) (i : Nat) : V Nat :=
+/-- The header's field `i` as a number. -/
+def num (h : Array String) (i : Nat) : V Nat :=
   match h[i]?.bind String.toNat? with
   | some n => pure n
   | none => throw s!"flock-ir-unit/v2: header field {i} is not a number"
 
-private def groups (h : Array String) (at0 : Nat) : V (Array Group × Nat) := do
+/-- The port groups the header lists from field `at0` (their count, then each one's column, words, port count and port
+widths), and the field after them. -/
+def groups (h : Array String) (at0 : Nat) : V (Array Group × Nat) := do
   let count ← num h at0
   let mut at_ := at0 + 1
   let mut out := #[]
@@ -121,6 +130,58 @@ def inputsOk (inGroups : Array Group) (ra rb : Array (Array Nat)) : Bool :=
       (inGroups.getD (i + 1) default).col) &&
     inGroups.all fun g => (List.range (g.bits.foldl (· + ·) 0)).all fun j =>
       ra.getD (g.col * WORD + j) #[] == #[g.col * WORD + j] && rb.getD (g.col * WORD + j) #[] == #[g.col * WORD + j]
+
+theorem forIn_append_yield {α : Type} (xs ys : List α) (f : α → PUnit → V (ForInStep PUnit))
+    (hf : ∀ a u, f a u ≠ .ok (.done u)) :
+    forIn (xs ++ ys) PUnit.unit f = (do forIn xs PUnit.unit f; forIn ys PUnit.unit f) := by
+  induction xs with
+  | nil => rfl
+  | cons x xs ih =>
+    simp only [List.cons_append, List.forIn_cons]
+    cases h : f x PUnit.unit with
+    | error e => rfl
+    | ok s =>
+      cases s with
+      | done u => exact absurd h (hf x _)
+      | yield u => exact ih
+
+/-- `checkOrder` as compiled code computes it (`checkOrder_eq_fast`): a row's A and B columns read where they are, not
+copied into one array, and whether a column is input padding read from a table of the input rows. -/
+def checkOrderFast (name : String) (inCols constPos : Nat) (ra rb : Array (Array Nat)) : V Unit := do
+  let pad := Array.ofFn (n := inCols) fun i => (ra.getD i #[]).isEmpty && (rb.getD i #[]).isEmpty
+  let padding := fun (c : Nat) => pad.getD c false
+  for r in [inCols:constPos] do
+    for c in ra.getD r #[] do
+      if c == constPos then continue
+      if c ≥ r then throw s!"{name}: row {r} reads column {c}, not an earlier one"
+      if padding c then throw s!"{name}: row {r} reads column {c}, an input padding column"
+    for c in rb.getD r #[] do
+      if c == constPos then continue
+      if c ≥ r then throw s!"{name}: row {r} reads column {c}, not an earlier one"
+      if padding c then throw s!"{name}: row {r} reads column {c}, an input padding column"
+
+theorem pad_getD (inCols : Nat) (ra rb : Array (Array Nat)) (c : Nat) :
+    (Array.ofFn (n := inCols) fun i => (ra.getD i #[]).isEmpty && (rb.getD i #[]).isEmpty).getD c false =
+      (decide (c < inCols) && (ra.getD c #[]).isEmpty && (rb.getD c #[]).isEmpty) := by
+  by_cases h : c < inCols
+  · simp [Array.getD, h]
+  · simp [Array.getD, h]
+
+/-- Compiled code runs `checkOrderFast`; the kernel and every proof see `checkOrder`. `@[csimp]` rewrites only code
+compiled after it, so it stays above `ofRows`. -/
+@[csimp] theorem checkOrder_eq_fast : @checkOrder = @checkOrderFast := by
+  funext name inCols constPos ra rb
+  unfold checkOrder checkOrderFast
+  simp only [pad_getD]
+  congr 1
+  congr 1
+  funext r u
+  rw [← Array.forIn_toList, Array.toList_append, forIn_append_yield, Array.forIn_toList, Array.forIn_toList]
+  · simp only [bind_assoc]
+  · intro c u
+    split
+    · simp [pure, Except.pure]
+    · split <;> split <;> simp [throw, throwThe, MonadExceptOf.throw, pure, Except.pure, bind, Except.bind]
 
 /-- An expanded circuit from its parts, as `parse` reads them from text or `Flock.Typed` has them from `derive`: its
 useful rows' count, its constant, its port groups, and each useful row's A and B columns. -/
@@ -237,7 +298,7 @@ def parse (lines : Array String) : V Net := do
   -- after the rows: an optional `LEAVES <json>` line (bound by the pin, not read), and nothing else
   let mut at_ := 1 + useful
   if (lines.getD at_ "").startsWith "LEAVES " then
-    match Json.parse ((lines.getD at_ "").drop 7).toString with
+    match JsonParse.parse ((lines.getD at_ "").drop 7).toString with
     | .ok _ => at_ := at_ + 1
     | .error e => throw s!"flock-ir-unit/v2: the LEAVES line is not JSON: {e}"
   if (lines.getD at_ "").startsWith "CUT " then
@@ -253,6 +314,46 @@ def rowNums (lines : Array String) (i : Nat) : V (Array Nat) :=
 
 /-- A line's numbers as `parse` reads a row's, `none` when a token isn't one. -/
 def lineNums (s : String) : Option (Array Nat) := (tokens s).mapM String.toNat?
+
+theorem tokens_eq (s : String) :
+    tokens s = (let st := s.toList.foldl Scan.tokStep (#[], ""); if st.2 != "" then st.1.push st.2 else st.1) := by
+  unfold tokens
+  simp only [Id.run]
+  rw [Scan.forIn_tok]
+  rfl
+
+/-- `lineNums`, read off the line's bytes (`Scan.numsU`) when it is ASCII decimal digits and whitespace, as a row is,
+and as `lineNums` reads it otherwise. -/
+def lineNumsFast (s : String) : Option (Array Nat) :=
+  let n := s.utf8ByteSize.toUSize
+  if h : Scan.ascii s = true ∧ n.toNat = s.utf8ByteSize then
+    match Scan.numsU s n (Nat.le_of_eq h.2) 0 0 0 #[] with
+    | some v => some v
+    | none => (tokens s).mapM String.toNat?
+  else (tokens s).mapM String.toNat?
+
+/-- Compiled code runs `lineNumsFast`; the kernel and every proof see `lineNums`. `@[csimp]` rewrites only code compiled
+after it, so it stays above `Row.of`, `look` and `parseWith`. -/
+@[csimp] theorem lineNums_eq_fast : @lineNums = @lineNumsFast := by
+  funext s
+  unfold lineNumsFast lineNums
+  dsimp only
+  split
+  · rename_i h
+    split
+    · rename_i v hv
+      have hc := Scan.ascii_chars h.1
+      have hu := Scan.numsU_some s _ (Nat.le_of_eq h.2) (s.utf8ByteSize + 1) 0 0 0 #[] v (by rw [h.2]; omega)
+        (by simp) (by simp) hv
+      simp only [USize.toNat_zero, bne_self_eq_false, UInt64.toNat_zero] at hu
+      have h' := Scan.nums_eq hc _ (Nat.le_of_eq h.2) s.toList [] [] (s.utf8ByteSize + 1) false 0 #[] (by simp)
+        (by rw [h.2, Scan.size_ascii hc]; simp) (by rw [Scan.size_ascii hc]; omega)
+      rw [List.length_nil] at h'
+      rw [h'] at hu
+      rw [tokens_eq]
+      exact Scan.numsL_tokens s.toList #[] "" false 0 #[] v (by simp) ⟨rfl, rfl⟩ hu
+    · rfl
+  · rfl
 
 /-- A line and, when read, its numbers (`some (lineNums s)`): read where the file's lines were split
 (`SplitNL.splitTasks`). -/
@@ -304,21 +405,20 @@ theorem mapM_toNat_arr (xs : Array String) (m : String) :
   rw [Array.mapM_eq_mapM_toList, Array.mapM_eq_mapM_toList, mapM_toNat]
   cases xs.toList.mapM String.toNat? <;> rfl
 
-/-- Row `i` of a `NET` block as numbers, from `t[k]` (`look`). -/
-def rowAt (t : Array Row) (k : Nat) (lines : Array String) (i : Nat) : V (Array Nat) :=
-  match look t k (lines.getD (1 + i) "") with
+/-- Row `i`'s numbers `o`, or the error `parse` gives when they are not numbers. -/
+def rowOf (o : Option (Array Nat)) (i : Nat) : V (Array Nat) :=
+  match o with
   | some v => pure v
   | none => throw s!"flock-ir-unit/v2: row {i} is not numbers"
 
-theorem rowAt_eq (t : Array Row) (k : Nat) (lines : Array String) (i : Nat) :
-    rowAt t k lines i = rowNums lines i := by
-  unfold rowAt rowNums
-  rw [look_eq, lineNums, mapM_toNat_arr]
+theorem rowOf_eq (lines : Array String) (i : Nat) : rowOf (lineNums (lines.getD (1 + i) "")) i = rowNums lines i := by
+  unfold rowOf rowNums lineNums
+  rw [mapM_toNat_arr]
 
-/-- `parse` with each row's numbers from `t` (`look`): the rows read where the file's lines were split
-(`HmRow.parseFastFrom`), line `base + j` of the file being line `j` of `lines`. `parseWith_eq` holds for any `t`. -/
-def parseWith (t : Array Row) (base : Nat) (lines : Array String) : V Net := do
-  let h := tokens (lines.getD 0 "")
+/-- `parse` of the lines `line 0`, ..., `line (n - 1)`, row `i`'s numbers `row (1 + i)`: `parse` when they are a block's
+lines and each line's numbers (`parseOn_eq`). -/
+def parseOn (line : Nat → String) (n : Nat) (row : Nat → Option (Array Nat)) : V Net := do
+  let h := tokens (line 0)
   if h[0]? != some "flock-ir-unit/v2" then throw "not a flock-ir-unit/v2 circuit"
   let name := h.getD 1 ""
   let useful ← num h 2
@@ -336,25 +436,46 @@ def parseWith (t : Array Row) (base : Nat) (lines : Array String) : V Net := do
   let mut ra := #[]
   let mut rb := #[]
   for i in [0:useful] do
-    let v ← rowAt t (base + 1 + i) lines i
+    let v ← rowOf (row (1 + i)) i
     let na := v.getD 0 0
     let nb := v.getD (1 + na) 0
     if v.size == 0 || v.size != 2 + na + nb then throw s!"flock-ir-unit/v2: row {i} is malformed"
     ra := ra.push (v.extract 1 (1 + na))
     rb := rb.push (v.extract (2 + na) (2 + na + nb))
   let mut at_ := 1 + useful
-  if (lines.getD at_ "").startsWith "LEAVES " then
-    match Json.parse ((lines.getD at_ "").drop 7).toString with
+  if (line at_).startsWith "LEAVES " then
+    match JsonParse.parse ((line at_).drop 7).toString with
     | .ok _ => at_ := at_ + 1
     | .error e => throw s!"flock-ir-unit/v2: the LEAVES line is not JSON: {e}"
-  if (lines.getD at_ "").startsWith "CUT " then
+  if (line at_).startsWith "CUT " then
     throw s!"{name}: a CUT line (a tail the verifier evaluates); the verifier evaluates no part of the computation"
-  if at_ != lines.size then throw "flock-ir-unit/v2: text after the rows that is not its LEAVES line"
+  if at_ != n then throw "flock-ir-unit/v2: text after the rows that is not its LEAVES line"
   ofRows name useful constPos inGroups outGroups ra rb
 
-theorem parseWith_eq (t : Array Row) (base : Nat) (lines : Array String) : parseWith t base lines = parse lines := by
-  unfold parseWith parse
-  simp only [rowAt_eq, rowNums]
+theorem parseOn_eq (lines : Array String) (line : Nat → String) (n : Nat) (row : Nat → Option (Array Nat))
+    (hl : ∀ k, line k = lines.getD k "") (hn : n = lines.size) (hr : ∀ k, row k = lineNums (line k)) :
+    parseOn line n row = parse lines := by
+  obtain rfl : row = fun k => lineNums (line k) := funext hr
+  obtain rfl : line = fun k => lines.getD k "" := funext hl
+  subst hn
+  unfold parseOn parse
+  simp only [rowOf_eq, rowNums]
+
+/-- `parse` with each row's numbers from `t` (`look`): the rows read where the file's lines were split
+(`HmRow.parseFastFrom`), line `base + j` of the file being line `j` of `lines`. `parseWith_eq` holds for any `t`. -/
+def parseWith (t : Array Row) (base : Nat) (lines : Array String) : V Net :=
+  parseOn (lines.getD · "") lines.size fun j => look t (base + j) (lines.getD j "")
+
+theorem parseWith_eq (t : Array Row) (base : Nat) (lines : Array String) : parseWith t base lines = parse lines :=
+  parseOn_eq lines _ _ _ (fun _ => rfl) rfl fun _ => look_eq _ _ _
+
+/-- `parse` reading each row with `lineNums` (`lineNumsFast`): `parseWith` on no rows read beforehand. -/
+def parseScan (lines : Array String) : V Net := parseWith #[] 0 lines
+
+/-- Compiled code runs `parseScan`; the kernel and every proof see `parse`. -/
+@[csimp] theorem parse_eq_scan : @parse = @parseScan := by
+  funext lines
+  exact (parseWith_eq #[] 0 lines).symm
 
 end Net
 

@@ -1,5 +1,12 @@
-import Proofs.Flock.Soundness.CompiledLock
-import Proofs.Flock.Soundness.Soundness
+module
+
+public import Definitions.Flock.Rewinding
+public import Proofs.Flock.Soundness.CompiledLock
+public import Proofs.Flock.Soundness.Game
+public import Proofs.Flock.Soundness.LigeritoPhase
+public import Proofs.Flock.Soundness.BindSound
+public import Proofs.Flock.Soundness.Soundness
+import Proofs.Flock.Soundness.Merkle
 
 /-!
 # Compiled soundness under collision resistance (README.md §1.2)
@@ -12,6 +19,8 @@ every cap (`Lock.leafE_off_le`), the second costs `√(N · Q · Adv)` per cap, 
 probability that two continuations from the cap open a position differently; each such pair,
 like each self-clash, is a SHA-512 collision (`Merkle.opening_binding`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

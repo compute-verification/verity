@@ -1,4 +1,4 @@
-"""[R16 tp TP-12, rev F-r16-18] the cross-rank collective-output pass: picks are rank-agnostic and seeded; the definition is bit-exact per kind;
+"""The cross-rank collective-output pass: picks are rank-agnostic and seeded; the definition is bit-exact per kind;
 a received output that is not the definition over the committed partials fails BY NAME; a missing member is a named FAIL, never a pass."""
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ def test_picks_are_identical_across_ranks_and_stratified_by_site_kind_phase():
     assert len(pre["rows"]) == 4 and pre["rows_total"] == 40 and all(0 <= r < 40 for r in pre["rows"])
     dec = next(p for p in p0["picks"] if p["step"] != 0 and p["kind"] == "all_reduce")
     assert dec["rows"] == [0, 1, 2]
-    # a different seed draws different decode steps (with overwhelming probability over 3 sites x 5 steps)
+    # a different seed samples different decode steps (with overwhelming probability over 3 sites x 5 steps)
     q0 = XC.pick_strata(_layouts(0), 0, b"\x02" * 32, per_stratum=2, max_rows=4)
     assert [p["step"] for p in q0["picks"]] != [p["step"] for p in p0["picks"]] or [p["rows"] for p in q0["picks"]] != [p["rows"] for p in p0["picks"]]
 
@@ -214,7 +214,7 @@ def test_flip_partial_spec_parses_the_ulp_mode():
 
 
 def test_coverage_of_unreplayable_sites_is_complete_only_when_every_program_site_has_a_stratum():
-    """[rev M-0418] the strata cover the sites the replay could not evaluate; a site with a received output but no stratum is a named FAIL."""
+    """The strata cover the sites the replay could not evaluate; a site with a received output but no stratum is a named FAIL."""
     r = XC.check_picks(_dumps(), world=2)
     assert r["result"] is True
     meta = [{"rank": 0, "unreplayable_sites": {"AllReduce2_v1": SITES, "AllGather2_v1": ["lm_head"], "EmbeddingShard_v1": ["model.embed_tokens"]}},

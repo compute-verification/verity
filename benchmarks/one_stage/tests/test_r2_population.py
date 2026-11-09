@@ -12,7 +12,7 @@ import pytest
 
 from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.types import Value as Bits
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
+from verity.core.protocols.spot.one_stage import partition as P, registration as R
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -63,3 +63,20 @@ def test_r2_registers_another_nonempty_partition(population, mixed, counts):
 def test_one_template_is_not_a_mixed_population():
     with pytest.raises(ValueError):
         R2.program([(XOR8, 1), (AND8, 1)], mixed=False)
+    with pytest.raises(ValueError):
+        R2.program([(XOR8, 3)], mixed=False, values=VALUES)
+
+
+VALUES = (("row-table/0/k8", 4, 16), ("input-ids/0", 2, 16))
+
+
+@pytest.mark.parametrize("population", [[(XOR8, 1)], [(XOR8, 3), (AND8, 1)]], ids=["one-unit", "three-and-one"])
+def test_r2s_partition_takes_the_windows_values(population):
+    """A window whose program takes values (a served window's tables, ahead of its templates' parameters): R2's other
+    partition takes the same values as the same parameters, and its partition is still another."""
+    own = P.mixed_population_program(population, values=VALUES)
+    query = P.template_instances_query([d for d, _ in population])
+    other = R2.program(population, mixed=True, values=VALUES)
+    assert other.fn.bindings["values"] == own.fn.bindings["values"] == VALUES
+    assert other.fn.signature()[0][:2] == own.fn.signature()[0][:2]
+    assert P.digest(P.partition(other, query)) != P.digest(P.partition(own, query))

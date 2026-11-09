@@ -5,7 +5,7 @@
 
 Writes `DIR/window/instances.jsonl`, one instance per line as `NetworkCertifier.WindowCharge.WindowDifftest.rawOfJson`
 reads it, and `DIR/window/python.jsonl`, the same line's results from the checkout's
-`verity.core.protocols.certifier.window_charge`: `reference_window` window by window from the instance's carry, each
+`verity.ml.protocols.certifier.window_charge`: `reference_window` window by window from the instance's carry, each
 window's charge and the carry it passes on, up to and including the first it refuses (`steps`), and the windows' charges
 chained from the book's first carry (its priors, run 0 and no order entry yet), or none when one refuses (`charges`).
 The Lean audit runs `WindowDifftestMain.lean` on both files (`runs` in `lean-audit.json`, which pins their SHA-256), and
@@ -15,7 +15,7 @@ writes them.
 Half the instances start from a random carry (KT counts small, at and just below the `2^KW` the book holds, or past it;
 runs up to 3 and ranks up to `INDEX_CAP + 2`, which `reference_window` refuses; positions anywhere below `2^32 − 1`),
 a window to three, and half from the book's first carry, a session of up to five windows. A window has 0 to 40 decision
-slots and 0 to 16 hit and order slots each. Books are drawn with each table's bins from 1 to 2,000, totals at the
+slots and 0 to 16 hit and order slots each. Books are sampled with each table's bins from 1 to 2,000, totals at the
 bins' sum or above it, and now and then a bin of 0, a total past `MAX_TOTAL` or below the bins' sum; steep books,
 frequency-1 bins at totals near `MAX_TOTAL`, whose symbols take 17 scalings; and certain books, each table's whole total
 in bin 0, under which a window with no slot that holds a value doesn't use the coder. Slots hold a value or not at a
@@ -33,7 +33,7 @@ from pathlib import Path
 
 import verity.core.protocols.certifier
 from verity.core.protocols.certifier.arith_encode import MAX_TOTAL, RUNS
-from verity.core.protocols.certifier.window_charge import (GAP_CAP, HIT_CAP, INDEX_CAP, WindowBook, WindowCarry, _bins,
+from verity.ml.protocols.certifier.window_charge import (GAP_CAP, HIT_CAP, INDEX_CAP, WindowBook, WindowCarry, _bins,
                                                            reference_window)
 
 COUNT = 4_000

@@ -1,6 +1,6 @@
 """stage.py FORM K N INST OUT: INST token rows of ``ScaledMmFp8Block_v2{K,N,128}`` (one x row, N weight columns per
-instance) staged for C-Flock as `verity_flock.multi_unit`'s statements, from synthetic values drawn as ``served_units``'
-``fp8-coord`` draws them (x = Fp8GroupQuant of a seeded N(0, 1) bf16 row; each weight column N(0, 0.02) quantized per 128, a
+instance) staged for Flock as `verity_flock.multi_unit`'s statements, from synthetic values sampled as ``served_units``'
+``fp8-coord`` samples them (x = Fp8GroupQuant of a seeded N(0, 1) bf16 row; each weight column N(0, 0.02) quantized per 128, a
 weight block's scale its first column's).
 
     FORM  c       one statement: N * K/128 k-step units and a scale stage of N slots per VU (OUT/c)
@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 
 from verity_flock import multi_unit as MU
-from verity_vllm.program.kernels import derived_rows as DR
+from verity.ml.definitions.numerics import derived_rows as DR
 
 G = 128
 SALT_KEY = b"multi-unit-benchmark"
@@ -55,7 +55,7 @@ def draw(K: int, N: int, n: int, seed: int = 0):
 
 def definition(K: int, N: int):
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import boolean_fp8 as BF
+    from verity.ml.definitions.registry import boolean_fp8 as BF
 
     return bind(BF.ScaledMmFp8BlockV2, K=K, N=N, G=G)
 

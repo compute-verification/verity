@@ -50,7 +50,7 @@ def attn_kind_for(obs: dict) -> tuple[str, dict, int | None]:
 FUSED_NORM_DISPATCH_PIN = "batch_invariant"
 
 _OBSERVED: dict = {"attention_impls": None, "export_facts": None, "target_profile": None, "launch_context": None,
-                   "allreduce_settings": None, "launch_region": None}
+                   "allreduce_settings": None, "launch_region": None, "batched_form": False}
 
 
 def clear_observations() -> None:
@@ -60,6 +60,17 @@ def clear_observations() -> None:
     _OBSERVED["launch_context"] = None
     _OBSERVED["allreduce_settings"] = None
     _OBSERVED["launch_region"] = None
+    _OBSERVED["batched_form"] = False
+
+
+def observe_batched_form(batched: bool) -> None:
+    """Whether the request Program is derived in class G's batched form (the Build's `--batched`, `prune.BATCHED`), which the
+    sparse-attention rules write in its own Definitions (`vllm_dsa.long_row_blocks`, the latent row), as `predict.dsa` does."""
+    _OBSERVED["batched_form"] = bool(batched)
+
+
+def batched_form() -> bool:
+    return bool(_OBSERVED.get("batched_form"))
 
 
 def observe_allreduce_settings(settings: dict | None) -> None:
@@ -72,7 +83,7 @@ def active_allreduce_settings() -> dict | None:
 
 
 def observe_launch_context(launch: dict | None) -> None:
-    """[R15 hopper HOP-03] The LAUNCH CONTEXT the request Program is built under (`frontend.targets.parse_launch_context`: per request step
+    """The LAUNCH CONTEXT the request Program is built under (`frontend.targets.parse_launch_context`: per request step
     the varlen launch's max_seqlen_q over ALL co-scheduled sequences).  The attention rule's FA3 tile selection reads it: a request's
     own rows are the launch's value only for a batch of one.  None = no declared context (own rows; B1 semantics, digests unchanged)."""
     _OBSERVED["launch_context"] = dict(launch) if launch else None
@@ -113,7 +124,8 @@ def traced_launch_tokens(own: int) -> int:
         return int(own)
     from verity_vllm.program.frontend import targets as T
     step, rows = region
-    return T.launch_tokens(own, step, active_launch_context(), sampled=rows == "sampled")
+    return T.launch_tokens(own, step, active_launch_context(), sampled=rows == "sampled",
+                           capture_sizes=active_target_profile().graph_capture_sizes())
 
 
 def _launch_of(node, read):
@@ -132,12 +144,14 @@ def _launch_of(node, read):
 
 
 def launch_tokens_of(node, own: int) -> int:
-    """The rows of the launch a node's `own` rows run in (`targets.launch_tokens` at the node's `launch_region` tag), for a kernel
-    choice that reads the launch's token count; `own` without a declared batch."""
+    """The rows of the launch a node's `own` rows run in (`targets.launch_tokens` at the node's `launch_region` tag, padded to the
+    target's capture size under breakable CUDA graphs), for a kernel choice that reads the launch's token count; `own` without a
+    declared batch."""
     if not launch_batch_declared():
         return int(own)
     from verity_vllm.program.frontend import targets as T
-    return _launch_of(node, lambda step, sampled: T.launch_tokens(own, step, active_launch_context(), sampled=sampled))
+    sizes = active_target_profile().graph_capture_sizes()
+    return _launch_of(node, lambda step, sampled: T.launch_tokens(own, step, active_launch_context(), sampled=sampled, capture_sizes=sizes))
 
 
 def launch_sequences_of(node) -> list[tuple[int, int]] | None:
@@ -197,7 +211,7 @@ def _attn_pins_ok(obs: dict | None, layer_name: str) -> str | None:
     if obs is None:
         return (f"attention implementation of {layer_name!r} was not observed at construction "
                 "(observe_attention_impls(vllm_meta.attention_impls(model)) before derive) — refusing rather than assuming a backend")
-    # [R13 hopper] the FA version pin is the ACTIVE target's effective one (`TargetProfile.effective_flash_attn_version`: the declared knob
+    # the FA version pin is the ACTIVE target's effective one (`TargetProfile.effective_flash_attn_version`: the declared knob
     # or the selector's default for the capability), and only a version the target has a registered attention chain for is admitted
     # (`frontend.targets.check_flash_attn_registered`); every other field keeps the FA2 profile's pin.
     from verity_vllm.program.frontend import targets as T
@@ -260,7 +274,7 @@ def declared_derived_accounting(profile: TargetProfile | None = None, applied: d
                     "fail-closed via kernel source sha + constexprs + geometry + NUM_SMS and the row's Match replay (bit-exact on captured operands)"},
             {"field": "flash_attn_version", "value": profile.flash_attn_version, "effective": profile.effective_flash_attn_version(),
              "applied": applied.get("flash_attn_version"), "source": "TargetProfile.flash_attn_version -> EngineArgs(attention_config={'flash_attn_version': v})",
-             "why": "[R13 hopper] None = vLLM's selector for the declared capability (FA3 on sm_90); the instantiated layers' version is read back and pinned per layer"},
+             "why": "None = vLLM's selector for the declared capability (FA3 on sm_90); the instantiated layers' version is read back and pinned per layer"},
         ],
     }
 

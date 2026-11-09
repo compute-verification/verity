@@ -1,22 +1,58 @@
-import Mathlib
-import Proofs.Accounting.Bandwidth.Interactive
+module
+
+public import Proofs.Accounting.Bandwidth.Interactive
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.Int.Star
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # B3 for the chip as a tick-by-tick transducer over the links' signals
 
-The bandwidth audit's model prover (`InteractiveDevice`) from the chip in the window, read tick by tick as v2.4 of
-`note:console/20261012T0645Z-draft-actual-circuit-model` describes it: causal from the window's start, the chip's
-behaviour is a function of its state then and of what it observes at each tick. The audited location is the chip, and
-HBM's only link is to it, so HBM hears only the chip: its reply is a function of the store and of the requests the chip
-sent it, and it computes no tag. The rest of the prover may answer as any function of the store, the oracle and every bit
-the chip sent it; its link delivers one signal of its alphabet a tick, so a signal is its index there, `βs` bits.
+The bandwidth audit's model prover (`InteractiveDevice`) from the chip in the window, read tick by tick as the
+actual-circuit model describes it: causal from the window's start, the chip's behaviour is a function of its state then
+and of what it observes at each tick. The audited location is the chip, and HBM's only link is to it, so HBM hears only
+the chip: its reply is a function of the store and of the requests the chip sent it, and it computes no tag. The rest of
+the prover may answer as any function of the store, the oracle and every bit the chip sent it; its link delivers one
+signal of its alphabet a tick, so a signal is its index there, `βs` bits.
 
 `Ticked.Chip` is such a transducer: at each tick it sends a request to HBM and fixes how many bits HBM's reply has, its
 width. `Ticked.observe` is what it observes over `T` ticks, and `Ticked.prog` the chip program that reads each tick's
 replies bit by bit: as many bits of device memory as the widths (addressed by the requests so far, `prog_ingress`) and
 `βs T` of side sources, with no regeneration (`prog_counts`). Its tags are the transducer's (`prog_run`).
 
-Two forms of B3 follow, as v2.4's B3 row has them:
+Two forms of B3 follow, as the model's B3 row has them:
 - **the reads form**, `SecurityProofs.Ticked.audit_reads`: the probability that the tags pass while
   `hbmBits + S + βs T + m b + λ < k b` is at most `AuditInteractive`'s bound at `c = βs T`, where `hbmBits` is the bits
   HBM replied with. It needs passive memory: given the chip's requests, a reply carries only its values, so its width is
@@ -28,6 +64,8 @@ Two forms of B3 follow, as v2.4's B3 row has them:
 
 `audit_reads_ro` and `audit_ro` are `AuditInteractiveRO`'s bounds when the rest ignores the oracle.
 -/
+
+@[expose] public section
 
 namespace Bandwidth
 

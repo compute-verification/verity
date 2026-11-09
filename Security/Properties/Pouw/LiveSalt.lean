@@ -1,4 +1,7 @@
-import PouwCheck
+module
+
+public import PouwCheck
+public import PouwCheck.Pass
 
 /-!
 # PoUW's Pearl-C live salt: what the check of a pass salted by a live challenger session must establish
@@ -13,7 +16,7 @@ SHA-512(`EPOCH_OPEN_TAG` ‖ `W` ‖ u64be(`k`)). H1's sessions are opened on a 
 its one coin after the epoch's root, and the epoch's salt is `audit.salt_of` of that coin over `W`, as H1 keys a window's
 salt by its weights' root. A salt epoch is neither `LiveCommitment.epoch`, the challenger's own number, nor `audit.Epoch`.
 
-Many passes run in one epoch under its one salt. Since #3894 a pass is one engine step's forward, cut so that the tile
+Many passes run in one epoch under its one salt. A pass is one engine step's forward, cut so that the tile
 caps fit, and the salt fixes seed_B, so B~ is formed once per epoch. Each pass's manifest names the epoch's session, and
 its `pass_index` is the epoch's `k`.
 
@@ -73,20 +76,22 @@ credited in one period, the one whose close lists the epoch's root.
 
 Under the salt-only layout an abandoned session ends complete too, so a prover can open `n` sessions on `n` epoch roots
 and present the epoch whose salt it likes best. The salt decides seed_B, the row seeds and `rotation_key`, not which units
-are proven (the draw coin, released after registration). Each epoch's deadline counts from its own session's release, and
+are proven (the sampling coin, released after registration). Each epoch's deadline counts from its own session's release, and
 every pass of the epoch registers by it, so abandoning buys no time, and an install that outlasts the deadline is cut into
 intervals, each its own epoch. Best-of-`n` gains at most `n·ε`, where `ε` is the chance that one salt lets a dishonest
 pass through, while nothing keyed by the salt is rewarded. A Pearl-C period refuses a complete salt-only session that no
 accepted pass presents, which makes the gain zero within credited periods. That rule is the period checker's, not this
-check's (the note `compute-accounting/20261024T2324Z-draft-livesalt`, "The Pearl-C period rule").
+check's.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.LiveSalt
 
 open Lean (Json)
 open PouwCheck (R at? checkWorkload workloadOf weightsRootAt MANIFEST_SCHEMA)
-open SampledProofs.Challenger (Audited ChallengerKey LedgerEntry LiveCommitment LiveOpening Roots ledgerEntry? leafOf
-  liveReason pinnedSession sessionNamed)
+open Spot.Challenger (Audited ChallengerKey Families LedgerEntry LiveCommitment LiveOpening Roots ledgerEntry?
+  leafOf liveReason pinnedSession sessionNamed)
 
 /-! ## The layout, the epoch's root and the salt -/
 
@@ -144,8 +149,8 @@ def entries (ledger : Json) : List LedgerEntry :=
 /-- The root an open entry names for its window, as `verifyLedger` reads it: `window.root` under v2, `window.commit`
 under v1. -/
 def openRoot (e : LedgerEntry) : Json :=
-  SampledProofs.getD (SampledProofs.getD e.body "window")
-    (if e.schema == SampledProofs.Challenger.LEDGER_SCHEMA then "root" else "commit")
+  Spot.getD (Spot.getD e.body "window")
+    (if e.schema == Spot.Challenger.LEDGER_SCHEMA then "root" else "commit")
 
 /-- What the auditor's ledger shows of session `s` and the epoch's root `r`, in its signed order:
 * a v2 reserve of `s`, of the salt-only layout;
@@ -155,28 +160,28 @@ def openRoot (e : LedgerEntry) : Json :=
 * no other open, v1 or v2, on `r` or of `s`. -/
 def LedgerShows (ledger : Json) (s : String) (r : ByteArray) (recordLeaf openSeq : Nat) : Prop :=
   ∃ rv o e : LedgerEntry, rv ∈ entries ledger ∧ o ∈ entries ledger ∧ e ∈ entries ledger ∧
-    (rv.kind = "reserve" ∧ rv.session = s ∧ rv.schema = SampledProofs.Challenger.LEDGER_SCHEMA ∧
-      SampledProofs.jeq (SampledProofs.getD rv.body "families")
-        (SampledProofs.Challenger.familiesJson SALT_FAMILIES) = true) ∧
-    (o.kind = "open" ∧ o.session = s ∧ o.schema = SampledProofs.Challenger.LEDGER_SCHEMA ∧ rv.seq < o.seq ∧
-      o.seq = openSeq ∧ SampledProofs.int? (SampledProofs.getD o.body "reserve") = some (rv.seq : Int) ∧
+    (rv.kind = "reserve" ∧ rv.session = s ∧ rv.schema = Spot.Challenger.LEDGER_SCHEMA ∧
+      Spot.jeq (Spot.getD rv.body "families")
+        (Spot.Challenger.familiesJson SALT_FAMILIES) = true) ∧
+    (o.kind = "open" ∧ o.session = s ∧ o.schema = Spot.Challenger.LEDGER_SCHEMA ∧ rv.seq < o.seq ∧
+      o.seq = openSeq ∧ Spot.int? (Spot.getD o.body "reserve") = some (rv.seq : Int) ∧
       openRoot o = .str (Flock.hexOf r)) ∧
     (e.kind = "end" ∧ e.session = s ∧ o.seq < e.seq ∧
-      SampledProofs.getD e.body "closed" = .bool true ∧ SampledProofs.getD e.body "complete" = .bool true ∧
-      SampledProofs.jeq (SampledProofs.getD e.body "released")
+      Spot.getD e.body "closed" = .bool true ∧ Spot.getD e.body "complete" = .bool true ∧
+      Spot.jeq (Spot.getD e.body "released")
         (Json.mkObj [(PouwWindow.SALT, Lean.toJson (1 : Nat))]) = true ∧
-      SampledProofs.nat? (SampledProofs.getD e.body "record_leaf") = some recordLeaf ∧
+      Spot.nat? (Spot.getD e.body "record_leaf") = some recordLeaf ∧
       leafOf o.sig < recordLeaf ∧ recordLeaf < leafOf e.sig) ∧
     ∀ o' ∈ entries ledger, o'.kind = "open" → (openRoot o' = .str (Flock.hexOf r) ∨ o'.session = s) → o' = o
 
 /-- The manifest's `session`, the gate's open answer as the run carries it (`PHC.carried`), names the ledger's session
 `a`, the `seq` of its open, the root it was opened on and the commitment its end names, and carries no `secret`. -/
 def ManifestNames (m : Json) (a : Audited) (r : ByteArray) (openSeq : Nat) : Prop :=
-  SampledProofs.getD (at? m "session") "session" = .str a.session ∧
-    SampledProofs.int? (SampledProofs.getD (at? m "session") "seq") = some (openSeq : Int) ∧
-    SampledProofs.getD (at? m "session") "root" = .str (Flock.hexOf r) ∧
-    SampledProofs.getD (at? m "session") "commitment" = .str a.commitment ∧
-    SampledProofs.field? (at? m "session") "secret" = none
+  Spot.getD (at? m "session") "session" = .str a.session ∧
+    Spot.int? (Spot.getD (at? m "session") "seq") = some (openSeq : Int) ∧
+    Spot.getD (at? m "session") "root" = .str (Flock.hexOf r) ∧
+    Spot.getD (at? m "session") "commitment" = .str a.commitment ∧
+    Spot.field? (at? m "session") "secret" = none
 
 /-! ## The check -/
 
@@ -225,9 +230,9 @@ def fv3Message (tag : String) (parts : List ByteArray) : ByteArray :=
   let t := tag.toUTF8
   parts.foldl (fun acc p => acc ++ Flock.be64 p.size.toUInt64 ++ p) (Flock.FV3.FRAME ++ Flock.be32 t.size.toUInt32 ++ t)
 
-/-- The message `taggedSha512 tag manifest` hashes, when the manifest has a canonical form. -/
+/-- The message `taggedSha512 tag manifest` hashes, when the manifest has identity bytes (`Flock.canonUtf8`). -/
 def taggedMessage (tag : String) (manifest : Json) : List ByteArray :=
-  match Flock.canon manifest with
+  match Flock.canonUtf8 manifest with
   | .ok s =>
     let t := tag.toUTF8
     let b := s.toUTF8
@@ -238,15 +243,15 @@ def taggedMessage (tag : String) (manifest : Json) : List ByteArray :=
 scheme, epoch and layout, the positions, and the domain's frame. -/
 def domainHashed (c : LiveCommitment) : List ByteArray :=
   let binding := Json.mkObj [("epoch", Lean.toJson c.epoch),
-    ("families", SampledProofs.Challenger.familiesJson c.families), ("scheme", Json.str c.scheme)]
+    ("families", Spot.Challenger.familiesJson c.families), ("scheme", Json.str c.scheme)]
   let positions := Json.mkObj [("start", Lean.toJson (0 : Nat)), ("step", Lean.toJson (1 : Nat)),
-    ("stop", Lean.toJson (SampledProofs.Challenger.total c.families))]
-  let tagged := taggedMessage SampledProofs.Challenger.BINDING binding ++
+    ("stop", Lean.toJson (Spot.Challenger.total c.families))]
+  let tagged := taggedMessage Spot.Challenger.BINDING binding ++
     taggedMessage "veritor/indexed-domain/range/v1" positions
-  match SampledProofs.Challenger.taggedSha512 SampledProofs.Challenger.BINDING binding,
-      SampledProofs.Challenger.taggedSha512 "veritor/indexed-domain/range/v1" positions with
+  match Spot.Challenger.taggedSha512 Spot.Challenger.BINDING binding,
+      Spot.Challenger.taggedSha512 "veritor/indexed-domain/range/v1" positions with
   | .ok b, .ok p =>
-    tagged ++ [fv3Message "domain" [b, Flock.FV3.uint 1, p, Flock.FV3.uint (SampledProofs.Challenger.total c.families)]]
+    tagged ++ [fv3Message "domain" [b, Flock.FV3.uint 1, p, Flock.FV3.uint (Spot.Challenger.total c.families)]]
   | _, _ => tagged
 
 /-- The node frames `Flock.Registered.climbL dom cur idx d sibs` hashes, bottom first. -/
@@ -263,7 +268,7 @@ frame, and the frame of each node on the path. -/
 def liveHashed (c : LiveCommitment) (dom : ByteArray) (pos : Nat) (o : LiveOpening) : List ByteArray :=
   let inner := c.scheme.toUTF8.push 0 ++ o.coin
   let leaf := fv3Message "leaf" [dom, Flock.FV3.uint pos, Flock.FV3.uint pos, c.scheme.toUTF8,
-    SampledProofs.Challenger.liveLeaf c.scheme o.coin o.salt]
+    Spot.Challenger.liveLeaf c.scheme o.coin o.salt]
   [inner, Flock.Hm96.Default512.saltPrefix ++ o.salt,
     Flock.Hm96.Default512.leafPrefix ++ Flock.Hm96.Default512.commitString (Flock.Sha512.hash inner) o.salt, leaf] ++
     climbFrames dom (Flock.Sha512.hash leaf) pos 0 o.path
@@ -271,7 +276,7 @@ def liveHashed (c : LiveCommitment) (dom : ByteArray) (pos : Nat) (o : LiveOpeni
 /-- Everything SHA-512 hashes when `liveReason c o label index` checks `o` against `c`'s root: `c`'s domain, then the
 coin's climb from its position. -/
 def hashedBy (c : LiveCommitment) (o : LiveOpening) (label : String) (index : Int) : List ByteArray :=
-  match SampledProofs.Challenger.liveDomain c.scheme c.epoch c.families, c.position label index with
+  match Spot.Challenger.liveDomain c.scheme c.epoch c.families, c.position label index with
   | .ok dom, some pos => domainHashed c ++ liveHashed c dom pos o
   | _, _ => domainHashed c
 
@@ -303,7 +308,7 @@ def callIndices (m : Json) : List Int :=
 
 /-- The epoch the pass `m` names: its manifest's session's `root`. An accepted pass of epoch `k` over `w` names
 `epochOpenRoot w k` there (`ManifestNames`). -/
-def epochOf (m : Json) : Json := SampledProofs.getD (at? m "session") "root"
+def epochOf (m : Json) : Json := Spot.getD (at? m "session") "root"
 
 /-- The signature of the Pearl-C period's credit: the verifier's challenger key, the auditor's ledger, the host's pins
 log, the verifier's copy of main's first-parent history and the period (its name, its close and the passes it presents,
@@ -312,13 +317,19 @@ abbrev PeriodCredit := (key ledger pins main period : Json) → R (List Json)
 
 /-! ## The properties -/
 
-/-- A live root binds its commitment and its coins. Take two commitments with one root, and an opening of each that
-`liveReason` accepts for one coin (`label`, `index`). Either the commitments are one (scheme, epoch and layout) and the
-openings carry the same coin, or two different messages, one hashed in checking each opening, have one SHA-512 digest. -/
+/-- A live root binds its commitment and its coins. Take two commitments with one root `r`, `⟨s, e, fs, r⟩` and
+`⟨s', e', fs', r⟩`, and an opening of each that `liveReason` accepts for one coin (`label`, `index`). Either the
+commitments are one (scheme, epoch and layout) and the openings carry the same coin, or two different messages, one hashed
+in checking each opening, have one SHA-512 digest. It doesn't bound the salt's choice among a weights' root's epochs: the
+prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes, and that choice rests
+on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until the period check refuses a
+complete salt-only session that no accepted pass presents. -/
 def LiveCoinBinding : Prop :=
-  ∀ (c c' : LiveCommitment) (o o' : LiveOpening) label index after after', c.root = c'.root →
-    liveReason c o label index after = .ok none → liveReason c' o' label index after' = .ok none →
-    (c = c' ∧ o.coin = o'.coin) ∨ Collides (hashedBy c o label index) (hashedBy c' o' label index)
+  ∀ (s s' : String) (e e' : Nat) (fs fs' : Families) (r : ByteArray) (o o' : LiveOpening) label index after after',
+    liveReason ⟨s, e, fs, r⟩ o label index after = .ok none →
+    liveReason ⟨s', e', fs', r⟩ o' label index after' = .ok none →
+    ((⟨s, e, fs, r⟩ : LiveCommitment) = ⟨s', e', fs', r⟩ ∧ o.coin = o'.coin) ∨
+      Collides (hashedBy ⟨s, e, fs, r⟩ o label index) (hashedBy ⟨s', e', fs', r⟩ o' label index)
 
 /-- An epoch's root names one weights' root and one epoch: two 64-byte weights' roots and two epoch numbers below 2^64
 with one epoch root are one pair, or their two messages, different, have one SHA-512 digest. -/
@@ -328,11 +339,14 @@ def EpochRootBinding : Prop :=
 
 /-- One epoch, one session, one salt: two passes that the check accepts against one ledger, under one key, pins log and
 history, both passes of epoch `k` over the weights' root `w`, were salted by one session `a` of the ledger, and their
-salts agree unless two different messages hashed in checking their salt coins have one SHA-512 digest. -/
+salts agree unless two different messages hashed in checking their salt coins have one SHA-512 digest. It doesn't bound
+the salt's choice among a weights' root's epochs: the prover picks `pass_index`, so it can open several epochs over one
+`W` and present the salt it likes, and that choice rests on the grinding term over every epoch the prover can open, at
+most n·ε for n epochs, until the period check refuses a complete salt-only session that no accepted pass presents. -/
 def OnePair (check : Check) : Prop :=
-  ∀ key ledger pins main session session' m m' salt salt' w k,
+  ∀ key ledger pins main session session' m m' salt salt',
     check key ledger pins main session m = .ok salt → check key ledger pins main session' m' = .ok salt' →
-    EpochRoot m w k → EpochRoot m' w k →
+    ∀ w k, EpochRoot m w k → EpochRoot m' w k →
     ∃ a c c' o o', Accepted key ledger pins main session m w k a c o salt ∧
       Accepted key ledger pins main session' m' w k a c' o' salt' ∧
       (salt = salt' ∨ Collides (hashedBy c o PouwWindow.SALT 0) (hashedBy c' o' PouwWindow.SALT 0))
@@ -341,7 +355,7 @@ def OnePair (check : Check) : Prop :=
 history, any two acceptances by one session were opened on one epoch root. It doesn't bound the salt's choice among a
 weights' root's epochs: the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it
 likes, and that choice rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until
-CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968). -/
+the period check refuses a complete salt-only session that no accepted pass presents. -/
 def OneRoot (check : Check) : Prop :=
   ∀ key ledger pins main session session' m m' salt salt',
     check key ledger pins main session m = .ok salt → check key ledger pins main session' m' = .ok salt' →

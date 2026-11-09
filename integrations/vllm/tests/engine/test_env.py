@@ -1,14 +1,19 @@
-"""`engine.env`: the vLLM pins are defaults an operator's export overrides, a target profile's values replace the
-process's, and every caller reads the one table."""
+"""`engine.env`: the vLLM pins are defaults an operator's export overrides, but for the fixed ones, which refuse another inherited
+value; a target profile's values replace the process's, and every caller reads the one table."""
 from __future__ import annotations
 
 import os
+import sys
 
 import pytest
 
 from verity_vllm.engine import env
 
 PINNED = sorted({*env.ENGINE, *env.EXPORT, "HF_HOME", "HF_HUB_OFFLINE"})
+RBLOCK = "TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK"
+#: every stage that builds `vllm.LLM` itself, at any world size
+TP_ENGINES = [("verity_vllm.pipeline.tp.capture", "main"), ("verity_vllm.pipeline.tp.commit", "main"),
+              ("verity_vllm.pipeline.tp.match", "_engine_main")]
 
 
 @pytest.fixture
@@ -51,10 +56,9 @@ def test_a_step_gets_the_stage_rpc_bound_unless_the_operator_set_one(monkeypatch
     assert env.step_timeout(1800.0) == {"VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS": "60"}
 
 
-@pytest.mark.parametrize("module, fn", [("verity_vllm.pipeline.tp.capture", "main"), ("verity_vllm.pipeline.tp.commit", "main"),
-                                        ("verity_vllm.pipeline.tp.match", "_engine_main")])
+@pytest.mark.parametrize("module, fn", TP_ENGINES)
 def test_every_tp_engine_bounds_a_step_by_its_rpc_timeout_before_it_is_built(module, fn) -> None:
-    """vLLM's own 300 s stopped a GLM-5.3 B8 capture in its first observed step, a 256-token prefill; the greedy row's first one
+    """vLLM's own 300 s stopped a GLM-5.3 B8 capture in its first observed step, a 256-token prefill; the greedy workload's first one
     took 147 s on an idle host."""
     import importlib
     import inspect
@@ -118,8 +122,9 @@ def test_the_engine_profile_reads_this_table() -> None:
 
     assert prof.DECLARED_ENV is env.ENGINE
     assert env.ENGINE == {"VLLM_USE_V2_MODEL_RUNNER": "1", "VLLM_ENABLE_V1_MULTIPROCESSING": "0", "VLLM_USE_FLASHINFER_SAMPLER": "0",
-                          "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1"}
+                          "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1", RBLOCK: "0"}
     assert set(env.REASONS) == set(env.ENGINE) and all(env.REASONS.values())
+    assert set(env.FIXED) <= set(env.ENGINE)
     assert env.EXPORT == {"VLLM_USE_LAYERNAME": "0", "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1",
                           "HF_HUB_OFFLINE": "1", "VLLM_LOGGING_LEVEL": "WARNING", "TOKENIZERS_PARALLELISM": "false"}
 
@@ -151,5 +156,113 @@ def test_a_checkpoint_not_on_this_host_is_refused_by_name(tmp_path) -> None:
 
 def test_serving_and_the_build_put_a_shared_expert_on_one_stream() -> None:
     """A Build orders a shared expert on the main stream, so a served run must run it there too: on two streams, its log's order
-    is not the execution order, and wiring (operand_provenance) fails."""
+    is not the execution order the fold takes it to be."""
     assert env.ENGINE["VLLM_DISABLE_SHARED_EXPERTS_STREAM"] == env.EXPORT["VLLM_DISABLE_SHARED_EXPERTS_STREAM"] == "1"
+
+
+def test_every_engine_runs_a_reduction_kernel_at_its_static_tiling(clean) -> None:
+    assert env.FIXED[RBLOCK] == ("dynamic_scale_rblock", False)
+    assert env.apply_engine(None)[RBLOCK] == os.environ[RBLOCK] == "0"
+    clean.setenv(RBLOCK, "0")
+    assert env.apply_engine(None)[RBLOCK] == "0"
+
+
+@pytest.mark.parametrize("inherited", ["1", "", "true"])
+def test_an_inherited_dynamic_tiling_is_refused_by_name_before_anything_is_pinned(clean, inherited) -> None:
+    clean.setenv(RBLOCK, inherited)
+    with pytest.raises(RuntimeError, match=f"fail-closed: this process inherited {RBLOCK}={inherited!r}.*unset it"):
+        env.apply_engine(None)
+    with pytest.raises(RuntimeError, match=f"inherited {RBLOCK}"):
+        env.pin({**env.ENGINE, "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION": "1"})
+    assert not (set(env.ENGINE) - set(env.FIXED)) & set(os.environ)
+    assert "HF_HUB_OFFLINE" not in os.environ
+
+
+def test_an_engine_refuses_an_inductor_that_read_the_tiling_otherwise(monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    monkeypatch.delitem(sys.modules, "torch._inductor.config", raising=False)
+    env.require_inductor({})
+    monkeypatch.setitem(sys.modules, "torch._inductor.config", SimpleNamespace(dynamic_scale_rblock=False))
+    env.require_inductor({"compilation_config": {"mode": 3}})
+    env.require_inductor({"compilation_config": {"inductor_compile_config": {"dynamic_scale_rblock": False}}})
+    env.require_inductor({"compilation_config": {"inductor_compile_config": None}})
+    for over in ({"inductor_compile_config": {"dynamic_scale_rblock": True}},
+                 SimpleNamespace(inductor_compile_config={"dynamic_scale_rblock": True})):
+        with pytest.raises(RuntimeError, match="inductor_compile_config sets dynamic_scale_rblock=True"):
+            env.require_inductor({"compilation_config": over})
+    monkeypatch.setitem(sys.modules, "torch._inductor.config", SimpleNamespace(dynamic_scale_rblock=True))
+    with pytest.raises(RuntimeError, match=f"torch._inductor.config was imported before {RBLOCK}=0 was pinned"):
+        env.require_inductor({})
+
+
+@pytest.mark.parametrize("module, fn", TP_ENGINES)
+def test_every_tp_engine_checks_its_inductor_before_it_is_built(module, fn) -> None:
+    import importlib
+    import inspect
+
+    src = inspect.getsource(getattr(importlib.import_module(module), fn))
+    assert src.index("engine_env.require_inductor(kw)") < src.index("LLM(**kw)")
+
+
+def test_every_engine_records_the_tiling_it_runs(clean, tmp_path) -> None:
+    import json
+
+    from verity_vllm.engine import build
+
+    clean.setenv("VLLM_BATCH_INVARIANT", "0")
+    clean.setenv("HF_HOME", str(tmp_path))
+    if (cfg := sys.modules.get("torch._inductor.config")) is not None:
+        clean.setattr(cfg, "dynamic_scale_rblock", False)
+    (m := tmp_path / "checkpoints.json").write_text(json.dumps({"checkpoints": [
+        {"repo": "r/m", "role": "M", "downloaded": True, "local_path": str(tmp_path)}]}))
+    for execution in ("bi-eager", "bi-compiled"):
+        _, env_flags, _ = build.engine_kwargs_for(m, case="M", execution=execution)
+        assert env_flags[RBLOCK] == "0"
+    with pytest.raises(RuntimeError, match="inductor_compile_config sets dynamic_scale_rblock=True"):
+        build.engine_kwargs_for(m, case="M", execution="bi-compiled",
+                                engine_args={"compilation_config": {"inductor_compile_config": {"dynamic_scale_rblock": True}}})
+
+
+_RANKS = """
+import multiprocessing as mp
+import sys
+
+from verity_vllm.engine import env
+
+
+def rank(q):
+    import torch._inductor.config as c
+    q.put(c.dynamic_scale_rblock)
+
+
+if __name__ == "__main__":
+    if sys.argv[1] == "late":
+        import torch._dynamo  # noqa: F401
+    env.apply_engine(None)
+    import torch._inductor.config as c
+    try:
+        env.require_inductor({})
+    except RuntimeError as e:
+        sys.exit(f"refused: {e}")
+    ctx = mp.get_context("spawn")
+    q = ctx.Queue()
+    p = ctx.Process(target=rank, args=(q,))
+    p.start()
+    print(c.dynamic_scale_rblock, q.get())
+    p.join()
+"""
+
+
+@pytest.mark.slow
+def test_torch_reads_the_pin_in_the_engine_process_and_a_rank_it_spawns_or_the_engine_is_refused(tmp_path) -> None:
+    """Runs torch's own reading of the variable, which a fake config can't: pinned before torch._inductor.config is imported, Inductor
+    reads the static tiling in the engine's process and in a rank it spawns; imported first, the engine is refused."""
+    import subprocess
+
+    (script := tmp_path / "ranks.py").write_text(_RANKS)
+    inherited = {k: v for k, v in os.environ.items() if k != RBLOCK}
+    pinned = subprocess.run([sys.executable, str(script), "pinned"], env=inherited, cwd=tmp_path, capture_output=True, text=True)
+    assert (pinned.returncode, pinned.stdout.split()) == (0, ["False", "False"]), pinned.stderr
+    late = subprocess.run([sys.executable, str(script), "late"], env=inherited, cwd=tmp_path, capture_output=True, text=True)
+    assert late.returncode == 1 and "torch._inductor.config was imported before" in late.stderr, late.stderr

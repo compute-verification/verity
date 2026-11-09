@@ -1,9 +1,11 @@
-import Definitions.Pouw.Assumptions.Dimension.H100Dense
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100Dense
 
 /-!
 # Computed fragments in the k8 lemma (trusted statements; draft semantics)
 
-**Draft semantics, pending review** (`internal/pouw-fp8/genuine-fp8-interface.md` §1.1; red team X-H32-2).
+**Draft semantics, pending review**.
 
 `AccIn` with `LaneFns m` covers a cheap tensor-core instruction whose A and B fragments are lane words. Here the
 fragments may be computed registers. A cheap register is then, up to the rounding `β`, its accumulator plus a function
@@ -16,18 +18,20 @@ column tiles is paid once and read by every tile, so its price per word goes to 
 increment still depends on few lanes:
 
 * **`AccInOfFrag`**: if every multiplicand register depends on at most `q` lanes, the increments are in
-  `LaneFns (K·q) β`. So `AccFragIn` implies `AccIn` at `m = K·q`, and `DenseCert`, `ApartCert` and `LegacyGamma` apply
+  `LaneFns (K·q) β`. So `AccFragIn` implies `AccIn` at `m = K·q`, and `DenseCert`, `ApartCert` and `LegacyGap` apply
   at `m = K·q`, however widely each fragment is shared.
 * **`DenseWritesFrag`**: the k8 bound with computed fragments, `a·|T₁| + c·|T₂| ≤ cost`, for targets dense and apart
   for `LaneFns (K·q) β`.
 * **`FragShareGain`**: the lane bound cannot be dropped. With one multiplicand that depends on every lane, `n` dense,
   pairwise apart words cost `32 + 31·n` at `h100Legacy`'s prices, below `32·n` once `n > 32`.
 
-The lane bound on the multiplicands is the named hypothesis `FragLanes S p q W` (`Pouw.Dimension.H100Assumptions`, red
-team F18-2). `DenseWritesFragLanes` (`Pouw.Dimension.H100Cite`) is `DenseWritesFrag` with it. The k8 lemma is cited
-only against adversaries whose cheap tensor-core multiplicands meet it (red team F18b-5). It is not needed at Round 8's
-loop-free prices (`DistinctWritesLoopFree`, `Pouw.Dimension.H100Floor`).
+The lane bound on the multiplicands is the named hypothesis `FragLanes S p q W` (`Pouw.Dimension.H100Assumptions`).
+`DenseWritesFragLanes` (`Pouw.Dimension.H100Cite`) is `DenseWritesFrag` with it. The k8 lemma is cited only against
+adversaries whose cheap tensor-core multiplicands meet it. It is not needed at Round 8's loop-free prices
+(`DistinctWritesLoopFree`, `Pouw.Dimension.H100Floor`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

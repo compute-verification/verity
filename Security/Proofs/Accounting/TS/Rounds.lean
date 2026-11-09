@@ -1,14 +1,20 @@
-import Definitions.Accounting.Guarantees.TS
-import Proofs.Pouw.RelativeSecurity
+module
+
+public import Definitions.Accounting.Guarantees.TS
+public import Proofs.Pouw.RelativeSecurity
 
 /-!
 # The tensor–scalar model's round lemmas
 
 The plays' tail bounds: one bet a round under (L), the deficiency against the deficient rounds, and SAMPLING's budget
-(EPS1-SPEC §2.4, §2.7; gap list G7–G9: note:20261017T0801Z-draft-lean-stmt). They are PoUW's round bounds
+(EPS1-SPEC §2.4, §2.7). They are PoUW's round bounds
 (`Pouw.RelativeSecurity`): `luck_rounds` conditions on the first round's coins (`prob_eq_expect`, `expect_prod`) as
 `expect_weight_le` does, and `budget_tail` is `prob_accepts_le` at `c = 1/Λ`.
 -/
+
+@[expose] public section
+
+open Claims renaming Ex → expect
 
 namespace Accounting.SecurityProofs.TS
 
@@ -18,17 +24,17 @@ open Accounting.TS Accounting.Assumptions.TS Accounting.Guarantees.TS Pouw.Relat
 
 namespace Rounds
 
-theorem expect_add {Ω : Type*} [Fintype Ω] (f g : Ω → ℝ) :
+theorem expect_add {Ω : Type} [Fintype Ω] (f g : Ω → ℝ) :
     expect (fun ω => f ω + g ω) = expect f + expect g := by
   unfold expect
   rw [Finset.sum_add_distrib, add_div]
 
 theorem prob_false {Ω : Type*} [Fintype Ω] : prob (fun _ : Ω => False) = 0 := by
-  unfold prob
+  unfold prob Claims.prUniform
   simp
 
 /-- An indicator below an event's: its expectation is at most the event's probability. -/
-theorem expect_ind_le_prob {Ω : Type*} [Fintype Ω] {P Q : Ω → Prop} {inst : DecidablePred P}
+theorem expect_ind_le_prob {Ω : Type} [Fintype Ω] {P Q : Ω → Prop} {inst : DecidablePred P}
     (h : ∀ ω, P ω → Q ω) : expect (fun ω => if P ω then (1 : ℝ) else 0) ≤ prob Q := by
   classical
   rw [prob_eq_expect Q]

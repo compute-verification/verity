@@ -1,17 +1,19 @@
-import Proofs.Flock.SessionLoop.FinRepPads
-import Proofs.Flock.SessionLoop.FinRepView
-import Proofs.Flock.SessionLoop.FinRounds
-import Proofs.Flock.SessionLoop.Tables
-import Proofs.Flock.Claims.ZK.FinishSwVals
-import Proofs.Flock.Claims.ZK.FinishClaimsX
+module
+
+public import Proofs.Flock.SessionLoop.FinRepPads
+public import Proofs.Flock.SessionLoop.FinRepView
+public import Proofs.Flock.SessionLoop.FinRounds
+public import Proofs.Flock.SessionLoop.Tables
+public import Proofs.Flock.Claims.ZK.FinishSwVals
+public import Proofs.Flock.Claims.ZK.FinishClaimsX
 
 /-!
 # `FinRepErased` at one rep stream
 
 **`Loop.finRepErased_at`**: at table `j`'s rep `r` (rep stream `2j + r`), where the session's rep on the loop's table
-and request returns `(p, tr)`, the run from the views returns `(p', tr)` with `eraseZ p' = eraseZ p`. The firewall's
+and request returns `(p, tr)`, the run from the views returns `(p', tr)` with `eraseZ p' = eraseZ p`. The ZK server's
 rep is `Masked.swSrcE_repCut_v` at the views' source, on the loop's table (`finRepTab`, `Level0Src.realOf`), request
-(`RepSrc`'s draws and salts, `RepSrc.salt`) and extra claims (`repFwC_claims_x`); the view run is that cut but for
+(`RepSrc`'s samples and salts, `RepSrc.salt`) and extra claims (`repFwC_claims_x`); the view run is that cut but for
 level 0's commitment (`cms_cm0`), the pads commitment (`padsView_ic`) and what only the final message reads
 (`eraseS_cutSrc`), so `repCut_eraseZ` and `go_of_eraseZ` give it. What the rep stream's place in the session fixes is
 taken as premises:
@@ -22,6 +24,8 @@ taken as premises:
 * `hxs`: the extra claims from the views have the request's coordinates (`finRepXs`);
 * `hrows`: every table's rows hold at its base (`Loop.FinRows`'s body).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -42,7 +46,7 @@ theorem go_eq_of_run_fst {α β : Type} {z : α × β} {a : α} (h : z.1 = a) : 
 
 set_option maxHeartbeats 1000000 in
 /-- **The rep from the views up to `eraseZ`, at one rep stream**: in the masked scope, at a witness in the relation,
-where the frame draws the tape's pads (`RepSrc`) and the loop the tape's level 0 (`Level0Src`), at admitted opened
+where the frame samples the tape's pads (`RepSrc`) and the loop the tape's level 0 (`Level0Src`), at admitted opened
 coins, the session's schedules and the views' commitments, where the session's rep on the loop's table and request at
 table `j`'s rep `r` returns `(p, tr)` from `l`, the run from the views returns `(p', tr)` with `eraseZ p' = eraseZ p`,
 given `hmk`, `hl0`, `hpri`, `hxs` and `hrows`. -/
@@ -51,8 +55,8 @@ theorem finRepErased_at (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.F
     (hS : Loop.RepSrc L₀ src x w) (hS0 : Level0Src src x w) {ν : finS.Nonce} {t : finS.Tape} {m₀ ρ₀ : Msg}
     {ops : List (Msg × Msg)} (hA : finS.Admits x (finCoins x ops))
     (hrows : ∀ j : Fin (Masked.jOf x), ((finS.C x j).T (finS.cz x (finCoins x ops) j)).tab.onVals.RowsAt
-      (finS.wt x w j, vs x w ν (finCoins x ops) j)
-      (finS.randAt x (finCoins x ops) t j).1.1 (finS.randAt x (finCoins x ops) t j).1.2.1.2.1)
+      (finS.wt x w j, vs x w ν (finCoins x ops) (finS.seenOf x t) j)
+      (finS.randAt x (finCoins x ops) t j).1.1 (finS.randAt x (finCoins x ops) t j).1.2.1)
     {s0 : _} {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x))
     {schs : Array (_root_.Flock.Schedule × ℕ)}
     (hschs : (FlockComplete.schedsPZk (FlockDeploy.tabsOf (Masked.stsOf x)) : V _) = .ok schs)
@@ -72,17 +76,17 @@ theorem finRepErased_at (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.F
         V _root_.Flock.Firewall.Finish.InnerCommit) = .ok ic')
     (hxs : extras.map (·.x) = q.xs)
     (hmk : ∀ i < (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).zp 64,
-      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j.val).rep r.val).masked i =
+      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val).masked i =
         q.vals[i]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h[i]!)
     (hl0 : ∀ res t₃ l₃, ((FlockComplete.piopCut (FlockComplete.asksCut (Masked.ligCoin (finCoins x ops)) (refK x))
         tb.st (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog (Masked.zkTab x j).sch.k0)
-        ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j.val).rep r.val)
+        ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val)
         (FlockComplete.flat tb.cm0.toC.cap) ic'.toC.root extras (Masked.priorE (finCoins x ops) j.val r.val)
         (FlockSoundness.Discharge.Composed.maskWordsOf (Masked.stsOf x)[j.val]!)).run
         (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[j.val]! r.val).toUTF8)).go l =
         (.ok (res, t₃), l₃) →
       ∀ i, (Masked.layE x j).zp 64 ≤ i → i < (Masked.layE x j).hab →
-        ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j.val).rep r.val).masked i =
+        ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val).masked i =
           FlockComplete.LigLock.l0Clear (Masked.ligCoin (finCoins x ops)) (Masked.ligP0 x j r) (Masked.zkTab x j).sch
             (Masked.ligTab x w t j) (Masked.ligBasis x (finCoins x ops) w t j r extras) (Masked.layE x j)
             ((Masked.UE.tapeZk t).extra j.val) r.val i + (_root_.Flock.Firewall.Finish.padsOf q.draws).h[i]!)
@@ -131,7 +135,7 @@ theorem finRepErased_at (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.F
   -- the loop's table is the tape's
   obtain ⟨-, -, -, hg⟩ := hS0.realOf ν t j r hRep.1
   obtain ⟨hex, hlp⟩ := hS0.realOf_lanes ν t j r hRep.1
-  -- the request's draws and salts are the frame's
+  -- the request's samples and salts are the frame's
   have hq0 := hRep.2.1
   unfold repInOf at hq0
   obtain ⟨⟨lay, ms⟩, hstart, hq0⟩ := bok hq0
@@ -167,19 +171,19 @@ theorem finRepErased_at (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.F
     intro i h1 h2 p hp
     rw [hqh]
     exact hS.salt ν t j r hRep.1 i h1 h2 p hp
-  -- the firewall's run at the extra claims from the views
+  -- the ZK server's run at the extra claims from the views
   have hrun' := go_eq_of_run_fst hrun
   have hxe : (_root_.Flock.Firewall.Finish.claimsOf q.xs).map (·.x) = extras.map (·.x) := by
     rw [_root_.Flock.Firewall.Finish.claimsOf_map_x, hxs]
   rw [_root_.Flock.Firewall.Finish.repFwC_claims_x _ _ _ _ _ _ _ _ _ hxe] at hrun'
-  rw [hk2, hkr, hsch, htp, hex, hlp] at hrun'
+  rw [hk2, hkr, hsch, htp] at hrun'
   have he : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.extra (Masked.ptsE (finCoins x ops) spec) = .ok extras := by
     rw [← hk2]
     exact hext
   obtain ⟨p', hcut, hpe⟩ := Masked.swSrcE_repCut_v (LeanRelease.ofLoopLink L₀ src (realOf src)) (ν, t)
     (Masked.UE.tapeZk t) Loop.frepOf x hx w hR t (finCoins x ops) hA (refK x) s0 spec hsx j r extras he
-    (vs x w ν (finCoins x ops)) q hq' hlay hz hpads (hrows j)
-    (fun i hi => hmk i (by rw [hLy]; exact hi)) tb.st hst _ tb.g hg tb.cm0.toC ic'.toC
+    (vs x w ν (finCoins x ops) (finS.seenOf x t)) q hq' hlay hz hpads (hrows j)
+    (fun i hi => hmk i (by rw [hLy]; exact hi)) tb.st hst _ tb.g hg tb.cm0.toC ic'.toC tb.extra tb.lanePad hex hlp
     (fun l => _root_.Flock.Firewall.Finish.saltAt (q.hiSalts.getD (l - 1) ByteArray.empty)) hsalt rfl hl hl0 hrun'
   -- the view run is that cut but for level 0's commitment, the pads commitment and the final-only data
   obtain ⟨hcap, hlays⟩ := cms_cm0 vs src x w hsc hR hS0 hsx hschs hcms hk hRep
@@ -189,7 +193,7 @@ theorem finRepErased_at (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.F
     (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) tb.st (Masked.zkTab x j).sch r.val
     (spec.domain spec.tables[j.val]! r.val).toUTF8
     (cm := FlockComplete.eraseC tb.cm0.toC) (cm' := cms[j.val]!) hcap.symm hlays.symm extras hn.symm hroot.symm
-    hilay.symm (src := (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j.val).rep r.val)
+    hilay.symm (src := (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val)
     (src' := (finSrc vs x w ν t ops j.val).rep r.val) (eraseS_cutSrc vs w ν t hA j.isLt r.isLt).symm
     (Masked.priorE (finCoins x ops) j.val r.val)
     (FlockSoundness.Discharge.Composed.maskWordsOf (Masked.stsOf x)[j.val]!)

@@ -1,7 +1,7 @@
-"""[moe F-moe-r17-07] The C2 ORACLE COMPARE had the alias class on ITS side too -- and it hid F-moe-r17-06 for three runs.
+"""The C2 ORACLE COMPARE had the alias class on ITS side too -- and it hid the committed reader's alias bug for three runs.
 
-OLMoE B2 mixedstop, tree_int5 / int6 / int7 (the committed reader by NAME = layer 0's bytes for every rotary invocation): C2 oracle compare
-'compared 8668 equal 8668' -- while the sampled replay found layers 1..15 unequal.  tree_int8 (24df89c50, the reader fixed): sampled replay
+OLMoE B2 mixedstop, three runs (the committed reader by NAME = layer 0's bytes for every rotary invocation): C2 oracle compare
+'compared 8668 equal 8668' -- while the sampled replay found layers 1..15 unequal.  The next run (the reader fixed): sampled replay
 2052/2052 equal, oracle compare 1320 MISMATCHES, every one a rotary invocation 1..15 (15 layers x 44 (step, request) pairs x 2 members).
 Cause: `oracle_compare` asked the Match oracle for `ident.op_path` = the CANONICAL shared path (`model.layers.0.self_attn.rotary_emb`) with
 no invocation; the fold's instances are hinted per LAYER (`model.layers.L.self_attn.rotary_emb/rope.q`, 16 distinct prefixes x 126 at step 0
@@ -11,10 +11,9 @@ pre-fix committed side answered layer 0's bytes too: EQUAL on both sides' wrong 
 Fix: `aliases` (manifest.op_path_aliases) inverted: (canonical, invocation k) -> the Program's per-layer op_path = the fold's hint; a shared
 invocation the table does not name is NOT compared (named), never compared against another layer's oracle.
 
-[reqval, on the train baa79a8dc] moe's four tests (d5aa44385) PORTED onto the train's interface (reqval 65588eaef + 051f4b722, the oracle side
-rel picked as Shape M): the record keys are `shared_invocations.{compared_at_program_op, not_compared}` and the not-compared reason is the
-F-moe-r17-06 string; the inverse table is built inside `oracle_compare` (no `alias_inverse` helper on the train) -- the same behaviour, a REAL
-`MatchOracle` over a synthetic per-layer-hinted Match dir, which the train's own tests (a fake oracle) did not have."""
+The record keys are `shared_invocations.{compared_at_program_op, not_compared}` and the not-compared reason names the missing alias-table
+path; the inverse table is built inside `oracle_compare` (no `alias_inverse` helper).  These tests run a REAL `MatchOracle` over a synthetic
+per-layer-hinted Match dir."""
 from __future__ import annotations
 
 import gzip
@@ -130,8 +129,40 @@ def test_the_false_equal_of_int5_int6_int7_is_gone_a_layer_zero_read_for_every_i
     assert res2["mismatch_n"] == 2 and {m["identity"]["invocation"] for m in res2["mismatch"]} == {2}
 
 
+def test_an_invocation_bound_at_its_runtime_row_is_compared_with_the_folds_row(tmp_path):
+    """A dead-free Program's last layer ropes its prompt's last query row only (`runtime_rows` [POS - 1, POS]): the binding map binds that
+    identity at the runtime tensor's last row, and the Match's fold holds every row the runtime computed.  With the manifest's `runtime_rows`
+    the oracle is the fold's row from r0 (equal); without them the sizes differ, by name; an entry bound at another row mismatches."""
+    d = make_match(str(tmp_path))
+    last = N_LAYERS - 1
+
+    def bound_at(row: int):
+        tensors, entries = [], []
+        for k in range(N_LAYERS):
+            for member in ("query", "key"):
+                one = (k, member) == (last, "query")
+                tensors.append((f"{ROT}/{member}", _rows(k, member).tobytes()))
+                entries.append({"identity": {"program_digest": "p" * 64, "request_id": "r0", "step": 0, "invocation": k, "op_path": ROT, "output_member": member,
+                                             "element_range": [0, H if one else POS * H], "rank": 0},
+                                "kind": "leaf", "name": f"{ROT}/{member}", "element_offset": row * H if one else 0, "tensor_ordinal": len(entries),
+                                "stream_offset": len(entries) * POS * H * 2, "encoding": {"dtype": "bfloat16", "shape": [POS, H]}})
+        return OC.OpenedReader(*commit_host_steps({0: tensors})), {"entries": entries}
+
+    rows = OC.runtime_rows_of({"identities": [{"step": 0, "request_id": "r0", "op_path": ROT, "output_member": "query", "invocation": last,
+                                               "runtime_rows": [POS - 1, POS]}, {"step": 0, "request_id": "r0", "op_path": ROT, "output_member": "key"}]})
+    assert rows == {(0, "r0", ROT, "query", last): (POS - 1, 1)}
+    rd, bmap = bound_at(POS - 1)
+    res = OC.oracle_compare(OC.MatchOracle(d), bmap, rd, aliases=ALIASES, runtime_rows=rows)
+    assert res["mismatch_n"] == 0 and res["equal"] == N_LAYERS * 2 and res["result"] is True, res
+    res = OC.oracle_compare(OC.MatchOracle(d), bmap, rd, aliases=ALIASES)
+    assert [m["why"] for m in res["mismatch"]] == [f"size: committed {H * 2} B, oracle {POS * H * 2} B over {POS} instances"]
+    rd0, bmap0 = bound_at(0)
+    res = OC.oracle_compare(OC.MatchOracle(d), bmap0, rd0, aliases=ALIASES, runtime_rows=rows)
+    assert res["mismatch_n"] == 1 and res["mismatch"][0]["why"].startswith("bytes differ (first element 0"), res["mismatch"]
+
+
 def test_a_malformed_alias_table_is_no_table_the_invocations_are_not_compared_by_name(tmp_path):
-    """moe's `alias_inverse` shape test, as behaviour on the train: a table that names nothing usable == no table (fail closed, by name)."""
+    """The `alias_inverse` shape test, as behaviour: a table that names nothing usable == no table (fail closed, by name)."""
     d = make_match(str(tmp_path))
     rd, bmap = make_committed()
     for bad in (None, {}, {"model.layers.9.self_attn.rotary_emb": [ROT, 9]}):

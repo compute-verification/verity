@@ -1,37 +1,33 @@
-"""Lane `ov-moe`: the pair-major MoE definitions (`verity_vllm.program.registry.quarantine.ov_moe.moe`), the `MoEFusedExperts`
+"""The pair-major MoE definitions (`verity_vllm.program.quarantine.ov_moe.moe`), the `MoEFusedExperts`
 recognizer (positive and negative cases on synthetic events shaped exactly like the pinned vLLM's `vllm.moe_forward`
-body as recorded in out/gen/lanes/moe/runs/olmoe_3x1_1req), and — when wave 1's real captures are present in the
-worktree — the end-to-end resolve / fold / VU-population facts quoted in out/gen/lanes/ov-moe/REPORT.md."""
+body as recorded on OLMoE).  The recorded kernel cases and captures are `test_gen_ov_moe_of_record`."""
 
 from __future__ import annotations
 
 import importlib
 
 import math
-from pathlib import Path
 
 import numpy as np
 import pytest
 
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
-from verity_vllm.engine.profiles.gen_ov_moe_patterns import FUSED_MOE_PINS, MoEFusedExperts
+from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import FUSED_MOE_PINS, MoEFusedExperts
 
-OV = importlib.import_module("verity_vllm.engine.profiles.derived_OLMOE")
+OV = importlib.import_module("verity_vllm.observe.fold.profiles.derived_OLMOE")
 from verity_vllm.observe.fold.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
 from verity_vllm.observe.fold.tree import step_events
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluate import evaluate_region
+from verity.ml.circuits.evaluation.reference import evaluate_region
 from verity.ml.circuits.layout import resolve
 from verity.ml.circuits.program import Program
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import prims as P
+from verity_vllm.program.quarantine.ov_moe import moe as Q
 
 C = OV.C
 H, I, E, TOPK = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"]
 CUDA = "cuda:0"
-REPO = Path(__file__).resolve().parents[2]
-W1_RUNS = REPO / "out" / "gen" / "lanes" / "moe" / "runs"
 
 
 # --- definitions -----------------------------------------------------------------------------------------------------
@@ -152,25 +148,6 @@ def test_nv_expf_helpers_are_the_ptx_ops():
     # neg / exponent-field scaling
     assert Q.F32Neg.evaluate(0) == 0x80000000 and Q.F32Neg.evaluate(0x7FC00000) == 0xFFC00000
     assert P.f32_of(Q.F32BitsShl23.evaluate(P.bits_of(12582912.0 + 127))) == 1.0 and P.f32_of(Q.F32BitsShl23.evaluate(P.bits_of(12582912.0 + 1))) == np.float32(2.0 ** -126)
-
-
-REC_ROUTER = REPO / "out" / "gen" / "lanes" / "ov-moe" / "difftest" / "moe_router_topk"
-
-
-@pytest.mark.skipif(not (REC_ROUTER / "manifest.json").exists(), reason="lane ov-moe's recorded topk_softmax cases not in this checkout")
-def test_router_program_is_bit_exact_on_the_recorded_kernel_cases():
-    """The 24 `_moe_C::topk_softmax` cases recorded on the pod (bf16 logits in, f32 weights + i32 ids out): weights AND ids
-    bit-exact with `NvExpf` (the correctly rounded stand-in matched 160/192 weight words, REPORT.md §4)."""
-    import json
-    man = json.loads((REC_ROUTER / "manifest.json").read_text())
-    prog = Program(bind(Q.MoeRouterTopK, E=64, TOPK=8, VPT=8))
-    for rec in man["cases"]:
-        cdir = REC_ROUTER / f"case_{rec['i']}"
-        xin = [int(b) for b in np.load(cdir / "in_0.npy").reshape(-1).astype(np.uint16)]
-        w = [int(b) for b in np.load(cdir / "out_0.npy").reshape(-1).view(np.uint32)]
-        ids = [int(b) for b in np.load(cdir / "out_1.npy").reshape(-1).view(np.uint32)]
-        out = _eval(prog, [xin])
-        assert out[:8] == w and out[8:] == ids, (rec["i"], rec["inputs"][0].get("kind"))
 
 
 # --- synthetic scope (the recorded shapes of olmoe_3x1_1req, layer 0) ----------------------------------------------------
@@ -316,7 +293,7 @@ def test_moe_scope_resolves_as_the_six_part_pair_major_group(M, naive):
     assert len(aligns) == (0 if naive else 1) and all(t.effect == "noop" for t in aligns)
     if aligns:
         # the claim must cover both of vLLM's dispatch paths as Kineto names them: the small-batch kernel (decode) and the
-        # sorted pair (prefill; lane cov-moe: G1 residue 32 kernels on a 155-token prompt under the single-name claim)
+        # sorted pair (prefill: under the single-name claim a 155-token prompt leaves 32 kernels of G1 residue)
         from verity_vllm.properties.census import claims_for
         declared = set(aligns[0].kernels)
         for kineto in ("void vllm::moe::moe_align_block_size_small_batch_expert_kernel<int>(int const*, int*, int*, int*, unsigned long, int, int, int)",
@@ -361,7 +338,7 @@ def test_a_tuned_tile_binds_hoppers_expert_step_on_cc90():
 
 
 def test_profile_is_the_tuned_gemm_plus_the_pairwise_pattern_and_not_accepted():
-    from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as BASE
+    from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as BASE
     names = [getattr(p, "name", type(p).__name__) for p in OV.PROFILE.patterns]
     assert names[:2] == ["gemm.matmul_kernel_persistent.tuned", "moe.fused_experts.pairwise"] and "moe_block_scope" not in names
     assert OV.PROFILE.accepted is False and OV.PROFILE.notes["case"] == "OLMOE"
@@ -370,43 +347,4 @@ def test_profile_is_the_tuned_gemm_plus_the_pairwise_pattern_and_not_accepted():
     assert isinstance(OV.PROFILE.patterns[1], MoEFusedExperts)
 
 
-# --- wave 1's real captures (present in the lane worktree, not in a fresh checkout) ----------------------------------------
-
-def _w1_log(name: str) -> Path:
-    p = W1_RUNS / name / "capture" / "log.jsonl.gz"
-    if not p.is_file():
-        pytest.skip(f"wave-1 capture {p} not present")
-    return p
-
-
-@pytest.mark.parametrize("name,steps", [("olmoe_3x1_1req", 1), ("olmoe_1x1_1req", 1)])
-def test_real_capture_resolves_without_unsupported(name, steps):
-    from verity_vllm.observe.fold.resolve_log import resolve_log
-    from verity_vllm.observe.fold.resolver import parts_of
-    _, results, _, _ = resolve_log(_w1_log(name), OV.PROFILE)
-    assert len(results) == steps
-    for sr in results:
-        assert sr.error is None
-        parts = [p for r in sr.resolutions for p in parts_of(r)]
-        assert not [p for p in parts if isinstance(p, Unsupported)]
-        specs = [p.spec.id for p in parts if isinstance(p, Compute)]
-        assert specs.count(f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}") == C["NL"] and specs.count(f"MoeSum_v1{{TOPK={TOPK},H={H}}}") == C["NL"]
-
-
-def test_real_capture_folds_and_every_moe_gemm_instance_has_coordinate_units():
-    """The fold binds the whole 3-token prefill (no unresolved read); under the 8M-leaf budget every oversize pair-GEMM
-    instance decomposes into N coordinate units that tile its returns — the VU coverage line of REPORT.md."""
-    from verity_vllm.check.replay import vu_query as vq
-    from verity_vllm.pipeline.match import fold_summary_result
-    summ, result = fold_summary_result(_w1_log("olmoe_3x1_1req"), "gen_ov_moe_olmoe", with_program=True)
-    assert summ["unsupported"] == 0 and summ["unresolved"] == 0 and summ["errors"] == 0 and summ["n_instances"] == 1736
-    ix = vq.index(result, max_arg_leaves=8_000_000, depth=3)
-    s = ix.summary()
-    assert s["instances_without_units"] == 0
-    up = s["specs"][f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}"]
-    assert up["instances"] == 3 * TOPK * C["NL"] and up["vus"] == up["instances"] * 2 * I and up["granularity"] == [f"child:MoeExpertCoordinate_v1{{E={E},K={H}}}"]
-    kk = next(k for k, m in ix.by_node.items() if m["spec"] == f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}")
-    covered = set()
-    for vu in ix.of_instance(kk):
-        covered.update(vq.returns_of(result, vu))
-    assert len(covered) == 2 * I
+# --- the recorded captures (present where they were captured, not in a fresh checkout) -------------------------------------

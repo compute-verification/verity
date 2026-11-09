@@ -1,4 +1,6 @@
-import Definitions.Pouw.Game.Defs
+module
+
+public import Definitions.Pouw.Game.Defs
 
 /-!
 # NCP's named assumption (trusted)
@@ -6,27 +8,31 @@ import Definitions.Pouw.Game.Defs
 A `Prop` taken as a hypothesis by the statements that use it, never an `axiom`.
 -/
 
+@[expose] public section
+
 namespace Pouw.NCP.Assumptions
 
 open Finset
 
 variable {Q R S : Type}
 
-/-- **Assumption TT_NCP(γ₀), tight stacked transcript** (red-team N2), for a cost model `CM`, a protocol `P` (the
+/-- **Assumption TT_NCP(g₀), tight stacked transcript**, for a cost model `CM`, a protocol `P` (the
 named assumption is its instance at `CM = M_4090` and `P` an NCP instance with `IsLead`), a segment length `d` (the
-instance's `P.d`), a domain `D`, a target `γ₀` and an error `ε(q, N)`: TT (`Pouw.Assumptions.TT`) with every
-checked-correct unit credited `3·m·k·n`, the work of the stacked product.
+instance's `P.d`), a domain `D`, a target `g₀` and an error `δ(q, N)`: TT (`Pouw.Assumptions.TT`) with every
+checked-correct unit credited `3·m·k·n`, the work of the stacked product, and like TT an event of no break
+(`Adversary.Breaks`).
 
-It is claimed only on a domain where `γ₀ ≥ d/(3k)` on every unit. The final checked value is `A·B`, free at a
+It is claimed only on a domain where `g₀ ≥ d/(3k)` on every unit. The final checked value is `A·B`, free at a
 degenerate input, and the one-segment adversary makes the event sure below it (`Pouw.NCP.GameProofs.oneSegment`), so
-without that premise the statement is false at the lead's `d = 16` on `leadDomain` for every `γ₀ < 16/3072`. -/
+without that premise the statement is false at the lead's `d = 16` on `leadDomain` for every `g₀ < 16/3072`. -/
 def TTNCP [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S) (d : ℕ)
-    (D : Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
-  (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N, (d : ℝ) ≤ γ₀ * (3 * (U.layout.shape u).k)) →
+    (D : Layout → Prop) (g₀ : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
+  (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N, (d : ℝ) ≤ g₀ * (3 * (U.layout.shape u).k)) →
   CM.Queries ∧
   ∀ U : Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     pr (fun x : (Q → R) × S =>
-      T / (1 - γ₀) < ∑ u ∈ checkedSet P U x.1 x.2 (A.transcript U x.1 x.2), 3 * ((U.layout.shape u).Wmm : ℝ))
-      ≤ ε q U.layout.N
+      T / (1 - g₀) < ∑ u ∈ checkedSet P U x.1 x.2 (A.transcript U x.1 x.2), 3 * ((U.layout.shape u).Wmm : ℝ) ∧
+        ¬ A.Breaks U x.1 x.2)
+      ≤ δ q U.layout.N
 
 end Pouw.NCP.Assumptions

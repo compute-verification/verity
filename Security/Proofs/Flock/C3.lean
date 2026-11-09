@@ -1,154 +1,129 @@
-import Proofs.Flock.C3.Fork.Sound
-import Proofs.Flock.C3.Fork.Extract
-import Proofs.Flock.C3.Compose.Bridge
-import Proofs.Flock.C3.Compose.BridgeOff
-import Proofs.Flock.C3.Compose.Discharge
-import Proofs.Flock.C3.Compose.Decoder
-import Proofs.Flock.C3.Compose.RepsOff
-import Proofs.Flock.C3.Compose.SrcClauses
-import Proofs.Flock.C3.Compose.Tied
-import Proofs.Flock.C3.Compose.HoloTys
-import Proofs.Flock.C3.Compose.LastRead
-import Proofs.Flock.C3.Compose.PartRead
-import Proofs.Flock.C3.Compose.SparseEnds
-import Proofs.Flock.C3.Compose.RsFacts
-import Proofs.Flock.C3.Compose.AtHolo
-import Proofs.Flock.C3.Compose.Custody
-import Proofs.Flock.C3.Compose.DecodeFix
-import Proofs.Flock.C3.Compose.HoloStageCoins
-import Proofs.Flock.C3.Compose.LaterHeld
-import Proofs.Flock.C3.Compose.LaterHeldW
-import Proofs.Flock.C3.Compose.LaterHolo
-import Proofs.Flock.C3.Compose.AtHoloHeld
-import Proofs.Flock.C3.Compose.HeldHyps
-import Proofs.Flock.C3.Compose.RepsHeld
-import Proofs.Flock.C3.Compose.SparseEndsAt
-import Proofs.Flock.C3.Compose.LaterFamily
-import Proofs.Flock.C3.Compose.SrcOKFamily
-import Proofs.Flock.C3.Compose.HoloCoinTys
-import Proofs.Flock.C3.Compose.HoloEncoded
-import Proofs.Flock.C3.Compose.RowsReg
-import Proofs.Flock.C3.Compose.HoloStreamSizes
-import Proofs.Flock.C3.Compose.HoloSparseRounds
-import Proofs.Flock.C3.Compose.HoloSparseWords
-import Proofs.Flock.C3.Compose.CoinsChecked
-import Proofs.Flock.C3.Compose.OffZs
-import Proofs.Flock.C3.Compose.HonestSrc
-import Proofs.Flock.Soundness.Refine.HoloRepConverse
-import Proofs.Flock.C3.Sparse.Read
-import Proofs.Flock.C3.Sparse.Src
-import Proofs.Flock.C3.Sparse.SrcTie
-import Proofs.Flock.C3.Sparse.SrcLayer
-import Proofs.Flock.C3.Sparse.SessionAt
-import Proofs.Flock.C3.Sparse.SrcEnd
-import Proofs.Flock.C3.Sparse.MsgsRead
-import Proofs.Flock.C3.Sparse.SrcSessions
-import Proofs.Flock.C3.Sparse.MsgsLayers
-import Proofs.Flock.C3.Sparse.PubTie
-import Proofs.Flock.C3.Sparse.PubLift
-import Proofs.Flock.C3.Sparse.PubCoins
-import Proofs.Flock.C3.Sparse.HeldStages
-import Proofs.Flock.C3.Sparse.ClaimSparseOf
-import Proofs.Flock.C3.Sparse.PubChecked
-import Proofs.Flock.C3.Sparse.ClaimReads
-import Proofs.Flock.C3.VStarList.Statements
-import Proofs.Flock.C3.VStarList.Shape
-import Proofs.Flock.C3.VStarList.Range
-import Proofs.Flock.C3.VStarList.Accepts
-import Proofs.Flock.C3.RegLevels.Top
-import Proofs.Flock.C3.Opening.Read
-import Proofs.Flock.C3.RegLevels.Read
-import Proofs.Flock.C3.PubRows.Shape
-import Proofs.Flock.C3.Opening.Rows
-import Proofs.Flock.C3.HoloValues.Read
-import Proofs.Flock.C3.Reps.Tie
-import Proofs.Flock.C3.Reps.Vals
-import Proofs.Flock.C3.Reps.Steps
-import Proofs.Flock.C3.Reps.StepsTie
-import Proofs.Flock.C3.Reps.RepsRead
-import Proofs.Flock.C3.Reps.RepCoins
-import Proofs.Flock.C3.HoloValues.Frames
-import Proofs.Flock.C3.HoloValues.Runs
-import Proofs.Flock.C3.HoloValues.Shift
-import Proofs.Flock.C3.Reps.Frames
-import Proofs.Flock.C3.Reps.HoloVals
-import Proofs.Flock.C3.Reps.AlgL
-import Proofs.Flock.C3.Reps.Maps
-import Proofs.Flock.C3.Reps.AtList
-import Proofs.Flock.C3.Reps.OpensRead
-import Proofs.Flock.C3.Reps.SrcOK
-import Proofs.Flock.C3.Reps.SrcOpens
-import Proofs.Flock.C3.Reps.TsRead
-import Proofs.Flock.C3.Reps.ReadCol
-import Proofs.Flock.C3.Reps.IoCols
-import Proofs.Flock.C3.Reps.ReadRow
-import Proofs.Flock.C3.Reps.ReadSib
-import Proofs.Flock.C3.Reps.ResRead
-import Proofs.Flock.C3.Reps.SentKeys
-import Proofs.Flock.C3.Reps.RepsCounted
-import Proofs.Flock.C3.Reps.RepsDrawnAt
-import Proofs.Flock.C3.Reps.DrawnRounds
-import Proofs.Flock.C3.Reps.WRead
-import Proofs.Flock.C3.Reps.ReadWhole
-import Proofs.Flock.C3.Reps.PortNames
-import Proofs.Flock.C3.Reps.RoundReads
-import Proofs.Flock.C3.Reps.RoundSel
-import Proofs.Flock.C3.Reps.RoundOfHolo
-import Proofs.Flock.C3.Reps.ReadWholeAt
-import Proofs.Flock.C3.Reps.WithReads
-import Proofs.Flock.C3.Reps.KeysInW
-import Proofs.Flock.C3.Reps.LigNames
-import Proofs.Flock.C3.Reps.LigKeys
-import Proofs.Flock.C3.Opening.SessionPartsL
-import Proofs.Flock.C3.Reps.WReadO
-import Proofs.Flock.C3.Reps.RoundLinks
-import Proofs.Flock.C3.Reps.WReadOReg
-import Proofs.Flock.C3.Opening.Session
-import Proofs.Flock.C3.Opening.SrcOpening
-import Proofs.Flock.C3.Opening.ClaimTie
-import Proofs.Flock.C3.Opening.SrcLayer
-import Proofs.Flock.C3.Opening.SrcCover
-import Proofs.Flock.C3.RegLevels.SrcTie
-import Proofs.Flock.C3.RegLevels.SrcRun
-import Proofs.Flock.C3.RegLevels.SrcOpened
-import Proofs.Flock.C3.RegLevels.SrcConss
-import Proofs.Flock.C3.RegLevels.SrcUnits
-import Proofs.Flock.C3.RegLevels.SrcOpenRel
-import Proofs.Flock.C3.RegLevels.RsT
-import Proofs.Flock.C3.RegLevels.Kappa
-import Proofs.Flock.C3.RegLevels.StackedReg
-import Proofs.Flock.C3.RegLevels.OpensRegs
-import Proofs.Flock.C3.RegLevels.VRows
-import Proofs.Flock.C3.RegLevels.AccReads
-import Proofs.Flock.C3.RegLevels.ValueTie
-import Proofs.Flock.C3.RegLevels.OutRegs
-import Proofs.Flock.C3.RegLevels.SharedRows
-import Proofs.Flock.C3.RegLevels.TopTie
-import Proofs.Flock.C3.RegLevels.TopLeaf
-import Proofs.Flock.C3.RegLevels.AccOut
-import Proofs.Flock.C3.RegLevels.PartTies
-import Proofs.Flock.C3.RegLevels.LigWhole
-import Proofs.Flock.C3.RegLevels.Maps
-import Proofs.Flock.C3.RegLevels.ROpens
-import Proofs.Flock.C3.RegLevels.ROpensPR
-import Proofs.Flock.C3.RegLevels.LevelsChecked
-import Proofs.Flock.C3.RegLevels.TopRead
-import Proofs.Flock.C3.RegLevels.SrcMaps
-import Proofs.Flock.C3.Sparse.SessionReg
-import Proofs.Flock.C3.Sparse.SessionKeys
-import Proofs.Flock.C3.Sparse.SessionChecked
-import Proofs.Flock.C3.Sparse.SessionZero
-import Proofs.Flock.C3.Sparse.HCols
-import Proofs.Flock.C3.RegLevels.LgCoins
-import Proofs.Flock.C3.RegLevels.RRounds
-import Proofs.Flock.C3.RegLevels.LgHeld
-import Proofs.Flock.C3.RegLevels.Reached
-import Proofs.Flock.C3.Reps.HAlgRows
+module
+
+public import Batteries.Recycling.MonadSatisfying.Array
+public import Proofs.Flock.C3.Compose.DecodeFix
+public import Proofs.Flock.C3.Compose.Decoder
+public import Proofs.Flock.C3.Compose.HoloCoinTys
+public import Proofs.Flock.C3.Compose.HoloEncoded
+public import Proofs.Flock.C3.Compose.HoloSparseRounds
+public import Proofs.Flock.C3.Compose.HoloSparseWords
+public import Proofs.Flock.C3.Compose.HoloStageCoins
+public import Proofs.Flock.C3.Compose.HoloStreamSizes
+public import Proofs.Flock.C3.Compose.LastRead
+public import Proofs.Flock.C3.Compose.LaterHeld
+public import Proofs.Flock.C3.Compose.LaterHeldW
+public import Proofs.Flock.C3.Compose.LaterHolo
+public import Proofs.Flock.C3.Compose.PartRead
+public import Proofs.Flock.C3.Compose.RowsReg
+public import Proofs.Flock.C3.Compose.RsFacts
+public import Proofs.Flock.C3.Compose.SparseEnds
+public import Proofs.Flock.C3.Compose.SrcClauses
+public import Proofs.Flock.C3.Compose.Tied
+public import Proofs.Flock.C3.Fork.Extract
+public import Proofs.Flock.C3.Fork.Sound
+public import Proofs.Flock.C3.HoloValues.Read
+public import Proofs.Flock.C3.Opening.ClaimTie
+public import Proofs.Flock.C3.Opening.Read
+public import Proofs.Flock.C3.Opening.Rows
+public import Proofs.Flock.C3.Opening.Session
+public import Proofs.Flock.C3.Opening.SessionPartsL
+public import Proofs.Flock.C3.Opening.SrcCover
+public import Proofs.Flock.C3.Opening.SrcLayer
+public import Proofs.Flock.C3.Opening.SrcOpening
+public import Proofs.Flock.C3.PubRows.Shape
+public import Proofs.Flock.C3.RegLevels.AccReads
+public import Proofs.Flock.C3.RegLevels.Kappa
+public import Proofs.Flock.C3.RegLevels.LevelsChecked
+public import Proofs.Flock.C3.RegLevels.LgCoins
+public import Proofs.Flock.C3.RegLevels.LgHeld
+public import Proofs.Flock.C3.RegLevels.LigWhole
+public import Proofs.Flock.C3.RegLevels.Maps
+public import Proofs.Flock.C3.RegLevels.OpensRegs
+public import Proofs.Flock.C3.RegLevels.OutRegs
+public import Proofs.Flock.C3.RegLevels.ROpens
+public import Proofs.Flock.C3.RegLevels.ROpensPR
+public import Proofs.Flock.C3.RegLevels.RRounds
+public import Proofs.Flock.C3.RegLevels.Read
+public import Proofs.Flock.C3.RegLevels.RsT
+public import Proofs.Flock.C3.RegLevels.SharedRows
+public import Proofs.Flock.C3.RegLevels.SrcConss
+public import Proofs.Flock.C3.RegLevels.SrcMaps
+public import Proofs.Flock.C3.RegLevels.SrcOpenRel
+public import Proofs.Flock.C3.RegLevels.SrcOpened
+public import Proofs.Flock.C3.RegLevels.SrcRun
+public import Proofs.Flock.C3.RegLevels.SrcTie
+public import Proofs.Flock.C3.RegLevels.SrcUnits
+public import Proofs.Flock.C3.RegLevels.StackedReg
+public import Proofs.Flock.C3.RegLevels.TopLeaf
+public import Proofs.Flock.C3.RegLevels.TopRead
+public import Proofs.Flock.C3.RegLevels.TopTie
+public import Proofs.Flock.C3.RegLevels.VRows
+public import Proofs.Flock.C3.RegLevels.ValueTie
+public import Proofs.Flock.C3.Reps.AlgL
+public import Proofs.Flock.C3.Reps.AtList
+public import Proofs.Flock.C3.Reps.HAlgRows
+public import Proofs.Flock.C3.Reps.IoCols
+public import Proofs.Flock.C3.Reps.KeysInW
+public import Proofs.Flock.C3.Reps.LigNames
+public import Proofs.Flock.C3.Reps.Maps
+public import Proofs.Flock.C3.Reps.OpensRead
+public import Proofs.Flock.C3.Reps.ReadCol
+public import Proofs.Flock.C3.Reps.ReadRow
+public import Proofs.Flock.C3.Reps.ReadSib
+public import Proofs.Flock.C3.Reps.ReadWhole
+public import Proofs.Flock.C3.Reps.RepCoins
+public import Proofs.Flock.C3.Reps.RepsRead
+public import Proofs.Flock.C3.Reps.ResRead
+public import Proofs.Flock.C3.Reps.RoundLinks
+public import Proofs.Flock.C3.Reps.RoundOfHolo
+public import Proofs.Flock.C3.Reps.RoundReads
+public import Proofs.Flock.C3.Reps.SentKeys
+public import Proofs.Flock.C3.Reps.SrcOK
+public import Proofs.Flock.C3.Reps.SrcOpens
+public import Proofs.Flock.C3.Reps.Steps
+public import Proofs.Flock.C3.Reps.StepsTie
+public import Proofs.Flock.C3.Reps.Tie
+public import Proofs.Flock.C3.Reps.TsRead
+public import Proofs.Flock.C3.Reps.Vals
+public import Proofs.Flock.C3.Reps.WRead
+public import Proofs.Flock.C3.Reps.WithReads
+public import Proofs.Flock.C3.Sparse.HeldStages
+public import Proofs.Flock.C3.Sparse.MsgsLayers
+public import Proofs.Flock.C3.Sparse.MsgsRead
+public import Proofs.Flock.C3.Sparse.PubChecked
+public import Proofs.Flock.C3.Sparse.PubLift
+public import Proofs.Flock.C3.Sparse.PubTie
+public import Proofs.Flock.C3.Sparse.Read
+public import Proofs.Flock.C3.Sparse.SessionAt
+public import Proofs.Flock.C3.Sparse.SessionReg
+public import Proofs.Flock.C3.Sparse.Src
+public import Proofs.Flock.C3.Sparse.SrcLayer
+public import Proofs.Flock.C3.Sparse.SrcSessions
+public import Proofs.Flock.C3.Sparse.SrcTie
+public import Proofs.Flock.C3.VStarList.Accepts
+public import Proofs.Flock.C3.VStarList.Range
+public import Proofs.Flock.C3.VStarList.Shape
+public import Proofs.Flock.C3.VStarList.Statements
+public import Proofs.Flock.Recursive.PartTie
+public import Proofs.Flock.Recursive.HPortTie
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # Candidate 3's recursive guarantee: its open pieces
 
-`Flock.Guarantees.RecursiveAuditC3` (`Proofs.Flock.Recursive.AuditC3`) is proved from piece (a); pieces (b)–(h)
+`Flock.Guarantees.RecursiveAuditHolo` (`Proofs.Flock.Recursive.AuditC3`) is proved from piece (a); pieces (b)–(h)
 discharge what it takes besides: VBridge at candidate 3's table (`_hbr`) and V*'s statements over the verifier's list
 (`_hob`). Each piece has its own directory and namespace, and `README.md` beside this file is the gap list.
 
@@ -156,24 +131,20 @@ discharge what it takes besides: VBridge at candidate 3's table (`_hbr`) and V*'
   (`holo_runs_sound`), which the oracle count (`holoTable_sound`, a1o, with a1s's `sparse_sound` and a1r's
   `regOpen_sound`) and the coupling (`holoTable_value_le_oracle`, a1l) bound.
 * (b) `C3/Compose/`, `FlockC3.Compose`: the family (`C3Family`, `C3Run`), the tape (`holoSteps`,
-  `holoTableCL_plays`), VBridge from the stages' obligations (`vbridge_c3`), the honest family (`C3Family.honest`,
-  n0), `_hbr` at it from n1 and the stages' read facts (`hbr_honest`), the fixed decoder at which n6 states the
-  read facts (`C3/Compose/Decoder.lean`), `SrcOK`'s decode fixed point where each stage plays on its steps to the
-  run's own output (`decodeRun_runSteps`, `srcDecode_of_plays`), and its stages' coins at the checked sessions from
-  the guarantee's custody (`stageCoins_checked`).
+  `holoTableCL_plays`), the honest family (`C3Family.honest`, n0), the fixed decoder at which n6 states the read
+  facts (`C3/Compose/Decoder.lean`), and `SrcOK`'s decode fixed point where each stage plays on its steps to the
+  run's own output (`decodeRun_runSteps`, `srcDecode_of_plays`).
 * (c) `C3/HoloValues/`, `FlockC3.HoloValues`: each rep plays `holoRepC` (`HReps`; at the honest family, n2).
 * (d) `C3/Sparse/`, `FlockC3.Sparse`: each rep's sparse phase at session level (`HSparse`; n3), and its read fact on
   the source's runs' own steps from their sparse phases' plays (`SrcSparseOK`, `sparseReadAt_of_ok`), which a source
   tied to V*'s accepted RecSparse units gives (`SrcSparseTie`, `srcSparseOK_of_tie`), and the tie from the unit's copy
-  in a good layer of V*'s (`SparseTieL`, `sparseTie_of_layer`), that copy from V*'s sessions (`SparseSessionAt`,
-  `sparseTieL_of_session`), `HCols` at every unit `RecSparse.check` accepts (`hCols_of_check`), and `HAlgRows` at a
-  holo shape from the verifier's checks and the algebra parts' `ResZeroAtLH` (`C3/Reps/`, `hAlgRows_of_res`).
+  in a good layer of V*'s (`SparseTieL`, `sparseTie_of_layer`), and that copy from V*'s sessions (`SparseSessionAt`,
+  `sparseTieL_of_session`).
 * (e) `C3/Opening/`, `FlockC3.Opening`: R's opening on the two claims (`HOpening`; n4), at the honest family from
   its read fact (`OpeningRead`, `hOpening_of_read`), and that fact from the `rec-opening` unit's residuals
   (`residuals_eq_runO`, `openingRead_of_rows`), and from V*'s sessions and the verifier's coins but the claim tie and
   the tape prefix (`openingRead_of_session`).
-* (f) `C3/RegLevels/`, `FlockC3.RegLevels`: R's levels against the registered cap (`HRegLevels`; n5) and R's
-  registered top from the verifier's hold of the inner transcript (`stackedTop_of_innerCommits`, t0).
+* (f) `C3/RegLevels/`, `FlockC3.RegLevels`: R's levels against the registered cap (`HRegLevels`; n5).
 * (g) `C3/PubRows/`, `FlockC3.PubRows`: the public rows per value prefix (`HPubRows`) and the tape (`HTape`), at the
   honest family from the verifier's check (n1), and the commitments there (`hCommits_honest`).
 * (h) `C3/VStarList/`, `FlockC3.VStarList`: V*'s statements over the verifier's list (`vstarParsesScoped_of_list`), R's
@@ -181,3 +152,5 @@ discharge what it takes besides: VBridge at candidate 3's table (`_hbr`) and V*'
   units from check 5 (`ellOk_of_sparseRange`, `units_of_sparseRange`), and the event's `AcceptsC3` from the
   verifier's acceptance (`acceptsC3_of_verify`).
 -/
+
+@[expose] public section

@@ -1,4 +1,5 @@
-"""Coverage campaign harness (D87): seeded workload draws, the step-indexed arrival loop, the control-run step expectation."""
+"""Coverage campaign harness (D87): seeded workload samples, the step-indexed arrival loop, the control-run step expectation.
+The generated B0 workloads are `test_coverage_workloads_of_record`."""
 from __future__ import annotations
 
 import json
@@ -14,7 +15,7 @@ REPO = Path(__file__).resolve().parents[2]
 
 
 # ---------------------------------------------------------------------------------------------------------
-# draws
+# samples
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -43,24 +44,6 @@ def test_draws_are_seeded_and_model_independent():
     assert gw.draw_lengths("B8-static", "C256", 0) != gw.draw_lengths("B8-static", "C256", 1)
     a = gw.draw_lengths("B8-static", "C256", 0)
     assert len({r["prompt_len"] for r in a}) > 1, "heterogeneous lengths within the batch"
-
-
-def test_generated_b0_workloads_match_their_draws():
-    for prof in gw.PROFILES:
-        for ctx in sorted(gw.CTX):
-            p = REPO / "verity_vllm" / "engine" / "profiles" / f"workload_cov_b0_{prof.lower()}_{ctx.lower()}.json"
-            if not p.exists():
-                pytest.skip(f"{p.name} not generated in this checkout")
-            doc = json.loads(p.read_text())
-            draws = gw.draw_lengths(prof, ctx, doc["length_seed"])
-            assert [(r["prompt_len"], r["max_tokens"], r["arrive_step"]) for r in doc["requests"]] == \
-                   [(d["prompt_len"], d["max_tokens"], d["arrive_step"]) for d in draws]
-            for r in doc["requests"]:
-                assert len(r["prompt_token_ids"]) == r["prompt_len"]
-            assert doc["expected_engine_steps"] == gw.simulate_schedule(draws)["expected_engine_steps"]
-            assert doc["serving_profile"] == prof and doc["context_class"] == ctx
-            if prof != "B1":
-                assert doc["engine"]["args"]["max_num_batched_tokens"] >= 8 * gw.CTX[ctx]["cap"]
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -350,8 +333,7 @@ class _ChunkedStubEngine(_LaggedStubEngine):
 
 
 def test_arrival_loop_counts_partial_prefill_forwards_under_chunked_prefill():
-    """The chunked owner's finding (lead's request, 2026-09-17): a 155-token prompt at budget 64 = 3 chunks, the first two return
-    nothing; the old inference measured lag 3 and counted 15 forwards for 17.  Both sources now give 17 / lag 1."""
+    """A 155-token prompt at budget 64 is 3 chunks, the first two returning nothing: both sources count 17 forwards and lag 1."""
     va = _load_adapter()
     R = lambda rid, plen, n, a: types.SimpleNamespace(request_id=rid, prompt_token_ids=[1] * plen, max_tokens=n, arrive_step=a, _order=0)  # noqa: E731
     for scheduler, source in ((True, "scheduler"), (False, "clamped")):

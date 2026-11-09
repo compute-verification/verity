@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Tables.Headline
-import Proofs.Flock.Soundness.Discharge.Tables.Accepts
+module
+
+public import Proofs.Flock.Soundness.Discharge.Tables.Headline
+public import Proofs.Flock.Soundness.Discharge.Tables.Accepts
 
 /-!
 # Sessions of `J` tables: the statements
@@ -8,23 +10,26 @@ The open guarantee is sessions of more than one table (`--session-tables J`, `J 
 here, and its theorem is below it.
 
 * `SessionTransfer`: the protocol-level transfer at `J` tables. Against any live prover of `liveSession` (one `Commit`
-  of `J` roots, one link-point draw every table reads, the `2J` rep streams in any order the prover picks with each
-  round's coins drawn after its bytes, then every proof file), the live verdict holds with probability at most the
+  of `J` roots, one link-point sample every table reads, the `2J` rep streams in any order the prover picks with each
+  round's coins flipped after its bytes, then every proof file), the live verdict holds with probability at most the
   model session's acceptance of every table (`modelSession`, the tables concurrently through `batch`) against the
   simulated prover `simSession`, whenever every table's decoder is right (`DecodesTable`, one per table).
 * `SessionBLModel`: the salted session on the tables `ts` is `modelSession`'s.
-* `ExecRefinesTables`: R11 for any plan, `ExecRefines … (LiveAccepts I) ⊥ (audit … (batchedSessionL … plan)) (simAuditJ …)`
-  given `DecodesOnJ`.
-* `HeadlineTables`: `Prog.flock_headline_live_on` with `plan S R` of any length `J`, at the live stratified draw.
-* `HeadlineTablesSubset`: the same at the live subset draw, with count curve `C(n − K, kd) / C(n, kd)`; flock-verify
-  takes no other draw at `J > 1`.
-* `AcceptsTables`: flock-verify's acceptance at `count > 1`: the record's draw, when there is one, is a subset draw;
-  the session's units (the draw's, without one the population's) split into `count` equal parts; and table `j` is
-  `setupH`'s statement under `Tags.tableIdentity count j` at the subset draw `partDraw` of part `j`.
+* `ExecRefinesTables`: the refinement for any plan,
+  `ExecRefines … (LiveAccepts I) ⊥ (audit … (batchedSessionL … plan)) (simAuditJ …)` given `DecodesOnJ`.
+* `HeadlineTables`: `Prog.flock_headline_live_on` with `plan S R` of any length `J`, at the live stratified sample.
+* `HeadlineTablesSubset`: the same at the live subset sample, with count curve `C(n − K, kd) / C(n, kd)`; flock-verify
+  takes no other sample at `J > 1`.
+* `AcceptsTables`: flock-verify's acceptance at `count > 1`: the record's sample, when there is one, is a subset sample;
+  the session's units (the sample's, without one the population's) split into `count` equal parts; and table `j` is
+  `setupH`'s statement under `Tags.tableIdentity count j` at the subset sample `partDraw` of part `j`.
 
-The decoder (`DecodesTable`, inside `DecodesOnJ`) is a named hypothesis per draw, registration and table: at one table
-it is `DecodesOn`'s, which [wave2-dec-zl] discharges for #828's tables, and its coin half is [wave2-plays-coin]'s.
+The decoder (`DecodesTable`, inside `DecodesOnJ`) is a named hypothesis per sample, registration and table: at one table
+it is `DecodesOn`'s, which `decodesOn_exec` (`Discharge/DecodeZL`) discharges for the plain headline's tables, and its
+coin half is `decodesOnOfRuns`'s.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Tables
 
@@ -59,7 +64,7 @@ def SessionBLModel : Prop :=
 theorem sessionBL_model : SessionBLModel :=
   fun A H E Lf ts => sessionBL_eq_modelSession A H E Lf ts
 
-/-- **R11 for sessions of `J` tables.** -/
+/-- **The refinement for sessions of `J` tables.** -/
 def ExecRefinesTables : Prop :=
   ∀ {D Sl : Type} [Nonempty D] [Inhabited D] [Inhabited Sl] {mPts n : ℕ} {Reg : Type} (H : List UInt8 → D)
     (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
@@ -79,7 +84,7 @@ theorem execRefines_tables_stmt : ExecRefinesTables :=
   fun H E Lf plan I wr opn dg dec one fin capOf N _ hdec τ =>
     execRefines_tables H E Lf plan I wr opn dg dec one fin capOf N hdec τ
 
-/-- **The headline at the executable for sessions of `J` tables, at the live stratified draw.** -/
+/-- **The headline at the executable for sessions of `J` tables, at the live stratified sample.** -/
 def HeadlineTables : Prop :=
   ∀ {N' n : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N')) {Reg : Type} {mPts : ℕ}
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
@@ -126,7 +131,7 @@ theorem headline_tables : HeadlineTables := by
   exact p.flock_headline_live_tables outs σs ks hks St hS Kd pop Lb src hA3 plan tab pp ones hConst zeros hZero lay rs
     hHm hk hRw hM hρ hr ht K I wr opn dg dec one fin capOf N hdec τ hCR hKS
 
-/-- **The headline at the executable for sessions of `J` tables, at the live subset draw.** -/
+/-- **The headline at the executable for sessions of `J` tables, at the live subset sample.** -/
 def HeadlineTablesSubset : Prop :=
   ∀ {N' n : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N')) {Reg : Type} {mPts : ℕ}
     (kd : ℕ) (_hkd : kd ≤ n)
@@ -173,7 +178,7 @@ theorem headline_tables_subset : HeadlineTablesSubset := by
     hRw hM hρ hr ht K hK I wr opn dg dec one fin capOf N hdec τ hCR hKS
 
 open Lean (Json) in
-/-- Part `j` of `count` equal consecutive parts of the session's units, as the subset draw of the population that
+/-- Part `j` of `count` equal consecutive parts of the session's units, as the subset sample of the population that
 `Stmt.setupTables` sets table `j` up at. -/
 def partDraw (population : ℕ) (units : Array ℕ) (count j : ℕ) : Json :=
   Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson population),
@@ -182,9 +187,10 @@ def partDraw (population : ℕ) (units : Array ℕ) (count j : ℕ) : Json :=
       Lean.toJson))]
 
 /-- **flock-verify's acceptance at more than one table.** When `Accepts I t` at `count > 1` under a tag without hidden
-outputs: the tag allows several tables and `count ≤ 64`; the record's draw, when there is one, is a subset draw, whose
+outputs: the tag allows several tables and `count ≤ 64`; the record's sample, when there is one, is a subset or stratified
+sample, whose
 population and units are the session's (without one, the population's every unit); the units split into `count`
-nonempty equal parts; and table `j` is `setupH`'s statement under `Tags.tableIdentity count j` at the subset draw of
+nonempty equal parts; and table `j` is `setupH`'s statement under `Tags.tableIdentity count j` at the subset sample of
 part `j`. -/
 def AcceptsTables : Prop :=
   ∀ {I : Inputs} {t : Transcript}, I.tags.hiddenOutputs = false → 1 < I.count → Accepts I t →
@@ -193,7 +199,8 @@ def AcceptsTables : Prop :=
       I.tags.manyTables.isSome ∧ I.count ≤ Flock.Tags.MAX_TABLES ∧
       ∃ (population : ℕ) (units : Array ℕ),
         (∀ d, recordDraw t.record = some d → ∃ u, Flock.Draw.UnitDraw.ofJson d = .ok u ∧
-          (∃ k', u.law = .subset k') ∧ u.population = population ∧ u.units = units) ∧
+          ((∃ k', u.law = .subset k') ∨ ∃ K st, u.law = .stratified K st) ∧
+          u.population = population ∧ u.units = units) ∧
         (recordDraw t.record = none → units = Array.range population) ∧
         0 < units.size ∧ units.size % I.count = 0 ∧ sts.size = I.count ∧
         ∀ (j : ℕ) (hj : j < sts.size),

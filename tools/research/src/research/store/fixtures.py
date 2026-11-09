@@ -19,9 +19,11 @@ export, and `hydrate_stubs` puts the bytes back where the history rewrite left a
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import tempfile
@@ -200,13 +202,22 @@ def _stale(dst: Path, m: ArtifactManifest) -> list[str]:
     return sorted([r for r, (h, n) in want.items() if r not in have or sha256_file(dst / r) != (h, n)] + sorted(have - set(want)))
 
 
-def _place(src: Path, dst: Path) -> None:
+def _place(src: Path, dst: Path, tmp_dir: Path | None = None) -> None:
     """A private, writable copy of an immutable store object at `dst` (never a hard link: a test running as root could write
-    through one into the store)."""
+    through one into the store), copied in full to a temp file in `tmp_dir` (default `dst`'s directory, on its filesystem) and
+    renamed into place, so no reader sees part of it."""
     dst.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dst.parent / f".tmp-{dst.name}-{os.getpid()}"
-    shutil.copyfile(src, tmp)
-    os.replace(tmp, dst)
+    tmp = (tmp_dir or dst.parent) / f".tmp-{dst.name}-{os.getpid()}-{secrets.token_hex(4)}"
+    try:
+        shutil.copyfile(src, tmp)
+        os.replace(tmp, dst)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _entry_lock(store: LocalStore, dst: Path):
+    """The lock every fetch holds while it reads or writes one entry's path in a tree (`fetchset.lock`)."""
+    return fetchset.lock(store, "entry-" + hashlib.sha256(str(dst.resolve()).encode()).hexdigest())
 
 
 def _materialise(store: LocalStore, m: ArtifactManifest, dst: Path) -> None:
@@ -219,7 +230,7 @@ def _materialise(store: LocalStore, m: ArtifactManifest, dst: Path) -> None:
     for rel, (h, _) in want.items():
         target = dst / rel
         if not (target.is_file() and sha256_file(target)[0] == h):
-            _place(store.object_path(h), target)
+            _place(store.object_path(h), target, dst.parent)          # the temp beside the tree: a reader hashing it sees its files only
     for p in _rel_files(dst) if dst.is_dir() else []:
         if p.relative_to(dst).as_posix() not in want:
             p.unlink()
@@ -230,7 +241,8 @@ def fetch_registry(store: LocalStore, repo: Path, paths: Sequence[str] = (), *, 
     """Make every fetched entry under `paths` (repo-relative; none = all) present and exactly its id.  `check_only` fetches
     manifests only and writes nothing to the tree.  The report's `entries` say, per entry, `tracked` (git holds it), `present`
     (already exact, which the bytes alone show: no source is needed), `fetched`, `stale` (check_only: missing or different) or
-    `missing` (no source held it)."""
+    `missing` (no source held it).  Concurrent fetches into one tree (a check's pytest and lean-suites steps) take turns on each
+    entry (`_entry_lock`) and each blob (`fetchset.lock`), and every file lands whole by rename, so all of them succeed."""
     repo = Path(repo)
     doc = load_map(repo)
     git = tracked(repo)
@@ -241,29 +253,38 @@ def fetch_registry(store: LocalStore, repo: Path, paths: Sequence[str] = (), *, 
         if a not in want:
             rep["entries"].append({"id": a, "path": p, "status": "tracked"})
     for a, p in list(want.items()):                          # an entry's id is its bytes: an exact copy needs no manifest and no source
-        if (repo / p).exists() and fixture_id(repo / p) == a:
+        with _entry_lock(store, repo / p):
+            exact = (repo / p).exists() and fixture_id(repo / p) == a
+        if exact:
             rep["entries"].append({"id": a, "path": p, "status": "present"})
             del want[a]
     fr = fetchset._report()
     ms = fetchset.fetch_manifests(store, want, srcs, jobs=jobs, report=fr)
-    todo: dict[str, str] = {}
+    todo: dict[str, list[str]] = {}
     for a, p in want.items():
         if a not in ms:
             rep["entries"].append({"id": a, "path": p, "status": "missing"})
-        elif _stale(repo / p, ms[a]):
-            todo[a] = p
+            continue
+        with _entry_lock(store, repo / p):
+            differs = _stale(repo / p, ms[a])
+        if differs:
+            todo[a] = differs
         else:
             rep["entries"].append({"id": a, "path": p, "status": "present"})
     if check_only:
-        rep["entries"] += [{"id": a, "path": p, "status": "stale", "differs": _stale(repo / p, ms[a])[:5]} for a, p in todo.items()]
+        rep["entries"] += [{"id": a, "path": want[a], "status": "stale", "differs": d[:5]} for a, d in todo.items()]
     else:
         fetchset.fetch_blobs(store, (b for a in todo for b in ms[a].blobs()), srcs, jobs=jobs, report=fr)
-        for a, p in todo.items():
-            if all(store.object_path(h).exists() for h, _ in ms[a].blobs()):
-                _materialise(store, ms[a], repo / p)
-                rep["entries"].append({"id": a, "path": p, "status": "fetched"})
-            else:
+        for a in todo:
+            p = want[a]
+            if not all(store.object_path(h).exists() for h, _ in ms[a].blobs()):
                 rep["entries"].append({"id": a, "path": p, "status": "missing"})
+                continue
+            with _entry_lock(store, repo / p):                # another fetch may have placed it meanwhile: then it is present
+                status = "fetched" if _stale(repo / p, ms[a]) else "present"
+                if status == "fetched":
+                    _materialise(store, ms[a], repo / p)
+            rep["entries"].append({"id": a, "path": p, "status": status})
     rep["fetch"] = fr
     rep["ok"] = not any(e["status"] in ("missing", "stale") for e in rep["entries"])
     return rep
@@ -350,13 +371,15 @@ def _split_missing(fr: dict[str, Any], doc: dict[str, Any]) -> tuple[list[str], 
 
 
 def export(store: LocalStore, repo: Path, dest: Remote, *, srcs: Sequence[Remote], include_previous: bool = True,
-           blobs: Sequence[tuple[str, int]] = (), jobs: int = fetchset.JOBS, dry_run: bool = False) -> dict[str, Any]:
-    """Copy every registry entry's manifest and blobs (and `blobs`, the history stubs' bytes) to `dest`, blobs first and manifests
-    last, as `push` does: a manifest the export holds is never missing a blob.  Objects already there are skipped (conditional
-    create; a key holding different bytes is a RemoteConflict, reported).  `dry_run` HEADs and reports what would be uploaded."""
+           blobs: Sequence[tuple[str, int]] = (), arts: Sequence[str] = (), jobs: int = fetchset.JOBS,
+           dry_run: bool = False) -> dict[str, Any]:
+    """Copy every registry entry's manifest and blobs (and `arts`, artifacts published that the registry doesn't hold, and `blobs`,
+    the history stubs' bytes) to `dest`, blobs first and manifests last, as `push` does: a manifest the export holds is never
+    missing a blob.  Objects already there are skipped (conditional create; a key holding different bytes is a RemoteConflict,
+    reported).  `dry_run` HEADs and reports what would be uploaded."""
     repo = Path(repo)
     doc = load_map(repo)
-    want = export_ids(doc, include_previous=include_previous)
+    want = list(dict.fromkeys([*export_ids(doc, include_previous=include_previous), *arts]))
     fr = fetchset._report()
     ms = _ensure_local(store, repo, doc, want, srcs, jobs, fr)
     fetchset.fetch_blobs(store, blobs, srcs, jobs=jobs, report=fr)

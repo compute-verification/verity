@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# The warden's bucket rows read by the proof system (warden_zk.py) on a CPU machine, on hidden_zk's builds (its job.sh,
-# sourced: C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame. From a clone:
-#   research run --on NODE --source . --project verity --as LANE --cwd clone --cpus 16 --mem-gb 64 --timeout 180m \
-#     --env WZ_MEM_GB=64 -- env CHECK_SLOTS=SLOTS python3 tools/verity/check/slot.py --by LANE -- \
+# The network certifier's bucket rows read by the proof system (warden_zk.py) on a CPU machine, on hidden_zk's builds
+# (its job.sh, sourced: Flock's flock-circuit and the Lean flock-verify) with the ZK server's Lean frame. From a clone:
+#   env WZ_MEM_GB=64 CHECK_SLOTS=SLOTS python3 tools/verity/check/slot.py --by LANE -- \
 #     bash benchmarks/network_traces/warden_zk.sh
-# The run: a warden-serve rehearsal against the fake endpoint (`warden_serve.py rehearse --fake`), whose warden commits
-# and signs each window's bucket rows while serving; then `warden_zk.py prove` on it.
+#   as a job of at most 180 minutes on 16 CPUs and 64 GB.
+# The run: a warden-serve rehearsal against the fake endpoint (`warden_serve.py rehearse --fake`), whose network
+# certifier commits and signs each window's bucket rows while serving; then `warden_zk.py prove` on it.
 # env: WZ_MEM_GB (what job.sh's stages may take, within the slot's)  WZ_REQUESTS (rehearse's --requests, 6)
 #      WZ_UNITS (warden_zk.py's --units, 16)  WZ_CACHE (the build cache, kept across runs where
 #      writable; hidden_zk's by default)  WZ_DRY=1
@@ -21,7 +21,7 @@ source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
 export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
-(cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/core/service/spot && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \

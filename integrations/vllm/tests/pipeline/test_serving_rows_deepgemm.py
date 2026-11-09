@@ -4,7 +4,7 @@
 committed q and s whole, ``w[n]`` and ``ws[n // 128]`` (the ``coord`` layout; N = 200 spans a whole weight block and a partial
 one).  The parts cover the row's three outputs once (the quantisation its q and s under one index entry, the coordinates its y,
 N units under one entry) and compute them: each part's Definition on its units' committed rows is their outputs.  The GEMM's own
-rows split into the same coordinates.  A row is read by one member per part, never by two members of one part, nor by the row
+rows split into the same coordinates, and both into coordinates of c outputs (``WIDE_COORDS``).  A row is read by one member per part, never by two members of one part, nor by the row
 and a part, and a committed q the GEMM's port does not take is refused."""
 from __future__ import annotations
 
@@ -18,12 +18,12 @@ from verity.ml.circuits.evaluation import evaluate, evaluate_batch
 
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
-from verity_vllm.program.kernels import deepgemm_twins as DT
-from verity_vllm.program.registry import boolean_deepgemm as BDG
-from verity_vllm.program.registry import boolean_fp8 as BF8
-from verity_vllm.program.registry import deepgemm as DG
-from verity_vllm.program.registry import fp8 as F8
-from verity_vllm.program.registry.fp8 import FP8_BLOCK
+from verity.ml.definitions.numerics import deepgemm_twins as DT
+from verity.ml.definitions.registry import boolean_deepgemm as BDG
+from verity.ml.definitions.registry import boolean_fp8 as BF8
+from verity.ml.definitions.registry import deepgemm as DG
+from verity.ml.definitions.registry import fp8 as F8
+from verity.ml.definitions.registry.fp8 import FP8_BLOCK
 
 K, N = 256, 200
 NB, KG = -(-N // FP8_BLOCK), K // FP8_BLOCK
@@ -93,8 +93,10 @@ def row(monkeypatch):
 
 def test_a_row_holds_its_quantisation_and_n_coordinates_of_its_gemm():
     spec = descriptor_id(linear())
-    assert SRW.unit_templates(spec) == ((spec, 1), (descriptor_id(quant()), 1), (descriptor_id(gemm(N)), 1), (descriptor_id(gemm(1)), N))
-    assert SRW.unit_templates(descriptor_id(gemm(N))) == ((descriptor_id(gemm(N)), 1), (descriptor_id(gemm(1)), N))
+    wide = tuple((descriptor_id(gemm(c)), N // c) for c in (8, 4, 2))
+    assert SRW.unit_templates(spec) == ((spec, 1), (descriptor_id(quant()), 1), (descriptor_id(gemm(N)), 1), *wide,
+                                        (descriptor_id(gemm(1)), N))
+    assert SRW.unit_templates(descriptor_id(gemm(N))) == ((descriptor_id(gemm(N)), 1), *wide, (descriptor_id(gemm(1)), N))
     t = SRW.template(descriptor_id(quant(True)))
     assert (t.layout, t.word, t.packed) == ("part", descriptor_id(quant()), (16, 8, 32))
     t = SRW.template(descriptor_id(gemm(1, True)))
@@ -129,6 +131,36 @@ def test_the_parts_cover_the_row_s_outputs_and_compute_them(row):
     want = leaves(dq["outs"], mq.outs, tq.packed[1:])
     assert qs[:, :K].tolist() == want[0].tolist() and qs[:, K:].tolist() == want[1].tolist()
     (y,) = ev(gemm(1), leaves(dg["rows"], mg.rows, tg.packed))
+    assert y.reshape(-1).tolist() == x["out"].tolist()
+
+
+def test_only_a_power_of_two_dividing_g_is_a_coordinate_of_c_outputs():
+    assert [SRW.coord_width(descriptor_id(gemm(n))) for n in (1, 2, 4, 8, 128, 3, 200, 256)] == [1, 2, 4, 8, 128, 0, 0, 0]
+    assert SRW.template(descriptor_id(gemm(4, True))).layout == "coord" and SRW.template(descriptor_id(gemm(N))).layout == "part"
+
+
+@pytest.mark.parametrize("own", [False, True])
+def test_the_gemm_s_coordinates_of_c_outputs_cover_its_outputs_and_compute_them(row, own):
+    """``WIDE_COORDS``: unit j of the GEMM's coordinates 4 outputs wide reads q and s whole, ``w[4j:4j + 4]`` and their one
+    scale row ``ws[4j // 128]``, and returns y's words [4j, 4j + 4), on the linear's rows (its part) and on the GEMM's own."""
+    x, c = row(own=own), 4
+    tg = SRW.template(descriptor_id(gemm(c, True)))
+    assert (tg.layout, tg.word, tg.packed) == ("coord", descriptor_id(gemm(c)), (8, 32, 8, 32, 16))
+    rows, _defs, counts = SRW.member_rows({"r0": {}}, [tg.id])
+    assert counts == [N // c]
+    (mg,) = SRW.members([tg.id], rows, counts)
+    assert (mg.n, mg.rows, mg.outs) == (N // c, (("in0", K // 2), ("in1", 2 * KG), ("in2", c * K // 2), ("in3", 2 * KG)),
+                                        (("out.out", c),))
+    dg, eg = SRW.read(mg, rows[0], x["store"], None)
+    assert eg == [[0, N // c, "r0", 16, 5, OP, "out", 0, 7]]
+    W, WS = x["w"].reshape(N, K), x["ws"].reshape(NB, KG).astype("<u4")
+    for j in range(N // c):
+        assert dg["rows"]["in0"][j].tobytes() == x["x_q"].tobytes()
+        assert dg["rows"]["in1"][j].tobytes() == x["x_s"].astype("<u4").tobytes()
+        assert dg["rows"]["in2"][j].tobytes() == W[c * j:c * (j + 1)].tobytes()
+        assert dg["rows"]["in3"][j].tobytes() == WS[c * j // FP8_BLOCK].tobytes()
+    assert dg["outs"]["out.out"].reshape(-1).tolist() == x["out"].tolist()
+    (y,) = ev(gemm(c), leaves(dg["rows"], mg.rows, tg.packed))
     assert y.reshape(-1).tolist() == x["out"].tolist()
 
 

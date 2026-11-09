@@ -1,4 +1,4 @@
-"""Advice-driven serving-rows windows, for network accounting under arbitrary vLLM usage: a TP rank's window over the Programs a
+"""Advice-driven serving-rows windows, for network certification under arbitrary vLLM usage: a TP rank's window over the Programs a
 registered compiler makes from the advice (everything serving made unpredictable, network-accounting's I1), with the registration
 binding both.
 
@@ -8,8 +8,8 @@ The binding is two keys of the registration's window provenance (`binding`, `tp.
     advice     {"root", "bits"}     the advice it read, private: the root of its hiding commitment, and its length in bits
 
 Core's ``verity/registration/v1`` record carries the window's provenance as one public item (``window``), which the record's digest
-covers and the coins commit to before the draw, so the draw comes after both are fixed and the record gains no field.  The advice
-is not published (Daniel, 24 Oct): its canonical encoding is committed as hiding rows (`commit_advice`: ``ROW_BITS``-bit rows,
+covers and the coins commit to before sampling, so the sample comes after both are fixed and the record gains no field.  The advice
+is not published: its canonical encoding is committed as hiding rows (`commit_advice`: ``ROW_BITS``-bit rows,
 zero-padded, under `verity.ml.commitments.advice`, hm96-sha512 leaves in one frame-v3-sha512 tree, its domain bound to the
 compiler), and only the root and the length are public.  The rows and their salts are the prover's (`opening`).
 
@@ -28,18 +28,19 @@ rank's `rank_replay.Loaded` for the requests the advice states (`requests_of`), 
 "prompt_len", "max_tokens"}`` with its output length as ``max_tokens``.  `Traced` is today's stand-in: the Build's Programs of
 record, by the manifest's lookup of record.  The ahead-of-time compiler takes its place under its own registered digest.
 
-**Transfer gates** (Daniel, 24 Oct): the units holding transfer gates, the I/O shell's ingress parse and egress render units, are
-proved with selection All, never sampled; every other unit is drawn as before.  The compiler lists them (``transfer_gates``: the
-templates whose units hold them, which its digest covers), and a ``work:K`` window draws by the work table
-`serving_rows.work_table_of` derives from that list and the window's own counts: each transfer-gate template works 0 with its
-floor all its units, so its stratum is drawn whole, beside the rest's strata at the stratified share of K.  Core's work law
+**Transfer gates**: the units holding transfer gates, the I/O shell's ingress parse and egress render units, are
+proved with selection All, never sampled; every other unit is sampled as before.  The compiler lists them (``transfer_gates``: the
+templates whose units hold them, which its digest covers), and a ``work:K`` window samples by the work table
+`window_law.work_table_of` derives from that list and the window's own counts: each transfer-gate template works 0 with its
+floor all its units, so its whole stratum is in the sample, beside the rest's strata at the stratified share of K.  Core's work sampling design
 (`draw.work_k`) is the All stratum, with no new verifier form; both sides derive the table, the registration's law is expanded
-under it (R1), and the Stream registers with it.  A partition that leaves a transfer-gate template out, or draws it by another law,
+under it (R1), and the Stream registers with it.  A partition that leaves a transfer-gate template out, or samples it by another law,
 is refused by name.  Until COMPILER lists the I/O shell's units, the stand-in's list is given (``--transfer-gate``), a template
-C-Flock proves today: the toy Commit's ``RoPEHead_v1{D=64}`` (its egress render, ``TokenSelect_v1``, has no C-Flock lowering).
+Flock proves today: the toy Commit's ``RoPEHead_v1{D=64}`` (its egress render, ``TokenSelect_v1``, has no Flock lowering).
 
 The advice is I1's (``codec``, default `I1`): `of_advice` reads its bytes, which must be its canonical encoding, commits them and
-binds the root and the advice's length, ``total_bits``.  `advice_of_workload` is the stand-in's advice, the prover's, for a
+binds the root and the advice's length, ``total_bits``; `opened` recomputes that binding from an opening without the stand-in's
+requests, for a compiler that compiles the advice itself.  `advice_of_workload` is the stand-in's advice, the prover's, for a
 fixed-length workload; a served run's is ADVICE-SRC's, from the scheduler's step trace.
 
     verity-vllm advice-windows COMMIT_OUT --advice FILE --opening FILE --partition F --out O --build-root B [--ranks 0,1]
@@ -61,7 +62,7 @@ from typing import Any
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.commitments import advice as AC
 from verity.ml.windows import interface as IF
-from verity_vllm.config import option
+from verity_vllm.config import option, workload_arg
 
 TRACED = "verity-vllm/advice-windows/traced-of-record/v0"
 I1 = "verity.core.protocols.certifier.advice"
@@ -134,23 +135,28 @@ def commitment_binding(compiler: Any) -> bytes:
 advice_rows = IF.advice_rows
 
 
-def commit_advice(compiler: Any, data: bytes, salts: Sequence[bytes] | None = None) -> AC.Registration:
+def commit_advice(compiler: Any, data: bytes, salts: Sequence[bytes] | None = None) -> AC.Committed:
     """The advice's hiding commitment (`interface.commit_advice`: `advice_rows` under `commitment_binding`), fresh salts unless
     ``salts`` is given."""
     return IF.commit_advice(named(compiler), data, salts)
 
 
 def of_advice(compiler: Any, data: bytes, codec: Any = None,
-              salts: Sequence[bytes] | None = None) -> tuple[list[dict[str, Any]], dict[str, Any], AC.Registration]:
+              salts: Sequence[bytes] | None = None) -> tuple[list[dict[str, Any]], dict[str, Any], AC.Committed]:
     """The advice's bytes read by ``codec`` (`codec_of`), refused unless they are its canonical encoding: the compiler's requests
     (`requests_of`), the binding (`binding`: the root of `commit_advice` and the length, ``codec.total_bits``) and the commitment,
     whose rows and salts are the prover's."""
     c = codec_of(codec)
+    advice = _read(c, data)
+    reg = commit_advice(compiler, data, salts)
+    return requests_of(advice), binding(compiler, reg.root.hex(), int(c.total_bits(advice))), reg
+
+
+def _read(c: Any, data: bytes) -> Any:
     advice = c.decode(data)
     if c.encode(advice) != data:
         raise ValueError("the advice's bytes are not its canonical encoding")
-    reg = commit_advice(compiler, data, salts)
-    return requests_of(advice), binding(compiler, reg.root.hex(), int(c.total_bits(advice))), reg
+    return advice
 
 
 def report(compiler: Any, data: bytes, T: int, codec: Any = None) -> dict[str, Any]:
@@ -158,9 +164,7 @@ def report(compiler: Any, data: bytes, T: int, codec: Any = None) -> dict[str, A
     a registration would carry (fresh salts), the advice's charge per egress window of ``T`` buckets (``codec.bits_by_window``),
     and the requests the stand-in refuses (`refusals`), by id.  Nothing of the advice itself."""
     c = codec_of(codec)
-    advice = c.decode(data)
-    if c.encode(advice) != data:
-        raise ValueError("the advice's bytes are not its canonical encoding")
+    advice = _read(c, data)
     reg, refused = commit_advice(compiler, data), refusals(advice)
     return {"roundtrip": True, "bytes": len(data), "rows": len(reg.salts), "row_bits": ROW_BITS,
             "binding": binding(compiler, reg.root.hex(), int(c.total_bits(advice))), "T": int(T),
@@ -169,23 +173,32 @@ def report(compiler: Any, data: bytes, T: int, codec: Any = None) -> dict[str, A
             "refused": {str(advice.requests[i].id): why for i, why in sorted(refused.items())}}
 
 
-def opening(data: bytes, reg: AC.Registration) -> dict[str, Any]:
+def opening(data: bytes, reg: AC.Committed) -> dict[str, Any]:
     """The advice's opening: its encoding and every row's salt, the prover's private file.  Handing it to the verifier stands in
     for the proof that the compiler's units are wired as the committed advice says (the named gap)."""
     return IF.advice_opening(data, reg)
 
 
 def of_opening(compiler: Any, doc: Mapping[str, Any], codec: Any = None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """The verifier's side of `opening`: the requests of the advice it opens and the binding it recomputes (`of_advice` under the
-    opening's salts), which `tp.serving_rows.source` holds the registration's to.  A malformed opening is a ValueError."""
+    """The verifier's side of `opening`: the requests of the advice it opens (`requests_of`) and the binding it recomputes
+    (`opened`), which `tp.serving_rows.source` holds the registration's to.  A malformed opening is a ValueError."""
+    advice, bound = opened(compiler, doc, codec)
+    return requests_of(advice), bound
+
+
+def opened(compiler: Any, doc: Mapping[str, Any], codec: Any = None) -> tuple[Any, dict[str, Any]]:
+    """The advice an opening opens, read by ``codec`` and refused unless its bytes are its canonical encoding, and the binding it
+    recomputes under the opening's salts (`binding`), without the stand-in's requests: a compiler that compiles the advice itself
+    (I2) refuses what it can't run.  A malformed opening is a ValueError."""
     if not isinstance(doc, Mapping) or doc.get("scheme") != SCHEME:
         raise ValueError(f"an advice opening is a {SCHEME} document")
     try:
         data, salts = bytes.fromhex(doc["advice"]), [bytes.fromhex(s) for s in doc["salts"]]
     except (KeyError, TypeError, ValueError) as e:
         raise ValueError(f"an advice opening holds the advice and its salts in hex: {e}") from e
-    reqs, bound, _reg = of_advice(compiler, data, codec, salts)
-    return reqs, bound
+    c = codec_of(codec)
+    advice = _read(c, data)
+    return advice, binding(compiler, commit_advice(compiler, data, salts).root.hex(), int(c.total_bits(advice)))
 
 
 def advice_of_workload(doc: Mapping[str, Any], codec: Any = None, drop: Sequence[str] = ()) -> Any:
@@ -255,7 +268,7 @@ CAP_BITS = 1 << 23
 @dataclass(frozen=True)
 class Capped:
     """A registered compiler with ℓ, the public cap on the advice's length in bits. Its digest names the inner compiler's and ℓ,
-    so the registration's ``compiler`` fixes ℓ before the draw as it fixes the code; `load` is the inner compiler's."""
+    so the registration's ``compiler`` fixes ℓ before sampling as it fixes the code; `load` is the inner compiler's."""
 
     inner: Any
     cap_bits: int = CAP_BITS
@@ -341,7 +354,7 @@ class Options:
     transfer_gate: list[str] = option("--transfer-gate", action="append", default=[],
                                       help="a template the stand-in compiler lists as holding transfer gates, every unit of it proved "
                                            "(repeatable; the partition's law is then work:K)")
-    write_from_workload: str | None = option("--write-from-workload", default=None,
+    write_from_workload: str | None = option("--write-from-workload", type=workload_arg, default=None,
                                              help="first write --advice as the stand-in's advice for this fixed-length workload (`advice_of_workload`)")
     drop: list[str] = option("--drop", action="append", default=[], help="with --write-from-workload: leave this request out (repeatable)")
     workers: int | None = option("--workers", type=int, default=None, help="processes hashing the rows (default: min(16, CPUs))")

@@ -1,15 +1,15 @@
 """The streamed-label wipe (experimental): a proof of secure erasure for a memory wipe, run by the memory challenger.
 `PROTOCOL.md` ("The streamed-label wipe") is its specification and states the guarantee.
 
-The memory challenger, the auditor's device on a machine the prover doesn't control, fills every memory tier of one
-server with labels it derives itself, then reveals `k` indices drawn on live coins after the fill and checks each answer
+The memory challenger, the auditor's device on a machine the developer doesn't control, fills every memory tier of one
+server with labels it derives itself, then reveals `k` indices sampled on live coins after the fill and checks each answer
 against its own derivation, under a deadline per batch.  The labels are the auditor's randomness: the answers are
 checked in the clear, and nothing of the prover's is opened.
 
 ~~~text
 K     = derive(secret, KEY_DOMAIN, {server, session})            32 bytes, one key per server and wipe
 L_i   = SHA-512(LABEL_TAG ‖ K ‖ u64 i)                           64 bytes, i in [0, N): one compression a label
-c_j   = derive(coin_secret, COIN_DOMAIN, {server, session, n}).uniform(N, j)    drawn once the fill is complete
+c_j   = derive(coin_secret, COIN_DOMAIN, {server, session, n}).uniform(N, j)    sampled once the fill is complete
 ~~~
 
 `secret` is the auditor's for this server and wipe, `coin_secret` is fresh from the OS when the fill completes.  A
@@ -17,9 +17,10 @@ session has four steps:
 
 1. **Open.** The challenger claims the session id in its `SessionLog` (one session an id) and publishes the
    `WipeCommitment`: the server, the session, `N`, `k`, the batch size, the deadline a batch and the declared memory tiers,
-   whose sizes add up to the fill.
+   whose sizes add up to at least the fill.
 2. **Fill.** `fill(chunk)` streams `L_0 … L_{N-1}` in order; the challenger reads its clock at the first and last chunk.
-3. **Challenge.** Once the fill is complete the challenger draws its coins, then reveals them a batch at a time
+   `fill_by(send)` is the same fill streamed by `send`, a streamer on the challenger's own host given `K`.
+3. **Challenge.** Once the fill is complete the challenger flips its coins, then reveals them a batch at a time
    (`challenge`), reads the receipt time before it hashes anything (`receive`), and checks every 64-byte answer against
    `L_{c_j}`.  The first late or wrong batch ends the session: no batch is retried, and no index is redrawn.
 4. **Sign.** One signature over `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records root)`, where the header is the
@@ -49,6 +50,7 @@ from typing import Any
 
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
+from verity.ml.commitments.scheme import DIGEST_BYTES
 from verity.ml.randomness import derive
 
 from .memory_challenger import CLOCK_RESOLUTION_NS, SCHEMES, SessionLog, Signer, Verify
@@ -61,7 +63,7 @@ SESSION_TAG = b"verity-pous/streamed-wipe/session/v1\0"
 RECORD_BINDING = b"verity-pous/streamed-wipe/batch-records/v1\0"
 RECORDS_TREE = "verity-pous/streamed-wipe/batch-records/frame-v3-sha512/v1"
 RECORD_SCHEMA = "pous/streamed-wipe/batch-record/v1"
-LABEL_BYTES = 64
+LABEL_BYTES = DIGEST_BYTES["sha512"]
 LABEL_BITS = 8 * LABEL_BYTES
 COMPLETE, LATE, WRONG = "complete", "late", "wrong"
 
@@ -113,7 +115,8 @@ def draw_indices(coin_secret: bytes, server: bytes, session: bytes, n: int, k: i
 @dataclass(frozen=True, slots=True)
 class WipeParams:
     """`labels` (`N`), the `k` challenges revealed `batch` at a time, each batch's deadline `limit_ns`, and the memory
-    tiers inside the boundary as `(name, bytes)`, whose total the fill covers exactly."""
+    tiers inside the boundary as `(name, bytes)`, whose total holds the fill: what they declare past it (`outside_bits`)
+    is memory the fill doesn't reach, which the bound counts in full."""
 
     labels: int
     k: int
@@ -126,9 +129,14 @@ class WipeParams:
             raise ValueError("a wipe has labels, 1 <= batch <= k < 2^32 challenges and a positive deadline")
         if not self.tiers or any(b <= 0 for _, b in self.tiers) or len({t for t, _ in self.tiers}) != len(self.tiers):
             raise ValueError("a wipe declares its tiers, each named once with a positive size")
-        if sum(b for _, b in self.tiers) != self.labels * LABEL_BYTES:
-            raise ValueError(f"the tiers total {sum(b for _, b in self.tiers)} bytes, but the fill is "
-                             f"{self.labels * LABEL_BYTES}: the fill covers every declared tier exactly")
+        if sum(b for _, b in self.tiers) < self.labels * LABEL_BYTES:
+            raise ValueError(f"the tiers total {sum(b for _, b in self.tiers)} bytes, less than the fill's "
+                             f"{self.labels * LABEL_BYTES}: the declared tiers hold the fill")
+
+    @property
+    def outside_bits(self) -> int:
+        """`R`: the declared memory the fill doesn't reach, in bits."""
+        return 8 * sum(b for _, b in self.tiers) - self.labels * LABEL_BITS
 
     @property
     def covered(self) -> bool:
@@ -234,7 +242,7 @@ def message(commitment: WipeCommitment, ended: str, fill_start_ns: int, fill_end
 
 class Challenger:
     """One streamed-label wipe of `server` under `session`, signed by `signer` (module docstring).  The session id goes
-    into `log` before anything else.  `coin_secret` is drawn from the OS when the fill completes unless a test gives
+    into `log` before anything else.  `coin_secret` is sampled from the OS when the fill completes unless a test gives
     it."""
 
     def __init__(self, secret: bytes, server: bytes, session: bytes, params: WipeParams, signer: Signer, *,
@@ -275,8 +283,19 @@ class Challenger:
             self.filled = start + count
         self.fill_end_ns = self.clock()
 
+    def fill_by(self, send: Callable[[bytes, int], Any]) -> Any:
+        """`fill`'s labels streamed by `send(K, N)`, which returns once it has sent the last; once only. Returns what
+        `send` returns. The answers are checked against this module's `label` whatever `send` streamed."""
+        if self.fill_start_ns is not None:
+            raise RuntimeError("the fill streams once")
+        self.fill_start_ns = self.clock()
+        out = send(self.key, self.params.labels)
+        self.filled = self.params.labels
+        self.fill_end_ns = self.clock()
+        return out
+
     def challenge(self) -> tuple[int, ...]:
-        """Reveal the next batch's indices and read its send time; the coins are drawn at the first batch."""
+        """Reveal the next batch's indices and read its send time; the coins are flipped at the first batch."""
         if self.fill_end_ns is None:
             raise RuntimeError("the challenges start once the fill is complete")
         if self.ended is not None:
@@ -333,7 +352,7 @@ class Challenger:
         return self.signed
 
     def coins(self) -> tuple[int, ...]:
-        """The drawn indices, public once the session is signed (the verifier's draws)."""
+        """The sampled indices, public once the session is signed (the verifier's samples)."""
         if self.signed is None or self.indices is None:
             raise RuntimeError("the coins are published after the session, once it is signed")
         return self.indices

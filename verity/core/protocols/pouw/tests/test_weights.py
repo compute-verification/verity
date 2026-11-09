@@ -6,12 +6,14 @@ from __future__ import annotations
 import random
 import struct
 
+import numpy as np
 import pytest
 
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw.audit import chacha20_block, hm96_salt
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import registered as G
 from verity.ml.commitments import hm96
+from verity.ml.commitments.hm96 import batch as hm96_batch
 from verity.ml.commitments.merkle import tree_levels
 from verity.ml.commitments.rowleaf import sha512_row_v2_digest
 from verity.ml.crypto import chacha20
@@ -164,6 +166,20 @@ def test_keystream_is_chacha20_block_and_hm96_salt(nonce, first):
     assert chacha20.keystream(key, nonce, first, 4) == b"".join(chacha20_block(key, first + i, nonce) for i in range(4))
     j = first // 3
     assert chacha20.keystream(key, nonce, 3 * j, 3) == hm96_salt(key, nonce, j)
+
+
+@pytest.mark.parametrize("nonce", [0, Wt.B_NONCE, (1 << 64) - 1])
+def test_hm96_salts_are_hm96_salt_at_each_row(nonce):
+    """numpy's salts at any rows, in their order and repeated, are the reference's row by row, the counter's 32-bit carry
+    and its last whole salt included; a row past it is refused."""
+    key, last = bytes(range(3, 35)), ((1 << 64) - 3) // 3
+    rows = [5, 0, (1 << 32) // 3, 1 << 40, 5, last, 2]
+    assert hm96_batch.salts(key, nonce, rows) == b"".join(hm96_salt(key, nonce, j) for j in rows)
+    assert hm96_batch.salts(key, nonce, np.array(rows[:3], dtype=np.int64)) == b"".join(hm96_salt(key, nonce, j) for j in rows[:3])
+    assert hm96_batch.salts(key, nonce, []) == b""
+    for bad in ([last + 1], [-1], [0.5]):
+        with pytest.raises(ValueError):
+            hm96_batch.salts(key, nonce, bad)
 
 
 def test_progress_and_workers():

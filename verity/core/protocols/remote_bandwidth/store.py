@@ -1,12 +1,12 @@
 """A registered store bound to a pinned model: what a pinned BF16 checkpoint alone fixes, so the verifier recomputes the
 payload root the prover's hello must carry and refuses any other (`Binding`), in the tree whose git hash names the
 verifier a period's circuit commits to (`verity/remote-bandwidth/v0 verifier tree <tree>`,
-`sampled_proofs.challenger.credited_session`). The decision from what the files hold is Lean's
+`spot.challenger.credited_session`). The decision from what the files hold is Lean's
 (`lean/RemoteAudit/Store.lean`), which decides a session's `bound`: the verifier's Lean process takes the pin's bytes
-and the weights blocks' digests at startup (`bind`) and decides each hello (`hold`), `Binding` beside it as the
-reference, a disagreement refusing the hello (`benchmarks/remote_session/verifier.py`). This is held to it by
+and the weights chunks' digests at startup (`bind`) and decides each hello (`hold`), `Binding` beside it as the
+reference, a disagreement refusing the hello (`verity/core/protocols/remote_bandwidth/session/verifier.py`). This is held to it by
 `lean/tests/test_binding.py`: the pin from its file's bytes (`pin_of`, `model_pin`), `checkpoint_sha512`, `store_salt`,
-`expected_root` from the weights blocks' digests, and `Binding`'s start and `hold`. Reading the files (`check`,
+`expected_root` from the weights chunks' digests, and `Binding`'s start and `hold`. Reading the files (`check`,
 `tensors`, `weight_digests`) and the arena's layout (`arena`) are Python only (`README.md`, "Which side is the
 definition").
 
@@ -16,17 +16,19 @@ pin        the checkpoint's files with their SHA-512s, in the auditor's model re
            the SHA-512 of checkpoint's canonical JSON, or a role's entry of core's pin (`models.json`, `read_pin`);
            every file is held to it before anything reads it (`check`)
 arena      one engine's weights (one GPU, tensor parallelism 1): every parameter of vLLM's model with two or more
-           dimensions, in its module order, each from a block boundary, as the checkpoint's BF16 bytes: embed_tokens;
+           dimensions, in its module order, each from a chunk boundary, as the checkpoint's BF16 bytes: embed_tokens;
            each decoder layer's self_attn.qkv_proj (q's, k's and v's rows in turn), o_proj, mlp.gate_up_proj (gate's
            rows, then up's) and down_proj; then lm_head unless the embedding is tied. The rest of the arena is zeros;
            norms and biases (one dimension) stay outside it
 store      `engines` arenas of `arena_blocks` each, in GPU order, then `host_blocks` of zero filler: each arena's
-           weights blocks labelled (weights, hbm) and its rest (filler, hbm), the host tier (filler, host)
-payload    `audit.payload_tree` over the store, block j salted with store_salt(key, PAYLOAD_LABEL, j) under the
+           weights chunks labelled (weights, hbm) and its rest (filler, hbm), the host tier (filler, host)
+salt       store_salt(key, label, c) = `codec.xof`(m)[0 : 192], SHA512(m ‖ u32be 0) ‖ SHA512(m ‖ u32be 1) ‖
+           SHA512(m ‖ u32be 2), m = "verity/store/salt/v1\0" ‖ key ‖ label ‖ u64be c (`SALT_VERSION`)
+payload    `audit.payload_tree` over the store, chunk j salted with store_salt(key, PAYLOAD_LABEL, j) under the
            verifier's key (its payload-key message), so its root follows from the pin, the store's shape and that key
-           (`expected_root`, in worker processes: at a whole node's 130M blocks 665 s on 11 cores, the Lean's
-           `Store.expectedRoot` 436 s on 11 threads, 23 Oct, `benchmarks/remote_session/binding_bench.py`)
-binding    at startup the pin read, every pinned file held to it, the arena laid out and its weights blocks' digests
+           (`expected_root`, in worker processes: at a whole node's 130M chunks 432 s on 11 cores, the Lean's
+           `Store.expectedRoot` 306 s on 11 threads, `benchmarks/remote_session/binding_bench.py`)
+binding    at startup the pin read, every pinned file held to it, the arena laid out and its weights chunks' digests
            computed; at each hello (`Binding.hold`) the store its size makes and that store's payload root under the
            verifier's key, against the hello's, else Refused with why
 ~~~
@@ -53,7 +55,9 @@ from verity.ml.commitments.merkle import merkle_depth
 from . import audit, codec, receipts
 
 BLOCK = codec.BLOCK_BYTES
-SALT_DOMAIN = b"verity/store/salt/v0\0"
+SALT_VERSION = "verity/store/salt/v1"
+"""The salts' format, which `Binding.record` names beside the roots they make."""
+SALT_DOMAIN = SALT_VERSION.encode() + b"\0"
 PAYLOAD_LABEL = hashlib.sha512(b"verity/remote-session/payload-salts/v0").digest()
 KEY_BYTES = 32
 """The verifier's payload salt key."""
@@ -77,7 +81,8 @@ class Refused(ValueError):
 
 
 def store_salt(key: bytes, label: bytes, c: int) -> bytes:
-    return hashlib.shake_256(SALT_DOMAIN + key + label + struct.pack(">Q", c)).digest(receipts.SALT_BYTES)
+    """Salt `c` under `key` and `label` (the module's docstring), `RemoteAudit.Store.storeSalt`."""
+    return codec.xof(SALT_DOMAIN + key + label + struct.pack(">Q", c), receipts.SALT_BYTES)
 
 
 def canonical_json(obj) -> bytes:
@@ -237,7 +242,7 @@ class Entry:
 
 @dataclass(frozen=True)
 class Arena:
-    """One engine's arena of weights (the module's docstring): its entries, each from a block boundary, and the blocks
+    """One engine's arena of weights (the module's docstring): its entries, each from a chunk boundary, and the chunks
     up to the end of the last one's."""
     directory: str
     entries: tuple[Entry, ...]
@@ -354,7 +359,7 @@ def arena_of(directory: Path) -> Arena:
 
 @dataclass(frozen=True)
 class Store:
-    """`engines` arenas of `arena_blocks` blocks, then `host_blocks` of zero filler (the module's docstring)."""
+    """`engines` arenas of `arena_blocks` chunks, then `host_blocks` of zero filler (the module's docstring)."""
     arena: Arena
     engines: int
     arena_blocks: int
@@ -384,7 +389,7 @@ class Store:
         return out
 
     def payloads(self) -> list[bytes]:
-        """Every block's payload, a small store's (the CPU backend's)."""
+        """Every chunk's payload, a small store's (the CPU backend's)."""
         raw = self.arena.read(0, self.arena.weights_blocks * BLOCK)
         weights = [raw[j * BLOCK:(j + 1) * BLOCK] for j in range(self.arena.weights_blocks)]
         zero = bytes(BLOCK)
@@ -403,7 +408,7 @@ def _weight_digests(a: Arena, lo: int, n: int) -> bytes:
 
 
 def weight_digests(a: Arena, path: Path, workers: int = 1) -> None:
-    """Each weights block's `codec.digest`, 64 bytes a block in block order, written to `path`."""
+    """Each weights chunk's `codec.digest`, 64 bytes a chunk in chunk order, written to `path`."""
     spans = [(lo, min(DIGESTS_A_TASK, a.weights_blocks - lo)) for lo in range(0, a.weights_blocks, DIGESTS_A_TASK)]
     with open(path, "wb") as f:
         if workers > 1 and len(spans) > 1:
@@ -429,7 +434,7 @@ def _subtree(digests: str, shape: tuple[int, int, int, int], node: bytes, key: b
                 level.append(dom.pad(j))
                 continue
             r = j % A if j < engines * A else W
-            x = d[64 * r:64 * (r + 1)] if r < W else zero
+            x = d[codec.DIGEST_BYTES * r:codec.DIGEST_BYTES * (r + 1)] if r < W else zero
             level.append(dom.leaf(j, j, audit.PAYLOAD_SCHEMA, receipts.hidden_digest(x, store_salt(key, PAYLOAD_LABEL, j))))
     return _up(dom, level, 0, first)
 
@@ -463,7 +468,7 @@ def expected_root(store: Store, node: bytes, key: bytes, digests: Path, workers:
 class Binding:
     """The verifier's binding of a registered store to a pinned model (`verifier.py --model`): at startup the pin read
     (`model_pin` of its file's bytes, `pin_data`, its name `role`), every pinned file held to it (`check`), the arena
-    laid out (`arena`) and its weights blocks' digests computed (`weight_digests`, the file `digests`); at each hello
+    laid out (`arena`) and its weights chunks' digests computed (`weight_digests`, the file `digests`); at each hello
     (`hold`), the store the hello's size makes of `engines` arenas of `arena_blocks` and the rest host filler, and its
     payload root under the verifier's key, against the hello's. The Lean's binding (`RemoteAudit.Store.bind`, `hold`)
     takes `pin_data` and `digests`. `record` is what `verifier.json` keeps of it."""
@@ -516,4 +521,4 @@ class Binding:
     def record(self) -> dict:
         return {"name": self.role, "checkpoint_sha512": self.pin["checkpoint_sha512"], "pin": str(self.pin_path),
                 "checkpoint": str(self.directory), "files": len(self.pin["checkpoint"]), "workers": self.workers,
-                **self.state}
+                "salt": SALT_VERSION, **self.state}

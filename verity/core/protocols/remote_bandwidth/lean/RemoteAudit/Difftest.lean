@@ -1,9 +1,13 @@
-import Difftest
-import RemoteAudit.Line
-import RemoteAudit.Registry
-import RemoteAudit.Schedule
-import RemoteAudit.Store
-import RemoteAudit.Wire
+module
+
+public import Difftest
+public import RemoteAudit.Line
+public import RemoteAudit.P2
+public import RemoteAudit.P2Session
+public import RemoteAudit.Registry
+public import RemoteAudit.Schedule
+public import RemoteAudit.Store
+public import RemoteAudit.Wire
 
 /-!
 # The difftest's Lean half
@@ -20,8 +24,15 @@ line (`line` of groups and windows given, `line_record` read off an accepted ses
 rationals as strings `n` or `n/d`) and `pooled.py`'s pooled bound, which the line
 reads (`pooled`, `RemoteAudit.Pooled`), whose refusals are outputs (`{"refused": why}`),
 so their reasons are compared, as are those of `schedule.py`'s schedule check (`schedule`, `RemoteAudit.Schedule`).
+`p2.py`'s P2 store (`RemoteAudit.P2`): a registration's digest (`p2_registration_digest`), a unit's partials, sketch
+and receipt (`p2_sketch`) and an opening's check on PoUS's vk (`p2_opening`); and a whole P2 session as
+`p2_party.py` runs it (`p2_session`, `RemoteAudit.P2Session`), on the registration file's bytes and the prover's lines.
 `remote-audit-difftest` serves them.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit.Difftest
 
@@ -218,8 +229,8 @@ def registerFn (j : Json) : V Json := do
     (← hex j "nonce")
   pure (Json.mkObj [("codec_seed", hexJ r.codecSeed), ("digest", hexJ r.digest)])
 
-/-- A call on the registry. A session names its registration as one drawn earlier in the case, by its place among
-those drawn, or as one given in full. -/
+/-- A call on the registry. A session names its registration as one sampled earlier in the case, by its place among
+those sampled, or as one given in full. -/
 inductive Op
   | register (node : ByteArray) (blocks : Nat) (payloadRoot : ByteArray) (codec : Codec.Codec) (receipt : Kind)
       (bind : Bool) (layout : String) (rows : Nat) (nonce : ByteArray)
@@ -295,7 +306,7 @@ def registryFn (j : Json) : V Json := do
       r := r'
       out := out.push (match c with | some c => c.toJson | none => refusedJ)
     | .live node => out := out.push (match ← r.liveDigest node with | some d => hexJ d | none => .null)
-    | .drawn node => out := out.push (toJson (← r.drawn node))
+    | .drawn node => out := out.push (toJson (← r.sampled node))
   pure (Json.mkObj [("results", .arr out), ("registry", r.toJson)])
 
 def codecDecodeFn (j : Json) : V Json := do
@@ -351,10 +362,10 @@ def leafReceiptFn (j : Json) : V Json := do
   | some y => pure (hexJ y)
   | none => pure .null
 
-def drawsFn (j : Json) : V Json := do
+def receiptSampleFn (j : Json) : V Json := do
   let lengths ← (← J.arr j "lengths" "input").mapM (J.asNat · "lengths")
   if lengths.isEmpty || lengths.any (· = 0) then throw "a window's passes are each one or more receipts"
-  let some ds := draws (← hex j "registration") (← nat j "window") (← hex j "coin") (← nat j "samples") lengths
+  let some ds := receiptSample (← hex j "registration") (← nat j "window") (← hex j "coin") (← nat j "samples") lengths
     | throw "the draw ran past its reads"
   pure (.arr (ds.map pairJ))
 
@@ -582,19 +593,23 @@ private def seenOf (j : Json) : V Line.Seen := do
       hbm := ← J.nat j "hbm" "seen"
       host := ← J.nat j "host" "seen" }
 
-/-- `line.record_run_json`: the line of an accepted session's record, `{"record", "samples", "seen", "per",
-"block_bytes", "chip_bytes", "node_bytes", "delta", "rates"}` (`record` as the verifier's `outcome` request gives it,
-`recordJ`'s), read off the record (`Line.lineOfRecordOn`), or why it has none: none for a record drawn more than one
-window a coin (`groups_per_coin`), whose windows' draws the line doesn't read (`Line.SHARED`). `clock`, if given, says
+/-- `line.record_run_json`: the line of an accepted session's record, `{"record", "registration", "samples", "seen",
+"per", "block_bytes", "chip_bytes", "node_bytes", "delta", "rates"}` (`record` as the verifier's `outcome` request gives
+it, `recordJ`'s; `registration` as `registrationOf` reads one), read off the record (`Line.lineOfRecordOn` at the
+record's `groups_per_coin` g, 1 when it doesn't name it: above 1 its pooled bound reads its draws, `Line.ofSummaryAt`),
+or why it has none: none for a record sampled more than one window a coin at one window in flight, which no property
+covers (`Line.SHARED`), and none for a record not of `registration`, its digest or its registered blocks another
+registration's (`Line.lineOfRegistered`). `clock`, if given, says
 whose clock the times seen are on: `record` (the default), the record's own, and held to it (`Line.timesOff`), or
 `challenger` (the challenger's release log's) or `replay` (a replay's at another round trip), which the record doesn't
 hold.
 
 With `session`, the session's transcript (`sessionFn`'s input: its registration, parameters, `not_before_ns`, events
-and coins), the line is of the record `Session.run` makes of it (`Line.lineOfRun`, `LineHeld`'s `lineOf`, its run
-shared with the record's check), at its parameters' `samples`: none for a transcript drawn more than one window a coin,
-as for its record. Refused unless the transcript has two windows in flight, `samples` is its parameters', and
-`record`, if given, is the run's (`summaryJ`'s form). -/
+and coins), the line is of the record `Shared.run g` makes of it at its parameters' g (`Line.lineOfRun`, `LineHeld`'s
+`lineOf` at a node of g windows a draw, `Session.run` at g = 1, its run shared with the record's check), at its
+parameters' `samples`, refused for a transcript run on another registration than `registration`. Refused unless the
+transcript has two windows in flight, `samples` is its parameters', and `record`, if given, is the run's (`recordJ`'s
+form). -/
 def lineRecordFn (j : Json) : V Json := do
   let onRecord ← if !J.has j "clock" then pure true else match ← J.str j "clock" "input" with
     | "record" => pure true
@@ -608,13 +623,19 @@ def lineRecordFn (j : Json) : V Json := do
   let node ← nat j "node_bytes"
   let δ ← ratIn j "delta" "input"
   let rates ← ratesOf j
+  let registration ← registrationOf (← J.get j "registration" "input")
   if !J.has j "session" then
     let rj ← J.get j "record" "input"
-    let line := Line.lineOfRecordOn onRecord (← summaryOf rj) samples seen per b chip node δ rates
+    let digest ← hex rj "registration"
+    let sm ← summaryOf rj
     let g ← if J.has rj "groups_per_coin" then J.nat rj "groups_per_coin" "record" else pure 1
-    return lineJ (if g ≠ 1 then .error Line.SHARED else line)
+    let f ← match ← J.get rj "pace" "record" with
+      | .null => pure 2
+      | q => if J.has q "in_flight" then J.nat q "in_flight" "pace" else pure 2
+    if g != 1 && f == 1 then return lineJ (.error Line.SHARED)
+    return lineJ (Line.lineOfRegistered onRecord g registration digest sm samples seen per b chip node δ rates)
   let x ← J.get j "session" "input"
-  if (← perCoinOf x) != 1 then return lineJ (.error Line.SHARED)
+  let g ← perCoinOf x
   let reg ← registrationOf (← J.get x "registration" "session")
   let (params, coins, appendCoins, notBeforeNs) ← sessionOf x
   match ← J.get (← J.get x "params" "session") "pace" "params" with
@@ -624,25 +645,26 @@ def lineRecordFn (j : Json) : V Json := do
       if (← J.nat q "in_flight" "pace") != 2 then throw "a line's session has two windows in flight (in_flight 2)"
   if samples ≠ params.samples then throw s!"samples: the session's {params.samples}, not {samples}"
   let events ← (← J.arr x "events" "session").mapM eventOf
-  let ran := Session.run (Session.State.init params reg coins appendCoins notBeforeNs) events
+  let ran := Shared.run g (Session.State.init params reg coins appendCoins notBeforeNs) events
   if J.has j "record" then
     let given ← J.get j "record" "input"
     let made := match ran with
-      | .ok (_, s') => s'.summary.map (summaryJ s'.digest)
+      | .ok (_, s') => s'.summary.map fun x => recordJ s'.digest x 2 g
       | .error _ => none
     if made.any (· != given) then
       return refusedOr (.error "the record is not the one Session.run makes of the session's transcript")
-  let sm? := match ran with
-    | .ok (_, s') => s'.summary
-    | .error _ => none
-  return lineJ (Line.lineOfSummary? onRecord sm? samples seen per b chip node δ rates)
+  return lineJ (match ran with
+    | .ok (_, s') => match s'.summary with
+      | some sm => Line.lineOfRegistered onRecord g registration s'.digest sm samples seen per b chip node δ rates
+      | none => Line.lineOfSummary? onRecord g none samples seen per b chip node δ rates
+    | .error _ => Line.lineOfSummary? onRecord g none samples seen per b chip node δ rates)
 
 private def natsOfN (j : Json) (n : Nat) (ctx : String) : V (Array Nat) := do
   let xs ← J.asArr j ctx
   if xs.size ≠ n then throw s!"{ctx}: {n} integers"
   xs.mapM (J.asNat · ctx)
 
-private def blockOf (j : Json) : V Schedule.Block := do
+private def blockOf (j : Json) : V Schedule.Chunk := do
   match j with
   | .null => pure none
   | v =>
@@ -675,13 +697,101 @@ def scheduleFn (j : Json) : V Json := do
   let got := Schedule.check ⟨registered, appends, steps⟩ (← nat j "blocks") (← nat j "cap") passes made
   pure (refusedOr ((fun b => Json.mkObj [("bits", toJson b)]) <$> got))
 
+def p2RegistrationOf (j : Json) : V P2.Registration := do
+  let c ← J.get j "codec" "registration"
+  P2.Registration.make? (← hex j "node") (← J.nat c "w" "codec") (← J.nat c "c0" "codec") (← J.str c "expander" "codec")
+    (← J.nat c "blocks_per_segment" "codec") (← J.nat c "segments" "codec") (← hex j "commitment") (← hex j "salt")
+    (← hex j "root") (← nat j "rows")
+
+/-- `p2.Registration.digest`. -/
+def p2RegistrationDigestFn (j : Json) : V Json := do pure (hexJ (← p2RegistrationOf j).digest)
+
+private def p2Seed (j : Json) : V ByteArray := do
+  let s ← hex j "seed"
+  if s.size ≠ DIGEST_BYTES then throw "a pass seed is 64 bytes"
+  pure s
+
+private def p2Blocks (j : Json) : V (Array ByteArray) := do
+  let bs ← hexes j "blocks"
+  if bs.size ≠ P2.UNIT_BLOCKS || bs.any (·.size ≠ P2.BLOCK_BYTES) then throw "a unit is four 2,056-byte blocks"
+  pure bs
+
+/-- `p2.Sketcher` on unit g's four blocks: each block's partial π (the decode's, `Sketcher.block`), their sum σ
+(`Sketcher.total`) and the receipt from σ (`Sketcher.receipt`), which the verifier's, of the unit's bytes, must be. -/
+def p2SketchFn (j : Json) : V Json := do
+  let s ← p2Seed j
+  let rows ← nat j "rows"
+  if !Kind.sketch.rowsOk rows then throw "sketch-sha512's rows are 16 or 64"
+  let g ← nat j "g"
+  if g ≥ 2 ^ 64 then throw "a unit index is a u64"
+  let bs ← p2Blocks j
+  let signs := P2.unitSigns s rows
+  let ps := (Array.range P2.UNIT_BLOCKS).map fun b => P2.blockPartial signs (P2.UNIT_BLOCKS * g + b) bs[b]!
+  let sigma := P2.int32s (P2.total rows ps)
+  pure (Json.mkObj [("partials", .arr (ps.map (hexJ ∘ P2.int32s))), ("sigma", hexJ sigma),
+    ("receipt", hexJ (P2.unitReceipt s g sigma))])
+
+private def p2OpeningOf (j : Json) : V P2.Opening := do
+  pure
+    { pass := ← int j "pass"
+      position := ← int j "position"
+      blocks := ← hexes j "blocks"
+      paths := ← (← J.arr j "paths" "input").mapM fun x => do (← J.asArr x "paths").mapM (bytesOf · "paths")
+      leaf := ← hex j "leaf"
+      leafSalt := ← hex j "leaf_salt"
+      receiptPath := ← hexes j "receipt_path" }
+
+/-- `p2.check` of an opening of position `p` of pass `i` under `seed`, the plan of `runs` over the registration's
+units and the pass's receipt root `root` (64 bytes, as a session receives it): the failure's name, or null. -/
+def p2OpeningFn (j : Json) : V Json := do
+  let reg ← p2RegistrationOf (← J.get j "registration" "input")
+  let s ← p2Seed j
+  let some plan := Plan.make? (← runsOf (← J.get j "runs" "input") "runs") reg.units | throw "not a plan"
+  let p ← nat j "p"
+  if p ≥ plan.length then throw "a position past the plan"
+  let o ← p2OpeningOf (← J.get j "opening" "input")
+  let root ← hex j "root"
+  if root.size ≠ DIGEST_BYTES then throw "a pass's root is 64 bytes"
+  pure (match P2.checkOpening reg s plan root (← nat j "i") p o with
+    | some f => .str f.name
+    | none => .null)
+
+/-- A P2 session of record (`P2Session`) on the bytes the verifier reads: `{"registration", "request", "not_before_ns",
+"coins", "chunk", "events"}`, the registration file's bytes and the prover's request line (lowercase hex), the session's
+2W coins, the draws a thread checks, and its events: `start` and `boundary` `{"now"}`, `close` `{"t", "now"}`, `root`
+`{"t", "i", "now", "line"}` and `openings` `{"t", "line"}` (each line lowercase hex, as the prover sent it), and `fail`.
+The held store (`Held.json`), every event's result (`resultJ`) and the answer (`P2Session.answer`); a registration
+or a request refused is `{"refused": "registration"}` or `{"refused": "request"}`. -/
+def p2SessionFn (j : Json) : V Json := do
+  let .ok held := P2Session.heldOf (← hex j "registration") | pure (Json.mkObj [("refused", .str "registration")])
+  let .ok params := P2Session.paramsOf held (← hex j "request") | pure (Json.mkObj [("refused", .str "request")])
+  let coins ← hexes j "coins"
+  if coins.size ≠ 2 * params.windows || coins.any (·.size ≠ Codec.COIN_BYTES) then throw "2W coins of 32 bytes"
+  let chunk ← nat j "chunk"
+  let mut s := P2Session.init held params coins (← nat j "not_before_ns")
+  let mut results : Array Json := #[]
+  for e in ← J.arr j "events" "input" do
+    let (r, s') ← match ← J.str e "kind" "event" with
+      | "start" => pure (Session.start s (← nat e "now"))
+      | "boundary" => pure (Session.boundary s (← nat e "now"))
+      | "close" => Session.close s (← int e "t") (← nat e "now")
+      | "root" => pure (P2Session.receive held s (← int e "t") (← int e "i") (← hex e "line") (← nat e "now"))
+      | "openings" => pure (P2Session.verify chunk held s (← int e "t") (← hex e "line"))
+      | "fail" => pure (P2Session.fail s)
+      | k => throw s!"no P2 event kind {k}"
+    results := results.push (resultJ r)
+    s := s'
+  pure (Json.mkObj [("held", held.json), ("results", .arr results), ("answer", P2Session.answer held s)])
+
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("session", sessionFn), ("registration_digest", registrationDigestFn), ("register", registerFn),
   ("registry", registryFn), ("codec_decode", codecDecodeFn),
   ("plan", planFn), ("plan_changed", planChangedFn), ("receipt", receiptFn), ("verify_opening", verifyOpeningFn),
-  ("leaf_receipt", leafReceiptFn), ("draws", drawsFn), ("schedule", scheduleFn),
+  ("leaf_receipt", leafReceiptFn), ("draws", receiptSampleFn), ("schedule", scheduleFn),
   ("pin", pinFn), ("canonical_json", canonicalJsonFn), ("checkpoint_sha512", checkpointFn),
   ("store_salt", storeSaltFn), ("expected_root", expectedRootFn), ("hold", holdFn), ("binding", bindingFn),
-  ("line", lineFn), ("line_record", lineRecordFn), ("pooled", pooledFn)]
+  ("line", lineFn), ("line_record", lineRecordFn), ("pooled", pooledFn),
+  ("p2_registration_digest", p2RegistrationDigestFn), ("p2_sketch", p2SketchFn), ("p2_opening", p2OpeningFn),
+  ("p2_session", p2SessionFn)]
 
 end RemoteAudit.Difftest

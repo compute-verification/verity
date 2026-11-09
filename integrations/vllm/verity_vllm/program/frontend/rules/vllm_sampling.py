@@ -1,5 +1,5 @@
-"""[R15 stoch] The frontend rule for the STOCHASTIC token select: `vllm_iface.gumbel_topp_token_select(logits, seed, temperature, top_p,
-pos, splits)` -> one `GumbelTopPTokenSelect_v1{V}(logits_row, top_p, seed, pos, temp, splits)` per logits row (verity_vllm.program.registry.sampling).
+"""The frontend rule for the STOCHASTIC token select: `vllm_iface.gumbel_topp_token_select(logits, seed, temperature, top_p,
+pos, splits)` -> one `GumbelTopPTokenSelect_v1{V}(logits_row, top_p, seed, pos, temp, splits)` per logits row (verity.ml.definitions.registry.sampling).
 
 What the op stands for (vLLM d9105ea80 `Sampler.sample` for a request whose `SamplingParams` are temperature T > 0, top_p < 1, top_k 0,
 an explicit `seed`, no penalties / logit bias / min_p / logprobs):
@@ -10,12 +10,12 @@ an explicit `seed`, no penalties / logit bias / min_p / logprobs):
     _gumbel_sample_kernel:    y = logits32 + g(tl.randint(seed, pos))     # Gumbel-max; `pos` = positions[logits_indices]
     token = first index of max_v y[v]                            # block argmax + torch.argmax + gather
 
-Operand roles (the coordinator's ruling on M-0049 / M-0107; R16 M-0169 for S): `seed` is a RUNTIME input of the Program (a forward
+Operand roles: `seed` is a RUNTIME input of the Program (a forward
 input of the wrapper, `request[r].seed` in the workload Program); `temperature`, `top_p` and `pos` are STRUCTURAL (the declared policy
 and the step's row position, constants of the Program: `Const32[f32 bits]`, `Const64[pos]`); `S` (splits) is a DERIVED input of the
 workload -- S_t = SplitsFor_v1(|live(t)|, num_SMs) (registry/topp_split.py) -- that the request wrapper reads from its request-owned
 `splits` Input (int32 [T+1], one entry per sampling event) and the op takes as a 1-element int32 value collection: the 6th operand of
-the composite, never a static of the Definition (R15's `{V,S}` static form is gone; a literal S inside forward is hidden state and is
+the composite, never a static of the Definition (the earlier `{V,S}` static form is gone; a literal S inside forward is hidden state and is
 refused like a literal seed).  [single-request workloads] A single-request workload's wrapper passes
 `splits=None` and `S` = SplitsFor_v1(1, num_SMs): the one live request makes S that constant at every event, and the rule emits it as
 `Const32[S]`, the 4th constant of the row in operand order (after temperature), exactly as the fold emits the observed S.  Only the logits
@@ -59,7 +59,7 @@ class GumbelTopPTokenSelectRule(OpRule):
                                    "pos >= 0 static", "splits is a 1-element 32-bit value collection (the request's derived-S Input entry for the event), "
                                    "or splits is None and S a static split count in {1, 2, 4, 8, 16, 32} (the registered split count)"),
                     evidence_domain="structural; numerics: GumbelTopPTokenSelect_v1{V} (exact-model-tested: difftest vs vLLM d9105ea80 "
-                                    "_temperature_kernel / _topp_sb_* / _gumbel_sample_kernel on L40S, 72/72 rows bit-exact; R16 GPU fixture "
+                                    "_temperature_kernel / _topp_sb_* / _gumbel_sample_kernel on L40S, 72/72 rows bit-exact; a GPU fixture "
                                     "at every split count S = 1..32, tests/program/test_topp_split_geometry.py)")
 
     def targets(self):
@@ -100,7 +100,7 @@ class GumbelTopPTokenSelectRule(OpRule):
         if isinstance(pos, bool) or not isinstance(pos, int) or pos < 0:
             return f"pos {pos!r} is not a static non-negative int"
         if splits is None:
-            from verity_vllm.program.registry.sampling import SPLIT_COUNTS
+            from verity.ml.definitions.registry.sampling import SPLIT_COUNTS
             if isinstance(S, bool) or not isinstance(S, int) or S not in SPLIT_COUNTS:
                 return f"splits is None but S {S!r} is not a launched split count {SPLIT_COUNTS} (the registered constant)"
             return True
@@ -119,7 +119,7 @@ class GumbelTopPTokenSelectRule(OpRule):
         x = ctx.coll(logits)
         rows, lead = rows_of(x)
         V = rows[0].type.n
-        from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile  # noqa: PLC0415  (vllm_bindings imports the rule modules)
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile  # vllm_bindings imports the rule modules
         # a constant split count (the registered S): the select specialised on it, its keep word as word gates, the same
         # six operands (the Const32[S] still read, in operand order)
         fn = ctx.kind("token_select_stochastic", node, V=V, CONSTRUCTION=active_target_profile().effective_sampler_construction()) \

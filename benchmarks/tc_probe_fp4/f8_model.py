@@ -1,4 +1,4 @@
-"""Vectorized ``GroupSum`` for the K = 32 FP8 rows (lane B200-FP8): the candidate models a ``tcgen05_f8.cu`` capture is scored
+"""Vectorized ``GroupSum`` for the K = 32 FP8 rows: the candidate models a ``tcgen05_f8.cu`` capture is scored
 against, evaluated on whole arrays of raw words.
 
 ``silicon.models.GroupSum.step`` is the reference: one output at a time in Python.  This module computes the same function on

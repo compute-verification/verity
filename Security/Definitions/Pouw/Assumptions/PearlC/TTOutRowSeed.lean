@@ -1,13 +1,15 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+module
+
+public import Definitions.Pouw.PearlC.DeviceRev1
 
 /-!
 # Per-row seeds (P2) as the per-unit game on the split layout (trusted definitions; nothing assumed)
 
-P2 seeds A's noise per row: row `i` of unit `u` draws E_A from the oracle input the per-unit scheme uses for a one-row
-unit (`internal/pouw/rtx-pro/a-commit-latency.md`, "Row additivity for P2: it reduces to the per-unit TT_OUT", 10:20Z).
+P2 seeds A's noise per row: row `i` of unit `u` samples E_A from the oracle input the per-unit scheme uses for a one-row
+unit ("Row additivity for P2: it reduces to the per-unit TT_OUT").
 So the row-seeded game on a workload `U` is the per-unit game on its **split workload**, where every row is its own
 unit, and rev1's TT_OUT on the split workload bounds it (`ttOutRowSeed_of_ttOut`, and per audit tile
-`ttOutTileRowSeed_of_ttOutTile`, in `RowSeedGamma.lean`). Row additivity is then a theorem, and no new assumption is
+`ttOutTileRowSeed_of_ttOutTile`, in `RowSeedGap.lean`). Row additivity is then a theorem, and no new assumption is
 added. The error runs over the `R = Σ_u m_u` declared rows: `(q + R)/2^128`.
 
 The reduction reads four conditions, all definitions here, each for the statement reviewer:
@@ -19,7 +21,7 @@ The reduction reads four conditions, all definitions here, each for the statemen
   with the cap checked for every row (every credited row, per tile). An aggregate cap doesn't transfer: a row over its
   own cap is excluded in the split game but would be credited in the row-seeded one. The per-row cap implies the
   aggregate one. At a census k the served check caps each row at `ρr = 4ρ` and the tile at `ρ`
-  (`pearlCProtocolDevRev1RowCapAt`, `pearlCTilesDevRev1RowCapAt`), which (C2) at `ρr` bounds (`RowCapAtGamma.lean`).
+  (`pearlCProtocolDevRev1RowCapAt`, `pearlCTilesDevRev1RowCapAt`), which (C2) at `ρr` bounds (`RowCapAtGap.lean`).
 - **(C3) `CostModel.SplitClosed CM`:** regrouping rows into units doesn't change what a program costs or queries.
   `CostModel` is abstract, so this is a hypothesis on `CM`, a property of W1 (which charges instructions, not which rows
   form a unit), and no cryptographic assumption.
@@ -31,19 +33,21 @@ earns a credit `≥ 0`: arithmetic, discharged at the concrete records by `norm_
 assumptions): `TTOut` and `TTOutTile` with the error read at the row count.
 
 Three additions, also definitions only:
-- **The code-form seed (`-h3`, `internal/pouw/rtx-pro/theory-pearl-c-sm120.md` §14).** (C1-h3) `CodeSeedNoise sem' semC
+- **The code-form seed (`-h3`).** (C1-h3) `CodeSeedNoise sem' semC
   π`: the code's seed is C1's up to a fixed permutation of the oracle's inputs. (C5) `CostModel.RelabelClosed CM`:
   relabelling a program's oracle keeps its cost and calls. With them the row-seeded TT_OUT carries to the code's form
   at the same error (`ttOutRowSeed_code`, in `RowSeedCode.lean`).
-- **The fragment argument's counting side** (`a-commit-latency.md`, "The fragment argument, made rigorous"):
+- **The fragment argument's counting side** ("The fragment argument, made rigorous"):
   `SkipSetU`, `undebitedSkippable` and `fragCount`, which `fragSkip_count_le` (`RowSeedFragment.lean`) bounds a skip
   program's undebited slots by.
-- **The fragment argument's skip class** (option (a) of `internal/pouw-fp8/rowseed-fragdraw-ruling.md`, 16:05Z):
+- **The fragment argument's skip class** (option (a) of the fragment-draw ruling):
   `SkipProgram` and its class, `SkipEmbed`, (C4) `CostModel.FragmentPriced`, (C6) `PearlCSem.RowDrawn`, `rowWords` and
   `QTree.hits`, which `qtree_union_bound` and `ttOutRowSeed_skipClass` (`RowSeedSkip.lean`) read. The corollary's one
   named assumption, `Assumptions.FragDraw`, is in `RowSeedAssumptions.lean`. P2 rests on `ttOutRowSeed_of_ttOut` (and
   its tile twin) alone, with no named assumption; the corollary is a supporting line, and it takes no TT_OUT.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 
@@ -73,10 +77,10 @@ def rowOfRow (L : Layout) (v : ℕ) : ℕ := v - rowOffset L (unitOfRow L v)
 def splitLayout (L : Layout) : Layout where
   N := rowsOf L
   shape v := ⟨1, (L.shape (unitOfRow L v)).n, (L.shape (unitOfRow L v)).k⟩
-  wid v := L.wid (unitOfRow L v)
+  fixedId v := L.fixedId (unitOfRow L v)
 
 /-- The split workload: the split layout, with the same weights. -/
-def splitWorkload (U : Workload) : Workload := ⟨splitLayout U.layout, U.weight⟩
+def splitWorkload (U : Workload) : Workload := ⟨splitLayout U.layout, U.fixed⟩
 
 /-- Row `i` of a matrix of codes, as a one-row matrix. -/
 def rowCodes (M : Codes) (i : ℕ) : Codes := fun _ l => M i l
@@ -102,7 +106,7 @@ def PearlCDevice.RowLocal (d : PearlCDevice) : Prop :=
     (i : Fin m) (j : Fin n),
     d.useful A B FA FB beA beB i j = d.useful (fun _ : Fin 1 => A i) B FA FB (fun _ => beA i) beB 0 j
 
-/-- The noise `sem` draws for row `i` of unit `u` as its own unit: `sem`'s noise at the one-row unit `rowIdx u i` of the
+/-- The noise `sem` samples for row `i` of unit `u` as its own unit: `sem`'s noise at the one-row unit `rowIdx u i` of the
 split workload, on that row's activations. -/
 noncomputable def PearlCSem.splitNoise (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U : Workload) (u i : ℕ)
     (act : Codes) :=
@@ -155,7 +159,7 @@ noncomputable def pearlCProtocolDevRev1RowCapAt (d : PearlCDevice) (sem : PearlC
     capOK := fun H s U u act =>
       (pearlCProtocolDevRev1 d sem ρ).capOK H s U u act ∧ (pearlCProtocolDevRev1RowCap d sem ρr).capOK H s U u act }
 
-/-- **(C2)'s tiles at a wider row cap** (card a6872606, option (a)): `pearlCTilesDevRev1` at the cap `ρ`, whose tile is
+/-- **(C2)'s tiles at a wider row cap**: `pearlCTilesDevRev1` at the cap `ρ`, whose tile is
 within the cap when its debit is at most `ρ` times its credited rows' credit and every credited row's is at most `ρr`
 times that row's share (`pearlCTilesDevRev1RowCap` at `ρr`). The credit is rev1's at `ρ`, `(1 − ρ)·C` times the
 credited rows' share. -/
@@ -178,31 +182,31 @@ def CostModel.SplitClosed (CM : CostModel Q R S) : Prop :=
 /-! ## The row-seeded statements (target forms) -/
 
 /-- **The row-seeded TT_OUT** (a target form, proved from rev1's TT_OUT, not assumed): `TTOut` with the error read at
-the row count, `εPearlC q R = (q + R)/2^128` for the `R = rowsOf U.layout ≤ 2^64` declared rows. -/
+the row count, `δPearlC q R = (q + R)/2^128` for the `R = rowsOf U.layout ≤ 2^64` declared rows. -/
 def TTOutRowSeed [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (D : Layout → Prop) (γ₀ : ℝ) : Prop :=
+    (D : Layout → Prop) (g₀ : ℝ) : Prop :=
   CM.Queries ∧
   ∀ U : Workload, U.InDomain P D → rowsOf U.layout ≤ 2 ^ 64 → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary CM, A.Bounded U T q →
       pr (fun x : (Q → R) × S =>
-        T / (1 - γ₀) < ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2),
+        T / (1 - g₀) < ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2),
           P.credit x.1 x.2 U u (actOf (A.transcript U x.1 x.2) u))
-        ≤ εPearlC q (rowsOf U.layout)
+        ≤ δPearlC q (rowsOf U.layout)
 
 /-- **The row-seeded TT_OUT per audit tile** (a target form): `TTOutTile` with the error read at the row count. -/
 def TTOutTileRowSeed [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (TR : TileRules Q R S) (D : Layout → Prop) (γ₀ : ℝ) : Prop :=
+    (TR : TileRules Q R S) (D : Layout → Prop) (g₀ : ℝ) : Prop :=
   CM.Queries ∧
   ∀ U : Workload, U.InDomain P D → rowsOf U.layout ≤ 2 ^ 64 → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary CM, A.Bounded U T q →
       pr (fun x : (Q → R) × S =>
-        T / (1 - γ₀) < ∑ g ∈ goodTiles P TR U x.1 x.2 (A.transcript U x.1 x.2),
+        T / (1 - g₀) < ∑ g ∈ goodTiles P TR U x.1 x.2 (A.transcript U x.1 x.2),
           TR.credit x.1 x.2 U g (actOf (A.transcript U x.1 x.2) ((TR.tiling U.layout).unit g)))
-        ≤ εPearlC q (rowsOf U.layout)
+        ≤ δPearlC q (rowsOf U.layout)
 
 /-! ## The code-form seed (`-h3`) -/
 
-/-- **(C1-h3) The code-form seed:** `semC` draws its noise from the oracle at the code's inputs, and a fixed permutation
+/-- **(C1-h3) The code-form seed:** `semC` samples its noise from the oracle at the code's inputs, and a fixed permutation
 `π L` of the oracle's inputs (one per layout) carries `sem'`'s inputs to them: `semC` at `H` is `sem'` at `H ∘ π L`.
 For P2's rows, `π L` takes the one-row unit's input at `rowIdx L u i` to the code's, indexed `u·2³² + i` with `leaf_i`
 framed inside unit `u`; the chain, scales and floor are `sem'`'s. -/
@@ -257,7 +261,7 @@ def omittedAt (slots : Finset (ℕ × ℕ × ℕ)) (patch : ℕ × ℕ × ℕ �
 
 end Pouw.PearlC
 
-/-! ## The skip class (option (a) of the 16:05Z ruling) -/
+/-! ## The skip class (option (a) of the fragment-draw ruling) -/
 
 namespace Pouw.QTree
 
@@ -346,7 +350,7 @@ def CostModel.FragmentPriced (CM : CostModel Q R S) {sem : PearlCSem Q R S} {p :
 /-- Row `i`'s words in a `k`-column operand. -/
 def rowWords (k : ℕ) (act : Codes) (i : ℕ) : Fin k → ℕ := fun l => act i l
 
-/-- **(C6) Each row's noise is one oracle draw**, a condition for the statement reviewer. The ruling's item 4 takes it
+/-- **(C6) Each row's noise is one oracle sample**, a condition for the statement reviewer. The ruling's item 4 takes it
 from C1, but C1 relates `sem'` to `sem` on the split workload and leaves which oracle inputs `sem.noise` reads
 abstract. At salt `s` on unit `u` of `U`, `sem` reads the per-job noise (`F_A`, `E_B`, `F_B`) from the oracle at the
 job's input `xJ` only, and row `i`'s `E_A` line from the oracle at `key i w` and `xJ` only, `w` the row's `k` words.

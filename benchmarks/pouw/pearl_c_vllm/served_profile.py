@@ -4,7 +4,7 @@ every forward, for an nsys profile of the served path at the panel's shapes, and
   python served_profile.py -- <e2e.py's arguments>          # run e2e.main with the ranges (under nsys by served_profile.sh)
   python served_profile.py --analyze REPORT.sqlite --out served-profile.json
 
-It runs the tree's own `e2e.py`, unchanged, on whichever tree is on PYTHONPATH (#540's at 8ca97148, or the migrated stack's),
+It runs the tree's own `e2e.py`, unchanged, on whichever tree is on PYTHONPATH,
 and adds only ranges and host timestamps:
 - each ``llm.generate`` is a range ``gen|<mode>|<phase>|<i>``: the mode read from the engine (``fp8`` for the base engine,
   else the arm's: ``bf16``, ``pearlc-nohash``, ``pearlc``), the phase from the request (``prefill``: one prompt, one token;
@@ -37,7 +37,10 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
-os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+from verity_config.settings import of
+
+settings = of(__file__)
+settings.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 
 _CTX: dict = {}
 _LOG: list = []
@@ -85,7 +88,6 @@ def _instrument() -> None:
 
     def engine_(args, group):
         import torch
-        from vllm_bench import find_model
         llm = engine(args, group)
         _CTX["group"] = group
         seen: dict = defaultdict(int)
@@ -104,7 +106,7 @@ def _instrument() -> None:
                 torch.cuda.nvtx.range_pop()
 
         llm.generate = gen
-        model = find_model(llm)
+        model = e2e.find_model(llm)
 
         def pre(_m, a, kw):
             ids = kw.get("input_ids") if kw.get("input_ids") is not None else (a[0] if a else None)
@@ -115,7 +117,7 @@ def _instrument() -> None:
 
         model.register_forward_pre_hook(pre, with_kwargs=True)
         model.register_forward_hook(post)
-        out = Path(os.environ.get("OUT") or os.environ.get("RESEARCH_RUN_DIR", ".")) / f"generates-{group}.json"
+        out = Path(settings.OUT or settings.RESEARCH_RUN_DIR or ".") / f"generates-{group}.json"
         atexit.register(lambda: out.write_text(json.dumps(_LOG)))
         return llm
 
@@ -357,7 +359,7 @@ def main() -> None:
 
 
 if __name__ in ("__main__", "__mp_main__") and "--analyze" not in sys.argv:
-    here = os.environ.get("SERVED_TREE", os.getcwd())
+    here = settings.SERVED_TREE or os.getcwd()
     sys.path[:0] = [str(Path(here) / "benchmarks/pouw/pearl_c_vllm"), str(Path(here) / "benchmarks/pouw")]
     _instrument()
 

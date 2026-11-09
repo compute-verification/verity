@@ -1,13 +1,17 @@
-import Definitions.Nci.Assumptions.Covering
+module
+
+public import Definitions.Nci.Assumptions.Covering
 
 /-!
 # The covering bound at one width `b` and one compression rate `r`
 
-Daniel's lower bound on inference blocks (22 Oct 2026): a circuit that computes many chained multiplications of updated
+A lower bound on inference blocks: a circuit that computes many chained multiplications of updated
 weights cannot be covered by few small blocks that each read little. It is a statement beside `Complies`, `Chain` and
 `F`, not a specialization of them: a covering's blocks may overlap and recompute, so it is not a division into IUs, and
 its multiplication blocks are any disjoint gate sets with an output gate, not a chain's products and sums.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 
@@ -27,7 +31,7 @@ In a transformer `k ≈ 10⁷` bits and `c ≈ 16`, so `D ≈ 6 · 10⁵` suffic
 0.1% of a 70B model's) are chained. The count is stated multiplied out, with no division by `(k / c)² + k`, so it says
 something when `k = 0`; in the slowdown form a division by zero is zero. -/
 def CoveringBound : Prop :=
-  ∀ (d : Declaration) (B : MulBlocks d) (s k D : ℕ) (r b : ℝ) (n : ℕ) (I : Fin n → Subcircuit d.D),
+  ∀ (d : RegisteredCircuit) (B : MulBlocks d) (s k D : ℕ) (r b : ℝ) (n : ℕ) (I : Fin n → Subcircuit d.D),
     (k : ℝ) < r * b * D → Assumptions.ParameterHard d B s r b → Covers d s k I →
       ((Assumptions.chainedBlocks d B D r b).card : ℝ) ≤ n * ((k / (r * b)) ^ 2 + k) ∧
       ((Assumptions.chainedBlocks d B D r b).card : ℝ) / d.D.N * s / ((k / (r * b)) ^ 2 + k) ≤ s * n / d.D.N

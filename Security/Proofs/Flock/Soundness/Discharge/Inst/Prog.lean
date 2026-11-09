@@ -1,5 +1,13 @@
-import Proofs.Flock.Soundness.Discharge.Inst.Place
-import Proofs.Flock.Soundness.Discharge.Placed.Keyed
+module
+
+public import Proofs.Flock.Soundness.Discharge.Const.Inst
+public import Proofs.Flock.Soundness.Discharge.Inst.Place
+public import Proofs.Flock.Soundness.Discharge.Placed.Keyed
+public import Proofs.Flock.Soundness.Discharge.Placed.Setup
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Aliased.Keys
+import Proofs.Flock.Soundness.Discharge.Placed.Wiring
+import Proofs.Flock.Soundness.Lowering
 
 /-!
 # The program of the whole template instance, and its `ProgPlaces`
@@ -10,13 +18,15 @@ the gate of its Δ source key (`keyOf`, `Aliased.srcKey` of the stacked input it
 share a gate exactly when Δ copies one column into them, or both read the zero (`instProg_wire_key`). It is `keyProg`
 with the unit's rows replaced by the template instance's, beside it.
 
-At every drawn unit's site in an accepted untyped statement:
+At every sampled proof block's site in an accepted untyped statement:
 * the statement places the program's rows at the unit's template instance (`placement_inst`, moved along the parse);
 * a composite input carries what its stacked unit input's copy position carries (`inst_block`), so inputs on one gate
   carry one value (`Accepted.inst_aliased`, from `Aliased.copyPos_of_key`).
 
 So `Sites.progPlaces_instProg` is a `ProgPlaces` that takes only the sites and the parse.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 
@@ -155,13 +165,13 @@ variable {n : ℕ} {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → 
     HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
 
 include hparse in
-/-- **W6 for the template instance's program, from the parse**: each drawn unit's rows are the composite rows of its
+/-- **W6 for the template instance's program, from the parse**: each sampled proof block's rows are the composite rows of its
 table's accepted circuit. -/
 theorem Sites.rows_instProg (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     (instProg c n).rows u = instRows (si.acc S R u h).st.c :=
   (rows_uniform _ _ _ _ _ n u).trans (congrArg instRows ((si.acc S R u h).c_eq (hparse S R u h))).symm
 
-/-- **A drawn unit's columns in its table's block**: its template instance's composite columns (`composePlace` at
+/-- **A sampled proof block's columns in its table's block**: its template instance's composite columns (`composePlace` at
 `pos`). -/
 noncomputable def Sites.instCol (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     Fin ((instProg c n).rows u).w → Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog) :=
@@ -174,14 +184,14 @@ noncomputable def Sites.instCol (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : 
 
 variable (outs : Finset (Fin (gates (inGates n (instRows c).nIn) (instRows c) n)))
 
-/-- **`ProgPlaces` for the program of the whole template instance**, from the sites and the parse alone: each drawn unit
+/-- **`ProgPlaces` for the program of the whole template instance**, from the sites and the parse alone: each sampled proof block
 placed at its template instance in its table's accepted statement (`placement_inst`), its instance the program's own
 (`Const.Prog.instC`), its composite inputs on one gate carrying one value (`Accepted.inst_aliased`). -/
 noncomputable def Sites.progPlaces_instProg : ProgPlaces (instProg c n) outs plan tab where
   inst := Const.Prog.instC (instProg c n) outs
   o := si.o
   col := Sites.instCol hparse
-  placed S R u h := placement_rows (Sites.rows_instProg hparse S R u h)
+  placed S R u h := Placement.sat <| placement_rows (Sites.rows_instProg hparse S R u h)
     (Accepted.placement_cast (si.acc S R u h).hT
       (placement_inst (si.acc S R u h).layout (Aliased.setupH_unitFacts (si.acc S R u h).ht (si.acc S R u h).h)
         (si.acc S R u h).regs (si.hvu S R u h)))

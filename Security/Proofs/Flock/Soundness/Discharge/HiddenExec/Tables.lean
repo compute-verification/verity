@@ -1,5 +1,22 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Defs
-import Proofs.Flock.Soundness.Discharge.Integrate
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Commit
+public import Proofs.Flock.Soundness.Discharge.Integrate
+public import Proofs.Flock.Soundness.Discharge.Integrate.Sites
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # The tables and sites of a one-table hidden-output session
@@ -9,21 +26,23 @@ file holds every row's `b ‖ c` and no output word, so a table is `stmtOf` of t
 read off its layout (`Refine.stmtOf`, which reads `Δ` and the regions `setupHidden` built), not `setupH`'s
 `Layout.model`:
 
-* `DrawSetupH I mPts S d`: `Stmt.setupHidden` on `I` accepts the draw `d`, which decodes to a draw `D` proving every unit
+* `DrawSetupH I mPts S d`: `Stmt.setupHidden` on `I` accepts the sample `d`, which decodes to a sample `D` proving every unit
   of `S`; the statement's blocks hold `D`'s proved units, its `fast100` schedule has two levels or more, and its link
   points are `mPts` (`DrawSetup`'s fields, with `setupHidden` for `setupH`), and the statement is well formed (`wf`,
   which `setupHidden_wf` proves of every statement `setupHidden` returns).
-* `TableH I mPts S`: a table, the hidden-output statement it is `stmtOf` of (at a draw `d`, at regions `regs`), and
-  each drawn unit's template instance and block.
+* `TableH I mPts S`: a table, the hidden-output statement it is `stmtOf` of (at a sample `d`, at regions `regs`), and
+  each sampled proof block's template instance and block.
 * `DrawSetupH.table`: the table at `regionsOf st`, each unit at its rank `r` among `D.proved`, block `r / c.g`, template
-  instance `r % c.g`. `DrawSetupH.refused`: at a draw with no `DrawSetupH`, the reference setup's statement with
+  instance `r % c.g`. `DrawSetupH.refused`: at a sample with no `DrawSetupH`, the reference setup's statement with
   Integrate's `contra` regions, which no witness satisfies.
-* `tableAtH`, `planAtH`, `tabAtH`, `tablesAtH`: the draw's table, the one-table plan and its tables, as
+* `tableAtH`, `planAtH`, `tabAtH`, `tablesAtH`: the sample's table, the one-table plan and its tables, as
   `Prog.flock_headline_live_on` takes them.
 
-`drawSetupH_of_accepts` and `tableAtH_of_accepts` (`Accepted.lean`): at a draw flock-verify accepts under hidden
+`drawSetupH_of_accepts` and `tableAtH_of_accepts` (`Accepted.lean`): at a sample flock-verify accepts under hidden
 outputs, the table is `stmtOf` of the statement it accepted.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.HiddenExec
 
@@ -33,7 +52,7 @@ open FlockSoundness.Discharge.Integrate (DrawSetup)
 
 variable {n : ℕ} (I : Inputs) (mPts : ℕ)
 
-/-- **A draw flock-verify sets up under hidden outputs**: `Integrate.DrawSetup` with `Stmt.setupHidden` for
+/-- **A sample flock-verify sets up under hidden outputs**: `Integrate.DrawSetup` with `Stmt.setupHidden` for
 `Stmt.setupH`. -/
 structure DrawSetupH (S : Finset (Fin n)) (d : Lean.Json) where
   st : Stmt
@@ -54,8 +73,8 @@ structure DrawSetupH (S : Finset (Fin n)) (d : Lean.Json) where
   hmPts : st.mPts = mPts
   wf : StmtWF st ∧ RegionsWF st
 
-/-- **A hidden-output draw's table with its sites**: the table, the statement `setupHidden` accepted at a draw `d` on
-the session's inputs, the regions at which the table is that statement's `stmtOf`, and each drawn unit's template instance and block. -/
+/-- **A hidden-output sample's table with its sites**: the table, the statement `setupHidden` accepted at a sample `d` on
+the session's inputs, the regions at which the table is that statement's `stmtOf`, and each sampled proof block's template instance and block. -/
 structure TableH (S : Finset (Fin n)) where
   T : TabSpec mPts
   st : Stmt
@@ -96,7 +115,7 @@ noncomputable def specAt (regs : List (Model.Region x.st.c.kLog (x.st.m - x.st.c
     have h3 := x.hmPts
     omega⟩
 
-/-- A drawn unit's rank among the draw's proved units. -/
+/-- A sampled proof block's rank among the sample's proved units. -/
 def rank (u : Fin n) : ℕ := x.D.proved.toList.idxOf u.val
 
 theorem rank_lt {u : Fin n} (h : u ∈ S) : x.rank u < x.D.proved.size := by
@@ -119,7 +138,7 @@ theorem rank_div_lt {u : Fin n} (h : u ∈ S) : x.rank u / x.st.c.g < 2 ^ (x.st.
   rw [Nat.div_lt_iff_lt_mul x.hg, hr.hm, Nat.add_sub_cancel_left, Nat.mul_comm]
   exact lt_of_lt_of_le (x.rank_lt h) x.hblk
 
-/-- **The draw's table**: `stmtOf` of the hidden-output statement at its regions, and each drawn unit at its rank `r`:
+/-- **The sample's table**: `stmtOf` of the hidden-output statement at its regions, and each sampled proof block at its rank `r`:
 block `r / c.g`, template instance `r % c.g`. -/
 noncomputable def table : TableH I mPts S where
   T := x.specAt (regionsOf x.st) (stmtOf_linkLayout x.st x.wf.1 x.wf.2).1
@@ -133,7 +152,7 @@ noncomputable def table : TableH I mPts S where
   hvu _ _ := Nat.mod_lt _ x.hg
   o u h := ⟨x.rank u / x.st.c.g, x.rank_div_lt h⟩
 
-/-- **Distinct drawn units have distinct sites** in the draw's table. -/
+/-- **Distinct sampled proof blocks have distinct sites** in the sample's table. -/
 theorem table_site_inj {u u' : Fin n} (h : u ∈ S) (h' : u' ∈ S)
     (e : (x.table.o u h).val = (x.table.o u' h').val ∧ x.table.vu u h = x.table.vu u' h') : u = u' := by
   refine x.rank_inj h h' ?_
@@ -142,7 +161,7 @@ theorem table_site_inj {u u' : Fin n} (h : u ∈ S) (h' : u' ∈ S)
   have e2' : x.rank u % x.st.c.g = x.rank u' % x.st.c.g := e2
   rw [← Nat.div_add_mod' (x.rank u) x.st.c.g, ← Nat.div_add_mod' (x.rank u') x.st.c.g, e1', e2']
 
-/-- The regions of a refused draw's table: the reference setup's, and Integrate's `contra`. -/
+/-- The regions of a refused sample's table: the reference setup's, and Integrate's `contra`. -/
 theorem refused_wf : ∀ R ∈ regionsOf x.st ++ DrawSetup.contra x.st.c.kLog (x.st.m - x.st.c.kLog),
     R.free.Nodup ∧ R.free.length ≤ PT_LOCAL := by
   intro R hR
@@ -150,7 +169,7 @@ theorem refused_wf : ∀ R ∈ regionsOf x.st ++ DrawSetup.contra x.st.c.kLog (x
   · exact (stmtOf_linkLayout x.st x.wf.1 x.wf.2).1 R hR
   · exact DrawSetup.contra_wf R hR
 
-/-- **The table of a refused draw `S'`**: a reference setup `x`'s statement with `contra`'s regions, which no witness
+/-- **The table of a refused sample `S'`**: a reference setup `x`'s statement with `contra`'s regions, which no witness
 satisfies (`refused_unsat`), every unit at block 0, template instance 0. -/
 noncomputable def refused (S' : Finset (Fin n)) : TableH I mPts S' where
   T := x.specAt (regionsOf x.st ++ DrawSetup.contra x.st.c.kLog (x.st.m - x.st.c.kLog)) x.refused_wf
@@ -173,12 +192,12 @@ end DrawSetupH
 variable (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
 
 open Classical in
-/-- **The table at draw `S`**: the draw's table (`DrawSetupH.table`) when flock-verify sets up the draw's JSON `dj S`
+/-- **The table at sample `S`**: the sample's table (`DrawSetupH.table`) when flock-verify sets up the sample's JSON `dj S`
 under hidden outputs, and otherwise the reference setup `x₀`'s refused table. -/
 noncomputable def tableAtH (S : Finset (Fin n)) : TableH I mPts S :=
   if h : Nonempty (DrawSetupH I mPts S (dj S)) then (Classical.choice h).table else x₀.refused S
 
-/-- **The table is `stmtOf` of setupHidden's statement wherever setupHidden accepts**: at a draw with a `DrawSetupH` at
+/-- **The table is `stmtOf` of setupHidden's statement wherever setupHidden accepts**: at a sample with a `DrawSetupH` at
 `dj S`, the table is `DrawSetupH.table` of one with the same statement. -/
 theorem tableAtH_stmt {S : Finset (Fin n)} (x : DrawSetupH I mPts S (dj S)) :
     ∃ y : DrawSetupH I mPts S (dj S), y.st = x.st ∧ tableAtH dj x₀ S = y.table := by
@@ -193,7 +212,7 @@ theorem tableAtH_cases (S : Finset (Fin n)) :
   · exact .inl ⟨_, rfl⟩
   · exact .inr rfl
 
-/-- **A refused draw's table is unsatisfiable**: at a draw with no `DrawSetupH`, no witness satisfies the table. -/
+/-- **A refused sample's table is unsatisfiable**: at a sample with no `DrawSetupH`, no witness satisfies the table. -/
 theorem tableAtH_unsat {S : Finset (Fin n)} (hS : ¬ Nonempty (DrawSetupH I mPts S (dj S)))
     (z : Witness (tableAtH dj x₀ S).T.S.m) : ¬ (tableAtH dj x₀ S).T.S.Satisfies z := by
   revert z
@@ -203,10 +222,10 @@ theorem tableAtH_unsat {S : Finset (Fin n)} (hS : ¬ Nonempty (DrawSetupH I mPts
 
 variable {Reg : Type}
 
-/-- The one-table plan: at draw `S`, the table `tableAtH … S`, for every registration. -/
+/-- The one-table plan: at sample `S`, the table `tableAtH … S`, for every registration. -/
 noncomputable abbrev planAtH : Finset (Fin n) → Reg → List (TabSpec mPts) := fun S _ => [(tableAtH dj x₀ S).T]
 
-/-- Every drawn unit is in the plan's one table. -/
+/-- Every sampled proof block is in the plan's one table. -/
 abbrev tabAtH : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planAtH (Reg := Reg) dj x₀ S R).length :=
   fun _ _ _ => ⟨0, Nat.zero_lt_one⟩
 

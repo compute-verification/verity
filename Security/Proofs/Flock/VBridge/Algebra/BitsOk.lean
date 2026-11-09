@@ -1,5 +1,24 @@
+module
+
+public import Proofs.Flock.VBridge.Algebra.ToVStar
+public import Proofs.Flock.VBridge.Algebra.Sim
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.VBridge.Algebra.Build
-import Proofs.Flock.VBridge.Algebra.ToVStar
+import VCVio.Prelude.Core
 
 /-!
 # The S `structureOf` builds has its `wt` bits below 128
@@ -10,6 +29,8 @@ residuals at `symbolic`, renamed by `bump` (which fixes exactly the elements wit
 `symbolic`, which is `symbolic` itself. Their elements are fixed by `bump` (`Lin.Good`), and `build` makes its
 operands from them and its added terms of the running sums and v (`structureOf_bitsOk`).
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 
@@ -155,7 +176,7 @@ theorem symbolic_ren (sh : Shape) : (symbolic sh).map (Lin.ren bump) = symbolic 
          | rfl)
     | rfl
 
-theorem residualLins_ren {sh : Shape} {coins : Coins} {extras : Array Claim} {lins : Array Lin} {info : Info Lin}
+theorem residualLins_ren {sh : Shape} {coins : CoinSource} {extras : Array Claim} {lins : Array Lin} {info : Info Lin}
     (h : residualLins sh coins extras = .ok (lins, info)) : lins.map (Lin.ren bump) = lins := by
   cases hr : run sh (symbolic sh) extras 0 coins with
   | error e =>
@@ -387,7 +408,7 @@ theorem build_bitsOk {sh : Shape} {lins : Array Lin} {b : Built} (hb : build sh 
 so `residuals_toV` reads it as V*'s. -/
 theorem structureOf_bitsOk {sh : Shape} {S : GfS} (h : structureOf sh = .ok S) : S.BitsOk := by
   unfold structureOf at h
-  cases hl : residualLins sh Coins.zeros (extrasLike sh) with
+  cases hl : residualLins sh CoinSource.zeros (extrasLike sh) with
   | error e => rw [hl] at h; cases h
   | ok p =>
     obtain ⟨lins, info⟩ := p

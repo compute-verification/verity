@@ -1,7 +1,9 @@
-import Definitions.Accounting.RateAudit
-import Definitions.Accounting.RateAuditInteractive
-import Definitions.Accounting.RateAuditRemote
-import Definitions.Accounting.RateAuditHorizon
+module
+
+public import Definitions.Accounting.RateAudit
+public import Definitions.Accounting.RateAuditInteractive
+public import Definitions.Accounting.RateAuditRemote
+public import Definitions.Accounting.RateAuditHorizon
 
 /-!
 # Conservation over tiers with named words (trusted)
@@ -16,12 +18,14 @@ oracle value is that word's receipt. Two of the run's queries with one oracle va
 * `RateConservationNamedRO`: at a count `k`, `C(N, k)/2^λ` in place of `C(q, k)/2^λ`.
 * `RatePaidNamedRO`: at every count at once, `2^N/2^λ` in place of `RatePaidRO`'s `2^q/2^λ`.
 * `RateChainSampledNamedRO`: the route `Sampled` (`RateChainSampledRO`) with that error at each pass.
-* `RateSessionSampledNamedRO`: the route `Sampled` for a session of windows, each closed by its pooled draw
-  (`RateSessionDraw`): over the horizon and in every window at once.
+* `RateSessionSampledNamedRO`: the route `Sampled` for a session of windows, each closed by its pooled sample
+  (`RateSessionSample`): over the horizon and in every window at once.
 
 The prover is one undifferentiated resource: these conserve the words read, rebuilt or held, whichever devices or
 parties read, rebuild or hold them, with no assumption on who they are.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 
@@ -50,7 +54,7 @@ chip's state, the run's trace and the `k` named words (`C(N, k)/2^λ`).
 
 Frozen (no-function, hash): as `RateAudit`, a bound in the random-oracle model over an abstract chip program. -/
 def RateConservationNamedRO : Prop :=
-  ∀ (N b h ρ S L q k lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveDevice N b h ρ S L q),
+  ∀ (N b h ρ S L q k lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveProver N b h ρ S L q),
     (∀ E R O O', A.side E R O = A.side E R O') →
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
         k ≤ (A.correct x.1 x.2.1 x.2.2).card ∧
@@ -74,7 +78,7 @@ each count `k ≤ N`, and `∑ₖ C(N, k) = 2^N`.
 
 Frozen (no-function, hash): as `RateAudit`. -/
 def RatePaidNamedRO : Prop :=
-  ∀ (N b h ρ S L q lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveDevice N b h ρ S L q),
+  ∀ (N b h ρ S L q lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveProver N b h ρ S L q),
     (∀ E R O O', A.side E R O = A.side E R O') →
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
         ∑ t, A.tierReads tier t x.1 x.2.1 x.2.2 + A.rebuilt x.1 x.2.1 x.2.2 * b + S + (L - ρ) + lam <
@@ -92,7 +96,7 @@ is at most `(K / (P·N))^(s·P) + P·(N/2^h + C(q, 2)/2^h + 2^N/2^λ)`.
 **The reading.** At `K = (1 − d̄)·P·N`, a window whose `s·P` openings all pass read, rebuilt or held the words of more
 than `K` correct receipts, at a slack of `N + 40` bits a pass for `λ`.
 
-Proof: `Accounting.SecurityProofs.RateChainSampledNamedRO`: `RateHorizon`, and `RatePaidNamedRO` at each pass through
+Proof: `Accounting.SecurityProofs.RateChainSampledNamedRO`: `RatePooled`, and `RatePaidNamedRO` at each pass through
 `RateChainPaidRO`'s union over passes.
 
 Frozen (no-function, hash): as `RateAudit`. -/
@@ -108,8 +112,8 @@ def RateChainSampledNamedRO : Prop :=
         (P : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h + (q.choose 2 : ℝ≥0∞) / 2 ^ h + (2 ^ N : ℝ≥0∞) / 2 ^ lam)
 
 /-- **The route `Sampled` for a session, with named words, with side sources that ignore the oracle.** For every
-session of `n` chained windows on one store, each closed by its pooled draw of `d` openings (`Rate.Session`, as in
-`RateSessionDraw`), with every pass's side sources ignoring the oracle, and every split into tiers: the probability
+session of `n` chained windows on one store, each closed by its pooled sample of `d` openings (`Rate.Session`, as in
+`RateSessionSample`), with every pass's side sources ignoring the oracle, and every split into tiers: the probability
 that every window's openings land on correct receipts while either the session's reads of every tier and rebuilt
 words (`Chain.spent`), plus each pass's on-chip state, free link bits and `λ`, fall short of `K + 1` words,
 
@@ -119,7 +123,7 @@ or some window's fall short of `K_w + 1` words,
 
   `spent_w + P·(S + (L − ρ) + λ) < (K_w + 1)·b`,
 
-is at most `RateSessionDraw`'s bound plus `n·P·(N/2^h + C(q, 2)/2^h + 2^N/2^λ)`.
+is at most `RateSessionSample`'s bound plus `n·P·(N/2^h + C(q, 2)/2^h + 2^N/2^λ)`.
 
 **The reading.** The hybrid claim on the words: at `K = (1 − d̄)·n·P·N` and `K_w = (1 − d_w)·P·N`, a session whose
 openings all pass read, rebuilt or held more than `(1 − d̄)` of its passes' words over its horizon and more than
@@ -127,7 +131,7 @@ openings all pass read, rebuilt or held more than `(1 − d̄)` of its passes' w
 rebuilds or holds them: the prover is one resource, and nothing here assumes which device or party it is.
 
 Proof: `Accounting.SecurityProofs.RateSessionSampledNamedRO`: at most `K` correct receipts in all or `K_w` in some
-window is `RateSessionDraw`'s event; otherwise some window's reads fall short of its correct receipts' words, so some
+window is `RateSessionSample`'s event; otherwise some window's reads fall short of its correct receipts' words, so some
 pass's do, which `RatePaidNamedRO` bounds at each pass, with a union over the windows and their passes.
 
 Frozen (no-function, hash): as `RateAudit`. -/

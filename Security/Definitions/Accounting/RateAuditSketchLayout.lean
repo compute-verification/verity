@@ -1,16 +1,21 @@
-import Definitions.Accounting.RateAuditSketch
+module
+
+public import Definitions.Accounting.RateAuditSketch
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The sketch rate audit for a prover whose memory holds any function of the store (trusted)
 
 `RateAuditSketch.lean`'s window, tag and digest, for a prover outside its verbatim class. What the prover holds in
 memory is laid out before the signs as any function of the store, as `RateAudit.lean`'s device memory is, and the chip
-reads it one bit at an address. That is the remote audit's prover under conservation (Daniel, 12 Oct, #1884): one
+reads it one bit at an address. That is the remote audit's prover under conservation: one
 undifferentiated resource, every tier of whose memory is memory here, every device of which that computes is the chip,
 and every bit of which it reads is counted. The class here also holds nothing on chip, takes in nothing over the side
 link but the certified stream's sectors, and rebuilds nothing, so an arbitrary prover's class contains it. Its chip
 queries the oracle `H(R, t, d)` at the window's fresh seed, as `RateAuditSketch.lean`'s does.
 -/
+
+@[expose] public section
 
 namespace Accounting.RateSketch
 

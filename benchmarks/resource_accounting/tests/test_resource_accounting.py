@@ -48,7 +48,7 @@ def test_shapes_parse_by_name_and_refuse_what_they_dont_name():
 
 
 def test_gamma_is_the_pinned_twins_larger_price_at_each_linear_and_the_cube():
-    """γ comes from the price twins at both FP32 prices, the larger published, on the path the draw's statement cites, at a
+    """γ comes from the price twins at both FP32 prices, the larger published, on the path the sample's statement cites, at a
     cube or a Llama linear's (n, k); the layout's is the max over its linears; a shape no twin states is missing, never
     filled in."""
     P = C.price_twins()
@@ -125,10 +125,10 @@ def test_the_table_derives_every_column_from_the_run_and_the_code():
     assert "S_chip – (this run recorded no registers a SM, so no Q_cert)" in R.markdown(doc_no_regs, {}, "fixture")
     assert "T = 1,354,057 ns, the RTT at P2's cap (354,000 ns) inside the rebuild floor of 1,708,058 ns" in md
     assert ("not a per-run covert bound: a per-run compute residual holds only conditional on BudgetAbort for the deployed "
-            "cost model (Daniel's decision 9; #1821's CovertResidualPerRun, and #1827") in md
-    assert "Note: first fetches are charged to the bandwidth account, not compute (Daniel's ruling)" in md
-    assert ("larger FP32 price at the point's (n, k) (#1809): cube8192 (8192, 8192) 0.36949%; llama31_8b's layout, the max "
-            "over its linears, 0.38912%.") in md
+            "cost model (CovertResidualPerRun; BudgetAbort holds for constant-cost models") in md
+    assert "Note: first fetches are charged to the bandwidth account, not compute; a priced-sum column" in md
+    assert ("larger FP32 price at the point's (n, k) (pearlCDomainDevNK, pearlCDomainDevShapes): cube8192 (8192, 8192) "
+            "0.36949%; llama31_8b's layout, the max over its linears, 0.38912%.") in md
     assert "sidecar" not in md
     assert ("Every arm ran beside a sidecar, an idle CUDA context in a second process held through the run (ready in 2.0 s)"
             in R.markdown({**_doc(), "sidecar": {"pid": 7, "ready_s": 2.04, "rc": 0}}, {}, "fixture"))
@@ -334,8 +334,8 @@ def test_the_pous_arm_reports_its_audit_s_cert_and_the_chain_beside_it():
     md = R.markdown(doc, {}, "fixture", _pous_result())
     assert "19 of 20 audits accepted" in md and "limit 854 µs" in md and "S_cert 1.021 GB" in md
     assert ("S_cert's basis: Pous.SecurityProofs.P2SlackFamilyUncond; P2 is experimental, and the deployed ring's theorem "
-            "(EndToEndRing, #1790) is held.") in md
-    assert "The deployed store is 2^19 blocks, |C| = 1.078 GB of the card's 103 GB (M); lane ra-pous-scale" in md
+            "(EndToEndRing) is held.") in md
+    assert "The deployed store is 2^19 blocks, |C| = 1.078 GB of the card's 103 GB (M); the store is not yet sized" in md
     assert f"Capacity {C.RESIDUAL}: M − S_cert = " in md
     assert "| 0.400 | 0.600 | 0.500 | +50.0% | +20.0% | 2 |" in md
     assert "gates failed: timed_audit" in md and R.pous(_doc(), None) is None
@@ -373,7 +373,7 @@ def test_the_hosted_harness_s_argv_has_its_out_replaced():
 
 
 def test_q_cert_is_the_granted_rate_and_t_holds_the_rtt_at_p2_s_cap_under_the_floor():
-    """An accepted window at the red team's grant certifies PROTOCOL.md §6's 741,353,308 bytes of a 2^19-block store at
+    """An accepted window at the red team's grant certifies PROTOCOL.md §1's 741,353,308 bytes of a 2^19-block store at
     the RTX PRO 6000's S_chip, error 2^-40.42; an uncertified tag has no Q_cert; a chain without windows certifies none;
     and the T a remote verifier would grant holds the RTT at P2's cap one ns under the rebuild floor."""
     from verity.core.protocols.bandwidth import audit
@@ -484,10 +484,10 @@ class _Tagger:
 
 
 def _device(setup, fail_after: int | None = None):
-    """The store's one prover (`joint.Device` over `gpu.Prover`) on `_Tagger`, its raw read made up."""
+    """The store's one prover (`joint.BandwidthProver` over `gpu.Prover`) on `_Tagger`, its raw read made up."""
     store = setup.store
     tree = J.store_key(store.params, store.salt, b"".join(store.blocks))[1]
-    d = J.Device(J.load_gpu(), _Tagger(store, fail_after), 0, store.params.blocks, tree)
+    d = J.BandwidthProver(J.load_gpu(), _Tagger(store, fail_after), 0, store.params.blocks, tree)
     d.raw_read = lambda reps: {"kernel": "none", "bytes": len(store.blocks) * store.params.block_bytes,
                                "device_ms": [0.25] * reps}
     return d
@@ -530,7 +530,7 @@ def test_proof_only_reads_time_every_tag_and_reject_the_skip_control(small_store
 
 def test_joint_windows_commit_while_the_audit_runs_and_are_judged_after(small_store, tmp_path):
     """(e): windows open at random gaps until the honest audit ends, each in a workspace of its own, and are judged once
-    closed; one past the granted 1.2 ms is late (no samples drawn) though on time at T, one past T is neither; a window
+    closed; one past the granted 1.2 ms is late (no samples sampled) though on time at T, one past T is neither; a window
     that fails stops the thread and is recorded."""
     gaps: list[float] = []
     prover = _device(small_store)

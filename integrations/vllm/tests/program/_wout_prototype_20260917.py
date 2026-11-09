@@ -1,4 +1,4 @@
-"""Prototype: per-body Out(S)/W_out without expanded-circuit traversal, checked against GateSelection.out (oracle).
+"""Prototype: per-body Out(S)/W_out without expanded-circuit traversal, checked against query_ast.oracle_out (oracle).
 
 A *part* is (scope, items) where scope is one activation of a specialization S and items are (node j, member m) of S's
 body (m = 0 for primitive/call nodes).  Out(part) = gates of the part that are (a) consumed by a body item outside the
@@ -6,10 +6,11 @@ part, or (b) returned by S's body (escape to the parent; exact when S is the roo
 import sys
 sys.path.insert(0, "/private/tmp/lane-coverage")
 from verity.ml.circuits.defs import PrimitiveDefinition, bind
-from verity.ml.circuits.layout import Scope, GateSelection, resolve
+from verity.ml.circuits.layout import Scope, resolve
+from verity.ml.circuits.query_ast import oracle_gateset, oracle_out
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Concat, Strided, runs
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 
 def node_leaf_gate(sc: Scope, j: int, leaf: int) -> int:
@@ -117,14 +118,14 @@ def check(program: Program, sc: Scope, parts: list[set[tuple[int, int]]], label:
         for j, m in items:
             lo, hi = item_interval(sc, j, m)
             gates.extend(range(lo, hi))
-        oracle = set(GateSelection(C, gates).out)
+        oracle = set(oracle_out(C, oracle_gateset(C, gates)))
         pred = out_pred(sc, items, designated)
         if pred == oracle:
             n_ok += 1
         else:
             bad.append((sorted(items)[:3], sorted(oracle)[:5], sorted(pred)[:5]))
     widths = [sum(C.gate(g).prim.ret.w for g in out_pred(sc, items, designated)) for items in parts]
-    print(f"{label}: {n_ok}/{len(parts)} parts agree with GateSelection.out; W_out max={max(widths)} "
+    print(f"{label}: {n_ok}/{len(parts)} parts agree with oracle_out; W_out max={max(widths)} "
           f"(circuit {C.size} gates)")
     for b in bad[:3]:
         print("   MISMATCH items", b[0], "oracle", b[1], "pred", b[2])
@@ -178,7 +179,7 @@ if __name__ == "__main__":
             okc, wc = check(P3, sb, chain, f"    PV chain merge per d ({len(pv)} k-steps)")
     # 4. MoE router: scans (carry 96 bits) and NvExpf calls
     try:
-        from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
+        from verity_vllm.program.quarantine.ov_moe import moe as Q
         P4 = Program(bind(Q.MoeRouterTopK, E=8, TOPK=2, VPT=8))
         sc4 = P4.circuit.root_scope
         ok4, w4 = check(P4, sc4, body_parts(sc4), "MoeRouterTopK_v1{E=8,TOPK=2} nodes/iterations")
@@ -186,7 +187,7 @@ if __name__ == "__main__":
         print("MoE skipped:", type(e).__name__, str(e)[:120])
     # 5. Gumbel: the Const64 gates
     try:
-        from verity_vllm.program.registry import sampling as G
+        from verity.ml.definitions.registry import sampling as G
         P5 = Program(bind(G.GumbelArgmaxBf16, V=8, SEED=12345, POS=3))
         sc5 = P5.circuit.root_scope
         ok5, w5 = check(P5, sc5, body_parts(sc5), "GumbelArgmaxBf16_v1{V=8} nodes")

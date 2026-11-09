@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.check import weights_of_record as WR
-from verity_vllm.engine.profiles.generic import rank_hf_config
+from verity_vllm.observe.fold.profiles.generic import rank_hf_config
 
 NH, KVH, D, H = 64, 4, 2, 8
 CFG = {"model_type": "qwen3_moe", "hidden_size": H, "num_attention_heads": NH, "num_key_value_heads": KVH, "head_dim": D,

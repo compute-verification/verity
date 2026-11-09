@@ -1,4 +1,19 @@
-import Proofs.Flock.Recursive.Raw
+module
+
+public import Proofs.Flock.Recursive.Raw
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The registrant's openings: the recursive audit's premise on the provers it covers
@@ -12,6 +27,8 @@ outside it. `FlockC3.Compose.registrantCovers_attained` (`Proofs.Flock.C3.Compos
 of V*'s sessions whose registrant opens the rows the verifier reads, together with the guarantee's other hypotheses on
 them.
 -/
+
+@[expose] public section
 
 namespace Flock.Assumptions
 

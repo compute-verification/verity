@@ -1,4 +1,5 @@
-"""P8: model and target facts live only in ``program/registry/quarantine/`` and ``engine/profiles/``.
+"""P8: model and target facts live only in ``verity_vllm/program/quarantine/`` and the engine profile: the model facts in
+``engine/profiles/``, and the κ profile that pins them for a (vLLM, torch, Triton, GPU) tuple in ``observe/fold/profiles/``.
 
 The rule's literal scan: a string literal in code (docstrings and a module's ``__models__`` marker excepted) naming a model
 (``model``), a vLLM layer class (``layer-class``), a GPU (``gpu``) or an ``sm_8x``/``sm_9x``/``sm_10x``/``sm_12x``
@@ -16,7 +17,7 @@ from . import _ratchet as R
 
 NAME = "p08_facts"
 RULE = "P8 (model and target facts live in their two homes)"
-HOMES = ("verity_vllm/program/registry/quarantine/", "verity_vllm/engine/profiles/")
+HOMES = ("verity_vllm/program/quarantine/", "verity_vllm/engine/profiles/", "verity_vllm/observe/fold/profiles/")
 MODEL = re.compile(r"(?i)(?<![a-z0-9])(llama|qwen|gemma|olmoe|olmo|mixtral|mistral|smollm|deepseek|phi-?[0-9]|pythia|"
                    r"gpt-?neox|gpt2|granite|falcon|starcoder|opt-[0-9])")
 LAYER_CLASS = re.compile(r"\b((?:QKV|Row|Column|MergedColumn|Replicated|ReplicatedLinear|VocabParallel|Parallel)"
@@ -59,8 +60,8 @@ def scan() -> tuple[R.Violation, ...]:
 
 def test_no_new_violations() -> None:
     R.assert_no_new(NAME, scan(), RULE,
-                    "Read model and target facts from program/registry/quarantine/ or the engine profile, not from a "
-                    "literal.")
+                    "Read model and target facts from verity_vllm/program/quarantine/ or the engine profile, "
+                    "not from a literal.")
 
 
 def test_allowlist_has_no_stale_entries() -> None:
@@ -80,5 +81,6 @@ def test_detectors_on_examples() -> None:
     assert got == [("gpu", "h100"), ("layer-class", "FusedMoE"), ("layer-class", "MoERunner"), ("model", "llama"),
                    ("model", "qwen"), ("sm-arch", "sm_90a")], got
     assert file_violations(bad, "verity_vllm/engine/profiles/x.py") == []
+    assert file_violations(bad, "verity_vllm/observe/fold/profiles/x.py") == []
     assert file_violations("x = ('bf16', 'float32', 'tp1', 'layers.0.mlp')\n", "verity_vllm/tp/x.py") == []
     assert file_violations("__models__ = ('deepseek-ai/DeepSeek-V4-Pro',)\n", "verity_vllm/tp/x.py") == []

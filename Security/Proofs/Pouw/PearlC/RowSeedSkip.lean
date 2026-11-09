@@ -1,12 +1,15 @@
-import Definitions.Pouw.Assumptions.PearlC.RowSeedAssumptions
-import Proofs.Pouw.PearlC.RowSeedFragment
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.RowSeedAssumptions
+public import Proofs.Pouw.PearlC.RowSeedFragment
+public import Proofs.Pouw.QTree
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Prob
-import Proofs.Pouw.QTree
 
 /-!
 # The fragment corollary: the union bound and `ttOutRowSeed_skipClass` (staging, nothing pinned)
 
-Option (a) of `internal/pouw-fp8/rowseed-fragdraw-ruling.md` (bc-3006c44a, 16:05Z); the definitions are in
+Option (a) of the fragment-draw ruling; the definitions are in
 `TTOutRowSeed.lean`, and the named assumption `Assumptions.FragDraw` is in `RowSeedAssumptions.lean`. **P2 rests on
 `ttOutRowSeed_of_ttOut` (and `ttOutTileRowSeed_of_ttOutTile`) alone, with no named assumption.** This file is a
 supporting line: no statement those proofs read is proved here. It takes no TT_OUT, and its one named assumption is
@@ -17,7 +20,7 @@ supporting line: no statement those proofs read is proved here. It takes no TT_O
   with probability at most `(q + m)·ε`. The proof is by induction on the calls: splitting a uniform oracle at the first
   query (`card_split`) leaves the other answers uniform, and the rest of the program with that answer fixed
   (`QTree.fixAt`) makes one call fewer, a repeated query included. `qtree_union_bound_at` lets the bad sets depend on
-  the answer at one input that no bad set contains (the per-job draw), by conditioning on it.
+  the answer at one input that no bad set contains (the per-job sample), by conditioning on it.
 * **`ttOutRowSeed_skipClass`** (the ruling's item 5): under the named assumption `FragDraw` at `Λ = 100`, (C4) and
   (C6), an adversary program with at most `q` calls outputs a skip-class program on unit `u` that saves more than
   `(4096/11)·100 ≈ 37,236` units per row with probability at most `(q + m)/2^128`, `m` the unit's rows. Outside the
@@ -25,6 +28,8 @@ supporting line: no statement those proofs read is proved here. It takes no TT_O
 * **`rowDrawn_satisfiable`**: (C6) holds on a finite oracle domain, so the corollary's `[Fintype Q]` doesn't make it
   vacuous. (C6) asks for an injective key only on the unit's rows and their 32-bit words, the rows the corollary reads.
 -/
+
+@[expose] public section
 
 namespace Pouw.QTree
 
@@ -263,8 +268,8 @@ theorem card_union_bound [Fintype Q] [DecidableEq Q] [Fintype R] {α : Type} (t 
   push_cast at this
   exact this
 
-/-- **The union bound over an adaptive program's oracle draws** (the 16:05Z ruling's item 3). A program `t` makes at
-most `q` oracle calls, and its result `a` names `m` final checks, the points `fin a i`, `i < m`. Each point `x` has a
+/-- **The union bound over an adaptive program's oracle samples** (the fragment-draw ruling's item 3). A program `t` makes
+at most `q` oracle calls, and its result `a` names `m` final checks, the points `fin a i`, `i < m`. Each point `x` has a
 bad set `Bad x` of answers, of probability at most `ε`. Then the probability over a uniform oracle that some call's
 answer, or some final check's, lies in its point's bad set is at most `(q + m)·ε`. A point queried again is answered as
 before, so its bad event is the first query's. -/
@@ -277,7 +282,7 @@ theorem qtree_union_bound [Fintype Q] [DecidableEq Q] [Fintype R] {α : Type} (t
   convert card_union_bound t q hq m fin Bad hε (fun x => card_le_of_pr_le (hB x)) using 1
 
 open Classical in
-/-- **The union bound with the bad sets read at a fixed point** `xJ` (the per-job draw): the bad sets `Bad z` may depend
+/-- **The union bound with the bad sets read at a fixed point** `xJ` (the per-job sample): the bad sets `Bad z` may depend
 on the answer `z = H xJ`, provided no answer at `xJ` itself is bad. Conditioning on `H xJ` leaves the other answers
 uniform, and the program with `xJ` answered `z` has no more calls. -/
 theorem qtree_union_bound_at [Fintype Q] [DecidableEq Q] [Fintype R] {α : Type} (t : QTree Q R α) (q : ℕ)
@@ -360,11 +365,12 @@ theorem unitChain_job_eq {sem : PearlCSem Q R S} {s : S} {U : Workload} {u : ℕ
   obtain ⟨-, hEB, hFB⟩ := hD.2.2.1 H H' act act' hJ
   simp only [PearlCSem.unitChain, FormChain.quantB, hEB, hFB]
 
-/-- **The fragment corollary** (the 16:05Z ruling's item 5), a supporting line: P2 rests on `ttOutRowSeed_of_ttOut`
-alone, and this takes no TT_OUT. Under the named assumption `FragDraw` at `Λ = 100`, (C4) and (C6): for every
-adversary program `T` with at most `q` oracle calls whose result is a skip program on unit `u`, the probability over
-the oracle that the skip program is in the skip class and saves more than `(4096/11)·100` units per row of the unit,
-against the honest program on some activation input and state, is at most `(q + m)/2^128`, `m` the unit's rows. -/
+/-- **The fragment corollary** (the fragment-draw ruling's item 5), a supporting line: P2 rests on
+`ttOutRowSeed_of_ttOut` alone, and this takes no TT_OUT. Under the named assumption `FragDraw` at `Λ = 100`, (C4) and
+(C6): for every adversary program `T` with at most `q` oracle calls whose result is a skip program on unit `u`, the
+probability over the oracle that the skip program is in the skip class and saves more than `(4096/11)·100` units per row
+of the unit, against the honest program on some activation input and state, is at most `(q + m)/2^128`, `m` the unit's
+rows. -/
 theorem ttOutRowSeed_skipClass [Fintype Q] [DecidableEq Q] [Fintype R] {CM : CostModel Q R S}
     {sem : PearlCSem Q R S} {p : Pipeline} {G : ℕ} {s : S} {U : Workload} {u : ℕ} {xJ : Q}
     {key : ℕ → (Fin (U.layout.shape u).k → ℕ) → Q} (e : SkipEmbed CM sem p G U u) (hD : sem.RowDrawn s U u xJ key)

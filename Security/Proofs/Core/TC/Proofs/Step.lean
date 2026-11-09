@@ -1,4 +1,6 @@
-import Proofs.Core.TC.Proofs.SemGroup
+module
+
+public import Proofs.Core.TC.Proofs.SemGroup
 
 /-!
 # One group, both sides: `group_sound`
@@ -6,6 +8,8 @@ import Proofs.Core.TC.Proofs.SemGroup
 The relation's special-value flags are the semantics' (`ind_sum`, `contains_infSign`), its finite path is `group_sum`
 (`groupSum_eq`), and its output state is the canonical state of `group_step_total`'s value.
 -/
+
+@[expose] public section
 
 namespace Verity.TC.Proofs
 
@@ -43,20 +47,6 @@ theorem contains_infSign (s : Bool) : ∀ l : List Value,
     | nan => simpa [Value.infSign?, Value.isInf] using ih
     | inf n => cases n <;> cases s <;> simp_all [Value.infSign?, Value.isInf]
     | fin t => simpa [Value.infSign?, Value.isInf] using ih
-
-theorem match_signs (l : List Bool) (hno : ¬ (l.contains true = true ∧ l.contains false = true))
-    (f : Bool → Value) (x : Value) :
-    (match l with
-      | s :: _ => f s
-      | [] => x) = if l.contains true then f true else if l.contains false then f false else x := by
-  cases l with
-  | nil => rfl
-  | cons s rest =>
-    cases s
-    · by_cases h : true ∈ rest
-      · exact absurd ⟨by simp [h], by simp⟩ hno
-      · simp [h]
-    · simp
 
 theorem filterMap_term_fin : ∀ l : List Value, l.any Value.isNaN = false → l.any (Value.isInf true) = false →
     l.any (Value.isInf false) = false → ∀ x ∈ l, ∃ t, x = .fin t

@@ -1,6 +1,38 @@
-import Proofs.Flock.Claims.KS.SimLead
-import Proofs.Flock.Claims.KS.PlainSched
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.SimLead
+public import Proofs.Flock.Claims.KS.PlainSched
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The simulated strategy after `Commit` leads with rep 0, from the live prover's schedule
@@ -13,6 +45,8 @@ and the rest on rep 1:
 * `leadsAfter_simAt`: `LeadsAfter` at `simAt`, from `SchedL` at every link point;
 * `leadsAfter_plainSimAt`: so at `plainSimAt`, from `SchedL` at the plain simulator's live strategy (`plainLive`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -41,7 +75,7 @@ theorem cast_coin_heq {C : Type} {iF iF' : Fintype C} {iN : Nonempty C} {k k' : 
   obtain rfl := coin_k_eq eg
   rfl
 
-/-- Equal strategies of equal games sending a message then drawing a coin agree after the message, at a coin. -/
+/-- Equal strategies of equal games sending a message then sampling a coin agree after the message, at a coin. -/
 theorem heq_snd_coin {M C : Type} {iF iF' : Fintype C} {iN : Nonempty C} {k k' : M → C → Game β}
     (e : Game.send M (fun m => @Game.coin β C iF iN (k m)) = Game.send M (fun m => @Game.coin β C iF' iN (k' m)))
     {s : Strategy (Game.send M fun m => @Game.coin β C iF iN (k m))}

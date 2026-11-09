@@ -1,5 +1,11 @@
+module
+
+public import Proofs.Flock.Soundness.Binding.RowsX
+public import Proofs.Flock.Soundness.Registered.Defs
+public import Proofs.Flock.Soundness.StrictCR
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Registered.Binding
-import Proofs.Flock.Soundness.Binding.RowsX
 
 /-!
 # Registered reads of rows each hashed under its own encoding
@@ -9,12 +15,14 @@ encoding (`ReadsX.leaf`), the same SHA-512 of the same commit string as hm96's. 
 bounds (`regLeaf_eq`, `prob_off_le`) are `Reads`' at that leaf: they read only the leaf, never how its bytes were made.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Registered
 
 open Game Refine Binding Audit
 open scoped ENNReal
 
-variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}

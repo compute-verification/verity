@@ -1,6 +1,8 @@
-import Definitions.Accounting.Actual
-import Definitions.Accounting.Physical
-import Definitions.Nci.Assumptions.Fit
+module
+
+public import Definitions.Accounting.Actual
+public import Definitions.Accounting.Physical
+public import Definitions.Nci.Assumptions.Fit
 
 /-!
 # NCI over windows: the fit bound on a physical run
@@ -18,19 +20,20 @@ bounds information, so plugging a wipe's residual in as `R` needs the read bound
 the links' capacity (`linkCapacity`), not the intake a run measures.
 -/
 
+@[expose] public section
+
 namespace Nci.Guarantees
 
 open Verity Accounting Finset
 
-/-- **The fit bound on a run** ("The fit bound", Notion, sections 2 and 9). For an actual circuit `A` meeting
-causality and links at the developer's pairwise disjoint servers `X i`, cuts `κ` of `[0, t)` into windows of at most
-`ω` ticks, and a reference circuit `c` contained (`M`) in the developer's declaration over `[0, t)` and threaded by `T`:
-when each server's state at each cut, in the image of `c`'s novel gates, is at most `R` bits wide, the capacity of the
-links into each server is at most `r`, and `S = R + r ω < N* b_w`, then under F3 (`Assumptions.Reach`) and F1 with F4
-(`Assumptions.Fits`) over the windows pulled into `c` (any division of `c` whose unit `(i, j)` is the gates `M` sends
-into the window `A[X i, [τ j, τ (j + 1))]`), the counted multiplications number at most
-`n J · reuse · N* S² / (4 w_e (N* b_w − S))`; and when every window is at least `ω₀` ticks long, at most
-`reuse · N* S² / (4 w_e (N* b_w − S) ω₀)` per server-tick, both written multiplied out.
+/-- **The fit bound on a run**. For an actual circuit `A` meeting causality and links at the developer's pairwise
+disjoint servers `X i`, cuts `κ` of `[0, t)` into windows of at most `ω` ticks, and a reference circuit `c` contained
+(`M`) in the developer's declaration over `[0, t)` and threaded by `T`: when each server's state at each cut, in the
+image of `c`'s novel gates, is at most `R` bits wide, the capacity of the links into each server is at most `r`, and
+`S = R + r ω < N* b_w`, then under F3 (`Assumptions.Reach`) and F1 with F4 (`Assumptions.Fits`) over the windows pulled
+into `c` (any division of `c` whose unit `(i, j)` is the gates `M` sends into the window `A[X i, [τ j, τ (j + 1))]`),
+the counted multiplications number at most `n J · reuse · N* S² / (4 w_e (N* b_w − S))`; and when every window is at
+least `ω₀` ticks long, at most `reuse · N* S² / (4 w_e (N* b_w − S) ω₀)` per server-tick, both written multiplied out.
 
 The state is counted by width, and at the first cut, `0`, it is what each server holds when the run starts. A wipe
 bounds information, so a wipe's residual is an `R` here only through the read bound's determination form. -/
@@ -38,7 +41,7 @@ def FitRate : Prop :=
   ∀ {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ)
     (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
     (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t : ℕ) (κ : Cuts t) (ω : ℕ) (R r : ℝ)
-    (c : Declaration) (M : Containment c.D (A.declaration (univ.biUnion X) t θ hθ).D) (T : Threading c)
+    (c : RegisteredCircuit) (M : Containment c.D (A.declaration (univ.biUnion X) t θ hθ).D) (T : Threading c)
     (start : Fin T.m → Fin (n * κ.J)) (Nstar : ℕ) (b_w w_e : ℝ),
     (∀ i j, i ≠ j → Disjoint (X i) (X j)) → A.Causal ℓ → A.Links ends β link →
     (∀ j : Fin κ.J, κ.τ j.succ - κ.τ j.castSucc ≤ ω) → (∀ i, (linkCapacity ends β (X i) : ℝ) ≤ r) →

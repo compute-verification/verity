@@ -1,10 +1,43 @@
-import Definitions.Pouw.Eps1.M3
+module
+
+public import Definitions.Pouw.Eps1.M3
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # Dither's CUDA-core lower bounds in model M3 (trusted)
 
-EPS1-QSTAR's proved lower bounds (note:20261017T0344Z-draft-eps1-qstar, (b)), over `Pouw.Eps1`'s model M3, each
-proved as `Pouw.SecurityProofs.Eps1.G` in `Proofs.Pouw.Eps1`:
+The proved lower bounds over `Pouw.Eps1`'s model M3, each proved as `Pouw.SecurityProofs.Eps1.G` in
+`Proofs.Pouw.Eps1`:
 
 * `WordLocalZero`: Theorem B at the zero instance, a word-local program costs at least 4 instructions a word;
 * `WordLocalGeneral`: Theorem B at a general instance, at least 8 a word (met by dp4a's 8 IDP.4A);
@@ -12,12 +45,14 @@ proved as `Pouw.SecurityProofs.Eps1.G` in `Proofs.Pouw.Eps1`:
   `1 + (32 − w)/(65·d)` slots a word when a slot writes at most `d` words.
 
 Theorem C's packed form, `(1 + 28/27)·L·m·n` instructions, is retired: its paper proof caps a writer's creations at 4,
-and a writer can create 8 (note:20261018T0230Z-draft-floors). `ClassPSlots` takes the cap as its parameter `w`.
+and a writer can create 8. `ClassPSlots` takes the cap as its parameter `w`.
 
 Free words (functions of one side alone) cost nothing, and the fold is not counted. M3 has no data-dependent
 addressing and each instruction writes one 32-bit word from at most three, so these bound the gather-free `q*` in
-M3; that the ISA's instructions are such is SCALAR-ROUTE's business, not these statements'.
+M3; whether the ISA's instructions are such is not these statements' business.
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.Eps1
 

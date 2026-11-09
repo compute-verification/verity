@@ -14,11 +14,12 @@ import types
 
 import numpy as np
 import pytest
-from verity.core.protocols.pouw.audit import Epoch, Workload, activation_binding, commit_rows, weight_binding, weights_root
+from verity.core.protocols.pouw.audit import (HM96, HM96_WEIGHTS, Epoch, Workload, activation_binding, commit_rows, weight_binding,
+                                              weights_root)
 from verity.core.protocols.pouw.coins import Challenger, CoinCommitment, CoinOpening, coin_reason
 from verity.core.protocols.pouw.protocol import Context as UnitContext
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape, Tile
-from verity.core.protocols.pouw.schemes import SCHEMES, get
+from verity.ml.protocols.pouw.schemes import SCHEMES, get
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
@@ -58,7 +59,7 @@ def _rng(seed=0):
 
 
 def _coins(seed=0):
-    """The epoch's challenger on a seeded entropy (a served one's is the Lean verifier of record's, `pouw.verifier.coins`)."""
+    """The epoch's challenger on a seeded entropy (a served one's is the Lean verifier's, `pouw.verifier.coins`)."""
     return Challenger(0, random.Random(seed).randbytes)
 
 
@@ -76,23 +77,25 @@ def _int7_linear(x, w, bias=None):
 
 # --- what the adapter refuses ------------------------------------------------------------------------------------------------
 
-def test_schemes_are_the_protocol_packages_and_only_ncp_pearl_c_sm120_and_h1_are_executed():
-    from verity.core.protocols.pouw import circuit
+def test_schemes_are_the_protocol_packages_and_only_ncp_pearl_c_sm120_h1_and_the_lead_are_executed():
+    from verity.ml.protocols.pouw import circuit
     from verity_vllm.protocols.pouw import h1 as pouw_h1
-    assert pouw.schemes() == tuple(sorted({*SCHEMES, *circuit.SCHEMES, *PPD.SCHEMES, pouw_h1.SCHEME})) and "ncp-v1" in pouw.schemes()
+    from verity_vllm.protocols.pouw import lead as pouw_lead
+    assert pouw.schemes() == tuple(sorted({*SCHEMES, *circuit.SCHEMES, *PPD.SCHEMES, pouw_h1.SCHEME, pouw_lead.SCHEME}))
+    assert "ncp-v1" in pouw.schemes()
     assert pouw.refusals("ncp-v1", _serve("pouw:ncp-v1")) == () and pouw.refusals("ncp-v2", _serve("pouw:ncp-v2")) == ()
     assert PO.refusals(_serve("pouw:ncp-v1")) == ()                           # through the selector, real adapter
     assert "executor runs" in pouw.refusals("pearl-fp8-v4", _serve("pouw:pearl-fp8-v4"))[0]
 
 
-def test_pearl_c_sm120_runs_on_the_device_only_and_not_beside_sampled_proofs():
+def test_pearl_c_sm120_runs_on_the_device_only_and_not_beside_spot():
     scheme = "pearl-c-sm120-v1-h3"
     assert scheme in pouw.EXECUTED
     assert any("device only" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}")))
     on = {"pouw": {"device": "cuda", "kernel": "benchmarks/pouw/pearl_c_sm120"}}
     assert pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings=on)) == ()
     assert any("path strings" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {"kernel": 3}})))
-    commit = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:vllm-v1"), settings=on)
+    commit = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:rows-sha512"), settings=on)
     assert any("no Definition" in r for r in PO.refusals(commit))
 
 
@@ -112,13 +115,13 @@ def test_a_run_the_adapter_cannot_serve_is_refused(kw, match):
     assert any(match in r for r in pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", **kw)))
 
 
-def test_pouw_executes_the_linear_apply_and_only_ncp_v2_is_admitted_beside_sampled_proofs():
+def test_pouw_executes_the_linear_apply_and_only_ncp_v2_is_admitted_beside_spot():
     assert pouw.EXECUTES == ("LinearBase.quant_method.apply",) and "pouw" in PO.SITES[pouw.EXECUTES[0]]
     assert not hasattr(pouw, "traced_as") and "ncp-v2" in pouw.schemes() and "ncp-v2" in pouw.EXECUTED
     for scheme in ("ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4"):
-        commit = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:vllm-v1"), settings={"pouw": {"coins": _coins()}})
+        commit = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:rows-sha512"), settings={"pouw": {"coins": _coins()}})
         assert any("no Definition" in r for r in PO.refusals(commit)), scheme
-    commit = PO.Context(stage="commit", enabled=("pouw:ncp-v2", "sampled-proofs:vllm-v1"), settings={"pouw": {"coins": _coins()}})
+    commit = PO.Context(stage="commit", enabled=("pouw:ncp-v2", "sampled-proofs:rows-sha512"), settings={"pouw": {"coins": _coins()}})
     assert PO.refusals(commit) == ()
 
 
@@ -195,8 +198,11 @@ def test_weights_are_committed_before_the_salt_and_the_int7_linear_is_served_exa
     settings = {"pouw": {"coins": coins, "transcript_dir": str(tmp_path)}}
     comp = PO.install(model, _serve("pouw:ncp-v1", settings=settings))
     opt = comp.get("pouw")
-    roots = {w: commit_rows(weight_binding(w), -2, [r.tobytes() for r in pouw.quantize(m)[0]]).commitment.root
-             for w, m in enumerate((w0, w1))}
+    key = pouw._SALT_KEYS["pouw:ncp-v1"]
+    rows = {w: [r.tobytes() for r in pouw.quantize(m)[0]] for w, m in enumerate((w0, w1))}
+    roots = {w: commit_rows(weight_binding(w), -2, r, HM96, key, HM96_WEIGHTS + w).commitment.root for w, r in rows.items()}
+    plain = {commit_rows(weight_binding(w), -2, r, h, public=True).commitment.root for w, r in rows.items() for h in ("sha256", "sha512")}
+    assert not plain & set(roots.values())                   # hiding: the weights' candidates alone don't give the roots
     declared = Workload((Matmul(0, Shape(16, K, N), 0), Matmul(1, Shape(16, N, N + 64), 1)))
     c = opt.commitment()
     assert comp.weight_commitments["pouw:ncp-v1"]["weight_roots"] == {str(w): r.hex() for w, r in roots.items()}
@@ -231,7 +237,7 @@ def test_the_executor_is_the_schemes_reference_bit_for_bit():
     b = rng.integers(-63, 64, (N, K)).astype(np.int8)
     u = Matmul(7, Shape(16, K, N), 3)
     rows = [r.tobytes() for r in a]
-    ctx = UnitContext(b"\x11" * 32, u, commit_rows(activation_binding(b"\x11" * 32, 7), 7, rows).commitment.root, b"\x22" * 32)
+    ctx = UnitContext(b"\x11" * 32, u, commit_rows(activation_binding(b"\x11" * 32, 7), 7, rows, HM96, bytes(32), 7).commitment.root, b"\x22" * 32)
     noise = s.noise(ctx)
     got = pouw.ncp_tiles(s, ctx, noise, a, pouw.Operands(np.ones(N, np.float32), *pouw.stack_y(s, ctx.salt, u.weight, b, noise)))
     tile = Tile(tuple(range(16)), tuple(range(48, 64)))
@@ -284,7 +290,7 @@ def test_ncp_v1_keeps_no_weight_copy_so_the_selector_admits_pous_beside_it(monke
 @pytest.mark.parametrize("scheme", ["pearl-c-sm120-v1-h3", "ncp-v2"])
 def test_a_scheme_that_keeps_weight_state_is_refused_beside_pous(monkeypatch, scheme):
     """Pearl-C forms B~ once per install, and ncp-v2 reuses each weight's side: under POUS their GEMMs would read a copy made
-    from the plaintext, not what POUS decodes (the composition's decision 3)."""
+    from the plaintext, not what POUS decodes."""
     _fake_pous(monkeypatch)
     settings = {"pouw": {"coins": _coins(), **({"device": "cuda", "kernel": "k"} if scheme.startswith("pearl") else {})}}
     assert pouw.keeps_weight_copy(scheme, _serve(f"pouw:{scheme}", settings=settings))
@@ -346,7 +352,7 @@ def test_served_fp8_claims_registered_weights_only_under_the_shared_rule(monkeyp
     """Served FP8 applies no keyed rotation, so its weights register only from the curated list, through the one
     registered-weights rule Pearl-C4 reads too; refused, the claim says it is about nothing and names why."""
     from verity.core.protocols.pouw import registration
-    from verity.core.protocols.pouw.schemes import pearl_c
+    from verity.ml.protocols.pouw.schemes import pearl_c
     s, seen = PPD.scheme_of("pearl-c-sm120-v1-h3"), []
     assert pouw.SERVED_TRANSFORMS == () and pearl_c.check_registration is registration.check_registration
     monkeypatch.setattr(pearl_c, "check_registration", lambda *a: seen.append(a) or registration.check_registration(*a))

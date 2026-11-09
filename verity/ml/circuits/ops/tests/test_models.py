@@ -1,10 +1,10 @@
-"""``verity.ml.circuits.silicon.models``: the ``Model`` protocol, ``GroupSum`` (= ``Pipeline``) and ``BlockScaledAlignAdd``.
+"""``verity.ml.circuits.silicon.models``: the ``Model`` protocol, ``GroupSum`` and ``BlockScaledAlignAdd``.
 
 The block-scaled model is replayed on every RTX 5090 vector autoproof recorded (``verity/ml/circuits/silicon/captures/autoproof-probe-vectors.json``:
 1,601 nvfp4 ascending-K chains and 1,400 unscaled-FP4 dots) and must agree bit-for-bit; the refuted single-window
 hypothesis (W=26) must *disagree* somewhere, or the fixture would not discriminate.  The accumulator rules that the
 zero-accumulator vectors cannot see (sign of zero, the scale-exponent anchor, the accumulator window) are checked on
-hand-computed cases taken from lane fp4-re's RTX 5090 evidence (log entries D16, D17, D18).
+hand-computed cases taken from the RTX 5090 evidence (log entries D16, D17, D18).
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from verity.errors import InvalidArtifact
-from verity.ml.circuits.silicon import models, silicon
+from verity.ml.circuits.silicon import models
 from verity.ml.circuits.silicon.models import (
     ADA_E4M3_M16N8K32,
     ADA_E5M2_M16N8K32,
@@ -37,7 +37,6 @@ from verity.ml.circuits.silicon.models import (
     BlockScaledAlignAdd,
     GroupSum,
     Model,
-    Pipeline,
     tc_dot,
     tc_dot_chain,
 )
@@ -68,13 +67,10 @@ def test_every_model_satisfies_the_protocol() -> None:
         assert isinstance(m.product(0, 0), Term)
 
 
-def test_pipeline_is_group_sum_and_nothing_moved() -> None:
-    assert Pipeline is GroupSum
-    assert silicon.Pipeline is GroupSum and silicon.Term is Term
+def test_pipelines_are_models() -> None:
     for name in ("AMPERE_BF16_M16N8K16", "HOPPER_BF16_M16N8K16", "HOPPER_E4M3_K32", "ADA_BF16_M16N8K16",
                  "ADA_E4M3_M16N8K32", "HAWKEYE_AMPERE_GROUPSUM_E4M3_V0"):
-        assert getattr(silicon, name) is getattr(models, name) is PIPELINES[getattr(models, name).name]
-    assert silicon.tc_dot is tc_dot and silicon.tc_dot_chain is tc_dot_chain
+        assert getattr(models, name) is PIPELINES[getattr(models, name).name]
     assert set(PIPELINES) <= set(MODELS)
 
 
@@ -110,7 +106,7 @@ def test_fp8_accumulator_is_truncated_to_the_adder_before_the_add() -> None:
 
 
 def test_e5m2_models_share_the_e4m3_pipeline() -> None:
-    # Measured by lane tc-probe-fp8 on 2026-09-22 (RTX 4090 / H100, 0 mismatches over 25M+ elements each): the e5m2
+    # Measured on the RTX 4090 and H100 (0 mismatches over 25M+ elements each): the e5m2
     # instructions run the e4m3 pipeline with exact e5m2 products, so the models differ only in dtype/product.
     for e5, e4 in ((ADA_E5M2_M16N8K32, ADA_E4M3_M16N8K32), (HOPPER_E5M2_K32, HOPPER_E4M3_K32)):
         assert (e5.groups, e5.width, e5.zero_exponent) == (e4.groups, e4.width, e4.zero_exponent)
@@ -216,7 +212,7 @@ def _bsaa(**kw) -> BlockScaledAlignAdd:
 
 
 def test_unscaled_fp4_vectors_replay_under_the_same_transducer(vectors: dict) -> None:
-    # PROBE-2: mma.sync m16n8k32 kind::f8f6f4 e2m1 without scales.  The same five-way align-add (scale None, unit
+    # autoproof's probe 2 (`probe2_*.json`): mma.sync m16n8k32 kind::f8f6f4 e2m1 without scales.  The same five-way align-add (scale None, unit
     # weight 2^-2) with k=32 in two groups of 16 reproduces all 1,400 recorded dots.
     unscaled = _bsaa(name="test_unscaled_fp4_m16n8k32", scale=None, k_per_instruction=32)
     cases = vectors["fp4_unscaled_m16n8k32"]["cases"]
@@ -277,7 +273,7 @@ def test_sm100_tcgen05_fp8_is_sm120s_group_sum_on_the_b200(kind: str, model: Gro
 
 
 def test_sm100_fp8_models_are_the_sm120_parameters_under_their_own_name() -> None:
-    """Lane B200-FP8's finding: the B200's tcgen05.mma kind::f8f6f4 computes the RTX PRO 6000's FP8 words.  The B200's model
+    """The B200's tcgen05.mma kind::f8f6f4 computes the RTX PRO 6000's FP8 words.  The B200's model
     objects are kept separate (named for the architecture they were measured on); this pins that their numerics are sm_120's
     field by field."""
     from dataclasses import fields
@@ -437,7 +433,7 @@ def test_mxf4_scales_share_the_nvf4_adder_d18() -> None:
         # UE8M0 code 130 (8.0) on A == UE4M3 0x50 (8.0) on A
         assert m8.step_scaled(acc, a, b, [130, 130], [127, 127]) == m4.step_scaled(acc, a, b, [0x50] * 4, [ONE] * 4)
     # the anchor follows the raw exponent fields: codes (ca, cb) put the unit weight at ca + cb - 262 and the grid
-    # at ca + cb - 289 (lane fp4-5090's fit: "X_raw - 33" with X_raw = ca + cb - 256)
+    # at ca + cb - 289 (the fit's "X_raw - 33" with X_raw = ca + cb - 256)
     assert m8.group_terms([0x2] + [0] * 63, [0x2] + [0] * 63, [140, 127], [150, 127])[0] == (4 * 8 * 8, 140 + 150 - 262, True)
     a = [0x2] + [0] * 63
     term = 2.0**36  # 1.0 * 2^13 * 2^23 = 256 * 2^28; grid 2^1
@@ -447,7 +443,7 @@ def test_mxf4_scales_share_the_nvf4_adder_d18() -> None:
 
 def test_underflow_sign_hypotheses_d13() -> None:
     # a nonzero mxfp4 sum entirely below the subnormal grid: the two instances differ only in the sign of that zero.
-    # RTX 5090 (fp4-re run r20260922-215831-c3d8, ue8m0_underflow / ue8m0_scale_extremes): +0 -- the signed variant
+    # RTX 5090 (ue8m0_underflow / ue8m0_scale_extremes): +0 -- the signed variant
     # misses 15,205 + 2,003 elements there, the pinned one none.
     tiny = [51] * 2  # UE8M0 code 51 = 2^-76: -0.5 * 0.5 * 2^-152 = -2^-154, below the grid but above grid_floor
     neg = [0x9] + [0] * 63  # -0.5
@@ -482,7 +478,7 @@ def test_subnormal_accumulator_anchors_at_its_exponent_field_d19() -> None:
     assert m.step_scaled(acc, neg, one, [50, 50], [50, 50]) == 0x0000_00FF
     assert m.step_scaled(acc, one, one, [50, 50], [50, 50]) == acc  # +2^-154 is on the grid but RZ discards it
     # (a window anchored at the true msb, -141 - 35 = -176, would have kept the -2^-162 term and given 0xFF: that is
-    # the rejected reading, 528 residual mismatches in fp4-re run r20260922-215831-c3d8)
+    # the rejected reading, with residual mismatches on the RTX 5090 captures)
     # the smallest normal accumulator anchors at -161 as well: -2^-148 (codes 53, 53 -> X = -156) is on the grid
     assert m.step_scaled(0x0080_0000, neg, one, [53, 53], [53, 53]) == 0x007F_FFFE
     assert m.step_scaled(0x0080_0000, neg, one, [46, 46], [46, 46]) == 0x0080_0000
@@ -535,8 +531,7 @@ def test_block_scaled_domain_errors() -> None:
     assert m.product(0x7, 0x7) == e2m1_product(0x7, 0x7)
 
 
-#: GPU 4's replay of the Lean scale-decode review's 17 bit-7 vectors on the RTX PRO 6000 (run r20260930-161935-83a8,
-#: `OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X`; research store internal/pouw/rtx-pro/handoffs/scale-dyadic-bit7-words.json):
+#: The Lean scale-decode review's 17 bit-7 vectors replayed on the RTX PRO 6000 (`OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X`):
 #: (name, firings, C word, A codes, B codes, A scale bytes, B scale bytes, D word on the card), codes and bytes packed
 #: little-endian (4 and 8 bits).  Every vector sets bit 7 on at least one scale byte; a chain feeds each D back as C.
 SCALE_BIT7_CARD = (

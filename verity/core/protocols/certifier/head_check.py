@@ -1,11 +1,11 @@
 """N2's check of one certified record head, zero-knowledge: the head committed at leaf 2 + direction of N2's root
-(`service.LinkWindows`) is the link-window's, complete, under the declared grid, and, where its end has an occupancy
+(`service.LinkWindows`) is the execution phase's, complete, under the declared grid, and, where its end has an occupancy
 profile, its counts are the profile's; and the certificate's signed digest is the head's record digest salted by the
-certifier. A Boolean Definition, the gated part of N2's proof unit (`service`'s `NetworkLinkWindow` v5, one per end),
-which runs on every link-window; its one output is the ok bit. That unit's Program holds it as one gate that names its
-circuit digest (`gate`), pinned in this module's sidecar and held to the Definition by circuit-check; N2's verifier of
-record reads its output from the unit's proof, and the in-the-clear check (`LinkWindows.clear`) runs its `reference`,
-which the tests hold to the circuit.
+certifier. A Boolean Definition, the gated part of N2's proof block (`service`'s `NetworkLinkWindow` v5, one per end),
+which runs on every execution phase; its one output is the ok bit. That proof block's Program holds it as one gate that
+names its circuit digest (`gate`), pinned in this module's sidecar and held to the Definition by circuit-check; N2's
+verifier reads its output from the proof block's proof, and the in-the-clear check (`LinkWindows.clear`) runs
+its `reference`, which the tests hold to the circuit.
 
     NetworkHeadCheck_v2{L, T, COUNTS}
         (record, record_domain: Digest, link: Array<L, Byte>, direction: Array<1>, window: Array<64>,
@@ -18,7 +18,7 @@ which the tests hold to the circuit.
 the end has an occupancy profile (`LinkWindows.occupancy`), so `profile` is a parameter. All three are public: the
 link's name and its grids are, and so is whether an end has a profile.
 
-**Public inputs.** `record` is the root of N2's commitment to the link-window, `record_domain` its domain id
+**Public inputs.** `record` is the root of N2's commitment to the execution phase, `record_domain` its domain id
 (`LinkWindows.domain`), `link` the link's name, `direction` the end (0 egress, 1 ingress), `window` the window's index
 (u64, least significant bit first), `grid` the declared grid as the head encodes it (`grid_bytes`: T, r, B and τ_b as
 u32 big-endian, then the parameters digest), `profile` the profile's row for the window: T counts, each u32, least
@@ -26,21 +26,20 @@ significant bit first, and `signed` the digest the end's certificate signs (`cer
 record digest under the certifier's salt and is all of the head the host's signature check reads.
 
 **Witness.** The head's bytes (`RecordHead.encode`, its frames root included), its leaf's hiding salt and its two
-siblings in N2's tree, and `salt_c`, the 64 bytes the certifier drew for the record and handed over with its head.
+siblings in N2's tree, and `salt_c`, the 64 bytes the certifier sampled for the record and handed over with its head.
 
 **What 1 means.** (1) The head opens at leaf 2 + direction of N2's commitment (`NetworkHidingRead`: its sha512/row/v2
-digest, hm96's hiding leaf, the frame-v3-sha512 read at depth 2), the leaf N3 opens for the same head
-(`N3HidingRead`). (2) Its fields are the ones the public inputs give (`NetworkHeadFields`): its link's length and name,
-its direction and window, the grid's T, r, B and τ_b, status 0 (complete) and the grid's parameters digest. (3) When
-COUNTS, its T counts are the profile's row (`NetworkHeadCounts`). (4) The certificate signs this head: R, the record
-digest of the head (`NetworkRecordDigest`, `tagged_sha512` of the record tag and the head), salted by `salt_c` is
-`signed`, SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R) (`NetworkSignedDigest`). Two fields are free: the deadline byte,
-which N2's unit reads beside the head check for its public deadline bit (`service.OUTPUTS`), and the frames root,
-which N3's design holds the window's frames to on every port-window that recorded frames (a prototype in the clear,
-not a proof-service unit).
+digest, hm96's hiding leaf, the frame-v3-sha512 read at depth 2). (2) Its fields are the ones the public inputs give
+(`NetworkHeadFields`): its link's length and name, its direction and window, the grid's T, r, B and τ_b, status 0
+(complete) and the grid's parameters digest. (3) When COUNTS, its T counts are the profile's row
+(`NetworkHeadCounts`). (4) The certificate signs this head: R, the record digest of the head (`NetworkRecordDigest`,
+`tagged_sha512` of the record tag and the head), salted by `salt_c` is `signed`,
+SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R) (`NetworkSignedDigest`). Two fields are free: the deadline byte, which N2's
+proof block reads beside the head check for its public deadline bit (`service.OUTPUTS`), and the frames root, which
+nothing in N2 reads.
 
 `salt_c` is not committed: (4) holds it, up to a SHA-512 collision, to the one the certifier signed under, so the
-certificate binds the head the check opens, and the head leaf stays the head's bytes alone, the leaf N3 reads.
+certificate binds the head the check opens, and the head leaf stays the head's bytes alone.
 
 **Cost.** Beyond the opening, the fields are an equality of 736 + 8L bits and the counts one of 32·T bits, so
 32·T − 1 ANDs (19,199 at T = 600), and three ANDs join the four. The opening is SHA-512 of the head's 157 + L + 4T bytes
@@ -64,6 +63,7 @@ from typing import Callable, Sequence
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import and_reduce
+from verity.ml.circuits.boolean.trace import part as _part
 from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
@@ -114,26 +114,6 @@ def grid_bytes(params: GridParams, parameters: bytes) -> bytes:
 
 
 # --- the circuit: traced parts ----------------------------------------------------------------------------------------
-
-def _part(name: str, statics: tuple[str, ...], signature: Callable, build: Callable, doc: str,
-          version: int = 1) -> CompositeDefinition:
-    """A Definition ``name_v{version}`` traced from ``build(C, S, *elements)`` once per binding of ``statics``."""
-
-    @lru_cache(maxsize=None)
-    def traced(*key) -> TR.Traced:
-        S = SimpleNamespace(**dict(zip(statics, key)))
-        params, ret = signature(S)
-        return TR.trace(lambda C, *e: build(C, S, *e), [t for _, t in params], ret)
-
-    def body(B, S, *colls):
-        params, ret = signature(S)
-        return TR.emit(traced(*(getattr(S, k) for k in statics)), [t for _, t in params], ret, B, *colls)
-
-    d = CompositeDefinition(name, version, statics, signature, body, conformance="exact-model-tested", doc=doc)
-    d.traced = traced  # type: ignore[attr-defined]
-    d.build = build  # type: ignore[attr-defined]  # C-Flock lowers an activation by it, not gate by gate
-    return d
-
 
 def _same(x, want) -> object:
     """1 iff bit x is `want`: a bit of the circuit, or the constant 0 or 1."""
@@ -366,7 +346,7 @@ GATE = re.compile(rf"Gate\[(?P<definition>.+)@(?P<digest>[0-9a-f]{{128}}|{UNPINN
 
 
 def circuit_digest(d) -> str:
-    """A Definition's circuit digest: core's `program_digest` of its Program, the digest a C-Flock statement names its
+    """A Definition's circuit digest: core's `program_digest` of its Program, the digest a Flock statement names its
     template by (META `program_digests`, `verity_flock.circuit.program_digests`). It encodes every Definition `d`
     reaches, the commitment gadgets' Boolean bodies included, whose tracing takes the head check minutes."""
     return program_digest(Program(d))
@@ -401,14 +381,14 @@ def gate_of(d, digest: str | None, what: str) -> PrimitiveDefinition:
 
 @lru_cache(maxsize=None)
 def gate(L: int, T: int, counts: bool) -> PrimitiveDefinition:
-    """`unit(L, T, counts)` as one gate of N2's proof unit (`service.LinkWindows.unit`), whose id names the Definition and
+    """`unit(L, T, counts)` as one gate of N2's proof block (`service.LinkWindows.unit`), whose id names the Definition and
     its pinned circuit digest (`pinned_digest`): `Gate[NetworkHeadCheck_v2{L=..,T=..,COUNTS=..}@<digest>]_v2`. So the
-    unit's Program digest, which the spec's check and each registration bind, binds the head check's circuit, and a
-    proof of another circuit of the same interface names another Program. A size class no sidecar pins names no digest
-    (`@unpinned`), and no proof of its unit is accepted: give it a root in the sidecar's bindings and pin it with
+    proof block's Program digest, which the spec's check and each registration bind, binds the head check's circuit, and
+    a proof of another circuit of the same interface names another Program. A size class no sidecar pins names no digest
+    (`@unpinned`), and no proof of its proof block is accepted: give it a root in the sidecar's bindings and pin it with
     `circuit-check --update-pins`. The Program holds the gate rather than the Definition's body because the commitment
     gadgets' Boolean bodies (`Hm96Sha512Leaf`, `FrameV3Node`, `FrameV3Leaf`, `Sha512Compress`) encode to about 140 MB,
-    and the proof service encodes the Program on every registration."""
+    and the proof system encodes the Program on every registration."""
     d = unit(L, T, counts)
     return gate_of(d, pinned_digest(d), "N2's head check")
 
@@ -510,7 +490,7 @@ def _bytes_bits(data: bytes) -> list[int]:
 
 
 def arguments(inst: Instance) -> list[list[int]]:
-    """The unit's arguments for one instance in its signature's order, each its leaves' bits, 0 or 1."""
+    """The proof block's arguments for one instance in its signature's order, each its leaves' bits, 0 or 1."""
     flat = {"record": _digest_bits(inst.record), "record_domain": _digest_bits(inst.record_domain),
             "link": _bytes_bits(inst.link), "direction": [inst.direction], "window": _int_bits(inst.window, 64),
             "grid": _bytes_bits(inst.grid), "profile": [b for n in inst.profile or () for b in _int_bits(n, 32)],
@@ -526,7 +506,7 @@ def arguments(inst: Instance) -> list[list[int]]:
 
 
 def evaluate(*insts: Instance) -> list[int]:
-    """The unit's output on each instance, all of one unit, in one evaluation."""
+    """The proof block's output on each instance, all of one proof block, in one evaluation."""
     if len({i.key for i in insts}) != 1:
         raise ValueError("the instances are of one unit")
     args = [list(rows) for rows in zip(*(arguments(i) for i in insts))]

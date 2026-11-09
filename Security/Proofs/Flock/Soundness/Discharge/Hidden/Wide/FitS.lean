@@ -1,16 +1,20 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegFit
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegTgt
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegFit
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegTgt
 
 /-!
 # The rows the hidden-output headlines cover: fit rows and `sha512/row-seg/v1` rows, each under its own prefix
 
 `RowsFit` covers rows that fit (`FitRow`), all of one kind (`sha512/row/v1` or `/row/v2`), so one prefix (`rowPre`) at
 every row. `Any.RowsFitS` covers each row unsegmented, its padding perhaps starting in its last compression's block
-(`Any.PadRow`), or a `sha512/row-seg/v1` row as `HmRow.segShape` cuts it (`Any.SegRow`), of any mix, the output rows
-fitting (`Any.OutRowsS`). A row's `hm96` slot hashes `Any.rowMsg` of its message bytes: its own prefix (`rowPre` at its
-own `v2`) and the bytes at an unsegmented row, `RowSeg.enc` of them at a row-seg row
-(`Any.row_bc_tgtS`, from `Any.row_bc_tgt` and `Any.seg_bc_tgt`).
+(`Any.PadRow`), or a `sha512/row-seg/v1` row as `HmRow.segShape` cuts it (`Any.SegRow`), of any mix, input rows and
+output rows alike, one output row per output port (`Any.OutRowsS`). A row's `hm96` slot hashes `Any.rowMsg` of its
+message bytes: its own prefix (`rowPre` at its own `v2`) and the bytes at an unsegmented row, `RowSeg.enc` of them at a
+row-seg row (`Any.row_bc_tgtS`, from `Any.row_bc_tgt` and `Any.seg_bc_tgt`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -23,16 +27,24 @@ open SegShape
 
 namespace Any
 
-/-- **A `sha512/row-seg/v1` row the hidden-output statement's proof covers**: segmented as `HmRow.segShape` cuts its
-bits, `16 · words` bits, its chunks its segments' compressions and then its outer message's (`outerComps`), each
-segment's bytes ending in its last compression's block (`SegFits`). -/
-def SegRow (p : Port) : Prop :=
-  p.segs = some (HmRow.segShape p.bits).1 ∧ p.bits = 16 * p.words ∧
-    p.chunks = firstOf (HmRow.segShape p.bits).1 (Binding.RowSeg.count p.bits) + outerComps p.bits ∧ SegFits p.bits
-
-/-- **The rows the hidden-output headlines cover**: one unsegmented output row per output port after the
-input rows (`OutRowsS`), and every row an unsegmented row (`PadRow`) or a `sha512/row-seg/v1` row (`SegRow`). -/
+/-- **The rows the hidden-output headlines cover**: one output row per output port after the input rows (`OutRowsS`),
+and every row an unsegmented row (`PadRow`) or a `sha512/row-seg/v1` row (`SegRow`). -/
 def RowsFitS (c : Circuit) : Prop := OutRowsS c ∧ ∀ p ∈ c.ports.toList, PadRow p ∨ SegRow p
+
+/-- **`RowsFitS` with output ports past the output rows** (`OutRowsP`: META `pinned_outputs`' have no row). -/
+def RowsFitP (c : Circuit) : Prop := OutRowsP c ∧ ∀ p ∈ c.ports.toList, PadRow p ∨ SegRow p
+
+theorem RowsFitS.toP {c : Circuit} (h : RowsFitS c) : RowsFitP c := ⟨h.1.toP, h.2⟩
+
+namespace RowsFitP
+
+variable {c : Circuit} (h : RowsFitP c)
+include h
+
+theorem kind {p : ℕ} (hp : p < c.ports.size) : PadRow c.ports[p]! ∨ SegRow c.ports[p]! :=
+  h.2 _ (by rw [getElem!_pos c.ports p hp]; exact Array.getElem_mem_toList hp)
+
+end RowsFitP
 
 /-- **The bytes a row's `hm96` slot hashes**, `bytes` its message bytes: `RowSeg.enc` of them at a segmented row, else
 its own prefix (`rowPre`) and them. -/
@@ -45,7 +57,7 @@ variable {c : Circuit} (h : RowsFitS c)
 include h
 
 theorem kind {p : ℕ} (hp : p < c.ports.size) : PadRow c.ports[p]! ∨ SegRow c.ports[p]! :=
-  h.2 _ (by rw [getElem!_pos c.ports p hp]; exact Array.getElem_mem_toList hp)
+  h.toP.kind hp
 
 theorem bits16 : ∀ p ∈ c.ports.toList, p.bits = 16 * p.words := fun p hp => by
   rcases h.2 p hp with h1 | h1
@@ -82,7 +94,7 @@ include L F
 `rowMsg` of its `2 · words` message bytes, under the 192 bytes at `saltCol` (`Any.row_bc_tgt`, `Any.seg_bc_tgt`). -/
 theorem row_bc_tgtS (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
-    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
+    (hz : SatEx (L.model regs) (UnitIn st.c) z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) (hk : PadRow st.c.ports[p]! ∨ SegRow st.c.ports[p]!) :
     bytesOf (blockBit (L.model regs) z o) 128 (bcCol st.c g p) = Binding.commitString
       (rowMsg st.c.ports[p]! (bytesOf (blockBit (L.model regs) z o) (2 * st.c.ports[p]!.words) (Typed.msgCol st.c g p)))

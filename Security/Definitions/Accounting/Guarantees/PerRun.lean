@@ -1,8 +1,10 @@
-import Definitions.Accounting.PerRun
-import Definitions.Accounting.Pouw
-import Definitions.Pouw.Game.Params
-import Definitions.Pouw.PearlC.W1Stop
-import Definitions.Pouw.Assumptions.Game
+module
+
+public import Definitions.Accounting.PerRun
+public import Definitions.Accounting.Pouw
+public import Definitions.Pouw.Game.Params
+public import Definitions.Pouw.PearlC.W1Stop
+public import Definitions.Pouw.Assumptions.Game
 
 /-!
 # The per-run guarantees (trusted)
@@ -23,18 +25,18 @@ server's state, in the capacity embedding.
 
 **Priced.** The machine charges a PoUW run's arithmetic, at W1's instruction prices with no fetch charge and no refund,
 to the compute account, and its first fetches of pre-salt or supplied bytes, deduplicated within the run, to the
-bandwidth account at the device's price of a bit read (Daniel's decision 9, 11 Oct). What the compute audit certifies is
+bandwidth account at the device's price of a bit read. What the compute audit certifies is
 the priced sum: the compute account's work plus `pRead` per bit it read from device memory
 (`Accounting.Run.ComputeSoundPerRunPriced`). Tables cite the work and the bits separately. Pearl-C's game gives that
-guarantee by the same truncation, from its γ-gap property at a priced cost model that truncates
+guarantee by the same truncation, from its gap property at a priced cost model that truncates
 (`PearlCEndToEndPerRun`, `ComputeOfPearlCPerRunPriced`). The machine that stops a run at its budget
 (`Pouw.PearlC.CostModel.withStop`) is a proof device, not a deployment requirement: on it every cost model with
-nonnegative costs truncates, and the γ-gap property over it is the γ-gap property per coin (`Pouw.PearlC.GγPerCoin`),
-so `PearlCStopEndToEndPerRun` and `ComputeOfPearlCStopPerRunPriced` rest on `GγPerCoin` alone. Its adversary may
+nonnegative costs truncates, and the gap property over it is the gap property per coin (`Pouw.PearlC.GGapPerCoin`),
+so `PearlCStopEndToEndPerRun` and `ComputeOfPearlCStopPerRunPriced` rest on `GGapPerCoin` alone. Its adversary may
 choose no budget, which runs, costs and calls as at `CM`, so a run that realizes Pearl-C's audit at `CM` realizes it on
 the stopping machine (`Accounting.RealizesPearlCPriced.withStop`), and `ComputeOfPearlCStopPerRunPriced` covers every
 run `ComputeOfPearlCPerRunPriced` covers, whether or not the device ever stops one. At W1 priced (`w1Priced`) the one
-open hypothesis is `GγPerCoin`, a conjecture (claim `pouw-gamma-per-coin`). PoUW's reads and the bandwidth audit's window reads are different device-model
+open hypothesis is `GGapPerCoin`, a conjecture (claim `pouw-gamma-per-coin`). PoUW's reads and the bandwidth audit's window reads are different device-model
 accounts' over one window (`Accounting.Run.ReadsAttributed`), so no bit read is certified twice (`JointPerRunPriced`),
 and the covert residual is one priced budget, `(F + pRead·BW)·T − (W + pRead·Q)` (`CovertResidualPerRunPriced`). The
 unpriced statements stay: a compute guarantee on the work alone gives the priced one at any `pRead ≥ 0`
@@ -45,6 +47,8 @@ Each `def G : Prop` is proved by `Accounting.SecurityProofs.G : Accounting.Guara
 `Proofs.Accounting.PerRunStop`).
 -/
 
+@[expose] public section
+
 namespace Accounting.Guarantees
 
 open Accounting Pouw
@@ -52,40 +56,42 @@ open Accounting Pouw
 /-- **PoUW's end-to-end guarantee, per run.** Under EndToEnd's hypotheses (TT among them), and when the cost model
 truncates (`BudgetAbort`), for every in-domain workload, oracle bound `q ≤ 2^64` and adversary that makes at most `q`
 oracle calls (with no bound on its cost), the audit with `t` work-weighted samples accepts while the adversary's online
-cost on that run is below `(1 − γ)(1 − ε_s)·W` with probability at most `(1 − ε_s)^t + ε(q, N)`, with
-`γ = 1 − (1 − γ₀)/Ω_max`. -/
+cost on that run is below `(1 − g)(1 − ε_s)·W` and its run doesn't break SHA-512 with probability at most
+`(1 − ε_s)^t + δ(q, N)`, with `g = 1 − (1 − g₀)/Ω_max`. -/
 def PouwEndToEndPerRun : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
-    γ₀ < 1 → 0 < Ωmax →
+    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (g₀ Ωmax : ℝ) (δ : ℕ → ℕ → ℝ),
+    g₀ < 1 → 0 < Ωmax →
     (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N,
       (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →
-    Assumptions.TT CM P D γ₀ ε → BudgetAbort CM →
+    Assumptions.TT CM P D g₀ δ → BudgetAbort CM →
     ∀ U : Workload, U.InDomain D → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary CM, CallsWithin A U q → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
           AuditAccepts (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          onlineCost A U x.1 x.2.1 < (1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout)
-        ≤ (1 - εs) ^ t + ε q U.layout.N
+          onlineCost A U x.1 x.2.1 < (1 - reductionGap g₀ Ωmax) * (1 - εs) * totalWref P U.layout ∧
+          ¬ A.Breaks U x.1 x.2.1)
+        ≤ (1 - εs) ^ t + δ q U.layout.N
 
 /-- **PoUW's per-run guarantee is the compute audit's per-run guarantee.** Under `PouwEndToEndPerRun`'s hypotheses, for
-any run on any device whose compute audit realizes PoUW's game at price `p`, with at least one draw of the game's coins
+any run on any device whose compute audit realizes PoUW's game at price `p`, with at least one sample of the game's coins
 and the device's oracle queries over the compute window at most `2^64`, the compute audit has its per-run guarantee at
-certificate `(1 − γ)(1 − εs)·W` and error `(1 − εs)^t + ε(q, N)`, where `q` is the device's oracle rate times the compute
-window's length. -/
+certificate `(1 − g)(1 − εs)·W` and error `(1 − εs)^t + δ(q, N)` unless the device's run breaks SHA-512, where `q` is the
+device's oracle rate times the compute window's length. -/
 def ComputeOfPouwPerRun : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
-    γ₀ < 1 → 0 < Ωmax →
+    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (g₀ Ωmax : ℝ) (δ : ℕ → ℕ → ℝ),
+    g₀ < 1 → 0 < Ωmax →
     (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N,
       (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →
-    Assumptions.TT CM P D γ₀ ε → BudgetAbort CM →
+    Assumptions.TT CM P D g₀ δ → BudgetAbort CM →
     ∀ U : Workload, U.InDomain D → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 → Nonempty (PouwCoins P U t) →
     ∀ (ι α ΩQ ΩS : Type) [Fintype α] [Fintype ΩQ] [Fintype ΩS] (d : Device ι)
       (r : Run d α (PouwCoins P U t) ΩQ ΩS) (p : Price),
-      d.rate .oracle * (r.win .compute).len ≤ 2 ^ 64 → RealizesPouw CM P U r p →
-      r.ComputeSoundPerRun p ((1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout)
-        ((1 - εs) ^ t + ε (d.rate .oracle * (r.win .compute).len) U.layout.N)
+      d.rate .oracle * (r.win .compute).len ≤ 2 ^ 64 → ∀ real : RealizesPouw CM P U r p,
+      r.ComputeSoundPerRunUnless p ((1 - reductionGap g₀ Ωmax) * (1 - εs) * totalWref P U.layout)
+        ((1 - εs) ^ t + δ (d.rate .oracle * (r.win .compute).len) U.layout.N)
+        (fun x o => (real.adv o).Breaks U x.1 x.2.1)
 
 /-- **The joint guarantee, per run.** On any device and any run of a joint audit on it whose compute, bandwidth and
 capacity audits have their per-run guarantees at certificates `W`, `Q` and `S` with errors `εW`, `εQ` and `εS`, the
@@ -114,50 +120,50 @@ def CovertResidualPerRun : Prop :=
           ((d.mem : ℝ) - S) * (r.win .capacity).len < r.othersHeld ω))
       ≤ εW + εQ + εS
 
-/-- **Pearl-C's γ-gap property, audited by work-weighted tickets, per run.** For Pearl-C's game at any cost model that
-truncates (`BudgetAbortPearlC`) and has the γ-gap property at `γ < 1` with error `η`, every in-domain workload whose
+/-- **Pearl-C's gap-gap property, audited by work-weighted tickets, per run.** For Pearl-C's game at any cost model that
+truncates (`BudgetAbortPearlC`) and has the gap property at `g < 1` with error `δ`, every in-domain workload whose
 units' `W_ref` are `κ ≥ 0` times their ticket weights `w`, every oracle bound `q ≤ 2^64` and every adversary that makes
 at most `q` oracle calls (with no bound on its cost), the audit with `t` tickets accepts while the adversary's online
-cost on that run is below `(1 − γ)(1 − ε_s)·∑_u W_ref(u)` with probability at most `(1 − ε_s)^t + η(q, N)`. At W1 with
+cost on that run is below `(1 − g)(1 − ε_s)·∑_u W_ref(u)` with probability at most `(1 − ε_s)^t + δ(q, N)`. At W1 with
 fetches priced (`w1Priced`), the cost is the run's instruction prices plus its first fetches priced. -/
 def PearlCEndToEndPerRun : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : PearlC.CostModel Q R S) (P : PearlC.Protocol Q R S) (D : PearlC.Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ),
-    γ < 1 → PearlC.Gγ CM P D γ η → BudgetAbortPearlC CM →
+    (CM : PearlC.CostModel Q R S) (P : PearlC.Protocol Q R S) (D : PearlC.Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ),
+    g < 1 → PearlC.GGap CM P D g δ → BudgetAbortPearlC CM →
     ∀ U : PearlC.Workload, U.InDomain P D → ∀ (w : ℕ → ℕ) (κ : ℝ), 0 ≤ κ →
     (∀ u < U.layout.N, P.Wref U.layout u = κ * w u) →
     ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : PearlC.Adversary CM, CallsWithinPearlC A U q → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : PearlCCoins Q R S U w t =>
           AuditAccepts (PearlC.correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          onlineCostPearlC A U x.1 x.2.1 < (1 - γ) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u)
-        ≤ (1 - εs) ^ t + η q U.layout.N
+          onlineCostPearlC A U x.1 x.2.1 < (1 - g) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u)
+        ≤ (1 - εs) ^ t + δ q U.layout.N
 
 /-- **Pearl-C's per-run guarantee is the compute audit's per-run guarantee on the priced sum.** Under
 `PearlCEndToEndPerRun`'s hypotheses, for any run on any device whose compute audit realizes Pearl-C's game with the
 adversary's cost covered by the compute account's work at price `p` plus `pRead` per bit it read
-(`RealizesPearlCPriced`), with at least one draw of the game's coins and the device's oracle queries over the compute
+(`RealizesPearlCPriced`), with at least one sample of the game's coins and the device's oracle queries over the compute
 window at most `2^64`, the compute audit has its per-run guarantee on the priced sum at certificate
-`(1 − γ)(1 − ε_s)·∑_u W_ref(u)` and error `(1 − ε_s)^t + η(q, N)`, where `q` is the device's oracle rate times the
+`(1 − g)(1 − ε_s)·∑_u W_ref(u)` and error `(1 − ε_s)^t + δ(q, N)`, where `q` is the device's oracle rate times the
 compute window's length. Tables cite the work and the bits read separately; the certificate is on their priced sum. -/
 def ComputeOfPearlCPerRunPriced : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : PearlC.CostModel Q R S) (P : PearlC.Protocol Q R S) (D : PearlC.Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ),
-    γ < 1 → PearlC.Gγ CM P D γ η → BudgetAbortPearlC CM →
+    (CM : PearlC.CostModel Q R S) (P : PearlC.Protocol Q R S) (D : PearlC.Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ),
+    g < 1 → PearlC.GGap CM P D g δ → BudgetAbortPearlC CM →
     ∀ U : PearlC.Workload, U.InDomain P D → ∀ (w : ℕ → ℕ) (κ : ℝ), 0 ≤ κ →
     (∀ u < U.layout.N, P.Wref U.layout u = κ * w u) → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
     Nonempty (PearlCCoins Q R S U w t) →
     ∀ (ι α ΩQ ΩS : Type) [Fintype α] [Fintype ΩQ] [Fintype ΩS] (d : Device ι)
       (r : Run d α (PearlCCoins Q R S U w t) ΩQ ΩS) (p : Price) (pRead : ℝ),
       d.rate .oracle * (r.win .compute).len ≤ 2 ^ 64 → RealizesPearlCPriced CM P U w r p pRead →
-      r.ComputeSoundPerRunPriced p pRead ((1 - γ) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u)
-        ((1 - εs) ^ t + η (d.rate .oracle * (r.win .compute).len) U.layout.N)
+      r.ComputeSoundPerRunPriced p pRead ((1 - g) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u)
+        ((1 - εs) ^ t + δ (d.rate .oracle * (r.win .compute).len) U.layout.N)
 
-/-- **Pearl-C's per-run guarantee from the γ-gap property per coin.** For any Pearl-C cost model `CM` with nonnegative
-costs and the γ-gap property per coin (`PearlC.GγPerCoin`) at `γ < 1` and error `η`: for every in-domain workload whose
+/-- **Pearl-C's per-run guarantee from the gap property per coin.** For any Pearl-C cost model `CM` with nonnegative
+costs and the gap property per coin (`PearlC.GGapPerCoin`) at `g < 1` and error `δ`: for every in-domain workload whose
 units' `W_ref` are `κ ≥ 0` times their ticket weights `w`, every oracle bound `q ≤ 2^64` and every adversary within `q`
 oracle calls (with no bound on its cost) on `CM.withStop`, the audit with `t` tickets accepts while the adversary's
-online cost on that run is below the certified `(1 − γ)(1 − ε_s)·∑_u W_ref(u)` with probability at most
-`(1 − ε_s)^t + η(q, N)`. `CM.withStop`, `CM` with an optional budget at which a run is stopped, is a proof device: an
+online cost on that run is below the certified `(1 − g)(1 − ε_s)·∑_u W_ref(u)` with probability at most
+`(1 − ε_s)^t + δ(q, N)`. `CM.withStop`, `CM` with an optional budget at which a run is stopped, is a proof device: an
 adversary of `CM` is one of `CM.withStop` with no budget, at the same transcript, cost and calls. At
 `CM = W1.w1Priced dv salt`, the cost is the run's arithmetic, charged to the compute account, plus its first fetches,
 charged to the bandwidth account. -/
@@ -165,40 +171,40 @@ def PearlCStopEndToEndPerRun : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : PearlC.CostModel Q R S),
     (∀ (prog : CM.Prog) (H : Q → R) (U : PearlC.Workload) (act : ℕ → PearlC.Codes) (σ : PearlC.State) (s : S),
       0 ≤ CM.cost prog H U act σ s) →
-    ∀ (P : PearlC.Protocol Q R S) (D : PearlC.Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ),
-    γ < 1 → PearlC.GγPerCoin CM P D γ η →
+    ∀ (P : PearlC.Protocol Q R S) (D : PearlC.Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ),
+    g < 1 → PearlC.GGapPerCoin CM P D g δ →
     ∀ U : PearlC.Workload, U.InDomain P D → ∀ (w : ℕ → ℕ) (κ : ℝ), 0 ≤ κ →
     (∀ u < U.layout.N, P.Wref U.layout u = κ * w u) →
     ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : PearlC.Adversary CM.withStop, CallsWithinPearlC A U q →
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : PearlCCoins Q R S U w t =>
           AuditAccepts (PearlC.correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          onlineCostPearlC A U x.1 x.2.1 < (1 - γ) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u)
-        ≤ (1 - εs) ^ t + η q U.layout.N
+          onlineCostPearlC A U x.1 x.2.1 < (1 - g) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u)
+        ≤ (1 - εs) ^ t + δ q U.layout.N
 
-/-- **The compute audit's per-run guarantee on the priced sum, from the γ-gap property per coin.** Under
+/-- **The compute audit's per-run guarantee on the priced sum, from the gap property per coin.** Under
 `PearlCStopEndToEndPerRun`'s hypotheses, for any run on any device whose compute audit realizes Pearl-C's game on
 `CM.withStop` with the adversary's cost covered by the compute charge, the compute account's work at price `p`, plus the
-bandwidth charge, `pRead` per bit it read (`RealizesPearlCPriced CM.withStop`), with at least one draw of the game's
+bandwidth charge, `pRead` per bit it read (`RealizesPearlCPriced CM.withStop`), with at least one sample of the game's
 coins and the device's oracle queries over the compute window at most `2^64`, the compute audit has its per-run
-guarantee on the priced sum at the certified `(1 − γ)(1 − ε_s)·∑_u W_ref(u)` and error `(1 − ε_s)^t + η(q, N)`, where
+guarantee on the priced sum at the certified `(1 − g)(1 − ε_s)·∑_u W_ref(u)` and error `(1 − ε_s)^t + δ(q, N)`, where
 `q` is the device's oracle rate times the compute window's length. The device need not stop a run: a run that realizes
 the game at `CM` realizes it on `CM.withStop` (`RealizesPearlCPriced.withStop`, the adversary choosing no budget), so
-this covers every run `ComputeOfPearlCPerRunPriced` covers, from `GγPerCoin` in place of `Gγ` and `BudgetAbortPearlC`. -/
+this covers every run `ComputeOfPearlCPerRunPriced` covers, from `GGapPerCoin` in place of `GGap` and `BudgetAbortPearlC`. -/
 def ComputeOfPearlCStopPerRunPriced : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : PearlC.CostModel Q R S),
     (∀ (prog : CM.Prog) (H : Q → R) (U : PearlC.Workload) (act : ℕ → PearlC.Codes) (σ : PearlC.State) (s : S),
       0 ≤ CM.cost prog H U act σ s) →
-    ∀ (P : PearlC.Protocol Q R S) (D : PearlC.Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ),
-    γ < 1 → PearlC.GγPerCoin CM P D γ η →
+    ∀ (P : PearlC.Protocol Q R S) (D : PearlC.Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ),
+    g < 1 → PearlC.GGapPerCoin CM P D g δ →
     ∀ U : PearlC.Workload, U.InDomain P D → ∀ (w : ℕ → ℕ) (κ : ℝ), 0 ≤ κ →
     (∀ u < U.layout.N, P.Wref U.layout u = κ * w u) → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
     Nonempty (PearlCCoins Q R S U w t) →
     ∀ (ι α ΩQ ΩS : Type) [Fintype α] [Fintype ΩQ] [Fintype ΩS] (d : Device ι)
       (r : Run d α (PearlCCoins Q R S U w t) ΩQ ΩS) (p : Price) (pRead : ℝ),
       d.rate .oracle * (r.win .compute).len ≤ 2 ^ 64 → RealizesPearlCPriced CM.withStop P U w r p pRead →
-      r.ComputeSoundPerRunPriced p pRead ((1 - γ) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u)
-        ((1 - εs) ^ t + η (d.rate .oracle * (r.win .compute).len) U.layout.N)
+      r.ComputeSoundPerRunPriced p pRead ((1 - g) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u)
+        ((1 - εs) ^ t + δ (d.rate .oracle * (r.win .compute).len) U.layout.N)
 
 /-- **The joint guarantee, per run, with the compute certificate on the priced sum.** On any device and any run of a
 joint audit on it whose reads are attributed (`Run.ReadsAttributed`: PoUW's reads and the bandwidth audit's window reads

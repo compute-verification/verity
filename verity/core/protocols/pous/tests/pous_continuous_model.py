@@ -14,9 +14,9 @@ Two restatements of one set of rules:
   1. Challenge `j` is sent no earlier than round `j − 1` closed (`contSend`).
   2. An answer's delay runs from the memory challenger's own send of its challenge (`contProg`).
   3. A round closes at its answer, or rejected once `late_limit` has passed with none; an answer past `late_limit` is
-     rejected too, its block never checked (`contVerdict`'s `.reject`).
-  4. Any other answer past `limit` is late, whatever its block; one within `limit` is a hit if it is the challenged
-     block and wrong otherwise.
+     rejected too, its label never checked (`contVerdict`'s `.reject`).
+  4. Any other answer past `limit` is late, whatever its label; one within `limit` is a hit if it is the challenged
+     label and wrong otherwise.
   5. With tolerance `f₀` the run accepts iff at most `f₀` rounds are not hits (`contAccepts`): those are the misses.
      The late count is the late and rejected rounds, every round whose answer was not in within `limit`.
 
@@ -42,23 +42,23 @@ HIT, WRONG, LATE, REJECT = "hit", "wrong", "late", "reject"
 
 @dataclass(frozen=True)
 class Ret:
-    """`Prog.ret a`."""
+    """`OracleAlgorithm.ret a`."""
 
     value: object
 
 
 @dataclass(frozen=True)
 class Round:
-    """`Prog.round qs k`: the queries `qs` at once, then `k` on their answers."""
+    """`OracleAlgorithm.round qs k`: the queries `qs` at once, then `k` on their answers."""
 
     qs: tuple
     k: Callable[[tuple], Ret | Round]
 
 
 def run(f: Callable, p: Ret | Round) -> object:
-    """Lean `Prog.run` (`Security/Definitions/Pous/Game/Oracle.lean`):
+    """Lean `OracleAlgorithm.run` (`Security/Definitions/Pous/Game/Oracle.lean`):
 
-    def run (f : M.Qry → M.Ans) : Prog M α → α
+    def run (f : M.Qry → M.Ans) : OracleAlgorithm M α → α
       | ret a => a
       | round qs k => run f (k (qs.map f))
     """
@@ -68,9 +68,9 @@ def run(f: Callable, p: Ret | Round) -> object:
 
 
 def depth(f: Callable, p: Ret | Round) -> int:
-    """Lean `Prog.depth` (`Security/Definitions/Pous/Game/Oracle.lean`):
+    """Lean `OracleAlgorithm.depth` (`Security/Definitions/Pous/Game/Oracle.lean`):
 
-    def depth (f : M.Qry → M.Ans) : Prog M α → ℕ
+    def depth (f : M.Qry → M.Ans) : OracleAlgorithm M α → ℕ
       | ret _ => 0
       | round qs k => depth f (k (qs.map f)) + 1
     """
@@ -81,9 +81,9 @@ def depth(f: Callable, p: Ret | Round) -> int:
 
 
 def work(f: Callable, p: Ret | Round) -> int:
-    """Lean `Prog.work` (`Security/Definitions/Pous/Game/Oracle.lean`):
+    """Lean `OracleAlgorithm.work` (`Security/Definitions/Pous/Game/Oracle.lean`):
 
-    def work (f : M.Qry → M.Ans) : Prog M α → ℕ
+    def work (f : M.Qry → M.Ans) : OracleAlgorithm M α → ℕ
       | ret _ => 0
       | round qs k => qs.length + work f (k (qs.map f))
     """
@@ -97,7 +97,7 @@ def machine_round(mach, h: tuple, T: int, m: object, msg: int | None) -> Ret | R
     """Lean `ContMachine.round` (`Security/Definitions/Pous/Model/Continuous.lean`):
 
     def ContMachine.round {sch : Scheme M} (mach : ContMachine sch) (W : Bits sch.n) (pp : Bits sch.t)
-        (h : List (Fin sch.B)) : ℕ → List Bool → Option (Fin sch.B) → Prog M (Option (Bits sch.ℓ) × List Bool)
+        (h : List (Fin sch.B)) : ℕ → List Bool → Option (Fin sch.B) → OracleAlgorithm M (Option (Bits sch.ℓ) × List Bool)
       | 0, m, msg =>
         match mach.step W pp h m msg with
         | .inl a => .ret (some a, m)
@@ -119,7 +119,7 @@ def machine_round(mach, h: tuple, T: int, m: object, msg: int | None) -> Ret | R
 def cont_verdict(D: int, Q: int, Q_late: int, f: Callable, p: Ret | Round, c: bytes) -> str:
     """Lean `contVerdict` (`Security/Definitions/Pous/Model/Continuous.lean`):
 
-    def contVerdict {ℓ : ℕ} {σ : Type} (D Q Q_late : ℕ) (f : M.Qry → M.Ans) (p : Prog M (Option (Bits ℓ) × σ))
+    def contVerdict {ℓ : ℕ} {σ : Type} (D Q Q_late : ℕ) (f : M.Qry → M.Ans) (p : OracleAlgorithm M (Option (Bits ℓ) × σ))
         (c : Bits ℓ) : ContVerdict :=
       match (p.run f).1 with
       | none => .reject
@@ -183,7 +183,7 @@ def cont_prog(mach, D_late: int, arr: Callable[[int], int], s: ContState, i: int
     """Lean `contProg` (`Security/Definitions/Pous/Model/Continuous.lean`):
 
     def contProg {sch : Scheme M} (mach : ContMachine sch) (D_late : ℕ) (W : Bits sch.n) (pp : Bits sch.t) (C : sch.Code)
-        (ω : M.Ω) (arr : ℕ → ℕ) (s : ContState sch.B) (i : Fin sch.B) : Prog M (Option (Bits sch.ℓ) × List Bool) :=
+        (ω : M.Ω) (arr : ℕ → ℕ) (s : ContState sch.B) (i : Fin sch.B) : OracleAlgorithm M (Option (Bits sch.ℓ) × List Bool) :=
       mach.round W pp s.sent D_late (contMem mach W pp C ω arr s) (some i)
     """
     return machine_round(mach, s.sent, D_late, cont_mem(mach, arr, s), i)
@@ -289,7 +289,7 @@ class Record:
 
 class ClockOracle:
     """The memory challenger on its own clock (the module docstring, "On the memory challenger's clock"): `n`
-    challenges, the `j`th asking for block `index(j)` of `C`. `named` is a memory challenger whose answers name their
+    challenges, the `j`th asking for label `index(j)` of `C`. `named` is a memory challenger whose answers name their
     challenge (`ContinuousMemoryChallenger.respond(j, …)`); an unnamed one credits every answer to the open challenge.
     Each action takes the clock reading `t` and returns what the memory challenger must do: the `(j, index)` it reveals,
     the `Record` it closes, or a `Refused`."""

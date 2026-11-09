@@ -1,9 +1,47 @@
-import Proofs.Accounting.TS.Session.Lanes.KnownFields
-import Proofs.Flock.C3.Reps.ReadWhole
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
-import Proofs.Flock.VBridge.Unit
-import Proofs.Flock.Verifier.Registered
-import Flock.KnownRead
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.KnownBits
+public import Proofs.Accounting.TS.Session.Lanes.KnownFields
+public import Proofs.Flock.C3.Reps.ReadWhole
+public import Proofs.Flock.Soundness.TmplReads
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.Discharge.FailClosed.TmplStmt
+import Proofs.Flock.Soundness.Discharge.Placed.Wiring
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # Every bit of a known port is on a wire of the unit, from flock-verify's check
@@ -12,7 +50,8 @@ import Flock.KnownRead
 has no port of a name the known content names (`Flock.KnownRead.namesOk`), and one of whose ports `F` names at known
 content is not a `sha512/row/v2` row of the known rows' words, or has a row bit that no computed row of the unit reads
 (an input row) or no copy returns (an output row) (`Flock.KnownRead.readsOk`; `check` is both, run on every statement
-beside the complete check). What that refusal establishes, from the verifier's code:
+beside the complete check). `readsOk` checks the input bits at columns every one of which the unit's computed rows read
+(`FlockSoundness.TmplFold.readsAt_of_readsOk`). What that refusal establishes, from the verifier's code:
 
 * `names_of_check`: the circuit names each port once, and has a port of each known name;
 
@@ -30,6 +69,8 @@ beside the complete check). What that refusal establishes, from the verifier's c
   circuit names each port once, and `admit`, `pub` and `o0` are its ports, known values' rows of 32, 1616 and 16 bits
   (`knownRows`' words), each bit on a wire of unit 0.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Lanes
 
@@ -163,8 +204,8 @@ theorem read_of_check {known : Known} (h : _root_.Flock.KnownRead.check c known 
         (_root_.Flock.ProvedScope.portMask c.unit.inGroups (c.unit.inWords * _root_.Flock.WORD))
         (_root_.Flock.portCols c.unit.inGroups) u y = some (q, k / 8, k % 8) := by
   have hqs : q < c.ports.size := by unfold _root_.Flock.HmOut.nIn at hq; omega
-  replace h := (parts_of_check h).2
-  unfold _root_.Flock.KnownRead.readsOk at h
+  obtain ⟨rd, h, hrd⟩ := FlockSoundness.TmplFold.readsAt_of_readsOk (parts_of_check h).2
+  unfold _root_.Flock.KnownRead.readsOkAt at h
   dsimp only at h
   have h1 := _root_.Flock.Registered.forM_ok h (nm, ks) (Array.mem_toList_iff.2 hm)
   dsimp only at h1
@@ -184,7 +225,7 @@ theorem read_of_check {known : Known} (h : _root_.Flock.KnownRead.check c known 
       obtain ⟨⟨u, p⟩, -, hb⟩ := List.any_eq_true.1 hb
       dsimp only at hb
       simp only [Bool.and_eq_true, decide_eq_true_eq] at hb
-      exact ⟨u, _, hb.1.1, hb.1.2, hb.2⟩
+      exact ⟨u, _, hb.1.1, hrd _ hb.1.2, hb.2⟩
 
 /-- **What the check accepted of a known output port**: at each bit `k < 16 · words` of an output port `q` the known
 content names, the bit's word is word `k / 16` of output port `q - nIn` (`outAt`), and some copy `u` of the unit returns
@@ -199,8 +240,8 @@ theorem out_of_check {known : Known} (h : _root_.Flock.KnownRead.check c known =
         c.unit.inWords * _root_.Flock.WORD ≤
           (c.unit.outGroups.getD 0 default).col * _root_.Flock.WORD + (16 * j + k % 16) ∧
         (c.unit.outGroups.getD 0 default).col * _root_.Flock.WORD + (16 * j + k % 16) < c.unit.constPos := by
-  replace h := (parts_of_check h).2
-  unfold _root_.Flock.KnownRead.readsOk at h
+  obtain ⟨rd, h, hrd⟩ := FlockSoundness.TmplFold.readsAt_of_readsOk (parts_of_check h).2
+  unfold _root_.Flock.KnownRead.readsOkAt at h
   dsimp only at h
   have h1 := _root_.Flock.Registered.forM_ok h (nm, ks) (Array.mem_toList_iff.2 hm)
   dsimp only at h1
@@ -232,8 +273,8 @@ theorem shape_of_check {known : Known} (h : _root_.Flock.KnownRead.check c known
     {ks : Array (Array ℕ × ByteArray)} (hm : (nm, ks) ∈ known) {q : ℕ} (hqs : q < c.ports.size)
     (hn : c.ports[q]!.name = nm) :
     c.ports[q]!.v2 = true ∧ c.ports[q]!.segs = none ∧ ∀ i (hi : i < ks.size), ks[i].1.size = c.ports[q]!.words := by
-  replace h := (parts_of_check h).2
-  unfold _root_.Flock.KnownRead.readsOk at h
+  obtain ⟨rd, h, hrd⟩ := FlockSoundness.TmplFold.readsAt_of_readsOk (parts_of_check h).2
+  unfold _root_.Flock.KnownRead.readsOkAt at h
   dsimp only at h
   have h1 := _root_.Flock.Registered.forM_ok h (nm, ks) (Array.mem_toList_iff.2 hm)
   dsimp only at h1
@@ -312,7 +353,7 @@ theorem unitLog_of_scopeOkH {c : _root_.Flock.Circuit} (h : Layout.scopeOkH c = 
   exact h.1.1.2
 
 /-- An output a unit computes is one of its committed wires. -/
-theorem mem_io_of_output {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
+theorem mem_io_of_output {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
     {u : Fin n} {g : Fin C.N} (hg : g ∈ C.outputs) (hu : P.unit g = some u) : g ∈ P.io u := by
   classical
   simp only [FlockSoundness.Audit.Partition.io, Finset.mem_filter]

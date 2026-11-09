@@ -1,6 +1,43 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.Bandwidth
-import Proofs.Accounting.Bandwidth.Chip
+module
+
+public import Definitions.Accounting.Guarantees.Bandwidth
+public import Proofs.Accounting.Bandwidth.Chip
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
+import Proofs.Pous.Prob
 
 /-!
 # The bandwidth audit v0 in the random-oracle model: the proof
@@ -15,6 +52,8 @@ contents of at least `k` blocks (`queried`):
   device memory, side sources and regeneration answered with, and which `k` of its queries named blocks, determine
   those `k` blocks given the oracle, since replaying the chip recomputes its queries (`Chip.replay_trace`).
 -/
+
+@[expose] public section
 
 namespace Bandwidth
 
@@ -183,7 +222,7 @@ end AuditRO
 
 theorem pr_eq_zero_of_card {Ω : Type} [Fintype Ω] (P : Ω → Prop) (h : Fintype.card Ω = 0) : pr P = 0 := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   have : (Finset.univ.filter P).card = 0 := Nat.eq_zero_of_le_zero (h ▸ Finset.card_le_univ _)
   simp [this]
 

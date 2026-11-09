@@ -1,4 +1,9 @@
-import Definitions.Pouw.H1Zy.Combine
+module
+
+public import Definitions.Pouw.H1Zy.Combine
+import Mathlib.Data.Finset.Attr
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.SetLike
 
 /-!
 # `PouwH1Combine_v1{TILE}` on bits (trusted)
@@ -17,6 +22,8 @@ They compose as on words (`Definitions.Pouw.H1Zy.Combine`): per word a `tree` of
 32 words that is `32 · 31 + 31 = 1,023` ANDs. `Proofs.Pouw.H1Zy.CombineBits` proves each piece's lowering computes its
 word view and `combineBits` computes `combineOk`.
 -/
+
+@[expose] public section
 
 namespace Pouw.H1Zy
 

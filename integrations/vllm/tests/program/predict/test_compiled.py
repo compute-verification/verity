@@ -1,14 +1,14 @@
 """verity_vllm.program.predict.compiled: each pinned model's predicted served-compiled Build is the Build traced on the pinned machine, from the
 model's config.json (`engine/profiles/hf_configs/`), its served pin (`verity_vllm/pins/served/`) and the device pin alone.
 
-The pinned digests are the served Builds of record on vy-glm53-s1 (one H200: cc 9.0, 132 SMs) over SCHEDULE (prompts of 100, 37, 9 and
-300 tokens capped at 14, 9, 8 and 6, arriving at steps 0, 0, 3 and 6): Llama-3.2-1B r20261018-062949-a32b, Qwen3-8B
-r20261018-062957-da83, Qwen3-30B-A3B r20261018-084657-c7f6, each Matched and Committed at that Build.  The served Commit with the
-predicted Build as Build of record passes for each: r20261018-105743-72a0, r20261018-115551-2b64 and r20261018-124350-5c89.  On
-vy-nebius-2 (one RTX PRO 6000: cc 12.0, 188 SMs) over the same SCHEDULE: Llama-3.2-1B r20261018-203256-0665 and Qwen3-8B
-r20261018-211943-d337, each Matched and Committed at that Build, and Qwen3-30B-A3B r20261024-092345-d136 (its rows declaring
-moe_backend triton), Matched at that Build.  On vy-dc-b200 (one B200: cc 10.0, 148 SMs, the rows declaring FLASH_ATTN
-FA2) over the same SCHEDULE: Llama-3.2-1B r20261019-000009-d8e9, Qwen3-8B r20261019-000518-c3cc and Qwen3-30B-A3B r20261019-030238-74d0
+The pinned digests are the served Builds of record on one H200 (cc 9.0, 132 SMs) over SCHEDULE (prompts of 100, 37, 9 and
+300 tokens capped at 14, 9, 8 and 6, arriving at steps 0, 0, 3 and 6): Llama-3.2-1B, Qwen3-8B
+and Qwen3-30B-A3B, each Matched and Committed at that Build.  The served Commit with the
+predicted Build as Build of record passes for each.  On
+one RTX PRO 6000 (cc 12.0, 188 SMs) over the same SCHEDULE: Llama-3.2-1B and Qwen3-8B,
+each Matched and Committed at that Build, and Qwen3-30B-A3B (its rows declaring
+moe_backend triton), Matched at that Build.  On one B200 (cc 10.0, 148 SMs, the rows declaring FLASH_ATTN
+FA2) over the same SCHEDULE: Llama-3.2-1B, Qwen3-8B and Qwen3-30B-A3B
 (its rows also declaring moe_backend triton), each Matched and Committed at that Build.  A library change that moves a Definition moves the traced digest too: trace the Build again (`served-match`), write
 its pin (`predict compiled-pin`) and pin both.
 """

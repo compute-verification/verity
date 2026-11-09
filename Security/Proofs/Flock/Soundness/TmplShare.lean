@@ -1,14 +1,29 @@
-import Proofs.Flock.Soundness.TmplUnit
-import Proofs.Flock.Soundness.TmplUnrollAt
+module
+
+public import Aesop.BuiltinRules
+public import Flock.Statement
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.Basic
+public import Mathlib.Tactic.ToAdditive
+public import Mathlib.Tactic.ToDual
+public import Proofs.Flock.Soundness.TmplUnit
+public import Proofs.Flock.Soundness.TmplUnrollAt
+import all Init.Util
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
 
 /-!
-# The templated unit's share is the flat slot's (PRF-133, part 3)
+# The templated unit's share is the flat slot's
 
 `Stmt.partialRangesT` folds a range whose net is a read template's unrolled net (`Stmt.unitShare`) with `Tmpl.foldUnit`
 instead of projecting the slot's `2^sl` base. Its entries are the projection's (`unitShare_get`, by `foldUnit_eq_project`
 on the template's own facts, `TmplUnit`), and the slot-type cache only spares work, so `partialRangesT` is `partialRanges`
 on any two caches of `slotBase`'s values (`partialRangesT_eq`).
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128
 

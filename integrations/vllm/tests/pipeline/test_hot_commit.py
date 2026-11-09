@@ -1,4 +1,4 @@
-"""[R16 sys, BRIEF §5] hot Commit worker: the key that decides what may share an engine, the client's cold fallback, the timeline
+"""hot Commit worker: the key that decides what may share an engine, the client's cold fallback, the timeline
 report's engine-start / reuse accounting.  Torch-free (the worker itself is exercised on a pod: cold vs hot vs hot roots)."""
 
 from __future__ import annotations
@@ -16,6 +16,8 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import hot as hc
 from verity_vllm.pipeline import research_tools, source_identity
 from verity_vllm.pipeline import timeline as tlm
+
+pytestmark = pytest.mark.usefixtures("outside_a_checkout")
 
 CORE = Path("verity")
 
@@ -161,7 +163,7 @@ def test_timeline_report_counts_starts_reuses_and_reasons(tmp_path):
 
 
 def test_timeline_report_defaults_to_the_last_row_attempt_of_an_append_only_file(tmp_path):
-    """[SYS-01c] row_pod appends every attempt to the same timeline.jsonl; the table is about the LAST attempt (one engine start, not the
+    """row_pod appends every attempt to the same timeline.jsonl; the table is about the LAST attempt (one engine start, not the
     sum of every rerun's), `--all` folds everything, and a file without a row envelope is one attempt."""
     p = tmp_path / "tl.jsonl"
     for reason in ("fresh process (one commit_delta per Commit stage)", "no live hot worker for this key"):

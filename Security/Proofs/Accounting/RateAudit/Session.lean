@@ -1,29 +1,69 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditHorizon
-import Definitions.Accounting.Guarantees.RateAuditNamed
-import Proofs.Accounting.RateAudit.Horizon
-import Proofs.Accounting.RateAudit.Named
+module
+
+public import Definitions.Accounting.Guarantees.RateAuditHorizon
+public import Definitions.Accounting.Guarantees.RateAuditNamed
+public import Proofs.Accounting.RateAudit.Horizon
+public import Proofs.Accounting.RateAudit.Named
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Accounting.RateAudit.Chain
+import Proofs.Accounting.RateAudit.Windows
+import Std.Tactic.BVDecide.Normalize.Prop
+import Proofs.Pous.Prob
 
 /-!
-# The pooled draw: windows and sessions, the proof
+# The pooled sample: windows and sessions, the proof
 
-**A window.** The window's draw of `d` openings is uniform over its `P·N` receipts and independent of its passes'
-coins: at each store and each value of those coins, the window's correct receipts are one fixed set, and the draw lands
-in it with probability `(#correct/(P·N))^d` (`Horizon.pr_sample'`, `Chain.pr_draw_le`).
+**A window.** The window's sample of `d` openings is uniform over its `P·N` receipts and independent of its passes'
+coins: at each store and each value of those coins, the window's correct receipts are one fixed set, and the sample lands
+in it with probability `(#correct/(P·N))^d` (`Horizon.pr_sample'`, `Chain.pr_sample_le`).
 
-**The horizon.** A session's windows are causal rounds over `M = P·N` items (`Rate.Causal`): window `w`'s correct
-receipts read the store, the earlier windows' coins, their draws among them, and its own passes' coins, never its own
-draw. `HorizonSampling` bounds the session's shortfall over its windows (`Session.pr_draws_le`).
+**The monitoring period.** A session's windows are causal rounds over `M = P·N` items (`Rate.Causal`): window `w`'s
+correct receipts read the store, the earlier windows' coins, their samples among them, and its own passes' coins, never
+its own sample. `PooledSampling` bounds the session's shortfall over its windows (`Session.pr_samples_le`).
 
 **The floor in every window.** Keep the first window whose correct receipts number at most `K_w` as it is and count
 every other window's receipts all good: still causal, since whether window `w` is the first short one reads only the
-windows up to `w`, and the good sets then hold at most `(n − 1)·M + K_w` items in all. `HorizonSampling` bounds it,
+windows up to `w`, and the good sets then hold at most `(n − 1)·M + K_w` items in all. `PooledSampling` bounds it,
 with no union over the windows (`Horizon.pr_floor_le`).
 
 **Paid.** A session with more than `K` correct receipts in all, or more than `K_w` in every window, whose reads fall
 short of those receipts' words leaves some window short (`Session.pr_unpaid_le`), and that window some pass, which
 `RatePaidNamedRO` bounds at the devices the earlier coins pick (`Session.pr_window_le`, then `Chain.pr_unpaid_le`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 
@@ -37,7 +77,7 @@ namespace Horizon
 theorem pr_sample' {α : Type} [Fintype α] (G : Finset α) (d : ℕ) :
     pr (fun I : Fin d → α => ∀ t, I t ∈ G) = ((G.card : ℝ≥0∞) / Fintype.card α) ^ d := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   have hG : Finset.univ.filter (fun I : Fin d → α => ∀ t, I t ∈ G) = Fintype.piFinset (fun _ => G) := by
     ext I
     simp [Fintype.mem_piFinset]
@@ -116,9 +156,9 @@ theorem card_correctAll (A : Chain P N b h ρ S L q r s) (E : Store N b) (ω : F
   rw [Finset.sum_boole]
   simp
 
-/-- **A window's pooled draw**: every opening lands on a correct receipt while the window holds at most `K`,
+/-- **A window's pooled sample**: every opening lands on a correct receipt while the window holds at most `K`,
 at most `(K/(P·N))^d`. -/
-theorem pr_draw_le (A : Chain P N b h ρ S L q r s) (d K : ℕ) :
+theorem pr_sample_le (A : Chain P N b h ρ S L q r s) (d K : ℕ) :
     pr (fun x : Store N b × WindowCoins P N b h ρ r s d =>
         (∀ t, x.2.2 t ∈ A.correctAll x.1 x.2.1) ∧ (A.correctAll x.1 x.2.1).card ≤ K)
       ≤ ((K : ℝ≥0∞) / (P * N)) ^ d := by
@@ -137,8 +177,8 @@ theorem pr_draw_le (A : Chain P N b h ρ S L q r s) (d K : ℕ) :
     rw [Horizon.pr_false]
     exact zero_le
 
-/-- A window's unpaid words from a per-pass bound, with its draw beside: at most `P·ε`. -/
-theorem pr_unpaid_draw_le {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : ℕ → Fin τ) (slack d : ℕ) (ε : ℝ≥0∞)
+/-- A window's unpaid words from a per-pass bound, with its sample beside: at most `P·ε`. -/
+theorem pr_unpaid_sample_le {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : ℕ → Fin τ) (slack d : ℕ) (ε : ℝ≥0∞)
     (hε : ∀ j η, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
         ∑ t, (A.device j η).tierReads tier t x.1 x.2.1 x.2.2 + (A.device j η).rebuilt x.1 x.2.1 x.2.2 * b + slack <
           ((A.device j η).correct x.1 x.2.1 x.2.2).card * b) ≤ ε) :
@@ -185,9 +225,9 @@ theorem pr_window_le (A : Session n P N b h ρ S L q r s d) (w : Fin n)
     rw [hη]
   simpa [e, hω, hc] using hy
 
-/-- **A session's pooled draws**: every window's openings land on correct receipts while the session holds at most
+/-- **A session's pooled samples**: every window's openings land on correct receipts while the session holds at most
 `K` in all or some window at most `K_w`. -/
-theorem pr_draws_le (A : Session n P N b h ρ S L q r s d) (K Kw : ℕ) :
+theorem pr_samples_le (A : Session n P N b h ρ S L q r s d) (K Kw : ℕ) :
     pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.chain w x.2).correctAll x.1 (x.2 w).1) ∧
           (∑ w, ((A.chain w x.2).correctAll x.1 (x.2 w).1).card ≤ K ∨
@@ -255,7 +295,7 @@ theorem pr_unpaid_le {τ : ℕ} (A : Session n P N b h ρ S L q r s d) (tier : �
             ((A.chain w x.2).correctAll x.1 (x.2 w).1).card * b) := pr_exists_le _
     _ ≤ ∑ _w : Fin n, (P : ℝ≥0∞) * ε := Finset.sum_le_sum (fun w _ => pr_window_le A w
           (fun C y => C.spent tier y.1 y.2.1 + P * slack < (C.correctAll y.1 y.2.1).card * b) _
-          (fun η => (A.window w η).pr_unpaid_draw_le tier slack d ε (hε w η)))
+          (fun η => (A.window w η).pr_unpaid_sample_le tier slack d ε (hε w η)))
     _ = (n : ℝ≥0∞) * (P * ε) := by rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
 end Session
@@ -269,21 +309,21 @@ open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_mono pr_or_le)
 
-/-- **A window's pooled draw** (`Accounting.Guarantees.RateWindowDraw`). -/
-theorem RateWindowDraw : Accounting.Guarantees.RateWindowDraw := by
+/-- **A window's pooled sample** (`Accounting.Guarantees.RateWindowSample`). -/
+theorem RateWindowSample : Accounting.Guarantees.RateWindowSample := by
   intro P N b h ρ S L q r s d K A
-  exact Chain.pr_draw_le A d K
+  exact Chain.pr_sample_le A d K
 
-/-- **A session's pooled draws: the horizon and every window** (`Accounting.Guarantees.RateSessionDraw`). -/
-theorem RateSessionDraw : Accounting.Guarantees.RateSessionDraw := by
+/-- **A session's pooled samples: the monitoring period and every window** (`Accounting.Guarantees.RateSessionSample`). -/
+theorem RateSessionSample : Accounting.Guarantees.RateSessionSample := by
   intro n P N b h ρ S L q r s d K Kw A
-  exact Session.pr_draws_le A K Kw
+  exact Session.pr_samples_le A K Kw
 
 /-- **The route `Sampled` for a session, with named words, with side sources that ignore the oracle**
 (`Accounting.Guarantees.RateSessionSampledNamedRO`). -/
 theorem RateSessionSampledNamedRO : Accounting.Guarantees.RateSessionSampledNamedRO := by
   intro n P N b h ρ S L q r s d K Kw lam τ tier A hA
-  have h₁ := Session.pr_draws_le A K Kw
+  have h₁ := Session.pr_samples_le A K Kw
   have h₂ := Session.pr_unpaid_le A tier (S + (L - ρ) + lam) _ (fun w η j ι =>
     (pr_mono (fun _ hx => by omega)).trans
       (RatePaidNamedRO N b h ρ S L q lam τ tier ((A.window w η).device j ι) (hA w η j ι)))

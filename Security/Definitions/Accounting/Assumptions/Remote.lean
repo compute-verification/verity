@@ -1,4 +1,38 @@
-import Definitions.Accounting.Remote
+module
+
+public import Definitions.Accounting.Remote
+public import Definitions.Accounting.Remote.Run
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The remote audit's named assumptions (trusted)
@@ -18,9 +52,11 @@ named `Prop` on a run:
 * `ZCost` is PoUW's conjecture as the receipt binds it: `z_b` bits of a prior tile's noised output `z` cost `W_tile` at
   PoUW's pricing, wherever and for whatever weights they are computed, except with probability `δ`.
 
-WorkHardness, the codec's cost of a partial completion, is lane ra-partial-lean's (`Accounting.Assumptions.WorkHardness`
-on its branch); the route it gives here is `Run.Rebuild`.
+WorkHardness, the codec's cost of a partial completion, is `Accounting.Assumptions.WorkHardness`; the route it gives
+here is `Run.Rebuild`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Remote.Assumptions
 

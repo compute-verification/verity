@@ -1,7 +1,15 @@
-import Proofs.Flock.Soundness.Refine.Opening
+module
+
+public import Proofs.Flock.Soundness.Refine.Opening
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Refine.Exec
+import Proofs.Flock.Soundness.Refine.Zerocheck
+import VCVio.Prelude.Core
 
 /-!
-# Ring switching's checks make the executable's ring-switch stage return (PROTOCOL.md §12)
+# Ring switching's checks make the executable's ring-switch stage return (`Flock.Opening`)
 
 The converse of `opening_refines`' first step. `ringSwitch_run`: when every claim's ring switch passes the verifier's
 value check (`dot w s == c.value`, Opening.lean:78), and the record holds ring switching's rounds from
@@ -16,6 +24,8 @@ a passing check changes nothing, a squeeze of `n ≠ 0` coins consumes the next 
 answers the framed bytes (Transcript.lean:75–90), and a loop whose every step yields returns the fold of its steps
 (`forIn_range_run`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

@@ -1,7 +1,14 @@
-import Proofs.Flock.Soundness.TmplFoldRef
+module
+
+public import Proofs.Flock.Level3.Fold
+public import Proofs.Flock.Soundness.TmplFoldRef
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.FoldedBase
+import Proofs.Flock.Level3.Nodes
 
 /-!
-# The template fold's arithmetic (PRF-133, part 3, stage 2)
+# The template fold's arithmetic
 
 What `Tmpl.foldDef` relies on besides the call tree:
 
@@ -10,6 +17,8 @@ What `Tmpl.foldDef` relies on besides the call tree:
 - `eqTail_at`, `eqTail_split`: the halves table read at `lo` is `eq(r[lo ..], ·)`, and `eq(r, u + 2^k v)` splits into
   `eq(r[0 .. k], u) · eq(r[k ..], v)`, the low and high factors of a summed class.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128
 

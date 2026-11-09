@@ -1,5 +1,8 @@
-import Proofs.Flock.Soundness.Assumptions
-import Proofs.Flock.Soundness.Game.Prob
+module
+
+public import Proofs.Flock.Soundness.Assumptions
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The collision-resistance assumptions have teeth
@@ -11,6 +14,8 @@ hash, and then assume nothing, or of none, and then make every theorem that take
 * both fail for a constant hash, at the finder that outputs two different strings after no evaluations
   (`not_strict_const`, `not_expected_const`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Teeth
 

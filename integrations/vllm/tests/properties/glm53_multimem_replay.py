@@ -28,8 +28,9 @@ from typing import Any
 import numpy as np
 
 from tests.properties import glm53_tp8_allreduce_capture_gpu as X
-from verity_vllm.program.registry import tp_allreduce as T
-from verity_vllm.program.registry import tp_allreduce_check as K
+from verity.ml.definitions.registry import tp_allreduce as T
+from verity.ml.definitions.registry import tp_allreduce_check as K
+from verity.ml.definitions.registry import tp_allreduce_nodes as TN
 
 OUT = "glm53_multimem_replay.json"
 #: vectors per Boolean evaluation, so a vector's every wire over them stays a few hundred MB
@@ -70,7 +71,7 @@ def launches(run: Path) -> tuple[list[dict[str, Any]], list[str]]:
         why = []
         if cov is None or cov.definition != "AllReduceMultimem_v1":
             why.append(f"route {setting!r} {route!r} at N={H} M={M} covers {cov and cov.definition!r}, not AllReduceMultimem_v1")
-        elif (T.multimem_trees(cov.statics["TREES"], X.WORLD) != T.multimem_trees(_tree(pins["trees"]), X.WORLD)
+        elif (TN.multimem_trees(cov.statics["TREES"], X.WORLD) != TN.multimem_trees(_tree(pins["trees"]), X.WORLD)
               or bool(cov.statics["FTZ"]) != pins["ftz"]):
             why.append(f"CAPTURED's trees and FTZ are not the record's pinned {pins['trees']} {pins['ftz']}")
         if c.get("comm") not in (None, route) or c.get("setting") not in (None, setting):
@@ -90,7 +91,7 @@ def boolean_rows(parts: np.ndarray, trees, ftz: bool) -> np.ndarray:
     """(WORLD, SIZE) words through `AllReduceMultimemVector_v2`, one instance per vector of each run of one tree."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation import bits as BS
-    from verity_vllm.program.registry import boolean_tp_allreduce as BA
+    from verity.ml.definitions.registry import boolean_tp_allreduce as BA
 
     W, size = parts.shape
     V = T.MULTIMEM_VECTOR
@@ -126,7 +127,7 @@ def replay_one(launch: dict[str, Any]) -> dict[str, Any]:
                differ={o: int((words != g).sum()) if words.size == size else size for o, g in got.items()})
     if launch["phase"] in X.PROBE_PHASES:
         dec = X.decode_probe(words, size)["trees"]
-        rec["decoded"] = {"trees": dec is not None and T.multimem_trees(dec, X.WORLD) == T.multimem_trees(trees, X.WORLD),
+        rec["decoded"] = {"trees": dec is not None and TN.multimem_trees(dec, X.WORLD) == TN.multimem_trees(trees, X.WORLD),
                           "ftz": X.decide_ftz(words, parts)["ftz"] == ftz}
     return rec
 

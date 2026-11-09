@@ -1,5 +1,14 @@
-import Mathlib.Tactic.IntervalCases
-import Proofs.Pouw.Fp8Atom.H1TAtomProofs
+module
+
+public import Definitions.Pouw.Fp8Atom.H1TLemmas
+public import Definitions.Pouw.Fp8Atom.H1TVectors
+public import Mathlib.Tactic.IntervalCases
+public import Proofs.Pouw.Fp8Atom.H1TAtomProofs
+public import Proofs.Pouw.Fp8Atom.Proofs
+import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.H1TProofs
 
 /-!
 # One slice: L1 to L3 (`H1TSlice`), the chain's monotonicity (`H1TChainMono`) and the range (`H1TRange`)
@@ -10,6 +19,8 @@ code's (`tag_facts`): a tag code has exponent field `fi + 10` and significand `8
 exponent is at most `fi + 13`, the grid `2^(E − 13)` is at most `2^fi`, and a tag product, `2^fi` times an integer, is
 on it (L2). A tag flip changes one code's sign only, so no product's magnitude or exponent moves (L1).
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T.Proofs
 
@@ -648,7 +659,7 @@ theorem h1tRange : H1TRange := by
   · have hq : (p : ℚ) + 1 ≤ 2 * U.T := by exact_mod_cast hp
     norm_num; nlinarith
 
-/-- X-M2-4 (a): the forming table's keys cover every slice. -/
+/-- The forming table's keys cover every slice. -/
 theorem h1tFormCover : H1TFormCover := floorF_index
 
 end Pouw.Fp8Atom.H1T.Proofs

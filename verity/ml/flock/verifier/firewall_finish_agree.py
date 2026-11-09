@@ -1,4 +1,4 @@
-"""The firewall's final round in Lean, on what a firewalled `flock-circuit prove --zk` session dumped (`FC_FINISH_DUMP`):
+"""The ZK server's final round in Lean, on what a firewalled `flock-circuit prove --zk` session dumped (`FC_FINISH_DUMP`):
 the session's Lean finish (`Flock.Firewall.Finish`, the session loop's, `Finish.serveLoop`) held the device's opening and
 the inner proof's rounds itself (`open`, `inner`) and wrote each rep's proof file, and `flock-firewall finish` on the
 dumped requests.
@@ -7,14 +7,16 @@ dumped requests.
 
 `DIR` holds, per firewalled table `T`, `table{T}.req` (its level-0 request, `flock-firewall finish`'s `table`),
 `table{T}.root` (the root of record, the Lean loop's) and `table{T}.finish_root` (the session's Lean finish's); and per rep
-`R`, `table{T}-rep{R}.req` (`Finish.parseRep`'s request, with the coins of every round the session answered) and
-`table{T}-rep{R}.lean` (the session's Lean finish's proof file, on salts for levels ≥ 1 it drew itself and the prover's
-trees took). Each table's two roots must be one, and each rep must have left its proof file (whether the verifier accepts
-the session is `firewall_finish_agree.sh`'s check; a replay cannot repeat the file, whose salts the finish drew from the
-OS). Then one `flock-firewall finish FINISH_ARG...` process (the session's statement: `--circuit`, `--public`, `--draw`
-its `session.json`, ...) gets every table's request, answered with the root of record. Each rep's request with its passed
+`R`, `table{T}-rep{R}.req` (`Finish.parseRep`'s request: the passed values, the extra claims and the coins of every round
+the session answered; never the rep's samples, which stay in the loop) and `table{T}-rep{R}.lean` (the session's Lean
+finish's proof file, on the rep's frame's samples and on salts for levels ≥ 1 it sampled itself and the prover's trees took).
+Each table's two roots must be one, and each rep must have left its proof file (whether the verifier accepts the session
+is `firewall_finish_agree.sh`'s check; a replay cannot repeat the file, whose samples and salts were sampled from the OS).
+Then one `flock-firewall finish FINISH_ARG...` process (the session's statement: `--circuit`, `--public`, `--draw` its
+`session.json`, ...) gets every table's request, answered with the root of record. Each rep's request with its passed
 values moved (`table{T}-rep{R}.vals` says where they sit), in a process of its own after its table and its salts
-(`salts T R`), must stop `finish` with no file: a constraint fails on the rep's pads (`stopped`). Every round in a
+(`salts T R`, where that finish samples the rep's samples itself), must stop `finish` with no file: a constraint fails on the
+rep's pads (`stopped`). Every round in a
 device round's place is the session loop's own (`Flock.Firewall.Frames`, on `Skeleton.rounds` and `Drive.openStep`), so there is no schedule of
 the prover's to hold to it. Writes DIR/result.json; exits 1 on any disagreement.
 """

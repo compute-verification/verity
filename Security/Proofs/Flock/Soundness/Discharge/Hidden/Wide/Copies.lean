@@ -1,4 +1,21 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Flat
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Flat
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hm.Nets
 
 /-!
 # Δ's copies at the rows, for `sha512/row/v1` and `sha512/row/v2` rows
@@ -11,6 +28,8 @@ compressions' messages from block `bits / 1024` on. The rows' wires (`rowWires_a
 `hm96` wire. Every copy into template instance `g`'s row `p` lands in that row's slots (`Dst`), and distinct rows' slots
 are distinct (`dst_inj`), so Δ's copies at a column of row `p` are row `p`'s (`filter_rows`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

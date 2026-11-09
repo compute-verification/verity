@@ -1,33 +1,38 @@
-import Mathlib.LinearAlgebra.FiniteDimensional.Lemmas
-import Definitions.Pouw.NCP.Relation
+module
+
+public import Definitions.Pouw.NCP.Relation
+public import Mathlib.LinearAlgebra.Dimension.Finrank
+public import Mathlib.LinearAlgebra.FiniteDimensional.Lemmas
 
 /-!
 # Theorem D: the dimension bound in AlgM_16 (trusted statements)
 
-`docs/pouw/milder-assumptions.md` §2 and §5 (a Sketch there), with the red team's statement fixes TD-1 to TD-3
-(`red-team.md`, Phase 6). A program of AlgM is straight-line and noise-oblivious: a list of instructions, and the
-constants of its free instructions, fixed before the salt. Its slots are functions of the noise `ω = (E₁, F₁)` on the
-whole grid (`Noise`: every entry in `[−31, 32]`): first its inputs `L`, then one slot per instruction.
+`docs/pouw/milder-assumptions.md` §2 and §5 (a Sketch there). A program of AlgM is straight-line and noise-oblivious: a
+list of instructions, and the constants of its free instructions, fixed before the salt. Its slots are functions of the
+noise `ω = (E₁, F₁)` on the whole grid (`Noise`: every entry in `[−31, 32]`): first its inputs `L`, then one slot per
+instruction.
 
-* **Adaptive inputs (TD-1).** `F₁` and `R` are public before `A` is committed, so `A` is any function `g(F₁)` (for the
-  fixed `R` and salt), quantified. `B` does not depend on `F₁`: it is committed before `F₁` is drawn. The inputs `L`
+* **Adaptive inputs.** `F₁` and `R` are public before `A` is committed, so `A` is any function `g(F₁)` (for the
+  fixed `R` and salt), quantified. `B` does not depend on `F₁`: it is committed before `F₁` is sampled. The inputs `L`
   are any functions in `V₀` (`V0`): the constants, the noise coordinates and every function of `F₁` (so of `F₁`, `R`
   and `A`), all free.
 * `free c w` outputs `c + Σ_{s < len} w_s·slot_s`, an exact ℚ-linear combination of the earlier slots and a constant,
   at no cost. This is more generous than W1, which prices adds; it gives every `E·B` term for nothing.
 * `priced p f` outputs any function `f` of the noise, at price `p`. A function of the earlier slots is a function of
   the noise, so this is at least as strong as the survey's 'any function of the earlier slots'.
-* **Registers (TD-3).** A slot is one 32-bit register written by one instruction; an instruction that writes several
+* **Registers.** A slot is one 32-bit register written by one instruction; an instruction that writes several
   registers is several instructions, one per register. Predicates are not slots: a free instruction reads only
   register slots, so an instruction whose output depends on a predicate other than ℚ-linearly is priced. `H16`
   prices every priced register write at 16 or more.
-* **Integer semantics (TD-2).** A program outputs a word when some slot's ℚ value equals the checked word's integer
+* **Integer semantics.** A program outputs a word when some slot's ℚ value equals the checked word's integer
   value at every grid point. The checked words are the integer ones (`Pouw.NCP.Relation.checked`); their link to
   the protocol's mod-`2^32` words is `int7Int32` (`AlgBoundWrapped`).
 
 The targets are the non-final checked words (depth `16·(τ + 1)` for `τ < 3k/16 − 1`) of a set `U` of the `N` units
 that share one `F₁`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 
@@ -83,7 +88,7 @@ def coords (N m n k : ℕ) : List (Noise N m n k → ℚ) :=
 def fnF (N m n k : ℕ) : Submodule ℚ (Noise N m n k → ℚ) :=
   Submodule.span ℚ {φ | ∀ ω ω' : Noise N m n k, ω.2 = ω'.2 → φ ω = φ ω'}
 
-/-- `V₀` (TD-1): the free values, the affine functions of the noise plus every function of `F₁`. -/
+/-- `V₀`: the free values, the affine functions of the noise plus every function of `F₁`. -/
 def V0 (N m n k : ℕ) : Submodule ℚ (Noise N m n k → ℚ) := span1 (coords N m n k) ⊔ fnF N m n k
 
 /-- The non-final positions of a unit: `3k/16 − 1` checkpoints of `m·n` entries. -/
@@ -100,7 +105,7 @@ def Outputs (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ 
     (P : List (Instr (Noise N m n k))) (L : List (Noise N m n k → ℚ)) : Prop :=
   ∀ u ∈ U, ∀ p < nonFinal k m n, word k m n N R A B u p ∈ slots P L
 
-/-- **MinRank ≥ 2** (TD-5): no combination `Σ_τ q_τ·M_τ` of the non-final checkpoint matrices is a nonzero rank-1
+/-- **MinRank ≥ 2**: no combination `Σ_τ q_τ·M_τ` of the non-final checkpoint matrices is a nonzero rank-1
 matrix `x·yᵀ` on `{0, …, k − 1}²`. -/
 def MinRank2 (k : ℕ) (R : Mat) : Prop :=
   ∀ q x y : ℕ → ℚ,
@@ -142,16 +147,16 @@ def AlgBound : Prop :=
     CheckpointIndependent k 16 R → U ⊆ range N → (∀ f ∈ L, f ∈ V0 N m n k) → H16 P → Outputs k m n N R A B U P L →
     16 * (U.card * (m * n) * (3 * k / 16 - 1)) ≤ cost P
 
-/-- **TT_NCP in AlgM_16** at `γ₀ = 16/(3k)`, in the shape of TT_NCP's event (`Pouw.NCP.Assumptions.TTNCP`, used by
-`gammaFromTTNCP`): for every `γ₀ ∈ [16/(3k), 1)`, a program of AlgM_16 on inputs in `V₀` that outputs the non-final
-checked words of the units in `U`, for any `A = g(F₁)`, never has `cost/(1 − γ₀) < Σ_{u ∈ U} 3·W_mm`, with
+/-- **TT_NCP in AlgM_16** at `g₀ = 16/(3k)`, in the shape of TT_NCP's event (`Pouw.NCP.Assumptions.TTNCP`, used by
+`gapFromTTNCP`): for every `g₀ ∈ [16/(3k), 1)`, a program of AlgM_16 on inputs in `V₀` that outputs the non-final
+checked words of the units in `U`, for any `A = g(F₁)`, never has `cost/(1 − g₀) < Σ_{u ∈ U} 3·W_mm`, with
 `W_mm = m·k·n`. The event is impossible, not only unlikely: correctness is on the whole grid. -/
 def TTNCPAlg : Prop :=
   ∀ (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
-    (L : List (Noise N m n k → ℚ)) (P : List (Instr (Noise N m n k))) (γ₀ : ℝ),
+    (L : List (Noise N m n k → ℚ)) (P : List (Instr (Noise N m n k))) (g₀ : ℝ),
     16 ∣ k → 0 < k → CheckpointIndependent k 16 R → U ⊆ range N → (∀ f ∈ L, f ∈ V0 N m n k) → H16 P →
-    Outputs k m n N R A B U P L → 16 / (3 * k : ℝ) ≤ γ₀ → γ₀ < 1 →
-    ¬ ((cost P : ℝ) / (1 - γ₀) < ∑ _u ∈ U, 3 * ((m * k * n : ℕ) : ℝ))
+    Outputs k m n N R A B U P L → 16 / (3 * k : ℝ) ≤ g₀ → g₀ < 1 →
+    ¬ ((cost P : ℝ) / (1 - g₀) < ∑ _u ∈ U, 3 * ((m * k * n : ℕ) : ℝ))
 
 /-- **Theorem D's hypotheses hold jointly, and its bound is attained**: for every `k ≥ 1024` with `16 ∣ k`, every
 shape, `A = g(F₁)`, `B` and unit set, some `R` passes `Admissible` and is checkpoint independent (the shift by 24,
@@ -164,12 +169,12 @@ def AlgWitness : Prop :=
       (∀ f ∈ coords N m n k, f ∈ V0 N m n k) ∧ H16 P ∧ Outputs k m n N R A B U P (coords N m n k) ∧
       cost P = 16 * (U.card * (m * n) * (3 * k / 16 - 1))
 
-/-- **`γ₀ = 16/(3k)` is sharp in AlgM_16**: for every `γ₀ < 16/(3k)`, with at least one unit and `m·n > 0`, the
+/-- **`g₀ = 16/(3k)` is sharp in AlgM_16**: for every `g₀ < 16/(3k)`, with at least one unit and `m·n > 0`, the
 program of `AlgWitness` makes TT_NCP's event hold, for every `R`, `A` and `B`. -/
 def AlgSharp : Prop :=
-  ∀ (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ) (γ₀ : ℝ),
-    16 ∣ k → 0 < k → U ⊆ range N → U.Nonempty → 0 < m * n → γ₀ < 16 / (3 * k : ℝ) →
+  ∀ (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ) (g₀ : ℝ),
+    16 ∣ k → 0 < k → U ⊆ range N → U.Nonempty → 0 < m * n → g₀ < 16 / (3 * k : ℝ) →
     ∃ P : List (Instr (Noise N m n k)), H16 P ∧ Outputs k m n N R A B U P (coords N m n k) ∧
-      (cost P : ℝ) / (1 - γ₀) < ∑ _u ∈ U, 3 * ((m * k * n : ℕ) : ℝ)
+      (cost P : ℝ) / (1 - g₀) < ∑ _u ∈ U, 3 * ((m * k * n : ℕ) : ℝ)
 
 end Pouw.Dimension

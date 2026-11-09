@@ -1,4 +1,4 @@
-"""[R15 tp, coord M-0481 C2 form (B), TP family] TPPartialSource.compare_match_oracle: every committed TP partial / MoE received output of a
+"""TPPartialSource.compare_match_oracle: every committed TP partial / MoE received output of a
 rank == the tp2_match capture recorder's stored collective input / output at the same (step, k), bit-for-bit, exhaustively over the family.
 Needs torch (torch.save/load of the oracle steps); CPU only.
 
@@ -26,6 +26,7 @@ import pytest
 torch = pytest.importorskip("torch")
 from tests.check.opened import commit_steps, meta, retained_block  # noqa: E402
 from verity_vllm.check import oracle_compare as OC  # noqa: E402
+from verity_vllm.commit.step_rows import ROW_BYTES  # noqa: E402
 from verity_vllm.acquire.sources import oracle_witness as OW  # noqa: E402
 from verity_vllm.acquire.sources import partial_source as tps  # noqa: E402
 
@@ -125,7 +126,7 @@ def test_committed_step_without_a_stored_oracle_fails(tmp_path):
     assert r["verdict"] == "FAIL" and r["steps_without_oracle"] == [1] and r["steps_compared"] == 1 and r["equal"] == 3
 
 
-# ---------------------------------------------------------------------------------------------- rev-pm M-0585 TIP1 / TIP2 / TIP3
+# ---------------------------------------------------------------------------------------------- the oracle comparison's three refusals
 
 def test_tip1_oracle_step_the_committer_never_reached_fails_named(tmp_path):
     """N-A: the oracle stored steps 0 and 1 but the committer only reached step 0 -> exhaustive in both directions, FAIL naming step 1."""
@@ -166,7 +167,7 @@ def test_a_member_changed_in_the_retained_copy_after_the_commit_is_not_verified_
     """On the TP path: after the commit the rank's retained copy of the MoE received output is overwritten with another tensor's bytes,
     and the oracle agrees with the overwrite -- a compare of the committer's memory would PASS 3/3.  The opening of that member does not
     verify against the rank's run root: not_verified, FAIL by name; the members in other leaves still compare equal."""
-    p0, p1, o0, o1 = _tensors(rows=16)                                         # 256 B each: one leaf per member
+    p0, p1, o0, o1 = _tensors(rows=ROW_BYTES // 16)                            # a row each: one leaf per member
     src, rd = _src({0: [_meta(f"{OPROJ}/part_rank0", p0), _meta(f"{MOE}/part_rank0", p1), _meta(f"{MOE}/out", o1)]})
     m = meta(src.c, 0, f"{MOE}/out")
     retained_block(src.c, 0)[m.dev_off:m.dev_off + m.nbytes] = torch.frombuffer(bytearray(tps._bytes(o0)), dtype=torch.uint8)

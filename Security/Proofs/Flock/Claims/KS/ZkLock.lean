@@ -1,4 +1,39 @@
-import Proofs.Flock.Claims.KS.ZkSim
+module
+
+public import Proofs.Flock.Claims.KS.ZkSim
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Monotonicity.Lemmas
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Presheaf
 
 /-!
 # The masked simulator, message by message, and its abort
@@ -11,9 +46,11 @@ simulator's live outcome is `P`'s roots, the live link points, the rounds of its
 last message (`zk_liveOut_known`, `zkSim_liveOut`).
 
 * **The abort** (`zkSimAbortAt`): where `P`'s run at `zkΦ`'s coins is rejected that last message is empty
-  (`zkSim_proofs_nil`), and the verdict at the draw refuses an outcome without proof files (`not_accTxJ_nil`), so
+  (`zkSim_proofs_nil`), and the verdict at the sample refuses an outcome without proof files (`not_accTxJ_nil`), so
   `ZkSimAbortAt` holds at every statement.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -29,7 +66,7 @@ theorem zk_stepWith_acc_iff {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Cla
     (v₁ v₂ : List Claims.Msg → Claims.OC Claims.Out) (K : ℕ)
     (hlt : ∀ bs : List Claims.Msg, bs.length < K → v₁ bs = v₂ bs)
     (heq : ∀ bs : List Claims.Msg, bs.length = K → (((v₁ bs).eval H).1 = .acc ↔ ((v₂ bs).eval H).1 = .acc)) :
-    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Trace),
+    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
       as.length + n = K →
       ((Claims.stepWith H P x ω v₁ n hist as t).out = .acc ↔ (Claims.stepWith H P x ω v₂ n hist as t).out = .acc) := by
   intro n
@@ -736,7 +773,7 @@ theorem zkSim_liveOut {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec 
 
 /-! ## The abort -/
 
-/-- **The verdict at the draw refuses an outcome without proof files**: what `wrS` writes has the outcome's proof
+/-- **The verdict at the sample refuses an outcome without proof files**: what `wrS` writes has the outcome's proof
 files wherever `verify --zk` accepts it (`recordsLiveAtS_wrS`), and `verify --zk` refuses none (`not_acceptsAt_nil`). -/
 theorem not_accTxJ_nil (I : Discharge.Exec.Inputs) (d : Lean.Json) (j₀ : ℕ) (rootB₀ : Array ByteArray) {N : ℕ}
     (C : Fin N → List 𝔽) {J mPts : ℕ} {o : LiveOutJ J mPts} (h : o.proofs = #[]) : ¬ AccTxJ I d j₀ rootB₀ C o := by

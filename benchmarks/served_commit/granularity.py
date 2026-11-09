@@ -1,33 +1,33 @@
-"""The Call boundaries a coarser proof unit would keep, from a served Build's request Programs: per Call (what the Commit's Call
+"""The Call boundaries a coarser proof block would keep, from a served Build's request Programs: per Call (what the Commit's Call
 boundaries are), per block (a decoder layer's attention block and its MLP block) and per layer, each at one token; per kept boundary
 its bytes, and per granularity the bytes and the hashing time they leave at the rows-sha512 floor.  Reads the Build only; measurement
-only, for PRF-62 (what per-layer units cost the proof); nothing here is a scheme.
+only, for what per-layer proof blocks would cost the proof; nothing here is a scheme.
 
     python granularity.py BUILD/build_request [BUILD/build_request_LP*_T* ...] [--json OUT.json]
                           (--rate-256, --rate-4k: the floor in GB/s at 256-byte and 4 KiB rows)
 
 A request Program (`descriptor.json.gz`) is its root body: the prescribed inputs, then one Call per op per token row (the attention
 Call at one query position).  Each Call's owning module is the Build's runtime correspondence (`call_name_of`; the descriptor's
-`node_hints` when the Build has none).  The units:
+`node_hints` when the Build has none).  The proof blocks:
 
-  call    every Call its own unit: every leaf one Call reads of another is kept.
+  call    every Call its own proof block: every leaf one Call reads of another is kept.
   block   a decoder layer's attention block and its MLP block, at one token.  The attention block is the layer's children (in Program
           order) up to the one whose Calls read other tokens' values (self-attention), so its input norm too; the MLP block is the
           rest, the post-attention norm and the MLP or MoE block.  A Call of the layer's own body is the MLP block's when it reads a
           value of the MLP block or of the attention child (a residual add after attention), else the attention block's.
   layer   a decoder layer at one token: what crosses is the residual stream between layers and the K and V that later tokens'
           attention reads.
-  layer-folded  the layer unit with the residual stream folded: a layer hands the next layer (or the final norm) one hidden vector
+  layer-folded  the layer proof block with the residual stream folded: a layer hands the next layer (or the final norm) one hidden vector
           per token, the sum of its output and its residual, instead of the two the next layer's fused add-norm reads; per layer
           and token the larger of what the next layer reads of each producer.  The same values only when every reader of the two
           reads them through their sum in the stream's dtype (`folded_readers` names the Definitions; vLLM's CUDA fused add-norm
           rounds the sum and normalizes that, its native one, which Inductor compiles, normalizes the fp32 sum).
 
 A decoder layer is a ModuleList element: a Call's module path up to its first numeric component.  A module outside every layer (the
-embedding, the final norm, the logits, the sampler) is its own unit at each token.  A Call's token is its embedding Call's: a Call
+embedding, the final norm, the logits, the sampler) is its own proof block at each token.  A Call's token is its embedding Call's: a Call
 reading one token's values is that token's, and attention, which reads the K and V of every earlier token, is its latest producer's
-(causal).  A token's step is its embedding Call's fx node (one per engine step).  A leaf is kept when a Call of another unit reads it,
-or when the Program returns it; its bytes are its declared width.  Hash ms is bytes over the floor's rate, without per-step padding.
+(causal).  A token's step is its embedding Call's fx node (one per engine step).  A leaf is kept when a Call of another proof block
+reads it, or when the Program returns it; its bytes are its declared width.  Hash ms is bytes over the floor's rate, without per-step padding.
 """
 from __future__ import annotations
 
@@ -49,13 +49,13 @@ def load(build_dir: str):
     from verity.ml.circuits.codec import decode_program
     from verity.ml.circuits.program import is_input
     from verity.ml.circuits.refs import runs
+    from verity.ml.definitions.registry.catalog import load as load_registry
     from verity_vllm.correspondence.reader_for_query import call_name_of, parse_call_name
     from verity_vllm.correspondence.runtime import RuntimeCorrespondence
-    from verity_vllm.query.program_view import _registry
 
     with gzip.open(Path(build_dir) / "descriptor.json.gz", "rt") as f:
         desc = json.load(f)
-    reg, _errors = _registry()
+    reg, _errors = load_registry()
     body = decode_program(desc, reg).defs[desc["root"]].body
     K = 0
     while K < len(body.nodes) and body.nodes[K].form == "batch" and is_input(body.nodes[K].fn):
@@ -84,13 +84,14 @@ def layer_of(module: str) -> tuple[str | None, str]:
 
 
 def analyze(build_dir: str, rates: dict[int, float]) -> dict:
+    from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.refs import runs
-    from verity_vllm.query.program_view import _spec_id, ports_of_type
+    from verity_vllm.query.program_view import ports_of_type
 
     calls, names, K, ret, source = load(build_dir)
     n = len(calls)
     reads = [[(r[1] - K, r[2], r[3]) for a in c.args for r in runs(a.refs) if r[0] == "n" and r[1] >= K] for c in calls]
-    family = [_spec_id(c.fn).split("{")[0] for c in calls]
+    family = [descriptor_id(c.fn).split("{")[0] for c in calls]
     module = [nm.module for nm in names]
     layer, child = zip(*(layer_of(m) for m in module)) if n else ((), ())
 
@@ -265,8 +266,8 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("builds", nargs="+", help="request Program dirs of a Build (each holds descriptor.json.gz)")
     ap.add_argument("--json")
-    ap.add_argument("--rate-256", type=float, default=66.12, help="GB/s, rows_floor minb2 at 256-byte rows (r20261017-234343-61c6)")
-    ap.add_argument("--rate-4k", type=float, default=230.61, help="GB/s, rows_floor minb2 at 4 KiB rows (r20261017-234343-61c6)")
+    ap.add_argument("--rate-256", type=float, default=66.12, help="GB/s, rows_floor minb2 at 256-byte rows")
+    ap.add_argument("--rate-4k", type=float, default=230.61, help="GB/s, rows_floor minb2 at 4 KiB rows")
     a = ap.parse_args()
     res = []
     for b in a.builds:

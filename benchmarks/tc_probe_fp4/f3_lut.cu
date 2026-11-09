@@ -1,4 +1,4 @@
-// F3 (lane pouw rtx-pro GPU 4): LUT-GEMM over the 16-code E2M1 alphabet with tables from the weights, against dense NVFP4 on
+// F3: LUT-GEMM over the 16-code E2M1 alphabet with tables from the weights, against dense NVFP4 on
 // sm_120a, bit for bit.
 //
 // The weights are fixed (preprocessing/fixed-weights), so every table is built on the host.  Table width (G, C): one table per

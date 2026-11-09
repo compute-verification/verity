@@ -1,5 +1,26 @@
-import Proofs.Properties.Nci.Resolve
-import Proofs.Properties.Nci.Width
+module
+
+public import Proofs.Properties.Nci.Resolve
+public import Proofs.Properties.Nci.Width
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Properties.Nci.Lemmas
+import Std.Data.HashSet.Lemmas
 
 /-!
 # The novel reads, from what `Desc.analyze` and `Desc.novelWidth` compute
@@ -8,27 +29,29 @@ Toward `NovelExact`. A segment names gates with their widths (`Width.segGates`).
 collects, per IU, the segments its root nodes read whose first piece is in a root node of another IU and outside θ's
 nodes (`intoOf_spec`), and `NciCheck.ius` sums the widths of the gates outside an IU that its gates read, θ's taken out
 (`ius_snd`, `hashSet_fold_sum'`), and `Desc.novelWidth` sums the widths of the distinct gates of those segments
-(`Width.novelWidthExact`). So `NovelExact` holds wherever one smaller statement does, a named `Prop` here, open
+(`Width.novelWidthExact`). So `NovelExact` holds wherever one smaller statement does, a named `Prop` here
 (`novelExact_of`): `ReadsExact`, that on a Program `Desc.evaluate` reads, the segments `Desc.analyze` gives a root node
 name, as gates with their widths, exactly the gates outside the node that its gates read, each in the root node of its
-segment's first piece.
+segment's first piece. `readsExact` (`Proofs.Properties.Nci.Agrees`) proves it.
 
 `descAgrees_of_open` gives `DescAgrees` from it, `Walk.OperandsResolve` and `Resolve.BodiesOk`, and
 `descAgrees_of_readsExact` (`Proofs.Properties.Nci.Agrees`) from it alone, the other two proved.
 -/
 
+@[expose] public section
+
 namespace NciCheck.Properties.SecurityProofs.Novel
 
 open DescAgree
-open Flock.Program (Prog)
+open Flock.Program (Prog GateTable)
 open Width (pieceGates piecesGates segGates segsGates dedup_sum)
 
-/-- **Open: `analyze`'s reads are the unrolled operands outside each root node.** On a Program `Desc.evaluate` reads,
+/-- **`analyze`'s reads are the unrolled operands outside each root node.** On a Program `Desc.evaluate` reads,
 with `NciCheck.circuitOf`'s circuit `c`: every gate a segment of root node `k`'s reads names (one of positive count) is a
 gate `a` of width `c.w[a]` in the root node `Desc.nodeOf` finds for the segment's first piece; and those gates are
 exactly the gates outside node `k` that its gates read. -/
 def ReadsExact : Prop :=
-  ∀ (bytes : ByteArray) (P : Prog) (reads : Array (Array Desc.Seg)) (c : Circuit),
+  ∀ (bytes : ByteArray) (P : Prog) (reads : Array (Array Desc.Seg)) (c : GateTable),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
     Desc.inputsAtRoot P = true → Desc.walkable P = true → Desc.analyze P = .ok reads → circuitOf P = .ok c →
     ∀ k < nodeCount P,
@@ -202,7 +225,7 @@ theorem hashSet_fold_sum' (S : Std.HashSet ℕ) (p : ℕ → Bool) (f : ℕ → 
   have hnd : S.toList.Nodup := Std.HashSet.distinct_toList.imp fun h => by simpa using h
   rw [← List.sum_toFinset _ hnd]
 
-theorem ius_snd (c : Circuit) (dv : Division) {u : ℕ} (hu : u < dv.n) :
+theorem ius_snd (c : GateTable) (dv : Division) {u : ℕ} (hu : u < dv.n) :
     (ius c dv)[u]!.2 = (tally c dv)[u]!.2.fold (fun x a => if dv.theta.contains a then x else x + c.w[a]!) 0 := by
   have hs := (tally_spec c dv).1
   rw [getElem!_pos (ius c dv) u (by simp [ius, hs, hu]), getElem!_pos (tally c dv) u (by rw [hs]; exact hu)]

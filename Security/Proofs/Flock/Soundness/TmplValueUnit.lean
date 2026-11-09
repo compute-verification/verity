@@ -1,9 +1,28 @@
-import Proofs.Flock.Soundness.TmplValue
-import Proofs.Flock.VBridge.Unit
-import Flock.TmplComputes
+module
+
+public import Proofs.Flock.Soundness.TmplValue
+public import Proofs.Flock.VBridge.Unit
+public import Flock.TmplComputes
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.ExecRows
+import VCVio.Prelude.Core
 
 /-!
-# A templated unit of a partition computes its Definitions at its local evaluation (PRF-133)
+# A templated unit of a partition computes its Definitions at its local evaluation
 
 Let unit `u` of a partition be an instance of `k` stacked copies of the audit's `Rows` of the net `Tmpl.unroll` builds
 (`Rows.ofNet`, `Rows.stack`), as a session's instance unit is of its circuit's unit net. At any transcript `X`, copy `i`'s
@@ -16,11 +35,13 @@ spec (`Tmpl.DefComputes`) carries that spec of the local evaluation at its bound
 (`unit_computes`). No verifier path reads this file.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.TmplValue
 
 open Flock Flock.Tmpl FlockSoundness.Audit
 
-variable {C : Audit.Circuit} {m : ℕ} {P : Partition C m} {u : Fin m} {t : Tmpl} {net : Net} {k : ℕ}
+variable {C : Verity.Boolean.Circuit} {m : ℕ} {P : Partition C m} {u : Fin m} {t : Tmpl} {net : Net} {k : ℕ}
 
 /-- A copy's constant column carries the transcript's value at the stack's constant. -/
 theorem copyVal_const (h : Flock.Tmpl.unroll t = .ok net) (I : P.IsRowsUnit u ((Rows.ofNet (unroll_built h)).stack k))
@@ -57,6 +78,27 @@ theorem unit_eval (hwf : t.wellFormed = true) (ha : t.apart = true) (ho : t.orde
   rw [← copyVal_const h I X hi]
   exact unroll_eval hwf ha ho h hu hs hc hb hj hw y hy
 
+/-- **A copy of a computing Definition carries its spec**: column values `f` that take, at the copy's columns, its
+Definition's value on `f` at its bound inputs, with the constant at 1, are on `e`'s columns `outs` `spec` of `f` at
+those inputs, when the copy is bound to as many inputs as `e` has and `e` computes `spec` on `outs`. -/
+theorem computes_of_eval {e o : ℕ} {inp : List ℕ} {f : ℕ → Bool} (hlen : inp.length = (t.defs.getD e default).ins)
+    (hev : ∀ y < (t.defs.getD e default).cols, f (o + y) = t.evalDef e (inp.map f) true y)
+    {outs : List ℕ} {spec : (ℕ → Bool) → List Bool} (hD : t.DefComputes e outs spec)
+    (hout : ∀ q < outs.length, outs.getD q 0 < (t.defs.getD e default).cols) :
+    ∀ q < outs.length, f (o + outs.getD q 0) = (spec fun x => f (inp.getD x 0)).getD q false := by
+  intro q hq
+  rw [hev _ (hout q hq)]
+  have hinp : inp.map f = (List.range (t.defs.getD e default).ins).map fun x => f (inp.getD x 0) := by
+    apply List.ext_getElem
+    · simp [hlen]
+    · intro n h1 _
+      have hn : n < inp.length := by simpa using h1
+      simp only [List.getElem_map, List.getElem_range]
+      rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hn]
+      rfl
+  rw [hinp]
+  exact hD _ q hq
+
 /-- **Every copy of a computing Definition in a templated unit carries its spec**: with the stack's constant at 1, at
 every copy of Definition `e` placed under one of the root's calls past the input rows, at any depth, the unit's local
 evaluation on `e`'s columns `outs` is `spec` of the local evaluation at the copy's bound inputs, when `e` computes `spec`
@@ -72,22 +114,12 @@ theorem unit_computes (hwf : t.wellFormed = true) (ha : t.apart = true) (ho : t.
     {outs : List ℕ} {spec : (ℕ → Bool) → List Bool} (hD : t.DefComputes e outs spec)
     (hout : ∀ q < outs.length, outs.getD q 0 < (t.defs.getD e default).cols) :
     ∀ q < outs.length, FlockVBridge.copyVal I X hi (o + outs.getD q 0) =
-      (spec fun x => FlockVBridge.copyVal I X hi (inp.getD x 0)).getD q false := by
-  intro q hq
-  have hlen : inp.length = (t.defs.getD e default).ins :=
-    Flock.TmplValue.within_ins (Flock.TmplValue.wf_getD hwf) hw
-      (Flock.TmplValue.call_bound_length (Flock.TmplValue.wf_getD hwf t.root) hc _ j)
-  rw [unit_eval hwf ha ho h hu I X hi hc hb hj hw _ (hout q hq), hone]
-  have hinp : inp.map (FlockVBridge.copyVal I X hi) = (List.range (t.defs.getD e default).ins).map
-      fun x => FlockVBridge.copyVal I X hi (inp.getD x 0) := by
-    apply List.ext_getElem
-    · simp [hlen]
-    · intro n h1 _
-      have hn : n < inp.length := by simpa using h1
-      simp only [List.getElem_map, List.getElem_range]
-      rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hn]
-      rfl
-  rw [hinp]
-  exact hD _ q hq
+      (spec fun x => FlockVBridge.copyVal I X hi (inp.getD x 0)).getD q false :=
+  computes_of_eval (f := FlockVBridge.copyVal I X hi)
+    (Flock.TmplValue.within_ins (Flock.TmplValue.wf_getD hwf) hw
+      (Flock.TmplValue.call_bound_length (Flock.TmplValue.wf_getD hwf t.root) hc _ j))
+    (fun y hy => by
+      have hv := unit_eval hwf ha ho h hu I X hi hc hb hj hw y hy
+      rwa [hone] at hv) hD hout
 
 end FlockSoundness.TmplValue

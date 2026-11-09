@@ -1,5 +1,5 @@
 """Reference-mode op rules (GUIDANCE §43.2 (B)): unannotated f32 / bf16 modules -> NUMERIC's reference kinds
-(`verity_vllm/program/registry/ref_prims.py`, vocabulary `verity-ref-vocab/1`). Every rule checks dtypes and shapes
+(`verity/ml/definitions/registry/ref_prims.py`, vocabulary `verity-ref-vocab/1`). Every rule checks dtypes and shapes
 structurally; anything else is `Unsupported`. The reference kinds *define* the arithmetic (sequential f32 chains,
 one DT rounding at stated points); torch CPU agreement is measured, not assumed (`docs/data/ref-prims/`).
 """
@@ -513,7 +513,7 @@ class BroadcastBiasAddRefRule(OpRule):
 
 class EmbeddingRefRule(OpRule):
     """`aten.embedding(table[V,H], ids)` with ids a *value* (a prescribed input or a computed token) -> `EmbeddingRef_v1{V,H,DT}` per
-    token; int64 ids are narrowed first with `I64ToI32_v1` (range-checked, XFER-G3 / R4). Static ids (`wpe[arange(T)]`) stay
+    token; int64 ids are narrowed first with `I64ToI32_v1` (range-checked). Static ids (`wpe[arange(T)]`) stay
     `StaticGather_v1`.
 
     v2 (G-RH-14): `padding_idx` may be any Python int or None. ATen's forward `embedding(weight, indices, padding_idx, …)` is
@@ -586,7 +586,7 @@ class EmbeddingRefRule(OpRule):
 class SdpaRefRule(OpRule):
     """`F.scaled_dot_product_attention(q, k, v, attn_mask, dropout_p=0, is_causal, scale, enable_gqa)` with `q [.., NH, T, D]`,
     `k, v [.., KVH, T, D]` of one dtype -> `EagerAttentionRef_v1{T=i+1,NH,KVH,D,DT,SCALE_OP="mul"}` per query row i: causal
-    masking = the row reads keys 0..i only (exact, NUMERIC's note), the scale `D^-0.5` applied to the scores. The *reference*
+    masking = the row reads keys 0..i only (exact), the scale `D^-0.5` applied to the scores. The *reference*
     arithmetic is the kind's (f32 sequential dot, one DT rounding per stated point); torch's math SDPA scales q and k by
     sqrt(scale) before the matmul — agreement with torch CPU is measured, not assumed, as for every reference kind.
 

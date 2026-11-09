@@ -1,4 +1,21 @@
-import Proofs.Flock.Recursive.Stage
+module
+
+public import Proofs.Flock.Recursive.Stage
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Recursion: V*'s stages at the wires V* reads
@@ -7,13 +24,15 @@ import Proofs.Flock.Recursive.Stage
 (`InnerRepCheck` pads a row port of `n` elements to `64 ⌈8 n / 64⌉` words and reads its first `128 n` bits), in no
 unit's `io`, so `VFull` fails there. `VFullR` and `VDecodesR` are the two at the wires some unit reads (`ReadW`). The
 transfer reads a commit string only at a wire where the layer disagrees with the openings' values, and a layer that
-agrees with them on the read wires decodes alike (`VDecodesR`), so that wire is read, and the full draw draws its unit:
+agrees with them on the read wires decodes alike (`VDecodesR`), so that wire is read, and the full sample samples its unit:
 
 * `sessions_stage_le_read`, `outerV_stage_le_read`, `zk_sessions_recursive_read`, `zk_sessions_recursive_fork_read`:
   `sessions_stage_le`, `outerV_stage_le`, `zk_sessions_recursive_full` and `zk_sessions_recursive_fork` at `VFullR` and
   `VDecodesR`, with the same bounds;
 * `vFullR_of_vFull`, `vDecodes_of_vDecodesR`: `VFull` gives `VFullR`, and `VDecodesR` gives `VDecodes`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 
@@ -25,7 +44,7 @@ variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type}
 
 /-- **A stage's transfer at V*'s sessions, at the read wires**: `sessions_stage_le` where every layer agreeing with the
 values `wv` on the read wires of the commit strings `Sk j` satisfies `Q`, and each read wire of `Sk j` is a wire of
-some unit. A layer failing `Q` disagrees with `wv` at a read wire, which every draw reads. -/
+some unit. A layer failing `Q` disagrees with `wv` at a read wire, which every sample reads. -/
 theorem sessions_stage_le_read
     (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)

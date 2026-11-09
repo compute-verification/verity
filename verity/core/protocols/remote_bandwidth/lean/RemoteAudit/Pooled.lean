@@ -1,3 +1,5 @@
+module
+
 /-!
 # The openings' pooled bound
 
@@ -12,9 +14,11 @@ bisection finds (`root`), so B exceeds S·(1 − δ^(1/S)) by at most S·2^-`ROO
 
 W is the greedy over the windows by U_t/s_t falling (`order`, `fill`): each takes the largest share its cap and the
 budget left allow, the fractional knapsack's optimum. `Properties.RemoteAudit.PooledCovers` states that W is at least
-`Accounting.Remote.Draw.pooled`, the bound `PooledDraw` reads. `pooled.py` is held to this by the difftest
+`Accounting.Remote.Draw.pooled`, the bound `PooledSample` reads. `pooled.py` is held to this by the difftest
 (`tests/test_pooled.py`). Code: Lean core only.
 -/
+
+@[expose] public section
 
 namespace RemoteAudit.Pooled
 

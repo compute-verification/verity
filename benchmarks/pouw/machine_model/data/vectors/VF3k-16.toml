@@ -1,8 +1,7 @@
-# VF3k-16: VF3j-16 on the gated opcode probes' rows (ISSUE, r20261016-183617-3914), each (kind, row) at the faster of its two measurements, and the peer-CTA DSMEM atomic as its own class.
+# VF3k-16: VF3j-16 on the gated opcode probes' rows (ISSUE), each (kind, row) at the faster of its two measurements, and the peer-CTA DSMEM atomic as its own class.
 name = "VF3k-16"
 epoch = "VF3k-16"
-summary = "VF3j-16 on the gated opcode probes' rows (ISSUE, r20261016-183617-3914), each (kind, row) at the faster of its two measurements, and the peer-CTA DSMEM atomic as its own class."
-note = "note:20261016T1912Z-draft-machine-model-vf3k"
+summary = "VF3j-16 on the gated opcode probes' rows (ISSUE), each (kind, row) at the faster of its two measurements, and the peer-CTA DSMEM atomic as its own class."
 superseded_by = "VF3l-16"
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
@@ -40,8 +39,7 @@ credits = [
     ["LDSM_X2", 1024], ["LDSM_X4", 2048], ["ATOME32P", 1024],
 ]
 
-[published]  # as `machine-model solve VF3k-16` printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+[published]  # as `machine-model solve VF3k-16` printed them: τ and U/F_low to 4 places, the margin to 3
 tau = 0.0603
-tau_600w = 0.0472
 uf_low = 1.1563
 margin = 2.0

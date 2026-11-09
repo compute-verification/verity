@@ -1,9 +1,13 @@
-import Definitions.Flock.Piop
+module
+
+public import Definitions.Flock.Piop
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Hidden unit circuits: L4′ with h, and the sparse phase H1–H4
 
-F4 candidate 3 (note:proofs/20261010T0250Z-draft-f4-bitsumcheck §1.3, row M1 of its §4) as `Game` programs, on the
+Hidden unit circuits as `Game` programs, on the
 pattern of `Piop.lean`. With hidden unit circuits the lincheck's comb is the public part's fold, and the prover sends
 the hidden part's fold `h` after `z_partial` and before `r'` (`holoLincheck`, L4′). The sparse phase (`sparsePhase`)
 then checks `h` against the registered templates at the rep's coins:
@@ -19,6 +23,8 @@ It returns the registered claim: the value the registered opening reads, at `(r_
 coefficients without `c₁ = claim + Σ_{i≥2} c_i` (C1, the sum rule `g(0) + g(1) = claim` in characteristic 2), and each
 coordinate of a point is a coin of its own.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Model
 
@@ -36,7 +42,7 @@ structure HoloLcOut (F : Type) (m n : ℕ) where
   ts : Fin n → F
   h : Fin 64 → F
 
-/-- **The lincheck with hidden units** (§10 with L4′): `lincheck` on the public part `S`, with the prover's `h` after
+/-- **The lincheck with hidden units** (`Flock.Piop` with L4′): `lincheck` on the public part `S`, with the prover's `h` after
 `z_partial` and the check `Σ_s (folded[s] + h[s])·z_partial[s] = claim`. -/
 def holoLincheck (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) :
     Game (Option (HoloLcOut F S.m (S.kLog - 6))) := do
@@ -57,7 +63,7 @@ def holoLincheck (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) :
 
 /-! ## Rounds in coefficient form -/
 
-/-- `n` coins, one draw each. -/
+/-- `n` coins, one sample each. -/
 def drawFin : (n : ℕ) → Game (Fin n → F)
   | 0 => pure Fin.elim0
   | n + 1 => do
@@ -70,7 +76,7 @@ def drawFin : (n : ℕ) → Game (Fin n → F)
 def degNext {k : ℕ} (claim : F) (c : F × (Fin k → F)) (r : F) : F :=
   c.1 + (claim + ∑ i, c.2 i) * r + ∑ i, c.2 i * r ^ (i.val + 2)
 
-/-- `n` rounds of degree `k + 1`: per round the prover sends `(c₀, c₂ … c_{k+1})` and the verifier draws the round's
+/-- `n` rounds of degree `k + 1`: per round the prover sends `(c₀, c₂ … c_{k+1})` and the verifier flips the round's
 coin. Returns the coins in round order and the last claim. -/
 def degRounds (k : ℕ) : (n : ℕ) → F → Game ((Fin n → F) × F)
   | 0, claim => pure (Fin.elim0, claim)
@@ -119,7 +125,7 @@ def vget {n : ℕ} (u : Fin n → F) (i : ℕ) : F := if h : i < n then u ⟨i, 
 /-- A point's coordinate `j`: the skip's six, then the rest. -/
 def cat6 {m : ℕ} (a : Fin 6 → F) (b : Fin m → F) (j : ℕ) : F := if j < 6 then vget a j else vget b (j - 6)
 
-/-- `Φ(q) = (α·q_{2ℓ} + q_{2ℓ+1}) · ∏_{j<ℓ} (1 + x_j + q_j)·(1 + y_j + q_{ℓ+j})` (§1.3). -/
+/-- `Φ(q) = (α·q_{2ℓ} + q_{2ℓ+1}) · ∏_{j<ℓ} (1 + x_j + q_j)·(1 + y_j + q_{ℓ+j})`. -/
 def sparsePhi (ell : ℕ) (α : F) (x y q : ℕ → F) : F :=
   (α * q (2 * ell) + q (2 * ell + 1)) * ∏ j ∈ Finset.range ell, ((1 + x j + q j) * (1 + y j + q (ell + j)))
 

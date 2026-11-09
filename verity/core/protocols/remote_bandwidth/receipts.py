@@ -3,9 +3,9 @@ commits them.
 
 ~~~text
 Z(x)          x zero-padded to whole 128-byte blocks (one SHA-512 block here)
-seed_(t,i)    SHA512(SEED_DOMAIN ‖ σ_t ‖ u32be i ‖ root_(t,i−1)),  SEED_DOMAIN = "verity/remote-bandwidth/seed/v0\0",
-              σ_t window t's challenge (its live coin, `coins.py`), root_(t,−1) = root_(t−1,last) in a session and the
-              registration's digest for its first window; in a session with appends, the root chained to them
+seed_(t,i)    SHA512(SEED_DOMAIN ‖ chal_t ‖ u32be i ‖ root_(t,i−1)),  SEED_DOMAIN = "verity/remote-bandwidth/seed/v0\0",
+              chal_t window t's challenge (its live coin, `coins.py`), root_(t,−1) = root_(t−1,last) in a session and
+              the registration's digest for its first window; in a session with appends, the root chained to them
               (`audit.chained`)
 plan_(t,i)    R runs (first, count) in read order: count ≥ 1, inside the store, pairwise disjoint, and no run starting
               where the one before it ends (it would be the same run).  Position p is the p-th block of the runs
@@ -21,7 +21,8 @@ y_(i,p)       sketch-sha512, the default: SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ fra
 k_s           sketch-sha512's rows, the registration's: 16 (the default) or 64 (`ROWS`); 0 under block-sha512
 S_i           sketch-sha512's k_s × 4096 signs of pass i: K = derive(seed_i, SIGN_DOMAIN, {"tag": "sketch-sha512",
               "k": k_s, "n": 4096}), row c the first 512 bytes of K.stream(("row", c)), bit u (byte u // 8, LSB
-              first) 1 → −1, 0 → +1,  SIGN_DOMAIN = "verity/remote-bandwidth/sketch-signs/v0"
+              first) 1 → −1, 0 → +1,  SIGN_DOMAIN = "verity/remote-bandwidth/sketch-signs/v0"; over a P2 store,
+              k_s × 8224, n = 8224 and 1,028 bytes a row, a unit of four blocks a vector (`p2.py`)
 σ_(i,j)       S_i · e_(i,j), its 4096 bytes as int8, over the integers (|σ[c]| ≤ 2^19): k_s int32 little-endian, 64
               bytes at 16 rows (y one compression after the seed's block) and 256 at 64 (three)
 leaf c        v_c = y_(16c) ‖ … ‖ y_(16c+15), positions in plan order, the last leaf short; committed as an
@@ -49,8 +50,8 @@ The registration also names its block layout (`LAYOUTS`): how a kernel's sketch 
 each block j the encoded store's bytes 4096·j … 4096·j + 4095, whole codec words.  Under store-order/v0, the only one,
 a vector is one registered block's bytes in store order.  `plan_of` takes a kernel's map from its vectors' bytes to
 the store's and returns the plan its vectors are, refusing padding, a codec word split across vectors and a block
-twice, so that only registered blocks' bytes are credited.  The fused GEMM's fragment cut is refused until the byte
-permutation ra-codec-tensor proposes for it is a layout of its own here.
+twice, so that only registered blocks' bytes are credited.  The fused GEMM's fragment cut is refused until a byte
+permutation for it is a layout of its own here.
 
 A pass's plan is public: the prover sends it with the root, and the root binds its digest.  Its runs are disjoint so
 that one read of a block serves at most one receipt of the pass; a plan that repeats a block is refused.  Its order is
@@ -76,6 +77,7 @@ from collections.abc import Iterator, Sequence
 from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain, VerificationLimits
 from verity.ml.commitments import hm96, verify_opening
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, sha512_row_v2_digest
+from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.ml.randomness import derive, frame
 
 from .codec import BLOCK_BYTES
@@ -92,7 +94,7 @@ SKETCH_ROWS = 16
 ROWS = (16, 64)
 SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
 CHALLENGE_BYTES = 32
-DIGEST_BYTES = 64
+DIGEST_BYTES = _DIGEST_BYTES["sha512"]
 PER_LEAF = 16
 OWNER = 0
 HM96 = hm96.SHA512
@@ -369,12 +371,19 @@ class Receipter:
         return h.digest()
 
 
-def sign_bits(seed: bytes, rows: int = SKETCH_ROWS) -> tuple[bytes, ...]:
-    """`S_i`'s sign bits, `rows` = k_s rows of 512 bytes: bit u of row c (byte u // 8, LSB first) is 1 where
-    `S_i[c][u] = −1`.  The key binds k_s, so 64 rows are not 16 rows and 48 more."""
+def _width(width: object) -> int:
+    if type(width) is not int or width < 8 or width % 8:
+        raise ValueError("a sketch's vector is a positive whole number of 8-byte groups")
+    return width
+
+
+def sign_bits(seed: bytes, rows: int = SKETCH_ROWS, width: int = BLOCK_BYTES) -> tuple[bytes, ...]:
+    """`S_i`'s sign bits, `rows` = k_s rows of `width`/8 bytes (512 at a registered block's 4,096 bytes, 1,028 at a P2
+    unit's 8,224, `p2.UNIT_BYTES`): bit u of row c (byte u // 8, LSB first) is 1 where `S_i[c][u] = −1`.  The key binds
+    k_s and the width, so 64 rows are not 16 rows and 48 more, and a unit's signs are not a block's."""
     rows = sketch_rows(SKETCH_SHA512, rows)
-    key = derive(_digest(seed, "a pass seed"), SIGN_DOMAIN, {"tag": SKETCH_SHA512, "k": rows, "n": BLOCK_BYTES})
-    return tuple(key.stream(("row", c), BLOCK_BYTES // 8) for c in range(rows))
+    key = derive(_digest(seed, "a pass seed"), SIGN_DOMAIN, {"tag": SKETCH_SHA512, "k": rows, "n": _width(width)})
+    return tuple(key.stream(("row", c), width // 8) for c in range(rows))
 
 
 def sketch_prefix(seed: bytes) -> bytes:
@@ -384,7 +393,6 @@ def sketch_prefix(seed: bytes) -> bytes:
 
 
 _BYTE_BITS = tuple(bytes((b >> u) & 1 for u in range(8)) for b in range(256))
-_EVERY_BYTE = int.from_bytes(b"\1" * BLOCK_BYTES, "little")
 
 
 def _int8_sum(planes: list[int], mask: int) -> int:
@@ -397,27 +405,53 @@ class SketchReceipter:
     """sketch-sha512 receipts under one pass's seed at `rows` = k_s, the default kind: `receipter(j, block)` is
     `y_(i,j)`, and `sketch(block)` its `σ_(i,j)`; given `z`, the receipt and sketch that bind it.  The product is in
     pure Python, a row's ±1 dot product as T − 2·(the sum where its sign is −1), each sum over the block's bit planes:
-    about 0.25 ms a block at 16 rows."""
+    about 0.25 ms a block at 16 rows.  `width` is the vector's bytes: a registered block's 4,096, or a P2 unit's 8,224
+    (`p2.py`, where z binds nothing), whose sketch is the sum of its pieces' (`partial`)."""
 
     kind = SKETCH_SHA512
 
-    def __init__(self, seed: bytes, rows: int = SKETCH_ROWS) -> None:
-        self.rows = sketch_rows(SKETCH_SHA512, rows)
+    def __init__(self, seed: bytes, rows: int = SKETCH_ROWS, width: int = BLOCK_BYTES) -> None:
+        self.rows, self.width = sketch_rows(SKETCH_SHA512, rows), _width(width)
         self._signs = tuple(int.from_bytes(b"".join(_BYTE_BITS[b] for b in row), "little")
-                            for row in sign_bits(seed, self.rows))
+                            for row in sign_bits(seed, self.rows, width))
+        self._every = int.from_bytes(b"\1" * width, "little")
         self.head = hashlib.sha512(sketch_prefix(seed))
 
-    def sketch(self, block: bytes, z: bytes | None = None) -> bytes:
-        x = int.from_bytes(_e(block, z), "little")
+    def _vector(self, block: bytes, z: bytes | None) -> bytes:
+        if self.width == BLOCK_BYTES:
+            return _e(block, z)
+        if z is not None or type(block) is not bytes or len(block) != self.width:
+            raise ValueError(f"a {self.width}-byte vector's sketch is of its {self.width} bytes alone")
+        return block
+
+    def _product(self, x: int) -> bytes:
         planes = [x >> k for k in range(8)]
-        total = _int8_sum(planes, _EVERY_BYTE)
+        total = _int8_sum(planes, self._every)
         return struct.pack(f"<{self.rows}i", *(total - 2 * _int8_sum(planes, row) for row in self._signs))
 
-    def __call__(self, j: int, block: bytes, z: bytes | None = None) -> bytes:
+    def sketch(self, block: bytes, z: bytes | None = None) -> bytes:
+        return self._product(int.from_bytes(self._vector(block, z), "little"))
+
+    def partial(self, piece: bytes, offset: int) -> bytes:
+        """The sketch of `piece` laid at byte `offset` of a vector, the rest of it zero: `S_i[c][offset + x]` against
+        `int8(piece[x])`, k_s int32 little-endian.  The sketch is linear, so a vector's is its disjoint pieces'
+        partials summed row by row."""
+        if (type(piece) is not bytes or not piece or type(offset) is not int or offset < 0
+                or offset + len(piece) > self.width):
+            raise ValueError(f"a piece is nonempty bytes inside the {self.width}-byte vector")
+        return self._product(int.from_bytes(piece, "little") << 8 * offset)
+
+    def receipt(self, j: int, sigma: bytes) -> bytes:
+        """`y` from vector j's sketch `sigma`, however it was computed: SHA512(prefix ‖ u64be j ‖ σ)."""
+        if type(sigma) is not bytes or len(sigma) != 4 * self.rows:
+            raise ValueError(f"a sketch is {self.rows} int32s")
         h = self.head.copy()
         h.update(_index(j))
-        h.update(self.sketch(block, z))
+        h.update(sigma)
         return h.digest()
+
+    def __call__(self, j: int, block: bytes, z: bytes | None = None) -> bytes:
+        return self.receipt(j, self.sketch(block, z))
 
 
 RECEIPTERS = {SKETCH_SHA512: SketchReceipter, BLOCK_SHA512: Receipter}

@@ -1,16 +1,16 @@
-"""The remote bandwidth session over the node's `Store`, inside the prover's process (the Commit's, or the serve
-driver's): `StoreBackend` is the backend `benchmarks/remote_session`'s `ProverSide` drives, the role `device.Device`
-and `CpuBackend` play there, and `prove` connects it to a verifier at ``HOST:PORT`` (the row's ``REMOTE_VERIFIER``,
+"""The remote bandwidth session over the node's `NodeMemory`, inside the prover's process (the Commit's, or the serve
+driver's): `StoreBackend` is the backend `benchmarks/remote_session`'s `ProverSide` drives, the role
+`device.GpuBackend` and `CpuBackend` play there, and `prove` connects it to a verifier at ``HOST:PORT`` (the row's ``REMOTE_VERIFIER``,
 `config.CommitConfig.remote_verifier`).
 
 ~~~text
-hello         the node, N = the store's blocks (`Store.layout`) and the payload root of every block's payload as the
-              store holds it now (`Store.payload`: weights, the KV pool's pages as filler, host filler)
+hello         the node, N = the store's blocks (`NodeMemory.layout`) and the payload root of every block's payload as the
+              store holds it now (`NodeMemory.payload`: weights, the KV pool's pages as filler, host filler)
 registration  the verifier's; the backend encodes the payloads under its key (`audit.Store`, the driver's reference
               encoding, or kv.cu on the GPU into the same host mirror: `DeviceEncoded`); the hello's layout is each
               region's kind, tier and blocks (`StoreBackend.layout`)
 session       the store records its memory map against `Registration.digest` under the session's lifetime cap L
-              (`Store.record_memory_map`), one session a store: the map's indices are one session's
+              (`NodeMemory.record_memory_map`), one session a store: the map's indices are one session's
 pass          before each pass `Serving.advance` runs the engine's next step s against the store (its frees, allocs
               and `kv_append`, which closes the step before's memory-map line with its re-keys for the pass's window),
               then appends the blocks step s completed and still holds (`MemoryMap.complete`) as the audit's append
@@ -37,8 +37,9 @@ Commit's session is `CommitSession`: the binder on its engine from the build, th
 Commit's instrumented run (`Lockstep`: each pass's engine step is the run's next step, so the memory map's steps are
 the steps the Commit commits), its store's encode on the GPU by kv.cu (`KvDevice`).
 
-`benchmarks/remote_session` is not a package: `session_module` loads its ``prover.py`` (and ``verifier.py``, for a
-local verifier) from the source tree (`config.REMOTE_SESSION`).
+`benchmarks/remote_session` is not a package: `session_module` loads its ``prover.py`` from the source tree
+(`config.REMOTE_SESSION`), and `prove` takes the wire from it. The verifier's side, the wire among it, is
+`verity.core.protocols.remote_bandwidth.session`.
 """
 from __future__ import annotations
 
@@ -62,7 +63,7 @@ import numpy as np
 from verity.core.protocols.remote_bandwidth import audit, codec as rcodec, receipts as rb
 from verity_vllm import config
 from verity_vllm.protocols.remote_bandwidth import memory_map as store_map
-from verity_vllm.protocols.remote_bandwidth.registry import Store
+from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
 
 
 def address(value: str) -> tuple[str, int]:
@@ -74,7 +75,7 @@ def address(value: str) -> tuple[str, int]:
 
 
 def session_module(name: str, directory: str | Path = config.REMOTE_SESSION) -> ModuleType:
-    """``benchmarks/remote_session``'s module ``name`` (``prover``, ``verifier``, ``wire``), loaded once from its file,
+    """``benchmarks/remote_session``'s module ``name`` (``prover``, ``device``, ``inplace``), loaded once from its file,
     as its own scripts import it."""
     if name in sys.modules:
         return sys.modules[name]
@@ -239,7 +240,7 @@ class Serving:
             late[w - m] = late.get(w - m, 0) + 1
         landed = self.landed + [None] * (len(self.made) - len(self.landed))
         return {"appends": len(self.made), "encoded": len(self.landed), "steps_late": dict(sorted(late.items())),
-                "waiting": self.map.waiting if self.store.memory_map is self.map else None,
+                "waiting": self.map.lines.waiting if self.store.memory_map is self.map else None,
                 "encodes": [[m, w, a.first, a.count] for m, w, a in zip(self.made, landed, self.appends)]}
 
     def plan(self) -> rb.Plan:
@@ -262,7 +263,7 @@ class StoreBackend:
 
     deferred = True
 
-    def __init__(self, store: Store, engine: Callable[[int], None], *, randbytes: Callable[[int], bytes] = os.urandom,
+    def __init__(self, store: NodeMemory, engine: Callable[[int], None], *, randbytes: Callable[[int], bytes] = os.urandom,
                  path: str | Path | None = None, read_bytes_per_s: float = 1e12, device: KvDevice | None = None) -> None:
         self.store, self.engine, self.path, self.randbytes, self.device = store, engine, path, randbytes, device
         self.blocks, self.read_bytes_per_s = store.layout().blocks, read_bytes_per_s
@@ -513,7 +514,8 @@ def prove(backend: StoreBackend, verifier: str, plan: str = "serve", *, node: by
     verifier's reason if it refuses the registration.  A prover that fails drops the connection, so the verifier sees
     the session end there."""
     host, port = address(verifier)
-    prover, wire = session_module("prover"), session_module("wire")
+    prover = session_module("prover")
+    wire = prover.wire
     conn = wire.connect(host, port)
     try:
         p = prover.ProverSide(conn, backend, node, prover.parse_plan(plan), log=log, **kw)
@@ -615,7 +617,7 @@ class CommitSession:
     target       before the build: the row's target declares synchronous scheduling (its Program's LAG 0)
     install      before the build: ``binder.Binder(store, passes=False, kv=False)`` on vLLM's model runner, block pool
                  and scheduler, registering weight tensors up to ``weight_blocks`` blocks.  The KV pool stays outside
-                 the registration (served writes do, memory accounting's MEM-39 ruling: live KV is uncredited for chat),
+                 the registration (served writes do, and live KV is uncredited for chat),
                  so no step writes a registered block and every pass reads every one
     check        after the build: the engine core in this process, scheduling synchronous, no KV pool registered; then
                  ``filler_gib`` GiB of zeros on the engine's GPU registered as the store's filler (`Binder.register_filler`)
@@ -661,7 +663,7 @@ class CommitSession:
         self.verifier, self.plan, self.kv_pages, self.weight_blocks = verifier, plan, kv_pages, weight_blocks
         self.kv_lib, self.backend_of, self.step_ms, self.filler_gib = kv_lib, backend_of, step_ms, filler_gib
         self.out, self.node, self.codec, self.log = None if out is None else Path(out), node, codec, log
-        self.store, self.binder = Store(), None
+        self.store, self.binder = NodeMemory(), None
         self.lockstep: Lockstep | None = None
         self.backend: StoreBackend | None = None
         self.record: dict[str, Any] | None = None

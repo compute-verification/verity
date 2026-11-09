@@ -1,4 +1,4 @@
-"""ENC-REPLAY: the replay reproduces vLLM's own scheduler, and the residual advice decodes back to the trace.
+"""The scheduler replay: the replay reproduces vLLM's own scheduler, and the residual advice decodes back to the trace.
 
 The fixtures are step traces of vLLM d9105ea80's `Scheduler` and `AsyncScheduler` on a fake executor (`vllm_trace.py
 tests/fixtures --requests 14 --seed 3`, the cases named by the file): preemption under KV pressure in both engine loops,
@@ -128,8 +128,8 @@ def test_table_counts_every_request_and_step():
 
 
 def corpus_dir(t, d: Path) -> Path:
-    """`t` written as one TRACE-CORPUS trace (`benchmarks/network_e2e/traces/summary.py`'s joined files), with a step that
-    scheduled nothing, as the hook records one."""
+    """`t` written as one trace-corpus trace (`benchmarks/network_e2e/traces/summary.py`'s joined files), with a step
+    that scheduled nothing, as the hook records one."""
     seen: set[int] = set()
     with open(d / "steps.jsonl", "w") as f:
         f.write(json.dumps({"step": 0, "total_num_scheduled_tokens": 0, "new": [], "cached": []}) + "\n")
@@ -178,6 +178,28 @@ def test_reads_a_trace_corpus_trace(tmp_path):
         assert R.compare(R.decode(x.certified(), R.encode(x)).steps, x.steps).first_mismatch is None
 
 
+def test_the_kv_pool_is_the_hooks_record_of_the_schedulers(tmp_path):
+    """`engine.json` (the trace hook's record of the scheduler's pool) gives the block size and count over `server.log`'s
+    capacity line, which can't tell a 64-token block from a 16-token one; arguments win over both, and a pool of more
+    than one KV cache group is refused by name."""
+    t = trace("sync-kv-pressure")
+    d = corpus_dir(t, tmp_path)
+    e = t.engine
+    (d / "server.log").write_text("")
+    (d / "engine.json").write_text(json.dumps({"block_size": e.block_size, "num_gpu_blocks": e.num_gpu_blocks,
+                                               "kv_cache_groups": 1, "scheduler": "Scheduler"}))
+    c = R.read_corpus_trace(d)
+    assert c.engine == e
+    assert R.compare(R.replay(c.engine, c.requests, admit=c.before_step).steps, c.steps).ordered == len(t.steps)
+    (d / "engine.json").write_text(json.dumps({"block_size": 64, "num_gpu_blocks": 7, "kv_cache_groups": 1}))
+    pool = R.read_corpus_trace(d).engine
+    assert (pool.block_size, pool.num_gpu_blocks) == (64, 7)
+    assert R.read_corpus_trace(d, block_size=e.block_size, num_gpu_blocks=e.num_gpu_blocks).engine == e
+    (d / "engine.json").write_text(json.dumps({"block_size": 64, "num_gpu_blocks": 7, "kv_cache_groups": 2}))
+    with pytest.raises(ValueError, match="2 KV cache groups; the replay models one pool"):
+        R.read_corpus_trace(d)
+
+
 def test_warden_ingress_is_the_engines_arrival_order(tmp_path):
     """`ingress="warden"` reads the engine's own `arrival` stamp (the server's body read, the order vLLM schedules in):
     requests the client sent out of the engine's order cost order bits at the client's send and none there, the floor a
@@ -211,7 +233,7 @@ def test_order_bits_charge_only_reordering():
 def test_v0_advice_is_valid_advice_v0(tmp_path):
     v0 = R.load_v0(os.environ.get("VERITY_ENCODINGS_ADVICE_V0"))
     if v0 is None:
-        pytest.skip(f"ADV-SPEC's advice v0 isn't at {R.V0_PATH} (VERITY_ENCODINGS_ADVICE_V0: a path to its advice.py)")
+        pytest.skip(f"advice v0 (advice.py) isn't at {R.V0_PATH} (VERITY_ENCODINGS_ADVICE_V0: a path to its advice.py)")
     for name in CASES:
         t = trace(name)
         adv = R.v0_advice(t, v0)

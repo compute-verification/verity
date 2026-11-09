@@ -1,5 +1,9 @@
-import Proofs.Flock.Soundness.SessionBatch
-import Proofs.Flock.Soundness.SessionAcc
+module
+
+public import Proofs.Flock.Soundness.ExtractAcc
+public import Proofs.Flock.Soundness.SessionAcc
+public import Proofs.Flock.Soundness.SessionBatch
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Several tables in one batched session, from accepted reruns (DESIGN.md §3)
@@ -15,6 +19,8 @@ own acceptance would make it relative to that, which can be far larger.
   `session_knowledge_sound_acc`;
 * `one_le_fail_add_accB`: the audit's `cover`, when the session accepts with positive probability.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

@@ -6,7 +6,31 @@ two (`sha_ne_hm`). So the block row at `x` is `[src]`, and the block holds the c
 row prefix's midstate, each later `cv` the previous output, the `hm96` slot's `cv` the last output and its `pad` the
 padding block (`row_copies_of_sat`), the constant bits read from the pin and the forced-zero row.
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Copies
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Copies
+public import Proofs.Flock.Soundness.Discharge.Hm.SatEx
+public import Proofs.Flock.Soundness.Discharge.Hm.Accept
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Hm.Nets
+import Proofs.Flock.Soundness.SparseRows
+import Proofs.Flock.Verifier.HmNets
+
+@[expose] public section
 
 open Flock FlockLevel3
 
@@ -218,8 +242,8 @@ theorem RowRanges.ofT {st : Stmt} {tb : TypedBlock} {words : String → Option (
   ⟨T.disj, T.bound, T.slotLog, T.count, T.one_range, T.fit, T.shaNet.1, T.hmNet.1, C.perVu_sha, C.perVu_hm, P.rowNets,
     T.kLog⟩
 
-theorem RowRanges.ofL {st : Stmt} {tags : Tags} (L : Layout st) (P : ParseFacts tags st.c) (C : CheckFacts st.c) :
-    RowRanges st.c :=
+theorem RowRanges.ofL {st : Stmt} {tags : Tags} {pre : Array (String × Net)} (L : Layout st)
+    (P : ParseFactsU tags pre st.c) (C : CheckFacts st.c) : RowRanges st.c :=
   ⟨L.disj, L.bound, L.slotLog, C.count, C.one_range, fun i => (L.fit i).1, P.shaNet, P.hmNet, C.perVu_sha, C.perVu_hm,
     P.rowNets, L.kLog⟩
 
@@ -568,9 +592,9 @@ theorem inBit_rows {st : Stmt} (R : RowRanges st.c) {n s off x src : ℕ} (hn : 
   exact ⟨(hE j.val).1.trans hval, (hE j.val).2.trans hval⟩
 
 /-- A row `[src]` in A and in B (zero when `src` is past the block) holds what `src` holds, in every block of a
-satisfying witness. -/
-theorem block_of_rows {S : Model.Statement} {z : Model.Witness S.m} (hz : S.Satisfies z) (o : Fin (2 ^ S.nbl))
-    {x src : ℕ} (hx : x < 2 ^ S.kLog)
+witness that satisfies it (`SatEx`). -/
+theorem block_of_rows_ex {S : Model.Statement} {D : ℕ → Prop} {z : Model.Witness S.m} (hz : SatEx S D z)
+    (o : Fin (2 ^ S.nbl)) {x src : ℕ} (hx : x < 2 ^ S.kLog) (hxD : ¬ D x)
     (h : ∀ j : Fin (2 ^ S.kLog), S.A₀ ⟨x, hx⟩ j = (if j.val = src then 1 else 0) ∧
       S.B₀ ⟨x, hx⟩ j = (if j.val = src then 1 else 0)) :
     blockBit S z o x = blockBit S z o src := by
@@ -578,13 +602,22 @@ theorem block_of_rows {S : Model.Statement} {z : Model.Witness S.m} (hz : S.Sati
   · have he : ∀ j : Fin (2 ^ S.kLog), (if j.val = src then (1 : ZMod 2) else 0) =
         if j = (⟨src, hsrc⟩ : Fin (2 ^ S.kLog)) then 1 else 0 := fun j => by simp [Fin.ext_iff]
     have hcopy : CopyRow S ⟨x, hx⟩ ⟨src, hsrc⟩ := ⟨fun j => (h j).1.trans (he j), fun j => (h j).2.trans (he j)⟩
-    rw [blockBit_of_lt _ z o hx, blockBit_of_lt _ z o hsrc, hcopy.block_eq hz o]
+    rw [blockBit_of_lt _ z o hx, blockBit_of_lt _ z o hsrc, hcopy.block_eq_ex hz hxD o]
   · have hne : ∀ j : Fin (2 ^ S.kLog), (if j.val = src then (1 : ZMod 2) else 0) = 0 :=
       fun j => ite_eq_right fun (e : j.val = src) => hsrc (e ▸ j.isLt)
     have hzr : ZeroRow S ⟨x, hx⟩ := ⟨fun j => (h j).1.trans (hne j), fun j => (h j).2.trans (hne j)⟩
-    rw [blockBit_of_lt _ z o hx, hzr.block_eq hz o]
+    rw [blockBit_of_lt _ z o hx, hzr.block_eq_ex hz hxD o]
     unfold blockBit
     simp only [hsrc, dite_false]
+
+/-- A row `[src]` in A and in B (zero when `src` is past the block) holds what `src` holds, in every block of a
+satisfying witness. -/
+theorem block_of_rows {S : Model.Statement} {z : Model.Witness S.m} (hz : S.Satisfies z) (o : Fin (2 ^ S.nbl))
+    {x src : ℕ} (hx : x < 2 ^ S.kLog)
+    (h : ∀ j : Fin (2 ^ S.kLog), S.A₀ ⟨x, hx⟩ j = (if j.val = src then 1 else 0) ∧
+      S.B₀ ⟨x, hx⟩ j = (if j.val = src then 1 else 0)) :
+    blockBit S z o x = blockBit S z o src :=
+  block_of_rows_ex (hz.ex fun _ => False) o hx not_false h
 
 theorem blockBit_constSrc {S : Model.Statement} {z : Model.Witness S.m} {o : Fin (2 ^ S.nbl)} {c : Circuit}
     {pin : ℕ} (ws : Array UInt64) (t : ℕ) (hpin : blockBit S z o pin = true)

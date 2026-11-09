@@ -2,10 +2,9 @@
 `model_executor/layers/fused_moe/experts/marlin_moe.py`), over the leaves `marlin_moe_leaf.mxfp4_marlin_moe_leaf` exports in place
 of its `moe_align_block_size` and its two `ops.moe_wna16_marlin_gemm` launches (`vllm_iface`):
 
-    marlin_moe_align(topk_ids [M, TOPK] i32, key [M, TOPK] i32, E, BM) -> (blk [M * TOPK] i32, par [1] i32)
-        `MoeAlignRanks{E,P=M*TOPK,BM}` over the router ids, each pair's key (the TP rank Program's `schedule` input,
-        `CollectiveBus.schedule_key`, so the application is tagged `schedule` for `tp_links.json`) and the pair indices as constants,
-        then `MoeAlignBlocks{P,BM}` over the ids and its ranks
+    marlin_moe_align(topk_ids [M, TOPK] i32, E, BM) -> (blk [M * TOPK] i32, par [1] i32)
+        `MoeAlignRanks{E,P=M*TOPK,BM}` over the router ids with the pair indices as constants, the key as well as the index: each
+        expert's pairs in pair-index order, as the served align ranks them; then `MoeAlignBlocks{P,BM}` over the ids and its ranks
     marlin_moe_mxfp4_gemm(x, w [E, N, K/2] u8, w_scale [E, N, K/32] u8, topk_ids, blk, par, topk_weights, BM, top_k, mul_topk_weights)
         -> [M * TOPK, N] bf16: per pair p, `MarlinMoeExpertGemm{E,K,N,TK,TN,GRID,DOT}` of x[p // top_k], ids[p], blk[p] and par (the
         w13 launch), or `MarlinMoeExpertGemmW` of x[p], ids[p], topk_weights[p], blk[p] and par (the w2 launch, top_k 1)
@@ -32,16 +31,16 @@ from verity_vllm.program.frontend.rules.common import call_args, from_rows, rows
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_tokens_of
 from verity_vllm.program.frontend.rules.vllm_dsa import _missing, _value
 from verity_vllm.program.frontend.rules.vllm_iface import iface
-from verity_vllm.program.kernels import marlin_moe_rows as MR
-from verity_vllm.program.registry import marlin_moe as MM
-from verity_vllm.program.registry.prims import F32 as F32_WORD, I32 as I32_WORD
+from verity.ml.definitions.numerics import marlin_moe_rows as MR
+from verity.ml.definitions.registry import marlin_moe as MM
+from verity.ml.definitions.registry.prims import F32 as F32_WORD, I32 as I32_WORD
 
 __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 BF16, F32, I32, U8 = torch.bfloat16, torch.float32, torch.int32, torch.uint8
 
 #: the roles the vocabulary may lack, and which kernel each states
-ROLE_KERNELS = {"marlin_moe_rank": "moe_align_block_size's ranks over a key per pair (MoeAlignRanks_v1)",
+ROLE_KERNELS = {"marlin_moe_rank": "moe_align_block_size's ranks in pair-index order (MoeAlignRanks_v1)",
                 "marlin_moe_align": "moe_align_block_size's schedule over those ranks (MoeAlignBlocks_v1)",
                 "const": "a constant word",
                 "marlin_moe_gemm": "Marlin's w13 launch on one pair (MarlinMoeExpertGemm_v1)",
@@ -49,7 +48,7 @@ ROLE_KERNELS = {"marlin_moe_rank": "moe_align_block_size's ranks over a key per 
 
 #: the (TK, TN, blocks per SM) each launch of DeepSeek-V4-Pro's TP8 rank ran at each decode batch of M tokens the H200 capture swept
 #: (132 SMs, driver 580.173.02), by the launch's (E, routed TOPK, K, N, launch top_k): w13 (384, 6, 7168, 768, 6), w2 (384, 6, 384,
-#: 7168, 1); the GO r20261014-101203-3273 (tests/properties/dsv4_marlin_capture_gpu.py, dsv4-marlin-capture/v3, its `sweep`)
+#: 7168, 1); a GO run of tests/properties/dsv4_marlin_capture_gpu.py (dsv4-marlin-capture/v3, its `sweep`)
 MARLIN_SERVED = {(384, 6, 7168, 768, 6): {1: (128, 64, 2), 2: (128, 64, 4), 3: (128, 64, 4), **dict.fromkeys((*range(4, 18), 460), (64, 128, 4)),
                                           461: (64, 128, 3), 921: (64, 128, 3), 922: (64, 128, 2), 1024: (64, 128, 2)},
                  (384, 6, 384, 7168, 1): {**dict.fromkeys((*range(1, 18), 460), (64, 128, 4)),
@@ -77,11 +76,11 @@ def served_config(E: int, TOPK: int, K: int, N: int, top_k: int, M: int, target=
 
 
 class MarlinMoeAlignRule(OpRule):
-    """`vllm_iface.marlin_moe_align`: `MoeAlignRanks{E,P,BM}` over the P = M * TOPK router ids, keys and pair indices, then
-    `MoeAlignBlocks{P,BM}`; the node is (blk, par)."""
+    """`vllm_iface.marlin_moe_align`: `MoeAlignRanks{E,P,BM}` over the P = M * TOPK router ids, keyed and indexed by the pair indices,
+    then `MoeAlignBlocks{P,BM}`; the node is (blk, par)."""
     modes = frozenset({"profile"})
-    info = RuleInfo("MarlinMoeAlign[vllm-marlin-moe]", 2, "op-binding", applies_to="vllm_iface.marlin_moe_align",
-                    preconditions=("topk_ids and key are i32 values of one shape [M, TOPK]",
+    info = RuleInfo("MarlinMoeAlign[vllm-marlin-moe]", 3, "op-binding", applies_to="vllm_iface.marlin_moe_align",
+                    preconditions=("topk_ids is an i32 value of shape [M, TOPK]",
                                    "num_experts and moe_block_size are static positive ints",
                                    "the launch routes this request's M tokens only"),
                     evidence_domain="structural; numerics: MoeAlignRanks_v1, MoeAlignBlocks_v1 (registry.marlin_moe)")
@@ -94,8 +93,6 @@ class MarlinMoeAlignRule(OpRule):
             return r
         a = call_args(node)
         if (r := _value(ctx, a["topk_ids"], I32, (None, None), "topk_ids")):
-            return r
-        if (r := _value(ctx, a["key"], I32, shape(ctx, a["topk_ids"]), "key")):
             return r
         E, BM = a["num_experts"], a["moe_block_size"]
         if not (isinstance(E, int) and isinstance(BM, int) and E > 0 and BM > 0):
@@ -111,13 +108,13 @@ class MarlinMoeAlignRule(OpRule):
         M, TOPK = shape(ctx, a["topk_ids"])
         S = {"E": a["num_experts"], "P": M * TOPK, "BM": a["moe_block_size"]}
         ranks, blocks = ctx.kind("marlin_moe_rank", node, **S), ctx.kind("marlin_moe_align", node, P=S["P"], BM=S["BM"])
-        ids, key = (ctx.coll(a[k]).reshape(Array(S["P"], I32_WORD)) for k in ("topk_ids", "key"))
+        ids = ctx.coll(a["topk_ids"]).reshape(Array(S["P"], I32_WORD))
         h = ctx.hint_name(node)
         ix = array_of([ctx.call(ctx.kind("const", node, W=32, BITS=p), node=node, rule=self, name=f"{h}/i32[{p}]") for p in range(S["P"])])
-        rank, start = ctx.call(ranks, ids, key, ix, node=node, rule=self, name=f"{h}/rank")
+        rank, start = ctx.call(ranks, ids, ix, ix, node=node, rule=self, name=f"{h}/rank")
         out = ctx.call(blocks, ids, rank, start, node=node, rule=self, name=h)
         ctx.define(node, [out[0], array_of([out[1]])])
-        ctx.record(self, node, S, emitted=f"{ranks.id} + {blocks.id}", schedule="marlin_moe_align")
+        ctx.record(self, node, S, emitted=f"{ranks.id} + {blocks.id}")
 
 
 class MarlinMoeGemmRule(OpRule):

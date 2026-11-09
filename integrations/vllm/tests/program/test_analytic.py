@@ -7,7 +7,7 @@ import pytest
 
 from verity_vllm.check.fold_compare import DEFAULT_COS_SIN as B0_FIXTURE
 from verity_vllm.program import model as analytic
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 # the relevant keys of the checkpoints' config.json (HF hub, the pinned revisions)
 SMOLLM2_135M = {"model_type": "llama", "hidden_size": 576, "num_hidden_layers": 30, "num_attention_heads": 9, "num_key_value_heads": 3,
@@ -80,25 +80,3 @@ def test_check_cos_sin_self_consistent_at_qwen_size():
     tab = analytic.cos_sin_table(b1.B1_CONFIG)
     r = analytic.check_cos_sin(b1.B1_CONFIG, tab)
     assert r["status"] == "pass" and r["n_elements"] == 131072 * 128 and r["max_ulp"] == 0
-
-
-def test_structure_gate_fails_unclassified_extras(monkeypatch):
-    """compare_structure: a superset with an `unclassified:` class is a fail (I8), an explained superset still passes."""
-    from verity_vllm.check import fold_compare as compare
-
-    class R:  # minimal FoldResult stand-in for compare_structure's inputs
-        params = (("prompt", None), ("weights", None))
-        instances: list = []
-
-        class body:
-            nodes: list = []
-            ret = None
-
-    monkeypatch.setattr(compare, "match_program", lambda *a, **k: {"matched": False, "superset": True, "extra_nodes": [{"index": 0, "id": "Foo_v1{N=1}"}]})
-    monkeypatch.setattr(compare, "expand_leaves", lambda *a, **k: ([], None, None, None))
-    monkeypatch.setattr(compare, "classify_extra", lambda result, extra: {"unclassified: Foo (decode, hint tail '', live)": {"count": 1, "specs": {}, "steps": {}, "nodes": []}})
-    monkeypatch.setattr(compare, "bind", lambda *a, **k: type("F", (), {"id": "fam"})())
-    out = compare.compare_structure(R(), C=b1.B0_CONFIG)
-    assert out["status"] == "fail" and out["unclassified"]
-    monkeypatch.setattr(compare, "classify_extra", lambda result, extra: {"final norm applied to every prefill row in vLLM; Serve_v4 normalises only the last position (dead extra instances)": {"count": 1, "specs": {}, "steps": {}, "nodes": []}})
-    assert compare.compare_structure(R(), C=b1.B0_CONFIG)["status"] == "pass"

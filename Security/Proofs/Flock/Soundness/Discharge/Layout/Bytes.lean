@@ -1,4 +1,7 @@
-import Proofs.Flock.Soundness.Binding.Layout
+module
+
+public import Proofs.Flock.Soundness.Binding.Layout
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # Bytes from their bits
@@ -6,6 +9,8 @@ import Proofs.Flock.Soundness.Binding.Layout
 `Binding.bytesAt` reads a byte string off a witness, byte `j`'s bit `t` (bit 0 the least significant) at the address
 `a j t` (`Binding.byteOf`). `bytesAt_eq` says what it reads: a byte string whose bits the witness holds there.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Layout
 

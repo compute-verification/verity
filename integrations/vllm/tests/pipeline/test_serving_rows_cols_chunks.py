@@ -1,6 +1,6 @@
 """A window's ``cols`` units in chunks (`pipeline.serving_rows`, ``CHUNKED``): the column blocks of MoeSum, the MNNVL
 all-reduce and the fused norm row's residual part (``COLS``) are consecutive chunks of at most the partition's ``chunk_cap``,
-each a member on the bit rows C-Flock's `UnitStager` stages (`chunk_rows.unit_rows`: ``in<g>`` per parameter, ``o0``), and the
+each a member on the bit rows Flock's `UnitStager` stages (`chunk_rows.unit_rows`: ``in<g>`` per parameter, ``o0``), and the
 chunks are the template's blocks read once, so that the Definition on each chunk's rows, parsed as the stager parses them, is
 the rows' committed columns, and a flipped word is not."""
 from __future__ import annotations
@@ -16,11 +16,11 @@ from verity_flock.class_statement import UnitStager
 from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
-from verity_vllm.program.registry import boolean_moe as BMOE
-from verity_vllm.program.registry import boolean_sigma as SG
-from verity_vllm.program.registry import boolean_tp_allreduce as BTA
-from verity_vllm.program.registry import moe as M
-from verity_vllm.program.registry import tp_allreduce as TA
+from verity.ml.definitions.registry import boolean_moe as BMOE
+from verity.ml.definitions.registry import boolean_sigma as SG
+from verity.ml.definitions.registry import boolean_tp_allreduce as BTA
+from verity.ml.definitions.registry import moe as M
+from verity.ml.definitions.registry import tp_allreduce as TA
 
 TOPK, WORLD, W, w = 3, 4, 8, 2
 NH, CAP = W // w, 3
@@ -108,7 +108,7 @@ def test_a_chunk_on_its_rows_computes_the_row_s_columns_and_a_flipped_word_is_re
     g, _entries = got[1]
     with pytest.raises(AssertionError, match="outputs are not the IR reference's"):
         st.reference_check(g["rows"], {"o0": g["outs"]["o0"] ^ np.uint16(1)})
-    win = CS.Window(*CS.population_program([(SRW.template(T).fn, 2 * NH)], several=True), {"law": "subset", "k": 2}, "ab" * 32,
+    win = CS.Binding(*CS.population_program([(SRW.template(T).fn, 2 * NH)], several=True), {"law": "subset", "k": 2}, "ab" * 32,
                     tuple(ms))
     assert CS.commit(win, [g for g, _e in got], salt_key=bytes(32)).window.population == 2 * NH
 

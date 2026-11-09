@@ -1,16 +1,18 @@
-import Definitions.Accounting.RateAudit
-import Definitions.Accounting.RateAuditJoint
+module
+
+public import Definitions.Accounting.RateAudit
+public import Definitions.Accounting.RateAuditJoint
 
 /-!
 # The rate audit with partial completion (trusted)
 
 `RateAudit.lean`'s game, except that rebuilding is no longer all-or-nothing. There, `rebuild j` returns the whole word
-`E_j` at `c_enc`, so a device that keeps part of a word and completes the rest (the red team's F27: keep a word's top
-bits, complete the bottom `x` from the known payload by a lattice) falls outside the game. Here the chip may instead
-`complete j x g`: obtain `x ≤ b` bits of information about word `j`, any `x`-bit function `g` of it (its bottom `x` bits,
-or anything else), at a compute cost `cost x` that depends only on `x`. The device keeps whatever else of the word it
-needs in its on-chip state, device memory or side sources, which the audit counts as before. A whole rebuild is
-`complete j b _ id`, at `cost b`, so every device of `RateAudit.lean`'s game is one of this game.
+`E_j` at `c_enc`, so a device that keeps part of a word and completes the rest (keep a word's top bits, complete the
+bottom `x` from the known payload by a lattice) falls outside the game. Here the chip may instead `complete j x g`:
+obtain `x ≤ b` bits of information about word `j`, any `x`-bit function `g` of it (its bottom `x` bits, or anything
+else), at a compute cost `cost x` that depends only on `x`. The device keeps whatever else of the word it needs in its
+on-chip state, device memory or side sources, which the audit counts as before. A whole rebuild is `complete j b _ id`,
+at `cost b`, so every device of `RateAudit.lean`'s game is one of this game.
 
 The cost is a parameter of the game, as `c_enc` is in `RateAudit.lean`. What it must be for a deployed codec is the
 named assumption `Accounting.Assumptions.WorkHardness` (`Definitions/Accounting/Assumptions/RateAudit.lean`): completing `x`
@@ -21,7 +23,7 @@ has no amortization across words (the claim `rate-codec-work`).
 
 Everything else (the random oracle at a fresh seed, the certified stream, on-chip state laid out before the seed,
 device memory read only through `ingress`, side sources answering any function of the store and the chip's address, the
-side link's `L` bits with the stream's `ρ` among them, the `q` queries, the sample drawn after the output) is
+side link's `L` bits with the stream's `ρ` among them, the `q` queries, the sample sampled after the output) is
 `RateAudit.lean`'s, and a run's world is `Rate.World`, whose `store` answers completions.
 
 `RealizesRatePartial` is `RealizesRate` (`RateAuditJoint.lean`) for a joint run whose bandwidth audit a partial device
@@ -29,6 +31,8 @@ plays, without `RealizesRate`'s compute field: that the game's compute and the c
 the named assumption `Accounting.Assumptions.RateComputeAdditive` (the actual-circuit model's W), which the guarantees take
 as a hypothesis.
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 
@@ -113,7 +117,7 @@ def queries (w : World N b h ρ) : PChip N b h ρ α → List (Bits ρ × Fin N 
 
 end PChip
 
-/-- A device with partial completion: `Device`'s on-chip state, device memory and free side sources, laid out from the
+/-- A device with partial completion: `Prover`'s on-chip state, device memory and free side sources, laid out from the
 store before the seed and the stream, and a chip program with completions from that state. In every world the program
 takes in at most `L` bits over the side link (free side sources and the certified stream together) and makes at most
 `q` oracle queries. -/

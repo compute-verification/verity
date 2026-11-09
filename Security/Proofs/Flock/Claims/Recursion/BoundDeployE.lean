@@ -1,10 +1,43 @@
-import Proofs.Flock.Claims.Recursion.BoundDeploy
-import Proofs.Flock.Claims.DeployE
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundDeploy
+public import Proofs.Flock.Claims.DeployE
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The bound record at the element-level verifier's steps (DecompB, option (b))
 
-`RecDeploy.KSBoundDeployed` and its ∀-form `KSBoundRoute` take the element-level verifier's steps `nextE` as a
+`RecDeploy.KSBoundDeployed` and its ∀-form `KSBoundRouteCols` take the element-level verifier's steps `nextE` as a
 parameter. Option (b) instantiates them with the element-level inner verifier's (`FlockDeploy.VE`, the deployed plain
 verifier with its digests of encodings dropped). What that reads, and what it doesn't:
 
@@ -22,6 +55,8 @@ So a bound proved at `nextE := VE.next` is a bound on the deployed compiled veri
 `VE` are (P1) and (P4) at `VE`'s steps, not yet proved (`plainKSAbort_bd` and `lastBindsEC_deployed_sha512_closed` are
 at the deployed plain verifier's own steps).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

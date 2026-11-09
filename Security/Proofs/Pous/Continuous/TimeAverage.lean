@@ -1,31 +1,35 @@
-import Mathlib.Data.Fintype.Fin
-import Proofs.Pous.Continuous.PerAnswer
+module
+
+public import Mathlib.Data.Fintype.Fin
+public import Proofs.Pous.Continuous.PerAnswer
 
 /-!
 # The continuous audit's time-averaged bound: `Pous.Guarantees.ContinuousTimeAverage`
 
 The proof, pinned as `Pous.SecurityProofs.ContinuousTimeAverage`. The memory challenger and the
-responder are `Security/Definitions/Pous/Model/Continuous.lean`'s; the memory challenger draws one coin and one
+responder are `Security/Definitions/Pous/Model/Continuous.lean`'s; the memory challenger flips one coin and one
 index per slot, and a challenge arrives at slot `t` iff its coin is below `a`.
 
 1. **The arrivals before `t`** (`pre`) are a prefix of all the arrivals, because the arrivals are sorted
    (`arrivals_split`). If a challenge arrives at `t`, it is the next one (`arrAt_pre`, `histAt_get`).
 2. **The view at slot `t`.** Replace the arrival schedule by `arrS a x t`: the arrivals before `t`, then `t`. The state
    after the challenges that arrived before `t` is the same under both (`contAfter_slot`), and it depends only on the
-   draws before `t` (`pre_congr`, `histAt_congr`). This is where queueing matters: the indices sent before the
+   samples before `t` (`pre_congr`, `histAt_congr`). This is where queueing matters: the indices sent before the
    challenge that arrives at `t` are `histAt a x t`, whatever the rounds did.
 3. **The bridge.** A challenge arriving at `t` is challenge `|pre a x t|`, and its record is the record of index
    `(x t).2` in the view at `t` (`record_slot`). At an idle slot the view's memory at the send time is `contHeldAt`
    (`contMem_slot`). The arriving slots inject into the records (`misses_le`), so an accepting run has at most `f`
    arriving slots that miss.
-4. **One slot.** In the view at `t` the history `histAt a x t` and the schedule are fixed by the earlier draws, so
-   `PerAnswer.lean`'s `pr_bad_le` and `miss_ge` apply as they are: off `bad`, the slot's draw `(c, i)` is an arrival
+4. **One slot.** In the view at `t` the history `histAt a x t` and the schedule are fixed by the earlier samples, so
+   `PerAnswer.lean`'s `pr_bad_le` and `miss_ge` apply as they are: off `bad`, the slot's sample `(c, i)` is an arrival
    that misses with probability at least `(a/b)·(ε_t − ε_proof)` (`slotQ_le`, with `pr_coin` and `pr_and_prod`).
-5. **Counting** (`pr_misses_gt_le`) over the `T` slot draws, with `q_t = (a/b)·max(ε_t − ε_proof, 0)` at an idle slot
-   off `bad` (`slotQ_eq`) and `0` elsewhere; the history `pr_misses_gt_le` indexes by is the list of earlier draws,
+5. **Counting** (`pr_misses_gt_le`) over the `T` slot samples, with `q_t = (a/b)·max(ε_t − ε_proof, 0)` at an idle slot
+   off `bad` (`slotQ_eq`) and `0` elsewhere; the history `pr_misses_gt_le` indexes by is the list of earlier samples,
    read back as a schedule by `pad`. The stopped union over the `T` slots costs `T·(β + 1)·π`
    (`continuous_time_average`).
 -/
+
+@[expose] public section
 
 namespace PousContinuous
 
@@ -147,14 +151,14 @@ theorem take_histAt (a : ℕ) (x : Fin T → Fin b × Fin B) (t : ℕ) :
   rw [histAt_T_split a x t]
   exact List.take_left' (length_histAt a x t)
 
-/-- The challenge that arrives at `t` carries the index drawn at `t`. -/
+/-- The challenge that arrives at `t` carries the index sampled at `t`. -/
 theorem histAt_get (a : ℕ) (x : Fin T → Fin b × Fin B) (t : Fin T) (ht : ((x t).1 : ℕ) < a) :
     (histAt a x T)[(pre a x t).length]? = some (x t).2 := by
   rw [histAt_T_split a x t, List.getElem?_append_right (by rw [length_histAt]), length_histAt, Nat.sub_self,
     List.getElem?_map, sorted_head (arrivals_sorted a x) t (mem_arrivals ht)]
   rfl
 
-/-- **The arrivals before `t` depend only on the draws before `t`.** -/
+/-- **The arrivals before `t` depend only on the samples before `t`.** -/
 theorem pre_congr (a : ℕ) {x x' : Fin T → Fin b × Fin B} {t : ℕ}
     (hx : ∀ s : Fin T, (s : ℕ) < t → x s = x' s) : pre a x t = pre a x' t := by
   unfold pre arrivals
@@ -212,12 +216,6 @@ theorem contRecord_congr {arr arr' : ℕ → ℕ} (s : ContState sch.B) (i : Fin
     contRecord mach D Q D_late Q_late W pp C ω arr s i = contRecord mach D Q D_late Q_late W pp C ω arr' s i := by
   unfold contRecord contProg contMem contSend
   rw [hl]
-
-theorem length_contRecords (arr : ℕ → ℕ) :
-    ∀ (s : ContState sch.B) (l : List (Fin sch.B)),
-      (contRecords mach D Q D_late Q_late W pp C ω arr s l).length = l.length
-  | _, [] => rfl
-  | s, i :: l => by simp [contRecords, length_contRecords arr _ l]
 
 end Congr
 
@@ -291,13 +289,13 @@ theorem misses_le :
 
 end Slot
 
-/-! ## One slot's draw -/
+/-! ## One slot's sample -/
 
 /-- The coin is below `a` with probability `a/b`. -/
 theorem pr_coin (a b : ℕ) (hab : a ≤ b) : (pr fun c : Fin b => (c : ℕ) < a).toReal = a / b := by
   rw [pr_toReal, Fin.card_filter_val_lt, min_eq_right hab, Fintype.card_fin]
 
-/-- The two parts of a slot's draw are independent. -/
+/-- The two parts of a slot's sample are independent. -/
 theorem pr_and_prod {α β : Type} [Fintype α] [Fintype β] (P : α → Prop) (R : β → Prop) :
     (pr fun d : α × β => P d.1 ∧ R d.2).toReal = (pr P).toReal * (pr R).toReal := by
   classical
@@ -307,7 +305,7 @@ theorem pr_and_prod {α β : Type} [Fintype α] [Fintype β] (P : α → Prop) (
   rw [pr_toReal, pr_toReal, pr_toReal, hf, Finset.card_product, Fintype.card_prod, Nat.cast_mul, Nat.cast_mul,
     mul_div_mul_comm]
 
-/-- A history of draws, oldest first, as a draw at every slot: `d₀` past its end. -/
+/-- A history of samples, oldest first, as a sample at every slot: `d₀` past its end. -/
 def pad {α : Type} {T : ℕ} (d₀ : α) (h : List α) : Fin T → α := fun s => h.getD s d₀
 
 theorem pad_take {α : Type} {T : ℕ} (d₀ : α) (y : Fin T → α) (j : ℕ) (s : Fin T) (hs : (s : ℕ) < j) :
@@ -347,19 +345,13 @@ theorem slotHit_congr (u : M.Ω × sch.Coins) {x x' : Fin T → Fin b × Fin sch
   unfold slotHit
   rw [arrS_congr a hx, histAt_congr a hx]
 
-theorem slotBad_congr (u : M.Ω × sch.Coins) {x x' : Fin T → Fin b × Fin sch.B} {t : ℕ}
-    (hx : ∀ s : Fin T, (s : ℕ) < t → x s = x' s) :
-    slotBad sch D Q D_late Q_late β W mach a u x t ↔ slotBad sch D Q D_late Q_late β W mach a u x' t := by
-  unfold slotBad
-  rw [arrS_congr a hx, histAt_congr a hx]
-
 theorem slotQ_congr (u : M.Ω × sch.Coins) {x x' : Fin T → Fin b × Fin sch.B} {t : ℕ}
     (hx : ∀ s : Fin T, (s : ℕ) < t → x s = x' s) :
     slotQ sch D Q D_late Q_late β W mach a u x t = slotQ sch D Q D_late Q_late β W mach a u x' t := by
   unfold slotQ slotBad
   rw [arrS_congr a hx, histAt_congr a hx]
 
-/-- **One slot.** The slot's share of the bound is at most the probability that its draw is an arrival that misses:
+/-- **One slot.** The slot's share of the bound is at most the probability that its sample is an arrival that misses:
 `(a/b)·(ε_t − ε_proof)` off `slotBad`, by `miss_ge`. -/
 theorem slotQ_le (hab : a ≤ b) (u : M.Ω × sch.Coins) (x : Fin T → Fin b × Fin sch.B) (t : ℕ) :
     slotQ sch D Q D_late Q_late β W mach a u x t ≤

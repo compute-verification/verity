@@ -1,4 +1,27 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Layout
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Defs
+public import Proofs.Flock.Soundness.Discharge.Hidden.Layout
+public import Proofs.Flock.Soundness.Discharge.Hm.Flat
+public import Proofs.Flock.Soundness.ParseUnitPre
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Aliased.Rows
+import Proofs.Flock.Soundness.Discharge.Hidden.Delta
+import Proofs.Flock.Soundness.Discharge.Hm.Nets
+import Proofs.Flock.Soundness.ExecLookup
 
 /-!
 # A hidden-output statement's flat twin, and its output rows' message bits
@@ -10,6 +33,8 @@ so its flat Δ count is zero (`flat_count_msg`), and `outPairs` copies into it o
 statement's row there is a copy of `outSrc` (`msg_copy`), its flat twin's a self row (`flat_self`). So a satisfying
 witness of the hidden statement satisfies its flat twin (`sat_flat`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -23,18 +48,42 @@ open Hm Compose Flock.DeriveAll Types.Dag
 abbrev flatTwin (st : Stmt) : Stmt :=
   { st with da := (HmRow.delta st.c st.pin).1, db := (HmRow.delta st.c st.pin).2 }
 
-/-- **What the copy positions read**, for a statement whose circuit `HmRow.parse` accepted and whose Δ is
-`HmRow.delta`'s. -/
-theorem unitFacts_of_parse {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {st : Stmt}
-    (hp : HmRow.parse tags cf tables = .ok st.c) (hda : st.da = (HmRow.delta st.c st.pin).1) :
-    Aliased.UnitFacts tags st := by
-  obtain ⟨P, ⟨more, hm, hmore⟩, hunit, hsn, hhn⟩ := parse_facts_nets (pre := #[]) (fun _ hx => by simp at hx) hp
+/-- **What the copy positions read, with nets `pre` first**, for a statement whose circuit `HmRow.parse` accepted with
+nets `pre` ahead of the file, whose unit's rows end at its useful rows, and whose Δ is `HmRow.delta`'s. -/
+theorem unitFacts_ofPre {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)}
+    {pre : Array (String × Net)} {st : Stmt} (hp : HmRow.parse tags cf tables (pre := pre) = .ok st.c)
+    (hrows : st.c.unit.a.rows ≤ st.c.unit.useful ∧ st.c.unit.b.rows ≤ st.c.unit.useful)
+    (hda : st.da = (HmRow.delta st.c st.pin).1) : Aliased.UnitFactsPre tags pre st := by
+  obtain ⟨P, -, hunit, hsn, hhn⟩ := parse_factsPre_nets hp
   obtain ⟨ls, hcheck⟩ := P.check
   have C := check_facts P.typed hcheck
   have hname : (st.c.nets.getD st.c.unitNet default).1 = "unit" := by
     obtain ⟨hlt, hp', -⟩ := Array.findIdx?_eq_some_iff_getElem.1 hunit
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlt, Option.getD_some]
     simpa using hp'
+  refine ⟨P, C, by rw [hda]; exact delta_flat st.c st.pin P.typed, fun he => ?_, fun he => ?_, hrows.1, hrows.2⟩
+  · rw [← he, hname] at hsn
+    exact absurd hsn (by unfold HmRow.SHA_NET; decide)
+  · rw [← he, hname] at hhn
+    exact absurd hhn (by unfold HmRow.HM_NET; decide)
+
+/-- **What the copy positions read, for a unit given ahead of the file** (a templated file's unit net `n`, which is not
+`Built`): for a statement whose circuit `HmRow.parse` accepted with `n` first, whose Δ is `HmRow.delta`'s, when `n`'s
+rows end at its useful rows. -/
+theorem unitFacts_of_parsePre {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {n : Net}
+    {st : Stmt} (hp : HmRow.parse tags cf tables (pre := #[("unit", n)]) = .ok st.c)
+    (hrows : n.a.rows ≤ n.useful ∧ n.b.rows ≤ n.useful) (hda : st.da = (HmRow.delta st.c st.pin).1) :
+    Aliased.UnitFactsPre tags #[("unit", n)] st :=
+  unitFacts_ofPre hp ((unit_of_parsePre hp).2.2 ▸ hrows) hda
+
+/-- **What the copy positions read**, for a statement whose circuit `HmRow.parse` accepted and whose Δ is
+`HmRow.delta`'s: the unit is one of the file's nets, whose rows `Net.parse` ends at its useful rows. -/
+theorem unitFacts_of_parse {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {st : Stmt}
+    (hp : HmRow.parse tags cf tables = .ok st.c) (hda : st.da = (HmRow.delta st.c st.pin).1) :
+    Aliased.UnitFacts tags st := by
+  obtain ⟨P, ⟨more, hm, hmore⟩, -, -, -⟩ := parse_factsPre_nets hp
+  obtain ⟨ls, hcheck⟩ := P.check
+  have C := check_facts P.typed hcheck
   have hmem : st.c.nets.getD st.c.unitNet default ∈ more := by
     have : st.c.nets.getD st.c.unitNet default ∈ st.c.nets.toList := getD_mem_toList P.unitNet
     rw [hm] at this
@@ -46,12 +95,7 @@ theorem unitFacts_of_parse {tags : Tags} {cf : ByteArray} {tables : List (String
       have h2 : (st.c.nets.getD st.c.unitNet default).2.lookup.isSome = false := C.unit_lookup
       rw [h1] at h2
       cases h2
-  refine ⟨P, C, by rw [hda]; exact delta_flat st.c st.pin P.typed, fun he => ?_, fun he => ?_,
-    hrows.1.le, hrows.2.le⟩
-  · rw [← he, hname] at hsn
-    exact absurd hsn (by unfold HmRow.SHA_NET; decide)
-  · rw [← he, hname] at hhn
-    exact absurd hhn (by unfold HmRow.HM_NET; decide)
+  exact (unitFacts_ofPre hp ⟨hrows.1.le, hrows.2.le⟩ hda).facts (fun _ hx => by simp at hx)
 
 /-! ## An output row's message bits -/
 
@@ -205,7 +249,7 @@ theorem flat_count_msg (hrw : RowWires st.c) (hu : ∀ p ∈ st.c.ports.toList, 
   have hoff' : 1536 * shaSub st.c p (b / 128) + 512 + msgOff b t <
       (st.c.nets.getD st.c.shaNet default).2.inWords * Flock.WORD := by
     rw [shaNet_inRows R.rowNets]; omega
-  obtain ⟨hum, huk, huc⟩ := unit_range_facts P C
+  obtain ⟨hum, huk, huc⟩ := unit_range_facts_of P.unitNet C
   have hunit : ∀ s₀ b, s₀ < st.c.unitRange.count → b < 2 ^ st.c.unitRange.slotLog →
       st.c.unitRange.slot s₀ + b ≠ x := fun s₀ b hs₀ hb he =>
     atSlot_ne L F hnn P.unitNet F.sha hat (show AtSlot st.c st.c.unitNet s₀ b x from ⟨hs₀, hb, he.symm⟩)
@@ -263,7 +307,7 @@ theorem flat_count_msg (hrw : RowWires st.c) (hu : ∀ p ∈ st.c.ports.toList, 
     have hne : w.dst.1 ≠ st.c.shaNet := (hrest w hw).1
     obtain ⟨hm', hk', -⟩ := rangeOf_spec (C.one_range _ hd1)
     have hq := getD_mem_toList hd3 (d := default)
-    have hle := (nets_ok P w.dst.1).1.2.2 _ hq
+    have hle := (F.nets w.dst.1).1.2.2 _ hq
     have hfit := (L.fit w.dst.1).2
     intro he
     refine atSlot_ne L F hnn hd1 hne hat (s' := g * st.c.perVu.getD w.dst.1 0 + w.dst.2.1)

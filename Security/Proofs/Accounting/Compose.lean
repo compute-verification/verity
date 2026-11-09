@@ -1,13 +1,16 @@
-import Proofs.Accounting.Compose.ServiceCovers
-import Definitions.Accounting.Guarantees.Compose
-import Proofs.Accounting.TS
-import Proofs.Accounting.Compose.ServiceBudget
-import Proofs.Accounting.Compose.SplitRateMerged
-import Proofs.Accounting.Compose.BindingOfECR
-import Proofs.Accounting.Compose.CircuitWork
-import Proofs.Accounting.Compose.WholeLuckOfEntropy
-import Proofs.Accounting.Compose.CircuitWorkSeeded
-import Proofs.Pouw.RelativeSecurity
+module
+
+public import Proofs.Accounting.Compose.ServiceCovers
+public import Definitions.Accounting.Guarantees.Compose
+public import Proofs.Accounting.TS
+public import Proofs.Accounting.Compose.ServiceBudget
+public import Proofs.Accounting.Compose.SplitRateMerged
+public import Proofs.Accounting.Compose.BindingOfECR
+public import Proofs.Accounting.Compose.CircuitWork
+public import Proofs.Accounting.Compose.WholeLuckOfEntropy
+public import Proofs.Accounting.Compose.CircuitWorkSeeded
+public import Proofs.Pouw.RelativeSecurity
+public import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # PoUW's credit on an arbitrary declared circuit: proofs
@@ -15,13 +18,11 @@ import Proofs.Pouw.RelativeSecurity
 Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers`, `CircuitWork`, `CircuitWorkSeeded`,
 `BindingOfECR` and `WholeLuckOfEntropy` (steps 1–6, 9, 11 and 12, each in its own file under
 `Proofs/Accounting/Compose/`), and `CreditOfWork` (step 7), `CircuitCredit` (step 8) and `CircuitCreditSeeded`
-(step 10) below; note:compute-accounting/20261018T1758Z-draft-compose-r6 gives the order. What the window's proofs'
-layer meets is proved: its static half is defined from the IR (`Declared.layer`), so `StageCuts` (at every value
-committed by its IR cut, which every one is at `Declared.atIR`), `StageCoins` (under `Declared.Wf`), `StageSlots`,
-`WriterReads` and
-`StageComplete` (under `Declared.Wf` and `units ≤ N_p`) are lemmas below, not premises, as are the draw cut of
-`Declared.atDraw`'s layer and `serviceGame`, `tileMode` as `jointGame`, `jointMode` at a split-stage window's joint
-run.
+(step 10) below. What the window's proofs' layer meets is proved: its static half is defined from the IR
+(`Declared.layer`), so `StageCuts` (at every value committed by its IR cut, which every one is at `Declared.atIR`),
+`StageCoins` (under `Declared.Wf`), `StageSlots`, `WriterReads` and `StageComplete` (under `Declared.Wf` and
+`units ≤ N_p`) are lemmas below, not premises, as are the sample cut of `Declared.atSample`'s layer and `serviceGame`,
+`tileMode` as `jointGame`, `jointMode` at a split-stage window's joint run.
 
 1. `SplitRateClosed` (proved, `Compose/SplitRateClosed.lean`), from step 2. A larger rate keeps `SplitRateAt` at the
    same `ν, ν₀`, and each closed branch is at least the sharp one: at `c = Kρw_max` and `q = p + (1 − p)e^{−c}`,
@@ -37,11 +38,11 @@ run.
    factors over the stages; `SplitRate` per stage at its share `≤ w_max`, its luck in expectation from `LuckAt`
    (`E[L_F] ≤ p·E[W_F]`, `E[L_0] ≤ p0·E[W_0]`), then backward induction over the stages, as
    `Accounting.SecurityProofs.TS.StageBudget`.
-5. `ServiceCovers` (proved, `Compose/ServiceCovers.lean`): `Accounting.SecurityProofs.TS.DrawnLayer.covers_of_cone` at
+5. `ServiceCovers` (proved, `Compose/ServiceCovers.lean`): `Accounting.SecurityProofs.TS.SampledLayer.covers_of_cone` at
    the tiles' words (`≥ 0`), at any joint run (the live statements use it at `SplitStages.joint`, by `serviceGame_eq`
    and `tileMode_eq`). The game's
    deficiency is the not-paid tiles' `tileCone` (the three modes, at `1` and `1`), so it is enough that a tile's layer
-   cone is at most `N_w` times its `tileCone`: a layer edge `DrawnLayer.Late u v` at slot `k` has its position a value
+   cone is at most `N_w` times its `tileCone`: a layer edge `SampledLayer.Late u v` at slot `k` has its position a value
    the prover writes and a gate of `u`'s unit (`layer_stageSlots`), and either one of `v`'s own gates (`u = v`) or an
    operand of one, read by a gate `j` of `v`'s, whose round is `v`'s (`Declared.Wf`, `layer_stageCoins`). Under
    `LayerCommitted` the position is committed by its IR cut, so `j`'s round is before that cut (`layer_stageCuts`),
@@ -59,11 +60,11 @@ run.
    protocol fact under which those are the service's coins, as `SeedNamed` is in step 9. Under `LayerCommitted` an
    input's layer cut is its IR cut (`layer_stageCuts`: an input has no second case), so a run input is bound before its
    first reader's coin. Then
-   `Accounting.SecurityProofs.TS.DrawnRightOff` at `S = 1` (its draw the layer's, `drawOf`) gives one event of
-   probability at most `δ_bind + δ_ks` off which every accepted drawn tile is right at its committed slots, so `Of`
-   gives the share game's pass (RT-I8's `compose_sampled` shape); `ServiceBudget` on `serviceGame` at `a`, `b` and
-   `shareCone` (the same coins and pass) and `budget_tail` at `t = ln(1/δ_s)` bound `a·S_F + b·S_0 ≥ Λ·ln(1/δ_s)` by
-   `δ_s`, `S_F`, `S_0` the folded and whole shares at `shareCone`. Off both,
+   `Accounting.SecurityProofs.TS.SampledRightOff` at `S = 1` (its sample the layer's, `drawOf`) gives one event of
+   probability at most `δ_bind + δ_ks` off which every accepted sampled tile is right at its committed slots, so `Of`
+   gives the share game's pass; `ServiceBudget` on `serviceGame` at `a`, `b` and `shareCone` (the same coins and pass)
+   and `budget_tail` at `t = ln(1/δ_s)` bound `a·S_F + b·S_0 ≥ Λ·ln(1/δ_s)` by `δ_s`, `S_F`, `S_0` the folded and whole
+   shares at `shareCone`. Off both,
    `UnitFixed` (its `WriterReads` by `layer_writerReads`) at `tileMode` and step 5's `Covers` give the good tiles' words
    at least `(1 − (c_F + c₀))·N_w`, `c_F`, `c₀` the folded and whole shares at `tileCone`, and the words not skipped
    whole at least `(1 − S_0)·N_w`, since a tile's words are at most `N_w` times its `shareCone` (a tile's cone holds
@@ -93,10 +94,10 @@ run.
    over the `rounds` rounds and the two modes gives `L_F ≤ 4·U_F + Π_F` and `L_0 ≤ κ₀·U_0 + Π_0` (`gainSum_le`,
    `premiumOf` at `seedTheta` and at `wholeTheta`) off `ε_id + 2·rounds·(δ_g + δ_b)`, with no stage order: each
    round's moment fixes every other answer of the window, so a mode that reads a later round's answers is in it.
-   Given the rounds' coins, the service's live draw of a uniform `K_d`-subset misses the tiles whose checked values
+   Given the rounds' coins, the service's live sample of a uniform `K_d`-subset misses the tiles whose checked values
    aren't honest with probability at most `(1 − ρ·U)^{K_d} ≤ e^{−ρ·K_d·U}`, so an accepted run with
-   `ρ·K_d·U ≥ ln(1/δ_s)` has probability at most `δ_s` (`live_le`). Off these, `DrawnRightOff` on
-   `Declared.atDraw`'s layer (its `MovedIn`, `JointSound`, `Pins`) and `Of` give the share game's pass; `UnitFixed`
+   `ρ·K_d·U ≥ ln(1/δ_s)` has probability at most `δ_s` (`live_le`). Off these, `SampledRightOff` on
+   `Declared.atSample`'s layer (its `MovedIn`, `JointSound`, `Pins`) and `Of` give the share game's pass; `UnitFixed`
    and step 5's `Covers` on `Declared.atIR`'s layer (`LayerCommitted` by `layerCommitted_atIR`) at `jointMode` give
    the good tiles' words as in step 6 (`WorkProof.work_of_bounds`). The two layers differ only in their cuts, and
    `UnitFixed`, `Covers` and the game read none of a layer's committed values, so they combine: each mode's share is
@@ -106,7 +107,7 @@ run.
    hold, as `LayerCommitted` is for the live pair.
 10. `CircuitCreditSeeded` (proved): step 9 at `a = aOf`, `b = bOf`, and step 7 on each run off its event at
    `r = rOfSeeded`; the certificate is issued at `.seeded`.
-11. `BindingOfECR` (proved, `Compose/BindingOfECR.lean`): `Accounting.SecurityProofs.TS.DrawnBindingOfFork` gives
+11. `BindingOfECR` (proved, `Compose/BindingOfECR.lean`): `Accounting.SecurityProofs.TS.SampledBindingOfFork` gives
    `Pr[MovedIn] ≤ |L|·√Pr[fork]`; AM–GM, `|L|·√x ≤ δ' + |L|²·x/(4δ')`; then `Pr[fork] ≤ F.Pr H + κ` and, where
    `Claims.ExpectedCR H F` holds, `F.Pr H ≤ E[cost]/2^256`, through `ENNReal.ofReal`'s monotonicity and
    `ofReal_add_le`; where it fails, the right side is `⊤` unless `L` is empty, where `MovedIn` can't hold (no slot to
@@ -120,6 +121,8 @@ run.
    entropy conjunct bounds each `Σ_b [S ⊆ Lk]` by `|B|·e^{−Σ_S h}`, and the sum folds back to
    `|B|·Π_v (e^{−h_v}·e^{x_v} + (1 − e^{−h_v})·e^{−κ₀x_v})`, each factor in `[0, 1]`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Compose
 
@@ -146,7 +149,7 @@ section Layer
 variable {ι C Ξ V : Type} (Cd : Declared ι) {Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
   (pr : ProofRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np V)
 
-theorem layer_draw : (Cd.layer hr hK pr).draw = drawOf hK := rfl
+theorem layer_sample : (Cd.layer hr hK pr).draw = drawOf hK := rfl
 
 theorem layer_src (ℓ : ℕ) : (Cd.layer hr hK pr).src ℓ =
     if h : ℓ < Cd.dag.length ∧ Cd.binding ℓ ≠ some .coin ∧ Cd.unit ℓ < Np then some (0, ⟨Cd.unit ℓ, h.2.2⟩)
@@ -182,8 +185,8 @@ theorem layer_stageCuts : StageCuts Cd (Cd.layer hr hK pr) := fun ℓ _ hc => by
 /-- The circuit cut at the IR commits by the IR's cuts. -/
 theorem layerCommitted_atIR : LayerCommitted Cd.atIR := fun _ _ => Or.inl (Nat.zero_le _)
 
-/-- The layer of the circuit committed at the draw cuts every position at the draw. -/
-theorem layer_atDraw_cut (ℓ : ℕ) : (((Cd.atDraw.layer hr hK pr).cut ℓ).2 : ℕ) = Cd.rounds :=
+/-- The layer of the circuit committed at the sample cuts every position at the sample. -/
+theorem layer_atSample_cut (ℓ : ℕ) : (((Cd.atSample.layer hr hK pr).cut ℓ).2 : ℕ) = Cd.rounds :=
   Nat.min_eq_right (Nat.le_max_right _ _)
 
 theorem layer_stageCoins (hw : Cd.Wf) : StageCoins Cd (Cd.layer hr hK pr) :=
@@ -305,7 +308,7 @@ theorem CircuitCredit : Accounting.Guarantees.Compose.CircuitCredit := by
     ρ p p0 wmax Λ δs δbind δks win hS hρ hρN hw hlk hΛ hSR hgame hOf hMoved hJS hPins hMu hRB hG hUF hFits hMS
     hSplit hClock hDisp hTen hPipe hSmem hWords hSem hFold hFill
   obtain ⟨ha, hb⟩ := costs_nonneg Sc Cd Z lam hMS
-  unfold Certificate.Holds
+  unfold CreditCertificate.Holds
   refine le_trans (Pouw.RelativeSecurity.prob_mono ?_)
     (CircuitWork Sc Cd hN hr hK W Pl pr folded ρ p p0 _ _ wmax Λ δs δbind δks hS hρ hρN hw hlk ha hb hΛ hSR
       hgame hOf hMoved hJS hPins hMu hRB hG hUF)
@@ -321,7 +324,7 @@ theorem CircuitCreditSeeded : Accounting.Guarantees.Compose.CircuitCreditSeeded 
     T J ρ κ0 δs δg δb δbind δks win hS hδg hKd hρ hρN ha hκ hgame hOf hMoved hJS hPins hSE hSLF hSLW hUF hFits hMS
     hSplit hClock hDisp hTen hPipe hSmem hWords hSem hFold hFill
   have hb := (costs_nonneg Sc Cd Z lam hMS).2
-  unfold Certificate.Holds
+  unfold CreditCertificate.Holds
   refine le_trans (Pouw.RelativeSecurity.prob_mono ?_)
     (CircuitWorkSeeded Sc Cd hN hr hK R Pl pr folded sq εid T J ρ _ _ κ0 δs δg δb δbind δks hS hδg hKd hρ hρN ha hb
       hκ hgame hOf hMoved hJS hPins hSE hSLF hSLW hUF)

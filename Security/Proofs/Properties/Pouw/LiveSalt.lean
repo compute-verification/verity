@@ -1,7 +1,10 @@
-import Properties.Pouw.LiveSalt
-import Proofs.Properties.Pouw.LiveSalt.Ledger
-import Proofs.Properties.Pouw.Commit
-import Proofs.Properties.NetworkRecords.Bytes
+module
+
+public import Properties.Pouw.LiveSalt
+public import Proofs.Properties.Pouw.LiveSalt.Ledger
+public import Proofs.Properties.Pouw.Commit
+public import Proofs.Flock.Bytes
+import all Lean.Data.Json.Basic
 
 /-!
 # Proofs of the Pearl-C live salt's properties (`Properties.Pouw.LiveSalt`)
@@ -16,8 +19,11 @@ one open and its one root (`oneRoot_of`), and so for `PouwCheck.liveSaltCheck` (
 and the ledger's are `LedgerShows`, from the ledger's invariant (`Ledger.ledgerShows_of`). Two accepted passes of one
 epoch are pinned on one root, so they read one session of the ledger, and each one's commitment has the root whose hex
 the session's `end` recorded (`Ledger.sessionNamed_root`). So, given `LiveCoinBinding`, their salt coins are one coin
-and their salts one salt, or the openings exhibit a collision (`onePair_of_binding`).
+and their salts one salt, or the openings exhibit a collision (`onePair_of_binding`). `LiveSalt.Coin` proves
+`LiveCoinBinding` (`liveCoinBinding`), so `onePair` holds with no hypothesis.
 -/
+
+@[expose] public section
 
 set_option mvcgen.warning false
 
@@ -26,7 +32,7 @@ namespace Properties.Pouw.LiveSalt
 open Lean (Json)
 open Std.Do
 open Properties.NetworkCertifier.Bytes (bs bs_append bs_length bs_inj)
-open SampledProofs.Challenger (Audited ChallengerKey LedgerEntry LiveCommitment LiveOpening Roots familiesJson liveReason
+open Spot.Challenger (Audited ChallengerKey LedgerEntry LiveCommitment LiveOpening Roots familiesJson liveReason
   pinnedSession sessionNamed)
 open Properties.Pouw.LiveSalt.Ledger (bind_ok of_triple ok_spec throw_spec ledgerShows_of sessionNamed_root)
 
@@ -128,21 +134,21 @@ theorem saltSession_ok {key ledger pins main window session : Json} {res : Audit
   obtain ⟨cr, hcr, rfl⟩ := h
   exact ⟨ck, hck, ha, hcr⟩
 
-theorem field_eq (j : Json) (k : String) : PouwWindow.field? j k = SampledProofs.field? j k := by
+theorem field_eq (j : Json) (k : String) : PouwWindow.field? j k = Spot.field? j k := by
   cases j <;> rfl
 
-theorem at_eq (j : Json) (k : String) : PouwCheck.at? j k = SampledProofs.getD j k := by
-  simp only [PouwCheck.at?, SampledProofs.getD, field_eq]
+theorem at_eq (j : Json) (k : String) : PouwCheck.at? j k = Spot.getD j k := by
+  simp only [PouwCheck.at?, Spot.getD, field_eq]
 
 theorem jsonStrIs_eq {j : Json} {s : String} (h : PouwCheck.jsonStrIs j s = true) : j = .str s := by
   cases j <;> simp_all [PouwCheck.jsonStrIs]
 
-theorem int_of_intOf {j : Json} {n : Int} (h : PouwWindow.intOf? j = some n) : SampledProofs.int? j = some n := by
+theorem int_of_intOf {j : Json} {n : Int} (h : PouwWindow.intOf? j = some n) : Spot.int? j = some n := by
   cases j with
   | num x =>
     obtain ⟨m, e⟩ := x
     cases e with
-    | zero => simpa [PouwWindow.intOf?, SampledProofs.int?] using h
+    | zero => simpa [PouwWindow.intOf?, Spot.int?] using h
     | succ e => simp [PouwWindow.intOf?] at h
   | _ => simp [PouwWindow.intOf?] at h
 
@@ -186,9 +192,9 @@ theorem none_of {x : Option String} (h : ∀ why, x = some why → False) : x = 
 
 theorem carries_names {s : Json} {sid : String} {seq : Nat} {root : ByteArray} {cm : String}
     (h : PouwCheck.carries s sid seq root cm = true) :
-    SampledProofs.getD s "session" = .str sid ∧ SampledProofs.int? (SampledProofs.getD s "seq") = some (seq : Int) ∧
-      SampledProofs.getD s "root" = .str (Flock.hexOf root) ∧ SampledProofs.getD s "commitment" = .str cm ∧
-      SampledProofs.field? s "secret" = none := by
+    Spot.getD s "session" = .str sid ∧ Spot.int? (Spot.getD s "seq") = some (seq : Int) ∧
+      Spot.getD s "root" = .str (Flock.hexOf root) ∧ Spot.getD s "commitment" = .str cm ∧
+      Spot.field? s "secret" = none := by
   cases s with
   | obj kv =>
     simp only [PouwCheck.carries, Bool.and_eq_true, Option.isNone_iff_eq_none, beq_iff_eq] at h
@@ -221,10 +227,10 @@ theorem accepted_of {key ledger pins main session : Json} {kv : Std.TreeMap.Raw 
       List.find? (fun x => x.kind == "open") (PouwCheck.sessionEntries ledger res.1.session),
       List.find? (fun x => x.kind == "end") (PouwCheck.sessionEntries ledger res.1.session)) =
         (some rv, some op, some en))
-    (hfam : SampledProofs.jeq (SampledProofs.getD rv.body "families") (familiesJson PouwWindow.SALT_FAMILIES) = true)
-    (hres : (SampledProofs.int? (SampledProofs.getD op.body "reserve") == some (rv.seq : Int)) = true)
-    (hcomp : (PouwCheck.jsonTrue (SampledProofs.getD en.body "complete") &&
-      SampledProofs.jeq (SampledProofs.getD en.body "released")
+    (hfam : Spot.jeq (Spot.getD rv.body "families") (familiesJson PouwWindow.SALT_FAMILIES) = true)
+    (hres : (Spot.int? (Spot.getD op.body "reserve") == some (rv.seq : Int)) = true)
+    (hcomp : (PouwCheck.jsonTrue (Spot.getD en.body "complete") &&
+      Spot.jeq (Spot.getD en.body "released")
         (Json.mkObj [(PouwWindow.SALT, Lean.toJson (1 : Nat))])) = true)
     (hrecv : (res.2.2 == [(PouwWindow.SALT,
       [PouwCheck.epochOpenRoot (PouwCheck.weightsRootAt 64 "verity/pouw/weights/v1" us.2) k])]) = true)
@@ -272,11 +278,21 @@ theorem epochRoot_unique {m : Json} {w w' : ByteArray} {k k' : Nat} (h : EpochRo
   cases hw'
   exact ⟨rfl, Option.some.inj (hk.symm.trans hk')⟩
 
+/-- `LiveCoinBinding` of two commitments with one root. -/
+theorem binding_of_root (hb : LiveCoinBinding) {c c' : LiveCommitment} {o o' : LiveOpening} {label : String}
+    {index : Int} {after after' : ByteArray} (hr : c.root = c'.root) (h : liveReason c o label index after = .ok none)
+    (h' : liveReason c' o' label index after' = .ok none) :
+    (c = c' ∧ o.coin = o'.coin) ∨ Collides (hashedBy c o label index) (hashedBy c' o' label index) := by
+  obtain ⟨s, e, fs, r⟩ := c
+  obtain ⟨s', e', fs', r'⟩ := c'
+  obtain rfl : r = r' := hr
+  exact hb s s' e e' fs fs' _ o o' label index after after' h h'
+
 /-- `OnePair` for `PouwCheck.liveSaltCheck`, given `LiveCoinBinding`: two accepted passes of one epoch are pinned on one
 root, so they read one session and two commitments with one root; the binding gives one coin, and one coin one salt,
 unless the openings exhibit a collision. -/
 theorem onePair_of_binding (hb : LiveCoinBinding) : OnePair PouwCheck.liveSaltCheck := by
-  intro key ledger pins main session session' m m' salt salt' w k h h' he he'
+  intro key ledger pins main session session' m m' salt salt' h h' w k he he'
   obtain ⟨w1, k1, a, c, o, hA⟩ := acceptMeans _ _ _ _ _ _ _ h
   obtain ⟨w2, k2, a', c', o', hA'⟩ := acceptMeans _ _ _ _ _ _ _ h'
   obtain ⟨ck, os, rcv, hck, hsch, hER, hpin, hnamed, hcounts, hshows, hnames, hcoins, hop, hlive, hsalt, hsaltj⟩ := hA
@@ -291,7 +307,7 @@ theorem onePair_of_binding (hb : LiveCoinBinding) : OnePair PouwCheck.liveSaltCh
   refine ⟨a, c, c', o, o', ⟨ck, os, rcv, hck, hsch, hER, hpin, hnamed, hcounts, hshows, hnames, hcoins, hop, hlive, hsalt,
     hsaltj⟩, ⟨ck, os', rcv', hck', hsch', hER', hpin', hnamed', hcounts', hshows', hnames', hcoins', hop', hlive',
     hsalt', hsaltj'⟩, ?_⟩
-  rcases hb c c' o o' _ _ _ _ hroot hlive hlive' with ⟨rfl, hcoin⟩ | hcol
+  rcases binding_of_root hb hroot hlive hlive' with ⟨rfl, hcoin⟩ | hcol
   · left
     rw [hcoin] at hsalt
     exact Except.ok.inj (hsalt.symm.trans hsalt')

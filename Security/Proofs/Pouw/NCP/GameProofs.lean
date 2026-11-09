@@ -1,18 +1,26 @@
-import Definitions.Pouw.Assumptions.NCP.GamePinned
+module
+
+public import Definitions.Pouw.Assumptions.NCP.GamePinned
+public import Proofs.Pouw.Barrier.Proofs
+public import Proofs.Pouw.QTree
+public import Proofs.Pouw.Sanity
+public import Proofs.Pouw.Witness
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Exact
 import Proofs.Pouw.NCP.Proofs
-import Proofs.Pouw.Barrier.Proofs
+import Proofs.Pouw.Prob
 import Proofs.Pouw.Reduction
-import Proofs.Pouw.Witness
-import Proofs.Pouw.Sanity
 
 /-!
 # NCP's game instance: proofs
 
-* `threeBlock`: every running sum is in int32 for `k ≤ 107,524` and noise in `[−31, 31]` (red-team N4), a sanity
+* `threeSegment`: every running sum is in int32 for `k ≤ 107,524` and noise in `[−31, 31]`, a sanity
   bound; `lastChecked`, `leadComplete` (checked values mod `2^32`, NA2).
-* `gammaFromTTNCP`: the reduction with credited work `3·m·k·n`; `ttncpWitness`, in `outputPriced3`.
+* `gapFromTTNCP`: the reduction with credited work `3·m·k·n`; `ttncpWitness`, in `outputPriced3`.
 * `oneSegment`: the zero-input adversary of class (c), in `Pouw.Barrier.gemmModel`.
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP.GameProofs
 
@@ -63,7 +71,7 @@ theorem y3 {k : ℕ} {B F1 R : Mat} (hR : SignedPerm k R) {j : ℕ} (hB : ∀ l 
   unfold InInt7 InSmall at *; constructor <;> linarith
 
 /-- **The three-block int32 bound.** -/
-theorem threeBlock : GamePinned.ThreeBlock := by
+theorem threeSegment : GamePinned.ThreeSegment := by
   intro k A B E1 F1 R i j τ hk hR hA hB hE hF hτ
   have hk' : (k : ℤ) ≤ 107524 := by exact_mod_cast hk
   have h31 : (2 : ℤ) ^ 31 = 2147483648 := by norm_num
@@ -97,7 +105,7 @@ theorem threeBlock : GamePinned.ThreeBlock := by
 /-- **Usefulness.** -/
 theorem lastChecked : GamePinned.LastChecked := by
   intro Q R S P H s U u A i j hd hk hA hB
-  have he : D1.blockEnd P.d (3 * (U.layout.shape u).k) (D1.nBlocks P.d (3 * (U.layout.shape u).k) - 1)
+  have he : D1.blockEnd P.d (3 * (U.layout.shape u).k) (D1.nSegments P.d (3 * (U.layout.shape u).k) - 1)
       = 3 * (U.layout.shape u).k := by
     rcases Nat.eq_zero_or_pos (U.layout.shape u).k with h0 | h0
     · simp [D1.blockEnd, h0]
@@ -116,13 +124,13 @@ theorem leadComplete : GamePinned.LeadComplete := by
 
 /-! ## `G_γ` from TT_NCP -/
 
-theorem wins_imp_ttncp (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) {γ₀ Ωmax T : ℝ}
+theorem wins_imp_ttncp (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) {g₀ Ωmax T : ℝ}
     (hΩ : 0 < Ωmax)
     (hW : ∀ u < U.layout.N, (P.Wref U.layout u : ℝ) ≤ Ωmax * (3 * ((U.layout.shape u).Wmm : ℝ)))
-    (hwin : Wins P U (reductionGamma γ₀ Ωmax) T τ H s) :
-    T / (1 - γ₀) < ∑ u ∈ checkedSet P U H s τ, 3 * ((U.layout.shape u).Wmm : ℝ) := by
+    (hwin : Wins P U (reductionGap g₀ Ωmax) T τ H s) :
+    T / (1 - g₀) < ∑ u ∈ checkedSet P U H s τ, 3 * ((U.layout.shape u).Wmm : ℝ) := by
   unfold Wins at hwin
-  rw [one_sub_reductionGamma, div_div_eq_mul_div] at hwin
+  rw [one_sub_reductionGap, div_div_eq_mul_div] at hwin
   have h1 : ∑ u ∈ correctSet P U H s τ, (P.Wref U.layout u : ℝ)
       ≤ Ωmax * ∑ u ∈ correctSet P U H s τ, 3 * ((U.layout.shape u).Wmm : ℝ) := by
     rw [Finset.mul_sum]
@@ -130,18 +138,18 @@ theorem wins_imp_ttncp (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S)
   have h2 : ∑ u ∈ correctSet P U H s τ, 3 * ((U.layout.shape u).Wmm : ℝ)
       ≤ ∑ u ∈ checkedSet P U H s τ, 3 * ((U.layout.shape u).Wmm : ℝ) :=
     Finset.sum_le_sum_of_subset_of_nonneg (correctSet_subset_checkedSet P U H s τ) fun _ _ _ => by positivity
-  have h3 : T * Ωmax / (1 - γ₀) = Ωmax * (T / (1 - γ₀)) := by ring
+  have h3 : T * Ωmax / (1 - g₀) = Ωmax * (T / (1 - g₀)) := by ring
   rw [h3] at hwin
-  have h4 : Ωmax * (T / (1 - γ₀)) < Ωmax * ∑ u ∈ checkedSet P U H s τ, 3 * ((U.layout.shape u).Wmm : ℝ) :=
+  have h4 : Ωmax * (T / (1 - g₀)) < Ωmax * ∑ u ∈ checkedSet P U H s τ, 3 * ((U.layout.shape u).Wmm : ℝ) :=
     lt_of_lt_of_le hwin (h1.trans (mul_le_mul_of_nonneg_left h2 hΩ.le))
   exact lt_of_mul_lt_mul_left h4 hΩ.le
 
-/-- **`G_γ` from TT_NCP.** -/
-theorem gammaFromTTNCP : GamePinned.GammaFromTTNCP := by
-  intro Q R S _ _ _ _ CM P d D γ₀ Ωmax ε hγ₀ hΩ hW hside hTT U hU T hT q hq A hA
+/-- **`G_g` from TT_NCP.** -/
+theorem gapFromTTNCP : GamePinned.GapFromTTNCP := by
+  intro Q R S _ _ _ _ CM P d D g₀ Ωmax ε hg₀ hΩ hW hside hTT U hU T hT q hq A hA
   refine le_trans (pr_mono ?_) ((hTT hside).2 U hU T hT q hq A hA)
-  rintro ⟨H, s⟩ hwin
-  exact wins_imp_ttncp P U H s _ hΩ (hW U hU) hwin
+  rintro ⟨H, s⟩ ⟨hwin, hb⟩
+  exact ⟨wins_imp_ttncp P U H s _ hΩ (hW U hU) hwin, hb⟩
 
 /-! ## TT_NCP's witness -/
 
@@ -153,17 +161,17 @@ variable (P : Params Q R S)
 def commitAns (U : Workload) (u : ℕ) (A : Mat) (a b : List R) : Commit :=
   let sh := U.layout.shape u
   let X := stackX sh.k A (P.expAct sh a) (P.expWt sh b).2
-  let Y := stackY sh.k (U.weight (U.layout.wid u)) (P.expWt sh b).2 (P.expWt sh b).1
+  let Y := stackY sh.k (U.fixed (U.layout.fixedId u)) (P.expWt sh b).2 (P.expWt sh b).1
   ⟨A, fun t => mmW (D1.blockEnd P.d (3 * sh.k) t) X Y, mmW (3 * sh.k) X Y⟩
 
 theorem commitAns_eq (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) :
-    commitAns P U u A ((P.qAct s u A (U.layout.wid u)).map H) ((P.qWt s (U.layout.wid u)).map H)
+    commitAns P U u A ((P.qAct s u A (U.layout.fixedId u)).map H) ((P.qWt s (U.layout.fixedId u)).map H)
       = ⟨A, P.toProtocol.refChecked H s U u A, P.toProtocol.refOut H s U u A⟩ := rfl
 
 /-- Unit `u`'s honest program: query its noise, then commit. -/
 def unitProg (U : Workload) (act : ℕ → Mat) (s : S) (u : ℕ) : QTree Q R Commit :=
-  (queryAll (P.qAct s u (act u) (U.layout.wid u))).bind fun a =>
-    (queryAll (P.qWt s (U.layout.wid u))).bind fun b => done (commitAns P U u (act u) a b)
+  (queryAll (P.qAct s u (act u) (U.layout.fixedId u))).bind fun a =>
+    (queryAll (P.qWt s (U.layout.fixedId u))).bind fun b => done (commitAns P U u (act u) a b)
 
 /-- NCP's honest reference as an oracle program. -/
 def honestProg (U : Workload) (act : ℕ → Mat) (s : S) : QTree Q R Transcript :=
@@ -180,7 +188,7 @@ theorem calls_honestProg (H : Q → R) (U : Workload) (act : ℕ → Mat) (s : S
     (honestProg P U act s).calls H ≤ U.layout.N * c := by
   refine calls_upTo_le H _ _ c fun u _ => ?_
   simp only [unitProg, calls_bind, calls_queryAll, eval_queryAll, calls]
-  have := hc s u (act u) (U.layout.wid u)
+  have := hc s u (act u) (U.layout.fixedId u)
   omega
 
 end Honest
@@ -205,19 +213,19 @@ theorem checked_le_outputPriced3_cost (P : Protocol Q R S) (prog : (outputPriced
   exact ⟨hu, by rw [hc]; rfl⟩
 
 theorem ttncp_outputPriced3 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) (d : ℕ)
-    (D : Layout → Prop) {γ₀ : ℝ} (h0 : 0 ≤ γ₀) (h1 : γ₀ < 1) :
-    Assumptions.TTNCP (outputPriced3 Q R S) P d D γ₀ (fun _ _ => 0) := by
+    (D : Layout → Prop) {g₀ : ℝ} (h0 : 0 ≤ g₀) (h1 : g₀ < 1) :
+    Assumptions.TTNCP (outputPriced3 Q R S) P d D g₀ (fun _ _ => 0) := by
   refine fun _ => ⟨outputPriced3_queries, fun U _ T hT q _ A hA => le_of_eq (pr_eq_zero fun x hx => ?_)⟩
   have e1 := checked_le_outputPriced3_cost P A.online x.1 U A.act (A.pre.eval x.1) x.2
   have e2 := (hA x.1 x.2).1
-  have e3 : T ≤ T / (1 - γ₀) := by
+  have e3 : T ≤ T / (1 - g₀) := by
     rw [le_div_iff₀ (by linarith)]
     nlinarith
-  exact absurd hx (not_lt.2 (e1.trans (e2.trans e3)))
+  exact absurd hx.1 (not_lt.2 (e1.trans (e2.trans e3)))
 
 /-- **TT_NCP's satisfiability witness.** -/
 theorem ttncpWitness : GamePinned.TTNCPWitness := by
-  intro Q R _ _ _ P c γ₀ h0 h1 hc hW
+  intro Q R _ _ _ P c g₀ h0 h1 hc hW
   refine ⟨ttncp_outputPriced3 _ _ _ h0 h1, fun U act _ s => honestProg P U act s, fun U hU act _ H s =>
     ⟨eval_honestProg P H U act s, ?_, calls_honestProg P H U act s hc⟩⟩
   refine (outputPriced3_cost_le _ H U act [] s).trans (Finset.sum_le_sum fun u hu => ?_)
@@ -226,15 +234,15 @@ theorem ttncpWitness : GamePinned.TTNCPWitness := by
 /-! ## The one-segment adversary -/
 
 /-- A unit's one-segment plan: `segPlan` with one register per block of the stacked product. -/
-def onePlan (d : ℕ) (sh : Shape) : Barrier.Plan := Barrier.Proofs.segPlan (D1.nBlocks d (3 * sh.k)) d sh
+def onePlan (d : ℕ) (sh : Shape) : Barrier.Plan := Barrier.Proofs.segPlan (D1.nSegments d (3 * sh.k)) d sh
 
-theorem nBlocks_mul {d K : ℕ} (hd : 0 < d) (h : d ∣ K) : D1.nBlocks d K * d = K := by
+theorem nSegments_mul {d K : ℕ} (hd : 0 < d) (h : d ∣ K) : D1.nSegments d K * d = K := by
   obtain ⟨c, rfl⟩ := h
-  unfold D1.nBlocks
+  unfold D1.nSegments
   rw [show d * c + d - 1 = d - 1 + d * c by omega, Nat.add_mul_div_left _ _ hd, Nat.div_eq_of_lt (by omega),
     zero_add, mul_comm]
 
-theorem nBlocks_pos {d K : ℕ} (hd : 0 < d) (hK : 0 < K) : 1 ≤ D1.nBlocks d K :=
+theorem nSegments_pos {d K : ℕ} (hd : 0 < d) (hK : 0 < K) : 1 ≤ D1.nSegments d K :=
   (Nat.le_div_iff_mul_le hd).2 (by omega)
 
 theorem e2_abs {k : ℕ} {E1 R : Mat} (hR : SignedPerm k R) {i : ℕ} {c : ℤ} (hE : ∀ l < k, |E1 i l| ≤ c) {l : ℕ}
@@ -345,10 +353,10 @@ theorem onePlan_correct (P : Params Q R S) (hd : 0 < P.d) (Lay : Layout) (H : Q 
     simp only [Barrier.Plan.commit, onePlan, Barrier.Proofs.segPlan_act, Option.getD_some, Params.toProtocol,
       Params.Y]
     rw [mmW_eq_of_mem (hI _ (blockEnd_le _ _ _) _ ha _ hb)]
-    by_cases hlast : x.1 + 1 < D1.nBlocks P.d (3 * (Lay.shape u).k)
+    by_cases hlast : x.1 + 1 < D1.nSegments P.d (3 * (Lay.shape u).k)
     · rw [Barrier.Proofs.segPlan_regs _ _ _ _ _ _ ha hb x.1 hlast, Sanity.blockEnd_full hd hlast, hX, hY]
       rfl
-    · have hx1 : x.1 = D1.nBlocks P.d (3 * (Lay.shape u).k) - 1 := by omega
+    · have hx1 : x.1 = D1.nSegments P.d (3 * (Lay.shape u).k) - 1 := by omega
       rw [hx1, Barrier.Proofs.regs_eq, Barrier.Proofs.segPlan_nReg, ite_eq_left (by omega),
         Barrier.Proofs.segPlan_reg, ite_eq_right (by omega), Sanity.blockEnd_last hd (by omega)]
       simp only [Barrier.MExpr.eval, Pi.zero_apply, Params.opX, Params.opY]
@@ -364,9 +372,9 @@ theorem oneSegment : GamePinned.OneSegment := by
   have hcost : ∀ u ∈ range Lay.N, (((onePlan P.d (Lay.shape u)).cost : ℕ) : ℝ)
       = 3 * ((Lay.shape u).Wmm : ℝ) - (Lay.shape u).m * P.d * (Lay.shape u).n := fun u hu => by
     have hu' := Finset.mem_range.1 hu
-    have hL := nBlocks_pos hd (show 0 < 3 * (Lay.shape u).k by have := hk u hu'; omega)
-    have hm := nBlocks_mul hd (Dvd.dvd.mul_left (hdk u hu') 3)
-    have hm' : (D1.nBlocks P.d (3 * (Lay.shape u).k) : ℝ) * P.d = 3 * (Lay.shape u).k := by exact_mod_cast hm
+    have hL := nSegments_pos hd (show 0 < 3 * (Lay.shape u).k by have := hk u hu'; omega)
+    have hm := nSegments_mul hd (Dvd.dvd.mul_left (hdk u hu') 3)
+    have hm' : (D1.nSegments P.d (3 * (Lay.shape u).k) : ℝ) * P.d = 3 * (Lay.shape u).k := by exact_mod_cast hm
     rw [onePlan, Barrier.Proofs.segPlan_cost _ _ _ hL]
     push_cast [Nat.cast_sub hL, Shape.Wmm]
     linear_combination ((Lay.shape u).m * (Lay.shape u).n : ℝ) * hm'
@@ -375,11 +383,12 @@ theorem oneSegment : GamePinned.OneSegment := by
   have hall := Barrier.Proofs.planAdv_correct P.nz (onePlan P.d) P.toProtocol ⟨Lay, fun _ => 0⟩
     fun H s u hu => onePlan_correct P hd Lay H s u (hk u hu) fun _ hτ _ ha _ hb =>
       nz_int32 P hN hR Lay H s u (hsh u hu) hτ ha hb
-  refine ⟨Barrier.Proofs.planAdv P.nz (onePlan P.d), ⟨hU, ?_, by norm_num, hB, hall⟩, ?_⟩
+  refine ⟨Barrier.Proofs.planAdv P.nz (onePlan P.d), ⟨hU, ?_, by norm_num, hB,
+    fun H s => ⟨hall H s, not_breaks_of_hashless (Barrier.Proofs.gemmModel_hashless _) _ _ _ _⟩⟩, ?_⟩
   · refine Finset.sum_nonneg fun u hu => ?_
     rw [← hcost u hu]
     positivity
-  · intro γ₀ hγ hN hγk H s
+  · intro g₀ hg hN hgk H s
     have hchk : checkedSet P.toProtocol ⟨Lay, fun _ => 0⟩ H s
         ((Barrier.Proofs.planAdv P.nz (onePlan P.d)).transcript ⟨Lay, fun _ => 0⟩ H s) = range Lay.N := by
       refine Finset.Subset.antisymm (fun u hu => ?_) ?_
@@ -388,7 +397,7 @@ theorem oneSegment : GamePinned.OneSegment := by
     rw [hchk, div_lt_iff₀ (by linarith), Finset.sum_mul]
     refine Finset.sum_lt_sum_of_nonempty (Finset.nonempty_range_iff.2 (by omega)) fun u hu => ?_
     have hu' := Finset.mem_range.1 hu
-    have h1 := hγk u hu'
+    have h1 := hgk u hu'
     have hmn : (0 : ℝ) < (Lay.shape u).m * (Lay.shape u).n := by
       have := (hsh u hu').1
       have : 0 < (Lay.shape u).n := lt_of_lt_of_le (by norm_num : (0 : ℕ) < 2 ^ 10) (hsh u hu').2.2.2.2.2.1
@@ -471,7 +480,7 @@ theorem shiftR_not_admissible {k : ℕ} (hk : 16 ≤ k) : ¬ Admissible k 16 (sh
 /-- The involution swapping `j` and `j + 24` in every period of `48`. -/
 def swap24 (j : ℕ) : ℕ := if j % 48 < 24 then j + 24 else j - 24
 
-/-- Sanity (red-team P2-1): the unsigned `swap24` is a signed permutation for `48 ∣ k` that passes the first two
+/-- Sanity: the unsigned `swap24` is a signed permutation for `48 ∣ k` that passes the first two
 clauses of the rejection rule (step `t`'s image is `24` away and straddles two steps), but `R² = I`, so the third
 clause rejects it. -/
 theorem swap24_not_admissible {k : ℕ} (h48 : 48 ∣ k) :
@@ -510,7 +519,7 @@ def stepSwap (j : ℕ) : ℕ := if j / 16 % 2 = 0 then j + 16 else j - 16
 /-- The sign `−1` on step `0` and `+1` elsewhere, so that the signed step swap has `R² ≠ ±I`. -/
 def stepSign (j : ℕ) : ℤ := if j < 16 then -1 else 1
 
-/-- Sanity (red-team P2-4): the step swap with signs `stepSign` is a signed permutation for `32 ∣ k`, `k ≥ 64`, that
+/-- Sanity: the step swap with signs `stepSign` is a signed permutation for `32 ∣ k`, `k ≥ 64`, that
 passes the first clause (no step meets its image) and the third (`R²` is `−1` at `(0, 0)` and `1` at `(32, 32)`), but
 maps step `0` onto step `1`, so the second clause rejects it. -/
 theorem stepSwap_not_admissible {k : ℕ} (hk : 64 ≤ k) (h32 : 32 ∣ k) :
@@ -575,7 +584,7 @@ theorem leadWitness : GamePinned.LeadWitness := by
   have hadmit := (ttncpWitness Unit Unit leadParams 0 0 le_rfl one_pos hq hW).2
   simp only [mul_zero] at hadmit
   exact ⟨leadParams, leadLayout, ⟨rfl, hN, hadm⟩, hS, hq, fun _ _ => rfl, leadComplete Unit Unit Salt leadParams,
-    hadmit, fun γ₀ h0 h1 => (ttncpWitness Unit Unit leadParams 0 γ₀ h0 h1 hq hW).1, leadLayout_inDomain, one_pos,
+    hadmit, fun g₀ h0 h1 => (ttncpWitness Unit Unit leadParams 0 g₀ h0 h1 hq hW).1, leadLayout_inDomain, one_pos,
     fun _ _ => ⟨64, rfl⟩⟩
 
 /-! ## `Barrier.Segment`'s hypotheses with the lead's noise -/

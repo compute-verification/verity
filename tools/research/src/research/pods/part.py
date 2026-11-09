@@ -107,8 +107,7 @@ def _named(name: str) -> list[dict]:
 
 
 def create_once(ns: Any) -> tuple[dict | None, int]:
-    """At most one pod per --name, whatever the create call says (retry loops made duplicates three times, 2026-09-26; red-team-
-    flock-2's pod-create.sh): refuse when a live pod of the name exists (exit 4, its id printed; ``--allow-duplicate`` overrides);
+    """At most one pod per --name, whatever the create call says (a retry loop around a create makes duplicates): refuse when a live pod of the name exists (exit 4, its id printed; ``--allow-duplicate`` overrides);
     after a failed create, a pod that appeared under the name anyway is the pod; only an explicit no-stock reply is exit 5 (try
     another spec), any other failure exit 2 (do not retry blindly).  Returns (pod, 0) or (None, exit code)."""
     import sys
@@ -181,8 +180,8 @@ def create_leased(ns: Any, *, gate: Callable[[str, float], tuple[str | None, str
 
 def main(argv: list[str]) -> int:
     """`research pods check-part <machine|pod-id> [--json]` | `research pods create <runpod create flags> --max-hours H [...]`
-    | `research pods extend|lease TARGET` | `research pods ssh|sync ...` (connect.py) | `research pods health <pod>` (health.py) | any other
-    verb goes to `python -m research.pods.runpod` unchanged.  Exit 3 = not the reference part (check-part, create) or DEGRADED (health);
+    | `research pods extend|lease TARGET` | `research pods ssh|sync ...` (connect.py) | any other
+    verb goes to `python -m research.pods.runpod` unchanged.  Exit 3 = not the reference part (check-part, create);
     create's exit 6 = no budget line lets it (research.pods.budgets.gate)."""
     import argparse
     import sys
@@ -287,10 +286,6 @@ def main(argv: list[str]) -> int:
         from .guard import main as guard_main                 # the fleet budget guard (guard.py)
 
         return guard_main(argv[1:])
-    if argv[:1] == ["health"]:
-        from .health import main as health_main               # fit to measure on? quota, GPU state, microbenchmark (health.py)
-
-        return health_main(argv[1:])
     sys.argv = ["research pods", *argv]
     runpod.main()
     return 0

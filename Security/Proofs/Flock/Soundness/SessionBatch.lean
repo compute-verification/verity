@@ -1,11 +1,13 @@
-import Proofs.Flock.Soundness.Session
-import Proofs.Flock.Soundness.Game.Prob
+module
+
+public import Proofs.Flock.Soundness.Session
+import Proofs.Flock.Soundness.Game
 
 /-!
-# Several tables in one batched session (PROTOCOL.md §5)
+# Several tables in one batched session (`Flock.Record`)
 
 The protocol batches tables. `Commit` sends every table's level-0 cap, the link points are one
-draw for all tables, and then every table's reps and openings run concurrently (`sessionB`). The
+sample for all tables, and then every table's reps and openings run concurrently (`sessionB`). The
 session accepts when every table accepts (`acceptedB`).
 
 For each table `j`, everything after `Commit` is a batch with table `j` at position `j` and the
@@ -24,6 +26,8 @@ For a unit read from table `j`, these are the unit's `ksFail` (`failProbB`), its
 (`extractProbB` of the link event), its `cover` (`one_le_fail_add_B'`) and its knowledge bound
 (`joint_le_B'`), in `ℝ≥0∞` as `Audit.ExtractionAnalysis` takes them.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 
@@ -69,13 +73,13 @@ noncomputable def gamesB (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
     List ((Fin 2 → Fin mPts → F) → Game (OutC F D)) :=
   List.ofFn fun i => (ts.get i).after A H E (caps i)
 
-/-- After `Commit`: one link-point draw, then the games concurrently. -/
+/-- After `Commit`: one link-point sample, then the games concurrently. -/
 noncomputable def sessAfterB (fs : List ((Fin 2 → Fin mPts → F) → Game (OutC F D))) :
     Game (List (OutC F D)) :=
   Game.coin (Fin 2 → Fin mPts → F) fun pts => batch (fs.map (· pts))
 
-/-- **A batched session** (PROTOCOL.md §5): `Commit` sends every table's level-0 cap, then one
-link-point draw, then every table's reps and openings concurrently. -/
+/-- **A batched session** (`Flock.Record`): `Commit` sends every table's level-0 cap, then one
+link-point sample, then every table's reps and openings concurrently. -/
 noncomputable def sessionB (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (ts : List (TabSpec mPts)) : Game (List (OutC F D)) :=
   Game.send (Fin ts.length → Cap D) fun caps => sessAfterB (gamesB A H E ts caps)

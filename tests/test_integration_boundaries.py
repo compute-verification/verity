@@ -1,6 +1,6 @@
 """Nothing under ``verity/`` needs an integration (AGENTS.md "Design rules", "Integrations are frontends";
 ARCHITECTURE.md "Integrations"): any serving stack plugs in without changing ``verity/``.
-Today some files do: C-Flock takes the vLLM integration's registered Definitions and kernels where ``verity`` has no
+Today some files do: Flock takes the vLLM integration's registered Definitions and kernels where ``verity`` has no
 equivalent yet, and core's difftests of the primitives and sigma hold the Lean to them (a benchmark may compose an
 integration).  ``KNOWN`` lists every such ``(file, module)`` site and may only shrink: a new site fails, and so does a
 listed site that is gone, so the list stays exact.
@@ -19,7 +19,7 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-#: The tree that needs no integration: ``verity``, C-Flock and their tests.
+#: The tree that needs no integration: ``verity``, Flock and their tests.
 SCANNED = ROOT / "verity"
 #: The integrations' import packages, from each distribution's wheel configuration (a virtual member, such as the Slack
 #: events service, has none to import).
@@ -33,51 +33,52 @@ IMPORT_CALLS = {"import_module", "__import__", "importorskip"}
 #: Every file under ``verity/`` that imports an integration, with each integration module it imports.  Repoint it at
 #: ``verity`` (or drop the use) and delete its line; a new line needs a reason the dependency cannot go through ``verity``.
 KNOWN = {
-    ("verity/core/primitives/evaluate/tests/test_difftest.py", "verity_vllm.program.registry"),
+    ("verity/core/primitives/evaluate/tests/test_difftest.py", "verity.ml.definitions.registry"),
     ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.commit"),
     ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.program.predict.build"),
     ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.program.predict.phi"),
     ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.query.required"),
+    # PoUB's memory-map/v1 builder (`record`), which lays a map out from a vLLM Program's KV rows: `map_case` builds with it
+    ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.commit_map"),
     ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.interface"),
     ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.registry"),
-    ("verity/core/primitives/requirement/tests/test_requirement_difftest.py", "verity_vllm.program.registry"),
-    ("verity/core/service/sigma/tests/test_sigma_difftest.py", "verity_vllm.program"),
-    ("verity/core/service/sigma/tests/test_sigma_difftest.py", "verity_vllm.program.registry"),
-    ("verity/core/service/sigma/tests/test_sigma_difftest.py", "verity_vllm.program.registry.catalog"),
-    ("verity/core/service/sigma/tests/test_sigma_difftest.py", "verity_vllm.program.replay"),
-    ("verity/ml/flock/python/verity_flock/boolean_export.py", "verity_vllm.pipeline.program_graph"),
-    ("verity/ml/flock/python/verity_flock/boolean_export.py", "verity_vllm.program.registry"),
-    ("verity/ml/flock/python/verity_flock/boolean_export.py", "verity_vllm.query"),
-    ("verity/ml/flock/python/verity_flock/boolean_export.py", "verity_vllm.query.word"),
-    ("verity/ml/flock/python/verity_flock/class_statement.py", "verity_vllm.pipeline.program_graph"),
-    ("verity/ml/flock/python/verity_flock/ir_lower.py", "verity_vllm.program.kernels"),
-    ("verity/ml/flock/python/verity_flock/ir_lower.py", "verity_vllm.program.registry"),
-    ("verity/ml/flock/python/verity_flock/ir_sampling.py", "verity_vllm.program.registry"),
-    ("verity/ml/flock/python/verity_flock/partition_units.py", "verity_vllm.program.registry"),
-    ("verity/ml/flock/python/verity_flock/tail.py", "verity_vllm.program.registry"),
-    ("verity/ml/flock/python/verity_flock/tail_pieces.py", "verity_vllm.program.registry"),
+    ("verity/core/primitives/requirement/tests/test_requirement_difftest.py", "verity.ml.definitions.registry"),
+    ("verity/core/service/sigma/tests/test_sigma_difftest.py", "verity.ml.definitions.boolean"),
+    ("verity/core/service/sigma/tests/test_sigma_difftest.py", "verity.ml.definitions.registry"),
+    ("verity/core/service/sigma/tests/test_sigma_difftest.py", "verity.ml.definitions.registry.catalog"),
+    ("verity/core/service/sigma/tests/test_sigma_difftest.py", "verity.ml.definitions.replay"),
+    ("verity/ml/definitions/tests/test_catalog.py", "verity.ml.definitions.registry"),
+    ("verity/ml/flock/python/verity_flock/boolean_export.py", "verity.ml.definitions.encoding"),
+    ("verity/ml/flock/python/verity_flock/boolean_export.py", "verity.ml.definitions.registry"),
+    ("verity/ml/flock/python/verity_flock/boolean_export.py", "verity.ml.definitions.word"),
+    ("verity/ml/flock/python/verity_flock/class_statement.py", "verity.ml.definitions.encoding"),
+    ("verity/ml/flock/python/verity_flock/ir_lower.py", "verity.ml.definitions.numerics"),
+    ("verity/ml/flock/python/verity_flock/ir_lower.py", "verity.ml.definitions.registry"),
+    ("verity/ml/flock/python/verity_flock/ir_sampling.py", "verity.ml.definitions.registry"),
+    ("verity/ml/flock/python/verity_flock/partition_units.py", "verity.ml.definitions.registry"),
+    ("verity/ml/flock/python/verity_flock/tail.py", "verity.ml.definitions.registry"),
+    ("verity/ml/flock/python/verity_flock/tail_pieces.py", "verity.ml.definitions.registry"),
     # SiluMul_v2's unit is the registry's Boolean SiluMulBf16_v4, which only this import registers; core has no SiluMulBf16_v2
-    ("verity/ml/flock/python/verity_flock/templates/silu_mul_v2.py", "verity_vllm.program.registry.boolean_silu"),
-    ("verity/ml/flock/python/verity_flock/topp_word.py", "verity_vllm.program.registry.topp_keep_builder"),
-    ("verity/ml/flock/python/verity_flock/topp_word.py", "verity_vllm.program.registry.topp_word_gates"),
-    ("verity/ml/flock/tests/test_boolean_export.py", "verity_vllm.program.registry"),
-    ("verity/ml/flock/tests/test_boolean_export.py", "verity_vllm.program.registry.prims"),
-    ("verity/ml/flock/tests/test_circuit.py", "verity_vllm.program.kernels"),
-    ("verity/ml/flock/tests/test_circuit.py", "verity_vllm.program.registry"),
-    ("verity/ml/flock/tests/test_class_statement.py", "verity_vllm.program.registry"),
-    ("verity/ml/flock/tests/test_derive.py", "verity_vllm.program.registry.prims"),
-    ("verity/ml/flock/tests/test_flock_rows.py", "verity_vllm.program.registry.prims"),
-    ("verity/ml/flock/tests/test_ir_lowering.py", "verity_vllm.program.registry"),
-    ("verity/ml/flock/tests/test_ir_lowering.py", "verity_vllm.program.registry.prims"),
-    ("verity/ml/flock/tests/test_ir_lowering.py", "verity_vllm.program.registry.sampling"),
-    ("verity/ml/flock/tests/test_ir_sampling.py", "verity_vllm.program.registry"),
-    ("verity/ml/flock/tests/test_ir_sampling.py", "verity_vllm.program.registry.prims"),
-    ("verity/ml/flock/tests/test_lean_rope.py", "verity_vllm.program.registry.prims"),
-    ("verity/ml/flock/tests/test_lean_typed_statement.py", "verity_vllm.program.registry.prims"),
-    ("verity/ml/flock/tests/test_partition_units.py", "verity_vllm.program.registry"),
-    ("verity/ml/flock/tests/test_stage_typed.py", "verity_vllm.program.registry.prims"),
-    ("verity/ml/flock/tests/test_topp_word.py", "verity_vllm.program.registry"),
-    ("verity/ml/flock/tests/test_typed_statement.py", "verity_vllm.program.registry.prims"),
+    ("verity/ml/flock/python/verity_flock/templates/silu_mul_v2.py", "verity.ml.definitions.registry.boolean_silu"),
+    ("verity/ml/flock/python/verity_flock/topp_word.py", "verity.ml.definitions.registry.topp_keep_builder"),
+    ("verity/ml/flock/python/verity_flock/topp_word.py", "verity.ml.definitions.registry.topp_word_gates"),
+    ("verity/ml/flock/tests/test_boolean_export.py", "verity.ml.definitions.registry"),
+    ("verity/ml/flock/tests/test_boolean_export.py", "verity.ml.definitions.registry.prims"),
+    ("verity/ml/flock/tests/test_circuit.py", "verity.ml.definitions.numerics"),
+    ("verity/ml/flock/tests/test_circuit.py", "verity.ml.definitions.registry"),
+    ("verity/ml/flock/tests/test_class_statement.py", "verity.ml.definitions.registry"),
+    ("verity/ml/flock/tests/test_derive.py", "verity.ml.definitions.registry.prims"),
+    ("verity/ml/flock/tests/test_flock_rows.py", "verity.ml.definitions.registry.prims"),
+    ("verity/ml/flock/tests/test_ir_lowering.py", "verity.ml.definitions.registry"),
+    ("verity/ml/flock/tests/test_ir_lowering.py", "verity.ml.definitions.registry.prims"),
+    ("verity/ml/flock/tests/test_ir_lowering.py", "verity.ml.definitions.registry.sampling"),
+    ("verity/ml/flock/tests/test_ir_sampling.py", "verity.ml.definitions.registry"),
+    ("verity/ml/flock/tests/test_ir_sampling.py", "verity.ml.definitions.registry.prims"),
+    ("verity/ml/flock/tests/test_lean_typed_statement.py", "verity.ml.definitions.registry.prims"),
+    ("verity/ml/flock/tests/test_partition_units.py", "verity.ml.definitions.registry"),
+    ("verity/ml/flock/tests/test_stage_typed.py", "verity.ml.definitions.registry.prims"),
+    ("verity/ml/flock/tests/test_topp_word.py", "verity.ml.definitions.registry"),
+    ("verity/ml/flock/tests/test_typed_statement.py", "verity.ml.definitions.registry.prims"),
 }
 
 
@@ -132,7 +133,8 @@ def test_nothing_in_verity_imports_an_integration_outside_known():
 
 def test_every_known_site_still_exists():
     # a listed file that does not exist yet is an open PR's site, listed ahead so both merge orders pass; once the file
-    # exists, its entry must match what it imports
-    gone = sorted((f, m) for f, m in KNOWN - _sites() if (ROOT / f).exists())
+    # exists, its entry must match what it imports.  An entry a layout move took out of the integrations (its module now
+    # `verity`'s) is no site at all: the move leaves it for a later change to delete
+    gone = sorted((f, m) for f, m in KNOWN - _sites() if (ROOT / f).exists() and m.split(".")[0] in INTEGRATIONS)
     assert not gone, ("these verity -> integration imports are gone; delete them from KNOWN in tests/test_integration_boundaries.py:\n"
                       + "\n".join(f'    ("{f}", "{m}"),' for f, m in gone))

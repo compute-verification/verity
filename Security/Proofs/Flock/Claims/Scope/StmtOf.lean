@@ -1,6 +1,45 @@
-import Proofs.Flock.Claims.Scope.Setup
+module
+
+public import Proofs.Flock.Claims.Scope.Readable
+public import Proofs.Flock.Level3.Placed
+public import Proofs.Flock.Soundness.Refine.Regions
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Scope.Fit
-import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
+import Proofs.Flock.Claims.Scope.Setup
+import Proofs.Flock.Soundness.Discharge.Hidden.Commit
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # Each table the verifier parses is `stmtOf`'s
@@ -9,6 +48,8 @@ import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
 `RegionsWF`), and its table's matrices (`placedA`, `placedB`, what `Tab.toModel` reads) are `stmtOf`'s (`matA`, `matB`;
 `placedA_eq`, on the public-output path and the hidden one).
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 
@@ -39,8 +80,10 @@ theorem tableAt_model {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts)
     simp only [↓reduceIte] at hd
     obtain ⟨hwf, hrw⟩ := Hidden.setupHidden_wf hd
     have s := Hidden.setupHidden_spec' hd
-    have P := parse_facts (Hidden.parse_untyped ht' s.parse).1
-    exact ⟨hwf, hrw, fun a b => ⟨Integrate.placedA_eq P (Hidden.hidden_layout' ht' hd) s.leaf a b,
-      Integrate.placedB_eq P (Hidden.hidden_layout' ht' hd) s.leaf a b⟩⟩
+    have hC := Hidden.committed_of_commit s.parse
+    have hW := hC.netWidths ht'
+    have hK := hC.netKinds ht'
+    have L := Hidden.hidden_layout' ht' hd (HiddenExec.setupTables_pinnedH hh hset j hj)
+    exact ⟨hwf, hrw, fun a b => ⟨Integrate.placedA_eqW hW hK L s.leaf a b, Integrate.placedB_eqW hW hK L s.leaf a b⟩⟩
 
 end Flock.Readable

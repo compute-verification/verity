@@ -7,20 +7,20 @@ import re
 
 _S_STATIC_RE = re.compile(r"[{,]S=(\d+)(?=[,}])")
 _TOPP_FAMILY = "GumbelTopPTokenSelect_v1"
-_SPLITS_OPERAND = 5   # GumbelTopPTokenSelect_v1{V}(logits, top_p, seed, pos, temperature, splits): the derived S operand (stoch M-0254)
+_SPLITS_OPERAND = 5   # GumbelTopPTokenSelect_v1{V}(logits, top_p, seed, pos, temperature, splits): the derived S operand
 
 
 def top_p_split_count(spec: str, B=None, inst: dict | None = None) -> int | None:
-    """The launch's top-p split count S carried by a fold TokenSelect instance.  [R16 stoch M-0254 / global M-0169 (4)] The value of
-    the select's `Const32[S]` splits operand (compare.Prog._bind_splits keeps it in `B.splits_values[select node]`; the constant itself
+    """The launch's top-p split count S carried by a fold TokenSelect instance.  The value of
+    the select's `Const32[S]` splits operand (compare.RootView._bind_splits keeps it in `B.splits_values[select node]`; the constant itself
     is bound to the Program's request-owned `splits` input entry, or held equal to a single-request Program's own `Const32[S]` by
-    `constant_splits_agree`), else the `S=<n>` static of the R15 form `GumbelTopPTokenSelect_v1{V,S}` (the fold's spec strings may carry
+    `constant_splits_agree`), else the `S=<n>` static of the older form `GumbelTopPTokenSelect_v1{V,S}` (the fold's spec strings may carry
     a `prefix:`).  None when the instance carries no readable S."""
     if B is not None and inst is not None:
         v = getattr(B, "splits_values", {}).get(inst.get("k"))
         if v is not None:
             return int(v)
-        # an unbound instance sequence (a Prog-shaped reader without compare's binding, stoch M-0268 (A)): the 6th operand must be ONE run
+        # an unbound instance sequence (a RootView-shaped reader without compare's binding): the 6th operand must be ONE run
         # ("n", k, 0, 1) onto a `Const32[0x<S>]_v1` instance emitted for the select (fold._const, patterns._stage3 Const(32, S, "splits"))
         args = inst.get("args") or []
         if len(args) > _SPLITS_OPERAND and len(args[_SPLITS_OPERAND]) == 1:
@@ -28,7 +28,7 @@ def top_p_split_count(spec: str, B=None, inst: dict | None = None) -> int | None
             if len(run) == 4 and run[0] == "n" and (run[2], run[3]) == (0, 1):
                 j = (getattr(B, "k2i", None) or {}).get(run[1])
                 if j is not None:
-                    from verity_vllm.check.match.program_compare import const_value
+                    from verity_vllm.check.match.instance_sequence import const_value
                     cv = const_value(B.inst[j]["spec"])
                     if cv is not None and cv[0] == 32:
                         return int(cv[1])
@@ -38,7 +38,7 @@ def top_p_split_count(spec: str, B=None, inst: dict | None = None) -> int | None
 
 def constant_splits_agree(A, B) -> dict | None:
     """A Program carries the registered S = SplitsFor_v1(1, num_SMs) as its own `Const32[S]` per select,
-    bound like the fold's and removed from both sequences by `compare.Prog._bind_splits`, so neither the canonical hash nor a DAG hash
+    bound like the fold's and removed from both sequences by `compare.RootView._bind_splits`, so neither the canonical hash nor a DAG hash
     carries its value: the two sides agree only if the constants are equal at every event both have (an event on one side only is a
     step the structural comparison already reports, e.g. a component's steps past an EOS).  None when either side binds no constant
     (a derived-S Program reads its `splits` input instead).  Mismatches are [event, S of A, S of B]."""
@@ -51,7 +51,7 @@ def constant_splits_agree(A, B) -> dict | None:
 
 
 def _splits_by_event(P) -> dict[int, int]:
-    """{event ordinal: S} of a compare.Prog's bound `Const32[S]` splits operands."""
+    """{event ordinal: S} of a compare.RootView's bound `Const32[S]` splits operands."""
     out = {}
     for k, S in getattr(P, "splits_values", {}).items():
         i = P.k2i.get(k)
@@ -61,14 +61,14 @@ def _splits_by_event(P) -> dict[int, int]:
 
 
 def scheduled_live_counts(requests: list[dict], present: dict[str, list[int]]) -> dict:
-    """[R17 stoch, BRIEF §6 Stochastic / COORD R17-1] The SCHEDULED workload state per engine step, built from the per-request facts G6
+    """The SCHEDULED workload state per engine step, built from the per-request facts G6
     has just established -- never from the record's per-step row list.
 
     For every request r with rows: its sampler-active steps are the contiguous range
         E_r = [first_r, first_r + (prefill_chunks_r - 1) + a_r + lag_r)
     where first_r is its verified arrival (== the declared step, or admitted by the declared idle rule), prefill_chunks_r - 1 the chunk
     steps whose sample is discarded, a_r its answer length (the cap on a length stop; the position of the first declared EOS on a
-    VERIFIED EOS stop) and lag_r the placeholder rows after an EOS stop = the attested AND declared scheduler lag (`eos_lag_rows`, R17-1:
+    VERIFIED EOS stop) and lag_r the placeholder rows after an EOS stop = the attested AND declared scheduler lag (`eos_lag_rows`:
     LAG is a declared specialization parameter; the post-EOS step is active internal computation whose row IS in the sampler batch).
     |live(t)| = #{r : t in E_r}.  A request whose G6 evidence is not established (a problem on it, an unverified early stop) leaves the
     state UNESTABLISHED at every step it touches -- the caller fails closed there instead of falling back to the observed rows.
@@ -140,8 +140,8 @@ def sampler_geometry_check(gp: dict, B, engine_step_of: dict[int, int], steps: d
     does not schedule -- an undeclared request, a row past a stop, a missing lag row -- is named), a top-p select on a step the state
     schedules nobody at is named, a scheduled sampling step without a top-p select is named, and a step whose state is unestablished
     fails closed.  Without `scheduled` the SampleEnd batch is held to the observed logits rows."""
-    from verity_vllm.program.registry.sampling_vocab import SHARED_GREEDY
-    from verity_vllm.program.registry.topp_geometry import registered_splits
+    from verity.ml.definitions.registry.sampling_vocab import SHARED_GREEDY
+    from verity.ml.definitions.registry.topp_geometry import registered_splits
     from verity_vllm.program.sampling_event import family_of
     topp = (_TOPP_FAMILY, SHARED_GREEDY[_TOPP_FAMILY].id)   # either `sampler_construction`
     per_step: dict[int | None, set[int | None]] = collections.defaultdict(set)
@@ -216,7 +216,7 @@ def sampler_geometry_check(gp: dict, B, engine_step_of: dict[int, int], steps: d
             hist[f"live={live}:S={x}"] += 1
         if None in Ss:
             problems.append(f"engine step {s}: a top-p TokenSelect carries no readable split count S (neither a Const32[S] splits operand -- the 6th "
-                            f"-- nor an S static of the R15 form)")
+                            f"-- nor an S static)")
         bad = sorted(x for x in Ss if x is not None and x != exp)
         if bad:
             mism.append({"step": s, "live": live, "registered_S": exp, "fold_S": bad})

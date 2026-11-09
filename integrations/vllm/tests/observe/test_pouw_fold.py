@@ -154,7 +154,7 @@ def test_the_capture_serves_the_committed_y_word_for_word(observed, linears):
     assert torch.equal(committed.view(torch.int16), y.view(torch.int16))
 
 
-def test_the_capture_context_leaves_sampled_proofs_out_and_is_none_without_an_executor():
+def test_the_capture_context_leaves_spot_out_and_is_none_without_an_executor():
     ctx = PO.capture_context(LW.POUW, settings={"pouw": {"coins": Challenger(0, random.Random(0).randbytes)}, "sampled-proofs": {}})
     assert ctx.stage == "capture" and ctx.enabled == ("pouw:ncp-v2",) and set(ctx.settings) == {"pouw"}
     assert PO.capture_context(LW.DEFAULT_TARGET) is None and PO.capture_context(None) is None
@@ -180,7 +180,7 @@ def test_the_match_capture_installs_its_workloads_target_executors(linears, monk
     monkeypatch.setattr(pouw.verifier, "coins", random.Random(5).randbytes)
 
     from verity_vllm.pipeline import m1_capture
-    wl = {"target": {"protocols": ["pouw:ncp-v2", "sampled-proofs:vllm-v1"]}, "protocols_config": {"pouw": {}}}
+    wl = {"target": {"protocols": ["pouw:ncp-v2", "sampled-proofs:rows-sha512"]}, "protocols_config": {"pouw": {}}}
     model, args = Model(), SimpleNamespace(target=None)
     protocols, entries = m1_capture.capture_protocols(wl, args, model)
     try:

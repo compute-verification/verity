@@ -189,7 +189,7 @@ def test_prescribed_padding_identities():
     v = {v.value_id: v for v in plan.values}["body.blocks.0.act/out"]
     assert not v.prescribed and v.prescribed_identities == 1 and v.identities == 3 and v.chosen.kind == "producer_output"
     assert [s.kind for s in v.sites] == ["prescribed", "producer_output"]
-    # padding identities as the finalize stage knows them (`padding_steps_of_record`): every identity of a Value -> prescribed as a whole
+    # padding identities as the finalize phase knows them: every identity of a Value -> prescribed as a whole
     pad = [r for r in rows if r["op_path"] == "logits"]
     plan2, _, _ = make_plan(rows) if False else (P.acquisition_plan(manifest(rows), AnnotationCorrespondence(tree()), tables=TABLES, padding_identities=pad), None, None)
     lg = {v.value_id: v for v in plan2.values}["logits/out"]
@@ -239,7 +239,7 @@ def _plan_in_a_fresh_process(tmp_path, mode: str) -> dict:
 
 def test_default_tables_do_not_depend_on_torch(tmp_path):
     """The plan with its default lifetime tables (no `tables=`) where torch imports and where it does not: the same tables, residuals
-    and digest, so a CPU gate without torch and the GPU stage evaluate one plan."""
+    and digest, so a CPU gate without torch and the GPU phase evaluate one plan."""
     from verity_vllm.commit.committer import flush_points
 
     rows = base_rows() + [row("instance_outputs", "body.blocks.0.qkv_proj", "0", spec="Gemm_v1"), row("instance_outputs", "body.norm", "out", spec="Norm_v1")]
@@ -297,7 +297,7 @@ def test_a_call_boundary_sized_plan_serialises_in_one_pass(monkeypatch):
     pass gives the same document, so the same digest."""
     p, _, _ = make_plan(base_rows())
     many = [P.ValuePlan(f"body.blocks.0.norm_in/mul_{i}", "out", "call_boundaries", 1, status="chosen",
-                        chosen=P.Site("registered_input", f"body.blocks.0.norm_in/mul_{i}", "out")) for i in range(3000)]
+                        chosen=P.AcquisitionSite("registered_input", f"body.blocks.0.norm_in/mul_{i}", "out")) for i in range(3000)]
     shared = [P.ValuePlan(f"body.blocks.0.act/v{i}", "out", "instance_outputs", 2, status="chosen", chosen=p.values[0].chosen) for i in range(5)]
     p.values = p.values + many + shared + [P.ValuePlan("body.gone", "out", "instance_outputs", 1, why="no legal site")]
     want = _body_by_site_scan(p)

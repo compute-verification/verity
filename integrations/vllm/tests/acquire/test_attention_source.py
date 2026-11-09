@@ -13,6 +13,7 @@ from __future__ import annotations
 __models__ = ("zai-org/GLM-5.3",)
 
 import copy
+import re
 import types
 from collections import Counter
 from typing import Any
@@ -29,6 +30,9 @@ from verity_vllm.acquire.sources import route_source as RS
 from verity_vllm.commit import binding as B
 from verity_vllm.query.manifest.bind import Binder, source_ports
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, TensorMeta
+from verity_vllm.program.predict import dsa as D
+from verity_vllm.query.manifest.format import RUN_FAMILY
+from verity.ml.definitions.registry.dsa_topk import waksman_switches
 
 NORM_ROPE = G.fused_norm_rope
 OTHERS = ("module_hook", "sampler", "allreduce_norm")
@@ -37,10 +41,11 @@ BY_ARGUMENT = {tid: arg for arg, tid in AS.ARGUMENTS.items()}
 
 class AttnRun(Run):
     """`Run` with the attention source attached, recording each step's bound copies, the committer's acquire/flush order and what
-    every layer computed."""
+    every layer computed.  A test that ends the source's steps (`on_step_end`) does it itself, as the collecting committer would."""
 
     def __init__(self, target: bool = True, identities: tuple[dict[str, Any], ...] = ()) -> None:
         super().__init__(target)
+        self.com.ends_source_steps = True
         self.att = AS.AttentionSource(self.com, self.src, identities)
         self.src.attention = self.att
         self.att.install()
@@ -153,7 +158,7 @@ def test_pitched_2d_is_the_native_collectors_staging_rule():
 @pytest.mark.slow
 def test_every_value_handed_to_the_committer_is_one_the_native_collector_stages(runs):
     """The native collector stages a contiguous tensor or equally spaced contiguous rows and raises on anything else ("layout is
-    not 2-D pitched", every rank of r20261013-002759-c965 on 8x H200). The W_UK_T product of a step of more than one token is a
+    not 2-D pitched", every rank on 8x H200). The W_UK_T product of a step of more than one token is a
     transposed bmm output, so the source hands the committer a contiguous copy of it, word-equal to it
     (`test_each_bound_value_is_the_one_the_layer_computed`)."""
     for r in runs.values():
@@ -390,6 +395,82 @@ def test_a_step_batching_requests_at_different_steps_of_their_own_holds_and_maps
     assert (cov["expected_n"], cov["bound_n"], cov["ambiguous_n"], cov["missing"]) == (2, 2, 0, [])
 
 
+def run_row(step: int, layer: int, pos: int, topk: int) -> dict[str, Any]:
+    """A `run_values` row of layer `layer`'s row at position `pos` (its top-k order of `topk` of its pos + 1 keys)."""
+    op, member = D.run_field(layer, pos).rsplit("/", 1)
+    return {"family": RUN_FAMILY, "request_id": "r0", "step": step, "engine_step": step, "invocation": 0, "rank": 3, "op_path": op,
+            "output_member": member, "element_range": [0, waksman_switches(pos + 1, topk)], "dtype": "u8",
+            "attention_module": f"model.layers.{layer}.self_attn", "statics": {"N": pos + 1, "TOPK": topk}}
+
+
+def test_the_run_values_the_manifest_requires_are_the_layers_top_k_rows_at_their_positions():
+    """At the decode (position 3), the mixed step's decode row (position 4, its one row through MQA: its prefill rows go through
+    dense MHA, which serves rows of at most INDEX_TOPK keys) and the sparse prefill's last row (position 10), of two indexer layers:
+    each field is committed at its step's end as the Program's `run` field holds the order its layer wrote into the shared buffer at
+    that row (the stand-in writes `(j + layer) % (P + 1)`, a valid order of the first `topk` slots), and nothing else is."""
+    keep = sorted(INDEXER)[:2]
+    want = [(1, keep[0], 3, 2), (2, keep[1], 4, 3), (3, keep[0], 10, 4), (3, keep[1], 10, 4)]
+    r = AttnRun(True, tuple(run_row(*w) for w in want))
+    try:
+        for k, (md, _routes, _phase) in enumerate(STEPS):
+            r.att.on_step_begin()
+            r.step(k, md, skip=tuple(i for i in range(L) if i not in keep))
+            r.att.on_step_end(types.SimpleNamespace(step=k))
+    finally:
+        r.close()
+    assert r.com.errors == [] and r.att.stats["run_values"] == len(want)
+    assert r.att.own_names == {D.run_field(layer, pos) for _s, layer, pos, _k in want}
+    assert r.att.targets_at(3) == {D.run_field(keep[0], 10): 1, D.run_field(keep[1], 10): 1} and r.att.targets_at(0) == {}
+    for step, layer, pos, topk in want:
+        got = [t for n, t in r.rec[step] if n == D.run_field(layer, pos)]
+        seen = r.seen[step][layer]
+        order = seen["topk"][seen["positions"].tolist().index(pos), :topk].tolist()
+        layout = {"fields": [{"name": D.run_field(layer, pos), "offset": 0, "leaves": waksman_switches(pos + 1, topk)}]}
+        assert len(got) == 1 and got[0].dtype == torch.uint8 and got[0].tolist() == D.run_bits(layout, {(layer, pos): order}, topk)
+    assert sum(n in r.att.own_names for k in r.rec for n in r.names(k)) == len(want)
+
+
+def test_a_cuda_graph_launchs_padding_rows_at_a_required_position_commit_nothing():
+    """[GLM-5.3] A decode launched at a CUDA graph's padded size hands `_sparse_indexer_and_attn` one real row (position 3) and three
+    padding rows whose positions the persistent buffer still holds (here 3 again) and whose top-k rows the indexer never wrote (-1):
+    only the row `forward_mqa` attended is read, and its order is committed as the Program's `run` field holds it."""
+    layer = sorted(INDEXER)[0]
+    r = AttnRun(True, (run_row(1, layer, 3, 2),))
+    try:
+        a = r.model.get_submodule(f"model.layers.{layer}.self_attn")
+        r.att.on_step_begin()
+        r.com._cur = types.SimpleNamespace(step=1)
+        a.md, a.slots = metadata(prefill=False, decodes=1), torch.tensor([3, -1, -1, -1])
+        a(torch.tensor([3, 3, 3, 3]), torch.zeros(4, 1))
+        r.com._cur = None
+        r.att.on_step_end(types.SimpleNamespace(step=1))
+    finally:
+        r.close()
+    topk = a.seen["topk"]
+    assert topk.shape[0] == 4 and bool((topk[1:] == -1).all())
+    assert r.com.errors == [] and r.att.stats["run_values"] == 1
+    name = D.run_field(layer, 3)
+    layout = {"fields": [{"name": name, "offset": 0, "leaves": waksman_switches(4, 2)}]}
+    assert [t.tolist() for n, t in r.rec[1] if n == name] == [D.run_bits(layout, {(layer, 3): topk[0, :2].tolist()}, 2)]
+
+
+def test_a_committer_that_never_ends_its_sources_steps_is_refused_a_manifest_with_run_values():
+    """`run` values are committed when a step's sources end (`on_step_end`), which only the collecting committer does: on any other
+    (`hooks_only`, a plugin) they would be missing from the step, so the source refuses the manifest naming them, and attaches
+    without them."""
+    from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
+    from verity_vllm.commit.committer.native_host import NativeHostCommitter
+    assert NativeCollectCommitter.ends_source_steps and not NativeHostCommitter.ends_source_steps
+    layer = sorted(INDEXER)[0]
+    r = Run()
+    try:
+        with pytest.raises(ValueError, match=re.escape(D.run_field(layer, 3))):
+            AS.AttentionSource(r.com, r.src, (run_row(1, layer, 3, 2),))
+        assert AS.AttentionSource(r.com, r.src, ()).own_names == frozenset()
+    finally:
+        r.src.uninstall()
+
+
 def test_a_non_contiguous_tap_is_staged_as_a_contiguous_copy_held_for_the_step():
     """[GLM-5.3] ql_nope is bmm(q_nope^T, W_UK_T).transpose(0, 1): [M, NH, L] over strides no 2-D pitch describes, which the native
     committer refuses ("layout is not 2-D pitched"); the source stages its contiguous copy, the same values in row-major order."""
@@ -406,5 +487,6 @@ def test_a_non_contiguous_tap_is_staged_as_a_contiguous_copy_held_for_the_step()
     assert name == "model.layers.0.self_attn/ql" and t.is_contiguous() and torch.equal(t, x) and src._copies == [t]
     src.on_step_begin = AS.AttentionSource.on_step_begin.__get__(src)
     src._pending = src._active = None
+    src.run = AS.RunValues((), {})
     src.on_step_begin()
     assert src._copies == []

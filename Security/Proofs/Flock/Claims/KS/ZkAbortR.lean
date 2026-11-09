@@ -1,10 +1,50 @@
-import Proofs.Flock.Claims.KS.ZkSimW
+module
+
+public import Proofs.Flock.Claims.KS.ZkSimW
+public import Proofs.Flock.Claims.KS.Trim
+public import Proofs.Flock.Claims.Recursion.FlockKSAcc
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.Deploy
+import Proofs.Flock.Claims.KS.Width
+import Proofs.Flock.Claims.Recursion.FlockKSDeploy
 import Proofs.Flock.Claims.Recursion.FlockKSRecord
+import Proofs.Flock.Claims.Recursion.InnerAbort
+import Proofs.Flock.Claims.Recursion.KSStated
 
 /-!
 # The recursion's KS over the masked record, from the masked table bound counted per round
 
-The recursion's chain at the abort law (`KSAbort_of_tableBoundOnAcc`) reads the table bound with escapes on accepted
+The recursion's chain at the abort distribution (`KSAbort_of_tableBoundOnAcc`) reads the table bound with escapes on accepted
 runs fitting as `Escapes.FitsFork` asks, every fork event charged at the busiest round's count, which the masked
 escapes with level 0's fork event do not fit at the deployed weight (`ZkFitsW`). Counted per round
 (`Claims.Recursion.TableBoundθOnAccR`, at every statement `Flock.TableBoundθAccAtR`, which `TableBoundθOnAcc` gives:
@@ -22,15 +62,17 @@ one table wherever some run accepts; the bound follows from a simulator of each 
 `FlockDeploy.KS.zk_KSFlock_of_simWJ`).
 -/
 
+@[expose] public section
+
 namespace Claims.Recursion
 
 open Claims Claims.Flock FlockSoundness FlockSoundness.Game FlockSoundness.Extract FlockSoundness.Rewinding
 
-/-! ## Fork events over draws, merged by round -/
+/-! ## Fork events over samples, merged by round -/
 
 section MergeD
 
-variable {Ω Coin A : Type} {H : Msg → Msg} {n : ℕ} {tr : Ω → (Fin n → Coin) × A → Trace}
+variable {Ω Coin A : Type} {H : Msg → Msg} {n : ℕ} {tr : Ω → (Fin n → Coin) × A → Transcript}
 
 /-- **The escapes fit `C` counted per round**: `Σ_i m_i c_i ≤ 2C`, with `m_i` the fork events at `i`'s round, and
 `Σ_l β_l ≤ n`. -/
@@ -135,7 +177,7 @@ theorem EscapesD.term_le_mergeR [Fintype Coin] [Fintype A] (e : EscapesD H n tr)
 
 end MergeD
 
-/-! ## The chain at the abort law, counted per round -/
+/-! ## The chain at the abort distribution, counted per round -/
 
 section TableBound
 
@@ -165,7 +207,7 @@ def TableBoundθAbortR (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg 
               lookCol (D.cols (abortRun H P D.V x keep ω d).seen 0) p.val = some u ∧ u ≠ C p
 
 /-- **The abort-law table bound counted per round, from the table bound with escapes on accepted runs counted per
-round**: `tableBoundθAbort_of_onAcc`, whose escapes at the abort law have the same rounds and weights. -/
+round**: `tableBoundθAbort_of_onAcc`, whose escapes at the abort distribution have the same rounds and weights. -/
 theorem tableBoundθAbortR_of_onAccR (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ)
     (Ok : Msg → Col → Prop) (decC : Msg → Msg → Coin) (htab : TableBoundθOnAccR H D N Ok) (hVk : ∀ x, 0 < D.V.k x)
     (hpc : CoinsShown H D.V decC) (hlast : AccLast H D.V) (hfree : DecideFree H D.V) (href : Refusable H D.V) :
@@ -175,72 +217,12 @@ theorem tableBoundθAbortR_of_onAccR (H : Msg → Msg) (D : Flock.Deploy Coin Co
   obtain ⟨m₀, hm₀⟩ := href x
   obtain ⟨e, ⟨hon, hon₁⟩, hfit, hb⟩ :=
     htab x (Ω × ((Fin (D.V.k x) → Coin) → Coin × A)) (refuser P x (D.V.k x) decC keep m₀)
-  have hrun := refuser_run H P D.V x decC hpc hlast hfree keep m₀ hm₀
-  let eD : EscapesD H (D.V.k x) (abortRun H P D.V x keep) :=
-    { I := e.I
-      c := e.c
-      j := e.j
-      ev := fun i ω d d' => TiedColl H ((abortRun H P D.V x keep ω d).vLog ++
-        (abortRun H P D.V x keep ω (forkDraw (e.j i) d d')).vLog)
-      L := e.L
-      β := e.β
-      ev₁ := fun _ ω d => TiedColl H (abortRun H P D.V x keep ω d).vLog
-      c_nonneg := e.c_nonneg
-      β_nonneg := e.β_nonneg
-      tied := fun _ _ _ _ h => h
-      tied₁ := fun _ _ _ h => h }
-  refine ⟨eD, hfit, fun ω C hC hg => ?_⟩
-  have hEx := Ex_mono fun g : (Fin (D.V.k x) → Coin) → Coin × A => hb (ω, g) C hC hg
-  rw [Ex_add, Ex_add, Ex_const] at hEx
-  have hL : (Ex fun g : (Fin (D.V.k x) → Coin) → Coin × A =>
-      accPr H D.V (refuser P x (D.V.k x) decC keep m₀) x (ω, g)) = accPrD (abortRun H P D.V x keep ω) := by
-    unfold accPr accPrD
-    rw [← Pr_refDraw (hVk x)]
-    exact congrArg Ex (funext fun g => Pr_congr fun r => (hrun ω g r).1)
-  have hO : (Ex fun g : (Fin (D.V.k x) → Coin) → Coin × A =>
-      Pr fun r : Fin (D.V.k x) → Coin => (run H (refuser P x (D.V.k x) decC keep m₀) D.V x (ω, g) r).out = .acc ∧
-        ∃ (p : Fin (N x)) (u : Col), lookCol (D.cols (run H (refuser P x (D.V.k x) decC keep m₀) D.V x (ω, g)
-          r).seen 0) p.val = some u ∧ u ≠ C p) =
-      Pr fun d : (Fin (D.V.k x) → Coin) × A => (abortRun H P D.V x keep ω d).out = .acc ∧
-        ∃ (p : Fin (N x)) (u : Col), lookCol (D.cols (abortRun H P D.V x keep ω d).seen 0) p.val = some u ∧
-          u ≠ C p := by
-    rw [← Pr_refDraw (hVk x)]
-    refine congrArg Ex (funext fun g => Pr_congr fun r => ?_)
-    constructor
-    · rintro ⟨ha, rest⟩
-      rw [(hrun ω g r).2 ha] at rest
-      exact ⟨(hrun ω g r).1.1 ha, rest⟩
-    · rintro ⟨ha, rest⟩
-      have ha' := (hrun ω g r).1.2 ha
-      rw [← (hrun ω g r).2 ha'] at rest
-      exact ⟨ha', rest⟩
-  have hT : (Ex fun g : (Fin (D.V.k x) → Coin) → Coin × A => e.term (ω, g)) ≤ eD.term ω := by
-    unfold Escapes.term EscapesD.term
-    rw [Ex_add, Ex_sum, Ex_sum]
-    refine add_le_add (Finset.sum_le_sum fun i _ => ?_) (Finset.sum_le_sum fun l _ => ?_)
-    · refine (Ex_sqrt_le _ fun g => mul_nonneg (e.c_nonneg i) (Pr_nonneg _)).trans ?_
-      rw [Ex_mul_left]
-      refine Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left ?_ (e.c_nonneg i))
-      refine (Ex_mono fun g => Pr_mono fun s hs => ?_).trans
-        (Pr_fork_refDraw_le (e.j i) (fun d d' => TiedColl H ((abortRun H P D.V x keep ω d).vLog ++
-          (abortRun H P D.V x keep ω d').vLog)) fun d d' h => TiedColl.of_dup h _)
-      obtain ⟨h1, h2 | h2⟩ := hon i (ω, g) s.1 s.2 hs
-      · have ht := e.tied i (ω, g) s.1 s.2 hs
-        rw [(hrun ω g _).2 h1, (hrun ω g _).2 h2] at ht
-        exact ht
-      · rw [(hrun ω g _).2 h1] at h2
-        exact h2.append_right _
-    · rw [Ex_mul_left]
-      refine mul_le_mul_of_nonneg_left ?_ (e.β_nonneg l)
-      refine (Ex_mono fun g => Pr_mono fun r hr => ?_).trans
-        (le_of_eq (Pr_refDraw (hVk x) fun d => TiedColl H (abortRun H P D.V x keep ω d).vLog))
-      have ht := e.tied₁ l (ω, g) r hr
-      rw [(hrun ω g r).2 (hon₁ l (ω, g) r hr)] at ht
-      exact ht
-  rw [hL, hO] at hEx
-  linarith
+  refine ⟨Escapes.toAbortD e, hfit, fun ω C hC hg => ?_⟩
+  exact accPrD_le_of_refuser H P D.V x decC (hVk x) hpc hlast hfree keep m₀ hm₀ e hon hon₁ (D.εtable x)
+    (fun s => ∃ (p : Fin (N x)) (u : Col), lookCol (D.cols s 0) p.val = some u ∧ u ≠ C p) ω
+    (fun g => hb (ω, g) C hC hg)
 
-/-- **Flock's one-wait bound at the abort law, from the table's bound there counted per round**:
+/-- **Flock's one-wait bound at the abort distribution, from the table's bound there counted per round**:
 `oneWaitAbort_of_tableBound`, the escapes with the conflict fork merged by round (`EscapesD.mergeR`). -/
 theorem oneWaitAbort_of_tableBoundR (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ)
     (hN : ∀ x, (N x : ℝ) ≤ D.N₀ x) (hεt : ∀ x, 0 ≤ D.εtable x) (hVk : ∀ x, 0 < D.V.k x)
@@ -248,59 +230,18 @@ theorem oneWaitAbort_of_tableBoundR (H : Msg → Msg) (D : Flock.Deploy Coin Col
     (hone : ∀ x, (∃ s, D.parse x = some s ∧ s.tables = 1) ∨ NoAcc H D.V x) (Ok : Msg → Col → Prop) (hz : ∀ x, Ok x 0)
     (hok : ColsOk H D N Ok) (hconf : ConflictTied H D N) (htab : TableBoundθAbortR H D N Ok) :
     OneWaitAbort H D := by
-  classical
   intro x Ω _ _ P A _ _ keep
   obtain ⟨e₀, hfit, hb⟩ := htab x Ω P A keep
-  set j₀ : Fin (D.V.k x) := ⟨0, hVk x⟩
-  set ev : Ω → (Fin (D.V.k x) → Coin) × A → (Fin (D.V.k x) → Coin) × A → Prop :=
-    fun ω d d' => ∃ p, ConflictAt (opD D N x (abortRun H P D.V x keep ω)) (d, d') p with hev
-  have tied : ∀ ω d d', ev ω d d' → TiedColl H ((abortRun H P D.V x keep ω d).vLog ++
-      (abortRun H P D.V x keep ω (forkDraw j₀ d d')).vLog) := by
-    intro ω d d' ⟨p, h1, h2, h3⟩
-    have hfd : forkDraw j₀ d d' = d' := by
-      show (forkCoins j₀ d.1 d'.1, d'.2) = d'
-      rw [Claims.Bridge.forkCoins_zero j₀ rfl]
-    rw [hfd]
-    simp only [opD] at h1 h2 h3
-    split_ifs at h1 h2 h3 with ha ha'
-    · obtain ⟨hk1, hr1⟩ := abortRun_acc_iff.1 ha
-      obtain ⟨hk2, hr2⟩ := abortRun_acc_iff.1 ha'
-      obtain ⟨u, hu⟩ := Option.isSome_iff_exists.1 h1
-      obtain ⟨v, hv⟩ := Option.isSome_iff_exists.1 h2
-      have hne : u ≠ v := fun huv => h3 (by rw [hu, hv, huv])
-      rw [abortRun_of_keep hk1] at hu ⊢
-      rw [abortRun_of_keep hk2] at hv ⊢
-      exact hconf x Ω P ω d.1 d'.1 p.val u v hr1 hr2 p.isLt hu hv hne
-    all_goals simp at h1 h2
-  refine ⟨(e₀.addFork (D.k x) (Nat.cast_nonneg _) j₀ ev tied).mergeR,
-    (e₀.fitsR_addFork (D.weight x) (D.k x) (Nat.cast_nonneg _) j₀ rfl ev tied hfit).fits_mergeR, fun ω hε => ?_⟩
-  have hacc : ¬ NoAcc H D.V x := fun hno => by
-    have : accPrD (abortRun H P D.V x keep ω) = 0 := by
-      unfold accPrD
-      rw [Pr_congr (q := fun _ => False) fun d =>
-        ⟨fun h => hno Ω P ω d.1 (abortRun_acc_iff.1 h).2, False.elim⟩, Pr_false]
-    linarith
-  have hk1 : 1 ≤ D.k x := (hk x).resolve_right hacc
-  obtain ⟨s, hs, h1⟩ := (hone x).resolve_right hacc
-  have hokD : ∀ d q u, (abortRun H P D.V x keep ω d).out = .acc → q < N x →
-      lookCol (D.cols (abortRun H P D.V x keep ω d).seen 0) q = some u → Ok x u := by
-    intro d q u ha hq hu
-    obtain ⟨hkeep, hr⟩ := abortRun_acc_iff.1 ha
-    rw [abortRun_of_keep hkeep] at hu
-    exact hok x Ω P ω d.1 q u hr hq hu
-  have hεc : 0 ≤ D.εtable x + e₀.term ω := add_nonneg (hεt x) (e₀.term_nonneg ω)
-  have hj := oneWaitD D N x (abortRun H P D.V x keep ω) hs h1 Ok (hz x) hokD _ hεc
-    (fun C hC hg => hb ω C hC hg) (D.k x) hk1
-  have hE : (Pr fun s : ((Fin (D.V.k x) → Coin) × A) × ((Fin (D.V.k x) → Coin) × A) =>
-      ∃ p, ConflictAt (opD D N x (abortRun H P D.V x keep ω)) s p) =
-      Pr fun s : ((Fin (D.V.k x) → Coin) × A) × ((Fin (D.V.k x) → Coin) × A) => ev ω s.1 s.2 := rfl
-  rw [hE] at hj
-  have hm := (e₀.addFork (D.k x) (Nat.cast_nonneg _) j₀ ev tied).term_le_mergeR ω
-  rw [EscapesD.term_addFork] at hm
-  have hrate : (N x : ℝ) * accPrD (abortRun H P D.V x keep ω) / (Real.exp 1 * D.k x) ≤
-      D.N₀ x / (Real.exp 1 * D.k x) * accPrD (abortRun H P D.V x keep ω) := by
-    rw [div_mul_eq_mul_div]
-    exact div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_right (hN x) hε.le) (by positivity)
+  refine ⟨(e₀.addFork (D.k x) (Nat.cast_nonneg _) ⟨0, hVk x⟩
+      (fun ω d d' => ∃ p, ConflictAt (opD D N x (abortRun H P D.V x keep ω)) (d, d') p)
+      (opD_tied H D N hconf P x keep ⟨0, hVk x⟩ rfl)).mergeR,
+    (e₀.fitsR_addFork (D.weight x) (D.k x) (Nat.cast_nonneg _) ⟨0, hVk x⟩ rfl
+      (fun ω d d' => ∃ p, ConflictAt (opD D N x (abortRun H P D.V x keep ω)) (d, d') p)
+      (opD_tied H D N hconf P x keep ⟨0, hVk x⟩ rfl) hfit).fits_mergeR, fun ω hε => ?_⟩
+  have hm := (e₀.addFork (D.k x) (Nat.cast_nonneg _) ⟨0, hVk x⟩
+    (fun ω d d' => ∃ p, ConflictAt (opD D N x (abortRun H P D.V x keep ω)) (d, d') p)
+    (opD_tied H D N hconf P x keep ⟨0, hVk x⟩ rfl)).term_le_mergeR ω
+  have := oneWaitAbort_le_of_tableBound H D N hN hεt hVk hk hone Ok hz hok hconf x P keep e₀ hb ω hε
   linarith
 
 /-- **Flock as the inner protocol meets `Inner.KSAbort`, from the KS chain's obligations counted per round**:

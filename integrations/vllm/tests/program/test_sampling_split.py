@@ -1,10 +1,10 @@
 """The sampling family's split into Definitions, twins and vocabulary changes no Definition.
 
-* Every Definition id and canonical descriptor digest (`query.word.definition_digest`: the descriptor entry and its callees'
-  digests) is the one `data/sampling_split_digests.json` pins, at every statics a circuit-check target or pin, a kept record or
+* Every Definition id and canonical descriptor digest (`word.closure_digest`: the definition digest and its callees'
+  closure digests) is the one `data/sampling_split_digests.json` pins, at every statics it pinned, a circuit-check pin, a kept record or
   manifest, or a served vocabulary uses, and each of the family's Definitions is still constructed by the module that
   constructed it.  The pins were written on the unsplit tree; a change to a Definition of the
-  family rewrites them (`python tests/program/test_sampling_split.py --write`, from `integrations/vllm`).
+  family rewrites them (this module's `--write`, run by `REWRITE`'s command), keeping every key they hold.
 * The family's Definition modules import only the stdlib, numpy, `verity`, one another, and the two other families' modules
   they take Definitions from (`OTHER_DEFINITION_MODULES`), less the one listed exception: so they can move to `verity/ml/circuits/`, which
   imports only `verity`, with the Definitions they call.
@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import ast
+import importlib.util
 import json
 import re
 import subprocess
@@ -22,10 +23,11 @@ import pytest
 
 VLLM = Path(__file__).resolve().parents[2]
 REPO = VLLM.parents[1]
-REG = VLLM / "verity_vllm" / "program" / "registry"
+REG = Path(importlib.util.find_spec("verity.ml.definitions.registry").origin).parent
 FIXTURE = Path(__file__).resolve().parent / "data" / "sampling_split_digests.json"
-TASKS = REPO / "tools" / "verity" / "circuit_check" / "tests" / "data" / "sampling_split_tasks.json"
-PKG = "verity_vllm.program.registry"
+REWRITE = ("a change meant to move the family's Definitions rewrites the pins with "
+           "`uv run python tools/verity/check/pins.py --write integrations/vllm/tests/program/data/sampling_split_digests.json`")
+PKG = "verity.ml.definitions.registry"
 #: the catalog, where the layout move put core's Definitions and silicon models
 CATALOG = "verity.ml.circuits"
 
@@ -71,7 +73,7 @@ def family_definitions() -> dict[str, object]:
     import importlib
 
     from verity.ml.circuits.defs import FunctionDefinition
-    from verity_vllm.program.registry.catalog import load
+    from verity.ml.definitions.registry.catalog import load
 
     load()
     mods = {f"{PKG}.{m}" for m in FAMILY_MODULES}
@@ -97,7 +99,7 @@ def _statics(body: str) -> dict:
 
 def resolve(key: str, defs: dict[str, object]):
     """The Definition a spec id names: the registry's binding (`query.call_scope.specialization`), else a family module's own."""
-    from verity_vllm.query.call_scope import specialization
+    from verity.ml.definitions.call_scope import specialization
 
     m = re.fullmatch(r"([^{]+)(?:\{(.*)\})?", key)
     fam, statics = m[1], _statics(m[2] or "")
@@ -112,21 +114,19 @@ def resolve(key: str, defs: dict[str, object]):
 
 
 def pin(key: str, defs: dict[str, object]) -> dict:
-    from verity_vllm.query.word import definition_digest
+    from verity.ml.definitions.word import closure_digest
 
     fn = resolve(key, defs)
-    return {"id": fn.id, "digest": definition_digest(fn)}
+    return {"id": fn.id, "digest": closure_digest(fn)}
 
 
 # --- the writer --------------------------------------------------------------------------------------------------------------
 
 def spec_keys(defs: dict[str, object]) -> list[str]:
-    """circuit-check's family targets and pins, the family ids a tracked JSON file writes with all their statics, and the
-    family's V- and (V, S)-indexed Definitions at the served sizes."""
-    tasks = json.loads(TASKS.read_text())
-    keys = {t["id"] for t in tasks["tasks"] if t["kind"] == "definition"} | {k for p in tasks["pins"].values() for k in p}
-    bases = sorted({k.split("{")[0] for k in keys} | set(defs), key=len, reverse=True)
-    pat = re.compile(r"\b((?:" + "|".join(map(re.escape, bases)) + r")\{[^{}\"]*\})")
+    """The keys the fixture already pins, the family ids a tracked JSON file writes with all their statics (circuit-check's
+    pins among them), and the family's V- and (V, S)-indexed Definitions at the served sizes: each that still resolves."""
+    keys: set[str] = set(_load()["pins"]) if FIXTURE.exists() else set()
+    pat = re.compile(r"\b((?:" + "|".join(map(re.escape, sorted(defs, key=len, reverse=True))) + r")\{[^{}\"]*\})")
     files = subprocess.run(["git", "ls-files", "-z", "*.json"], cwd=REPO, capture_output=True, text=True, check=True).stdout.split("\0")
     for f in filter(None, files):
         p = REPO / f
@@ -165,19 +165,20 @@ def defs():
 
 
 def test_each_definition_is_constructed_where_it_was(defs):
-    assert {k: defining_module(d) for k, d in sorted(defs.items())} == _load()["modules"]
+    assert {k: defining_module(d) for k, d in sorted(defs.items())} == _load()["modules"], REWRITE
 
 
 @pytest.mark.parametrize("key", _params())
 def test_the_definition_id_and_digest_are_unchanged(key, defs):
     """The keys in `SLOW_TRACE` and those at a served (V, S) pair trace a Boolean Definition's body for over 5 s, so they are slow;
     the rest, served vocabularies included, stay quick."""
-    assert pin(key, defs) == _load()["pins"][key]
+    assert pin(key, defs) == _load()["pins"][key], REWRITE
 
 
 def test_the_pins_cover_every_circuit_check_target_of_the_family():
     have = set(_load()["pins"])
-    assert len(have) > 100 and {"GumbelTopPTokenSelect_v1{V=128256}", "TopPKeepWord_v1{V=16,S=4}", "GumbelSelectF32_v2{V=2}"} <= have
+    want = {"GumbelTopPTokenSelect_v1{V=128256}", "TopPKeepWord_v1{V=16,S=4}", "GumbelSelectF32_v2{V=2}"}
+    assert len(have) > 100 and want <= have, REWRITE
 
 
 # --- the boundary --------------------------------------------------------------------------------------------------------------

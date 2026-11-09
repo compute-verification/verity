@@ -1,8 +1,8 @@
 """PoUW's `ncp-v2` under sampled proofs: each weight's side as its own `NcpWeight_v1` Program call, once per run, and each
 executed linear call as its own `NcpLinear_v1` Program call reading it.
 
-`verity.core.protocols.pouw.circuit` gives the circuit (`traced_as`: both Definitions, their `Q_template_instances` queries, the served
-count and the closure-draw layout; P is the scheme's). Here is what the vLLM integration does with it:
+`verity.ml.protocols.pouw.circuit` gives the circuit (`traced_as`: both Definitions, their `Q_template_instances` queries, the served
+count and the closure-sampling layout; P is the scheme's). Here is what the vLLM integration does with it:
 
 - **Build.** A model Program's row at a PoUW site is lowered to `ROW_FAMILY` (`lower`): the served output of one row of
   that site's `NcpLinear` call, which the replay checks against the call rather than as a bf16 GEMM.
@@ -30,16 +30,16 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
 import numpy as np
-from verity.core.protocols.pouw import circuit as C
+from verity.ml.protocols.pouw import circuit as C
 from verity.core.protocols.pouw.audit import commit_rows
-from verity.core.protocols.pouw.circuit import partition as CP
-from verity.core.protocols.pouw.circuit import reference as R
-from verity.core.protocols.pouw.circuit.ncp2 import D, Shape
+from verity.ml.protocols.pouw.circuit import partition as CP
+from verity.ml.protocols.pouw.circuit import reference as R
+from verity.ml.protocols.pouw.circuit.ncp2 import D, Shape
 from verity.core.protocols.pouw.protocol import tagged
 
 from verity.ml.circuits import partition_object as PO
 from verity_vllm.query.manifest.format import spec_family
-from verity.ml.circuits.evaluate import evaluate_region
+from verity.ml.circuits.evaluation.reference import evaluate_region
 
 #: The model Program's families for one row of a PoUW site: its served output, checked by the replay against the call; the
 #: second is a biased linear's row whose bias add was the pre-bias output's only reader (`program.registry.pouw_rows`)
@@ -58,9 +58,9 @@ M32 = 0xFFFFFFFF
 
 
 def kind_of(scheme: str) -> str:
-    """The permutation P that ``scheme`` pins (`verity.core.protocols.pouw.circuit.SCHEMES`); ValueError for a scheme without a circuit."""
+    """The permutation P that ``scheme`` pins (`verity.ml.protocols.pouw.circuit.SCHEMES`); ValueError for a scheme without a circuit."""
     if scheme not in C.SCHEMES:
-        raise ValueError(f"{scheme}: no circuit (verity.core.protocols.pouw.circuit.SCHEMES = {', '.join(C.SCHEMES)})")
+        raise ValueError(f"{scheme}: no circuit (verity.ml.protocols.pouw.circuit.SCHEMES = {', '.join(C.SCHEMES)})")
     return C.SCHEMES[scheme]
 
 
@@ -301,8 +301,9 @@ def call_leaf(rec: CallRecord) -> bytes:
 
 
 def calls_root(salt: bytes, weights_root: bytes, records: Sequence[CallRecord]) -> bytes:
-    """The root over every call's leaf, in call order."""
-    return commit_rows(tagged(CALLS_BINDING, salt, weights_root), -1, [call_leaf(r) for r in records]).commitment.root
+    """The root over every call's leaf, in call order: a plain tree, which the replay recomputes from the records."""
+    return commit_rows(tagged(CALLS_BINDING, salt, weights_root), -1, [call_leaf(r) for r in records], "sha256",
+                       public=True).commitment.root
 
 
 def sides(records: Sequence[CallRecord]) -> list[WeightRecord]:
@@ -317,7 +318,7 @@ def sides(records: Sequence[CallRecord]) -> list[WeightRecord]:
 
 @dataclass(frozen=True)
 class Compiled:
-    """One call shape's Programs, their template partitions and their trace (`verity.core.protocols.pouw.circuit.traced_as`)."""
+    """One call shape's Programs, their template partitions and their trace (`verity.ml.protocols.pouw.circuit.traced_as`)."""
 
     traced: Any
     program: Any
@@ -336,7 +337,7 @@ def program(scheme: str, m: int, k: int, n: int) -> Compiled:
     ValueError for a scheme without one."""
     t = C.traced_as(scheme, m, k, n)
     if t is None:
-        raise ValueError(f"{scheme}: no circuit (verity.core.protocols.pouw.circuit.SCHEMES = {', '.join(C.SCHEMES)})")
+        raise ValueError(f"{scheme}: no circuit (verity.ml.protocols.pouw.circuit.SCHEMES = {', '.join(C.SCHEMES)})")
     prog, wprog = CP.program(t.shape, t.kind), CP.weight_program(t.shape, t.kind)
     return Compiled(t, prog, PO.TemplatePartition(prog, t.query), wprog, PO.TemplatePartition(wprog, t.weight_query))
 
@@ -353,7 +354,7 @@ def _transcript(prog: Any, args: Sequence[Sequence[int]]) -> dict[int, int]:
 
 
 def evaluate_ir(scheme: str, call: Call) -> tuple[Compiled, dict[int, int]]:
-    """The call's Program evaluated on its bound inputs: the compiled Programs and its transcript (gate -> encoding)."""
+    """The call's Program evaluated on its bound inputs: the compiled Programs and its trace (gate -> encoding)."""
     sh = call.shape
     c = program(scheme, sh.m, sh.k, sh.n)
     return c, _transcript(c.program, call.args(c.traced.kind))
@@ -367,7 +368,7 @@ def evaluate_weight_ir(scheme: str, call: Call) -> tuple[Compiled, dict[int, int
 
 
 def commit_weight_ir(scheme: str, call: Call) -> WeightRecord:
-    """The call's weight side committed from its Program's transcript: each Y unit's leaf over the gates its partition names."""
+    """The call's weight side committed from its Program's trace: each Y unit's leaf over the gates its partition names."""
     c, tr = evaluate_weight_ir(scheme, call)
     tp = c.weight_partition
     outs = [np.array([tr[g] for g in tp.outputs(u)], np.uint32) for u in range(tp.population)]
@@ -384,7 +385,7 @@ def commit_weight_ir(scheme: str, call: Call) -> WeightRecord:
 
 
 def commit_call_ir(index: int, scheme: str, call: Call, side: WeightRecord | None = None) -> CallRecord:
-    """The call committed from its Program's transcript: each unit's leaf over the gates `TemplatePartition.outputs` names,
+    """The call committed from its Program's trace: each unit's leaf over the gates `TemplatePartition.outputs` names,
     its weight side ``side`` (`commit_weight_ir` when None)."""
     c, tr = evaluate_ir(scheme, call)
     sh, tp = call.shape, c.partition

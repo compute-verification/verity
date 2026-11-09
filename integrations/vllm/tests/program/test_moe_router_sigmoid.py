@@ -16,10 +16,10 @@ from verity.ml.circuits.evaluation.reference import standalone_call
 from verity.ml.circuits import codec
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.program import Program
-from verity_vllm.program.registry import moe
-from verity_vllm.program.kernels import moe_twins
-from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry import ref_prims as R
+from verity.ml.definitions.registry import moe
+from verity.ml.definitions.numerics import moe_twins
+from verity.ml.definitions.registry import prims as P
+from verity.ml.definitions.registry import ref_prims as R
 
 NEG_INF, PINF, QNAN = 0xFF800000, 0x7F800000, 0x7FC00000
 TIERS = ((128, 8), (256, 8), (384, 8), (512, 8), (512, 22), (768, 16), (896, 16), (1024, 16))   # SigmoidBiasTiers
@@ -180,8 +180,8 @@ def test_statics_are_checked(bad):
 
 
 #: the served word Programs (256 experts, 8 slots, x2.5), by launch: `codec.program_digest` of each standalone Program
-SERVED = {"block": "59895b10a0a99cfe2276a8be5ef4afddebb606630ef7781e13425d937e841ea3e9d95bb9f32f70fd0d02b0e1d949b7414020bf79d6a089caa7f83886eb704f7d",
-          "warp": "9ff429aef6778d86029b3b14c66ef8011bb4183105ebf321ee55704a568f625392527c39025907e352819d6081e18c456bb728bf4c0e2c03a734d405a8a75216"}
+SERVED = {"block": "a51907a4af4c68792a7049acede040b6738cbe2ababb88676d55e6509248f5082c02f48cf5db747e1528265ac5c3c04bd799069b7fa32e2265a5baada1677ef0",
+          "warp": "d14a959cc427da1117cad8fc19558c8c6b011879e820313a6538a8004e59960a55e51d2c9ea16ef95bedefffbb9bd13e539199462a6eee6d37bdf8940c79c67f"}
 
 
 @pytest.mark.parametrize("launch", sorted(SERVED))

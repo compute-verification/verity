@@ -1,6 +1,6 @@
 """A multi-output relation's values compare against the members its ports are committed as.  `DeepGemmFp8Linear_v1` returns (q, s, y) on
 ports 0 / 1 / 2 and the manifest commits them as `x_q` / `x_s` / `0` (`part_rank<r>` on a row-parallel TP linear): the GLM-5.3 TP8 Commit
-r20261016-151308-b727 left every DeepGemm prefill stratum 'evaluator produced no member x_q' (411 per rank), and port 0's q stood where
+left every DeepGemm prefill stratum 'evaluator produced no member x_q' (411 per rank), and port 0's q stood where
 member 0 (y) was.  The committed q is e4m3 (`float8_e4m3fn`, one byte a word), read like any other 8-bit plane.  A MoE plane row has no
 port map: its ports are its plane members in return order (`Fp8GroupQuantUe8m0_v1` on the in_quant plane: 0 -> in_q, 1 -> in_scale)."""
 from __future__ import annotations
@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.check.replay import evaluate as EV, opening as OP
-from verity_vllm.program.kernels.deepgemm_rows import deepgemm_linear
+from verity.ml.definitions.numerics.deepgemm_rows import deepgemm_linear
 
 K, N, ROW, ROWS = 256, 128, 1, 3
 OP_PATH = "model.layers.0.mlp.down_proj"
@@ -161,7 +161,7 @@ def _plane_store(q, s, flip=None):
 
 @pytest.fixture
 def quant(monkeypatch):
-    from verity_vllm.program.kernels.glm53_rows import fp8_group_quant_ue8m0
+    from verity.ml.definitions.numerics.glm53_rows import fp8_group_quant_ue8m0
     x = _operands(np.random.default_rng(5))[0]
     got = fp8_group_quant_ue8m0({"K": K, "G": 128}, [x])
     monkeypatch.setattr(EV, "_evaluate_row", lambda *a, **k: fp8_group_quant_ue8m0({"K": K, "G": 128}, [x]))

@@ -1,5 +1,5 @@
 """`circuit_check.ambient` (``circuit-check --ambient``): a Definition's flat lowering is one text in a plain interpreter and a
-perturbed one and reads no environment, clock or unseeded draw, so it depends only on its builders' operands; a builder that
+perturbed one and reads no environment, clock or unseeded sample, so it depends only on its builders' operands; a builder that
 reads anything else is refused by name. And no word primitive is lowered by whichever of two builders was imported first."""
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from verity.ml.circuits.defs import REGISTRY
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
-#: the Boolean Definitions the PoUW H1 tile unit (`h1unit.Shape(32).unit()`) reaches that lower in under a second each
+#: the Boolean Definitions the PoUW H1 tile's proof block (`h1unit.Shape(32).unit()`) reaches that lower in under a second each
 H1 = ["PouwLow8_v2", "PouwSx8_v2", "PouwAndBit_v2", "PouwI8AddBit_v2", "PouwI8Neg_v2", "PouwI8Add_v2", "PouwU129_v2",
       "PouwZyCell_v2", "F2fpBf16_v2", "PouwXinFinal_v2", "S32ToF32Rn_v2", "F32Mul_v4", "PouwSegDot0_v2", "PouwSegDot_v2",
       "BlackwellS8ImmaDot32_v2", "GemmAccumulatorS8_v2{K=32,DOT=BlackwellS8ImmaDot32_v2}", "PouwZyDequant_v2"]
@@ -33,7 +33,7 @@ def test_the_h1_units_definitions_lower_to_one_text_in_any_interpreter():
 @pytest.mark.slow
 def test_the_h1_units_larger_definitions_lower_to_one_text_in_any_interpreter():
     """PouwFx1Absorb and PouwNoiseBlock, the H1 tile's largest Definitions that lower in seconds (about 4 and 6 s a lowering,
-    three lowerings each): their builders (the absorb's fold, the noise block's SHA-512) are none of the small ones'."""
+    three lowerings each): their builders (the absorb's fold, the noise chunk's SHA-512) are none of the small ones'."""
     big = ["PouwFx1Absorb_v2", "PouwNoiseBlock_v2"]
     assert _verdicts(big) == dict.fromkeys(big, "same")
 
@@ -42,7 +42,7 @@ BAD = {"Counted": "differs", "SetOrder": "differs", "Environ": "reads", "Clocked
 
 
 def test_a_builder_that_reads_state_besides_its_operands_is_refused_by_name():
-    """A count of earlier lowerings, the order of a set of strings, the environment, a clock, an unseeded draw
+    """A count of earlier lowerings, the order of a set of strings, the environment, a clock, an unseeded sample
     (`fixtures/ambient_builders.py`): each refused, and the read named where the builder made it."""
     specs = [f"ambient_builders:{n}" for n in [*BAD, "Plain"]]
     rs = dict(zip(specs, A.check(specs, path=(str(FIXTURES),))))
@@ -70,7 +70,19 @@ def test_no_word_primitive_is_lowered_by_whichever_builder_registered_first():
         "Definition, or its own piece in `ir_lower.PIECES`")
 
 
-def test_a_word_two_builders_build_is_ambiguous_unless_it_has_a_piece_of_its_own(monkeypatch):
+def _traced(name, fn):
+    """A piece wrapped as `verity_flock.boolean_export`'s tracer wraps it."""
+    def w(*a, **k):
+        return fn(*a, **k)
+    w.__wrapped__ = fn
+    return w
+
+
+@pytest.mark.parametrize("wrap", [None, _traced], ids=["unwrapped", "wrapped"])
+def test_a_word_two_builders_build_is_ambiguous_unless_it_has_a_piece_of_its_own(monkeypatch, wrap):
+    """Whether or not the pieces resolved are wrapped (`ir_lower.PIECES.wrap`), as the Boolean export's tracer wraps each one
+    once a test in the process exports: else the check finds nothing wherever an export ran first."""
+    monkeypatch.setattr(IL.PIECES, "wrap", wrap)
     word = SimpleNamespace(id="AmbientTestWord_v1")
     for i, build in (("AmbientTestOne_v1", lambda C, a: a), ("AmbientTestTwo_v1", lambda C, a: [a[0].inv().inv()])):
         monkeypatch.setitem(REGISTRY.defs, i, SimpleNamespace(id=i, word=word, build=build))

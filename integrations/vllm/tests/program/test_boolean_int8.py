@@ -1,4 +1,4 @@
-"""`verity_vllm.program.registry.boolean_int8`: `int8_exact`'s numerics on bits.
+"""`verity.ml.definitions.registry.boolean_int8`: `int8_exact`'s numerics on bits.
 
 Each leaf is its word primitive on uniform words and on its special ones (signed zeros, infinities, quiet and signalling NaNs,
 subnormals, rint's ties, the s8 and u32 saturation edges). Each σ composite is its word Definition on random rows and on the
@@ -18,9 +18,9 @@ from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation import evaluate, evaluate_batch
 from verity.ml.circuits.ops import prims as CP
 from verity.ml.circuits.types import Array, Value
-from verity_vllm.program.boolean import boolean_version
-from verity_vllm.program.registry import boolean_int8 as BI8
-from verity_vllm.program.registry import int8_exact as IE
+from verity.ml.definitions.boolean import boolean_version
+from verity.ml.definitions.registry import boolean_int8 as BI8
+from verity.ml.definitions.registry import int8_exact as IE
 
 #: 1/sqrt(128), the 8B row's attention scale
 SCALE = 128 ** -0.5
@@ -111,7 +111,7 @@ def test_each_leaf_reads_its_word_view() -> None:
     for leaf, word in zip(BI8.INT8_LEAVES, IE.INT8_PRIMITIVES):
         assert TR.word_of(leaf) is word, leaf.id
     assert [d.id for d in BI8.INT8_LEAVES] == ["F32Rint_v2", "F32ToS8Rzi_v2", "S8ToF32_v2", "F32MulWide_v2", "F64Mul_v2",
-                                               "F64ToU32RniSat_v2", "LutIndex_v2", "Exp2Lut127_v3", "U8ToU16_v2"]
+                                               "F64ToU32RniSat_v2", "LutIndex_v2", "Exp2Lut127_v3", "U8ToU16_v2", "U8x4ToU32_v2"]
 
 
 def test_the_quantizer_element_ties_saturates_and_takes_extreme_scales() -> None:

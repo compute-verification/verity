@@ -1,7 +1,42 @@
-import Proofs.Flock.SessionLoop.FinRepView
+module
+
+public import Proofs.Flock.SessionLoop.FinRepView
+public import Proofs.Flock.Claims.ZK.SimInner
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import Proofs.Flock.Claims.ZK.FinishSwInner
+import Proofs.Flock.Claims.ZK.InnerLeaf
 import Proofs.Flock.SessionLoop.RepSrc
-import Proofs.Flock.Claims.ZK.FinishSwTau
-import Proofs.Flock.Claims.ZK.Blind
 
 /-!
 # (c.3)'s `FinRepFinal`, in parts
@@ -13,15 +48,17 @@ salt, and the pads' opened columns and salts. `Loop.FinRepAt P` is that context 
 
 * **`Loop.FinRepL0`**: level 0's opened rows and salts agree.
 * **`Loop.FinRepTau`**: `τ` agrees.
-* **`Loop.FinRepTauSalt`**: `τ`'s salt agrees. It holds in the masked scope where the frame draws the tape's pads
+* **`Loop.FinRepTauSalt`**: `τ`'s salt agrees. It holds in the masked scope where the frame samples the tape's pads
   (`Loop.finRepTauSalt`, from `Loop.RepSrc`): each rep fixes its salt in advance (`Finish.repFwC_map_tauSalt`,
   `FinRep.repCut_map_tauSalt`), the views' is the tape's (`Loop.finSrc_tauSalt`: the switched prover moves the pads
-  alone, `Coined.swExe_ytau`), and the firewall's is the request's draws', which are the tape's
+  alone, `Coined.swExe_ytau`), and the ZK server's is the request's samples', which are the tape's
   (`Masked.pads_frame_eq`).
 * **`Loop.FinRepOpen`**: the pads' opened columns and salts agree.
 
 **`Loop.finRepFinal_of`**: the four give `FinRepFinal`.
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 
@@ -29,7 +66,7 @@ section
 
 variable {M : Type → Type} [Monad M] [LawfulMonad M] [MonadExceptOf String M] [MonadLiftT V M]
 
-/-- **The firewall's rep proves under its pads' `τ` salt**, whatever it returns. -/
+/-- **The ZK server's rep proves under its pads' `τ` salt**, whatever it returns. -/
 theorem repFwC_map_tauSalt (io : FlockComplete.Asks M) (hs : Hashes M) (st : Setup) (sch : Flock.Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (g : Array F128) (cm0 : FlockComplete.Commit) (extras : Array Claim)
     (pads : FlockComplete.PadsZk) (ic : FlockComplete.InnerCommit) (vals : Array F128)
@@ -217,10 +254,10 @@ theorem finRepFinal_of (h : FinRepL0 vs L₀ src real wk x w ∧ FinRepTau vs L�
     ic' p tr hic' hrun p' l' hv hz
   exact ⟨h1, h2, h3, h4, h5, h6⟩
 
-/-- **`FinRepTauSalt` holds where the frame draws the tape's pads** (`Loop.RepSrc`), at a live statement: the run from
+/-- **`FinRepTauSalt` holds where the frame samples the tape's pads** (`Loop.RepSrc`), at a live statement: the run from
 the views proves under the views' `τ` salt (`FinRep.repCut_map_tauSalt`), the tape's (`finSrc_tauSalt`), and the
-firewall's rep under its pads' (`Finish.repFwC_map_tauSalt`), the request's draws', which are the tape's
-(`Masked.pads_frame_eq`, at the draws `RepSrc` sizes and the layout the frame starts at,
+ZK server's rep under its pads' (`Finish.repFwC_map_tauSalt`), the request's samples', which are the tape's
+(`Masked.pads_frame_eq`, at the samples `RepSrc` sizes and the layout the frame starts at,
 `LeanRelease.lay_ofLoopLink`). -/
 theorem finRepTauSalt (hx : Masked.Live x) (hS : Loop.RepSrc L₀ src x w) : FinRepTauSalt vs L₀ src real wk x w := by
   have bok : ∀ {α β : Type} {y : V α} {f : α → V β} {b : β}, y >>= f = .ok b → ∃ a, y = .ok a ∧ f a = .ok b := by

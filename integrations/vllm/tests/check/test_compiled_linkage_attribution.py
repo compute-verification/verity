@@ -1,6 +1,6 @@
-"""[R16 compiled, F-cb-23 / rev M-0243] the compiled Commit's per-(step, request) attribution: the ordered boundary linkage ties every
+"""The compiled Commit's per-(step, request) attribution: the ordered boundary linkage ties every
 request's rows of every committed step to ITS tokens (ids in == token(k-1) / declared prompt; argmax lm_head(final hidden row) == token(k)).
-An equal-shape request swap at B>=2 relabels a step's rows together -- the sampled replay is consistent by construction (rev M-0243), the
+An equal-shape request swap at B>=2 relabels a step's rows together -- the sampled replay is consistent by construction, the
 linkage is what catches it, so it must run over EVERY step and count the pairs it tied.  CPU-only, no engine: the check object is built
 without a model and fed committed tensors through a stub."""
 from __future__ import annotations

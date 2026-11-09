@@ -1,3 +1,5 @@
+module
+
 /-!
 Where Python's `json.loads` reads a text otherwise than Lean's `Json.parse`, for the verdicts that read JSON the Python
 reads with `json`: a number with a fraction or an exponent is a Python `float` (never an `int`, and `inf` past the double
@@ -7,6 +9,8 @@ U+FFFD. `scan` puts `null` in place of each float, which fails every check a flo
 Boolean, an array, an object), and says whether the text holds a value Python's canonical `json.dumps` (`allow_nan=False`,
 then UTF-8) cannot write.
 -/
+
+@[expose] public section
 
 namespace PousCheck.Prim.PyJson
 

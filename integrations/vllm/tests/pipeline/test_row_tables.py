@@ -20,7 +20,7 @@ from verity.ml.circuits import evaluation as E
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import gemm as OG
 from verity.ml.commitments import row_table as RT
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R
+from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R
 from verity_vllm.commit import index as IX, row_tables as RTB
 from verity.ml.windows import rows as CS, tables as TB
 from verity_vllm.pipeline import serving_rows as SRW
@@ -95,19 +95,19 @@ class Served:
         return {op: (ids, np.stack(xs), np.array(ss, dtype=np.float32)) for op, (ids, xs, ss) in out.items()}
 
 
-def window(row_tables: bool = True) -> tuple[CS.Window, Served, list]:
+def window(row_tables: bool = True, law=None, work_table=None) -> tuple[CS.Binding, Served, list]:
     s = Served()
     ms = SRW.members([COORD], [s.rows], [UNITS], {COORD: CAP})
     tables: tuple = ()
     if row_tables:
         ms, tables = SRW.with_row_tables(ms, [COORD], [s.rows], ARRIVALS)
-    w = CS.Window(*CS.population_program([(DEFN, UNITS)], several=True), D.parse_law("stratified:2"), RUN, tuple(ms), tables,
-                  CTX.hex() if row_tables else "")
+    w = CS.Binding(*CS.population_program([(DEFN, UNITS)], several=True), law or D.parse_design("stratified:2"), RUN, tuple(ms),
+                   tables, CTX.hex() if row_tables else "", work_table)
     return w, s, ms
 
 
-def committed(monkeypatch, row_tables: bool = True, **kw) -> tuple[CS.Committed, Served, list]:
-    w, s, ms = window(row_tables)
+def committed(monkeypatch, row_tables: bool = True, law=None, work_table=None, **kw) -> tuple[CS.Committed, Served, list]:
+    w, s, ms = window(row_tables, law, work_table)
     monkeypatch.setattr(SRW, "_operand", s.operand)
     got = SRW._read_s8(ms, s.rows, s, None, ARRIVALS)
     return CS.commit(w, [g[0] for g in got], salt_key=bytes(32), row_salt_key=ROW_KEY, **kw), s, got
@@ -281,7 +281,7 @@ def test_the_registration_holds_the_tree_over_the_step_roots_and_the_verifier_ti
 
 
 def test_the_audit_record_carries_each_drawn_chunks_reads_beside_the_roots_lean_reports(monkeypatch, tmp_path):
-    """`reported_reads`: each drawn chunk's table and root from the verifier's own reads file beside Lean's `registered`
+    """`reported_reads`: each sampled chunk's table and root from the verifier's own reads file beside Lean's `registered`
     finding, held only when every verdict accepted and reports exactly its file's port, value and root."""
     c, _s, got = committed(monkeypatch)
     CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=R)
@@ -373,17 +373,17 @@ def test_a_window_or_commit_whose_links_do_not_hold_is_refused(monkeypatch):
     w, s, ms = window()
     prog, query, ctx = w.program, w.query, CTX.hex()
     with pytest.raises(ValueError, match="every row some member's"):
-        CS.Window(prog, query, w.law, RUN, w.members, w.row_tables + (RTB.row_table(9, QKV, COORD, SRW.s8_words(K), [("r9", 0, 1)]),), ctx)
+        CS.Binding(prog, query, w.law, RUN, w.members, w.row_tables + (RTB.row_table(9, QKV, COORD, SRW.s8_words(K), [("r9", 0, 1)]),), ctx)
     with pytest.raises(ValueError, match="no row of"):
-        CS.Window(prog, query, w.law, RUN, w.members, w.row_tables[:3], ctx)
+        CS.Binding(prog, query, w.law, RUN, w.members, w.row_tables[:3], ctx)
     bad = replace(w.row_tables[0], words=3)
     with pytest.raises(ValueError, match="34 words"):
-        CS.Window(prog, query, w.law, RUN, w.members, (bad,) + w.row_tables[1:], ctx)
+        CS.Binding(prog, query, w.law, RUN, w.members, (bad,) + w.row_tables[1:], ctx)
     t = w.row_tables
     with pytest.raises(ValueError, match="by segment, rising"):
-        CS.Window(prog, query, w.law, RUN, w.members, t[2:] + t[:2], ctx)
+        CS.Binding(prog, query, w.law, RUN, w.members, t[2:] + t[:2], ctx)
     with pytest.raises(ValueError, match="row keys each once"):
-        CS.Window(prog, query, w.law, RUN, w.members, t[:2] + (replace(t[2], keys=(t[2].keys[0],) * 2),) + t[3:], ctx)
+        CS.Binding(prog, query, w.law, RUN, w.members, t[:2] + (replace(t[2], keys=(t[2].keys[0],) * 2),) + t[3:], ctx)
     # within a segment the order is the integration's: vLLM's is refused otherwise on its side
     RTB.check_order(t)
     with pytest.raises(ValueError, match=r"row_tables.table_key"):
@@ -392,7 +392,7 @@ def test_a_window_or_commit_whose_links_do_not_hold_is_refused(monkeypatch):
         RTB.check_order(t[:2] + (replace(t[2], keys=t[2].keys[::-1]),) + t[3:])
     for no in ("", "ab" * 32, "AB" * 64):
         with pytest.raises(ValueError, match="names its context"):
-            CS.Window(prog, query, w.law, RUN, w.members, t, no)
+            CS.Binding(prog, query, w.law, RUN, w.members, t, no)
     with pytest.raises(ValueError, match="one per row"):
         CS.Member(COORD, (("x", 34), ("w", 34)), (("o0", 1),), 2, tables=(("x", 2), ("w", 2)), links=((0, 0),))
     member = lambda links, units: CS.Member(COORD, (("x", 34), ("w", 34)), (("o0", 1),), 3,  # noqa: E731
@@ -427,7 +427,7 @@ def test_window_bytes_are_the_bytes_the_window_writes(monkeypatch, tmp_path, row
         assert b["x_private"] == x * UNITS and b["x_public"] == 128 * UNITS
 
 
-#: Llama-3.1-8B's int8 linears (K, N), its layers, and the chunk caps of record (r20261018-084708-1e58's partition file)
+#: Llama-3.1-8B's int8 linears (K, N), its layers, and the chunk caps of record
 LLAMA8B = {"self_attn.qkv_proj": (4096, 6144), "self_attn.o_proj": (4096, 4096), "mlp.gate_up_proj": (4096, 28672), "mlp.down_proj": (14336, 4096)}
 LAYERS, B = 32, 32
 CAPS = {4096: 2048, 14336: 1024}

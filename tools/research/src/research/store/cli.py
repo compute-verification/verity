@@ -14,7 +14,7 @@
   research data fetch ART [--to DIR] [--path GLOB]... [--list [--json]]
                                                    materialise the payload (file or tree, or just the files matching --path); prints the path;
                                                    --list prints the tree's files (path, bytes, local/remote) and fetches nothing
-  research data evict --target-free-gb N [--dry-run] [--runs [--runs-dir D]] [--min-mb M] [--keep-trees] [--keep-registry FILE]...
+  research data evict --target-free-gb N [--dry-run] [--runs [--runs-dir D] [--verify-remote]] [--min-mb M] [--keep-trees] [--keep-registry FILE]...
                      [--src-dir D [--src-origin URL]] [--json]
                                                    free disk: evict blobs (and trees/) whose artifacts are PRESERVED on the remote, largest first;
                                                    --runs also evicts preserved big files of finished run dirs (oldest first); exit 1 if the target is not reached;
@@ -45,11 +45,18 @@
   research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
                                                    make the registry's fetched entries under PATH (default: all) present and exact, from the
                                                    private remote when reachable, else the public export; every byte checked; exit 1 if any is missing
-  research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--jobs N] [--json]
+  research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
   research data export --verify-url URL [--repo DIR] [--no-previous] [--blobs FILE] [--jobs N] [--json]
-                                                   copy every registry entry (and its `previous` ids) to the public export bucket; --verify-url
+                                                   copy every registry entry (and its `previous` ids, and each --id) to the public export bucket; --verify-url
                                                    fetches them all back through a public front end into a scratch store, checking every byte
   research data doctor [--clean] [--runs-dir D]    stale store_publish_error.json files (run is an attempt here) vs real failures; --clean deletes the stale
+  research data gc --cite DIR... --cache DIR [--apply --state FILE] [--report FILE] [--work DIR] [--jobs N]
+                                                   the remote's blobs only uncited artifacts past their kind's TTL hold (gc.py, README §7.4);
+                                                   --apply marks them and deletes those still candidates a grace after their mark
+  research data withdraw ART... --reason T --ref ISSUE --as HANDLE --cache DIR [--apply]
+                                                   delete the blobs of artifacts holding values that must never be shared, cited or
+                                                   not, and label each `withdrawn` (withdraw.py, README §7.4); a blob another
+                                                   artifact holds is kept and named
   research data reindex [--remote]                 rebuild the catalog (built aside, swapped in complete); --remote first pulls what the remote has
   research data index [--db F] [--from DIR] [--public [--public-db F]] [--full] [--jobs N] [--json]
                                                    the derived index (bucket_index.py): list the bucket, read the records the index lacks, write
@@ -60,7 +67,7 @@
   research data pending [--json]                   the write-through queue: what this store holds that the remote lacks (exit 1 if any)
   research data reconcile-attempts (RUN... | --all) [--apply] [--json]
                                                    local attempts that differ from the remote's write-once copy; --apply supersedes them (audited)
-  research data parity --fresh DIR [--render] [--json-out FILE]
+  research data parity --fresh DIR [--json-out FILE]
                                                    content parity against a store built from the remote alone (parity.py); exit 0 iff explained
   research data catalog [--json]                   catalog schema version vs the code's (older catalogs migrate forward on open; a newer one is
                                                    refused, exit 3, unless RESEARCH_CATALOG_IGNORE_VERSION=1), row counts per table
@@ -84,7 +91,7 @@ import os
 import sqlite3
 import sys
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from ..secret_hint import lost
 from . import ids, vocab
@@ -339,7 +346,10 @@ def cmd_evict(argv: list[str]) -> int:
                     help="keep every blob an artifact of this registry holds (fixtures/artifacts.json's form: its `art:` keys); repeatable")
     ap.add_argument("--runs", action="store_true", help="also evict preserved big files from finished run directories (writes run-files.evicted.json)")
     ap.add_argument("--runs-dir", default=None, metavar="DIR", help="runs root for --runs (default $RESEARCH_RUNS or ~/.research/runs)")
-    ap.add_argument("--quiet-min", type=float, default=EV.QUIET_S / 60, metavar="M", help="--runs: skip run dirs touched in the last M minutes (default 30)")
+    ap.add_argument("--quiet-min", type=float, default=EV.QUIET_S / 60, metavar="M", help="--runs: skip run dirs touched in the last M minutes (default 1440, a day)")
+    ap.add_argument("--verify-remote", action="store_true",
+                    help="--runs on an agent VM: a run's tree the local catalog records no verified replica of counts once its manifest "
+                         "and blobs are on the remote at their sizes (HEADs, no read-back; evict.py `on_remote`)")
     ap.add_argument("--src-dir", default=None, metavar="DIR",
                     help="also delete the `research run` source trees under DIR (<root>/src) recoverable on the node that nothing uses, "
                          "whatever the target (evict.py `evict_src`; needs root or CAP_SYS_PTRACE to read /proc)")
@@ -361,7 +371,7 @@ def cmd_evict(argv: list[str]) -> int:
         from ..runs import runs_root  # noqa: PLC0415
 
         rep["runs"] = EV.evict_runs(st, runs_root(ns.runs_dir), target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes,
-                                    quiet_s=ns.quiet_min * 60, log=say)
+                                    quiet_s=ns.quiet_min * 60, log=say, remote_check=ns.verify_remote)
     if ns.src_dir:
         rep["src"] = EV.evict_src(Path(ns.src_dir), origin=ns.src_origin, dry_run=ns.dry_run, keep_s=ns.src_keep_h * 3600, log=say)
     if ns.json:
@@ -421,7 +431,7 @@ def cmd_select(argv: list[str]) -> int:
     `research data index` build) plus this store's matches the index lacks; from the catalog where there is no index.  Every form
     (text, `--ids`, `--json`) ends with one stderr line naming the source and, for the index, the time it is complete as of: a
     stale build answers only for what it had listed.  With no index that ever listed the bucket and a catalog holding no artifact,
-    an empty answer would mean nothing, so it exits 1 naming what is missing (a `research run` job's store, 19 Oct)."""
+    an empty answer would mean nothing, so it exits 1 naming what is missing (as in a `research run` job's store)."""
     from . import bucket_index as BI  # noqa: PLC0415
 
     ns = _select_parser().parse_args(argv)
@@ -483,7 +493,20 @@ def cmd_snapshot(argv: list[str]) -> int:
     return 0
 
 
+def _hide_tokens(v):
+    """``v`` with each JWT (a `label_auth` or `label_delegation` token) replaced by its length: a token read back stays valid for
+    minutes and lands in worker logs and run outputs, so the text views never print one (`--json` keeps the whole value)."""
+    if isinstance(v, dict):
+        return {k: _hide_tokens(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_hide_tokens(x) for x in v]
+    if isinstance(v, str) and v.startswith("eyJ") and v.count(".") == 2:
+        return f"<token, {len(v)} chars>"
+    return v
+
+
 def _fmt_label_value(v) -> str:
+    v = _hide_tokens(v)
     return v if isinstance(v, str) else json.dumps(v)
 
 
@@ -534,7 +557,7 @@ def cmd_labels(argv: list[str]) -> int:
         _dump([lab.to_doc() for lab in labs])
         return 0
     for lab in labs:
-        print(f"{lab.ts}  {lab.key}={json.dumps(lab.value) if not isinstance(lab.value, str) else lab.value}  by {lab.by}" + (f"  ref {lab.ref}" if lab.ref else ""))
+        print(f"{lab.ts}  {lab.key}={_fmt_label_value(lab.value)}  by {lab.by}" + (f"  ref {lab.ref}" if lab.ref else ""))
     if not labs:
         print(f"no labels on {ns.target}", file=sys.stderr)
     return 0
@@ -784,19 +807,16 @@ def cmd_refresh(argv: list[str]) -> int:
 
 def cmd_parity(argv: list[str]) -> int:
     """Content parity of this store against a store built from the remote alone (`parity.py`): artifacts, attempts, labels, replica
-    rows, and with `--render` the canonical tables.  Read-only for the store under test.  Exit 0 iff every difference is explained."""
+    rows.  Read-only for the store under test.  Exit 0 iff every difference is explained."""
     from . import parity as PA  # noqa: PLC0415
 
     ap = _ap("parity")
     ap.add_argument("--fresh", required=True, metavar="DIR", help="where to build the store from the remote alone (a new directory)")
-    ap.add_argument("--render", action="store_true", help="also compare the daily render (tables + drilldowns) over the same records")
-    ap.add_argument("--render-source", default=None, metavar="TREE", help="the tree to render with (default: steward.toml [[render]] source)")
     ap.add_argument("--jobs", type=int, default=32, metavar="N")
     ap.add_argument("--json-out", metavar="FILE", help="write the full report (every difference and its cause) here")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
-    rep = PA.run(store_root(ns.store), Path(ns.fresh), jobs=max(1, ns.jobs), render=ns.render,
-                 log=None if ns.json else (lambda m: print(m, file=sys.stderr)), source=Path(ns.render_source) if ns.render_source else None)
+    rep = PA.run(store_root(ns.store), Path(ns.fresh), jobs=max(1, ns.jobs), log=None if ns.json else (lambda m: print(m, file=sys.stderr)))
     if ns.json_out:
         Path(ns.json_out).write_text(json.dumps(rep, indent=1, sort_keys=True, default=str))
     if ns.json:
@@ -956,7 +976,9 @@ def cmd_push(argv: list[str]) -> int:
     artifact it references, and the assertions about the attempt, its derivation and those artifacts (`labels_sync.push_targets`; an
     explicit art: id pushes its own assertions) -- an attempt whose assertions did not all land is reported NOT preserved.  `--pending`
     pushes every local artifact without a verified remote replica, every attempt the remote lacks, and every local assertion the remote
-    lacks.  One object's failure is reported, the batch continues; exit 1 if anything is not PRESERVED."""
+    lacks.  An artifact withdrawn from the shared store (`research data withdraw`, its `withdrawn` label pulled from the remote first)
+    is refused, so a machine's copy never goes back up.  One object's failure is reported, the batch continues; exit 1 if anything
+    is not PRESERVED."""
     ap = _ap("push")
     ap.add_argument("targets", nargs="*", help="art:<hex> or run ids")
     ap.add_argument("--pending", action="store_true", help="everything local that the remote does not verifiably hold")
@@ -1013,6 +1035,8 @@ def cmd_push(argv: list[str]) -> int:
             print(f"\r  {p['id'][:16]}… {p['done']}/{p['objects'] - 1} blobs  {p['done'] / max(p['seconds'], 1e-9):.1f} obj/s", end="", file=sys.stderr, flush=True)
 
     notes_seen: set[str] = set()
+    if arts:                                                       # a withdrawal made elsewhere: its label first, so push refuses
+        LS.pull_targets(st, list(dict.fromkeys(arts)), jobs=ns.jobs)
     for a in dict.fromkeys(arts):
         try:
             rep = st.push(a, preserve=True, jobs=ns.jobs, verify=ns.verify, progress=heartbeat)
@@ -1213,8 +1237,8 @@ def cmd_fetch_fixtures(argv: list[str]) -> int:
 
 
 def cmd_export(argv: list[str]) -> int:
-    """Copy every `fixtures/artifacts.json` entry, with the ids under its `previous` block and any `--blobs`, to the public export
-    (`remote.load_export`: the `[export]` table of store.toml, `$RESEARCH_EXPORT_DIR`, or `$RESEARCH_EXPORT_BUCKET`), taking the
+    """Copy every `fixtures/artifacts.json` entry, with the ids under its `previous` block, each `--id` and any `--blobs`, to the
+    public export (`remote.load_export`: the `[export]` table of store.toml, `$RESEARCH_EXPORT_DIR`, or `$RESEARCH_EXPORT_BUCKET`), taking the
     bytes from the repo, the local store or the private remote.  `--verify-url URL` exports nothing: it fetches all of it back
     through URL into a scratch store and checks every byte against its id (the end-to-end test of a public front end)."""
     from . import fetchset, fixtures as F  # noqa: PLC0415
@@ -1225,6 +1249,7 @@ def cmd_export(argv: list[str]) -> int:
     ap.add_argument("--dry-run", action="store_true", help="HEAD the export and report what would be uploaded")
     ap.add_argument("--no-previous", action="store_true", help="leave out the ids under the map's `previous` block")
     ap.add_argument("--blobs", default=None, metavar="FILE", help="also these blobs: one `<sha256> <bytes>` per line (history stubs)")
+    ap.add_argument("--id", action="append", default=[], metavar="ART", help="also this artifact, which the registry doesn't hold; repeatable")
     ap.add_argument("--verify-url", default=None, metavar="URL", help="fetch everything back through URL and check it; export nothing")
     ap.add_argument("--jobs", type=int, default=fetchset.JOBS)
     ap.add_argument("--json", action="store_true")
@@ -1252,7 +1277,7 @@ def cmd_export(argv: list[str]) -> int:
         print("research data export: no export configured ([export] in store.toml, RESEARCH_EXPORT_DIR or RESEARCH_EXPORT_BUCKET)", file=sys.stderr)
         return 1
     rep = F.export(st, root, dest, srcs=fetchset.sources(st, public=""), include_previous=not ns.no_previous, blobs=blobs,
-                   jobs=ns.jobs, dry_run=ns.dry_run)
+                   arts=ns.id, jobs=ns.jobs, dry_run=ns.dry_run)
     if ns.json:
         _dump(rep)
     else:
@@ -1316,6 +1341,95 @@ def cmd_doctor(argv: list[str]) -> int:
     return 0
 
 
+def cmd_gc(argv: list[str]) -> int:
+    """README §7.4 (`gc.py`): which blobs only uncited artifacts past their kind's TTL hold; `--apply` marks them and deletes those
+    marked at least `gc.GRACE_S` ago that still are.  Read-only without `--apply`."""
+    from . import gc  # noqa: PLC0415
+
+    ap = _ap("gc")
+    ap.add_argument("--cite", action="append", default=[], metavar="DIR", required=True,
+                    help="a tree whose files cite art ids and runs (the notes repository; a checkout of the code); repeatable")
+    ap.add_argument("--cache", required=True, metavar="DIR", help="where manifests, labels and attempts read from the remote are kept")
+    ap.add_argument("--state", metavar="FILE", help="the marks (required with --apply)")
+    ap.add_argument("--apply", action="store_true", help="mark this pass's candidates and delete the ones marked a grace ago")
+    ap.add_argument("--report", metavar="FILE", help="write the plan's summary and the expired ids here (JSON)")
+    ap.add_argument("--work", metavar="DIR", help="where the pass's blob table goes (a local disk; default the temp dir)")
+    ap.add_argument("--cite-linear", action="store_true", help="Linear's issues, comments, projects, project updates and "
+                    "documents cite too (research.linear's credentials; required with --apply)")
+    ap.add_argument("--jobs", type=int, default=gc.JOBS)
+    ns = ap.parse_args(argv)
+    if ns.apply and not (ns.state and ns.cite_linear):
+        ap.error("--apply needs --state and --cite-linear (lanes cite in Linear most: top, 26 Oct)")
+    st = LocalStore(ns.store)
+    if st.remote is None:
+        print("research data gc: no remote configured", file=sys.stderr)
+        return 2
+    say = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
+    try:
+        linear = None
+        if ns.cite_linear:
+            from ..linear import Linear  # noqa: PLC0415
+            linear = Linear().gql
+        p = gc.plan(st.remote, Path(ns.cache), [Path(c) for c in ns.cite], now=gc.clock(), jobs=ns.jobs,
+                    work=Path(ns.work) if ns.work else None, linear=linear, log=say)
+        out: dict[str, Any] = {"remote": st.remote.describe(), "ttl_days": gc.TTL_DAYS, **p.summary()}
+        if ns.apply:
+            out["applied"] = gc.apply(st.remote, p, Path(ns.cache), Path(ns.state), now=gc.clock(), jobs=ns.jobs, log=say)
+    except gc.GcError as e:
+        print(f"research data gc: nothing deleted: {e}", file=sys.stderr)
+        return 1
+    if ns.report:
+        Path(ns.report).write_text(json.dumps({**out, "expired": p.expired}, sort_keys=True) + "\n")
+    _dump(out)
+    applied = out.get("applied") or {}
+    return 1 if applied.get("error_count") or applied.get("lost_count") else 0
+
+
+def cmd_withdraw(argv: list[str]) -> int:
+    """README §7.4 (`withdraw.py`): delete the blobs of artifacts holding values that must never be shared, cited or not, and label
+    each `withdrawn` with the reason.  A blob another artifact also holds is kept and named.  Read-only without `--apply`."""
+    from . import gc, withdraw
+
+    ap = _ap("withdraw")
+    ap.add_argument("arts", nargs="+", metavar="ART", help="full art: ids")
+    ap.add_argument("--reason", required=True, help="why, in a few words: the `withdrawn` label's value")
+    ap.add_argument("--ref", required=True, help="the issue or ruling that asked for it (INF-333)")
+    ap.add_argument("--as", dest="by", required=True, metavar="HANDLE", help="the handle withdrawing them: the labels' `by`")
+    ap.add_argument("--cache", required=True, metavar="DIR", help="where manifests read from the remote are kept (gc's cache works)")
+    ap.add_argument("--work", metavar="DIR", help="where the pass's blob table goes (default the temp dir)")
+    ap.add_argument("--path", dest="paths", action="append", metavar="PREFIX",
+                    help="withdraw only the files under PREFIX in the arts' trees (repeatable; a run's out/sampled-proofs/served, say)")
+    ap.add_argument("--apply", action="store_true", help="delete the blobs and write the labels")
+    ns = ap.parse_args(argv)
+    st = LocalStore(ns.store)
+    if st.remote is None:
+        print("research data withdraw: no remote configured", file=sys.stderr)
+        return 2
+    say = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
+    try:
+        p = withdraw.plan(st.remote, Path(ns.cache), ns.arts, work=Path(ns.work) if ns.work else None, log=say, paths=ns.paths)
+        out: dict[str, Any] = {"remote": st.remote.describe(), **p.summary()}
+        if p.missing:
+            _dump(out)
+            print("research data withdraw: no manifest for some ids; nothing deleted", file=sys.stderr)
+            return 1
+        if ns.apply:
+            out["applied"] = withdraw.apply(st.remote, p, log=say)
+            lost = False
+            for art in p.arts:
+                value = f"{ns.reason} (only {', '.join(ns.paths)})" if ns.paths else ns.reason
+                st.add_label(art, vocab.WITHDRAWN, value, ns.by, ref=ns.ref)
+                said, bad = _label_write_through(st, art)
+                say(f"{art}: withdrawn label {said}")
+                lost |= bad
+            out["labels_lost"] = lost
+    except gc.GcError as e:
+        print(f"research data withdraw: nothing deleted: {e}", file=sys.stderr)
+        return 1
+    _dump(out)
+    return 1 if out.get("labels_lost") else 0
+
+
 _VERBATIM_AFTER = ("--meta", "--note")      # free text / JSON values: never rewritten
 _VERBATIM_COMMANDS = ("sql",)
 
@@ -1376,7 +1490,7 @@ COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "fetch-fixtures": cmd_fetch_fixtures, "export": cmd_export,
     "doctor": cmd_doctor, "evict": cmd_evict, "labels-sync": cmd_labels_sync,
     "catalog": cmd_catalog, "vocab-check": cmd_vocab_check, "pending": cmd_pending, "refresh": cmd_refresh,
-    "parity": cmd_parity, "reconcile-attempts": cmd_reconcile_attempts,
+    "parity": cmd_parity, "reconcile-attempts": cmd_reconcile_attempts, "gc": cmd_gc, "withdraw": cmd_withdraw,
 }
 
 

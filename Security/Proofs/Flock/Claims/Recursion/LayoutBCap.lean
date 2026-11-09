@@ -1,7 +1,44 @@
-import Proofs.Flock.Claims.Recursion.LayoutBDeployed
-import Proofs.Flock.Claims.Recursion.KSLin2PlainClosed
-import Proofs.Flock.Claims.Recursion.DeployScope
-import Proofs.Flock.C3.Reps.AtList
+module
+
+public import Proofs.Flock.C3.Reps.AtList
+public import Proofs.Flock.Claims.KS.PlainCapsDep
+public import Proofs.Flock.Claims.Recursion.BindsDeployed
+public import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
+public import Proofs.Flock.Claims.Recursion.DeployScope
+public import Proofs.Flock.Claims.Recursion.KSLin2PlainClosed
+public import Proofs.Flock.Claims.Recursion.LayoutBDeployed
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
 # V*'s bound layout with round 0 at RecCap (`layoutBCap`), and `HeldB` there
@@ -42,6 +79,8 @@ circuit has its port `top` (`CapPorts`), proved at every shape (`capPorts`, `Cap
 takes the same facts but that one.
 -/
 
+@[expose] public section
+
 namespace RecDeploy
 
 open Flock
@@ -81,7 +120,8 @@ def capCalls (r : XR) (s : ℕ) : List (Msg × List HmNets.Lin × List HmNets.Li
 statements. -/
 theorem readX_statements {x : Msg} {r : XR} (h : readX x = some r) :
     ∃ vs, RecVStar.statements r.shape = .ok vs ∧ r.w.parts.length = vs.size := by
-  unfold readX at h
+  replace h := readXPre_of_readX h
+  unfold readXPre at h
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
   obtain ⟨w, -, ri, -, sh, -, pa, -, dims, -, vs, hvs, h⟩ := h
   split_ifs at h with hl
@@ -95,7 +135,7 @@ theorem readX_statements {x : Msg} {r : XR} (h : readX x = some r) :
 theorem capAt_readX {x : Msg} {r : XR} (h : readX x = some r) :
     ∃ N, capAt r = some (nS x - 1, N) ∧ 0 < nS x := by
   obtain ⟨vs, hvs, hlen⟩ := readX_statements h
-  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, _, _, K, N, -, -, rfl⟩ := FlockC3.Reps.list_ok hvs
+  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, _, _, K, L, N, -, -, -, rfl⟩ := FlockC3.Reps.list_ok hvs
   have hn : nS x = r.w.parts.length := by simp [nS, h]
   refine ⟨N, ?_, ?_⟩
   · rw [hn, hlen]
@@ -267,7 +307,7 @@ last (it is a stream round), so it has no pieces. Each rep's level-0 round commi
 theorem not_heldB_layoutBCap_none {W : Type} (IV : Claims.Verifier Coin) (ivScope : Msg → Bool) (b : Brings)
     (I : Claims.Recursion.Inner Coin W) (hk : ∀ x, I.V.k x = (FlockDeploy.V false).k x)
     (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (shape : Claims.Recursion.Form → Prop)
-    (hM : SchedMatches shape) {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) (hf : shape st.form)
+    (hM : SchedMatches shape) {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st) (hf : shape st.form)
     {j : ℕ} {sr : RecVStar.SchedRound} (hs : streamRound x j = some sr) (ht : sr.2.1.isEmpty = false) :
     ¬ Claims.Recursion.VStarB.HeldB (deployRec IV ivScope b) I (layoutBCap (fun _ _ _ => none) fin) shape := by
   intro hH
@@ -297,7 +337,7 @@ theorem not_heldB_layoutBCap_none {W : Type} (IV : Claims.Verifier Coin) (ivScop
 `heldB_layoutBCap`. What stays at the dense form is the schedule (`SchedMatches`), RecCap's port (`CapPorts`), the rows'
 ports (`RowsCover`), the tops (`TopsHeld`, false at every `topsAt` that holds no such round:
 `not_heldB_layoutBCap_none`), the last round's pieces (`FinPieces`, which holds at `finOpen`: `finPieces_finOpen`), and
-`VstarShowsB`, `PartChecksB`, `PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. -/
+`VstarShowsB`, `PartChecksBV`, `PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. -/
 theorem ksLin2_deployed_cap (b : Brings) (topsAt : Msg → ℕ → ℕ → Option (List (Msg × List HmNets.Lin)))
     (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ) (join : List Msg → Msg)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
@@ -315,7 +355,7 @@ theorem ksLin2_deployed_cap (b : Brings) (topsAt : Msg → ℕ → ℕ → Optio
           (cmt : Msg → ℕ → Msg → Msg),
           (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
             decC shows cmt) ∧
-          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+          (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
             L shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
             L shape shows cmt s) ∧

@@ -1,29 +1,44 @@
-import Proofs.Flock.Soundness.Discharge.Integrate.Headline
-import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
-import Proofs.Flock.Soundness.Discharge.DecodeZL
-import Proofs.Flock.Soundness.Discharge.HiddenDec
-import Proofs.Flock.Soundness.Discharge.DecodeZLJ
-import Proofs.Flock.Soundness.Discharge.Tables
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Assemble
+public import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Assemble
+public import Proofs.Flock.Soundness.Discharge.HiddenDec.Assemble
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
-# The headlines with R11b's message half discharged
+# The headlines with the decoder premise's message half discharged
 
 Each headline takes `hdec` (`DecodesOn`, or `DecodesOnJ` at `J` tables). These corollaries fix the decoder, the
 openings, single coins, no final messages and `capOfRoot` at the values the decoding theorems are about, and replace
 `hdec` by those theorems' hypotheses:
-* `flock_headline_exec_dec`: #828's `flock_headline_exec` with #862's `decodesOn_exec` at `wOP`, `wLIG`: `hdec` becomes
-  `c.outNet = c.unitNet`, `TagsOk`, `RecordsLive` and `DrawOk` at the law's draws;
-* `flock_headline_exec_hidden_dec`: #869's `flock_headline_exec_hidden` with #875's `decodesOn_execH`: `hdec` becomes
-  `c.outNet = c.unitNet`, `TagsOkHL`, `RecordsLive` and `DrawOkH` at the law's draws, and the session's leaf is the
+* `flock_headline_exec_dec`: `flock_headline_exec` with `decodesOn_exec` at `wOP`, `wLIG`: `hdec` becomes
+  `c.outNet = c.unitNet`, `TagsOk`, `RecordsLive` and `DrawOk` at the sampling design's samples;
+* `flock_headline_exec_hidden_dec`: `flock_headline_exec_hidden` with `decodesOn_execH`: `hdec` becomes
+  `c.outNet = c.unitNet`, `TagsOkHL`, `RecordsLive` and `DrawOkH` at the sampling design's samples, and the session's leaf is the
   model's leaf of the tags' leaf scheme (`leafOfId`: `hm96-sha512/v1` or plain SHA-512 leaves);
-* `headline_tables_subset_dec`: `headline_tables_subset` at the tables flock-verify sets up (`planJ`) with #867's
-  `decodesOnJ_exec`: `hdec` becomes `TagsOkJ`, `RecordsLiveJ` and `DrawOkJ` at the law's draws. The decoder at `J`
+* `headline_tables_subset_dec`: `headline_tables_subset` at the tables flock-verify sets up (`planJ`) with
+  `decodesOnJ_exec`: `hdec` becomes `TagsOkJ`, `RecordsLiveJ` and `DrawOkJ` at the sampling design's samples. The decoder at `J`
   tables reads no circuit, so there is no `c.outNet = c.unitNet` here.
 
 `FailClosed.flock_headline_exec_dec` and `_hidden_dec` take none of the hypotheses on the statement's form
 (`c.outNet = c.unitNet`, `scopeOk`, the parse and load, retained rounds and leaves), which flock-verify refuses a statement
-failing (PROTOCOL.md §16.15).
+failing (`Flock.ProvedScope`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.HdecCor
 

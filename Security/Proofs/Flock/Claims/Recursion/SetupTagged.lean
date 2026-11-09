@@ -1,5 +1,39 @@
-import Proofs.Flock.Claims.Recursion.LayoutBTops
-import Proofs.Flock.Claims.Recursion.VStarCross
+module
+
+public import Proofs.Flock.Claims.Recursion.LayoutBTops
+import all Init.Data.String.Defs
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.DeployFacts
 
 /-!
 # The plain setup makes a call no recorded part makes
@@ -8,14 +42,16 @@ import Proofs.Flock.Claims.Recursion.VStarCross
 The inner statement's setup, wherever it is `.ok` at `H`, makes a call that is neither (`setupM_log_untagged`): its
 session digest `σ = SHA-512(sigmaTag ‖ …)`, whose tag `verity/flock-circuit/sigma` has `f` at byte 7. So a premise
 asking every call of an accepted inner run to be a recorded one, or a collision among them, asks at every accepted run
-with a setup for a collision among the recorded calls (`setupM_not_layoutBTops`), which `ReadersLogCollS` does not: it
-searches the setup's calls too.
+with a setup for a collision among the recorded calls (`setupM_not_layoutBTops`), which `CallsLogCollAt` does not: it
+searches the setup's calls too (`Deploy.callsAt`).
 
 The proof runs the setup on a poisoned oracle (`poison`), SHA-512 refusing every input `p` holds of. Off a run whose
 log `p` holds of nowhere, the poisoned run is the `OC` run (`poisonSim`, one more simulation of `Flock.With.Sim`, at
 `setupTablesWith_sim`). With `p` the inputs not `HmTagged`, a hidden-output setup refuses at `σ`
 (`setupHiddenWith_poison`), and so does every session of such tables (`setupTablesWith_poison`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -91,6 +127,8 @@ theorem untagged_of_tag {t : String} (ht : 8 ≤ t.toUTF8.data.toList.length ∧
   simp
 
 set_option linter.unusedTactic false in
+-- `Stmt.setupHiddenWith`'s unfolded do-block taken a bind at a time (`ebind_ok'`), each poisoned call refuted where it
+-- occurs
 set_option maxHeartbeats 4000000 in
 /-- **A hidden-output setup refuses on an oracle refusing its `σ` input.** -/
 theorem setupHiddenWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteArray} {sig : String}
@@ -118,6 +156,8 @@ theorem mapM_range_ne_ok {α : Type} {n : ℕ} (hn : 0 < n) {f : ℕ → Flock.V
   | error e => rw [h0] at h; cases h
   | ok a => exact hf a h0
 
+-- `Stmt.setupTablesWith`'s unfolded do-block taken a bind at a time (`ebind_ok'`), each poisoned call refuted where it
+-- occurs
 set_option maxHeartbeats 4000000 in
 /-- **A session of hidden-output tables refuses on an oracle refusing their `σ` input**: one table's setup is
 `setupHiddenWith`, and several tables' first is. -/
@@ -135,9 +175,12 @@ theorem setupTablesWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteA
     | (exact throw_ok hs)
     | (obtain ⟨_, hx, hs⟩ := ebind_ok' hs
        try (cases hx; done)
-       try (simp only [hhid, ↓reduceIte] at hx; refine setupHiddenWith_poison hp ?_ _ _ _ _ _ _ _ _ hx; exact htag)
+       try (simp only [hhid, ↓reduceIte] at hx
+            obtain ⟨_, hx, -⟩ := ebind_ok' hx
+            refine setupHiddenWith_poison hp ?_ _ _ _ _ _ _ _ _ hx; exact htag)
        try (refine mapM_range_ne_ok (by omega) (fun a ha => ?_) hx
             simp only [hhid, ↓reduceIte] at ha
+            obtain ⟨_, ha, -⟩ := ebind_ok' ha
             refine setupHiddenWith_poison hp ?_ _ _ _ _ _ _ _ _ ha
             exact htag))
     | (rw [ite_ok] at hs
@@ -177,7 +220,7 @@ theorem innerTags_untagged : RecVStar.innerTags.hiddenOutputs = true ∧
 
 /-- **`S(x_I)` holds a call no part records**: where the inner statement sets up on hidden outputs at a `σ` tag with
 `f` at byte 7, its setup is `.ok` at SHA-512 (`setupWith_sha512_of`), so one of the inputs `innerSetupIns` lists, the
-ones `ReadersLogCollS` searches beside the recorded calls, is not `HmTagged` (`setupM_log_untagged`). -/
+ones `Deploy.callsAt` searches beside the recorded calls, is not `HmTagged` (`setupM_log_untagged`). -/
 theorem innerSetupIns_untagged {xI : Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
     (h : FlockDeploy.setupOf false xI = some (s, spec, sts)) (hhid : s.read.tags.hiddenOutputs = true)
     (hsig : 8 ≤ s.read.tags.sigmaTag.toUTF8.data.toList.length ∧

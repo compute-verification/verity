@@ -1,4 +1,4 @@
-"""`verity_vllm.program.replay.substitute`: the O(1) path for scattered `Strided` arguments.
+"""`verity.ml.definitions.replay.substitute`: the O(1) path for scattered `Strided` arguments.
 
 A `Strided` whose runs are O(count) leaves (a transposed weight read, a column gather) used to be substituted run by
 run: the GLM-5.3 full-depth derive carries ~2e6-leaf transposed-weight arguments on every MLA-absorb BatchedGemm, so
@@ -14,7 +14,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, concat, runs, strided_view
 from verity.ml.circuits.types import Array, Value
-from verity_vllm.program.replay import _substitute_scattered, replayer, substitute
+from verity.ml.definitions.replay import _substitute_scattered, replayer, substitute
 
 V32 = Value(32)
 Add32 = PrimitiveDefinition("TAdd32", 1, (("a", V32), ("b", V32)), V32, lambda a, b: (a + b) & 0xFFFFFFFF, register=False)
@@ -44,6 +44,7 @@ def test_run_path_bit_identical_for_ordinary_shapes():
         Strided("p", 0, 7, 1, 0, 0, 6),      # broadcast of one leaf
         Strided("p", 0, 0, 4, 8, 1, 16),     # contiguous rows (inner_stride == 1)
         Strided("p", 0, 3, 1, 1, 0, 5),      # an affine run written as a strided one
+        Strided("p", 0, 2, 4, 0, 1, 4),      # one row, not repeated
         Explicit((("p", 0, 2), ("p", 1, 9), ("p", 0, 2))),
         Concat([Affine("p", 0, 0, 4), Affine("p", 1, 2, 6), Strided("p", 0, 20, 1, 0, 0, 3)]),
     ]
@@ -70,6 +71,8 @@ def test_scattered_strided_rebases_in_o1():
         Strided("p", 0, 0, 16, 1, 8, 48),    # column gather: i-major
         Strided("p", 0, 5, 1, 7, 0, 8),      # single-leaf rows: inner == 1, outer_stride 7
         Strided("p", 0, 10, 4, 0, 3, 8),     # broadcast rows with scattered elements
+        Strided("p", 0, 4, 5, 0, 1, 20),     # one contiguous row repeated (an embedding backward's gradient row)
+        Strided("p", 0, 4, 5, 0, 1, 18),     # ... with a short last row
     ]:
         out = substitute(refs, env)
         assert isinstance(out, Strided), refs
@@ -117,6 +120,19 @@ def test_replayed_program_equals_direct_lowering_for_scattered_views():
     assert program_digest(encode_program(replayed)) == program_digest(encode_program(direct))
     batch = next(n for n in replayed.root.body.nodes if n.form == "batch" and n.args)  # not the Input batch
     assert isinstance(batch.args[0].refs, Strided)
+
+
+def test_replayed_program_equals_direct_lowering_for_a_repeated_row():
+    """A row read once per batch member (`outer_stride == 0`) replays as the one `Strided` the direct lowering wrote, not
+    one part per member."""
+    def body(Bd, S, M):  # M: [6]; every member reads M[1:4]
+        return Bd.batch(Row3, Coll(Array(5, Array(3, V32)), strided_view(M, 1, 3, 0, 1, 15)), axes=(0,))
+    rep = CompositeDefinition("TRepeat", 1, (), lambda S: ((("M", Array(6, V32)),), Array(5, V32)), body, register=False)
+    direct = Program(bind(rep))
+    replayed = _replayed(bind(rep), "TRepeat")
+    assert program_digest(encode_program(replayed)) == program_digest(encode_program(direct))
+    batch = next(n for n in replayed.root.body.nodes if n.form == "batch" and n.args)
+    assert isinstance(batch.args[0].refs, Strided) and batch.args[0].refs.outer_stride == 0
 
 
 def test_replayed_digest_unchanged_for_ordinary_bodies():

@@ -1,19 +1,23 @@
-import Definitions.Nci.Guarantees.Covering
-import Mathlib.Algebra.Order.BigOperators.Ring.Finset
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.Ring
+module
+
+public import Definitions.Nci.Guarantees.Covering
+public import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.Ring
 
 /-!
 # The covering bound at one width and one rate
 
-Daniel's proof (22 Oct 2026): charge each chained multiplication block to a block `S` of the covering that computes its
+The proof: charge each chained multiplication block to a block `S` of the covering that computes its
 output gate. Tracing back from that gate inside the multiplication block (`completes_or_meets`), `S` either completes it
 or has one of its gates as an input, and the multiplication blocks are disjoint and miss `θ`, so at most `k` are not
 completed. The completed ones lie in `θ'_S × J_S`: `|θ'_S| ≤ k / c` by parameter-hardness, and for each token `j ∈ J_S`
 the inputs of `S` in `T_j` cut the activation off from every weight outside `θ'_S` (`inner_or_meets` traced back from the
 activation, which `S` reads), so they are at least `c` and `|J_S| ≤ k / c`.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs.Covering
 
@@ -43,7 +47,7 @@ theorem inner_or_meets {S : Subcircuit C} {R : Finset (Fin C.N)} {g t : Fin C.N}
 
 /-- A subcircuit that computes a multiplication block's output gate completes the block or has one of its gates as an
 input. -/
-theorem completes_or_meets {d : Declaration} (B : MulBlocks d) {S : Subcircuit d.D} {p : Fin B.nw × Fin B.nt}
+theorem completes_or_meets {d : RegisteredCircuit} (B : MulBlocks d) {S : Subcircuit d.D} {p : Fin B.nw × Fin B.nt}
     (hp : p ∈ B.P) (ho : B.o p ∈ S.inner) : B.Completes S p ∨ ∃ x ∈ B.m p, x ∈ S.ins := by
   by_cases hx : ∃ x ∈ B.m p, x ∈ S.ins
   · exact Or.inr hx

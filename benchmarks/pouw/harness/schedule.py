@@ -1,6 +1,6 @@
 """The harness's rules as pure functions, so they're tested without a GPU: how many operand sets a shape gets, a burst's
 length, each rep's randomized order, the gate ledger that refuses to time what hasn't passed its gate in this run, and the
-consistency floor (the red team's W7)."""
+consistency floor."""
 
 from __future__ import annotations
 

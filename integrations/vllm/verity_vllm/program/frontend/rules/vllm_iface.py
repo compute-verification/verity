@@ -92,17 +92,17 @@ _define_once("unified_cache_pad(Tensor live, Tensor zero, int slot) -> ()", "uni
 # value, row, leaf): the request wrapper's input, called before its prefill; each layer's history opens with its C rows.  Not a vLLM
 # op: a stand-in with an explicit schema like `unified_cache_pad` (rule `KvPrefix[vllm]`).
 _define_once("kv_prefix(Tensor prefix) -> ()", "kv_prefix", lambda prefix: None)
-# [R15 stoch] The stochastic token select of vLLM d9105ea80's sampler for ONE request with temperature + top-p (no top-k / penalties /
+# The stochastic token select of vLLM d9105ea80's sampler for ONE request with temperature + top-p (no top-k / penalties /
 # logit bias / min_p), as one op the wrapper authors per sampled step: `Sampler.sample` = f32 widening -> `_temperature_kernel` ->
 # `apply_top_k_top_p_triton` (`_apply_topp_split`, `splits` splits) -> `_gumbel_sample_kernel` (Gumbel-max with the stream key
 # `tl.randint(seed, pos)`) -> block argmax.  `logits` bf16 [.., V]; `seed` int64 [1] (the request's `SamplingParams.seed`, a RUNTIME
 # input); `temperature` / `top_p` the request's declared policy (STRUCTURAL: constants of the Program); `pos` the position of the
 # logits row (`input_batch.positions[logits_indices]`: the last input token of the step); `splits` int32 [1] the pipeline's split count
-# for this event -- [R16 stoch, coord M-0169] a DERIVED input of the workload (S_t = SplitsFor_v1(|live(t)|, num_SMs)) the request wrapper
+# for this event -- a DERIVED input of the workload (S_t = SplitsFor_v1(|live(t)|, num_SMs)) the request wrapper
 # reads from its request-owned `splits` Input, not a static.  [registered S] The Build passes `splits=None` and `S` = the registered
 # split count SplitsFor_v1(1, num_SMs) (`topp_geometry.registered_splits`), at which every served event runs (`engine.topp_pin`).
 # Not a vLLM op: a stand-in with an explicit schema like `unified_cache_pad`; the frontend rule `GumbelTopPTokenSelect[vllm]` binds it
-# to `GumbelTopPTokenSelect_v1{V}` (verity_vllm.program.registry.sampling; S its 6th operand).
+# to `GumbelTopPTokenSelect_v1{V}` (verity.ml.definitions.registry.sampling; S its 6th operand).
 _define_once("gumbel_topp_token_select(Tensor logits, Tensor seed, float temperature, float top_p, int pos, Tensor? splits, int? S=None) -> Tensor",
              "gumbel_topp_token_select",
              lambda logits, seed, temperature, top_p, pos, splits, S=None: logits.new_empty(tuple(logits.shape[:-1]), dtype=torch.int32))
@@ -240,10 +240,10 @@ _define_once("fused_inv_rope_fp8_quant_kernel(Tensor o, Tensor positions, Tensor
 # (`export_compat.deep_gemm_fp8_einsum_leaf`)
 _define_once("deep_gemm_fp8_einsum(str expr, Tensor a, Tensor a_scale, Tensor b, Tensor b_scale, Tensor(a!) d, int[] recipe) -> ()",
              "deep_gemm_fp8_einsum", lambda expr, a, a_scale, b, b_scale, d, recipe: None)
-# `fused_marlin_moe`'s `moe_align_block_size` as its launches read it, from the router ids and a key per pair (`marlin_moe_leaf`):
-# (each pair's moe block [pairs] i32, num_tokens_post_padded / moe_block_size [1] i32)
-_define_once("marlin_moe_align(Tensor topk_ids, Tensor key, int num_experts, int moe_block_size) -> (Tensor, Tensor)", "marlin_moe_align",
-             lambda topk_ids, key, num_experts, moe_block_size: (topk_ids.new_empty((topk_ids.numel(),)), topk_ids.new_empty((1,))))
+# `fused_marlin_moe`'s `moe_align_block_size` as its launches read it, from the router ids, each expert's pairs in pair-index order
+# (`marlin_moe_leaf`): (each pair's moe block [pairs] i32, num_tokens_post_padded / moe_block_size [1] i32)
+_define_once("marlin_moe_align(Tensor topk_ids, int num_experts, int moe_block_size) -> (Tensor, Tensor)", "marlin_moe_align",
+             lambda topk_ids, num_experts, moe_block_size: (topk_ids.new_empty((topk_ids.numel(),)), topk_ids.new_empty((1,))))
 # one `moe_wna16_marlin_gemm` launch of `fused_marlin_moe` on W4A16 float4_e2m1f experts, over the logical weights w [E, N, K/2] and
 # their e8m0 scales [E, N, K/32], each pair at its moe block `blk` of `par` (`marlin_moe_align`): rows [x rows * top_k, N] bf16
 _define_once("marlin_moe_mxfp4_gemm(Tensor x, Tensor w, Tensor w_scale, Tensor topk_ids, Tensor blk, Tensor par, Tensor topk_weights, "

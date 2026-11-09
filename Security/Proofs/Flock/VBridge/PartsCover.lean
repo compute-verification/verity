@@ -1,6 +1,25 @@
-import Proofs.Flock.VBridge.PartS
-import Proofs.Flock.VBridge.Algebra.ToVStar
+module
+
+public import Proofs.Flock.VBridge.PartS
+public import Proofs.Flock.VBridge.Algebra.ToVStar
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.ExecDraw
+import VCVio.Prelude.Core
 
 /-!
 # The parts' residuals cover S's
@@ -13,6 +32,8 @@ E's stage theorems read) returns them:
 * `residuals_zero_of_parts`: a part's residual `k` is S's residual `R[k]` (`PartS.res_partS`), at part ports reading S's
   ports where the part's index says; with `groups_cover`, every residual of S is zero.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Parts
 

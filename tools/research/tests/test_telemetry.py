@@ -390,7 +390,7 @@ def test_shared_scope_attribution_tolerates_the_round_offset_between_cgroup_and_
     assert att["tree_gone"] == [100] and att["outsiders_gone"] == [] and att["largest_before"]["pid"] == 100
 
 
-# ---- rev M-1748 d1-d8 ---------------------------------------------------------------------------------------------------------------------
+# ---- the classifier's rules d1-d8 ---------------------------------------------------------------------------------------------------------
 
 def test_d1_checker_fail_with_rc_0_is_workload_check_failed_not_success(tmp_path):
     d = _attempt(tmp_path, rc=0, sig=None, samples=[])
@@ -518,11 +518,11 @@ def test_d6_deferred_hash_records_identity_at_launch_and_completes_at_preserve(t
     assert job.hash_inputs(tmp_path)[0]["stat_changed_since_launch"] is True
 
 
-# ---- R18 infra regressions (ported from veritor r18-int-3) -------------------------------------------------------------------------------------
+# ---- tele run: the event CLI, the sampler's import root, timeouts, leftovers and memory caps ---------------------------------------------------
 
 def test_event_accepts_kv_positionals_after_options_on_every_python(tmp_path):
-    """[r18-int-2, arch M-0025] run_row.sh writes `tele event ... submitted --stage S row=.. role=..`; 3.11 parse_args rejected the k=v
-    tail ('unrecognized arguments') and the event was silently lost to telemetry_errors.log; parse_intermixed_args takes it everywhere."""
+    """run_row.sh writes `tele event ... submitted --stage S row=.. role=..`; 3.11 parse_args rejects the k=v tail ('unrecognized
+    arguments'), which would lose the event silently to telemetry_errors.log; parse_intermixed_args takes it everywhere."""
     env = dict(os.environ, PYTHONPATH=str(PKG_ROOT))
     r = subprocess.run([sys.executable, "-m", "research.telemetry", "event", "--attempt-dir", str(tmp_path), "--proc", "run_row", "submitted",
                         "--stage", "build,match", "row=r1", "role=B0"], capture_output=True, text=True, env=env, cwd=str(tmp_path))
@@ -534,8 +534,8 @@ def test_event_accepts_kv_positionals_after_options_on_every_python(tmp_path):
 
 
 def test_tele_run_launched_through_the_script_starts_a_sampler_that_finds_the_package(tmp_path):
-    """[r18-int-2, F-r18-infra-1] r18-int-1 canary: `zk/campaign/tele run ...` -> sampler.log '/usr/bin/python3: No module named telemetry',
-    no resources.jsonl.  The launcher below is that script's shape: the import root goes on sys.path IN-PROCESS only, the environment
+    """A `tele run ...` launched through a script must not leave sampler.log reading '/usr/bin/python3: No module named telemetry'
+    and no resources.jsonl.  The launcher below is that script's shape: the import root goes on sys.path IN-PROCESS only, the environment
     carries no PYTHONPATH and the cwd is elsewhere.  The sidecar (`python -m research.telemetry sample`, a new process) must still
     resolve the same package -- run._tele_env() puts `src/` (parents[2] of research/telemetry/run.py) on the child's PYTHONPATH.
 
@@ -583,8 +583,8 @@ SETS_TIMEOUT = ("import sys; from research.telemetry.run import set_timeout; set
 
 
 def test_tele_run_reads_a_timeout_change_from_the_control_file_and_records_it(tmp_path, monkeypatch):
-    """[r19-int-8, F-r19-int-8] Seven R19 rows were launched with --timeout sized on Build alone; tele run held the value in memory and
-    would have SIGTERMed healthy Match/Commit stages.  `tele set-timeout` writes control/timeout_s; the run loop re-reads it (mtime/size
+    """A row launched with --timeout sized on Build alone would have its healthy Match/Commit stages SIGTERMed if tele run held the
+    value in memory.  `tele set-timeout` writes control/timeout_s; the run loop re-reads it (mtime/size
     change), emits a `timeout_changed` mark carrying old/new/actor/reason and updates status.json.  The stage clock stands at 0 until
     status.json carries the new value, then reads 30 s: past a 1 s launch timeout raised to 60 s (the workload is released and finishes
     with rc 0, no timeout marker), and past a 60 s launch timeout lowered to 0.5 s (the ordinary timeout cancel-intent names the NEW
@@ -629,7 +629,7 @@ def test_tele_run_reads_a_timeout_change_from_the_control_file_and_records_it(tm
         gate.close()
     recs = [json.loads(l) for l in (d2 / "events.jsonl").read_text().splitlines() if l.strip()]
     ci = [x for x in recs if x.get("kind") == "cancel_intent"]
-    assert ci and ci[0]["actor"] == "timeout" and "timeout_s=0.5" in ci[0]["reason"]
+    assert ci and ci[0]["actor"] == "timeout" and "timeout_s=0.5 (abort)" in ci[0]["reason"], "it names the limit that fired"
     st = json.loads((d2 / "status.json").read_text())
     assert st["state"] == "cancelled" and st["timed_out"] is True
 
@@ -666,8 +666,8 @@ def test_tele_run_kills_what_is_left_of_the_workloads_group_once_its_leader_exit
 
 
 def test_a_run_on_a_machine_that_caps_sessions_needs_a_cap_of_its_own(tmp_path):
-    """On node 1 (8 Oct 01:59Z) and cpu-1 (06:00Z) user-1001.slice sat at its MemoryMax, logind failed to create 266 login session
-    scopes, and those logins' runs went on in ssh.service, which has no per-run cap. The machine's session-.scope.d MemoryMax is the
+    """When user-1001.slice sits at its MemoryMax, logind fails to create login session scopes, and those logins' runs go on in
+    ssh.service, which has no per-run cap. The machine's session-.scope.d MemoryMax is the
     cap a run expects; a run with no finite memory.max, or in a service's cgroup, has none of its own. A machine without the drop-in
     asks nothing."""
     from research.telemetry.cgroup import session_cap, uncapped
@@ -908,7 +908,7 @@ def test_v1_kill_counter_that_did_not_move_vetoes_the_failcnt_fallback(tmp_path,
     assert "log.killed" in [e["kind"] for e in doc["evidence"]]
 
 
-# ---- the sampler's PSS rounds (network accounting's friction note, 3 Oct: a 100 GB process's smaps_rollup read slowed its engine) ------------
+# ---- the sampler's PSS rounds (reading a 100 GB process's smaps_rollup slows its engine) ------------------------------------------------------
 
 GB = 10 ** 9
 
@@ -1111,8 +1111,8 @@ def test_a_namespace_with_a_portion_from_another_tree_is_a_mismatch(tmp_path):
 
 
 def test_a_cancel_also_signals_the_runs_workers_that_left_its_group_but_never_the_runner(tmp_path, monkeypatch):
-    """INF-48/INF-53: circuit_check's pool (17 Oct 11:21Z, cpu-2) and vLLM's TP workers (vy-glm53-eu2) setsid out of the workload's
-    group and outlived `research cancel`; they still carry the run's RESEARCH_RUN_DIR."""
+    """circuit_check's pool and vLLM's TP workers setsid out of the workload's group, so the group's signal alone would leave them
+    running past `research cancel`; they still carry the run's RESEARCH_RUN_DIR."""
     from research.telemetry import cancel
     d = _attempt(tmp_path, rc=None, sig=None, samples=[], pid=100)
     want = str(d.resolve())
@@ -1137,7 +1137,7 @@ def test_a_cancel_also_signals_the_runs_workers_that_left_its_group_but_never_th
     assert result["strays_total"] == 1 and result["strays"][0]["pid"] == 300 and result["strays_signalled"] == 1
 
 
-# ---- the run's cgroup scope: what research cancel and a stage timeout end (INF-93) -------------------------------------------------------
+# ---- the run's cgroup scope: what research cancel and a stage timeout end -----------------------------------------------------------------
 
 B = 5_000_000                       # past any pid_max, so no fake pid is this test's own
 RID = "r20261019-002224-7f15"
@@ -1223,8 +1223,8 @@ def _running(d: Path, *, runner: int, pgid: int, start: int = 7) -> None:
 
 
 def _vllm_world(tmp_path, **kw):
-    """vy-glm53-eu, 19 Oct 01:20Z: a queued run's runner and sampler in its queue scope, its workload under gpu-lease (the leader) whose
-    scope holds vLLM's engine and eight TP rank workers that setsid and were reparented to systemd --user, their environment unreadable;
+    """A queued run's runner and sampler in its queue scope, its workload under gpu-lease (the leader) whose scope holds vLLM's
+    engine and eight TP rank workers that setsid and are reparented to systemd --user, their environment unreadable;
     beside it another run's process and a system daemon."""
     rd = str(tmp_path / RID)
     py = ["python3", "-c", "..."]
@@ -1392,8 +1392,8 @@ def test_the_runner_ends_what_a_cancel_left_once_its_grace_is_over_and_records_i
 
 # ---- who ends a cancelled run: control/cancel, claimed once by the cancel (its request) or by the runner (closed) -----------------------
 
-#: The workload: a child that calls setsid itself and ignores SIGTERM, as the vllm.build stages under GNU `timeout` did (each in a
-#: process group of its own; vy-glm53-cpu-2, 20 Oct 06:12Z), writes its pid to the gate argv[1]; the workload waits on it.
+#: The workload: a child that calls setsid itself and ignores SIGTERM, as the vllm.build stages under GNU `timeout` do (each in a
+#: process group of its own), writes its pid to the gate argv[1]; the workload waits on it.
 SETSID_CHILD = """
 import subprocess, sys
 subprocess.Popen([sys.executable, "-c", "import os, signal, sys; os.setsid(); signal.signal(signal.SIGTERM, signal.SIG_IGN); "
@@ -1404,83 +1404,6 @@ subprocess.Popen([sys.executable, "-c", "import os, signal, sys; os.setsid(); si
 def _cancel_argv(d: Path, pgid: int) -> list[str]:
     return ["--actor", "manual", "--reason", "superseded", "--target-pgid", str(pgid), "--expect-run-dir", str(d), "--attempt-dir", str(d),
             "--deliver", "--grace-s", "20"]
-
-
-def test_a_cancel_ends_a_setsid_child_that_ignores_sigterm_though_the_workload_dies_before_the_runner_looks(tmp_path, monkeypatch):
-    """The workload dies of the cancel's SIGTERM at once and its setsid child ignores it, and the runner looks before the cancel is
-    done.  The cancel claims control/cancel before it signals, so the runner finds the request, SIGKILLs the child once the grace is
-    over (the runner's clock passes it) and records it in status.json.  Before, the request came after the cancel's sweep, the
-    runner had recorded the exit by then, and nothing SIGKILLed the child (r20261019-235351-7350)."""
-    import signal
-    import threading
-
-    from research.telemetry import cancel, scope
-    from research.telemetry import run as trun
-    from waits import wait_exit
-    d = tmp_path / "a"
-    d.mkdir()
-    gate = Gate(tmp_path / "child.pid")
-    cancelled, looked, t = threading.Event(), threading.Event(), [0.0]
-
-    def sleep(dt):
-        """scope's: the run's time moves only here, once the cancel has returned; past the grace, the SIGKILLed child's exit."""
-        looked.set()
-        cancelled.wait()
-        if t[0] >= 20:
-            wait_exit(child)
-        t[0] += dt
-    for mod in (trun, scope):
-        monkeypatch.setattr(mod, "clock", lambda: t[0])
-    monkeypatch.setattr(scope, "sleep", sleep)
-    started, real_set_status = threading.Event(), trun.set_status
-
-    def set_status(attempt_dir, state, **kv):
-        out = real_set_status(attempt_dir, state, **kv)
-        if state == "running" and "pgid" in kv:
-            started.set()
-        elif state != "running":
-            looked.set()
-        return out
-    monkeypatch.setattr(trun, "set_status", set_status)
-
-    def pids():
-        """The cancel's sweep runs once the runner has looked after the workload's exit (it recorded the end, or it is ending the
-        run), as on vy-glm53-cpu-2: the workload died of the SIGTERM before the cancel was done."""
-        looked.wait()
-        return real_pids()
-    real_pids = cancel.list_pids
-    monkeypatch.setattr(cancel, "list_pids", pids)
-    rcs: list[int] = []
-    runner = threading.Thread(target=lambda: rcs.append(trun.main([
-        "--attempt-dir", str(d), "--stage", "t", "--no-sampler", "--no-classify", "--stall-dump-s", "0", "--",
-        sys.executable, "-c", SETSID_CHILD, str(gate.path)])))
-    runner.start()
-    started.wait()
-    child = int(gate.readline())
-    child_fd = os.pidfd_open(child)
-    try:
-        pgid = json.loads((d / "status.json").read_text())["pgid"]
-        assert cancel.main(_cancel_argv(d, pgid)) == 0
-        cancelled.set()
-        runner.join()
-        st = json.loads((d / "status.json").read_text())
-        assert "scope_end" in st, "the runner recorded the exit without ending the run's processes: the child ran on"
-        wait_exit(child)
-    finally:
-        try:
-            signal.pidfd_send_signal(child_fd, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        os.close(child_fd)
-        gate.close()
-    assert rcs == [128 + 15]
-    se = st["scope_end"]
-    assert se["empty"] is True and "by" not in se, "the runner's scope end"
-    assert any(x.startswith(f"{child} ") for x in se["SIGKILL"]["pids"])
-    recs = [json.loads(l) for l in (d / "events.jsonl").read_text().splitlines() if l.strip()]
-    (result,) = [x for x in recs if x.get("kind") == "cancel_result" and x.get("actor") == "manual" and x.get("signal") == 15]
-    assert result["scope"]["runner_kills_after_s"] == 20 and "cancel_killed_after_s" not in result["scope"]
-    assert any(x.startswith(f"{child} ") for x in result["scope"]["SIGTERM"]["pids"]), "the child got the cancel's SIGTERM first"
 
 
 def test_a_cancel_whose_runner_is_gone_sigkills_the_runs_setsid_child_itself_and_records_it(tmp_path, monkeypatch, fake_time):

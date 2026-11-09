@@ -1,5 +1,7 @@
-import Definitions.Nci.Guarantees.Layered
-import Proofs.Nci.Threads
+module
+
+public import Definitions.Nci.Guarantees.Layered
+public import Proofs.Nci.Threads
 
 /-!
 # Proofs that keyed circuits are threaded
@@ -13,11 +15,13 @@ them when it reads less than `(E + 1) · b` bits (`lookupsIn_bits`). A subcircui
 or to a lookup (at most `eLk` each), with a lookup costing a read of its token (`threaded_of_layered`).
 -/
 
+@[expose] public section
+
 namespace Nci.SecurityProofs
 
 open Verity Finset
 
-theorem threadMults_subset {c : Declaration} (T : Threading c) (R : Finset (Fin c.D.N)) (t : Fin T.m) :
+theorem threadMults_subset {c : RegisteredCircuit} (T : Threading c) (R : Finset (Fin c.D.N)) (t : Fin T.m) :
     T.threadMults R t ⊆ T.M := by
   intro g hg
   rw [Threading.threadMults, mem_filter, Threading.mults, mem_inter] at hg
@@ -25,7 +29,7 @@ theorem threadMults_subset {c : Declaration} (T : Threading c) (R : Finset (Fin 
 
 section Layered
 
-variable {c : Declaration} {T : Threading c} {d e eLk b : ℕ}
+variable {c : RegisteredCircuit} {T : Threading c} {d e eLk b : ℕ}
 
 /-- The lookups of thread `t` in `R`. -/
 def lookupsIn (L : Layered T d e eLk b) (R : Finset (Fin c.D.N)) (t : Fin T.m) : Finset (Fin c.D.N) :=
@@ -253,8 +257,8 @@ theorem ThreadedOfLayered : Guarantees.ThreadedOfLayered := by
 
 /-- **Training is slowed, for keyed circuits.** -/
 theorem LayeredTraining : Guarantees.LayeredTraining := by
-  intro Γ α b_w b_a κ c dcl T d e eLk b E M L hα hbw hba hE hd hB hS hW hκ
-  exact ThreadedTraining Γ α b_w b_a κ c dcl T (d - E) (e + E * eLk) M hα hbw hba (Nat.sub_pos_of_lt hE) hd hB
+  intro Γ α b_w b_a κ r dcl T d e eLk b E M L hα hbw hba hE hd hB hS hW hκ
+  exact ThreadedTraining Γ α b_w b_a κ r dcl T (d - E) (e + E * eLk) M hα hbw hba (Nat.sub_pos_of_lt hE) hd hB
     (threaded_of_layered L Γ (α * Γ) E hS) hW hκ
 
 /-- **The reference circuit is threaded, at Kimi K2's shapes.** -/
@@ -263,13 +267,5 @@ theorem ReferenceThreaded : Guarantees.ReferenceThreaded := by
   unfold Assumptions.ReferenceLayered at hL
   obtain ⟨L⟩ := hL
   exact threaded_of_layered L Γ S 7 (hS.trans_lt (by norm_num))
-
-/-- **Training is slowed, at Kimi K2's shapes.** -/
-theorem ReferenceTraining : Guarantees.ReferenceTraining := by
-  intro Γ α b_w b_a κ c dcl T M hL hα hbw hba hd hB hS hW hκ
-  unfold Assumptions.ReferenceLayered at hL
-  obtain ⟨L⟩ := hL
-  exact LayeredTraining Γ α b_w b_a κ c dcl T _ _ _ _ 7 M L hα hbw hba (by norm_num) hd hB
-    (hS.trans_lt (by norm_num)) hW hκ
 
 end Nci.SecurityProofs

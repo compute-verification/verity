@@ -32,10 +32,10 @@ import verity_vllm
 from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition
 from verity_vllm.program.frontend.rules.vocab import PROFILES
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import prims as P
 from verity_vllm.program.frontend import targets as TG
-from verity_vllm.program.registry.hopper import Fa3InvSum
+from verity.ml.definitions.registry.hopper import Fa3InvSum
 
 PACKAGE = Path(verity_vllm.__file__).parent
 DEFAULT = TargetProfile().numerics_profile
@@ -47,7 +47,7 @@ STATICS = dict(K=64, N=64, I=8, H=64, E=8, TOPK=2, VPT=8, T=4, NH=2, KVH=1, D=64
                ROPE=32, DR=16, DV=16, SM_SCALE=0.0625, SHOT=1, SIZE=64, TREES=2, FTZ=False, STAGE=1, CLUSTER=2, FMA=True,
                SPLIT_K=2, B=2, BS=32, VEC=8, TILE_K=32, WARPS=4, NS=2, BLOCK=8, HC=4, TN=8, TH=64, REPEAT=2, HC_EPS=1e-6, NHP=2,
                DN=64, QB=64, ROWS=8, R=4, CHUNKS=2, QG=64, SPLITS=2, NW=2, QT=64, NP=64, LIMIT=10.0, P=6, BM=8, TK=64, GRID=4,
-               CHAIN=(0, 1, 2, 3))
+               CHAIN=(0, 1, 2, 3), KVL=64)
 #: the statics that select among Definitions, at every registered value
 SELECTING = {"DOT": tuple(TG.DOTS.values()), "INV": (P.Fa2InvSum, Fa3InvSum), "SCALE": TargetProfile.FP8_SCALE_CONSTRUCTIONS,
              "CONSTRUCTION": TargetProfile.SAMPLER_CONSTRUCTIONS,
@@ -203,13 +203,13 @@ def test_every_allowed_definition_is_reported_without_its_entry():
 def test_the_scan_reads_the_fold_pattern_modules():
     refs = fold_references()
     where = {w.rsplit(":", 1)[0] for _, w in refs.values()}
-    assert {"verity_vllm.engine.profiles.gen_ov_moe_patterns", "verity_vllm.observe.fold.patterns.norms"} <= where, sorted(where)
+    assert {"verity_vllm.observe.fold.profiles.gen_ov_moe_patterns", "verity_vllm.observe.fold.patterns.norms"} <= where, sorted(where)
     assert {"SiluMul_v2", "MoeSum_v1", "RMSNormTriton_v1", "RMSNormTriton_v3"} <= set(refs), sorted(refs)
     assert "b1-eager-v3" in CURRENT and "dense2-eager-v1" in CURRENT
 
 
 def test_a_fold_pattern_naming_the_older_silu_is_a_violation():
-    """The dense `SiluAndMul` named `SiluMul_v1` while the b1-eager-v3 Build binds `SiluMul_v2` (#820): exactly what rule 1 reports."""
+    """The dense `SiluAndMul` named `SiluMul_v1` while the b1-eager-v3 Build binds `SiluMul_v2`: exactly what rule 1 reports."""
     refs = {k: v for k, v in fold_references().items() if not k.startswith("SiluMul")}
     refs["SiluMul_v1"] = (b1.SiluMul, "verity_vllm.observe.fold.patterns.activations:37")
     assert violations(refs, DEFAULT) == ["rule 1: verity_vllm.observe.fold.patterns.activations:37 names SiluMul_v1; the b1-eager-v3 "

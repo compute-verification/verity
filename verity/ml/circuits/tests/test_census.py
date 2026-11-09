@@ -130,7 +130,9 @@ def hashed(n: int) -> Program:
                lambda Bd, S, i, a, b: Bd.call(Add16, Bd.call(Pick, i, a), Bd.call(Pick, i, b)))
 
     def body(Bd, S, toks, t):
-        col = lambda t, c: Coll(C, strided_view(t, c, 1, 3, 0, R))
+        def col(t, c):
+            return Coll(C, strided_view(t, c, 1, 3, 0, R))
+
         out = [Bd.call(Pick, toks[i], col(t, c)) for i in range(n) for c in range(3)]
         out += [Bd.call(Two, toks[0], col(t, 0), col(t, 2)), Bd.call(Two, toks[1], col(t, 1), col(t, 1)), Bd.call(Fold, col(t, 2)),
                 Bd.call(Pick, toks[0], col(Bd.call(Keep, t), 1)), Bd.call(Add16, t[0][0], t[R - 1][1])]
@@ -614,6 +616,18 @@ def test_a_boolean_programs_work_is_its_gates(monkeypatch):
     assert set(c["totals"]["work"]) == {"tc:fp8", "cuda:gate"}
     assert c["classes"]["TBStep_v1"]["work"] == {"tc:fp8": {"gates": 8, "and": 3}}
     assert c["classes"]["TBHalf_v1"]["work"] == {"cuda:gate": {"gates": 2, "and": 1}}
+
+
+def test_boolean_gates_are_a_classs_work_summed_over_its_facets():
+    """`boolean_gates` gives each Definition the gates `census` with ``boolean`` counts for it, its facets summed (a class's,
+    or the root's as the totals), and one reaching a primitive that is no gate the primitive's id."""
+    P = Program(BRoot)
+    c = census(P, boolean=True)
+    coord = next(nd.fn for nd in P.root.body.nodes if descriptor_id(nd.fn) == "TBCoord_v1{K=3}")
+    gates = lambda work: sum(w["gates"] for w in work.values())  # noqa: E731
+    want = gates(c["classes"]["TBCoord_v1{K=3}"]["work"])
+    assert CE.boolean_gates([coord, P.root, coord]) == [want, gates(c["totals"]["work"]), want]
+    assert CE.boolean_gates([Add16]) == [Add16.id]
 
 
 def test_silicon_step_refusals(monkeypatch):

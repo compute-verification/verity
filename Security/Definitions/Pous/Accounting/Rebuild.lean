@@ -1,5 +1,7 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Definitions.Pous.Model.BandChain
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Definitions.Pous.Model.BandChain
 
 /-!
 # The background-rebuild budget
@@ -7,10 +9,11 @@ import Definitions.Pous.Model.BandChain
 The counts `Pous.Guarantees.BackgroundRebuildExcluded` reads, all in sequential `Π₂` calls of at least `call_ns` each:
 what re-encoding one band segment from its data costs, how long a row of the graded audit's rounds may last, and the cap
 on a graded audit's whole duration that the guarantee requires the memory challenger to enforce (`PROTOCOL.md`,
-"Isolation over the whole graded window"). Added on 3 Oct 2026, with that guarantee. A call of at least `call_ns` is the
-ideal-permutation model's unit; at the reference Feistel-SHAKE256 `Π₂` a prover answers from 1.53% of `C` in 481
-Keccak-f without completing a call (red team, 4 Oct 2026, art:7617c8017e80).
+"Isolation over the whole graded window"). A call of at least `call_ns` is the ideal-permutation model's unit; at the
+reference Feistel-SHAKE256 `Π₂` a prover answers from 1.53% of `C` in 481 Keccak-f without completing a call.
 -/
+
+@[expose] public section
 
 namespace Pous.Rebuild
 

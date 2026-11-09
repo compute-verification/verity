@@ -1,9 +1,12 @@
-import Proofs.Flock.Soundness.TmplLayOk
-import Proofs.Flock.Soundness.TmplWf
-import Flock.TmplAt
+module
+
+public import Flock.TmplAt
+public import Proofs.Flock.Soundness.TmplLayOk
+public import Proofs.Flock.Soundness.TmplPosMap
+public import Proofs.Flock.Soundness.TmplWf
 
 /-!
-# A templated unit's committed net exists, checked on its description (PRF-133)
+# A templated unit's committed net exists, checked on its description
 
 `Tmpl.unrollAt` (the rows, `Net.ofRows`' checks, then `Net.ofRowsAt`'s at `posMap`'s positions) succeeds on a template
 that passes `Tmpl.unrollOk` at `layoutM`'s layouts (`unrollAt_ok`), so a verifier that checks the description knows the
@@ -19,6 +22,8 @@ committed net exists without building it.
 - `unitNet_eq`: the net the verifier carries (`Tmpl.unitNet`, its header from the description and its rows built only
   when read) is `unrollAt`'s, so a read templated unit's net is its template's committed net (`TmplUnit.unrolled`).
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl Flock.TmplApart
 

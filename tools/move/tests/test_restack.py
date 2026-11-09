@@ -2,6 +2,7 @@
 `app/util.py` to `app/core/util.py` and renames the module `app.util` to `app.core.util`."""
 from __future__ import annotations
 
+import fcntl
 import importlib.util
 import json
 import os
@@ -165,6 +166,58 @@ def test_a_real_content_conflict_after_the_move(repo, monkeypatch, capsys):
     assert "pr: conflicted at moved (1)" in capsys.readouterr().out
 
 
+def test_a_conflict_only_in_lean_locks_takes_ontos_and_leaves_them_stale(repo, monkeypatch, capsys):
+    on(repo, "pr", ("edit util and lock", {"app/util.py": edit(UTIL, "return 5", "return 50"),
+                                           "pkg/lean-audit.json": '{"reads": "branch"}\n'}))
+    moved = RS.rev("move", str(repo))
+    git(repo, "checkout", "-q", "main")
+    onto = commit(repo, "main changes the lock", {"pkg/lean-audit.json": '{"reads": "main"}\n'})
+    r = RS.restack("pr", moved, onto=onto, cwd=str(repo))
+    assert (r["status"], r["files"]) == ("locks-stale", ["pkg/lean-audit.json"]), r
+    assert show(repo, r["result"], "pkg/lean-audit.json") == '{"reads": "main"}\n'
+    assert "return 50" in show(repo, r["result"], "app/core/util.py")
+    assert git(repo, "rev-list", "--parents", "-n", "1", r["result"]).split()[2] == onto
+    assert f"pr: locks-stale {r['result'][:12]}" in RS.line(r)
+    monkeypatch.chdir(repo)
+    assert RS.main(["pr", "--move-commit", moved, "--onto", onto]) == 1
+
+
+def test_a_lock_conflict_beside_a_content_conflict_is_still_a_conflict(repo):
+    on(repo, "pr", ("edit util and lock", {"app/util.py": edit(UTIL, "return 3", "return 30"),
+                                           "pkg/lean-audit.json": '{"reads": "branch"}\n'}))
+    moved = RS.rev("move", str(repo))
+    git(repo, "checkout", "-q", "main")
+    onto = commit(repo, "main edits both", {"app/core/util.py": edit(UTIL, "return 3", "return 33"),
+                                            "pkg/lean-audit.json": '{"reads": "main"}\n'})
+    r = RS.restack("pr", moved, onto=onto, cwd=str(repo))
+    assert (r["status"], r["step"], r["files"]) == ("conflicted", "moved", ["app/core/util.py", "pkg/lean-audit.json"])
+
+
+def test_a_branch_based_after_the_moves_base_is_refused_with_the_plain_merge(repo, monkeypatch, capsys):
+    """A branch based on a main past the move's base would restack `clean` with duplicate imports and lock entries, because
+    the last merge, based on the move, brings main's commits since the base in from both sides. Here main
+    adds an import after the base, and the moved main has it at the top of the file."""
+    git(repo, "checkout", "-q", "-b", "later", "base")
+    later = commit(repo, "main after the move's base", {"app/main.py": MAIN + "from app.util import f3\n"})
+    git(repo, "checkout", "-q", "-b", "pr-later", later)
+    commit(repo, "edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")})
+    git(repo, "checkout", "-q", "main")
+    git(repo, "merge", "-q", "-s", "ours", "--no-ff", "-m", "land later", later)
+    landed = show(repo, "move", "app/main.py")
+    onto = commit(repo, "carry later's import across the move", {"app/main.py": "from app.core.util import f3\n" + landed})
+    r = RS.restack("pr-later", "move", onto=onto, cwd=str(repo))
+    assert r["status"] == "based-after" and "result" not in r and "steps" in r and not r["steps"], r
+    assert f"has {later[:12]}" in r["error"] and f"`git merge {onto[:12]}`" in r["error"]
+    assert RS.restack("pr", "move", onto=onto, cwd=str(repo))["status"] == "clean", "a branch based before the base still restacks"
+    assert RS.restack("pr-later", "move", cwd=str(repo), main="later")["status"] == "based-after", "main shows it before --onto does"
+    monkeypatch.chdir(repo)
+    assert RS.main(["pr-later", "--move-commit", "move", "--onto", onto, "--main", "main"]) == 1
+    assert "pr-later: based-after  [plain merge" in (o := capsys.readouterr().out) and "`git merge main`" in o
+    monkeypatch.setattr(RS, "based_after", lambda *a: None)
+    dup = RS.restack("pr-later", "move", onto=onto, cwd=str(repo))
+    assert dup["status"] == "clean" and show(repo, dup["result"], "app/main.py").count("import f3") == 2, "what it refuses"
+
+
 def test_a_conflict_with_the_tree_before_the_move(repo):
     git(repo, "checkout", "-q", "base")
     git(repo, "checkout", "-q", "-B", "main")
@@ -234,6 +287,34 @@ def test_a_script_that_fails_is_reported_and_nothing_else_happens(repo):
     r = RS.restack("pr", "move", cwd=str(repo))
     assert r["status"] == "script-failed" and "exit 1" in r["error"] and "LAYOUT_FAIL" in r["error"]
     assert git(repo, "worktree", "list", "--porcelain") == before
+
+
+def test_the_moves_main_has_and_the_branch_lacks_are_found_by_their_move_lines_oldest_first(repo):
+    """`Move:` runs rename.py and `Layout-move:` layout.py, each with its map (and `--no-lock` as the move ran); a merge, a
+    restack's own commit and a commit the branch has are no moves to cross."""
+    words = commit(repo, "words", {"a.txt": "a\n"})
+    git(repo, "commit", "-q", "--allow-empty", "-m", "words\n\nMove: tools/move/words_map.toml")
+    words = git(repo, "rev-parse", "HEAD")
+    git(repo, "branch", "later", words)
+    git(repo, "commit", "-q", "--allow-empty", "-m", "paths\n\nLayout-move: tools/move/paths_map.toml --no-lock")
+    paths = git(repo, "rev-parse", "HEAD")
+    git(repo, "commit", "-q", "--allow-empty", "-m", f"carried\n\n{RS.TRAILER_MOVE}: {paths}\nMove: tools/move/x.toml.bak")
+    git(repo, "checkout", "-q", "-b", "side", "HEAD~1")
+    git(repo, "commit", "-q", "--allow-empty", "-m", "side")
+    git(repo, "checkout", "-q", "main")
+    git(repo, "merge", "-q", "--no-ff", "-m", "land side\n\nMove: tools/move/merged_map.toml", "side")
+    assert RS.moves_on("main", "pr", str(repo)) == [
+        (words, "tools/move/rename.py", ("--map", "tools/move/words_map.toml")),
+        (paths, "tools/move/layout.py", ("--map", "tools/move/paths_map.toml", "--no-lock"))]
+    assert RS.moves_on("main", "later", str(repo)) == RS.moves_on("main", "pr", str(repo))[1:]
+    assert RS.move_line(paths, str(repo)) == ("tools/move/layout.py", ("--map", "tools/move/paths_map.toml", "--no-lock"))
+    assert RS.move_line("move", str(repo)) is None
+
+
+def test_a_branch_with_no_move_to_cross_is_told_to_merge(repo, monkeypatch, capsys):
+    monkeypatch.chdir(repo)
+    assert RS.main(["pr", "--main", "base"]) == 0
+    assert "pr: no-moves" in capsys.readouterr().out
 
 
 def test_the_source_branch_and_checkout_are_untouched(repo):
@@ -330,6 +411,19 @@ def test_a_restacked_result_gets_its_stale_pins_regenerated_by_its_own_list(repo
     assert RS.restack("pr", "move", cwd=str(repo), pins=False)["steps"][-1]["step"] == "moved"
 
 
+def test_a_conflict_only_in_a_pinned_digest_list_is_regenerated_by_the_pins_step(repo):
+    pins = TOY_PINS.replace('pathlib.Path("PIN")', 'pathlib.Path("pkg/TRUSTED.sha256")')
+    on(repo, "pr", ("a pinned list", {RS.PINS: pins, "pkg/TRUSTED.sha256": "branch\n",
+                                      "app/util.py": edit(UTIL, "return 1", "return 10")}))
+    moved = RS.rev("move", str(repo))
+    git(repo, "checkout", "-q", "main")
+    onto = commit(repo, "main pins too", {"pkg/TRUSTED.sha256": "main\n"})
+    r = RS.restack("pr", moved, onto=onto, cwd=str(repo))
+    assert r["status"] == "clean", r
+    assert [s["step"] for s in r["steps"]] == ["base", "script", "moved", "pins"]
+    assert show(repo, r["result"], "pkg/TRUSTED.sha256") == "pin of     return 10\n"
+
+
 def test_a_pin_whose_command_fails_leaves_the_restack_pins_stale(repo, capsys):
     on(repo, "pr", ("a pin", {RS.PINS: TOY_PINS, "PIN": "x\n", "BROKEN": ""}))
     r = RS.restack("pr", "move", cwd=str(repo))
@@ -342,3 +436,65 @@ def test_a_result_without_a_list_of_pins_runs_none(repo):
     on(repo, "pr", ("edit", {"README.md": "readme 2\n"}))
     r = RS.restack("pr", "move", cwd=str(repo))
     assert r["status"] == "clean" and "pins" not in [s["step"] for s in r["steps"]], r
+
+
+def test_dropping_a_scratch_worktree_never_fails_on_what_git_leaves(repo):
+    """A scratch worktree the script left a read-only directory in, which `git worktree remove` can't empty, still goes and
+    the clone forgets it: the restack's result is already read, so its cleanup fails nothing."""
+    wt = repo.parent / "scratch"
+    git(repo, "worktree", "add", "--detach", "-q", str(wt), "main")
+    stuck = wt / "cache" / "deep"
+    stuck.mkdir(parents=True)
+    (stuck / "f").write_text("x")
+    os.chmod(stuck, 0o555)
+    os.chmod(wt / "cache", 0o555)
+    RS.drop_worktree(str(wt), str(repo))
+    assert not wt.exists()
+    assert str(wt) not in git(repo, "worktree", "list")
+
+
+def test_dropping_a_scratch_worktree_changes_no_file_outside_it(repo, tmp_path):
+    """A symlink or a hard link in a read-only directory of the worktree (a tool's cache links into it) goes without its
+    target's mode changing: deleting it takes its directory's permission, never its own."""
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    linked, hard = outside / "linked", outside / "hard"
+    for f in (linked, hard):
+        f.write_text("secret")
+        os.chmod(f, 0o600)
+    wt = repo.parent / "scratch"
+    git(repo, "worktree", "add", "--detach", "-q", str(wt), "main")
+    for name, add in (("symlink", lambda p: p.symlink_to(linked)), ("hardlink", lambda p: os.link(hard, p))):
+        stuck = wt / "cache" / name
+        stuck.mkdir(parents=True)
+        add(stuck / "f")
+        os.chmod(stuck, 0o555)
+    RS.drop_worktree(str(wt), str(repo))
+    assert not wt.exists()
+    assert {f.name: f.stat().st_mode & 0o777 for f in (linked, hard)} == {"linked": 0o600, "hard": 0o600}
+
+
+def test_a_scratch_worktree_is_added_and_forgotten_holding_the_clones_worktree_lock_and_filled_without_it(repo, monkeypatch):
+    """`git worktree add` writes a placeholder HEAD before the real one, and a fetch in the clone reads every worktree's HEAD
+    (drive's sync failed on one: `bad object worktrees/restack-…/HEAD`). So a scratch worktree is added, with no checkout,
+    and forgotten holding the clone's worktree lock alone, which every fetch the queue runs holds shared, and its checkout
+    fills it after the lock goes."""
+    lock, seen, real = repo / ".git" / RS.WORKTREES_LOCK, [], RS.git
+
+    def probed(*args, **kw):
+        if args[0] in ("worktree", "reset"):
+            with open(lock, "a") as f:
+                try:
+                    fcntl.flock(f, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                    seen.append((*args[:2], "free"))
+                except BlockingIOError:
+                    seen.append((*args[:2], "held"))
+        return real(*args, **kw)
+
+    monkeypatch.setattr(RS, "git", probed)
+    wt = repo.parent / "scratch"
+    RS.add_worktree(str(wt), "main", str(repo))
+    assert (wt / "README.md").read_text() == "readme\n"
+    RS.drop_worktree(str(wt), str(repo))
+    assert seen == [("worktree", "add", "held"), ("reset", "--hard", "free"), ("worktree", "prune", "held")]
+    assert not wt.exists() and str(wt) not in git(repo, "worktree", "list")

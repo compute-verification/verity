@@ -1,23 +1,23 @@
-"""PoUW's verifier of record. Lean is the definition and the verifier of record (Daniel, 18 Oct; AGENTS.md "Design
-rules"), and PoUW has switched to it by the 8 Oct procedure (`.agents/skills/friction/SKILL.md`): the served window's checks
+"""PoUW's verifier. Lean is the definition and the verifier (AGENTS.md "Design
+rules"), and PoUW has switched to it: the served execution phase's checks
 are its Lean's, `lean/check` (`pouw-check`), `lean/commit` (`pouw-commit`) and `lean/window` (`pouw-window`), whose
 verdicts `benchmarks/pouw/served_zk/of_record.py` publishes. The Python beside them (`core_check`, `coins`, `window`) is kept
 as the reference, and the difftests hold it to the Lean: a disagreement fails with the Lean's verdict. A served H1
-window's statements are judged here too: `credit.window` and `credit.period_credit` take each drawn unit's outcome from
+execution phase's statements are judged here too: `credit.window` and `credit.period_credit` take each sampled proof block's outcome from
 `lean("credit-verified", …)` (`PouwCheck.Verified`), with `credit._verified` the reference, and each round's live
 outcome from `lean("credit-live-verified", …)` (`PouwCheck.LiveVerified`), with `credit._live_verified` the reference,
-on the circuit files its period's open committed, `lean("credit-committed-files", …)` (`PouwCheck.CommittedFiles`),
+on the circuit files its credit period's open committed, `lean("credit-committed-files", …)` (`PouwCheck.CommittedFiles`),
 with `credit.committed_files` the reference.
 
 `RECORD_VERDICT` is the switch, and setting it to ``"python"`` is the one line that undoes it.
 
-`coins` is the challenger's entropy: bytes the Lean verifier of record reads from the operating system (`pouw-check-difftest`'s
+`coins` is the challenger's entropy: bytes the Lean verifier reads from the operating system (`pouw-check-difftest`'s
 ``coins``, `IO.getRandomBytes`, A3's `uniform/io-getrandombytes`), which a served `coins.Challenger` and
-`window.live_challenger` draw every coin and hm96 salt from. Python never reads them from the operating system itself, and
+`window.live_challenger` flip every coin and hm96 salt from. Python never reads them from the operating system itself, and
 `RECORD_VERDICT` doesn't switch them. Building takes the lock `verity_difftest.build` takes (its `BUILD_LOCK`): Lake builds
 the path requires in place, and two builds at once would rewrite one module's C under each other.
 
-This module imports only the standard library, so what decides a window never depends on `verity.ml`."""
+This module imports only the standard library, so what decides an execution phase never depends on `verity.ml`."""
 from __future__ import annotations
 
 import atexit
@@ -121,9 +121,9 @@ def lean(fn: str, value: Any) -> Any:
 
 
 def coins(n: int) -> bytes:
-    """`n` bytes of the operating system's randomness, read by the Lean verifier of record (`IO.getRandomBytes`, A3's
+    """`n` bytes of the operating system's randomness, read by the Lean verifier (`IO.getRandomBytes`, A3's
     `uniform/io-getrandombytes`): a served challenger's entropy. Raises `LeanError` where the Lean can't run, refuses or
-    answers other than `n` bytes: no coins, so no commitment and no draw."""
+    answers other than `n` bytes: no coins, so no commitment and no sample."""
     if not (type(n) is int and 0 <= n <= COINS_MAX):
         raise ValueError(f"coins are 0 to {COINS_MAX} bytes a request, not {n!r}")
     kind, body = _server.call("coins", n)
@@ -134,6 +134,6 @@ def coins(n: int) -> bytes:
     return bytes.fromhex(body)
 
 
-#: the claim instance naming `coins`'s bytes, which a served challenger reads (`sampled_proofs.challenger.coin_claim`)
+#: the claim instance naming `coins`'s bytes, which a served challenger reads (`spot.challenger.coin_claim`)
 CLAIM = "uniform/io-getrandombytes"
 coins.claim = CLAIM  # type: ignore[attr-defined]

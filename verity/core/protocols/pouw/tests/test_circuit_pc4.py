@@ -1,8 +1,8 @@
-"""Pearl-C4's tile check as a Program (`verity.core.protocols.pouw.circuit.pc4`): its primitives and float forms are the scheme's operations
+"""Pearl-C4's tile check as a Program (`verity.ml.protocols.pouw.circuit.pc4`): its primitives and float forms are the scheme's operations
 on the domain the row's admission bit admits, its units evaluate to `schemes.pearl_c4`'s forming, clean-up and checked
 words (the pinned ``test-16-nvfp4`` vector), its admission bit is `row_passes` on every row, and its partition computes
 every value in exactly one unit; its hiding Programs publish only admission bits and tile digests, their units' ports are
-`PORTS`, the verifier derives the anchored inputs (`anchors.TileAnchors`), and `plan.tile_layout` draws a tile with its
+`PORTS`, the verifier derives the anchored inputs (`anchors.TileAnchors`), and `plan.tile_layout` samples a tile with its
 rows."""
 from __future__ import annotations
 
@@ -23,12 +23,12 @@ from verity.ml.circuits.ops.prims import F32ToE2m1Sat, F32ToE4m3Sat, HopperBF16W
 from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, I32Le
 from verity.ml.circuits.silicon import fp32
 from verity.ml.randomness import derive
-from verity.core.protocols.pouw.circuit import pc4, plan
-from verity.core.protocols.pouw.circuit.anchors import TileAnchors, region_bytes
-from verity.core.protocols.pouw.circuit import words as W
+from verity.ml.protocols.pouw.circuit import pc4, plan
+from verity.ml.protocols.pouw.circuit.anchors import TileAnchors, region_bytes
+from verity.ml.protocols.pouw.circuit import words as W
 from verity.core.protocols.pouw.protocol import DomainError
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import pearl_c4 as F
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 
 K = 128
 CASE = next(c for c in json.loads(V.OUT.read_text())["cases"] if c["case"] == "test-16-nvfp4")
@@ -320,7 +320,7 @@ def test_the_verifier_derives_the_anchored_inputs():
 
 def test_the_tile_layout_proves_each_drawn_tile_with_its_rows():
     """`plan.tile_layout`: a tile's closure is itself and its TM `RowA` units, and its ``b_rows`` its TN `RowB` units in the
-    weight's Program; a draw proves both, the row units each once (`Plan.proved_b`), opens nothing, and the tile stratum
+    weight's Program; a sample proves both, the row units each once (`Plan.proved_b`), opens nothing, and the tile stratum
     has the W_ref given."""
     tm, tn = HIDDEN.tile
     lay = plan.tile_layout(HIDDEN, 1000)

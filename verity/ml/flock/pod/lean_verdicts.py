@@ -7,22 +7,44 @@ refusal, with a VERDICT and none accepting, and every other part of it has a VER
 honest one is accepted). ``flock-verify statement``'s line is its part's VERDICT: accepted when Lean derived the units from
 the verifier's program (``partition_check``'s ``units`` ``derived``), refused as ``setup: …``. A part that never ran has
 neither file and fails. A forgery's part the verifier never checked is "no proof produced (not exercised)", never a
-refusal: one whose session Lean found missing its files (``session files: …``), and one the firewall held back (its
+refusal: one whose session Lean found missing its files (``session files: …``), and one the ZK server held back (its
 prover's ``LIVE`` lines, ``PART.live``, the session verdicts oprove kept, stop at ``FIREWALL-REFUSED: …``, and no session
-reached Lean), since the firewall is the prover's own check, which a dishonest prover doesn't run. A forgery no part of
+reached Lean), since the ZK server is the prover's own check, which a dishonest prover doesn't run. A forgery no part of
 which Lean refused, one of them not exercised, fails the step as not exercised. A forged inner session
 (``forged-inner-W-PART``, 85's NEG_INNER) is read only by the parts ``COVERS`` names for it: without one of them among the
 parts run, nothing could refuse it, and it is "not covered by the parts run", which fails the step like a forgery no part
 refused. One line per part, then the count; the exit is 0 only when there is a part, every honest part passes and every
 forgery is refused.
 
-    python3 verity/ml/flock/pod/lean_verdicts.py DIR PART...
+With ``--compose BIN`` (85's V* parts), the recursive statement's verdict is Lean's, not this script's:
+``BIN rec-compose`` (`RecCompose.check`) over DIR's ``rec-inner.json``, its one shared rows file ``rows.json``, the link
+table's ``--rec-links ROOT:N`` in ``rec-links.txt`` when the inner population is wired (85's REC_LINKS=1), the
+challenger's interactive-run record ``rec-run.json`` and the V* parts' logs (the honest parts 85 gave V*'s inputs,
+``own-PART.txt``) accepts only when there is one part per V* statement, each one ``--zk`` session accepted at the SHA-512
+of that one rows file and of that inner shape, every part having read one set of the other inputs V*'s parts share and
+no two sessions one coin key (`RecCompose.Accepts`), and the record shows the parts are one run: the staging first, one
+session opened per part, each the composed one, the close last (`RecCompose.OneRun`); the step fails unless it does.
+Each forgery of a V* part, put in that part's place, must be refused by it too. The record is the one the challenger
+kept while the parts ran, ``rec-run.jsonl`` (`run_record`): 85's oprove under MODES=firewall (one session per staged
+statement) stages ``rows.json`` and the shared set every part is given before any session, each V* part's challenger
+logs every ``Hello`` it answers as an open of that part (``flock-circuit serve --rec-run``), and oprove closes it after
+the last session; a staged forgery's challenger logs into a record of its own (``rec-run-FORGERY.jsonl``), whose opens
+stand in for its part's (``rec-run-FORGERY.json``), while a forged inner, verified over the honest sessions, keeps
+theirs. Without one, the record is DIR's ``rec-run.json``. A composition with no record to read, or no ``REC-COMPOSE``
+line, is neither accepted nor refused, and fails the step. A run of some of V*'s
+parts (``LEVELS``) is not composed, and says so; nor is a run with neither file (MODES=dev or host runs WARM + RUNS
+sessions a part), whose parts are not shown to be one run. A run with a forced retry (85's RETRY, ``retried.txt``
+naming the statement given a second session) passes only when its composition is refused for that retry: ``part J: …
+a part is never retried`` at the statement's part J.
+
+    python3 verity/ml/flock/pod/lean_verdicts.py [--compose BIN] DIR PART...
     python3 verity/ml/flock/pod/lean_verdicts.py --cover KIND PART...   # exit 0 when a PART covers the forgery KIND
 """
 from __future__ import annotations
 
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -69,7 +91,7 @@ def verdicts(log: Path) -> list[dict]:
 
 
 def firewall_refusal(live: Path) -> str | None:
-    """The firewall's refusal among the prover's ``LIVE`` verdicts (one JSON per line), if one stopped at it."""
+    """The ZK server's refusal among the prover's ``LIVE`` verdicts (one JSON per line), if one stopped at it."""
     if not live.exists():
         return None
     for line in live.read_text(errors="replace").splitlines():
@@ -90,8 +112,8 @@ def no_proof(v: dict) -> bool:
 
 def check(d: Path, part: str, kind: str | None = None) -> tuple[bool, bool, bool, str]:
     """``part``'s (passes, refused, not exercised, line); a forgery's part (``kind``) passes when it has a VERDICT or the
-    firewall held it back, and is refused when it exited 1 with none accepting and Lean checked a session of it. A part
-    whose every session is missing its files, or that the firewall held back, is not exercised, never refused."""
+    ZK server held it back, and is refused when it exited 1 with none accepting and Lean checked a session of it. A part
+    whose every session is missing its files, or that the ZK server held back, is not exercised, never refused."""
     rc, vs = exit_status(d / f"time-{part}.txt"), verdicts(d / f"{part}.log")
     fw = None if vs or rc is not None else firewall_refusal(d / f"{part}.live")
     if fw:
@@ -117,7 +139,124 @@ def kind_of(part: str, honest: list[str]) -> str:
     return name[: -len(max(ends, key=len)) - 1] if ends else name
 
 
+def statements(d: Path) -> int:
+    """How many statements V* has: ``rec-statements.txt``'s ``RECVSTAR`` line (85's), 0 without one."""
+    f = d / "rec-statements.txt"
+    lines = [ln for ln in f.read_text(errors="replace").splitlines() if ln.startswith("RECVSTAR ")] if f.exists() else []
+    return len(json.loads(lines[0][9:])["statements"]) if lines else 0
+
+
+def part_of(d: Path, name: str) -> int | None:
+    """The V* part ``own-NAME.txt`` gives ``verify`` (``--rec-part J``), if any."""
+    a = (d / f"own-{name}.txt").read_text().split()
+    return int(a[a.index("--rec-part") + 1]) if "--rec-part" in a[:-1] else None
+
+
+def events_of(f: Path) -> list:
+    """A record's events, one JSON a line, in the order they were logged."""
+    out = []
+    for i, line in enumerate(f.read_text().splitlines()):
+        try:
+            out.append(json.loads(line))
+        except ValueError:
+            raise ValueError(f"{f.name}: its line {i + 1} is not JSON") from None
+    return out
+
+
+def run_record(d: Path, names: list[str]) -> Path:
+    """The run's record (``verity/rec-run/v1``) for the parts ``names``: the challenger's ``rec-run.jsonl`` event for
+    event (``rec-run.json``). A staged forgery among ``names`` (one with its own ``own-FORGERY.txt``) was proved on a
+    challenger of its own, which logged its opens in ``rec-run-FORGERY.jsonl``: they replace its part's, before the
+    close (``rec-run-FORGERY.json``). A forgery verified over its part's honest session (a forged inner) keeps that
+    part's opens. Without ``rec-run.jsonl``, DIR's ``rec-run.json`` as given."""
+    from verity_flock import rec_compose as RC
+
+    if not (d / "rec-run.jsonl").exists():
+        return d / "rec-run.json"
+    events = events_of(d / "rec-run.jsonl")
+    own = [p for p in names if p.startswith("forged-") and (d / f"own-{p}.txt").exists()]
+    for p in own:
+        j = part_of(d, p)
+        events = [e for e in events if not (isinstance(e, dict) and e.get("event") == "open" and e.get("rec_part") == j)]
+        at = next((i for i, e in enumerate(events) if isinstance(e, dict) and e.get("event") == "close"), len(events))
+        events[at:at] = events_of(d / f"rec-run-{p}.jsonl")
+    run = d / (f"rec-run-{own[0]}{f'+{len(own) - 1}' if len(own) > 1 else ''}.json" if own else "rec-run.json")
+    run.write_text(json.dumps({"events": events, "kind": RC.RUN_KIND}, sort_keys=True, separators=(",", ":")) + "\n")
+    return run
+
+
+def compose(binary: str, d: Path, logs: list[Path]) -> tuple[bool | None, str]:
+    """``binary rec-compose`` over ``logs`` at DIR's ``rec-inner.json``, ``rows.json``, the link table's ``--rec-links``
+    when DIR has ``rec-links.txt`` (85's REC_LINKS=1), and the run's record for those logs' parts (`run_record`).
+    (accepted, its line); accepted is None when there is no record to compose over, which is neither Lean's acceptance
+    nor its refusal."""
+    try:
+        run = run_record(d, [f.stem for f in logs])
+    except (OSError, ValueError) as e:
+        return None, f"no interactive-run record from rec-run.jsonl ({e})"
+    links = ["--rec-links", (d / "rec-links.txt").read_text().strip()] if (d / "rec-links.txt").is_file() else []
+    r = subprocess.run([binary, "rec-compose", "--rec-inner", str(d / "rec-inner.json"), "--rec-rows", str(d / "rows.json"),
+                        *links, "--rec-run", str(run), *map(str, logs)], capture_output=True, text=True, check=False)
+    line = next((ln for ln in r.stdout.splitlines() if ln.startswith("REC-COMPOSE ")), None)
+    if line is None:
+        return None, f"exit {r.returncode}: {r.stderr.strip()[-300:]!r}"
+    return r.returncode == 0, line
+
+
+def why_of(line: str) -> str:
+    """A ``REC-COMPOSE`` line's reason, "" when it has none."""
+    try:
+        return str(json.loads(line.removeprefix("REC-COMPOSE ")).get("why") or "")
+    except (ValueError, AttributeError):
+        return ""
+
+
+def composed(binary: str, d: Path, honest: list[str], groups: dict[str, list[str]],
+             results: dict[str, tuple[bool, bool, bool, str]]) -> bool:
+    """The V* parts composed by Lean (`compose`): the honest ones must compose, and each forgery, its every part put in
+    that part's place at once, must not. A forgery is one statement however many parts it has (a forged inner is every V*
+    part verified against it, and the parts that don't read its forged coin accept, as they should), so its parts are
+    never put in one at a time. A part Lean never checked (not exercised) is judged above, not here. True when a run of
+    only some of V*'s parts is not composed."""
+    vparts = [p for p in honest if (d / f"own-{p}.txt").exists()]
+    n = statements(d)
+    if len(vparts) < n or n == 0:
+        print(f"lean compose: {len(vparts)} of V*'s {n} parts run, so the recursive statement is not composed")
+        return True
+    if not (d / "rec-run.json").exists() and not (d / "rec-run.jsonl").exists():
+        print("lean compose: no interactive-run record (rec-run.json, or a firewalled oprove's rec-run.jsonl), so the "
+              "recursive statement is not composed: its parts are not shown to be one run (C10 OneRun)")
+        return True
+    accepted, line = compose(binary, d, [d / f"{p}.log" for p in vparts])
+    retried = (d / "retried.txt").read_text().strip() if (d / "retried.txt").exists() else ""
+    if retried:
+        j = part_of(d, retried) if (d / f"own-{retried}.txt").exists() else None
+        why = why_of(line)
+        ok = accepted is False and j is not None and why.startswith(f"part {j}: ") and "a part is never retried" in why
+        print(f"lean compose (RETRY={retried}, part {j}: refused as retried, a negative control): {line}"
+              f"{'' if ok else '  <- FAILS'}")
+    else:
+        ok = accepted is True
+        print(f"lean compose: {line}{'' if ok else '  <- FAILS'}")
+    for k, ps in groups.items():
+        put = {p.removeprefix(f"forged-{k}-"): p for p in ps if not results[p][2]}
+        put = {part: p for part, p in put.items() if part in vparts}
+        if not put:
+            continue
+        accepted, fline = compose(binary, d, [d / f"{put.get(q, q)}.log" for q in vparts])
+        name = next(iter(put.values())) if len(put) == 1 else f"forged-{k} ({len(put)} parts)"
+        print(f"lean compose {name}: {fline}{'' if accepted is False else '  <- FAILS'}")
+        ok = ok and accepted is False
+    return ok
+
+
 def main(argv: list[str]) -> int:
+    binary = None
+    if argv[:1] == ["--compose"]:
+        if len(argv) < 2:
+            print("lean_verdicts.py --compose BIN DIR PART...", file=sys.stderr)
+            return 2
+        binary, argv = argv[1], argv[2:]
     if not argv:
         print(__doc__.strip().splitlines()[-1].strip(), file=sys.stderr)
         return 2
@@ -164,6 +303,8 @@ def main(argv: list[str]) -> int:
     if unexercised:
         count += f", {len(unexercised)} not exercised (no proof produced)"
     ok = bool(parts) and all(results[p][0] for p in honest) and all(refused.values())
+    if binary:
+        ok = composed(binary, d, honest, groups, results) and ok
     print(count + ("" if ok else ": the step fails" if parts else ": no part to check, the step fails"))
     return 0 if ok else 1
 

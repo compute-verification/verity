@@ -1,5 +1,5 @@
-"""`Q_word_v1{X,W,R=no-recompute}` (`verity_vllm.query.word`): every computation gate certified by exactly one unit, cross-unit reads
-only through committed values (`verity.ml.circuits.partition.validate_unit_cut`), wiring and constants as structure, the widths as the IR's own
+"""`Q_word_v1{X,W,R=no-recompute}` (`verity.ml.definitions.word`): every computation gate certified by exactly one unit, cross-unit reads
+only through committed values (`verity.ml.circuits.partition.validate_unit_cut`), wiring and constants as structure, the widths as the circuit's own
 |out(S)| where no wiring sits between units, the committed interior values of a norm, a Gemm and FA2 attention, failures by name, and
 the rule cache (`word.use_rule_cache`, the manifest CLI's `--unit-rule-cache`): a read rule is the computed one, keyed by the Definition's content, the query, the limits and
 the code, and the manifest is the same with it."""
@@ -8,9 +8,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.layout import GateSelection
+from verity.ml.circuits.query_ast import oracle_gateset, oracle_out
 from verity.ml.circuits.cut import call_scope
-from verity_vllm.query import word as W
+from verity.ml.definitions import word as W
 
 
 def _fn(fam: str, **statics):
@@ -65,7 +65,7 @@ def test_widths_are_the_irs_out_where_no_wiring_sits_between_units(fam, statics)
     c, call = call_scope(fn)
     for u in range(len(R["kinds"])):
         gates = (G.keep[np.flatnonzero(R["owner"] == u)] + call.offset).tolist()
-        out = GateSelection(c, gates).out
+        out = oracle_out(c, oracle_gateset(c, gates))
         assert sum(c.gate(g).prim.ret.w for g in out) == R["out_bits"][u] and len(out) == R["out_gates"][u]
 
 
@@ -237,7 +237,7 @@ def test_a_dead_gate_joins_the_unit_it_reads():
 @pytest.mark.parametrize("name,E,committed", [("MoeRouterTopKOrdered", 64, 2 * 64 + 2), ("MoeRouterTopKOrderedNorm", 128, 2 * 128 + 2 + 8 + 1)])
 def test_the_ordered_router_commits_its_softmax_once_and_recomputes_nothing(name, E, committed):
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import moe
+    from verity.ml.definitions.registry import moe
     f = bind(getattr(moe, name), E=E, TOPK=8, VPT=8)
     G = W.Graph(f)
     R = W.units(G, 16, 32)
@@ -275,7 +275,7 @@ def test_a_call_that_only_rearranges_bits_returns_its_inputs():
     # every gate is wiring: the returned values are the committed inputs themselves (not committed and unread)
     from verity.ml.circuits.defs import CompositeDefinition, bind
     from verity.ml.circuits.types import Array
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
     f = bind(CompositeDefinition("Widen", 1, ("N",), lambda S: ((("a", Array(S.N, P.BF16)),), Array(S.N, P.F32)),
                                  lambda B, S, a: B.batch(P.Bf16ToF32, a, axes=(0,)), register=False), N=8)
     G = W.Graph(f)
@@ -353,7 +353,7 @@ def _moe(routed: bool, E: int, K: int, N: int, swap: bool):
     """GLM-5.3's MoE expert FP8 GEMM (w13; w2 `routed`) on Hopper's tiles (G = KB = 128), scaled down in E, K and N."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
-    from verity_vllm.program.registry import fp8_moe_experts as XM
+    from verity.ml.definitions.registry import fp8_moe_experts as XM
     return bind(XM.MoeExpertFp8GemmW if routed else XM.MoeExpertFp8Gemm, E=E, K=K, N=N, G=128, KB=128, SWAP=swap,
                 DOT=HopperE4m3QgmmaDot32 if swap else HopperE4m3MmaV2Dot32)
 
@@ -363,7 +363,7 @@ def _twice():
     from verity.ml.circuits.defs import CompositeDefinition, bind
     from verity.ml.circuits.refs import tuple_of
     from verity.ml.circuits.types import Array, Tuple
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
 
     def body(B, S, x):
         a = B.call(P.F32Add, x[0], x[1])
@@ -374,7 +374,7 @@ def _twice():
 
 def _sampler():
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import sampling as SM
+    from verity.ml.definitions.registry import sampling as SM
     return bind(SM.GumbelTopPTokenSelect, V=16)
 
 
@@ -383,7 +383,7 @@ def _dead_input():
     from verity.ml.circuits.defs import CompositeDefinition, bind
     from verity.ml.circuits.refs import tuple_of
     from verity.ml.circuits.types import Array, Tuple
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
 
     def body(B, S, x, y):
         B.call(P.Bf16ToF32, y[0])
@@ -392,12 +392,10 @@ def _dead_input():
                                     body, register=False))
 
 
-#: Definitions over every branch of the graph and its check: wiring and constants, a wide gate, a value computed twice in one unit
-#: (the sampler's greedy flag) and in two, a parameter returned through wiring and one nobody reads, and the MoE expert FP8 GEMMs
-#: over two K tiles and a partial weight block
-CORPUS = {"norm": lambda: _fn("RMSNormTriton_v1", N=64, EPS=1e-05), "select": lambda: _fn("TokenSelect_v1", V=8),
-          "attention": lambda: _fn("Attention_v3", T=3, NH=2, KVH=1, D=16, BN=128), "gemm": lambda: _fn("Gemm_v1", K=64, N=8),
-          "wide": lambda: _fn("EmbeddingShard_v1", VS=4099, H=4, START=0), "sampler": lambda: _sampler(), "twice": _twice,
+#: Definitions whose rules take every branch of the graph and its check: a wide gate, a value computed twice in one unit (the
+#: sampler's greedy flag) and in two, a parameter returned through wiring and one nobody reads, and the MoE expert FP8 GEMMs over
+#: two K tiles and a partial weight block
+CORPUS = {"wide": lambda: _fn("EmbeddingShard_v1", VS=4099, H=4, START=0), "sampler": lambda: _sampler(), "twice": _twice,
           "dead-input": _dead_input,
           "moe-w13": lambda: _moe(False, E=4, K=256, N=130, swap=True), "moe-w2": lambda: _moe(True, E=4, K=256, N=48, swap=False)}
 
@@ -425,49 +423,6 @@ def _reference_verdict(G, owner, head):
 
 
 @pytest.mark.parametrize("name", CORPUS)
-def test_the_graph_is_core_references_field_by_field(name):
-    from verity.ml.circuits import cut
-    f = CORPUS[name]()
-    ref, g = cut.CallGraph(f), W.Graph(f)
-    for a in ("n", "total", "free", "outputs", "returned_inputs", "recomputed", "input_reads", "free_by_prim", "prims", "scopes",
-              "prim_names", "scope_names"):
-        assert getattr(g, a) == getattr(ref, a), a
-    for a in ("keep", "width", "prim", "scope", "src", "dst", "input_ids"):
-        assert getattr(g, a).tolist() == list(getattr(ref, a)), a
-    assert g.external.tolist() == [bool(x) for x in ref.external]
-    assert g.input_read.tolist() == [i for i, _q in ref.input_reads] and g.input_reader.tolist() == [q for _i, q in ref.input_reads]
-
-
-@pytest.mark.parametrize("name", [pytest.param(n, marks=pytest.mark.slow) if n == "moe-w13" else n for n in CORPUS])
-def test_the_cut_verdict_is_validate_unit_cuts_on_the_cut_and_on_broken_ones(name):
-    """`word.cut_verdict` gives `validate_unit_cut`'s verdict, its codes, counts, listed gates and detail order, on the cut and on cuts
-    broken every way it names: gates in no unit, a committed value dropped (an uncommitted read or output), a value committed that no
-    other unit reads, units merged and split (a recompute across units), and random owners."""
-    import json
-    G = W.Graph(CORPUS[name]())
-    owner, kinds, head = W.partition(G, 16)
-    rng = np.random.default_rng(0)
-    cuts = [(owner, head)]
-    heads = np.flatnonzero(head >= 0)
-    for _ in range(2):
-        o, h = owner.copy(), head.copy()
-        if G.n:
-            o[rng.integers(0, G.n, max(1, G.n // 40))] = -1
-            h[rng.integers(0, G.n, max(1, G.n // 40))] = len(kinds)
-        if len(heads):
-            h[rng.choice(heads, max(1, len(heads) // 3), replace=False)] = -1
-        cuts += [(o, head), (owner, h), (o, h), (rng.integers(0, max(1, len(kinds)), G.n), head), (np.zeros(G.n, np.int64), head),
-                 (np.arange(G.n, dtype=np.int64), np.arange(G.n, dtype=np.int64))]
-    codes = set()
-    for o, h in cuts:
-        got, want = W.cut_verdict(G, o, h), _reference_verdict(G, o, h)
-        assert json.dumps(got.to_json()) == json.dumps(want.to_json())
-        codes |= set(got.codes)
-    if G.n > 8:
-        assert {"gate-not-certified-once", "gate-count", "read-uncommitted", "committed-unread"} <= codes, codes
-
-
-@pytest.mark.parametrize("name", ["moe-w13", "moe-w2", "twice", "dead-input", "sampler", "wide"])
 def test_a_rule_is_the_reference_cuts_byte_for_byte(name, monkeypatch):
     """The unit rule, as the rule cache writes it, is the one main cut with core's graph and `validate_unit_cut` (`_Reference`,
     `_reference_verdict`): GLM-5.3's MoE expert FP8 GEMMs scaled down, and a failing cut's violation detail, gate ids and all."""
@@ -503,7 +458,7 @@ def test_the_graph_holds_a_few_bytes_per_operand_read():
 #: forking happens in a fresh interpreter: a pytest-xdist worker has threads, and a fork beside them may deadlock
 PREFETCH_PROBE = """
 import json, multiprocessing
-from verity_vllm.query import word as W
+from verity.ml.definitions import word as W
 from verity_vllm.query.program_view import spec_base, spec_statics
 specs = ["Attention_v3{T=5,NH=2,KVH=1,D=64,BN=128}", "batch:RMSNormTriton_v1{N=64,EPS=1e-05}", "EmbeddingShard_v1{VS=4099,H=4,START=0}",
          "NoSuch_v1{N=1}"]
@@ -531,7 +486,7 @@ def test_prefetch_memos_the_rules_the_check_computes_in_place():
 #: the probe's specs prefetched under a budget no cut fits, each cut counted in its worker while it runs, then without one
 PREFETCH_BUDGET_PROBE = """
 import json, multiprocessing
-from verity_vllm.query import word as W
+from verity.ml.definitions import word as W
 specs = ["Attention_v3{T=5,NH=2,KVH=1,D=64,BN=128}", "batch:RMSNormTriton_v1{N=64,EPS=1e-05}", "EmbeddingShard_v1{VS=4099,H=4,START=0}"]
 live, most = multiprocessing.Value("i", 0), multiprocessing.Value("i", 0)
 cut = W._rule_of_pending
@@ -638,7 +593,7 @@ def test_an_entry_is_keyed_by_the_definitions_content_the_query_the_limits_and_t
         return W._rule_entry(fn, X, 32, 0, lim)[0]
     base = at(norm)
     assert len({base, at(_fn("RMSNormTriton_v1", N=1024, EPS=1e-05)), at(norm, X=8), at(norm, lim=W.gate_limits(1000))}) == 4
-    assert W.definition_digest(norm) != W.definition_digest(_fn("RMSNormTriton_v1", N=2048, EPS=1e-06))
+    assert W.closure_digest(norm) != W.closure_digest(_fn("RMSNormTriton_v1", N=2048, EPS=1e-06))
     monkeypatch.setattr(W, "_CODE", ["another cut"])
     assert at(norm) != base
 

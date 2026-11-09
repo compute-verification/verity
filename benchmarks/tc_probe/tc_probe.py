@@ -1,9 +1,9 @@
 """Hardware probe for one tensor-core instruction: one ``mma.sync`` (or ``wgmma``) per tile, arbitrary accumulators, captures in
-the golden-record format, compared bit for bit against the pinned ``verity.ml.circuits.silicon.silicon`` model of that instruction.
+the golden-record format, compared bit for bit against the pinned ``verity.ml.circuits.silicon.models`` model of that instruction.
 
-Provenance: ported for lane WP1 from veritor ``gpu/tensor-core-semantics/`` (``mma_tiles.cu``, ``tcs_gpu.py``,
+Provenance: ported from veritor ``gpu/tensor-core-semantics/`` (``mma_tiles.cu``, ``tcs_gpu.py``,
 ``validate_tiles.py``: the BF16 kernel, encodings, finite-sweep families, per-element records, multiprocess model comparison,
-golden sampling) and extended for lane tc-probe-fp8 with the E4M3 kernel half and encodings of the same files, the FP8-specific
+golden sampling) and extended with the E4M3 kernel half and encodings of the same files, the FP8-specific
 families (the Ada zero-product accumulator truncation: discrepancy-log entry D10 and ``verity.ml.circuits.silicon.models.ADA_E4M3_M16N8K32``;
 Hawkeye's adder-width probe of ``characterize.py``; the special-value classes of ``gpu/tc-fp8/campaign.py``) and the Hopper
 ``wgmma`` path with the SASS confirmation of ``gpu/tc-fp8/wgmma_fp8_probe.py`` (exactly one MMA-class instruction per tile
@@ -37,7 +37,7 @@ second descriptor, the SS form GEMM mainloops issue) and ``tcgen05_tiles.cu`` (`
 and B through descriptors, the accumulator in tensor memory, M = 128; ``--no-input-d`` runs its first MMA with enable_input_d = 0,
 the accumulator not read, over zero accumulators, as a GEMM mainloop's first k step).
 
-SASS (nvcc 12.4, compile check r20260922-180506-a006 on vy-sp1): every tile kernel holds exactly one MMA-class instruction --
+SASS (nvcc 12.4): every tile kernel holds exactly one MMA-class instruction --
 ``HMMA.16816.F32.BF16`` (sm_80/sm_89/sm_90a bf16), ``QMMA.16832.F32.E4M3.E4M3`` / ``QMMA.16832.F32.E5M2.E5M2`` (sm_89 FP8),
 ``QGMMA.64x8x32.F32.E4M3.E4M3`` / ``QGMMA.64x8x32.F32.E5M2.E5M2`` (sm_90a wgmma) -- EXCEPT ``mma.sync.m16n8k32.{e4m3,e5m2}`` on
 sm_90a, which ptxas lowers to ``F2FP.F16.<fmt>.UNPACK_B`` conversions, two ``HMMA.16816.F32`` (the FP16 tensor-core instruction,
@@ -61,7 +61,7 @@ finite-sweep families and compares every output element with the model(s); ``--f
 
     randn_zero_acc (n), randn_random_acc (n/4), uniform_bits (n/4), subnormal (n/8), cancellation (n/8), mixed_magnitude (n/8),
     near_overflow (n/16), signed_zero (256), tiny_acc_zero_products (512)               -- every format, as in the Ada validation
-    zero_acc_tiny_cancellation (max(256, n/16))                                          -- BF16 only (WP1: the zero's exponent)
+    zero_acc_tiny_cancellation (max(256, n/16))                                          -- BF16 only (the zero's exponent)
     zero_products_nonzero_acc (512): all products zero, random finite accumulators        -- FP8: the accumulator truncation quirk
     acc_only_lsb_walk (64 bases x 1024 low-10-bit patterns): zero products               -- FP8: which accumulator bits survive
     specials (48): NaN (E4M3) / inf and NaN (E5M2) operand and accumulator classes       -- FP8: hardware words only, never asserted
@@ -70,14 +70,13 @@ finite-sweep families and compares every output element with the model(s); ``--f
 
 Seeds are fixed (``--seed``, default 20260902) and recorded.  Outputs under ``--out``: ``probe_results.json`` (identity, layout
 check, per-family counts per model, first mismatches with A/B/C/D words, family summaries, SASS counts), ``capture_sample.json``
-(golden-format records sampled per family), ``tiles_<family>.npz`` (the full capture: A, Bt, C, D per tile) and, under
-``research run``, ``result.json`` with ``kind: tc-evidence/v1`` (``workload_fingerprint`` = instruction, arch, sku, driver, nvcc,
+(golden-format records sampled per family), ``tiles_<family>.npz`` (the full capture: A, Bt, C, D per tile) and, in a recorded
+run (``RESEARCH_RUN_ID`` set), ``result.json`` with ``kind: tc-evidence/v1`` (``workload_fingerprint`` = instruction, arch, sku, driver, nvcc,
 seed, n, families, models; ``tc_evidence`` = per-family counts, ``model_agrees`` per model, first mismatches; validation passed
 iff every mismatch count against a pinned model and every replay is zero).  ``--compile-only`` builds the instruction's kernel
 for its arch (sm_90a compiles wherever the toolkit is, whatever the GPU), runs ``--sass-check`` (cuobjdump: MMA-class
 instructions per tile kernel, compared with the table's ``sass_mma``; the tile kernel's SASS is kept as ``sass_<kernel>_<arch>.txt``)
-and writes ``result.json`` with ``kind: tc-compile-check/v1`` without touching the device.  The BF16 path is unchanged from WP1:
-the same families, the same random draws, the same words.
+and writes ``result.json`` with ``kind: tc-compile-check/v1`` without touching the device.
 
 ``--canary`` (``canary.py``) runs the instruction's fixed canary tile set -- the first tiles of every family under the canary seed
 plus every regression tile of every resolved discrepancy-log entry naming the instruction -- in under a minute, exits 1 on any
@@ -104,11 +103,12 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
 from verity.ml.circuits.silicon import models as TCM
-from verity.ml.circuits.silicon import silicon as S
+from verity.ml.circuits.silicon import models as S, term as TM
 from verity.ml.circuits.silicon import total as T
 
 HERE = Path(__file__).resolve().parent
@@ -230,7 +230,7 @@ class Format:
 
     def random_finite_bits(self, rng, shape, exp_lo=None, exp_hi=None) -> np.ndarray:
         """Uniformly random sign, exponent field in [exp_lo, exp_hi] (default 1 .. finite max) and mantissa; NaN codes repaired
-        to the largest finite mantissa (E4M3) -- the draws are the ones of the WP1 BF16 probe, unchanged."""
+        to the largest finite mantissa (E4M3) -- the BF16 probe's samples."""
 
         n = int(np.prod(shape))
         lo, hi = (1 if exp_lo is None else exp_lo), (self.finite_exp_max if exp_hi is None else exp_hi)
@@ -265,7 +265,7 @@ def _fp8_positive_table(fmt: Format) -> tuple[np.ndarray, np.ndarray]:
 # --- the instruction table -----------------------------------------------------------------------------------------------------------
 
 
-def _e5m2_product(a: int, b: int) -> S.Term:
+def _e5m2_product(a: int, b: int) -> TM.Term:
     """HYPOTHESIS: exact product of two E5M2 bytes as a 25-bit-scaled :class:`Term`, formed like :func:`silicon.e4m3_product`
     (3x3-bit significands -> 6 bits, shifted by 19; subnormals keep their unnormalised significand at exponent -14).  Exponent
     field 31 (infinities and NaN) is outside the finite model and raises.  The canonical product is silicon-p0's to add."""
@@ -277,27 +277,27 @@ def _e5m2_product(a: int, b: int) -> S.Term:
     sb = (b & 0x3) | (0x4 if eb else 0)
     magnitude = (sa * sb) << 19
     if magnitude == 0:
-        return S.ZERO
-    return S.Term(((a ^ b) >> 7) & 1 == 1, (ea or 1) + (eb or 1) - 30, magnitude)
+        return TM.ZERO
+    return TM.Term(((a ^ b) >> 7) & 1 == 1, (ea or 1) + (eb or 1) - 30, magnitude)
 
 
-PRODUCTS: dict[str, Callable[[int, int], S.Term]] = {"e4m3": S.e4m3_product, "e5m2": _e5m2_product}
+PRODUCTS: dict[str, Callable[[int, int], TM.Term]] = {"e4m3": TM.e4m3_product, "e5m2": _e5m2_product}
 
 
-def tc_dot_with_product(pipeline: S.Pipeline, product: Callable[[int, int], S.Term], acc_bits: int, a, b) -> int:
+def tc_dot_with_product(pipeline: S.GroupSum, product: Callable[[int, int], TM.Term], acc_bits: int, a, b) -> int:
     """:func:`silicon.tc_dot` with the products formed by ``product`` instead of the pipeline's own (hypothesis models)."""
 
     if len(a) != pipeline.k or len(b) != pipeline.k:
         raise S.InvalidArtifact(f"{pipeline.name} takes {pipeline.k} operand pairs")
-    acc = S.fp32_term(acc_bits)
+    acc = TM.fp32_term(acc_bits)
     start = 0
     for size in pipeline.groups:
         terms = [acc, *(product(a[i], b[i]) for i in range(start, start + size))]
         acc = S.group_sum(terms, width=pipeline.width, zero_exponent=pipeline.zero_exponent)
-        if acc.magnitude and acc.exponent > S.FP32_MAX_EXPONENT:
-            return S.pack_fp32(acc)
+        if acc.magnitude and acc.exponent > TM.FP32_MAX_EXPONENT:
+            return TM.pack_fp32(acc)
         start += size
-    return S.pack_fp32(acc)
+    return TM.pack_fp32(acc)
 
 
 def fp32_add_bits(x: int, y: int) -> int:
@@ -311,7 +311,7 @@ def fp32_add_bits(x: int, y: int) -> int:
 SM90_FP8_MMA_LOWERING = "2xHMMA.16816.F32+FADD"
 # ptxas (12.4, sm_90a) lowers mma.sync.m16n8k32.{e4m3,e5m2} to: F2FP.F16.<fmt>.UNPACK_B of every operand word (low half and high
 # half separately), HMMA.16816.F32 over the low halves with a zero accumulator, HMMA.16816.F32 over the high halves with a zero
-# accumulator, FADD of the two partial words, FADD with the accumulator (compile check r20260922-181825-a926, sass_*.txt).  The
+# accumulator, FADD of the two partial words, FADD with the accumulator (sass_*.txt).  The
 # low half of an operand word holds k = 4t, 4t+1 (and 16+4t, 16+4t+1), the high half k = 4t+2, 4t+3 (and 16+..): the partition
 # below.  The one open assumption is that HMMA.16816.F32 with FP16 inputs has Hopper's BF16 K=16 pipeline (groups (16,), width
 # 26); the FP8 values and products are exact in FP16, so the terms are the same numbers.
@@ -319,7 +319,7 @@ _SM90_LOW_K = [k for k in range(32) if k % 4 in (0, 1)]
 _SM90_HIGH_K = [k for k in range(32) if k % 4 in (2, 3)]
 
 
-def sm90_fp8_mma_lowered(pipeline16: S.Pipeline, product: Callable[[int, int], S.Term], acc_bits: int, a, b) -> int:
+def sm90_fp8_mma_lowered(pipeline16: S.GroupSum, product: Callable[[int, int], TM.Term], acc_bits: int, a, b) -> int:
     if len(a) != 32 or len(b) != 32:
         raise S.InvalidArtifact("the sm_90a FP8 mma.sync lowering takes 32 operand pairs")
     low = tc_dot_with_product(pipeline16, product, 0, [a[k] for k in _SM90_LOW_K], [b[k] for k in _SM90_LOW_K])
@@ -335,7 +335,7 @@ class Model:
     (:func:`verity.ml.circuits.silicon.total.tc_dot_total`: NaN, infinities and saturation included), so the ``specials`` family is asserted
     too.  ``declared`` models fail validation on any mismatch; the others are HYPOTHESES whose agreement counts are reported."""
 
-    pipeline: S.Pipeline
+    pipeline: S.GroupSum
     product: str | None = None
     declared: bool = True
     lowering: str | None = None
@@ -437,11 +437,11 @@ INSTRUCTIONS: dict[str, Instruction] = {
         _mma("sm120.mma.m16n8k32.e5m2", "sm_120a", E5M2, (Model(TCM.BLACKWELL_SM120_E5M2_M16N8K32), _ADA_E5M2, _HOPPER_HMMA_X2_E5M2)),
         _wgmma("sm90.wgmma.m64n8k32.e4m3", E4M3, (Model(S.HOPPER_E4M3_K32),)),
         _wgmma("sm90.wgmma.m64n8k32.e5m2", E5M2, (_HOPPER_E5M2,)),
-        # lane wgmma-bf16: the BF16 wgmma vLLM's H100 GEMMs issue, against its total semantics (specials asserted); the Ampere
+        # The BF16 wgmma vLLM's H100 GEMMs issue, against its total semantics (specials asserted); the Ampere
         # pipeline is the control that the tiles distinguish one group of 16 / 26 bits from two groups of 8 / 25 bits.
         _wgmma("sm90.wgmma.m64n8k16.bf16", BF16, (Model(TCM.HOPPER_BF16_WGMMA_K16, total=True), Model(S.AMPERE_BF16_M16N8K16, declared=False, total=True))),
         # Blackwell datacenter (B200): the mma.sync FA2 runs (JIT from its sm_80 PTX) and the tcgen05 k16 step cuBLAS's GEMMs issue, each
-        # against Hopper's k16 pipeline (r20261018-234914-864e: 0 mismatches) with Ampere's as the control that the families tell them apart.
+        # against Hopper's k16 pipeline (which they match on every word) with Ampere's as the control that the families tell them apart.
         _mma("sm100.mma.m16n8k16.bf16", "sm_100a", BF16, (Model(S.HOPPER_BF16_M16N8K16), Model(S.AMPERE_BF16_M16N8K16, declared=False))),
         _tcgen05("sm100.tcgen05.mma.bf16", (Model(TCM.HOPPER_BF16_WGMMA_K16, total=True),
                                             Model(S.AMPERE_BF16_M16N8K16, declared=False, total=True))),
@@ -626,10 +626,12 @@ def host_identity() -> dict:
 
 def families(rng, n_random, fmt: Format, M: int, K: int):
     """Yield (name, A (n,M,K), Bt (n,8,K), C (n,M,8), meta) -- the nine families of the Ada validation (unchanged for BF16: the
-    same draws in the same order), the WP1 zero-exponent family (BF16) and the FP8-specific families."""
+    same samples in the same order), the zero-exponent family (BF16) and the FP8-specific families."""
 
-    cast = lambda x: fmt.from_f32(x.astype(np.float32))
-    zeros_acc = lambda n: np.zeros((n, M, N), np.uint32)
+    def cast(x):
+        return fmt.from_f32(x.astype(np.float32))
+    def zeros_acc(n):
+        return np.zeros((n, M, N), np.uint32)
     fp8 = fmt.bits == 8
 
     # 1. Hawkeye-style: standard normal operands, zero accumulator.
@@ -713,7 +715,7 @@ def families(rng, n_random, fmt: Format, M: int, K: int):
     yield "tiny_acc_zero_products", np.zeros((n, M, K), fmt.dtype), np.zeros((n, N, K), fmt.dtype), acc, None
 
     if fmt is BF16:
-        # 10. (WP1 addition) +-0 accumulators with cancelling products below 2^-145: BF16 subnormal a (30% of lanes), b in
+        # 10. +-0 accumulators with cancelling products below 2^-145: BF16 subnormal a (30% of lanes), b in
         # [2^-27, 2^-5].  Decides whether a zero accumulator's exponent enters the alignment maximum (silicon and the simulator's
         # E_ZERO zero: no; a zero carried at -126/-127 would truncate these sums differently -- see the log).
         n = max(256, n_random // 16)
@@ -724,7 +726,7 @@ def families(rng, n_random, fmt: Format, M: int, K: int):
         yield "zero_acc_tiny_cancellation", a, b, acc, None
 
     # 11-14: the accumulator / adder families of tc-probe-fp8, for every format (pin-bf16 extended them to BF16 with the
-    # format's own parameters; the FP8 draws are the same, in the same order, as before).
+    # format's own parameters; the FP8 samples are the same, in the same order, as before).
     yield from probe_families(rng, fmt, M, K)
 
     if fp8:
@@ -736,7 +738,8 @@ def probe_families(rng, fmt: Format, M: int, K: int):
     classes and Hawkeye's adder-width probe.  The accumulator families are format-independent by construction (products are
     zero); the specials table and the adder-width exponents come from the format (``SPECIAL_OPERANDS``, ``adder_width_parameters``)."""
 
-    zero_ops = lambda n: (np.zeros((n, M, K), fmt.dtype), np.zeros((n, N, K), fmt.dtype))
+    def zero_ops(n):
+        return (np.zeros((n, M, K), fmt.dtype), np.zeros((n, N, K), fmt.dtype))
 
     # 11. all products zero, random finite accumulators over the whole range: the Ada quirk is that the accumulator comes back
     # truncated to the adder's 14 bits even though nothing was added (0x3f800001 -> 0x3f800000).  Half of the tiles have zero
@@ -844,7 +847,7 @@ def adder_width_parameters(fmt: Format) -> tuple[tuple[int, ...], list[int]]:
     -30..-3 to bracket both boundaries with margin; pa in {-55, 0, 32, 63} keeps every 2^pe, 2^(pe+ratio) a finite FP32 (pe <= 126,
     pe + ratio >= -140, i.e. down into the subnormals, where a survived residual comes back as an exact subnormal word)."""
 
-    lo, hi = fmt.min_pow2_exp, fmt.max_pow2_exp
+    hi = fmt.max_pow2_exp
     if fmt.bits == 8:
         return (0, (hi + 1) // 2, hi), list(range(-26, -4))
     return (-55, 0, 32, 63), list(range(-30, -2))
@@ -1178,7 +1181,7 @@ def _init_floors(desc, floors):
 def floor_alternatives(pool, model: Model, A, Bt, C, D, declared_words, procs: int, floors: list[int]) -> dict:
     """D15(b): the declared pipeline evaluated with ``zero_exponent`` set to every floor in ``floors`` on the floor-probe tiles;
     per floor, how many words differ from the pinned floor's and from the hardware's.  All zeros = no floor in the range is
-    observable on these tiles (the structural reason is in the lane's D15 entry: with any nonzero term the group's maximum
+    observable on these tiles (the structural reason is in discrepancy-log entry D15: with any nonzero term the group's maximum
     exponent is at least -126, the FP32 subnormal grid, above every floor here; with no nonzero term the sum is zero regardless)."""
 
     desc = (model.pipeline.name, model.product, model.declared, model.lowering)
@@ -1236,8 +1239,9 @@ def layout_check(probe: Probe, ins: Instruction) -> dict:
 
 
 def special_all_finite_records(path: Path) -> list[dict]:
-    """The all-finite records (finite acc, finite a and b words) of a ``tc-total-2026-09-07/<device>/mma_special.reduced.json.gz``
-    file, in the golden-record shape: the ``cases`` list and the ``pos`` list (one measured word each)."""
+    """The all-finite records (finite acc, finite a and b words) of a device's ``mma_special.reduced.json.gz`` from the
+    A100 and RTX 4090 special-value campaign, in the golden-record shape: the ``cases`` list and the ``pos`` list (one
+    measured word each)."""
 
     import gzip
 
@@ -1260,8 +1264,8 @@ def special_all_finite_records(path: Path) -> list[dict]:
 
 
 def hopper_capture_records(path: Path) -> list[dict]:
-    """Every record of veritor's H100 BF16 wgmma capture (``tc-hopper-2026-09-07/special.reduced.json.gz``: 14 families, the
-    non-finite ones included), in the golden-record shape with ``family`` set."""
+    """Every record of veritor's H100 BF16 wgmma capture (its ``special.reduced.json.gz``: 14 families, the non-finite
+    ones included), in the golden-record shape with ``family`` set."""
 
     import gzip
 
@@ -1483,7 +1487,7 @@ def sweep(probe: Probe, ins: Instruction, args, out: Path, identity: dict) -> tu
                 C = np.zeros_like(C)
             n_sample = min(args.golden_per_family, A.shape[0] * M * N)
             if only is not None and name not in only:
-                rng.choice(A.shape[0] * M * N, size=n_sample, replace=False)  # the skipped family's sampling draw: --families leaves the others' tiles unchanged
+                rng.choice(A.shape[0] * M * N, size=n_sample, replace=False)  # the skipped family's sampling sample: --families leaves the others' tiles unchanged
                 continue
             t0 = time.time()
             D = probe.tiles(A, Bt, C)
@@ -1507,7 +1511,7 @@ def sweep(probe: Probe, ins: Instruction, args, out: Path, identity: dict) -> tu
                 mism = (model != D) | err
                 any_mism |= mism
                 fam["models"][mname] = {"mismatches": int(mism.sum()), "domain_errors": int(err.sum())}
-            # compatibility with the WP1 field names: the first (declared) model's count
+            # the legacy bench-result/v1 field names (trust.py reads them): the first (declared) model's count
             fam["mismatches_vs_model"] = fam["models"][model_names[0]]["mismatches"]
             fam["model_domain_errors"] = fam["models"][model_names[0]]["domain_errors"]
             for t, i, j in list(zip(*np.nonzero(any_mism)))[:FIRST_MISMATCHES]:
@@ -1689,7 +1693,8 @@ def compile_only(ids: list[str], out: Path, args) -> int:
         print(id_, json.dumps({k: v for k, v in entry.items() if k not in ("instruction", "sass")}),
               json.dumps({k: v for k, v in entry.get("sass", {}).items() if k in ("ok", "kernel", "tile_kernel_mma_count", "error")}), flush=True)
     (out / "probe_results.json").write_text(json.dumps(results, indent=1))
-    run_id = os.environ.get("RESEARCH_RUN_ID")
+    from verity_config.settings import SHARED  # here, not at the top: verity/ml/circuits/ops' tests import this module's tiles
+    run_id = SHARED.RESEARCH_RUN_ID
     if run_id:
         checks = {id_: {"compiled": e["compiled"], "sass_ok": e.get("sass", {}).get("ok", False), "mma_count": e.get("sass", {}).get("tile_kernel_mma_count"),
                         "expected_mma_count": e.get("sass", {}).get("expected_mma_count"), "single_instruction": e.get("sass", {}).get("single_instruction"),
@@ -1795,7 +1800,7 @@ def main() -> int:
             ap.error("--no-input-d is a tcgen05 mode (sm100.tcgen05.mma.bf16)")
         probe.set_enable_input_d(False)
         identity["enable_input_d"] = 0
-    results["pipeline"] = ins.models[0].pipeline.name  # WP1 field
+    results["pipeline"] = ins.models[0].pipeline.name  # the legacy field trust.py reads
     print("device", json.dumps(identity), flush=True)
     print("layout_check", json.dumps(results["layout_check"]), flush=True)
 
@@ -1880,7 +1885,8 @@ def main() -> int:
     results["hypothesis_findings"] = findings
     (out / "probe_results.json").write_text(json.dumps(results, indent=1))
 
-    run_id = os.environ.get("RESEARCH_RUN_ID")
+    from verity_config.settings import SHARED  # here, not at the top: verity/ml/circuits/ops' tests import this module's tiles
+    run_id = SHARED.RESEARCH_RUN_ID
     if run_id:
         import canary as CANARY  # the label contract of tc-evidence/v1 lives there (no-op if --canary imported it already)
 
@@ -2005,7 +2011,7 @@ def main() -> int:
         })
         if evidence.get("labels"):
             print("labels (apply to the result artifact once `research run` has stored it):", flush=True)
-            for cmd in CANARY.label_commands("<artifact-id>", evidence["labels"], os.environ.get("RESEARCH_LANE", "<lane>")):
+            for cmd in CANARY.label_commands("<artifact-id>", evidence["labels"], SHARED.RESEARCH_LANE or "<lane>"):
                 print("   ", cmd, flush=True)
     print("FAILURES" if failures else "ALL HARDWARE WORDS REPRODUCED" if not findings else "RECORDED (hypothesis findings)",
           failures or findings, f"{results['seconds']}s", flush=True)

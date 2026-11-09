@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # An untimed nsys profile of the served e2e (served_profile.py over the tree's own e2e.py: both engines resident, the reps
-# interleaved, no verify passes), from a run tree's root, with GPU 1's ship already on node 2 (SHIP_TAR):
-#   research run --on vy-nebius-2 --project verity --campaign pouw --source <run tree> --cwd source --env GPU_LEASE_WHO=<id> \
+# interleaved, no verify passes), from a run tree's root, with GPU 1's ship already on the node (SHIP_TAR):
+#   research run --on MACHINE --project verity --source <run tree> --cwd source --env GPU_LEASE_WHO=LANE \
 #     --env SHIP_TAR=<ship> [--env SCHEDULE=deferred] --send served_profile.sh --send served_profile.py -- \
 #     bash "$RESEARCH_RUN_DIR"/inputs/served_profile.sh
 # The GPU part runs in a one-GPU preemptible lease (window.sh's identity, ship and device checks first); the SQLite export and
@@ -26,7 +26,7 @@ fi
 MODEL=${MODEL:-$WORK/models/llama-3.1-8b-instruct}
 export PATH=$WORK/venv312/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=12.0f HF_HOME=${HF_HOME:-/workspace/hf}
 . benchmarks/pouw/pearl_c_vllm/flashinfer_env.sh
-export PYTHONPATH=$PWD:$PWD/integrations/vllm:$PWD/benchmarks/pouw:$PWD/benchmarks/pouw/pearl_c_vllm
+export PYTHONPATH=$PWD:$PWD/tools/config:$PWD/integrations/vllm:$PWD/benchmarks/pouw:$PWD/benchmarks/pouw/pearl_c_vllm
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} CUDA_DEVICE_ORDER=PCI_BUS_ID SERVED_TREE=$PWD
 UUID=${GPU_LEASE_UUID:?run under gpu-lease}; UUID=${UUID%%,*}; export E2E_GPU_UUID=$UUID
 nvidia-smi --query-gpu=uuid,name,compute_cap,clocks.sm,clocks.mem,driver_version --format=csv,noheader -i "$UUID" > "$OUT/identity.csv"

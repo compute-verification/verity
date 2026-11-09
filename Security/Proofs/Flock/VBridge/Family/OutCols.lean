@@ -1,6 +1,21 @@
-import Proofs.Flock.VBridge.Family.Names
+module
+
+public import Proofs.Flock.VBridge.Family
+public import Proofs.Flock.VBridge.Family.Names
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Hm.Site
-import Proofs.Flock.Soundness.Discharge.Layout.OutPin
 
 /-!
 # A part's `out` columns, from the verifier's own checks
@@ -17,8 +32,10 @@ verifier's `unitLaid` (`check_part`), and the leaves are `HmRow.check`'s leaf ma
 
 The parts' `v` and row columns (`PartVCols`, `PartRowCols`, `PartRowBits`) are another matter: their keys
 (`Aliased.srcKey`) read copy 0's leaf map and the ports' names and words, which only META's `leaves_in` and `ports`
-give, and META is read by `Lean.Json.parse`, a `partial def` no proof unfolds.
+give, and META is read by `Flock.JsonParse.parse`, which no proof here evaluates.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.OfVStar
 

@@ -3,7 +3,6 @@
   "entries": [
     {"file": "verity_vllm/check/c2_rules.py", "kind": "verdict-import", "symbol": "<module>", "detail": "verity_vllm.check.c2_rules -> verity_vllm.check.replay.replay_codes"},
     {"file": "verity_vllm/check/c2_rules.py", "kind": "verdict-import", "symbol": "<module>", "detail": "verity_vllm.check.c2_rules -> verity_vllm.query.manifest.format"},
-    {"file": "verity_vllm/check/executed_prefix.py", "kind": "g-literal", "symbol": "executed_prefix_facts", "detail": "G6"},
     {"file": "verity_vllm/check/executed_prefix.py", "kind": "g-literal", "symbol": "link_to_match_account", "detail": "G6", "count": 5},
     {"file": "verity_vllm/check/gates.py", "kind": "g-identifier", "symbol": "<module>", "detail": "gate_G1"},
     {"file": "verity_vllm/check/gates.py", "kind": "g-identifier", "symbol": "<module>", "detail": "gate_G2"},
@@ -34,17 +33,13 @@
     {"file": "verity_vllm/check/match/declaration.py", "kind": "g-literal", "symbol": "requests_declared", "detail": "G1"},
     {"file": "verity_vllm/check/match/engine_steps.py", "kind": "g-literal", "symbol": "vu_population", "detail": "G7"},
     {"file": "verity_vllm/check/match/engine_steps.py", "kind": "g-literal", "symbol": "within_step_order", "detail": "G8"},
-    {"file": "verity_vllm/check/match/per_request.py", "kind": "g-literal", "symbol": "_compare_component", "detail": "G3", "count": 5},
-    {"file": "verity_vllm/check/match/per_request.py", "kind": "g-literal", "symbol": "_compare_component", "detail": "G4", "count": 2},
-    {"file": "verity_vllm/check/match/per_request.py", "kind": "g-literal", "symbol": "_request_leg", "detail": "G5", "count": 2},
-    {"file": "verity_vllm/check/match/per_request.py", "kind": "g-literal", "symbol": "check_requests", "detail": "G3", "count": 2},
-    {"file": "verity_vllm/check/match/per_request.py", "kind": "g-literal", "symbol": "check_requests", "detail": "G4", "count": 2},
-    {"file": "verity_vllm/check/match/per_request.py", "kind": "g-literal", "symbol": "check_requests", "detail": "G5", "count": 2},
-    {"file": "verity_vllm/check/replay/tier_a_pool.py", "kind": "reason-prefix", "symbol": "_reason_class", "detail": "'...' in reason", "count": 3},
+    {"file": "verity_vllm/check/match/per_request.py", "kind": "g-literal", "symbol": "check_requests", "detail": "G3"},
+    {"file": "verity_vllm/check/match/per_request.py", "kind": "g-literal", "symbol": "check_requests", "detail": "G4"},
+    {"file": "verity_vllm/check/match/per_request.py", "kind": "g-literal", "symbol": "check_requests", "detail": "G5"},
     {"file": "verity_vllm/check/replay/replay_codes.py", "kind": "reason-prefix", "symbol": "not_evaluable_codes", "detail": "why.startswith"},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "reason-prefix", "symbol": "_fork_worker", "detail": "why.startswith"},
-    {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "reason-prefix", "symbol": "recompute_run", "detail": "'...' in str(r.get('why'))"},
-    {"file": "verity_vllm/engine/rank_worker.py", "kind": "reason-prefix", "symbol": "TP2CaptureWorkerExtension.tp2_commit_make", "detail": "'...' in str(note.get('shard') or '')"},
+    {"file": "verity_vllm/commit/executed_prefix.py", "kind": "g-literal", "symbol": "executed_prefix_facts", "detail": "G6"},
+    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "reason-prefix", "symbol": "TP2CaptureWorkerExtension.tp2_commit_make", "detail": "'...' in str(note.get('shard') or '')"},
     {"file": "verity_vllm/pipeline/experiment.py", "kind": "g-literal", "symbol": "vu_partition_index", "detail": "G8"},
     {"file": "verity_vllm/pipeline/report.py", "kind": "g-literal", "symbol": "build_card", "detail": "G4"},
     {"file": "verity_vllm/pipeline/report.py", "kind": "g-literal", "symbol": "build_card", "detail": "G5"},
@@ -58,6 +53,6 @@
     {"file": "verity_vllm/program/frontend/rules/vocab.py", "kind": "reason-prefix", "symbol": "Vocabulary.to_json", "detail": "'...' in self.notes"},
     {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "reason-prefix", "symbol": "_classify", "detail": "'...' in msg", "count": 3},
     {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "reason-prefix", "symbol": "_classify", "detail": "'...' in msg.lower()"},
-    {"file": "verity_vllm/program/kernels/twins.py", "kind": "reason-prefix", "symbol": "_skip_class", "detail": "'...' in msg", "count": 3}
+    {"file": "verity/ml/definitions/numerics/twins.py", "kind": "reason-prefix", "symbol": "_skip_class", "detail": "'...' in msg", "count": 3}
   ]
 }

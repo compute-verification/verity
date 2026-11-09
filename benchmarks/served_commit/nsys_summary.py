@@ -37,7 +37,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("db")
     ap.add_argument("--json")
-    ap.add_argument("--run", default="run:served-commit-prof")
+    ap.add_argument("--run", default="run:served-commit-rows")
     ap.add_argument("--each", action="store_true", help="every run range of the arm, not only the last: per run its step count, "
                     "prefill_mean and decode_mean on one line, and the full summaries as a JSON list")
     a = ap.parse_args()
@@ -88,7 +88,7 @@ def summarize(q, strings: dict, nvtx: list, run: tuple, run_label: str) -> dict:
     mg = "graphNodeId" if "graphNodeId" in mcols else "NULL"
     mem = q(f"SELECT start, end, bytes, copyKind, correlationId, streamId, {mg} FROM CUPTI_ACTIVITY_KIND_MEMCPY "
             "WHERE globalPid >> 24 = ? AND end >= ? AND start <= ?", pid, r0, r1 + 5_000_000_000)
-    # only work launched inside the run's host window
+    # only work launched inside the run's host period
     inrun = lambda c: c in rt and r0 <= rt[c][0] <= r1  # noqa: E731
     kern = [k for k in kern if inrun(k[3])]
     mem = [m for m in mem if inrun(m[4])]

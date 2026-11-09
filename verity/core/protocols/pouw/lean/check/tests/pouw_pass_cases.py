@@ -1,20 +1,20 @@
-"""The pass and draw difftest's cases: `core_check.pass_epoch`'s arguments, ``{"coins", "raw": hex | null, "context",
+"""The pass and sample difftest's cases: `core_check.pass_epoch`'s arguments, ``{"coins", "raw": hex | null, "context",
 "recorded", "reveal", "committed", "stream", "prover", "live"}`` (the four before ``live`` hex or null, ``live`` the
 verifier's `core_check.LIVE` inputs or null), `core_check.live_salt`'s, ``{"key", "ledger", "pins", "main", "session",
 "manifest"}``, and `core_check.draw`'s, ``{"coins", "recorded", "opening", "stream", "registration", "receipt", "k",
 "population", "units"}``.
 
-A pass case is an honest pass (a small workload, its weights' roots, an epoch's coins committed under one of
+A pass case is an honest pass (a small workload, its weights' roots, an execution phase's coins committed under one of
 `core_check.COIN_VERSIONS` and its salt coin opened after the weights' root, a recorded pass salted by a beacon, a
-certified pass under a stream and a prover, salted by the network certifier's reveal for the PoUW window its context
-names, over the weights' root the certifier recorded with the stream and the prover before it drew that salt, or a live
-Pearl-C pass of salt epoch k over its weights' root W, salted by a salt-only challenger session the auditor's ledger
-reserves, opens on the epoch's root `salt.epoch_open_root(W, k)` and ends complete), then one mutation (`PASS_MUTATIONS`) aimed at one refusal of `pass_epoch`.  A live-salt case is a live
+certified pass under a stream and a prover, salted by the network certifier's reveal for the PoUW execution phase its context
+names, over the weights' root the certifier recorded with the stream and the prover before it sampled that salt, or a live
+Pearl-C pass of salt execution phase k over its weights' root W, salted by a salt-only challenger session the auditor's ledger
+reserves, opens on the execution phase's root `salt.epoch_open_root(W, k)` and ends complete), then one mutation (`PASS_MUTATIONS`) aimed at one refusal of `pass_epoch`.  A live-salt case is a live
 Pearl-C pass's manifest and its verifier's inputs, then one mutation (`LIVE_SALT_NAMES`) aimed at one refusal of
-`live_salt`.  A draw case is an honest draw (the draw coin of seeded coins, or of a live epoch's as a certified
-window's, opened after a registration's digest, the units `stream_subset` of its key's stream), then one mutation
+`live_salt`.  A sample case is an honest sample (the sampling coin of seeded coins, or of a live execution phase's as a certified
+execution phase's, opened after a registration's digest, the units `stream_subset` of its key's stream), then one mutation
 (`DRAW_NAMES`).
-`tests/test_difftest.py` draws them for the harness, and `verity/core/protocols/pouw/tests/test_pouw_core_check.py`
+`tests/test_difftest.py` samples them for the harness, and `verity/core/protocols/pouw/tests/test_pouw_core_check.py`
 holds each mutation to the refusal it aims at.
 """
 from __future__ import annotations
@@ -32,16 +32,16 @@ from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
 from verity.core.protocols.pouw.protocol import tagged
-from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.spot import challenger as Ch
 from verity.ml.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
 from verity.ml.randomness import derive
 
-#: a certified window's verifier's inputs, in `pass_epoch`'s order
+#: a certified execution phase's verifier's inputs, in `pass_epoch`'s order
 CERTIFIED = ("reveal", "committed", "stream", "prover")
 
 
 class Coins:
-    """An epoch's challenger under a coin scheme of `core_check.COIN_VERSIONS` (`coins.Challenger`'s, any version)."""
+    """An execution phase's challenger under a coin scheme of `core_check.COIN_VERSIONS` (`coins.Challenger`'s, any version)."""
 
     def __init__(self, rng: random.Random, epoch: int, scheme: str = Co.SCHEME, early: bool = False) -> None:
         keep = CC.COIN_VERSIONS[scheme][0]
@@ -82,7 +82,7 @@ def salt_session(rng: random.Random, after: bytes | None, epoch: int, sid: str,
                  layout: tuple[tuple[str, int], ...] = Wd.SALT_FAMILIES, scheme: str = Wd.LIVE_SCHEME, seed: int = 0
                  ) -> RC.Session:
     """Session `sid` of a fresh challenger of `layout` (a Pearl-C salt session's, `window.SALT_FAMILIES`, by default) in
-    epoch `epoch`, signed under key `seed`: its salt coin opened after `after` (none when None) and nothing else."""
+    execution phase `epoch`, signed under key `seed`: its salt coin opened after `after` (none when None) and nothing else."""
     return RC.Session(rng, Ch.LiveChallenger(scheme, epoch, layout, rng.randbytes), [], salt=after, sid=sid, seed=seed)
 
 
@@ -108,7 +108,7 @@ def carried(o: dict, c: Ch.LiveCommitment) -> dict:
 def live_ledger(rng: random.Random, h: dict, root: bytes | None = None, reserved: bool = True, k: int = 0,
                 opened: dict | None = None, **end) -> None:
     """Live pass `h`'s ledger, signed under key `k`: the auditor's gate reserving its session for the session's layout
-    (every session reserved first unless not `reserved`) and opening it on `root` (the pass's epoch's root R by
+    (every session reserved first unless not `reserved`) and opening it on `root` (the pass's execution phase's root R by
     default), its open changed by `opened`, ending it as the gate does (`gate_end`) changed by `end`; and the manifest's
     ``session`` the gate's answer to that open."""
     s = h["s"]
@@ -133,20 +133,20 @@ def salted(h: dict, s: RC.Session | None = None) -> None:
 
 
 def epoch_index(rng: random.Random) -> int:
-    """A salt epoch's number among its weights' root's epochs (``pass_index``), from 0 to 2^64 - 1."""
+    """A salt execution phase's number among its weights' root's execution phases (``pass_index``), from 0 to 2^64 - 1."""
     return rng.choice([0, 0, 1, rng.randrange(1 << 8), rng.randrange(1 << 64), (1 << 64) - 1])
 
 
 def call_offset(rng: random.Random, n: int) -> int:
-    """Where a pass's call indices start within its epoch: after the epoch's earlier passes' calls, its `n` calls all
+    """Where a pass's call indices start within its execution phase: after the execution phase's earlier passes' calls, its `n` calls all
     below 2^32 (`core_check.CALL_BOUND`)."""
     return rng.choice([0, 0, rng.randrange(1 << 12), rng.randrange(CC.CALL_BOUND - n + 1), CC.CALL_BOUND - n])
 
 
 def honest_live(rng: random.Random, man: dict, k: int | None = None) -> dict:
-    """Manifest `man` salted live (LIVESALT2) as a pass of salt epoch `k` (``pass_index``, drawn when None) over its
+    """Manifest `man` salted live (LIVESALT2) as a pass of salt execution phase `k` (``pass_index``, sampled when None) over its
     weights' root W: a Pearl-C salt session S of the auditor's challenger that its gate reserved and
-    opened on the epoch's root R = `salt.epoch_open_root(W, k)` and ended complete, S's salt coin released after R; the
+    opened on the execution phase's root R = `salt.epoch_open_root(W, k)` and ended complete, S's salt coin released after R; the
     manifest carries k, S's commitment, salt coin, salt and the gate's answer, and the verifier holds the pinned key,
     the ledger, the host's pins log, main's history and S's files (`core_check.LIVE`)."""
     w = CC.weights_root(Co.SCHEME, _roots(man))
@@ -167,7 +167,7 @@ def _pass_manifest(rng: random.Random) -> dict:
 
 
 def _live_manifest(rng: random.Random) -> dict:
-    """A live Pearl-C pass's manifest: its call indices continuing its epoch's earlier passes', below 2^32."""
+    """A live Pearl-C pass's manifest: its call indices continuing its execution phase's earlier passes', below 2^32."""
     man = _pass_manifest(rng)
     off = call_offset(rng, len(man["matmuls"]))
     for u in man["matmuls"]:
@@ -177,9 +177,9 @@ def _live_manifest(rng: random.Random) -> dict:
 
 def honest_pass(rng: random.Random, kind: str | None = None) -> dict:
     """An honest pass: ``coin`` (the current coins), ``recorded-coin`` (the e2e-service passes' coins, in a replay),
-    ``beacon`` (a recorded pass's), ``certified`` (salted by the network certifier's reveal for its PoUW window, which
+    ``beacon`` (a recorded pass's), ``certified`` (salted by the network certifier's reveal for its PoUW execution phase, which
     the verifier holds) or ``live`` (a live Pearl-C pass's, `honest_live`: its salt coin from a salt-only session of the
-    auditor's challenger opened on its salt epoch's root, which the verifier holds as `core_check.LIVE`), as a case with
+    auditor's challenger opened on its salt execution phase's root, which the verifier holds as `core_check.LIVE`), as a case with
     its manifest and the challenger beside it."""
     kind = kind or rng.choice(["coin", "coin", "recorded-coin", "beacon", "certified", "live"])
     man = _live_manifest(rng) if kind == "live" else _pass_manifest(rng)
@@ -216,7 +216,7 @@ def honest_pass(rng: random.Random, kind: str | None = None) -> dict:
 
 
 def _context(case: dict, digest: str) -> str:
-    """The window's context: the pass's prefix, a certified window's PoUW window (`salt.context`), and the digest."""
+    """The execution phase's context: the pass's prefix, a certified execution phase's PoUW execution phase (`salt.context`), and the digest."""
     w = case["window"]
     return f"{case['prefix']}/{digest}" if w is None else f"{case['prefix']}/{PS.WINDOW_SEGMENT}/{w}/{digest}"
 
@@ -498,8 +498,8 @@ def _mutate_live(h: dict, name: str, rng: random.Random) -> None:
         case "other-session":
             live["session"]["close"] = s.signed(sid=RC.session_id(rng))
         case "other-root" | "on-weights" | "other-epoch":
-            # the session opened, and its salt coin released, on another root than the epoch's: a random one or H1's
-            # window-open root; W itself (LIVESALT2's first form); or another epoch's over W
+            # the session opened, and its salt coin released, on another root than the execution phase's: a random one or H1's
+            # execution phase-open root; W itself (LIVESALT2's first form); or another execution phase's over W
             k = h["k"] + 1 if h["k"] < (1 << 64) - 1 else h["k"] - 1
             other = {"other-root": lambda: rng.choice([rng.randbytes(64), PS.window_open_root(w, rng.randbytes(64), s.sid)]),
                      "on-weights": lambda: w, "other-epoch": lambda: PS.epoch_open_root(w, k)}[name]()
@@ -510,13 +510,13 @@ def _mutate_live(h: dict, name: str, rng: random.Random) -> None:
                 [-1, -rng.randrange(1, 1 << 64), 1 << 64, (1 << 64) + rng.randrange(9), True, False, str(h["k"]), None,
                  [h["k"]], {"k": h["k"]}]))
         case "named-epoch":
-            # the manifest names another epoch than the one its session was opened for
+            # the manifest names another execution phase than the one its session was opened for
             man["pass_index"] = h["k"] + 1 if h["k"] < (1 << 64) - 1 else h["k"] - 1
         case "call-range":
             u = rng.choice(man["matmuls"])
             u["index"] = rng.choice([CC.CALL_BOUND, CC.CALL_BOUND + rng.randrange(1, 1 << 20), (1 << 64) - 1])
         case "h1-layout" | "not-salt-only":
-            # #3868's session: H1's layout, its salt coin alone released, so ended incomplete; or another layout or scheme
+            # an H1 session: H1's layout, its salt coin alone released, so ended incomplete; or another layout or scheme
             layout, scheme = (Wd.live_families(rng.choice([1, 2])), Wd.LIVE_SCHEME) if name == "h1-layout" else \
                 rng.choice([(((Wd.SALT, 1), (Wd.DRAW, 1)), Wd.LIVE_SCHEME), (((Wd.SALT, 2),), Wd.LIVE_SCHEME),
                             (Wd.SALT_FAMILIES, "verity/vllm/commit-coins/v1")])
@@ -603,8 +603,8 @@ def _receipt(rng: random.Random, reg: str) -> dict:
 
 def honest_draw(rng: random.Random, scheme: str | None = None, many: bool = False, early: bool | None = None
                 ) -> tuple[dict, Coins]:
-    """An honest draw under `scheme` (any version by default, `CC.COIN_EARLY`'s binding included, `early`);
-    `many` draws at least one unit of at least 50."""
+    """An honest sample under `scheme` (any version by default, `CC.COIN_EARLY`'s binding included, `early`);
+    `many` samples at least one unit of at least 50."""
     scheme = scheme or rng.choice([Co.SCHEME, Co.SCHEME, CC.COINS_RECORDED, Co.SCHEME])
     early = (scheme == Co.SCHEME and rng.random() < 0.3) if early is None else early
     ch = Coins(rng, rng.randrange(4), scheme, early)
@@ -681,25 +681,25 @@ def _challenger_key(seed: int) -> lms.PrivateKey:
 
 
 def signed(commitment: Ch.LiveCommitment, rng: random.Random, signer: int | None = None, key: int | None = None) -> dict:
-    """A live window's coins as its verifier holds them: `commitment`'s challenger record, signed on a host by
+    """A live execution phase's coins as its verifier holds them: `commitment`'s challenger record, signed on a host by
     challenger key `signer` (0 or 1, at random), and the verifier's key for key `key` (the signer's by default)."""
     signer = rng.randrange(2) if signer is None else signer
     sk, vk = _challenger_key(signer), _challenger_key(signer if key is None else key)
-    host = rng.choice(["vy-nebius-cpu-1", "auditor.local", "h_1"])
+    host = rng.choice(["challenger-1.example", "auditor.local", "h_1"])
     message = Ch.record_message(lms.public_key(sk)[:16], host, commitment)
     record = Ch.ChallengerRecord(commitment, host, lms.sign_at(sk, rng.randrange(4), message).encode())
     return {"key": Ch.ChallengerKey(vk.params.W, vk.params.H, lms.public_key(vk)).to_json(), "record": record.to_json()}
 
 
-#: the challenger key of a prover's own, which no window's parameters pin (`signed`'s keys 0 and 1 are the verifier's)
+#: the challenger key of a prover's own, which no execution phase's parameters pin (`signed`'s keys 0 and 1 are the verifier's)
 PROVERS_KEY = 2
 
 
 def honest_live_draw(rng: random.Random, many: bool = False) -> tuple[dict, Ch.LiveChallenger]:
-    """An honest draw under a live epoch's coins (`window.live_challenger`, a certified window's), held as their signed
-    record (`signed`), under the challenger key the window's parameters pin (``key``, the record's): its ``pouw/draw``
-    coin 0 opened after the registration's digest."""
-    ch = Wd.live_challenger(rng.randrange(4), rng.choice([1, 2, 3]), rng.randbytes)
+    """An honest sample under a live execution phase's sample session's coins (`window.draw_challenger`), held as their signed record
+    (`signed`), under the challenger key the execution phase's parameters pin (``key``, the record's): its ``pouw/draw`` coin 0
+    opened after the registration's digest."""
+    ch = Wd.draw_challenger(rng.randrange(4), rng.randbytes)
     reg, stream = rng.randbytes(64).hex(), rng.randbytes(64).hex()
     receipt = _receipt(rng, reg)
     n = rng.choice([50, rng.randint(50, 5000), rng.randint(50, 1 << 40)] + ([] if many else [1, 2, 7]))
@@ -721,8 +721,8 @@ def _mutate_live_draw(d: dict, ch: Ch.LiveChallenger, name: str, rng: random.Ran
             bad = rng.choice([{**cj, "root": "00"}, {**cj, "families": "x"}, {**cj, "epoch": -1}, {**cj, "extra": 1}])
             d["coins"] = {**coins, "record": {**rec, "commitment": bad}}
         case "live-not-epoch":
-            layout = rng.choice([((Wd.DRAW, 1), (Wd.SALT, 1), (Wd.ROUND, 1)), ((Wd.SALT, 1), (Wd.ROUND, 2)),
-                                 ((Wd.SALT, 1), (Wd.DRAW, 2), (Wd.ROUND, 1))])
+            layout = rng.choice([((Wd.DRAW, 1), (Wd.SALT, 1), (Wd.ROUND, 1)), Wd.live_families(rng.choice([1, 2])),
+                                 ((Wd.SALT, 1), (Wd.DRAW, 1), (Wd.ROUND, 1)), ((Wd.DRAW, 2),)])
             d["coins"] = signed(Ch.LiveChallenger(Wd.LIVE_SCHEME, c.epoch, layout, rng.randbytes).commitment, rng)
             d["key"] = d["coins"]["key"]
         case "live-bare":
@@ -749,7 +749,7 @@ def _mutate_live_draw(d: dict, ch: Ch.LiveChallenger, name: str, rng: random.Ran
             d["key"] = rng.choice([None, {**key, "W": 3}, {**key, "public": key["public"][:64]}, {**key, "extra": 1}, 7,
                                    "key"])
         case "live-moved":
-            other = Wd.live_challenger(c.epoch, c.family(Wd.ROUND), rng.randbytes).commitment.to_json()
+            other = Wd.draw_challenger(c.epoch, rng.randbytes).commitment.to_json()
             d["coins"] = {**coins, "record": {**rec, "commitment": other}}
         case "live-opening-form":
             k = rng.choice(["coin", "path", "index", "epoch", "label"])
@@ -757,11 +757,11 @@ def _mutate_live_draw(d: dict, ch: Ch.LiveChallenger, name: str, rng: random.Ran
                    "label": [5, None]}[k]
             d["opening"] = rng.choice([{**o, k: rng.choice(bad)}, {x: v for x, v in o.items() if x != "index"}])
         case "live-label":
-            d["opening"] = ch.open(Wd.SALT, 0, bytes.fromhex(d["registration"])).to_json()
+            d["opening"] = {**o, "label": Wd.SALT}
         case "live-epoch":
             d["opening"] = {**o, "epoch": o["epoch"] + 1}
         case "live-foreign":
-            other = Wd.live_challenger(c.epoch, c.family(Wd.ROUND), rng.randbytes)
+            other = Wd.draw_challenger(c.epoch, rng.randbytes)
             d["opening"] = other.open(Wd.DRAW, 0, bytes.fromhex(d["registration"])).to_json()
         case "live-tampered":
             d["opening"] = {**o, "salt": _flip(o["salt"])}
@@ -783,8 +783,8 @@ DRAW_NAMES = ["verifier-coins", "recorded-scheme", "registration", "stream", "re
 
 
 def draw_instance(rng: random.Random, name: str = "honest") -> dict:
-    """One `draw` case: an honest draw (under seeded coins, or live ones a third of the time), then mutation `name` (a
-    live one's on a live draw)."""
+    """One `draw` case: an honest sample (under seeded coins, or live ones a third of the time), then mutation `name` (a
+    live one's on a live sample)."""
     if name in LIVE_DRAW_NAMES or (name == "honest" and rng.random() < 1 / 3):
         d, live = honest_live_draw(rng, name == "live-units")
         if name != "honest":

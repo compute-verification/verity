@@ -13,21 +13,21 @@ import numpy as np
 import pytest
 
 from verity.ml.circuits.defs import REGISTRY, bind
-from verity.core.protocols.sampled_proofs.one_stage import draw as DR, partition as P, registration as R
+from verity.core.protocols.spot.one_stage import draw as DR, partition as P, registration as R
 from verity.ml.windows import interface as IF, rows as CS
 from verity_vllm.commit import step_rows
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline import deferred_rows as DRW
-from verity_vllm.program.registry import b1  # noqa: F401  (registers RoPEHead_v1)
+from verity.ml.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1)
 
 from tests.pipeline import served_rope as SR
 from tests.pipeline.served_rope import D, HEADS, LAW, ROPE
 
 
 def _commit(tmp_path) -> dict:
-    """The deferred Commit's output dir and row dir, and the world that served it."""
+    """A deferred Commit: its output dir and row dir, and the world that served it."""
     pytest.importorskip("torch")
     return SR.commit(tmp_path)
 
@@ -41,8 +41,8 @@ def test_a_deferred_commits_serving_rows_are_the_verifiers_window_over_the_serve
     w = rec["window"]
     assert (win["population"], rec["format"], w["kind"], w["run"]) == (heads, R.FORMAT, "stand-in", c["run_root"])
     man = RB.open_bundle(RB.path(c["out"], 1))["manifest_sha256"]
-    assert w["of"] == {"commitment": "vllm-v1", "run_root": c["run_root"], "bundle_manifest_sha256": man, "rows": DRW.ROWS}
-    assert w["link"] == DRW.link("vllm-v1") and w["committer"]["from"] == "replay bundle" and w["row"] == "rope-d64-cpu"
+    assert w["of"] == {"commitment": step_rows.NAME, "run_root": c["run_root"], "bundle_manifest_sha256": man, "rows": DRW.ROWS}
+    assert w["link"] == DRW.link(step_rows.NAME) and w["committer"]["from"] == "replay bundle" and w["row"] == "rope-d64-cpu"
 
     # the verifier's own copies: its population program, the run root of record, the public body it holds
     defn = bind(REGISTRY["RoPEHead_v1"], D=D)
@@ -51,14 +51,14 @@ def test_a_deferred_commits_serving_rows_are_the_verifiers_window_over_the_serve
                                                                           f"{ROPE}/{p}", CS.ROW_SCHEMA, heads, c["run_root"])}
              for p in ("x", "cs", "out")}
     pub = (wdir / "m0-public.bin").read_bytes()
-    v = R.check(rec, program, query, DR.parse_law(LAW), CS.SCHEME, ports, leaf_layer=CS.leaf_layer({ROPE: pub}))
+    v = R.check(rec, program, query, DR.parse_design(LAW), CS.SCHEME, ports, leaf_layer=CS.leaf_layer({ROPE: pub}))
     assert v.ok, v.detail
     # the same copies from the record alone, as the audit's verifier derives them (no committed value read)
     mine = DRW.window_of_record(RB.path(c["out"], 1), str(c["row_dir"]), str(c["partition"]))
     assert (mine.partition_digest, mine.run, CS.expected_ports(mine)) == (win["partition_digest"], c["run_root"], ports)
     # and from the window's own records: its circuit record, whose SHA-512 the registration binds
     assert w["circuit"] == hashlib.sha512((wdir / "circuit.json").read_bytes()).hexdigest()
-    got, _doc = IF.of_records(wdir, DR.parse_law(LAW), {ROPE: defn}.__getitem__)
+    got, _doc = IF.of_records(wdir, DR.parse_design(LAW), {ROPE: defn}.__getitem__)
     assert (got.partition_digest, got.run, got.members, CS.expected_ports(got)) == (mine.partition_digest, mine.run, mine.members, ports)
 
     # every hidden row is what was served: x the qkv row's head slice, cs the cache row at the token's position, out the rotated head
@@ -79,7 +79,7 @@ def test_a_deferred_commits_serving_rows_are_the_verifiers_window_over_the_serve
 
 def test_the_in_commit_hook_writes_the_window_as_served(tmp_path):
     """The in-Commit hook (`serving_rows.readers`, its request as the row stage writes it) over the same Commit's members: the same
-    program, partition and domains, and the window ``served`` (serving's own commitment, before any draw) with no stand-in link."""
+    program, partition and domains, and the window ``served`` (serving's own commitment, before any sample) with no stand-in link."""
     c = _commit(tmp_path)
     hook = json.loads((SR.hook(c, tmp_path / "hook", run="r-hook") / "registration.json").read_text())
     DRW.from_bundle(RB.path(c["out"], 1), str(c["row_dir"]), str(c["partition"]), tmp_path / "deferred", workers=1)
@@ -91,19 +91,17 @@ def test_the_in_commit_hook_writes_the_window_as_served(tmp_path):
     assert [(x["port"], x["domain"]) for x in hook["roots"]] == [(x["port"], x["domain"]) for x in deferred["roots"]]
 
     # the audit's source check (A5's): the deferred window is a stand-in linked to the run root of record and the bundle, and the
-    # hook's is served exactly when that root is a SHA-512 root (a vllm-v1 run's is refused by name)
+    # hook's is served over that SHA-512 root
     man, root = RB.open_bundle(RB.path(c["out"], 1))["manifest_sha256"], c["run_root"]
-    assert DRW.source(deferred["window"], root, man, "vllm-v1") == {"kind": True, "run": True, "commitment": True, "of": True, "link": True}
-    sha512 = len(bytes.fromhex(root)) == DRW.SERVED_ROOT
-    assert DRW.source(hook["window"], root, man, "vllm-v1") == {"kind": True, "run": True, "commitment": True, "sha512": sha512, "link": True}
+    assert DRW.source(deferred["window"], root, man, step_rows.NAME) == {"kind": True, "run": True, "commitment": True, "of": True, "link": True}
+    assert DRW.source(hook["window"], root, man, step_rows.NAME) == {"kind": True, "run": True, "commitment": True, "sha512": True, "link": True}
 
 
 def test_a_rows_sha512_records_stand_in_names_that_commitment_and_its_served_window_passes_the_source_check(tmp_path):
-    """A deferred Commit committed under rows-sha512 (the Commit's default): the stand-in's ``of`` and ``link`` name the commitment
-    the record was committed in, not vllm-v1, and the in-Commit hook's served window over the same record passes the audit's source
-    check; either one naming vllm-v1 is refused by name."""
-    pytest.importorskip("torch")
-    c = SR.commit(tmp_path, commit_scheme=step_rows.NAME)
+    """A deferred Commit, committed under rows-sha512: the stand-in's ``of`` and ``link`` name the commitment the record was
+    committed in, and the in-Commit hook's served window over the same record passes the audit's source check; either one naming
+    vllm-v1 is refused by name."""
+    c = _commit(tmp_path)
     bundle, root = RB.path(c["out"], 1), c["run_root"]
     r = DRW.of_record(bundle, str(c["row_dir"]))
     assert (r.commitment, len(bytes.fromhex(root))) == (step_rows.NAME, DRW.SERVED_ROOT)
@@ -121,6 +119,13 @@ def test_a_rows_sha512_records_stand_in_names_that_commitment_and_its_served_win
     assert refused(deferred) == refused(hook) == []
     assert refused(dict(deferred, **DRW.stand_in(root, man, "vllm-v1"))) == ["of", "link"]
     assert refused(dict(hook, commitment="vllm-v1")) == ["commitment"]
+
+    # the record's weights were registered under rows-sha512 as well: a SHA-512 tree, the one the hook's rows were opened against
+    wroot = r.row["commit"]["weight_registration"]["root"]
+    tree = json.loads((bundle / "weights" / "tree.json").read_text())
+    assert (tree["scheme"], tree["root"], len(bytes.fromhex(wroot))) == (step_rows.NAME, wroot, DRW.SERVED_ROOT)
+    assert DRW.source(hook, root, man, r.commitment, wroot)["weights_sha512"] is True
+    assert [k for k, v in DRW.source(hook, root, man, r.commitment, "ab" * 32).items() if not v] == ["weights_sha512"]
 
 
 def test_the_audits_source_check_takes_a_served_window_only_over_a_sha512_run_root_of_record():

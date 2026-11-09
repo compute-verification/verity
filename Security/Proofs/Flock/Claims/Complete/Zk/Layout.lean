@@ -1,10 +1,45 @@
-import Proofs.Flock.Claims.Complete.Zk.MaskRank
-import Proofs.Flock.Claims.DeployCode
-import Proofs.Flock.Claims.Bridge.Custody
-import Proofs.Flock.Claims.Scope.Fit
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Refine.Setup
+module
+
+public import Proofs.Flock.Claims.DeployCode
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Scope.Check
+import Proofs.Flock.Claims.Scope.Setup
+import Proofs.Flock.Claims.Scope.Sizes
+import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.TmplUnitNet
 
 /-!
 # The mask slot's layout at every in-scope table
@@ -14,6 +49,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 block and `m = k_log + nbl` from the table's setup, public (`setupH_mask`) or with hidden outputs (`Hidden.Spec`, whose
 circuit is `HmOut.parse`'s: `hmOut_parse_mask`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.MaskRank
 
@@ -29,7 +66,9 @@ theorem hmOut_parse_mask {tags : Tags} {bytes : ByteArray} {tables : List (Strin
     obtain ⟨_, -, h'⟩ := ebind_ok h'
     simp only [pure, Except.pure, Except.ok.injEq] at h'
     exact h'.symm
+  have hi := HmOut.parse_isTmpl h
   unfold HmOut.parse at h
+  rw [if_neg (by simp [hi])] at h
   dsimp only at h
   split at h
   · obtain ⟨c', hc', h⟩ := ebind_ok h
@@ -58,6 +97,19 @@ theorem hmOut_parse_mask {tags : Tags} {bytes : ByteArray} {tables : List (Strin
       dsimp only
       exact hm_check_mask hls
 
+/-- **`hmOut_parse_mask` at the committed circuit** (`HmOut.parseCommit`): a templated file's is `HmRow.parse`'s with the
+template's net first, which passed `HmRow.check` (`hm_parse_checkPre`). -/
+theorem hmOut_parseCommit_mask {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (h : HmOut.parseCommit tags bytes tables = .ok c) :
+    ∀ r ∈ c.ranges.toList, r.kind = Kind.mask → 7 ≤ r.slotLog ∧ r.start + 2 ^ r.slotLog ≤ 2 ^ c.kLog := by
+  cases hi : tags.isTmpl
+  · rw [parseCommit_flat hi] at h
+    exact hmOut_parse_mask h
+  · rw [parseCommit_tmpl hi] at h
+    obtain ⟨tu, c₀, hp, -, -, rfl⟩ := TmplValue.parseTmpl_cases h
+    obtain ⟨_, hls⟩ := hm_parse_checkPre hp
+    exact hm_check_mask hls
+
 /-- **A table's setup places its mask slot in the block**, and its `m` is `k_log + nbl`, with or without hidden
 outputs. -/
 theorem setupOne_layout {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
@@ -70,7 +122,7 @@ theorem setupOne_layout {tags : Tags} {cf pf : ByteArray} {coins : Coins} {table
     exact ⟨(setupH_mask h).2, (setupH_mask h).1⟩
   · rw [HiddenExec.setupOne_hidden hh] at h
     have S := Hidden.setupHidden_spec' h
-    exact ⟨S.m, hmOut_parse_mask S.parse⟩
+    exact ⟨S.m, hmOut_parseCommit_mask S.parse⟩
 
 /-- **Every table of a masked session in scope has the layout the rank bound reads** (`LayoutOk`). -/
 theorem layoutOk_of_scope {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg} {s : Ins}

@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # The served-rows tie in zero knowledge (served_tie_zk.py, or served_statics_zk.py) on a sealed served window, on a CPU machine, on
-# hidden_zk's builds (its job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean
-# frame and the sampled-proofs verifier built in the tree. From a clone:
-#   research run --on vy-nebius-cpu-2 --project verity --cwd clone --timeout 180m --env STZK_MEM_GB=56 \
-#     --env STZK_RUN=/workspace/research/network-accounting/vllm-serve-seal/RUN --env STZK_WINDOW=5 -- \
-#     bash benchmarks/prove_path/served_tie_zk.sh
+# hidden_zk's builds (its job.sh, sourced: Flock's flock-circuit and the Lean flock-verify) with the ZK server's Lean
+# frame and the sampled-proofs verifier built in the tree. From a clone, the outputs in $RESEARCH_RUN_DIR/out, in up to
+# 180 minutes:
+#   STZK_MEM_GB=56 STZK_RUN=RUN_DIR STZK_WINDOW=5 bash benchmarks/prove_path/served_tie_zk.sh
 # env: STZK_MEM_GB (what job.sh's stages may take, within the slot's)  STZK_RUN, STZK_WINDOW (the sealed run and window)
 #      STZK_FORM (tie, the default: served_tie_zk.py, the routed tie; statics: served_statics_zk.py, the rows held to
 #      their Programs' statics)  STZK_ARGS (the driver's prove flags: --g, and the routed form's --blocks, --per)
@@ -20,7 +19,7 @@ source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
 export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
-(cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/core/service/spot && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \

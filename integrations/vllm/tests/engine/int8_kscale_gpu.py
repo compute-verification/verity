@@ -8,7 +8,7 @@ against `windows.lock.json`), each a one-token greedy request.  Writes `<out>/k_
 `manifests/int8-k-scales.json` before `int8_exact_gpu.py`).
 
     cd integrations/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../..:../../tools/research/src
-    $PY tests/engine/int8_kscale_gpu.py --out DIR --data DIR_WITH_C4 --at 2026-10-17T00:00:00Z --by LANE
+    $PY tests/engine/int8_kscale_gpu.py --out DIR --data DIR_WITH_C4 --at ISO_TIME --by LANE
 """
 from __future__ import annotations
 
@@ -27,8 +27,8 @@ from tests.engine import ppl_oracle  # noqa: F401  (puts benchmarks/ppl on sys.p
 from tests.engine.int8_exact_gpu import pin, scratch_checkpoints
 from verity_vllm.engine import int8_k_scales as K
 
-import methodology  # noqa: E402
-import windows as W  # noqa: E402
+import methodology
+import windows as W
 
 
 class Calibrator:

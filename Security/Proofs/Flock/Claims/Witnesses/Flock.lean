@@ -1,4 +1,43 @@
-import Proofs.Flock.Claims.Witnesses.Shared
+module
+
+public import Proofs.Flock.Claims.Witnesses.Shared
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.Congr
 
 /-!
 # Refutation witnesses: Flock's claims
@@ -26,6 +65,8 @@ that met its first form at every record is gone. `ZK` reads the masked record's 
 `ZK_quiet_toyZD`, where every witness is in the relation). At the deployed masked record (`ZKMal.zkDeployed`) the coin
 layer is the deployed one, not such a record's (`ZK_meets`, `ZK_coins_fails`).
 -/
+
+@[expose] public section
 
 namespace Claims.Witness.Flock
 
@@ -57,15 +98,15 @@ noncomputable def ksD (Coin : Type) : Claims.Flock.Deploy Coin Unit Unit where
 def inStmt : Claims.Flock.Stmt where
   m := 22
   kLog := 6
-  C := ⟨0, [], []⟩
-  inp _ := []
-  out _ := []
+  C := ⟨0, fun g => g.elim0, fun g => g.elim0, ∅⟩
+  inp _ _ := .pub 0
+  out _ _ := .pub 0
   pub := []
   form :=
     { hm96Rows := true, typed := false, retainedRounds := true, leaf := "hm96-sha512/v1", tables := 1,
       publicInputs := false, sharedRows := false, registeredReads := false, hiddenOutputs := false,
       unitInputGroups := 1, tail := false, unitLog := 0, readsOnlyPortBits := true, rowsV1 := true,
-      rowsV2OrSeg := false, wiresAcyclic := false }
+      rowsV2OrSeg := false, wiresAcyclic := false, templated := false }
 
 /-- The toy record of `Complete` and `Nontrivial`: every statement parses as `inStmt`, and the verifier rejects. -/
 def compD (Coin : Type) : Claims.Flock.Deploy Coin Unit Unit where
@@ -120,9 +161,9 @@ theorem listWithin_unit {Col : Type} [DecidableEq Col] [Zero Col] (len : Unit �
 
 theorem inStmt_inScope : Claims.Flock.InScope false inStmt := by
   refine ⟨by decide, by decide, by decide, by decide, rfl, by decide, rfl, Or.inl rfl, by decide, by decide,
-    fun h => absurd h (by decide), Or.inl ⟨rfl, by decide⟩, by decide, rfl, Or.inl rfl⟩
+    fun h => absurd h (by decide), Or.inl ⟨rfl, by decide⟩, by decide, rfl, Or.inl rfl, fun h => absurd h (by decide)⟩
 
-theorem inStmt_relS (w : Claims.Flock.Wit) : Claims.Flock.RelS inStmt w := fun _ _ => rfl
+theorem inStmt_relS (w : Claims.Flock.Wit) : Claims.Flock.RelS inStmt w := fun _ _ o => o.elim0
 
 section Numbers
 

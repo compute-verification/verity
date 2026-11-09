@@ -19,8 +19,8 @@ def _module(name: str, **attrs) -> types.ModuleType:
 
 
 @pytest.fixture
-def JS(monkeypatch):
-    """j10r_so with dither_a, dither_one and h1r stood in: `Refs.receipts` reads only the window, the capture and
+def JS(monkeypatch: pytest.MonkeyPatch) -> types.ModuleType:
+    """j10r_so with dither_a, dither_one and h1r stood in: `Refs.receipts` reads only the execution phase, the capture and
     j10r_units (stood in by each test)."""
     monkeypatch.syspath_prepend(str(DITHER))
     for m in (_module("dither_a"), _module("dither_one", h1v3_itself=None), _module("h1r", H1R=type("H1R", (), {}))):
@@ -30,12 +30,13 @@ def JS(monkeypatch):
     return j10r_so
 
 
-def test_receipts_take_a_host_capture_to_b_device(JS, monkeypatch):
+def test_receipts_take_a_host_capture_to_b_device(JS: types.ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
     """B on another device than the host-memory capture (`meta` standing in for cuda:0): call_receipts gets A on B's
-    device, and a skipped dead row block's units the zero receipt."""
+    device, and a skipped dead row tile's units the zero receipt."""
     seen = []
 
-    def call_receipts(a, b, salt, base, root_a, root_b, only):
+    def call_receipts(a: torch.Tensor, b: torch.Tensor, salt: bytes, base: int, root_a: bytes, root_b: bytes,
+                      only: list[int]) -> np.ndarray:
         if a.device != b.device:
             raise RuntimeError(f"Expected all tensors to be on the same device, {b.device} and {a.device}")
         seen.append((tuple(a.shape), a.device.type, base, list(only)))

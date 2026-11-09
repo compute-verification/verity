@@ -17,7 +17,7 @@ when it fails (exit 3):
   launch   the kernel each path ran (torch.profiler): `_dsv4_topk_kernel`, `dsv4HashTopkSoftplusSqrt<int, int>`, and
            `act_and_mul_kernel<bf16, ..., silu_kernel, ..., act_first, use_vec, HAS_CLAMP>` with use_vec at d = 384 (TP8's
            3072 / 8, 16-byte vectors on sm_90) and the scalar fallback at d = 9.
-  rows     `router_rows`: groups of 64 rows sharing one bias (the kernel reads one bias per launch), drawn to reach the router's
+  rows     `router_rows`: groups of 64 rows sharing one bias (the kernel reads one bias per launch), sampled to reach the router's
            edges: ties in the current and in the score, a bias that decides, score + bias == +0, the x > 20 select and its
            boundary, the ex2 halving below -126, subnormal, huge and non-finite logits and biases, fewer than six currents above
            -inf and none.  `hash_rows`: a token's six table ids in [0, E) (the checkpoint's values; repeats too) and logits whose
@@ -57,10 +57,10 @@ from typing import Any, Callable
 
 import numpy as np
 from verity.ml.circuits.ops import mufu as MU
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.kernels.dsv4_moe_twin import clamp_twin, hash_twin, lg2_words, router_twin, score_words
-from verity_vllm.program.registry import dsv4_moe as D
-from verity_vllm.program.registry import mla_check as MC
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.numerics.dsv4_moe_twin import clamp_twin, hash_twin, lg2_words, router_twin, score_words
+from verity.ml.definitions.registry import dsv4_moe as D
+from verity.ml.definitions.registry import mla_check as MC
 
 SCHEMA = "verity-vllm/dsv4-moe-capture/v1"
 RECORD = "dsv4_moe_capture.json"
@@ -218,7 +218,7 @@ def _read(kind: str, rng: np.random.Generator) -> np.ndarray:
 def hash_rows(seed: int = 2027, n: int = 8192, e: int = E) -> dict[str, np.ndarray]:
     """n token rows of e logits, row r of kind `HASH_KINDS[r % 8]`: `tokens` (n,) a permutation of [0, n), `tid2eid` (n, 6) the table
     (six distinct ids in [0, e) a row, or for `repeat` copies of fewer), and the six words the row's ids read set by its kind (the
-    other logits normal draws)."""
+    other logits normal samples)."""
     rng = np.random.default_rng(seed)
     tokens = rng.permutation(n).astype(np.int32)
     table = np.zeros((n, TOPK), np.int32)
@@ -271,7 +271,7 @@ def clamp_sweep(d: int) -> np.ndarray:
 
 
 def clamp_rows(seed: int, n: int, d: int, sweep: bool) -> dict[str, np.ndarray]:
-    """n rows of 2d bf16 words, row r's gate and up halves of kind `CLAMP_KINDS[r % 5]` each (the two drawn independently), then
+    """n rows of 2d bf16 words, row r's gate and up halves of kind `CLAMP_KINDS[r % 5]` each (the two sampled independently), then
     `clamp_sweep(d)` when asked."""
     rng = np.random.default_rng(seed)
     kinds = np.arange(n) % (len(CLAMP_KINDS) - 1)
@@ -677,7 +677,7 @@ def run(out: str, seed: int, n: int, clamp_n: int, min_driver: int, want_cc: str
     os.environ["VLLM_BATCH_INVARIANT"] = "1"
     import torch
     import vllm
-    import vllm._custom_ops  # noqa: F401
+    import vllm._custom_ops
 
     outdir = Path(out)
     outdir.mkdir(parents=True, exist_ok=True)

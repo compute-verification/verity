@@ -14,8 +14,12 @@ A holo shape (`Shape.holo`, hidden unit circuits) has `h`'s round as a row port 
 operands read (`RecAlgebra.atomOp`). A part's name does not say whether its shape is holo; the statement does, in META
 (`HOLO_KEY`, absent meaning plain), and `check` builds the one net it selects.
 -/
-import Flock.RecOpen
-import Flock.RecAlgebra
+module
+
+public import Flock.RecOpen
+public import Flock.RecAlgebra
+
+@[expose] public section
 
 namespace Flock
 namespace RecResiduals
@@ -277,6 +281,19 @@ def readIns (g : Net) : Array Bool :=
   (List.range' nIn (g.constPos - nIn)).foldl
     (fun rd r => (g.a.row r ++ g.b.row r).foldl (fun rd c => rd.setIfInBounds c true) rd)
     (Array.replicate nIn false)
+
+/-- `readIns`, each row's entries read where they lie. -/
+def readInsFast (g : Net) : Array Bool :=
+  let nIn := min (g.inWords * WORD) g.constPos
+  let mark := fun (rd : Array Bool) (c : Nat) => rd.setIfInBounds c true
+  foldFrom (fun rd r => g.b.rowFold r mark (g.a.rowFold r mark rd)) (g.constPos - nIn) nIn (Array.replicate nIn false)
+
+/-- Compiled code runs `readInsFast`; the kernel and every proof see `readIns`. `@[csimp]` rewrites only code compiled
+after it, so it stays directly below `readIns`. -/
+@[csimp] theorem readIns_eq_fast : @readIns = @readInsFast := by
+  funext g
+  unfold readIns readInsFast
+  simp only [foldFrom_eq, Sparse.rowFold_eq, Array.foldl_append]
 
 /-- The input column of bit `q` of the row ports' elements, the ports of `ns` elements from column `k`, each
 `16 · portWordsOf n` columns (`unitNet'`'s `w`). -/

@@ -1,4 +1,6 @@
-import PouwCheck
+module
+
+public import PouwCheck.Protocol
 
 /-!
 # PoUW's window check: what its Lean code (`PouwCheck.protocol`) does
@@ -8,14 +10,16 @@ The properties of the executable check (`verity/core/protocols/pouw/lean/check/`
 the types its decoders produce. Each is a `Prop`, and `Proofs.Properties.Pouw.Check` proves every one.
 
 `AcceptMeans` is the check's whole meaning: what it accepts is a registration that keeps PoUW's rule
-(`RegistrationKeeps`), which the service accepted with the profile and draw the rule fixes (`ServiceAccepted`), and it
-then publishes the window's items at the verifier's values and the service's draw. The rest are its consequences a reader
+(`RegistrationKeeps`), which the service accepted with the profile and sample the rule fixes (`ServiceAccepted`), with a
+live window's salt its live coin's and a seeded window's answer carrying none (`SaltKept`), and it then publishes the window's items at the verifier's values and the service's sample. The rest are its consequences a reader
 checks first, and what the other verdicts mean. That the check accepts every such registration is completeness,
 `Proofs.Properties.Pouw.Check.acceptMeans_complete`.
 
-What the window's draw guarantees (`Properties.Pouw.Window.DrawMisses`) is the window's property, not the check's: the
+What the window's sample guarantees (`Properties.Pouw.Window.DrawMisses`) is the window's property, not the check's: the
 check establishes that the service drew exactly `K′ = kPrime ε δ` distinct units of the registered `N`, all passed.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Check
 
@@ -28,7 +32,7 @@ open PouwWindow (Work point level floorPoint)
 verifier's context registering exactly `window.REGISTERED`; its `length` item a fixed-length window's at the verifier's
 max_tokens (`lengthProblem`: stop mode fixed, the verifier's max_tokens, each slot served its max_tokens); a work level whose credited tiles are at least the range's
 low end and whose next level is at most the floor point of its high end; each item the verifier's own at that level
-(`expected`, compared canonically); the population `N = point(level + 1)`; the law `subset:K′` with `K′` the window's
+(`expected`, compared canonically); the population `N = point(level + 1)`; the sampling design `subset:K′` with `K′` the window's
 exact `kPrime`; and the check's query and scheme. -/
 def RegistrationKeeps (p : Params) (c : Registration) (f : Fixed) : Prop :=
   (c.window.kind = "served" ∧ c.window.context = p.context) ∧
@@ -45,8 +49,8 @@ def RegistrationKeeps (p : Params) (c : Registration) (f : Fixed) : Prop :=
   c.query = p.query ∧ c.scheme = p.check.scheme
 
 /-- The service accepted this registration (`e` is one-stage's answer for its digest) with `prof` and `draw`: the profile
-of the registered Program over one level, the registered partition's `N` units drawn `subset:K′`, at the window's δ,
-with `K′` units drawn; and a draw `subset:K′` over `N` of `K′` distinct units below `N`, ascending. -/
+of the registered Program over one level, the registered partition's `N` units sampled `subset:K′`, at the window's δ,
+with `K′` units sampled; and a sample `subset:K′` over `N` of `K′` distinct units below `N`, ascending. -/
 def ServiceAccepted (p : Params) (c : Registration) (f : Fixed) (e : Evidence) (prof : Core.Integrity)
     (draw : UnitDraw) : Prop :=
   e.protocol = oneStage ∧ e.commitment = some (Flock.hexOf c.digest) ∧ e.said = .accept prof draw ∧
@@ -56,13 +60,19 @@ def ServiceAccepted (p : Params) (c : Registration) (f : Fixed) (e : Evidence) (
   draw.law = .subset f.sampling.k ∧ draw.population = f.work.n ∧
   draw.units.size = f.sampling.k ∧ Ascending draw.units.toList ∧ ∀ u ∈ draw.units.toList, u < f.work.n
 
-/-- What the check accepts is a registration that keeps PoUW's rule, which the service accepted as the rule fixes; it
-then publishes the check item, the level's work, the sampling item, the verifier's max_tokens, `root_W` and the drawn
-units, and the profile is the service's. -/
+/-- The salt the service's answer carries is the window's: a live window's (`coins` live) is its live coin's, taken
+from the salt-only session the auditor's ledger opened on the salt epoch root of the registration's weights' root W, the
+root X of the activations it committed before its salt (`windowAnchors`) and the answer's epoch, after that root
+(`windowSaltReason`, `core_check.window_salt`), and a seeded window's answer carries none. -/
+def SaltKept (p : Params) (c : Registration) (e : Evidence) : Prop := windowSaltReason p c e.salt = none
+
+/-- What the check accepts is a registration that keeps PoUW's rule, which the service accepted as the rule fixes with
+the window's salt; it then publishes the check item, the level's work, the sampling item, the verifier's max_tokens, `root_W` and the sampled
+proof blocks, and the profile is the service's. -/
 def AcceptMeans : Prop :=
   ∀ (p : Params) (c : Registration) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     protocol.check p c e = .accept pub prof →
-      ∃ f draw, RegistrationKeeps p c f ∧ ServiceAccepted p c f e prof draw ∧
+      ∃ f draw, RegistrationKeeps p c f ∧ ServiceAccepted p c f e prof draw ∧ SaltKept p c e ∧
         pub = ⟨p.check, f.work, f.sampling, p.maxTokens, f.rootW, draw.units⟩
 
 /-- An accepted window is credited a grid level inside the declared range: its credited tiles are at least `lo`, and
@@ -71,8 +81,8 @@ def AcceptedInRange : Prop :=
   ∀ (p : Params) (c : Registration) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     protocol.check p c e = .accept pub prof → p.lo ≤ pub.work.credited ∧ pub.work.n ≤ p.hi
 
-/-- An accepted window's draw is `K′` distinct units of its `N`, `K′` the window's exact `kPrime` at its ε and δ, and the
-registration was for that law over that population. -/
+/-- An accepted window's sample is `K′` distinct units of its `N`, `K′` the window's exact `kPrime` at its ε and δ, and the
+registration was for that sampling design over that population. -/
 def AcceptedDraw : Prop :=
   ∀ (p : Params) (c : Registration) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     protocol.check p c e = .accept pub prof →
@@ -109,9 +119,10 @@ def UndecidedOnlyFromService : Prop :=
 
 /-! ## The commitment -/
 
-/-- The digest is one-stage's registration digest, SHA-512 of the format, a zero byte and the canonical record. -/
+/-- The digest is one-stage's window record digest (`Flock.WindowRecord.digestOf`), SHA-512 of the format, a zero byte
+and the canonical record. -/
 def DigestIsOneStage's : Prop :=
-  ∀ c : Registration, protocol.digest c = Flock.Sha512.hash (c.format.toUTF8 ++ ByteArray.mk #[0] ++ c.bytes)
+  ∀ c : Registration, protocol.digest c = Flock.WindowRecord.digestOf c.format c.bytes
 
 /-- A decoded registration keeps the bytes it was read from, so its digest is of exactly those bytes. -/
 def CommitmentKeepsBytes : Prop := ∀ (b : ByteArray) (c : Registration), protocol.commitment b = .ok c → c.bytes = b

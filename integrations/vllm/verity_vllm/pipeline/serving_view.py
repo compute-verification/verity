@@ -43,7 +43,7 @@ from verity_vllm.config import option
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.pipeline import program_graph as PG
 from verity_vllm.program.sampling_event import is_sampling_event
-from verity_vllm.query import word as word_query
+from verity.ml.definitions import word as word_query
 from verity_vllm.query.program_view import _read_instance_header, from_instances, iter_instance_rows, spec_base, spec_statics
 
 SCHEMA = "vllm-serving-view/v1"

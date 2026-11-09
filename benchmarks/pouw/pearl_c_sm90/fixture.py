@@ -2,7 +2,7 @@
 pearl_c_sm90.cu's kernels write, in its row-major layout (every operand in natural order along k), for forming v1 on
 `pearl_c_device.H100` (G = 4: `pearl-c-h100-v1-h3`), hashing format -h3 (SHA-512 throughout); the unpromoted plain
 baseline (gemm_fast's y_fast) on the H100 record without promotion (`H100_UNPROMOTED`, no scheme of its own).  Forming,
-lines and hashes come from `verity.core.protocols.pouw.schemes.pearl_c` on the device record; the products over every
+lines and hashes come from `verity.ml.protocols.pouw.schemes.pearl_c` on the device record; the products over every
 cell are batched in numpy (the chains window by window, the peel with `verity.ml.kernels.tc.group_sum_total_batch` on the
 record's peel step), and one whole 64 x 64 tile is recomputed by the scheme (`encode`, `checked`, `digest`) and must
 agree.  run.py compares the device's buffers with these bytes before it times anything.
@@ -47,9 +47,9 @@ from verity.core.protocols.pouw.audit import (HM96, HM96_TRANSCRIPT, HM96_WEIGHT
                                                          hm96_salt, rows_domain, transcript_domain, weight_binding, weights_root)
 from verity.core.protocols.pouw.coins import Challenger, CoinOpening  # noqa: E402
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_c as C  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_kw as P  # noqa: E402
-from verity.core.protocols.pouw.schemes.pearl_c_device import (  # noqa: E402
+from verity.ml.protocols.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.ml.protocols.pouw.schemes import pearl_kw as P  # noqa: E402
+from verity.ml.protocols.pouw.schemes.pearl_c_device import (  # noqa: E402
     DEVICES,
     H100,
     Device,
@@ -60,12 +60,12 @@ VARIANTS = (H100,)
 H100_UNPROMOTED = replace(H100, name="h100-unpromoted", g=None)
 CASE, INDEX, WEIGHT = "gpu-check", 5, 1
 COINS = b"verity-pouw/pearl-c-sm90-gpu-check/coins"
-#: the check's prover hm96 salt key (a served run draws its own)
+#: the check's prover hm96 salt key (a served run samples its own)
 SALT_KEY = hashlib.sha256(b"verity-pouw/pearl-c-sm90-gpu-check/salt-key").digest()
 
 
 def test_challenger() -> Challenger:
-    """The gate's test challenger: epoch 0's coins drawn from SHA-512 in counter mode over `COINS`, the same at every build,
+    """The gate's test challenger: epoch 0's coins flipped from SHA-512 in counter mode over `COINS`, the same at every build,
     so a replay starts the fixture's epoch again from B's root."""
     blocks, buf = (hashlib.sha512(COINS + i.to_bytes(8, "little")).digest() for i in itertools.count()), bytearray()
 
@@ -270,7 +270,7 @@ def peel_np(device: Device, c: np.ndarray, pa: np.ndarray, pb: np.ndarray) -> np
 
 def _side(job):
     device, rows, idx, side, seed_e, seed_b, k, e = job
-    s = C.PearlC(k_min=32, tile=(16, 16), forming="v1", device=DEVICES[device])
+    s = C.PearlC(k_min=32, tile=(16, 16), forming="v1", device=DEVICES[device], hashing="h0")
     return s._side(rows, idx, side, seed_e, seed_b, k, e)
 
 

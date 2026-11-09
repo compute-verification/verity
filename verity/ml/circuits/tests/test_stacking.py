@@ -1,7 +1,7 @@
 """`verity.ml.circuits.stacking` (property/v1) on small synthetic Programs with their census/v1: an exact int8 Program passes,
 and a clamping, wrapping, FP-smuggling, reinterpreting, carry-computing, gather-heavy, too wide or input-holding one fails with
-its reason, or has its carries budgeted. The red team's attacks (benchmarks/property_redteam on cursor/property-redteam-6cd3)
-are cases here."""
+its reason, or has its carries budgeted. The red team's attacks (benchmarks/property_redteam) are
+cases here."""
 from __future__ import annotations
 
 import hashlib
@@ -54,7 +54,7 @@ SQACC = stand_in("PouwSqAcc", (("acc", Value(576)), ("x", S32)), Value(576))
 U8S8 = stand_in("BlackwellU8S8ImmaDot32", (("acc", S32), ("a", Array(32, S8)), ("b", Array(32, S8))))
 F64MUL = stand_in("F64Mul", (("a", Value(64)), ("b", Value(64))), Value(64))
 EXP2LUT = stand_in("Exp2Lut127", (("t", S8),))
-#: the sha256 of vLLM's LUT softmax table (`engine.int8_attention.LUT` at #2455's head) as 256 little-endian u32 words
+#: the sha256 of vLLM's LUT softmax table (`engine.int8_attention.LUT`) as 256 little-endian u32 words
 EXP2_LUT127_SHA256 = "6eb8e9b3478db58b4e5a711f31968394f7e93fa4e1df2e0d801eab92a5f66f84"
 
 
@@ -194,7 +194,7 @@ BOUND = (-(1 << 20), 1 << 20)
 
 
 def test_a_run_inputs_declared_bound_is_refused():
-    """No declared `In(bound)` is taken on trust (18 Oct): evaluation doesn't enforce a run input's bound, so a run input whose
+    """No declared `In(bound)` is taken on trust: evaluation doesn't enforce a run input's bound, so a run input whose
     port bounds it far from the s32 edge, whole or on some of its leaves, is refused when its Program is built (`E_PORT_BOUND`),
     and never judged as bounded."""
     with pytest.raises(ValueError, match=r"E_PORT_BOUND: program function TestInt8Program_v1: parameter 'c' leaves \[0, 1\)"):
@@ -319,6 +319,22 @@ def test_a_word_read_at_another_width_is_refused(how, where, built, monkeypatch)
     monkeypatch.setattr(_Widths, "first", lambda self, c: None)
     v = judge(*_reinterpreting_program(how))
     assert codes(v) == ["reinterpretation"] and v.reasons[0]["definitions"] == {where: 1}, v.reasons
+
+
+def test_a_field_of_every_row_of_a_mixed_tuple_array_is_checked_by_structure(monkeypatch):
+    """A batch's argument that reads one field of each row of an earlier batch's output (a `Strided` over a mixed-width tuple
+    array, the field wider than the residue cap) is decided by the field's widths, not leaf by leaf: at its own width it passes
+    with `_Widths.leaf` refusing any call, and read at another width or shifted into the next field it is refused."""
+    rows, k, s = 64, 6144, 48
+    row = TupleT((Array(k, S8), Array(s, S32)))
+    W = _Widths((), [type("Out", (), {"out": Array(rows, row)})()])
+    codes = Strided("n", 0, 0, k, row.leaves, 1, rows * k)
+    monkeypatch.setattr(_Widths, "leaf", lambda *_: pytest.fail("checked leaf by leaf"))
+    assert W.first(Coll(Array(rows, Array(k, S8)), codes)) is None
+    assert W.first(Coll(Array(rows, Array(s, S32)), Strided("n", 0, k, s, row.leaves, 1, rows * s))) is None
+    monkeypatch.undo()
+    assert W.first(Coll(Array(rows, Array(k, S32)), codes))[0] == 0
+    assert W.first(Coll(Array(rows, Array(k, S8)), Strided("n", 0, s, k, row.leaves, 1, rows * k)))[0] == k - s
 
 
 def _carry_program() -> tuple[Program, list[int]]:
@@ -460,7 +476,7 @@ def test_the_table_is_leans_class_of():
 
 
 def test_the_families_built_on_demand_and_lifts_are_budgeted():
-    """The red team's round-2 table for the families served circuits build that Lean doesn't list yet: the sampler's and
+    """The red team's table of the families served circuits build that Lean doesn't list yet: the sampler's and
     the lifting's gates are budgeted, ⊥ is a constant, and a lift takes its primitive's class, a free one's budgeted."""
     cases = {
         "GatherI32x64_v1": "gathers", "LGatherRow16x5_v1": "gathers", "LGatherRow32x8o7fc00000_v1": "gathers",
@@ -549,7 +565,7 @@ def test_a_tree_of_gathers_pays_for_each_select_among_run_time_values():
 
 def test_a_field_extraction_is_a_rounding_at_any_position():
     """`BitAtx32` reads bit i of a word: a rounding whenever either operand is a run input, so a bit at a constant position
-    (red team round 2's soundness item) is budgeted, not free wiring."""
+    (a soundness item of the red team's) is budgeted, not free wiring."""
     for registered in (("word",), ("i",)):
         program, ends = _one_gate_program(BITAT, registered)
         assert P.analyze(program, census(program, ends)).steps[0]["units"] == {**FREE, "roundings": 1}
@@ -559,7 +575,7 @@ def test_a_field_extraction_is_a_rounding_at_any_position():
 
 
 def test_the_bf16_widening_is_a_free_affine_map():
-    """The 18 Oct ruling: `Bf16ToF32` is its bf16 encoding times 2^16 read as signed, on its evaluator, so it never wraps and
+    """`Bf16ToF32` is its bf16 encoding times 2^16 read as signed, on its evaluator, so it never wraps and
     is free (an affine map), its value the operand's range times 2^16; a lift of it is budgeted."""
     w = prims.Bf16ToF32
     for x in [0, 1, 0x3F80, 0x7F80, 0x7FFF, 0x8000, 0xBF80, 0xFFFF] + random.Random(0).sample(range(1 << 16), 64):
@@ -580,7 +596,7 @@ def test_the_bf16_widening_is_a_free_affine_map():
     (scalar.I32Add, [(P.S32[1], P.S32[1]), (1, 1)]),  # within s32, and the sum wraps
 ])
 def test_a_wrapping_affine_map_is_charged_never_clipped(prim, ranges):
-    """Red team round 5: an affine map whose operand's range leaves its width's signed reading, or whose result leaves s32,
+    """Red team: an affine map whose operand's range leaves its width's signed reading, or whose result leaves s32,
     isn't proven, so it is budgeted (a rounding) rather than free over a range clipped to s16 or s32."""
     t = P.count(prim, (True,) * len(ranges), ranges)
     assert (t.units, t.affine) == ({"roundings": 1}, 0)
@@ -677,7 +693,7 @@ def _pv(K: int, steps: str = "maxmin") -> CompositeDefinition:
 @pytest.mark.parametrize("K,steps,unproven", [
     (132_096, "maxmin", 0), (132_128, "maxmin", 1), (132_096, "min", 0), (131_040, "max", 0), (131_072, "max", 1)])
 def test_ps_quantizer_bounds_it_to_0_127_so_pv_stays_in_window_to_132104_tokens(K, steps, unproven):
-    """Red team round 2's over-strict case: with the range rules P lies in [0, 127] (fminf alone suffices: a negative or NaN
+    """The red team's over-strict case: with the range rules P lies in [0, 127] (fminf alone suffices: a negative or NaN
     truncates to 0), so 32 * 127 * 128 a step reaches -2^31 past 132,104 tokens; P from fmaxf alone is any s8 word, whose
     128 * 128 reaches 2^31 at 131,072."""
     t = P.count(_pv(K, steps), (True, True))
@@ -702,7 +718,7 @@ def _lut_pv(K: int) -> CompositeDefinition:
 
 @pytest.mark.parametrize("K,entry_max,unproven", [(132_096, None, 0), (132_128, None, 1), (131_040, 128, 0), (131_072, 128, 1)])
 def test_lut_ps_low_byte_keeps_the_tables_hull_so_pv_stays_in_window_to_132096_keys(K, entry_max, unproven, monkeypatch):
-    """Red team round 5: P = S32LowByte(Exp2Lut127(t)) lies in the table's hull, [0, 127], since a word in s8 is its own low
+    """Red team: P = S32LowByte(Exp2Lut127(t)) lies in the table's hull, [0, 127], since a word in s8 is its own low
     byte, so 32 * 128 * 127 a step reaches -2^31 only past K = 132,096 (Lean's `LutPvWindow`). Read at its type, [-128, 127],
     as with one table entry of 128 (whose low byte is -128), 128 * 128 reaches 2^31 at 131,072."""
     if entry_max is not None:
@@ -794,7 +810,7 @@ def test_check_refuses_bad_windows_c_and_another_programs_census():
 
 
 def test_caps_rates_and_durations_are_exact_and_a_float_is_refused():
-    """Red team round 5: `Fraction(0.1)` is 0.1's binary value, a little more than 1/10, in the attacker's favour. c, R_in and
+    """Red team: `Fraction(0.1)` is 0.1's binary value, a little more than 1/10, in the attacker's favour. c, R_in and
     a window's seconds are taken exactly (an int, a Fraction or a str), a float is refused with its exact spelling in the
     message, and a window's reads is an integer."""
     program, ends = int8_program(epilogue=True)

@@ -1,5 +1,22 @@
-import Proofs.Flock.Recursive.HoloExec
-import Proofs.Flock.C3.Fork.SparseRounds
+module
+
+public import Proofs.Flock.Recursive.HoloExec
+public import Proofs.Flock.C3.Fork.SparseRounds
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.RepSound
 
 /-!
 # Piece (a), the sparse count: one rep's sparse phase is sound
@@ -15,6 +32,8 @@ with `q(t, k)` the planes of type `t` at entry `k` (`planeAt`, the bit `k + 2^ν
 hidden part of the lincheck's fold at `z = R.bits`, for a table `R` whose unit slots are in range, is the assembly's
 (`holo_runs_sound`, `C3/Fork/Runs.lean`), not this lemma's.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

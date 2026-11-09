@@ -1,22 +1,47 @@
-import Proofs.Flock.Soundness.Discharge.Composed.SoundJ
-import Proofs.Flock.Soundness.Assumptions.Zk
+module
+
+public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Proofs.Flock.Soundness.Discharge.Composed.SoundJ
+import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
-# `zk_session_soundJ` at the coin server's custody
+# `zk_session_soundJ` at the challenger's live-coin part's custody
 
-`zk_session_soundJ` takes `RecordsLiveZKJ` (`hRec`) and `DrawOkZKJ` at every draw of the live subset law (`hDraw`). As
-at one table (`ZkLink/DrawOk.lean`), the record and its draw file are custody, and the rest of `DrawOkZKJ` is
+`zk_session_soundJ` takes `RecordsLiveZKJ` (`hRec`) and `DrawOkZKJ` at every sample of the live subset sampling design (`hDraw`). As
+at one table (`ZkLink/DrawOk.lean`), the record and its sample file are custody, and the rest of `DrawOkZKJ` is
 flock-verify's own arithmetic. This file splits them:
 
+* `drawOkZKJ_of_size`: from `DrawFileZK dj law pop` at any sampling design, at a sample `S` whose file decodes only to `q` units, with
+  `nTab I` dividing `q`, `DrawOkZKJ` holds at `mPtsOf c.g (q / nTab I)` link points. The stratified sampling design meets it at
+  `q = ∑ s, k s` (`ZkReg/Guarded.lean`, `drawOkZKJ_of_exec`).
 * `drawOkZKJ_of_file`: from `DrawFileZK dj (subset kd) pop`, with `nTab I` dividing `kd`, `DrawOkZKJ` holds at
-  `mPtsOf c.g (kd / nTab I)` link points at every draw `S`. `UnitDraw.ofJson` decodes a subset draw only at its `k`
-  units, so a draw file it decodes is a draw of `kd` units, and part `j` (`partDraw`) of it decodes to its `kd / nTab I`
-  units, which are the units `partOf` sends to table `j`. No fact about the law's runs is needed: the run that reads
-  past the source's bytes draws every unit, whose draw file decodes only at `kd = n`.
+  `mPtsOf c.g (kd / nTab I)` link points at every sample `S`. `UnitDraw.ofJson` decodes a subset sample only at its `k`
+  units, so a sample file it decodes is a sample of `kd` units, and part `j` (`partDraw`) of it decodes to its `kd / nTab I`
+  units, which are the units `partOf` sends to table `j`. No fact about the sampling design's runs is needed: the run that reads
+  past the source's bytes samples every unit, whose sample file decodes only at `kd = n`.
 * `zk_session_soundJ_custody`: `zk_session_soundJ` with `RecordCustodyZKJ` (`live-verifier`) for `hRec` and `hDraw`,
   at `mPtsOf c.g (kd / nTab I)` link points, and `nTab I ∣ kd` (flock-verify accepts a session of `count > 1` tables
-  only at a draw that splits into `count` equal parts, `accepts_tables`).
+  only at a sample that splits into `count` equal parts, `accepts_tables`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 
@@ -28,9 +53,10 @@ open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type}
 
+-- `walk_step` down the unfolded do-block of `ofJson`, the sample's decoder, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- What `UnitDraw.ofJson` returns: its units are the `units` field's, it has no closure without a `closure` key, and a
-`subset k` draw has `k` units. -/
+`subset k` sample has `k` units. -/
 theorem ofJson_shape {j : Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D) :
     (∃ a, J.arr j "units" "unit_draw" = .ok a ∧ a.mapM (J.asNat · "U2: a drawn unit") = .ok D.units) ∧
     (j.getObjVal? "closure" = .error "property not found: closure" → D.closure = #[]) ∧
@@ -63,7 +89,7 @@ theorem mapM_asNat_toJson (s : String) (a : Array ℕ) : (a.map toJson).mapM (J.
   rw [Array.mapM_eq_mapM_toList, Array.toList_map, mapM_asNat_toJson_list]
   rfl
 
-/-- **Part `j` of a draw decodes to its units** (`partDraw` has no closure). -/
+/-- **Part `j` of a sample decodes to its units** (`partDraw` has no closure). -/
 theorem ofJson_partDraw {pop count j : ℕ} {units : Array ℕ} {D : Draw.UnitDraw}
     (h : Draw.UnitDraw.ofJson (Tables.partDraw pop units count j) = .ok D) :
     D.proved = units.extract (j * (units.size / count)) (j * (units.size / count) + units.size / count) := by
@@ -79,14 +105,14 @@ theorem ofJson_partDraw {pop count j : ℕ} {units : Array ℕ} {D : Draw.UnitDr
   rfl
 
 
-/-- **The coin server's draws are `DrawOkZKJ`.** On untyped `--statement` tags whose circuit file parses under the
-`--zk` tags to `c`: when the record's draw file is the verifier's draw under the subset law `subset kd` over `[0, pop)`
-(`DrawFileZK`) and the session's tables divide `kd`, every draw `S` is `DrawOkZKJ` at `mPtsOf c.g (kd / nTab I)` link
-points. -/
-theorem drawOkZKJ_of_file (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
-    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.subset kd) pop) (S : Finset (Fin n)) :
-    DrawOkZKJ I dj (mPtsOf c.g (kd / nTab I)) S := by
+/-- **`DrawOkZKJ` from custody under any sampling design, at a sample whose decoded file has `q` units**, the session's tables
+dividing `q`: `DrawOkZKJ` at `mPtsOf c.g (q / nTab I)` link points at `S`. Part `j` of the sample (`partDraw`) decodes
+to its `q / nTab I` units, which are the units `partOf` sends to table `j`. -/
+theorem drawOkZKJ_of_size (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (law : Draw.Law) (q pop : ℕ) (hdiv : q % nTab I = 0)
+    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj law pop) (S : Finset (Fin n))
+    (hsize : ∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → D.units.size = q) :
+    DrawOkZKJ I dj (mPtsOf c.g (q / nTab I)) S := by
   intro j
   have hc' : ∀ j : ℕ, (if (tagsAt (zkTags I) I.count j).typed then HmRow.parseTyped (tagsAt (zkTags I) I.count j)
       I.circuitFile I.tables else HmRow.parse (tagsAt (zkTags I) I.count j) I.circuitFile I.tables) = .ok c := by
@@ -110,7 +136,7 @@ theorem drawOkZKJ_of_file (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Ci
     exact (hj ud hud).elim
   obtain ⟨D, hDj⟩ := hD
   have hDe := hdj S D hDj
-  have hsz : D.units.size = kd := (ofJson_shape hDj).2.2 kd (by rw [hDe]; rfl)
+  have hsz : D.units.size = q := hsize D hDj
   have hS : D.units = ((S.image Fin.val).sort (· ≤ ·)).toArray := by rw [hDe]; rfl
   by_cases h1 : I.count ≤ 1
   · have hn : nTab I = 1 := by simp [nTab, h1]
@@ -130,16 +156,16 @@ theorem drawOkZKJ_of_file (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Ci
   · have hn : nTab I = I.count := by simp [nTab, h1]
     have hdr : drawJ I (dj S) j = Tables.partDraw D.population D.units I.count j := by
       simp only [drawJ, h1, ite_false, partJson, hDj]
-    have hq : kd = I.count * (kd / I.count) := by
+    have hq : q = I.count * (q / I.count) := by
       rw [hn] at hdiv
       exact (Nat.mul_div_cancel' (Nat.dvd_of_mod_eq_zero hdiv)).symm
-    have hjq : j.val * (kd / I.count) + kd / I.count ≤ kd := by
+    have hjq : j.val * (q / I.count) + q / I.count ≤ q := by
       have hj : j.val < I.count := by have := j.isLt; omega
-      have := Nat.mul_le_mul_right (kd / I.count) (Nat.succ_le_of_lt hj)
+      have := Nat.mul_le_mul_right (q / I.count) (Nat.succ_le_of_lt hj)
       rw [Nat.succ_mul] at this
       omega
     have hpd : ∀ D', Draw.UnitDraw.ofJson (drawJ I (dj S) j) = .ok D' →
-        D'.proved = D.units.extract (j.val * (kd / I.count)) (j.val * (kd / I.count) + kd / I.count) := by
+        D'.proved = D.units.extract (j.val * (q / I.count)) (j.val * (q / I.count) + q / I.count) := by
       intro D' h'
       rw [hdr] at h'
       rw [ofJson_partDraw h', hsz]
@@ -155,17 +181,17 @@ theorem drawOkZKJ_of_file (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Ci
       simp only [partOf, hDj, hsz] at hpo
       generalize D.units.toList.idxOf u.val = i at hi hget hpo
       rw [Array.length_toList, hsz] at hi
-      have hq0 : 0 < kd / I.count := by
-        rcases Nat.eq_zero_or_pos (kd / I.count) with h0 | h0
+      have hq0 : 0 < q / I.count := by
+        rcases Nat.eq_zero_or_pos (q / I.count) with h0 | h0
         · rw [h0, Nat.mul_zero] at hq; omega
         · exact h0
-      have hlt : i / (kd / I.count) < I.count := (Nat.div_lt_iff_lt_mul hq0).2 (by rw [← hq]; exact hi)
-      have hji : i / (kd / I.count) = j.val := by omega
-      have h1 := Nat.div_add_mod i (kd / I.count)
+      have hlt : i / (q / I.count) < I.count := (Nat.div_lt_iff_lt_mul hq0).2 (by rw [← hq]; exact hi)
+      have hji : i / (q / I.count) = j.val := by omega
+      have h1 := Nat.div_add_mod i (q / I.count)
       have h2 := Nat.mod_lt i hq0
       rw [hji] at h1
       rw [Array.mem_def, Array.toList_extract, List.extract_eq_take_drop]
-      refine List.mem_iff_getElem.2 ⟨i - j.val * (kd / I.count), ?_, ?_⟩
+      refine List.mem_iff_getElem.2 ⟨i - j.val * (q / I.count), ?_, ?_⟩
       · simp only [List.length_drop, List.length_take, Array.length_toList, hsz]
         rw [Nat.mul_comm] at h1
         omega
@@ -176,9 +202,19 @@ theorem drawOkZKJ_of_file (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Ci
     · rw [setupH_mPts_of_proved (hc' j) (fun D' h' => ?_) hst]
       rw [hpd D' h', Array.size_extract, hsz, Nat.min_eq_left hjq, Nat.add_sub_cancel_left, hn]
 
-/-- **One `--zk` sampled session of `J` tables is sound, at the coin server's custody.** `zk_session_soundJ` with
-`RecordCustodyZKJ` (`live-verifier`: the record is the live session's, and its draw file the verifier's draw under the
-subset law) in place of `hRec` and `hDraw`, at `mPtsOf c.g (kd / nTab I)` link points, the session's tables dividing
+/-- **The challenger's live-coin part's samples are `DrawOkZKJ`.** On untyped `--statement` tags whose circuit file parses under the
+`--zk` tags to `c`: when the record's sample file is the verifier's sample under the subset sampling design `subset kd` over `[0, pop)`
+(`DrawFileZK`) and the session's tables divide `kd`, every sample `S` is `DrawOkZKJ` at `mPtsOf c.g (kd / nTab I)` link
+points. -/
+theorem drawOkZKJ_of_file (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
+    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.subset kd) pop) (S : Finset (Fin n)) :
+    DrawOkZKJ I dj (mPtsOf c.g (kd / nTab I)) S :=
+  drawOkZKJ_of_size I ht hc (.subset kd) kd pop hdiv dj hdj S fun D hD => (ofJson_shape hD).2.2 kd (by rw [hdj S D hD]; rfl)
+
+/-- **One `--zk` sampled session of `J` tables is sound, at the challenger's live-coin part's custody.** `zk_session_soundJ` with
+`RecordCustodyZKJ` (`live-verifier`: the record is the live session's, and its sample file the verifier's sample under the
+subset sampling design) in place of `hRec` and `hDraw`, at `mPtsOf c.g (kd / nTab I)` link points, the session's tables dividing
 `kd`. -/
 theorem zk_session_soundJ_custody
     (I : Inputs) (ht : I.tags.typed = false)
@@ -193,7 +229,7 @@ theorem zk_session_soundJ_custody
     (dg : ByteArray → ByteArray) (N : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the verify command's tags, and the coin server's custody of the record and its draw file
+    -- the verify command's tags, and the challenger's live-coin part's custody of the record and its sample file
     (hTags : TagsOkZJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZJ (Reg := Reg) dj y₀ S R).length) wr kd)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)

@@ -1,10 +1,61 @@
-import Proofs.Flock.Claims.KS.PlainDrawAccK
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawAccK
+public import Proofs.Flock.Claims.Bridge.DecodePlain
+public import Proofs.Flock.Claims.KS.PlainBound
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.DecodeDeploy
+import Proofs.Flock.Claims.KS.DecodeHidden
+import Proofs.Flock.Claims.KS.Entries
+import Proofs.Flock.Claims.KS.PlainDrawK
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
-# The deployed plain decoders at the statement's draw, at `VK keep`
+# The deployed plain decoders at the statement's sample, at `VK keep`
 
-The deployed plain decoders for the verdict at the statement's draw read through `keep`, on `PlainDrawAccK`'s
-acceptance lemmas, at any record writer `wr` whose transcripts record their outcome at the setup at the draw
+The deployed plain decoders for the verdict at the statement's sample read through `keep`, on `PlainDrawAccK`'s
+acceptance lemmas, at any record writer `wr` whose transcripts record their outcome at the setup at the sample
 (`RecordsLiveAtDK`). The one place they meet the outcome's rounds is the rep's run (`PlaysCoin.RepRun`), which reads a
 round's coin count, coins and bytes and never its digest, so the decoded rounds carry it to the outcome's up to their
 digests (`PlaysCoin.repRun_of_erase`). At `wrPDK` they are the decoders for `plainVerdictAtK keep`, and at `keep := id`
@@ -13,11 +64,13 @@ and `wrPD` `PlainDrawDec`'s for `plainVerdictAt`:
 * `recordsLive_wrK1_of`, `recordsLive_wrPDK1`: a recording transcript, and `wrPDK`, at a one-table outcome record it as
   one table's, the rounds up to their digests.
 * `decodesTable_wrK_sc_of`, `decodesTable_wrK_scH_of`: the decoders right at public and at hidden outputs, on the
-  outcomes whose transcript `verifyWithMK keep` accepts at the draw `dj S` with no column off `C` (`AcceptsAtDK`,
+  outcomes whose transcript `verifyWithMK keep` accepts at the sample `dj S` with no column off `C` (`AcceptsAtDK`,
   `TxNoOffAtK`); `decodesTable_wrPDK_sc`, `decodesTable_wrPDK_scH` at `wrPDK`.
 * `plain_hdecAtK_of`, `plain_hdecHAtK_of`: at `plainTab`; `plain_hdecAtK`, `plain_hdecHAtK` at `wrPDK`, with
   `plainVerdictAtK keep`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PlaysCoin
 
@@ -88,7 +141,7 @@ theorem recordsLive_wrPDK1 (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) {
 open DecodeZL Integrate in
 /-- **The deployed plain decoders are right at a record writer for accepting with no opening off `C` without a
 self-clash**, at one table: `decodesTable_wrPD_sc` through `keep`, at any writer `wr` whose transcripts record their
-outcome at the setup at the draw `dj S` (`RecordsLiveAtDK`), on the outcomes whose transcript `verifyWithMK keep`
+outcome at the setup at the sample `dj S` (`RecordsLiveAtDK`), on the outcomes whose transcript `verifyWithMK keep`
 accepts there, whose root is `rootB₀`'s and on which the deployed plain reader looks up no column off `C` there
 (`TxNoOffAtK`). -/
 theorem decodesTable_wrK_sc_of (keep : Bool → Bool)
@@ -405,9 +458,9 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 open Classical Discharge.Tables Claims.Bridge.PlainDraw in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the draw, at a record writer**:
+/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at a record writer**:
 `plain_hdecAt` through `keep`, at any writer `wr` whose transcripts record their outcome at the setup at `d`, from
-`decodesTable_wrK_sc_of` at `d` and no drawn unit. -/
+`decodesTable_wrK_sc_of` at `d` and no sampled proof block. -/
 theorem plain_hdecAtK_of (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -463,7 +516,7 @@ theorem plain_hdecAtK_of (keep : Bool → Bool)
   exact hdec
 
 open Classical Discharge.Tables Claims.Bridge.PlainDraw in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the draw, at hidden outputs and a leaf
+/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and a leaf
 form `F`, at a record writer**: `plain_hdecHAt` through `keep`, at any writer `wr` whose transcripts record their
 outcome at the setup at `d`, from `decodesTable_wrK_scHLf_of`. -/
 theorem plain_hdecHLfAtK_of (keep : Bool → Bool) (F : AtDraw.LeafForm)
@@ -506,7 +559,8 @@ theorem plain_hdecHLfAtK_of (keep : Bool → Bool) (F : AtDraw.LeafForm)
       fun _ _ => plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay := by
     funext S R
     obtain rfl : S = ∅ := Finset.eq_empty_of_isEmpty S
-    exact tableAtH_plainTab ht (fun _ : Finset (Fin 0) => d) (spec := st.spec) (S := ∅) x₀ x₀ hx₀ L m k0 l₀ l₁
+    exact tableAtH_plainTab ht (HmOut.parse_isTmpl hc) (fun _ : Finset (Fin 0) => d) (spec := st.spec) (S := ∅) x₀ x₀
+      hx₀ L m k0 l₀ l₁
       rest ext hsch hm hlay
   have hS : HiddenDec.DrawOkH ins.read.I (fun _ : Finset (Fin 0) => d) st.spec.mPts ∅ :=
     ⟨fun _ _ u hu => absurd hu (Finset.notMem_empty u), fun st' hst' => by
@@ -522,7 +576,7 @@ theorem plain_hdecHLfAtK_of (keep : Bool → Bool) (F : AtDraw.LeafForm)
   exact hdec
 
 open Classical Discharge.Tables Claims.Bridge.PlainDraw in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the draw, at hidden outputs and
+/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and
 `hm96-sha512/v1` leaves, at a record writer**: `plain_hdecHAt` through `keep`, at any writer `wr` whose transcripts
 record their outcome at the setup at `d`: `plain_hdecHLfAtK_of` at `LeafForm.hm96`. -/
 theorem plain_hdecHAtK_of (keep : Bool → Bool)
@@ -554,7 +608,7 @@ theorem plain_hdecHAtK_of (keep : Bool → Bool)
     hwr
 
 open Classical Discharge.Tables Claims.Bridge.PlainDraw in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the draw**: `plain_hdecAt` with
+/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample**: `plain_hdecAt` with
 `plainVerdictAtK keep` for `plainVerdictAt` (`plain_hdecAtK_of` at `wrPDK`). -/
 theorem plain_hdecAtK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
@@ -582,7 +636,7 @@ theorem plain_hdecAtK (keep : Bool → Bool)
     (recordsLiveAtDK_wrPDK keep ins.read.I d)
 
 open Classical Discharge.Tables Claims.Bridge.PlainDraw in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the draw, at hidden outputs and
+/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and
 `hm96-sha512/v1` leaves**: `plain_hdecHAt` with `plainVerdictAtK keep` for `plainVerdictAt` (`plain_hdecHAtK_of` at
 `wrPDK`). -/
 theorem plain_hdecHAtK (keep : Bool → Bool)

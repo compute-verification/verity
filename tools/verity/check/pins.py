@@ -1,20 +1,34 @@
-"""`pins`: every tracked file that records the sha256 of Lean sources, with the command that regenerates it.
+"""`pins`: every tracked file a command regenerates from the tree, with that command: each pin, a file that records the sha256
+of Lean sources (`PINS`), and each test's fixture (`WRITERS`).
 
-    python tools/verity/check/pins.py            each pin, whether it is stale, and its command
+    python tools/verity/check/pins.py            each pin, whether it is stale, and its command; then each test's fixture
     python tools/verity/check/pins.py --stale    exit 1 listing each stale pin with its command
     python tools/verity/check/pins.py --regen    run each stale pin's command at the root, in order; exit 1 while one is stale
+    uv run python tools/verity/check/pins.py --write PATH...   rewrite each named test's fixture by its test module's
+                                                 ``--write``, at the root; exit 1 when one failed
     python tools/verity/check/pins.py --merged OURS THEIRS [--conflicted PATH...]   regenerate what a merge of THEIRS into
                                                  OURS, under way at the root, wrote by merging text (`merged`)
 
-A pin is written only by its command, never by hand: #1499's revert came from a hand-written one. A pin is stale when a file it
-records has another digest in the tree (or is gone), and its command, run at the root of a checkout, rewrites it from the tree.
+A test's fixture is a tracked file a test holds the tree to and its test module rewrites from the tree (``python MODULE
+--write``, in the workspace's environment). ``--write PATH`` is the one command that regenerates it, and the test's failure
+names it (`Writer.command`); only the test can tell that its fixture is stale, so ``--stale`` and ``--regen`` leave it alone.
+`tests/test_pins.py` fails on a test module under `WRITER_DIRS` with a ``--write`` that no `Writer` lists, and on a `Writer`
+whose module doesn't name its command.
+
+A pin is written only by its command, never by hand: a hand-written one can record a digest its command doesn't. A pin is
+stale when a file it records has another digest in the tree (or is gone), or, for a `sha256sum` listing, when its command's
+arguments (a `find` among them) name a file it doesn't list or no longer name one it does (`Pin.gap`), and its command, run
+at the root of a checkout, rewrites it from the tree.
 `tests/test_pins.py` fails while a pin is stale, naming its command, and while a tracked file records the digest of a Lean source
 (`*.lean`, a Lake manifest, lakefile or toolchain) without being listed here. `tools/move/restack.py` runs `--regen` on every
 restacked branch. Not listed, since another check owns them: a `lean-audit.json`'s records (the Lean check, `check.py --update`)
 and `tools/verity/lean/lean-deps.json`, a bundle per manifest that a cold run exports (preflight names its command).
 
 `--merged` is the merge's half (`research merge --train --prepare` runs it on every merge of a train): Lake manifests and pins
-are generated, so their merged text is never kept. Each Lake package (a directory with a tracked `lakefile.toml` and
+are generated, so their merged text is never kept.  Drive's merge onto `next` has no checkout to run commands in, so when its
+only conflicts are in pins it rebuilds each from the merged tree itself, reading `PINS` from this file's text, unless both
+sides changed what a JSON pin holds besides its digests, which conflicts (`research.queue.repinned`).
+Each Lake package (a directory with a tracked `lakefile.toml` and
 `lake-manifest.json`) whose lakefile, manifest or toolchain, or one of a package it requires by path, both sides changed gets
 `lake update`, packages a package requires first (0fcc: two branches each added a dependency, and the merged manifest held
 neither); a package whose manifest moves to a new dependency key gets the pin of the bundle one side had for it, when the new
@@ -63,6 +77,9 @@ class Pin:
     #: its dependencies nor Mathlib's built cache, and `lake build` would compile Mathlib)
     builds: str | None = None
 
+    def _rooted(self, p: str) -> str:
+        return os.path.normpath(os.path.join(self.under, p)) if self.under else p
+
     def recorded(self, root: Path) -> dict[str, str]:
         """{root-relative path: recorded digest}."""
         text = (root / self.path).read_text()
@@ -70,25 +87,41 @@ class Pin:
             pairs = [ln.split("  ", 1)[::-1] for ln in text.splitlines() if ln.strip()]
         else:
             pairs = json.loads(text)[self.key].items()
-        return {str(Path(self.under, p)) if self.under else p: h for p, h in pairs}
+        return {self._rooted(p): h for p, h in pairs}
+
+    def gap(self, root: Path) -> tuple[list[str], list[str]]:
+        """A `sha256sum` listing's (files its command hashes that it doesn't list, files it lists that its command doesn't
+        hash), from the command's arguments as bash expands them in `under` (a `find` in them sees a file added since), without
+        hashing anything; ([], []) for a pin with a command of its own, which records the fixed list its command names."""
+        if self.command is not None:
+            return [], []
+        args = self._sha256sum(root).removeprefix("sha256sum")
+        out = subprocess.run(["bash", "-c", f"printf '%s\\n' {args}"], cwd=root / self.under, capture_output=True, text=True,
+                             check=True).stdout
+        hashed, listed = {self._rooted(p) for p in out.splitlines() if p}, set(self.recorded(root))
+        return sorted(hashed - listed), sorted(listed - hashed)
 
     def stale(self, root: Path) -> list[str]:
-        """The recorded files whose digest in the tree differs, or that are gone. One git ignores (a fetched fixture) is judged
-        only where it has been fetched."""
+        """The recorded files whose digest in the tree differs, or that are gone, and those `gap` finds. One git ignores (a
+        fetched fixture) is judged only where it has been fetched."""
         rec = self.recorded(root)
         missing = [p for p in rec if not (root / p).is_file()]
         return sorted({p for p, h in rec.items() if p not in missing and sha256(root / p) != h} |
-                      set(missing) - ignored(root, missing))
+                      set(missing) - ignored(root, missing) | set().union(*self.gap(root)))
 
-    def shell(self, root: Path) -> str:
-        if self.command is not None:
-            return self.command
+    def _sha256sum(self, root: Path) -> str:
+        """The `sha256sum ...` that `under`'s README.md writes this pin with, on one line."""
         name = Path(self.path).name
         readme = re.sub(r"\\\n\s*", "", (root / self.under / "README.md").read_text())
         m = re.search(rf"^(sha256sum [^\n]*) > {re.escape(name)}$", readme, re.M)
         if not m:
             raise SystemExit(f"{self.under}/README.md: no `sha256sum ... > {name}` command")
-        return f"cd {self.under} && {m.group(1)} > {name}"
+        return m.group(1)
+
+    def shell(self, root: Path) -> str:
+        if self.command is not None:
+            return self.command
+        return f"cd {self.under} && {self._sha256sum(root)} > {Path(self.path).name}"
 
 
 NCP = "verity/core/protocols/pouw/tests/ncp_lean.py"
@@ -96,8 +129,10 @@ PINS = (
     Pin("verity/core/protocols/pous/lean/TRUSTED.sha256", None, "verity/core/protocols/pous/lean", None),
     Pin("verity/ml/flock/tests/fixtures/randomness_lean.json", "inputs", "", "bash verity/ml/flock/tests/lean/generate.sh",
         "Security/Proofs"),
-    Pin("verity/core/protocols/sampled_proofs/tests/fixtures/exfiltration_lean.json", "inputs", "",
-        "bash verity/core/protocols/sampled_proofs/tests/lean/generate.sh", "Security/Proofs"),
+    Pin("verity/core/protocols/spot/tests/fixtures/exfiltration_lean.json", "inputs", "",
+        "bash verity/core/protocols/spot/tests/lean/generate.sh", "Security/Proofs"),
+    Pin("verity/core/protocols/spot/tests/fixtures/exfiltration_two_lean.json", "inputs", "",
+        "bash verity/core/protocols/spot/tests/lean/generate.sh", "Security/Proofs"),
     Pin("verity/ml/flock/tests/fixtures/inner_claims.json", "inputs", "",
         "bash verity/ml/flock/tests/lean/generate_inner_claims.sh", "verity/core/service/flock"),
     Pin("verity/core/protocols/pouw/tests/vectors/ncp_lean.json", "sources_sha256", "Security",
@@ -105,6 +140,38 @@ PINS = (
         f"lake env lean NcpCheck.lean > ncp_lean.out) && uv run python {NCP} pin Security/ncp_lean.out Security; "
         f"s=$?; rm -f Security/NcpCheck.lean Security/ncp_lean.out; exit $s", "Security"),
 )
+
+
+@dataclass(frozen=True)
+class Writer:
+    #: the fixture, from the root
+    path: str
+    #: the test module that holds the tree to it and rewrites it from the tree with ``--write``, from the root
+    module: str
+
+    @property
+    def command(self) -> str:
+        """What the test's failure names: the one command that rewrites the fixture."""
+        return f"uv run python tools/verity/check/pins.py --write {self.path}"
+
+
+CIRCUITS_TESTS, VLLM_PROGRAM_TESTS = "verity/ml/circuits/tests/", "integrations/vllm/tests/program/"
+WRITERS = (
+    *(Writer(CIRCUITS_TESTS + f, CIRCUITS_TESTS + m) for f, m in (
+        ("boolean_vectors.json", "test_boolean.py"),
+        ("format_vectors.json", "test_format_spec.py"),
+        ("partition_v2_vectors.json", "test_partition_v2.py"),
+        ("population_recorded.json", "test_population_recorded.py"),
+        ("qcall_vectors.json", "test_qcall_vectors.py"),
+        ("qword_vectors.json", "test_qword_vectors.py"),
+        ("template_instance_vectors.json", "test_template_instance.py"),
+    )),
+    Writer(VLLM_PROGRAM_TESTS + "data/sampling_split_digests.json", VLLM_PROGRAM_TESTS + "test_sampling_split.py"),
+    Writer("tools/verity/circuit_check/tests/fixtures/split/prims_serve.json",
+           "tools/verity/circuit_check/tests/test_split_prims_serve.py"),
+)
+#: the directories whose every test module with a ``--write`` is a `Writer`'s (`tests/test_pins.py`)
+WRITER_DIRS = (CIRCUITS_TESTS, VLLM_PROGRAM_TESTS)
 SETUP = "tools/verity/lean/setup.sh"
 #: tracked files that record Lean sources' digests and are someone else's to keep: the Lean check's locks, and the moves' history
 EXEMPT = re.compile(r"(^|/)lean-audit\.json$|^tools/move/|^archive/")
@@ -162,6 +229,23 @@ def regen(root: Path) -> list[tuple[Pin, list[str]]]:
         if r.returncode:
             print(f"pins: {pin.path}: its command exited {r.returncode}", file=sys.stderr)
     return stale(root)
+
+
+def write(paths: list[str], root: Path) -> int:
+    """`--write`: run each named fixture's test module with ``--write`` at ``root``, in this interpreter, in order; 1 when one
+    failed, 2 when a path is no `Writer`'s fixture (and nothing runs)."""
+    by_path = {w.path: w for w in WRITERS}
+    paths = [os.path.normpath(p) for p in paths]
+    if unknown := [p for p in paths if p not in by_path]:
+        print(f"pins: {', '.join(unknown)}: no test's fixture; --write takes one of {', '.join(by_path)}", file=sys.stderr)
+        return 2
+    rc = 0
+    for w in map(by_path.get, paths):
+        print(f"pins: rewriting {w.path}: python {w.module} --write", flush=True)
+        if r := subprocess.run([sys.executable, w.module, "--write"], cwd=root).returncode:
+            print(f"pins: {w.path}: {w.module} --write exited {r}", file=sys.stderr)
+            rc = 1
+    return rc
 
 
 def git(root: Path, *args: str) -> str:
@@ -314,8 +398,20 @@ def merged(root: Path, ours: str, theirs: str, conflicted: list[str]) -> tuple[i
 
 
 def report(rows: list[tuple[Pin, list[str]]], root: Path) -> str:
-    return "\n".join(f"{pin.path} is stale ({', '.join(s[:3])}{', ...' if len(s) > 3 else ''}): run `{pin.shell(root)}`"
-                     for pin, s in rows)
+    def few(s: list[str]) -> str:
+        return ", ".join(s[:3]) + (", ..." if len(s) > 3 else "")
+
+    def files(s: list[str]) -> str:
+        return f"{len(s)} file{'s' * (len(s) != 1)}"
+
+    lines = []
+    for pin, s in rows:
+        new, old = pin.gap(root)
+        why = [few(changed)] if (changed := [p for p in s if p not in new and p not in old]) else []
+        why += [f"its command hashes {files(new)} it doesn't list: {few(new)}"] if new else []
+        why += [f"it lists {files(old)} its command doesn't hash: {few(old)}"] if old else []
+        lines.append(f"{pin.path} is stale ({'; '.join(why)}): run `{pin.shell(root)}`")
+    return "\n".join(lines)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -324,9 +420,12 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--stale", action="store_true")
     g.add_argument("--regen", action="store_true")
     g.add_argument("--merged", nargs=2, metavar=("OURS", "THEIRS"))
+    g.add_argument("--write", nargs="+", metavar="PATH", help="rewrite these tests' fixtures (`WRITERS`)")
     ap.add_argument("--conflicted", nargs="*", default=[], metavar="PATH", help="--merged: the merge's conflicted paths")
     ap.add_argument("--root", type=Path, default=ROOT)
     a = ap.parse_args(argv)
+    if a.write:
+        return write(a.write, a.root)
     if a.merged:
         rc, doc = merged(a.root, *a.merged, a.conflicted)
         print(json.dumps(doc))
@@ -339,6 +438,8 @@ def main(argv: list[str] | None = None) -> int:
     for pin in PINS:
         s = pin.stale(a.root)
         print(f"{'stale' if s else 'ok   '}  {pin.path}  `{pin.shell(a.root)}`")
+    for w in WRITERS:
+        print(f"test   {w.path}  `{w.command}`")
     return 0
 
 

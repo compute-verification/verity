@@ -23,7 +23,7 @@ R = ValueRef
 
 @pytest.mark.parametrize("E_,renorm", [(64, False), (64, True), (128, False), (128, True)])
 def test_the_committed_softmax_is_the_taps_layout_with_no_recompute(E_, renorm):
-    from verity_vllm.query import word as W_
+    from verity.ml.definitions import word as W_
 
     fn = RS.router_fn(E_, 8, 8, renorm)
     G = W_.Graph(fn)
@@ -130,7 +130,7 @@ def test_the_plan_anchors_the_tap_on_the_moe_module():
 
 
 def test_word_check_sees_the_tapped_softmax_as_committed():
-    from verity_vllm.query import word as W_
+    from verity.ml.definitions import word as W_
 
     groups = [{"family": fam, "statics": {"E": 64, "TOPK": 8, "VPT": 8}, "definition": f"{fam}{{E=64,TOPK=8,VPT=8}}", "calls": 3,
                "where": "model.layers.0.mlp.experts"} for fam in RS.ROUTERS]
@@ -142,12 +142,12 @@ def test_word_check_sees_the_tapped_softmax_as_committed():
 
 def test_the_manifest_cli_and_verify_carry_the_policy(monkeypatch):
     from verity_vllm.pipeline import manifest as M
-    from verity_vllm.query.manifest import verify as V
+    from verity_vllm.pipeline import manifest_verify as MV
 
     assert M.taps_of() == () and M.taps_of(router_softmax=True) == (RS.FAMILY,) and M.TAPS[RS.FAMILY] is RS.POLICY
     seen = {}
     monkeypatch.setattr(M, "build", lambda program, **kw: seen.setdefault("kw", kw) and {})
-    V.rebuild(program="p", taps=M.taps_of(router_softmax=True))
+    MV.rebuild(program="p", taps=M.taps_of(router_softmax=True))
     assert seen["kw"]["taps"] == (RS.FAMILY,)
 
 

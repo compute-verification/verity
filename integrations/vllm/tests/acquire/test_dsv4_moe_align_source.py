@@ -24,7 +24,7 @@ from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import moe_align_source as MA
 from verity_vllm.acquire.sources import oracle_witness as OW
 from verity_vllm.acquire.sources import taps
-from verity_vllm.program.registry import marlin_moe as MM
+from verity.ml.definitions.registry import marlin_moe as MM
 from verity_vllm.query.manifest.bind import Binder, source_ports
 
 
@@ -145,7 +145,7 @@ def model_of(ids: list[torch.Tensor]) -> torch.nn.Module:
 
 
 def fake_marlin(monkeypatch, *, tamper: str | None = None, seed: int = 0) -> None:
-    """The kernel, its atomic order drawn from ``seed`` and the call's pair count: two runs of other seeds schedule apart."""
+    """The kernel, its atomic order sampled from ``seed`` and the call's pair count: two runs of other seeds schedule apart."""
     def moe_align_block_size(topk_ids, block_size, num_experts, expert_map=None, pad_sorted_ids=False, ignore_invalid_experts=False):
         ids = topk_ids.reshape(-1).tolist()
         out = kernel(ids, num_experts, block_size, np.random.default_rng(len(ids) + seed).permutation(len(ids)), unwritten=0)
@@ -428,7 +428,7 @@ def test_a_call_routed_otherwise_runs_its_own_schedule_and_is_counted(monkeypatc
 def test_the_rank_worker_arms_the_replay_once_before_the_committer_installs(monkeypatch, tmp_path) -> None:
     """`tp2_commit_install` arms the rank's align source with the capture's schedule before its committer installs: once, at the
     warm-up's install, and the record's install reuses it.  A Commit without a capture arms nothing."""
-    from verity_vllm.engine import rank_worker as RW
+    from verity_vllm.pipeline.tp import rank_worker as RW
 
     _capture(monkeypatch, tmp_path, [ids_of(1), ids_of(2)])
     events: list = []

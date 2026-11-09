@@ -1,50 +1,61 @@
-"""The proof leg: units through C-Flock `prove --zk` behind the Lean firewall and the Lean verifier of record, one call
-(`prove_units`) that stages each member's units, registers them, takes the verifier's draw, proves each drawn member's
+"""The proof leg: units through Flock `prove --zk` behind the Lean ZK server and the Lean verifier, one call
+(`prove_units`) that stages each member's units, registers them, takes the verifier's sample, proves each sampled member's
 units in one `--zk` session, verifies it with Lean `flock-verify verify --zk` (with `--registered` when the units read
 registered values), opens the rows the verifier holds its own copy of, and records every verdict in the one-stage audit
-record. Network-accounting's I5 for the arbitrary-vLLM goal (thread 1792816009.557169): the compiled per-step units, N2's
-head-check units and the I/O tie's units all ride it.
+record. The compiled per-step units of an arbitrary vLLM model, its head-check units and the I/O tie's units all ride
+it.
 
-    python benchmarks/one_stage/prove_leg.py standin --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
-      --out DIR [--n 4] [--negatives] [--registered]
-    python benchmarks/one_stage/prove_leg.py defs --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
-      --out DIR --shape gemm:1b:2048 [--shape attention:1b:69 ...] [--negatives] [--census] [--reads slots]
+    python benchmarks/one_stage/prove_leg.py standin --bin flock-circuit --lean flock-verify [--firewall flock-firewall] \\
+      --out DIR [--n 4] [--negatives] [--registered] [--gpus 0,1]
+    python benchmarks/one_stage/prove_leg.py defs --bin flock-circuit --lean flock-verify [--firewall flock-firewall] \\
+      --out DIR --shape gemm:1b:2048 [--shape attention-v20:1b:384:block ...] [--negatives] [--census] [--reads slots] [--gpus 0,1]
 
-* **Members** (`Member`). One template's units, one statement: a bound Definition C-Flock lowers flat (`ir_lower`; Lean
-  refuses typed and template statements until PRF-133), `UnitStager`'s rows and output rows, the prover's rows, the rows
+* **Members** (`Member`). One template's units, one statement: a bound Definition Flock lowers flat (`ir_lower`; Lean
+  refuses typed and template statements), `UnitStager`'s rows and output rows, the prover's rows, the rows
   the verifier derives itself (``held``: public inputs, opened by ``b || c`` to its own copy under the salts the prover
   reveals for those rows alone), and the output rows it requires (``expect``: an ok bit). ``stage_kw`` passes a shared-row
   file's tables, refs and registered reads to `UnitStager.stage` for units that read registered values.
 * **The program.** The caller's (a window's, whose partition the statements bind), else the population program of the
   members' templates (`partition.mixed_population_program`, `Q_template_instances`), one stratum a member.
 * **The registration** (`registration.record`): each statement's frame-v3 ports, the sampling design, the scheme and the
-  leaf layer, checked by the verifier of record (R1-R7) and against each statement's header before the draw.
-* **The draw** (``coins``): ``"lean"``, the verifier's Lean on its own OS coins (`flock-verify draw --stratified K`, A3);
-  a mapping ``{member: [unit, ...]}`` of each member's drawn units, a draw the proof service made on live coins; or a
+  leaf layer, checked by the verifier (R1-R7) and against each statement's header before the sample.
+* **The sample** (``coins``): ``"lean"``, the verifier's Lean (`flock-verify draw --stratified K`) on a development
+  challenger's coins opened after the registration (`a0.challenger_draw`);
+  a mapping ``{member: [unit, ...]}`` of each member's sampled proof blocks, a sample the proof system made on live coins; or a
   callable that takes the registration record and returns that mapping (a `service.Stream`'s register and select).
-* **Proving.** Each drawn member's units are one `serve --zk --draw-file` / `prove --zk` session, behind the firewall
-  (``FC_FIREWALL=1``, its Lean frame ``FC_FIREWALL_LEAN``) when `Tools.firewall` names one.
-* **The verdict of record** is Lean's `verify --zk --archive --partition --program [--registered]` on the session. A unit
-  is accepted when its session's Lean and M0 verdicts accept it and its held and expected rows open to the verifier's own.
-  The audit record (`verifier.audit_record`) holds every verdict, the draw and the roots.
+* **Proving.** Each sampled member's units are one `--zk` session on SPOT's proof server (`verity_flock.proof_server`):
+  one long-lived streaming prover a device and one queued verifier a block type, ``FC_VERIFY_AHEAD`` 2, every member's
+  session submitted before any is collected. The run's server (`proof_server`, the CLI's ``--gpus``) serves every leg
+  inside it; a leg outside one runs its own CPU server. Under ``FLOCK_CHALLENGER=1`` a leg runs a server of its own whose
+  verifiers take their coin trees from challengers, and closes it before its verdicts, since a challenger's audit holds
+  every session it served at once. Behind the ZK server (``FC_FIREWALL=1``, its Lean frame ``FC_FIREWALL_LEAN``, when
+  `Tools.firewall` names one) a session is one `serve --zk --draw-file` / `prove --zk` process pair instead
+  (`a0.session`).
+* **The verdict of record** is Lean's `verify --zk --archive --partition --program [--registered]` on the session, run on the
+  server's verdict pool as each session ends, off the provers' path. A unit is accepted when its session's Lean and M0
+  verdicts accept it, its verifier's challenger's audit passed (``challenger/<member>``, with a challenger), and its held
+  and expected rows open to the verifier's own.
+  The audit record (`verifier.audit_record`) holds every verdict, the sample and the roots.
 
 Negatives (`negatives`), each refused at the proof layer:
 
     tampered-unit     a unit whose committed output word is wrong, proved with the prover's self-check skipped: the
-                      firewall's Lean recheck stops it; unfirewalled, Lean `verify --zk` refuses the proof that reaches it
+                      ZK server's Lean recheck stops it; unserved, Lean `verify --zk` refuses the proof that reaches it
     tampered-public   a unit staged on a held row other than the verifier's copy: its proof verifies, its opening fails
-    tampered-root     a registration whose first root is not the statement's: refused before the draw
-    wrong-unit        a member's session checked against another member's circuit (that stratum's committed pin)
+    tampered-root     a registration whose first root is not the statement's: refused before the sample
+    incorrect-block        a member's session checked against another member's circuit (that stratum's committed pin)
     tampered-registered-root  (members with registered reads) the verifier's --registered file with a root changed
 
 Served Definitions (`served`, ``defs``): vLLM's served Definitions as the frontend binds them on the RTX PRO 6000 target
 (`targets.gemm_spec`, `attention_spec`, `rmsnorm_fused_spec`, the dead-free rewrites) at a Llama model's statics, each the
-template the serving rows commit (`serving_rows.template`: a row, or a ``SLICES`` row's unit), on seeded stand-in values. A
-shape whose rows' in-circuit hashing alone passes C-Flock's block (`m1_families.block`) is reported refused, not lowered.
+template the serving rows commit (`serving_rows.template`: a row, or a ``SLICES`` row's unit), on seeded stand-in values;
+and the window circuit's units (`window_circuit`): an attention head's per-key-block Calls on the RTX PRO 6000 and the H200
+(``CUT_TARGETS``) and the embedding's registered read. A unit's MUFU table reads are laid out as its template's own
+(`chunk_rows.reads`) unless ``--reads`` says otherwise. A shape whose rows' in-circuit hashing alone passes Flock's block
+(`m1_families.block`) is reported refused, not lowered, and an ``UNSTAGED`` unit (the embedding's read) is sized only.
 
-Known limits: units flat or untyped staged (PRF-133); C-Flock's block at most 2^27 (split-K, #3467, past K = 5041);
-table-heavy units need lookup slots (``--reads slots``; #3416, #3478); tail lookup slots are the GPU prover's; prover
-worker threads may need a bigger stack (PRF-141).
+Known limits: units flat or untyped staged; Flock's block at most 2^27 (split-K past K = 5041); table-heavy units
+need lookup slots; tail lookup slots are the GPU prover's; prover worker threads may need a bigger stack.
 """
 from __future__ import annotations
 
@@ -71,10 +82,11 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import a7  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import verifier as V  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R  # noqa: E402
+from verity.core.protocols.spot.one_stage import verifier as V  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
+from verity_flock.proof_server import ProofServer, ProofServerError, Statement  # noqa: E402
 
 FORMAT = "verity/prove-leg/v0"
 TIMING = ("e2e_s", "wait_s", "witness_s", "prove_total_s", "proof_bytes", "k_log", "nbl", "dense_m", "units")
@@ -114,8 +126,8 @@ class Member:
 
 @dataclass(frozen=True)
 class Tools:
-    """The binaries: M0's ``flock-circuit`` (the proving build), the Lean ``flock-verify``, and the Lean firewall's frame
-    ``flock-firewall`` (None: proved without the firewall)."""
+    """The binaries: M0's ``flock-circuit`` (the proving build), the Lean ``flock-verify``, and the Lean ZK server's frame
+    ``flock-firewall`` (None: proved without the ZK server)."""
 
     bin: str
     lean: str
@@ -133,6 +145,25 @@ def free_port() -> int:
 
 #: `stage`'s bound stagers by unit and partition inside `reuse_lowerings`, else None
 _STAGERS: dict | None = None
+#: the run's proof server (`proof_server`), which every leg inside it proves on
+_SERVER: ProofServer | None = None
+
+
+@contextlib.contextmanager
+def proof_server(tools: Tools, out: Path, devices: Sequence[int] | None = None, verify_ahead: int = 2):
+    """SPOT's proof server for every leg run inside: ``devices``' GPUs (None: one CPU prover), its processes' logs under
+    ``out`` and, once it closes, ``server.json`` (its devices, each type's device and each process's exit). Its sessions
+    run as SPOT's proof server runs them (`a0.DIRECT`: no ZK server, the witness built where the prover builds it)."""
+    global _SERVER
+    ps = ProofServer(tools.bin, out, devices=devices, verify_ahead=verify_ahead, env=a0.DIRECT)
+    _SERVER = ps
+    try:
+        yield ps
+    finally:
+        _SERVER = None
+        exits = ps.close()
+        (Path(out) / "server.json").write_text(json.dumps({"devices": devices, "verify_ahead": verify_ahead,
+                                                           "routes": ps.routes, "exits": exits}, indent=1, sort_keys=True))
 
 
 class OutsideShape(ValueError):
@@ -222,10 +253,12 @@ def stage(m: Member, base: int, bound: dict, out: Path, salt_key: bytes, files: 
 
 def _draw(coins, rec: dict, program_file: Path, partition_file: Path, k: int, lean: str, out: Path,
           bases: dict[str, tuple[int, int]]) -> dict:
-    """The verifier's draw as one draw object over global units: Lean's own (``coins == "lean"``), or the caller's."""
+    """The verifier's sample as one sample object over global units: its Lean's on a development challenger's coins
+    opened after the registration (``coins == "lean"``, `a0.challenger_draw`), or the caller's."""
     if coins == "lean":
-        p = a0.run([lean, "draw", "--program", str(program_file), "--partition", str(partition_file), "--stratified", str(k)],
-                   out / "draw.log")
+        p = a0.challenger_draw(lean, ["--program", str(program_file), "--partition", str(partition_file),
+                                      "--stratified", str(k)], rec["law"], rec["population"], R.digest(rec),
+                               out / "draw.log")
         line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
         if line is None:
             raise RuntimeError(f"flock-verify draw gave no draw (rc {p.returncode}): {p.stderr[-400:]}")
@@ -271,7 +304,7 @@ def public_bcs(path: Path, ports: list) -> tuple[dict[str, list[bytes]], dict[st
 
 
 def opened(s: dict, local: list[int], m: Member) -> dict:
-    """Each drawn unit's held rows opened to the verifier's own copy and its expected output rows to the required words,
+    """Each sampled proof block's held rows opened to the verifier's own copy and its expected output rows to the required words,
     under the salts the prover reveals for those rows alone: ``{unit: [failed row, ...]}``."""
     if not (m.held or m.expect):
         return {i: [] for i in local}
@@ -285,15 +318,38 @@ def opened(s: dict, local: list[int], m: Member) -> dict:
     return out
 
 
+def _session(m: Member, s: dict, h: Any, local: list[int], tools: Tools, sdir: Path) -> tuple[dict | None, dict | None, dict, float | None]:
+    """Member ``m``'s session record, its prover's record, its verdict of record and its seconds: from the proof server
+    (``h``, the session submitted there), else one serve/prove process pair behind the ZK server or a challenger of its
+    own (`a0.session`), verified then."""
+    if h is None:
+        env = {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": tools.firewall, **a0.firewall_env(s)} if tools.firewall else {}
+        if m.forge:
+            env["FC_ZK_SELF_CHECK"] = "skip"
+        t = time.time()
+        record, live = a0.session(tools.bin, s, s["n"], f"subset:{len(local)}", free_port(), sdir,
+                                  draw_file=sdir / "draw.json", zk=True, env=env)
+        session_s = round(time.time() - t, 1)
+        return record, live, a0.lean_verify(tools.lean, s, s["n"], sdir, zk=True), session_s
+    try:
+        h.result()
+    except ProofServerError as e:
+        return None, {"accepted": False, "why": str(e)[-1200:]}, {"accepted": False, "of_record": True,
+                                                                 "why": "no session recorded"}, None
+    return json.loads((h.dir / "session.json").read_text()), h.live, h.verdict(), round(h.seconds, 1)
+
+
 def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[int]] | Callable[[dict], Mapping[str, Sequence[int]]],
                 registered: Path | None = None, *, tools: Tools, out: Path, k: int | None = None, program=None, query=None,
-                window: dict | None = None, mutate: Callable[[dict], dict] | None = None) -> dict:
-    """Every member staged, registered, drawn, proved ``--zk`` and verified by Lean; returns the leg's record
-    (``verity/prove-leg/v0``): per member its drawn units, each unit's verdict, the session's verdicts and timing; the
+                window: dict | None = None, mutate: Callable[[dict], dict] | None = None,
+                server: ProofServer | None = None) -> dict:
+    """Every member staged, registered, sampled, proved ``--zk`` and verified by Lean; returns the leg's record
+    (``verity/prove-leg/v0``): per member its sampled proof blocks, each unit's verdict, the session's verdicts and timing; the
     audit record; and ``accepted``. ``registered``: the verifier's own ``--registered`` file. ``k``: the stratified rule's
     K (default every unit). ``program``/``query``: the window's, else the members' population program. ``window``: the
     registration's window (default a stand-in's). ``mutate``: the registration record as the verifier is handed it (a
-    negative's), from the honest one."""
+    negative's), from the honest one. ``server``: the proof server to prove on (default the run's, `proof_server`, else
+    one of the leg's own on the CPU; under FLOCK_CHALLENGER=1 always the leg's own, with challengers)."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
@@ -343,7 +399,7 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
         publics[s["name"]] = a0.sha512_file(s["dir"] / f"pub-{s['n']}.bin")
     leaf_layer = hashlib.sha512(canonical_json(publics)).hexdigest()
     k = population if k is None else k
-    law = D.parse_law(f"stratified:{k}")
+    law = D.parse_design(f"stratified:{k}")
     window = window or {"kind": "stand-in", "of": "the proof leg's members (prove_leg.py)",
                         "members": {s["name"]: {"template": P.template_id(s["defn"]), "units": [s["base"], s["base"] + s["n"]]}
                                     for s in staged}, "link": "none"}
@@ -366,53 +422,72 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
                  {s["name"]: (s["base"], s["n"]) for s in staged})
     (out / "draw.json").write_text(json.dumps(draw, sort_keys=True))
     served, proved, n_inst, verdicts, statement, sessions, session_roots = [], [], 0, {}, {}, [], {}
-    for m, s in zip(members, staged):
-        local = sorted(u - s["base"] for u in draw["units"] if s["base"] <= u < s["base"] + s["n"])
-        ml = leg["members"][m.name]
-        ml["drawn"] = local
-        if not local:
-            continue
-        sdir = out / f"session-{m.name}"
-        sdir.mkdir(parents=True, exist_ok=True)
-        (sdir / "draw.json").write_text(json.dumps({"law": "subset", "population": s["n"], "k": len(local), "units": local},
-                                                   sort_keys=True))
-        env = {}
-        if tools.firewall:
-            env = {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": tools.firewall, **a0.firewall_env(s)}
-        if m.forge:
-            env["FC_ZK_SELF_CHECK"] = "skip"
-        t = time.time()
-        record, live = a0.session(tools.bin, s, s["n"], f"subset:{len(local)}", free_port(), sdir,
-                                  draw_file=sdir / "draw.json", zk=True, env=env)
-        session_s = round(time.time() - t, 1)
-        draw_t = (record or {}).get("unit_draw") or {}
-        v = V.check_draw(draw_t, {"population": s["n"]}, {"law": "subset", "k": len(local)})
-        served += [s["base"] + u for u in draw_t.get("units", [])]
-        session_roots.update({f"{m.name}/{p_}": r for p_, r in ((live or {}).get("roots") or {}).items()})
-        proved += a0.proved_units(s["header"], live or {})
-        n_inst += (live or {}).get("instances", 0)
-        m0 = {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True
-              and (live or {}).get("roots") == s["header"]["frame_v3"]["roots"] and v.ok,
-              "why": ((record or {}).get("verdict") or {}).get("why") or (live or {}).get("why"), "draw_check": v.to_json()}
-        lv = a0.lean_verify(tools.lean, s, s["n"], sdir, zk=True)
-        op = opened(s, local, m)
-        verdicts[f"m0-verifier/{m.name}"] = m0
-        verdicts[f"lean-verify/{m.name}"] = {**lv, "tool": "flock-verify verify --zk --archive --partition --program"
-                                             + (" --registered" if registered else "")}
-        verdicts[f"openings/{m.name}"] = {"accepted": not any(op.values()), "detail": {i: b for i, b in op.items() if b}}
-        statement[m.name] = {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest",
-                                                                                         "sigma")},
-                             "timing": {x: (live or {}).get(x) for x in TIMING}, "lean_verify_s": lv.get("verify_s")}
-        sessions += [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]
-        ml["units"] = [{"unit": s["base"] + i, "verdict": "accept" if m0["accepted"] and lv["accepted"] and not op[i] else
-                        "refused: " + "; ".join(x for x in (None if m0["accepted"] else f"m0 {m0['why']}",
-                                                            None if lv["accepted"] else f"lean {lv.get('why')}",
-                                                            f"opening {op[i]}" if op[i] else None) if x)} for i in local]
-        ml.update(session_s=session_s, timing=statement[m.name]["timing"], m0=m0["accepted"], lean=lv["accepted"],
-                  prover_stopped=(live or {}).get("prover_stopped"), children_maxrss_gb=maxrss_gb(resource.RUSAGE_CHILDREN),
-                  lean_why=lv.get("why"), lean_verify_s=lv.get("verify_s"), openings=verdicts[f"openings/{m.name}"])
-        log(f"{m.name}: drawn {local}, M0 {m0['accepted']}, Lean {lv['accepted']} ({lv.get('why')}), openings "
-            f"{verdicts[f'openings/{m.name}']['accepted']}, session {session_s} s")
+    pairs = tools.firewall is not None
+    chall = not pairs and a0.own_challenger(zk=True)
+    with contextlib.ExitStack() as stack:
+        if chall:
+            server = stack.enter_context(ProofServer(tools.bin, out / "proof-server", env=a0.DIRECT, challenger=True))
+        elif not pairs and server is None:
+            server = _SERVER or stack.enter_context(ProofServer(tools.bin, out / "proof-server", env=a0.DIRECT))
+        submitted = {}
+        for m, s in zip(members, staged):
+            local = sorted(u - s["base"] for u in draw["units"] if s["base"] <= u < s["base"] + s["n"])
+            leg["members"][m.name]["drawn"] = local
+            if not local:
+                continue
+            sdir = out / f"session-{m.name}"
+            sdir.mkdir(parents=True, exist_ok=True)
+            sample = {"law": "subset", "population": s["n"], "k": len(local), "units": local}
+            (sdir / "draw.json").write_text(json.dumps(sample, sort_keys=True))
+            submitted[m.name] = None if pairs else server.submit(
+                Statement(pin=s["pin"], circuit=s["dir"] / "circuit.txt", tables=s["dir"] / "tables",
+                          instances=s["dir"] / f"inst-{s['n']}.bin", public=s["dir"] / f"pub-{s['n']}.bin"),
+                sample, str(sdir.resolve()), out=sdir / "sessions", self_check="skip" if m.forge else None,
+                verdict=lambda _, s=s, sdir=sdir: a0.lean_verify(tools.lean, s, s["n"], sdir, zk=True))
+        got = {m.name: _session(m, s, submitted[m.name], leg["members"][m.name]["drawn"], tools, out / f"session-{m.name}")
+               for m, s in zip(members, staged) if m.name in submitted}
+        if chall:
+            stack.close()
+        for m, s in zip(members, staged):
+            if m.name not in submitted:
+                continue
+            ml, sdir = leg["members"][m.name], out / f"session-{m.name}"
+            local = ml["drawn"]
+            record, live, lv, session_s = got[m.name]
+            h = submitted[m.name]
+            ch = h.challenger if h is not None else (live or {}).get("challenger")
+            if ch is not None:
+                verdicts[f"challenger/{m.name}"] = {**ch, "accepted": ch.get("ok") is True}
+            ch_ok = ch is None or ch.get("ok") is True
+            draw_t = (record or {}).get("unit_draw") or {}
+            v = V.check_draw(draw_t, {"population": s["n"]}, {"law": "subset", "k": len(local)})
+            served += [s["base"] + u for u in draw_t.get("units", [])]
+            session_roots.update({f"{m.name}/{p_}": r for p_, r in ((live or {}).get("roots") or {}).items()})
+            proved += a0.proved_units(s["header"], live or {})
+            n_inst += (live or {}).get("instances", 0)
+            m0 = {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True
+                  and (live or {}).get("roots") == s["header"]["frame_v3"]["roots"] and v.ok,
+                  "why": ((record or {}).get("verdict") or {}).get("why") or (live or {}).get("why"), "draw_check": v.to_json()}
+            op = opened(s, local, m)
+            verdicts[f"m0-verifier/{m.name}"] = m0
+            verdicts[f"lean-verify/{m.name}"] = {**lv, "tool": "flock-verify verify --zk --archive --partition --program"
+                                                 + (" --registered" if registered else "")}
+            verdicts[f"openings/{m.name}"] = {"accepted": not any(op.values()), "detail": {i: b for i, b in op.items() if b}}
+            statement[m.name] = {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest",
+                                                                                             "sigma")},
+                                 "timing": {x: (live or {}).get(x) for x in TIMING}, "lean_verify_s": lv.get("verify_s")}
+            sessions += [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]
+            ml["units"] = [{"unit": s["base"] + i, "verdict": "accept" if m0["accepted"] and lv["accepted"] and ch_ok and not op[i] else
+                            "refused: " + "; ".join(x for x in (None if m0["accepted"] else f"m0 {m0['why']}",
+                                                                None if lv["accepted"] else f"lean {lv.get('why')}",
+                                                                None if ch_ok else f"challenger {json.dumps(ch)[:300]}",
+                                                                f"opening {op[i]}" if op[i] else None) if x)} for i in local]
+            ml.update(session_s=session_s, timing=statement[m.name]["timing"], m0=m0["accepted"], lean=lv["accepted"],
+                      challenger=None if ch is None else ch_ok,
+                      prover_stopped=(live or {}).get("prover_stopped"), children_maxrss_gb=maxrss_gb(resource.RUSAGE_CHILDREN),
+                      lean_why=lv.get("why"), lean_verify_s=lv.get("verify_s"), openings=verdicts[f"openings/{m.name}"])
+            log(f"{m.name}: drawn {local}, M0 {m0['accepted']}, Lean {lv['accepted']} ({lv.get('why')}), openings "
+                f"{verdicts[f'openings/{m.name}']['accepted']}{'' if ch is None else f', challenger {ch_ok}'}, session {session_s} s")
 
     result = V.audit_record(rec, receipt, draw, rec["law"], sorted(proved), n_inst, statement, verdicts, tools.delta,
                             sessions=sessions, served=sorted(served), session_roots=session_roots)
@@ -442,7 +517,7 @@ def refused(leg: dict, member: str | None = None) -> bool:
 
 def wrong_unit(honest: dict, a: str, b: str, tools: Tools, out: Path) -> dict:
     """Member ``a``'s honest session checked as member ``b``'s: the auditor's committed circuit for ``b``'s stratum is
-    ``b``'s pin, which ``a``'s circuit file doesn't hash to (the proof service's own check, `proofs.verify`'s
+    ``b``'s pin, which ``a``'s circuit file doesn't hash to (the proof system's own check, `proofs.verify`'s
     ``circuit``), and Lean verifies ``a``'s session against ``b``'s circuit file."""
     if "_staged" not in honest:
         return {"refused": False, "skipped": "the honest leg has no session (refused before the draw)"}
@@ -484,8 +559,8 @@ def tampered_registered_root(honest: dict, member: str, registered: Path, tools:
 
 def negatives(members: list[Member], coins, registered: Path | None, tools: Tools, out: Path, honest: dict,
               program=None, query=None, k: int | None = None) -> dict:
-    """The proof-layer negatives on the first member (and, for wrong-unit, the second), each expected refused. ``coins``
-    must draw unit 0 of the first member (``"lean"`` with every unit drawn does), or ``k`` (the stratified rule's K, fewer
+    """The proof-layer negatives on the first member (and, for incorrect-block, the second), each expected refused. ``coins``
+    must sample unit 0 of the first member (``"lean"`` with every unit sampled does), or ``k`` (the stratified rule's K, fewer
     than the member's units) is given and every unit is forged. ``program``/``query``: the honest leg's, when it was given
     its own."""
     m = members[0]
@@ -558,13 +633,30 @@ def standin(n: int, ks: Sequence[int] = (128, 256), seed: int = 20261024) -> lis
     return out
 
 
+def out_words(fn, *args: np.ndarray) -> np.ndarray:
+    """Each instance's output row ``o0`` (``(n, words)`` u16): ``fn``'s return leaves on ``args`` (each parameter's leaves
+    per instance, `evaluation.evaluate_batch`), concatenated little-endian and zero-padded to whole u16 words, as
+    `class_statement.unit_lowering`'s output port holds them."""
+    from verity.ml.circuits.evaluation import evaluate_batch
+
+    ret = fn.signature()[1]
+    leaves = np.asarray(evaluate_batch(fn, *args), dtype=np.uint64).reshape(len(args[0]), ret.leaves)
+    bits = np.concatenate([(leaves[:, [i]] >> np.arange(w, dtype=np.uint64)) & np.uint64(1)
+                           for i, w in enumerate(ret.leaf_widths())], axis=1).astype(np.uint8)
+    bits = np.pad(bits, ((0, 0), (0, -bits.shape[1] % 16)))
+    return np.packbits(bits, axis=1, bitorder="little").view("<u2").astype(np.uint16)
+
+
 def registered_standin(n: int, K: int, out: Path, table_rows: int = 8, seed: int = 20261024):
     """The stand-in with registered weights: a Program whose ``weights`` parameter (``table_rows`` bf16 rows of K, a
     registered value committed once, `registered.Registered.commit`) unit i reads row ``positions[i]`` of as its ``w``,
-    ``x`` the unit's own and held by the verifier. Returns ``(member, program, query, registered file)``: the verifier's
-    own ``--registered`` file (`registered.reads_file`, at the value's root) written under ``out``."""
+    and whose ``x`` (unit i's row i, the input the verifier holds) and output rows ``o0`` (unit i's row i) are registered
+    values too, so every port of the statement is a port of the verifier's registered reads, which the Lean verifier opens
+    (`Flock.Registered.checkComplete`). Returns ``(member, program, query, registered file)``: the verifier's own
+    ``--registered`` file (`registered.reads_file` at the values' roots, and the output rows' port) written under
+    ``out``."""
     from circuit_check import targets as TG
-    from verity.core.protocols.sampled_proofs.one_stage import registered as G
+    from verity.core.protocols.spot.one_stage import registered as G
     from verity.ml.circuits.defs import CompositeDefinition, bind
     from verity.ml.circuits.program import Program
     from verity.ml.circuits.refs import coll_concat
@@ -586,16 +678,25 @@ def registered_standin(n: int, K: int, out: Path, table_rows: int = 8, seed: int
     program = Program(bind(CompositeDefinition("ProveLegRegisteredDot", 0, (), sig, body, register=False)))
     query = P.template_instance_query(fn)
     x, weights = bf16(rng.normal(0, 1, (n, K))), bf16(rng.normal(0, 0.02, (table_rows, K)))
-    reg = G.Registered.commit(P.program_digest(program), "weights", weights.tolist(), None, G.WORD_BITS, V2)
-    own = G.reads_file(program, query, {"weights": K}, {"weights": reg.root.hex()}, schemas={"weights": V2})
+    prog = P.program_digest(program)
+    reg = G.Registered.commit(prog, "weights", weights.tolist(), None, G.WORD_BITS, V2)
+    reg_x = G.Registered.commit(prog, xn, x.tolist(), None, G.WORD_BITS, V2)
+    reg_o = G.Registered.commit(prog, "dot", out_words(fn, x, weights[positions]).tolist(), None, G.WORD_BITS, V2)
+    own = G.reads_file(program, query, {xn: K, "weights": K}, {xn: reg_x.root.hex(), "weights": reg.root.hex()},
+                       schemas={xn: V2, "weights": V2})
+    own["ports"]["o0"] = {**reg_o.entry(), **G.width_entry(G.WORD_BITS), **G.schema_entry(V2), "reads": list(range(n))}
     out.mkdir(parents=True, exist_ok=True)
     (out / "registered.json").write_text(json.dumps(own, sort_keys=True))
     table, refs = G.table(positions)
     rows, salts, entry = reg.statement(table)
+    _, x_salts, x_entry = reg_x.statement(range(n))
+    _, o_salts, o_entry = reg_o.statement(range(n))
     member = Member(f"dot{K}-registered", fn, [(xn, V2, 16 * K, [xn]), (wn, V2, 16 * K, [wn])], [(V2, (0,))],
-                    {xn: x, wn: weights[positions]}, held={xn: x},
+                    {xn: x, wn: weights[positions]},
                     stage_kw={"tables": {xn: x, wn: np.asarray(rows, dtype=np.uint16)},
-                              "refs": {xn: list(range(n)), wn: refs}, "registered": {wn: entry}, "salts": {wn: salts}})
+                              "refs": {xn: list(range(n)), wn: refs},
+                              "registered": {xn: x_entry, wn: entry, "o0": o_entry},
+                              "salts": {xn: x_salts, wn: salts, "o0": o_salts}})
     return member, program, query, out / "registered.json"
 
 
@@ -608,7 +709,6 @@ def n2_member(name: str, key: tuple[int, int, int], insts: Sequence, pubs: Seque
     sys.path.insert(0, str(HERE.parent / "network_traces"))
     import n2_zk as N
 
-    N.builders()
     bits = N.row_bits(N.HC.unit(key[0], key[1], bool(key[2])))
     words = [N.rows_of(i) for i in insts]
     values = {r: np.asarray([w[r] for w in words], dtype=np.uint16) for r in N.ROWS}
@@ -624,16 +724,67 @@ LLAMA = {"1b": {"H": 2048, "I": 8192, "NH": 32, "KVH": 8, "D": 64, "V": 128256, 
          "8b": {"H": 4096, "I": 14336, "NH": 32, "KVH": 8, "D": 128, "V": 128256, "EPS": 1e-5}}
 #: the --zk statement's least and greatest log size (`stage`)
 M_MIN = 25
+#: the target each attention cut's decode head is served on, by family: the RTX PRO 6000 (FA2's `Attention_v5`, whose dead-free
+#: v18 `window_circuit.CUTS` cuts by `AttentionHead_v19`) and the H200 (FA3's `Attention_v4`, cut by `AttentionHead_v20`)
+CUT_TARGETS = {"attention-v19": ((12, 0), 188), "attention-v20": ((9, 0), 132)}
+#: an attention cut's Calls by name: its first visited key block, the full block below it and its epilogue
+CALLS = {"first": "AttnBlockFirst", "block": "AttnBlock", "end": "AttnHeadEnd"}
+#: an attention Call's f32 running state, each parameter's stand-in (scale, mean): the running max, the lane sums and O
+STATE = {"m_prev": (2.0, 0.0), "l_prev": (4.0, 16.0), "o_prev": (4.0, 0.0), "l": (4.0, 16.0), "o": (4.0, 0.0)}
+#: the window circuit's units that no serving row commits (`serving_rows.template` refuses their one-bit leaves): their
+#: Definition is the window's own (`interface.resolve`), and they read no pinned table
+WINDOW_ONLY = ("EmbeddingRead_v1",)
+#: the units `defs` sizes but never stages, and why: the stager lowers a unit whole through `ir_lower`, and these whole
+#: pass any node's memory
+UNSTAGED = {"EmbeddingRead_v1": "lowered whole, its SHA-512 parts take about 150 GB each through ir_lower, and staging "
+                                "embedding-read:1b reached 430 GB before its out-of-memory kill: it needs cutting into Calls "
+                                "first"}
 
 
 def _gen(rng: np.random.Generator, n: int, size: int, scale: float = 1.0, mean: float = 0.0) -> np.ndarray:
     return bf16(rng.normal(mean, scale, (n, size)))
 
 
+def _f32(rng: np.random.Generator, n: int, size: int, scale: float = 1.0, mean: float = 0.0) -> np.ndarray:
+    """``size`` f32 values a unit as u16 words, each value's little-endian bytes (a 32-bit leaf's row words)."""
+    return rng.normal(mean, scale, (n, size)).astype("<f4").view("<u2").astype(np.uint16)
+
+
+def _bit_words(bits: Sequence[int]) -> np.ndarray:
+    """A one-bit-leaf row's u16 words: its bits in leaf order, little-endian (`interface`'s bit rows)."""
+    return np.packbits(np.asarray(bits, dtype=np.uint8), bitorder="little").view("<u2").astype(np.uint16)
+
+
+def attention_call(shape: str) -> Any:
+    """The Call ``shape`` (``attention-v19|attention-v20:M:T:first|block|end``) names: the served decode head of T keys on its
+    ``CUT_TARGETS`` target (`targets.attention_spec`, one query row), cut as `window_circuit.CUTS` cuts it, and its first
+    visited block (keys (nb - 1) BN ... T - 1), the full block below it (T > BN) or its epilogue."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.definitions.registry import dead_free as DF
+    from verity_vllm import TargetProfile
+    from verity_vllm.program.frontend import targets as TG
+    from verity_vllm.program.predict.window_circuit import CUTS
+
+    fam, model, T, call = shape.split(":")
+    L, (cc, sms) = LLAMA[model], CUT_TARGETS[fam]
+    row = TG.attention_spec(TargetProfile(compute_capability=cc, num_sms=sms), int(T), L["NH"], L["KVH"], L["D"], 1, row=0, own_rows=1)
+    if row.base_id == "Attention_v5":
+        row = bind(DF.AttentionV18, **row.bindings)
+    cut = bind(CUTS[row.version], **row.bindings)
+    if f"v{cut.version}" != fam.rsplit("-", 1)[1]:
+        raise SystemExit(f"{shape}: the served head is cut by Attention_v{cut.version}, not {fam}'s")
+    head = next(n.fn for n in cut.body.nodes if n.fn.base_id.rsplit("_v", 1)[0] == "AttentionHead")
+    want = CALLS.get(call)
+    hit = [n.fn for n in head.body.nodes if n.form == "call" and n.fn.base_id.rsplit("_v", 1)[0] == want]
+    if not hit:
+        raise SystemExit(f"{shape}: {head.id} has no {call!r} Call (calls: {sorted(CALLS)}; a full block needs T > BN)")
+    return hit[0]
+
+
 def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[str, np.ndarray]]]:
     """The served Definition ``shape`` names (``family:model[:arg]``, ``model`` a key of `LLAMA`) as the frontend binds it on
-    the RTX PRO 6000 (sm_120, batch invariant, FA2 under the per-iteration Check_inf chain), and its stand-in values
-    (``rng, n -> {parameter: (n, words) u16}``):
+    the RTX PRO 6000 (sm_120, batch invariant, FA2 under the per-iteration Check_inf chain; an ``attention-v20`` Call on the
+    H200), and its stand-in values (``rng, n -> {parameter: (n, words) u16}``):
 
         gemm:M[:K]           Gemm_v2{K,N=1,DOT}, the unit of a Gemm_v2 row (``SLICES``), K the hidden size by default
         attention:M:T        Attention_v5, a decode row (one query row, non-causal) over T keys
@@ -642,15 +793,19 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
         rmsnorm-triton:M     RMSNormTriton_v5{N=H,EPS} (`prune`'s rewrite of RMSNormTriton_v1)
         embedding:M[:V]      Embedding_v1{V,H}
         token-select:M[:V]   TokenSelect_v4{V} (`prune`'s rewrite of TokenSelect_v1)
-        token-select-chunk:M[:C]    TokenSelectChunk_v2{C}, a V-chunk of TokenSelect_v4 (C-Flock's ``token-select-chunk``)
+        token-select-chunk:M[:C]    TokenSelectChunk_v2{C}, a V-chunk of TokenSelect_v4 (Flock's ``token-select-chunk``)
         token-select-combine:M[:V]  TokenSelectCombine_v2{V,C}, TokenSelect_v4's combine (``token-select-combine``), its
                                     partials the chunks' own of a stand-in logits row
         rope:M[:NHEADS]      RoPE_v1{NHEADS,D}, NHEADS the query heads by default
+        attention-v19:M:T:CALL  a Call of the RTX PRO 6000's decode head over T keys as the window circuit cuts it
+                             (`attention_call`): first (AttnBlockFirst_v1), block (AttnBlock_v5) or end (AttnHeadEnd_v1)
+        attention-v20:M:T:CALL  the same on the H200 (sm_90, FA3): AttnBlockFirst_v1, AttnBlock_v4 or AttnHeadEnd_v1
+        embedding-read:M[:V] EmbeddingRead_v1{V,H}, the window's embedding unit, each stand-in row opening at its token
     """
     from verity.ml.circuits.defs import bind
+    from verity_vllm import TargetProfile
     from verity_vllm.program.frontend import targets as TG
-    from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity_vllm.program.registry import b1, dead_free as DF
+    from verity.ml.definitions.registry import b1, dead_free as DF
 
     fam, model, *arg = shape.split(":")
     L = LLAMA[model]
@@ -703,8 +858,38 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
             ang = pos * 500000.0 ** (-np.arange(0, D, 2) / D)
             return {"x": _gen(rng, n, heads * D), "cs": bf16(np.concatenate([np.cos(ang), np.sin(ang)], axis=1))}
         return bind(b1.RoPE, NHEADS=heads, D=D), rope
+    if fam in CUT_TARGETS:
+        fn = attention_call(shape)
+
+        def call(rng, n):
+            out = {}
+            for nm, t in fn.signature()[0]:
+                words = sum(t.leaf_widths()) // 16
+                out[nm] = _gen(rng, n, words) if t.width_set() == {16} else _f32(rng, n, words // 2, *STATE[nm])
+            return out
+        return fn, call
+    if fam == "embedding-read":
+        from verity.ml.commitments.gates import embedding as E
+        from verity.ml.commitments.gates.frame_v3 import root_ref
+        from verity.ml.commitments.gates.hm96 import reference as hm96_leaf
+        from verity.ml.commitments.gates.rowleaf import reference as row_digest
+        from verity.ml.commitments.merkle import merkle_depth
+        from verity.ml.commitments.rowleaf import bit_row
+
+        def emb_read(rng, n):
+            names, cols = ("tok", "root", "domain", "row", "salt", "path"), []
+            for _ in range(n):
+                tok, row = int(rng.integers(0, V)), _gen(rng, 1, H, 0.02)[0].tolist()
+                salt, dom = rng.bytes(E.SALT_BYTES), rng.bytes(64)
+                path = [rng.bytes(64) for _ in range(merkle_depth(V))]
+                root = root_ref(dom, E.SCHEMA, hm96_leaf(row_digest(*bit_row((row, 16))), salt)[2], tok, path)
+                if E.reference(V, tok, root, dom, row, salt, path)[1] != 1:
+                    raise AssertionError(f"{shape}: the stand-in row doesn't open at token {tok}")
+                cols.append([_bit_words(b) for b in E.arguments(V, tok, root, dom, row, salt, path)])
+            return {nm: np.stack([c[j] for c in cols]) for j, nm in enumerate(names)}
+        return E.read(V, H), emb_read
     raise SystemExit(f"{shape}: no served family {fam!r} (gemm, attention, attention-v18, rmsnorm-fused, rmsnorm-triton, embedding, "
-                     f"token-select, token-select-chunk, token-select-combine, rope)")
+                     f"token-select, token-select-chunk, token-select-combine, rope, {', '.join(CUT_TARGETS)}, embedding-read)")
 
 
 _LOWERINGS: dict = {}
@@ -758,29 +943,33 @@ def units_for(k_log: int, per_block: int) -> int:
     return 1 if b <= 3 else per_block * 2 ** (b - 1) + 1
 
 
-def served_member(shape: str, seed: int, n: int = 1, reads: str = "inline") -> tuple[Member, dict]:
-    """``shape``'s served unit as a member of ``n`` units: its parameters the prover's rows, its outputs hidden, values seeded
-    by ``seed``, its table reads laid out by ``reads`` (`Member`)."""
-    import a11_kinds as K
+def served_member(shape: str, seed: int, n: int = 1, reads: str | None = None) -> tuple[Member, dict]:
+    """``shape``'s served unit as a member of ``n`` units: its parameters the prover's rows (`interface.unit_rows`), its outputs
+    hidden, values seeded by ``seed``, its table reads laid out by ``reads`` (`Member`), by default its template's own
+    (`chunk_rows.reads`)."""
     from verity.ml.circuits.codec import descriptor_id
-    from verity_vllm.pipeline import serving_rows as SRW
+    from verity.ml.windows import interface as IF
+    from verity_vllm.pipeline import chunk_rows as CR, serving_rows as SRW
 
     fn, gen = served(shape)
     did = descriptor_id(fn)
-    tp = SRW.template(did)
-    params, ret = fn.signature()
-    rows = [(nm, V2, K.leaf_bits(t), [nm]) for nm, t in params]
-    out_rows = K.out_rows(len(ret.fields) if hasattr(ret, "fields") else 1)
+    if fn.base_id in WINDOW_ONLY:
+        tfn, layout, own = IF.resolve(did), "window", "inline"
+    else:
+        tp = SRW.template(did)
+        tfn, layout, own = tp.fn, tp.layout, CR.reads(tp)
+    reads = reads or own
+    rows, out_rows = IF.unit_rows(fn)
     values = gen(np.random.default_rng(seed), n)
-    if set(values) != {nm for nm, _t in params}:
-        raise AssertionError(f"{shape}: values for {sorted(values)}, parameters {[nm for nm, _t in params]}")
-    info = {"descriptor_id": did, "layout": tp.layout, "values": "stand-in: seeded inputs, outputs by the Definition's own evaluator",
+    if set(values) != {nm for nm, *_ in rows}:
+        raise AssertionError(f"{shape}: values for {sorted(values)}, parameters {[nm for nm, *_ in rows]}")
+    info = {"descriptor_id": did, "layout": layout, "values": "stand-in: seeded inputs, outputs by the Definition's own evaluator",
             "seed": seed, "rows": [[r, b] for r, _s, b, _p in rows], "n": n, "reads": reads}
-    return Member(shape.replace(":", "-"), tp.fn, rows, out_rows, values, reads=reads), info
+    return Member(shape.replace(":", "-"), tfn, rows, out_rows, values, reads=reads), info
 
 
-def prove_served(shape: str, tools: Tools, out: Path, seed: int, reads: str = "inline") -> tuple[Member, dict, dict]:
-    """``shape``'s member through `prove_units`, one unit drawn by Lean: staged at one unit, and again at `units_for`'s when
+def prove_served(shape: str, tools: Tools, out: Path, seed: int, reads: str | None = None) -> tuple[Member, dict, dict]:
+    """``shape``'s member through `prove_units`, one unit sampled by Lean: staged at one unit, and again at `units_for`'s when
     one unit's statement is smaller than --zk admits. Call inside `reuse_lowerings`. Returns the member, its info and the leg."""
     import a11_kinds as K
 
@@ -802,11 +991,11 @@ def prove_served(shape: str, tools: Tools, out: Path, seed: int, reads: str = "i
 
 
 def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed: int, max_ands: int,
-         lower_refused: bool = False, reads: str = "inline") -> dict:
-    """Each served shape sized, and unless only sizing (``tools`` None), proved: one unit drawn by Lean, its member staged at
-    `served_member`'s units (its table reads by ``reads``), through `prove_units` and, with ``negs``, `negatives` at that
-    draw. A shape whose rows alone pass C-Flock's block is recorded refused and not lowered (with ``lower_refused``: lowered,
-    its blocker C-Flock's own refusal), nor one whose estimate passes ``max_ands``."""
+         lower_refused: bool = False, reads: str | None = None) -> dict:
+    """Each served shape sized, and unless only sizing (``tools`` None), proved: one unit sampled by Lean, its member staged at
+    `served_member`'s units (its table reads by ``reads``, else its template's own), through `prove_units` and, with ``negs``, `negatives` at that
+    sample. A shape whose rows alone pass Flock's block is recorded refused and not lowered (with ``lower_refused``: lowered,
+    its blocker Flock's own refusal), nor one whose estimate passes ``max_ands``, nor an ``UNSTAGED`` unit."""
     summary: dict[str, dict] = {}
     for shape in shapes:
         rec: dict[str, Any] = {"shape": shape}
@@ -818,6 +1007,9 @@ def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed
             rec["descriptor_id"] = descriptor_id(fn)
             rec["census"] = c = sized(fn)
             log(f"{shape}: census {c}")
+            if fn.base_id in UNSTAGED:
+                rec["blocker"] = f"not staged: {UNSTAGED[fn.base_id]}"
+                continue
             if c["refused_block"]:
                 rec["blocker"] = (f"refused by C-Flock's block: its rows ({c['row_bits']} bits) need a block of 2^{c['rows_log']} "
                                   f"for their in-circuit hashing alone, past 2^{c['k_max']}")
@@ -865,7 +1057,7 @@ def main(argv=None) -> int:
     s = sub.add_parser("standin", help="the stand-in members through the leg, and the negatives")
     s.add_argument("--bin", required=True)
     s.add_argument("--lean", required=True)
-    s.add_argument("--firewall", default=None, help="flock-firewall: prove behind the firewall")
+    s.add_argument("--firewall", default=None, help="flock-firewall: prove behind the ZK server")
     s.add_argument("--out", required=True, type=Path)
     s.add_argument("--n", type=int, default=4)
     s.add_argument("--ks", default="128,256")
@@ -875,7 +1067,7 @@ def main(argv=None) -> int:
     d = sub.add_parser("defs", help="vLLM's served Definitions at Llama shapes through the leg (`served`), and the negatives")
     d.add_argument("--bin", default=None)
     d.add_argument("--lean", default=None)
-    d.add_argument("--firewall", default=None, help="flock-firewall: prove behind the firewall")
+    d.add_argument("--firewall", default=None, help="flock-firewall: prove behind the ZK server")
     d.add_argument("--out", required=True, type=Path)
     d.add_argument("--shape", action="append", required=True, help="family:model[:arg] (`served`); repeatable")
     d.add_argument("--negatives", action="store_true")
@@ -884,16 +1076,27 @@ def main(argv=None) -> int:
                    help="lower a shape the census finds past C-Flock's block, for the stager's own refusal")
     d.add_argument("--seed", type=int, default=20261025)
     d.add_argument("--mem-gb", type=int, default=64, help="the job's memory: a shape estimated past mem / 700 B an AND isn't lowered")
-    d.add_argument("--reads", choices=("inline", "slots"), default="inline",
-                   help="UnitStager's reads: a pinned MUFU table's reads inline (the served rows' own for a row template, "
-                        "chunk_rows.reads) or in lookup slots")
+    d.add_argument("--reads", choices=("inline", "slots"), default=None,
+                   help="UnitStager's reads: a pinned MUFU table's reads inline or in lookup slots (default: the template's "
+                        "own, chunk_rows.reads)")
+    for p_ in (s, d):
+        p_.add_argument("--gpus", default=None, help="the proof server's GPUs, comma-separated (default: one CPU prover)")
+        p_.add_argument("--verify-ahead", type=int, default=2, help="the proof server's FC_VERIFY_AHEAD")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
+    gpus = [int(x) for x in a.gpus.split(",")] if a.gpus else None
+
+    def server(tools: Tools | None):
+        if tools is None or tools.firewall:
+            return contextlib.nullcontext()
+        return proof_server(tools, a.out / "proof-server", gpus, a.verify_ahead)
+
     if a.command == "defs":
         if not a.census and not (a.bin and a.lean):
             ap.error("defs: --bin and --lean, or --census")
         tools = None if a.census else Tools(a.bin, a.lean, a.firewall)
-        summary = defs(a.shape, tools, a.out, a.negatives, a.seed, a.mem_gb * 2**30 // 700, a.lower_refused, a.reads)
+        with server(tools):
+            summary = defs(a.shape, tools, a.out, a.negatives, a.seed, a.mem_gb * 2**30 // 700, a.lower_refused, a.reads)
         ok = all("error" not in r for r in summary.values()) if a.census else all(defs_ok(r) for r in summary.values())
         log("done: " + ("ok" if ok else "FAILED") + " " + json.dumps({k: ("blocker" if "blocker" in r else "error" if "error" in r
                                                                         else "sized" if a.census else defs_ok(r))
@@ -907,14 +1110,15 @@ def main(argv=None) -> int:
         members = [m]
     else:
         members = standin(a.n, ks)
-    honest = prove_units(members, "lean", reg, tools=tools, out=a.out / "honest", program=program, query=query)
-    summary = {"honest": {x: honest.get(x) for x in ("accepted", "audit", "members", "verdicts", "registration", "seconds",
-                                                    "firewall")}}
-    ok = bool(honest.get("accepted"))
-    if a.negatives:
-        neg = negatives(members, "lean", reg, tools, a.out / "negatives", honest, program, query)
-        summary["negatives"] = neg
-        ok &= all(r["refused"] for r in neg.values())
+    with server(tools):
+        honest = prove_units(members, "lean", reg, tools=tools, out=a.out / "honest", program=program, query=query)
+        summary = {"honest": {x: honest.get(x) for x in ("accepted", "audit", "members", "verdicts", "registration", "seconds",
+                                                        "firewall")}}
+        ok = bool(honest.get("accepted"))
+        if a.negatives:
+            neg = negatives(members, "lean", reg, tools, a.out / "negatives", honest, program, query)
+            summary["negatives"] = neg
+            ok &= all(r["refused"] for r in neg.values())
     summary["ok"] = ok
     (a.out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     log("done: " + ("ok" if ok else "FAILED"))

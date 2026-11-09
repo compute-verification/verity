@@ -14,6 +14,7 @@ from types import ModuleType, SimpleNamespace
 
 import pytest
 
+from verity_vllm.engine import served as SV
 from verity_vllm.pipeline import cli
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
@@ -28,7 +29,7 @@ RUN = {"wall_s": 0.5, "iterations": 2, "step_wall_s": [0.2, 0.3], "generated_tok
 SERVED = {"VLLM_BATCH_INVARIANT": False, "VLLM_USE_DEEP_GEMM": False, "VLLM_DISABLE_SHARED_EXPERTS_STREAM": True,
           "VLLM_USE_FLASHINFER_SAMPLER": False, "VLLM_USE_V2_MODEL_RUNNER": True, "NCCL_P2P_DISABLE": None, "disable_custom_all_reduce": False,
           "enforce_eager": True, "compilation_mode": "NONE", "cudagraph_mode": "NONE", "attention_backend": None, "flash_attn_version": None,
-          "moe_backend": "triton"}
+          "moe_backend": "triton", **{k: SV.DEFAULTS[k] for k in SV.COLLECTIVE_SWITCHES if k not in ("disable_custom_all_reduce", "NCCL_P2P_DISABLE")}}
 
 
 class _LLM:
@@ -63,9 +64,11 @@ class _LLM:
 @pytest.fixture
 def stand_ins(monkeypatch):
     """The drivers' engine-side calls stood in, and the target's environment knobs restored after the test; ``use(llm, target)``
-    returns the profiles the Commit's guard was given."""
+    returns the profiles the Commit's guard was given.  Inductor's config is unloaded for the test: another test in the same worker
+    may have imported it before the engine's pin, which `engine.env.require_inductor` refuses."""
     from verity_vllm import protocols as PO
     from verity_vllm.engine import engine_profile as prof
+    from verity_vllm.engine import handle
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline import commit as PC
     from verity_vllm.pipeline import gpu_lease as GL
@@ -79,8 +82,9 @@ def stand_ins(monkeypatch):
         vllm = ModuleType("vllm")
         vllm.LLM = llm
         monkeypatch.setitem(sys.modules, "vllm", vllm)
+        monkeypatch.delitem(sys.modules, "torch._inductor.config", raising=False)
         for owner, name, value in [(prof, "apply_env", lambda: {"VLLM_BATCH_INVARIANT": "1"}), (prof, "checkpoint_for", lambda case, path: {"repo": "org/model"}),
-                                   (prof, "engine_kwargs", lambda cp, **kw: dict(kw)), (prof, "get_model_runner", lambda llm: 1 / 0),
+                                   (prof, "engine_kwargs", lambda cp, **kw: dict(kw)), (handle, "model_runner", lambda llm: 1 / 0),
                                    (va, "load_workload", lambda path, max_tokens: json.loads(json.dumps(WORKLOAD))),
                                    (va, "target_of_workload", lambda wl, *a: target), (va, "case_of", lambda wl, case: case),
                                    (va, "throwaway_requests", lambda eng, reqs, seed=0: reqs), (va, "versions_doc", lambda eng: {}),
@@ -141,7 +145,7 @@ def test_a_rank_that_does_not_realise_the_declared_target_fails_closed_before_an
 
 
 @pytest.mark.parametrize("extra, extension", [(("--no-observer",), "verity_vllm.engine.int8_ranks.Int8Ranks"),
-                                              ((), "verity_vllm.engine.rank_worker.TP2CaptureWorkerExtension")], ids=["control", "capture"])
+                                              ((), "verity_vllm.pipeline.tp.rank_worker.TP2CaptureWorkerExtension")], ids=["control", "capture"])
 def test_an_int8_targets_ranks_register_its_parts_through_their_extension(tmp_path, stand_ins, monkeypatch, extra, extension):
     """The driver registers the int8 parts and exports them (``VERITY_INT8_PARTS``); every engine it builds names an extension whose
     import registers them in each rank, a Match control's included."""
@@ -243,7 +247,7 @@ class _Worker:
 
 
 def _extension(monkeypatch, model):
-    from verity_vllm.engine import rank_worker as RW
+    from verity_vllm.pipeline.tp import rank_worker as RW
     monkeypatch.setattr(RW, "_tp_facts", lambda worker: {"tp": {"rank": 1, "world_size": 2}})
     w = _Worker(model)
     w.__class__ = type("Worker", (_Worker, RW.TP2CaptureWorkerExtension), {})
@@ -280,14 +284,14 @@ def test_a_ranks_probe_reads_back_its_own_engines_execution(monkeypatch):
 @pytest.mark.parametrize("target", [H200, None], ids=["declared", "undeclared"])
 def test_a_ranks_header_is_made_over_an_engine_built_for_the_declared_target(monkeypatch, tmp_path, target):
     """`tp2_install`'s header is `make_header` over the rank's `Engine`, whose `target` is what `run_facts.profile_manifest` attests."""
-    from verity_vllm.engine import vllm_adapter as va
+    from verity_vllm.observe import capture
     seen = []
 
     def make_header(engine, workload, **kw):
         seen.append(engine)
         raise RuntimeError("header made")
 
-    monkeypatch.setattr(va, "make_header", make_header)
+    monkeypatch.setattr(capture, "make_header", make_header)
     _, w = _extension(monkeypatch, object())
     with pytest.raises(RuntimeError, match="header made"):
         w.tp2_install(out_dir=str(tmp_path), workload=WORKLOAD, case="C", cp={"repo": "org/model"}, engine_kwargs={}, env_flags={},

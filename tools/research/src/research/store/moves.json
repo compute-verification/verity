@@ -1371,6 +1371,12 @@
     },
     {
       "paths": {
+        "Security/Models/": "Security/Definitions/",
+        "Security/Properties/Proofs/": "Security/Proofs/Properties/"
+      }
+    },
+    {
+      "paths": {
         "integrations/vllm/verity_vllm/protocol_options/__init__.py": "integrations/vllm/verity_vllm/protocols/__init__.py",
         "integrations/vllm/verity_vllm/protocol_options/interface.py": "integrations/vllm/verity_vllm/protocols/interface.py",
         "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py": "integrations/vllm/verity_vllm/protocols/sampled_proofs.py",
@@ -1428,8 +1434,308 @@
     },
     {
       "paths": {
-        "Security/Models/": "Security/Definitions/",
-        "Security/Properties/Proofs/": "Security/Proofs/Properties/"
+        "integrations/vllm/verity_vllm/program/registry/": "verity/ml/definitions/registry/",
+        "integrations/vllm/verity_vllm/program/kernels/": "verity/ml/definitions/numerics/",
+        "integrations/vllm/verity_vllm/program/boolean.py": "verity/ml/definitions/boolean.py",
+        "integrations/vllm/verity_vllm/program/replay.py": "verity/ml/definitions/replay.py",
+        "integrations/vllm/verity_vllm/program/dtypes.py": "verity/ml/definitions/dtypes.py",
+        "integrations/vllm/verity_vllm/program/encoding.py": "verity/ml/definitions/encoding.py",
+        "integrations/vllm/verity_vllm/query/word.py": "verity/ml/definitions/word.py",
+        "integrations/vllm/verity_vllm/query/call_scope.py": "verity/ml/definitions/call_scope.py",
+        "integrations/vllm/verity_vllm/query/cross_call.py": "verity/ml/definitions/cross_call.py",
+        "integrations/vllm/verity_vllm/program/registry/quarantine/": "integrations/vllm/verity_vllm/program/quarantine/",
+        "integrations/vllm/verity_vllm/program/registry/mla_capture.py": "integrations/vllm/verity_vllm/program/mla_capture.py",
+        "integrations/vllm/verity_vllm/program/registry/moe_difftest.py": "integrations/vllm/verity_vllm/program/moe_difftest.py",
+        "integrations/vllm/verity_vllm/program/registry/layer_norm_difftest.py": "integrations/vllm/verity_vllm/program/layer_norm_difftest.py",
+        "integrations/vllm/verity_vllm/program/kernels/relations.py": "integrations/vllm/verity_vllm/program/relations.py",
+        "integrations/vllm/verity_vllm/program/kernels/sampling_rng.py": "integrations/vllm/verity_vllm/program/sampling_rng.py",
+        "integrations/vllm/verity_vllm/program/kernels/libdevice_sampling.py": "integrations/vllm/verity_vllm/program/libdevice_sampling.py",
+        "integrations/vllm/verity_vllm/program/kernels/rmsnorm_fused_sweep.py": "integrations/vllm/verity_vllm/program/rmsnorm_fused_sweep.py",
+        "integrations/vllm/verity_vllm/program/kernels/gemm_target_correspondence.py": "integrations/vllm/verity_vllm/program/gemm_target_correspondence.py",
+        "integrations/vllm/verity_vllm/program/kernels/compiled_relations.py": "integrations/vllm/verity_vllm/program/compiled_relations.py",
+        "integrations/vllm/verity_vllm/program/kernels/compiled_norm_literal.py": "integrations/vllm/verity_vllm/program/compiled_norm_literal.py"
+      }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/engine/capture.py": "integrations/vllm/verity_vllm/observe/capture.py",
+        "integrations/vllm/verity_vllm/engine/pinned.py": "integrations/vllm/verity_vllm/observe/pinned.py"
+      }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/observe/chunks.py": "integrations/vllm/verity_vllm/engine/chunks.py"
+      }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/engine/rank_worker.py": "integrations/vllm/verity_vllm/pipeline/tp/rank_worker.py"
+      }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/check/kernel_identity.py": "integrations/vllm/verity_vllm/engine/kernel_identity.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/one_stage/llama1b_tp1_commit.sh": "examples/vllm/commit.sh",
+        "benchmarks/one_stage/llama1b_serve_seal.sh": "examples/vllm/serve.sh"
+      }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/engine/profiles/__init__.py": "integrations/vllm/verity_vllm/observe/fold/profiles/__init__.py",
+        "integrations/vllm/verity_vllm/engine/profiles/generic.py": "integrations/vllm/verity_vllm/observe/fold/profiles/generic.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_dense2_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_dense2_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_dense_gemma2_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_dense_gemma2_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_dense_softcap_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_dense_softcap_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_llama_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_llama_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_ln_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_ln_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_marlin_moe_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_marlin_moe_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_mhc_moe.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_mhc_moe.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_ov_easy_family.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_ov_easy_family.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_ov_moe_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_ov_moe_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_ov_sampling_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_ov_sampling_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_shared_moe_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_shared_moe_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py": "integrations/vllm/verity_vllm/observe/fold/profiles/vllm_d9105ea80_sm89_eager.py",
+        "integrations/vllm/verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager_qwen15.py": "integrations/vllm/verity_vllm/observe/fold/profiles/vllm_d9105ea80_sm89_eager_qwen15.py",
+        "integrations/vllm/verity_vllm/engine/profiles/admission_calibration.py": "integrations/vllm/verity_vllm/engine/profiles/admission_calibration.py",
+        "integrations/vllm/verity_vllm/engine/profiles/cases.py": "integrations/vllm/verity_vllm/engine/profiles/cases.py",
+        "integrations/vllm/verity_vllm/engine/profiles/coverage_roles.py": "integrations/vllm/verity_vllm/engine/profiles/coverage_roles.py",
+        "integrations/vllm/verity_vllm/engine/profiles/dense_generic.py": "integrations/vllm/verity_vllm/engine/profiles/dense_generic.py",
+        "integrations/vllm/verity_vllm/engine/profiles/devices.py": "integrations/vllm/verity_vllm/engine/profiles/devices.py",
+        "integrations/vllm/verity_vllm/engine/profiles/family_facts.py": "integrations/vllm/verity_vllm/engine/profiles/family_facts.py",
+        "integrations/vllm/verity_vllm/engine/profiles/int8_gemm_configs.py": "integrations/vllm/verity_vllm/engine/profiles/int8_gemm_configs.py",
+        "integrations/vllm/verity_vllm/engine/profiles/layer_classes.py": "integrations/vllm/verity_vllm/engine/profiles/layer_classes.py",
+        "integrations/vllm/verity_vllm/engine/profiles/transport.py": "integrations/vllm/verity_vllm/engine/profiles/transport.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/e2e_h200/": "examples/h200/",
+        "benchmarks/e2e_demo/": "examples/h200/interfaces/"
+      }
+    },
+    {
+      "paths": {
+        "Security/Proofs/Accounting/RemoteHeld/Component.lean": "Security/Proofs/Accounting/RemoteHeld/Subprotocol.lean",
+        "Security/Proofs/Properties/RemoteAudit/Component.lean": "Security/Proofs/Properties/RemoteAudit/Subprotocol.lean",
+        "Security/Properties/RemoteAudit/Component.lean": "Security/Properties/RemoteAudit/Subprotocol.lean"
+      }
+    },
+    {
+      "paths": {
+        "verity/core/protocols/pouw/circuit/live_reads.py": "verity/core/protocols/pouw/live_reads.py",
+        "verity/core/protocols/pouw/circuit/": "verity/ml/protocols/pouw/circuit/",
+        "verity/core/protocols/pouw/schemes/": "verity/ml/protocols/pouw/schemes/",
+        "verity/core/protocols/pous/circuit.py": "verity/ml/protocols/pous/circuit.py",
+        "verity/core/protocols/pous/circuit.circuit-check.py": "verity/ml/protocols/pous/circuit.circuit-check.py",
+        "verity/core/protocols/pous/circuit.circuit-check.json": "verity/ml/protocols/pous/circuit.circuit-check.json",
+        "verity/core/protocols/pous/answer_circuit.py": "verity/ml/protocols/pous/answer_circuit.py",
+        "verity/core/protocols/pous/answer_circuit.circuit-check.py": "verity/ml/protocols/pous/answer_circuit.circuit-check.py",
+        "verity/core/protocols/pous/decode_circuit.py": "verity/ml/protocols/pous/decode_circuit.py",
+        "verity/core/protocols/pous/decode_circuit.circuit-check.py": "verity/ml/protocols/pous/decode_circuit.circuit-check.py",
+        "verity/core/protocols/pous/verdict_circuit.py": "verity/ml/protocols/pous/verdict_circuit.py",
+        "verity/core/protocols/pous/verdict_circuit.circuit-check.py": "verity/ml/protocols/pous/verdict_circuit.circuit-check.py",
+        "verity/core/protocols/certifier/advice_check.py": "verity/ml/protocols/certifier/advice_check.py",
+        "verity/core/protocols/certifier/advice_check.circuit-check.py": "verity/ml/protocols/certifier/advice_check.circuit-check.py",
+        "verity/core/protocols/certifier/advice_check.circuit-check.json": "verity/ml/protocols/certifier/advice_check.circuit-check.json",
+        "verity/core/protocols/certifier/cache_step_v2.py": "verity/ml/protocols/certifier/cache_step_v2.py",
+        "verity/core/protocols/certifier/cache_step_v2.circuit-check.py": "verity/ml/protocols/certifier/cache_step_v2.circuit-check.py",
+        "verity/core/protocols/certifier/cache_step_v2.circuit-check.json": "verity/ml/protocols/certifier/cache_step_v2.circuit-check.json",
+        "verity/core/protocols/certifier/compile_slice_v2.py": "verity/ml/protocols/certifier/compile_slice_v2.py",
+        "verity/core/protocols/certifier/compile_slice_v2.circuit-check.py": "verity/ml/protocols/certifier/compile_slice_v2.circuit-check.py",
+        "verity/core/protocols/certifier/compile_slice_v2.circuit-check.json": "verity/ml/protocols/certifier/compile_slice_v2.circuit-check.json",
+        "verity/core/protocols/certifier/compile_slice_v3.py": "verity/ml/protocols/certifier/compile_slice_v3.py",
+        "verity/core/protocols/certifier/compile_slice_v3.circuit-check.py": "verity/ml/protocols/certifier/compile_slice_v3.circuit-check.py",
+        "verity/core/protocols/certifier/compile_slice_v3.circuit-check.json": "verity/ml/protocols/certifier/compile_slice_v3.circuit-check.json",
+        "verity/core/protocols/certifier/egress.py": "verity/ml/protocols/certifier/egress.py",
+        "verity/core/protocols/certifier/egress.circuit-check.py": "verity/ml/protocols/certifier/egress.circuit-check.py",
+        "verity/core/protocols/certifier/egress.circuit-check.json": "verity/ml/protocols/certifier/egress.circuit-check.json",
+        "verity/core/protocols/certifier/ingress_scan.py": "verity/ml/protocols/certifier/ingress_scan.py",
+        "verity/core/protocols/certifier/ingress_scan.circuit-check.py": "verity/ml/protocols/certifier/ingress_scan.circuit-check.py",
+        "verity/core/protocols/certifier/ingress_scan.circuit-check.json": "verity/ml/protocols/certifier/ingress_scan.circuit-check.json",
+        "verity/core/protocols/certifier/io_ids.py": "verity/ml/protocols/certifier/io_ids.py",
+        "verity/core/protocols/certifier/io_ids.circuit-check.py": "verity/ml/protocols/certifier/io_ids.circuit-check.py",
+        "verity/core/protocols/certifier/io_ids.circuit-check.json": "verity/ml/protocols/certifier/io_ids.circuit-check.json",
+        "verity/core/protocols/certifier/served_statics.py": "verity/ml/protocols/certifier/served_statics.py",
+        "verity/core/protocols/certifier/served_statics.circuit-check.py": "verity/ml/protocols/certifier/served_statics.circuit-check.py",
+        "verity/core/protocols/certifier/served_statics.circuit-check.json": "verity/ml/protocols/certifier/served_statics.circuit-check.json",
+        "verity/core/protocols/certifier/served_tie.py": "verity/ml/protocols/certifier/served_tie.py",
+        "verity/core/protocols/certifier/served_tie.circuit-check.py": "verity/ml/protocols/certifier/served_tie.circuit-check.py",
+        "verity/core/protocols/certifier/served_tie.circuit-check.json": "verity/ml/protocols/certifier/served_tie.circuit-check.json",
+        "verity/core/protocols/certifier/window_charge.py": "verity/ml/protocols/certifier/window_charge.py",
+        "verity/core/protocols/certifier/window_charge.circuit-check.py": "verity/ml/protocols/certifier/window_charge.circuit-check.py",
+        "verity/core/protocols/certifier/window_charge.circuit-check.json": "verity/ml/protocols/certifier/window_charge.circuit-check.json"
+      }
+    },
+    {
+      "paths": {
+        "Security/Definitions/Accounting/ComposePeriod.lean": "Security/Definitions/Accounting/ComposeMonitoringPeriod.lean",
+        "Security/Definitions/Accounting/Guarantees/ComposePeriod.lean": "Security/Definitions/Accounting/Guarantees/ComposeMonitoringPeriod.lean",
+        "Security/Proofs/Accounting/ComposePeriod.lean": "Security/Proofs/Accounting/ComposeMonitoringPeriod.lean",
+        "Security/Proofs/Accounting/ComposePeriod/": "Security/Proofs/Accounting/ComposeMonitoringPeriod/",
+        "Security/Proofs/Accounting/Lemmas/ComposePeriod.lean": "Security/Proofs/Accounting/Lemmas/ComposeMonitoringPeriod.lean"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/numerical/python/verity_numerical/bench/templates.py": "verity/ml/flock/python/verity_flock/subcircuit_templates.py",
+        "benchmarks/numerical/python/verity_numerical/bench/templates.circuit-check.py": "verity/ml/flock/python/verity_flock/subcircuit_templates.circuit-check.py",
+        "benchmarks/numerical/python/verity_numerical/bench/templates.circuit-check.json": "verity/ml/flock/python/verity_flock/subcircuit_templates.circuit-check.json",
+        "benchmarks/numerical/python/verity_numerical/bench/input_sets.py": "verity/ml/flock/python/verity_flock/input_sets.py",
+        "benchmarks/torch_gpu/commit_slots/fixtures/commit-slots-v1.json": "verity/ml/commitments/tests/fixtures/commit-slots-v1.json",
+        "benchmarks/numerical/tests/bench/data/captured-101/": "verity/ml/flock/tests/data/captured-101/"
+      }
+    },
+    {
+      "paths": {
+        "Security/Definitions/Population/DrawPressure.lean": "Security/Definitions/Population/SamplePressure.lean",
+        "Security/Proofs/Population/DrawPressure.lean": "Security/Proofs/Population/SamplePressure.lean"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/covert_witness/grader/": "benchmarks/training_slowdown/grader/"
+      }
+    },
+    {
+      "paths": {
+        "Security/Definitions/Population.lean": "Security/Definitions/SampledProofs.lean",
+        "Security/Definitions/Population/": "Security/Definitions/SampledProofs/",
+        "Security/Proofs/Population.lean": "Security/Proofs/SampledProofs.lean",
+        "Security/Proofs/Population/": "Security/Proofs/SampledProofs/",
+        "Security/Proofs/Properties/CertifierDevice.lean": "Security/Proofs/Properties/NetworkCertifier/Device.lean",
+        "Security/Proofs/Properties/CertifierDevice/Basic.lean": "Security/Proofs/Properties/NetworkCertifier/Device/Basic.lean",
+        "Security/Proofs/Properties/CertifierDevice/Complete.lean": "Security/Proofs/Properties/NetworkCertifier/Device/Complete.lean",
+        "Security/Proofs/Properties/CertifierDevice/Fifo.lean": "Security/Proofs/Properties/NetworkCertifier/Device/Fifo.lean",
+        "Security/Proofs/Properties/CertifierDevice/Issuer.lean": "Security/Proofs/Properties/NetworkCertifier/Device/Issuer.lean",
+        "Security/Proofs/Properties/CertifierDevice/Late.lean": "Security/Proofs/Properties/NetworkCertifier/Device/Late.lean",
+        "Security/Proofs/Properties/CertifierDevice/Lms.lean": "Security/Proofs/Properties/NetworkCertifier/Device/Lms.lean",
+        "Security/Proofs/Properties/CertifierDevice/Shaper.lean": "Security/Proofs/Properties/NetworkCertifier/Device/Shaper.lean",
+        "Security/Proofs/Properties/CertifierDevice/Step.lean": "Security/Proofs/Properties/NetworkCertifier/Device/Step.lean",
+        "Security/Proofs/Properties/CertifierDevice/Trace.lean": "Security/Proofs/Properties/NetworkCertifier/Device/Trace.lean",
+        "Security/Proofs/Properties/CertifierNetwork.lean": "Security/Proofs/Properties/NetworkCertifier/DeviceOutput.lean",
+        "Security/Proofs/Properties/CertifierNetwork/Accepted.lean": "Security/Proofs/Properties/NetworkCertifier/DeviceOutput/Accepted.lean",
+        "Security/Proofs/Properties/CertifierNetwork/Bucketer.lean": "Security/Proofs/Properties/NetworkCertifier/DeviceOutput/Bucketer.lean",
+        "Security/Proofs/Properties/CertifierNetwork/Certify.lean": "Security/Proofs/Properties/NetworkCertifier/DeviceOutput/Certify.lean",
+        "Security/Proofs/Properties/CertifierNetwork/Defs.lean": "Security/Proofs/Properties/NetworkCertifier/DeviceOutput/Defs.lean",
+        "Security/Proofs/Properties/CertifierNetwork/Encode.lean": "Security/Proofs/Properties/NetworkCertifier/DeviceOutput/Encode.lean",
+        "Security/Proofs/Properties/CertifierNetwork/Frames.lean": "Security/Proofs/Properties/NetworkCertifier/DeviceOutput/Frames.lean",
+        "Security/Proofs/Properties/CertifierNetwork/Instance.lean": "Security/Proofs/Properties/NetworkCertifier/DeviceOutput/Instance.lean",
+        "Security/Proofs/Properties/CertifierNetwork/Records.lean": "Security/Proofs/Properties/NetworkCertifier/DeviceOutput/Records.lean",
+        "Security/Proofs/Properties/CertifierNetwork/Runs.lean": "Security/Proofs/Properties/NetworkCertifier/DeviceOutput/Runs.lean",
+        "Security/Proofs/Properties/Evaluate.lean": "Security/Proofs/Properties/Core/Evaluate.lean",
+        "Security/Proofs/Properties/Identity.lean": "Security/Proofs/Properties/Hash/Identity.lean",
+        "Security/Proofs/Properties/NetworkCertifier.lean": "Security/Proofs/Properties/NetworkCertifier/Check.lean",
+        "Security/Proofs/Properties/NetworkCertifier/Bytes.lean": "Security/Proofs/Properties/NetworkCertifier/Check/Bytes.lean",
+        "Security/Proofs/Properties/NetworkCertifier/Check.lean": "Security/Proofs/Properties/NetworkCertifier/Check/Check.lean",
+        "Security/Proofs/Properties/NetworkCertifier/Extract.lean": "Security/Proofs/Properties/NetworkCertifier/Check/Extract.lean",
+        "Security/Proofs/Properties/NetworkCertifier/Grid.lean": "Security/Proofs/Properties/NetworkCertifier/Check/Grid.lean",
+        "Security/Proofs/Properties/NetworkCertifier/Instance.lean": "Security/Proofs/Properties/NetworkCertifier/Check/Instance.lean",
+        "Security/Proofs/Properties/NetworkCertifier/LinkWindow.lean": "Security/Proofs/Properties/NetworkCertifier/Check/LinkWindow.lean",
+        "Security/Proofs/Properties/NetworkCertifier/Outcomes.lean": "Security/Proofs/Properties/NetworkCertifier/Check/Outcomes.lean",
+        "Security/Proofs/Properties/NetworkCertifier/Run.lean": "Security/Proofs/Properties/NetworkCertifier/Check/Run.lean",
+        "Security/Proofs/Properties/NetworkCertifier/Strings.lean": "Security/Proofs/Properties/NetworkCertifier/Check/Strings.lean",
+        "Security/Proofs/Properties/NetworkCertifier/Tree.lean": "Security/Proofs/Properties/NetworkCertifier/Check/Tree.lean",
+        "Security/Proofs/Properties/NetworkRecords.lean": "Security/Proofs/Properties/NetworkCertifier/Records.lean",
+        "Security/Proofs/Properties/NetworkRecords/Accept.lean": "Security/Proofs/Properties/NetworkCertifier/Records/Accept.lean",
+        "Security/Proofs/Properties/NetworkRecords/Bytes.lean": "Security/Proofs/Properties/NetworkCertifier/Records/Bytes.lean",
+        "Security/Proofs/Properties/NetworkRecords/Check.lean": "Security/Proofs/Properties/NetworkCertifier/Records/Check.lean",
+        "Security/Proofs/Properties/NetworkRecords/Commit.lean": "Security/Proofs/Properties/NetworkCertifier/Records/Commit.lean",
+        "Security/Proofs/Properties/NetworkRecords/Instance.lean": "Security/Proofs/Properties/NetworkCertifier/Records/Instance.lean",
+        "Security/Proofs/Properties/NetworkRecords/NoGrid.lean": "Security/Proofs/Properties/NetworkCertifier/Records/NoGrid.lean",
+        "Security/Proofs/Properties/NetworkRecords/Program.lean": "Security/Proofs/Properties/NetworkCertifier/Records/Program.lean",
+        "Security/Proofs/Properties/RemoteAudit.lean": "Security/Proofs/Properties/Accounting/Remote.lean",
+        "Security/Proofs/Properties/RemoteAudit/Bisect.lean": "Security/Proofs/Properties/Accounting/Remote/Bisect.lean",
+        "Security/Proofs/Properties/RemoteAudit/Coins.lean": "Security/Proofs/Properties/Accounting/Remote/Coins.lean",
+        "Security/Proofs/Properties/RemoteAudit/Draw.lean": "Security/Proofs/Properties/Accounting/Remote/Draw.lean",
+        "Security/Proofs/Properties/RemoteAudit/Frozen.lean": "Security/Proofs/Properties/Accounting/Remote/Frozen.lean",
+        "Security/Proofs/Properties/RemoteAudit/Lifetime.lean": "Security/Proofs/Properties/Accounting/Remote/Lifetime.lean",
+        "Security/Proofs/Properties/RemoteAudit/Line.lean": "Security/Proofs/Properties/Accounting/Remote/Line.lean",
+        "Security/Proofs/Properties/RemoteAudit/Live.lean": "Security/Proofs/Properties/Accounting/Remote/Live.lean",
+        "Security/Proofs/Properties/RemoteAudit/Order.lean": "Security/Proofs/Properties/Accounting/Remote/Order.lean",
+        "Security/Proofs/Properties/RemoteAudit/Plan.lean": "Security/Proofs/Properties/Accounting/Remote/Plan.lean",
+        "Security/Proofs/Properties/RemoteAudit/Pooled.lean": "Security/Proofs/Properties/Accounting/Remote/Pooled.lean",
+        "Security/Proofs/Properties/RemoteAudit/Released.lean": "Security/Proofs/Properties/Accounting/Remote/Released.lean",
+        "Security/Proofs/Properties/RemoteAudit/Schedule.lean": "Security/Proofs/Properties/Accounting/Remote/Schedule.lean",
+        "Security/Proofs/Properties/RemoteAudit/Session.lean": "Security/Proofs/Properties/Accounting/Remote/Session.lean",
+        "Security/Proofs/Properties/RemoteAudit/Shared.lean": "Security/Proofs/Properties/Accounting/Remote/Shared.lean",
+        "Security/Proofs/Properties/RemoteAudit/SharedLink.lean": "Security/Proofs/Properties/Accounting/Remote/SharedLink.lean",
+        "Security/Proofs/Properties/RemoteAudit/Sort.lean": "Security/Proofs/Properties/Accounting/Remote/Sort.lean",
+        "Security/Proofs/Properties/RemoteAudit/Subprotocol.lean": "Security/Proofs/Properties/Accounting/Remote/Subprotocol.lean",
+        "Security/Proofs/Properties/RemoteAudit/Window.lean": "Security/Proofs/Properties/Accounting/Remote/Window.lean",
+        "Security/Properties/CertifierDevice.lean": "Security/Properties/NetworkCertifier/Device.lean",
+        "Security/Properties/CertifierNetwork.lean": "Security/Properties/NetworkCertifier/DeviceOutput.lean",
+        "Security/Properties/CertifierNetwork/Runs.lean": "Security/Properties/NetworkCertifier/DeviceOutput/Runs.lean",
+        "Security/Properties/Evaluate.lean": "Security/Properties/Core/Evaluate.lean",
+        "Security/Properties/Identity.lean": "Security/Properties/Hash/Identity.lean",
+        "Security/Properties/NciDesc.lean": "Security/Properties/Nci/Desc.lean",
+        "Security/Properties/NciDesc/Cover.lean": "Security/Properties/Nci/Desc/Cover.lean",
+        "Security/Properties/NciDesc/Verdict.lean": "Security/Properties/Nci/Desc/Verdict.lean",
+        "Security/Properties/NetworkCertifier.lean": "Security/Properties/NetworkCertifier/Check.lean",
+        "Security/Properties/NetworkCertifier/LinkWindow.lean": "Security/Properties/NetworkCertifier/Check/LinkWindow.lean",
+        "Security/Properties/NetworkRecords.lean": "Security/Properties/NetworkCertifier/Records.lean",
+        "Security/Properties/RemoteAudit.lean": "Security/Properties/Accounting/Remote.lean",
+        "Security/Properties/RemoteAudit/Coins.lean": "Security/Properties/Accounting/Remote/Coins.lean",
+        "Security/Properties/RemoteAudit/Line.lean": "Security/Properties/Accounting/Remote/Line.lean",
+        "Security/Properties/RemoteAudit/Line/Premises.lean": "Security/Properties/Accounting/Remote/Line/Premises.lean",
+        "Security/Properties/RemoteAudit/Line/Record.lean": "Security/Properties/Accounting/Remote/Line/Record.lean",
+        "Security/Properties/RemoteAudit/Live.lean": "Security/Properties/Accounting/Remote/Live.lean",
+        "Security/Properties/RemoteAudit/Pooled.lean": "Security/Properties/Accounting/Remote/Pooled.lean",
+        "Security/Properties/RemoteAudit/Schedule.lean": "Security/Properties/Accounting/Remote/Schedule.lean",
+        "Security/Properties/RemoteAudit/Shared.lean": "Security/Properties/Accounting/Remote/Shared.lean",
+        "Security/Properties/RemoteAudit/Subprotocol.lean": "Security/Properties/Accounting/Remote/Subprotocol.lean"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/pous/band_gpu/memory_challenger.py": "verity/core/devices/memory_challenger/timed_audit.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/core/protocols/pous/challenger_party.py": "verity/core/devices/memory_challenger/challenger_party.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/remote_session/verifier.py": "verity/core/protocols/remote_bandwidth/session/verifier.py",
+        "benchmarks/remote_session/lean_verifier.py": "verity/core/protocols/remote_bandwidth/session/lean_verifier.py",
+        "benchmarks/remote_session/checks.py": "verity/core/protocols/remote_bandwidth/session/checks.py",
+        "benchmarks/remote_session/challengers.py": "verity/core/protocols/remote_bandwidth/session/challengers.py",
+        "benchmarks/remote_session/wire.py": "verity/core/protocols/remote_bandwidth/session/wire.py"
+      }
+    },
+    {
+      "paths": {
+        "Security/Proofs/Flock/Soundness/LinkSound.lean": "Security/Proofs/Flock/Soundness/BindSound.lean"
+      }
+    },
+    {
+      "paths": {
+        "Security/Definitions/SampledProofs.lean": "Security/Definitions/Spot.lean",
+        "Security/Definitions/SampledProofs/": "Security/Definitions/Spot/",
+        "Security/Proofs/Properties/SampledProofs.lean": "Security/Proofs/Properties/Spot.lean",
+        "Security/Proofs/Properties/SampledProofs/": "Security/Proofs/Properties/Spot/",
+        "Security/Proofs/SampledProofs.lean": "Security/Proofs/Spot.lean",
+        "Security/Proofs/SampledProofs/": "Security/Proofs/Spot/",
+        "Security/Properties/SampledProofs.lean": "Security/Properties/Spot.lean",
+        "Security/Properties/SampledProofs/": "Security/Properties/Spot/",
+        "integrations/vllm/verity_vllm/protocols/sampled_proofs.py": "integrations/vllm/verity_vllm/protocols/spot.py",
+        "verity/core/protocols/sampled_proofs/": "verity/core/protocols/spot/",
+        "verity/core/service/sampled_proofs/": "verity/core/service/spot/",
+        "verity/core/service/sampled_proofs/SampledProofs.lean": "verity/core/service/spot/Spot.lean",
+        "verity/core/service/sampled_proofs/SampledProofs/": "verity/core/service/spot/Spot/"
+      }
+    },
+    {
+      "paths": {
+        "Security/Definitions/Accounting/Guarantees/DeclaredCircuit.lean": "Security/Definitions/Accounting/Guarantees/RegisteredCircuit.lean",
+        "Security/Proofs/Accounting/DeclaredCircuit.lean": "Security/Proofs/Accounting/RegisteredCircuit.lean",
+        "Security/Proofs/Accounting/DeclaredCircuit/": "Security/Proofs/Accounting/RegisteredCircuit/",
+        "Security/Properties/Accounting/DeclaredCircuit.lean": "Security/Properties/Accounting/RegisteredCircuit.lean"
       }
     }
   ]

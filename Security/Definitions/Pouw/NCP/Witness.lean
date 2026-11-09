@@ -1,4 +1,6 @@
-import Definitions.Pouw.Game.Defs
+module
+
+public import Definitions.Pouw.Game.Defs
 
 /-!
 # NCP's witness cost model (trusted; used only by `TT_NCP`'s satisfiability witness)
@@ -6,6 +8,8 @@ import Definitions.Pouw.Game.Defs
 `outputPriced3`: `outputPriced` (`Definitions/Pouw/Witness/Model.lean`) with every committed unit priced at `3·m·k·n`,
 the work `TT_NCP` credits. It forbids nothing and only prices commitments; it is not M_4090.
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP
 

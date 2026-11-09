@@ -11,8 +11,8 @@ import numpy as np
 import pytest
 
 from tests.properties import fp8_sm120_capture_gpu as X
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.kernels import fp8_moe_rows as MR
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.numerics import fp8_moe_rows as MR
 from verity_vllm.properties.record import digest_of
 
 K, N = 256, 200

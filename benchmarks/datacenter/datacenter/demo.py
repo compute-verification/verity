@@ -5,23 +5,24 @@ two-stage model, a BF16 linear a node (`models.LINEAR`), whose registered inputs
 the first node runs, and whose BMC telemetry is delivered out. Each node's certifier releases a salt into it, and each
 node computes a noised product on it (`models.DOT`, PoUW's proof work in miniature, which never leaves the node). The
 registration also commits the occupancy profiles the night may follow, one for each of 8 ticks its schedule may start
-at. The verifier's plan wipes the first node's DPU and BMC, challenges a KV store and opens a read window on it. The demo runs
-the night honestly and accounts for it, under compute accounting's salt custody too, then runs it again with an adversary
-who tries five things at once, each of which the audit refuses for its own reason.
+at. The verifier's plan wipes the first node's DPU and BMC, as far as their links fill them, challenges a KV store and
+opens a read window on it. The demo runs the night honestly and accounts for it, under the salt custody
+premise too, then runs it again with an adversary who tries five things at once, each of which the audit refuses for
+its own reason.
 """
 from __future__ import annotations
 
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Tuple
 
-from . import (SALT_CUSTODY, Challenge, Deviation, Interval, Plan, Port, ReadWindow, Store, Wipe, account, audit,
+from . import (SALT_CUSTODY, Challenge, Deviation, Interval, Plan, Port, ReadWindow, StoreEntry, Wipe, account, audit,
                occupancy, place, register, run)
 from .examples import GB, rack
 from .models import DOT, LINEAR, MAT, VEC, WEIGHTS, X, program, word, words
 
 IMAGE = words("image", 32)
 S0, S1 = words("salt0", 32), words("salt1", 32)
-KV = Store("kv", 1 * GB, "n1.gpu0")
+KV = StoreEntry("kv", 1 * GB, "n1.gpu0")
 
 
 def model(B, x, w1, w2, image, temperature, s0, s1):
@@ -61,7 +62,7 @@ def night(deviation: Deviation | None = None, assume=()):
 def main() -> None:
     print("An honest night:\n")
     print(night())
-    print("\nUnder compute accounting's salt custody (unproved):\n")
+    print("\nUnder the salt custody premise (unproved):\n")
     for b in night(assume=(SALT_CUSTODY,)).blocks:
         print(f"  {b.block}: k = {b.custody:g} bits, so at least {b.local_at_least:g} of {b.credited:g} credited ran on "
               f"{b.block}")

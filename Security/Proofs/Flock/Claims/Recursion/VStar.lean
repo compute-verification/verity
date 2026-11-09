@@ -1,5 +1,45 @@
-import Proofs.Flock.Claims.Recursion.InnerAccepts
-import Proofs.Flock.Claims.Recursion.Registered
+module
+
+public import Proofs.Flock.Claims.Recursion.InnerAbort
+public import Proofs.Flock.Claims.Recursion.InnerAccepts
+public import Proofs.Flock.Claims.Recursion.Registered
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Finder
+import Proofs.Flock.Claims.Prob
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # `VStarAccepts` at the deployed readers, reduced to V*'s parts
@@ -67,7 +107,7 @@ the inner verifier.
   recording its check's calls, `PartLogs`, and the public ones among the setup's evaluations at the run's V*
   statements, `PubReg`). So `CallsLogColl` admits the setup's evaluations beside the recorded calls. It serves its
   consumer as the first half does (`PrBAbort_le_reg`): a collision among the recorded calls and the setup's
-  evaluations, or a registered tie, at either draw is one `Be` or `Br` finds (`coll_or_reg_split`).
+  evaluations, or a registered tie, at either sample is one `Be` or `Br` finds (`coll_or_reg_split`).
 * `codeFacts_of_parts`: all of it at once. With `ReadsThrough`, `PartCallsTrue` at every part, `ReadsPub`,
   `FinalOpens` and V*'s parts at each shape (`VStarParts`: the part facts above at one layout and opening), the
   readers give `InnerViewRun`, `CallsNil`, `CallsTrue`, `CallsOpenPlayed`, `CallsLogColl` and `InnerAcceptsR`.
@@ -81,6 +121,8 @@ the inner verifier.
   message's digest under the salt's mask, as hm96 rows open (`Deploy.zeroCommit`'s form). It binds wherever the salt's
   and the message's encodings are injective.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion.VStar
 
@@ -186,7 +228,7 @@ theorem Layout.msgs_getD_fixed {L : Layout} {x : Msg} {ws : List Flock.Wit} {i :
 
 /-- A round the verifier answers with a message: the rounds go on from the history and the trace it extends. -/
 theorem stepWith_msg {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vn : List Msg → OC Out) (n : ℕ)
-    (hist : List (Msg × Msg)) (as : List Msg) (t : Trace) {m : Msg}
+    (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) {m : Msg}
     (hv : ((vn (as ++ [((P.next x hist ω).eval H).1])).eval H).1 = .msg m) :
     stepWith H P x ω vn (n + 1) hist as t =
       stepWith H P x ω vn n (hist ++ [(((P.next x hist ω).eval H).1, m)]) (as ++ [((P.next x hist ω).eval H).1])
@@ -199,7 +241,7 @@ theorem stepWith_msg {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω
 
 /-- Two replayed message lists that agree at every round the run plays give one run. -/
 theorem stepWith_replay_congr (H : Msg → Msg) (x : Msg) (vn : List Msg → OC Out) (ms : List Msg) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace) (ms' : List Msg), hist.length = t.msgs.length →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) (ms' : List Msg), hist.length = t.msgs.length →
       (∀ j, t.msgs.length ≤ j → j < (stepWith H (replay ms) x () vn n hist as t).msgs.length →
         ms'.getD j [] = ms.getD j []) →
       stepWith H (replay ms') x () vn n hist as t = stepWith H (replay ms) x () vn n hist as t
@@ -224,7 +266,7 @@ theorem stepWith_replay_congr (H : Msg → Msg) (x : Msg) (vn : List Msg → OC 
 
 /-- A replayed run's message at each round it plays is the replayed list's there. -/
 theorem stepWith_replay_fst (H : Msg → Msg) (x : Msg) (vn : List Msg → OC Out) (ms : List Msg) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), hist.length = t.msgs.length →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), hist.length = t.msgs.length →
       ∀ j, t.msgs.length ≤ j → j < (stepWith H (replay ms) x () vn n hist as t).msgs.length →
         ((stepWith H (replay ms) x () vn n hist as t).msgs.map Prod.fst).getD j [] = ms.getD j []
   | 0, _, _, t, _, j, hj1, hj => by simp only [stepWith] at hj; omega
@@ -256,7 +298,7 @@ theorem run_replay_self {Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Ve
 
 /-- A run plays at most its rounds. -/
 theorem stepWith_length_le {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vn : List Msg → OC Out) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       (stepWith H P x ω vn n hist as t).msgs.length ≤ t.msgs.length + n
   | 0, _, _, _ => le_refl _
   | n + 1, hist, as, t => by
@@ -270,7 +312,7 @@ theorem stepWith_length_le {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Ms
 
 /-- A run with a round left plays one. -/
 theorem stepWith_length_gt {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vn : List Msg → OC Out)
-    {n : ℕ} (hn : 0 < n) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace) :
+    {n : ℕ} (hn : 0 < n) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) :
     t.msgs.length < (stepWith H P x ω vn n hist as t).msgs.length := by
   obtain ⟨n, rfl⟩ : ∃ k, n = k + 1 := ⟨n - 1, by omega⟩
   have := congrArg List.length (stepWith_succ_fst_take H P x ω vn n hist as t)
@@ -279,7 +321,7 @@ theorem stepWith_length_gt {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Ms
 
 /-- A round before a run's last is answered with a message. -/
 theorem stepWith_msg_of_lt {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vn : List Msg → OC Out) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace) (i : ℕ), t.msgs.length ≤ i →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) (i : ℕ), t.msgs.length ≤ i →
       i + 1 < (stepWith H P x ω vn n hist as t).msgs.length →
         ∃ m, ((stepWith H P x ω vn n hist as t).msgs[i]?).map Prod.snd = some (.msg m)
   | 0, _, _, t, i, hi, h => by simp only [stepWith] at h; omega
@@ -300,7 +342,7 @@ theorem stepWith_msg_of_lt {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Ms
 
 /-- A run that stops before its rounds run out is decided at its last round. -/
 theorem stepWith_last_of_lt {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vn : List Msg → OC Out) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       (stepWith H P x ω vn n hist as t).msgs.length < t.msgs.length + n →
         ∀ m, ((stepWith H P x ω vn n hist as t).msgs.getLast?).map Prod.snd ≠ some (.msg m)
   | 0, _, _, t, h => by simp only [stepWith] at h; omega
@@ -314,7 +356,7 @@ theorem stepWith_last_of_lt {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : M
 /-- **Two replayed runs agree on their first `N` rounds** where their messages agree before round `N` and their
 verifiers answer alike on up to `N` messages. -/
 theorem stepWith_replay_take (H : Msg → Msg) (x : Msg) (vn vn' : List Msg → OC Out) (ms ms' : List Msg) (N : ℕ) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), hist.length = t.msgs.length →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), hist.length = t.msgs.length →
       as.length = t.msgs.length → (∀ i, t.msgs.length ≤ i → i < N → ms.getD i [] = ms'.getD i []) →
       (∀ bs : List Msg, bs.length ≤ N → vn bs = vn' bs) →
       (stepWith H (replay ms) x () vn n hist as t).msgs.take N =
@@ -436,7 +478,7 @@ theorem innerViewRun_of_readsThrough {H : Msg → Msg} {D : Deploy Coin} {I : In
   intro decO x Ω P ω r c ws _
   unfold innerRun
   rw [hR.1 x r ws]
-  exact congrArg Trace.seen (run_replay_self H I.V (xI D x) (msgs x ws) _).symm
+  exact congrArg Transcript.seen (run_replay_self H I.V (xI D x) (msgs x ws) _).symm
 
 omit [Fintype Coin] [Nonempty Coin] in
 /-- **No witnesses record no calls** (`CallsNil`) wherever `D` reads through readers. -/
@@ -498,7 +540,7 @@ agrees with the messages the part holds; or two of its recorded calls collide, o
 the setup makes at `xO` (`SetupColl`, which `Br` finds). -/
 def PartChecks (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : Layout) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
     (∀ (c : ℕ → Coin), shows s x xO c → ∀ ms : List Msg,
       (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) → chk s x c ms) ∨
@@ -512,7 +554,7 @@ one of them ties with an evaluation the setup makes at `xO` (a climb whose top n
 children). -/
 def PartOpens (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : Layout) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (opening : Opening) (cmt : Msg → ℕ → Msg → Msg) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
       (∀ (c : ℕ → Coin), shows s x xO c → ∀ i < L.rounds x, ∀ m, L.held x s w i = some m →
         ∃ cs, cs ⊆ L.calls x s w ∧ opening.opens (cmt x i xO) m cs) ∨
@@ -523,7 +565,7 @@ an accepted run of a compiled statement of the shape, each V* statement shows th
 of each inner round the layout spans, the run's message at that round. -/
 def Staged (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (L : Layout) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form →
     ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin), (run H P D.V x ω r).out = .acc →
       ∀ s < D.nS x, shows s x ((runVstar H D I P x ω r).getD s []) (coinSeq r) ∧
         ∀ i < L.rounds x,
@@ -534,7 +576,7 @@ the shape): at a compiled statement of the shape, inner messages on which every 
 `c` are accepted by `IV` at those coins. -/
 def Decomp (H : Msg → Msg) (D : Deploy Coin) (IV : Verifier Coin) (shape : Form → Prop)
     (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
     (∀ s < D.nS x, chk s x c ms) → (run H (replay ms) IV (xI D x) () fun i => c i.val).out = .acc
 
 /-- **The inner verifier is its checks together** (a code fact about the inner verifier `IV` at the shape): at a
@@ -542,14 +584,14 @@ compiled statement of the shape, inner messages on which each of its `nC x` chec
 by `IV` at those coins. -/
 def InnerConj (H : Msg → Msg) (D : Deploy Coin) (IV : Verifier Coin) (shape : Form → Prop) (nC : Msg → ℕ)
     (check : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
     (∀ j < nC x, check j x c ms) → (run H (replay ms) IV (xI D x) () fun i => c i.val).out = .acc
 
 /-- **V\*'s parts cover the inner checks** (a code fact about how the compiled statement cuts the inner verifier into
 V*'s parts, at the shape): each of the inner verifier's checks follows from some part's inner check. -/
 def Covers (D : Deploy Coin) (shape : Form → Prop) (nC : Msg → ℕ) (check : ℕ → Msg → (ℕ → Coin) → List Msg → Prop)
     (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ j < nC x, ∃ s < D.nS x,
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ j < nC x, ∃ s < D.nS x,
     ∀ (c : ℕ → Coin) (ms : List Msg), chk s x c ms → check j x c ms
 
 omit [Fintype Coin] [Nonempty Coin] in
@@ -565,7 +607,7 @@ theorem decomp_of_covers {H : Msg → Msg} {D : Deploy Coin} {IV : Verifier Coin
 wherever the part's outer relation holds at a V* statement of a compiled statement that parses, each evaluation the
 part records is a true evaluation of `H`. -/
 def PartCallsTrue (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : Layout) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → ∀ (xO : Msg) (w : Flock.Wit), Flock.check DO.parse xO w = true →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → ∀ (xO : Msg) (w : Flock.Wit), Flock.check DO.parse xO w = true →
     ∀ e ∈ L.calls x s w, H e.1 = e.2
 
 /-- **Every recorded call is a true evaluation** (`CallsRecord`'s second half, a code fact): wherever `E_O` gives
@@ -627,7 +669,7 @@ one round, which open one commit string (`Staged`) two ways (`PartOpens`), a col
 theorem agree_or_coll {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {IV : Verifier Coin} {L : Layout} {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
     {opening : Opening} {cmt : Msg → ℕ → Msg → Msg} (hR : ReadsThrough H D IV L.msgs L.calls) (hVL : VstarLen D)
-    (hO : ∀ s, PartOpens H D DO L shape shows opening cmt s) (hS : Staged H D I L shape shows cmt) {x : Msg} {st : Stmt}
+    (hO : ∀ s, PartOpens H D DO L shape shows opening cmt s) (hS : Staged H D I L shape shows cmt) {x : Msg} {st : CompiledStatement}
     (hst : D.parse x = some st) (hf : shape st.form) {Ω : Type} {P : Prover Ω} {ω : Ω} {r : Fin (D.V.k x) → Coin}
     (hacc : (run H P D.V x ω r).out = .acc) {ws : List Flock.Wit}
     (ho : OuterHolds DO (runVstar H D I P x ω r) (D.nS x) ws) (htrue : ∀ e ∈ D.calls x ws, H e.1 = e.2) :
@@ -665,7 +707,7 @@ outer relation at the run's V* statements, whose recorded calls are true evaluat
 two of their recorded calls collide, or a registered tie at the run's V* statements. -/
 def VStarAcceptsR (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (shape : Form → Prop) : Prop :=
-  ∀ (x : Msg) (s : Stmt), D.parse x = some s → shape s.form →
+  ∀ (x : Msg) (s : CompiledStatement), D.parse x = some s → shape s.form →
     ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin), (run H P D.V x ω r).out = .acc →
       ∀ ws, OuterHolds DO (runVstar H D I P x ω r) (D.nS x) ws → (∀ e ∈ D.calls x ws, H e.1 = e.2) →
         (D.innerView H x r ws).out = .acc ∨ CallsColl H D x (runVstar H D I P x ω r) ws
@@ -716,7 +758,7 @@ theorem vstarAccepts_dense {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W
   vstarAccepts_of_parts hR hVL hC hO hS hD
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- **`VStarAcceptsR` at the holo shape**, from V*'s parts there (`RecursiveAuditC3`'s inner protocol, private inner
+/-- **`VStarAcceptsR` at the holo shape**, from V*'s parts there (`RecursiveAuditHolo`'s inner protocol, private inner
 circuits). -/
 theorem vstarAccepts_holo {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {IV : Verifier Coin} {L : Layout} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
@@ -833,7 +875,7 @@ compiled statement of the shape, the layout spans the inner verifier's rounds, a
 verifier's last is a public round (`pubAt`), a round the statement fixes (`fixedAt`), or one some part holds. The last
 inner round, Flock's last message, is `FinalOpens`'. -/
 def HeldPub (D : Deploy Coin) (I : Inner Coin W) (L : Layout) (shape : Form → Prop) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form →
     I.V.k (xI D x) ≤ L.rounds x ∧ ∀ i, i + 1 < I.V.k (xI D x) →
       L.pubAt x i = true ∨ (L.fixedAt x i).isSome ∨ ∃ s < D.nS x, (L.msgAt x s i).isSome
 
@@ -850,7 +892,7 @@ theorem opensPlayed_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin
     (hS : Staged H D I L shape shows cmt) (hPub : ReadsPub H D I DO L) (hFin : FinalOpens H D I DO opening)
     {decO : List (ℕ × Col) → List T} {x : Msg} {Ω : Type} {P : Prover Ω} {ω : Ω} {r : Fin (D.V.k x) → Coin}
     {c : (EO D I DO decO).C x} {ws : List Flock.Wit} (hg : EOGives H D I DO decO P x ω r c ws)
-    (htrue : ∀ e ∈ D.calls x ws, H e.1 = e.2) {st : Stmt} (hst : D.parse x = some st) (hf : shape st.form) :
+    (htrue : ∀ e ∈ D.calls x ws, H e.1 = e.2) {st : CompiledStatement} (hst : D.parse x = some st) (hf : shape st.form) :
     ∀ j < (D.innerView H x r ws).msgs.length,
       (∀ m, L.fixedAt x j = some m → ((D.innerView H x r ws).msgs.map Prod.fst).getD j [] = m) ∧
       (L.pubAt x j = true →
@@ -866,7 +908,7 @@ theorem opensPlayed_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin
   have hview : ((D.innerView H x r ws).msgs.map Prod.fst).getD j [] = (L.msgs x ws).getD j [] := by
     have h := hj
     rw [hR.1 x r ws] at h ⊢
-    simp only [Trace.seen] at h ⊢
+    simp only [Transcript.seen] at h ⊢
     exact run_replay_fst H I.V (xI D x) (L.msgs x ws) _ h
   have hjr : j < L.rounds x := lt_of_lt_of_le hplay (hH x st hst hf).1
   refine ⟨fun m hm => hview.trans (Layout.msgs_getD_fixed hjr hm), hPub decO x Ω P ω r c ws hg j hj,
@@ -1083,7 +1125,7 @@ theorem forkColl_of_openingPlayed {H : Msg → Msg} {D : Deploy Coin} {I : Inner
     · rfl
   have hv := congrArg Seen.msgs (hV decO x Ω P t.1 t.2.1 _ ws hg)
   have hv' := congrArg Seen.msgs (hV decO x Ω P t.1 (fork j t.2.1 t.2.2.1) _ ws' hg')
-  simp only [innerRun, Trace.seen] at hv hv'
+  simp only [innerRun, Transcript.seen] at hv hv'
   have hboth : i < (D.innerView H x t.2.1 ws).msgs.length ∧
       i < (D.innerView H x (fork j t.2.1 t.2.2.1) ws').msgs.length := by
     by_cases h1 : i < (D.innerView H x t.2.1 ws).msgs.length
@@ -1159,7 +1201,7 @@ compiled statement of the shape, each SHA-512 call `IV` makes on the inner messa
 some part's inner check makes there (`logs s x c ms`). -/
 def LogDecomp (H : Msg → Msg) (D : Deploy Coin) (IV : Verifier Coin) (shape : Form → Prop)
     (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
     ∀ e ∈ (run H (replay ms) IV (xI D x) () fun i => c i.val).vLog, ∃ s < D.nS x, e ∈ logs s x c ms
 
 /-- **The inner verifier's calls are its parts' or public** (a code fact about the inner verifier `IV` at the shape):
@@ -1167,7 +1209,7 @@ at a compiled statement of the shape, each SHA-512 call `IV` makes on the inner 
 that some part's inner check makes there, or one of the calls `pub x` on the statement's public data. -/
 def LogDecompPub (H : Msg → Msg) (D : Deploy Coin) (IV : Verifier Coin) (shape : Form → Prop)
     (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)) (pub : Msg → List (Msg × Msg)) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
     ∀ e ∈ (run H (replay ms) IV (xI D x) () fun i => c i.val).vLog, (∃ s < D.nS x, e ∈ logs s x c ms) ∨ e ∈ pub x
 
 omit [Fintype Coin] [Nonempty Coin] in
@@ -1181,7 +1223,7 @@ theorem logDecompPub_of_logDecomp {H : Msg → Msg} {D : Deploy Coin} {IV : Veri
 shape, each call in `pub x` is an evaluation the setup makes at the V* statements the staging gives at any rounds
 (`setupCalls`), which `Br` reads. -/
 def PubReg (H : Msg → Msg) (D : Deploy Coin) (shape : Form → Prop) (pub : Msg → List (Msg × Msg)) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ ps : List (Msg × Out), ∀ e ∈ pub x,
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ ps : List (Msg × Out), ∀ e ∈ pub x,
     e ∈ setupCalls H D (D.vstar x ps)
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
@@ -1196,7 +1238,7 @@ one of them ties with an evaluation the setup makes at `xO` (`SetupColl`). -/
 def PartLogs (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : Layout) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg))
     (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
     (∀ (c : ℕ → Coin), shows s x xO c → ∀ ms : List Msg,
       (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) → ∀ e ∈ logs s x c ms, e ∈ L.calls x s w) ∨
@@ -1214,7 +1256,7 @@ theorem logColl_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} 
     (hS : Staged H D I L shape shows cmt) (hLD : LogDecompPub H D I.V shape logs pub) (hPR : PubReg H D shape pub)
     {decO : List (ℕ × Col) → List T} {x : Msg} {Ω : Type} {P : Prover Ω}
     {ω : Ω} {r : Fin (D.V.k x) → Coin} {c : (EO D I DO decO).C x} {ws : List Flock.Wit}
-    (hg : EOGives H D I DO decO P x ω r c ws) (htrue : ∀ e ∈ D.calls x ws, H e.1 = e.2) {st : Stmt}
+    (hg : EOGives H D I DO decO P x ω r c ws) (htrue : ∀ e ∈ D.calls x ws, H e.1 = e.2) {st : CompiledStatement}
     (hst : D.parse x = some st) (hf : shape st.form) :
     (∀ e ∈ (innerRun H D I x r ws).vLog, e ∈ D.calls x ws ∨ e ∈ setupCalls H D (runVstar H D I P x ω r)) ∨
       CallsColl H D x (runVstar H D I P x ω r) ws := by
@@ -1276,7 +1318,7 @@ theorem callsLogColl_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coi
   · exact logColl_of_parts hR hVL hLH hOH hSH hDH hPH hg ht hst hf
   · exact logColl_of_parts hR hVL hLS hOS hSS hDS hPS hg ht hst hf
 
-/-- The calls `Be` reads at a draw are true evaluations: `E_O`'s witnesses' where it gives them (`CallsTrue`), none's
+/-- The calls `Be` reads at a sample are true evaluations: `E_O`'s witnesses' where it gives them (`CallsTrue`), none's
 where it gives up (`CallsNil`). -/
 theorem calls_true_of {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {decO : List (ℕ × Col) → List T} {Ω : Type} {P : Prover Ω} {x : Msg} (hT : CallsTrue H D I DO)
@@ -1286,8 +1328,8 @@ theorem calls_true_of {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO
   · exact hN0 x
   · exact hT decO x Ω P ω d.1 d.2 ws (eoGives_of_some hws)
 
-/-- `P_I`'s aborting run records only calls that `E_O`'s witnesses there record or the setup makes at that draw's V*
-statements, or the finders charge a collision at that draw (`innerF_vLog_sub` off one). -/
+/-- `P_I`'s aborting run records only calls that `E_O`'s witnesses there record or the setup makes at that sample's V*
+statements, or the finders charge a collision at that sample (`innerF_vLog_sub` off one). -/
 theorem innerF_vLog_sub_coll {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {decO : List (ℕ × Col) → List T} {Ω : Type} {P : Prover Ω} {x : Msg} {decC : Msg → Msg → Coin}
     (hL : CallsLogColl H D I DO) (hpc : PublicCoin H I decC) (ω : Ω)
@@ -1301,11 +1343,11 @@ theorem innerF_vLog_sub_coll {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin
     obtain ⟨ws, hws⟩ := Option.isSome_iff_exists.1 hk'.1
     rw [innerF_eq_innerRun hpc hws hk'.2, hws]
     exact hL decO x Ω P ω d.1 d.2 ws (eoGives_of_some hws)
-  · exact Or.inl fun e he => by simp [innerF, hk, abortTrace] at he
+  · exact Or.inl fun e he => by simp [innerF, hk, abortTranscript] at he
 
 /-- **`B` at `P_I`'s aborting runs finds only what the forks charge, from `CallsLogColl`**: `PrBAbort_le_PrBI` with
 `CallsLogColl` and `CallsTrue` for `CallsRecord`. Where a kept run's calls aren't all recorded, the finders charge a
-collision at its draw, `Be`'s or `Br`'s at the fork `B_I` makes there (`coll_or_reg`); `B_I` guesses among the inner
+collision at its sample, `Be`'s or `Br`'s at the fork `B_I` makes there (`coll_or_reg`); `B_I` guesses among the inner
 rounds, which are among the compiled verifier's (`InnerRounds`), so the forks' charges sum to at most
 `k(x)·(Pr[Be] + Pr[Br])` (`sum_forkReg_le`). -/
 theorem PrBAbort_le_reg {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
@@ -1377,7 +1419,7 @@ verifier messages show (`shows`) and, as the commit string of each inner round t
 message at that round (`cmt`). -/
 def VstarShows (D : Deploy Coin) (I : Inner Coin W) (L : Layout) (shape : Form → Prop) (decC : Msg → Msg → Coin)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ ps : List (Msg × Out),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ ps : List (Msg × Out),
     ps.length = I.V.k (xI D x) + D.kS x → ∀ c : ℕ → Coin,
       (∀ i < ps.length, ∃ m, (ps.getD i ([], .rej)).2 = .msg m ∧ decC x m = c i) →
         ∀ s < D.nS x, shows s x ((D.vstar x ps).getD s []) c ∧

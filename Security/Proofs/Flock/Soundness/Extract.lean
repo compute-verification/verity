@@ -1,5 +1,16 @@
-import Proofs.Flock.Soundness.Game.Runs
-import Mathlib.Analysis.SpecialFunctions.Exp
+module
+
+public import Definitions.Flock.Extract
+public import Proofs.Flock.Soundness.Game
+public import Definitions.Flock.Rewinding
+public import Mathlib.Analysis.Complex.Exponential
+meta import Lean.Meta.Tactic.NormCast
+import Mathlib.Algebra.Order.BigOperators.Expect
+import Mathlib.Algebra.Order.Field.Power
+import Mathlib.Analysis.Complex.Order
+import Mathlib.Analysis.Complex.Trigonometric
+import Mathlib.Data.EReal.Inv
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Extraction by filling: the extractor's own table
@@ -17,18 +28,14 @@ Markov step bounds the probability that the extractor's table fails (`tail_of_fi
 product form `ε · Pr[fails] ≤ 2ε_c + 2·E[mass]` needs no condition on `ε` (`joint_of_fixed`).
 -/
 
+@[expose] public section
+
 namespace FlockSoundness
 
 namespace Extract
 
 open Game Rewinding
-
 variable {β P V : Type} [Fintype P] [DecidableEq V]
-
-/-- **The extractor's table** from runs `bs`: at each position, the first opening a run made there;
-`z₀` where none did. -/
-def firstTable (op : β → P → Option V) (z₀ : P → V) (bs : List β) (p : P) : V :=
-  (bs.findSome? fun b => op b p).getD (z₀ p)
 
 theorem conflictAt_comm (op : β → P → Option V) (a b : β) (p : P) :
     ConflictAt op (a, b) p ↔ ConflictAt op (b, a) p :=

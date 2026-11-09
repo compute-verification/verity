@@ -1,4 +1,4 @@
-"""``circuit-check --structural UNIT.tmpl TARGET``: a ``flock-ir-tmpl`` unit (`verity_flock.tmpl`) accepted as the C-Flock
+"""``circuit-check --structural UNIT.tmpl TARGET``: a ``flock-ir-tmpl`` template (`verity_flock.tmpl`) accepted as the Flock
 lowering of the Definition TARGET, which `verity_flock.ir_lower.lower` lowers flat.
 
 **Syntactic.** Both sides are read into one table of canonical gates: a bit is a GF(2) form over the inputs and the table's
@@ -12,10 +12,10 @@ template adds past a call's support), constants folded or carried as inputs, dea
 AND's operands, each of which leaves every bit's value as it was: so it proves, by construction, that the template computes
 what the lowering computes on every input. It is not complete: one function written as two AND structures is not matched.
 
-A form is held as its fingerprint, the XOR of its nodes' labels, each node's label 512 bits the check draws from the OS's
-random source when it makes the node, since a hash unit's bits are forms of about half the unit's nodes, which no exact
+A form is held as its fingerprint, the XOR of its nodes' labels, each node's label 512 bits the check samples from the OS's
+random source when it makes the node, since a hash proof block's bits are forms of about half its nodes, which no exact
 table of them fits. Which forms a check builds does not depend on the labels (a triple's node is its first writer's pair),
-and two distinct forms share a fingerprint with probability 2^-512 over labels drawn after both are fixed, so among the M
+and two distinct forms share a fingerprint with probability 2^-512 over labels sampled after both are fixed, so among the M
 forms a check builds it identifies two that differ with probability at most M² / 2^513 over its own coins, with no premise
 on a hash; short of that the table is the exact one.
 
@@ -24,15 +24,17 @@ the report says which output bits differ and both are evaluated, bit-sliced: on 
 `EXHAUSTIVE_BITS` input bits, else on ``vectors`` random inputs, which miss a difference on a fraction ε of the inputs with
 probability (1 − ε)^vectors. An exhaustive pass is a proof too; a random one is a warning, ``structural/random-only``.
 
-**A unit** (`check_unit`): a template on a unit's u16 row ports, as a structural stager writes it (`class_statement.UnitStager`'s
-``structural``), is held the same way to the flat unit the flat stager lays out on those ports
+**A proof block** (`check_unit`): a template on a proof block's u16 row ports, as a structural stager writes it
+(`class_statement.UnitStager`'s ``structural``), is held the same way to the flat proof block the flat stager lays out on
+those ports
 (`class_statement.unit_circuit`), so the class a pin names is accepted as its Definition's lowering on its ports.
 
 Refused by name, since neither comparison covers them: a template one of whose rows reads a column at or past its own that
 is no input and not the constant (so some column is not a function of the inputs), whose input columns' rows are not their
 own ``(c)·(c)``, whose port groups overlap, reach the constant or are not the Definition's input leaves and output bits, or
-hold a column of their words that is no port's bit at other than zero; and a Definition whose lowering asserts or reads a
-table, which rows carry as more than gates.
+hold a column of their words that is no port's bit at other than zero; and a Definition whose lowering asserts, which rows
+carry as more than gates. A table read is read as the rows the flat layout writes it as (`ir_lower._Read`), so a template
+carrying those rows, as `struct_lower`'s does, is compared gate for gate.
 """
 from __future__ import annotations
 
@@ -109,8 +111,9 @@ class Refused(ValueError):
 
 
 def ports(groups: Sequence[str]) -> tuple[list[list[int]], list[list[int]], list[int]]:
-    """Per input port and per output port of a unit's header (``n_in (col words n bits..).. n_out (col words n bits..)..``),
-    its columns, bit 0 first; and the columns of the groups' words that are no port's bit, which a unit holds at zero."""
+    """Per input port and per output port of a proof block's header (``n_in (col words n bits..).. n_out (col words n
+    bits..)..``), its columns, bit 0 first; and the columns of the groups' words that are no port's bit, which a proof block
+    holds at zero."""
     try:
         g = [int(x) for x in groups]
     except ValueError:
@@ -220,11 +223,38 @@ def _lowered(target: Any, C: Any = None) -> tuple[Any, list[list], list[list]]:
     return C, ins, words
 
 
+def _read_bits(C: Any, g: int, bits: list[int], K: Canon, ev) -> tuple[dict[int, int], int]:
+    """Value ``bits`` of ``C``'s table read ``g`` as the canonical bits of the rows the flat layout writes it as
+    (`ir_lower._Read`, its index forms' bits by ``ev``), so a template carrying those rows is compared gate for gate; and
+    how many rows."""
+    from verity_flock import ir_lower as IL
+
+    r = IL._Read(C, g, bits, 0)
+    out = {j: 1 if c else ZERO for j, c in r.const_bits.items()}
+    if not r.rows:
+        return out, 0
+    ra: dict[int, list] = {}
+    rb: dict[int, list] = {}
+    r.fill(ra, rb, lambda f: [("v", ev(f))])
+    val = [ZERO] * r.rows
+
+    def side(x) -> int:
+        if isinstance(x, np.ndarray):
+            return _xor(val[c] for c in x.tolist())
+        return _xor(1 if t == "C" else t[1] if isinstance(t, tuple) else val[t] for t in x)
+
+    for c in range(r.rows):
+        val[c] = K.AND(side(ra.pop(c)), side(rb.pop(c)))
+    out.update((j, val[r.out_col[j]]) for j in r.bits)
+    return out, r.rows
+
+
 def lowering_bits(C: Any, ins: list[list], words: list[list], K: Canon) -> tuple[list[tuple], dict]:
-    """The canonical bit of each of the flat lowering's output bits, its inputs read as nodes ``0 ..`` in order."""
-    if C.asserts or C.lookups:
-        raise Refused("unsupported", f"the lowering has {len(C.asserts)} assertions and {len(C.lookups)} table reads, "
-                                     "which a template's rows do not carry as gates")
+    """The canonical bit of each of the flat lowering's output bits, its inputs read as nodes ``0 ..`` in order; a table read
+    as its rows (`_read_bits`)."""
+    if C.asserts:
+        raise Refused("unsupported", f"the lowering has {len(C.asserts)} assertions, which a template's rows do not carry "
+                                     "as gates")
     val: dict[int, int] = {}
     i = 0
     for w in ins:
@@ -237,15 +267,27 @@ def lowering_bits(C: Any, ins: list[list], words: list[list], K: Canon) -> tuple
     def ev(f) -> int:
         return _xor(val[v] for v in f.s) ^ f.c
 
-    ands = 0
+    value_bits: dict[int, list[int]] = {}
+    for v in live:
+        if C.kind[v] == "lookup":
+            value_bits.setdefault(C.data[v][0], []).append(C.data[v][1])
+    reads: dict[int, dict[int, int]] = {}
+    ands = read_rows = 0
     for v in live:
         if C.kind[v] == "and":
             a, b = C.data[v]
             val[v] = K.AND(ev(a), ev(b))
             ands += 1
+        elif C.kind[v] == "lookup":
+            g, j = C.data[v]
+            if g not in reads:
+                reads[g], n = _read_bits(C, g, sorted(value_bits[g]), K, ev)
+                read_rows += n
+            val[v] = reads[g][j]
         elif C.kind[v] != "in":
             raise Refused("unsupported", f"the lowering's bit {v} is a {C.kind[v]}")
-    return [ev(b) for w in words for b in w], {"live_ands": ands, "input_ports": len(ins), "input_bits": sum(map(len, ins)),
+    return [ev(b) for w in words for b in w], {"live_ands": ands + read_rows, "reads": len(reads),
+                                                 "input_ports": len(ins), "input_bits": sum(map(len, ins)),
                                                  "output_bits": sum(map(len, words))}
 
 
@@ -310,11 +352,11 @@ def check(target: Any, tmpl: Any, *, exhaustive_bits: int = EXHAUSTIVE_BITS, vec
 def check_unit(definition: Any, in_rows: Sequence[tuple[str, Sequence[str]]], tmpl: Any, *, public: Sequence[str] = (),
                name: str = "unit", exhaustive_bits: int = EXHAUSTIVE_BITS, vectors: int = VECTORS,
                seed: int = CK.Options.seed) -> dict:
-    """``tmpl`` held, as `check` holds it to a Definition's lowering, to the flat unit `class_statement.unit_lowering` lays
-    ``definition`` out as on the u16 row ports ``in_rows`` (``public`` its public ports): `class_statement.unit_circuit`
+    """``tmpl`` held, as `check` holds it to a Definition's lowering, to the flat proof block `class_statement.unit_lowering`
+    lays ``definition`` out as on the u16 row ports ``in_rows`` (``public`` its public ports): `class_statement.unit_circuit`
     on `class_statement.unit_ports`, input ``in{j}`` and output ``out{j}`` the template's ports in order. So a structural
-    stager's unit (`UnitStager`'s ``structural``, `struct_lower` on those ports) is held to the unit the flat stager lays
-    out."""
+    stager's proof block (`UnitStager`'s ``structural``, `struct_lower` on those ports) is held to the proof block the flat
+    stager lays out."""
     from verity_flock import class_statement as CS
 
     from verity.ml.circuits.evaluation.reference import resolve

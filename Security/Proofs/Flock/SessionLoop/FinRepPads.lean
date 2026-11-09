@@ -1,15 +1,51 @@
-import Proofs.Flock.SessionLoop.FinRepCm
-import Proofs.Flock.SessionLoop.RepSrc
-import Proofs.Flock.Claims.ZK.SimCommit
-import Proofs.Flock.Claims.ZK.FinishInner
+module
+
+public import Proofs.Flock.Claims.ZK.FinExe
+public import Proofs.Flock.Claims.ZK.SimCommit
+public import Proofs.Flock.SessionLoop.FinRep
+public import Proofs.Flock.SessionLoop.FinRepCm
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Shaped.Commit
+import Proofs.Flock.Claims.Complete.Zk.Count
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.ZK.FinishSwInner
-import Proofs.Flock.Claims.ZK.Blind
+import Proofs.Flock.SessionLoop.RepSrc
 
 /-!
 # The pads commitment from the views
 
 At (c.3)'s context, rep stream `k`'s pads commitment from the views' leaves (`Loop.padsView`) has the size, root and tree
-of the firewall's (`Finish.innerCommitP` of the request's pads under its leaf salts), wherever table `k / 2`'s rows hold
+of the ZK server's (`Finish.innerCommitP` of the request's pads under its leaf salts), wherever table `k / 2`'s rows hold
 at its base:
 
 * **`Hm96.viewR_leavesP`**: a real view's pads leaves read the randomness alone, whatever the witness, so where the rows
@@ -21,6 +57,8 @@ at its base:
 
 **`Loop.padsView_ic`** states it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK.Table
 
@@ -47,7 +85,7 @@ workers' values (`Hm96.swViewR_eq`), and the pads leaves read the randomness alo
 theorem FlockSoundness.Discharge.ZkView.Coined.swExe_leavesP {K W Hi VL : Type} [Field K]
     {z : FlockSoundness.Discharge.ZkView.Sizes} (T : FlockSoundness.Discharge.ZkView.Coined K W Hi VL z) (w : W)
     (v : T.tab.Vals) (ω : T.tab.Rand) (ys : T.tab.Hid → FlockSoundness.Discharge.ZkView.Salt)
-    (hr : T.tab.onVals.RowsAt (w, v) ω.1 ω.2.1.2.1) :
+    (hr : T.tab.onVals.RowsAt (w, v) ω.1 ω.2.1) :
     (T.swExe w v ω ys).leavesP = (T.viewExe w ω ys).leavesP := by
   have e1 : T.swExe w v ω ys = T.tab.toBase (T.hm96.onVals.viewR (w, v) ω ys) :=
     congrArg T.tab.toBase
@@ -114,30 +152,30 @@ open FlockSoundness.Discharge in
 theorem finSrc_padLeaf (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape)
     (ops : List (Msg × Msg)) {i r : ℕ} (hi : i < Masked.jOf x) (hr : r < 2)
     (hrows : ((finS.C x ⟨i, hi⟩).T (finS.cz x (finCoins x ops) ⟨i, hi⟩)).tab.onVals.RowsAt
-      (finS.wt x w ⟨i, hi⟩, vs x w ν (finCoins x ops) ⟨i, hi⟩)
-      (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1.1 (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1.2.1.2.1) :
+      (finS.wt x w ⟨i, hi⟩, vs x w ν (finCoins x ops) (finS.seenOf x t) ⟨i, hi⟩)
+      (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1.1 (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1.2.1) :
     ((finSrc vs x w ν t ops i).rep r).padLeaf = ((Masked.srcV x (finCoins x ops) w t i).rep r).padLeaf :=
   Masked.tabSrcView_padLeaf Masked.PE x (Masked.czExe Masked.PE x (finCoins x ops))
     (finS.swViewsAt x (finCoins x ops) (finS.wt x w) (vs x w ν (finCoins x ops)) t)
     (Masked.viewsE x (finCoins x ops) w t) hi hr
     (ZkView.Coined.swExe_leavesP ((finS.C x ⟨i, hi⟩).T (finS.cz x (finCoins x ops) ⟨i, hi⟩))
-      (finS.wt x w ⟨i, hi⟩) (vs x w ν (finCoins x ops) ⟨i, hi⟩) (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1
+      (finS.wt x w ⟨i, hi⟩) (vs x w ν (finCoins x ops) (finS.seenOf x t) ⟨i, hi⟩) (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1
       (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).2 hrows)
 
 variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
   (x : Msg) (w : Flock.Wit)
 
-/-- **The pads commitment from the views is the firewall's** up to its columns and salts: in the masked scope, at a
-witness in the relation, where the frame draws the tape's pads (`Loop.RepSrc`) and every table's rows hold at its base
+/-- **The pads commitment from the views is the ZK server's** up to its columns and salts: in the masked scope, at a
+witness in the relation, where the frame samples the tape's pads (`Loop.RepSrc`) and every table's rows hold at its base
 (as `Loop.FinRows` states them), rep stream `k`'s pads commitment from the views' leaves has the size, root and tree of
 `Finish.innerCommitP` on its request's pads and leaf salts. -/
 theorem padsView_ic (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w)
     (hS : Loop.RepSrc L₀ src x w) {ν : finS.Nonce} {t : finS.Tape} {ops : List (Msg × Msg)}
     (hrows : ∀ j : Fin (Masked.jOf x), ((finS.C x j).T (finS.cz x (finCoins x ops) j)).tab.onVals.RowsAt
-      (finS.wt x w j, vs x w ν (finCoins x ops) j)
-      (finS.randAt x (finCoins x ops) t j).1.1 (finS.randAt x (finCoins x ops) t j).1.2.1.2.1)
+      (finS.wt x w j, vs x w ν (finCoins x ops) (finS.seenOf x t) j)
+      (finS.randAt x (finCoins x ops) t j).1.1 (finS.randAt x (finCoins x ops) t j).1.2.1)
     {s0 : _} {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x))
     {schs : Array (_root_.Flock.Schedule × ℕ)}
     (hschs : (FlockComplete.schedsPZk (FlockDeploy.tabsOf (Masked.stsOf x)) : V _) = .ok schs)

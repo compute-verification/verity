@@ -7,7 +7,7 @@ docstring) and sizes:
 
 - **Σ_sync:**
   - δ from 0 up to the p99.99 first-frame latency, in 16 steps;
-  - ρ geometrically from the p0.01 production rate up to the p50 rate, in 8 values, each rounded down to a fraction
+  - ρ geometrically from the p0.01 serving rate up to the p50 rate, in 8 values, each rounded down to a fraction
     with denominator at most 1024 (rounding down keeps a value lenient). Both rates are taken per configuration first:
     the low end is the p0.01 of the configurations' p0.01 rates, and the high end the median of their medians over
     windows. A configuration's windows are the windows its egress frames span, 1 + its largest anchor // T, and the
@@ -55,8 +55,8 @@ docstring) and sizes:
   overflow and a p99 queueing delay of at most one bucket. Both improve monotonically in r, so the search doubles and
   then bisects. If one bucket's demand exceeds Q, every r overflows: the tool exits with an error naming the demand and
   Q, for the egress and the ingress grid alike.
-- **The ingress grid:** the smallest r_in that carries honest ingress, at τ_in. τ_in is **100 ms**, decided on 29 Sep
-  2026 from a calibration of honest traces. The grid stays configurable, so `--ingress-bucket-ms` still compares
+- **The ingress grid:** the smallest r_in that carries honest ingress, at τ_in. τ_in is **100 ms**, set
+  from a calibration of honest traces. The grid stays configurable, so `--ingress-bucket-ms` still compares
   alternatives. With arrival times (`arrival_ms`), τ_in may be finer than the trace bucket, and the report adds the
   delivery delay: a frame waits for the next ingress bucket boundary, then for its FIFO slot. The p99 FIFO delay is at
   most one ingress bucket by default; `--ingress-max-delay-ms` sets the budget in ms instead, so different τ_in are

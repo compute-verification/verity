@@ -1,5 +1,5 @@
 """`Binder`: the store's hooks into one in-process vLLM engine (``VLLM_ENABLE_V1_MULTIPROCESSING=0``, so the scheduler and
-the model runner share one `Store`), every patch through `verity_vllm.engine.hooks` and undone by its `Hooks`.
+the model runner share one `NodeMemory`), every patch through `verity_vllm.engine.hooks` and undone by its `Hooks`.
 
 ~~~text
 GPUModelRunner.load_model           after: each weight tensor a region (kind weights, tier hbm), registered once
@@ -38,17 +38,12 @@ import numpy as np
 
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols.remote_bandwidth.interface import IDENTITY, Append, Codec, PageLayout, Receipt, Segment, WindowRecord
-from verity_vllm.protocols.remote_bandwidth.registry import RemoteBandwidthReceipt, Store, TagReceipt
+from verity_vllm.protocols.remote_bandwidth.registry import KindReceipt, NodeMemory, RemoteBandwidthReceipt
 
 if TYPE_CHECKING:
     from verity.core.protocols.remote_bandwidth.audit import Tiles
 
 RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
-
-
-def default_receipt() -> Receipt:
-    from verity.core.protocols.bandwidth import tags
-    return TagReceipt(tags.get("ro-blake3/v1"))
 
 
 class TorchBacking:
@@ -196,9 +191,9 @@ def _unwrap(m: Any) -> Any:
 
 
 class Inbox:
-    """The verifier's messages as they arrive: `put` (from any thread) each window's 32-byte challenge, `σ_0` first,
-    then at each window's end the next one's or None, the close after the last (the driver's `Session.start` and
-    `Session.boundary`).  Called, it hands over those not yet taken, in order."""
+    """The verifier's messages as they arrive: `put` (from any thread) each window's 32-byte challenge, `chal_0` first,
+    then at each window's end the next one's or None, the close after the last (the driver's `AuditRun.start` and
+    `AuditRun.boundary`).  Called, it hands over those not yet taken, in order."""
 
     def __init__(self) -> None:
         self._q: deque[bytes | None] = deque()
@@ -240,21 +235,21 @@ class Binder:
     `Registration.digest`).  Each window's record goes to ``on_window``; without a reader, a window's receipts are the
     reference's, every block read on the CPU.  With ``tiles`` (the driver's `audit.Tiles`), each receipt is bound to
     ``tiles.output(seed, j)``, PoUW's tile output before block ``j`` is read, and the default receipt is the driver's
-    (`RemoteBandwidthReceipt`); without them, the tag receipt, which binds only the block.  With ``passes=False`` the
-    binder runs no pass: a remote session's backend runs them, and its windows (`verity_vllm.protocols.remote_bandwidth.remote.CommitSession`).
+    (`RemoteBandwidthReceipt`); without them, its default kind, sketch-sha512, of the block alone (`KindReceipt`).
+    With ``passes=False`` the binder runs no pass: a remote session's backend runs them, and its windows (`verity_vllm.protocols.remote_bandwidth.remote.CommitSession`).
     With ``weight_blocks`` it registers weight tensors in order while their blocks fit that many, and counts the rest
     unregistered: a store small enough for a remote session's CPU passes (`remote.StoreBackend`).  With ``kv=False``
     the KV pool stays outside the registration (counted unregistered): its pages' hooks reach no store, and a step
     writes no registered block, so its `kv_append` only numbers the step; `register_filler` adds the store's filler."""
 
-    def __init__(self, store: Store, *, block_bytes: int = 4096, kv_codec: Codec = IDENTITY,
+    def __init__(self, store: NodeMemory, *, block_bytes: int = 4096, kv_codec: Codec = IDENTITY,
                  receipt: Receipt | None = None, weights: Callable[[Any], Sequence[WeightRegion]] = model_weights,
                  reader: Callable[[Sequence[Segment]], dict[int, bytes] | bytes | None] | None = None, fifo: bool = True,
                  messages: Callable[[], Sequence[bytes | None]] | None = None, registration: bytes | None = None,
                  on_window: Callable[[WindowRecord], None] | None = None, tiles: Tiles | None = None,
                  passes: bool = True, weight_blocks: int | None = None, kv: bool = True) -> None:
         self.store, self.block_bytes, self.kv_codec, self.kv = store, block_bytes, kv_codec, kv
-        self.receipt = receipt or (RemoteBandwidthReceipt() if tiles is not None else default_receipt())
+        self.receipt = receipt or (RemoteBandwidthReceipt() if tiles is not None else KindReceipt())
         self.weights, self.reader, self.fifo, self.tiles = weights, reader, fifo, tiles
         self.messages, self.registration, self.on_window, self.passes = messages, registration, on_window, passes
         self.weight_blocks = weight_blocks

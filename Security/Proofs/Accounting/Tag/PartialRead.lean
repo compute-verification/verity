@@ -1,5 +1,7 @@
-import Proofs.Accounting.Tag.Basic
-import Definitions.Accounting.Guarantees.Tag
+module
+
+public import Definitions.Accounting.Guarantees.Tag
+import Mathlib.NumberTheory.LucasLehmer
 
 /-!
 # A partially read block's words
@@ -9,6 +11,8 @@ possible block along an unread word holds all `2^32` of its variants, each as li
 that word is `2^-32`; along a read word the class is the block alone, so the best guess is `1`.
 -/
 
+@[expose] public section
+
 namespace Accounting.TagProofs
 
 open Accounting.Tag Accounting.Guarantees.Tag
@@ -16,18 +20,18 @@ open scoped ENNReal
 
 variable {W : ℕ}
 
-theorem mem_consistent {known x : Block W} {U : Finset (Fin W)} :
+theorem mem_consistent {known x : Chunk W} {U : Finset (Fin W)} :
     x ∈ consistent known U ↔ ∀ i, i ∉ U → x i = known i := by
   simp [consistent]
 
-theorem partialRead_apply (known : Block W) (U : Finset (Fin W)) (x : Block W) :
+theorem partialRead_apply (known : Chunk W) (U : Finset (Fin W)) (x : Chunk W) :
     partialRead known U x = if x ∈ consistent known U then ((consistent known U).card : ℝ≥0∞)⁻¹ else 0 := by
   unfold partialRead
   rw [PMF.uniformOfFinset_apply]
   congr
 
 /-- Along an unread word, every variant of a possible block is possible. -/
-theorem update_mem_consistent {known x : Block W} {U : Finset (Fin W)} {j : Fin W} (hj : j ∈ U)
+theorem update_mem_consistent {known x : Chunk W} {U : Finset (Fin W)} {j : Fin W} (hj : j ∈ U)
     (hx : x ∈ consistent known U) (a : Word) : Function.update x j a ∈ consistent known U := by
   rw [mem_consistent] at hx ⊢
   intro i hi
@@ -35,7 +39,7 @@ theorem update_mem_consistent {known x : Block W} {U : Finset (Fin W)} {j : Fin 
   exact hx i hi
 
 /-- Along a read word, the only possible variant of a possible block is the block. -/
-theorem update_mem_consistent_iff {known x : Block W} {U : Finset (Fin W)} {j : Fin W} (hj : j ∉ U)
+theorem update_mem_consistent_iff {known x : Chunk W} {U : Finset (Fin W)} {j : Fin W} (hj : j ∉ U)
     (hx : x ∈ consistent known U) (a : Word) : Function.update x j a ∈ consistent known U ↔ a = x j := by
   rw [mem_consistent] at hx
   constructor
@@ -47,7 +51,7 @@ theorem update_mem_consistent_iff {known x : Block W} {U : Finset (Fin W)} {j : 
     rw [Function.update_eq_self]
     exact mem_consistent.2 hx
 
-theorem card_consistent_ne_zero (known : Block W) (U : Finset (Fin W)) : ((consistent known U).card : ℝ≥0∞) ≠ 0 := by
+theorem card_consistent_ne_zero (known : Chunk W) (U : Finset (Fin W)) : ((consistent known U).card : ℝ≥0∞) ≠ 0 := by
   have : known ∈ consistent known U := mem_consistent.2 fun _ _ => rfl
   exact_mod_cast (Finset.card_pos.2 ⟨known, this⟩).ne'
 

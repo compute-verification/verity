@@ -1,5 +1,8 @@
-import Definitions.Accounting.Guarantees.TS.Stages
-import Proofs.Accounting.TS
+module
+
+public import Definitions.Accounting.Guarantees.TS.Stages
+public import Proofs.Accounting.TS
+public import Proofs.Accounting.Lemmas.TS.Stages
 
 /-!
 # Sampled proofs under per-stage coins: proofs
@@ -10,16 +13,20 @@ The round's step (`Stages.budget_point`): for `s ≥ 2`, `p ∈ [1/e, 1)`, `L = 
 `e^{mL}·(1 − m)^s ≤ (1 − m)·e^{mL}(1 − m) ≤ 1 − m`, since `(1 − m)^s ≤ (1 − m)^2` and `1 − m ≤ e^{−m} ≤ e^{−mL}` (this is
 where `s ≥ 2` and `L ≤ 1`, i.e. `p ≥ 1/e`, enter).
 
-On coins `a` before the draws, `m = Pr[hit]` and `y = Pr[hit ∧ ok]` over one draw, and a round's `s` independent draws
+On coins `a` before the samples, `m = Pr[hit]` and `y = Pr[hit ∧ ok]` over one sample, and a round's `s` independent samples
 all pass with probability `Pr[ok]^s ≤ (1 − m + y)^s` (`Stages.prob_pi_all`). A share `d ≤ r·m` gives
 `e^{d/Λ} ≤ e^{mL}` at `Λ = r/L`, so `E[e^{d/Λ}·1{pass} | a] ≤ 1 − m + y/p` (`Stages.sampled_step`), and averaging over `a`,
-`1 − E[m] + E[y]/p ≤ 1` exactly when the draws are lucky at `p` (`Stages.sampled_budget`).
+`1 − E[m] + E[y]/p ≤ 1` exactly when the samples are lucky at `p` (`Stages.sampled_budget`).
 
-Under per-stage coins the draws' luck is the per-unit luck averaged over the draw law: a unit's skip and check are its
+Under per-stage coins the samples' luck is the per-unit luck averaged over the sampling design: a unit's skip and check are its
 own stage's (`Stages.skipped_of_le`, `Stages.passes_of_le`), so conditioning on the stages before it, `StageLuck` bounds
 `Pr[skipped_u ∧ passes_u]` by `p·Pr[skipped_u]` (`Stages.unit_luck`); and a unit's work weight at most `r` times its
-draw probability prices the share at `r` (`Stages.prob_comp`).
+sample probability prices the share at `r` (`Stages.prob_comp`).
 -/
+
+@[expose] public section
+
+open Claims renaming Ex → expect
 
 namespace Accounting.SecurityProofs.TS
 
@@ -81,11 +88,11 @@ theorem budget_point {s : ℕ} (hs : 2 ≤ s) {p m y : ℝ} (hp0 : Real.exp (-1)
     _ = 1 - m + (1 - lam) * m / p := by ring
     _ = 1 - m + y / p := by rw [hy']
 
-/-- `s` independent draws all land in `q` with probability `Pr[q]^s`. -/
+/-- `s` independent samples all land in `q` with probability `Pr[q]^s`. -/
 theorem prob_pi_all {D : Type} [Fintype D] (s : ℕ) (q : D → Prop) :
     prob (fun ds : Fin s → D => ∀ i, q (ds i)) = prob q ^ s := by
   classical
-  unfold prob
+  unfold prob Claims.prUniform
   have key : ∀ (inst : DecidablePred fun ds : Fin s → D => ∀ i, q (ds i)) (inst' : DecidablePred q),
       (@Finset.filter _ (fun ds : Fin s → D => ∀ i, q (ds i)) inst Finset.univ).card =
         (@Finset.filter _ q inst' Finset.univ).card ^ s := by
@@ -125,7 +132,7 @@ theorem expect_empty {Ω : Type} [Fintype Ω] [IsEmpty Ω] (f : Ω → ℝ) : ex
   simp
 
 theorem prob_empty {Ω : Type} [Fintype Ω] [IsEmpty Ω] (q : Ω → Prop) : prob q = 0 := by
-  unfold prob
+  unfold prob Claims.prUniform
   simp
 
 theorem expect_lin {Ω : Type} [Fintype Ω] [Nonempty Ω] (f g : Ω → ℝ) (p : ℝ) :
@@ -136,8 +143,8 @@ theorem expect_lin {Ω : Type} [Fintype Ω] [Nonempty Ω] (f g : Ω → ℝ) (p 
     nsmul_eq_mul, mul_one]
   field_simp
 
-/-- One path of coins before the draws: the drawn checks all pass with probability `Pr[ok]^s`, and the share is
-priced at `r` by the draws' mass on saved work. -/
+/-- One path of coins before the samples: the sampled checks all pass with probability `Pr[ok]^s`, and the share is
+priced at `r` by the samples' mass on saved work. -/
 theorem sampled_step {D : Type} [Fintype D] [Nonempty D] {s : ℕ} (hs : 2 ≤ s) {p r : ℝ}
     (hp0 : Real.exp (-1) ≤ p) (hp1 : p < 1) (hr : 0 < r) (hit ok : D → Prop) (sh : ℝ)
     (hd : sh ≤ r * prob hit) :
@@ -173,7 +180,7 @@ theorem sampled_step {D : Type} [Fintype D] [Nonempty D] {s : ℕ} (hs : 2 ≤ s
         budget_point hs hp0 (prob_nonneg _) (prob_mono fun t ht => ht.1) (prob_le_one _)
 
 /-- **A sampled round's budget**: `E[e^{d/Λ}·1{pass}] ≤ 1` at `Λ = r/ln(1/p)`, in `BudgetAt`'s form, for a check
-`pass` that is every draw's `ok` and a share `d` fixed before the draws. -/
+`pass` that is every sample's `ok` and a share `d` fixed before the samples. -/
 theorem sampled_budget {A D : Type} [Fintype A] [Fintype D] {s : ℕ} (hs : 2 ≤ s) {p r : ℝ}
     (hp0 : Real.exp (-1) ≤ p) (hp1 : p < 1) (hr : 0 < r) (hit ok : A → D → Prop) (d₀ : A → ℝ)
     (hd : ∀ a, d₀ a ≤ r * prob (fun t => hit a t))
@@ -205,7 +212,7 @@ theorem sampled_budget {A D : Type} [Fintype A] [Fintype D] {s : ℕ} (hs : 2 �
     rw [div_le_iff₀ hp]; linarith
   linarith
 
-/-- The probability that a ticket names a unit with `P` is the sum of those units' draw probabilities. -/
+/-- The probability that a ticket names a unit with `P` is the sum of those units' sample probabilities. -/
 theorem prob_comp {D V : Type} [Fintype D] [Fintype V] (tk : D → V) (P : V → Prop) :
     prob (fun t => P (tk t)) = ∑ u, (by classical exact if P u then prob (fun t => tk t = u) else 0) := by
   classical
@@ -299,7 +306,7 @@ theorem unit_luck [Fintype C] {p : ℝ} (hp : 0 ≤ p) (stg : V → ℕ) : ∀ {
       simp only [CoinStages.skipped, CoinStages.passes, hu, false_and, false_or, false_implies, true_and]
       exact unit_luck hp stg (next c) (hnext c) u
 
-/-- A round's share under per-stage coins is priced at `r` by the draws' mass on skipped units. -/
+/-- A round's share under per-stage coins is priced at `r` by the samples' mass on skipped units. -/
 theorem share_le [Fintype V] {D : Type} [Fintype D] (stg : V → ℕ) (tk : D → V) (w : V → ℝ) {r : ℝ}
     (hw : ∀ u, w u ≤ r * prob (fun t => tk t = u)) {M : ℕ} (T : CoinStages C V M) (x : Paths C M) :
     (∑ u, ((by classical exact if T.skipped stg x u then w u else 0) : ℝ)) ≤

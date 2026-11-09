@@ -14,7 +14,7 @@ from verity.ml.circuits import evaluation as E  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity_vllm.check.match import xrank_collectives as XC  # noqa: E402
 from verity_vllm.pipeline.tp import xrank_dump as XD  # noqa: E402
-from verity_vllm.program.registry import tp_allreduce as TA  # noqa: E402
+from verity.ml.definitions.registry import tp_allreduce as TA  # noqa: E402
 
 W = 8
 M, NC = 6, 24                       # 144 words: multimem's 32-word owner slices and custom's 2-stage packs cross the rows
@@ -270,7 +270,7 @@ def test_the_programs_must_bind_every_request_call() -> None:
 
 def test_a_routed_family_no_phase_stratum_drew_gets_its_own_stratum() -> None:
     """Mixed arrivals leave prefill-sized launches among the decode-phase steps; a family a site takes that its phase strata missed
-    (the fused norm at a few layers of the GLM-5.3 B8 Commit) is drawn on its own, and the phase strata draw what they drew."""
+    (the fused norm at a few layers of the GLM-5.3 B8 Commit) is sampled on its own, and the phase strata sample what they drew."""
     site, sizes = "model.layers.38.input_layernorm", {0: 256, 1: 120, 2: 100, 3: 90, 4: 3, 5: 80}
     layouts = {s: [(f"{site}/part_rank0", (m, NC))] for s, m in sizes.items()}
 

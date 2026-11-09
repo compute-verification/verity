@@ -1,4 +1,4 @@
-// EPS1 DC on datacenter Blackwell (sm_100a, B200): TENSOR's M4 (note:20261017T0321Z-draft-eps1-tensor §5) as opcode probes.
+// The tensor measurement M4 on datacenter Blackwell (sm_100a, B200) as opcode probes.
 // Build with ../opcode_probe/probe.py build --arch sm_100a; gated and poisoned as every opcode probe (probe.cuh).
 // tcgen05.mma (cta_group::1) is issued by one thread into tensor memory (TMEM, 512 columns allocated a CTA) from one
 // shared-memory tile (no-swizzle K-major descriptors, dc.cuh); its completion is one mbarrier phase after the loop.
@@ -306,10 +306,10 @@ DC_DEV void ld_until_mma(const OpArgs& a) {
 
 // The honest LI loop beside the saturated MMA, exact by OP_UNTIL (as ld_until_mma): warp 0 fixed on tcgen05.mma, LW
 // loader warps reading the accumulator from TMEM and folding it with LI (LOP3 to absorb a word, IMAD to multiply by an
-// odd a), a segment of 128 words a trip (4 tcgen05.ld.32x32b.x32). CP 0 is the bare fold (LI); CP 1 adds LI-CP-W's
+// odd a), a segment of 128 words a trip (4 tcgen05.ld.32x32b.x32). CP 0 is the bare fold (LI); CP 1 adds the LI
 // checkpoint with `redux.sync.xor.b32`, CP 2 with the 5-shuffle fallback: each lane XORs its 8 chains (4 LOP3) and the
 // warp reduces once a segment. The three throughputs' ratio is what the checkpoint costs the latency-bound loop, which
-// the honest profile scales dc100-li-l32's measured cycles by (note:LI-ALT asked this of DC).
+// the honest profile scales dc100-li-l32's measured cycles by.
 template <int CP, int LW>
 DC_DEV void tcli_until_mma(const OpArgs& a) {
   __shared__ __align__(1024) Smem s;
@@ -539,7 +539,7 @@ DC_DEV void sync_until_mma(const OpArgs& a) {
   OP_SINK(v ^ threadIdx.x)
 }
 
-// ---- kind::mxf4: E2M1 K = 64 a MMA at twice i8's MAC rate (lowbit_dc/fpx.cu's call and descriptor) --------------------
+// ---- kind::mxf4: E2M1 K = 64 a MMA at twice i8's MAC rate --------------------
 // The operand tile's 32 bytes a row are 64 packed E2M1 (every code valid). UE8M0 scales of 1 (0x7F) fill columns 256-383
 // (uniform, so their layout doesn't matter), so the MMAs write D0 only.
 DC_DEV void umma_mxf4(uint32_t d, uint64_t da, uint64_t db, uint32_t idesc, uint32_t sfa, uint32_t sfb, uint32_t acc) {
@@ -620,7 +620,7 @@ DC_DEV void lane_beside_mma(const OpArgs& a) {
   teardown(tmem);
   OP_SINK(v ^ threadIdx.x)
 }
-// TMA bulk-async copies beside the saturated tcgen05.mma (DC EPS1 r10): one side warp's lane 0 issues cp.async.bulk (SASS
+// TMA bulk-async copies beside the saturated tcgen05.mma: one side warp's lane 0 issues cp.async.bulk (SASS
 // UBLKCP, a move) or cp.reduce.async.bulk.add.u32 (UBLKRED, a combine), 4 KB (1024 words) an op, DC_BULK_R a trip, into
 // the block's own global region, with a group bound so the queue stays full. Warp 0 runs tcgen05.mma flat out (OP_LOOP),
 // the bulk warp only while it does (OP_UNTIL). A TMA bulk op takes uniform operands (addresses from blockIdx and the op's

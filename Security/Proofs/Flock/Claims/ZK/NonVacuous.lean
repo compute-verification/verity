@@ -1,5 +1,44 @@
-import Proofs.Flock.Claims.ZK.Congr
-import Proofs.Flock.Claims.DeployOC
+module
+
+public import Proofs.Flock.Claims.DeployOC
+public import Proofs.Flock.Claims.ZK.Congr
+public import Proofs.Flock.Claims.ZK.Statement
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # `ZKmalR` is not vacuous
@@ -21,6 +60,8 @@ every verifier, so for it the claim is the plain bound, at every `γ`:
   `not_flockZK_collSim` and `not_flockZK_leak` are the same at any record whose relation holds where they need it.
 -/
 
+@[expose] public section
+
 namespace Claims.ZKMal
 
 open Claims
@@ -37,10 +78,10 @@ def collSim (u v : Msg) : Simulator where
   prog _ _ := .hash u fun _ => .hash v fun _ => .ret []
 
 theorem Pr_true {α : Type} [Fintype α] [Nonempty α] : Pr (fun _ : α => True) = 1 := by
-  unfold Pr; simp
+  unfold Pr Claims.prUniform; simp
 
 theorem stepWith_quietP_pLog {N Ω : Type} (H : Msg → Msg) (m x : Msg) (ω : N × Ω) (vnext : List Msg → OC Out) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       (stepWith H (quietP N Ω m) x ω vnext n hist as t).pLog = t.pLog
   | 0, _, _, _ => rfl
   | n + 1, hist, as, t => by
@@ -147,15 +188,13 @@ theorem not_flockZK_leak {Coin Col T N Ω : Type} [Fintype Coin] [Nonempty Coin]
 def toyStmt : Flock.Stmt where
   m := 0
   kLog := 0
-  C := ⟨0, [], []⟩
-  inp _ := []
-  out _ := []
+  C := ⟨0, fun g => g.elim0, fun g => g.elim0, ∅⟩
+  inp _ _ := .pub 0
+  out _ _ := .pub 0
   pub := []
-  form := ⟨false, false, false, "", 0, false, false, false, false, 0, false, 0, false, false, false, false⟩
+  form := ⟨false, false, false, "", 0, false, false, false, false, 0, false, 0, false, false, false, false, false⟩
 
-theorem toy_relS (w : Flock.Wit) : Flock.RelS toyStmt w := by
-  intro b _
-  rfl
+theorem toy_relS (w : Flock.Wit) : Flock.RelS toyStmt w := fun _ _ o => o.elim0
 
 /-- **A masked record whose relation holds at every statement and witness.** -/
 def toyD : Flock.Deploy Unit Unit Unit where

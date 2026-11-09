@@ -1,4 +1,4 @@
-"""[R19 moe F-r19-moe-1, row #70] the TP partial source at a MID-module collective site -- a model class (OlmoeAttention) that calls
+"""The TP partial source at a MID-module collective site -- a model class (OlmoeAttention) that calls
 `tensor_model_parallel_all_gather` from its own module, twice per forward (q, then k).  The source finds the site from the class source
 (`verity_vllm.engine.collectives.collective_sites`), hooks the module, binds each call's rank-local INPUT as `<module>/shard_rank<r>` and RECEIVED output
 as `<module>/out` (occurrence k = the manifest's invocation k), declares 2 partials per step for identity_check, and pairs the Match oracle
@@ -10,9 +10,9 @@ import types
 import pytest
 
 pytest.importorskip("verity_vllm.acquire.sources.partial_source")
-from verity_vllm.acquire.sources import partial_source as tps  # noqa: E402
-from tests.acquire.test_tp_partial_source_moe import _Committer, _Mod, _T, _make, _model  # noqa: E402
-from verity_vllm.engine.collectives import collective_sites as CS  # noqa: E402
+from verity_vllm.acquire.sources import partial_source as tps
+from tests.acquire.test_tp_partial_source_moe import _Committer, _Mod, _T, _make, _model
+from verity_vllm.engine.collectives import collective_sites as CS
 
 THIS = __name__
 
@@ -94,7 +94,7 @@ def test_mid_module_sites_and_patch_targets():
 
 
 def test_a_call_under_an_instance_flag_counts_only_when_the_flag_allows_it():
-    """Qwen3-30B-A3B TP2 Commit r20261003-085103-4792: the finder counted Qwen3MoeSparseMoeBlock's sequence-parallel all-gather at all
+    """A Qwen3-30B-A3B TP2 Commit: the finder counted Qwen3MoeSparseMoeBlock's sequence-parallel all-gather at all
     48 `model.layers.N.mlp` blocks, the run issued none, and identity_check failed every step on both ranks (`tp_sites_bad` 48)."""
     off, on = Qwen3MoeSparseMoeBlockLike(False), Qwen3MoeSparseMoeBlockLike(True)
     assert CS.class_collective_calls(Qwen3MoeSparseMoeBlockLike, model_prefix=THIS) == {"all_gather": 1}

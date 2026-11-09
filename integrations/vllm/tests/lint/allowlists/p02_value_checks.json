@@ -1,6 +1,4 @@
 {
   "rule": "P2 (value checks read opened values only)",
-  "entries": [
-    {"file": "verity_vllm/check/value_check.py", "kind": "import", "symbol": "<module>", "detail": "verity_vllm.check.value_check -> verity_vllm.commit.committer.native_host"}
-  ]
+  "entries": []
 }

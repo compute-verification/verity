@@ -1,25 +1,28 @@
 """A served window sealed as a deferred Commit's row dir (`serve_seal.seal_window`) and opened as PROVE-PATH opens it
-(`deferred_rows.of_record`), and the registered advice compiler (`advice_windows.Capped`, PROVE-PATH's, with the cap ℓ).  CPU only."""
+(`deferred_rows.of_record`), and the registered registered compiler (`advice_windows.Capped`, PROVE-PATH's, with the cap ℓ).  CPU only."""
 from __future__ import annotations
 
 import json
 import math
+import shutil
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
 from verity_vllm.pipeline import advice as ADV
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_seal as ss
+from verity_vllm.records.commit_run import CommitRun
 
 ROWS = {0: [("runner-a", 0, 3, 0, 3), ("runner-b", 3, 5, 0, 2), ("warmup", 5, 6, 0, 1)], 1: [("runner-a", 0, 1, 3, 3)]}
 NAMES = {"runner-a": "alice", "runner-b": "cmpl-2"}
 
 
-def _ledgers() -> dict[str, sc.Ledger]:
-    return {"alice": sc.Ledger("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 4}}, "alice", streamed=[7, 9]),
-            "cmpl-2": sc.Ledger("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, None, streamed=[8])}
+def _ledgers() -> dict[str, sc.LiveRequest]:
+    return {"alice": sc.LiveRequest("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 4}}, "alice", streamed=[7, 9]),
+            "cmpl-2": sc.LiveRequest("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, None, streamed=[8])}
 
 
 def test_a_windows_requests_are_named_by_user_with_their_rows_and_first_step():
@@ -34,10 +37,8 @@ def test_a_windows_requests_are_named_by_user_with_their_rows_and_first_step():
 def _sealed(tmp_path):
     torch = pytest.importorskip("torch")
     from tests.check.opened import commit_steps
-    from verity_vllm.commit import step_rows
 
-    com, rc = commit_steps({0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]},
-                           commit_scheme=step_rows.NAME)
+    com, rc = commit_steps({0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]})
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
     leds = _ledgers()
     reqs, rows = ss.window_requests(ROWS, NAMES.get, leds.get)
@@ -59,6 +60,83 @@ def test_a_sealed_rows_sha512_window_opens_as_a_deferred_commits_row_dir(tmp_pat
     assert r.run.run_root == rc.run_root and r.ctx["served_window"]["window"] == 5 and r.ctx["code"] == "c0de"
     assert r.programs == {} and r.arrivals == {"alice": 0, "cmpl-2": 0} and r.ctx["tokens"] == {"alice": [7, 9], "cmpl-2": [8]}
     assert sorted(p.name for p in (d / "commit").iterdir()) == ["binding_map_p0.json", "replay_bundle_p0", "runs.jsonl", "verdict.json"]
+    (run,) = CommitRun.load_lines(d / "commit" / "runs.jsonl")
+    assert run.schema is None and run.arm == "instrumented" and run.tokens_equal is None and run.commit.run_root == rc.run_root.hex()
+    assert "committed_not_retained" not in s and "committed_not_retained" not in json.loads(Path(s["bundle"], "MANIFEST.json").read_text())
+
+
+#: a served step as `--retain-exclude hidden_m1` commits it: an attention interior between two module outputs
+INTERIOR = [("model.layers.0.self_attn.qkv_proj/0", 300), ("fa2.m1/L0/s0/g32x8x1/S", None), ("model.layers.0.self_attn.o_proj/0", 200)]
+
+
+def _interior_window(tmp_path, gap=None):
+    """`INTERIOR` (the plane four leaves and 100 B) at step 0 and the sampler at step 1, committed under rows-sha512, step 0
+    retained as the committer retains it with the hidden family excluded (`host_retention._HostRanges`, everything but the plane's
+    leaf-aligned interior, or but ``gap`` as well), and sealed."""
+    torch = pytest.importorskip("torch")
+    from tests.check.opened import commit_steps
+    from verity_vllm.commit import step_rows
+    from verity_vllm.commit.committer import host_retention as HR
+
+    C = step_rows.ROW_BYTES
+    spec = [(n, nb or 4 * C + 100) for n, nb in INTERIOR]
+    stream = (torch.arange(sum(nb for _n, nb in spec), dtype=torch.int64) % 251).to(torch.uint8)
+    tensors, off = [], 0
+    for i, (name, nb) in enumerate(spec):
+        tensors.append((name, bytes(stream[off:off + nb].numpy()), i, "int32" if ".m1/" in name else "bfloat16", (nb // 2,)))
+        off += nb
+    com, rc = commit_steps({0: tensors, 1: [("runner.sampler", b"\x01\x02\x03\x04")]})
+    assert com.chunk == C
+    (lo, hi, fam), = HR._excluded_chunk_ranges(com._layouts[0], HR.HIDDEN_M1_FAMILIES, C)
+    blk, used = com._gpu_blocks[0]
+    kept = HR.outside(sorted([(lo, hi, fam), *([(*gap, "")] if gap else [])]), 0, -(-used // C) * C)
+    com._gpu_blocks[0] = (HR._HostRanges([(a, b, blk[a:b]) for a, b in kept], used, {fam: hi - lo}, C), used)
+    com.retain_exclude = set(HR.HIDDEN_M1_FAMILIES)
+    com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
+    leds = _ledgers()
+    reqs, rows = ss.window_requests(ROWS, NAMES.get, leds.get)
+    d = tmp_path / "windows" / "w6"
+
+    def seal(by=ss.seal_window):
+        return by(com, rc, d, rec={"window": 6, "run_id": "t/w6", "steps": len(rc.steps), "passed": True}, reqs=reqs,
+                  request_rows=rows, tokens={k: v.streamed for k, v in leds.items()}, sampling={}, label="serve-openai:t")
+    return SimpleNamespace(stream=stream, lo=lo, hi=hi, C=C, committed=used + com._gpu_blocks[1][1], d=d, seal=seal)
+
+
+def test_a_window_committed_without_its_attention_interior_seals_it_as_committed_not_retained(tmp_path):
+    """`--retain-exclude hidden_m1`: the run root is the one every byte was committed under, the bundle's store lacks only the
+    plane's interior, its manifest (and the context, and the seal's line) name that as committed and not retained, and the window
+    opens as PROVE-PATH opens it: a module output reads verified against the run root, a read inside the interior answers None."""
+    from verity_vllm.commit.opened import OpenedReader
+    from verity_vllm.pipeline import deferred_rows as DR, replay_bundle as RB
+
+    w = _interior_window(tmp_path)
+    s, n = w.seal(), w.hi - w.lo
+    man = json.loads(Path(s["bundle"], "MANIFEST.json").read_text())
+    got = man[RB.NOT_RETAINED]
+    assert got == {"families": ["fa2_hidden_m1", "fa3_hidden_m1"], "bytes": n, "by_family": {"fa2_hidden_m1": n, "fa3_hidden_m1": 0},
+                   "committed_bytes": w.committed, "retained_bytes": got["retained_bytes"]}
+    assert s[RB.NOT_RETAINED] == got and RB.open_bundle(s["bundle"])["context"][RB.NOT_RETAINED] == got
+    steps = json.loads(Path(s["bundle"], "store", "store.json").read_text())["steps"]
+    assert got["retained_bytes"] == sum(b - a for st in steps for a, b in st["ranges"])
+    assert Path(s["bundle"], "store", "raw", "s0.bin").stat().st_size == sum(b - a for a, b in steps[0]["ranges"])
+    assert not any(a < w.hi and w.lo < b for a, b in steps[0]["ranges"]), "the interior is in no retained range"
+    r = DR.of_record(s["bundle"], str(w.d))
+    rd, o = OpenedReader(r.store, r.run), 300 + 4 * w.C + 100
+    assert rd(0, "model.layers.0.self_attn.qkv_proj/0", 0, 300) == bytes(w.stream[0:300].numpy())
+    assert rd(0, "model.layers.0.self_attn.o_proj/0", 0, 200) == bytes(w.stream[o:o + 200].numpy())
+    assert rd(0, "fa2.m1/L0/s0/g32x8x1/S", 0, w.lo - 300) == bytes(w.stream[300:w.lo].numpy()), "the plane's boundary leaf is retained"
+    assert rd(0, "fa2.m1/L0/s0/g32x8x1/S", w.lo - 300, w.lo - 300 + 64) is None
+    assert rd.stats["not_retained"] == 1 and rd.stats["failed"] == 0
+
+
+def test_a_committed_byte_not_retained_outside_the_excluded_interiors_is_refused_at_the_seal(tmp_path):
+    from verity_vllm.commit import step_rows
+
+    w = _interior_window(tmp_path, gap=(0, step_rows.ROW_BYTES))
+    with pytest.raises(ValueError, match=r"not retained outside the excluded families' interiors .*step 0 \[0, "):
+        w.seal()
+    assert not (w.d / "commit" / "replay_bundle_p0").exists() and not (w.d / "commit" / "replay_bundle_p0.partial").exists()
 
 
 #: the Commit of record of the bench row llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager (its ``source``):
@@ -78,15 +156,22 @@ def _i64(xs, T):
     return b"".join(int(x).to_bytes(8, "little") for x in [*xs, *[0] * (T - len(xs))])
 
 
-def _sealed_parts(tmp_path, with_manifest: bool, port=None, embed_ids=None, name=None, kept=None):
+def _sealed_parts(tmp_path, with_manifest: bool, port=None, embed_ids=None, name=None, kept=None, by=None):
     """The record's committed tensors of steps 0 and 1 (shapes cut to the served window's 5 and 2 token rows) committed and sealed
     as a served window of two requests, by a committer that carries the row's manifest (as `serve_seal.committer` leaves it) or not.
     With ``port`` ({step: (ids, positions)}) each step's stream starts with the step-input port and, as `serve_seal.single_ids`
     leaves the committer, the embedding's own ids aren't committed, unless ``embed_ids`` ({step: ids}) commits them beside it;
-    its `served_record.SamplerInputsSource` kept the rows ``kept`` (`SERVED_ROWS` by default)."""
+    its `served_record.SamplerInputsSource` kept the rows ``kept`` (`SERVED_ROWS` by default). Sealed by `serve_seal.seal_window`,
+    or ``by``."""
+    fx, seal = _parts_window(tmp_path, with_manifest, port=port, embed_ids=embed_ids, name=name, kept=kept)
+    d, s = seal(by or ss.seal_window)
+    return fx, d, s
+
+
+def _parts_window(tmp_path, with_manifest: bool, port=None, embed_ids=None, name=None, kept=None):
+    """`_sealed_parts`' window, committed, and how to seal it: ``seal(by)`` gives its row dir and what ``by`` returned."""
     torch = pytest.importorskip("torch")
     from tests.check.opened import commit_steps
-    from verity_vllm.commit import step_rows
     from verity_vllm.commit.served_record import PORT_NAMES, SamplerInputsSource, StepInputPort
 
     fx = json.loads(PARTS.read_text())
@@ -104,20 +189,22 @@ def _sealed_parts(tmp_path, with_manifest: bool, port=None, embed_ids=None, name
                     continue
                 raw = b"".join(int(x).to_bytes(4, "little") for x in embed_ids[int(s)])
             steps[int(s)].append((m["name"], raw, m["ordinal"], m["dtype"], shape))
-    com, rc = commit_steps(steps, commit_scheme=step_rows.NAME)
+    com, rc = commit_steps(steps)
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
     if port:
         com.sources = [StepInputPort(com, T), SamplerInputsSource(com)]
         com.sources[1].rows = SERVED_ROWS if kept is None else kept
     if with_manifest:
         com.required_manifest = {k: fx[k] for k in ("identities", "op_path_aliases", "program_digest", "populations")}
-    leds = {"b0-1": sc.Ledger("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
-            "b0-2": sc.Ledger("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, "b0-2", streamed=[8, 6])}
+    leds = {"b0-1": sc.LiveRequest("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
+            "b0-2": sc.LiveRequest("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, "b0-2", streamed=[8, 6])}
     reqs, rows = ss.window_requests(SERVED_ROWS, SERVED_NAMES.get, leds.get)
     d = tmp_path / (name or ("w5" if with_manifest else "w5-raw"))
-    s = ss.seal_window(com, rc, d, rec={"window": 5, "run_id": "t/w5", "steps": len(rc.steps), "passed": True}, reqs=reqs,
-                       request_rows=rows, tokens={k: v.streamed for k, v in leds.items()}, sampling={}, label="serve-openai:t")
-    return fx, d, s
+
+    def seal(by):
+        return d, by(com, rc, d, rec={"window": 5, "run_id": "t/w5", "steps": len(rc.steps), "passed": True}, reqs=reqs,
+                     request_rows=rows, tokens={k: v.streamed for k, v in leds.items()}, sampling={}, label="serve-openai:t")
+    return fx, seal
 
 
 def _store(d, s, opened: bool = False):
@@ -133,7 +220,7 @@ def _store(d, s, opened: bool = False):
 
 
 def test_a_served_windows_identities_are_what_the_rows_programs_read(tmp_path):
-    """The failing read of PROVE-PATH on serve-openai's w5 (r20261024-114918-57a0), (b0-1, step 1, gate_up_proj/out), and the rest
+    """PROVE-PATH's read on serve-openai's w5 (b0-1, step 1, gate_up_proj/out), and the rest
     of what the row's Programs read: a Gemm's `out`, RoPE's `query` / `key` (layer 1 through the row's alias), an RMSNorm's
     `norm_scale` and an `fa2.m1` member, each bound exactly as the Commit of record bound the same tensor."""
     fx, d, s = _sealed_parts(tmp_path, with_manifest=True)
@@ -155,7 +242,7 @@ def test_a_served_windows_identities_are_what_the_rows_programs_read(tmp_path):
 
 
 def test_without_the_rows_manifest_a_window_binds_raw_names(tmp_path):
-    """What r20261024-105002-1042's w5 sealed: no manifest, so a name is its identity, and the Programs' reads miss by name."""
+    """A window sealed with no manifest: so a name is its identity, and the Programs' reads miss by name."""
     _fx, d, s = _sealed_parts(tmp_path, with_manifest=False)
     r, _bmap, store = _store(d, s)
     assert r.manifest is None and store.has("b0-1", 1, "model.layers.0.mlp.gate_up_proj", "0")
@@ -236,7 +323,7 @@ def test_the_committer_commits_the_steps_ids_once_as_the_ports():
     torch = pytest.importorskip("torch")
     from tests.check.opened import committer
 
-    com = committer(commit_scheme="rows-sha512")
+    com = committer()
     com.plan_inputs = {"model.embed_tokens", "model.layers.0.mlp.act_fn"}
     emb = torch.nn.Embedding(4, 2)
     assert com._acquires_input("model.embed_tokens", emb)
@@ -309,25 +396,24 @@ def test_a_steps_stream_starts_with_its_input_ids_then_positions_padded_to_the_t
 def test_a_sealed_windows_context_carries_its_served_rows_and_the_port_its_streams_start_with(tmp_path):
     torch = pytest.importorskip("torch")
     from tests.check.opened import commit_steps
-    from verity_vllm.commit import step_rows
     from verity_vllm.commit.served_record import PORT_NAMES, SamplerInputsSource, StepInputPort
     from verity_vllm.pipeline import deferred_rows as DR
 
     def i64(xs, T):
         return b"".join(int(x).to_bytes(8, "little") for x in [*xs, *[0] * (T - len(xs))])
 
-    com0, _ = commit_steps({0: [("x", b"\0")]}, commit_scheme=step_rows.NAME)
+    com0, _ = commit_steps({0: [("x", b"\0")]})
     T = com0.chunk // 8
     steps = {0: [(PORT_NAMES[0], i64([1, 2, 3, 4, 5], T), 0, "int64", (T,)), (PORT_NAMES[1], i64([0, 1, 2, 0, 1], T), 1, "int64", (T,)),
                  ("model.embed_tokens/in", i64([1, 2, 3, 4, 5], 5), 2, "int64", (5,))],
              1: [(PORT_NAMES[0], i64([7, 8], T), 0, "int64", (T,)), (PORT_NAMES[1], i64([3, 2], T), 1, "int64", (T,))]}
-    com, rc = commit_steps(steps, commit_scheme=step_rows.NAME)
+    com, rc = commit_steps(steps)
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
     com.sources = [StepInputPort(com, T), SamplerInputsSource(com)]
     com.sources[1].rows = SERVED_ROWS
     served = {"digest": "ab" * 64, "statics": {"R": 4, "P": 2}}
-    leds = {"b0-1": sc.Ledger("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
-            "b0-2": sc.Ledger("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, "b0-2", streamed=[8, 6])}
+    leds = {"b0-1": sc.LiveRequest("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
+            "b0-2": sc.LiveRequest("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, "b0-2", streamed=[8, 6])}
     reqs, rows = ss.window_requests(SERVED_ROWS, SERVED_NAMES.get, leds.get)
     d = tmp_path / "windows" / "w2"
     s = ss.seal_window(com, rc, d, rec={"window": 2, "run_id": "t/w2", "steps": 2, "passed": True, "served_rows": served}, reqs=reqs,
@@ -363,6 +449,39 @@ def test_a_sealed_window_whose_record_is_not_its_bundles_is_refused(tmp_path, ta
         DR.of_record(s["bundle"], str(d))
 
 
+# ------------------------------------------------------------------------------------------------------- the target φ reads
+
+def test_the_served_target_carries_the_int8_scope_its_layers_ran(monkeypatch):
+    """serve.json's target is the one predict's Build reads the int8 linears from (an exact-int8 checkpoint's Build refuses a
+    target without them): `target_of` writes the scope read back from the served model's layers, none for a bf16 model, and
+    refuses a mixed one."""
+    import sys
+    import types
+
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+
+    vllm = types.ModuleType("vllm")
+    vllm.envs = SimpleNamespace(VLLM_BATCH_INVARIANT=True)
+    monkeypatch.setitem(sys.modules, "vllm", vllm)
+    monkeypatch.setitem(sys.modules, "vllm.envs", vllm.envs)
+    h200 = TargetProfile.default().with_overrides(compute_capability=(9, 0), num_sms=132)
+    monkeypatch.setattr(TargetProfile, "from_device", classmethod(lambda cls, device=0: h200))
+    base = type("LinearMethodBase", (), {})
+    int8 = type("Int8PlainLinearMethod", (base,), {"int8_arm": "plain"})()
+    bf16 = type("UnquantizedLinearMethod", (base,), {})()
+
+    def model(*methods):
+        return SimpleNamespace(modules=lambda: iter([SimpleNamespace(quant_method=m) for m in methods]))
+
+    got = ss.target_of(model(int8, int8))
+    assert got == {"target": h200.with_overrides(int8_exact="linears").to_json(), "execution": "bi-eager"}
+    assert got["target"]["int8_exact"] == "linears" and list(got["target"]["compute_capability"]) == [9, 0]
+    assert ss.target_of(model(bf16)) == ss.target_of() == {"target": h200.to_json(), "execution": "bi-eager"}
+    assert "int8_exact" not in ss.target_of(model(bf16))["target"]
+    with pytest.raises(ValueError, match="int8_exact must be None"):
+        ss.target_of(model(int8, bf16))
+
+
 # ---------------------------------------------------------------------------------------------------------------- the advice's cap
 
 def test_the_registered_compiler_is_prove_paths_capped_compiler():
@@ -380,10 +499,102 @@ def test_the_registered_compiler_is_prove_paths_capped_compiler():
     assert isinstance(c, AW.Capped) and c.name == AW.CAPPED and c.digest == want
     assert c.digest == "2f470d2b6aadc53b707b0bd65820da4c55583eb18667eb3dce128aabb9dddab855473d52af758a630a2958e3555f7cafbc68e9238c0188cd9f8ef551abca2a9a"
     assert ADV.registered_compiler("inner-compiler", "cd" * 64, cap_bits=8192).digest != want
-    assert ADV.registered_compiler("inner-compiler").cap_bits == ADV.CAP_BITS
+    assert ADV.registered_compiler("inner-compiler", "cd" * 64).cap_bits == ADV.CAP_BITS
 
 
 @pytest.mark.parametrize("cap", [0, 7, True, "8"])
 def test_a_cap_that_is_not_a_bit_count_is_refused(cap):
     with pytest.raises(ValueError, match="whole number of bits"):
         ADV.registered_compiler("c", digest="ab" * 64, cap_bits=cap)
+
+
+# ------------------------------------------------------------------------------------------------- in the seal's own process
+
+#: what a seal's result says of when and how long, which two seals of the same execution block needn't share
+TIMES = ("manifest_sha256", "seal_s", "phases_s", "engine_s")
+
+
+@pytest.fixture(scope="module")
+def seal_process():
+    from verity_vllm.pipeline.seal_process import SealProcess
+
+    sp = SealProcess()
+    yield sp
+    assert sp.close()["exitcode"] == 0
+
+
+def _written(d: Path) -> dict[str, Any]:
+    """Every file under ``d``, by its path: its bytes, but the bundle's manifest less when it was sealed and the verdict less the
+    manifest's sha256, as JSON."""
+    out: dict[str, Any] = {}
+    for p in sorted(x for x in d.rglob("*") if x.is_file()):
+        rel = p.relative_to(d).as_posix()
+        if p.name == "MANIFEST.json":
+            out[rel] = {k: v for k, v in json.loads(p.read_text()).items() if k != "sealed_utc"}
+        elif p.name == "verdict.json":
+            out[rel] = v = json.loads(p.read_text())
+            for b in v["replay_deferred"]["bundles"]:
+                b.pop("manifest_sha256")
+        else:
+            out[rel] = p.read_bytes()
+    return out
+
+
+def _both(d: Path, seal: Any, by: Any) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """The execution block ``seal`` seals into ``d`` sealed by `seal_window`, then again by ``by``: what each wrote and returned."""
+    inline = seal(ss.seal_window)[1]
+    first = _written(d)
+    shutil.rmtree(d)
+    other = seal(by)[1]
+    return first, _written(d), inline, other
+
+
+@pytest.mark.parametrize("window", ["port", "interior"])
+def test_an_execution_block_sealed_in_its_own_process_writes_what_the_serving_process_writes(tmp_path, seal_process, window):
+    """`seal_process.SealProcess`: the store's files written by the serving process, the binding map, the checks, the store's
+    store.json, the context, the manifest and the records by the seal's: the files `seal_window` writes, byte for byte but for
+    when the manifest says it was sealed, and the result it returns. An execution block with the port and the row's manifest
+    (its binder, its positions' check, its port layout), and one committed without its attention interior
+    (`store_dump.not_retained`)."""
+    if window == "port":
+        _fx, seal = _parts_window(tmp_path, True, port=PORT)
+        d = tmp_path / "w5"
+    else:
+        w = _interior_window(tmp_path)
+        d, seal = w.d, lambda by: (w.d, w.seal(by))
+    first, again, inline, other = _both(d, seal, seal_process.seal)
+    assert first.keys() == again.keys() and [k for k in first if first[k] != again[k]] == []
+    assert {k: v for k, v in inline.items() if k not in TIMES} == {k: v for k, v in other.items() if k not in TIMES}
+    assert other["phases_s"].keys() == inline["phases_s"].keys() and other["engine_s"].keys() == {"handoff", "store_files"}
+    assert json.loads((d / "commit" / "replay_bundle_p0" / "store" / "store.json").read_text())["steps"][0]["metas"]
+
+
+def test_a_check_failed_in_the_seals_process_is_the_blocks_error_and_leaves_no_store(tmp_path, seal_process):
+    """A check that fails in the seal's process fails the execution block by the same name `seal_window`'s does, and the store
+    the serving process wrote meanwhile is discarded, as `seal_window` never writes it; the process seals the next block."""
+    from verity_vllm.commit import step_rows
+    from verity_vllm.pipeline.seal_process import SealFailed
+
+    with pytest.raises(SealFailed, match=r"^ValueError: the step-input port's positions aren't .*its row ran 2"):
+        _sealed_parts(tmp_path, True, port={**PORT, 1: ([7, 8], [3, 3])}, by=seal_process.seal)
+    w = _interior_window(tmp_path, gap=(0, step_rows.ROW_BYTES))
+    with pytest.raises(SealFailed, match=r"^ValueError: .*not retained outside the excluded families' interiors .*step 0 \[0, "):
+        w.seal(seal_process.seal)
+    for d in (tmp_path / "w5", w.d):
+        assert not (d / "commit" / "replay_bundle_p0").exists() and not (d / "commit" / "replay_bundle_p0.partial").exists()
+    _fx, _d, s = _sealed_parts(tmp_path, True, port=PORT, name="w7", by=seal_process.seal)
+    assert "error" not in s and Path(s["bundle"], "MANIFEST.json").is_file()
+
+
+def test_a_store_the_serving_process_fails_to_write_raises_what_seal_window_raises(tmp_path, seal_process):
+    """The serving process's own failure to write the store, once the process's checks pass, is raised as `seal_window` raises it."""
+    raised = []
+    for by in (ss.seal_window, seal_process.seal):
+        _fx, seal = _parts_window(tmp_path, True, port=PORT)
+        (tmp_path / "w5" / "commit").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "w5" / "commit" / "replay_bundle_p0.partial").write_text("a file where the store's dir goes")
+        with pytest.raises(NotADirectoryError) as e:
+            seal(by)
+        raised.append(str(e.value))
+        shutil.rmtree(tmp_path / "w5")
+    assert raised[0] == raised[1]

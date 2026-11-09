@@ -28,9 +28,12 @@ import os
 import sys
 from pathlib import Path
 
+from verity_config.settings import of
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "clear"))
+settings = of(__file__)
 
 SCHEME = "pearl-c-sm120-v1-h3"
 WEIGHTS = {0: (256, 1024), 1: (128, 2048)}
@@ -64,7 +67,7 @@ def capture(args) -> int:
                                   salt_key=salt_key)
         d = out / name
         try:
-            run.begin(retain=str(d), run=os.environ.get("RESEARCH_RUN_ID", "h3-screen"))
+            run.begin(retain=str(d), run=settings.RESEARCH_RUN_ID or "h3-screen")
             run.omit = frozenset(omit)
             for index, ((w, m), x) in enumerate(zip(CALLS, xs)):
                 y = run.gemm(w, x, weights[w], None)
@@ -96,7 +99,7 @@ def _calls(d: Path) -> dict:
     """An eager pass's calls held to the reference: the row seeds, E_A's committed rows and its padding rows."""
     import verify_run as VR
     from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
-    from verity.core.protocols.pouw.schemes import pearl_c as C
+    from verity.ml.protocols.pouw.schemes import pearl_c as C
 
     man = json.loads((d / "manifest.json").read_text())
     s, files, out = _scheme(man), VR.Files(d), []
@@ -169,7 +172,7 @@ def check(args) -> int:
         r = {"tiles": _tiles(d, args.jobs)}
         if not graphs and not omit:
             r["calls"] = _calls(d)
-        v = VR.verify(d / "manifest.json", VR.DRAWS, args.jobs, os.environ.get("RESEARCH_SOURCE_SHA", "unknown"))
+        v = VR.verify(d / "manifest.json", VR.DRAWS, args.jobs, settings.RESEARCH_SOURCE_SHA or "unknown")
         r["verify_run"] = {k: v.get(k) for k in ("accepted", "line", "verdicts", "error")}
         res[name] = r
         print(f"{name}: {r['tiles']['tiles']} tiles, {r['tiles']['failed']} failed check_tile; "

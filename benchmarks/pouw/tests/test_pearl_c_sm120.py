@@ -1,10 +1,10 @@
-"""Pearl-C's sm_120 tree off the card (benchmarks/pouw/pearl_c_sm120): the shared-memory swizzles conflict-free for every
-ldmatrix phase and the GEMMs within sm_120's 99 KB, the kernel's constants the scheme's, the SASS gate refusing a lowered or
-spilling build, the check fixture against the scheme on both device records, and run.py's identity refusal and dry run on
-a CPU stand-in for libcuda (#449's, with fake_tma.c's tensor maps; an RTX PRO 6000's name, SM count, compute capability,
-UUID and shared-memory limit), every launch's pointers and sizes checked against each kernel's footprint as pearl_c_sm120.cu
-states it, and each mainloop GEMM's operands against the tensor maps encoded for them.  With VERITY_POUW_NVCC naming a
-CUDA >= 12.8 toolkit, the real sm_120a build passes the gate."""
+"""Pearl-C's sm_120 tree off the card (benchmarks/pouw/pearl_c_sm120): the shared-memory swizzles conflict-free for
+every ldmatrix phase and the GEMMs within sm_120's 99 KB, the kernel's constants the scheme's, the SASS gate refusing a
+lowered or spilling build, the check fixture against the scheme on both device records, and run.py's identity refusal
+and dry run on a CPU stand-in for libcuda (pearl_c/fake_cuda.c, with fake_tma.c's tensor maps; an RTX PRO 6000's name,
+SM count, compute capability, UUID and shared-memory limit), every launch's pointers and sizes checked against each
+kernel's footprint as pearl_c_sm120.cu states it, and each mainloop GEMM's operands against the tensor maps encoded for
+them.  With VERITY_POUW_NVCC naming a CUDA >= 12.8 toolkit, the real sm_120a build passes the gate."""
 
 from __future__ import annotations
 
@@ -127,7 +127,7 @@ def test_gemms_fit_sm120_shared_memory():
 
 
 def test_k32_is_the_transposed_grid_of_column_pairs_and_leaves_every_product_unchanged():
-    """form_s5's codes and the lines' transposed F lines in K32 order (the pous root's 10:29Z ruling): within each aligned
+    """form_s5's codes and the lines' transposed F lines in K32 order (the pous root's ruling): within each aligned
     32, position 8q + 2b + s holds column 8b + 2q + s; the kernel's k32 and the fixture's are the same map, an involution,
     and a product over k of two operands both in K32 order is the unpermuted one's, word for word, on both device records."""
     t = np.arange(96)
@@ -147,9 +147,9 @@ def test_k32_is_the_transposed_grid_of_column_pairs_and_leaves_every_product_unc
 
 
 def test_kernel_constants_match_the_reference():
-    from verity.core.protocols.pouw.schemes import pearl_c as C
-    from verity.core.protocols.pouw.schemes import pearl_kw as P
-    from verity.core.protocols.pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
+    from verity.ml.protocols.pouw.schemes import pearl_c as C
+    from verity.ml.protocols.pouw.schemes import pearl_kw as P
+    from verity.ml.protocols.pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
 
     assert int(re.search(r"S5_LINE = (0x[0-9A-Fa-f]+);", SOURCE).group(1), 16) == C.S5_LINE
     assert "0x1p-32f" in SOURCE and C.S5_FLOOR == P.f32_bits(2.0 ** -32)
@@ -311,7 +311,7 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
     """Bytes each pointer slot must hold for the launch, from the kernel's indexing in pearl_c_sm120.cu."""
     if name == "lines":
         count = i[2]
-        return {0: 32, 1: 32 * count, 2: 32 * count, 3: 128 * count, 4: 32 * i[4]}
+        return {0: 32 * (count > i[4]), 1: 32 * count, 2: 32 * count, 3: 128 * count, 4: 32 * i[4]}
     if name in ("stats_s5", "stats_r"):
         rows, k = i[:2]
         return {0: 4 * rows * k, 1: 4 * rows, 2: 4 * rows, 3: 4 * rows, 4: 8 * rows}
@@ -388,6 +388,8 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 4 * i[0] * i[1]}
     if name == "diff_words":
         return {0: 4 * i[0], 1: 4 * i[0], 2: 8}
+    if name == "prefetch_l2":
+        return {0: i[0]}
     if name.endswith("_smem"):
         return {0: 4}
     raise AssertionError(f"no footprint for {name}")

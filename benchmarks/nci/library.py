@@ -1,4 +1,4 @@
-"""A library of training algorithms and what the NCI policy costs each, with where every block's reads go.
+"""A library of training algorithms and what the inference-only policy costs each, with where every block's reads go.
 
 An algorithm (``algorithms.json``) carries its measured scaling (``scaling``: compute-equivalent multipliers over a
 dense AdamW Chinchilla-optimal reference, each citing findings, and ``multiplier``, the one at the largest compute) and
@@ -14,7 +14,7 @@ token's computation, reads its slice's state, the activations crossing into it a
 ``Gamma``. The board (``rows.json``) and the library use the same search.
 
 ``lower`` is the thread theorem (``slowdown.thread_lower``) on the same profile. It is 1 when the algorithm is not one
-the theorem covers, and 1 when the data is committed, since its premise ``BaselineRegistered`` then fails (the coverage
+the theorem covers, and 1 when the data is committed, since its premise ``ThetaRegistered`` then fails (the coverage
 gap).
 
     python benchmarks/nci/library.py table --model kimi-k2 --policy kimi-k2-1m-raw

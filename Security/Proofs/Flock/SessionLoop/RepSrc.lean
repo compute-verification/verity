@@ -1,22 +1,57 @@
-import Proofs.Flock.SessionLoop.Statement
-import Proofs.Flock.Claims.ZK.FinishSwFrame
-import Proofs.Flock.Claims.ZK.FrameRankFault
+module
+
+public import Proofs.Flock.Claims.ZK.FrameRankFault
+public import Proofs.Flock.SessionLoop.Statement
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
 
 /-!
-# The rep draws as the finish reads them
+# The rep samples as the finish reads them
 
-`Loop.RepSrc` (`Loop.Src`'s rep-draws half) gives, at a release whose draws are `L₀`'s and whose layout at rep stream
-`2j + r` is the tape's (`Masked.layE`), the premises `Masked.swSrcE_repCut` takes of the frame's draws and the tape, at
+`Loop.RepSrc` (`Loop.Src`'s rep-draws half) gives, at a release whose samples are `L₀`'s and whose layout at rep stream
+`2j + r` is the tape's (`Masked.layE`), the premises `Masked.swSrcE_repCut` takes of the frame's samples and the tape, at
 the frame reps `Loop.frepOf`:
 
-* `Loop.RepSrc.size`: the draws are `drawBytes` long (`hz`).
-* `Loop.RepSrc.pads`: the tape's pads are those of the tape of the frames' draws (`hpads`).
-* `Loop.RepSrc.h`: below `h_ab`, the tape's `h` is the tape of the frames' draws' (`htape`).
+* `Loop.RepSrc.size`: the samples are `drawBytes` long (`hz`).
+* `Loop.RepSrc.pads`: the tape's pads are those of the tape of the frames' samples (`hpads`).
+* `Loop.RepSrc.h`: below `h_ab`, the tape's `h` is the tape of the frames' samples' (`htape`).
 * `Loop.RepSrc.innerSalt`: at each leaf of the pads tree, the masked prover's fitted leaf salts agree.
 
-At the loop's own release (`ofLoopLink`) the draws are `L₀`'s (`LeanRelease.draws_ofLoopLink`), and where the rep's frame
+At the loop's own release (`ofLoopLink`) the samples are `L₀`'s (`LeanRelease.draws_ofLoopLink`), and where the rep's frame
 starts, its layout is the tape's (`LeanRelease.lay_ofLoopLink`, `swSrcE_repCut`'s `hlayR`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -35,7 +70,7 @@ variable {L₀ : LeanRelease Flock.Wit
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
       ℕ → V (Array F128 × ByteArray × Array ByteArray)} {x : Msg} {w : Flock.Wit}
 
-/-- **The frame's draws are `drawBytes` long** at the release `Lr`, whose draws are `L₀`'s and whose layout at the rep is
+/-- **The frame's samples are `drawBytes` long** at the release `Lr`, whose samples are `L₀`'s and whose layout at the rep is
 the tape's. -/
 theorem Loop.RepSrc.size (hS : Loop.RepSrc L₀ src x w)
     (Lr : LeanRelease Flock.Wit
@@ -49,7 +84,7 @@ theorem Loop.RepSrc.size (hS : Loop.RepSrc L₀ src x w)
   exact (hS ν t j r).1
 
 /-- **The tape's pads are the frame's**: table `j`'s rep `r`'s pads on the tape are those on the tape of the frames'
-draws (`tapeOfDraws`, at any other entries `tz`). -/
+samples (`tapeOfDraws`, at any other entries `tz`). -/
 theorem Loop.RepSrc.pads (hS : Loop.RepSrc L₀ src x w)
     (Lr : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -66,7 +101,7 @@ theorem Loop.RepSrc.pads (hS : Loop.RepSrc L₀ src x w)
   exact (hS ν t j r).2.1
 
 /-- **Below `h_ab`, the tape's `h` is the frame's**: table `j`'s rep `r`'s `h` on the tape is that on the tape of the
-frames' draws, where `padsOf` reads it as it stands (`padsOf_get`). -/
+frames' samples, where `padsOf` reads it as it stands (`padsOf_get`). -/
 theorem Loop.RepSrc.h (hS : Loop.RepSrc L₀ src x w)
     (Lr : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -83,7 +118,7 @@ theorem Loop.RepSrc.h (hS : Loop.RepSrc L₀ src x w)
     FlockComplete.padsOf_get _ j.val r.val (Masked.layE x j) k (by omega) (by omega) (by omega)]
 
 /-- **The pads tree's leaf salts are the frame's**: at each leaf, the masked prover's `fitBytes 192` of the tape's leaf
-salt is that of the tape of the frames' draws. -/
+salt is that of the tape of the frames' samples. -/
 theorem Loop.RepSrc.innerSalt (hS : Loop.RepSrc L₀ src x w)
     (Lr : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -98,7 +133,7 @@ theorem Loop.RepSrc.innerSalt (hS : Loop.RepSrc L₀ src x w)
     (by rw [hlay]; exact hq), hlay, hd]
   exact (hS ν t j r).2.2.1 q hq
 
-/-- The release at the loop's own frames and link draws `L₀`'s bytes. -/
+/-- The release at the loop's own frames and link samples `L₀`'s bytes. -/
 theorem LeanRelease.draws_ofLoopLink (src : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
       ℕ → V (Array F128 × ByteArray × Array ByteArray))

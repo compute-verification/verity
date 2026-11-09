@@ -14,7 +14,7 @@ The pins are `vllm_moe.MOE_GEMM_PINS`' kernel body with the FP8 numeric constexp
 (`frontend.targets.moe_expert_fp8_launch_dot`; a target or tile without a registered step refuses by name).  The tile is
 the one vLLM picks: on a batch-invariant target `get_default_config`'s fixed BLOCK 64/64/32, GROUP_SIZE_M 8, 4 warps, 3 stages, SWAP_AB
 False; on cc 9.0 without batch invariance the tuned config's (fused_moe.py:1422-1451), with SWAP_AB =
-`enable_swap_ab` (BLOCK_SIZE_M < 64 and BLOCK_SIZE_N >= 64, fused_moe/utils.py:628-633) and DOT selected by #1944's
+`enable_swap_ab` (BLOCK_SIZE_M < 64 and BLOCK_SIZE_N >= 64, fused_moe/utils.py:628-633) and DOT selected by the
 `fp8_moe.sm90_dot` rule (MMAv2 at the small tiles, QGMMA elsewhere): the acceptance rule is
 `frontend.targets.moe_fp8_tuned_tile_refusal`, which the fold applies too.  The Definitions read only KB = BLOCK_SIZE_K and SWAP.
 The schedule (sorted or naive) and the routed weights are `FusedMoeKernelRule`'s.
@@ -37,7 +37,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.observations import active
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 from verity_vllm.program.frontend.rules.vllm_moe import INDEXED_READ, MOE_GEMM_PINS, FusedMoeKernelRule, _flat_pairs, _not_owned
-from verity_vllm.program.registry.fp8 import weight_blocks
+from verity.ml.definitions.registry.fp8 import weight_blocks
 
 FP8_E4M3 = torch.float8_e4m3fn
 
@@ -181,7 +181,7 @@ class FusedMoeKernelFp8Rule(FusedMoeKernelRule):
         bc, bsc = ctx.coll(b), ctx.coll(b_s)
         naive = sc.get("naive_block_assignment") is True
         ids_node = launch_tensor(node, meta, "expert_ids_ptr") if naive else ctx.val(launch_tensor(node, meta, "sorted_token_ids_ptr")).ids_node
-        from verity_vllm.program.registry.prims import F32, I32
+        from verity.ml.definitions.registry.prims import F32, I32
         ids = _flat_pairs(ctx.coll(ids_node), nv, I32)
         ws = _flat_pairs(ctx.coll(launch_tensor(node, meta, "topk_weights_ptr")), nv, F32) if mrw else None
         role, dot = moe_expert_fp8_role(mrw, BM, BN, WARPS, SWAP)
@@ -214,7 +214,7 @@ class SiluAndMulPerBlockQuantRule(InPlaceRule):
                                    "group_size G a power of two dividing I; scale_ub None"),
                     evidence_domain="structural; numerics: SiluMulFp8BlockQuant_v1 (registry.fp8_moe, model-untested: not on "
                                     "vLLM's served cc 9.0 path; glm53_block_fp8_capture/v3 compared it on cc 9.0 at "
-                                    "VLLM_USE_DEEP_GEMM=0, run r20261014-092222-e32d)")
+                                    "VLLM_USE_DEEP_GEMM=0)")
 
     def targets(self):
         return targets_for("silu_and_mul_per_block_quant")

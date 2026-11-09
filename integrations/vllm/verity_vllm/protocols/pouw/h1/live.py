@@ -1,5 +1,5 @@
-"""H1's live tables (VLLM-85): the served path's side of `PouwLiveSlots_v2{T}` (`verity.core.protocols.pouw.circuit.live`),
-the unit that makes each round's served rows m_s a proved value, one ``live@<s>`` a round, each request's cap bound to its
+"""H1's live tables: the served path's side of `PouwLiveSlots_v2{T}` (`verity.ml.protocols.pouw.circuit.live`),
+the proof block that makes each round's served rows m_s a proved value, one ``live@<s>`` a round, each request's cap bound to its
 public max_tokens.
 
 * **The tables.** With the Commit (`pouw_h1_served.Served`'s ``tap``) a window registers its round tables as values of
@@ -11,7 +11,7 @@ public max_tokens.
     admissions, and its domain binds the window's session, since its root, round 0's ``request_table``, is inside round
     0's request root and so inside the open root (`credit.requests_root`), as ``ids@0``'s is. The prompts' tokens are
     ``ids@0``'s, not its. Its rows are ``row-seg/v1`` rows (`live_reads.REQUEST_SCHEMA`), the live statement's one row
-    format whose commitment compresses before its last block.
+    format whose commitment compresses before its last chunk.
   * round s's slot table ``<prefix>slots@<s>`` (`live_reads.SLOTS`): T rows, slot i's leaf (q + 1 for a row of request q, 0
     past the step's batch, `live_reads.slot_words`), registered at round s's close under the open root and listed whole among
     round s's segments (`Served.segments`), so round s's root commits it before its coin (`credit._a_link`).
@@ -21,7 +21,7 @@ public max_tokens.
   `pouw_h1.H1Run.open_request` and `open_slot` refuse them (`Table`). Row j's salt is the run's key's at `nonce`.
 * **m_s** is step s's served rows, the scheduler's: its batch's rows (`pouw_h1.H1Run.owners`). Under CUDA graphs a call's
   A rows are padded to the graph's size, past them (`pouw_h1.Call.pad`), and those rows are no slot of the step's.
-* **The statements.** ``live@<s>`` is unit s of the live Program (`live.program_v2` of T, the window's S and its prefix),
+* **The statements.** ``live@<s>`` is proof block s of the live Program (`live.program_v2` of T, the window's S and its prefix),
   on round s's slot table, the request headers, the public m_s, the public round s and the public caps (`caps`: round 0's
   requests' max_tokens, the fixed length the period's open commits): `statement` gives its rows and its ``--registered``
   file (`live_reads.reads_file`), and `verdicts` holds each round's tables to the roots its round committed and its rows to
@@ -37,13 +37,14 @@ from typing import Any, Sequence
 import numpy as np
 
 from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw.circuit import live as L
-from verity.core.protocols.pouw.circuit import live_reads as LR
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.ml.protocols.pouw.circuit import live as L
+from verity.core.protocols.pouw import live_reads as LR
+from verity.core.protocols.spot.one_stage import registered as G
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.commitments import Commitment
 
+from verity_vllm.protocols.pouw.h1 import prover as PV
 from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 
@@ -71,7 +72,7 @@ def request_words(entries: Sequence[RQ.RequestEntry], rows: int) -> np.ndarray:
 
 def caps(entries: Sequence[RQ.RequestEntry]) -> list[int]:
     """The public max_tokens of round 0's requests in admission order, the fixed length the period's open commits
-    (`credit.committed_length`) and so the live unit's public caps (`live_reads.caps`)."""
+    (`credit.committed_length`) and so the live proof block's public caps (`live_reads.caps`)."""
     return [e.max_tokens for e in entries]
 
 
@@ -140,26 +141,32 @@ def m_of(run: Any, s: int) -> int:
     return run.step_rows()[s]
 
 
-def statement(run: Any, s: int, m: int | None = None) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
-    """Round s's ``live@<s>``: its input rows, each port's u16 words (`live_reads.statement_rows`' ports, one instance), and
-    its ``--registered`` file (`live_reads.reads_file`) under the window Program's digest, the open root and the session, at
-    m_s (or a claimed ``m``)."""
-    served, T = run.served, run.rows
+def _rows(run: Any, s: int, m: int | None = None) -> tuple[dict[str, np.ndarray], int]:
+    """Round s's ``live@<s>`` input rows at m_s (or a claimed ``m``): each port's u16 words (`live_reads.statement_rows`'
+    ports, one instance), and the m they state."""
+    T = run.rows
     if (gap := admission_gap(run)) is not None:
         raise ValueError(gap)
     if s >= len(run.round_log):
         raise ValueError(f"round {s} hasn't closed, so its slot table isn't committed")
-    roots = {v: r.root.hex() for v, r in served.live.items()}
     m = m_of(run, s) if m is None else m
     rows = {f"slot_{i}": w for i, w in enumerate(slot_words(run.owners.get(s, []), T))}
     rows |= {f"req_{i}": w for i, w in enumerate(request_words(run.admitted.get(0, []), T))}
     rows["m"] = np.asarray(LR.slot_words([m])[0], np.uint16)
     rows["s"] = np.asarray(LR.slot_words([s])[0], np.uint16)
-    mt = caps(run.admitted.get(0, []))
-    rows |= {f"cap_{i}": w for i, w in enumerate(LR.slot_words(LR.caps(mt, T)))}
-    doc = LR.reads_file(served.program_digest, T, run.steps, s, roots, served.root, served.live[value(served, LR.REQUESTS)].session,
-                       m, served.program.fn.bindings["PREFIX"], mt)
-    return {p: np.asarray(w, np.uint16).reshape(1, -1) for p, w in rows.items()}, doc
+    rows |= {f"cap_{i}": w for i, w in enumerate(LR.slot_words(LR.caps(caps(run.admitted.get(0, [])), T)))}
+    return {p: np.asarray(w, np.uint16).reshape(1, -1) for p, w in rows.items()}, m
+
+
+def statement(run: Any, s: int, m: int | None = None) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+    """Round s's ``live@<s>``: its input rows (`_rows`) and its ``--registered`` file (`live_reads.reads_file`) under the
+    window Program's digest, the open root and the session, at m_s (or a claimed ``m``)."""
+    served = run.served
+    rows, m = _rows(run, s, m)
+    doc = LR.reads_file(served.program_digest, run.rows, run.steps, s, {v: r.root.hex() for v, r in served.live.items()},
+                        served.root, served.live[value(served, LR.REQUESTS)].session, m,
+                        served.program.fn.bindings["PREFIX"], caps(run.admitted.get(0, [])))
+    return rows, doc
 
 
 def evaluated(run: Any, s: int, m: int | None = None) -> int:
@@ -177,7 +184,7 @@ def evaluated(run: Any, s: int, m: int | None = None) -> int:
 def verdicts(run: Any) -> list[dict[str, Any]]:
     """Each round's ``live@<s>``: its slot table's root is the one round s's row commits (``slots``) and is listed whole
     there, round 0's request headers' is round 0's ``request_table``, and `live.live_ok_v2` of its rows at m_s and the
-    public caps, as is its unit's circuit (`evaluated`); ``ok`` when all hold, else ``reason`` (every round's
+    public caps, as is its proof block's circuit (`evaluated`); ``ok`` when all hold, else ``reason`` (every round's
     `admission_gap` of a per-round window). Empty without live tables."""
     served = run.served
     if served is None or not served.live or served.refused:
@@ -208,7 +215,7 @@ def dump(run: Any, out: Path) -> dict[str, Any]:
     """The prover's ``live@<s>`` of each closed round, for `benchmarks/pouw/h1_prove/live.py`: ``out/window.json`` (public:
     T, S, the prefix, the window Program's digest, the open root, the session, the live tables' roots, each round's
     served rows m_s and round 0's requests' max_tokens, the caps) and ``out/<s>/rows.npz`` in `window.py open`'s form (``w_``, ``s_``, ``v_``, ``r_`` and ``p_`` of each
-    port: its words, salt, registered value, position and path, one instance, unit s), with ``out/<s>/opening.json``, each
+    port: its words, salt, registered value, position and path, one instance, proof block s), with ``out/<s>/opening.json``, each
     registered row's ``b || c`` and path, which is all of it the verifier sees. Every row is the prover's own: ``out`` is
     the prover's directory, never a run's ``out/``."""
     served, T = run.served, run.rows
@@ -217,26 +224,39 @@ def dump(run: Any, out: Path) -> dict[str, Any]:
     pub = {"T": T, "S": run.steps, "prefix": prefix, "program": prog, "window": window, "session": req.session,
            "roots": {v: r.root.hex() for v, r in served.live.items()},
            "served": [m_of(run, s) for s in range(len(run.round_log))], "max_tokens": caps(run.admitted.get(0, []))}
-    cap = LR.caps_table(prog, prefix, window, T, pub["max_tokens"])[2]
+    cap, ok = LR.caps_table(prog, prefix, window, T, pub["max_tokens"])[2], LR.ok_table(prog, prefix, window, run.steps)[2]
+    salts = {r.value: _salts(r) for r in (req, cap, ok)}
     out.mkdir(parents=True, exist_ok=True)
     (out / "window.json").write_text(json.dumps(pub, indent=1))
     for s, m in enumerate(pub["served"]):
-        rows, _doc = statement(run, s)
-        reads = {f"slot_{i}": (served.live[value(served, LR.SLOTS, s)], i) for i in range(T)}
+        rows, _m = _rows(run, s, m)
+        slots = served.live[value(served, LR.SLOTS, s)]
+        known = LR.m_table(prog, prefix, window, s, m)[2], LR.round_table(prog, prefix, window, s)[2]
+        reads = {f"slot_{i}": (slots, i) for i in range(T)}
         reads |= {f"req_{i}": (req, i) for i in range(T)}
         reads |= {f"cap_{i}": (cap, i) for i in range(T)}
-        reads |= {"m": (LR.m_table(prog, prefix, window, s, m)[2], 0), "s": (LR.round_table(prog, prefix, window, s)[2], 0), LR.OK_PORT: (LR.ok_table(prog, prefix, window, run.steps)[2], s)}
+        reads |= {"m": (known[0], 0), "s": (known[1], 0), LR.OK_PORT: (ok, s)}
         rows[LR.OK_PORT] = np.asarray([CC.OK_ROW], np.uint16)
+        drawn = salts | {r.value: _salts(r) for r in (slots, *known)}
         z: dict[str, Any] = {"units": np.array([s])}
+        opening = {}
         for p, (reg, i) in reads.items():
-            z |= {f"w_{p}": rows[p], f"s_{p}": np.frombuffer(reg.salts[i], np.uint8).reshape(1, -1),
-                  f"v_{p}": np.array([reg.value]), f"r_{p}": np.array([i], np.int64), f"p_{p}": np.array([reg.path(i).hex()])}
+            path = reg.path(i).hex()
+            z |= {f"w_{p}": rows[p], f"s_{p}": drawn[reg.value][i], f"v_{p}": np.array([reg.value]),
+                  f"r_{p}": np.array([i], np.int64), f"p_{p}": np.array([path])}
+            opening[p] = {"value": reg.value, "index": i, "bc": reg.bcs[i].hex(), "path": path}
         d = out / str(s)
         d.mkdir(exist_ok=True)
-        np.savez(d / "rows.npz", **z)
-        (d / "opening.json").write_text(json.dumps({p: {"value": reg.value, "index": i, "bc": reg.bcs[i].hex(),
-                                                        "path": reg.path(i).hex()} for p, (reg, i) in reads.items()}))
+        PV.savez(d / "rows.npz", z)
+        (d / "opening.json").write_text(json.dumps(opening))
     return {"dir": str(out), "rounds": len(pub["served"])}
+
+
+def _salts(reg: Any) -> np.ndarray:
+    """Every row's salt of a registered value as ``(rows, 1, 192)`` u8, sampled in one pass where its salts are sampled on
+    read (`pouw_h1_registered.Salts.at`)."""
+    got = reg.salts.at(range(reg.leaves)) if hasattr(reg.salts, "at") else b"".join(reg.salts)
+    return np.frombuffer(got, np.uint8).reshape(reg.leaves, 1, -1)
 
 
 __all__ = ["REQUESTS", "SLOTS", "Table", "admission_gap", "caps", "dump", "evaluated", "headers", "m_of", "nonce", "request_words",

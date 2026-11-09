@@ -1,4 +1,4 @@
-"""`circuit.h1tile` registers `eps1-sm120-h1fx1` only ``if SG is not None`` (``SG`` is #2417's `circuit.segment`), so on a
+"""`circuit.h1tile` registers `eps1-sm120-h1fx1` only ``if SG is not None`` (``SG`` is `circuit.segment`), so on a
 tree without segment the scheme is quietly absent.  That guard must not fail silently: once `circuit.segment` imports, the
 one scheme has to be in `compile.SCHEMES`.
 
@@ -11,19 +11,19 @@ import importlib
 
 import pytest
 
-from verity.core.protocols.pouw.circuit import compile as C
-from verity.core.protocols.pouw.circuit import h1tile as H
+from verity.ml.protocols.pouw.circuit import compile as C
+from verity.ml.protocols.pouw.circuit import h1tile as H
 
 
 def _segment_present() -> bool:
     try:
-        importlib.import_module("verity.core.protocols.pouw.circuit.segment")
+        importlib.import_module("verity.ml.protocols.pouw.circuit.segment")
     except ImportError:
         return False
     return True
 
 
-@pytest.mark.skipif(not _segment_present(), reason="circuit.segment (#2417) is not on this tree, so the scheme cannot register")
+@pytest.mark.skipif(not _segment_present(), reason="circuit.segment is not on this tree, so the scheme cannot register")
 def test_the_scheme_registers_once_segment_is_present():
     """With segment on the tree, h1tile's guard must have registered the one `eps1-sm120-h1fx1` scheme; a silent miss fails
     here rather than leaving the scheme quietly absent."""

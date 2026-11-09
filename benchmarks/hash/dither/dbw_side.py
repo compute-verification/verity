@@ -1,20 +1,20 @@
-"""The remote bandwidth audit beside sbench's served arms on the GPU they share (`sbench.py --bw-passes GIB`, `dbw.py`).
+"""PoUB beside sbench's served arms on the GPU they share (`sbench.py --bw-passes GIB`, `dbw.py`).
 
-One process stands in for the auditor: the remote audit's own verifier (`benchmarks/remote_session/verifier.py`'s
-`Verifier`, its coins from an in-process challenger, the Lean verifier of record deciding) on a loopback socket. Its
+One process stands in for the auditor: PoUB's own verifier (`verity/core/protocols/remote_bandwidth/session/verifier.py`'s
+`Verifier`, its coins from an in-process challenger, the Lean verifier deciding) on a loopback socket. Its
 prover is `prover.py`, unmodified, on the GPU sbench leased (CUDA_VISIBLE_DEVICES inherited) and on --prover-cpus,
 over a store of GIB GiB of seeded payload under kv.cu's p1024 masked codec (`device.py`, the store `run.sh` registers on
 one GPU). That store stands in for the node's registered one: the engines' weights arenas that `node.py` registers can't
 share a GPU with sbench's arms. sbench sends one JSON line a command on stdin:
 
-    {"op": "session", "k": K, "paced": "1:1000:2773:W"}   session K, paced (`verifier.pace_of`), its first coin now
+    {"op": "session", "k": K, "paced": "1:1000:2773:W"}   run K, paced (`verifier.pace_of`), its first coin now
     {"op": "stop"}                                       the registration closed, the prover's bye, and exit
 
 and reads one JSON line an event on stdout, each with its `t_ns` on the host's monotonic clock (sbench's workers'
-too): `ready` (the registration, the prover's calibration, the round trips and the allowance A), `started` (session
+too): `ready` (the registration, the prover's calibration, the round trips and the allowance A), `started` (run
 K's first coin sent: its passes begin), `passes` (the prover's `closed`: its last pass is done), `ended` (K's verdict
 and failure, its pass timeline and memory lines; `dbw.session_of`), `stopped`, or `error`. The prover's plan (honest,
-skip:F, one session each) is fixed at its start. OUT/verifier.json is the verifier's record as `verifier.py` writes
+skip:F, one run each) is fixed at its start. OUT/verifier.json is the verifier's record as `verifier.py` writes
 it, and OUT/prover/ the prover's.
 """
 from __future__ import annotations
@@ -29,16 +29,16 @@ import threading
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+
+from verity.core.protocols.remote_bandwidth.session import verifier as V
+from verity.core.protocols.remote_bandwidth.session import wire
+
+from verity.core.protocols.remote_bandwidth import audit
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 RS = ROOT / "benchmarks" / "remote_session"
-sys.path.insert(0, str(RS))
-sys.path.insert(0, str(ROOT))
-
-import verifier as V
-import wire
-
-from verity.core.protocols.remote_bandwidth import audit
 
 EVENTS = os.fdopen(os.dup(1), "w", buffering=1)
 os.dup2(2, 1)
@@ -52,7 +52,7 @@ def emit(event: str, **kw) -> None:
 
 
 def lines(r: dict) -> dict:
-    """A session's verdict, pass timeline and memory lines, without its draws: what sbench's report reads."""
+    """A run's verdict, pass timeline and memory lines, without its samples: what sbench's report reads."""
     seen = r.get("windows_seen", [])
     passes = []
     for w in seen:
@@ -75,12 +75,11 @@ def lines(r: dict) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--plan", required=True, help="the prover's sessions in order (honest, skip:F), comma-separated")
+    ap.add_argument("--plan", required=True, help="the prover's runs in order (honest, skip:F), comma-separated")
     ap.add_argument("--gib", type=float, default=24.0, help="the store, whole 1 GiB chunks")
     ap.add_argument("--lib", help="session.so (without it the prover's options name its backend: --cpu BLOCKS)")
     ap.add_argument("--kv", help="kv.so (p1024, masked)")
     ap.add_argument("--lean-exe", type=Path, help="a built remote-audit-verifier (default: the verifier builds it)")
-    ap.add_argument("--verdict", default=V.VERDICT, choices=V.VERDICTS)
     ap.add_argument("--jitter-ms", type=float, default=50.0)
     ap.add_argument("--quantile", default="max", choices=("p50", "p99", "p999", "max"))
     ap.add_argument("--pings", type=int, default=1000)
@@ -114,7 +113,7 @@ def main() -> int:
     plan = len(a.plan.split(","))
 
     def watch() -> None:
-        """The prover exits once its plan's last session has ended (`prover.py`), else only on an error."""
+        """The prover exits once its plan's last run has ended (`prover.py`), else only on an error."""
         rc = prover.wait()
         if not stopping.is_set() and not (rc == 0 and session["ended"] == plan):
             emit("error", why=f"the prover exited {rc} with its plan unfinished (OUT/prover.log)")
@@ -135,7 +134,7 @@ def main() -> int:
             session["started"] = True
             emit("started", k=session["k"])
 
-    def got():
+    def got() -> tuple[dict, bytes, int]:
         head, body, stamp = recv()
         if head.get("type") == "closed":
             emit("passes", k=head.get("k"), at_ns=stamp)
@@ -144,7 +143,7 @@ def main() -> int:
     conn.send, conn.recv = sent, got
     v = V.Verifier(conn, source=os.urandom(32), windows=1, window_ns=10 ** 9, samples=2773, delta=2.0 ** -40,
                    jitter_ns=round(a.jitter_ms * 1e6), log=lambda m: print(m, flush=True), hbm_bytes=a.hbm_bytes,
-                   verdict=a.verdict, lean_exe=a.lean_exe)
+                   lean_exe=a.lean_exe)
     try:
         reg, cal = v.register()
     except (audit.RegistryError, ValueError, wire.Closed) as e:
@@ -167,7 +166,7 @@ def main() -> int:
     def record() -> None:
         (a.out / "verifier.json").write_text(json.dumps(
             {"schema": "verity/remote-session/verifier/v0", "peer": list(peer), "registration": wire.registration_json(reg),
-             "verdict": v.verdict, "calibration": cal, "rtt": rtt, "allowance_ns": allowance, "sessions": results,
+             "verdict": "lean", "calibration": cal, "rtt": rtt, "allowance_ns": allowance, "sessions": results,
              "registry": v.registry_json()}, indent=1))
 
     record()
@@ -181,7 +180,7 @@ def main() -> int:
         try:
             r = v.session(msg["k"], allowance, v.clock.now(), V.pace_of(msg["paced"], pass_ms))
         except (wire.Closed, audit.SessionError) as e:
-            emit("error", why=f"session {msg['k']}: {type(e).__name__}: {e}")
+            emit("error", why=f"run {msg['k']}: {type(e).__name__}: {e}")
             rc = 3
             break
         results.append(r)

@@ -1,22 +1,56 @@
-import SampledProofs.Registration
-import Proofs.Flock.Claims.Sampling.Reference.Deployed
+module
+
+public import Spot.Registration
+public import Proofs.Flock.Claims.Sampling.Reference.Deployed
+public import Proofs.Flock.Claims.Sampling.Reg
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The sampled verifier's code from its Lean draw
+# The sampled verifier's code from its Lean sample
 
 `SamplingDeploy.code c reg L bytes sr sess`: the record's code (`SamplingDeploy.Code`) with what the Lean sampled
-verifier (`SampledProofs`) computes taken from it, and the rest `c`'s:
+verifier (`Spot`) computes taken from it, and the rest `c`'s:
 
-* `checked`: the draw of record. `SampledProofs.Slots.select` runs on the registration the statement names (`reg x`, a
+* `checked`: the sample of record. `Spot.Slots.select` runs on the registration the statement names (`reg x`, a
   `Reg`: the selection rule, the verifier's own program, query and work table, and the challenger's closure map, as
-  `SampledProofs.Run.run` reads them) over `L x` bytes of the coins (`bytes`), and every slot of the layout is
-  checked where the draw is refused (`drawChecked`). Nothing is checked where the statement names no registration.
-* `sessions`, `session`, `rounds`: one proof session per registration proves every drawn unit
-  (`Stream.session`, where each covered registration's draw is its own tables of the session's statement). So every
+  `Spot.Run.run` reads them) over `L x` bytes of the coins (`bytes`), and every slot of the layout is
+  checked where the sample is refused (`drawChecked`). Nothing is checked where the statement names no registration.
+* `sessions`, `session`, `rounds`: one proof session per registration proves every sampled proof block
+  (`Stream.session`, where each covered registration's sample is its own tables of the session's statement). So every
   checked unit's session is the run's one session (`sess`) on its rounds (`sr`), and `sessions = 1`.
 
-`SampledProofs.Run.run` takes the session's statement and the verifiers' verdicts as inputs (`Run.Input.statement`,
-`verdicts`, `sessions`), and nothing in `SampledProofs` composes a session's statement, encodes its Flock witness or runs
+`Spot.Run.run` takes the session's statement and the verifiers' verdicts as inputs (`Run.Input.statement`,
+`verdicts`, `sessions`), and nothing in `Spot` composes a session's statement, encodes its Flock witness or runs
 Flock. So `sess`, the reference prover's framing (`step`, `reads`, `wit`), the verifier in public-coin form, its parser,
 scope check and partition, and the commitment's layout stay parameters.
 
@@ -28,7 +62,7 @@ At this code:
 * `drawSlots_code`: `DrawSlots` from `RegMatches` (the registration's program is the statement's descriptor, its layout
   the statement's partition and its design the statement's design) and `BytesUniform` (the bytes are uniform when the
   coins are).
-* `drawFixed_code`: `DrawFixed` from `BytesFixed` (the session's rounds are second-stage, and the draw's bytes don't
+* `drawFixed_code`: `DrawFixed` from `BytesFixed` (the session's rounds are second-stage, and the sample's bytes don't
   read them).
 * `framed_code_iff`, `acceptsFramed_code_iff`, `sessionsScope_code_iff`, `sessionWit_code_iff`, `sessionsIn_code_iff`:
   `Framed`, `AcceptsFramed`, `SessionsScope`, `SessionWit` and `SessionsIn` are exactly their one-session forms
@@ -36,7 +70,7 @@ At this code:
   with no unit named.
 * `N₀_of_shapes`, `sessIn_of_shapes`: `N₀` reads only the session's table sizes, so `SessIn`'s `N₀` clause holds when
   every session at `x` has the tables `shape x` fixes (`ShapesFixed`). Nothing the Lean verifier runs establishes it at
-  `sess`: its registration refusal (`Run.countVaries`) fixes the drawn count only, and its outcome step takes the
+  `sess`: its registration refusal (`Draw.bernoulli`) fixes the sampled count only, and its outcome step takes the
   session's statement as an opaque object.
 * `shapeChecked`, `shapesFixed_checked`, `shapesFixed_iff_checked`, `sessIn_checked`: the shape check an outcome step
   would run (`sess` with every session refused whose tables aren't `shape x`) fixes the shapes, refuses nothing exactly
@@ -44,38 +78,16 @@ At this code:
 * `complete_code`: `Complete` at the code from Flock's masked completeness and those premises.
 -/
 
+@[expose] public section
+
 namespace SamplingDeploy
 
-open Claims Claims.Sampling Claims.Sampling.Reference Properties.SampledProofs
+open Claims Claims.Sampling Claims.Sampling.Reference Properties.Spot
 open Lean (Json)
 
-/-- **A registration as the draw of record reads it**, what `SampledProofs.Run.run` passes to `Select.select`: the
-verifier's own copies (`Run.Input.params.verifier`, whose program, query and work table the draw reads), the selection
-rule and the challenger's closure map. -/
-structure Reg where
-  verifier : SampledProofs.Registration.Verifier
-  rule : SampledProofs.Select.Rule
-  closure : Option (Array (Int × Array Int))
-
-def Reg.program (g : Reg) : SampledProofs.Program := g.verifier.program
-
-def Reg.query (g : Reg) : Json := g.verifier.query
-
-def Reg.table (g : Reg) : Option Json := g.verifier.workTable
-
-/-- The registration's layout (`Slots.layout`), empty where its query doesn't apply. -/
-def Reg.layout (g : Reg) : SampledProofs.Slots.Layout :=
-  match SampledProofs.Slots.layout g.program g.query with
-  | .ok l => l
-  | .error _ => default
-
-/-- **The draw of record's checked units** on the bytes `src`: `Slots.select`'s, and every slot of the layout where it
-is refused (`drawChecked`). -/
-def Reg.checked (g : Reg) (src : ByteArray) : List (ℕ × ℕ) :=
-  (drawChecked g.rule g.program g.query g.table g.closure g.layout src).toList
-
-/-- **The sampled verifier's code with its Lean draw**: `c` with `checked` the draw of record on the registration
-`reg x` over the bytes `bytes x` of the coins, and one session per registration, `sess`, on the rounds `sr`. -/
+/-- **The sampled verifier's code with its Lean sample**: `c` with `checked` the sample of record on the registration
+`reg x` over the bytes `bytes x` of the coins, and one session per registration, `sess`, on the rounds `sr`, so every
+unit has the statement's `N₀`. -/
 def code (c : Code) (reg : Msg → Option Reg) (L : Msg → ℕ)
     (bytes : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → Fin (L x) → Fin 256)
     (sr : (x : Msg) → Finset (Fin (c.V.k x))) (sess : Msg → Seen → Option (Msg × Seen)) : Code :=
@@ -83,7 +95,8 @@ def code (c : Code) (reg : Msg → Option Reg) (L : Msg → ℕ)
     checked := fun x r => ((reg x).map fun g => g.checked (bytesOf (bytes x r))).getD []
     rounds := fun x _ => sr x
     sessions := fun _ => 1
-    session := fun x _ v => sess x v }
+    session := fun x _ v => sess x v
+    unitN₀ := fun x _ => c.innerN₀ x }
 
 /-- **One session that every checked unit shares has `SessionSlots`**: the first checked unit's session is every
 checked unit's. -/
@@ -102,7 +115,7 @@ theorem code_checked (x : Msg) (r : Fin (c.V.k x) → FlockDeploy.Coin) :
     (code c reg L bytes sr sess).checked x r = ((reg x).map fun g => g.checked (bytesOf (bytes x r))).getD [] :=
   rfl
 
-theorem code_session (x : Msg) (u : ℕ × ℕ) (v : Seen) : (code c reg L bytes sr sess).session x u v = sess x v := rfl
+theorem code_session (x : Msg) (u : ℕ) (v : Seen) : (code c reg L bytes sr sess).session x u v = sess x v := rfl
 
 theorem sessionSlots_code (H : Msg → Msg) : SessionSlots (code c reg L bytes sr sess) H :=
   sessionSlots_of_one H _ (fun _ => le_rfl) fun _ _ _ _ => rfl
@@ -118,22 +131,22 @@ theorem δc_code (H : Msg → Msg) (x : Msg) :
   rw [Nat.cast_one, one_mul]
   rfl
 
-/-! ## The draw -/
+/-! ## The sample -/
 
 /-- **The registration is the statement's**: at a statement that parses and whose query evaluates, the statement names
 a registration whose program is the statement's descriptor (`Program.parse`), whose layout (`Slots.layout`) is the
 statement's partition and whose design (`slotDesign`) is the statement's. -/
 def RegMatches : Prop :=
   ∀ x s Pt, c.parse x = some s → c.partition s = some Pt →
-    ∃ g l, reg x = some g ∧ SampledProofs.Program.parse ⟨s.desc.toArray⟩ = .ok g.program ∧
-      SampledProofs.Slots.layout g.program g.query = .ok l ∧ Pt = slotPartition l ∧
+    ∃ g l, reg x = some g ∧ Spot.Program.parse ⟨s.desc.toArray⟩ = .ok g.program ∧
+      Spot.Slots.layout g.program g.query = .ok l ∧ Pt = slotPartition l ∧
       slotDesign g.rule g.program g.query g.table = .ok s.design
 
-/-- **The draw's bytes are uniform when the coins are.** -/
+/-- **The sample's bytes are uniform when the coins are.** -/
 def BytesUniform : Prop :=
   ∀ x (E : (Fin (L x) → Fin 256) → Prop), Pr (fun r : Fin (c.V.k x) → FlockDeploy.Coin => E (bytes x r)) = Pr E
 
-/-- **The session's rounds are second-stage and the draw doesn't read them.** -/
+/-- **The session's rounds are second-stage and the sample doesn't read them.** -/
 def BytesFixed : Prop :=
   ∀ x, sr x ⊆ c.stage2 x ∧ ∀ r d, bytes x (forkOn (sr x) r d) = bytes x r
 
@@ -188,7 +201,7 @@ def SessScope (H : Msg → Msg) : Prop :=
       (code c reg L bytes sr sess).checked x r ≠ [] →
       sess x (run H P c.V x ω r).seen = some (xS, vS) → FlockDeploy.scopeCheck true xS = true
 
-/-- **`SessionWit` at one session**: on a statement in scope with no faulty unit, at coins that check some unit,
+/-- **`SessionWit` at one session**: on a statement in scope with no incorrect proof block, at coins that check some unit,
 openings that pass the commitment's check, are the committed values and cover what the session reads under its
 statement `xS` encode (`wit`) a witness in `xS`'s relation. -/
 def SessWit (H : Msg → Msg) : Prop :=
@@ -247,14 +260,14 @@ theorem sessionWit_code_iff (H : Msg → Msg) :
 theorem sessionsIn_code_iff : SessionsIn (code c reg L bytes sr sess) ↔ SessIn c sess := by
   constructor
   · intro h x v xS vS hv
-    exact h x (0, 0) v xS vS hv
+    exact h x 0 v xS vS hv
   · intro h x _ v xS vS hv
     exact h x v xS vS hv
 
 /-! ## The sessions' table shapes -/
 
 /-- **The session's table shapes are the statement's**: whatever a run shows, the session's statement sets up tables of
-sizes `shape x`, in order. The sampled verifier's registration refusal (`Run.countVaries`: `shapes`) fixes the drawn
+sizes `shape x`, in order. The sampled verifier's registration refusal (`Draw.bernoulli`: `bernoulli`) fixes the sampled
 count only, and its outcome step never reads the session's tables, so nothing in the Lean verifier establishes this at
 `sess`; at the session the shape check lets through it holds (`shapesFixed_checked`). -/
 def ShapesFixed (shape : Msg → List ℕ) : Prop :=
@@ -326,7 +339,7 @@ theorem sessIn_checked (shape : Msg → List ℕ)
 
 set_option synthInstance.maxSize 1024 in
 /-- **Sampling completeness at the code**: `complete_deploy` with `SessionSlots` proved, `DrawSlots` and `DrawFixed`
-from the draw's facts, and the other premises in their one-session form. -/
+from the sample's facts, and the other premises in their one-session form. -/
 theorem complete_code (H : Msg → Msg) (hF : Claims.Flock.Complete H (FlockDeploy.deployZk rel))
     (hfixed : BytesFixed c L bytes sr) (hreg : RegMatches c reg) (hunif : BytesUniform c L bytes)
     (hframe : FramedOne c reg L bytes sr sess H) (haccept : AcceptsOne c reg L bytes sr sess H)

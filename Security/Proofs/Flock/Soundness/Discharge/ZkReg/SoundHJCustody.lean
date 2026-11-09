@@ -1,6 +1,26 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJ
+module
+
+public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJ
+public import Proofs.Flock.Soundness.Registered.ReadsX
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
 
 /-!
 # One hidden-output `--zk --registered` sampled session of `J` tables, under the record's custody
@@ -9,12 +29,14 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
 (`live-verifier`), exactly as `Composed.zk_session_soundJ_custody` replaces them in `zk_session_soundJ`:
 
 * `drawOkZKHJ_of_file`: `Composed.drawOkZKJ_of_file` under hidden outputs. From `DrawFileZK dj (subset kd) pop`, with
-  `nTab I` dividing `kd`, `DrawOkZKHJ` holds at `mPtsOf c.g (kd / nTab I)` link points at every draw `S`: the units are
-  `drawOkZKJ_of_file`'s, and setupHidden's link points at a draw proving `N₀` units are `mPtsOf c.g N₀`
+  `nTab I` dividing `kd`, `DrawOkZKHJ` holds at `mPtsOf c.g (kd / nTab I)` link points at every sample `S`: the units are
+  `drawOkZKJ_of_file`'s, and setupHidden's link points at a sample proving `N₀` units are `mPtsOf c.g N₀`
   (`setupHidden_mPts_of_proved`), as setupH's are.
-* `zk_session_soundHJR_custody`: the custody assumption reads only the record and its draws, which neither the shared
+* `zk_session_soundHJR_custody`: the custody assumption reads only the record and its samples, which neither the shared
   rows nor the registered check change.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 
@@ -25,9 +47,9 @@ open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **The coin server's draws are `DrawOkZKHJ`.** On untyped `--statement` tags whose circuit file `HmOut.parse`s under
-the `--zk` tags to `c`: when the record's draw file is the verifier's draw under the subset law `subset kd` over
-`[0, pop)` (`DrawFileZK`) and the session's tables divide `kd`, every draw `S` is `DrawOkZKHJ` at
+/-- **The challenger's live-coin part's samples are `DrawOkZKHJ`.** On untyped `--statement` tags whose circuit file `HmOut.parse`s under
+the `--zk` tags to `c`: when the record's sample file is the verifier's sample under the subset sampling design `subset kd` over
+`[0, pop)` (`DrawFileZK`) and the session's tables divide `kd`, every sample `S` is `DrawOkZKHJ` at
 `mPtsOf c.g (kd / nTab I)` link points. -/
 theorem drawOkZKHJ_of_file (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
@@ -129,9 +151,9 @@ theorem zk_session_soundHJR_custody
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hscope : Layout.scopeOkH c = true)
-    -- the law (the live subset draw), the tables dividing it
+    -- the sampling design (the live subset sample), the tables dividing it
     (kd : ℕ) (hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
-    -- the record, at the link points of the law's draws
+    -- the record, at the link points of the sampling design's samples
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
@@ -140,7 +162,7 @@ theorem zk_session_soundHJR_custody
     -- A3
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the verify command's tags, and live-verifier: the record and its draw file are the live session's
+    -- the verify command's tags, and live-verifier: the record and its sample file are the live session's
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
     -- the count curve's parameters

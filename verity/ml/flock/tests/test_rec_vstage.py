@@ -30,7 +30,7 @@ from verity_flock import rec_vstar as V
 HERE = Path(__file__).resolve().parent
 SET = HERE / "fixtures" / "hidden-outputs" / "flat" / "gemm-coordinate"
 INNER = json.loads((HERE / "fixtures" / "inner_claims.json").read_text())
-LEAN = HERE.parents[2] / "core" / "service" / "flock"
+LEAN = HERE.parents[3] / "verity/core/service/flock"
 
 
 def test_staging_pauses_the_collector_and_restores_it():
@@ -67,7 +67,7 @@ def _fold() -> dict:
 
 @pytest.fixture(scope="module")
 def inner(tmp_path_factory) -> Path:
-    """The fixture's honest session replayed through the firewall (`rec_live.Proxy`, seeded salts), whose coin server returns
+    """The fixture's honest session replayed through the ZK server (`rec_live.Proxy`, seeded salts), whose challenger returns
     the recorded coins, as `rec_live.Proxy.write` lays it out. The session ran on seeded coins: its Hello is replayed without
     the coin scheme."""
     assert (SET / "stage" / "circuit.txt").is_file(), (
@@ -127,7 +127,7 @@ def _ports(vf, chain, mrs, rep: int, acc: O.Chain | None = None) -> list[list[in
 
 
 def test_the_record_holds_every_top_salted_and_the_openings_climb_to_them(inner):
-    """Replayed through the firewall, the coin server's record holds no tree top in the clear (level 0's ``root_B``, each
+    """Replayed through the ZK server, the challenger's record holds no tree top in the clear (level 0's ``root_B``, each
     later level's cap: one ``b || c`` a node), V*'s opened tops are the proofs' caps, and every opening climbs to its node."""
     public, private, proofs = V.load(inner)
     text = (inner / "public.json").read_text()
@@ -209,7 +209,7 @@ def test_each_forgery_fails_the_relation_that_reads_it(side):
 
 
 def test_stagings_with_one_salts_file_read_one_chain(inner, tmp_path):
-    """The pod stages each statement in its own process: the running sums' salts, drawn once and kept in the salts file, give
+    """The pod stages each statement in its own process: the running sums' salts, sampled once and kept in the salts file, give
     every staging the same chain, and a file of another length is refused."""
     from verity.ml.commitments import hm96
 
@@ -277,13 +277,33 @@ def test_the_shared_rows_register_each_levels_tops_as_the_level_and_its_rec_cap_
         S.shared_rows([p0], (), [l2, staged("cap/L2x", {"top": e("rec-top-L2", "ef", range(128))})])
 
 
+def test_the_staged_shared_rows_are_one_file_with_acc0_from_the_first_level_without_the_algebra(tmp_path):
+    """`staged_shared_rows`: the algebra's parts' and the levels' rows under a staging `v`, and without the algebra the
+    first level's `acc` as `acc0`, the one file every part is verified against."""
+    from verity_flock import rec_cap as RC
+
+    def e(value, root="aa", reads=(0,)):
+        return {"value": value, "root": root, "leaves": 128, "words": 64, "word_bits": 16, "domain": "dd", "reads": list(reads)}
+
+    def staged(name, ports):
+        (tmp_path / name).mkdir(parents=True)
+        (tmp_path / name / "registered.json").write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": ports}))
+
+    staged("v/L0", {"out": e(RC.TOP_VALUE, reads=(3,)), "acc": e(O.ACC_VALUE, "bb", (2,))})
+    staged("v/L1", {"out": e("rec-top-L1", "ee"), "acc": e(O.ACC_VALUE, "cc", (4,))})
+    assert S.staged_shared_rows(tmp_path / "v")["ports"] == {
+        RC.TOP_VALUE: e(RC.TOP_VALUE, reads=(3,)), "rec-top-L1": e("rec-top-L1", "ee"), "acc0": e(O.ACC_VALUE, "bb", (2,))}
+    staged("v/alg/p0", {"acc0": e(O.ACC_VALUE, "ab"), "v": e("rec-v")})
+    assert S.staged_shared_rows(tmp_path / "v")["ports"]["acc0"] == e(O.ACC_VALUE, "ab")
+
+
 @pytest.mark.slow
 def test_the_forged_message_changes_one_bit_of_the_provers_row_alone(tmp_path):
     """`forge_row` on a two-instance statement's ``inst.bin``: one bit of the named row moves, its header, its other rows, its
     salts and every ``b || c`` stay, and a word the layout does not put there is refused."""
     from test_rec_residuals import S_SMALL, _holding, _rows
     from verity.ml.commitments import hm96
-    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.spot.one_stage import registered as RG
 
     g = random.Random(13)
     (w0, v0), (w1, v1) = _holding(g), _holding(g)

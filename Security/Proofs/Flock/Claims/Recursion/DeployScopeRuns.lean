@@ -1,4 +1,41 @@
+module
+
+public import Proofs.Flock.Claims.Recursion.Deploy
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.DeployFacts
+import Proofs.Flock.Claims.Recursion.DeployScope
 import Proofs.Flock.Claims.Recursion.DeploySessions
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The scope refusals on an accepted run
@@ -8,9 +45,11 @@ them on a run: every V* session of an accepted run ends on a decision the compil
 (`run_decides`), at the session's last round. Before the last session, the next session's first round refuses a
 session that ended on a coin (`decided`, which `run_round` reads); the last session's last round is the run's, which
 accepts (`stepWith_acc_last`). So the compiled verifier refuses an accepted run whose inner shape the setup's checks
-refuse or one of whose V* records doesn't draw every unit (`run_acc_scope`; `Draw.Full`, `run_acc_full`), and what it
+refuse or one of whose V* records doesn't sample every unit (`run_acc_scope`; `DrawRecord.Full`, `run_acc_full`), and what it
 reads of the statement with the sessions' records is in `InScope` (`run_acc_inScope_records`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -22,7 +61,7 @@ open FlockDeploy (Coin Final Ins)
 is refused). -/
 theorem stepWith_acc_last {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
     (vn : List Msg → Claims.OC Out) :
-    ∀ (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Claims.Trace),
+    ∀ (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Claims.Transcript),
       (Claims.stepWith H P x ω vn f hist as t).out = .acc →
       ∃ a, (Claims.stepWith H P x ω vn f hist as t).msgs.getLast? = some (a, .acc)
   | 0, _, _, _, h => by simp [Claims.stepWith] at h
@@ -152,8 +191,8 @@ theorem run_decides (hacc : (run H P (V IV st) x ω r).out = .acc) {s : ℕ} (hs
       exact hnrej
 
 /-- **The compiled verifier refuses an accepted run out of scope**: on an accepted run, the setup's checks accept the
-inner shape `x` carries, and every V* session's decision is on a record that draws every unit of its population
-(`RecScope.fullDrawOk`, hence `Draw.Full` by `RecScope.fullDrawOk_iff`). -/
+inner shape `x` carries, and every V* session's decision is on a record that samples every unit of its population
+(`RecScope.fullDrawOk`, hence `DrawRecord.Full` by `RecScope.fullDrawOk_iff`). -/
 theorem run_acc_scope (hacc : (run H P (V IV st) x ω r).out = .acc) :
     ∃ xr, readX x = some xr ∧ RecScope.accepts (readOf xr) = true ∧
       ∀ s < nS x, ∃ i f, i < (run H P (V IV st) x ω r).msgs.length ∧
@@ -183,8 +222,8 @@ theorem run_acc_scope (hacc : (run H P (V IV st) x ω r).out = .acc) :
   · obtain ⟨i, f, hi, hD, -, hf⟩ := hd s hs
     exact ⟨i, f, hi, hD, hf⟩
 
-/-- **Every V\* session of an accepted run draws every unit**: its decision's record holds a draw, and it is the full
-draw (`Draw.Full`). -/
+/-- **Every V\* session of an accepted run samples every unit**: its decision's record holds a sample, and it is the full
+sample (`DrawRecord.Full`). -/
 theorem run_acc_full (hacc : (run H P (V IV st) x ω r).out = .acc) :
     ∀ s < nS x, ∃ i f, i < (run H P (V IV st) x ω r).msgs.length ∧
       DecidesAt IV st x r (run H P (V IV st) x ω r).msgs i s f ∧
@@ -203,6 +242,11 @@ theorem run_acc_inScope_records (hacc : (run H P (V IV st) x ω r).out = .acc) :
       Claims.Recursion.InScope
         (RecScope.toStmt { readOf xr with records := (List.finRange (nS x)).map fun s => (fs s).record }) := by
   obtain ⟨xr, hx, hacc', hall⟩ := run_acc_scope H IV st x P ω r hacc
+  obtain ⟨as', ha⟩ := stepWith_acc H P x ω _ _ _ _ _ hacc
+  obtain ⟨xr', hx', -, hin⟩ := acc_parse (IV := IV) (st := st) H ha
+  rw [hx] at hx'
+  cases hx'
+  have hdn : RecScope.dense xr.shape = true := ((RecScope.inScope_iff hacc').1 hin).2
   have hch : ∀ s : Fin (nS x), ∃ f : Final, ∃ i, i < (run H P (V IV st) x ω r).msgs.length ∧
       DecidesAt IV st x r (run H P (V IV st) x ω r).msgs i s f ∧ RecScope.fullDrawOk xr.shape f.record = true := by
     intro s
@@ -213,8 +257,8 @@ theorem run_acc_inScope_records (hacc : (run H P (V IV st) x ω r).out = .acc) :
   · obtain ⟨i, hi, hD, -⟩ := hfs s
     exact ⟨i, hi, hD⟩
   · refine (RecScope.inScope_iff
-      (r := { readOf xr with records := (List.finRange (nS x)).map fun s => (fs s).record }) hacc').2 ?_
-    refine List.all_eq_true.2 fun rec hm => ?_
+      (r := { readOf xr with records := (List.finRange (nS x)).map fun s => (fs s).record }) hacc').2
+      ⟨List.all_eq_true.2 fun rec hm => ?_, hdn⟩
     obtain ⟨s, -, rfl⟩ := List.mem_map.1 hm
     obtain ⟨-, -, -, hf⟩ := hfs s
     exact hf

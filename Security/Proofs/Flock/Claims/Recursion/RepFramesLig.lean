@@ -1,4 +1,23 @@
-import Proofs.Flock.Claims.Recursion.RepFramesFields
+module
+
+public import Proofs.Flock.Claims.Recursion.RepFramesFields
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Claims.Recursion.RepFramesBind
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 
 /-!
 # What a rep's Ligerito frames fix of its proof
@@ -18,6 +37,8 @@ at every index the sizes allow:
 With `rep_bind_fields`, two proofs `verifyRep` accepts as one rep on one retained stream agree in every field but
 `params`, `zerocheck.finalC`, `ligerito.initialCap` and the openings (`rep_bind_lig`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 
@@ -230,7 +251,7 @@ theorem ligFrames_fields {sh : Shape} {p p' : Proof} (hp : DecodeZL.ProofSizes s
 
 /-- **Two reps accepted on one stream agree in every field but `params`, `finalC`, `initialCap` and the openings**:
 `rep_bind_fields` with `ligFrames_fields`, at a schedule of at least two levels. -/
-theorem rep_bind_lig (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : Session) (i r : ℕ)
+theorem rep_bind_lig (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ)
     (bytes bytes' cap cap' : ByteArray) (hm : 14 ≤ st.m) (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default)) (hk : st.fold.kLog = st.kLog)
     (h : verifyRep spec st sch sess i r bytes = .ok cap) (h' : verifyRep spec st sch sess i r bytes' = .ok cap')

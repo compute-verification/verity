@@ -3,7 +3,11 @@
 the AND of its bound inputs, from its rows alone; and a Definition placing two copies of it on its own inputs and XORing
 them gets `0`, from its row and its calls' copies (`rows_sat` gives `SatAt` at every copy of a unit's root).
 -/
-import Flock.TmplEval
+module
+
+public import Flock.TmplEval
+
+@[expose] public section
 
 namespace Flock.Test.TmplEval
 

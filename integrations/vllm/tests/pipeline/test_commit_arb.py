@@ -1,11 +1,16 @@
-"""`pipeline.commit_arb`'s traffic and verdict, without an engine: CERT-VARLEN's lengths and caps, the sampling mix, seeded
-and in arrival order; a run passes only when every request and every window did."""
+"""`pipeline.commit_arb`'s traffic, verdict and Commit, without an engine: CERT-VARLEN's lengths and caps, the sampling mix,
+seeded and in arrival order; a run passes only when every request and every window did; it commits under serve-openai's
+rows-sha512 committer."""
 from __future__ import annotations
 
 import pytest
 
 from verity_vllm.config import UsageError
+from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import commit_arb as CA
+from verity_vllm.pipeline import serve_seal as SS
+
+from tests.pipeline import predicted
 
 
 def encode(text):
@@ -118,3 +123,31 @@ def test_summary_passes_only_when_every_request_and_window_did():
     assert not CA.summarize([(q, fin, {**ok, "passed": False})], [win], engine_steps=5, idle_steps=1)["passed"]
     assert not CA.summarize([(q, fin, ok)], [{**win, "passed": False}], engine_steps=5, idle_steps=1)["passed"]
     assert not CA.summarize([], [win], engine_steps=0, idle_steps=0)["passed"]
+
+
+def test_it_commits_under_serve_openais_rows_sha512_committer_and_needs_the_rows_manifest(tmp_path):
+    """commit-arb's Commit is serve-openai's rows-sha512 one (`serve_seal.committer`), never SHA-256: without the manifest of the
+    row's Build of record predict wrote, or ninja for its kernels, it is refused before the model loads, and the committer
+    refuses it too."""
+    def parse(*more: str) -> CA.Options:
+        return cli.parse("commit-arb", ["--model", "m", "--revision", "r", "--out", str(tmp_path), *more], environ={})
+
+    with pytest.raises(UsageError, match="under rows-sha512 .*--required-manifest DIR/manifest.json"):
+        CA.preflight(parse(), which=lambda _: "/v/bin/ninja")
+    with pytest.raises(UsageError, match="rows-sha512 .*commits with the Commit of record's parts"):
+        SS.committer(CA.committer_opts(parse()), llm=None, label="commit-arb")
+    with pytest.raises(UsageError, match="no such file"):
+        CA.preflight(parse("--required-manifest", str(tmp_path / "none.json")), which=lambda _: "/v/bin/ninja")
+    (traced := tmp_path / "traced").mkdir()
+    (traced / "manifest.json").write_text("{}")
+    with pytest.raises(UsageError, match="no record of predict's beside it"):
+        CA.preflight(parse("--required-manifest", str(traced / "manifest.json")), which=lambda _: "/v/bin/ninja")
+    man = predicted.row(tmp_path)
+    with pytest.raises(UsageError, match="ninja"):
+        CA.preflight(parse("--required-manifest", str(man)), which=lambda _: None)
+    CA.preflight(parse("--required-manifest", str(man)), which=lambda _: "/v/bin/ninja")
+    opts = CA.committer_opts(parse("--required-manifest", str(man), "--hidden-so", "h.so", "--norm-tap-so", "n.so"))
+    assert (opts.scheme, opts.commit, opts.seal) == (SS.ROWS, True, False)
+    assert SS.scheme_refusal(opts) is None
+    args = SS.committer_args(opts)
+    assert (args.commit_scheme, args.required_manifest, args.hidden_so, args.tap_sources.norm_tap_so) == (SS.ROWS, str(man), "h.so", "n.so")

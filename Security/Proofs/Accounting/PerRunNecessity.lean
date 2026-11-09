@@ -1,4 +1,13 @@
+module
+
+public import Definitions.Accounting.PerRun
+public import Definitions.Pouw.Assumptions.Game
+public import Definitions.Pouw.Game.Params
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Accounting.PerRunPouw
+import Proofs.Pouw.Prob
+public import Proofs.Pouw.Break
 
 /-!
 # PoUW's per-run guarantee needs the cost model to truncate
@@ -11,6 +20,8 @@ on every coin, so the probability of acceptance with realized cost below `(1 −
 `(1 − ε_s)^t + ε = 1/4` at `ε_s = 1/2` and `t = 2` (`tt_not_perRun`). The cost reads the salt, which the program
 cannot branch on, so the class has no aborted program and `BudgetAbort` fails (`not_budgetAbort`).
 -/
+
+@[expose] public section
 
 namespace Accounting.PerRunNecessity
 
@@ -51,6 +62,7 @@ theorem tt : Assumptions.TT CM P D 0 (fun _ _ => 0) := by
   intro U' _ T _ q _ A' hA'
   classical
   refine (pr_eq_zero fun x hx => ?_).le
+  replace hx := hx.1
   have hT : ∑ u ∈ range U'.layout.N, ((U'.layout.shape u).Wmm : ℝ) ≤ T := by
     simpa [CM] using (hA' x.1 false).1
   have hK : ∑ u ∈ checkedSet P U' x.1 x.2 (A'.transcript U' x.1 x.2), ((U'.layout.shape u).Wmm : ℝ) ≤
@@ -103,21 +115,21 @@ theorem tt_not_perRun :
       (1 - 1 / 2 : ℝ) ^ 2 + 0 <
         pr (fun x : (Unit → Unit) × Bool × (Fin 2 → Ticket (P.Wref U.layout) U.layout.N) =>
           AuditAccepts (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          onlineCost A U x.1 x.2.1 < (1 - reductionGamma 0 1) * (1 - 1 / 2) * totalWref P U.layout) := by
+          onlineCost A U x.1 x.2.1 < (1 - reductionGap 0 1) * (1 - 1 / 2) * totalWref P U.layout) := by
   refine ⟨tt, wref_le, inDomain, callsWithin, ?_⟩
-  have hW : (1 - reductionGamma 0 1) * (1 - 1 / 2) * totalWref P U.layout = 1 / 2 := by
-    norm_num [reductionGamma, totalWref, P, U, layout]
+  have hW : (1 - reductionGap 0 1) * (1 - 1 / 2) * totalWref P U.layout = 1 / 2 := by
+    norm_num [reductionGap, totalWref, P, U, layout]
   have : Nonempty (Ticket (P.Wref U.layout) U.layout.N) := ⟨⟨⟨0, by simp [U, layout]⟩, ⟨0, by simp [P]⟩⟩⟩
   have hev : ∀ x : (Unit → Unit) × Bool × (Fin 2 → Ticket (P.Wref U.layout) U.layout.N),
       (AuditAccepts (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
-        onlineCost A U x.1 x.2.1 < (1 - reductionGamma 0 1) * (1 - 1 / 2) * totalWref P U.layout) ↔
+        onlineCost A U x.1 x.2.1 < (1 - reductionGap 0 1) * (1 - 1 / 2) * totalWref P U.layout) ↔
         x.2.1 = true := by
     rintro ⟨H, s, c⟩
     rw [hW, onlineCost_eq]
     cases s <;> norm_num [accepts]
   rw [show (fun x : (Unit → Unit) × Bool × (Fin 2 → Ticket (P.Wref U.layout) U.layout.N) =>
       AuditAccepts (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
-        onlineCost A U x.1 x.2.1 < (1 - reductionGamma 0 1) * (1 - 1 / 2) * totalWref P U.layout) =
+        onlineCost A U x.1 x.2.1 < (1 - reductionGap 0 1) * (1 - 1 / 2) * totalWref P U.layout) =
       fun x => x.2.1 = true from funext fun x => propext (hev x), pr_mid_true]
   norm_num
 
@@ -126,7 +138,9 @@ theorem tt_not_perRun :
 theorem not_budgetAbort : ¬ BudgetAbort CM := by
   intro h
   obtain ⟨hTT, hW, hU, hA, hlt⟩ := tt_not_perRun
-  exact absurd (SecurityProofs.PouwEndToEndPerRun Unit Unit Bool CM P D 0 1 (fun _ _ => 0) one_pos one_pos hW hTT h
-    U hU 0 (by norm_num) A hA 2 (1 / 2) (by norm_num)) (not_le.2 hlt)
+  have hb := SecurityProofs.PouwEndToEndPerRun Unit Unit Bool CM P D 0 1 (fun _ _ => 0) one_pos one_pos hW hTT h
+    U hU 0 (by norm_num) A hA 2 (1 / 2) (by norm_num)
+  exact absurd (le_trans (pr_mono fun x hx =>
+    ⟨hx.1, hx.2, Pouw.Proofs.not_breaks_of_hashless (fun _ _ _ _ _ _ => rfl) A U x.1 x.2.1⟩) hb) (not_le.2 hlt)
 
 end Accounting.PerRunNecessity
