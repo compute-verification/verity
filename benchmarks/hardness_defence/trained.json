@@ -1,9 +1,13 @@
 {
  "8b": {
-  "bf16": {"name": "8b-bf16", "run": null},
+  "bf16": {"name": "8b-bf16", "run": "r20261109-180714-2aa4"},
   "controls": {
    "8b-u2-torch": {"pricing": [["r20261109-171450-8775", "8bt-*"]]}
   },
-  "arms": {}
+  "arms": {
+   "8b-lora64-lr3e-5": {"run": "r20261109-180858-22d5", "pricing": []},
+   "8b-lora64-lr1e-4": {"run": "r20261109-180846-e10c", "pricing": []},
+   "8b-lora64-lr3e-4": {"run": "r20261109-180852-9c3d", "pricing": []}
+  }
  }
 }
