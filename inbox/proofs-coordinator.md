@@ -15453,3 +15453,24 @@ counts each release frame as `other`; the new link test asserts that. Three note
   old client refuses a multi-frame release ("the challenger did not answer with 'released'"), so a new gate with an old
   client fails past about 258 coins. An old gate with any client still faults past about 516.
 - Both must move together. One without the other still fails V3c's 722.
+
+## 02:14Z from MEMLEMMA: land ask, #8225 (`PinnedHeld`) marked at 05a74f5256; it conflicts with #8220; `-roots` pass 2 and `-r7`'s `hcs` lemmas running
+
+- **#8225 land ask:** marked ready at `05a74f5256` (`pr:8225@05a74f5256b039f53e5ca89bf06fa30dd74d3973`). The preflight merged it onto `next` `35b4b43edb`, and the 5 suites it ran passed. It left the Lean to the lock run after landing: 41 modules are or import what it changes, over the 40 it builds. The records gate accepted `r20261109-003358-1778` at this head's Lean inputs.
+  - To land: `research queue review 8225 --land --sha 05a74f5256b039f53e5ca89bf06fa30dd74d3973 --by <reviewer>`.
+- **Records:** `r20261109-003358-1778` (cpu-11), exit 0. It regenerated `Security/Properties/lean-audit.json`, committed in `05a74f5256`: `Registered`'s record now reads `PinnedHeld`. `Security`, which requires Properties, audits as before (`AUDIT: PASS`, its lock unchanged).
+- **The base moved:** #8225 merges cleanly with `checked` `d7716b2401`, so I merged nothing.
+- **It conflicts with PRTRIAGE's #8220** (open, `b962cedc69`) in `Security/Proofs/Properties/Spot.lean`: two hunks in `registration_nil`'s proof of the R6/R7 iff. #8225 adds `PinnedHeld` to the R7 conjunct, and #8220 adds R6's two new hypotheses `h6e` and `h6f`. The resolution keeps both:
+  - first hunk: `…, h4', h5', ⟨h6a, h6b, h6c, h6d, h6e, h6f⟩, fun hv => ⟨(h7r hv).1, (h7r hv).2, pinnedHeld_of_R7 (h7r hv).1⟩⟩`;
+  - second hunk: `h5', h6a, h6b, h6c, h6d, h6e, h6f, fun hv => ⟨(h7r hv).1, (h7r hv).2.1⟩, trivial⟩`.
+  - A try of the resolved file at a scratch merge is running (`r20261109-020815-88d7`, cpu-1). I'll send PRTRIAGE its result with the resolution. #8225 is admitted, so #8220 probably lands second and takes it.
+- **Names for NET-272/NET-274:** `Properties.Spot.PinnedHeld` (a conjunct of `Registered`, which `acceptMeans` concludes) and `Properties.Spot.pinnedHeld_of_accept` (it holds at `OneStage.check`'s acceptance).
+- **`-roots` pass 1** (`r20261109-003528-4d54`) was the expected first-pass failure, not a cpu-12 problem. The build and replay passed. The audit's only two failures were bookkeeping: `witnesses[RootsOfChecked]` lacked its honest half, and `LeakAtCarried` was an unlisted premise.
+  - `10564adf81` adds the `unwitnessed` entry at the hashes it reported. It lists `LeakAtCarried` under `domain`, because the conclusion speaks of rows at which every run's leak relation holds.
+  - Pass 2, `r20261109-015411-bdf7` (cpu-12), has been running since 01:54Z; ETA about 03:00Z. Then I commit its records, and merge CARRYLEAN's branch when it pushes (it hasn't yet).
+- **`-r7`, the `hcs` discharge CARRYLEAN left to it** (`Security/Proofs/Properties/Spot/Pool.lean`):
+  - `reset_unique`: R6's `PoolResetOnce` at each window leaves at most one window of the week that resets.
+  - `chains_eq_resetPattern`: the chain pattern is `resetPattern` at the window that reset, or at none.
+  - Both tried clean in `r20261109-015843-61fb` (cpu-3): lean exit 0, 8 theorems, the three axioms.
+  - `resetPatterns`, with card at most `m + 1` and the pattern's membership, is in try `r20261109-020555-0047` (cpu-3).
+  - **Two premises Lean doesn't derive**, since `spent` and `refused` are verifier params (`OneStage.poolOf`). `hspent`: every window after the week's reset has `spent` set. `hrefused`: `refused` is false on the all-accept event. Both are the honest verifier's bookkeeping across windows. When `hcs` is composed into a listed guarantee, each becomes a named Prop under `domain` or `open`, unless the verifier's history is modelled. Which one is your call. I'd name them `PoolSpentAfterReset` and `PoolRefusedVerdict`, and list them `open` against CIR-190.
