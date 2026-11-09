@@ -33,6 +33,7 @@ import os
 import re
 import runpy
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -199,12 +200,14 @@ def _child() -> None:
 
     sys.dont_write_bytecode = True
     scratch = Path(tempfile.mkdtemp(prefix="documented-commands-")).resolve()
-    os.environ["TMPDIR"] = tempfile.tempdir = str(scratch)
-    # A verdict reads the tree alone, the same on a laptop, an agent VM and in a job: no machines file, job variables or
-    # secrets for `secret_hint.recover` to take back, and an empty notes root, which `research notes` would clone first.
-    for k in [k for k in os.environ if k.startswith("RESEARCH_") or k == "CLOUD_AGENT_INJECTED_SECRET_NAMES"]:
+    tempfile.tempdir = str(scratch)
+    # A verdict reads the tree alone, the same on a laptop, an agent VM and in a job: none of the operator's variables
+    # (store credentials, job variables, secret names), a HOME with no machines file, and an empty notes root, which
+    # `research notes` would otherwise clone first.  The suite's read tracer keeps its own.
+    keep = ("PATH", "PYTHONPATH", "VIRTUAL_ENV", "LANG", "LC_ALL", "PYTEST_CURRENT_TEST")
+    for k in [k for k in os.environ if k not in keep and not k.startswith("VERITY_SUITE_")]:
         del os.environ[k]
-    os.environ["HOME"] = str(scratch)
+    os.environ.update(HOME=str(scratch), TMPDIR=str(scratch))
     (scratch / ".research" / "notes").mkdir(parents=True)
     known = argparse.ArgumentParser.parse_known_args
     state = {"depth": 0, "armed": False, "parsed": False}
@@ -280,17 +283,25 @@ def _child() -> None:
     sys.addaudithook(hook)
     import research.cli
     import research.remote
+    import research.store.local
     import verity_cli
 
-    load_machines = research.remote.load_machines
+    def acting(owner, name: str, why: str) -> None:
+        real = getattr(owner, name)
 
-    def machines(*a, **k):
-        """Resolving a machine reads the operator's registry: past the parse (`check.py --record --on auto` does it first)."""
-        if state["armed"]:
-            raise _Acts("reads the machine registry")
-        return load_machines(*a, **k)
+        def wrapped(*a, **k):
+            if state["armed"]:
+                raise _Acts(why)
+            return real(*a, **k)
 
-    research.remote.load_machines = machines
+        setattr(owner, name, wrapped)
+
+    # Resolving a machine, opening the evidence store or finding a program on PATH reads the operator's state, past the
+    # parse: `check.py --record --on auto` resolves a machine before it parses, `check.py --agreement-files` fetches from
+    # the store, and `check.py --preflight` runs uv when there is one.
+    acting(research.remote, "load_machines", "reads the machine registry")
+    acting(research.store.local.LocalStore, "__init__", "opens the evidence store")
+    acting(shutil, "which", "looks for a program to run")
 
     def enter(argv: list[str]):
         if argv[0] == "research":
@@ -412,6 +423,23 @@ def test_the_child_parses_without_running():
     got = [json.loads(x) for x in p.stdout.splitlines()]
     assert [g["status"] for g in got][:2] == ["ok", "fails"] and got[2]["status"] in ("ok", "acts"), (
         [(g["status"], g["why"]) for g in got], p.stderr[-2000:])
+
+
+def test_a_verdict_reads_the_tree_alone(tmp_path):
+    """Lines whose CLI reads the operator's state before or instead of parsing (a machine, the store, a program on PATH, the
+    notes clone) get one verdict on every machine: here, and with none of this process's variables and a HOME whose
+    machines file lists no machine, as on a node."""
+    (tmp_path / ".research" / "notes" / "machines.d").mkdir(parents=True)
+    probe = "".join(json.dumps({"file": "-", "line": 0, "argv": a, "block": True}) + "\n" for a in (
+        ["tools/verity/check/check.py", "--record", "--on", "auto", "--pool", "research"],
+        ["tools/verity/check/check.py", "--agreement-files"], ["tools/verity/check/check.py", "--preflight"],
+        ["research", "notes", "sync", "--path", "kb"]))
+    bare = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path),
+            **{k: v for k, v in os.environ.items() if k == "PYTHONPATH" or k.startswith("VERITY_SUITE_")}}
+    got = [[(r["status"], r["why"]) for r in map(json.loads, subprocess.run(
+        [sys.executable, __file__, "--child"], cwd=ROOT, input=probe, capture_output=True, text=True, env=env).stdout.splitlines())]
+        for env in (None, bare)]
+    assert len(got[0]) == 4 and [s for s, _ in got[0]] == [s for s, _ in got[1]] and all(s != "fails" for s, _ in got[0]), got
 
 
 if __name__ == "__main__" and sys.argv[1:] == ["--child"]:
