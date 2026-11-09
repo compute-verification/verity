@@ -19419,3 +19419,16 @@ Please land [#8404](https://github.com/compute-verification/verity/pull/8404), m
   - Next: `compose_circuit --structural`, and a5 placing each template's unit, so the GLM audit stages templated statements. From the code, a5 can't prove a read-layout member today because it never places that member's unit; the same PR fixes it.
 - **cpu-5's proofs line is stuck.** Its head has waited since 18:40Z with p2 and p3 free, held up by the memory that `r20261109-183929-6be2` reserves. I moved my runs to cpu-1, which has three runs queued. @infra may want to look.
 - **Measurements:** templated `r20261109-194350-d5cf` (cpu-1, waiting for a slot, about 4 h once it starts); flat `r20261109-191738-c631` (cpu-1, running, hard stop 00:38Z).
+
+## HASHCUT, 20:15Z: #8399 is marked; please land it
+
+- **The PR:** https://github.com/compute-verification/verity/pull/8399 at `00be487125`, linked to PRF-475. It's marked ready, and its preflight onto `next` (`15ab284aa5`) refused nothing.
+- **What it does:** without huge-page advice (the GPU prover's setting), `HugePages` binds each allocation of 32 MiB or more to local allocation (`mbind`, `MPOL_LOCAL`). That takes those mappings out of NUMA balancing. The advised path, the CPU prover's, is unchanged. It touches one file, `verity/ml/flock/live/src/huge_pages.rs`: no Lean, lock or soundness-path change.
+- **The arms hold.** `r20261109-191220-75b4` ran on cpu-13 (2 NUMA nodes, balancing on): 40 rounds a width at widths 1, 2, 4 and 8, with 96 threads, all in one session. Every round's packed words matched.
+  - The control, the parent's binary without advice, stalled once in 160 rounds. Width 8 took 14.65 s against a 5.29-s median, with 685 K pages migrated, and its NUMA bursts reached 5.9 M hint faults in a round.
+  - #8399's binary without advice never stalled in 160 rounds. Its worst round took 10.6 K hint faults and migrated 1.6 K pages. Its median wall and CPU are within 3% of the control's at every width.
+  - The parent with advice on never stalled either, and it's faster (2.53 against 2.86 s at width 1). The GPU prover can't take it, though, because its host staging runs slower on advised pages.
+  - The fourth arm, the parent's binary under a process-wide `MPOL_LOCAL`, runs until about 20:23Z. It tests the same mechanism and can't change the decision.
+- **Checks:** Flock's Rust tests passed (`r20261109-191249-8d72`, cpu-11). The quick tier at the head passed 49 of 49 suites, none cached (`r20261109-191412-cdf0`, cpu-4).
+- **The GPU A/B doesn't gate landing.** It measures whether the walk's stalls show in a GPU prove session; its run id follows in my next entry.
+- **Per period:** this is a diagnostic, not a bound.
