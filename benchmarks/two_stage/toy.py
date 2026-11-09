@@ -36,7 +36,7 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.core.protocols.spot import second_stage as SS, service as S
+from verity.core.protocols.spot import service as S
 from verity.core.protocols.spot.one_stage import partition as P, registered as REG, registration as R
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import CompositeDefinition, bind
@@ -288,8 +288,8 @@ def references(q: int, out: Path) -> dict:
     and program as the sessions' circuits are, on zero rows at the member's slots, one table row a unit a port as
     `interior` lays them out, salted under `REFERENCE_KEY`: its public file is ``out``/m<k>/pub.bin, its ``circuit.txt``
     beside it, and its prover file is deleted. Both files are a function of ``q`` and the design alone, byte for byte.
-    Its registered reads are `reads`' file with none of the run's fields (`second_stage.blank_reads`): each port the
-    value it reads (a link port the boundary port it opens, any other the member's own), its words and schema."""
+    Its registered reads are `reads`' file, which names none of the run's fields: each port the value it reads (a link
+    port the boundary port it opens, any other the member's own), its words and schema."""
     from verity_flock.class_statement import member_stager
 
     window, names = interior_window("00" * 64, range(q)), boundary_ports(boundary_window(q, q))
@@ -306,7 +306,7 @@ def references(q: int, out: Path) -> dict:
                                    "word_bits": REG.WORD_BITS, REG.SCHEMA_KEY: m.schema(p)}
                                for p, words in m.all_rows}, registered=REG)
         named.append({"template": m.template, "circuit": header["circuit_sha512"], "header": header,
-                      "registered": SS.blank_reads(reads)})
+                      "registered": reads})
     return {"templates": named}
 
 

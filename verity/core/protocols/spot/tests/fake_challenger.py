@@ -220,10 +220,9 @@ class Stream(S.Stream):
         interior program in the check's order: a stand-in for its circuit file's SHA-512, which nothing in this stream
         reads, the header of its reference statement, fixed before the run (`reference_header`), which an honest
         statement's header is placed in the run (`second_stage.at_run`) but for the run's fields
-        (`second_stage.RUN_FIELDS`), and the registered reads it was verified against: an honest session's ports and
-        the value each reads, with none of the run's fields (`second_stage.blank_reads`)."""
-        return {"templates": [{"template": t, "circuit": h["circuit_sha512"], "header": h,
-                               "registered": SS.blank_reads(r)}
+        (`second_stage.RUN_FIELDS`), and the registered reads it was verified against: an honest session's, which
+        round 2 holds a statement's to but for the run's fields (`second_stage.blank_reads`)."""
+        return {"templates": [{"template": t, "circuit": h["circuit_sha512"], "header": h, "registered": r}
                               for (t, _lo, _hi, h), r in zip(self._references(second), self._reads(second))]}
 
     def statements(self, second: S.Draw) -> list[dict[str, Any]]:

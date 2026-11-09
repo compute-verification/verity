@@ -214,7 +214,7 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
     refs = tuple((e["template"], e["header"]) for e in proofs["templates"])
     ref_reads = tuple((e["template"], e["registered"]) for e in proofs["templates"])
     (t0, r0), names = ref_reads[0], T.boundary_ports(T.boundary_window(N, Q))
-    assert r0["ports"]["row"]["value"] == names["ingress"] and r0["ports"]["row"]["root"] is None
+    assert r0["ports"]["row"]["value"] == names["ingress"] and not {"root", "reads"} & set(r0["ports"]["row"])
     other = {**r0, "ports": {**r0["ports"], "row": {**r0["ports"]["row"], "value": names["o0"]}}}
 
     def sha512(j) -> str:

@@ -35,10 +35,12 @@ table, so a ref could point a drawn unit at another unit's rows.
 
 Each statement's registered reads are its template's reference statement's (`Own.ref_reads`, the ``--registered`` file
 the auditor's params give the registered reference statement, fixed before the run), the two the same with each port's
-run fields blanked (`blank_reads`, `READ_RUN_FIELDS`: ``root``, ``domain``, ``leaves``, ``reads`` and ``reads_from``,
-which ``second-read`` holds to the run) (``second-values``, `_values_ok`). So the ports a session reads registered and
-the value each reads are fixed before the run: ``second-read`` alone lets a port no link names read any value either
-registration registers.
+run fields blanked (`blank_reads`) (``second-values``, `_values_ok`). The run's fields are those ``second-read`` holds
+to the run: every port's ``root``, ``domain`` and ``leaves`` (`READ_RUN_FIELDS`), and the rows (``reads``,
+``reads_from``: `READ_ROW_FIELDS`) of a port a link names or one reading the interior record's own port, whose rows the
+run places (`_run_places_rows`). So the ports a session reads registered, the value each reads, and the rows at which it
+reads a value a registration registers are fixed before the run: ``second-read`` alone lets a port no link names read
+any value either registration registers, at any rows.
 
 The interior record names the replay sample it lays out (``window.replay_sample``, which the proof server writes), and
 ``second-interior-order`` fails unless it is the verifier's own, in its order (`interior_order_ok`), checked before any
@@ -79,9 +81,10 @@ STMT_KEYS = ["draw", "header", "registered", "template"]
 #: reference placed in the run in, which other checks hold instead: ``second-population`` the first two, the session's
 #: verifier ``units.blocks``, the indices cut into blocks of ``vus_per_block`` (its header's ``units`` must be
 #: `Flock.HmRow.unitsEntry` of its indices), ``second-roots`` the next two, and ``second-read`` ``registered``, each
-#: read's root, domain and rows, with ``second-values`` the value each port reads, through the ``--registered`` file the
-#: session's verifier holds it to (`SecondStage.RUN_FIELDS`). A reference staged at other slots differs from the header
-#: only in the indices and their blocks.
+#: read's root, domain and rows, with ``second-values`` the value each port reads, and the rows at which it reads a
+#: value a registration registers, through the ``--registered`` file the session's verifier holds it to
+#: (`SecondStage.RUN_FIELDS`). A reference staged at other slots differs from the header only in the indices and their
+#: blocks.
 RUN_FIELDS = (("instances",), ("units", "indices"), ("units", "blocks"), ("frame_v3", "roots"), ("frame_v3", "domain_ids"),
               ("registered",))
 
@@ -568,27 +571,49 @@ def _refs_ok(s: Stmt) -> bool:
     return all(any(name == port for name, _ in reads) for port, _ in _entries(_get(s.header, "shared_rows")))
 
 
-#: `SecondStage.READ_RUN_FIELDS`: the run's fields of a port of a registered-reads file, the only ones a statement's
-#: registered reads may differ from its template's reference statement's in, which ``second-read`` holds to the run
-READ_RUN_FIELDS = ("root", "domain", "leaves", "reads", "reads_from")
+#: `SecondStage.READ_RUN_FIELDS`: the run's fields of every port of a registered-reads file, which ``second-read`` holds
+#: to the run (`_same_at`)
+READ_RUN_FIELDS = ("root", "domain", "leaves")
+
+#: `SecondStage.READ_ROW_FIELDS`: the rows a port of a registered-reads file reads, slot ``reads_from + k`` its row
+#: ``reads[k]``, run fields only where the run places them (`_run_places_rows`)
+READ_ROW_FIELDS = ("reads", "reads_from")
 
 
-def blank_reads(r: Any) -> Any:
-    """`SecondStage.blankReads`: registered-reads file `r` with each port's run fields (`READ_RUN_FIELDS`) None;
-    anything else unchanged."""
+def _run_places_rows(own: Own, t: str, port: str, e: Any) -> bool:
+    """`SecondStage.runPlacesRows`: template `t`'s session port `port` reads registered-reads entry `e` at rows the run
+    places, which ``second-read`` holds to the run (`_rows_ok`): a port a link names, each slot at its cell's replay
+    block's rows, or one reading the interior record's own port, each slot at its own rows (`_read_ok`'s first two
+    cases). Any other port reads a value a registration registers, which ``second-read`` holds only to the value's root,
+    domain and leaves (`_same_at`), so ``second-values`` holds its rows to the reference statement's, the same rows in
+    every run. A workload whose rows there depend on the sampled block (a positional table) would need a rule of its
+    own."""
+    v = _get(e, "value")
+    return _link_of(own, t, port) is not None or (isinstance(v, str) and v in _by_port(own.interior))
+
+
+def blank_reads(own: Own, t: str, r: Any) -> Any:
+    """`SecondStage.blankReads`: registered-reads file `r` of a session of template `t` with each port's run fields
+    None: `READ_RUN_FIELDS`, and `READ_ROW_FIELDS` where the run places the port's rows (`_run_places_rows`); anything
+    else unchanged."""
     ports = _get(r, "ports")
     if not isinstance(ports, dict):
         return r
-    return {**r, "ports": {p: {**e, **dict.fromkeys(READ_RUN_FIELDS)} if isinstance(e, dict) else e
-                           for p, e in ports.items()}}
+
+    def blank(p: str, e: Any) -> Any:
+        if not isinstance(e, dict):
+            return e
+        return {**e, **dict.fromkeys(READ_RUN_FIELDS + (READ_ROW_FIELDS if _run_places_rows(own, t, p, e) else ()))}
+    return {**r, "ports": {p: blank(p, e) for p, e in ports.items()}}
 
 
 def _values_ok(own: Own, s: Stmt) -> bool:
     """`SecondStage.valuesOk`: statement `s`'s registered reads are its template's reference statement's
-    (`Own.ref_reads`) but for the run's fields, the two the same with those blanked, so None only where the reference's
-    is; False for a template the params give no reference reads."""
+    (`Own.ref_reads`) but for the run's fields, the two the same with those blanked (`blank_reads`), so None only where
+    the reference's is, and each value a registration registers read at the reference's rows; False for a template the
+    params give no reference reads."""
     ref = next(((r,) for t, r in own.ref_reads if t == s.template), None)
-    return ref is not None and _jeq(blank_reads(s.registered), blank_reads(ref[0]))
+    return ref is not None and _jeq(blank_reads(own, s.template, s.registered), blank_reads(own, s.template, ref[0]))
 
 
 def _stmt_codes(own: Own, named: bool, k: int, p: Part, s: Stmt) -> list[str]:
@@ -705,6 +730,6 @@ def attach(rec: Mapping[str, Any], v: Verdict) -> dict[str, Any]:
     return out if v.ok else {**out, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None}
 
 
-__all__ = ["FORM", "READ_RUN_FIELDS", "Checked", "Link", "Own", "Part", "at_run", "attach", "blank_reads", "blank_run",
-           "check", "interior_order_ok", "links_of", "own_draw", "parts", "port_binding", "replay_links", "set_name",
-           "statement_reads", "verified_of"]
+__all__ = ["FORM", "READ_ROW_FIELDS", "READ_RUN_FIELDS", "Checked", "Link", "Own", "Part", "at_run", "attach",
+           "blank_reads", "blank_run", "check", "interior_order_ok", "links_of", "own_draw", "parts", "port_binding",
+           "replay_links", "set_name", "statement_reads", "verified_of"]

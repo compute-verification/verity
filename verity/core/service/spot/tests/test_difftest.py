@@ -3663,7 +3663,8 @@ def _two_stage_text(seed: int) -> str:
     registration's digest; the verdicts accepting, the second-stage session's statement the honest one
     (`_second_statement`), which the verifier of record names as it checked it (`_checked_names`), and the auditor's
     params naming its template's circuit file, reference header (`_second_reference`) and the registered reads its
-    reference statement reads, the statement's with none of the run's fields (`second_stage.blank_reads`)."""
+    reference statement reads, the statement's, which round 2 compares but for the run's fields
+    (`second_stage.blank_reads`)."""
     rng = random.Random(f"two-stage/{seed}")
     rule, b, i = _rule(TWO_STAGE_RULE), BOUNDARY, INTERIOR
     first_law = DR.derive(b.program, b.query, service.selection_law(rule, b.population))
@@ -3721,7 +3722,7 @@ def _two_stage_text(seed: int) -> str:
         "interior": {"params": {**params(i, irec["law"], [rec], d2), "proofs": {"templates": [
                          {"template": i.templates[0], "circuit": "ab" * 64,
                           "header": _second_reference(i.templates[0], 0, m, i.ports),
-                          "registered": SS.blank_reads(statements[0]["registered"])}]}},
+                          "registered": statements[0]["registered"]}]}},
                      "replay": _json(codec.encode_program(Program(BLOCK))),
                      "values": ivalues, "record": irec, "received": "2026-10-07T00:01:00Z", "source": d2.read.hex(),
                      "coins": d2.evidence(d2.segment.to_json()), "proved_units": None, "instances": None,
@@ -3953,8 +3954,8 @@ def _second_case(s: Setup, named: bool, sample: list[int], drawn: list[int], lin
     linking it and the interior then not registering it, and those in `own` read it from their own `x`, each slot its
     own row; the verifier of record reports those reads, and a verdict of record names each statement's session as it
     checked it (`_checked_by`); and each template's reference header is its part's (`_second_reference`) over the ports
-    the interior registers for it, and its reference statement's registered reads are its statement's with none of the
-    run's fields (`second_stage.blank_reads`)."""
+    the interior registers for it, and its reference statement's registered reads are its statement's, which round 2
+    compares but for the run's fields (`second_stage.blank_reads`)."""
     q, strata = len(sample), P.strata(s.program, s.query)
     parts = [SS.Part(t, lo, (hi - lo) // q) for t, ((lo, hi),) in strata]
     slots = {t: hi - lo for t, ((lo, hi),) in strata}
@@ -3991,7 +3992,7 @@ def _second_case(s: Setup, named: bool, sample: list[int], drawn: list[int], lin
     return {"allow": allow, "sample": sample, "drawn": drawn, "program": s.desc, "query": s.query, "interior": rec,
             "boundary": SECOND_BOUNDARY, "statements": statements, "verdicts": {"lean": lean, **_checked_by(statements)},
             "links": [{"template": t, "port": "x", "value": BX} for t in sorted(links)], "refs": refs,
-            "ref_reads": {s_["template"]: SS.blank_reads(s_["registered"]) for s_ in statements}}
+            "ref_reads": {s_["template"]: s_["registered"] for s_ in statements}}
 
 
 def _shifted(ss, k: int):
@@ -4030,7 +4031,7 @@ def _shared_at(c: dict, i: int, ports, reads=()) -> dict:
     reported = {**lean.get("registered", {}), **{f"{t}/{p}": {"value": e["value"], "root": e["root"]} for p, e in more.items()}}
     changed = _second_with(c, i, header={**h, "shared_rows": shared}, registered=registered)
     return {**changed, "refs": {**c["refs"], t: {**c["refs"][t], "shared_rows": shared}},
-            "ref_reads": {**c["ref_reads"], t: SS.blank_reads(registered)},
+            "ref_reads": {**c["ref_reads"], t: registered},
             "verdicts": {**changed["verdicts"], "lean": {**lean, **({"registered": reported} if reported else {})}}}
 
 
@@ -4126,8 +4127,8 @@ def _reordered(c: dict, x: int) -> dict:
 
 def _valued(c: dict, x: int) -> dict:
     """`c` with the reference statements' registered reads none, or its first template's dropped, null, of another
-    format, reading another value at each port, reading a port more or none, or naming the run's fields (which round 2
-    blanks), or not an object."""
+    format, reading another value at each port, reading a port more or none, or naming other roots, leaves and rows
+    (which round 2 blanks, the rows where the run places them), or not an object."""
     refs = c["ref_reads"] if isinstance(c.get("ref_reads"), dict) else {}
     t = min(refs, default=None)
     if t is None:
@@ -4147,20 +4148,22 @@ def _valued(c: dict, x: int) -> dict:
 def _read_registered(c: dict, x: int) -> dict:
     """`c` with its first statement reading, at a port `z` of no interior root, the boundary's registered value `w` or
     `w2`, slot 0 its first row, which `second-read` takes at a port no link names and the verifier of record reports,
-    and its template's reference statement reading `w` or `w2` there: which value a port reads is the reference's
-    (`second-values`), never the run's choice."""
+    and its template's reference statement reading `w` or `w2` there, slot 0 its first row, slot 0 its second, or slot 1
+    its first: which value a port reads, and at which rows, is the reference's (`second-values`), never the run's
+    choice."""
     ss, refs, vs = c.get("statements"), c.get("ref_reads"), c.get("verdicts")
     if not (isinstance(ss, list) and ss and isinstance(ss[0], dict) and isinstance(ss[0].get("template"), str)
             and isinstance(refs, dict) and isinstance(vs, dict) and isinstance(vs.get("lean"), dict)):
         return c
     s, lean = ss[0], vs["lean"]
     value, named = ("w", "w2")[x % 2], ("w", "w2")[(x // 2) % 2]
+    first, rows = ((0, [0]), (0, [1]), (1, [0]))[(x // 4) % 3]
     e = next(e for e in SECOND_BOUNDARY["registered"] if e["value"] == value)
     r = s["registered"] if isinstance(s.get("registered"), dict) else {"format": "verity/registered-reads/v1"}
     ports = r["ports"] if isinstance(r.get("ports"), dict) else {}
     registered = {**r, "ports": {**ports, "z": {**e, "reads_from": 0, "reads": [0]}}}
     reported = lean["registered"] if isinstance(lean.get("registered"), dict) else {}
-    ref = SS.blank_reads({**r, "ports": {**ports, "z": {**e, "value": named}}})
+    ref = {**r, "ports": {**ports, "z": {**e, "value": named, "reads_from": first, "reads": rows}}}
     changed = _second_with(c, 0, registered=registered)
     return {**changed, "ref_reads": {**refs, s["template"]: ref}, "verdicts": {**changed["verdicts"], "lean": {
         **lean, "registered": {**reported, f"{s['template']}/z": {"value": value, "root": e["root"]}}}}}
@@ -5468,7 +5471,7 @@ def test_a_two_stage_run_reaches_every_step(pieces):
                 **s["registered"]["ports"], **{p: {"value": p, "root": ROOTS[p], **INTERIOR.ports[p], "reads_from": 0,
                                                    "reads": rows} for p, rows in ports.items()}}}}
             ps = it["params"]
-            es = [{**e, "registered": SS.blank_reads(s["registered"])} if referred else e
+            es = [{**e, "registered": s["registered"]} if referred else e
                   for e in ps["proofs"]["templates"]]
             return {**c, "interior": {**it, "statements": [s], "params": {**ps, "proofs": {"templates": es}}},
                     "verdicts": {**c["verdicts"], "lean": {**c["verdicts"]["lean"], **_checked_names(s)}}}
@@ -5654,12 +5657,13 @@ def test_round_two_holds_each_port_a_header_shares_rows_at_to_a_registered_read(
 def test_round_two_holds_each_port_to_the_value_its_reference_reads(pieces):
     """`second-values`, Lean's the Python's whole, over the two-template interior after a replay sample of two: a
     statement's registered reads are its template's reference statement's but for the run's fields
-    (`second_stage.READ_RUN_FIELDS`). So TRIPLE reading its linked `x` passes against a reference reading the boundary's
-    `x` with the run's fields named or not, and is refused against no reference reads, one for no template, null, of
+    (`second_stage.blank_reads`). So TRIPLE reading its linked `x` passes against a reference reading the boundary's `x`
+    with other roots, leaves and rows or none, and is refused against no reference reads, one for no template, null, of
     another format, reading another value, a port more or none; PAIR reading its own `x` is refused against a reference
     reading the boundary's. At a port no link names, which `second-read` lets read any value either registration
-    registers, PAIR reading `w2` passes where its reference reads `w2` and is refused where it reads `w`, and the
-    reverse (`_read_registered`): the run never chooses the value."""
+    registers at any rows, PAIR reading `w2` passes where its reference reads `w2` at its rows and is refused where it
+    reads `w`, and the reverse, and reading either is refused where its reference reads it at other rows
+    (`_read_registered`): the run never chooses the value, nor the rows."""
     pair, triple = SECOND_MIXED.templates
     sample, drawn = [0, 2], [1, 4, 6, 9]
     honest = _second_case(SECOND_MIXED, True, sample, drawn, allow=True)
@@ -5668,7 +5672,7 @@ def test_round_two_holds_each_port_to_the_value_its_reference_reads(pieces):
     ref = linked["ref_reads"][triple]
     x = ref["ports"]["x"]
     assert honest["ref_reads"] == {pair: None, triple: None}
-    assert sorted(ref["ports"]) == ["x"] and x == {"value": BX, **dict.fromkeys(SS.READ_RUN_FIELDS)}
+    assert sorted(ref["ports"]) == ["x"] and x["value"] == BX
 
     def at(c: dict, t: str, r) -> dict:
         return {**c, "ref_reads": {**c["ref_reads"], t: r}}
@@ -5690,6 +5694,9 @@ def test_round_two_holds_each_port_to_the_value_its_reference_reads(pieces):
         (_read_registered(honest, 1), ["second-values"]),
         (_read_registered(honest, 2), ["second-values"]),
         (_read_registered(own, 1), ["second-values"]),
+        (_read_registered(honest, 4), ["second-values"]),
+        (_read_registered(honest, 7), ["second-values"]),
+        (_read_registered(honest, 8), ["second-values"]),
     ]
     for case, codes in cases:
         got = second_statements(copy.deepcopy(case))

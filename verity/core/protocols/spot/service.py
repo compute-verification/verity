@@ -71,7 +71,7 @@ flat Flock circuit file of one instance of it (`verity_flock.class_statement.Uni
 and program digests. The auditor names each file by its SHA-512 in the run's interior params, `proofs.templates`
 (`template_circuits`), beside the header of the template's registered reference statement and the registered reads it
 was verified against, which round 2 holds each statement's header and registered reads to but for the run's fields
-(`second_stage.RUN_FIELDS`, `second_stage.READ_RUN_FIELDS`), and reproduces the file from public data
+(`second_stage.RUN_FIELDS`, `second_stage.blank_reads`), and reproduces the file from public data
 alone: the template's Definition and rows, the interior's
 partition and program digests, the values it reads (`reads`), its AND gates per stage (`stage_ands`) and the leaf
 scheme, in a process where `FLOCK_PACK_WORDS`, `FLOCK_CORE_ROWS`, `FLOCK_PLAIN_LEAVES`, `FLOCK_OWN_ROWS` and

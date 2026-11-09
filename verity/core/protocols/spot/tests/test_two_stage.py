@@ -67,7 +67,7 @@ TEMPLATE, = (t for t, _ in P.strata(P.population_program(PAIR, Q * N_RHO), QUERY
 #: and the set it was staged in, none of the run's fields (`fake_challenger.reference_header`).
 REFERENCE = FC.reference_header(TEMPLATE, 0, Q * N_RHO, dict.fromkeys(INTERIOR, SCHEMA))
 #: The registered reads of an honest statement's session in these streams, fixed before the run: PAIR's linked `x` and
-#: `o0`, each the boundary port its link names, and none of the run's fields (`second_stage.READ_RUN_FIELDS`).
+#: `o0`, each the boundary port its link names, and none of the run's fields (`second_stage.blank_reads`).
 READS = {"ports": {"x": {"value": BX}, "o0": {"value": BOUT}}}
 #: `READS` and the interior's own `out`.
 READS_OUT = {"ports": {**READS["ports"], "out": {"value": "out"}}}
@@ -539,12 +539,11 @@ def test_an_own_read_at_another_root_fails_the_interior_audit():
     assert not out.accepted and not checks["registered"]["ok"] and checks["statements"]["codes"] == ["second-read"]
 
 
-def test_round_two_holds_a_port_to_the_registered_value_its_reference_reads(monkeypatch):
-    """`second-values`, over what the verifier holds of a run (`second_stage.Own`) with its interior record registering
-    values `w1` and `w2`: at a port `w` no link names, `second-read` lets a session read either at its own root, domain
-    and leaves, so which one the port reads would be the run's choice, and no frame fixed before the run could name it.
-    Round 2 holds it to the one its template's reference statement reads there: the run's statement reading `w1` passes
-    where its reference reads `w1`, and is refused where it reads `w2` or no `w`; reading `w2`, the reverse."""
+def _registered_codes(monkeypatch):
+    """Round 2's codes over what the verifier holds of a run (`second_stage.Own`) with its interior record registering
+    values `w1` and `w2`, as a function of the value the run's statement reads at a port `w` no link names (slot 0 its
+    row 0), the one its template's reference statement reads there (None: no `w`) and its rows, ``(reads_from,
+    reads)``, and the reference's reads of the linked ports (`READS`'s when None)."""
     seen = []
     check = SS.check
     monkeypatch.setattr(SS, "check", lambda allow, own, ss: seen.append((own, ss)) or check(allow, own, ss))
@@ -553,17 +552,39 @@ def test_round_two_holds_a_port_to_the_registered_value_its_reference_reads(monk
     entries = {v: {"value": v, "root": f"{i:02x}" * 64, "domain": f"{i + 1:02x}" * 64, "leaves": 8}
                for i, v in ((0x70, "w1"), (0x72, "w2"))}
 
-    def codes(value: str, named: str | None) -> list[str]:
+    def codes(value: str, named: str | None, rows=(0, [0]), linked=None) -> list[str]:
         ports = {**s["registered"]["ports"], "w": {**entries[value], "reads_from": 0, "reads": [0]}}
         stmt = {**s, "registered": {**s["registered"], "ports": ports}}
-        ref = READS if named is None else {"ports": {**READS["ports"], "w": {"value": named}}}
+        w = {} if named is None else {"w": {"value": named, "reads_from": rows[0], "reads": rows[1]}}
+        ref = {"ports": {**(READS["ports"] if linked is None else linked), **w}}
         o = dataclasses.replace(own, interior={**own.interior, "registered": list(entries.values())},
                                 reported=SS.statement_reads([stmt]), verified=SS.verified_of(_lean(checked=stmt)),
                                 ref_reads=((TEMPLATE, ref),))
         return list(SS.check(True, o, [stmt]).codes)
+    return codes
 
+
+def test_round_two_holds_a_port_to_the_registered_value_its_reference_reads(monkeypatch):
+    """`second-values`: at a port `w` no link names, `second-read` lets a session read either value the interior record
+    registers, `w1` or `w2`, at its own root, domain and leaves, so which one the port reads would be the run's choice,
+    and no frame fixed before the run could name it. Round 2 holds it to the one its template's reference statement
+    reads there: the run's statement reading `w1` passes where its reference reads `w1`, and is refused where it reads
+    `w2` or no `w`; reading `w2`, the reverse."""
+    codes = _registered_codes(monkeypatch)
     assert codes("w1", "w1") == codes("w2", "w2") == []
     assert codes("w1", "w2") == codes("w1", None) == codes("w2", "w1") == codes("w2", None) == ["second-values"]
+
+
+def test_round_two_holds_a_registered_value_to_the_rows_its_reference_reads(monkeypatch):
+    """`second-values` at a value a registration registers: `second-read` holds such a read only to the value's root,
+    domain and leaves, so the rows at which a session reads it would be the run's choice. Round 2 holds them to the
+    reference statement's (`second_stage.READ_ROW_FIELDS`): the run's statement reading `w1` at slot 0's row 0 is
+    refused where its reference reads `w1` at row 1, from slot 1, or at no row. A linked port's rows, which
+    `second-read` holds to the run, are the run's to place: a reference naming other rows there still passes."""
+    codes = _registered_codes(monkeypatch)
+    assert codes("w1", "w1", (0, [0])) == []
+    assert codes("w1", "w1", (0, [1])) == codes("w1", "w1", (1, [0])) == codes("w1", "w1", (0, [])) == ["second-values"]
+    assert codes("w1", "w1", linked={p: {**e, "reads_from": 3, "reads": [7]} for p, e in READS["ports"].items()}) == []
 
 
 def test_a_rejected_verdict_rejects_and_names_both_records():
