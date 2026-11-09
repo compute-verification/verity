@@ -64,7 +64,8 @@ set at its own interior values does when `Y` is the incorrect set at each replay
   `κ_δ` and `γ`: the inner wait's union bound over `above Y` projected on the outer run's replay sample (at most
   `2^{|sampleBlocks S|}` sets) at the second stage's miss (`Sessions.secondDraws`, at most `∏_{ρ∈S} e_ρ` at `Y`'s
   counts, by `above`, which the projection keeps), and the outer wait's over `above`'s values on `S₁Two` (at most
-  `2^M`), each within its wait's slack: `|sampleBlocks S| ≤ n_in` and `M ≤ n_out` (`Sessions.unions`).
+  `2^M`), each within its wait's slack: `|sampleBlocks S| ≤ n_in` and `M ≤ n_out` (`Sessions.unions`). An outer run
+  no second-stage fork of which is accepted adds nothing, so the inner union needs its bits only where one is.
 * `wrongAll`, `inter_cell_wrongAll`, `exists_best_interior`: the incorrect proof blocks at interiors, cell by cell,
   and a replay block's best interior, at which it escapes the most (its escape takes finitely many values).
 * `splitTwo`: **the deterministic half**. At an accepted run whose extraction fails, without an own-call collision the
@@ -278,16 +279,18 @@ theorem card_image_above_le (Pt : Partition) (d : Claims.Sampling.Design.Two) (S
     (S.image (above Pt d)).card ≤ 2 ^ footBits Pt d :=
   (card_image_le_of_counts Pt d S (above Pt d) fun _ _ h => above_congr Pt d h).trans (prod_cell_le_footBits Pt d)
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+omit [Fintype Coin] [Nonempty Coin] in
 /-- **The contract's unions at `n_PU` bits**: counts of at least `n_PU` cover both waits' unions, since `M ≤ n_PU` and
 a replay sample has at most `n_PU` proof blocks. -/
-theorem unions_of_nPU_le (L : CompiledTwo Coin A) (hout : ∀ x, L.nPU x ≤ L.nOut x) (hin : ∀ x, L.nPU x ≤ L.nIn x)
-    (x : Msg) (s : AuditStatement) (Pt : Partition) (d : Claims.Sampling.Design.Two) (hs : L.parse x = some s)
-    (hPt : L.partition s = some Pt) :
+theorem unions_of_nPU_le {H : Msg → Msg} (L : CompiledTwo Coin A) (hout : ∀ x, L.nPU x ≤ L.nOut x)
+    (hin : ∀ x, L.nPU x ≤ L.nIn x) (x : Msg) (s : AuditStatement) (Pt : Partition) (d : Claims.Sampling.Design.Two)
+    (hs : L.parse x = some s) (hPt : L.partition s = some Pt) :
     footBits Pt d ≤ L.nOut x ∧
-      ∀ r : Fin (L.V.k x) → Coin, (sampleBlocks Pt d.part (L.replaySample x r)).card ≤ L.nIn x :=
+      ∀ (Ω : Type) (P : Prover Ω) ω (r e : Fin (L.V.k x) → Coin),
+        (run H P L.V x ω (forkOn (L.stage2 x) r e)).out = .acc →
+          (sampleBlocks Pt d.part (L.replaySample x r)).card ≤ L.nIn x :=
   ⟨(footBits_le Pt d).trans ((Compiled.nPU_eq hs hPt).ge.trans (hout x)),
-    fun _ => (card_sampleBlocks_le Pt d.part _).trans ((Compiled.nPU_eq hs hPt).ge.trans (hin x))⟩
+    fun _ _ _ _ _ _ => (card_sampleBlocks_le Pt d.part _).trans ((Compiled.nPU_eq hs hPt).ge.trans (hin x))⟩
 
 /-- **An outer run bad for the sets `Xs`**, its second stage `g`: the inner wait comes up short, or for some `X ∈ Xs`
 no kept inner run has a proof block of `X` good. -/
@@ -343,31 +346,8 @@ theorem inner_badTwo_le (L : CompiledTwo Coin A) (x : Msg) (run' : (Fin (L.V.k x
   have hy : ∀ X ∈ Xs,
       Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
         (run' (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-          ∀ v ∈ X, ¬ L.GoodAt x found (forkOn (L.stage2 x) r p.1) v p.2) ≤ esc + κr := by
-    intro X hX
-    let sel : List ℕ → Option (Fin (L.nPU x)) := fun l =>
-      (List.finRange (L.nPU x)).find? fun i => decide (∃ v ∈ X, l[i.val]? = some v)
-    have hsel : ∀ l : List ℕ, l.length ≤ L.nPU x → ∀ v ∈ l, v ∈ X →
-        ∃ i, sel l = some i ∧ ∃ v ∈ X, l[i.val]? = some v := by
-      intro l hl v hvl hvX
-      obtain ⟨j, hj, hjv⟩ := List.getElem_of_mem hvl
-      have hjv' : l[(⟨j, lt_of_lt_of_le hj hl⟩ : Fin (L.nPU x)).val]? = some v := by
-        show l[j]? = some v
-        rw [List.getElem?_eq_getElem hj, hjv]
-      obtain ⟨i, hi⟩ := Option.isSome_iff_exists.1
-        ((List.find?_isSome (p := fun i : Fin (L.nPU x) => decide (∃ v ∈ X, l[i.val]? = some v))).2
-          ⟨⟨j, lt_of_lt_of_le hj hl⟩, List.mem_finRange _, decide_eq_true ⟨v, hvX, hjv'⟩⟩)
-      exact ⟨i, hi, of_decide_eq_true
-        (List.find?_some (p := fun i : Fin (L.nPU x) => decide (∃ v ∈ X, l[i.val]? = some v)) hi)⟩
-    have hmiss := (Pr_fst (β := L.SlotEC x) (fun d : Fin (L.V.k x) → Coin =>
-      ∀ u ∈ L.checked x (forkOn (L.stage2 x) r d), u ∉ X)).trans_le (hesc X hX)
-    refine Claims.Sampling.Pr_or_le (fun p hp => ?_) hmiss (hsess sel)
-    by_cases hm : ∃ v ∈ L.checked x (forkOn (L.stage2 x) r p.1), v ∈ X
-    · obtain ⟨v, hvl, hvX⟩ := hm
-      obtain ⟨i, hi, v', hv'X, hv'⟩ := hsel _ (hslots _) v hvl hvX
-      exact Or.inr ⟨hp.1, i, hi, ⟨v', hXs X hX v' hv'X⟩, hv',
-        fun hf => hp.2 v' hv'X ⟨i, hXs X hX v' hv'X, hv', hf⟩⟩
-    · exact Or.inl fun v hvl hvX => hm ⟨v, hvl, hvX⟩
+          ∀ v ∈ X, ¬ L.GoodAt x found (forkOn (L.stage2 x) r p.1) v p.2) ≤ esc + κr :=
+    fun X hX => L.pr_notGood_le x run' found (hXs X hX) hslots r (hesc X hX) hsess
   have hw := wait_bad_le (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.kIn x) (L.capIn x)
     (L.capIn_pos x) (L.kIn_pos x) Xs (fun X d uc => ∀ v ∈ X, ¬ L.GoodAt x found (forkOn (L.stage2 x) r d) v uc)
     (add_nonneg hesc0 hκr0) hy
@@ -387,7 +367,8 @@ theorem outer_badTwo_le (L : CompiledTwo Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x 
     (run' : (Fin (L.V.k x) → Coin) → Trace)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop)
     (Pt : Partition) (d : Claims.Sampling.Design.Two) (hPU : L.nPU x = Pt.blocks.length)
-    (hun : footBits Pt d ≤ L.nOut x ∧ ∀ r, (sampleBlocks Pt d.part (L.replaySample x r)).card ≤ L.nIn x)
+    (hun : footBits Pt d ≤ L.nOut x ∧ ∀ r e, (run' (forkOn (L.stage2 x) r e)).out = .acc →
+      (sampleBlocks Pt d.part (L.replaySample x r)).card ≤ L.nIn x)
     (κr : (Fin (L.V.k x) → Coin) → ℝ) (hκr0 : ∀ r, 0 ≤ κr r)
     (hreplay : ∀ T ⊆ range d.part.blocks.length,
       Pr (fun r : Fin (L.V.k x) → Coin => ∀ ρ ∈ L.replaySample x r, ρ ∉ T) ≤ d.replay.Pa d.part T)
@@ -453,8 +434,16 @@ theorem outer_badTwo_le (L : CompiledTwo Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x 
             ((above Pt d Y).image (· ∩ sampleBlocks Pt d.part (L.replaySample x r))) (forkOn (L.stage2 x) r) e)) :=
           Ex_mono fun r => mul_le_mul_of_nonneg_left (Pr_mono fun e h => L.badOuterTwo_inter _ h) (Pr_nonneg _)
       _ ≤ Ex (fun r => 2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (esc r + κr r)) :=
-          Ex_mono fun r => L.inner_badTwo_le x run' found (hXs r) (card_image_inter_le _ _) (hun.2 r) hslots r
-            (hesc0 r) (hκr0 r) (hesc r) (hsess r)
+          Ex_mono fun r => by
+            by_cases hacc : ∃ e, (run' (forkOn (L.stage2 x) r e)).out = .acc
+            · obtain ⟨e, he⟩ := hacc
+              exact L.inner_badTwo_le x run' found (hXs r) (card_image_inter_le _ _) (hun.2 r e he) hslots r
+                (hesc0 r) (hκr0 r) (hesc r) (hsess r)
+            · have h0 : Pr (fun e : Fin (L.V.k x) → Coin => (run' (forkOn (L.stage2 x) r e)).out = .acc) = 0 :=
+                (Pr_congr fun e => ⟨fun h => hacc ⟨e, h⟩, False.elim⟩).trans Pr_false
+              rw [h0, zero_mul]
+              exact add_nonneg (add_nonneg (by positivity) (Real.exp_pos _).le)
+                (mul_nonneg hc.le (add_nonneg (hesc0 r) (hκr0 r)))
       _ = 2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (Ex esc + Ex κr) := by
           rw [Ex_add, Ex_const, Ex_mul_left, Ex_add]
       _ ≤ 2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (δ + Ex κr) := by
@@ -534,7 +523,8 @@ theorem pr_failsTwo_le_of (H : Msg → Msg) (L : CompiledTwo Coin A) {δ : ℝ} 
       exact h
     rw [hF]
     refine (L.outer_badTwo_le hδ x (run H P L.V x ω) (found ω) Pt d (Compiled.nPU_eq hs hPt)
-      (hS.unions x s Pt d hs hPt hd hin) (fun r => L.κs x + Real.sqrt (L.V.k x * L.γs x * β ω r))
+      ⟨(hS.unions x s Pt d hs hPt hd hin).1, (hS.unions x s Pt d hs hPt hd hin).2 Ω P ω⟩
+      (fun r => L.κs x + Real.sqrt (L.V.k x * L.γs x * β ω r))
       (fun r => add_nonneg (L.κs_nonneg x) (Real.sqrt_nonneg _))
       (hS.replayDraws x s Pt d hs hPt hd hin) (hS.secondDraws x s Pt d hs hPt hd hin) (hS.slots x)
       (hsess ω)).trans (le_of_eq ?_)
@@ -659,8 +649,7 @@ theorem splitTwo {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Bi
   refine Or.inr ⟨_, hXr, accList_length_eq hshort2, fun l e hl v hv hgood => ?_⟩
   obtain ⟨⟨ρ', t'⟩, _, hvp⟩ := mem_biUnion.1 hv
   obtain ⟨hvcell, hvwrong⟩ := mem_filter.1 hvp
-  obtain ⟨i, hvlt, hvi, xS, vS, hsess, hsh, wS, hwS, hRw⟩ := hgood
-  have hvc := List.mem_of_getElem? hvi
+  obtain ⟨hvc, xS, vS, wS, hsess, hRw, hkept⟩ := L.good_found H P ω x s c (hS.shared x Ω P ω) hjZ hl hgood
   have hacc' : (run' (forkOn (L.stage2 x) r e)).out = .acc := by
     have h := acc_of_accList hl
     exact h
@@ -669,8 +658,7 @@ theorem splitTwo {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Bi
   have hρp : ρ = ρ' := Option.some.inj (hρ.symm.trans (replayOf_of_mem_cell hvcell))
   subst hρp
   have hcorr := hcor (w.val H L.commit s) (ιr ρ) fun q hq hok => by
-    have hqf : q ∈ fd := L.mem_found H x s run' c hjZ hl hvi hvlt
-      (L.unitExt_mem H x run' s v _ _ hsess hsh hwS hq hok)
+    have hqf : q ∈ fd := hkept q hq hok
     refine ⟨fun hr => ?_, fun hi => ?_⟩
     · rw [hr] at hok
       exact val_assemble hagree hqf hr hok

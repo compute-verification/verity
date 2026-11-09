@@ -84,6 +84,7 @@ class Proc:
     def _handle_client_request(self, kind: str, req: Any) -> None:
         self.log.append((kind, req))
         self.scheduler.work = self.scheduler.work or kind == "add"
+        self.running = self.running and kind != "stop"
 
     def step(self) -> Any:
         self.log.append(("step", self.scheduler.has_requests()))
@@ -94,7 +95,7 @@ class Proc:
         self.log.append(("step", scheduling))
         if scheduling:
             self.batch_queue.appendleft("b")
-        else:
+        elif self.batch_queue:
             self.batch_queue.pop()
         return None, scheduling
 
@@ -130,6 +131,19 @@ class Edge:
     def take(self, core: Any, drained: cg.Drained) -> None:
         self.log.append((self.name, "take", drained))
         self.dues = deque([False])
+
+
+class Held(Edge):
+    """An edge that waits until ready, its answers following a script whose last answer holds."""
+
+    def __init__(self, log: list, name: str, due: list, ready: list, poll_s: float) -> None:
+        super().__init__(log, name, due)
+        self.readies, self.poll_s = deque(ready), poll_s
+
+    def ready(self, core: Any) -> bool:
+        ok = self.readies[0] if len(self.readies) == 1 else self.readies.popleft()
+        self.log.append((self.name, "ready", ok))
+        return ok
 
 
 @pytest.fixture
@@ -224,6 +238,37 @@ def test_without_a_batch_queue_a_due_edge_is_taken_at_once(seam):
     core.step()
     core.step()
     assert log == [("cut", "take", cg.Drained(due_t=1.0, drained_t=2.0, drain_calls=0)), ("step", True), ("step", True)]
+
+
+def test_a_held_edge_holds_the_input_loop_once_drained_until_ready_and_requests_are_handled_meanwhile(seam):
+    log: list = []
+    seam.edge("cut", lambda core: Held(log, "cut", due=[True], ready=[False, False, False, True], poll_s=0.5))
+    core = seam.cls(log, later=[("abort", "a1"), ("add", "r1")], batches=["b1"])
+    core.step_with_batch_queue()
+    core.step_with_batch_queue()
+    core._process_input_queue()
+    core.step_with_batch_queue()
+    assert "has_requests" not in vars(core.scheduler)
+    assert log == [("step", False),
+                   ("cut", "ready", False), ("step", False),
+                   ("cut", "ready", False), ("get", 0.5), ("abort", "a1"),
+                   ("cut", "ready", False), ("get", 0.5), ("add", "r1"),
+                   ("cut", "ready", True), ("has_work", True),
+                   ("cut", "ready", True), ("cut", "take", cg.Drained(due_t=1.0, drained_t=2.0, drain_calls=1)),
+                   ("step", True)]
+
+
+def test_a_held_edge_waits_beside_a_gate_and_at_shutdown_is_not_taken(seam):
+    log: list = []
+    seam.gate("tick", lambda core: Gate(log, "tick", ready=[False, True], poll_s=0.25))
+    seam.edge("cut", lambda core: Held(log, "cut", due=[True], ready=[False], poll_s=0.05))
+    core = seam.cls(log, later=[EMPTY, ("stop", None)])
+    core._process_input_queue()
+    core.step()
+    assert log == [("tick", "ready", False), ("cut", "ready", False), ("get", 0.05),
+                   ("tick", "ready", True), ("cut", "ready", False), ("get", 0.05), ("stop", None),
+                   ("tick", "open", SHUTDOWN),
+                   ("cut", "ready", False), ("step", False)]
 
 
 def test_edges_due_at_one_step_are_taken_in_their_order(seam):

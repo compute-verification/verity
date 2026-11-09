@@ -57,6 +57,8 @@ class Shape:
     zc_packed: bool | None = None
     #: before the lane groups, level 0's M1 commit held every witness lane's codeword at once
     lane_groups: bool = True
+    #: level 0's M1 commit transforms the witness lanes in place in its leaves (launch_ntt_rows; not under FC_NTT_REGS=0)
+    l0_rows: bool = True
     #: before keep-L0, a keeping rep 0 held a and b through Ligerito and a copy of z from its witness on
     keep_ab: bool = False
     ligerito: tuple = field(default=None, compare=False)
@@ -110,11 +112,15 @@ def rep_events(s: Shape, mode: str) -> Iterator[tuple]:
         yield a("d_zk_extra", 4 * l * F128)
         yield a("d_cw0", n * (w + 4) * F128)
         yield a("d_tree0", (2 * n - 1) * HB)
-        wg = w >> min(ik, 2) if s.lane_groups else w
-        yield a("cw_w", n * wg * F128)
-        yield a("cw_x", n * 4 * F128)
-        yield r("cw_w")
-        yield r("cw_x")
+        if s.l0_rows:
+            yield a("cw_x", n * 4 * F128)
+            yield r("cw_x")
+        else:
+            wg = w >> min(ik, 2) if s.lane_groups else w
+            yield a("cw_w", n * wg * F128)
+            yield a("cw_x", n * 4 * F128)
+            yield r("cw_w")
+            yield r("cw_x")
     else:
         yield a("d_cw0", n * w * F128)
         yield a("d_tree0", (2 * n - 1) * HB)

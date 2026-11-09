@@ -29,16 +29,16 @@ import os
 import sys
 from pathlib import Path
 
-DOT = '{"fn":"HopperBF16WgmmaDot16_v1"}'
 SPEC = "q-template-instance"
 
 
 def template():
-    """``GemmCoordinate_v2{K, DOT}``: the Definition each unit of the inner statement is one instance of."""
-    from circuit_check import targets as TG
+    """``GemmCoordinate_v2{K, DOT}`` at Hopper's step (`gemm.GEMM_HOPPER`): the Definition each unit of the inner statement is one
+    instance of."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops import gemm as G
 
-    TG.load_registries()
-    return TG.definition(f"GemmCoordinate_v2{{K={int(os.environ['K'])},DOT={DOT}}}")
+    return bind(G.GemmCoordinate, K=int(os.environ["K"]), **G.GEMM_HOPPER)
 
 
 def population() -> int:

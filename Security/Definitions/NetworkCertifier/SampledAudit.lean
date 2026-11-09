@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Claims.Sampling
+public import Definitions.Claims.SamplingGeneric
 public import Definitions.NetworkCertifier.Run
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -187,22 +188,25 @@ def RAcc (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option 
 
 section Claim
 
-variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
+open Claims.SamplingGeneric (Arg Compiled)
 
-/-- **The sampled audit's scope**: the sampling scope (`Scope`), and the statement's layout fits its program over its
-horizon (`BoundaryGates.Fits`). -/
-def ScopeAcc {L S : ℕ} (D : Deploy Coin Col T) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (x : Msg) : Prop :=
-  Scope D x ∧ ∃ s, D.parse x = some s ∧ (lay s).Fits s.prog (k s)
+variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-- **The sampled audit implies `Accepted`** at the deployment `D`, at the public layout `lay` and horizon `k` of each
-statement. It holds on the statements in its scope (`ScopeAcc`), at every `δ ≥ 0`, at the sampling extractor and every
-decoder that lists every trace within Flock's radius: `Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind`, with `KS`'s errors
-(`ε_ks = κ − δ + √(γ·Pr[B])`, Flock's error at the proof blocks' sessions; `ε_bind = Pr[B_ext]`). The selection enters only
-through `M_δ`. -/
-def KSAccepted (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) : Prop :=
-  ∀ (δ : ℝ) decode, 0 ≤ δ → Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
-    KSLinOn H D.V (ScopeAcc D lay k) (RAcc H D.commit D.parse D.partition L K S lay k δ) (E D decode) (κ D δ) (γ D)
-      (fun _ => 1) (Bext H D.V (E D decode))
+/-- **The sampled audit's scope**: the sampling scope (`Compiled.Scope`), and the statement's layout fits its program
+over its horizon (`BoundaryGates.Fits`). -/
+def ScopeAcc {L S : ℕ} (D : Compiled Coin A) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
+    (x : Msg) : Prop :=
+  D.Scope x ∧ ∃ s, D.parse x = some s ∧ (lay s).Fits s.prog (k s)
+
+/-- **The sampled audit implies `Accepted`** at the compiled sampled verifier `D`, at the public layout `lay` and
+horizon `k` of each statement. It holds on the statements in its scope (`ScopeAcc`), at every `δ ≥ 0`, at the compiled
+extractor: `Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind`, with `Compiled.KS`'s errors (`ε_ks = κ − δ + √(γ·Pr[B])`, the
+proof system's error at the proof blocks' sessions; `ε_bind = Pr[B_ext]`). The selection enters only through `M_δ`. -/
+def KSAccepted (H : Msg → Msg) (D : Compiled Coin A) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
+    (k : AuditStatement → ℕ) : Prop :=
+  ∀ δ : ℝ, 0 ≤ δ →
+    KSLinOn H D.V (ScopeAcc D lay k) (RAcc H D.commit D.parse D.partition L K S lay k δ) D.E (D.κ δ) D.γ
+      (fun _ => 1) (Bext H D.V D.E)
 
 end Claim
 

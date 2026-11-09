@@ -38,7 +38,7 @@ use flock_core::{
 use flock_field::F128;
 use flock_live::{
     circuit::*,
-    firewall::{Framer, Gate},
+    firewall::{Framer, Gate, cpu_seconds},
     run_record::RunLog,
     session_verify as sverify,
     zk_hooks::{Hooks, NoMask, ProverSeed},
@@ -581,7 +581,8 @@ struct CircuitVerifier {
     lincheck: sverify::Lincheck,
     /// the last `verify` call's phase timers
     phases: Mutex<Option<Value>>,
-    /// `proved_scope::check` of the statement: the refusal of a form the soundness proof does not cover
+    /// `proved_scope::check` of the statement, kept per statement (`proved_scope::VERDICTS`): the refusal of a form the
+    /// soundness proof does not cover
     scope: Result<(), String>,
 }
 
@@ -615,7 +616,7 @@ impl StatementVerifier for CircuitVerifier {
 impl CircuitVerifier {
     fn new(tabs: Tables) -> Self {
         let t0 = &tabs.list[0];
-        let scope = proved_scope::check(&t0.st.c, &t0.inst, is_zk(&t0.st), tabs.list.len());
+        let scope = proved_scope::VERDICTS.check(&t0.st.c, &t0.inst, is_zk(&t0.st), tabs.list.len());
         CircuitVerifier { tabs, lincheck: sverify::Lincheck::from_env().unwrap_or_else(|e| refuse(e)), phases: Mutex::new(None), scope }
     }
 
@@ -883,8 +884,8 @@ struct Serving {
 }
 
 /// The challenger's session (`serve --tree-from`), one connection the server's sessions share. It closes when the server is
-/// done with it: once its last session's record is written, `serve_loop` returns and drops the last [`Serving`] holding it
-/// (`serve --queue`: once its queue ends). A close the challenger doesn't confirm is the server's refusal.
+/// done with it: once its last session's record is written, `serve_loop` returns and the last [`Serving`] holding it is
+/// dropped (`serve --queue`: once its queue ends). A close the challenger doesn't confirm is the server's refusal.
 struct TreeFrom(flock_live::tree_from::Shared);
 
 impl Drop for TreeFrom {
@@ -971,6 +972,8 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
     } else {
         Tables::one(st, inst)
     };
+    // each session's server is built after its accept (`server_of`): a configuration it would refuse is refused here instead
+    config_of(&tabs).check().unwrap_or_else(|e| refuse(e));
     let tree_from = tree_from_arg(&tabs, false);
     Serving { given, law, tabs, tree_from }
 }
@@ -1280,22 +1283,24 @@ fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng
 
 /// M1 on the device: level 0's hiding and both reps' pads with their commitments, sampled beside the witness build (they depend on
 /// the seed alone). The salt ids are the sequential prover's: rep 0's pads tree takes the next id, rep 1's the one after rep 0's
-/// proof's trees (levels 1 to R), which `session` consumes when rep 1 starts. Returns the level-0 sample's seconds, and each rep's
-/// pads with their tree's salt id.
+/// proof's trees (levels 1 to R), which `session` consumes when rep 1 starts. Rep 0's pads, with their tree's salt id, go on
+/// `rep0` as soon as they are made, so rep 0 waits on level 0 and its own pads alone; rep 1's are made next and returned, for
+/// rep 1 to join when it starts.
 fn zk_prepare(st: &Stmt, plan: &Plan, seed: ProverSeed, lig: LigeritoProfile, salts: &Mutex<flock_live::zk_hooks::LeafSalts>,
-              points: &Arc<Mutex<Vec<Vec<F128>>>>) -> (f64, [(ZkRep, u64); 2]) {
+              points: &Arc<Mutex<Vec<Vec<F128>>>>, rep0: std::sync::mpsc::Sender<(ZkRep, u64)>) -> (ZkRep, u64) {
     let mut prng = flock_live::zk_hooks::ProverRng::from_seed(seed);
     let tl0 = Instant::now();
     let level0 = level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper);
     let t_level0 = tl0.elapsed().as_secs_f64();
     let trees = pcs_of(st, lig).ligerito_prover_config().expect("Ligerito config").recursive_steps as u64;
     let id0 = salts.lock().unwrap_or_else(PoisonError::into_inner).next_id();
-    let reps = [0usize, 1].map(|rep| {
-        let id = id0 + rep as u64 * (1 + trees);
-        (make_zkrep(st, plan, &mut prng, &level0, points, rep, id, salts, None), id)
-    });
-    eprintln!("ZKPRE\t{}", json!({"level0_s": t_level0, "s": tl0.elapsed().as_secs_f64()}));
-    (t_level0, reps)
+    // a session that stopped before its reps dropped the receiver
+    let _ = rep0.send((make_zkrep(st, plan, &mut prng, &level0, points, 0, id0, salts, None), id0));
+    let t_rep0 = tl0.elapsed().as_secs_f64();
+    let id1 = id0 + 1 + trees;
+    let rep1 = (make_zkrep(st, plan, &mut prng, &level0, points, 1, id1, salts, None), id1);
+    eprintln!("ZKPRE\t{}", json!({"level0_s": t_level0, "rep0_s": t_rep0, "s": tl0.elapsed().as_secs_f64()}));
+    rep1
 }
 
 /// The salt trees a device session's table samples, in order, as (tree id, leaves): level 0, then each rep's Ligerito levels 1
@@ -4007,12 +4012,13 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let mut salts_ahead = if after { None } else { start_ahead() };
     // the rank check's claim points: per table (each has its own mask slot)
     let points_t: Vec<Arc<Mutex<Vec<Vec<F128>>>>> = tabs.list.iter().map(|_| Arc::new(Mutex::new(Vec::new()))).collect();
-    // M1 on the device: level 0's hiding and both reps' pads commitments beside the witness build, and rep 0's replay and inner
-    // proof beside rep 1's device run (FC_ZK_SEQUENTIAL: neither, the reference for the overlap's gain)
+    // M1 on the device: level 0's hiding and both reps' pads commitments beside the witness build (rep 1's beside rep 0 too), and
+    // rep 0's replay and inner proof beside rep 1's device run (FC_ZK_SEQUENTIAL: neither, the reference for the overlap's gain)
     let overlap = std::env::var_os("FC_ZK_SEQUENTIAL").is_none();
     let zk_pre = (plan.gpu && is_zk(st) && overlap && plan.lean_frames.is_none()).then(|| {
         let (st, plan, salts, points) = (st.clone(), plan.clone(), salts_t[0].clone(), points_t[0].clone());
-        flock_live::spawn(move || zk_prepare(&st, &plan, seed, lig, &salts, &points))
+        let (tx, rx) = std::sync::mpsc::channel();
+        (rx, flock_live::spawn(move || zk_prepare(&st, &plan, seed, lig, &salts, &points, tx)))
     });
     // Hello's round trip beside the witness build (FC_HELLO_AHEAD=0: after it): Hello reads no witness, and nothing else reaches
     // the transport before it. Not through the ZK server's Lean session loop
@@ -4057,10 +4063,13 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         salts_ahead = start_ahead();
     }
     let tj = Instant::now();
-    let mut zk_pre = match zk_pre.map(|h| h.join()) {
-        Some(Ok((_, reps))) => Some(reps.map(Some)),
-        Some(Err(e)) => panic!("M1's randomness: {}", panic_msg(e)),
-        None => None,
+    // rep 0's pads now; rep 1's when rep 1 starts
+    let (mut zk_pre, mut zk_pre1) = match zk_pre {
+        Some((rx, h)) => match rx.recv() {
+            Ok(rep0) => (Some([Some(rep0), None]), Some(h)),
+            Err(_) => panic!("M1's randomness: {}", h.join().err().map(panic_msg).unwrap_or_default()),
+        },
+        None => (None, None),
     };
     // the preparation's time past the witness build (what it adds to the session)
     let t_zk_pre_wait = tj.elapsed().as_secs_f64();
@@ -4197,10 +4206,15 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             let mut rep0_done: Option<(Vec<u8>, Value)> = None;
             for rep in 0..2 {
                 // M1: this rep's pads and their commitment (a fresh salt tree id), sampled before anything of the rep is sent (on the
-                // device path, beside the witness build: rep 1's tree id is consumed here, where the sequential prover takes it)
+                // device path, rep 0's beside the witness build and rep 1's after them, joined here and any wait counted in rep 1's
+                // prove time: rep 1's tree id is consumed here, where the sequential prover takes it)
                 let tz0 = Instant::now();
                 let (zkrep, pre_id) = match zk_pre.as_mut() {
-                    Some(z) => { let (r, id) = z[rep].take().expect("a rep's pads"); (Some(r), Some(id)) }
+                    Some(z) => {
+                        let joined = |h: std::thread::JoinHandle<(ZkRep, u64)>| h.join().unwrap_or_else(|e| panic!("M1's randomness: {}", panic_msg(e)));
+                        let (r, id) = z[rep].take().or_else(|| zk_pre1.take().map(joined)).expect("a rep's pads");
+                        (Some(r), Some(id))
+                    }
                     None => (is_zk(st).then(|| {
                         let id = salts.lock().unwrap_or_else(PoisonError::into_inner).next_id();
                         let name = flock_live::firewall::level0_session(&commit);
@@ -4220,8 +4234,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                 if let (Some(g), Some(z)) = (&firewall, &zkrep) {
                     g.lock().unwrap_or_else(PoisonError::into_inner).begin_rep(rep, z)?;
                 }
-                let t_zk_commit = if pre_id.is_some() { if rep == 0 { t_level0 } else { 0.0 } }
-                                  else { tz0.elapsed().as_secs_f64() + if rep == 0 { t_level0 } else { 0.0 } };
+                let t_zk_commit = tz0.elapsed().as_secs_f64() + if rep == 0 { t_level0 } else { 0.0 };
                 // rep 1's stream on the device path opens at its first round, after rep 0's last one (the order on the wire)
                 let mut lch = if rep0_finish.is_some() { None } else { Some(LiveChallenger::new(t.clone(), &tb.name, rep, &dom(rep))?) };
                 let tt = t.clone();
@@ -4441,6 +4454,10 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     }
     let e2e_s = t0.elapsed().as_secs_f64();
     let wait_e2e_s = t.lock().unwrap_or_else(PoisonError::into_inner).wait_s();
+    // a session that stopped before rep 1 still ends rep 1's pads before it returns
+    if let Some(h) = zk_pre1 {
+        let _ = h.join();
+    }
     if let Some(h) = salts_ahead {
         let (tables, held, reuse, reused, threads, s) = h.join().unwrap_or_else(|e| panic!("the salts read ahead: {}", panic_msg(e)));
         let untaken: usize = tables.iter().map(|(a, _)| a.untaken()).sum();
@@ -4653,6 +4670,47 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
         "zk_level0_ybar_forged" => Plan { zk_l0_tamper: 3, ..f },
         "zk_level0_extra_lane_sum_forged" => Plan { zk_l0_tamper: 4, ..f },
         _ => h,
+    }
+}
+
+/// `unit-walk`: circuit `--net` (default the statement's unit) over `--slots` slots of seeded input words, as the device
+/// witness builds its host units (`unit_ab_into`), at each `--wide` lane groups a pass (default 1,2,4,8) on each `--threads`
+/// pool size (default the global pool's) in turn, `--reps` rounds: a `WALK` line each with its wall and CPU seconds and
+/// whether its packed words are the first run's. The walk reads no input value, so seeded words time it as a served
+/// statement's do.
+fn unit_walk(c: &Composite) {
+    let ni: usize = arg("--net", &c.unit_net.to_string()).parse().expect("--net");
+    let net = &c.nets[ni].1;
+    let slots: usize = arg("--slots", "2048").parse().expect("--slots");
+    let reps: usize = arg("--reps", "2").parse().expect("--reps");
+    let list = |name: &str, default: &str| -> Vec<usize> { arg(name, default).split(',').map(|w| w.parse().expect(name)).collect() };
+    let widths = list("--wide", "1,2,4,8");
+    let pools: Vec<rayon::ThreadPool> = list("--threads", &rayon::current_num_threads().to_string()).into_iter()
+        .map(|t| rayon::ThreadPoolBuilder::new().num_threads(t).stack_size(flock_live::THREAD_STACK).build().expect("a thread pool"))
+        .collect();
+    let uw = 1usize << (net.unit_log - 7);
+    let mut s = 0x9e37_79b9_7f4a_7c15u64 ^ arg("--seed", "1").parse::<u64>().expect("--seed");
+    let mut r = || { s ^= s << 13; s ^= s >> 7; s ^= s << 17; s };
+    let ins: Vec<Vec<F128>> = (0..slots).map(|_| (0..net.in_words).map(|_| F128::new(r(), r())).collect()).collect();
+    let t = Instant::now();
+    let one_pass = net.one_pass();
+    let flat_s = t.elapsed().as_secs_f64();
+    let nnz = net.a.nnz() + net.b.nnz();
+    let (mut out, mut first) = (vec![0u64; 4 * uw * slots], None::<(bool, Vec<u64>)>);
+    for rep in 0..reps {
+        for pool in &pools {
+            for &n in &widths {
+                out.fill(0);
+                let (t, cpu) = (Instant::now(), cpu_seconds());
+                let ok = pool.install(|| flock_live::circuit::unit_ab_into_wide(net, ni, uw, &ins, &mut out, n));
+                let (wall_s, cpu_s) = (t.elapsed().as_secs_f64(), cpu_seconds() - cpu);
+                let want = first.get_or_insert_with(|| (ok, out.clone()));
+                println!("WALK\t{}", json!({"net": ni, "rows": net.useful, "nnz": nnz, "slots": slots,
+                    "groups": slots.div_ceil(64), "wide": n, "rep": rep, "threads": pool.current_num_threads(),
+                    "one_pass": one_pass, "flat_s": flat_s, "wall_s": wall_s, "cpu_s": cpu_s, "ok": ok,
+                    "same": want.0 == ok && want.1 == out}));
+            }
+        }
     }
 }
 
@@ -6323,9 +6381,11 @@ fn verify_ahead_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value 
         std::thread::scope(|sc| {
             for (j, (l, (d, a))) in ls.iter().zip(dirs.iter().zip(&addrs)).enumerate() {
                 flock_live::spawn_scoped(sc, move || serve_on(l, d, Some((SESSIONS - j).div_ceil(servers)), (ahead + 1).div_ceil(servers), a, None, || {
-                    let mut s = server(st, inst);
-                    fix_verifier_coins(&mut s, [9; 32]);
-                    Some((s, Value::Null))
+                    Some((move || {
+                        let mut s = server(st, inst);
+                        fix_verifier_coins(&mut s, [9; 32]);
+                        s
+                    }, Value::Null))
                 }));
             }
             prove_sessions(st, inst, &base, &seeds, 0, &addrs.join(","), ahead, None, &mut |_, v, proofs| got.push((v, proofs)));
@@ -6376,9 +6436,11 @@ fn front_ahead_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
         std::thread::scope(|sc| {
             let (l, d, a) = (&l, &d, &a);
             flock_live::spawn_scoped(sc, move || serve_on(l, d, Some(SESSIONS), 3, a, None, || {
-                let mut s = server(st, inst);
-                fix_verifier_coins(&mut s, [9; 32]);
-                Some((s, Value::Null))
+                Some((move || {
+                    let mut s = server(st, inst);
+                    fix_verifier_coins(&mut s, [9; 32]);
+                    s
+                }, Value::Null))
             }));
             prove_sessions(st, inst, &base, &seeds, 0, a, 0, None, &mut |_, v, proofs| got.push((v, proofs)));
         });
@@ -6800,7 +6862,7 @@ fn run_log(st: &Stmt) -> Option<RunLog> {
     Some(RunLog::new(file, part).unwrap_or_else(|e| refuse(e)))
 }
 
-fn serve_loop(log: Option<&RunLog>, make: impl Fn() -> Option<(Server, Value)>) {
+fn serve_loop<B: FnOnce() -> Server + Send>(log: Option<&RunLog>, make: impl Fn() -> Option<(B, Value)>) {
     let listen = arg("--listen", "127.0.0.1:7500");
     let out = std::path::PathBuf::from(arg("--out", "sessions"));
     let l = std::net::TcpListener::bind(&listen).unwrap();
@@ -6814,16 +6876,15 @@ fn serve_loop(log: Option<&RunLog>, make: impl Fn() -> Option<(Server, Value)>) 
     serve_on(&l, &out, max, concurrency, &bound, log, make);
 }
 
-/// Serves `l`'s connections, one session each, up to `concurrency` at once, and `max` of them (unbounded: `None`), each on
-/// the server `make` gives before it is accepted, until it gives none; each session's record, proofs and verifier file
-/// under `out/<session>`, its line, with the fields `make` gave beside its server, in `out/index.jsonl` and on stdout (`out`:
-/// the directory those fields name as `out`, else the server's). With a run's record (`log`), each session's Hello
-/// answered with coins is logged there first.
-fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>, concurrency: usize, listen: &str,
-            log: Option<&RunLog>, make: impl Fn() -> Option<(Server, Value)>) {
+/// Serves `l`'s connections, one session each, up to `concurrency` at once, and `max` of them (unbounded: `None`), until
+/// `make` gives none (`flock_live::serve_sessions`): each on the server `make`'s build gives, built on the session's own
+/// thread once it is accepted; each session's record, proofs and verifier file under `out/<session>`, its line, with the
+/// fields `make` gave beside its build, in `out/index.jsonl` and on stdout (`out`: the directory those fields name as
+/// `out`, else the server's). With a run's record (`log`), each session's Hello answered with coins is logged there first.
+fn serve_on<B: FnOnce() -> Server + Send>(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>, concurrency: usize,
+                                          listen: &str, log: Option<&RunLog>, make: impl Fn() -> Option<(B, Value)>) {
     use std::io::{BufReader, BufWriter, Write};
     std::fs::create_dir_all(out).unwrap();
-    let free = (Mutex::new(concurrency), std::sync::Condvar::new());
     let index = Mutex::new(());
     let one = |i: usize, conn: std::net::TcpStream, mut s: Server, tag: Value| {
         conn.set_nodelay(true).unwrap();
@@ -6857,7 +6918,7 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
         let mut line = json!({"session": id, "accepted": rec["verdict"]["accepted"], "why": rec["verdict"]["why"], "aborted": rec["aborted"],
                           "link_mode": rec["link_mode"], "link_sha256": rec["link_sha256"], "require_link": rec["config"]["require_link"],
                           "verify_s": rec["verdict"]["verify_s"], "handle_s": rec["verdict"]["handle_s"], "rounds": rec["verdict"]["rounds"],
-                          "stmt_cache": stmt_cache_seen(Side::Verifier)});
+                          "stmt_cache": stmt_cache_seen(Side::Verifier), "scope_cache": proved_scope::VERDICTS.seen()});
         if let (Value::Object(line), Value::Object(tag)) = (&mut line, tag) {
             line.extend(tag);
         }
@@ -6867,31 +6928,8 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
         idx.write_all(format!("{line}\n").as_bytes()).unwrap();
         println!("SESSION\t{line}");
     };
-    std::thread::scope(|sc| {
-        for i in 0.. {
-            if Some(i) == max {
-                break;
-            }
-            {
-                let mut n = free.0.lock().unwrap_or_else(PoisonError::into_inner);
-                while *n == 0 {
-                    n = free.1.wait(n).unwrap_or_else(PoisonError::into_inner);
-                }
-                *n -= 1;
-            }
-            let Some((s, tag)) = make() else { break };
-            let (conn, _) = l.accept().unwrap();
-            let (one, free) = (&one, &free);
-            flock_live::spawn_scoped(sc, move || {
-                // a session's panic stops the server
-                if catch_unwind(AssertUnwindSafe(|| one(i, conn, s, tag))).is_err() {
-                    std::process::exit(101);
-                }
-                *free.0.lock().unwrap_or_else(PoisonError::into_inner) += 1;
-                free.1.notify_one();
-            });
-        }
-    });
+    flock_live::serve_sessions(l, max, concurrency, || make().map(|(build, tag)| move || (build(), tag)),
+                               |i, conn, (s, tag): (Server, Value)| one(i, conn, s, tag));
 }
 
 /// `replay [--zk] [--session-tables J] --sessions DIR...`: the verifier's offline verdict on each recorded session
@@ -7133,13 +7171,14 @@ fn serve_queue(c: Composite, path: &str) {
             }
         };
         let tabs = Tables::one(&st, &inst);
+        config_of(&tabs).check().unwrap_or_else(|e| refuse(e));
         let tree_from = tree_from.get_or_insert_with(|| tree_from_arg(&tabs, true)).clone();
         let sv = Serving { given: Some(draw), law: None, tabs, tree_from };
         let mut tag = json!({"label": j["label"]});
         if let Some(out) = j["out"].as_str() {
             tag["out"] = json!(out);
         }
-        Some((server_of(&sv, &st, &inst, 1), tag))
+        Some((move || server_of(&sv, &st, &inst, 1), tag))
     })
 }
 
@@ -7265,6 +7304,9 @@ fn main() {
         }
         return;
     }
+    if cmd == "unit-walk" {
+        return unit_walk(&c);
+    }
     let pin = arg("--pin", "");
     if cmd == "serve" && pin.is_empty() {
         refuse("serve needs --pin (the pinned circuit's SHA-512)".into());
@@ -7326,7 +7368,8 @@ fn main() {
         "serve" => {
             let log = run_log(&st);
             let sv = serving(&st, &inst, tables);
-            serve_loop(log.as_ref(), move || Some((server_of(&sv, &st, &inst, tables), Value::Null)))
+            let (sv, st, inst) = (&sv, &st, &inst);
+            serve_loop(log.as_ref(), || Some((move || server_of(sv, st, inst, tables), Value::Null)))
         }
         "prove" => {
             if firewall_on(&st) {
@@ -7350,6 +7393,6 @@ fn main() {
                 println!("LIVE\t{v}");
             });
         }
-        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ..."),
+        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ... | unit-walk --circuit FILE [--slots N] [--wide 1,2,4,8]"),
     }
 }

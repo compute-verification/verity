@@ -286,6 +286,46 @@ def test_the_lean_run_refuses_a_draw_whose_coins_the_challenger_did_not_release_
     assert "read none" in refused.value.verdict.detail["coins"]
 
 
+def test_the_lean_run_accepts_a_draw_whose_session_released_its_coins_in_several_frames(tmp_path, signer, monkeypatch):
+    """A window's withheld session that opened `test_remote.RELEASED` coins of the draw's family before the draw, so
+    many that its release at the close is past `remote.MAX_HEAD` as one frame (which cut the close, so its coins never
+    settled) and takes several (`remote.release_frames`): the draw's coins settle from them, and the Lean run accepts
+    the draw on that evidence. The evidence with the draw's coins as their raw bytes alone, as a cut close left them,
+    is refused: an opening without its salt is malformed."""
+    import test_remote
+    from test_challenger import lms_verify
+    from test_service import SESSION, _lean, _ports, _record, _stream
+
+    monkeypatch.setattr(test_remote, "FAMILIES", [("positions", test_remote.RELEASED + 64), ("replay", 2)])
+    host = Host(tmp_path, signer, withhold=True)
+    client = R.RemoteChallenger.connect(host.address)
+    record = C.LiveRecord(client, "positions", itertools.count().__next__)
+    for k in range(0, test_remote.RELEASED, R.MAX_BATCH):
+        C.record_many([(record, bytes([0xcd]) * 64)] * min(R.MAX_BATCH, test_remote.RELEASED - k))
+    coins = T.ChallengerCoins(record)
+    stream = _stream(coins=coins)
+    window = test_remote.WINDOW["root"]
+    reg = stream.register(_record(), _ports(6), window_root=window)
+    segment = coins.commit(bytes.fromhex(reg.digest))
+    draw = stream.select(reg)
+    raw = segment.to_json()
+    client.close()
+    assert host.ended() is None
+    coins.settle()
+    assert len(client.opened) > test_remote.RELEASED and segment.start == test_remote.RELEASED
+    assert len(R.release_frames(client.commitment, list(client.opened.values()))) > 1
+    read = stream._entries[reg.order].read
+    evidence = {"key": test_remote.pinned_key().to_json(), "ledger": R.ledger_lines(host.ledger.path),
+                "main": test_remote.MAIN, "pins": test_remote.HOST_PINS, "segment": segment.to_json(),
+                "session": R.session_files(host.directory)}
+    after = bytes.fromhex(reg.digest)
+    assert T.coins_reason(evidence, window, after, read, lms_verify) is None
+    assert "coin opening is malformed" in T.coins_reason({**evidence, "segment": raw}, window, after, read, lms_verify)
+    assert stream.deliver(draw, [SESSION]) is None
+    out = stream.outcome(draw, _lean(), {"statement": "stub"}, coins=evidence)
+    assert out.accepted and "run" not in stream.records[-1]["audit"]["checks"], stream.records[-1]["audit"]["checks"]
+
+
 def _salt_coins(challenger: C.LiveChallenger | None = None) -> tuple[C.LiveChallenger, T.ChallengerCoins]:
     ch = challenger or C.LiveChallenger(SCHEME, 0, [(T.SEED_SALT_FAMILY, 2), *FAMILIES], entropy("salt"))
     return ch, T.ChallengerCoins(C.LiveRecord(ch, T.SEED_SALT_FAMILY, itertools.count().__next__))

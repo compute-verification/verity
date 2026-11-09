@@ -53,6 +53,16 @@ verity_vllm.pipeline.boundary_rows      # a served window's boundary commitment 
 verity_vllm.pipeline.tick_plugin      # --admit tick under vLLM's own server: vLLM imports its general plugin (register) and its middleware (TickFeed) by name
 verity_vllm.pipeline.edge      # a replay block's edge values and `follows`: a library entry point, read by benchmarks/prove_path
 verity_vllm.pipeline.interior_rows      # a two-stage audit's interior registration from replay: a library entry point (`Replay`, `span`, `interior`), for the two-stage driver
+# the engine's seams and stock pieces: library entry points (tests/test_vllm_public_api.py's PUBLIC), which general plugins and
+# code outside the package call
+verity_vllm.engine.core_gate      # the engine core's seam between steps: general plugins add their gates and edges to its SEAM
+verity_vllm.engine.step_end      # the scheduler's seam at each step's end: general plugins add their observers to its SEAM
+verity_vllm.engine.plugins      # the distribution's general plugins (PLUGINS) and the environment that loads the ones a run names (env)
+verity_vllm.engine.pin_op      # one name a vLLM module or op namespace is called through, pinned by general plugins
+verity_vllm.engine.stock      # a stock engine at the pin with no protocol on, which benchmarks/replay_determinism builds
+verity_vllm.engine.forward_pass      # the model runner's seam around each forward pass: general plugins add their observers to its SEAM
+verity_vllm.engine.stock_kernels      # vLLM's own kernels at the pin, the baselines kernels and compute accounting time against
+verity_vllm.engine.collectives.all_reduce      # the CUDA communicator's seam for its all-reduce: a general plugin adds its replacement to its SEAM
 # the protocol options, each module a root: the adapters are imported by name when a run enables their protocol
 # (protocol_options.adapter)
 verity_vllm.protocols

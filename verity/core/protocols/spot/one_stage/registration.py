@@ -23,8 +23,10 @@
   - R4: the leaf layer is the digest of the verifier's copy, so a null one is refused when the verifier holds one;
   - R5: the anchors are the verifier's;
   - R6: `previous` is the digest of this prover's last record (null for the first), no earlier record has the same
-    window, for a bound verifier the window names its stream and prover (Binding), and the window names the seed salt
-    the verifier read from its challenger, or none when it read none (Seed salt).
+    window, for a bound verifier the window names its stream and prover (Binding), the window names the seed salt
+    the verifier read from its challenger, or none when it read none (Seed salt), and it names the reset serving
+    chose for its pool, its week and whether the week's reset is spent, as the verifier holds them, at most one reset
+    a week, or none of them for a verifier with no pool (Pool chain).
 * **Receipt**: `{"format": "verity/registration-receipt/v1", "registration": <digest>, "verifier", "received": "<UTC,
   %Y-%m-%dT%H:%M:%SZ>"}`, and the sample names it.
 * **The public file** (`matches_public`): the verifier holds its own (scheme, roots, their domains, its instance count)
@@ -86,14 +88,27 @@
   record, the log's last, which R6 holds `previous` to (`last_digest`): the verifier names the record itself, so a
   window's history, the earlier windows' outputs it reads, is held to the previous window's root and domain for P, and
   with no previous record it is `R7-output`.
-* **Pool chain** (`pool`: `{"pin", "pout", "genesis", "accepted"}`): a program whose window opens a pool from a
-  registered value `pin` and leaves it in a registered value `pout` (PoolWindow's rows, each the pool's root). The
-  window carries the previous window's pool (`pool_chains`) when the verifier accepted the window of the log's last
-  record, the previous window of record (`accepted`), and that record registered its program: `pin` is then a reused
-  value, the previous record's `pout` in `pout`'s row format (`pool_values`), so its entry takes that entry's domain and
-  root. Otherwise, at a registration's first window, after a failed or refused window, or at a registration boundary,
-  the chain restarts from the empty pool: `pin` is a supplied value filled from `genesis`, the empty pool's root, so
-  its root is fixed.
+* **Pool chain** (`pool`: `{"pin", "pout", "genesis", "lag", "reset", "verdicts", "week"}`): a program whose window
+  opens a pool from a registered value `pin` and leaves it in a registered value `pout` (PoolWindow's rows, each the
+  pool's root). A window carries the previous window's pool (`pool_chains`) unless a public rule or serving restarts
+  it: `pin` is then a reused value, the previous record's `pout` in `pout`'s row format (`pool_values`), so its entry
+  takes that entry's domain and root, whatever the verifier made of that window. The chain restarts from the empty
+  pool, `pin` a supplied value filled from `genesis`, the empty pool's root, so its root is fixed:
+  - by the public rule, which takes no advice: at a registration's first window, at a registration boundary (the log's
+    last record registered another program), and after the verifier refused the window `lag` windows of record before
+    this one (`pool_refused`), `lag` the fixed public lag at which serving learns a verdict. Whether it did is read
+    from the verifier's own verdict log (`verdicts`: each earlier record's digest and whether its run accepted), so
+    where every run accepted it never restarts the chain;
+  - by serving's own reset (`reset`), which an engine crash needs, at most one a week: the record's window names it
+    (`POOL_RESET`, a bool; `R6-pool-reset` where it names another or none). Each window also names its week
+    (`POOL_WEEK`, its index among the monitoring period's weeks on the verifier's clock, `week`; `R6-pool-week`) and
+    whether the week's reset is spent at it (`POOL_SPENT`; `R6-pool-spent`): that it resets, or that the previous
+    record, of the same week, named it spent (`pool_spent_before`), so a week's windows from its reset on all name it
+    spent, and the next week starts unspent. R6 refuses a reset where the week's is spent before it
+    (`R6-pool-reset-week`). Serving chooses the resets, so they are advice: the records name, of a week's n windows,
+    the one serving reset at or none, log2(n + 1) bits a week (log2 1009, 9.98 bits, for 600-second windows), which
+    leakage charges. The rest of the chain, the spent marks and the weeks included, is a function of the resets, the
+    verdicts and the verifier's clock, and public.
   R7 refuses a record whose entry for `pin` is not the pool its window opens (`pool_open`) by name (`R7-pool-chain`),
   beside the R7 codes the reuse or the fill gives it. The pool's root is all the chain carries. What a window takes up
   that the one before left open at its edge is part of its certified input, which the verifier pins at the root the
@@ -121,6 +136,12 @@ RECEIPT = "verity/registration-receipt/v1"
 KINDS = ("served", "stand-in")
 #: the window's field naming its seed salt (Seed salt)
 SEED_SALT = "seed_salt"
+#: the window's field naming the reset serving chose for its pool (Pool chain)
+POOL_RESET = "pool_reset"
+#: the window's field naming its week on the verifier's clock (Pool chain)
+POOL_WEEK = "pool_week"
+#: the window's field naming whether its week's one reset is spent at it (Pool chain)
+POOL_SPENT = "pool_spent"
 _KEYS = {"format", "protocol", "program", "query", "partition", "population", "law", "scheme", "roots", "leaf_layer",
          "anchors", "window", "previous"}
 _ROOT_KEYS = {"port", "root", "leaves", "domain"}
@@ -219,9 +240,10 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     window's day and the registration log's declarations (Declared day), both or neither; R2 holds the record's program
     to the day's one declaration (`_declared`).  `seed_salt`: the window's seed salt the verifier read from its
     challenger (Seed salt), which R6 holds the window to name; ValueError in another form or without `window_root`.
-    `pool`: the values a window opens and leaves its pool in, the empty pool's root and whether the verifier accepted
-    the window of the log's last record (Pool chain, `_pool`), whose `pin` it adds to `outputs` or `supplied`
-    (`pool_values`) and R7 holds to the chain (`R7-pool-chain`).  R3
+    `pool`: the values a window opens and leaves its pool in, the empty pool's root, whether the verifier refused the
+    window the public lag back, the window's own reset, which R6 holds it to name, and whether its week's one reset is
+    spent (Pool chain, `_pool`), whose `pin` it adds to `outputs` or `supplied` (`pool_values`) and R7 holds to the
+    chain (`R7-pool-chain`).  R3
     reads `ports` by name, so its codes come in the ports' sorted order whatever order the mapping has, as the Lean port
     reads them."""
     c = _Collect()
@@ -316,6 +338,18 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
                 c.fail(f"R6-{k}", {"registered": w.get(k), "verifier": bound[k]})
     if w.get(SEED_SALT) != salt:
         c.fail("R6-seed-salt", {"registered": w.get(SEED_SALT), "verifier": salt})
+    reset = pool["reset"] if pool is not None else None
+    if w.get(POOL_RESET) is not reset:
+        c.fail("R6-pool-reset", {"registered": w.get(POOL_RESET), "verifier": reset})
+    week = pool["week"] if pool is not None else None
+    if not _names(w.get(POOL_WEEK), week):
+        c.fail("R6-pool-week", {"registered": w.get(POOL_WEEK), "verifier": week})
+    before = pool is not None and pool_spent_before(pool, earlier)
+    spent = (pool["reset"] or before) if pool is not None else None
+    if w.get(POOL_SPENT) is not spent:
+        c.fail("R6-pool-spent", {"registered": w.get(POOL_SPENT), "verifier": spent})
+    if pool is not None and pool["reset"] and before:
+        c.fail("R6-pool-reset-week", {"registered": True, "verifier": "the week's reset is spent before this window"})
     # R7
     if v2:
         _check_registered(c, rec["registered"], program, registered, pins, rec, sup, earlier, bound, outs, formats, window,
@@ -518,14 +552,22 @@ def _seed_salt(seed_salt: str | None, window: str | None) -> str | None:
 
 
 #: a pool's fields (Pool chain)
-POOL_KEYS = ("accepted", "genesis", "pin", "pout")
+POOL_KEYS = ("genesis", "lag", "pin", "pout", "reset", "verdicts", "week")
+
+
+def _names(x: Any, want: int | None) -> bool:
+    """Whether a window field names `want`, an integer that is not a bool, or none (`jeq`)."""
+    return x is None if want is None else type(x) is int and x == want
 
 
 def _pool(pool: Mapping[str, Any] | None, registered: Mapping[str, int], supplied: Any, pinned: Any,
           outputs: Any, schemas: Any) -> dict[str, Any] | None:
     """The verifier's pool (Pool chain): None, or exactly `pin` and `pout`, two registered values it neither fills,
     pinned nor gives as outputs, `pin` with no row format of its own (it takes `pout`'s, `pool_values`), `genesis`,
-    lowercase hex of 64 bytes, and `accepted`, a bool; ValueError otherwise, which the Lean verifier refuses too
+    lowercase hex of 64 bytes, `lag`, the public lag at which serving learns a verdict, a positive integer, `verdicts`,
+    the verifier's verdict log, an object of record digests (lowercase hex of 64 bytes) to whether its run on that
+    record accepted, `reset`, the reset the record's window names, a bool R6 holds it to, and `week`, the window's week
+    on the verifier's clock, a natural R6 holds it to. ValueError otherwise, which the Lean verifier refuses too
     (`OneStage.paramsOfJson`)."""
     if pool is None:
         return None
@@ -542,17 +584,50 @@ def _pool(pool: Mapping[str, Any] | None, registered: Mapping[str, int], supplie
     g = pool["genesis"]
     if not (isinstance(g, str) and len(g) == 128 and _HEX.fullmatch(g)):
         raise ValueError(f"the pool's genesis is lowercase hex of 64 bytes: {g!r}")
-    if type(pool["accepted"]) is not bool:
-        raise ValueError(f"the pool's accepted is a bool: {pool['accepted']!r}")
+    if type(pool["reset"]) is not bool:
+        raise ValueError(f"the pool's reset is a bool: {pool['reset']!r}")
+    if not (type(pool["lag"]) is int and pool["lag"] >= 1):
+        raise ValueError(f"the pool's lag is a positive integer: {pool['lag']!r}")
+    if not (type(pool["week"]) is int and pool["week"] >= 0):
+        raise ValueError(f"the pool's week is a natural: {pool['week']!r}")
+    verdicts = pool["verdicts"]
+    if not (isinstance(verdicts, Mapping) and all(isinstance(d, str) and len(d) == 128 and _HEX.fullmatch(d)
+                                                  and type(a) is bool for d, a in verdicts.items())):
+        raise ValueError(f"the pool's verdicts are an object of record digests (lowercase hex of 64 bytes) to bools: "
+                         f"{verdicts!r}")
     return dict(pool)
 
 
-def pool_chains(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]], program: Program) -> bool:
-    """Whether the window carries the previous window's pool (Pool chain): the verifier accepted the window of the log's
-    last record, the previous window of record (`accepted`), and that record registered its program. Otherwise the chain
-    restarts from the empty pool, as a registration's first window opens it (`Registration.Pool.chains`)."""
+def pool_refused(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]]) -> bool:
+    """Whether the verifier refused the window `lag` windows of record before this one (Pool chain): its verdict log
+    (`verdicts`) names its run on that record of the log refused. A log shorter than the lag, or a record it holds no
+    verdict for, is not refused, so where every run accepted the chain never restarts (`Registration.Pool.refused`)."""
+    lag = pool["lag"]
+    if len(log) < lag:
+        return False
+    try:
+        d = digest(log[len(log) - lag])
+    except (TypeError, ValueError):
+        return False
+    return pool["verdicts"].get(d) is False
+
+
+def pool_spent_before(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]]) -> bool:
+    """Whether the week's one reset is spent before this window (Pool chain): the log's last record, the previous window
+    of record, names it spent (`POOL_SPENT`) in the verifier's week (`POOL_WEEK`), so a week starts unspent
+    (`Registration.Pool.spentBefore`)."""
     last = log[-1] if log else None
-    return pool["accepted"] and isinstance(last, Mapping) and last.get("program") == P.program_digest(program)
+    w = last.get("window") if isinstance(last, Mapping) else None
+    return isinstance(w, Mapping) and w.get(POOL_SPENT) is True and _names(w.get(POOL_WEEK), pool["week"])
+
+
+def pool_chains(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]], program: Program) -> bool:
+    """Whether the window carries the previous window's pool (Pool chain): neither the verifier refused the window the
+    public lag back (`pool_refused`) nor serving reset it (`reset`), and the log's last record, the previous window of
+    record, registered its program (`Registration.Pool.chains`). Otherwise it opens the empty pool."""
+    last = log[-1] if log else None
+    return (not pool["reset"] and not pool_refused(pool, log) and isinstance(last, Mapping)
+            and last.get("program") == P.program_digest(program))
 
 
 def pool_values(pool: Mapping[str, Any] | None, program: Program, supplied: Any, outputs: Any, schemas: Any,
@@ -581,8 +656,8 @@ def pool_open(pool: Mapping[str, Any], rec: Mapping[str, Any], program: Program,
               supplied: Mapping[str, Any], log: Sequence[Mapping[str, Any]],
               binding: Mapping[str, str] | None) -> tuple[str, str] | str:
     """The domain and root of the pool the record's window opens (Pool chain): the previous record's entry for `pout` (its
-    last naming it) when the window carries the previous window's pool (`pool_chains`), else the empty pool's: the domain
-    the verifier gives `pin` (`registered_entries`) and the root R7 recomputes for it filled from `genesis`
+    last naming it) when the window carries the previous window's pool (`pool_chains`), else the empty pool's: the
+    domain the verifier gives `pin` (`registered_entries`) and the root R7 recomputes for it filled from `genesis`
     (`registered.supplied_root`); where there is none, why (`Registration.poolOpen`, none there)."""
     if pool_chains(pool, log, program):
         es = log[-1].get("registered")
@@ -693,5 +768,6 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
 registered_entries = G.registered_entries
 
 __all__ = ["FORMAT", "FORMAT_V2", "KINDS", "POOL_KEYS", "PROTOCOL", "RECEIPT", "WINDOW_DOMAIN", "check", "digest",
-           "held_roots", "matches_public", "pool_chains", "pool_open", "pool_values", "query_digest", "receipt", "record",
-           "record_digest", "refuse_unwindowed", "registered_entries", "unwindowed", "window_domain"]
+           "held_roots", "matches_public", "pool_chains", "pool_open", "pool_refused", "pool_spent_before",
+           "pool_values", "query_digest", "receipt", "record", "record_digest", "refuse_unwindowed",
+           "registered_entries", "unwindowed", "window_domain"]

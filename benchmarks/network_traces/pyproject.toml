@@ -42,7 +42,7 @@ untraced = [
 # window_chain joins for network-e2e's chain. scan_zk's draws take the challenger's coins through one_stage's a5_coins,
 # whose local session is live_challenger's auditor host and serve.py (under its tests' stub); its honest round on them
 # lowers and stages through one_stage's a0, a7, a8 and prove_leg (`warden_zk._one_stage`) and Flock's class statement, and
-# its stream's verifier is the Lean `sampled-proofs-verifier`, whose lakefile is the package it builds.
+# its stream's verifier is the Lean package `core_spot`'s verifier executable, whose lakefile is the package it builds.
 # chain_record writes the block record's certifier entry by block_certifier's block_leg, which test_block_certifier
 # holds to the block record's schema, `block_record` and its period-0 fixture, and test_chain_record to the schema on
 # certifier/v0 cases from period_case (the period check's Python mirror, with verity_difftest's decoders, and its pinned

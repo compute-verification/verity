@@ -171,11 +171,13 @@ def window(gpu, api, osrt, tid, a, b):
     fam = defaultdict(float)
     cnt = defaultdict(int)
     by = defaultdict(int)
+    names = defaultdict(float)
     for x in g:
         d = overlap([(x[0], x[1])], a, b)
         f = family(x[2]) if x[4] == "kernel" else x[2]
         fam[f] += d
         cnt[f] += 1
+        names[re.sub(r"^void |[<(].*", "", x[2]) if x[4] == "kernel" else x[2]] += d
         if x[4] != "kernel":
             by[x[2]] += x[5]
     idle = sum(y - x for x, y in gaps)
@@ -185,7 +187,30 @@ def window(gpu, api, osrt, tid, a, b):
             "idle_host_ms": at["host"] / 1e6, "syncs": len(syncs),
             "launches": sum(1 for x in th if "Launch" in x[2]), "os_calls": dict(os_names),
             "family_ms": {k: v / 1e6 for k, v in sorted(fam.items(), key=lambda kv: -kv[1])}, "family_n": dict(cnt),
+            "name_ms": {k: v / 1e6 for k, v in names.items()},
             "copy_bytes": dict(by), "segments": segs}
+
+
+def marks(gpu, api, anchor: str) -> list[tuple[int, int, int]]:
+    """Each launch of ``anchor``'s phase mark: (the mark's ns, the launching thread, the launch's ns). The mark is where the
+    thread returns from a synchronize right after the previous phase's last transcript read, with no GPU work queued between
+    them."""
+    corr = {x[3]: x for x in api}
+    enq = ("Launch", "Memcpy", "Memset")
+    out = []
+    for L in (corr[x[3]] for x in gpu if x[4] == "kernel" and anchor in x[2] and x[3] in corr):
+        tid = L[4]
+        th = [x for x in api if x[4] == tid and L[0] - 500_000_000 < x[1] <= L[0]]
+        syncs = [x for x in th if x[2].startswith("cudaStreamSynchronize")]
+        if not syncs:
+            continue
+        s = syncs[-1][1]
+        for p, q in zip(reversed(syncs[:-1]), reversed(syncs[1:])):
+            if not any(p[1] <= x[0] < q[0] and any(k in x[2] for k in enq) for x in th):
+                s = q[1]
+                break
+        out.append((s, tid, L[0]))
+    return out
 
 
 def main() -> int:
@@ -200,31 +225,18 @@ def main() -> int:
     a = ap.parse_args()
     gpu, api, osrt = load(a.sqlite)
     secs = phase_seconds(a.prove_out, a.phase)
-    corr = {x[3]: x for x in api}
-    anchors = [corr[x[3]] for x in gpu if x[4] == "kernel" and a.anchor in x[2] and x[3] in corr]
-    print(f"{len(anchors)} anchors ({a.anchor}), {len(secs)} {a.phase} records, {len(gpu)} GPU ops, {len(api)} CUDA calls, "
+    ms = marks(gpu, api, a.anchor)
+    print(f"{len(ms)} anchors ({a.anchor}), {len(secs)} {a.phase} records, {len(gpu)} GPU ops, {len(api)} CUDA calls, "
           f"{len(osrt)} OS calls")
-    if len(anchors) != len(secs):
+    if len(ms) != len(secs):
         print("anchors and records differ in number: windows paired in order, the shorter list's length")
-    enq = ("Launch", "Memcpy", "Memset")
     wins = []
-    for i, (L, sec) in enumerate(zip(anchors, secs)):
-        tid = L[4]
-        th = [x for x in api if x[4] == tid and L[0] - 500_000_000 < x[1] <= L[0]]
-        syncs = [x for x in th if x[2].startswith("cudaStreamSynchronize")]
-        if not syncs:
-            continue
-        # the phase mark: a synchronize right after the previous phase's last transcript read, no GPU work queued between them
-        s = syncs[-1][1]
-        for p, q in zip(reversed(syncs[:-1]), reversed(syncs[1:])):
-            if not any(p[1] <= x[0] < q[0] and any(k in x[2] for k in enq) for x in th):
-                s = q[1]
-                break
+    for i, ((s, tid, launch), sec) in enumerate(zip(ms, secs)):
         e = s + int(sec * 1e9)
         after = [x[1] for x in api if x[4] == tid and x[2].startswith("cudaStreamSynchronize") and abs(x[1] - e) < 2_000_000]
         w = window(gpu, api, osrt, tid, s, e)
         w["rep"] = i
-        w["anchor_us"] = round((L[0] - s) / 1e3, 1)
+        w["anchor_us"] = round((launch - s) / 1e3, 1)
         w["end_vs_sync_us"] = round(min((x - e for x in after), key=abs) / 1e3, 1) if after else None
         wins.append(w)
     timed = wins[a.skip:]
