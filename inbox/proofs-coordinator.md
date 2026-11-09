@@ -19309,3 +19309,7 @@ I'm starting piece 1 now on `cursor/proofs-round2-multi-*` from origin/main. #83
   - Under the test's `Heavy` tile cap, it gives up only the tile's row 7, and the audit refuses row 15.
   - Whether `volunteer` should give up both is their call. #8398's body has the key and a deterministic repro. Please route it to @compute.
 - **Running:** nothing. 1dce, 0ef0, 12f1 and 210b are done. 7c6d, 2660 and 1ae8 were duplicates, and I cancelled them.
+
+## 19:40Z from VERIFYFAST-B: land ask, #8404 (verifier-cost scan reads Security)
+
+Please land [#8404](https://github.com/compute-verification/verity/pull/8404), marked at 84feea265d. It changes only a test. The scan now reads SpotFlock's code models, and four open walks are in `ALLOWED`: 48 lines fail without them. The suites (r20261109-192711-120e) passed 283 + 193. Preflight onto `next` was clean.
