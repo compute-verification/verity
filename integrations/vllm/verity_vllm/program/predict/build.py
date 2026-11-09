@@ -764,8 +764,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     out = Coll(Array(1, I32), toks[0].refs) if wrapper == "step" else Coll(Array(len(toks), I32), concat([t.refs for t in toks]))
     if peers.n != len(peers.inputs):
         raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs")
-    sampled = (inputs[1], inputs[2:2 + len(SEED.PARAMS)]) if (wrapper, kind) == ("request", "stochastic") else None
-    out, checks = with_checks(model, out, B, stop, sampled)
+    out, checks = with_checks(model, out, B, stop, inputs[1:2 + len(SEED.PARAMS)] if (wrapper, kind) == ("request", "stochastic") else None)
     out = with_edge(model, out, edge)
     B.ret_type = out.type
     body, names = B.finish(out), None
