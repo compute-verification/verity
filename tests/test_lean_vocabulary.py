@@ -746,10 +746,10 @@ KNOWN: dict[str, str] = {
         "duplicate of `parties.Challenger`: becomes a client of the memory challenger's (memory-accounting)",
     "benchmarks/resource_accounting/joint.py::Device":
         "homonym, the store's bandwidth prover: rename (memory-accounting)",
-    "benchmarks/rho/rho/circuits.py::Circuit":
+    "benchmarks/slowdown/slowdown/circuits.py::Circuit":
         "homonym, a benchmark row naming a Definition at its size: rename (training)",
-    "benchmarks/rho/rho/params.py::Registry": "homonym, a table of benchmark parameters: rename (training)",
-    "benchmarks/rho/rho/theorem.py::Partition":
+    "benchmarks/slowdown/slowdown/params.py::Registry": "homonym, a table of benchmark parameters: rename (training)",
+    "benchmarks/slowdown/slowdown/theorem.py::Partition":
         "homonym, a benchmark's serving blocks and dark leaves: rename (training)",
     "benchmarks/sampling_plan/h200.py::Window": "homonym, one subcircuit's sampling block: rename (proofs)",
     "benchmarks/sampling_plan/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
