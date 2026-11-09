@@ -271,29 +271,29 @@ no kept inner run has a proof block of `X` good. -/
 def BadOuterTwo (L : CompiledTwo Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) (Xs : Finset (Finset ℕ))
     (g : (Fin (L.V.k x) → Coin) → Fin (L.V.k x) → Coin) (e : L.E1 x) : Prop :=
-  (accList (fun d => (run' (g d)).out = .acc) (L.k x) ((List.finRange (L.cap x)).map e.1)).length < L.k x ∨
-    ∃ X ∈ Xs, AllBad (fun d => (run' (g d)).out = .acc) (L.k x)
-      (fun d uc => ∀ v ∈ X, ¬ L.GoodAt x found (g d) v uc) ((List.finRange (L.cap x)).map e.1) e.2
+  (accList (fun d => (run' (g d)).out = .acc) (L.kIn x) ((List.finRange (L.capIn x)).map e.1)).length < L.kIn x ∨
+    ∃ X ∈ Xs, AllBad (fun d => (run' (g d)).out = .acc) (L.kIn x)
+      (fun d uc => ∀ v ∈ X, ¬ L.GoodAt x found (g d) v uc) ((List.finRange (L.capIn x)).map e.1) e.2
 
 /-- **The extraction's failure event**: the statement is in scope, and the outer wait comes up short or, for some
 candidate `Y`, every kept outer run is bad for the sets that escape no more than `Y`. -/
 def FailsTwo (L : CompiledTwo Coin A) (δ : ℝ) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) (c : L.ECoins x) : Prop :=
   ∃ s Pt d, L.parse x = some s ∧ L.partition s = some Pt ∧ L.two s = some d ∧ InScopeTwo Pt d s ∧
-    ((accList (fun r => (run' r).out = .acc) (L.k x) ((List.finRange (L.cap x)).map c.1)).length < L.k x ∨
-      ∃ Y ∈ S₁Two Pt d δ, AllBad (fun r => (run' r).out = .acc) (L.k x)
+    ((accList (fun r => (run' r).out = .acc) (L.kOut x) ((List.finRange (L.capOut x)).map c.1)).length < L.kOut x ∨
+      ∃ Y ∈ S₁Two Pt d δ, AllBad (fun r => (run' r).out = .acc) (L.kOut x)
         (fun r e => L.BadOuterTwo x run' found (above Pt d Y) (forkOn (L.stage2 x) r) e)
-        ((List.finRange (L.cap x)).map c.1) (L.toE1 x c))
+        ((List.finRange (L.capOut x)).map c.1) (L.toE1 x c))
 
 /-! ## The failure event's probability -/
 
 omit [Inhabited Coin] in
-/-- **One outer run's inner wait**, at sets `Xs` of proof blocks below `n_PU`, at most `2^{n_PU}` of them, each missed by
-the second stage at `r` with probability at most `esc`: `Compiled.inner_bad_le`'s union bound at the picked slot for each
-`X`, and the wait's over `Xs`. -/
+/-- **One outer run's inner wait**, at sets `Xs` of proof blocks below `n_PU`, at most `2^{n_PU}` of them
+(`n_PU ≤ n_in`), each missed by the second stage at `r` with probability at most `esc`: `Compiled.inner_bad_le`'s union
+bound at the picked slot for each `X`, and the wait's over `Xs`. -/
 theorem inner_badTwo_le (L : CompiledTwo Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) {Xs : Finset (Finset ℕ)}
-    (hXs : ∀ X ∈ Xs, ∀ v ∈ X, v < L.nPU x) (hcard : Xs.card ≤ 2 ^ L.nPU x)
+    (hXs : ∀ X ∈ Xs, ∀ v ∈ X, v < L.nPU x) (hcard : Xs.card ≤ 2 ^ L.nPU x) (hun : L.nPU x ≤ L.nIn x)
     (hslots : ∀ r', (L.checked x r').length ≤ L.nPU x) (r : Fin (L.V.k x) → Coin)
     {esc κr : ℝ} (hesc0 : 0 ≤ esc) (hκr0 : 0 ≤ κr)
     (hesc : ∀ X ∈ Xs, Pr (fun d : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.stage2 x) r d), u ∉ X) ≤ esc)
@@ -305,7 +305,7 @@ theorem inner_badTwo_le (L : CompiledTwo Coin A) (x : Msg) (run' : (Fin (L.V.k x
               ¬ found u (forkOn (L.stage2 x) r p.1) (p.2 i u)) ≤ κr) :
     Pr (fun d : Fin (L.V.k x) → Coin => (run' (forkOn (L.stage2 x) r d)).out = .acc) *
         Pr (fun e : L.E1 x => L.BadOuterTwo x run' found Xs (forkOn (L.stage2 x) r) e) ≤
-      2 * (L.k x : ℝ) / L.cap x + Real.exp (-(L.k x : ℝ) / 8) + slack * (esc + κr) := by
+      2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (esc + κr) := by
   have hy : ∀ X ∈ Xs,
       Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
         (run' (forkOn (L.stage2 x) r p.1)).out = .acc ∧
@@ -334,10 +334,10 @@ theorem inner_badTwo_le (L : CompiledTwo Coin A) (x : Msg) (run' : (Fin (L.V.k x
       exact Or.inr ⟨hp.1, i, hi, ⟨v', hXs X hX v' hv'X⟩, hv',
         fun hf => hp.2 v' hv'X ⟨i, hXs X hX v' hv'X, hv', hf⟩⟩
     · exact Or.inl fun v hvl hvX => hm ⟨v, hvl, hvX⟩
-  have hw := wait_bad_le (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.k x) (L.cap x) (L.cap_pos x)
-    (L.k_pos x) Xs (fun X d uc => ∀ v ∈ X, ¬ L.GoodAt x found (forkOn (L.stage2 x) r d) v uc)
+  have hw := wait_bad_le (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.kIn x) (L.capIn x)
+    (L.capIn_pos x) (L.kIn_pos x) Xs (fun X d uc => ∀ v ∈ X, ¬ L.GoodAt x found (forkOn (L.stage2 x) r d) v uc)
     (add_nonneg hesc0 hκr0) hy
-  have hc : ((Xs.card : ℕ) : ℝ) ^ (1 / (L.k x : ℝ)) ≤ slack := L.rpow_k_le_slack x hcard (by omega)
+  have hc : ((Xs.card : ℕ) : ℝ) ^ (1 / (L.kIn x : ℝ)) ≤ slack := L.rpow_kIn_le_slack x hcard (by omega)
   exact hw.trans (add_le_add le_rfl (mul_le_mul_of_nonneg_right hc (add_nonneg hesc0 hκr0)))
 
 set_option synthInstance.maxSize 1024 in
@@ -345,11 +345,13 @@ omit [Inhabited Coin] in
 /-- **One tape's outer wait**: on a statement in scope at `(s, Pt, d)`, where the first stage misses each set of replay
 blocks with probability at most its `P_a` and the second stage misses `X` with at most the product of its cells'
 escapes, the outer wait (times its acceptance) comes up short or, for some candidate `Y`, keeps only runs bad for the
-sets that escape no more than `Y`, with probability at most `T + c·(T + c·(δ + E[κr]))`, `T = 2k/K + e^{−k/8}`. -/
+sets that escape no more than `Y`, with probability at most `T_out + c·(T_in + c·(δ + E[κr]))`, `T = 2k/K + e^{−k/8}`
+at each wait's count. -/
 theorem outer_badTwo_le (L : CompiledTwo Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg)
     (run' : (Fin (L.V.k x) → Coin) → Trace)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop)
     (Pt : Partition) (d : Claims.Sampling.Design.Two) (hPU : L.nPU x = Pt.blocks.length)
+    (hun : L.nPU x ≤ L.nOut x ∧ L.nPU x ≤ L.nIn x)
     (κr : (Fin (L.V.k x) → Coin) → ℝ) (hκr0 : ∀ r, 0 ≤ κr r)
     (hreplay : ∀ T ⊆ range d.part.blocks.length,
       Pr (fun r : Fin (L.V.k x) → Coin => ∀ ρ ∈ L.replaySample x r, ρ ∉ T) ≤ d.replay.Pa d.part T)
@@ -367,19 +369,20 @@ theorem outer_badTwo_le (L : CompiledTwo Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x 
               ¬ found u (forkOn (L.stage2 x) r p.1) (p.2 i u)) ≤
         κr r) :
     Pr (fun r : Fin (L.V.k x) → Coin => (run' r).out = .acc) *
-        Pr (fun c : (Fin (L.cap x) → Fin (L.V.k x) → Coin) × (Fin (L.k x) → L.E1 x) =>
-          (accList (fun r => (run' r).out = .acc) (L.k x) ((List.finRange (L.cap x)).map c.1)).length < L.k x ∨
-            ∃ Y ∈ S₁Two Pt d δ, AllBad (fun r => (run' r).out = .acc) (L.k x)
+        Pr (fun c : (Fin (L.capOut x) → Fin (L.V.k x) → Coin) × (Fin (L.kOut x) → L.E1 x) =>
+          (accList (fun r => (run' r).out = .acc) (L.kOut x) ((List.finRange (L.capOut x)).map c.1)).length <
+              L.kOut x ∨
+            ∃ Y ∈ S₁Two Pt d δ, AllBad (fun r => (run' r).out = .acc) (L.kOut x)
               (fun r e => L.BadOuterTwo x run' found (above Pt d Y) (forkOn (L.stage2 x) r) e)
-              ((List.finRange (L.cap x)).map c.1) c.2) ≤
-      2 * (L.k x : ℝ) / L.cap x + Real.exp (-(L.k x : ℝ) / 8) +
-        slack * (2 * (L.k x : ℝ) / L.cap x + Real.exp (-(L.k x : ℝ) / 8) + slack * (δ + Ex κr)) := by
+              ((List.finRange (L.capOut x)).map c.1) c.2) ≤
+      2 * (L.kOut x : ℝ) / L.capOut x + Real.exp (-(L.kOut x : ℝ) / 8) +
+        slack * (2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (δ + Ex κr)) := by
   have hc := slack_pos
   have hEκ : 0 ≤ Ex κr := Ex_nonneg hκr0
   have hy : ∀ Y ∈ S₁Two Pt d δ,
       Pr (fun p : (Fin (L.V.k x) → Coin) × L.E1 x =>
         (run' p.1).out = .acc ∧ L.BadOuterTwo x run' found (above Pt d Y) (forkOn (L.stage2 x) p.1) p.2) ≤
-      2 * (L.k x : ℝ) / L.cap x + Real.exp (-(L.k x : ℝ) / 8) + slack * (δ + Ex κr) := by
+      2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (δ + Ex κr) := by
     intro Y hY
     obtain ⟨_, hYδ⟩ := mem_filter.1 hY
     let esc : (Fin (L.V.k x) → Coin) → ℝ := fun r =>
@@ -403,19 +406,20 @@ theorem outer_badTwo_le (L : CompiledTwo Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x 
       fun r e' e => by rw [forkOn_forkOn']).trans_le ?_
     calc Ex (fun r => Pr (fun e' => (run' (forkOn (L.stage2 x) r e')).out = .acc) *
           Pr (fun e : L.E1 x => L.BadOuterTwo x run' found (above Pt d Y) (forkOn (L.stage2 x) r) e))
-        ≤ Ex (fun r => 2 * (L.k x : ℝ) / L.cap x + Real.exp (-(L.k x : ℝ) / 8) + slack * (esc r + κr r)) :=
-          Ex_mono fun r => L.inner_badTwo_le x run' found hXs hcardXs hslots r (hesc0 r) (hκr0 r) (hesc r)
+        ≤ Ex (fun r => 2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (esc r + κr r)) :=
+          Ex_mono fun r => L.inner_badTwo_le x run' found hXs hcardXs hun.2 hslots r (hesc0 r) (hκr0 r) (hesc r)
             (hsess r)
-      _ = 2 * (L.k x : ℝ) / L.cap x + Real.exp (-(L.k x : ℝ) / 8) + slack * (Ex esc + Ex κr) := by
+      _ = 2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (Ex esc + Ex κr) := by
           rw [Ex_add, Ex_const, Ex_mul_left, Ex_add]
-      _ ≤ 2 * (L.k x : ℝ) / L.cap x + Real.exp (-(L.k x : ℝ) / 8) + slack * (δ + Ex κr) := by
+      _ ≤ 2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (δ + Ex κr) := by
           gcongr
-  have hy0 : 0 ≤ 2 * (L.k x : ℝ) / L.cap x + Real.exp (-(L.k x : ℝ) / 8) + slack * (δ + Ex κr) := by
+  have hy0 : 0 ≤ 2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (δ + Ex κr) := by
     positivity
-  have hw := wait_bad_le (fun r => (run' r).out = .acc) (L.k x) (L.cap x) (L.cap_pos x) (L.k_pos x)
+  have hw := wait_bad_le (fun r => (run' r).out = .acc) (L.kOut x) (L.capOut x) (L.capOut_pos x) (L.kOut_pos x)
     (S₁Two Pt d δ) (fun Y r e => L.BadOuterTwo x run' found (above Pt d Y) (forkOn (L.stage2 x) r) e) hy0 hy
-  have hcard : ((S₁Two Pt d δ).card : ℝ) ^ (1 / (L.k x : ℝ)) ≤ slack :=
-    L.rpow_k_le_slack x (m := L.nPU x) ((card_filter_le _ _).trans (by rw [card_powerset, card_range, hPU]))
+  have hun1 := hun.1
+  have hcard : ((S₁Two Pt d δ).card : ℝ) ^ (1 / (L.kOut x : ℝ)) ≤ slack :=
+    L.rpow_kOut_le_slack x (m := L.nPU x) ((card_filter_le _ _).trans (by rw [card_powerset, card_range, hPU]))
       (by omega)
   exact hw.trans (add_le_add le_rfl (mul_le_mul_of_nonneg_right hcard hy0))
 
@@ -456,12 +460,12 @@ theorem pr_failsTwo_le_of (H : Msg → Msg) (L : CompiledTwo Coin A) {δ : ℝ} 
       L.κ δ x + slack ^ 2 * Ex (fun r => Real.sqrt (L.V.k x * L.γs x * β ω r)) := by
     intro ω
     have hF : Pr (fun c : L.ECoins x => L.FailsTwo δ x (run H P L.V x ω) (found ω) c) =
-        Pr (fun c : (Fin (L.cap x) → Fin (L.V.k x) → Coin) × (Fin (L.k x) → L.E1 x) =>
-          (accList (fun r => (run H P L.V x ω r).out = .acc) (L.k x)
-            ((List.finRange (L.cap x)).map c.1)).length < L.k x ∨
-            ∃ Y ∈ S₁Two Pt d δ, AllBad (fun r => (run H P L.V x ω r).out = .acc) (L.k x)
+        Pr (fun c : (Fin (L.capOut x) → Fin (L.V.k x) → Coin) × (Fin (L.kOut x) → L.E1 x) =>
+          (accList (fun r => (run H P L.V x ω r).out = .acc) (L.kOut x)
+            ((List.finRange (L.capOut x)).map c.1)).length < L.kOut x ∨
+            ∃ Y ∈ S₁Two Pt d δ, AllBad (fun r => (run H P L.V x ω r).out = .acc) (L.kOut x)
               (fun r e => L.BadOuterTwo x (run H P L.V x ω) (found ω) (above Pt d Y) (forkOn (L.stage2 x) r) e)
-              ((List.finRange (L.cap x)).map c.1) c.2) := by
+              ((List.finRange (L.capOut x)).map c.1) c.2) := by
       refine Eq.trans ?_ (Claims.Sampling.Pr_equiv (L.ecoinsEquiv x) _)
       refine Pr_congr fun c => ⟨fun ⟨s', Pt', d', hs', hPt', hd', _, h⟩ => ?_,
         fun h => ⟨s, Pt, d, hs, hPt, hd, hin, h⟩⟩
@@ -473,7 +477,7 @@ theorem pr_failsTwo_le_of (H : Msg → Msg) (L : CompiledTwo Coin A) {δ : ℝ} 
       subst hd'
       exact h
     rw [hF]
-    refine (L.outer_badTwo_le hδ x (run H P L.V x ω) (found ω) Pt d (Compiled.nPU_eq hs hPt)
+    refine (L.outer_badTwo_le hδ x (run H P L.V x ω) (found ω) Pt d (Compiled.nPU_eq hs hPt) (hS.unions x)
       (fun r => L.κs x + Real.sqrt (L.V.k x * L.γs x * β ω r))
       (fun r => add_nonneg (L.κs_nonneg x) (Real.sqrt_nonneg _))
       (hS.replayDraws x s Pt d hs hPt hd hin) (hS.secondDraws x s Pt d hs hPt hd hin) (hS.slots x)
@@ -583,13 +587,13 @@ theorem splitTwo {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Bi
     exact (d.Pa_congr Pt (f := counts Pt d.part (wrongAll H L.commit s Pt d.part w ιs))
       (g := footprint H L.commit s Pt d.part w ιs)
       fun ρ hρ t ht => congrArg card (inter_cell_wrongAll H L.commit s Pt d.part w ιs hρ ht)).trans_le (hPa ιs)
-  by_cases hshort : (accList (fun r => (run' r).out = .acc) (L.k x) ((List.finRange (L.cap x)).map c.1)).length <
-    L.k x
+  by_cases hshort : (accList (fun r => (run' r).out = .acc) (L.kOut x)
+    ((List.finRange (L.capOut x)).map c.1)).length < L.kOut x
   · exact Or.inl hshort
   refine Or.inr ⟨_, hYS, accList_length_eq hshort, fun j r hj => ?_⟩
   have hjZ := L.mem_outerList H x run' c hj
-  by_cases hshort2 : (accList (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.k x)
-    ((List.finRange (L.cap x)).map (c.2.1 j))).length < L.k x
+  by_cases hshort2 : (accList (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.kIn x)
+    ((List.finRange (L.capIn x)).map (c.2.1 j))).length < L.kIn x
   · exact Or.inl hshort2
   let ιr : ℕ → ℕ → Bool := fun ρ => ιOf fd (L.iroots x (run' r).seen ρ)
   have hXr : wrongAll H L.commit s Pt d.part w ιr ∈ above Pt d (wrongAll H L.commit s Pt d.part w ιs) := by

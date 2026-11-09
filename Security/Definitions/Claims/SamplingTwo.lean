@@ -26,7 +26,9 @@ are the proof blocks, with `k = 1` and no interior registration.
    `P̄_a(w) = E_S ∏_{ρ∈S} e_ρ(w)`, `e_ρ(w) = ∏_t C(n_{ρ,t} − w(ρ, t), k_t)/C(n_{ρ,t}, k_t)` (`Design.Two.esc`, the
    hypergeometric miss, `escCell`), written through the first stage's `P_a`; the confidence set
    `M̄_δ = {w : P̄_a(w) > δ}` (`Design.Two.M`); and the relation `RTwo`: at some interiors, the extracted boundary
-   trace's footprint is in `M̄_δ`.
+   trace's footprint is in `M̄_δ`. The cap reads two rates, a first stage that catches each replay block at rate `r₁`
+   (`Design.Two.FirstRate`) and a second stage that samples each cell at rate `r₂` (`Design.Two.SecondRate`), and the
+   replay blocks a footprint marks incorrect (`Design.Two.wrongBlocks`).
 4. **The compiled verifier** (`CompiledTwo`): a `Compiled` with the statement's two-stage design (`two`) and the
    replay sample (`replaySample`). Its second stage is `Compiled.stage2`, and `iroots x v ρ` is the roots a run shows for
    replay block `ρ`'s interior. Its extractor, errors and numbers are `Compiled`'s.
@@ -135,6 +137,22 @@ noncomputable def Design.Two.Pa (d : Design.Two) (Pt : Partition) (fp : ℕ → 
 /-- **The confidence set** `M̄_δ`: every footprint `fp` with `P̄_a(fp) > δ`. -/
 def Design.Two.M (d : Design.Two) (Pt : Partition) (δ : ℝ) : Set (ℕ → ℕ → ℕ) := {fp | δ < d.Pa Pt fp}
 
+/-- **The first stage catches each replay block at rate `r`**: it misses every set `T` of replay blocks with
+probability at most `(1 − r)^{|T|}`, as independent catches at rate `r` would. -/
+def Design.Two.FirstRate (d : Design.Two) (r : ℝ) : Prop :=
+  ∀ T ⊆ Finset.range d.part.blocks.length, d.replay.Pa d.part T ≤ (1 - r) ^ T.card
+
+/-- **The second stage samples each cell at rate `r`**: in every nonempty cell `(ρ, t)` it samples
+`min(k_t, n_{ρ,t}) ≥ r·n_{ρ,t}` proof blocks. -/
+def Design.Two.SecondRate (d : Design.Two) (Pt : Partition) (r : ℝ) : Prop :=
+  ∀ ρ < d.part.blocks.length, ∀ t < Pt.strata.length, 0 < (cell Pt d.part ρ t).card →
+    r * (cell Pt d.part ρ t).card ≤ ((min (d.k.getD t 0) (cell Pt d.part ρ t).card : ℕ) : ℝ)
+
+/-- **The replay blocks a footprint marks incorrect**: those with an incorrect proof block in the cell of some
+stratum. -/
+def Design.Two.wrongBlocks (d : Design.Two) (Pt : Partition) (fp : ℕ → ℕ → ℕ) : Finset ℕ :=
+  (Finset.range d.part.blocks.length).filter fun ρ => ∃ t < Pt.strata.length, 0 < fp ρ t
+
 /-- **The two-stage relation** at `δ`, on the statement's bytes: it parses, its proof-block partition and two-stage
 design evaluate (`partition`, `two`, the verifier's own), and at some interior values, one interior per replay block,
 the footprint of the boundary trace `w` opens is in `M̄_δ`. The interiors are the relation's to pick: serving commits
@@ -229,6 +247,8 @@ read at a replay block.
   blocks `r` samples: the second stage's sample is, in each sampled replay block, a uniform `k_t`-subset of each cell,
   independently.
 * `slots`, `refuses` (at `CompiledTwo.Scope`), `fixed` and `runs`: `Sessions`'.
+* `unions`: both waits' unions, over sets of the `n_PU` proof blocks, are within their bits (`n_PU ≤ n_out`,
+  `n_PU ≤ n_in`).
 * `interior`: the roots a run shows for a replay block's interior values are the same at fresh second-stage coins.
 * `opens`: on a statement in scope, at an accepted run that samples `u` and shows its session, a witness in `A`'s
   relation at the session's statement reveals openings such that any values and interior values agreeing with those
@@ -245,6 +265,7 @@ structure Sessions (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop where
           ∏ t ∈ Finset.range Pt.strata.length,
             escCell (cell Pt d.part ρ t).card (d.k.getD t 0) (X ∩ cell Pt d.part ρ t).card
   slots : ∀ x r, (L.checked x r).length ≤ L.nPU x
+  unions : ∀ x, L.nPU x ≤ L.nOut x ∧ L.nPU x ≤ L.nIn x
   refuses : ∀ x (Ω : Type) (P : Prover Ω) ω r, (run H P L.V x ω r).out = .acc → L.Scope x
   interior : ∀ x (Ω : Type) (P : Prover Ω) ω r e ρ,
     L.iroots x (run H P L.V x ω (forkOn (L.stage2 x) r e)).seen ρ = L.iroots x (run H P L.V x ω r).seen ρ

@@ -30,7 +30,12 @@ check the stream ran on it, in the stream's order.
 * `deliver`: one or more session records' SHA-512 (`service._DIGEST`);
 * `outcome`: the verdicts' hold (`Service.checkVerdicts`), the public outputs of the first verifier, and the
   audit record (`Record.record`) over the sample's proved units, and under a two-stage rule the interior registration's
-  over the second stage's sample; the symbol accepts when every audit record does.
+  over the second stage's sample, with round 2's statement check of the second-stage sessions' statements against the
+  interior registration, the second stage's cells and the design's links, which the verifier derives from the replay
+  block's Definition in the challenger's program (`SecondStage.replayLinks`), as its `statements` check
+  (`SecondStage.check`, the two-stage form allowed only when `SecondStage.FORM` is); the symbol accepts when every audit
+  record does. Under a two-stage rule each audit record takes the sessions' reads of its registration's own ports at
+  their own roots (`own_reads`), whose rows round 2 holds.
 
 A step's refusal is `{"step", "codes"}`; a decided run is `{"receipt", "draw", "read", "symbol", "public", "audit"}`, the
 audit record as the text of Python's `canonical_json`, and under a two-stage rule `interior`, the interior registration's
@@ -45,6 +50,7 @@ public import Spot.Select
 public import Spot.Slots
 public import Spot.Service
 public import Spot.ChallengerCoins
+public import Spot.SecondStage
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -60,8 +66,10 @@ def RECEIPT : String := "verity/registration-receipt/v1"
 /-- A two-stage run's interior registration and second stage: the challenger's copies for the interior registration
 (its program, the population of the replay sample's proof blocks, under the check's query), one replay block's Program,
 the interior values, the record and its place in the log, the second stage's coins and their evidence, its audit
-record's proved units, instances, served units and session roots, and the circuit file each template's sessions verify
-against, by SHA-512, as the auditor's params name them (`templateCircuits`). -/
+record's proved units, instances, served units and session roots, the second-stage sessions' statements
+(`SecondStage.Stmt`), and the circuit file each template's sessions verify against, by SHA-512, as the auditor's params
+name them (`templateCircuits`). The design's links are the verifier's own, from the replay block's Definition in the
+boundary program (`SecondStage.replayLinks`), and never part of it. -/
 structure Interior where
   params : OneStage.Params
   replay : Program
@@ -74,6 +82,7 @@ structure Interior where
   instances : Option Int
   served : Json
   sessionRoots : Json
+  statements : Option (Array Json) := none
   circuits : Array (String × String) := #[]
 
 /-- `values` are the Spec's values, a two-stage rule's boundary values. -/
@@ -144,13 +153,15 @@ def coinsHold (coins record : Json) (window : Option String) (read : ByteArray) 
   | some w, .ok after => (Challenger.coinsReason coins w after read).isNone
   | _, _ => false
 
-/-- The audit record over `draw` (`Record.record`) with the run's statement, verdicts, δ and sessions. -/
+/-- The audit record over `draw` (`Record.record`) with the run's statement, verdicts, δ and sessions, taking reads of
+the registration's own ports at their own roots under a two-stage rule. -/
 private def audit (i : Input) (record receipt draw law : Json) (proved : Array Int) (instances : Int)
     (served sessionRoots : Json) : V Json :=
   do Record.record (← Record.inputOf (Json.mkObj [("registration", record), ("receipt", receipt),
     ("draw", draw), ("law", law), ("proved_units", Json.arr (proved.map Lean.toJson)),
     ("instances", Lean.toJson instances), ("statement", i.statement), ("verdicts", Json.mkObj i.verdicts.toList),
-    ("delta", i.delta), ("sessions", Json.arr i.sessions), ("served", served), ("session_roots", sessionRoots)]))
+    ("delta", i.delta), ("sessions", Json.arr i.sessions), ("served", served), ("session_roots", sessionRoots),
+    ("own_reads", Json.bool (i.rule matches .twoStage ..))]))
 
 /-- Under a two-stage rule, the check's query is the rule's `grain`. -/
 private def grainHolds (rule : Select.Rule) (query : Json) : Bool :=
@@ -189,13 +200,22 @@ private def secondStage (i : Input) (sample : Array Nat) :
   | _, some _ => throw "a one-stage run has no interior registration"
   | _, none => return .ok none
 
-/-- The interior registration's audit record over the second stage's proved units: whether it accepts, and the run's
-`interior` entry; nothing under a one-stage rule. -/
-private def interiorAudit (i : Input) : Option (Interior × Json × Json × Json × Nat) → V (Bool × List (String × Json))
+/-- The interior registration's audit record over the second stage's proved units, with round 2's statement check
+(`SecondStage.check`) over the first stage's replay sample `sample`: whether it accepts, and the run's `interior` entry;
+nothing under a one-stage rule. -/
+private def interiorAudit (i : Input) (sample : Array Nat) :
+    Option (Interior × Json × Json × Json × Nat) → V (Bool × List (String × Json))
   | none => return (true, [])
   | some (it, receipt, draw, law, read) => do
     let proved := it.provedUnits.getD (Draw.proved draw)
     let rec_ ← audit i it.record receipt draw law proved (it.instances.getD proved.size) it.served it.sessionRoots
+    let strata ← Partition.strata it.params.verifier.program it.params.verifier.query
+    let own : SecondStage.Own :=
+      { sample, parts := SecondStage.parts sample.size strata, interior := it.record, boundary := i.record,
+        drawn := (Draw.proved draw).map Int.toNat,
+        links := SecondStage.replayLinks i.params.verifier.program.prog it.replay.prog.programFn i.record,
+        reported := Record.sessionRegistered i.verdicts }
+    let rec_ := SecondStage.attach rec_ (SecondStage.check SecondStage.FORM own it.statements)
     return (jeq (getD rec_ "accepted") (.bool true), [("interior", Json.mkObj [("receipt", receipt), ("draw", draw),
       ("read", Lean.toJson read), ("audit", Json.str (← PyJson.canonical rec_))])])
 
@@ -236,7 +256,7 @@ def run (i : Input) : V Json := do
     let proved := i.provedUnits.getD drawn
     let instances := i.instances.getD proved.size
     let rec_ ← audit i i.record receipt draw derived proved instances i.served i.sessionRoots
-    let (accepted₂, staged) ← interiorAudit i inner
+    let (accepted₂, staged) ← interiorAudit i (drawn.map Int.toNat) inner
     let accepted := jeq (getD rec_ "accepted") (.bool true) && accepted₂
     return Json.mkObj ([("receipt", receipt), ("draw", draw), ("read", Lean.toJson read),
       ("symbol", Json.str (if accepted then "accept" else "reject")),
