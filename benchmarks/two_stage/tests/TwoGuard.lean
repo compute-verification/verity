@@ -47,7 +47,7 @@ def secondDrawAt (h : Held) (s₀ s₁ : ByteArray) : Option Json :=
 /-- `SpotFlock.ownOf` at the first stage's bytes `s₀`. -/
 def ownOfAt (h : Held) (st : Roots) (rec draw : Json) (s₀ : ByteArray) : Spot.SecondStage.Own :=
   { sample := h.reg.sample s₀, parts := none, interior := rec, boundary := st.record,
-    drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, refs := refsOf h }
+    drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, refs := refsOf h, refReads := refRegisteredOf h }
 
 /-- `SpotFlock.readsOk` at the stages' bytes. -/
 def readsOkAt (h : Held) (t : ℕ) (x m₁ xS : Claims.Msg) (s₀ s₁ : ByteArray) : Bool :=
@@ -197,6 +197,8 @@ def diag (h : Held) (ms : Spot.Bits.Members) (x m₁ m₂ : Claims.Msg) (s₀ s�
   let (sd, _) ← timed "secondDraw" (fun _ => secondDrawAt h s₀ s₁) fun d => (d.map (·.compress)).getD "none"
   let _ ← timed "replay sample" (fun _ => h.reg.sample s₀) toString
   let (refs, _) ← timed "refsOf" (fun _ => refsOf h) (fun r => toString r.size)
+  let (refReads, _) ← timed "refRegisteredOf" (fun _ => refRegisteredOf h) fun r =>
+    toString (r.toList.map fun e => (e.1, e.2 != Json.null))
   for t in List.range ms.length do
     let xS := xs.getD t (h.xS₀ t)
     let _ ← timed s!"t{t} rounds = k₀" (fun _ => ((FlockDeploy.V true).k xS, k₀ h t)) toString
@@ -209,14 +211,16 @@ def diag (h : Held) (ms : Spot.Bits.Members) (x m₁ m₂ : Claims.Msg) (s₀ s�
     | some st, some rec, some draw, some w =>
       let own : Spot.SecondStage.Own :=
         { sample := h.reg.sample s₀, parts := none, interior := rec, boundary := st.record,
-          drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, refs }
+          drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, refs, refReads }
       let _ ← timed s!"t{t} interiorOrderOk" (fun _ => Spot.SecondStage.interiorOrderOk own) b
       let (S?, _) ← timed s!"t{t} stmtJsonOf" (fun _ => stmtJsonOf h t w) (fun S => b S.isSome)
       if let some S := S? then
-        let _ ← timed s!"t{t} codes" (fun _ =>
-          Spot.SecondStage.stmtCodes own (Spot.SecondStage.byTemplate own.interior)
+        let _ ← timed s!"t{t} codes, as codesOk reads them" (fun _ =>
+          Spot.SecondStage.stmtCodes { own with verified := S.checked.toArray }
+            (Spot.SecondStage.byTemplate own.interior)
             (Spot.SecondStage.posOf (partsAt h own.sample.size) (h.names.getD t ""))
             (partAt h own.sample.size t) S) toString
+        let _ ← timed s!"t{t} codesOk" (fun _ => codesOk h own t S) b
       let _ ← timed s!"t{t} pinOk" (fun _ => pinOk h t w) b
     | _, _, _, _ => say s!"t{t}: readsOk has no input (decode x, jsonMsg m₁, secondDraw or decode xS is none)"
   match (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption, replayDesign h with
