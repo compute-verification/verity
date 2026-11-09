@@ -30,7 +30,7 @@ release, across every close before b, so the continuation at a later close is th
 request or from an earlier close's continuation (`resumed`), and the outputs a response adds between two closes are
 the difference of its two stamps. 0 < `max_tokens` − e ≤ `max_tokens` always: a response whose e reaches `max_tokens`
 is finished, never continued with nothing left, and one whose id cells before b outnumber its `max_tokens` is refused
-(`over`), so no continuation asks for more than its certified request did, whatever cap that was held to.
+(`over`), so no continuation asks for more than its certified request did, whatever bound that was held to.
 
 **Fail closed.** `check` holds the stamps a record carries to `stamps`' and refuses, by name: a stamp of a response
 that isn't open at b or was never released (`extra`), an open response with none (`missing`), a response stamped twice
