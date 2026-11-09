@@ -39,7 +39,7 @@ import all Init.Data.Array.Attach
 import all Init.WF
 
 /-!
-# The run's interior record at the two-stage instance
+# The run's records at the two-stage instance
 
 `SpotFlock.Instance.interior0` is the interior record the instance's run sends in round 1, and `m1` its bytes as an
 honest worker prints them (`Flock.Firewall.printJson`). The kernel decides what round 2 reads of it:
@@ -53,11 +53,19 @@ Its ports are the template's, `i0` with one leaf and `o0` with two, named withou
 interior port only its name and leaves, in its binding (`SecondStage.portBinding`), at a port the statement reads
 registered; its root and domain are placeholders.
 
+`boundary0 vI rI dI vO rO dO` is the run's boundary record, its statement `x0 …`'s JSON:
+- one replay block (`population_boundary0`);
+- the values `vI` and `vO` the links name, each one leaf at root `rI`, `rO` under domain `dI`, `dO`.
+
+The statement's linked reads are held to those (`SecondStage.readOk`'s linked arm: the same root, domain and leaves,
+each slot at row `0`). `decode_x0` reads `x0` back as it wherever its strings are plain (`plain_boundary0`), as hex
+roots and domains are.
+
 ## What this does not show
 
-The boundary record `x`, whose roots the statement's registered reads open, and the statement's bindings, which hash
-`interior0`'s program, partition and leaves with the run's name, are not built here. Nothing here states that
-`interior0` is any served run's record: it is the record of the synthetic run whose acceptance the instance needs.
+The roots and domains `boundary0` takes, the registered reads' own, and the statement's bindings, which hash
+`interior0`'s program, partition and leaves with the run's name, are not fixed here. Nothing here states that either
+record is any served run's: they are the records of the synthetic run whose acceptance the instance needs.
 -/
 
 @[expose] public section
@@ -168,6 +176,116 @@ theorem interior0_sample :
     Spot.getD (Spot.getD interior0 "window") "replay_sample" = .arr #[Lean.toJson (0 : ℕ)] := by kernel_rfl
 
 theorem runOf_interior0 : Spot.SecondStage.runOf interior0 = some RUN0 := by kernel_rfl
+
+/-! ### The boundary record -/
+
+/-- The boundary record's entry for value `v`: one leaf, at root `r` under domain `d`. -/
+def entry1 (v r d : String) : Json :=
+  Json.mkObj [("domain", .str d), ("leaves", natJ 1), ("port", .str v), ("root", .str r)]
+
+/-- The boundary record's window: the run's. -/
+def windowB : Json := Json.mkObj [("interior", .bool false), ("kind", .str "served"), ("run", .str RUN0)]
+
+/-- **The run's boundary record**: one replay block, and the values `vI` and `vO` the links name, each one leaf at its
+root and domain, its keys ascending at every level. -/
+def boundary0 (vI rI dI vO rO dO : String) : Json :=
+  Json.mkObj [("partition", .str "partition-0"), ("population", natJ 1), ("program", .str "program-0"),
+    ("roots", .arr #[entry1 vI rI dI, entry1 vO rO dO]), ("scheme", .str "frame-v3-sha512/hm96-sha512"),
+    ("window", windowB)]
+
+/-- `boundary0`'s bytes, as an honest worker prints it. -/
+def x0 (vI rI dI vO rO dO : String) : Msg :=
+  (Flock.Firewall.printJson (boundary0 vI rI dI vO rO dO)).toUTF8.data.toList
+
+theorem entry1_obj (v r d : String) : entry1 v r d = .obj ⟨⟨FlockDeploy.Concrete.objT (entry1 v r d)⟩⟩ := by
+  kernel_rfl
+
+theorem entry1_model (v r d : String) : (FlockDeploy.Concrete.objT (entry1 v r d)).toListModel =
+    [⟨"domain", .str d⟩, ⟨"leaves", natJ 1⟩, ⟨"port", .str v⟩, ⟨"root", .str r⟩] := by kernel_rfl
+
+theorem entry1_asc (v r d : String) : Flock.Firewall.ascending (FlockDeploy.Concrete.objT (entry1 v r d)) = true := by
+  kernel_rfl
+
+theorem plain_entry1 {v r d : String} (hv : Flock.Firewall.plainStr v = true) (hr : Flock.Firewall.plainStr r = true)
+    (hd : Flock.Firewall.plainStr d = true) : Flock.Firewall.plain (entry1 v r d) = true := by
+  rw [entry1_obj]
+  refine FlockDeploy.Concrete.plain_obj_of (entry1_model v r d) (entry1_asc v r d) ?_
+  simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq]
+  exact ⟨⟨by simp [Flock.Firewall.plainStr, String.all_bool_eq], hd⟩,
+    ⟨by simp [Flock.Firewall.plainStr, String.all_bool_eq], by simp [Flock.Firewall.plain, natJ]⟩,
+    ⟨by simp [Flock.Firewall.plainStr, String.all_bool_eq], hv⟩,
+    ⟨by simp [Flock.Firewall.plainStr, String.all_bool_eq], hr⟩⟩
+
+theorem windowB_obj : windowB = .obj ⟨⟨FlockDeploy.Concrete.objT windowB⟩⟩ := by kernel_rfl
+
+theorem windowB_model : (FlockDeploy.Concrete.objT windowB).toListModel =
+    [⟨"interior", .bool false⟩, ⟨"kind", .str "served"⟩, ⟨"run", .str RUN0⟩] := by kernel_rfl
+
+theorem windowB_asc : Flock.Firewall.ascending (FlockDeploy.Concrete.objT windowB) = true := by kernel_rfl
+
+theorem plain_windowB : Flock.Firewall.plain windowB = true := by
+  rw [windowB_obj]
+  refine FlockDeploy.Concrete.plain_obj_of windowB_model windowB_asc ?_
+  simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq]
+  simp [Flock.Firewall.plain, Flock.Firewall.plainStr, String.all_bool_eq, RUN0]
+
+section Boundary
+
+variable (vI rI dI vO rO dO : String)
+
+theorem boundary0_obj : boundary0 vI rI dI vO rO dO =
+    .obj ⟨⟨FlockDeploy.Concrete.objT (boundary0 vI rI dI vO rO dO)⟩⟩ := by kernel_rfl
+
+theorem boundary0_model : (FlockDeploy.Concrete.objT (boundary0 vI rI dI vO rO dO)).toListModel =
+    [⟨"partition", .str "partition-0"⟩, ⟨"population", natJ 1⟩, ⟨"program", .str "program-0"⟩,
+      ⟨"roots", .arr #[entry1 vI rI dI, entry1 vO rO dO]⟩, ⟨"scheme", .str "frame-v3-sha512/hm96-sha512"⟩,
+      ⟨"window", windowB⟩] := by kernel_rfl
+
+theorem boundary0_asc :
+    Flock.Firewall.ascending (FlockDeploy.Concrete.objT (boundary0 vI rI dI vO rO dO)) = true := by kernel_rfl
+
+variable {vI rI dI vO rO dO}
+
+/-- `boundary0` is plain where its value names, roots and domains are: hex roots and domains are
+(`FlockDeploy.Concrete.plainStr_hexOf`). -/
+theorem plain_boundary0 (hvI : Flock.Firewall.plainStr vI = true) (hrI : Flock.Firewall.plainStr rI = true)
+    (hdI : Flock.Firewall.plainStr dI = true) (hvO : Flock.Firewall.plainStr vO = true)
+    (hrO : Flock.Firewall.plainStr rO = true) (hdO : Flock.Firewall.plainStr dO = true) :
+    Flock.Firewall.plain (boundary0 vI rI dI vO rO dO) = true := by
+  rw [boundary0_obj]
+  refine FlockDeploy.Concrete.plain_obj_of (boundary0_model vI rI dI vO rO dO) (boundary0_asc vI rI dI vO rO dO) ?_
+  simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq]
+  simp [Flock.Firewall.plain, Flock.Firewall.plainList, Flock.Firewall.plainStr, String.all_bool_eq, natJ,
+    plain_entry1 hvI hrI hdI, plain_entry1 hvO hrO hdO, plain_windowB]
+
+variable (vI rI dI vO rO dO)
+
+theorem norm_boundary0 : FlockSoundness.Discharge.Recursion.FirewallJson.norm (boundary0 vI rI dI vO rO dO) =
+    boundary0 vI rI dI vO rO dO := by kernel_rfl
+
+theorem population_boundary0 : Spot.nat? (Spot.getD (boundary0 vI rI dI vO rO dO) "population") = some 1 := by
+  kernel_rfl
+
+variable {vI rI dI vO rO dO}
+
+/-- **`x0` reads back as the boundary record**, where its strings are plain. -/
+theorem decode_x0 (h : Flock.Firewall.plain (boundary0 vI rI dI vO rO dO) = true) :
+    decode (x0 vI rI dI vO rO dO) =
+      some ⟨boundary0 vI rI dI vO rO dO, portRoots (boundary0 vI rI dI vO rO dO)⟩ := by
+  have hb : (⟨(x0 vI rI dI vO rO dO).toArray⟩ : ByteArray) =
+      (Flock.Firewall.printJson (boundary0 vI rI dI vO rO dO)).toUTF8 := by
+    unfold x0
+    rw [Array.toArray_toList]
+  have hj : jsonMsg (x0 vI rI dI vO rO dO) = some (boundary0 vI rI dI vO rO dO) := by
+    unfold jsonMsg FlockDeploy.jsonOf
+    rw [hb, FlockComplete.fromUTF8?_toUTF8]
+    simp only [FlockSoundness.Discharge.Recursion.FirewallJson.parse_printJson h, norm_boundary0]
+    rfl
+  unfold SpotFlock.decode
+  rw [hj]
+  rfl
+
+end Boundary
 
 variable (R : Ref) (desc : Msg) (q : Query) (c₀ : Code)
 
