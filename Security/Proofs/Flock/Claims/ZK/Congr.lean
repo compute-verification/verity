@@ -82,7 +82,7 @@ theorem stepWith_pLog_congr {Ω : Type} (H : Msg → Msg) (P Q : Prover Ω) (x :
     (vnext : List Msg → OC Out) (K : ℕ)
     (hv : ∀ hist : List (Msg × Msg), hist.length < K → ((P.next x hist ω).eval H).1 = ((Q.next x hist ω).eval H).1)
     (hl : ∀ hist : List (Msg × Msg), hist.length < K → ((P.next x hist ω).eval H).2 ⊆ ((Q.next x hist ω).eval H).2) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t t' : Trace), hist.length + n ≤ K → t.pLog ⊆ t'.pLog →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t t' : Transcript), hist.length + n ≤ K → t.pLog ⊆ t'.pLog →
       (stepWith H P x ω vnext n hist as t).pLog ⊆ (stepWith H Q x ω vnext n hist as t').pLog
   | 0, _, _, _, _, _, h => by simpa [stepWith] using h
   | n + 1, hist, as, t, t', hn, h => by

@@ -80,7 +80,10 @@ throttles anonymous clones from shared addresses. `lean-deps.json` pins one bund
 (`deps_key`; a `path` entry changes no key) by sha256; the launcher sends a presigned URL for each (`--urls`, `check.py --record`), and a bundle is used only when its
 bytes are the pinned ones. A bundle leaves out the builds Mathlib's cache supplies: `lake exe cache get` takes those from
 Mathlib's CDN, which is not GitHub. After a bump, a passing cold audit run with `--export` writes the new bundles into its run
-directory, custody puts them on R2, and `--pin RUN` pins them.
+directory, custody puts them on R2, and `--pin RUN` pins them. The rest of a fetched package is built only as far as the tree
+imported it when it was exported: each pin lists what its bundle holds built (`modules`), and an import beyond that needs a
+re-pin, since the Lean check's module runner mounts the bundle read-only and can't build it
+(`tests/test_lean_packages.py`).
 """
 from __future__ import annotations
 
@@ -562,6 +565,22 @@ def bundle(src: Path, dst: Path) -> dict:
     return {"sha256": COMMON.sha256(dst), "bytes": dst.stat().st_size}
 
 
+def modules(src: Path) -> dict[str, dict[str, list[str]]]:
+    """What a bundle of ``src`` (a `.lake/packages`) holds of each fetched package whose build Mathlib's cache doesn't supply:
+    {package: {"roots": the first components of its module names, "built": each module with an `.olean` in its build}}. A
+    root is one its built modules have or a `.lean` file at the top of its checkout, so a package nothing was built of yet
+    still claims its imports."""
+    out = {}
+    for n in sorted(set(os.listdir(src)) - cache_covered(src)):
+        if not (src / n).is_dir():
+            continue
+        lib = src / n / ".lake" / "build" / "lib" / "lean"
+        built = sorted(".".join(f.relative_to(lib).with_suffix("").parts) for f in lib.rglob("*.olean")) if lib.is_dir() else []
+        tops = {f.stem for f in (src / n).glob("*.lean") if f.stem != "lakefile"}
+        out[n] = {"roots": sorted(tops | {m.split(".")[0] for m in built}), "built": built}
+    return out
+
+
 def restore(store: Path, k: str, url: str, pin: dict, name: str, log=print) -> bool:
     """Download the bundle pinned under ``k`` and unpack it as ``store/k``. False, and the package builds cold, when it can't
     be fetched or isn't the pinned bundle. The URL is never logged: it grants a read until it expires."""
@@ -663,7 +682,7 @@ class WarmDeps:
                 continue
             t0 = time.monotonic()
             with self._lock(k):
-                done[k] = {"package": p, **bundle(self.store / k, dest / f"{k}.tar.gz")}
+                done[k] = {"package": p, **bundle(self.store / k, dest / f"{k}.tar.gz"), "modules": modules(self.store / k)}
             log(f"lean-audit: {p}: dependencies bundled ({k[:12]}, {done[k]['bytes'] >> 20} MiB in {time.monotonic() - t0:.0f} s)")
         (dest / "lean-deps.json").write_text(json.dumps({"schema": "lean-deps/v1", "deps": done}, indent=1) + "\n")
         return done
@@ -1577,7 +1596,11 @@ def pin(run_id: str) -> int:
         if f is None or (f.sha256, f.bytes) != (v["sha256"], v["bytes"]) or not head or head["bytes"] != v["bytes"]:
             print(f"lean_audit: {v['package']}: the bundle {k[:12]} is not on the remote as listed; not pinned", file=sys.stderr)
             return 1
-        deps[k] = {"package": v["package"], "sha256": v["sha256"], "bytes": v["bytes"], "run": run_id}
+        if "modules" not in v:
+            print(f"lean_audit: {v['package']}: the bundle {k[:12]} lists no modules (an export before `modules`); export "
+                  "again", file=sys.stderr)
+            return 1
+        deps[k] = {"package": v["package"], "sha256": v["sha256"], "bytes": v["bytes"], "run": run_id, "modules": v["modules"]}
         print(f"lean_audit: {v['package']}: pinned {k[:12]} ({v['bytes'] >> 20} MiB, {run_id})")
     (ROOT / PIN).write_text(json.dumps({"schema": "lean-deps-pin/v1", "deps": deps}, indent=1, sort_keys=True) + "\n")
     return 0

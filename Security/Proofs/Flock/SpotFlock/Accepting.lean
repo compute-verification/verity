@@ -290,7 +290,7 @@ theorem run_proverOf {Ω : Type} (H : Msg → Msg) (x m₀ m₁ xS : Msg) (P' : 
       [] h3]
     show (stepWith H P x ω vS (k₀ h) [(m₀, b₀), (m₁, b₁), (xS, [])] [m₀, m₁, xS]
       ⟨[(m₀, .msg b₀), (m₁, .msg b₁), (xS, .msg [])], [], [], .rej⟩).out = _
-    have hs' := congrArg Trace.out hs
+    have hs' := congrArg Transcript.out hs
     exact hs'
   exact (hrun ((V h).k x) (by show 3 + k₀ h = k₀ h + 1 + 1 + 1; omega)).trans
     (congrArg (fun n => (stepWith H P' xS ω vF n [] [] ⟨[], [], [], .rej⟩).out) hk).symm

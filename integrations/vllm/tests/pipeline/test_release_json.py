@@ -1,5 +1,6 @@
 """RELEASE.json names the tree the ship INSTALLED, enforced at the writer
-(explicit tree, refused unless it is the cwd), the reader (tree-local record first) and the ship (read-back check).  Torch-free."""
+(explicit tree, refused unless it is the cwd), the reader (tree-local record first) and the ship (read-back check).  Torch-free.
+The row's read of it is `test_row_setup`'s."""
 
 from __future__ import annotations
 
@@ -159,31 +160,3 @@ def test_cli_check_and_line_as_a_process(tmp_path):
     assert r.returncode == 0 and line.startswith("r16-int-3|commit=a2dabe493 ") and src.endswith("/r16-int-3/RELEASE.json")
     r = subprocess.run(py + ["nc-build", "/workspace/cp/r16-int-3"], capture_output=True, text=True, cwd=cwd)
     assert r.stdout.strip() == "/workspace/cp/nc_build-r16-int-3"
-
-
-def test_the_row_reads_the_release_through_the_module(tmp_path, monkeypatch):
-    """The row's release line: from `release-json line` (tree-local first), the record USED is the one copied into the evidence, and a
-    released tree takes the release's collector build dir unless the caller set NATIVE_COLLECT_BUILD."""
-    from tests.pipeline.test_row import _row
-    rel = tmp_path / "RELEASE.json"
-    rel.write_text(json.dumps({"tag": "r16-int-3", "build_dirs": {"native_collect": str(tmp_path / "nc_rel")}}))
-
-    def prepared(*flags, environ=None):
-        r = _row(tmp_path / "sweep", "--native-collect-default", str(tmp_path / "nc_default"), *flags, environ=environ)
-        monkeypatch.setattr(r, "release_line", lambda fallback: (f"r16-int-3|commit=a2dabe493 tree={r.tree}", str(rel)))
-        for step in ("precheck_identity", "precheck_target", "admission", "install_signal_forwarding"):
-            monkeypatch.setattr(r, step, lambda: None)
-
-        def shape():
-            r.B = r.I = r.O = r.LP = r.T = 1
-            r.ck = r.tgt = r.hidden_so = r.code9 = ""
-        monkeypatch.setattr(r, "shape", shape)
-        r.prepare()
-        return r
-    r = prepared()
-    assert json.loads((Path(r.d) / "release.json").read_text()) == json.loads(rel.read_text())
-    assert r.ncb == r.child_env["NATIVE_COLLECT_BUILD"] == str(tmp_path / "nc_rel")
-    assert json.loads((Path(r.d) / "tree.json").read_text())["release_line"].startswith("r16-int-3|commit=a2dabe493 ")
-    for pinned in (prepared("--native-collect-build", str(tmp_path / "nc_own")),
-                   prepared(environ={"NATIVE_COLLECT_BUILD": str(tmp_path / "nc_own")})):
-        assert pinned.ncb == pinned.child_env["NATIVE_COLLECT_BUILD"] == str(tmp_path / "nc_own")
