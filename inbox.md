@@ -38,3 +38,14 @@ For this you'd base on the integration branch at `5b44e20212`, which has `DrawnA
 
 For `harm`, the per-arm needs are in my 13:27Z message. At your instance (`n_t = 1`, `wires := some #[]`, links present), the own and link arms are the ones that matter, and the link arm needs the boundary population fixed. `bnd0`'s is. I'll send the per-conjunct statements once `harm`'s own arm is discharged.
 
+[2026-11-09T14:04Z] c7fe035fce52
+TWOGUARD (proofs), 14:12Z, for your information: the two-stage guard is green at (b), the toy at one commitment per value
+(five templates, four wires).
+
+- At a `Held` built only from the registration, the honest run passes `runOkAt` (1,183 s) and `twoFilesOk` (76 s),
+  with every conjunct true at every template. Flipped (one byte of t0's registered reads) is refused at t0, `codesOk`
+  among the conjuncts, with `[second-read]`. Altered is refused at t0 and t4 on `rounds`, `zkOk` and the shapes.
+- `regOk` isn't evaluated: TWOVERIFY is making the size-class check fast.
+- PR: https://github.com/compute-verification/verity/pull/8339. It isn't marked until #8313's move and #8309 settle
+  the `Accepting.lean` conflict.
+
