@@ -14,9 +14,12 @@ in-range faults under clamp.py's boxes, with three simulators:
 The direct tokens are coded two ways: "tokens", each token's id, which is all a simulator served tokens alone can
 decode, and "rank", its rank under the honest model's scores, which needs log-probabilities. A record's forced_bits,
 edit_bits, edit_direct, edit and best_bits are the first code's, each with the best edit under it; the same names
-ending in _rank are the second's. A fault is covered by its charge when its advice is at most c + --slot-bits: c its
-block's output bits, and the location the charge pays beyond a served slot's (log2 of proof blocks a served token,
-GLM-5.3's by default).
+ending in _rank are the second's.
+
+A fault is covered by its charge when its advice is at most c + --slot-bits + log2 --new. The charge pays c and the
+faulted block's location among all proof blocks; the simulator's channel locates only the faulted request, and the
+advice locates the rest. So the advice may spend c, --slot-bits (log2 of proof blocks a served token, GLM-5.3's by
+default) and log2 --new (the faulted token's position in the response).
 
 Faults sit at a prompt's last position t0 (the forward serving the first new token) or --offsets positions before it,
 every forward clamped to the boxes. Kinds:
@@ -349,8 +352,8 @@ def main() -> int:
     ap.add_argument("--cont", type=int, default=8, help="nearest first-token-matching edits decoded a fault")
     ap.add_argument("--eps", type=float, default=1e-3, help="the slack of the eps-max-divergence")
     ap.add_argument("--slot-bits", type=float, default=24.2,
-                    help="log2 of proof blocks a served token: the location the charge pays beyond a served slot's "
-                         "(GLM-5.3's, 1.9e7)")
+                    help="log2 of proof blocks a served token: the location the charge pays beyond a served token "
+                         "slot's (GLM-5.3's, 1.9e7)")
     ap.add_argument("--precision", default="bf16", choices=("bf16", "fp32"))
     ap.add_argument("--batch", type=int, default=512)
     ap.add_argument("--threads", type=int, default=0)
@@ -435,7 +438,7 @@ def main() -> int:
                            "direct_at": D0[j].nonzero().flatten().tolist(),
                            "cont_exact": bool(mine) and any(not bool(De[r].any()) for r in mine),
                            "served": tok.decode(ys[j].tolist()), "honest_served": tok.decode(yh.tolist()),
-                           "budget": f["c"] + a.slot_bits}
+                           "budget": f["c"] + a.slot_bits + math.log2(a.new)}
                     for code in CODES:
                         sfx = "" if code == CODES[0] else "_" + code
                         best = min(mine, key=code_e[code].__getitem__) if mine else None
