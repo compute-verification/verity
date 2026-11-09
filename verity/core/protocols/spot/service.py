@@ -69,8 +69,9 @@ the premises that theorem takes.
 flat Flock circuit file of one instance of it (`verity_flock.class_statement.UnitStager`, `unit_lowering` at
 `structural=False`, as one-stage's sessions verify against theirs), which binds the interior registration's partition
 and program digests. The auditor names each file by its SHA-512 in the run's interior params, `proofs.templates`
-(`template_circuits`), beside the header of the template's registered reference statement, which round 2 holds each
-statement's header to but for the run's fields (`second_stage.RUN_FIELDS`), and reproduces the file from public data
+(`template_circuits`), beside the header of the template's registered reference statement and the registered reads it
+was verified against, which round 2 holds each statement's header and registered reads to but for the run's fields
+(`second_stage.RUN_FIELDS`, `second_stage.blank_reads`), and reproduces the file from public data
 alone: the template's Definition and rows, the interior's
 partition and program digests, the values it reads (`reads`), its AND gates per stage (`stage_ands`) and the leaf
 scheme, in a process where `FLOCK_PACK_WORDS`, `FLOCK_CORE_ROWS`, `FLOCK_PLAIN_LEAVES`, `FLOCK_OWN_ROWS` and
@@ -794,32 +795,36 @@ def _check_ids(query: Any) -> list[str] | None:
     return list(ts) if ok else None
 
 
-def template_circuits(proofs: Mapping[str, Any] | None,
-                      query: Mapping[str, Any]) -> tuple[tuple[str, str, dict[str, Any]], ...]:
-    """The auditor's params naming each template's circuit file and the reference header of its statements (the module
-    docstring), a two-stage run's `interior.params.proofs`: `{"templates": [{"template": <descriptor id>, "circuit":
-    <SHA-512, lowercase hex>, "header": <the registered reference statement's header>}, ...]}`, as (template, circuit,
-    header) triples in the order the check's template query `query` names the templates, which is REPLAY_c's
-    first-instance order (`replay_cells`). None names no file and gives none. Raises `ValueError` for any other form, a
-    circuit that isn't 128 lowercase hex digits, a header that isn't an object, and a list that doesn't name each of the
-    check's templates once, in its order. The Lean verifier's `Run.templateCircuits` is this."""
+def template_circuits(proofs: Mapping[str, Any] | None, query: Mapping[str, Any]
+                      ) -> tuple[tuple[str, str, dict[str, Any], dict[str, Any] | None], ...]:
+    """The auditor's params naming each template's circuit file and its registered reference statement's header and
+    registered reads (the module docstring), a two-stage run's `interior.params.proofs`: `{"templates": [{"template":
+    <descriptor id>, "circuit": <SHA-512, lowercase hex>, "header": <the registered reference statement's header>,
+    "registered": <the registered reads it was verified against, null for none>}, ...]}`, as (template, circuit, header,
+    registered) in the order the check's template query `query` names the templates, which is REPLAY_c's first-instance
+    order (`replay_cells`). None names no file and gives none. Raises `ValueError` for any other form, a circuit that
+    isn't 128 lowercase hex digits, a header that isn't an object, registered reads neither an object nor null, and a
+    list that doesn't name each of the check's templates once, in its order. The Lean verifier's `Run.templateCircuits`
+    is this."""
     if proofs is None:
         return ()
     ids = _check_ids(query)
     if ids is None:
         raise ValueError("a two-stage design's check is a template query")
     form = ('the params\' proofs are {"templates": [{"template": <descriptor id>, "circuit": <SHA-512>, '
-            '"header": <object>}, ...]}')
+            '"header": <object>, "registered": <object or null>}, ...]}')
     if not isinstance(proofs, Mapping) or set(proofs) != {"templates"} or not isinstance(proofs["templates"], (list, tuple)):
         raise ValueError(form)
     named = []
     for e in proofs["templates"]:
-        if not (isinstance(e, Mapping) and set(e) == {"template", "circuit", "header"} and isinstance(e["template"], str)
-                and isinstance(e["circuit"], str) and _DIGEST.fullmatch(e["circuit"]) and isinstance(e["header"], dict)):
-            raise ValueError(f"{form}, each circuit a SHA-512 in lowercase hex, each header an object: {e!r}")
-        named.append((e["template"], e["circuit"], e["header"]))
-    if [t for t, _c, _h in named] != ids:
-        raise ValueError(f"the params name the circuits of {[t for t, _c, _h in named]}, not the check's templates {ids}, "
+        if not (isinstance(e, Mapping) and set(e) == {"template", "circuit", "header", "registered"}
+                and isinstance(e["template"], str) and isinstance(e["circuit"], str) and _DIGEST.fullmatch(e["circuit"])
+                and isinstance(e["header"], dict) and (e["registered"] is None or isinstance(e["registered"], dict))):
+            raise ValueError(f"{form}, each circuit a SHA-512 in lowercase hex, each header an object and each "
+                             f"registered an object or null: {e!r}")
+        named.append((e["template"], e["circuit"], e["header"], e["registered"]))
+    if [t for t, *_ in named] != ids:
+        raise ValueError(f"the params name the circuits of {[t for t, *_ in named]}, not the check's templates {ids}, "
                          "each once, in its order")
     return tuple(named)
 
@@ -2164,8 +2169,9 @@ class Stream:
         and sample a verdict names), the interior registration and the second stage's cells as the interior
         registration's audit record's `statements` check: a two-stage outcome without them fails it, and so does every
         one while `second_stage.FORM` refuses the two-stage form. `proofs` is the auditor's params naming each template's
-        circuit file and the reference header round 2 holds its statements to (`template_circuits`; without them every
-        statement fails ``second-header``), which the run of record reads from its interior params. The outcome accepts
+        circuit file and the reference header and registered reads round 2 holds its statements to (`template_circuits`;
+        without them every statement fails ``second-header`` and ``second-values``), which the run of record reads from
+        its interior params. The outcome accepts
         when the registration's audit record (over the replay sample) and the interior registration's (over the sample)
         both do, and the run of record checks both. Raises `Refused` for `statements` on a one-stage outcome, and
         (`proofs`) for `proofs` on a one-stage stream or in any form `template_circuits` refuses, before anything is
@@ -2270,8 +2276,8 @@ class Stream:
         the second stage's sample, with round 2's check of `statements` (`second_stage.check`, over the parts the
         interior program's strata make, the design's links, which it derives from the replay block's Definition
         (`second_stage.replay_links`), the reads the verdicts report, what they name of each session they accepted
-        (`second_stage.verified_of`), and the reference header the params `proofs` give each template,
-        `template_circuits`), and the registration's
+        (`second_stage.verified_of`), and the reference header and registered reads the params `proofs` give each
+        template, `template_circuits`), and the registration's
         over the replay sample, each taking the sessions' reads of its own ports at their own roots (`own_reads`), both
         failing `run` where the whole run isn't the verifier's; and the public outputs."""
         assert e.sessions is not None and e.draw is not None and e.interior is not None and e.second is not None
@@ -2289,11 +2295,12 @@ class Stream:
         rec = V.audit_record(ireg.record, ireg.receipt, second.draw, second.law, proved,
                              len(proved) if instances is None else instances, statement, verdicts, self.delta,
                              e.sessions, served, session_roots, own_reads=True)
+        named = template_circuits(proofs, self.spec.check.query)
         own = SS.Own(tuple(replayed), SS.parts(len(replayed), P.strata(e.interior_program, self.spec.check.query)),
                      ireg.record, reg.record, tuple(D.proved(second.draw)),
                      SS.replay_links(e.program, descriptor_id(self.replay), reg.record),
                      A.session_registered(verdicts), SS.verified_of(verdicts),
-                     tuple((t, h) for t, _c, h in template_circuits(proofs, self.spec.check.query)))
+                     tuple((t, h) for t, _c, h, _r in named), tuple((t, r) for t, _c, _h, r in named))
         rec = SS.attach(rec, SS.check(SS.FORM, own, statements))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
                                   verdicts, self.delta, e.sessions, None, replay_session_roots, own_reads=True)
