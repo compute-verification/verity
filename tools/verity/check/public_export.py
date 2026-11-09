@@ -480,11 +480,16 @@ def fixtures(tree, boundary, logs: Path) -> tuple[dict[str, list[str]], list[str
     return shipped, [p for p in public if p not in shipped]
 
 
+def written(judgment, shipped: dict[str, list[str]]) -> list[str]:
+    """The files the export writes: ``judgment``'s public set and the ``shipped`` fixtures' files."""
+    return sorted(set(judgment.public).union(*shipped.values()))
+
+
 def export(tree, boundary, judgment, dest: Path, shipped: dict[str, list[str]]) -> dict:
     """Copy ``judgment``'s public set and the ``shipped`` fixtures' files into ``dest``, rewrite its manifests and its lists
     of the tree's paths, and commit it as a new repository's one commit."""
     copied = set(judgment.public)
-    for f in sorted(copied | {f for fs in shipped.values() for f in fs}):
+    for f in written(judgment, shipped):
         (dest / f).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(tree.root / f, dest / f)
     _, dists, _, _ = tree.python
@@ -745,7 +750,7 @@ def main(argv: list[str] | None = None) -> int:
     judgment = PB.judge(tree, boundary)
     logs = (ns.report.parent if ns.report else dest.parent) / "export-logs"
     shipped, unshipped = fixtures(tree, boundary, logs)
-    files = sorted(judgment.public | {f for fs in shipped.values() for f in fs})
+    files = written(judgment, shipped)
     source = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True, check=True).stdout.strip()
     report = {"source": {"root": str(root), "commit": source}, "dest": str(dest), "edges": len(judgment.edges)}
     report |= export(tree, boundary, judgment, dest, shipped)
