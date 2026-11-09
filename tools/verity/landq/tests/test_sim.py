@@ -32,6 +32,36 @@ def test_a_new_head_ends_the_hold_on_the_head_it_replaced() -> None:
     assert sorted(r.held) == [(0.0, 5.0), (5.0, 20.0)]
 
 
+def test_a_red_task_of_the_start_fails_until_a_fix_and_results_carry_their_keys() -> None:
+    seen: list[lq.Result] = []
+
+    def step(s, e, p):
+        if isinstance(e, lq.Result):
+            seen.append(e)
+        return lq.step(s, e, p)
+
+    fix = sim.Arrival(1, "h1", 0.0, frozenset({"b/x.py"}), fixes=frozenset({"unit:b"}))
+    r = sim.simulate([fix], sim.World(tasks=(A, B), red=frozenset({"unit:b"})), ONE, step=step)
+    assert mains(r) == {1: 35.0} and not r.unsound
+    got = {e.task: e for e in seen}
+    assert got["unit:b"].status == lq.PASS and got["unit:b"].key != got["unit:b"].base_key
+    assert got["unit:a"].status == lq.PASS and got["unit:a"].key == got["unit:a"].base_key
+
+
+def test_a_report_can_end_at_a_minute_before_the_queue_is_done() -> None:
+    r = sim.simulate([arrive(1, 0.0, "a/x.py"), arrive(2, 100.0, "a/y.py")], W, ONE, until=50.0)
+    assert (mains(r), r.end) == ({1: 15.0, 2: None}, 50.0)
+
+
+def test_an_advance_is_unsound_only_when_its_tree_fails_a_task_main_did_not() -> None:
+    s = sim._Sim((), sim.World(tasks=(A, B), red=frozenset({"unit:b"})), ONE, lq.step, "main", 10)
+    s.trees["T1"] = ((0, 0), frozenset({1}))
+    s.trees["T2"] = ((1, 0), frozenset({0, 1}))
+    s.do_Advance(lq.Advance("T1", ()))
+    s.do_Advance(lq.Advance("T2", ()))
+    assert s.unsound == ["T2"]
+
+
 def test_a_cold_start_runs_every_task_once_and_later_candidates_read_the_cache() -> None:
     r = sim.simulate([arrive(1, 0.0, "a/x.py"), arrive(2, 100.0, "a/y.py")], sim.World(tasks=(A, B), warm=False), ONE)
     assert mains(r) == {1: 35.0, 2: 115.0}
@@ -64,7 +94,7 @@ def test_a_breaking_pr_is_ejected_and_lands_once_its_fix_comes_back() -> None:
 
 
 def test_a_break_must_name_a_listed_task() -> None:
-    with pytest.raises(ValueError, match=r"#1@h1 breaks tasks the world doesn't list: \['unit:z'\]"):
+    with pytest.raises(ValueError, match=r"#1@h1 breaks or fixes tasks the world doesn't list: \['unit:z'\]"):
         sim.simulate([arrive(1, 0.0, "a/x.py", breaks=("unit:z",))], W, ONE)
 
 

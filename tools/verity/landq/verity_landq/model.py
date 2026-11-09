@@ -158,11 +158,14 @@ class Listed:
 
 @dataclass(frozen=True)
 class Result:
-    """Task `task` ended on `tree` with `status`: `PASS`, `FAIL` (with the task's declared `inputs`) or `INFRA`."""
+    """Task `task` ended on `tree` with `status`: `PASS`, `FAIL` (with the task's declared `inputs`) or `INFRA`; `key` is the
+    task's key on `tree` and `base_key` its key on the tree's base, when the world knows them (the model reads neither)."""
     tree: str
     task: str
     status: str
     inputs: frozenset[str] = frozenset()
+    key: str | None = None
+    base_key: str | None = None
 
     def __post_init__(self) -> None:
         if self.status not in (PASS, FAIL, INFRA):

@@ -11,8 +11,9 @@ the candidates with the verdict their results make, and the outcomes of decided 
 each action into the model's decision with the same effect on the world, and calls it again until it asks for nothing
 new, as a loop that ticks often would.  A tick that builds waits for its trees before deciding again, as the loop's builds
 finish within its tick.  A candidate's verdict is `fail` once a task failed, `pass` once every listed task passed, `infra`
-once every task has an outcome and some only infra ones, else `pending`.  The module is a parameter, so nothing here
-imports it.
+once every task has an outcome and some only infra ones, else `pending`; a failure carries the task's key and, where the
+contract has `Failed.base_key`, its key on the candidate's base, as the world's results give them.  A `Red` is rung as a
+page.  The module is a parameter, so nothing here imports it.
 """
 from __future__ import annotations
 
@@ -36,7 +37,7 @@ class Cand:
     members: tuple[lq.Member, ...]
     tree: str | None = None
     tasks: frozenset[str] | None = None
-    results: dict[str, tuple[str, frozenset[str]]] = field(default_factory=dict)
+    results: dict[str, tuple[str, frozenset[str], str | None, str | None]] = field(default_factory=dict)  # status, inputs, keys
     tries: int = 1
 
 
@@ -95,17 +96,20 @@ class Driver:
         if c.tree is None or c.tasks is None:
             return vq.Verdict()
         got = {t: c.results.get(t) for t in sorted(c.tasks)}
+        based = "base_key" in getattr(vq.Failed, "__dataclass_fields__", {})
 
-        def entry(t: str, inputs: frozenset[str]):
-            return vq.Failed(t, f"{t}@{c.tree}", frozenset(WHOLE if i in lq.ROOTS else i for i in inputs))
+        def entry(t: str, o: tuple):
+            inputs = frozenset(WHOLE if i in lq.ROOTS else i for i in o[1])
+            key = o[2] if o[2] is not None else f"{t}@{c.tree}"
+            return vq.Failed(t, key, inputs, o[3]) if based else vq.Failed(t, key, inputs)
 
-        failed = tuple(entry(t, o[1]) for t, o in got.items() if o and o[0] == lq.FAIL)
+        failed = tuple(entry(t, o) for t, o in got.items() if o and o[0] == lq.FAIL)
         if failed:
             return vq.Verdict(vq.FAIL, failed=failed)
         if all(o and o[0] == lq.PASS for o in got.values()):
             return vq.Verdict(vq.PASS)
         if all(o for o in got.values()):
-            return vq.Verdict(vq.INFRA, infra=tuple(entry(t, o[1]) for t, o in got.items() if o[0] == lq.INFRA))
+            return vq.Verdict(vq.INFRA, infra=tuple(entry(t, o) for t, o in got.items() if o[0] == lq.INFRA))
         return vq.Verdict()
 
     def find(self, s: QState, tree: str) -> int:
@@ -147,7 +151,7 @@ class Driver:
             if c.tree == e.tree:
                 old = c.results.get(e.task)
                 if old is None or old[0] == lq.INFRA:
-                    c.results[e.task] = (e.status, frozenset(e.inputs))
+                    c.results[e.task] = (e.status, frozenset(e.inputs), e.key, e.base_key)
 
     def on_MainMoved(self, s: QState, e: lq.MainMoved) -> None:
         s.main = e.tree
@@ -197,3 +201,6 @@ class Driver:
     def do_Ring(self, s: QState, a) -> list[lq.Decision]:
         c = s.stack[self.find(s, a.sha)]
         return [lq.Page(c.tree, "", c.tries)]
+
+    def do_Red(self, s: QState, a) -> list[lq.Decision]:
+        return [lq.Page(a.sha, "red: " + ", ".join(f.task for f in a.failed), 0)]

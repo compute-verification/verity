@@ -16,9 +16,12 @@ that run them, and the faults.  The queue is `model.step`, or any function of it
   already running or queued is not run twice.
 - A run takes one of `World.nodes` nodes for its task's `minutes`, lower candidates first; a `Task.off_pool` task runs on
   capacity of its own, at once.
-- A run fails when a PR head in its key breaks the task, else falsely with probability `World.flaky`; either fail is cached,
-  as a pass is.  With probability `World.infra` it ends in an infra error instead, which is never cached.
+- A run fails when its tree fails the task, else falsely with probability `World.flaky`; either fail is cached, as a pass
+  is.  A tree fails the tasks its start's tree is red on (`World.red`, cached as failed at the start) and those a PR head
+  in its history breaks, less those a later head in it fixes.  With probability `World.infra` a run ends in an infra error
+  instead, which is never cached.  Each result carries the task's key on its tree and on the tree's base.
 - An ejected PR comes back `World.fix` minutes later at a new head that breaks nothing.
+- An advance is unsound when the tree fails a task `main` didn't.
 
 `summary` reports ready-to-main (from a PR's first ready mark to the first `main` holding its last head) and main's lag (at
 each sample, how long the PR the queue has held longest off `main` has waited since it was ready and reviewed).
@@ -47,13 +50,14 @@ class Task:
 @dataclass(frozen=True)
 class Arrival:
     """A PR marked ready at `head` at minute `ready`, reviewed at `reviewed` (at `ready` when None), whose change touches
-    `paths` and fails the tasks named in `breaks` (each one it touches)."""
+    `paths`, fails the tasks named in `breaks` and makes pass again those named in `fixes` (each one it touches)."""
     pr: int
     head: str
     ready: float
     paths: frozenset[str]
     reviewed: float | None = None
     breaks: frozenset[str] = frozenset()
+    fixes: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -67,6 +71,7 @@ class World:
     fix: float = 120.0
     seed: int = 0
     warm: bool = True                  # every task's result at the start's tree is cached: a `main` that passed
+    red: frozenset[str] = frozenset()  # the tasks the start's tree fails, until a change that fixes them reaches `main`
 
 
 @dataclass(frozen=True)
@@ -103,11 +108,11 @@ Step = Callable[[lq.State, lq.Event, lq.Policy], tuple[lq.State, tuple[lq.Decisi
 
 
 def simulate(arrivals: Iterable[Arrival], world: World, policy: lq.Policy, *, step: Step = lq.step, main: str = "main",
-             state=None, limit: int = 5_000_000) -> Report:
-    """Replay ``arrivals`` through ``step`` in ``world`` until nothing is left to happen (or ``limit`` events).  ``state`` is
-    the queue's start (`State.start(main)` when None); another queue's state need only list its candidates as `stack`, each
-    with its `tree`."""
-    return _Sim(tuple(arrivals), world, policy, step, main, limit, state).run()
+             state=None, limit: int = 5_000_000, until: float | None = None) -> Report:
+    """Replay ``arrivals`` through ``step`` in ``world`` until nothing is left to happen, ``limit`` events, or minute
+    ``until``, where the report ends.  ``state`` is the queue's start (`State.start(main)` when None); another queue's state
+    need only list its candidates as `stack`, each with its `tree`."""
+    return _Sim(tuple(arrivals), world, policy, step, main, limit, state).run(until)
 
 
 def quantile(xs: list[float], f: float) -> float:
@@ -203,14 +208,21 @@ class _Sim:
         self.now = 0.0
         self.heap: list = []
         self.n = 0
-        self.trees: dict[str, tuple[tuple[int, ...], frozenset[int]]] = {main: (tuple(0 for _ in self.tasks), frozenset())}
+        unknown = sorted(t for t in world.red if t not in self.index)
+        if unknown:
+            raise ValueError(f"World.red names tasks the world doesn't list: {unknown}")
+        red = frozenset(self.index[t] for t in world.red)
+        self.trees: dict[str, tuple[tuple[int, ...], frozenset[int]]] = {main: (tuple(0 for _ in self.tasks), red)}
+        self.base: dict[str, str] = {}
+        self.main = main
         self.live: set[str] = set()
-        self.cache: dict[tuple[int, int], str] = {(i, 0): lq.PASS for i in range(len(self.tasks))} if world.warm else {}
+        self.cache: dict[tuple[int, int], str] = ({(i, 0): lq.FAIL if i in red else lq.PASS for i in range(len(self.tasks))}
+                                                  if world.warm else {})
         self.runs: dict[int, _Run] = {}
         self.by_key: dict[tuple[int, int], int] = {}
         self.runq: list = []
         self.free = world.nodes
-        self.info: dict[tuple[int, str], tuple[frozenset[str], frozenset[str], frozenset[int]]] = {}
+        self.info: dict[tuple[int, str], tuple[frozenset[str], frozenset[int], frozenset[int], frozenset[int]]] = {}
         self.row: dict[tuple[int, str], int] = {}
         self.rows: list[dict] = []
         self.open: dict[int, tuple[str, float]] = {}
@@ -222,28 +234,41 @@ class _Sim:
             rid = len(self.rows)
             reviewed = a.ready if a.reviewed is None else max(a.ready, a.reviewed)
             self.rows.append(dict(pr=a.pr, head=a.head, ready=a.ready, batchable=reviewed, main=None, ejects=0, false=0))
-            self.know(a.pr, a.head, a.paths, a.breaks, rid)
+            self.know(a.pr, a.head, a.paths, a.breaks, rid, a.fixes)
             self.push(a.ready, "ready", (a.pr, a.head, reviewed <= a.ready))
             if reviewed > a.ready:
                 self.push(reviewed, "ready", (a.pr, a.head, True))
 
     # the world ---------------------------------------------------------------------------------------------------------
 
-    def know(self, pr: int, head: str, paths: frozenset[str], breaks: frozenset[str], rid: int) -> None:
+    def know(self, pr: int, head: str, paths: frozenset[str], breaks: frozenset[str], rid: int,
+             fixes: frozenset[str] = frozenset()) -> None:
         touch = self.touch(paths)
-        unknown = sorted(b for b in breaks if b not in self.index)
+        unknown = sorted(b for b in breaks | fixes if b not in self.index)
         if unknown:
-            raise ValueError(f"Arrival #{pr}@{head} breaks tasks the world doesn't list: {unknown}")
-        self.info[(pr, head)] = (paths, frozenset(self.index[b] for b in breaks if self.index[b] in touch), touch)
+            raise ValueError(f"Arrival #{pr}@{head} breaks or fixes tasks the world doesn't list: {unknown}")
+
+        def touched(names: frozenset[str]) -> frozenset[int]:
+            return frozenset(self.index[b] for b in names if self.index[b] in touch)
+
+        self.info[(pr, head)] = (paths, touched(breaks), touch, touched(fixes))
         self.row[(pr, head)] = rid
+
+    def result(self, tree: str, i: int, status: str) -> lq.Result:
+        base = self.base.get(tree)
+        return lq.Result(tree, self.names[i], status, self.tasks[i].inputs, f"{self.trees[tree][0][i]:x}",
+                         None if base is None else f"{self.trees[base][0][i]:x}")
 
     def push(self, t: float, kind: str, payload) -> None:
         heapq.heappush(self.heap, (t, self.n, kind, payload))
         self.n += 1
 
-    def run(self) -> Report:
+    def run(self, until: float | None = None) -> Report:
         events = 0
         while self.heap and events < self.limit:
+            if until is not None and self.heap[0][0] > until:
+                self.now = until
+                break
             t, _, kind, payload = heapq.heappop(self.heap)
             self.now = t
             events += 1
@@ -300,7 +325,7 @@ class _Sim:
             got = self.cache.get((i, keys[i]))
             if got is not None:
                 self.counts["cached"] += 1
-                self.feed(lq.Result(tree, name, got, self.tasks[i].inputs))
+                self.feed(self.result(tree, i, got))
             else:
                 self.want(i, tree)
 
@@ -354,7 +379,7 @@ class _Sim:
             self.cache[(run.task, run.key)] = status
         for tree in sorted(run.waiters):
             if tree in self.live:
-                self.feed(lq.Result(tree, task.name, status, task.inputs))
+                self.feed(self.result(tree, run.task, status))
         self.dispatch()
 
     def on_back(self, pr: int, head: str) -> None:
@@ -367,13 +392,14 @@ class _Sim:
         keys, bad = self.trees[d.base]
         keys, bad = list(keys), set(bad)
         for m in d.members:
-            _, breaks, touch = self.info[(m.pr, m.head)]
+            _, breaks, touch, fixes = self.info[(m.pr, m.head)]
             b = _bit(m.pr, m.head)
             for i in touch:
                 keys[i] ^= b
-            bad |= breaks
+            bad = (bad | breaks) - fixes
         tree = f"T{d.cid}"
         self.trees[tree] = (tuple(keys), frozenset(bad))
+        self.base[tree] = d.base
         self.counts["candidates"] += 1
         self.push(self.now + self.world.build, "built", (d.cid, tree))
 
@@ -382,8 +408,9 @@ class _Sim:
 
     def do_Advance(self, d: lq.Advance) -> None:
         self.counts["advances"] += 1
-        if self.trees[d.tree][1]:
+        if self.trees[d.tree][1] - self.trees[self.main][1]:
             self.unsound.append(d.tree)
+        self.main = d.tree
         for m in d.landed:
             r = self.rows[self.row[(m.pr, m.head)]]
             if r["main"] is None:
@@ -394,11 +421,11 @@ class _Sim:
         rid = self.row[(d.pr, d.head)]
         r = self.rows[rid]
         r["ejects"] += 1
-        paths, breaks, _ = self.info[(d.pr, d.head)]
+        paths, breaks, _, fixes = self.info[(d.pr, d.head)]
         r["false"] += not breaks
         self.release(d.pr, d.head)
         head = f"{d.head}+"
-        self.know(d.pr, head, paths, frozenset(), rid)
+        self.know(d.pr, head, paths, frozenset(), rid, frozenset(self.names[i] for i in fixes))
         r["head"] = head
         self.push(self.now + self.world.fix, "back", (d.pr, head))
 

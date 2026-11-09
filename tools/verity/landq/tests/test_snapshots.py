@@ -3,6 +3,7 @@ the verified queue's contract lands what passes, ejects by inputs, retries infra
 tree that failed."""
 import random
 import types
+from dataclasses import dataclass
 
 import fake_vqueue as vq
 import harness
@@ -81,8 +82,24 @@ def test_the_drop_of_a_candidate_now_on_main_records_its_pass() -> None:
 
 def test_a_failed_task_keyed_on_the_whole_tree_reaches_decide_as_a_glob_of_it() -> None:
     c = snapshots.Cand(1, "m", (lq.Member(1, "h1", frozenset({"a/x.py"})),), tree="T1", tasks=frozenset({"lean-suites"}),
-                       results={"lean-suites": (lq.FAIL, frozenset({"."}))})
+                       results={"lean-suites": (lq.FAIL, frozenset({"."}), None, None)})
     assert D.verdict(c).failed == (vq.Failed("lean-suites", "lean-suites@T1", frozenset({snapshots.WHOLE})),)
+
+
+def test_a_failure_carries_its_key_and_its_base_key_where_the_contract_has_one() -> None:
+    @dataclass(frozen=True)
+    class Failed:
+        task: str
+        key: str
+        inputs: frozenset[str]
+        base_key: str | None = None
+
+    based = types.SimpleNamespace(**{k: getattr(vq, k) for k in dir(vq) if not k.startswith("_")})
+    based.Failed = Failed
+    c = snapshots.Cand(1, "m", (lq.Member(1, "h1", frozenset({"a/x.py"})),), tree="T1", tasks=frozenset({"unit:b"}),
+                       results={"unit:b": (lq.FAIL, frozenset({"b/"}), "7", "7")})
+    assert snapshots.Driver(based).verdict(c).failed == (Failed("unit:b", "7", frozenset({"b/"}), "7"),)
+    assert D.verdict(c).failed == (vq.Failed("unit:b", "7", frozenset({"b/"})),)
 
 
 def test_an_action_naming_a_candidate_that_isnt_live_is_refused() -> None:
