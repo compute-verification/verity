@@ -6,8 +6,8 @@ public import Definitions.NetworkCertifier.SampledAudit
 # The layouts and openings the network certifier's guarantees fail at (trusted definitions; used only by the
 satisfiability witnesses)
 
-The nontrivial lemmas of `Guarantees/SampledAudit`, `Guarantees/SampledCharge` and `Period` state their conclusions
-false at a compiled verifier that accepts everything, over these:
+The nontrivial lemmas of `Guarantees/SampledAudit`, `Guarantees/SampledCharge`, `Guarantees/Checked` and `Period` state
+their conclusions false at an audit that accepts everything, over these:
 
 * `trivLay`: one link of one slot with no gate, at which `SampledAuditAccepted`'s conclusion fails;
 * `notLay`: step `t`'s ingress is the input, and its egress slot's presence gate the input's negation, at which the

@@ -63,8 +63,8 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                PeriodEscapes, PeriodLeaksChecked)
 ../../Definitions/NetworkCertifier/Guarantees/Checked.lean  trusted: the leak bounds with checked inputs
                                (SampledLeakChecked, PooledLeakChecked)
-../../Definitions/NetworkCertifier/Witness.lean  trusted: the audit the leak bounds' nontrivial lemmas fail at
-                               (notProg, notStmt, notPart, notLay; atNot, a deployment at it)
+../../Definitions/NetworkCertifier/Witness.lean  trusted: the layouts and openings the nontrivial lemmas fail at
+                               (trivLay, notLay, certOps)
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
                                each a `def G : Prop` under the same namespace (`Guarantees.G`)
 ../NetworkCertifier.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee and lemma, from the modules below
