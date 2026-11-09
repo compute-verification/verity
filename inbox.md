@@ -28,3 +28,16 @@ MOEFUSE done, CIR-188 block: PR #8131, head 8e4d5e8a696, marked ready. Runs at t
 [2026-11-08T17:47Z] f0c48fa53083
 MOEFUSE, CIR-193: posted both cuts on CIR-193. SparseMla_v1: each head as a chain of 64-key block units (largest 0.92 of a block); it is built and pinned on cursor/circuits-cir193-sparse-mla-6f04 at acea573d746, and I open the PR once its circuit-check shards and suites pass. Gumbel: an exact cut that changes nothing serving computes, but the keep word runs all six split-count pipelines (9.9e10 ANDs), so it comes to about 3,300 units a token and about 15 new unit Definitions, each with a serving reader. Do not count on it for Tue; I start it once the SparseMla PR is marked. The only smaller cut makes S structure, which is Daniel's call, and I did not take it. #8131 checks are still running.
 
+[2026-11-09T02:17Z] d750d06d8e0f
+MOEFUSE, CIR-193 items 1-3: all three PRs are marked. #8131 and #8213 have landed on checked; #8253 is admitted.
+- #8131 at 875f74cdc81 (checked merged in, plus 8 holds for the served FP8 MoE expert GEMMs, MAX 125). It was not ejected: I marked the new head. --all at fabfdfe663b: 6dfa a51a dd85 ddfb. Suites: 1ef3.
+- #8213 SparseMla_v1 head_chain cut (per head: FIRST block, full blocks at 0.94 of a block, then SparseMlaHeadEnd_v1 at 0.04), plus block/absent-hold. Head d5cf1e7db0a, MAX 124. circuit-check: 9fd1. --all at 964c2e84b24: 40d8 e83b 43f9 12ad. Suites: c172.
+- #8253 Gumbel top-p stage cut: 3,924 units of 85 Definitions, largest 0.82. Head f502f6a0256, MAX 123. circuit-check: 5adc (the V=64 Call is 2^28 whole, its cut fits at 2^26). Suites: 2681. Served check: fcdc (4 rows, twin = reference = Call). Block shares: d6e6.
+  - Fixes since b9db: sampling.CUTS now names topp_stages instead of importing it (the import closed a P9 module cycle), and cut_of resolves the name. The sampler-input reads moved to stage_rows (P10: serving_rows is at exactly 800 lines). The census STAGES export, the STAGE_OF by-name fix and the FastEngine name (P11) are fixed too.
+Every remaining suite failure also fails on checked e33c57bab89 alone. Owners should know:
+  (a) verity-vllm, 3 DSA class-G tests (test_dsa_long_rows x2, test_reads x1): prune.swapped reads base_id off a PrimitiveDefinition. Shown alone by r20261108-230625-8c96.
+  (b) verity-circuit-check: test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees and test_every_registered_primitive_declares_the_tables_it_reads (DsaTopKSlot20x16_v1). Shown alone by r20261108-220432-925f.
+  (c) verity-flock: test_read_tmpl_stager x2. Shown alone by f779 and 9e7b.
+  (d) circuit-check --all: lowering/pin-mismatch LinearTorchDw_v1{M=64,K=1,N=1,...}.
+DSV4 overlap (posted on CIR-193): FlashMlaPrefill shares the chain layout but not the unit, and nothing shares the Gumbel cut. Not started on DSV4.
+
