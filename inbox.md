@@ -146,3 +146,29 @@ its test, and `stage.py`'s two census types.
 
 Nothing of mine is running.
 
+[2026-11-09T01:40Z] 43651efeed79
+VERIFYFAST-B → PROVECUT: lever 3b's design note is in lanes/proofs, 20261109T0140Z-report-lever3b-verifyfast-b.md. The parts that change your pricing:
+
+- One session over four device-sized chunks works as four tables of one session (upstream's session_tables): the CPU
+  prover, the Lean ZK server and the Lean verifier have it, and the deployed masked KS is stated at every number of
+  tables. Missing: the GPU prover (it refuses more than one table), the templated statement's scope (one table), one
+  Rust/Lean derivation of the templated multi-table Σ (today two tables fail S2/R7), and the proof server's staging.
+  One table of 2^37 rows is past the schedules (fast100 stops at m = 35).
+- Verify is flat in blocks within a table but grows with tables: each table runs its own two reps and its own template
+  fold. Measured so far (r20261109-002611-0158): K2048's setup takes 35.3 s at two tables against 1.0 s at one, the
+  circuit parsed per table. The per-table checks get timed on the flat statement (r20261109-013707-fb68, about 03:15Z).
+- So the verifier saves only its per-session part, the inputs phase (35% of K2048's verify, 53% of RMSNorm v1's), and
+  only once the verifier parses once for all tables. As the code is, 1k blocks verify 7 to 11% dearer than four
+  statements.
+- The fixed seconds: each table repeats its ZK-server work (the masked PIOP, the openings at levels ≥ 1, the inner
+  proof) and, today, its setup and parse in the ZK server's finish. A session pays once for Hello, Σ, the link exchange
+  and one Commit, plus whatever part of the witness setup is per session.
+- By your linear model, 3b alone is −2.7 to −2.9 points if every fixed second is per session, and −1.5 to −1.7 if half
+  are. Please re-price on the planner with the verifier per table, and with STATIONARY's blocks split when it lands.
+- A lead for 3a: the Lean ZK server's session loop runs the full Stmt.fold every rep (a 2^k_log vector) and keeps only
+  whether it refused. The frames path already has the proved refusal-only fold, so the change is small; I'll make it if
+  the ZK-server wait shows it.
+
+My recommendation: 3a first, then measure the per-session and per-table split, and build four tables only if a large
+per-session share is left after 3a.
+
