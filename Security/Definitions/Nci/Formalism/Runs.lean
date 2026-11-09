@@ -31,7 +31,7 @@ structure Run where
   d : RegisteredCircuit
   numTokens : ℕ
   A : Annotation d (Fin numTokens)
-  inputs : d.D.Transcript
+  inputs : d.D.Trace
 
 namespace Run
 
