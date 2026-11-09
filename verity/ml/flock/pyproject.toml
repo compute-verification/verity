@@ -70,7 +70,7 @@ untraced = [
     "tests/test_sha512_leaves.py",
     "tests/test_stage_typed.py",
     "tests/test_typed_statement.py",
-    "tests/test_witness_host.py", "tests/test_zerocheck_fused.py",
+    "tests/test_witness_host.py", "tests/test_zc_round1.py", "tests/test_zerocheck_fused.py",
 ]
 # Test-only. Of Security, only what the tests and their Lean read: Lake and `lean` run outside the read guard, so
 # tests/test_security_inputs.py holds this list to the import closure under Security of every module they build or import.

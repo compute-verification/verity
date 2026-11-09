@@ -8,6 +8,7 @@ public import Proofs.Flock.SamplingGeneric.TwoAt
 public import Proofs.Flock.Claims.Sampling.Deployed
 public import Proofs.Flock.Claims.NumbersDeploy
 import Proofs.Flock.SamplingGeneric.TwoKSAt
+import Proofs.Flock.SpotFlock.RevealsLe
 
 /-!
 # SPOT[Flock]'s two-stage verifier: the compiler's premises at its code
@@ -25,8 +26,8 @@ import Proofs.Flock.SamplingGeneric.TwoKSAt
   session's one way (`SpotFlock.sessionRunsTo`);
 * `sessionsTwo_spot`: the two-stage contract from the same openings (`sessionsTwo_atOrder`);
 * `ksAtTwo_spot`: `CompiledTwo.KSAt`, KS with each hash term at a budget on one run's SHA-512 work
-  (`compilerKSAtTwo`), from the same openings and the reveal count (`SamplingDeploy.RevealsLe`), which bounds the
-  opening checks' calls (`openCallsLe_compiled`).
+  (`compilerKSAtTwo`), from the same openings alone, the opening checks' calls bounded by the code's reveal count
+  (`SpotFlock.revealsLe`, `openCallsLe_compiled`).
 -/
 
 @[expose] public section
@@ -88,16 +89,15 @@ theorem sessionsTwo_spot (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockD
     (sessionsIn_code h) hopens
 
 /-- **SPOT[Flock]'s two-stage knowledge soundness at a time budget**: `compilerKSAtTwo` at `ksTwo_spot`'s premises
-(`sessionsTwo_spot`), with Flock's KS and binding as in `ksTwo_masked`, and the opening checks' count from the reveal
-count (`openCallsLe_compiled`). -/
+(`sessionsTwo_spot`), with Flock's KS and binding as in `ksTwo_masked`, and the opening checks' count from the code's
+reveal count (`revealsLe`, `openCallsLe_compiled`). -/
 theorem ksAtTwo_spot (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
-      (SamplingDeploy.deploy _root_.Flock.Readable.relation (code h)) (two h) iroots)
-    (hrev : SamplingDeploy.RevealsLe (code h)) :
+      (SamplingDeploy.deploy _root_.Flock.Readable.relation (code h)) (two h) iroots) :
     (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h)
       (rs h) (cap h)).KSAt FlockDeploy.sha512 :=
   Claims.SamplingGeneric.compilerKSAtTwo FlockDeploy.Coin _ _ FlockDeploy.sha512
     (Claims.SamplingGeneric.flockArgKS FlockDeploy.sha512 _ _root_.Flock.SecurityProofs.MaskedKS
       (Claims.Sampling.listWithin_deployZk _)) (SamplingDeploy.commit_binds (code h) _) (sessionsTwo_spot h hopens)
-    (SamplingDeploy.openCallsLe_compiled _ (code h) iroots _ hrev)
+    (SamplingDeploy.openCallsLe_compiled _ (code h) iroots _ (revealsLe h))
 
 end SpotFlock

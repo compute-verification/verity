@@ -7,6 +7,7 @@ refusals; and its profile at the footprint."""
 
 from __future__ import annotations
 
+import dataclasses
 import random
 from fractions import Fraction
 from math import comb
@@ -65,6 +66,11 @@ TEMPLATE, = (t for t, _ in P.strata(P.population_program(PAIR, Q * N_RHO), QUERY
 #: The reference header of an honest statement in these streams, fixed before the run: PAIR's part's, its ports' schemas
 #: and the set it was staged in, none of the run's fields (`fake_challenger.reference_header`).
 REFERENCE = FC.reference_header(TEMPLATE, 0, Q * N_RHO, dict.fromkeys(INTERIOR, SCHEMA))
+#: The registered reads of an honest statement's session in these streams, fixed before the run: PAIR's linked `x` and
+#: `o0`, each the boundary port its link names, and none of the run's fields (`second_stage.blank_reads`).
+READS = {"ports": {"x": {"value": BX}, "o0": {"value": BOUT}}}
+#: `READS` and the interior's own `out`.
+READS_OUT = {"ports": {**READS["ports"], "out": {"value": "out"}}}
 
 
 def _spec(selection=RULE, values=VALUES, proof_deadline=60.0) -> S.Spec:
@@ -111,9 +117,19 @@ def _interior(m: int, previous: str, sample, row=0, **change) -> tuple[dict, dic
     return {**rec, **change}, _ports(program, QUERY, INTERIOR, m)
 
 
-def _lean(accepted=True, reads=None) -> dict:
+def _lean(accepted=True, reads=None, checked=None, tables=1) -> dict:
+    """The verdict of record, accepted or not, reporting the sessions' registered reads `reads`, and naming what
+    `flock-verify verify` names of the session of statement `checked` it checked: its header's and registered reads'
+    digests, its sample and the `tables` it set it up as (None: no statement's). For a list of statements, one such
+    verdict of record for each."""
     v = {"of_record": True, "accepted": accepted, "digest": "dd" * 64, "sessions": [SESSION]}
-    return {"lean": v if reads is None else {**v, "registered": reads}}
+    if reads is not None:
+        v["registered"] = reads
+    if isinstance(checked, list):
+        return {f"lean-verify/{i}": v | FC.checked(s, tables) for i, s in enumerate(checked)}
+    if isinstance(checked, dict):
+        v |= FC.checked(checked, tables)
+    return {"lean": v}
 
 
 def _roots(names) -> dict:
@@ -146,17 +162,24 @@ def _reads_of(statements) -> dict | None:
     return out or None
 
 
-def _two_stage_outcome(stream: S.Stream, statements, reads=_reads_of, sample=list, **params) -> S.Outcome:
+def _two_stage_outcome(stream: S.Stream, statements, reads=_reads_of, sample=list, checked=None, tables=1,
+                       **params) -> S.Outcome:
     """The run's outcome with the second-stage statements `statements` gives (a function of the honest prover's one,
     `fake_challenger.Stream.statements`, PAIR's, and the second stage's sample, or as given), and the verifier of record
-    reporting the reads `reads` gives of them; the interior record naming `sample` of the replay sample (`_stages`); the
-    auditor's params `proofs`, if given, else the honest ones (`fake_challenger.Stream.proofs`)."""
+    reporting the reads `reads` gives of them and naming what it checked of the first one's session, or of the one
+    `checked` gives (a function of the honest statement, None for none), as `tables` tables; the interior record naming
+    `sample` of the replay sample (`_stages`); the auditor's params `proofs`, if given, else the honest ones
+    (`fake_challenger.Stream.proofs`)."""
     _, second = _stages(stream, sample=sample)
     stream.deliver(second, [SESSION])
+    honest = stream.statements(second)[0]
     if callable(statements):
-        statements = statements(stream.statements(second)[0], second)
-    return stream.outcome(second, _lean(reads=reads(statements)), {"statement": "stub"},
-                          session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, statements=statements, **params)
+        statements = statements(honest, second)
+    first = statements[0] if isinstance(statements, list) and statements else None
+    return stream.outcome(second, _lean(reads=reads(statements), checked=first if checked is None else checked(honest),
+                                        tables=tables),
+                          {"statement": "stub"}, session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)},
+                          statements=statements, **params)
 
 
 def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
@@ -187,7 +210,7 @@ def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
     reads = statements[0]["registered"]["ports"]
     assert {p: (e["value"], e["reads"]) for p, e in reads.items()} == {
         p: (v, [D.proved(first.draw)[u // N_RHO] for u in range(Q * N_RHO)]) for p, v in (("x", BX), ("o0", BOUT))}
-    out = stream.outcome(second, _lean(reads=_reads_of(statements)), {"statement": "stub"},
+    out = stream.outcome(second, _lean(reads=_reads_of(statements), checked=statements[0]), {"statement": "stub"},
                          session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, statements=statements)
     assert not SS.FORM and not out.accepted and out.profile is None and stream.symbols == ("reject",)
     assert out.verdict.detail["reject"] == {"checks": ["statements"], "verdicts": {"lean": True}, "replay_sample": []}
@@ -248,7 +271,7 @@ def _frame(key: str, f):
 
 @pytest.mark.parametrize("statements, codes", [
     (lambda s, second: [s], ["two-stage-form"]),
-    (lambda s, second: [{**s, "registered": _linked(s, out=_own(second))}], ["two-stage-form"]),
+    (lambda s, second: [{**s, "registered": _linked(s, out=_own(second))}], ["second-values"]),
     (None, ["second-statements"]),
     ([], ["second-cover"]),
     (lambda s, second: [s, s], ["second-template"]),
@@ -274,27 +297,32 @@ def _frame(key: str, f):
     (_restated(draw=lambda d: {**d, "units": [0, 3] if d["units"] != [0, 3] else [1, 4]}), ["second-sample"]),
     (_restated(draw=lambda d: {**d, "population": N * N_RHO}), ["second-sample"]),
     (lambda s, second: [{**s, "registered": _linked(s, shift=1)}], ["second-read"]),
-    (lambda s, second: [{**s, "registered": _linked(s, out=_own(second, shift=1))}], ["second-read"]),
-    (lambda s, second: [{**s, "registered": _linked(s, out=s["registered"]["ports"]["x"])}], ["second-read"]),
-    (lambda s, second: [{**s, "registered": _linked(s, y=_own(second))}], ["second-read"]),
-    (lambda s, second: [{**s, "registered": _linked(s, x=_own(second, port="x"))}], ["second-read"]),
-    (lambda s, second: [{**s, "registered": {"ports": {"x": s["registered"]["ports"]["x"]}}}], ["second-read"]),
-    (_restated(registered=None), ["second-read"]),
+    (lambda s, second: [{**s, "registered": _linked(s, out=_own(second, shift=1))}], ["second-read", "second-values"]),
+    (lambda s, second: [{**s, "registered": _linked(s, out=s["registered"]["ports"]["x"])}],
+     ["second-read", "second-values"]),
+    (lambda s, second: [{**s, "registered": _linked(s, y=_own(second))}], ["second-read", "second-values"]),
+    (lambda s, second: [{**s, "registered": _linked(s, x=_own(second, port="x"))}], ["second-read", "second-values"]),
+    (lambda s, second: [{**s, "registered": {"ports": {"x": s["registered"]["ports"]["x"]}}}],
+     ["second-read", "second-values"]),
+    (_restated(registered=None), ["second-read", "second-values"]),
 ])
 def test_round_two_refuses_a_statement_the_run_did_not_make(statements, codes):
     """Round 2, by both verifiers, passes the run's own statements, its linked ports reading the boundary at each slot's
-    cell's replay block, and its own `out` reading each slot's own rows or not (the form's refusal their one failure),
-    and refuses: none (`second-statements`), none for a part's template (`second-cover`), a template
-    twice or one of no part (`second-template`), one that isn't a statement (`second-statement`, and `second-reported`
-    when its session's reads are reported, since no statement makes them), one whose header has a key its template's
-    reference header lacks, at the top or in an object, or holds otherwise, or names another input set than the run's
-    for its position or another binding than the run's for a port (`second-header`; the `registered` it names is the
-    reads' business and its `units.blocks` the session verifier's, not the header's), and one that isn't the
-    run's: another population of slots (`second-population`), a scheme, root or domain the interior registration's isn't
-    or a port of it it neither roots nor reads (`second-roots`), another sample (`second-sample`), or a read of another
-    cell's replay block, another slot's rows, a boundary port by a port no link names, another port's own, or a linked
-    port's own, or a linked port not read (`second-read`). Neither audit record refuses the reads of its own ports at
-    their own roots, which round 2 holds."""
+    cell's replay block (the form's refusal their one failure), under the auditor's params whose reference statement
+    reads those ports (`fake_challenger.Stream.proofs`), so one reading its own `out` too is refused (`second-values`),
+    and refuses, each statement's session checked as it states by a verifier of record: none (`second-statements`), none
+    for a part's template (`second-cover`), a template twice or one of no part (`second-template`), one that isn't a
+    statement (`second-statement`, and `second-reported` when its session's reads are reported, since no statement makes
+    them), one whose header has a key its template's reference header lacks, at the top or in an object, or holds
+    otherwise, or names another input set than the run's for its position or another binding than the run's for a port
+    (`second-header`; the `registered` it names is the reads' business and its `units.blocks` the session verifier's,
+    not the header's), and one that isn't the run's: another population of slots (`second-population`), a scheme, root
+    or domain the interior registration's isn't or a port of it it neither roots nor reads (`second-roots`), another
+    sample (`second-sample`), or a read of another cell's replay block, another slot's rows, a boundary port by a port
+    no link names, another port's own, or a linked port's own, or a linked port not read (`second-read`), and
+    `second-values` beside it where the reads differ from the reference's but for the run's fields: a port more or
+    fewer, another value, or none. Neither audit record refuses the reads of its own ports at their own roots, which
+    round 2 holds."""
     stream = _stream()
     out = _two_stage_outcome(stream, statements)
     checks = stream.records[0]["audit"]["checks"]
@@ -315,6 +343,50 @@ def test_round_two_holds_the_reads_to_what_the_verdicts_report(reads):
     assert not out.accepted and stream.records[0]["audit"]["checks"]["statements"]["codes"] == ["second-reported"]
 
 
+@pytest.mark.parametrize("checked", [
+    lambda s: None,
+    lambda s: {**s, "header": {**s["header"], "circuit_sha512": "ab" * 64}},
+    lambda s: {**s, "draw": {**s["draw"], "units": [0, 3] if s["draw"]["units"] != [0, 3] else [1, 4]}},
+    lambda s: {**s, "registered": _linked(s, shift=1)},
+], ids=["no-verdict", "another-file", "another-sample", "other-reads"])
+def test_round_two_holds_each_statement_to_the_verdict_that_checked_it(checked):
+    """The run's own statement, which passes every other check, is refused (`second-verified`) when no verdict of record
+    names its session, or the one that does checked it against a public file whose header names another file, at another
+    sample, or on other registered reads: round 2 reads a statement only as a verifier of record checked it."""
+    stream = _stream()
+    out = _two_stage_outcome(stream, lambda s, second: [s], checked=checked)
+    assert not out.accepted and stream.records[0]["audit"]["checks"]["statements"]["codes"] == ["second-verified"]
+
+
+@pytest.mark.parametrize("tables", [2, None], ids=["two-tables", "no-count"])
+def test_round_two_refuses_a_session_split_across_tables(tables):
+    """The run's own statement, which passes every other check, is refused by name (`second-tables`) when the verdict of
+    record that checked its session set it up as two Flock tables, or names no table count: round 2 reads one session
+    of one table for each part, as it reads one statement for each."""
+    stream = _stream()
+    out = _two_stage_outcome(stream, lambda s, second: [s], tables=tables)
+    assert not out.accepted and stream.records[0]["audit"]["checks"]["statements"]["codes"] == ["second-tables"]
+
+
+def test_round_two_reads_no_statement_holding_a_fraction():
+    """A statement whose header holds a non-integer number, which Lean's `canon` refuses, is refused (`second-verified`)
+    though its verdict names the digest `json.dumps` writes of it: Lean's verifier names no header it can't write. The
+    key holding it is none of its template's reference's, so `second-header` refuses it too."""
+    stream = _stream()
+    out = _two_stage_outcome(stream, lambda s, second: [{**s, "header": {**s["header"], "fraction": 0.5}}])
+    assert not out.accepted and stream.records[0]["audit"]["checks"]["statements"]["codes"] == [
+        "second-verified", "second-header"]
+
+
+def test_only_an_accepted_verdict_of_record_names_what_was_checked():
+    v = {"of_record": True, "accepted": True, "public_header_sha512": "ab" * 64, "unit_draw": {"units": [1]}}
+    assert SS.verified_of({"lean": v, "upstream": {"of_record": False, "accepted": True}}) == (
+        SS.Checked("ab" * 64, None, {"units": [1]}, None),)
+    assert SS.verified_of({"lean": {**v, "session_tables": 2}}) == (SS.Checked("ab" * 64, None, {"units": [1]}, 2),)
+    assert SS.verified_of({"a": {**v, "accepted": False}, "b": {**v, "of_record": False},
+                           "c": {**v, "public_header_sha512": None}}) == ()
+
+
 FV = REFERENCE["frame_v3"]
 
 
@@ -331,7 +403,7 @@ FV = REFERENCE["frame_v3"]
     ({**REFERENCE, "frame_v3": {**FV, "schemas": {**FV["schemas"], "y": SCHEMA}}}, ["second-header"]),
     ({**REFERENCE, "frame_v3": {k: v for k, v in FV.items() if k != "schemas"}}, ["second-header"]),
     ({"scheme": S.SCHEME}, ["second-header"]),
-    (None, ["second-header"]),
+    (None, ["second-header", "second-values"]),
 ])
 def test_round_two_holds_each_header_to_its_templates_reference(header, codes):
     """`second-header`, by both verifiers: each statement's header is the reference header the auditor's params give its
@@ -342,7 +414,8 @@ def test_round_two_holds_each_header_to_its_templates_reference(header, codes):
     under a reference fixed before the run that names none of the run's fields or names them otherwise, or was staged at
     other slots, or names another set and bindings, which the verifier replaces; a reference with another scheme, another
     `units.units_per_vu`, another schema, a port the interior record lacks or none of the ports, or a key the header
-    lacks, is refused by name, and so is the statement when the params give no reference."""
+    lacks, is refused by name, and so is the statement when the params give no reference (and no reference reads,
+    `second-values`)."""
     stream = _stream()
     out = _two_stage_outcome(stream, lambda s, second: [s], proofs=None if header is None else _circuits((PAIR,), header=header))
     checks = stream.records[0]["audit"]["checks"]
@@ -362,21 +435,23 @@ def _sharing(registered=None):
 
 @pytest.mark.parametrize("statements, codes", [
     (_sharing(lambda s, second: _linked(s, out=_own(second))), ["two-stage-form"]),
-    (_sharing(), ["second-refs"]),
-    (_sharing(lambda s, second: None), ["second-read", "second-refs"]),
+    (_sharing(), ["second-refs", "second-values"]),
+    (_sharing(lambda s, second: None), ["second-read", "second-refs", "second-values"]),
     (_sharing(lambda s, second: _linked(s, out=_own(second, shift=1))), ["second-read"]),
     (lambda s, second: [{**s, "registered": _linked(s, out=_own(second))}], ["second-header"]),
 ])
 def test_round_two_holds_each_port_a_header_shares_rows_at_to_a_registered_read(statements, codes):
     """`second-refs`, by both verifiers, under a reference whose sessions share rows at the interior's ports
-    (``shared_rows``: tables whose rows an instance reads by the refs in its public file's body). The run's statement
-    reading its linked `x` at the boundary and its own `out` at each slot's own rows passes, refused only on the form.
-    One leaving the shared `out` unread is refused: the session's verifier would only bound its refs by their table, so
-    one could point a drawn unit at another unit's rows. So is one reading nothing registered. A shared port read at
-    another slot's rows, where the verifier would hold the ref, is `second-read`'s, and a header sharing no rows where
-    its reference does is `second-header`'s."""
+    (``shared_rows``: tables whose rows an instance reads by the refs in its public file's body) and read the
+    interior's own `out` (`READS_OUT`). The run's statement reading its linked `x` at the boundary and its own `out` at
+    each slot's own rows passes, refused only on the form. One leaving the shared `out` unread is refused: the session's
+    verifier would only bound its refs by their table, so one could point a drawn unit at another unit's rows; its
+    reads are then not its reference's either (`second-values`). So is one reading nothing registered. A shared port
+    read at another slot's rows, where the verifier would hold the ref, is `second-read`'s, and a header sharing no rows
+    where its reference does is `second-header`'s."""
     stream = _stream()
-    out = _two_stage_outcome(stream, statements, proofs=_circuits((PAIR,), header={**REFERENCE, "shared_rows": SHARED}))
+    out = _two_stage_outcome(stream, statements, proofs=_circuits((PAIR,), header={**REFERENCE, "shared_rows": SHARED},
+                                                                  reads=(READS_OUT,)))
     checks = stream.records[0]["audit"]["checks"]
     assert not out.accepted and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
 
@@ -404,7 +479,7 @@ def test_round_two_places_the_reference_in_the_run_as_the_served_path_names_it()
     assert SS.at_run(SS.Own((), None, {**rec, "window": {"kind": "served"}}, None, ()), False, 0, TEMPLATE,
                      REFERENCE) is None
     assert stream.deliver(second, [SESSION]) is None
-    out = stream.outcome(second, _lean(reads=_reads_of([s])), {"statement": "stub"},
+    out = stream.outcome(second, _lean(reads=_reads_of([s]), checked=s), {"statement": "stub"},
                          session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, statements=[s])
     checks = stream.records[0]["audit"]["checks"]
     assert not out.accepted and checks["statements"]["codes"] == ["two-stage-form"] and "run" not in checks
@@ -459,9 +534,57 @@ def test_an_own_read_at_another_root_fails_the_interior_audit():
     fails beside round 2's (`second-read`)."""
     stream = _stream()
     out = _two_stage_outcome(stream, lambda s, second: [{**s, "registered": _linked(s, out={
-        **_own(second), "root": "ee" * 64})}])
+        **_own(second), "root": "ee" * 64})}], proofs=_circuits((PAIR,), reads=(READS_OUT,)))
     checks = stream.records[0]["audit"]["checks"]
     assert not out.accepted and not checks["registered"]["ok"] and checks["statements"]["codes"] == ["second-read"]
+
+
+def _registered_codes(monkeypatch):
+    """Round 2's codes over what the verifier holds of a run (`second_stage.Own`) with its interior record registering
+    values `w1` and `w2`, as a function of the value the run's statement reads at a port `w` no link names (slot 0 its
+    row 0), the one its template's reference statement reads there (None: no `w`) and its rows, ``(reads_from,
+    reads)``, and the reference's reads of the linked ports (`READS`'s when None)."""
+    seen = []
+    check = SS.check
+    monkeypatch.setattr(SS, "check", lambda allow, own, ss: seen.append((own, ss)) or check(allow, own, ss))
+    _two_stage_outcome(_stream(), lambda s, second: [s])
+    (own, (s,)), = seen
+    entries = {v: {"value": v, "root": f"{i:02x}" * 64, "domain": f"{i + 1:02x}" * 64, "leaves": 8}
+               for i, v in ((0x70, "w1"), (0x72, "w2"))}
+
+    def codes(value: str, named: str | None, rows=(0, [0]), linked=None) -> list[str]:
+        ports = {**s["registered"]["ports"], "w": {**entries[value], "reads_from": 0, "reads": [0]}}
+        stmt = {**s, "registered": {**s["registered"], "ports": ports}}
+        w = {} if named is None else {"w": {"value": named, "reads_from": rows[0], "reads": rows[1]}}
+        ref = {"ports": {**(READS["ports"] if linked is None else linked), **w}}
+        o = dataclasses.replace(own, interior={**own.interior, "registered": list(entries.values())},
+                                reported=SS.statement_reads([stmt]), verified=SS.verified_of(_lean(checked=stmt)),
+                                ref_reads=((TEMPLATE, ref),))
+        return list(SS.check(True, o, [stmt]).codes)
+    return codes
+
+
+def test_round_two_holds_a_port_to_the_registered_value_its_reference_reads(monkeypatch):
+    """`second-values`: at a port `w` no link names, `second-read` lets a session read either value the interior record
+    registers, `w1` or `w2`, at its own root, domain and leaves, so which one the port reads would be the run's choice,
+    and no frame fixed before the run could name it. Round 2 holds it to the one its template's reference statement
+    reads there: the run's statement reading `w1` passes where its reference reads `w1`, and is refused where it reads
+    `w2` or no `w`; reading `w2`, the reverse."""
+    codes = _registered_codes(monkeypatch)
+    assert codes("w1", "w1") == codes("w2", "w2") == []
+    assert codes("w1", "w2") == codes("w1", None) == codes("w2", "w1") == codes("w2", None) == ["second-values"]
+
+
+def test_round_two_holds_a_registered_value_to_the_rows_its_reference_reads(monkeypatch):
+    """`second-values` at a value a registration registers: `second-read` holds such a read only to the value's root,
+    domain and leaves, so the rows at which a session reads it would be the run's choice. Round 2 holds them to the
+    reference statement's (`second_stage.READ_ROW_FIELDS`): the run's statement reading `w1` at slot 0's row 0 is
+    refused where its reference reads `w1` at row 1, from slot 1, or at no row. A linked port's rows, which
+    `second-read` holds to the run, are the run's to place: a reference naming other rows there still passes."""
+    codes = _registered_codes(monkeypatch)
+    assert codes("w1", "w1", (0, [0])) == []
+    assert codes("w1", "w1", (0, [1])) == codes("w1", "w1", (1, [0])) == codes("w1", "w1", (0, [])) == ["second-values"]
+    assert codes("w1", "w1", linked={p: {**e, "reads_from": 3, "reads": [7]} for p, e in READS["ports"].items()}) == []
 
 
 def test_a_rejected_verdict_rejects_and_names_both_records():
@@ -696,7 +819,7 @@ def test_a_replay_block_of_two_templates_runs_with_a_template_major_interior():
     statements = stream.statements(second)
     assert [(s["template"], {p: e["value"] for p, e in s["registered"]["ports"].items()}) for s in statements] == [
         (pair, {"x": x, "o0": o0}), (triple, {"x": y, "o0": o1})]
-    out = stream.outcome(second, _lean(reads=_reads_of(statements)), {"statement": "stub"},
+    out = stream.outcome(second, _lean(reads=_reads_of(statements), checked=statements), {"statement": "stub"},
                          session_roots={**_roots(MIXED_BOUNDARY), **_roots(INTERIOR)}, statements=statements)
     checks = stream.records[0]["audit"]["checks"]
     assert not out.accepted and checks["statements"]["codes"] == ["two-stage-form"] and "run" not in checks, checks
@@ -714,7 +837,7 @@ def test_round_two_refuses_statements_out_of_the_parts_order():
     stream = _window_stream()
     second = _window_stages(stream)
     statements = stream.statements(second)[::-1]
-    out = stream.outcome(second, _lean(reads=_reads_of(statements)), {"statement": "stub"},
+    out = stream.outcome(second, _lean(reads=_reads_of(statements), checked=statements), {"statement": "stub"},
                          session_roots={**_roots(MIXED_BOUNDARY), **_roots(INTERIOR)}, statements=statements)
     checks = stream.records[0]["audit"]["checks"]
     assert not out.accepted and checks["statements"]["codes"] == ["second-order"] and "run" not in checks, checks
@@ -750,18 +873,21 @@ def test_a_replay_block_of_two_templates_fits_the_check_in_order():
     assert not P.in_order(blocks, WINDOW_QUERY, 3 * Q)
 
 
-def _circuits(window=WINDOW, files=("ab" * 64, "cd" * 64), header=REFERENCE) -> dict:
-    return {"templates": [{"template": P.template_id(t), "circuit": c, "header": header} for t, c in zip(window, files)]}
+def _circuits(window=WINDOW, files=("ab" * 64, "cd" * 64), header=REFERENCE, reads=(READS, READS)) -> dict:
+    return {"templates": [{"template": P.template_id(t), "circuit": c, "header": header, "registered": r}
+                          for t, c, r in zip(window, files, reads)]}
 
 
 def test_the_params_name_each_templates_circuit_file_in_the_checks_order():
     """`template_circuits`: the auditor's params name each of the check's templates' circuit files by SHA-512 and its
-    statements' reference header, in the check's order, as (template, circuit, header) triples, for one template's
-    check and a window's; none names no file; any other form, a header that isn't an object, and a list that isn't the
-    check's templates once each in its order, is refused."""
+    statements' reference header and registered reads, in the check's order, as (template, circuit, header,
+    registered), for one template's check and a window's, the reads null for none; none names no file; any other form,
+    a header that isn't an object, registered reads neither an object nor null or none given, and a list that isn't
+    the check's templates once each in its order, is refused."""
     ids = [P.template_id(t) for t in WINDOW]
-    assert S.template_circuits(_circuits(), WINDOW_QUERY) == ((ids[0], "ab" * 64, REFERENCE), (ids[1], "cd" * 64, REFERENCE))
-    assert S.template_circuits(_circuits((PAIR,)), QUERY) == ((ids[0], "ab" * 64, REFERENCE),)
+    assert S.template_circuits(_circuits(reads=(READS, None)), WINDOW_QUERY) == (
+        (ids[0], "ab" * 64, REFERENCE, READS), (ids[1], "cd" * 64, REFERENCE, None))
+    assert S.template_circuits(_circuits((PAIR,)), QUERY) == ((ids[0], "ab" * 64, REFERENCE, READS),)
     assert S.template_circuits(None, WINDOW_QUERY) == ()
     entries = _circuits()["templates"]
     for proofs, match in (({"templates": entries[::-1]}, "not the check's templates"),
@@ -774,6 +900,12 @@ def test_the_params_name_each_templates_circuit_file_in_the_checks_order():
                           ({"templates": [{**entries[0], "header": []}, entries[1]]}, "each header an object"),
                           ({"templates": [{k: v for k, v in entries[0].items() if k != "header"}, entries[1]]},
                            "each header an object"),
+                          ({"templates": [{**entries[0], "registered": []}, entries[1]]},
+                           "each registered an object or null"),
+                          ({"templates": [{**entries[0], "registered": "r"}, entries[1]]},
+                           "each registered an object or null"),
+                          ({"templates": [{k: v for k, v in entries[0].items() if k != "registered"}, entries[1]]},
+                           "each registered an object or null"),
                           ({"templates": entries, "circuit": "ab" * 64}, "proofs are"), ({}, "proofs are")):
         with pytest.raises(ValueError, match=match):
             S.template_circuits(proofs, WINDOW_QUERY)

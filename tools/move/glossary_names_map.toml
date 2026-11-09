@@ -6,18 +6,16 @@
 # - Trace and transcript, swapped back to the Glossary's words. Core's `Verity.Circuit.Transcript`, one run's value for
 #   every gate, is a trace, so it becomes `Verity.Circuit.Trace`. The claims layer's `Claims.Trace`, a run's messages,
 #   each party's oracle calls and the decision, is a transcript, so it becomes `Claims.Transcript`, and `Trace.seen`,
-#   its fields and `Claims.Recursion.abortTrace` follow. `Accounting.PeriodRun.transcript`, the trace a node committed
-#   in the period, becomes `Accounting.PeriodRun.trace`. All three change in one move, so no namespace holds both
-#   meanings at once. Each word is renamed only in the files that use that name and no other `Transcript` or `Trace`, so
+#   its fields and `Claims.Recursion.abortTrace` follow. Both change in one move, so no namespace holds both meanings at
+#   once (`Accounting.PeriodRun.transcript`, the trace a node committed in the period, is `period_trace_map.toml`'s).
+#   Each word is renamed only in the files that use that name and no other `Transcript` or `Trace`, so
 #   `Flock.Transcript`, `Pouw.Transcript`, `Pouw.PearlC.Transcript`, `FlockComplete.Trace` and
-#   `Accounting.Remote.Held.Trace` keep theirs. The files fall in four groups:
+#   `Accounting.Remote.Held.Trace` keep theirs. The files fall in three groups:
 #   - the dotted names in the two declaring modules, the vocabulary guard's keys and `ZkStep`, which also opens
 #     `Flock.Transcript`;
 #   - `Transcript` where it names `Verity.Circuit.Transcript` (as `C.Transcript` and `Circuit.Transcript`), and in the
 #     two `TileCheck` modules, where `(τ : Transcript)` is `Pouw.PearlC.Transcript` ([keep]);
-#   - `Trace` where it names `Claims.Trace`;
-#   - `transcript` in the modules that declare, build or read `PeriodRun.transcript`, where every `transcript` is that
-#     trace.
+#   - `Trace` where it names `Claims.Trace`.
 #   A module under `Population` is listed under `SampledProofs` too, its name after the Security areas move. A module in
 #   a namespace under `Claims` that means another `Transcript` must name it in full (`Flock.Transcript`), since
 #   `Claims.Transcript` comes before an opened name there.
@@ -202,17 +200,6 @@ files = [
     "Security/Proofs/Flock/Recursive/LinksOuter.lean",
 ]
 words = { "Trace" = "Transcript", "abortTrace" = "abortTranscript" }
-
-[[words_in]]
-files = [
-    "Security/Definitions/Accounting/JointPeriod.lean",
-    "Security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean",
-    "Security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityPeriod.lean",
-    "Security/Proofs/Accounting/JointBridge/HonestH200.lean",
-    "Security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityBlock.lean",
-    "Security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityPeriod.lean",
-]
-words = { "transcript" = "trace" }
 
 # The size ratio.
 [[words_in]]

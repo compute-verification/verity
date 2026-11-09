@@ -4,8 +4,8 @@ step 0, and r1 (a 4-row prefill, then 1 decode step) from step 1, which ends whi
 `remote_bandwidth.memory_map.Replay` accepts, a complete block is in it exactly while the requirement has its rows live, and the
 pages are the ones the engine's slots name.  A warm request (a prefix-cache hit) reads its first page from the request that
 computed it: the page is written once and freed after the last reader of either.  GLM-5.3's MLA: the DSA stand-in's rows are its
-latent rows, one plane a layer, in MLA's latent page, and 1152-byte latent rows lay out 18 blocks a page of 64 slots, rows
-straddling blocks.
+latent rows, one plane a layer, in MLA's latent page (a row past INDEX_TOPK reads them through its concentrator, and a batched
+Program's members are read as its Calls), and 1152-byte latent rows lay out 18 blocks a page of 64 slots, rows straddling blocks.
 """
 from __future__ import annotations
 
@@ -27,6 +27,12 @@ from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.requirement import from_census
 from verity.ml.circuits.types import Array, RecordType, Value
 from verity_vllm.commit import memory_map as MM
+from verity_vllm.program import prune as P
+from verity_vllm.program.frontend.derive import derive_report
+from verity_vllm.program.frontend.export_compat import dsa_leaves
+from verity_vllm.program.frontend.rules import vllm_bindings as VB, vllm_dsa
+from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
+from verity_vllm.program.frontend.rules.vocab import PROFILES
 from verity_vllm.program.predict.build import BF16, I32, build_program, decoder
 from verity_vllm.program.predict.common import _Peers
 from verity_vllm.protocols.remote_bandwidth import commit_map as CM
@@ -520,6 +526,51 @@ def test_a_sparse_mla_layers_rows_are_its_latent_rows(dsa):
         assert {tuple((nodes[inputs + j].fn.name, hi - lo) for _, j, lo, hi in x.group) for x in plane} == {
             (("RMSNormTriton", DSA.L), ("RoPEHeadGptJ", DSA.R))}
     assert not {x.group for x in rs.layers[0][0]} & {x.group for x in rs.layers[1][0]}
+
+
+def _born_last(rs: MM.Rows) -> list:
+    return [[(x.born, x.last) for x in plane] for kv in rs.layers for plane in kv]
+
+
+def test_a_row_past_topk_reads_its_layers_rows_through_its_concentrator(dsa):
+    """At TOPK 2 the decode's row of 3 keys is past TOPK: its sparse MLA reads the TOPK rows `DsaButterflyRowsPad` routes from its
+    layer's history, and its layer's rows are that history's, as at TOPK 4, where it reads them directly."""
+    program = dsa_request(topk=2)
+    nodes = program.root.body.nodes
+    inputs = sum(1 for nd in nodes if is_input(nd.fn))
+    assert sum(getattr(nd.fn, "name", None) == "DsaButterflyRowsPad" for nd in nodes) == 2
+    rs = MM.rows(program)
+    assert (len(rs.layers), rs.positions, _born_last(rs)) == (2, 3, _born_last(dsa[1]))
+    assert {tuple((nodes[inputs + j].fn.name, hi - lo) for _, j, lo, hi in x.group) for (plane,) in rs.layers for x in plane} == {
+        (("RMSNormTriton", DSA.L), ("RoPEHeadGptJ", DSA.R))}
+
+
+@pytest.mark.parametrize("block", [256, 2])
+def test_a_batched_programs_rows_are_its_flat_programs(served, monkeypatch, block):
+    """Class G's form at TOPK 2 (`observe_batched_form`: latent rows, the long rows in blocks of `vllm_dsa.BLOCK_KEYS` keys): a
+    prefill of two, then a call of three rows past TOPK.  Compiled batched (`prune.BATCHED`), each layer's latent rows are batches
+    and the call's sparse MLA one batch of its three rows, each member reading its rows through its concentrator's batch; `rows`
+    reads each member, and every layer's rows are born and last read where the flat Program's are."""
+    monkeypatch.setattr(vllm_dsa, "BLOCK_KEYS", block)
+    monkeypatch.setitem(PROFILES, DSA.BATCHED.name, DSA.BATCHED)
+    VB.observe_batched_form(True)
+    steps = ((0, 2), (2, 3))
+    model = Sampled(list(DSA._model(topk=2, steps=steps).layers), steps)
+    xs = DSA._inputs(model)
+
+    def compiled(form):
+        with dsa_leaves(DSA.SITE, model):
+            rep = derive_report(model, xs, mode="profile", profile=DSA.BATCHED.name, name="dsa", rules=vllm_ruleset(), dead_free=form)
+        assert rep.program is not None, rep.unsupported
+        return rep.program
+
+    flat, batched = compiled(True), compiled(P.BATCHED)
+    nodes = batched.root.body.nodes
+    assert [nd.n for nd in nodes if nd.form == "batch" and getattr(nd.fn, "name", None) == "SparseMla"] == [3, 3]
+    assert all(nd.form == "call" for nd in flat.root.body.nodes if getattr(nd.fn, "name", None) == "SparseMla")
+    a, b = MM.rows(flat), MM.rows(batched)
+    assert (len(b.layers), b.positions, b.steps) == (2, 5, 2)
+    assert _born_last(b) == _born_last(a) == [[(0, 1)] * 2 + [(1, 1)] * 3] * 2
 
 
 def test_mlas_cache_is_a_latent_page(dsa, reqs):

@@ -6,7 +6,7 @@ public import Mathlib.Data.Fintype.Prod
 public import Mathlib.Data.Fintype.Sigma
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.ZK.Hiding
 import Proofs.Flock.Soundness.ZK.RealLeaves
 

@@ -21,23 +21,19 @@ At every `D`:
 * its proof blocks and scope are `D`'s (`ofDeploy_nPU`, `ofDeploy_scope`); both waits' unions have `n_PU` bits, so each
   wait's `k` and `K` are `D`'s (`ofDeploy_kOut`, `ofDeploy_kIn`, `ofDeploy_capOut`, `ofDeploy_capIn`); and its opening
   count is `D`'s (`openCallsLe_ofDeploy`, from `Sampling.OpenCallsLe`);
-* its errors are within `Claims.Sampling`'s: `κ` at every `δ` where `ε_table ≥ 0` (`κ_ofDeploy_le`; at each unit's
-  `N₀`, within the same form at any bound on the units' `κ_F`, `κ_ofDeployAt_le`) and `γ` (`γ_ofDeploy_le`, from
-  `γFlock_mul_le`);
-* **it meets the contract** where `D` meets the frozen hypotheses `KS_of` reads (`sessions_ofDeploy`): `draws` from
+* **it meets the contract** where `D` meets the frozen hypotheses (`sessions_ofDeploy`): `draws` from
   `DrawLaw`, `slots` by the cut, `unions` by its bits, `refuses` from `Refuses`, `interior` from `InteriorFixed`,
   `fixed` from `DrawFixed` (`fixed_ofDeployAt`), `runs` from `SessionRuns` one way (`SessionRunsTo`) and the inner
   numbers at each unit's `N₀` (`InnerNumbersAt`, `runs_ofDeployAt`; the session's embedding is `emb`, the only order
   embedding onto its rounds), and `opens` from `SessionOpens`.
 
 `SamplingDeploy.compiled F c iroots` is `ofDeploy` at the deployed record `deployOf F c`: its sample, rounds,
-sessions, reveal, interior roots and commitment are the code's (`compiled_checked`, …, `rfl`), its opening count is
-bounded by the reveal count (`openCallsLe_compiled`), and its errors are within the deployed record's (`κ_compiled_le`,
-`γ_compiled_le`). `SamplingDeploy.compiledAt F c iroots` is `ofDeployAt` there at the code's `unitN₀`, the two-stage
-compiler's (`κ_compiledAt_le`), and `compiled` at a code that sets no `unitN₀`. The four contract clauses that are
-facts about the sampled verifier's code alone are named Props of
-`SamplingDeploy.Code`'s functions (`Code.DrawLaw`, `Code.Refuses`, `Code.InteriorFixed`, `Code.DrawFixed`), each the
-frozen hypothesis at `deployOf F c` (`drawLaw_deployOf`, …, `Iff.rfl`), and `sessions_compiled` reads them.
+sessions, reveal, interior roots and commitment are the code's (`compiled_checked`, …, `rfl`), and its opening count
+is bounded by the reveal count (`openCallsLe_compiled`). `SamplingDeploy.compiledAt F c iroots` is `ofDeployAt` there
+at the code's `unitN₀`, the two-stage compiler's, and `compiled` at a code that sets no `unitN₀`. The four contract
+clauses that are facts about the sampled verifier's code alone are named Props of `SamplingDeploy.Code`'s functions
+(`Code.DrawLaw`, `Code.Refuses`, `Code.InteriorFixed`, `Code.DrawFixed`), each the frozen hypothesis at `deployOf F c`
+(`drawLaw_deployOf`, …, `Iff.rfl`), and `sessions_compiled` reads them.
 -/
 
 @[expose] public section
@@ -177,64 +173,6 @@ theorem openCallsLe_ofDeploy {H : Msg → Msg} (h : Claims.Sampling.OpenCallsLe 
     (ofDeploy D iroots).OpenCallsLe H :=
   openCallsLe_of_deploy D _ rfl rfl rfl rfl h
 
-/-! ## The errors -/
-
-omit [Fintype Coin] [Nonempty Coin] in
-/-- **`κ` at each unit's `N₀`**: where every proof block's `κ_F` at its unit's `N₀` is at most `M ≥ 0`, `κ` is the
-frozen one's form at `M` in place of `κ_F`. -/
-theorem κ_ofDeployAt_le (δ : ℝ) (x : Msg) {M : ℝ} (hM : 0 ≤ M)
-    (hF : ∀ u < Claims.Sampling.nPU D x, κFAt D x (n₀ x u) ≤ M) :
-    (ofDeployAt D iroots n₀).κ δ x ≤ Claims.Sampling.slack ^ 2 * (δ + M) +
-      (2 * (D.k x : ℝ) / D.cap x + Real.exp (-(D.k x : ℝ) / 8)) +
-        Claims.Sampling.slack * (2 * (D.k x : ℝ) / D.cap x + Real.exp (-(D.k x : ℝ) / 8)) := by
-  have hs : (ofDeployAt D iroots n₀).κs x ≤ M := maxBelow_le hM hF
-  unfold Compiled.κ
-  rw [show (ofDeployAt D iroots n₀).kOut x = D.k x from rfl, show (ofDeployAt D iroots n₀).kIn x = D.k x from rfl,
-    show (ofDeployAt D iroots n₀).capOut x = D.cap x from rfl, show (ofDeployAt D iroots n₀).capIn x = D.cap x from rfl]
-  gcongr
-
-omit [Fintype Coin] [Nonempty Coin] in
-/-- **`κ` is within the frozen one**: each proof block's bound is `κ_F`, nonnegative where `ε_table` is. -/
-theorem κ_ofDeploy_le (δ : ℝ) (x : Msg) (hε : 0 ≤ D.εtable x) :
-    (ofDeploy D iroots).κ δ x ≤ Claims.Sampling.κ D δ x := by
-  have hF : 0 ≤ Claims.Sampling.κF D x := by
-    unfold Claims.Sampling.κF
-    have h1 : (0 : ℝ) ≤ 2 ^ (-(D.innerWaits x : ℝ)) := by positivity
-    have h2 : (0 : ℝ) ≤ 2 * (D.innerK x : ℝ) / D.innerCap x := by positivity
-    have h3 := (Real.exp_pos (-(D.innerK x : ℝ) / 8)).le
-    linarith
-  refine (κ_ofDeployAt_le D iroots (fun x _ => D.innerN₀ x) δ x hF fun _ _ => (κFAt_innerN₀ D x).le).trans_eq ?_
-  unfold Claims.Sampling.κ
-  ring
-
-omit [Fintype Coin] [Nonempty Coin] in
-/-- **`γ` is within the frozen one**: a proof block's bound over its session's rounds, times the compiled verifier's
-rounds, is at most Flock's `γ` at those rounds (`γFlock_mul_le`). -/
-theorem γ_ofDeploy_le (x : Msg) : (ofDeploy D iroots).γ x ≤ Claims.Sampling.γ D x := by
-  have hG : (0 : ℝ) ≤ 16 * (Real.sqrt (2 * (D.V.k x : ℝ) * D.weight x) + D.V.k x) ^ 2 := by positivity
-  have hterm : ∀ u, (D.V.k x : ℝ) * ((ofDeploy D iroots).γb x u / ((D.rounds x u).card : ℝ)) ≤
-      16 * (Real.sqrt (2 * (D.V.k x : ℝ) * D.weight x) + D.V.k x) ^ 2 := by
-    intro u
-    rcases Nat.eq_zero_or_pos (D.rounds x u).card with hc | hc
-    · rw [hc, Nat.cast_zero, div_zero, mul_zero]
-      exact hG
-    · rw [← mul_div_assoc, div_le_iff₀ (by exact_mod_cast hc : (0 : ℝ) < (D.rounds x u).card)]
-      exact (mul_comm _ _).trans_le
-        (Claims.Sampling.γFlock_mul_le ((Finset.card_le_univ _).trans_eq (Fintype.card_fin _)) le_rfl)
-  unfold Compiled.γ Claims.Sampling.γ
-  refine mul_le_mul_of_nonneg_left ?_ (by positivity)
-  rcases Nat.eq_zero_or_pos (D.V.k x) with hk | hk
-  · have h0 : ((ofDeploy D iroots).V.k x : ℝ) = 0 := by exact_mod_cast hk
-    rw [h0, zero_mul]
-    exact hG
-  · have hkpos : (0 : ℝ) < D.V.k x := by exact_mod_cast hk
-    calc ((ofDeploy D iroots).V.k x : ℝ) * (ofDeploy D iroots).γs x
-        ≤ (D.V.k x : ℝ) * (16 * (Real.sqrt (2 * (D.V.k x : ℝ) * D.weight x) + D.V.k x) ^ 2 / D.V.k x) :=
-          mul_le_mul_of_nonneg_left (maxBelow_le (div_nonneg hG hkpos.le) fun u _ =>
-            (le_div_iff₀ hkpos).2 ((mul_comm _ _).trans_le (hterm u))) hkpos.le
-      _ = 16 * (Real.sqrt (2 * (D.V.k x : ℝ) * D.weight x) + D.V.k x) ^ 2 := by
-          rw [← mul_div_assoc, mul_div_cancel_left₀ _ hkpos.ne']
-
 /-! ## The contract -/
 
 variable [Inhabited Coin]
@@ -317,9 +255,9 @@ theorem runs_ofDeployAt (H : Msg → Msg) (hruns : Claims.Sampling.SessionRunsTo
       exact hlt i
 
 omit [Nonempty Coin] in
-/-- **The contract from the frozen hypotheses**: `KS_of`'s, at `D`, give `ofDeploy`'s `Sessions`. The sample's members
-are the checked units at slots below `n_PU` (`mem_ofDeploy_checked`); `fixed` and `runs` are `fixed_ofDeployAt`'s and
-`runs_ofDeployAt`'s at the record's `N₀`. -/
+/-- **The contract from the frozen hypotheses** at `D` (`Claims.Sampling.DrawLaw`, …, `SessionOpens`): they give
+`ofDeploy`'s `Sessions`. The sample's members are the checked units at slots below `n_PU` (`mem_ofDeploy_checked`);
+`fixed` and `runs` are `fixed_ofDeployAt`'s and `runs_ofDeployAt`'s at the record's `N₀`. -/
 theorem sessions_ofDeploy (H : Msg → Msg) (hd : Claims.Sampling.DrawLaw D) (hr : Claims.Sampling.Refuses H D)
     (hi : Claims.Sampling.InteriorFixed H D iroots) (hf : Claims.Sampling.DrawFixed D)
     (hruns : Claims.Sampling.SessionRuns H D) (hnum : Claims.Sampling.InnerNumbers D)
@@ -438,13 +376,6 @@ theorem compiled_sh (x : Msg) (u : ℕ) :
 theorem openCallsLe_compiled (H : Msg → Msg) (h : RevealsLe c) : (compiled F c iroots).OpenCallsLe H :=
   Claims.SamplingGeneric.openCallsLe_ofDeploy (deployOf F c) iroots (openCallsLe_deployOf F c H h)
 
-theorem κ_compiled_le (δ : ℝ) (x : Msg) :
-    (compiled F c iroots).κ δ x ≤ Claims.Sampling.κ (deployOf F c) δ x :=
-  Claims.SamplingGeneric.κ_ofDeploy_le (deployOf F c) iroots δ x (deployOf_εtable_nonneg F c x)
-
-theorem γ_compiled_le (x : Msg) : (compiled F c iroots).γ x ≤ Claims.Sampling.γ (deployOf F c) x :=
-  Claims.SamplingGeneric.γ_ofDeploy_le (deployOf F c) iroots x
-
 /-- **The deployed sampled verifier at its units' `N₀`**: `ofDeployAt` at `deployOf F c` and the code's `unitN₀`, each
 proof block's shape and `κ_F` at its unit's `N₀`; at a code that sets no `unitN₀`, `compiled`. -/
 noncomputable abbrev compiledAt :
@@ -455,16 +386,6 @@ theorem compiledAt_sh (x : Msg) (u : ℕ) :
     (compiledAt F c iroots).sh x u =
       (Claims.Flock.Numbers.waits, Claims.Flock.Numbers.cap, (c.rounds x u).card, c.unitN₀ x u) :=
   rfl
-
-/-- **`κ` at the units' `N₀`**: where every proof block's `κ_F` at its unit's `N₀` is at most `M ≥ 0`
-(`κ_ofDeployAt_le`). -/
-theorem κ_compiledAt_le (δ : ℝ) (x : Msg) {M : ℝ} (hM : 0 ≤ M)
-    (hF : ∀ u < units c x, Claims.SamplingGeneric.κFAt (deployOf F c) x (c.unitN₀ x u) ≤ M) :
-    (compiledAt F c iroots).κ δ x ≤ Claims.Sampling.slack ^ 2 * (δ + M) +
-      (2 * ((deployOf F c).k x : ℝ) / (deployOf F c).cap x + Real.exp (-((deployOf F c).k x : ℝ) / 8)) +
-        Claims.Sampling.slack * (2 * ((deployOf F c).k x : ℝ) / (deployOf F c).cap x +
-          Real.exp (-((deployOf F c).k x : ℝ) / 8)) :=
-  Claims.SamplingGeneric.κ_ofDeployAt_le (deployOf F c) iroots c.unitN₀ δ x hM hF
 
 /-- **The contract at the deployed record**: the code's facts, with the sessions' runs, numbers and openings
 (`sessions_ofDeploy`). -/

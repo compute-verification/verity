@@ -6,7 +6,12 @@ registration and to the second draw's cells. `service.Stream` adds it to the int
 
 A statement is one second-stage session's: ``{"template", "header", "draw", "registered"}``, the template its circuit is
 an instance of (its stratum's name under the check's query), its public file's header, its session record's
-``unit_draw``, and the registered reads it was verified against (``--registered``), None for none.
+``unit_draw``, and the registered reads it was verified against (``--registered``), None for none. Round 2 takes it only
+where an accepted verdict of record names its header, its registered reads and its sample (``second-verified``,
+`verified_of`): ``public_header_sha512`` and ``registered_sha512``, the SHA-512 of the header's and the
+``--registered`` file's canonical JSON, and ``unit_draw``, which `flock-verify verify` writes of the session it checked;
+and only where every one that does checked its session as one table (``session_tables``, ``second-tables``): a session
+split across Flock tables is refused, as one split across statements is (``second-template``).
 
 The design's links are the verifier's own, derived from the replay block's Definition (`replay_links`, which the
 difftest's ``replay_links`` holds to `SecondStage.replayLinks`) and never supplied.
@@ -28,6 +33,15 @@ holds each instance's ref to the row at the position the read gives its unit (`F
 ``second-read`` holds the read to the slot's own rows or its cell's replay block's; elsewhere it only bounds a ref by its
 table, so a ref could point a drawn unit at another unit's rows.
 
+Each statement's registered reads are its template's reference statement's (`Own.ref_reads`, the ``--registered`` file
+the auditor's params give the registered reference statement, fixed before the run), the two the same with each port's
+run fields blanked (`blank_reads`) (``second-values``, `_values_ok`). The run's fields are those ``second-read`` holds
+to the run: every port's ``root``, ``domain`` and ``leaves`` (`READ_RUN_FIELDS`), and the rows (``reads``,
+``reads_from``: `READ_ROW_FIELDS`) of a port a link names or one reading the interior record's own port, whose rows the
+run places (`_run_places_rows`). So the ports a session reads registered, the value each reads, and the rows at which it
+reads a value a registration registers are fixed before the run: ``second-read`` alone lets a port no link names read
+any value either registration registers, at any rows.
+
 The interior record names the replay sample it lays out (``window.replay_sample``, which the proof server writes), and
 ``second-interior-order`` fails unless it is the verifier's own, in its order (`interior_order_ok`), checked before any
 statement is read.
@@ -37,6 +51,7 @@ statement is read.
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -68,8 +83,10 @@ MAX_LEAVES = 2 ** 64
 #: reference placed in the run in, which other checks hold instead: ``second-population`` the first two, the session's
 #: verifier ``units.blocks``, the indices cut into blocks of ``vus_per_block`` (its header's ``units`` must be
 #: `Flock.HmRow.unitsEntry` of its indices), ``second-roots`` the next two, and ``second-read`` ``registered``, each
-#: read's root, domain and rows (`SecondStage.RUN_FIELDS`). A reference staged at other slots differs from the header
-#: only in the indices and their blocks.
+#: read's root, domain and rows, with ``second-values`` the value each port reads, and the rows at which it reads a
+#: value a registration registers, through the ``--registered`` file the session's verifier holds it to
+#: (`SecondStage.RUN_FIELDS`). A reference staged at other slots differs from the header only in the indices and their
+#: blocks.
 RUN_FIELDS = (("instances",), ("units", "indices"), ("units", "blocks"), ("frame_v3", "roots"), ("frame_v3", "domain_ids"),
               ("registered",))
 
@@ -99,6 +116,53 @@ class Stmt:
 
 
 @dataclass(frozen=True)
+class Checked:
+    """What an accepted verdict of record names of the session it checked: the digests of the public file's header and
+    of the ``--registered`` file it checked the session against (``public_header_sha512``, ``registered_sha512``, None
+    for none), the sample it checked it at (``unit_draw``) and the number of tables it set the session up as
+    (``session_tables``)."""
+
+    header: str
+    registered: Any
+    draw: Any
+    tables: Any
+
+
+#: `SecondStage.ONE_TABLE`: the ``session_tables`` a verdict of record names of a session round 2 reads
+ONE_TABLE = 1
+
+
+def verified_of(verdicts: Mapping[str, Any]) -> tuple[Checked, ...]:
+    """`SecondStage.verifiedOf`: what each accepted verdict of record among `verdicts` that names a header names."""
+    return tuple(Checked(v["public_header_sha512"], v.get("registered_sha512"), v.get("unit_draw"),
+                         v.get("session_tables"))
+                 for v in verdicts.values() if isinstance(v, Mapping) and isinstance(v.get("public_header_sha512"), str)
+                 and v.get("of_record") and v.get("accepted") is True)
+
+
+def _integral(j: Any) -> bool:
+    """Whether JSON value `j` holds no non-integer number, the one value Lean's `canon` refuses."""
+    if isinstance(j, float):
+        return False
+    if isinstance(j, Mapping):
+        return all(_integral(v) for v in j.values())
+    return not isinstance(j, (list, tuple)) or all(_integral(v) for v in j)
+
+
+def _sha512(j: Any) -> str | None:
+    """`canonSha512`: the SHA-512 of JSON value `j`'s canonical JSON, None where it holds a non-integer number."""
+    return hashlib.sha512(canonical_json(j)).hexdigest() if _integral(j) else None
+
+
+def _checked(s: Stmt) -> Checked | None:
+    """`Stmt.checked`: what a verdict of record that checked statement `s`'s session, as round 2 reads one, names of it
+    (one table), None when its header or registered reads hold a non-integer number."""
+    h = _sha512(s.header)
+    r = None if s.registered is None else _sha512(s.registered)
+    return None if h is None or (s.registered is not None and r is None) else Checked(h, r, s.draw, ONE_TABLE)
+
+
+@dataclass(frozen=True)
 class Link:
     """A link of the two-stage design: template `template`'s session port `port` reads the boundary registration's port
     `value`."""
@@ -113,8 +177,10 @@ class Own:
     """What the verifier holds of the run: the replay sample, the parts (`parts`), the interior and boundary
     registrations' records, the second draw's units, the design's links (`replay_links`, None when the replay block's
     Definition makes none), the ``{value: root}`` the verifiers of record report the sessions read
-    (`audit.session_registered`), and the reference header of each template's statement, ``(template, header)``, as
-    the auditor's params give it (`service.template_circuits`)."""
+    (`audit.session_registered`), what they name of each session they accepted (`verified_of`), and the reference
+    header of each template's statement, ``(template, header)``, and the registered reads it was verified against,
+    ``(template, registered)``, None for none (`ref_reads`), as the auditor's params give them
+    (`service.template_circuits`)."""
 
     sample: tuple[int, ...]
     parts: tuple[Part, ...] | None
@@ -123,7 +189,9 @@ class Own:
     drawn: tuple[int, ...]
     links: tuple[Link, ...] | None = ()
     reported: Mapping[str, Any] | None = None
+    verified: tuple[Checked, ...] = ()
     refs: tuple[tuple[str, Any], ...] = ()
+    ref_reads: tuple[tuple[str, Any], ...] = ()
 
 
 def parts(q: int, strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> tuple[Part, ...] | None:
@@ -485,6 +553,22 @@ def _linked_read(own: Own, t: str, reads: Sequence[tuple[str, Any]]) -> bool:
     return all(x.template != t or any(port == x.port for port, _ in reads) for x in own.links or ())
 
 
+def _verified_ok(own: Own, s: Stmt) -> bool:
+    """`SecondStage.verifiedOk`: an accepted verdict of record names statement `s`'s header, registered reads and
+    sample."""
+    c = _checked(s)
+    return c is not None and any(v.header == c.header and _jeq(v.registered, c.registered) and _jeq(v.draw, c.draw)
+                                 for v in own.verified)
+
+
+def _tables_ok(own: Own, s: Stmt) -> bool:
+    """`SecondStage.tablesOk`: every accepted verdict of record that names statement `s`'s header, registered reads and
+    sample set its session up as one table."""
+    c = _checked(s)
+    return c is None or all(not (v.header == c.header and _jeq(v.registered, c.registered) and _jeq(v.draw, c.draw))
+                            or _jeq(v.tables, ONE_TABLE) for v in own.verified)
+
+
 def _refs_ok(s: Stmt) -> bool:
     """`SecondStage.refsOk`: statement `s` reads registered every port its header shares rows at (``shared_rows``, the
     tables whose rows its instances read by the refs in its public file's body)."""
@@ -492,15 +576,63 @@ def _refs_ok(s: Stmt) -> bool:
     return all(any(name == port for name, _ in reads) for port, _ in _entries(_get(s.header, "shared_rows")))
 
 
+#: `SecondStage.READ_RUN_FIELDS`: the run's fields of every port of a registered-reads file, which ``second-read`` holds
+#: to the run (`_same_at`)
+READ_RUN_FIELDS = ("root", "domain", "leaves")
+
+#: `SecondStage.READ_ROW_FIELDS`: the rows a port of a registered-reads file reads, slot ``reads_from + k`` its row
+#: ``reads[k]``, run fields only where the run places them (`_run_places_rows`)
+READ_ROW_FIELDS = ("reads", "reads_from")
+
+
+def _run_places_rows(own: Own, t: str, port: str, e: Any) -> bool:
+    """`SecondStage.runPlacesRows`: template `t`'s session port `port` reads registered-reads entry `e` at rows the run
+    places, which ``second-read`` holds to the run (`_rows_ok`): a port a link names, each slot at its cell's replay
+    block's rows, or one reading the interior record's own port, each slot at its own rows (`_read_ok`'s first two
+    cases). Any other port reads a value a registration registers, which ``second-read`` holds only to the value's root,
+    domain and leaves (`_same_at`), so ``second-values`` holds its rows to the reference statement's, the same rows in
+    every run. A workload whose rows there depend on the sampled block (a positional table) would need a rule of its
+    own."""
+    v = _get(e, "value")
+    return _link_of(own, t, port) is not None or (isinstance(v, str) and v in _by_port(own.interior))
+
+
+def blank_reads(own: Own, t: str, r: Any) -> Any:
+    """`SecondStage.blankReads`: registered-reads file `r` of a session of template `t` with each port's run fields
+    None: `READ_RUN_FIELDS`, and `READ_ROW_FIELDS` where the run places the port's rows (`_run_places_rows`); anything
+    else unchanged."""
+    ports = _get(r, "ports")
+    if not isinstance(ports, dict):
+        return r
+
+    def blank(p: str, e: Any) -> Any:
+        if not isinstance(e, dict):
+            return e
+        return {**e, **dict.fromkeys(READ_RUN_FIELDS + (READ_ROW_FIELDS if _run_places_rows(own, t, p, e) else ()))}
+    return {**r, "ports": {p: blank(p, e) for p, e in ports.items()}}
+
+
+def _values_ok(own: Own, s: Stmt) -> bool:
+    """`SecondStage.valuesOk`: statement `s`'s registered reads are its template's reference statement's
+    (`Own.ref_reads`) but for the run's fields, the two the same with those blanked (`blank_reads`), so None only where
+    the reference's is, and each value a registration registers read at the reference's rows; False for a template the
+    params give no reference reads."""
+    ref = next(((r,) for t, r in own.ref_reads if t == s.template), None)
+    return ref is not None and _jeq(blank_reads(own, s.template, s.registered), blank_reads(own, s.template, ref[0]))
+
+
 def _stmt_codes(own: Own, named: bool, k: int, p: Part, s: Stmt) -> list[str]:
     q, reads = len(own.sample), _entries(_get(s.registered, "ports"))
-    checks = (("second-header", _header_ok(own, named, k, s.template, s.header)),
+    checks = (("second-verified", _verified_ok(own, s)),
+              ("second-tables", _tables_ok(own, s)),
+              ("second-header", _header_ok(own, named, k, s.template, s.header)),
               ("second-population", _population_ok(q, p, s.header)),
               ("second-roots", _roots_ok(named, own.interior, s.template, s.header, [name for name, _ in reads])),
               ("second-sample", _jeq(s.draw, own_draw(q, p, own.drawn))),
               ("second-read", all(_read_ok(own, named, p, port, e) for port, e in reads)
                and _linked_read(own, p.template, reads)),
-              ("second-refs", _refs_ok(s)))
+              ("second-refs", _refs_ok(s)),
+              ("second-values", _values_ok(own, s)))
     return [code for code, ok in checks if not ok]
 
 
@@ -603,5 +735,6 @@ def attach(rec: Mapping[str, Any], v: Verdict) -> dict[str, Any]:
     return out if v.ok else {**out, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None}
 
 
-__all__ = ["FORM", "Link", "Own", "Part", "at_run", "attach", "blank_run", "check", "interior_order_ok", "links_of",
-           "own_draw", "parts", "port_binding", "replay_links", "set_name", "statement_reads"]
+__all__ = ["FORM", "READ_ROW_FIELDS", "READ_RUN_FIELDS", "Checked", "Link", "Own", "Part", "at_run", "attach",
+           "blank_reads", "blank_run", "check", "interior_order_ok", "links_of", "own_draw", "parts", "port_binding",
+           "replay_links", "set_name", "statement_reads", "verified_of"]

@@ -28,11 +28,16 @@ them on every input (``twin`` null: no served twin cuts the same proof block).  
 activation of the circuit's template (``Extract.claimedUnits``), and a class here is part of one, on synthetic Calls.
 
 A type of `CENSUS` is a block type of the serving rows by its census name (`serving_templates.template`, the name a proof
-overhead card prices it under), one whole Definition a proof block, staged like a `UNITS` type: each parameter one ``row/v2``
-input row of seeded N(0, 1) bf16 words, each output one ``row/v2`` output row, the circuit streamed to circuit.txt once,
-every input's outputs checked against the Program's reference (``twin`` null).
+overhead card prices it under), one whole Definition a proof block, laid out as the served composer lays its template
+(`compose_circuit.py --template`): its served rows (`chunk_rows.unit_rows`, each parameter's leaves seeded at their width,
+`census_leaves`) and statement (`chunk_rows.statement`: the 64-key sparse MLA split part's MUFU reads in Flock's lookup
+slots, its unit cut into stage nets under the automatic caps, which keep it within the GPU prover's slot types; RMSNorm's
+and the FP8 linears' inline) under its unit name, so the statement is the served one but for its binding: its
+``class_sha512`` is the served composer's. The circuit is streamed to circuit.txt once, every input's outputs checked against
+the Program's reference (``twin`` null).
 
-Writes circuit.txt, inst.bin, pub.bin, pin.txt and stage.json under OUT, and a PARTS type's partition.json.
+Writes circuit.txt, inst.bin, pub.bin, pin.txt and stage.json under OUT, a PARTS type's partition.json, and beside a statement
+reading in slots the MUFU tables the prover reads (``tables/``, ``flock-circuit --tables``), as the served composer does.
 
 Types (GLM-5.3's statics from its config: hidden 6144, q_lora 2048, kv_lora 512, moe_intermediate 2048, 256 experts, top 8,
 FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 rank):
@@ -55,6 +60,10 @@ FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 r
                 the block's inputs instead.
     gq          `CENSUS`: Fp8GroupQuantUe8m0_v1{K,G}, one token row's quantization to E4M3 in groups of G with power-of-two
                 scales, before an FP8 linear of K inputs (K = 6144: the hidden state's); a K below 6144 is a column block.
+    fi          `CENSUS`: FlashInferFp8Linear_v1{K,N}, the FlashInfer FP8 linear's output coordinate (N = 1) on one token row:
+                its bf16 x quantized in the block, an E4M3 weight row and its f32 block scales (K = 2048: q_b and o_proj).
+    mla-split-part  `CENSUS`: SparseMlaSplitPart_v1 at T = 64, one query's sparse MLA over one split's 64 keys (FA3's).
+    rmsnorm-v8  `CENSUS`: RMSNormFusedCudaVector8_v1{N=6144,BLOCK=256}, the fused residual add and RMSNorm of one token row.
     the rest    `PARTS`: the capture map's Programs (``glm-moe-dsa-eager-hopper-tp8-v0``) at their GLM-5.3 statics; the MoE
                 tiles' KB and SWAP are Triton's 128 and swapped until the H200 capture pins them."""
 from __future__ import annotations
@@ -197,18 +206,40 @@ for _p in PARTS.values():
 
 @dataclass(frozen=True)
 class Census:
-    """A census type: its family, bound at statics ``S`` in the order of ``defaults`` (its census name's)."""
+    """A census type: its family, bound at statics ``S`` in the order of ``defaults`` (its census name's), then ``fixed``, the
+    statics no spec overrides (a function's or a float's, as the census name writes them)."""
 
     family: str
     defaults: dict
+    fixed: str = ""
 
     def name(self, S: dict) -> str:
-        return f"{self.family}{{{','.join(f'{k}={v}' for k, v in S.items())}}}"
+        return f"{self.family}{{{','.join([*(f'{k}={v}' for k, v in S.items()), *filter(None, [self.fixed])])}}}"
 
 
+_EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
 CENSUS: dict[str, Census] = {
     "gq": Census("Fp8GroupQuantUe8m0_v1", {"K": 6144, "G": 128}),
+    "fi": Census("FlashInferFp8Linear_v1", {"K": 2048, "N": 1}),
+    "mla-split-part": Census("SparseMlaSplitPart_v1", {}, 'T=64,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},'
+                             'INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}'),
+    "rmsnorm-v8": Census("RMSNormFusedCudaVector8_v1", {}, f"N=6144,EPS={_EPS},BLOCK=256"),
 }
+
+
+def census_leaves(rng: np.random.Generator, ty, n: int) -> np.ndarray:
+    """``n`` rows of a parameter of type ``ty`` as u16 words, its leaves packed at their width: bf16 of N(0, 1) for 16-bit
+    leaves, E4M3 codes other than NaN for 8-bit ones, f32 powers of two from 2^-10 to 2^-4 (a block scale) for 32-bit ones."""
+    w = set(ty.leaf_widths())
+    if w == {16}:
+        return bf16(rng.standard_normal((n, ty.leaves)))
+    if w == {8} and ty.leaves % 2 == 0:
+        c = rng.integers(0, 256, (n, ty.leaves), dtype=np.uint8)
+        c[(c & 0x7F) == 0x7F] ^= 1
+        return c.view("<u2")
+    if w == {32}:
+        return np.ldexp(np.ones((n, ty.leaves), np.float32), rng.integers(-10, -3, (n, ty.leaves))).astype("<f4").view("<u2")
+    raise SystemExit(f"stage.py: a census parameter of {ty.leaves} leaves of {sorted(w)} bits, which `census_leaves` doesn't draw")
 
 
 def _static(default, v: str):
@@ -266,26 +297,44 @@ def stage_part(name: str, part: Part, S: dict, tag: str, n: int, out: Path, t0: 
             "seconds": {"draw": round(t_draw, 1), "total": round(time.time() - t0, 1)}, "maxrss_gb": gb()}
 
 
+def nets(low) -> list[dict]:
+    """Each net's ANDs, rows and matrix entries a side: the unit's, then under read slots each tail stage's (the circuit's
+    ``unit``, ``stage0``, ...; a lookup slot's table counts its entries once per statement, in the prover)."""
+    stages = getattr(getattr(low, "tail", None), "stages", ())
+    lays = [("unit", low.layout), *((f"stage{i}", st.layout) for i, st in enumerate(stages))]
+    return [{"net": nm, **{k: int(lay.counts[k]) for k in ("ands", "rows", "nnz_a", "nnz_b")}} for nm, lay in lays]
+
+
 def stage_census(name: str, cen: Census, S: dict, tag: str, n: int, out: Path, t0: float) -> dict:
-    """``n`` inputs of the census type's Definition, a proof block each, as stage.json's record."""
+    """``n`` inputs of the census type's Definition, a proof block each, on its served rows and statement, as stage.json's
+    record."""
+    from verity_vllm.pipeline import chunk_rows as CR
     from verity_vllm.pipeline.serving_rows import template
 
-    d = template(cen.name(S)).fn
-    params, ret = d.signature()
-    if any(set(ty.leaf_widths()) != {16} for _p, ty in params):
-        raise SystemExit(f"stage.py: {d.id} has a parameter that isn't 16-bit words, which a census type draws as bf16")
+    tp = template(cen.name(S))
+    d = tp.fn
+    params, _ret = d.signature()
     rng = np.random.default_rng(int.from_bytes(hashlib.sha256(f"verity/served-units/v1\0{tag}".encode()).digest()[:8], "little"))
-    rows = {p: bf16(rng.standard_normal((n, ty.leaves))) for p, ty in params}
+    vals = {p: census_leaves(rng, ty, n) for p, ty in params}
+    in_rows, out_rows = CR.unit_rows(tp)
+    if any(p not in vals for *_r, ps in in_rows for p in ps):
+        raise SystemExit(f"stage.py: {tp.id}'s served rows {in_rows} cut a parameter, which a census type draws whole")
+    rows = {r: np.concatenate([vals[p] for p in ps], axis=1) for r, _s, _b, ps in in_rows}
+    if any(rows[r].shape != (n, b // 16) for r, _s, b, _ps in in_rows):
+        raise SystemExit(f"stage.py: {tp.id}'s drawn rows {[rows[r].shape for r, *_x in in_rows]} are not its rows' words")
+    stmt = CR.statement(tp)
     t_draw = time.time() - t0
-    in_rows = [(p, V2, 16 * ty.leaves, [p]) for p, ty in params]
-    out_rows = [(V2, (j,)) for j in range(len(getattr(ret, "fields", None) or (ret,)))]
-    st = CS.UnitStager(d, f"unit/served-{tag}", in_rows, out_rows, circuit=out / "circuit.txt")
+    st = CS.UnitStager(d, "unit/serving-rows", in_rows, out_rows, circuit=out / "circuit.txt", **stmt)
     t_built = time.time() - t0
     salt_key = hashlib.sha256(f"verity/served-units/salts\0{tag}".encode()).digest()
     got = st.stage(rows, out, salt_key)
+    if stmt.get("reads") == "slots":
+        FC.IL.write_tables(out / "tables")
     meta = got["meta"]
     return {"unit": name, "statics": S, "tag": tag, "n": n, "definition": d.id, "census": cen.name(S),
-            "in_rows": [[r, s, b] for r, s, b, _ in in_rows], "public_inputs": [], "packed": False, "ands": got["ands"],
+            "in_rows": [[r, s, b, ps] for r, s, b, ps in in_rows], "public_inputs": [], "packed": False, "ands": got["ands"],
+            "statement": stmt, "caps": getattr(st.low, "caps", None), "nets": nets(st.low), "lookups": meta.get("lookups"),
+            "slot_types": len({r["net"] for r in meta.get("ranges", ())}),
             "unit_nnz": got["unit_nnz"], "k_log": meta["k_log"], "unit_log": meta.get("unit_log"),
             "vus_per_block": meta.get("vus_per_block"), "row_schemas": meta.get("row_schemas"),
             "circuit_bytes": (out / "circuit.txt").stat().st_size, "circuit_sha512": st.pin, "class_sha512": st.class_sha512,
@@ -325,6 +374,8 @@ def public_words(d, row: np.ndarray, params: tuple[str, ...], packed: bool = Fal
 def main() -> None:
     args = [a for a in sys.argv[1:] if a not in ("--public-weights", "--packed")]
     public, packed = "--public-weights" in sys.argv, "--packed" in sys.argv
+    if any(a.startswith("--") for a in args) or len(args) != 3:
+        raise SystemExit(f"stage.py: usage: stage.py UNIT N OUT [--public-weights [--packed]], not {sys.argv[1:]}")
     if packed and not public:
         raise SystemExit("stage.py: --packed lays out --public-weights' ports")
     spec, n, out = args[0], int(args[1]), Path(args[2])
@@ -334,7 +385,8 @@ def main() -> None:
     if isinstance(u, (Part, Census)):
         if public:
             raise SystemExit(f"stage.py: --public-weights is for a type of UNITS, not {name}")
-        rec = (stage_part if isinstance(u, Part) else stage_census)(name, u, S, tag, n, out, t0)
+        rec = (stage_part(name, u, S, tag, n, out, t0) if isinstance(u, Part)
+               else stage_census(name, u, S, tag, n, out, t0))
         (out / "pin.txt").write_text(rec["circuit_sha512"])
         (out / "stage.json").write_text(json.dumps(rec, indent=1))
         print(json.dumps(rec), flush=True)
