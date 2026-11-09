@@ -3,8 +3,8 @@ the size of the circuit that description unrolls to (README.md).
 
   measure --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES] [--exe PATH]
       Serve_v1 at each config, word-level and on bits (`lift.on_bits`), as an inference-only check instance (θ its registered inputs, one
-      IU per Call), checked by `nci-check --policy` (`InferenceOnlyCheck.Desc`) and, where the unrolled circuit has at most GATES
-      gates, by `nci-check --policy --unrolled` (`InferenceOnlyCheck.check`) on the instance expanded gate by gate;
+      IU per Call), checked by `inference-only-check --policy` (`InferenceOnlyCheck.Desc`) and, where the unrolled circuit has at most GATES
+      gates, by `inference-only-check --policy --unrolled` (`InferenceOnlyCheck.check`) on the instance expanded gate by gate;
       DIR/results.json.
   partition --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES] [--exe PATH]
       the one-stage verifier's partition (`sampled-proofs-difftest`'s `partition`: `Partition.units`, `strata`, the sampling design
@@ -34,7 +34,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 NCI = ROOT / "verity/core/protocols/network/inference_only/lean"
-EXE = NCI / ".lake/build/bin/nci-check"
+EXE = NCI / ".lake/build/bin/inference-only-check"
 SCHEMA = "verity/verifier-cost/v1"
 
 sys.path.insert(0, str(HERE))
@@ -181,7 +181,7 @@ def measure(args) -> int:
                                  | {"desc_s": round(row["desc"]["seconds"], 3),
                                     "unrolled_s": row["unrolled"].get("seconds"), "agrees": row["unrolled"].get("agrees")}),
                       flush=True)
-    result = {"schema": SCHEMA, "verifier": "nci-check", "workload": "Serve_v1", "repeat": args.repeat,
+    result = {"schema": SCHEMA, "verifier": "inference-only-check", "workload": "Serve_v1", "repeat": args.repeat,
               "unrolled_max": args.unrolled_max, "rows": rows}
     (out / "results.json").write_text(json.dumps(result, indent=1) + "\n")
     bad = [r["config"] + "/" + r["ir"] for r in rows

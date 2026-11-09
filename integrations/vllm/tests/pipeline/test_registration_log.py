@@ -1,4 +1,4 @@
-"""`registration_log.write` is a log nci-check's full check accepts: on a Program whose θ is registered, its record, provenance
+"""`registration_log.write` is a log inference-only-check's full check accepts: on a Program whose θ is registered, its record, provenance
 and trusted input pass `inference_only_reference.check_baseline` (`InferenceOnlyCheck.Baseline`'s reference), each entry is the one one-stage's
 `Registered.commit` makes of the parameter's rows, and each break is refused with the code the check names."""
 import copy
