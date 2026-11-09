@@ -20314,3 +20314,53 @@ The same text is note `proofs/20261109T2140Z-report-form-s-table-half`.
   - The stale runs at `05986c5ed8` (468c, 1740) had never started; I cancelled them.
   - At `258b9fe5a7`: the Lean check is r20261109-215649-153a (cpu-3, about 7 min once it has a slot). The suites are r20261109-215759-85e8 (cpu-1, about 20 min), with `benchmarks/two_stage` and `benchmarks/spot_proved` added, since #8413's changes reach them.
   - Its body says `Goal proofs/spot-128k-attention-proved`, the label you gave PRF-477. I mark it once both pass. Land it after #8413.
+
+## TWOOPENS, Mon 9 Nov 22:06Z: #8309 renamed at `58f7298323`, not marked; records ETA 23:15Z, mark ETA 23:45Z
+
+This supersedes my 21:05Z land ask at `a59ab0b49b`.
+- **The rename is in** at `58f7298323` (`cursor/proofs-sessions-bytemplate-3e7a`). The premise is
+  `SpotFlock.Addresses` and its record `Address`, with `AddressHolds`, `addressMap(_spec)`, `addressPlace`,
+  `addressOp(_seenAt)`, `openAt_addressOp`, binders `addr`, and "address" in SpotFlock's docstrings.
+  - Fields and file names stay.
+  - The lock's open entry keeps owner, issue and due under the new name; both guarantees' `open` lists name it, and the
+    unwitnessed hashes are untouched.
+  - The title, body and module docstrings say "address". The body cites the ask (`db12b54a-08d9-4089-a8c2-fae66d5a3968`,
+    A provisional), with link text that names `Addresses`.
+- **The script** is `inbox/rename_addresses.py` on `cursor/proofs-inbox`, run as `python3 rename_addresses.py BASE FILE...`.
+  It applies a word list (CODE, PROSE, KEEP) only to the lines a branch adds over BASE, so nothing on BASE moves.
+  Another pair costs one line in CODE and PROSE.
+- **Checks so far.** The Lean tries pass, with `SpotKSTwo` and `SpotExfilTwo` on the three standard axioms and no
+  sibling clash: `r20261109-214712-de0b`, `r20261109-215008-42fa`, `r20261109-215110-11c4`, `r20261109-215353-91da`.
+  I also replaced the deprecated `if_pos`/`if_neg` in #8309's own `FrameAt` and `SlotsAt`, so its files build without
+  a warning.
+- **What the rename costs.** The earlier records (`r20261109-180613-4518`) and suites (`r20261109-192812-42ec`,
+  `r20261109-202801-f7c8`) cover only the old head. To redo:
+  - the records run `r20261109-215630-ef57` (cpu-1, from 21:56Z), ETA 23:15Z;
+  - then the 9 suites the change touches, 8 of which read the lock, at the records commit: about 25 min, ETA 23:45Z.
+  - Then I mark, and write the land ask here with the run ids. `checked` (`00d07520b3`) is already in #8309.
+- **The stacked PRs take it by one merge.** The table and script went to SLOTSAT, TWOWITNESS and TWOVERIFY at 22:03Z.
+  - #8363: five lines of `Instance.lean` read the old names, plus `InstanceSites.lean` per your note.
+  - #8406 and #8339 read none.
+  - The pin merged it cleanly at `cd80f9f6e0`, and its try passes (`r20261109-220052-cad2`).
+  - No TWOWITNESS branch reads the old names.
+- **Freeze.** The command prints the four `seed_rule*` lines and nothing else. They are `checked`'s `0cee82ddb2`
+  (seed_rule moved to `program/frontend`), which #8309 has through its merges of `checked`, and `checked` holds the move.
+  None is mine.
+- **Main's site names: I changed none.** A later word map would touch:
+  - 139 names declared in 48 files: Flock soundness's per-gate family (`Placed.Sites*`, `HiddenExec.SitesH*`/`SitesHP*`/
+    `SiteH*`, `Integrate.sitesAt*`, `SitesZ*`, `sitesSh*`, `sitesZ*`, `sitesPJ*`, `sitesPHJI*`, `BcSite`, `bc_site*`,
+    `siteAddr*`, `copy_site*`, `RowSite*`, `ResSite*`, `CopySite*`, VBridge's `siteRowsShared`), and SPOT's
+    `Spot/SiteDifftest.lean`;
+  - the 81 Lean files that read them, more through the namespace `Sites`, and their records in the root, Proofs and
+    interface locks;
+  - 13 file names, 11 of them under the frozen `Security/Proofs/Flock`.
+  It must key on whole names: the physical `Core.Site`, `Properties.Site` and `Composite.onsite` share the word.
+- **ci review-3.** The lint's count is 415 files over the allowance, down from 416.
+  - In: `test_guard.py`'s flock-verify (0 left); `guard.py` from 22 sites to 9 (flock-verify, reference circuit,
+    "draws", `ref_draw` to `ref_sample`, and its local `draw`).
+  - Left, for my next PR:
+    - `guard.py`'s 9, which mirror main's names (`unit_draw`, `FlockDeploy.Raw`'s `draw`, `select.second_law`, the `law`
+      key);
+    - `TwoGuard.lean`'s 19: `secondDrawAt`, which #8406 reads; `Spot.Draw`/`drawn` on lines #8339 edits; main's `law`;
+    - the SpotFlock Lean: `FrameAt`'s `cap` binder (8), `RevealAt`'s `drawnOf`/`draw` (9) and `SlotsAt`'s 3 prose
+      "drawn". Each is code except the 3, and any Lean edit now would need another records run.
