@@ -9,58 +9,58 @@
 # min(k/u, C/F) steps after each registration.
 
 [premise.update-hardness]
-lean = "Nci.Cover.Assumptions.UpdateHardness"
+lean = "InferenceOnly.Cover.Assumptions.UpdateHardness"
 standing = "supported"
 beyond = "contested"
 credible_bits = { value = 1.1e9, unit = "bit", source = "E1 Lemma 9 / P0: one step's data at Kimi K2's batch, 6.7e7 tokens x 17 bits", status = "derived" }
 
 [premise.parameter-hard]
-lean = "Nci.Assumptions.ParameterHard"
+lean = "InferenceOnly.Assumptions.ParameterHard"
 standing = "supported"
 beyond = "contested"
 credible_bits = { value = 1.1e9, unit = "bit", source = "as premise.update-hardness: one step's data replays the step (E1 P0)", status = "derived" }
 
 [premise.parameter-hard-at]
-lean = "Nci.Assumptions.ParameterHardAt"
+lean = "InferenceOnly.Assumptions.ParameterHardAt"
 standing = "supported"
 beyond = "contested"
 credible_bits = { value = 1.1e9, unit = "bit", source = "as premise.update-hardness: one step's data replays the step (E1 P0)", status = "derived" }
 
 [premise.weights-incompressible]
-lean = "Nci.Assumptions.WeightsIncompressible"
+lean = "InferenceOnly.Assumptions.WeightsIncompressible"
 standing = "assumed"
 beyond = "contested"
 credible_bits = { value = 1.1e9, unit = "bit", source = "as premise.update-hardness: one step's data replays the step (E1 P0)", status = "derived" }
 
 [premise.activation-chained]
-lean = "Nci.Assumptions.ActivationChained"
+lean = "InferenceOnly.Assumptions.ActivationChained"
 standing = "supported"
 beyond = "supported"
-credible_bits = { value = inf, unit = "bit", source = "Nci.Assumptions.ActivationChainedAt docstring: an activation's own bits are a cut, c_a about its width; the depth D it needs at k is classes.chained_share", status = "derived" }
+credible_bits = { value = inf, unit = "bit", source = "InferenceOnly.Assumptions.ActivationChainedAt docstring: an activation's own bits are a cut, c_a about its width; the depth D it needs at k is classes.chained_share", status = "derived" }
 
 [premise.activation-chained-at]
-lean = "Nci.Assumptions.ActivationChainedAt"
+lean = "InferenceOnly.Assumptions.ActivationChainedAt"
 standing = "supported"
 beyond = "supported"
-credible_bits = { value = inf, unit = "bit", source = "Nci.Assumptions.ActivationChainedAt docstring: an activation's own bits are a cut, c_a about its width; the depth D it needs at k is classes.chained_share", status = "derived" }
+credible_bits = { value = inf, unit = "bit", source = "InferenceOnly.Assumptions.ActivationChainedAt docstring: an activation's own bits are a cut, c_a about its width; the depth D it needs at k is classes.chained_share", status = "derived" }
 
 [premise.upstream]
-lean = "Nci.Cover.MulBlocks.Upstream"
+lean = "InferenceOnly.Cover.MulBlocks.Upstream"
 standing = "supported"
 beyond = "supported"
-credible_bits = { value = inf, unit = "bit", source = "Nci.Cover.MulBlocks.Upstream docstring: a structural property of the training circuit; the depth D it needs at k is classes.upstream_share", status = "derived" }
+credible_bits = { value = inf, unit = "bit", source = "InferenceOnly.Cover.MulBlocks.Upstream docstring: a structural property of the training circuit; the depth D it needs at k is classes.upstream_share", status = "derived" }
 
 [premise.baseline-registered]
-lean = "Nci.Assumptions.ThetaRegistered"
+lean = "InferenceOnly.Assumptions.ThetaRegistered"
 standing = "supported"
 beyond = "supported"
-credible_bits = { value = inf, unit = "bit", source = "Nci.Assumptions.ThetaRegistered: what registration enforces (no unregistered value in the declaration's θ)", status = "derived" }
+credible_bits = { value = inf, unit = "bit", source = "InferenceOnly.Assumptions.ThetaRegistered: what registration enforces (no unregistered value in the declaration's θ)", status = "derived" }
 
 [premise.reference-layered]
-lean = "Nci.Assumptions.ReferenceLayered"
+lean = "InferenceOnly.Assumptions.ReferenceLayered"
 standing = "assumed"
 beyond = "assumed"
-credible_bits = { value = inf, unit = "bit", source = "Nci.Guarantees.ReferenceThreaded: the named conjecture at Kimi K2's shapes; its block-size limit is the threaded class's thread_k", status = "conjecture" }
+credible_bits = { value = inf, unit = "bit", source = "InferenceOnly.Guarantees.ReferenceThreaded: the named conjecture at Kimi K2's shapes; its block-size limit is the threaded class's thread_k", status = "conjecture" }
 
 [premise.e1-activation-rate]
 lean = "draft:E1-activation-rate"

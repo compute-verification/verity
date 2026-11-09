@@ -31,8 +31,8 @@ name = "pouw_commit"
 path = "../../verity/core/protocols/pouw/lean/commit"
 
 [[require]]
-name = "nci_check"
-path = "../../verity/core/protocols/network/nci/lean"
+name = "inference_only_check"
+path = "../../verity/core/protocols/network/inference_only/lean"
 
 [[require]]
 name = "certifier_device"
@@ -88,13 +88,13 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Pouw.Period", "Properties.Pouw.PeriodJ10R", "Properties.Pouw.PeriodJ10RStrata",
   "Properties.Pouw.ServedFreed", "Properties.Pouw.ServedWork", "Properties.Pouw.ServedValues", "Properties.Pouw.Strata",
   "Properties.Pouw.Credit",
-  "Properties.Nci", "Properties.Nci.Threads", "Properties.NetworkCertifier.Device", "Properties.Pous",
+  "Properties.InferenceOnly", "Properties.InferenceOnly.Threads", "Properties.NetworkCertifier.Device", "Properties.Pous",
   "Properties.Pous.TimedAudit", "Properties.Pous.MemoryChallenger", "Properties.Pous.Wipe", "Properties.Pous.EndToEnd",
   "Properties.Pous.Period", "Properties.Pous.EndToEndAt", "Properties.Pous.PeriodAt", "Properties.Pous.PeriodDeployed",
   "Properties.Accounting.JointBridge.SpaceOfPeriodHeld", "Properties.Attest", "Properties.Pous.Component",
   "Properties.NetworkCertifier.Check", "Properties.NetworkCertifier.Check.LinkWindow", "Properties.NetworkCertifier.DeviceOutput",
-  "Properties.NetworkCertifier.DeviceOutput.Runs", "Properties.Hash.Identity", "Properties.Annot", "Properties.Nci.Desc",
-  "Properties.Nci.Desc.Verdict", "Properties.Nci.Desc.Cover", "Properties.Nci.Baseline", "Properties.Nci.Count",
+  "Properties.NetworkCertifier.DeviceOutput.Runs", "Properties.Hash.Identity", "Properties.Annot", "Properties.InferenceOnly.Desc",
+  "Properties.InferenceOnly.Desc.Verdict", "Properties.InferenceOnly.Desc.Cover", "Properties.InferenceOnly.Baseline", "Properties.InferenceOnly.Count",
   "Properties.Spot", "Properties.Spot.Draw", "Properties.Spot.Bits",
   "Properties.Spot.Interval", "Properties.Spot.FactorUpper", "Properties.Spot.TwoStageCheck",
   "Properties.Spot.Halt", "Properties.Spot.Second", "Properties.Spot.Wires", "Properties.Spot.Members",
@@ -106,7 +106,7 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Accounting.RegisteredCircuit", "Properties.Accounting.Remote.Line", "Properties.Accounting.Remote.Schedule",
   "Properties.Accounting.Remote.Shared", "Properties.Accounting.Remote.Live", "Properties.Accounting.Remote.Subprotocol",
   "Properties.Composition", "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
-  "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.Flock.Circuit", "Properties.Nci.Protocol",
+  "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.Flock.Circuit", "Properties.InferenceOnly.Protocol",
   "Properties.Verity.Soundness", "Properties.Verity.Game", "Properties.Verity.Idle", "Properties.Remote",
   "Properties.Verity.Subprotocols", "Properties.Verity.Coupling", "Properties.Flock.Nets", "Properties.Pous.WipeSigned",
   "Properties.Challenger", "Properties.Firewall", "Properties.Core.Site"]

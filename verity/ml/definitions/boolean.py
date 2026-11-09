@@ -577,7 +577,7 @@ def gate_table(fns) -> tuple[dict[str, int], list[str]]:
     two-input Boolean gates as `census` counts a Definition's Boolean work (an n-input And or Xor n - 1, a Not 1, a constant bit
     or an input 0) through its Boolean version (`boolean_version`, the primitive itself where it is Boolean); and, sorted, the
     keys of those it can't price: no Boolean version, or one that reaches a primitive that is no gate. The one table a count
-    of (c, k)-inference blocks reads (`NciCheck.Count`'s ``table``)."""
+    of (c, k)-inference blocks reads (`InferenceOnlyCheck.Count`'s ``table``)."""
     from verity.ml.circuits import census as CE
     from verity.ml.circuits.program import is_input
 
