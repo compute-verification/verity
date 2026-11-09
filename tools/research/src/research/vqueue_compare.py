@@ -7,8 +7,9 @@ merges on `origin/checked`'s first-parent line (`queue.queue_commit`: each one's
 its landing's, since drive merges a member again as it lifts it and lands it in that tick), the `git revert`s there that undo
 one (an odd chain of `This reverts commit C`; a `Revert "Queue: #N` subject naming no commit undoes #N's newest landing), and
 `origin/main`'s first-parent line.  When `main` reached each commit isn't in git: `--main-moves` gives it, `<UTC ISO> <commit>`
-lines (a hex prefix of `PREFIX` digits or more names the one commit of `main`'s line it starts); the earliest line is where
-`main` was then, and each later one reaches the commits above every line before it.  Without it `main`'s arrival is unknown,
+lines (a hex prefix of `PREFIX` digits or more names the one commit of `main`'s line it starts, and a commit off that line
+counts as the newest commit of the line it holds); the earliest line is where `main` was then, and each later one reaches
+the commits above every line before it.  Without it `main`'s arrival is unknown,
 and the old path's `main` is `main` now.  Each PR's ready mark is the newest `ready = true` label at a head at or before the
 event measured from it (`research queue stats` reads the same labels; a head with no label of its own has no mark here), and an
 old-path ejection is a head whose newest `ready` label is `false` (`research queue eject`'s, its reason in `ref`).
@@ -310,9 +311,11 @@ def resolve(c: str, commits: list[str], index: dict[str, int]) -> str | None:
     return hits[0] if len(hits) == 1 else None
 
 
-def parse_moves(text: str, line: list[str]) -> tuple[list[tuple[datetime, str]], list[str]]:
+def parse_moves(text: str, line: list[str], onto: Callable[[str], str | None] | None = None,
+                ) -> tuple[list[tuple[datetime, str]], list[str]]:
     """``text``'s `<UTC ISO> <commit>` lines (blank and `#` lines skipped), each commit resolved on `main`'s first-parent
-    ``line``, and why each other line was left out."""
+    ``line``, and why each other line was left out.  A commit `main` reached off that line (one `checked` merged later as a
+    second parent) is read as ``onto``'s answer, the newest commit of the line it holds."""
     index = {c: i for i, c in enumerate(line)}
     moves, warn = [], []
     for i, raw in enumerate(text.splitlines(), 1):
@@ -325,6 +328,8 @@ def parse_moves(text: str, line: list[str]) -> tuple[list[tuple[datetime, str]],
             warn.append(f"--main-moves line {i}: {raw.strip()!r}: {e}; want `<UTC ISO> <commit>`: left out")
             continue
         c = resolve(parts[1], line, index) if len(parts) == 2 else None
+        if c is None and onto is not None and len(parts) == 2:
+            c = onto(parts[1])
         if c is None:
             warn.append(f"--main-moves line {i}: {raw.strip()!r} names no one commit of `main`'s first-parent line: left out")
         else:
@@ -723,6 +728,19 @@ def _git(repo: Path, *args: str) -> str:
     return r.stdout
 
 
+def _onto(repo: Path, line: list[str]) -> Callable[[str], str | None]:
+    """The newest commit of `main`'s first-parent ``line`` that a commit holds, down that commit's own first-parent line;
+    None for one git doesn't have (the move is then left out, and said)."""
+    index = set(line)
+
+    def onto(c: str) -> str | None:
+        r = subprocess.run(["git", "rev-list", "--first-parent", "--max-count=10000", f"{c}^{{commit}}", "--"], cwd=repo,
+                           capture_output=True, text=True)
+        return None if r.returncode else next((x for x in r.stdout.split() if x in index), None)
+
+    return onto
+
+
 def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="python3 -m research.vqueue_compare", description=__doc__.split("\n\n")[0],
                                  epilog="exit 0: the paths agree and every advance was sound; 1: not; 2: an input can't be read")
@@ -749,7 +767,7 @@ def main(argv: list[str] | None = None) -> int:
         chain = parse_chain(_git(a.repo, "log", "--first-parent", f"--format={CHAIN_FORMAT}", a.checked, "--"))
         line = _git(a.repo, "rev-list", "--first-parent", a.main, "--").split()[::-1]
         entries, bad = parse_log(a.log.read_text(errors="replace"))
-        moves, warn = parse_moves(a.main_moves.read_text(), line) if a.main_moves else ([], [])
+        moves, warn = parse_moves(a.main_moves.read_text(), line, _onto(a.repo, line)) if a.main_moves else ([], [])
         reds, also = parse_reds(json.loads(a.old_reds.read_text()), chain) if a.old_reds else ({}, [])
         until = when(a.until) if a.until else clock()
         since = when(a.since) if a.since else entries[0].at if entries else until

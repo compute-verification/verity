@@ -464,6 +464,20 @@ def test_parse_moves_and_arrivals():
     assert "want `<UTC ISO> <commit>`" in warn[1]
     assert vc.arrivals(line, moves) == {Q2: vc.when(at("10:30")), Q3: vc.when(at("10:30")), Q4: vc.when(at("11:00"))}
     assert vc.arrivals(line, []) == {}
+    off, warn = vc.parse_moves(f"{at('10:00')} {A}\n{at('10:20')} {LK}\n{at('10:40')} {RA}\n", line, {LK: Q2}.get)
+    assert (off, len(warn)) == ([(vc.when(at("10:00")), A), (vc.when(at("10:20")), Q2)], 1)   # LK is off the line, and holds Q2
+    assert vc.arrivals(line, off) == {Q1: vc.when(at("10:20")), Q2: vc.when(at("10:20"))}
+
+
+def test_a_move_off_mains_first_parent_line_reads_as_the_newest_commit_of_it_held(world):
+    """`main` moved to a commit `checked` merged later as a second parent, such as a lock commit: it brought the commits of
+    `main`'s first-parent line it holds."""
+    line = git(world.repo, "rev-list", "--first-parent", "--reverse", "refs/remotes/origin/main").split()
+    side = git(world.repo, "commit-tree", git(world.repo, "mktree"), "-p", world.q[102], "-m", "Lock records regenerated",
+               stamp="14:30")
+    onto = vc._onto(world.repo, line)
+    assert onto(side) == onto(side[:10]) == world.q[102] and onto(world.q[103]) == world.q[103]
+    assert onto("f" * 40) is None
 
 
 def test_parse_reds_resolves_tips_on_checked():
