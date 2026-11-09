@@ -735,7 +735,7 @@ def test_a_priority_waiter_goes_ahead_of_waiting_lane_checks_and_behind_older_pr
 
 
 def test_a_small_check_passes_lane_waiters_ahead_that_only_memory_keeps_from_starting(tmp_path, monkeypatch):
-    """INF-607: on cpu-6 and cpu-7 a 400-448 GB run at the head of the line waited on memory while 7 slots sat idle, and every small
+    """A 400-448 GB run at the head of the line waited on memory while 7 slots sat idle, and every small
     check behind it waited too. A waiter asking at most BACKFILL_MAX_GB doesn't count a lane waiter ahead whose ask exceeds the
     memory free now; one with no ask, one that would fit, and a priority waiter still hold the line."""
     line = tmp_path / SLOT.LINE

@@ -26,7 +26,7 @@ def test_a_timeout_with_units_is_shipped_as_seconds_and_seen_by_the_guards(capsy
 
 
 def test_a_bare_timeout_under_five_minutes_is_refused_for_a_machine_with_the_unit_to_write(capsys):
-    """#7908's runs passed `--timeout 60` meaning minutes and were killed 60 s after taking their slots (INF-605)."""
+    """A PR's runs passed `--timeout 60` meaning minutes and were killed 60 s after taking their slots."""
     for argv in (["--on", "vy-nowhere"], ["--on", "auto"], ["--queue", "--source", ".", "--project", "p"]):
         assert cli.main(["run", *argv, "--timeout", "60", "--", "true"]) == 2
         err = capsys.readouterr().err
@@ -89,8 +89,8 @@ def test_fetch_reports_a_running_run_whose_machine_rebooted_or_whose_runner_is_g
 
 
 def test_a_run_that_ends_between_the_status_copy_and_the_runner_probe_is_its_end_not_runner_gone(tmp_path, monkeypatch):
-    """INF-619: `--wait` copied status.json while the run was running, then probed the runner after it had ended and exited, and
-    called a passing run runner-gone (r20261109-062759-36d6). A failed probe rereads the status first."""
+    """`--wait` copied status.json while the run was running, then probed the runner after it had ended and exited, and called
+    a passing run runner-gone. A failed probe rereads the status first."""
     import socket
     local = _machine_run(tmp_path, monkeypatch, launcher_log="")
     d = tmp_path / "machine" / "r-x"

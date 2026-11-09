@@ -604,8 +604,8 @@ SHORT_TIMEOUT_S = 300
 
 def _short_bare_timeout(harness_opts: list[str]) -> str | None:
     """Why a run sent to a machine is refused for its ``--timeout``: a bare number under :data:`SHORT_TIMEOUT_S` reads as seconds,
-    and on a shared machine it is nearly always minutes meant (INF-605: `--timeout 60` killed each of #7908's runs 60 s after it
-    took its slot). A value with a unit (`90s`, `60m`) passes as written."""
+    and on a shared machine it is nearly always minutes meant (`--timeout 60` once killed each of a PR's runs 60 s after it took
+    its slot). A value with a unit (`90s`, `60m`) passes as written."""
     v = remote.flag_value(harness_opts, "--timeout")
     if v is None or not v.replace(".", "", 1).isdigit():
         return None

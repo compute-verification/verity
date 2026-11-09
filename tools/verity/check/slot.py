@@ -109,7 +109,7 @@ SCOPE_ENV = "CHECK_SCOPE_UNIT"
 #: this instead (reserving only the slot's mem= would under-report the run in the ledger)
 RUN_MEM_ENV = "CHECK_RUN_MEM_GB"
 #: a lane waiter that asks at most this many GB (RUN_MEM_ENV) passes the lane waiters ahead of it that only memory keeps from
-#: starting: a 448 GB run at the head held 7 idle slots and every small check behind it (INF-607). Small runs end and free
+#: starting: a 448 GB run at the head held 7 idle slots and every small check behind it. Small runs end and free
 #: their memory soon, so passing the head costs it little
 BACKFILL_MAX_GB = 32
 USAGE = "usage: slot.py [--priority [--rank N]] [--by NAME] [--twin PAIR[@HOME]] [--wait-max SECONDS] [--run-max SECONDS] -- CMD..."

@@ -1526,9 +1526,9 @@ class Watch:
                     self.hold("worker_idle", r, t, w, at=iso(updated), since=iso(updated), **detail)
             elif status == "ARCHIVED":
                 w["gone"] = True
-            # a Task worker's runs aren't the API's, so its `latestRunId` never moves (circuits' CC-KEY kept a 2 Nov one through
-            # ten runs on 9 Nov, INF-390): only a worker whose runs the API lists can drop a message, and an IDLE read right
-            # after an ACTIVE one is a run that ended
+            # a Task worker's runs aren't the API's, so its `latestRunId` never moves (one kept a week-old id through ten runs):
+            # only a worker whose runs the API lists can drop a message, and an IDLE read right after an ACTIVE one is a run that
+            # ended
             if (status == "IDLE" and not w.get("no_runs") and w.get("idle_at") != updated
                     and (latest := info.get("latestRunId"))):
                 self.dropped({**info, "id": agent}, self.read({**info, "id": agent}, latest), t, role="worker", **detail)
@@ -1611,8 +1611,8 @@ class Watch:
             by_lane = not mine and bool(k.get("lane"))
             if by_lane:
                 # nothing names its branches (a Task-launched worker: no `git.branches`, a PR body naming only its lane): its
-                # lane's pushes and runs stand in, since archiving one at work loses it (circuits' MOEFUSE, 9 Nov, 40 min after
-                # a push; its runs went under its coordinator's id)
+                # lane's pushes and runs stand in, since archiving one at work loses it (one was archived 40 min after a push,
+                # its runs filed under its coordinator's id)
                 mine = {b for b in heads if b.startswith(f"cursor/{k['lane']}-")} | self.pr_lanes.get(k["lane"], set())
             pushed = max((heads[b][1] for b in mine if b in heads), default=None)
             # a coordinator signs its notes with its lane, not its id, so its id alone rings it falsely as silent

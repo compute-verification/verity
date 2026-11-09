@@ -767,7 +767,7 @@ def unverified_main(ctx: Ctx) -> list[Finding]:
     main again; read from drive's state, not its log, so it still rings while drive is down. Quiet while drive ticks
     (`drive_ticking`): drive's own `_behind` alarm rings then, and this one covers drive being dead.
 
-    Since main moves only through the verified queue (CI-489, 15:29Z 9 Nov; drive stopped for good), its decisions file
+    Since main moves only through the verified queue (drive stopped for good), its decisions file
     (`VQUEUE_DECISIONS`) is read instead when it exists: one event per further hour once the queue has decided nothing for
     `UNVERIFIED_S`, a loop stopped or stuck; a queue that decides is ci's, which it rings itself."""
     if (decisions := ctx.root / VQUEUE_DECISIONS).exists():

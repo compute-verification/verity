@@ -49,8 +49,8 @@ def test_an_idle_nodes_research_pool_takes_a_job_while_the_busy_ones_queue():
 
 
 def test_a_run_that_takes_a_lean_build_slot_goes_only_where_the_machines_lean_slots_have_build():
-    """9 Nov: proofs' `lean_changed.py --build` runs went by `--on auto` to cpu-9, whose `build` pool is drive's, and were refused
-    in 0 s, again and again. A machine whose Lean slots give `build` none is skipped for them; one with no Lean slots file, or
+    """`lean_changed.py --build` runs went by `--on auto` to a machine whose `build` pool was the queue's, and were refused in
+    0 s, again and again. A machine whose Lean slots give `build` none is skipped for them; one with no Lean slots file, or
     whose file couldn't be read, isn't."""
     cpu9 = "vy-nebius-cpu-9"
     drives = {**pool(slot("r0", cpus="12-33")), "lean": {"check": 2}}

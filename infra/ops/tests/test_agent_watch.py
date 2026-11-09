@@ -1407,8 +1407,8 @@ def test_a_worker_whose_message_never_became_a_run_is_recorded_dropped_for_its_l
 
 
 def test_a_task_worker_whose_latest_run_id_never_moves_is_never_called_dropped(tmp_path):
-    """circuits' CC-KEY (INF-390): resumed by Task, it kept a 2 Nov latestRunId through ten runs on 9 Nov, and each IDLE after
-    its work read as a message that never became a run. Seen working with its latest API run finished, it is a Task worker."""
+    """A worker resumed by Task kept a week-old latestRunId through ten runs, and each IDLE after its work read as a message that
+    never became a run. Seen working with its latest API run finished, it is a Task worker."""
     notes = tmp_path / "notes"
     note(notes, "circuits", "a.md", f"circuits worker ({W1_})")
     st = {**worker("ACTIVE", "2026-10-18T19:40:00Z", name="CC-KEY"), "latestRunId": "run-w"}
@@ -1843,8 +1843,8 @@ def test_a_push_to_a_pr_branch_whose_body_names_a_worker_is_its_activity(tmp_pat
 
 
 def test_a_worker_whose_branches_nothing_names_takes_its_lanes_pushes_as_its_activity(tmp_path):
-    """circuits' MOEFUSE (9 Nov) was archived silent 40 min after pushing #8281's `cursor/circuits-cir193-...-6f04`: a Task-launched
-    worker has no `git.branches`, the PR body named only `Lane circuits`, and the branch's suffix isn't its id's. With no branch
+    """A worker was archived as silent 40 min after pushing its PR's `cursor/<lane>-...` branch: a Task-launched worker has no
+    `git.branches`, the PR body named only `Lane circuits`, and the branch's suffix isn't its id's. With no branch
     of its known, pushes to its lane's branches (`cursor/<lane>-*`, and open PRs whose body says `Lane <lane>`) count."""
     notes = tmp_path / "notes"
     note(notes, "circuits", "a.md", f"circuits worker MOEFUSE ({W1_})", age_s=2 * 3600)

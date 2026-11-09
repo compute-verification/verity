@@ -78,8 +78,8 @@
 # poll falls back to the rules above, keeping its place in the queue.
 # A lease's owner lines are written as soon as its locks are taken (the UUIDs and the memory scope are looked up before), so a
 # held lock never shows the previous holder's line for longer than that.  When CMD ends, still holding the locks, the lease
-# prefixes each of its lines with `released=TIME`, so a reader of the file sees it ended (INF-612: node A's lines named run ecd8
-# for hours after its locks were free); the line stays, for the run that last held the GPU (gpu_adopt, the keeper's grants).
+# prefixes each of its lines with `released=TIME`, so a reader of the file sees it ended (a node's lines once named a run for
+# hours after its locks were free); the line stays, for the run that last held the GPU (gpu_adopt, the keeper's grants).
 # A lease killed outright leaves its line unmarked: `status` reports a free lock as free whatever its owner file says.
 #
 # Foreign memory: a free lock is not a free GPU.  A run's process that outlives its lease (vLLM's TP rank workers, which

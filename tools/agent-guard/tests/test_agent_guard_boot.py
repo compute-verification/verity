@@ -73,7 +73,7 @@ def test_boot_refuses_without_origin_or_an_earlier_copy(tmp_path):
 
 def test_boot_puts_the_hook_at_a_task_launched_agents_root_above_its_checkout(tmp_path):
     """A Task-launched cloud agent's workspace root is /agent with the repository under /agent/repos/, and Cursor reads hooks
-    from the root only: proofs' workers ran no hook, so no inbox message and no secret refusal reached them (INF-617). The
+    from the root only: Task-launched workers ran no hook, so no inbox message and no secret refusal reached them. The
     root's hooks.json runs the checkout's hook.sh, or DEST's copy while there is no checkout, and a root that is itself a
     checkout gets none."""
     env = {**os.environ, **GIT_ENV, "AGENT_GUARD_DEST": str(tmp_path / "opt"), "AGENT_GUARD_SKIP_INSTALL": "1",

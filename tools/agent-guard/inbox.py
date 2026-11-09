@@ -42,8 +42,8 @@ HEAD = re.compile(r"^\[\d{4}-\d\d-\d\dT\d\d:\d\dZ\] ([0-9a-f]{12})$", re.M)
 FILE = "inbox.md"
 PUSH_TRIES = 4
 LOCK_STALE_S = 300
-#: a pushed message no VM has taken after this long: its target's hook isn't polling (INF-608: BINDKSAT's branch held every
-#: message from 04:33Z to 07:32Z while each `send` said only "pushed")
+#: a pushed message no VM has taken after this long: its target's hook isn't polling (one branch held every message for three
+#: hours while each `send` said only "pushed")
 STALE_S = 600
 
 
@@ -146,8 +146,8 @@ def stale_note(agent: str, n: int, oldest: str) -> str:
             f"`inbox.py check {agent}` on its VM says why")
 
 
-#: a target that ended its turn runs no shell command, so its hook never pulls (INF-608: MEMPOOL finished and marked #8132
-#: before circuits' two stop messages reached it); a sender without the Cursor API can't see that, so `send` always says it
+#: a target that ended its turn runs no shell command, so its hook never pulls (a worker finished and marked its PR ready
+#: before two stop messages reached it); a sender without the Cursor API can't see that, so `send` always says it
 UNTIL_RESUMED = ("it arrives only while {agent}'s turn runs shell commands: if {agent} has ended its turn (FINISHED or IDLE), "
                  "resume it with Task (or a follow-up), which delivers at once")
 
