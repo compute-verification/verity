@@ -1044,6 +1044,23 @@ def statement_reads(ss: Sequence[Any]) -> dict[str, Any]:
     return out
 
 
+def interior_reads(own: Own, ss: Sequence[Any]) -> list[dict[str, str]]:
+    """`SecondStage.interiorReads`: the reads of statements `ss` that `_read_ok` takes at a value only the interior
+    registration registers: at a port no link or wire names, of a value that is no port of either record and that the
+    boundary doesn't register. Each is ``{"template", "port", "value"}``, in statement and port order. These reads rest
+    on the interior's own values (a history table the interior registers, say), and the attached record names them
+    (`attach`)."""
+    out = []
+    for s in map(_stmt, ss):
+        for port, e in sorted(_entries(_get(s.registered, "ports")), key=lambda pe: pe[0]) if s is not None else ():
+            v = _get(e, "value")
+            if (isinstance(v, str) and _link_of(own, s.template, port) is None and _wire_of(own, s.template, port) is None
+                    and v not in _by_port(own.interior) and v not in _by_port(own.boundary)
+                    and _registered_entry(own.boundary, v) is None and _registered_entry(own.interior, v) is not None):
+                out.append({"template": s.template, "port": port, "value": v})
+    return out
+
+
 def _order_failures(ps: Sequence[Part], ss: Sequence[Any]) -> list[tuple[str, Any]]:
     """`SecondStage.orderFailures`: ``second-order`` for each statement for a part, no earlier statement's, other than
     the part at its position, round 2 reading the statements by position, the i-th the i-th part's (the parts' order,
@@ -1120,14 +1137,18 @@ def check(allow: bool, own: Own, statements: Sequence[Any] | None) -> Verdict:
     return c.verdict()
 
 
-def attach(rec: Mapping[str, Any], v: Verdict) -> dict[str, Any]:
-    """The interior registration's audit record `rec` with round 2's check `v` as ``checks.statements``, failing where `v`
-    does as a failed check of its own fails it: not accepted, and no profile, integrity profile or wrong units."""
-    out = {**rec, "checks": {**rec["checks"], "statements": v.to_json()}}
+def attach(rec: Mapping[str, Any], v: Verdict, reads: Sequence[Mapping[str, str]] = ()) -> dict[str, Any]:
+    """The interior registration's audit record `rec` with round 2's check `v` as ``checks.statements``, and the reads
+    `reads` that rest on the interior's own values (`interior_reads`) as ``interior_reads`` where there are any. It
+    fails where `v` does, as a failed check of its own fails it: not accepted, and no profile, integrity profile or
+    wrong units."""
+    out = {**rec, "checks": {**rec["checks"], "statements": v.to_json()},
+           **({"interior_reads": [dict(r) for r in reads]} if reads else {})}
     return out if v.ok else {**out, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None}
 
 
 __all__ = ["FORM", "READ_ROW_FIELDS", "READ_RUN_FIELDS", "Checked", "Link", "Own", "Part", "Rows", "Run", "Wire",
-           "at_run", "attach", "blank_reads", "blank_run", "check", "interior_order_ok", "link_runs", "links_of",
+           "at_run", "attach", "blank_reads", "blank_run", "check", "interior_order_ok", "interior_reads", "link_runs",
+           "links_of",
            "own_draw", "parts", "port_binding", "replay_links", "replay_rows", "replay_wires", "row_at", "rows_of",
            "set_name", "statement_reads", "verified_of", "wire_runs", "wires_of"]

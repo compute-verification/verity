@@ -955,6 +955,22 @@ def statementReads (ss : List Json) : Array (String × Json) :=
       | _ => acc) acc
     | none => acc) #[]
 
+/-- The reads of statements `ss` that `readOk` takes at a value only the interior registration registers: at a port no
+link or wire names, of a value that is no port of either record and that the boundary doesn't register. Each is
+`{"template", "port", "value"}`, in statement and port order. These reads rest on the interior's own values (a history
+table the interior registers, say), and the attached record names them (`attach`). -/
+def interiorReads (own : Own) (ss : List Json) : Array Json :=
+  ss.foldl (fun acc j => match Stmt.ofJson? j with
+    | some s => (entries (getD s.registered "ports")).foldl (fun acc (port, e) => match getD e "value" with
+      | .str v =>
+        if (linkOf own s.template port).isNone && (wireOf own s.template port).isNone &&
+            !(Record.byPort own.interior).any (·.1 == v) && !(Record.byPort own.boundary).any (·.1 == v) &&
+            (registeredEntry own.boundary v).isNone && (registeredEntry own.interior v).isSome then
+          acc.push (Json.mkObj [("template", .str s.template), ("port", .str port), ("value", .str v)])
+        else acc
+      | _ => acc) acc
+    | none => acc) #[]
+
 /-- `second-reported` when the reads the verifiers of record report are not those statements `ss` state. -/
 def reportedFailures (own : Own) (ss : List Json) : List (String × Json) :=
   if Record.sameDict (own.reported.getD #[]) (statementReads ss) then [] else [("second-reported", Json.str REPORTED_WHY)]
@@ -1001,11 +1017,13 @@ def check (allow : Bool) (own : Own) (stmts : Option (Array Json)) : Check :=
       else interiorFailures own ++ designFailures ps own
   found.foldl (fun c x => c.fail x.1 x.2) {}
 
-/-- The interior registration's audit record `rec` with round 2's check `c` as `checks.statements`, failing where `c`
-does as a failed check of its own fails it (`Record.record`): not accepted, and no profile, integrity profile or wrong
-units. -/
-def attach (rec : Json) (c : Check) : Json :=
+/-- The interior registration's audit record `rec` with round 2's check `c` as `checks.statements`, and the reads
+`reads` that rest on the interior's own values (`interiorReads`) as `interior_reads` where there are any. It fails where
+`c` does, as a failed check of its own fails it (`Record.record`): not accepted, and no profile, integrity profile or
+wrong units. -/
+def attach (rec : Json) (c : Check) (reads : Array Json := #[]) : Json :=
   let r := rec.setObjVal! "checks" ((getD rec "checks").setObjVal! "statements" c.toJson)
+  let r := if reads.isEmpty then r else r.setObjVal! "interior_reads" (.arr reads)
   if c.codes.isEmpty then r
   else (((r.setObjVal! "accepted" (.bool false)).setObjVal! "profile" .null).setObjVal! "integrity_profile" .null).setObjVal!
     "wrong_units" .null
