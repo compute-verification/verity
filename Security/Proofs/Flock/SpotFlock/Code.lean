@@ -378,17 +378,18 @@ template `t`'s name with its reference reads (`Held.refReads`), for each templat
 def refRegisteredOf : Array (String × Json) :=
   ((List.range h.ms.length).map fun t => (h.names.getD t "", h.refReads t)).toArray
 
-/-- **What the verifier holds of the run** as round 2's statement check reads it (`SecondStage.Own`), at the run's
-statement `st`, round 1's record `rec`, the second stage's draw and round 0's coin: the replay sample, the interior and
-boundary registrations' records, the second draw's units, the design's links and wires and the templates' reference
-headers and registered reads, which the registration fixes before the run. -/
-def ownOf (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin) : Spot.SecondStage.Own :=
-  { sample := h.reg.sample (src c₀), parts := none, interior := rec, boundary := st.record,
-    drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, wires := h.wires, refs := refsOf h,
-    refReads := refRegisteredOf h }
-
 /-- **The second stage's parts** in a replay sample of `q` blocks, one per template in template order (`partAt`). -/
 def partsAt (q : ℕ) : Array Spot.SecondStage.Part := ((List.range h.ms.length).map (partAt h q)).toArray
+
+/-- **What the verifier holds of the run** as round 2's statement check reads it (`SecondStage.Own`), at the run's
+statement `st`, round 1's record `rec`, the second stage's draw and round 0's coin: the replay sample and the parts in
+it (`partsAt`, where a wired read finds its writer's), the interior and boundary registrations' records, the second
+draw's units, the design's links and wires and the templates' reference headers and registered reads, which the
+registration fixes before the run. -/
+def ownOf (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin) : Spot.SecondStage.Own :=
+  { sample := h.reg.sample (src c₀), parts := some (partsAt h (h.reg.sample (src c₀)).size), interior := rec,
+    boundary := st.record, drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, wires := h.wires,
+    refs := refsOf h, refReads := refRegisteredOf h }
 
 /-- **Round 2's statement check passes template `t`'s statement `S`** against the template's part, with what the
 verifier holds of the run (`own`): no failing check (`SecondStage.stmtCodes` at `partAt`, the header placed at the

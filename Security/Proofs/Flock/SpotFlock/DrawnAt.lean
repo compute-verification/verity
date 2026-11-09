@@ -2,8 +2,18 @@ module
 
 public import Proofs.Flock.SpotFlock.Depths
 public import Proofs.Flock.SpotFlock.SlotsAt
+public import Proofs.Flock.Bridge.Draw
+public import Proofs.Flock.Claims.Sampling.Select.Layout
+public import Proofs.Flock.SpotFlock.Cap
 import Proofs.Flock.Claims.JsonNorm
+import Proofs.Flock.Claims.Sampling.Select.Bounds
+import Proofs.Flock.Claims.Sampling.Select.Take
+import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
 import Proofs.Flock.Claims.Complete.Json.RoundTrip
+import Proofs.Flock.Claims.Sampling.Select.Second
+import Proofs.Flock.SamplingGeneric.TwoCode
+import Proofs.Flock.SpotFlock.Facts
+import Proofs.Flock.SpotFlock.Placement
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.ExecDraw
 import Proofs.Flock.Soundness.Refine.Setup
@@ -15,9 +25,9 @@ import all Lean.Data.Json.Basic
 /-!
 # A checked unit's session draws it
 
-`CheckedRun.counted_of`: at an accepted run's checked unit that isn't always checked, whose session has one table, the
-unit's instance (`rankAt`) is below the table's count (`Counted`), where the drawn slot that names the unit is in its
-template's part of the second stage's population.
+`CheckedRun.counted`: at an accepted run's checked unit that isn't always checked, whose session has one table, the
+unit's instance (`rankAt`) is below the table's count (`Counted`), where the first stage samples unit slots of its
+layout (`FirstSlots`).
 
 The unit is checked because the second stage drew a slot whose proof block it is (`RegTwo.checked`). Round 2 holds the
 session's sample to the verifier's own draw within the template's part (`second-sample`, `SecondStage.ownDraw`) by
@@ -25,7 +35,12 @@ canonical text (`jeq`), and two printable values with one canonical text are equ
 text back to each (`jsonEquiv_of_jeq`). The session sets up with its statement's sample, normalized
 (`Raw.ins_draw`), so its sample's units are the drawn slots in the part, counted from its first (`units_of_equiv`).
 Its first table's instances are the units the sample proves (`Layout.drawn_spec`), and the unit's instance is the first
-of them whose proof block is the unit (`CheckedRun.drawnAt`).
+of them whose proof block is the unit (`CheckedRun.drawnAt`, `CheckedRun.counted_of`).
+
+The drawn slot is in its proof block's template's part (`fit_of`): the second stage's draw proves slots of its
+population (`proved_second_lt`), its units drawn inside the cells (`drawUnits_lt`, each stratum's units its own,
+`stratifiedWith_sub`); a slot's template's cells hold it (`templateAt_spec`); and a cell's position in a replay block
+that is a unit slot is one of that template's member's units, by the members' files (`templateOf_cell`).
 -/
 
 @[expose] public section
@@ -229,6 +244,248 @@ theorem wf_of_jsonOf {what : String} {b : ByteArray} {j : Json} (h : FlockDeploy
       cases h
       exact FlockComplete.JsonRT.parse_wf s _ hp
 
+/-- **A slot of the second stage's population is in its template's cells**: `templateAt` names a template whose cells
+hold it. -/
+theorem templateAt_spec (g : RegTwo) {q j : ℕ} (hj : j < Properties.Spot.cellOff q g.ns g.ns.size) :
+    g.templateAt q j < g.ns.size ∧ Properties.Spot.cellOff q g.ns (g.templateAt q j) ≤ j ∧
+      j < Properties.Spot.cellOff q g.ns (g.templateAt q j + 1) := by
+  unfold RegTwo.templateAt
+  cases hf : (List.range g.ns.size).find? (fun t => decide (j < Properties.Spot.cellOff q g.ns (t + 1))) with
+  | none =>
+    exfalso
+    have hpos : 0 < g.ns.size := by
+      rcases Nat.eq_zero_or_pos g.ns.size with h0 | h0
+      · simp [h0, Properties.Spot.cellOff] at hj
+      · exact h0
+    have := List.find?_eq_none.1 hf (g.ns.size - 1) (List.mem_range.2 (by omega))
+    rw [Nat.sub_add_cancel hpos] at this
+    exact this (decide_eq_true hj)
+  | some t =>
+    obtain ⟨hlt, hmem, hbefore⟩ := List.find?_range_eq_some.1 hf
+    simp only [Option.getD_some]
+    refine ⟨List.mem_range.1 hmem, ?_, of_decide_eq_true hlt⟩
+    rcases Nat.eq_zero_or_pos t with rfl | ht0
+    · simp [Properties.Spot.cellOff]
+    · have := hbefore (t - 1) (by omega)
+      simp only [Bool.not_eq_true', decide_eq_false_iff_not, not_lt, Nat.sub_add_cancel ht0] at this
+      exact this
+
+open Properties.Spot.SecurityProofs (bind_ok bind_error onWith_take) in
+/-- **Every unit `stratifiedWith` returns is a stratum's**: the unit at an index below that stratum's size, each
+stratum's `subset` drawing below its size (`subset_spec`). -/
+theorem stratifiedWith_sub (src : ByteArray) (strata : Array _root_.Flock.Draw.Stratum) (p p' : ℕ) (D : Array ℕ)
+    (h : (_root_.Flock.Draw.stratifiedWith (fun _ need => Spot.Draw.take src need) strata).run p = .ok (some D, p')) :
+    ∀ x ∈ D, ∃ i < strata.size, ∃ j < strata[i]!.size, strata[i]!.unit j = x := by
+  unfold _root_.Flock.Draw.stratifiedWith at h
+  dsimp only at h
+  rw [Std.Legacy.Range.forIn_eq_forIn_range'] at h
+  have hsize : ([:strata.size] : Std.Legacy.Range).size = strata.size := by
+    show (strata.size - 0 + 1 - 1) / 1 = _
+    omega
+  rw [hsize, show ([:strata.size] : Std.Legacy.Range).start = 0 from rfl,
+    show ([:strata.size] : Std.Legacy.Range).step = 1 from rfl] at h
+  have loop : ∀ (l : List ℕ) (out : Array ℕ) (pos : ℕ) (r : Option (Option (Array ℕ))) (out' : Array ℕ) (pos₁ : ℕ),
+      (forIn (m := StateT ℕ (Except String)) l ((none : Option (Option (Array ℕ))), out) (fun i __s => do
+          let __x ← _root_.Flock.Draw.onWith (fun need => Spot.Draw.take src need) strata[i]!.need
+            (_root_.Flock.Draw.subset strata[i]!.k strata[i]!.size)
+          match __x with
+          | some local_ => pure (ForInStep.yield (none, __s.2 ++ Array.map strata[i]!.unit local_))
+          | _ => pure (ForInStep.done (some none, __s.2)))).run pos = .ok ((r, out'), pos₁) →
+      r = none ∧ ∀ x ∈ out', x ∈ out ∨ ∃ i ∈ l, ∃ j < strata[i]!.size, strata[i]!.unit j = x := by
+    intro l
+    induction l with
+    | nil =>
+      intro out pos r out' pos₁ hl
+      simp only [List.forIn_nil, StateT.run_pure] at hl
+      obtain ⟨h1, _⟩ := Prod.mk.inj (Except.ok.inj hl)
+      obtain ⟨rfl, rfl⟩ := Prod.mk.inj h1
+      exact ⟨rfl, fun x hx => Or.inl hx⟩
+    | cons i is ih =>
+      intro out pos r out' pos₁ hl
+      rw [List.forIn_cons, StateT.run_bind, StateT.run_bind] at hl
+      cases ho : (_root_.Flock.Draw.onWith (fun need => Spot.Draw.take src need) strata[i]!.need
+          (_root_.Flock.Draw.subset strata[i]!.k strata[i]!.size)).run pos with
+      | error e => rw [ho] at hl; exact absurd hl (by rw [bind_error, bind_error]; simp)
+      | ok y =>
+        obtain ⟨v, pos₂⟩ := y
+        obtain ⟨n, Dl, rfl, rfl, hst⟩ :=
+          onWith_take src _ (by unfold _root_.Flock.Draw.Stratum.need; omega) _ pos _ _ ho
+        rw [ho, bind_ok] at hl
+        dsimp only at hl
+        rw [StateT.run_pure, pure_bind] at hl
+        dsimp only at hl
+        obtain ⟨hr, hsub⟩ := ih _ _ r out' pos₁ hl
+        refine ⟨hr, fun x hx => ?_⟩
+        rcases hsub x hx with hx' | ⟨i', hi', j', hj', hx'⟩
+        · rcases Array.mem_append.1 hx' with hx'' | hx''
+          · exact Or.inl hx''
+          · obtain ⟨j', hj', rfl⟩ := Array.mem_map.1 hx''
+            obtain ⟨π, hkn, hπ, hmem⟩ := FlockSoundness.Discharge.Exec.subset_spec hst.2.2.1
+            obtain ⟨i₀, hi₀, hπi⟩ := (hmem j').1 hj'
+            exact Or.inr ⟨i, List.mem_cons_self, j', hπi ▸ hπ i₀ (by omega), rfl⟩
+        · exact Or.inr ⟨i', List.mem_cons_of_mem _ hi', j', hj', hx'⟩
+  rw [StateT.run_bind] at h
+  cases hl : (forIn (m := StateT ℕ (Except String)) (List.range' 0 strata.size 1)
+      ((none : Option (Option (Array ℕ))), (#[] : Array ℕ)) _).run p with
+  | error e => rw [hl] at h; exact absurd h (by rw [bind_error]; simp)
+  | ok y =>
+    obtain ⟨⟨r, out'⟩, pos₁⟩ := y
+    rw [hl, bind_ok] at h
+    dsimp only at h
+    obtain ⟨rfl, hsub⟩ := loop _ _ _ _ _ _ hl
+    rw [StateT.run_pure] at h
+    obtain ⟨h1, _⟩ := Prod.mk.inj (Except.ok.inj h)
+    have hD : D = out'.qsort (fun x1 x2 => decide (x1 < x2)) := (Option.some.inj h1).symm
+    intro x hx
+    rw [hD, FlockSoundness.Audit.DrawExec.mem_qsort] at hx
+    rcases hsub x hx with h0 | ⟨i, hi, j, hj, hx'⟩
+    · simp at h0
+    · have := List.mem_range'_1.1 hi
+      exact ⟨i, by omega, j, hj, hx'⟩
+
+open Properties.Spot.SecurityProofs (bind_ok bind_error onWith_take) in
+/-- **A draw's units are slots of its population**: under a `subset` law, or a stratified or work law whose strata's
+ranges are the population's slots in order, every unit `drawUnits` returns is below the population. -/
+theorem drawUnits_lt {law : _root_.Flock.Draw.Law} {n : ℕ} {src : ByteArray} {units : Array ℕ} {read : ℕ}
+    (hb : _root_.Flock.Bridge.NotBernoulli law)
+    (hSt : ∀ St : Array _root_.Flock.Draw.Stratum, ((∃ k, law = .stratified k St) ∨
+      ∃ k ws, law = .work k ws ∧ St = ws.map (·.toStratum)) →
+        St.toList.flatMap (fun s => Properties.Spot.SecurityProofs.expand s.units.toList) = List.range n)
+    (h : Spot.Draw.drawUnits law n src = .ok (units, read)) : ∀ u ∈ units, u < n := by
+  have hstrata : ∀ St : Array _root_.Flock.Draw.Stratum,
+      St.toList.flatMap (fun s => Properties.Spot.SecurityProofs.expand s.units.toList) = List.range n →
+      ∀ p D, (_root_.Flock.Draw.stratifiedWith (fun _ need => Spot.Draw.take src need) St).run 0 = .ok (some D, p) →
+        ∀ u ∈ D, u < n := by
+    intro St hpos p D ho u hu
+    obtain ⟨i, hi, j, hj, rfl⟩ := stratifiedWith_sub src St 0 p D ho u hu
+    have hmem : St[i]!.unit j ∈ List.range n := by
+      rw [← hpos, List.mem_flatMap]
+      refine ⟨St[i]!, by rw [getElem!_pos St i hi]; exact Array.mem_toList_iff.2 (Array.getElem_mem hi), ?_⟩
+      rw [Properties.Spot.SecurityProofs.stratum_unit,
+        List.getD_eq_getElem _ _ (by rw [← Properties.Spot.SecurityProofs.stratum_size']; exact hj)]
+      exact List.getElem_mem _
+    exact List.mem_range.1 hmem
+  unfold Spot.Draw.drawUnits at h
+  cases hw : (_root_.Flock.Draw.drawWith (fun _ need => Spot.Draw.take src need) law n).run 0 with
+  | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
+  | ok x =>
+    obtain ⟨r, read'⟩ := x
+    rw [hw, bind_ok] at h
+    obtain ⟨d, rfl⟩ : ∃ d, r = some d := by
+      cases r with
+      | none => exact absurd h (by simp [throw, throwThe, MonadExceptOf.throw])
+      | some d => exact ⟨d, rfl⟩
+    dsimp only at h
+    obtain ⟨hu, -⟩ := Prod.mk.inj (Except.ok.inj h)
+    subst hu
+    cases law with
+    | subset k =>
+      unfold _root_.Flock.Draw.drawWith at hw
+      dsimp only at hw
+      rw [StateT.run_bind] at hw
+      cases ho : (_root_.Flock.Draw.onWith (fun need => Spot.Draw.take src need)
+          (2 * k * _root_.Flock.Draw.width n + 64) (_root_.Flock.Draw.subset k n)).run 0 with
+      | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
+      | ok y =>
+        obtain ⟨v, p⟩ := y
+        obtain ⟨j, D, rfl, -, hst⟩ := onWith_take src _ (by omega) _ 0 _ _ ho
+        rw [ho, bind_ok, StateT.run_pure] at hw
+        obtain ⟨h1, -⟩ := Prod.mk.inj (Except.ok.inj hw)
+        obtain rfl := (Option.some.inj h1).symm
+        intro u hu
+        obtain ⟨π, hkn, hπ, hmem⟩ := FlockSoundness.Discharge.Exec.subset_spec hst.2.2.1
+        obtain ⟨i₀, hi₀, rfl⟩ := (hmem u).1 hu
+        exact hπ i₀ (by omega)
+    | bernoulli a b => exact absurd rfl (hb a b)
+    | stratified k strata =>
+      unfold _root_.Flock.Draw.drawWith at hw
+      dsimp only at hw
+      rw [StateT.run_bind] at hw
+      cases ho : (_root_.Flock.Draw.stratifiedWith (fun _ need => Spot.Draw.take src need) strata).run 0 with
+      | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
+      | ok y =>
+        obtain ⟨v, p⟩ := y
+        rw [ho, bind_ok, StateT.run_pure] at hw
+        obtain ⟨h1, -⟩ := Prod.mk.inj (Except.ok.inj hw)
+        cases v with
+        | none => exact absurd h1 (by simp)
+        | some D =>
+          obtain rfl := (Option.some.inj h1).symm
+          exact hstrata strata (hSt strata (Or.inl ⟨k, rfl⟩)) p D ho
+    | work k strata =>
+      unfold _root_.Flock.Draw.drawWith at hw
+      dsimp only at hw
+      rw [StateT.run_bind] at hw
+      cases ho : (_root_.Flock.Draw.stratifiedWith (fun _ need => Spot.Draw.take src need)
+          (strata.map (·.toStratum))).run 0 with
+      | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
+      | ok y =>
+        obtain ⟨v, p⟩ := y
+        rw [ho, bind_ok, StateT.run_pure] at hw
+        obtain ⟨h1, -⟩ := Prod.mk.inj (Except.ok.inj hw)
+        cases v with
+        | none => exact absurd h1 (by simp)
+        | some D =>
+          obtain rfl := (Option.some.inj h1).symm
+          exact hstrata _ (hSt _ (Or.inr ⟨k, strata, rfl, rfl⟩)) p D ho
+
+open Properties.Spot.SecurityProofs (bind_eq_ok throw_bind_ne) in
+/-- **An accepted second stage's draw** is the object `drawFirstRead` writes for the units it drew under `secondLaw`'s
+Flock law over the `|sample|·Σ n_t` proof blocks. -/
+theorem selectSecond_draw {sample ns ks : Array ℕ} {src : ByteArray} {draw : Json} {read : ℕ}
+    (h : Spot.Select.selectSecond sample ns ks src = .ok (draw, read)) :
+    ∃ parsed units read', Spot.Draw.flockLaw (Spot.Select.secondLaw sample ns ks) (sample.size * ns.toList.sum) =
+        .ok parsed ∧ Spot.Draw.drawUnits parsed (sample.size * ns.toList.sum) src = .ok (units, read') ∧
+      draw = Json.mkObj ((Spot.entries (Spot.Select.secondLaw sample ns ks)).toList ++
+        [("population", Lean.toJson (sample.size * ns.toList.sum)), ("units", Spot.natsJson units)]) := by
+  unfold Spot.Select.selectSecond at h
+  cases hq : Spot.Select.secondProblem sample ns ks with
+  | some e => rw [hq] at h; dsimp only at h; exact absurd h (throw_bind_ne _ _ _)
+  | none =>
+    rw [hq] at h
+    dsimp only at h
+    obtain ⟨⟨draw', read'⟩, hd, h⟩ := bind_eq_ok.1 h
+    split at h
+    · exact absurd h (throw_bind_ne _ _ _)
+    simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, rfl⟩ := h
+    unfold Spot.Draw.drawFirstRead at hd
+    obtain ⟨parsed, hp, hd⟩ := bind_eq_ok.1 hd
+    obtain ⟨⟨units, read''⟩, hu, hd⟩ := bind_eq_ok.1 hd
+    simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hd
+    obtain ⟨rfl, rfl⟩ := hd
+    exact ⟨parsed, units, read'', hp, hu, rfl⟩
+
+/-- **The second stage proves slots of its population**: every unit an accepted second stage's draw proves is a slot
+below `|sample|·Σ n_t`, its draw having no closure and its units drawn inside the cells (`positions_second`). -/
+theorem proved_second_lt {sample ns ks : Array ℕ} {src : ByteArray} {draw : Json} {read : ℕ}
+    (h : Spot.Select.selectSecond sample ns ks src = .ok (draw, read)) :
+    ∀ j ∈ Spot.Draw.proved draw, ∃ v : ℕ, j = v ∧ v < sample.size * ns.toList.sum := by
+  obtain ⟨parsed, units, read', hp, hu, rfl⟩ := selectSecond_draw h
+  obtain ⟨ws, rfl, hmap⟩ := Properties.Spot.SecurityProofs.flockLaw_second _ _ _ _ _ hp
+  have hlt := drawUnits_lt (fun a b => by simp) (fun St hSt => by
+      rcases hSt with ⟨k, hk⟩ | ⟨k, ws', hk, rfl⟩
+      · cases hk
+      · cases hk
+        exact Properties.Spot.SecurityProofs.positions_second hmap) hu
+  intro j hj
+  unfold Spot.Draw.proved at hj
+  rw [FlockSoundness.Audit.DrawExec.mem_qsort] at hj
+  rcases Array.mem_append.1 hj with hj | hj
+  · dsimp only at hj
+    rw [Properties.Spot.SecurityProofs.getD_draw_units] at hj
+    simp only [Spot.natsJson, Array.mem_filterMap, Array.mem_map] at hj
+    obtain ⟨_, ⟨v, hv, rfl⟩, hjv⟩ := hj
+    rw [Properties.Spot.SecurityProofs.int_toJson] at hjv
+    cases hjv
+    exact ⟨v, rfl, hlt v hv⟩
+  · dsimp only at hj
+    have hc : Spot.getD (Json.mkObj ((Spot.entries (Spot.Select.secondLaw sample ns ks)).toList ++
+        [("population", Lean.toJson (sample.size * ns.toList.sum)), ("units", Spot.natsJson units)])) "closure" =
+        Json.null := rfl
+    rw [hc] at hj
+    simp at hj
+
 end DrawnAt
 
 variable (h : Held)
@@ -272,6 +529,147 @@ theorem readsOk_order {t : ℕ} {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin}
     simp only [Bool.and_eq_true] at hr
     exact hr.1.1
 
+/-- **Position `p` of template `t`'s cell in a replay block that is a unit slot is one of member `t`'s units**: the
+registration's proof block there is the members' (`filesOk_sound`), which has room in member `t`'s range. -/
+theorem templateOf_cell {l : Spot.Slots.Layout} (hfo : filesOk h.reg h.ms l h.k = true) {S : Array ℕ} {t i p : ℕ}
+    (ht : t < h.reg.ns.size) (hi : i < S.size) (hp : p < h.reg.ns.getD t 0)
+    (hS : ∃ b, l.blocks[S.getD i 0]? = some b ∧ b.unit = some (S.getD i 0)) :
+    templateOf h.ms (h.reg.blockAt S (Properties.Spot.cellOff S.size h.reg.ns t + i * h.reg.ns.getD t 0 + p)) =
+      t := by
+  obtain ⟨hT, -, hfit, hblk⟩ := filesOk_sound hfo
+  obtain ⟨b, hb, hu⟩ := hS
+  have htm : t < h.ms.length := hT ▸ ht
+  have hroom := (hfit _ b hb _ hu).2 t htm
+  rw [Nat.succ_mul] at hroom
+  rw [h.reg.blockAt_cell S ht hi hp, hblk _ b hb hu t htm p hp, Properties.Spot.filesBlockOf,
+    templateOf_unitBase htm (by omega)]
+
+/-- **A slot of the second stage's population is in its proof block's template's part**, where its replay block is a
+unit slot of the layout the members' files fit: its template's cells hold it (`templateAt_spec`), and its proof block
+is one of that member's units (`templateOf_cell`). -/
+theorem holds_blockAt {l : Spot.Slots.Layout} (hfo : filesOk h.reg h.ms l h.k = true) {S : Array ℕ}
+    (hS : ∀ i < S.size, ∃ b, l.blocks[S.getD i 0]? = some b ∧ b.unit = some (S.getD i 0)) {j : ℕ}
+    (hj : j < Properties.Spot.cellOff S.size h.reg.ns h.reg.ns.size) :
+    (partAt h S.size (templateOf h.ms (h.reg.blockAt S j))).holds S.size j = true := by
+  obtain ⟨ht, hlo, hhi⟩ := DrawnAt.templateAt_spec h.reg hj
+  generalize h.reg.templateAt S.size j = t at ht hlo hhi
+  have hsucc := Properties.Spot.SecurityProofs.cellOff_succ S.size h.reg.ns t
+  have hn : 0 < h.reg.ns.getD t 0 := by
+    rcases Nat.eq_zero_or_pos (h.reg.ns.getD t 0) with h0 | h0
+    · rw [h0, Nat.mul_zero, Nat.add_zero] at hsucc
+      omega
+    · exact h0
+  have hq : j - Properties.Spot.cellOff S.size h.reg.ns t < S.size * h.reg.ns.getD t 0 := by omega
+  have hi := (Nat.div_lt_iff_lt_mul hn).2 hq
+  have hp := Nat.mod_lt (j - Properties.Spot.cellOff S.size h.reg.ns t) hn
+  have hj' : j = Properties.Spot.cellOff S.size h.reg.ns t +
+      (j - Properties.Spot.cellOff S.size h.reg.ns t) / h.reg.ns.getD t 0 * h.reg.ns.getD t 0 +
+      (j - Properties.Spot.cellOff S.size h.reg.ns t) % h.reg.ns.getD t 0 := by
+    have := Nat.div_add_mod (j - Properties.Spot.cellOff S.size h.reg.ns t) (h.reg.ns.getD t 0)
+    rw [Nat.mul_comm] at this
+    omega
+  have htt := templateOf_cell h hfo ht hi hp (hS _ hi)
+  rw [← hj'] at htt
+  rw [htt]
+  simp only [Spot.SecondStage.Part.holds, partAt, Bool.and_eq_true]
+  rw [hsucc] at hhi
+  exact ⟨decide_eq_true hlo, decide_eq_true hhi⟩
+
+/-- **A drawn slot is in its proof block's template's part**, where the replay sample is unit slots of the layout the
+members' files fit: an accepted second stage proves slots of its population (`proved_second_lt`), each in its proof
+block's template's part (`holds_blockAt`). -/
+theorem fit_of {l : Spot.Slots.Layout} (hfo : filesOk h.reg h.ms l h.k = true) {S : Array ℕ}
+    (hS : ∀ i < S.size, ∃ b, l.blocks[S.getD i 0]? = some b ∧ b.unit = some (S.getD i 0)) {src₁ : ByteArray}
+    {draw : Json} {read : ℕ} (hsel : Spot.Select.selectSecond S h.reg.ns h.reg.ks src₁ = .ok (draw, read)) :
+    ∀ j ∈ Spot.Draw.proved draw,
+      (partAt h S.size (templateOf h.ms (h.reg.blockAt S j.toNat))).holds S.size j.toNat = true := by
+  intro j hj
+  obtain ⟨v, rfl, hv⟩ := DrawnAt.proved_second_lt hsel j hj
+  rw [Int.toNat_natCast]
+  refine holds_blockAt h hfo hS ?_
+  unfold Properties.Spot.cellOff
+  rwa [List.take_of_length_le (by simp)]
+
+/-- **The first stage samples unit slots**: at the layout of the first stage's program and query, each replay block
+the first stage's sample names on any coins is a slot whose proof block is that unit. -/
+def FirstSlots : Prop :=
+  ∀ l, Spot.Slots.layout h.reg.first.program h.reg.first.query = .ok l → ∀ src,
+    ∀ i < (h.reg.sample src).size, ∃ b, l.blocks[(h.reg.sample src).getD i 0]? = some b ∧
+      b.unit = some ((h.reg.sample src).getD i 0)
+
+/-- A layout's population is the first of its slots. -/
+theorem popOf_prefix (l : Spot.Slots.Layout) : Spot.Slots.popOf l <+: l.blocks.toList := by
+  rcases l with ⟨⟨cl⟩⟩
+  cases cl with
+  | nil => simp [Spot.Slots.popOf]
+  | cons c cs =>
+    simp only [Spot.Slots.popOf, Spot.Slots.Layout.blocks, Array.toList_flatten, List.map_cons, List.flatten_cons,
+      List.map_append, List.flatten_append, List.headD_cons]
+    exact List.prefix_append _ _
+
+/-- **Slot `ρ` of the population is unit `ρ`** where the population is its units in slot order (`popOk`). -/
+theorem slot_of_popOk {p : Spot.Program} {q : Json} {n : ℕ} (hpop : Spot.Slots.popOk p q n = true)
+    {l : Spot.Slots.Layout} (hl : Spot.Slots.layout p q = .ok l) {ρ : ℕ} (hρ : ρ < n) :
+    ∃ b, l.blocks[ρ]? = some b ∧ b.unit = some ρ := by
+  unfold Spot.Slots.popOk at hpop
+  rw [hl] at hpop
+  have hu := of_decide_eq_true hpop
+  have hρ' : ρ < (Spot.Slots.popOf l).length := by
+    have := congrArg List.length hu
+    simp only [List.length_map, List.length_range] at this
+    omega
+  have hpre := popOf_prefix l
+  refine ⟨(Spot.Slots.popOf l)[ρ], ?_, ?_⟩
+  · rw [← Array.getElem?_toList, List.getElem?_eq_getElem (Nat.lt_of_lt_of_le hρ' hpre.length_le),
+      ← hpre.getElem hρ']
+  · have := List.getElem_of_eq hu (by simpa using hρ')
+    simpa only [List.getElem_map, List.getElem_range] using this
+
+/-- **A first stage of count `K` samples unit slots** where its population is its units in slot order (`popOk`,
+which the run checks at registration, `population-order`): with no closure map it proves the units it drew
+(`select_proved`), each below the population (`drawUnits_lt`), and slot `u` of the population is unit `u`. -/
+theorem firstSlots_of {K : ℕ} (hK : firstK h.reg.first = some K)
+    (hpop : ∀ n, Spot.Partition.units h.reg.first.program h.reg.first.query = .ok n →
+      Spot.Slots.popOk h.reg.first.program h.reg.first.query n = true) : FirstSlots h := by
+  intro l hl src i hi
+  obtain ⟨hc, hne, n, named, hn, hlo, hf⟩ := firstK_some hK
+  cases hs : Spot.Select.select h.reg.first.rule h.reg.first.program h.reg.first.query h.reg.first.table
+      h.reg.first.closure src with
+  | error e => simp [RegTwo.sample, hs] at hi
+  | ok res =>
+    obtain ⟨draw, proved, read⟩ := res
+    have hS : h.reg.sample src = proved := by simp [RegTwo.sample, hs]
+    rw [hS] at hi ⊢
+    obtain ⟨n', named', derived, hn', hl', hder, units, hpu, hcase⟩ := select_proved _ _ _ _ _ _ _ _ _ hs
+    rw [hn] at hn'
+    obtain rfl := Except.ok.inj hn'
+    rw [hlo] at hl'
+    obtain rfl := Except.ok.inj hl'
+    obtain rfl : derived = none := Properties.Spot.SecurityProofs.deriveLaw_subset _ _ _ _ _
+      (Properties.Spot.SecurityProofs.flockLaw_subset _ _ _ hf).1 hder
+    rw [hpu hc] at hi ⊢
+    rcases hcase with ⟨hall, -⟩ | ⟨-, parsed, read', hp, hu⟩
+    · exact absurd hall hne
+    · have hp' : Spot.Draw.flockLaw named n = .ok parsed := hp
+      rw [hf] at hp'
+      obtain rfl : parsed = .subset K := (Except.ok.inj hp').symm
+      have hu' : Spot.Draw.drawUnits (.subset K) n src = .ok (units, read') := hu
+      have hlt := DrawnAt.drawUnits_lt (fun a b => by simp) (fun St hSt => by
+        rcases hSt with ⟨k, hk⟩ | ⟨k, ws, hk, -⟩ <;> cases hk) hu'
+      have hmem : units.getD i 0 ∈ units := by
+        rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi, Option.getD_some]
+        exact Array.getElem_mem hi
+      exact slot_of_popOk (hpop n hn) hl (hlt _ hmem)
+
+theorem secondDraw_ok {c₀ c₁ : FlockDeploy.Coin} {draw : Json} (hdraw : secondDraw h c₀ c₁ = some draw) :
+    ∃ rd, Spot.Select.selectSecond (h.reg.sample (src c₀)) h.reg.ns h.reg.ks (src c₁) = .ok (draw, rd) := by
+  unfold secondDraw at hdraw
+  split at hdraw
+  · rename_i draw' rd heq
+    cases hdraw
+    exact ⟨rd, heq⟩
+  · cases hdraw
+
 namespace CheckedRun
 
 /-- **A checked unit's one-table session draws its template's part of the second stage's sample**: in an accepted
@@ -279,7 +677,7 @@ run, the second stage drew `draw` (`secondDraw`) and round 1's record lists the 
 the session's sample proves (`drawnOf`) are its first table's instances (`Layout.drawn_spec`); and its sample's units
 are the drawn slots in the unit's template's part, counted from its first (`units_of_equiv`). -/
 theorem drawnAt {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1) :
-    ∃ draw rec (D : _root_.Flock.Draw.UnitDraw), secondDraw h r.c₀ r.c₁ = some draw ∧ jsonMsg r.m₁ = some rec ∧
+    ∃ draw rec, ∃ D : _root_.Flock.Draw.UnitDraw, secondDraw h r.c₀ r.c₁ = some draw ∧ jsonMsg r.m₁ = some rec ∧
       blocksOf rec = (h.reg.sample (src r.c₀)).toList ∧
       drawnOf ((FlockDeploy.readOf true (r.xS h)).bind (·.draw)) = D.proved.toList ∧
       r.sts[0]!.pub.n = D.proved.size ∧
@@ -345,15 +743,7 @@ theorem counted_of {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 
     r.Counted h := by
   obtain ⟨draw, rec, D, hdraw, hrec, hbl, hdr, hn, hun⟩ := drawnAt h hr hc1
   obtain ⟨-, -, -, -, -, -, -, -, hu, -⟩ := hr
-  have hsel : ∃ rd, Spot.Select.selectSecond (h.reg.sample (src r.c₀)) h.reg.ns h.reg.ks (src r.c₁) =
-      .ok (draw, rd) := by
-    unfold secondDraw at hdraw
-    split at hdraw
-    · rename_i draw' rd heq
-      cases hdraw
-      exact ⟨rd, heq⟩
-    · cases hdraw
-  obtain ⟨rd, hsel⟩ := hsel
+  obtain ⟨rd, hsel⟩ := secondDraw_ok h hdraw
   have hu' : r.u ∈ (List.range (unitCount h r.x)).filter fun v => h.reg.always v ||
       (Spot.Draw.proved draw).any fun j => h.reg.blockAt (h.reg.sample (src r.c₀)) j.toNat == v := by
     have := hu
@@ -385,6 +775,18 @@ theorem counted_of {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 
     ((partAt h (h.reg.sample (src r.c₀)).size (templateOf h.ms r.u)).lo +
       (j.toNat - (partAt h (h.reg.sample (src r.c₀)).size (templateOf h.ms r.u)).lo)) == r.u) = true
   rw [Nat.add_sub_of_le hlo, hju', beq_self_eq_true]
+
+/-- **A checked unit is counted** where its registration checks no unit always and its first stage samples unit slots
+(`FirstSlots`): `counted_of`, each drawn slot in its proof block's template's part (`fit_of`) at the layout the
+members' files fit (`two_eq`). -/
+theorem counted {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1) (ha : h.reg.always r.u = false)
+    (hS : FirstSlots h) : r.Counted h := by
+  obtain ⟨-, d, -, -, -, h2, -⟩ := id hr
+  obtain ⟨l, hl, -, -, -, hfo⟩ := two_eq h h2
+  refine counted_of h hr hc1 ha fun draw hdraw j hj hju => ?_
+  obtain ⟨rd, hsel⟩ := secondDraw_ok h hdraw
+  have hfit := fit_of h hfo (hS l hl (src r.c₀)) hsel j hj
+  rwa [hju] at hfit
 
 end CheckedRun
 
