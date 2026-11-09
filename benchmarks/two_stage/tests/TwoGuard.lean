@@ -176,7 +176,9 @@ def coinBytes (p : System.FilePath) : IO ByteArray := do
 
 /-- **Each member's key program** for its units (`Spot.Bits.keyProg`): its inputs and rows, its lowered gates (one an
 input, three a row: `Spot.Bits.off` past its last gate), the walks of every gate its lowering makes (`Spot.Bits.lower`
-calls `off` once per gate a row reads and twice more a row), and the time of one walk. -/
+calls `off` once per gate a row reads and twice more a row), and the time of one walk; and the time of the constants'
+answer at one input gate (`Spot.Bits.consts`, which the lowering asks at each input gate) and of that gate's owner
+(`Spot.Bits.owner`). -/
 def members (ms : Spot.Bits.Members) : IO (List Json) :=
   (List.range ms.length).mapM fun t => do
     let (c, vs) := ms.getD t default
@@ -184,9 +186,12 @@ def members (ms : Spot.Bits.Members) : IO (List Json) :=
       s!"{kp.inputs} inputs, {kp.rows.size} rows"
     let (lowered, walkMs) ← timed s!"m{t} off past its last gate" (fun _ => Spot.Bits.off kp kp.size) toString
     let walks := kp.rows.foldl (fun s r => s + r.1.length + r.2.length + 2) 0
+    let κ := Spot.Bits.consts c vs.size
+    let (_, constsMs) ← timed s!"m{t} consts at input gate 2" (fun _ => κ 2) toString
+    let (_, ownerMs) ← timed s!"m{t} owner of input gate 2" (fun _ => Spot.Bits.owner kp 2) toString
     return Json.mkObj [("units", Lean.toJson vs.size), ("inputs", Lean.toJson kp.inputs),
       ("rows", Lean.toJson kp.rows.size), ("lowered", Lean.toJson lowered), ("lowering_walks", Lean.toJson walks),
-      ("walk_ms", Lean.toJson walkMs)]
+      ("walk_ms", Lean.toJson walkMs), ("consts_ms", Lean.toJson constsMs), ("owner_ms", Lean.toJson ownerMs)]
 
 /-- Each conjunct of `runOkAt` and `twoFilesOk` on its own, in their order. -/
 def diag (h : Held) (ms : Spot.Bits.Members) (x m₁ m₂ : Claims.Msg) (s₀ s₁ : ByteArray) : IO Unit := do
