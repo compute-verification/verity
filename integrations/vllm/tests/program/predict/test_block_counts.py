@@ -1,7 +1,7 @@
 """verity_vllm.program.predict.block_counts: a day's (c, k)-inference blocks from its served windows' circuit records,
 judged against its declared c, k and n. On a small circuit (two catalog templates over two slots) its count, a block's
 gates, its gate table and its verdict agree with `InferenceOnlyCheck.Count`'s Python reference (`inference_only_reference.check_count`, which
-`nci-count-difftest` holds the Lean to) on the session Program, m activations of the block Definition; the public judgment
+`inference-only-count-difftest` holds the Lean to) on the session Program, m activations of the block Definition; the public judgment
 holds only its record's fields and no count, so days of different counts under n publish the same bytes, and a refusal past
 n names n; the exact counts are in the private file alone (0600); a block reaching an unpriced primitive leaves the gates
 undecided; and on `test_window_circuit`'s TINY window a block's fresh bits are B's k (`inference_blocks.budgets`).

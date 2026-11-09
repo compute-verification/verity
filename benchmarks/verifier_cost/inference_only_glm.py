@@ -1,4 +1,4 @@
-"""``inference_only_glm.py measure``: the inference-only check (`nci-check --policy`, `InferenceOnlyCheck.Desc`) on GLM-5.3's registered Programs, the B1
+"""``inference_only_glm.py measure``: the inference-only check (`inference-only-check --policy`, `InferenceOnlyCheck.Desc`) on GLM-5.3's registered Programs, the B1
 Build's workload Program of each TP rank, and on Programs derived from them for the divisions the registered ones can't
 express (README.md).
 
@@ -9,7 +9,7 @@ express (README.md).
 
 `--rank` names each rank's workload descriptor (`build/rank<r>/build_workload/descriptor.json.gz` of the Build), in rank
 order, and `--pins` the Build's meta (`rank_workload_digests`), which each must match. `--check-mem-gb` caps each
-`nci-check`'s address space, so one that outgrows its share fails rather than the node. The cases:
+`inference-only-check`'s address space, so one that outgrows its share fails rather than the node. The cases:
 
   registered  each rank's Program as registered, whose root is its inputs and one Call, the request: θ its weights
               (`annotations["theta"]`), then θ empty, one IU (the Call)
@@ -28,7 +28,7 @@ order, and `--pins` the Build's meta (`rank_workload_digests`), which each must 
               at A (`GAMMA`, `ALPHA`), its neighbours and C (`ALPHA_C` at `GAMMA` and `GAMMA_C`). Given its
               registration, the node is held to it before any check (it is the program of the record `--node-trusted`
               cites as the run's own, `run`, and `--node-provenance` has one entry per θ node, each citing the log's
-              first record), and the check of record runs too, at A (`nci-check INSTANCE TRUSTED`,
+              first record), and the check of record runs too, at A (`inference-only-check INSTANCE TRUSTED`,
               `InferenceOnlyCheck.Baseline`: the policy check, then θ's provenance against the registration log).
               `--node-points` picks some of `NODE_POINTS`
 
@@ -419,7 +419,7 @@ def join(srcs: list[Source], bodies: list[dict], colls: list[list[int]]) -> dict
 
 
 class Runs:
-    """Instances written to scratch and checked by `nci-check` on a pool; rows and IUs collected into `out`."""
+    """Instances written to scratch and checked by `inference-only-check` on a pool; rows and IUs collected into `out`."""
 
     def __init__(self, args) -> None:
         self.args, self.out = args, Path(args.out)
@@ -429,7 +429,7 @@ class Runs:
         self.rows: list[dict] = []
 
     def submit(self, path: Path, row: dict, unrolled: bool = False, trusted: Path | None = None) -> None:
-        """`nci-check --policy` on the instance `path`, or with `trusted` the check of record against it."""
+        """`inference-only-check --policy` on the instance `path`, or with `trusted` the check of record against it."""
         argv = [str(self.args.exe), *([str(path), str(trusted)] if trusted else
                                       ["--policy", *(["--unrolled"] if unrolled else []), str(path)])]
         if self.args.check_mem_gb:
