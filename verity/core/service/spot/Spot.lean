@@ -35,6 +35,7 @@ public import Spot.ChallengerDraw
 public import Spot.ChallengerTrees
 public import Spot.ChallengerInnerTrees
 public import Spot.Wires
+public import Spot.HistoryTable
 public import Spot.WiresSpan
 public import Spot.WiresOrder
 public import Spot.WiresSound
