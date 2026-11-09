@@ -44,6 +44,14 @@ theorem unitIndices_of_get {pub : _root_.Flock.Public} {u : Json} {indices : Arr
   rw [Array.mapM_eq_mapM_toList, Array.toList_map, DrawnAt.mapM_asNat_toJson]
   rfl
 
+/-- `unitIndices` as `drawn` reads it, one bind at a time. -/
+theorem unitIndices_walk {pub : _root_.Flock.Public} {u : Json} {a : Array Json} {popIdx : Array ℕ}
+    (h1 : _root_.Flock.J.get pub.header "units" "public file" = .ok u)
+    (h2 : _root_.Flock.J.arr u "indices" "public file" = .ok a)
+    (h3 : a.mapM (_root_.Flock.J.asNat · "a unit index") = .ok popIdx) :
+    _root_.Flock.Registered.unitIndices pub = .ok popIdx := by
+  simp only [_root_.Flock.Registered.unitIndices, h1, h2, h3, bind, Except.bind]
+
 /-- **The drawn public file labels its `i`-th instance with the population's label of the `i`-th proved unit.** -/
 theorem unitIndices_drawn {c : _root_.Flock.Circuit} {pop pub : _root_.Flock.Public} {d : Json}
     {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hp : pop.header = .obj m)
@@ -57,16 +65,12 @@ theorem unitIndices_drawn {c : _root_.Flock.Circuit} {pop pub : _root_.Flock.Pub
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
-    refine ⟨_, _, ‹_›, ?_, unitIndices_of_get ?_ (unitsEntry_indices _ _)⟩
-    · simp only [_root_.Flock.Registered.unitIndices, bind, Except.bind,
-        ‹_root_.Flock.J.get pop.header "units" "public file" = .ok _›,
-        ‹_root_.Flock.J.arr _ "indices" "public file" = .ok _›]
-      exact ‹Array.mapM _ _ = .ok _›
-    · dsimp only
+    exact ⟨_, _, ‹_›, unitIndices_walk ‹_› ‹_› ‹_›, unitIndices_of_get (by
+      dsimp only
       rw [hp]
       simp only [Json.setObjVal!, Json.getObjVal?, Std.TreeMap.Raw.get?_eq_getElem?,
         Std.TreeMap.Raw.getElem?_insert hm.insert.insert.insert]
-      simp
+      simp) (unitsEntry_indices c _)⟩
 
 private theorem eq_of_nat? {y : Json} {b : ℕ} (h : Spot.nat? y = some b) : y = Lean.toJson b := by
   cases y with
@@ -129,8 +133,8 @@ theorem unitIndices_pop {j : Json} (hw : Claims.Json.Wf j) {pop : _root_.Flock.P
       simp only [Array.getElem_map, Array.getElem_range]
       exact eq_of_nat? hx
     have hun : Spot.getD j "units" ≠ .null := fun h0 => by
-      rw [h0] at hi
-      simp [Spot.getD, Spot.field?, Json.getObjVal?, Except.toOption] at hi
+      rw [h0, show Spot.getD Json.null "indices" = Json.null from rfl] at hi
+      cases hi
     have hu := getObjVal_of_getD hun
     have hiu : (Spot.getD j "units").getObjVal? "indices" = .ok (.arr is) := by
       rw [← hi]
@@ -164,7 +168,7 @@ entry names none, and each position it reads at its place in the entry's `reads`
 abbrev ReadFields (e : Json) (reg : _root_.Flock.Registered.Port) : Prop :=
   ((Spot.getD e "reads_from" = .null ∧ reg.readsFrom = 0) ∨
       Spot.getD e "reads_from" = .num ⟨Int.ofNat reg.readsFrom, 0⟩) ∧
-    ∃ rs, Spot.getD e "reads" = .arr rs ∧
+    ∃ rs : Array Json, Spot.getD e "reads" = .arr rs ∧
       ∀ k pos, reg.readsRel[k]? = some (some pos) → rs[k]? = some (.num ⟨Int.ofNat pos, 0⟩)
 
 /-- **A `ports` file's ports read as its entries say** (`ReadFields`), each at an entry under its name. -/
@@ -180,7 +184,6 @@ theorem portsOf_reads {j : Json} {own : Array _root_.Flock.Registered.Port}
     refine ⟨_, ‹_›, fun reg hreg => ?_⟩
     obtain ⟨⟨nm, e⟩, hkv, h⟩ := (mapM_ok_mem h).1 reg hreg
     dsimp only at h
-    simp only [FlockSoundness.Refine.throw_bind'] at h
     repeat' walk_step
     all_goals
       simp only [pure, Except.pure, Except.ok.injEq] at h
