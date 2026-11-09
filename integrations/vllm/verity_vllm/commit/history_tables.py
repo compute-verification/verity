@@ -31,6 +31,8 @@ from verity.ml.commitments import history as HT
 from verity.ml.commitments import hm96
 from verity_vllm.program.predict.reads import PREFIX_CACHE
 
+__all__ = ["Histories", "ROW_BYTES", "SWITCH", "WORDS", "check", "name", "of_request", "on", "refusal", "release"]
+
 #: the registration's engine switch the table-read form is under, off by default
 SWITCH = "dsa_table_reads"
 #: a latent row's words: ``DsaLatentRow_v1{KVL=512, R=64}``'s [kv_c | k_pe], bf16
