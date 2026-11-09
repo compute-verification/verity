@@ -24,8 +24,7 @@ reads. A second per-piece bound counts products by columns, at most
 `e_max` per input entry used at a position that is not full (`card_products_le_columns`, `max_mul_sum_le`).
 
 The count is one lemma over what the dark parts absorb, a budget `B` (`matMulOn_of_counts`): training's
-incompressibility bounds it by the dark gates' reads (`IncompressibleContainedMatMulOn`), and at `μ = 1` it goes
-(`ContainedFanOutOn`).
+incompressibility bounds it by the dark gates' reads (`IncompressibleContainedMatMulOn`).
 -/
 
 @[expose] public section

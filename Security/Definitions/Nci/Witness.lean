@@ -7,7 +7,7 @@ public import Definitions.Nci.Links
 public import Definitions.Nci.Fit
 public import Definitions.Nci.Layered
 public import Definitions.Nci.Packed
-public import Definitions.Nci.BitDecl
+public import Definitions.Nci.BitView
 public import Definitions.Nci.Covering
 
 /-!
@@ -24,8 +24,7 @@ that nothing a proof block reads is fresh and the policy holds at read cap `0`.
 * `T1`: the toy's threading, one counted multiplication (gate `2`) of the weight by the token, the token the one
   thread's value; `T0`, the threading of no counted multiplication; `σ1` and `σ0`, their one parameter slot;
   `noLinks`, links with no sources; `layered0` and `layered1`, `T0` and `T1` keyed with no roots and no lookups;
-* `mb0`, the cover theorem's multiplication blocks of no product on a registered circuit's bit view; `mbBits`, the covering
-  bound's two products of the toy's bit view (`Cover.bitDecl`), the weight's bit for each of two tokens;
+* `mb0`, the cover theorem's multiplication blocks of no product on a registered circuit's bit view;
 * `OneWindow`: one PoUW window of capacity `2` over the outcomes `Bool`, its certificate `right` or `wrong` at every
   outcome, and no faulty proof block (`bad`).
 -/
@@ -203,26 +202,6 @@ def mb0 (r : RegisteredCircuit) : Cover.MulBlocks (Cover.Circuit.ofDecl r) Empty
   m_disjoint p := p.1.elim
   o p := p.1.elim
   m_outputs p := p.1.elim
-
-/-- Gate `2 + j` of the toy's bit view, which has the toy's four gates, each one bit wide. -/
-def productBit (j : Fin 2) : Fin (Cover.bitDecl D).D.N :=
-  Fin.cast (by decide : 4 = (Cover.bitDecl D).D.N) ⟨2 + j, by omega⟩
-
-/-- The toy's two products on its bit view: one weight, the bit of gate `0`, multiplied for two tokens, at gates `2`
-and `3`, each a block of its own output, with no token computation. -/
-def mbBits : Covering.MulBlocks (Cover.bitDecl D) where
-  nw := 1
-  nt := 2
-  P := univ
-  m p := {productBit p.2}
-  o p := productBit p.2
-  T _ := ∅
-  m_disjoint := by decide
-  m_computed := by decide
-  o_mem _ _ := mem_singleton_self _
-  reach _ _ g hg := by rw [mem_singleton.1 hg]; exact .refl (mem_singleton_self _)
-  T_disjoint _ _ _ := disjoint_empty_left _
-  T_θ _ := disjoint_empty_left _
 
 /-! One PoUW window of capacity `2` over the outcomes `Bool`, and no faulty proof block. -/
 

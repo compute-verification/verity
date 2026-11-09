@@ -358,9 +358,9 @@ block can import information, spending its fresh bits, or reconstruct it, spendi
 - So verified work does little learning, and learning at scale has to run on the uncredited capacity, which PoUW keeps
   small.
 
-The per-block cap is about h·(k + c/g) weighted weight-uses, h the price of fresh weights the description premise lets a
-block hold (not a storage bound) and g the gates a use's certified upstream computation takes. When reconstructing that
-computation would expose updated weights priced above h, the cap falls to h·k.
+The per-block cap is about k + c/g served uses, g the gates a use's certified upstream computation takes. When
+reconstructing that computation would expose updated weights priced above h, the price of fresh weights the description
+premise lets a block hold (not a storage bound), the cap falls to k.
 
 **Assumes.** The learning rows of the table above, the hardware rows, and parts 1 to 5. Further premises can strengthen
 the local bound (an activation price, a joint price, a recoverable source), each a new hypothesis to earn;
@@ -369,8 +369,8 @@ the local bound (an activation price, a joint price, a recoverable source), each
 **Lean.**
 
 - The local bounds' caps `Nci.Guarantees.HeldBudget` (or, statistically, `Nci.Guarantees.StatHeldBudget`),
-  `Nci.Guarantees.ImportOrRecompute`, `Nci.Guarantees.RecomputeByGates`, `Nci.Guarantees.RecomputeByState` and
-  `Nci.Guarantees.WeightedProductCap`, and the floor `Nci.Guarantees.CapabilityFloor`: **proved**
+  `Nci.Guarantees.ImportOrRecompute`, `Nci.Guarantees.RecomputeByGates` and `Nci.Guarantees.RecomputeByState`, and the
+  floor `Nci.Guarantees.CapabilityFloor`: **proved**
   (`Security/Proofs/Nci/Capability/`, `Security/Proofs/Accounting/Coverage.lean`), each from its premises. Every premise,
   structure and bound is surveyed in `Security/Definitions/Nci/Capability/README.md`.
 - Their premises, `Nci.Assumptions.CoversEfficientMethods`, `Nci.Assumptions.DescriptionHard` (or
@@ -449,7 +449,7 @@ Each is a named `Prop` in a lock's `assumptions` (`Security/lean-audit.json`, an
 for the `Properties.*` ones), one line in plain words, except `CoinsConfidential` (prose only). These are the named `Prop`s the statements above
 read; each theorem's full hypotheses are its Lean, among them `TagsOkZHJ`, `Built`, `StrictCR.Finder.CR`,
 `DrawnLayer.JointSound` and `.Pins` (which `CircuitCredit` also reads), and the local bounds' structural
-hypotheses `HeldPriceAtMost`, `SlotsRead`, `OverlapWeights` and `RequiresState`.
+hypotheses `HeldPriceAtMost`, `OverlapWeights` and `RequiresState`.
 
 Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means"):
 

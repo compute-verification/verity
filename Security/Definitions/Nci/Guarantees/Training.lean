@@ -13,9 +13,7 @@ containment. Each statement names both the chain and the threading the assumptio
 
 The assumption is in reads, so a dark gate of a partial containment absorbs at most its fresh input reads of the partial
 sums, where in support form it absorbed at most its width: the dark-gate term of `IncompressibleContainedMatMulOn` is
-the dark gates' reads. At `μ = 1` that term goes, and with it the partial sums: `ContainedFanOutOn` bounds the products
-a declaration computes under the activations' half of the assumption alone, `ActivationsIncompressible` on the reference
-circuit.
+the dark gates' reads.
 -/
 
 @[expose] public section
@@ -100,23 +98,5 @@ def IncompressibleContainedTrainingOn : Prop :=
           (μ * b_a / max (emax : ℝ) (K / (4 * b_w * dd))) *
         (κ * r.D.size r.D.computed - 2 * M.dark.card) ≤
       2 * (α * d.D.size d.D.computed + (1 - μ) * ∑ v ∈ M.dark, (novelReads r {v} : ℝ))
-
-/-- **Products done in the declaration are bounded by their fan-out** (`IncompressibleContainedMatMulOn` at `μ = 1`): a
-declaration `d` that complies at `(Γ, α)` and contains `r` partly computes the chain's products in `S`, `G_S` of them,
-with `b_a / Λ · G_S ≤ α size(d)`, `Λ = max e_max (K / (4 b_w dd))`, and no term for the dark gates, so it holds
-even when every partial sum is added off the books. Each inference block makes at most `Λ` products per `b_a` bits it
-reads: `e_max` per input entry it uses at a position it completes no entry of, one for each row of the multiplication,
-and, at positions it completes entries of, `K / (4 b_w dd)` per `b_a` bits by AM–GM on its weight and input reads. Of
-training's incompressibility it needs only the activations' half, `ActivationsIncompressible` on `r` at read cap
-`K ≥ α Γ`, besides the registered-information premise `ThetaRegistered`. -/
-def ContainedFanOutOn : Prop :=
-  ∀ (Γ : ℕ) (α K b_w b_a : ℝ) (r d : RegisteredCircuit) (ch : Chain r.D) (dd emax : ℕ) (M : PartialContainment r d),
-    0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → α * Γ ≤ K →
-    (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → CompliesRate Γ α d → Assumptions.ThetaRegistered r d M →
-    Assumptions.ActivationsIncompressible r ch Γ K b_w b_a →
-      b_a / max (emax : ℝ) (K / (4 * b_w * dd)) *
-        (Finset.univ.filter fun p : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ) × Fin (ch.d ℓ) =>
-          ch.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ M.S).card ≤
-      α * d.D.size d.D.computed
 
 end Nci.Guarantees

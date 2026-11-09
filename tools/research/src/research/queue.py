@@ -289,7 +289,8 @@ move on `next`.  The preflight merges no move PR's head, and notes rather than r
 Landing.  `drive` (`research.drive`) is the loop's tick that needs no agent: it lands `next`'s reviewed prefix, a Lean change
 as any other, by a fast-forward of `checked` (no new merge commit), commits the lock records a lock run regenerates after a
 Lean change, and checks `checked` after each landing,
-naming the culprit of what that check fails (fixed forward, else reverted on `checked`), and fast-forwarding `main` to each commit whose check passed every step on the merge gate; it tells
+naming the culprit of what that check fails (fixed forward, else reverted on `checked` unless a warn step failed: drive.toml's
+`warn_steps`), and fast-forwarding `main` to each commit whose check passed every step on the merge gate; it tells
 `CI` what it refuses.  A push refused because `checked` moved leaves it alone; drive's next tick takes the new `checked` only
 if drive wrote it, and otherwise holds and rings `CI` and `TOP` (`Driver._unwritten`).  A PR landed on `checked` stays open on GitHub until `main` reaches it, and no sync admits it again.  What reaches
 `main` and changes what a guarantee says sends the spec-change DM of what changed (`spec_alert`).
@@ -697,6 +698,10 @@ class Rules:
 LANDINGS = ("review",)
 #: a landing or warn gate's path (`DriveFlags.landing_gates`, `DriveFlags.warn_gates`)
 GATE_PATH_RE = re.compile(r"[\w.-]+(?:/[\w.-]+)*\.py")
+#: the steps of a check (`tools/verity/check/check.py`), of which `DriveFlags.warn_steps` names some
+CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "lean-changed", "flock-circuit-build", "lean-build",
+               "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests",
+               "ratchet-gate")
 #: an entry of `DriveFlags.lowrisk_excludes`: a directory from the repository's root ending in `/`, or a file name glob
 LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+|[\w.*?\[\]-]+")
 #: drive.toml's `executor`: off, shadow (beside the after-landing run) or on (in its place)
@@ -738,6 +743,9 @@ class DriveFlags:
     #: scripts run where and as the landing gates are, whose refusal keeps no PR out: the ready mark prints it as a warning, and
     #: the sync admits the PR and keeps it for drive to tell its owner once a head (`Driver.tell_warned`)
     warn_gates: tuple[str, ...] = ()
+    #: the check's steps whose red drive never reverts: it names the culprit and rings its lane and the owner of what failed
+    #: once, to fix it forward in its next PR (`drive.Driver._warns`)
+    warn_steps: tuple[str, ...] = ()
     #: every sync, members with a land verdict go below those waiting for one (`Driver._lift`), so a member waiting for its
     #: review holds only itself
     verdict_first: bool = True
@@ -871,6 +879,10 @@ class DriveFlags:
                     raise bad(k, "a list of Python scripts by their path from the repository's root, as "
                                  "[\"integrations/x/tools/gate.py\"]")
                 got[k] = tuple(v)
+        if "warn_steps" in doc:
+            if not (isinstance(doc["warn_steps"], list) and all(x in CHECK_STEPS for x in doc["warn_steps"])):
+                raise bad("warn_steps", f"a list of the check's steps, of {', '.join(CHECK_STEPS)}")
+            got["warn_steps"] = tuple(doc["warn_steps"])
         for k in ("stale_days", "stale_close_days"):
             if k in doc:
                 if type(doc[k]) is not int or doc[k] < 0:
@@ -6405,7 +6417,7 @@ def main(argv: list[str]) -> int:
                    after_landing_shards=flags.after_landing_shards,
                    lowrisk_lane=flags.lowrisk_lane, lowrisk_per_tick=flags.lowrisk_per_tick,
                    lowrisk_excludes=flags.lowrisk_excludes, executor=flags.executor,
-                   executor_enqueue=flags.executor_enqueue).tick(dry_run=a.dry_run)
+                   executor_enqueue=flags.executor_enqueue, warn_steps=flags.warn_steps).tick(dry_run=a.dry_run)
             return 0
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")
