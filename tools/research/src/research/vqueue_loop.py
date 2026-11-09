@@ -129,6 +129,13 @@ TIME, STAMP_RE = "%Y-%m-%dT%H:%M:%SZ", re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d
 READY_VERDICT = "ready_verdict"
 #: who graph2 writes its labels as (its `research data label ... --by executor`): a label by anyone else counts for nothing
 GRAPH2_BY = "executor"
+#: the id prefix of graph2's task checking a Lean package's lock records, and what an ejection for one tells its owner: no
+#: lock run regenerates a change's records after it lands, so the change carries them
+LEAN_LOCK = "lean-lock:"
+LEAN_LOCK_FIX = (". The lock records of {pkgs} don't match the change: if it changes a guarantee's statement or what one reads, "
+                 "regenerate each package's records on it (`research run --on auto --mem-gb 32 --max-min 180 --project verity "
+                 "--source . --cwd clone -- python3 tools/verity/lean/check.py --build --update PKG`, the lean-proofs skill's full "
+                 "record), commit them, and mark it ready again")
 #: why a candidate's verdict waits on its base (`World._base`, `World._gone`) while graph2 hasn't listed the base's check
 UNLISTED = "its check isn't listed yet"
 #: who ejects, as drive's ejections are by
@@ -1539,6 +1546,8 @@ class Loop:
         text = (f"#{a.number} at {a.head[:12]} is ejected from the verified queue: {a.why}. Failed: {tasks}. Each result, its "
                 f"log's digest with it: `research store labels task:<key> --key result --history`. Fix it and mark it ready "
                 f"again")
+        if locks := sorted({f.task.removeprefix(LEAN_LOCK) for f in a.failed if f.task.startswith(LEAN_LOCK)}):
+            text += LEAN_LOCK_FIX.format(pkgs=", ".join(locks))
         if (p := w.open().get(a.number)) is None or p.head != a.head:
             return self.record(t, "eject", members=[a.number], heads=[a.head], number=a.number, failed=a.failed, done=False,
                                why=f"{a.why}; not ejected: " + ("closed" if p is None else f"pushed to {p.head[:12]} since"))

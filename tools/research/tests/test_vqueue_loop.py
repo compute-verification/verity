@@ -233,6 +233,27 @@ def test_a_failed_candidate_ejects_the_member_its_failed_inputs_meet_and_the_res
     assert env.queued() == {branch(again["sha"]): again["sha"]}
 
 
+def test_an_ejection_for_a_failed_lean_lock_task_tells_its_owner_how_to_regenerate_the_package_s_records(env):
+    env.put(1, {"a.lean": "1\n"})
+    two = env.put(2, {"b.txt": "2\n"})
+    loop = env.loop(policy)
+    (built,) = loop.tick()
+    keys = env.listed(built["sha"], {"lean-lock:Security": ["a.lean"], "pytest:b": ["b.txt"]})
+    env.result(keys["lean-lock:Security"], "lean-lock:Security", "fail")
+    env.result(keys["pytest:b"], "pytest:b", "pass")
+    eject, _ = loop.tick()
+    assert (eject["action"], eject["number"]) == ("eject", 1)
+    (post,) = env.posts
+    assert "lock records of Security don't match" in post and "check.py --build --update PKG" in post, post
+    env.put(3, {"c.txt": "3\n"})
+    (again,) = loop.tick()
+    keys = env.listed(again["sha"], {"pytest:b": ["b.txt"], "pytest:c": ["c.txt"]})
+    env.result(keys["pytest:b"], "pytest:b", "fail")
+    env.result(keys["pytest:c"], "pytest:c", "pass")
+    loop.tick()
+    assert "lock records" not in env.posts[-1] and two[:12] in env.posts[-1], env.posts[-1]
+
+
 def test_a_retry_sets_its_infra_results_aside_so_the_check_is_pending_until_a_newer_one_and_infra_is_rung_once(env):
     env.put(1, {"a.txt": "1\n"})
     loop = env.loop(policy)
