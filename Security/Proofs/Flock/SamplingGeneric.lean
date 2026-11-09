@@ -24,7 +24,6 @@ public import Proofs.Flock.SamplingGeneric.TwoBernoulli
 public import Proofs.Flock.SamplingGeneric.TwoCap
 public import Proofs.Flock.SamplingGeneric.Complete
 public import Proofs.Flock.SamplingGeneric.TwoRankin
-public import Proofs.Flock.SamplingGeneric.TwoRegSets
 
 /-!
 # The sampled compiler in the claims core, at Flock
@@ -87,7 +86,7 @@ At a first stage that catches each replay block at rate `r₁` and a second stag
 `P̄_a ≤ (1 − r₁·r₂)^m`, `m` the replay blocks the footprint marks incorrect, so a footprint in `M̄_δ` marks fewer than
 every `K` with `(1 − r₁·r₂)^K ≤ δ` (`SamplingGeneric/TwoCap.lean`: **`CapTwo`** is proved). At two stages, the
 committed form's incorrect set is the grid's incorrect proof blocks at the committed traces, and reads no second-stage
-coin (`SamplingGeneric/TwoRegSets.lean`: `CompiledTwo.FregTwo_eq`, `CompiledTwo.FregTwo_forkOn`).
+coin (`SamplingGeneric/TwoCap.lean`: `CompiledTwo.FregTwo_eq`, `CompiledTwo.FregTwo_forkOn`).
 -/
 
 @[expose] public section
