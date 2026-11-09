@@ -228,7 +228,9 @@ def test_a_member_that_doesnt_merge_onto_the_build_is_left_out_logged_and_its_ow
     (post,) = env.posts
     assert "#2 at" in post and "doesn't merge" in post
     assert _acts(loop.tick()) == ["drop"]
-    assert _acts(loop.tick()) == ["skip", "build"] and len(env.posts) == 1      # the same head onto the same base: told once
+    again, built = loop.tick()                                      # the same head onto the same base: told once
+    assert (again["action"], again["text"], again["done"], built["action"]) == ("skip", None, False, "build")
+    assert len(env.posts) == 1
 
 
 def test_a_loop_started_again_on_the_same_log_and_origin_repeats_no_build_and_no_advance(env):
@@ -294,6 +296,23 @@ def test_a_task_blocked_behind_a_failed_one_fails_the_candidate_with_its_inputs_
     assert v.state == FAIL and [(f.task, f.key) for f in v.failed] == [("lean-build:x", keys["lean-build:x"])]
     env.graph2.list_graph(f"ready:{sha}", {"schema": GRAPH_V2, "commit": "0" * 40, "tasks": []})
     assert w.verdict(sha).verdict.state == LIST_FAILED
+
+
+def test_an_action_that_fails_stops_the_tick_with_its_error_logged_and_a_torn_line_stays_its_own(env):
+    one = env.put(1, {"a.txt": "1\n"})
+    env.log.parent.mkdir(parents=True)
+    env.log.write_text('{"at": "2030-03-17T17:46:40Z", "tick": 4, "act')        # a crash mid-write
+    loop = env.loop(lambda s: [Eject(1, one, "its change fails the check"), Build((1,), s.main, 0)])
+    loop.world.withdraw = lambda n, h, why: World.withdraw(loop.world, n, h, why)   # the real one, under the clone's lock
+    held = Q._lock(loop.world.repo)                                 # a drive tick in the clone
+    try:
+        (rec,) = loop.tick()
+    finally:
+        held.close()
+    assert (rec["action"], rec["tick"], rec["number"]) == ("eject", 1, 1) and "holds" in rec["error"], rec
+    assert env.queued() == {} and env.posts == []                  # the build after it waits for the next tick
+    assert [json.loads(x) for x in env.log.read_text().splitlines()[1:]] == [rec]
+    assert any("read as none" in x for x in env.out)
 
 
 def test_research_queue_vqueue_is_its_own_command(capsys):

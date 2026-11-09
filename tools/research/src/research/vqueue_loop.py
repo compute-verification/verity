@@ -219,6 +219,7 @@ class World:
         self._judged: dict[tuple[str, str], tuple[bool, bool]] = {}
         self._prs: dict[int, PR] | None = None
         self._driver: Driver | None = None
+        self._main: str | None = None
         #: what the last `ready` read: {number: the PR at its ready head}
         self.prs: dict[int, PR] = {}
 
@@ -235,6 +236,9 @@ class World:
         main = _out(self.repo, "rev-parse", MAIN)
         if rules := rules_at(self.repo, main):
             self.q._rules = rules
+        if main != self._main:                              # the merges' records onto the `main` before, as a sync drops them
+            q = self.q
+            q._merge_records, q._merge_keys, q._context, q._merged_from, self._main = {}, {}, None, {}, main
         return main
 
     def open(self) -> dict[int, PR]:
@@ -481,7 +485,15 @@ class World:
                                members, base, sha, "")
 
     def withdraw(self, number: int, head: str, why: str) -> PR:
-        return self.q.eject(number, why, EJECTOR, sha=head)
+        """`Queue.eject` under the clone's queue lock, as `research queue eject` takes it: it writes drive's state, which a
+        drive tick holding the lock rewrites whole (held, the eject fails and the next tick ejects again)."""
+        from .queue import _lock
+
+        lock = _lock(self.repo)
+        try:
+            return self.q.eject(number, why, EJECTOR, sha=head)
+        finally:
+            lock.close()
 
     def handle(self, number: int) -> str | None:
         p = self.prs.get(number) or self.open().get(number)
@@ -513,6 +525,8 @@ class Tick:
     judged: dict[str, Judged]
     members: dict[str, list[Member]]
     past: Past
+    #: each (head, base) a skip told its owner of, as `head@base`
+    told: set[str] = field(default_factory=set)
 
 
 class Loop:
@@ -559,8 +573,14 @@ class Loop:
             judged[sha] = j = w.verdict(sha)
             members[sha] = ms
             cands.append(Candidate(sha, base, tuple(m.pr for m in ms), tuple(m.head for m in ms), j.verdict, past.tries(sha)))
+        on = {c.sha: c.base for c in cands}
+
+        def height(sha: str, seen: tuple[str, ...] = ()) -> int:
+            return 1 + height(on[sha], (*seen, sha)) if on.get(sha) in on and sha not in seen else 0
+
+        cands.sort(key=lambda c: (height(c.sha), c.sha))       # each after the candidate it is built on
         snap = Snapshot(main, tuple(sorted(ready, key=lambda x: x.rank)), tuple(cands), past.history(), self.batch, self.depth)
-        return Tick(n, main, origin, snap, judged, members, past)
+        return Tick(n, main, origin, snap, judged, members, past, past.told())
 
     # -- a tick
 
@@ -648,8 +668,10 @@ class Loop:
 
     def write(self, rec: dict) -> None:
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
-        with self.log_path.open("a") as f:
-            f.write(json.dumps(rec, sort_keys=True) + "\n")
+        with self.log_path.open("ab+") as f:
+            end = f.seek(0, 2)
+            torn = end > 0 and (f.seek(end - 1), f.read(1))[1] != b"\n"     # a crash's torn line stays a line of its own
+            f.write((("\n" if torn else "") + json.dumps(rec, sort_keys=True) + "\n").encode())
 
     def apply(self, a: Action, t: Tick) -> list[dict]:
         if isinstance(a, Build):
@@ -674,11 +696,14 @@ class Loop:
         if unknown := [n for n in a.members if n not in w.prs]:
             raise QueueError(f"build: {', '.join(f'#{n}' for n in unknown)} not ready")
         tip, merged, left = w.build([w.prs[n] for n in a.members], a.base)
-        told, recs = t.past.told(), []
+        recs = []
         for p, why in left:
-            text = (f"#{p.number} at {p.head[:12]} doesn't merge onto the verified queue's candidate on {a.base[:12]}: {why}. "
-                    f"It is left out until it merges: merge `main` into it")
-            done = f"{p.head}@{a.base}" not in told and not self.shadow and w.say(text, self.owner(p.number))
+            text = None if (key := f"{p.head}@{a.base}") in t.told else (
+                f"#{p.number} at {p.head[:12]} doesn't merge onto the verified queue's candidate on {a.base[:12]}: {why}. "
+                f"It is left out until it merges: merge `main` into it")
+            done = text is not None and not self.shadow and w.say(text, self.owner(p.number))
+            if done or (text and self.shadow):
+                t.told.add(key)
             recs.append(self.record(t, "skip", base=a.base, members=[p.number], heads=[p.head], number=p.number, why=why,
                                     text=text, done=done))
         if not merged:
@@ -712,11 +737,12 @@ class Loop:
         if (p := w.open().get(a.number)) is None or p.head != a.head:
             return self.record(t, "eject", members=[a.number], heads=[a.head], number=a.number, failed=a.failed, done=False,
                                why=f"{a.why}; not ejected: " + ("closed" if p is None else f"pushed to {p.head[:12]} since"))
+        told = False
         if not self.shadow:
             w.withdraw(a.number, a.head, a.why)
-            w.say(text, self.owner(a.number))
+            told = w.say(text, self.owner(a.number))
         return self.record(t, "eject", members=[a.number], heads=[a.head], number=a.number, why=a.why, failed=a.failed,
-                           text=text, done=not self.shadow)
+                           text=text, told=told, done=not self.shadow)
 
     def owner(self, number: int) -> tuple[str, ...]:
         """Whom a message about PR ``number`` goes to: its owner's handle, else `CI`, as drive tells."""
