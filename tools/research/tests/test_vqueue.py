@@ -701,13 +701,15 @@ class World:
     `shared/`'s), or for an interaction nobody's, at a key only such trees give the task, or, in a red world, on a red task's
     test of its own; an erring PR makes a task end in infra errors, or the listing fail, in every such tree.  In a red world
     `main` fails one or two red tasks in every tree without their fix, a good PR, at a key each PR touching their inputs
-    changes (some good PRs touch them, the same tests failing).  PRs arrive, push, conflict and are unmarked for a while;
+    changes (some good PRs touch them, the same tests failing); a red task whose failing tests graph2 doesn't report is
+    inherited at its key alone, and no good PR but its fix touches it.  PRs arrive, push, conflict and are unmarked for a while;
     graph2 answers late, sends the cached inherited failures before the rest, flakes on a first run, errs on a first
     enqueue, or wedges until retried; someone else moves `main`, the loop stops a tick early, and a merged PR stays marked
     for a while; `step` checks every invariant on the way."""
 
-    def __init__(self, seed: int, red: bool | None = None, bad: bool = True):
-        self.seed = seed
+    def __init__(self, seed: int, red: bool | None = None, bad: bool = True,
+                 policy: Callable[[Snapshot], list] = decide):
+        self.seed, self.policy = seed, policy
         rng = self.rng = random.Random(seed)
         numbers = sorted(rng.sample(range(10, 90), rng.randint(3, 12)))
         self.batch, self.depth, self.rings = rng.choice((1, 2, 3, 4, 6)), rng.choice((1, 2, 3)), rng.choice((1, 2, 3))
@@ -718,12 +720,13 @@ class World:
         self.good = set(numbers) - set(self.bad) - set(self.erring)
         red = rng.random() < 0.3 if red is None else red
         self.fixes = rng.sample(sorted(self.good), min(len(self.good), rng.choice((1, 2)))) if red else []
+        self.detail = [rng.random() < 0.6 for _ in self.fixes]   # graph2 reports the red task's failing tests
         files = {m: {f"pkg{m}/mod{m}.py"} | ({"shared/x.py"} if rng.random() < 0.3 else set()) for m in numbers}
         self.breaks: dict[int, int] = {}
         for i, fix in enumerate(self.fixes):
             files[fix].add(f"red{i}/fix.py")
             for m in sorted(self.good - set(self.fixes)):
-                if rng.random() < 0.2:
+                if self.detail[i] and rng.random() < 0.2:
                     files[m].add(f"red{i}/other{m}.py")
             for m in sorted(self.bad):
                 if m not in self.breaks and rng.random() < 0.4:
@@ -789,7 +792,8 @@ class World:
         return frozenset(own | {(f"suite:red{i}", t) for i in range(len(self.fixes)) for t in self.red_tests(i, sha)})
 
     def failures(self, c: Candidate) -> tuple[Failed, ...]:
-        """``c``'s failures: its bad members' and the red tasks', each with its key on ``c``'s base, and the base's tests."""
+        """``c``'s failures: its bad members' and the red tasks', each with its key on ``c``'s base and, where graph2 reports
+        them, its failing tests and the base's."""
         out = []
         for m in sorted(self.tree[c.sha] & set(self.bad)):
             if m in self.breaks:
@@ -804,7 +808,7 @@ class World:
         for i in range(len(self.fixes)):
             if tests := self.red_tests(i, c.sha):
                 out.append(Failed(f"suite:red{i}", self.red_key(i, c.sha), frozenset({f"red{i}/"}), self.red_key(i, c.base),
-                                  tests, self.red_tests(i, c.base) or None))
+                                  *((tests, self.red_tests(i, c.base) or None) if self.detail[i] else ())))
         return tuple(out)
 
     def verdict(self, c: Candidate) -> Verdict:
@@ -856,7 +860,7 @@ class World:
         self.tick += 1
         moved = self.events()
         s = self.snapshot()
-        acts = decide(s)
+        acts = self.policy(s)
         self.check(s, acts, moved)
         n = len(acts)
         if acts and self.crashes and self.rng.random() < 0.15:
@@ -869,7 +873,7 @@ class World:
         self.again |= {(f.task, f.key) for a in acts[:n] if isinstance(a, Red) and a.sha not in recorded for f in a.failed}
         live = [m for c in self.cands.values() for m in c.members]
         assert len(live) == len(set(live)), f"seed {self.seed} tick {self.tick}: a PR in two live candidates: {self.cands}"
-        again = decide(self.snapshot())
+        again = self.policy(self.snapshot())
         dropped = {a.sha for a in acts[:n] if isinstance(a, Drop)}
         repeated = [a for a in set(again) & set(acts[:n]) if not isinstance(a, Ring) and not (isinstance(a, Red) and a.sha not in dropped)]
         assert not repeated, f"seed {self.seed} tick {self.tick}: a restart repeats {repeated}"
@@ -886,6 +890,7 @@ class World:
                 assert all(m in ready and ready[m].head == h for m, h in zip(c.members, c.heads)), where
                 self.seen["advanced on a red main"] += bool(self.reds(s.main))
                 self.seen["inherited by tests"] += any(f.key != f.base_key for f in c.verdict.failed)
+                self.seen["inherited at its key alone"] += any(not f.tests for f in c.verdict.failed)
             elif isinstance(a, Eject):
                 assert any(isinstance(d, Drop) and d.outcome is not None and d.outcome.state == FAIL
                            and a.number in d.outcome.members for d in acts), where
@@ -990,8 +995,8 @@ SEEDS = range(500)
 
 def ticks(w: World) -> int:
     """The ticks within which a scenario settles: every good PR on main, every bad PR ejected, no candidate left.  Seeds 0 to
-    4999 settled within 91 ticks and 12 per PR, none more than 19 past 8 a PR, and with a broken main whose fixes are ranked
-    last and late, within 71 and 9.7 per PR, none more than 5 past 8 a PR."""
+    4999 settled within 82 ticks and 11.7 per PR, none more than 14 past 8 a PR, and with a broken main whose fixes are ranked
+    last and late, within 55 and 9 per PR, none more than 3 past 8 a PR."""
     return 40 + 8 * len(w.marks)
 
 
@@ -1017,8 +1022,8 @@ def test_the_simulated_queue_keeps_every_invariant_and_settles():
     for what in ("main moved elsewhere", "the loop stopped early", "ejected by inputs", "ejected after a rerun",
                  "ejected for erring", "a lean PR built", "two lean PRs built together", "bisected", "bisected on infra errors",
                  "retried", "retried late", "retried while the rest ran", "rerun", "rung", "rung late", "wedged", "a red rung",
-                 "advanced on a red main", "built on a red main", "inherited by tests", "a mixed failure",
-                 "waited for the rest of a check", "a fix cleared a red"):
+                 "advanced on a red main", "built on a red main", "inherited by tests", "inherited at its key alone",
+                 "a mixed failure", "waited for the rest of a check", "a fix cleared a red"):
         assert seen[what], f"no seed exercised: {what}"
 
 
@@ -1037,5 +1042,46 @@ def test_a_red_main_keeps_landing_good_prs_its_reds_never_grow_and_its_fixes_cle
         assert not w.ejected and not w.reds(w.main), f"seed {seed}: {w.ejected} {w.reds(w.main)}"
         seen["a PR landed before a fix"] += min(w.merged.values()) < min(w.merged[f] for f in w.fixes)
         seen.update(w.seen)
-    for what in ("a red rung", "advanced on a red main", "a fix cleared a red", "inherited by tests", "a PR landed before a fix"):
+    for what in ("a red rung", "advanced on a red main", "a fix cleared a red", "inherited by tests",
+                 "inherited at its key alone", "a PR landed before a fix"):
         assert seen[what], f"no seed exercised: {what}"
+
+
+def _candidates(s: Snapshot, f: Callable[[Candidate], Candidate]) -> Snapshot:
+    return replace(s, candidates=tuple(map(f, s.candidates)))
+
+
+def _verdicts(s: Snapshot, **kw) -> Snapshot:
+    return _candidates(s, lambda c: replace(c, verdict=replace(c.verdict, **kw)))
+
+
+def _failures(s: Snapshot, f: Callable[[Failed], Failed]) -> Snapshot:
+    return _candidates(s, lambda c: replace(c, verdict=replace(c.verdict, failed=tuple(map(f, c.verdict.failed)))))
+
+
+MISREADS: dict[str, Callable[[Snapshot], Snapshot]] = {
+    "tries as one": lambda s: _candidates(s, lambda c: replace(c, tries=1)),
+    "reruns as none": lambda s: _candidates(s, lambda c: replace(c, reruns=0)),
+    "reruns as one": lambda s: _candidates(s, lambda c: replace(c, reruns=1)),
+    "every check as ended": lambda s: _verdicts(s, ended=True),
+    "no infra errors": lambda s: _verdicts(s, infra=()),
+    "no clock": lambda s: replace(s, now=None),
+    "no base keys": lambda s: _failures(s, lambda f: replace(f, base_key=None)),
+    "no failing tests": lambda s: _failures(s, lambda f: replace(f, tests=frozenset())),
+    "the base failing what the candidate fails": lambda s: _failures(
+        s, lambda f: f if f.base_tests is None else replace(f, base_tests=f.base_tests | f.tests)),
+    "no history": lambda s: replace(s, history=()),
+    "no Lean cap": lambda s: replace(s, lean=s.batch),
+}
+
+
+@pytest.mark.parametrize("misread", MISREADS)
+def test_decide_misreading_a_field_of_the_snapshot_breaks_an_invariant_of_the_simulated_queue(misread):
+    """The invariants hold `decide` to every field it reads: handed snapshots with one field misread, it breaks one of them,
+    or doesn't settle, in some seed."""
+    with pytest.raises(AssertionError):
+        for seed in SEEDS:
+            w = World(seed, policy=lambda s: decide(MISREADS[misread](s)))
+            while not w.done():
+                assert w.tick < ticks(w), f"seed {seed}: not settled after {ticks(w)} ticks"
+                w.step()
