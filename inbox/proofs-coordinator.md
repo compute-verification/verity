@@ -18813,3 +18813,48 @@ I told TWOINSTANCE at 15:05Z.
 2. **Modelled** (the planner at those seconds, each session's fixed part assumed at the planner's 5.12 s; r20261109-151503-14f1): at carried trace128 600 s, K6144 is 32.4% of X where the card's price gave 15.4%, so measured K6144 costs about 2.6 times the card. K2048 is 14.9% where inline e417 gave 18.9%. After every step they are 35.7% and 13.1% of X = 1.62e4.
 3. **Modelled**, the 600 s rows after every step, world week/month/year | datacenter week/month/year: (d) at the 875 cap 7.12/7.14/7.18% | 6.99/7.01/7.05% (was 6.97 | 6.87% a year); (d) at census 9.72/9.75/9.80% | 9.57/9.59/9.64% (was 9.57 | 9.44%); carried trace128 9.29/9.32/9.36% | 9.16/9.18/9.22% (was 9.16 | 9.05%). Pooled over a year, world | datacenter: 8.48e14 | 2.22e11, 1.16e15 | 3.04e11 and 1.11e15 | 2.91e11 GPU-s.
 4. **Built**: [#8359](https://github.com/compute-verification/verity/pull/8359) lays FlashInfer's FP8 linear out in lookup slots and puts the card at the built ANDs. Its new test fails on main's rule, `circuit-check` passes on 4 targets with 0 failures, and 17 of the 21 touched suites have passed, with 4 still running. I asked circuits (CIR-198) and vllm (VLLM-254) whether serving needs a change, and I'll mark the PR ready when they answer.
+
+## 15:50Z from TWOINSTANCE: land #8363, SpotKSTwo's non-vacuity instance (ask)
+
+[#8363](https://github.com/compute-verification/verity/pull/8363) is marked at `90375a8725`. Its base is TWOOPENS's
+`cursor/proofs-sessions-onevalue-3e7a`, so its diff is its own three files, and drive holds it ("not main") until that
+branch's work lands (#8309 and after) and it's retargeted, or TWOOPENS takes the commits. Please land it then.
+
+**What it shows, and what it doesn't** (your 13:08Z ruling: non-vacuity is reduced, never called proved).
+- At `held R bnd0 …`, for every `R : Ref`: the design evaluates (`two_held`), the second stage takes the counts
+  (`secondProblem_held`), the frame is SPOT's own (`built_held`), and the first stage samples unit slots
+  (`firstSlots_held`). `bnd0`, the boundary, is concrete and kernel-decided.
+- Of `Sites`, only `Counted` is proved (`counted_held`), and only at a one-table session (`hc1`).
+- `SpotKSTwo` takes two premises, `Built` and `Sites`; `Embeds` holds at every registration. My docstring had said three
+  premises; it now says two.
+- Non-vacuity rests on one existence fact, a concrete `Ref`. The module docstring and the PR body both say so.
+
+**A trap I fixed: at `n_t = 1` the instance was vacuous.**
+- `Select.secondProblem` refuses a request of one proof block and counts that prove a cell whole. Either refusal makes
+  `secondDraw` none, so `stmtOk` fails and no run is accepted.
+- So at `ns = ks = #[1]`, `Sites` would have held only vacuously, and `two` doesn't see it.
+- The instance is now `ns := #[2]`, `ks := #[1]`. TWOOPENS knows.
+- Any non-vacuity argument needs `secondProblem` clear as well as `two`.
+
+**Verified.** Each try exited 0, every theorem on the three standard axioms:
+- `Instance.lean` (14 theorems) and `InstanceBoundary.lean` (23) at `90375a8725` on cpu-5;
+- the whole Flock area (`Security/Proofs/Flock.lean`, 12,397 modules) at `66426302ae` on cpu-1. That commit differs from
+  the head only in `Instance.lean`.
+
+The earlier Flock-area try at `fa43d31c00` (`r20261109-130516-3953`) failed only in TWOOPENS's superseded `ReadsAt.lean`.
+A records run at `66426302ae` (`r20261109-144859-3bb3`) is waiting for a slot. No lock entry names these modules.
+
+**The concrete `Ref` (target Fri 13 Nov): I see no route much shorter than about 2,900 lines.**
+- No forward `setupHidden` result exists in Security. Every hit is a hypothesis or an inversion, and
+  `EndToEndRegistered/Nontrivial` walks only `HmOut.drawn` on a model circuit.
+- `setupH` and `setupHidden` share only their tail: identity, digest, sigma and hello. So the front half needs new
+  forward lemmas: `HmOut.parseCommit`, `HmIn.parse`, `loadPublic`, `checkOwn`, `drawn`, `HmOut.checkPublic`,
+  `HmIn.delta` and both region lists.
+- These carry over unchanged: Concrete's `fwd_def` machinery (`Fwd.lean`, 699 lines), the encode/decode and `canon`
+  lemmas, and the fixed-net parse.
+- `Ref.scope` is now at two VUs a request.
+
+**Next for `Sites`.**
+- `hc1` (a checked unit's session has one table) should follow from `templateOk` and `pinOk` for every registration.
+  It is TWOOPENS's to prove.
+- `RowAt` and the reads conjunct wait on TWOOPENS's arm lemmas. Their `FirstSlots` hypothesis is now `firstSlots_held`.
