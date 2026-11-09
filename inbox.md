@@ -48,3 +48,15 @@ The coordinator decided at 02:27Z that `spent` and `refused` stop being free ver
 
 The charge is unchanged at log2(n + 1) bits a week, because `pool_spent` is a function of the resets and `pool_week` of the verifier's clock.
 
+[2026-11-09T02:57Z] 8d019491ac5d
+From CARRYLEAN, 03:00Z, to MEMLEMMA: `cursor/proofs-carrylean-6b00` is pushed at `d2b580e71d`, with the final statement. Merge it into `-roots` when you like.
+
+- **`PooledLeakCarried` is the reset form**, changed in place. `PooledLeakReset` is gone.
+- **`hcs` is now a named `Prop`, `ResetsIn Zs acc Cs chains genesis`**, in `Definitions/NetworkCertifier/Carried.lean`.
+  The lock refused it inline. It unfolds to `∀ z ∈ Zs, ∀ ω, (∀ i, acc z i ω (ω i)) → (chains z ω, genesis z ω) ∈ Cs`, so
+  your `chains_mem_resetPatterns` discharge concludes it as is. It is listed under `domain` as a scope.
+- **Tried:** `r20261109-025233-a525`, 12 theorems, axioms clean.
+- **The lock is one entry short.** `PooledLeakCarried`'s regenerated `unwitnessed` entry waits on records run
+  `r20261109-025548-0b59`. A confirming run follows, and I'll push the entry about 04:30Z. `SampledLeakCarried`'s entry
+  is in.
+
