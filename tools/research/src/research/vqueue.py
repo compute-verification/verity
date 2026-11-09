@@ -4,8 +4,8 @@ A candidate is `main`'s tip, or the candidate below it, with one `Queue: #N` mer
 as `next` is), pushed to `queue/<sha12>` and checked by graph2 as `ready:<sha>`.  Its verdict decides what happens:
 
     pass     `main` fast-forwards to it, so its members are on `main` and the candidate above it now sits on `main`
-    fail     a failure its base has too (at its base's key, or with its failing tests among the base's) is inherited and
-             blames nobody: a candidate whose every failure is inherited passes once every other gating task has, so `main`'s
+    fail     a failure its base has too (at its base's key, with its failing tests among the base's, or as a read outside its
+             task's declared inputs that the base's task makes too, whatever files) is inherited and blames nobody: a candidate whose every failure is inherited passes once every other gating task has, so `main`'s
              reds only shrink, and each is rung once (`Red`).  The members whose changed files meet one of its own failures'
              inputs are the suspects: one suspect is ejected (its ready mark withdrawn, its owner told which tasks failed),
              several are bisected; none meeting them makes every member a suspect, and a lone member's failed keys are rerun
@@ -184,6 +184,8 @@ class Red:
 Action = Build | Advance | Drop | Eject | Retry | Rerun | Ring | Red
 
 
+#: the prefix of a task's test for each file it read outside its declared inputs, a fault graph2 names by file
+UNDECLARED = "undeclared:"
 ON_MAIN = "on main"
 BASE_FAILED = "its base failed"
 BASE_DROPPED = "its base was dropped"
@@ -363,9 +365,16 @@ def _stale(c: Candidate, ready: dict[int, Ready], below: set[int]) -> str | None
 
 def _inherited(f: Failed) -> bool:
     """Whether the base fails ``f`` too, so no member is to blame: at the same key (graph2 keys a task by everything it reads,
-    so no member touched it, and a fail stands), or with its failing tests among the base's failing tests of it."""
-    return (f.base_key is not None and f.key == f.base_key) or bool(f.tests and f.base_tests is not None
-                                                                     and f.tests <= f.base_tests)
+    so no member touched it, and a fail stands), with its failing tests among the base's failing tests of it, or, for a task
+    failed by reading files outside its declared inputs (each of its tests `UNDECLARED`), when the base fails that task so too,
+    whatever files each names: a task that faults stays faulted, so nothing stale passes, and the base stays red on it until
+    its declarations land."""
+    if f.base_key is not None and f.key == f.base_key:
+        return True
+    if not f.tests or f.base_tests is None:
+        return False
+    return f.tests <= f.base_tests or (all(t.startswith(UNDECLARED) for t in f.tests)
+                                       and any(t.startswith(UNDECLARED) for t in f.base_tests))
 
 
 def _reading(v: Verdict) -> str:

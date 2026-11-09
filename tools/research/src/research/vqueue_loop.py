@@ -1053,7 +1053,7 @@ def _fault_tests(why: str) -> frozenset[str]:
     if m := UNDECLARED_RE.search(why):
         # graph2 names only the first three files of its sorted reads: one the change adds past them goes unseen, and one it
         # removes from them brings the next into view, as if added
-        return frozenset(f"undeclared:{p}" for p in m.group(2).split(", ") if p)
+        return frozenset(f"{vqueue.UNDECLARED}{p}" for p in m.group(2).split(", ") if p)
     if (i := why.find(RACE)) >= 0:
         return frozenset({f"fault:{why[i:]}"})
     return frozenset({"fault:" + " ".join(RUN_ID_RE.sub("", RUN_ON_RE.sub("run", why)).split())})

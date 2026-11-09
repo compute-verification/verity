@@ -665,7 +665,7 @@ def test_a_fault_main_has_too_is_inherited_by_what_it_names_so_no_pr_touching_it
     (f,) = loop.world.verdict(sha, main).verdict.failed
     assert f.tests == f.base_tests == {"undeclared:x.txt", "undeclared:y.txt"} and vqueue._inherited(f)
     faulted(sha, "sha512:t1", "r20260101-000001-bbbb on n2", "read 3 file(s) outside its declared inputs: x.txt, y.txt, z.txt")
-    assert not vqueue._inherited(loop.world.verdict(sha, main).verdict.failed[0])            # one the change adds
+    assert vqueue._inherited(loop.world.verdict(sha, main).verdict.failed[0])   # one the change adds: main faults it too
     race = 'its runner caught a race: {"error": "race (t.txt)"}'
     faulted(main, "sha512:t0", "r20260101-000000-aaaa on n1", race)
     faulted(sha, "sha512:t1", "r20260101-000001-bbbb on node-12", race)

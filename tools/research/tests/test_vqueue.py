@@ -478,6 +478,10 @@ def test_a_failure_not_at_its_bases_key_is_the_batchs_own(base_key):
     (set(), {"t::a"}, False),                               # its failing tests unknown
     ({"t::a"}, set(), False),                               # the base's failing tests of it unknown
     ({"t::a"}, None, False),                                # the base passed it, or that is unknown
+    ({"undeclared:a", "undeclared:new"}, {"undeclared:a", "undeclared:b"}, True),  # a fault the base has too, whatever files
+    ({"undeclared:new"}, {"t::a"}, False),                  # the base fails the task, but not by a fault
+    ({"undeclared:a", "t::c"}, {"undeclared:a", "undeclared:b"}, False),  # a test failing beside the fault is new
+    ({"undeclared:a"}, None, False),                        # the base passed it
 ])
 def test_a_failure_at_a_key_a_member_changed_is_inherited_when_its_failing_tests_are_among_the_bases(tests, base_tests,
                                                                                                         inherits):
