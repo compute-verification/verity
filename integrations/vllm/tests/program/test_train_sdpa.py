@@ -1,10 +1,9 @@
-"""torch's flash attention forward at cc 12.0 (`rules.training_attention.FlashAttention`): at each shape `fa2_train.TRAIN_SDPA`
+"""torch's flash attention forward at cc 12.0 (`rules.training_attention.FlashSdpa`): at each shape `fa2_train.TRAIN_SDPA`
 lists the op is one batch over the B * H heads of the head torch's kernels compute there, its O and LSE each head's in order; a
 shape the capture doesn't cover, a non-causal call, dropout, another scale and a read of the backward's state are refused; only
 the training rules at the capture's cc hold the rule."""
 from __future__ import annotations
 
-import numpy as np
 import pytest
 import torch
 from torch.fx.experimental.proxy_tensor import make_fx
@@ -16,7 +15,7 @@ from verity.ml.definitions.registry import fa2_train as FT
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.outcomes import Unsupported
 from verity_vllm.program.frontend.rules.training import training_rules
-from verity_vllm.program.frontend.rules.training_attention import FlashAttention
+from verity_vllm.program.frontend.rules.training_attention import FlashSdpa
 
 aten = torch.ops.aten
 
@@ -76,9 +75,9 @@ def test_flash_forward_refusals(why, f, shape, reason) -> None:
 
 
 def test_without_a_cc_flash_attention_is_not_lowered() -> None:
-    assert any(isinstance(r, FlashAttention) for r in training_rules(cc=CC).rules)
-    assert not any(isinstance(r, FlashAttention) for r in training_rules().rules)
+    assert any(isinstance(r, FlashSdpa) for r in training_rules(cc=CC).rules)
+    assert not any(isinstance(r, FlashSdpa) for r in training_rules().rules)
     shape = (2, 12, 1024, 64)
     assert _refusal(_sdpa(0.0, True), _meta(shape, shape, shape), cc=None).reason != "identity"
     with pytest.raises(ValueError, match="no captured flash attention"):
-        FlashAttention((9, 0))
+        FlashSdpa((9, 0))

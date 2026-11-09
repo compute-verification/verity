@@ -44,7 +44,7 @@ from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import ref_prims as R
 from verity.ml.definitions.registry import torch_embedding_f32 as TEF
 from verity_vllm.program.frontend.rules.base import RuleSet
-from verity_vllm.program.frontend.rules.training_attention import FlashAttention
+from verity_vllm.program.frontend.rules.training_attention import FlashSdpa
 from verity_vllm.program.frontend.rules.training_emit import (_DT, BIT, F32, _alpha, _batch, _bits, _call, _const, _ew, _flat,
                                                               _iota, _operand, _operand_ok, _ones, _per_row, _ref, _rounded, _shape,
                                                               _tokens, _TrainRule, _widened, aten)
@@ -708,7 +708,7 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
     both placed first, before the default rules' CPU kinds, a whole tensor's vector norm or sum as its `reduce_kernel` does
     (`FullReduce`, before `Reduce`), an f32 embedding's gradient as its kernels do (`EmbeddingDenseBackward`), a fused AdamW step
     and a clamp as their kernels do (`FusedAdamW`, `Clamp`), `kthvalue` as its radix select does (`KthValue`) and torch's flash
-    attention forward as its kernels do (`FlashAttention`, placed first), in the rule set
+    attention forward as its kernels do (`FlashSdpa`, placed first), in the rule set
     ``training-cc<major>.<minor>``.  `tf32`, at a `cc`: the step sets cuda.matmul.allow_tf32, which the traced graph doesn't
     show, so its f32 `mm`s and `bmm`s are cuBLAS's TF32 GEMMs, which `Matmul` refuses (``training-cc<major>.<minor>-tf32``)."""
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
@@ -720,7 +720,7 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
                                          EmbeddingDenseBackward(cc), Compare(), Logic(), IntOps(), Where(), Clamp(cc), Index(),
                                          KthValue(cc), Copy(cc)] + ([] if cc else [Cast()])
     name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}" + ("-tf32" if tf32 else "")
-    return RuleSet(name, first + ([FlashAttention(cc)] if cc else []) + list(DEFAULT_RULES.rules) + last, list(DEFAULT_RULES.families))
+    return RuleSet(name, first + ([FlashSdpa(cc)] if cc else []) + list(DEFAULT_RULES.rules) + last, list(DEFAULT_RULES.families))
 
 
 __all__ = ["training_rules", "Matmul", "Binary", "Unary", "Lerp", "Addcmul", "Addcdiv", "SiluBackward", "ForeachAdd", "FusedAdamW",

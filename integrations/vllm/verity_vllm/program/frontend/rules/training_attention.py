@@ -1,5 +1,5 @@
 """The training rules' attention (`rules.training`): at a compute capability whose flash attention forward is captured, torch's
-`_scaled_dot_product_flash_attention` as that GPU's kernels compute it (`FlashAttention`)."""
+`_scaled_dot_product_flash_attention` as that GPU's kernels compute it (`FlashSdpa`)."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from verity_vllm.program.frontend.strided_views import _tensor_type
 _STATE = 7
 
 
-class FlashAttention(_TrainRule):
+class FlashSdpa(_TrainRule):
     """`_scaled_dot_product_flash_attention(q, k, v, 0, True)` of bf16 values [B, H, T, D] at the default scale -> one batch over
     the B * H heads of the head Definition torch's kernels compute at that shape on the capture's GPU (`fa2_train.train_sdpa`:
     `Fa2TrainHead_v1` unsplit, `Fa2TrainSplitHead_v1` in four splits), O (bf16) and the LSE (f32) of each head.  The rule claims
@@ -29,9 +29,9 @@ class FlashAttention(_TrainRule):
 
     def __init__(self, cc: tuple[int, int]):
         if tuple(cc) != CB.TRAIN_CC:
-            raise ValueError(f"FlashAttention: cc {tuple(cc)} has no captured flash attention (the captures are at {CB.TRAIN_CC})")
+            raise ValueError(f"FlashSdpa: cc {tuple(cc)} has no captured flash attention (the captures are at {CB.TRAIN_CC})")
         self.cc = f"cc{cc[0]}.{cc[1]}"
-        self.info = _info(f"FlashAttention_{self.cc}", "aten._scaled_dot_product_flash_attention of bf16 values",
+        self.info = _info(f"FlashSdpa_{self.cc}", "aten._scaled_dot_product_flash_attention of bf16 values",
                           "q, k and v are bf16 values of one shape [B, H, T, D] that `fa2_train.TRAIN_SDPA` lists",
                           "causal, no dropout, the default scale, no debug mask; only O and the LSE read",
                           "one batch of heads")
@@ -83,4 +83,4 @@ class FlashAttention(_TrainRule):
                    emitted=f"{head.id} x{B * H}")
 
 
-__all__ = ["FlashAttention"]
+__all__ = ["FlashSdpa"]
