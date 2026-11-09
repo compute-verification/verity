@@ -72,6 +72,13 @@ def seal_off_the_checkout(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(A, "SEAL_BASE", tmp_path_factory.mktemp("sealed"))
 
 
+@pytest.fixture
+def sandboxed_node(monkeypatch):
+    """A node whose builds are sandboxed, the only kind on which `audit` uses its replay cache: a test of what the cache
+    reuses builds with `lake` itself and audits without building, so the node it runs on can't change what it sees."""
+    monkeypatch.setattr(A, "sandboxed", lambda: True)
+
+
 def unshaped(rep: dict) -> list[str]:
     """A report's failures other than the shape rule's, for a test of something else that adds guarantees to the control
     without entering them under `shape.properties`."""
@@ -1112,7 +1119,7 @@ def test_facts_from_judges_from_a_stored_document_as_a_full_audit_does(tmp_path)
     """Stage B of the lock run (`--facts-from`, `audit_from_facts`) gives the full audit's verdict and record from the
     stored facts document alone, with no build: the control fixture passes both, each lock violation fails both the same,
     and an `--update` writes the same lock byte for byte. The document is schema-versioned and position-free, so no file's
-    bytes, a declaration's line or a module's build path leaks into what drive's after-landing lock run reuses."""
+    bytes, a declaration's line or a module's build path leaks into what the graph's early cutoff compares."""
     noop = lambda *_: None
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
@@ -1318,12 +1325,42 @@ def test_the_facts_cache_reads_a_document_only_by_its_key_and_refuses_a_tampered
     assert A.read_cached_facts(cache, key) is None, "a document without its sidecar is a miss, never a hit"
 
 
+def test_a_facts_or_replay_cache_that_a_build_could_write_is_refused(tmp_path, capsys):
+    """A facts sidecar's SHA-256 catches corruption and staleness, not a writer that rewrites the document and its sidecar
+    consistently, and a replay entry is no harder to forge. So each cache must lie outside all a sandboxed build writes:
+    every audited package's `.lake` and its path dependencies' (`writable`, `sandbox.sh`'s RW_DIRs). `build_roots_over`
+    finds an overlap either way (the cache in a root, or a root in the cache) and through a symlink, and the CLI refuses
+    such a cache before anything builds."""
+    pkg, dep = tmp_path / "tree" / "P", tmp_path / "tree" / "D"
+    (pkg / ".lake").mkdir(parents=True)
+    dep.mkdir()
+    (pkg / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": "D", "type": "path", "dir": "../D"}]}))
+    roots = [pkg.resolve() / ".lake", dep.resolve() / ".lake"]
+    assert A.writable(pkg) == roots
+    assert A.build_roots_over(tmp_path / "facts", [pkg]) == []
+    assert A.build_roots_over(tmp_path / "tree" / "facts", [pkg]) == [], "beside the packages, as lean_changed keeps it"
+    assert A.build_roots_over(pkg / ".lake" / "facts", [pkg]) == roots[:1]
+    assert A.build_roots_over(dep / ".lake" / "x", [pkg]) == roots[1:], "a path dependency's .lake is written too"
+    assert A.build_roots_over(tmp_path / "tree", [pkg]) == sorted(roots), "a cache holding a root"
+    (tmp_path / "link").symlink_to(pkg / ".lake", target_is_directory=True)
+    assert A.build_roots_over(tmp_path / "link" / "facts", [pkg]) == roots[:1], "resolved, as sandbox.sh binds"
+
+    ctl = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", ctl, ignore=shutil.ignore_patterns(".lake"))
+    for flag in ("--facts-cache", "--replay-cache"):
+        with pytest.raises(SystemExit):
+            A.main([str(ctl), flag, str(ctl / ".lake" / "cache"), "--out", str(tmp_path / "out")])
+        assert f"{flag} {ctl / '.lake' / 'cache'} overlaps {(ctl / '.lake').resolve()}" in capsys.readouterr().err
+    assert not (ctl / ".lake").exists(), "refused before anything built"
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_facts_cache_stores_the_sealed_document_under_its_build_s_key_and_judges_as_usual(tmp_path):
+def test_facts_cache_stores_the_sealed_document_under_its_build_s_key_and_judges_as_usual(tmp_path, monkeypatch):
     """`--facts-cache` (`audit(facts_cache=, facts_reuse=True)`, what lean_changed's records step passes) judges as a plain
     audit does and also stores the sealed document with its sidecar under the build's `facts_key`; a second audit of the
     same tree recomputes that key and reads the document back as a hit. `--facts-only` (the graph's stage A) still writes
-    the document alone, so its output stays the bytes the graph's cutoff compares, and the two flags exclude each other."""
+    the document alone, so its output stays the bytes the graph's cutoff compares, and the two flags exclude each other. A
+    node whose builds aren't sandboxed stores nothing: any build there could have written the cache."""
     noop = lambda *_: None
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
@@ -1331,6 +1368,13 @@ def test_facts_cache_stores_the_sealed_document_under_its_build_s_key_and_judges
     A.audit(pkg, tmp_path / "pop", build=False, replay=False, runs=False, update=True, log=noop)  # record so it passes
     plain = A.audit(pkg, tmp_path / "plain", build=False, replay=False, runs=False, log=noop)
 
+    monkeypatch.setattr(A, "sandboxed", lambda: False)
+    bare = tmp_path / "bare"
+    d = A.audit(pkg, tmp_path / "d", build=False, replay=False, runs=False, facts_cache=bare, facts_reuse=True, log=noop)
+    assert not bare.exists() and "facts_key" not in d and "sandbox" in d["facts_cache"], "no sandbox: nothing stored"
+    assert d["failures"] == [], "and the audit judges as usual"
+
+    monkeypatch.setattr(A, "sandboxed", lambda: True)
     cache = tmp_path / "facts"
     a = A.audit(pkg, tmp_path / "a", build=False, replay=False, runs=False, facts_cache=cache, facts_reuse=True, log=noop)
     key = a["facts_key"]
@@ -1983,6 +2027,32 @@ def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_scope_s_memory_holds
     assert A.build_threads(heavy, {"LEAN_NUM_THREADS": "3"}, have_gib=4) is None, "an explicit setting wins"
     assert A.replay_threads(heavy, env, have_gib=64) == min(A.cores(), 64 // A.REPLAY_GIB_PER_THREAD)
     assert A.replay_threads(light, env, have_gib=4) is None
+
+
+def test_a_heavy_build_pipelines_its_replay_under_lean_audit_s_thread_setting(tmp_path, monkeypatch):
+    """`lean_audit.py` runs every check.py with `LEAN_NUM_THREADS` set, under which `replay_threads` is None for every
+    package; the pipeline keyed on it never ran in a check, and the lock run's Security/Proofs replayed its 3179 modules
+    for 1117 s after its 2641 s build on 138 cores (r20261108-212009-2b2c). Heaviness is the manifest's (`pins_heavy`),
+    so a heavy package's sandboxed build with a replay cache on a large machine pipelines whatever that variable says."""
+    heavy, light = tmp_path / "heavy", tmp_path / "light"
+    for p, deps in ((heavy, ["mathlib", "Arklib"]), (light, ["batteries"])):
+        p.mkdir()
+        (p / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": d} for d in deps]}))
+    cache = tmp_path / "replay"
+    monkeypatch.setattr(A, "cores", lambda: A.PIPELINE_MIN_CORES)
+    monkeypatch.setattr(A, "sandboxed", lambda: True)
+    monkeypatch.setenv("LEAN_NUM_THREADS", str(A.PIPELINE_MIN_CORES))
+    assert A.replay_threads(heavy) is None, "the setting that hid the pipeline"
+    assert A.pins_heavy(heavy) and not A.pins_heavy(light)
+    assert A.pipelined(heavy, True, True, cache, None)
+    assert not A.pipelined(light, True, True, cache, None), "a light package's replay is short"
+    assert not any(A.pipelined(heavy, *args) for args in ((False, True, cache, None), (True, False, cache, None),
+                                                          (True, True, None, None), (True, True, cache, {"G": {}})))
+    monkeypatch.setattr(A, "sandboxed", lambda: False)
+    assert not A.pipelined(heavy, True, True, cache, None), "outside the sandbox the build could write the cache"
+    monkeypatch.setattr(A, "sandboxed", lambda: True)
+    monkeypatch.setattr(A, "cores", lambda: A.PIPELINE_MIN_CORES - 1)
+    assert not A.pipelined(heavy, True, True, cache, None), "a build bound by its cores keeps them"
 
 
 def test_a_spec_whose_guarantees_an_arklib_package_proves_needs_the_spec_floor(tmp_path):
@@ -5064,12 +5134,46 @@ def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_i
                         ("anonymous_instances", []), ("run_paths", []), ("listings", ([], {}, [])), ("regenerated", None)):
         monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
     rep = A.audit(pkg, tmp_path / "out", runs=False, log=lambda *_: None)
-    assert order == (["pinned", "replay_step", "dependency_scans", "dependency_digests", "proved"] if spec else ["replay_step"])
+    assert order == (["pinned", "final_replay", "dependency_scans", "dependency_digests", "proved"] if spec else ["final_replay"])
     assert given["replay_step"][2] is own and given["dependency_scans"][1] == own["oleans"] == given["dependency_digests"][2]
     assert given["replay_step"][9] is False      # an unsealed audit (no seals here) never writes the shared replay cache
     assert rep["failures"][0] == "unchecked: a hit" and rep["failures"][1].startswith("dependencies: the .olean files of the")
     assert rep["dependency_sources"] == 7 and rep["upstream"] == {"x": 1} and rep["replay"] == {"checked": 1, "reused": 0}
     assert {"audit", "dependency-sources", "upstream", "dependencies", "replay"} <= set(rep["seconds"])
+
+
+@pytest.mark.parametrize("sandbox", [True, False])
+def test_a_node_that_builds_without_the_sandbox_neither_reuses_nor_writes_the_replay_cache(tmp_path, monkeypatch, sandbox):
+    """Outside the sandbox a build could have written the shared replay cache, so an audit there gives its replay no
+    cache: it reuses no entry, stores none and checks every module, and the report says why. A sandboxed node's replay
+    is given the cache."""
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "lean-toolchain").write_text("leanprover/lean4:v0\n")
+    A.dump(pkg, {"roots": ["P"], "dependencies": {}})
+    cache = tmp_path / "replay"
+    cache.mkdir()
+    (cache / "k.json").write_text("{}")
+    given = {}
+
+    def replay_step(*args):
+        given["cache"] = args[5]
+        return [], {"checked": 1, "reused": 0}
+
+    monkeypatch.setattr(A, "sandboxed", lambda: sandbox)
+    monkeypatch.setattr(A, "facts_of", lambda *a, keep=True, sealed=None: {
+        "lean": "v0", "modules": ["P"], "declarations": 1, "axioms": [], "escapes": [], "oleans": [], "pins": {}})
+    monkeypatch.setattr(A, "replay_step", replay_step)
+    monkeypatch.setattr(A, "dependency_scans", lambda *a: ([], 0))
+    monkeypatch.setattr(A, "dependency_digests", lambda *a: {})
+    for name, value in (("judge", ([], {})), ("dropped", []), ("spec_reads", []), ("shape", []), ("unread_spec", {}),
+                        ("read_by_dependents", set()), ("reads_home", {}), ("scans", []), ("heartbeats", []),
+                        ("anonymous_instances", []), ("run_paths", []), ("listings", ([], {}, [])), ("regenerated", None)):
+        monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
+    rep = A.audit(pkg, tmp_path / "out", runs=False, log=lambda *_: None, replay_cache=cache)
+    assert given["cache"] == (cache if sandbox else None)
+    assert ("replay_cache" in rep) is not sandbox and (sandbox or "sandbox" in rep["replay_cache"])
+    assert [p.name for p in cache.iterdir()] == ["k.json"]
 
 
 def _runs(tmp_path, monkeypatch, entry, exit=0):
@@ -5164,7 +5268,7 @@ def counts(rep: dict) -> tuple[int, int]:
 
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_a_replay_reuses_only_modules_whose_olean_files_and_imports_passed_it(tmp_path):
+def test_a_replay_reuses_only_modules_whose_olean_files_and_imports_passed_it(tmp_path, sandboxed_node):
     """On a real build: a second audit reuses every module's replay; a change to `Control.Defs` replays it and what imports
     it; a declaration that skipped the kernel is still rejected beside reused modules, and a failed replay stores the
     modules the kernel accepted (`Control`, which imports the bad one) and never the rejected one, which fails again."""
@@ -5208,7 +5312,7 @@ _BAD_PARTS = ("Bad.olean", "Bad.olean.server", "Bad.olean.private", "Bad.ir.sig"
 
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_a_seal_replays_the_build_at_the_seal_not_a_swap_a_dependent_makes(tmp_path, monkeypatch):
+def test_a_seal_replays_the_build_at_the_seal_not_a_swap_a_dependent_makes(tmp_path, monkeypatch, sandboxed_node):
     """The gap this closes: once a package is sealed, a dependent's build may write its `.lake` (`writable`), so a
     reader of the live files could be shown bytes the build swaps out and back.  The audit copies the build at the seal and
     reads the copies.  Here a package is built with a `Control.Bad` whose declaration skips the kernel (the sealed, true
@@ -5384,7 +5488,7 @@ def test_a_replay_key_covers_every_module_it_imports_transitively(tmp_path):
 
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_the_closure_replay_checks_each_imported_module_once_and_then_reuses_it(tmp_path):
+def test_the_closure_replay_checks_each_imported_module_once_and_then_reuses_it(tmp_path, sandboxed_node):
     """On a real build: `--closure` sends every module the control imports (the toolchain's `Init`) through the kernel, a
     second audit checks none of them, and a change to an own module checks only it and what imports it."""
     pkg, cache = tmp_path / "control", tmp_path / "replay-cache"
@@ -5473,7 +5577,7 @@ def test_an_unsealed_replay_reuses_the_cache_but_writes_nothing(tmp_path, monkey
     assert (sealed / "B.json").is_file() and (sealed / "A.json").stat().st_mtime > 1000
 
 
-def test_an_unsealed_audit_leaves_the_shared_replay_cache_unchanged(tmp_path, monkeypatch):
+def test_an_unsealed_audit_leaves_the_shared_replay_cache_unchanged(tmp_path, monkeypatch, sandboxed_node):
     """lean's rule: an audit without seals keys its replay on the live `.lake`, which a dependent's build can tamper with,
     so it may reuse the shared cache but must write nothing to it, or a tampered verdict could poison a sealed run. An
     unsealed `audit` runs a real `replay_step` against a warm cache and leaves every entry, byte and mtime, as it was; the
@@ -5631,6 +5735,30 @@ def test_a_pipeline_runs_one_batch_at_a_time_in_the_heavy_slot_and_none_after_th
     A._HEAVY_REPLAY.release()
 
 
+def test_the_final_replay_waits_for_the_batch_running_when_the_build_ended(tmp_path, monkeypatch):
+    """Under `lean_audit.py`'s `LEAN_NUM_THREADS` the final replay takes no `_HEAVY_REPLAY`, so `wait` is what keeps it from
+    checking, beside the last batch, the modules that batch is about to store."""
+    monkeypatch.setattr(A, "free_gib", lambda: 10**6)
+    order, started, release = [], threading.Event(), threading.Event()
+
+    def replay(self, mods):
+        started.set()
+        release.wait()
+        order.append("batch stored")
+
+    monkeypatch.setattr(A.Pipeline, "_replay", replay)
+    p = pipeline(tmp_path, monkeypatch, ["P/A.lean"], loop=True, batch=1)
+    p.line("Built P.A (1s)\n")
+    started.wait()
+    p.end()
+    final = threading.Thread(target=lambda: (p.wait(), order.append("final replay")))
+    final.start()
+    assert final.is_alive() and order == []
+    release.set()
+    final.join()
+    assert order == ["batch stored", "final replay"]
+
+
 def test_a_batch_whose_modules_and_their_closure_all_passed_runs_no_replay(tmp_path, monkeypatch):
     """A cold build reports every module built, most of them with the bytes an earlier replay passed: a batch whose modules,
     and with `--closure` every module they import, are in the cache under its copies' keys starts no `Replay.lean`, which
@@ -5783,7 +5911,7 @@ def piped_build(pkg: Path, tmp_path: Path, monkeypatch, closure: bool) -> A.Pipe
 
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_a_pipelined_replay_checks_and_rejects_what_the_replay_without_it_does(tmp_path, monkeypatch):
+def test_a_pipelined_replay_checks_and_rejects_what_the_replay_without_it_does(tmp_path, monkeypatch, sandboxed_node):
     """On a real build with a declaration that skipped the kernel: a batch on every module the build reported, run on
     copies of their files, stores the four the kernel accepted, `Control` (which imports the bad one) included. The replay
     after the build then checks `Control.Bad` alone, reuses the four, and fails as the replay without a batch fails on a
@@ -5811,7 +5939,8 @@ def test_a_pipelined_replay_checks_and_rejects_what_the_replay_without_it_does(t
 
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_a_pipelined_closure_replay_of_module_system_files_leaves_the_final_one_nothing_to_check(tmp_path, monkeypatch):
+def test_a_pipelined_closure_replay_of_module_system_files_leaves_the_final_one_nothing_to_check(tmp_path, monkeypatch,
+                                                                                                  sandboxed_node):
     """With `--closure`, on `module` files, whose private parts the batch copies: the batch checks the own modules and the
     toolchain modules they import, and the replay after the build reuses every one of them. Only the closure's cold
     replay (the toolchain's `Init`) shows a batch storing closure modules the final replay then finds."""

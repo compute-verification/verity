@@ -187,10 +187,19 @@ input. What the guarantee rests on: `verity/core/protocols/spot/README.md`.
   `prove_path/run.sh` builds, with the ZK server's send check. It runs in a proofs slot, one point at a time. Each session's
   record carries its wall time and its summed peak memory (prover, live verifier and ZK server), which is what a CPU node
   spends on one sampled statement of a block's sample.
+- `phase_profile.sh` (with `phase_profile.py`): one GPU prover phase (`PHASE`, default `t.ligerito`) on a pod of its own: the
+  source's build (`AS=base` or `new`) on a served type at full (`UNITS`, default `moe-w13:N=1,SWAP=False`), its transcript pinned to main's under
+  M1 and M0, one warm `zk_cost.py` dev process under Nsight Systems with CUDA and OS calls traced, and an A/B of base and new.
+  `phase_profile.py` cuts each rep's phase at the prover's synchronizes and splits it into GPU time by kernel family and the
+  host's time with the GPU idle: its OS calls (a live coin's round trip), its CUDA calls and its own compute.
 - `forged_proofs.sh`: the fixture of Flock's forged-proof negatives (`verity/ml/flock/tests/test_lean_forged_proofs.py`),
   on hidden_zk's cached builds (`forged_proofs.py`). A small A8 unit (`LlBf16DotprodDot_v1` at K = 128) staged bound to its partition,
   with one honest sampled `--zk` session and two whose committed output word is wrong, proved with the prover's self-check
   skipped (`FC_ZK_SELF_CHECK=skip`), so the Lean verifier gets a well-formed proof of a false statement.
+- `form_refusals.sh`: the fixture of `verify --zk`'s form refusals
+  (`verity/core/protocols/spot/tests/test_form_refusals.py`), on the same builds (`form_refusals.py`): honest
+  `--zk` sessions of that unit flat, of it as its template, and of a toy whose last stage returns the outputs, with the
+  flat session's verdicts under four statements `verify --zk` must refuse.
 - `a11.sh`: run A11's entry point, on A6's builds. A11 is GLM-5.3 TP8 B1's served step, rank 0: `a11_kinds.py` censuses
   the request Program's root Calls by Definition kind and tries one unit of each through the circuit prover (a kind whose word units it
   refuses, through its Boolean version's); `a11_slice.py` cuts the
