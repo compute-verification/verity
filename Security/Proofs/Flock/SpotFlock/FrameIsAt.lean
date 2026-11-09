@@ -41,12 +41,13 @@ def readsInterior (own : Spot.SecondStage.Own) (t port v : String) : Bool :=
         (Spot.SecondStage.registeredEntry own.boundary v).isNone)
 
 /-- **The entry round 2 reads a registered read's value `v` at template `t`'s port `port` off**
-(`SecondStage.readOk`): the boundary port a link names; else template `t`'s port of the interior record, where the
-interior record has a port named `v`, which round 2 holds to be that one; else the registered value `v`. -/
+(`SecondStage.readOk`): the boundary port a link names; else the interior record's port named `v`, where it has one;
+else the registered value `v`. The entry is the value's, not the reading port's, so every session that reads one value
+names one entry. -/
 def readKey (own : Spot.SecondStage.Own) (t port v : String) : SlotKey :=
   match Spot.SecondStage.linkOf own t port with
   | some l => .port l.value
-  | none => if ((Spot.Record.byPort own.interior).find? (·.1 == v)).isSome then .interior t port else .reg v
+  | none => if ((Spot.Record.byPort own.interior).find? (·.1 == v)).isSome then .port v else .reg v
 
 variable (h : Held)
 
