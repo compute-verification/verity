@@ -5,7 +5,7 @@ public import Proofs.InferenceOnly.Threads
 public import Proofs.InferenceOnly.Lemmas.Activations
 
 /-!
-# Proofs of NCI's activations bound over all of training
+# Proofs of the inference-only policy's activations bound over all of training
 
 For one small subcircuit `R` (`activations_reads`), call a thread **full** for `R` when `R` holds a whole activation of it
 (`Links.Whole`), and let `ρ t` count the activations of thread `t` that `R` uses and does not hold whole (`openActs`).
