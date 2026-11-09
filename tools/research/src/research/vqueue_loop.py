@@ -155,7 +155,7 @@ class Past:
         return {f"{h}@{r.get('base')}" for r in self.of("skip") if r.get("done") or r.get("shadow") for h in r.get("heads") or ()}
 
     def built(self, sha: str) -> dict | None:
-        return next((r for r in reversed(self.of("build", sha)) if r.get("enqueued")), None)
+        return next(reversed(self.of("build", sha)), None)
 
 
 @dataclass
@@ -168,6 +168,8 @@ class Judged:
     note: str = ""
     graph2: str | None = None
     lacks: tuple[str, ...] = ()
+    #: whether graph2 listed it, or said its listing failed
+    listed: bool = True
 
 
 class _Seen:
@@ -368,7 +370,7 @@ class World:
             if said == LIST_FAILED:
                 return Judged(Verdict(LIST_FAILED), mark=f"list-failed {_digest(theirs)}", note=str(theirs.get("why") or ""),
                               graph2=said)
-            return Judged(Verdict(PENDING), note="not listed yet", graph2=said)
+            return Judged(Verdict(PENDING), note="not listed yet", graph2=said, listed=False)
         _, graph = got
         tasks = {t["id"]: t for t in graph["tasks"]}
         if isinstance(pol := policy.at(self.repo, sha), str):
@@ -594,7 +596,11 @@ class Loop:
             else:
                 base, ms = "", []
                 w.log(f"research queue vqueue: candidate {sha[:12]} holds a commit that is no `Queue: #N` merge above its base")
-            judged[sha] = j = w.verdict(sha)
+            j = w.verdict(sha)
+            if not j.listed and not past.tries(sha):        # pushed, and its enqueue failed or never ran
+                j = Judged(Verdict(LIST_FAILED), mark="not enqueued", note="the log holds no enqueue of it", graph2=j.graph2,
+                           listed=False)
+            judged[sha] = j
             members[sha] = ms
             cands.append(Candidate(sha, base, tuple(m.pr for m in ms), tuple(m.head for m in ms), j.verdict, past.tries(sha)))
         on = {c.sha: c.base for c in cands}
@@ -635,6 +641,9 @@ class Loop:
             for rec in recs:
                 self.write(rec)
             logged += recs
+            if failed := next((r["error"] for r in recs if r.get("error")), None):
+                self.out(f"research queue vqueue: tick {t.n}: {_name(a)} failed, the tick stops: {failed}")
+                break
         for sha, j in t.judged.items():
             if j.note:
                 self.out(f"research queue vqueue: tick {t.n}: {sha[:12]} {j.verdict.state}: {j.note}")
@@ -735,10 +744,13 @@ class Loop:
             recs.append(self.record(t, "build", base=a.base, priority=a.priority, why="no member merges onto its base"))
             return recs
         w.push(tip, branch(tip))
-        w.enqueue(tip, a.priority)
-        recs.append(self.record(t, "build", sha=tip, base=a.base, members=[m.pr for m in merged],
-                                heads=[m.head for m in merged], priority=a.priority, enqueued=True, done=True))
-        return recs
+        line = {"sha": tip, "base": a.base, "members": [m.pr for m in merged], "heads": [m.head for m in merged],
+                "priority": a.priority}
+        try:
+            w.enqueue(tip, a.priority)
+        except QueueError as e:                             # pushed: the next tick reads it as not enqueued, and retries
+            return [*recs, self.record(t, "build", **line, enqueued=False, done=True, error=str(e)[-600:])]
+        return [*recs, self.record(t, "build", **line, enqueued=True, done=True)]
 
     def _advance(self, c: Candidate, t: Tick) -> dict:
         if not self.shadow:

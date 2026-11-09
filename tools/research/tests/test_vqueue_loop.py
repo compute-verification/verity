@@ -363,6 +363,27 @@ def test_an_action_that_fails_stops_the_tick_with_its_error_logged_and_a_torn_li
     assert any("read as none" in x for x in env.out)
 
 
+def test_a_build_whose_enqueue_failed_is_logged_stops_the_tick_and_is_enqueued_by_the_next(env):
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"b.txt": "2\n"})
+    loop = env.loop(lambda s: policy(s) + ([] if s.candidates else [Build((2,), s.main, 0)]))
+    real, calls = loop.world.enqueue, []
+
+    def enqueue(sha: str, priority: int) -> None:
+        calls.append(sha)
+        if len(calls) == 1:
+            raise Q.QueueError("graph2 is down")
+        real(sha, priority)
+
+    loop.world.enqueue = enqueue
+    (built,) = loop.tick()                                      # the second build waits
+    assert (built["action"], built["enqueued"], built["error"]) == ("build", False, "graph2 is down"), built
+    assert env.queued() == {branch(built["sha"]): built["sha"]} and env.graph2.enqueued() == []
+    (retry,) = loop.tick()
+    assert (retry["action"], retry["enqueued"], retry["mark"], retry["priority"]) == ("retry", True, "not enqueued", 5)
+    assert [e["check"] for e in env.graph2.enqueued()] == [f"ready:{built['sha']}"] and loop.tick() == []
+
+
 def test_each_tick_reads_the_labels_afresh_as_drive_reads_them(env):
     made: list[Labels] = []
     loop = env.loop(lambda s: [])
