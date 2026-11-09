@@ -223,7 +223,8 @@ def persist_tables(paths: list[Path], request_bits: float) -> str:
                                with_ctrl(r.get("net_bits_w"), r.get("ctrl_bits_w")), r.get("ctrl_max_w", "-"),
                                with_ctrl(r.get("pairz_bits_w"), r.get("pairz_bits_ctrl")), r.get("pairz_emp_w", "-"),
                                with_ctrl(r.get("pair_bits_w"), r.get("pair_bits_ctrl")),
-                               q * c["per_request_bits"], lead(r) / (q * c["per_request_bits"])])
+                               q * c["per_request_bits"], r.get("code_bits", "-"),
+                               lead(r) / (q * c["per_request_bits"])])
         charged = Q * c["per_request_bits"]
         largest = max(lead(f), f.get("net_bits_w") or 0.0, pz.get("pairz_bits_w") or 0.0, pi.get("pair_bits_w") or 0.0)
         flips = [x for x in (flip_tail(g, s["vocab"]) for g in vf) if x is not None]
@@ -233,21 +234,22 @@ def persist_tables(paths: list[Path], request_bits: float) -> str:
                      flip_tail(f, s["vocab"]) if "decoded_detail" in f else "-", max(nulls) if nulls else "-",
                      with_ctrl(f["net_bits_w"], f.get("ctrl_bits_w")), verdict,
                      with_ctrl(pz.get("pairz_bits_w"), pz.get("pairz_bits_ctrl")),
-                     with_ctrl(pi.get("pair_bits_w"), pi.get("pair_bits_ctrl")), charged, lead(f) / charged,
-                     largest / charged, largest / (Q * request_bits)])
+                     with_ctrl(pi.get("pair_bits_w"), pi.get("pair_bits_ctrl")), charged, f.get("code_bits", "-"),
+                     lead(f) / charged, largest / charged, largest / (Q * request_bits)])
     out = ["Recovered bits about one weight column (value faults at the sink), each with its random-column control in "
            "parentheses, and over the charged bits (Q requests times the bits each returns; 8k: Q requests of "
            f"{request_bits:g} bits). Lead fault: the most tail bits at the largest Q.\n\n" + table(
                ["output", "model", "boxes", "position", "cut", "temperature", "faults", "Q", "lead fault",
                 "tail net (random columns)", "tail, sign flipped", "largest control, any fault", "all-in net",
                 "growth (lead score)", "pairwise vs null, best fault",
-                "pairwise as independent, best fault", "charged bits", "lead / charged", "largest / charged",
-                "largest / charged (8k)"], rows)]
+                "pairwise as independent, best fault", "charged bits", "lead's served-change code bits",
+                "lead / charged", "largest / charged", "largest / charged (8k)"], rows)]
     if curves:
         out.append("The lead fault against Q:\n\n" + table(
             ["output", "Q", "direct reads", "decoded tokens", "tail net (control)", "control max",
              "all-in net (control)", "control max", "pairwise vs null (control)", "same, counted in draws",
-             "pairwise as independent (control)", "charged bits", "lead / charged"], curves))
+             "pairwise as independent (control)", "charged bits", "served-change code bits", "lead / charged"],
+            curves))
     if sites_out:
         out.append("Every site at the sink (the best fault of each site; value faults scored along the weights' "
                    "column, other sites split-half along their fitted mean effect):\n\n" + table(
