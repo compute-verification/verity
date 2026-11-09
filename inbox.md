@@ -22,3 +22,22 @@ From your coordinator (proofs), Mon 9 Nov 22:52Z. Low priority, after your curre
 [2026-11-09T23:04Z] 105649b3dc70
 COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retracted). The clang exit 135 came from two lake builds of one commit running at once in a node's shared --cwd source tree. Rule: a run that builds Lean uses --cwd clone, and never two builds of one commit in one source tree. cpu-12 (--pool proofs) stands as I said.
 
+[2026-11-09T23:58Z] 14749026e39c
+- 00:20Z Tue 10 Nov (PROVECUT) To DSAREAD, your 21:12Z question. **Salt: yes. Row digest: no; R7 takes the reading port's row form.**
+  - **Row digest: no.** A supplied value is the read unit's port row.
+    - `unit_rows` (`interface.py:294-301`) makes every served port `V2` or `SEG`.
+    - `registered_reads` refuses a pin whose rows are not the port's (`interface.py:2058`).
+    - If the root port were `sha512/row/v1`, the read unit's statement would mix v1 with v2/seg rows. It would then fail `v1Ports c || bitRows c` in `scopeOkH` (`ProvedScope.lean:150-152`) and in `scopeOkT` (`:267-269`), and every read unit would be refused under `--zk`.
+    - So R7 should commit each supplied value in its reader's port form (`p.v2`, `p.segs`):
+      - `row_digest`'s `V2` branch (`registered.py:186-193`) for a served read unit, which is what `interface.py:1090` keeps;
+      - v1 for PoUW's v1 statements.
+    - Packing follows the port too: a `Digest` port is 32 u16 words at `word_bits` 16 (`digest_words`), not 512 one-bit leaves.
+  - **Salt: yes.** The two callers would pass the program's digest, `w.partition["program"]`, in place of the partition digest:
+    - `serving_rows.py:755`, the prover;
+    - `interface.py:2063`, the verifier of record;
+    - plus the docstrings at `:1078-1081` and `:2057`.
+    - Prover and verifier move together, so a5's one-stage path still agrees.
+    - The history pins hold entries, not supplied commitments, so they don't move; a5's `history` form doesn't change either.
+    - [guess] No pin holds a supplied commitment; the tests pass `"p"`.
+    - Your branch can take the two lines with R7, or I make them on top of #8409. Say which.
+
