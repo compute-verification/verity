@@ -37,8 +37,9 @@ The report (`--json` for the whole of it):
   liveness       the longest a candidate pending during the window waited from its build to its advance or drop (or
                  `--until`), the builds dropped stale (a `drop` with no outcome, but `on main`'s), the retries that enqueued
                  again, the rings, and the actions that failed (a decision with an `error`, which nothing else counts)
-  soundness      whether every `advance` was to a candidate whose base was the logged `main` (or the candidate advanced before
-                 it in the same tick) and no outcome logged for it failed: `main` moves only to a passed tree on itself
+  soundness      whether every `advance` was to a candidate the log built, whose base was the logged `main` (or the candidate
+                 advanced before it in the same tick), and no outcome logged for it failed: `main` moves only to a passed tree
+                 on itself
 
 Exit 0 when the paths agree and every advance was sound, 1 when not, 2 when the inputs can't be read.  `parse_log`,
 `parse_chain`, `parse_moves`, `parse_reds`, `compare` and `render` are pure; `main` reads git, the files and the labels
@@ -584,7 +585,9 @@ def compare(entries: list[Entry], chain: Chain, line: list[str], arrived: dict[s
         if base is None or base not in (e.main, before.get((e.tick, e.main))):
             bad.append({"at": iso(e.at), "sha": e.sha, "base": base, "main": e.main,
                         "why": "its base isn't the logged `main`" if base else "it names no base"})
-        elif cand is not None and cand.outcome == FAIL:
+        elif cand is None:
+            bad.append({"at": iso(e.at), "sha": e.sha, "base": base, "main": e.main, "why": "the log holds no build of it"})
+        elif cand.outcome == FAIL:
             bad.append({"at": iso(e.at), "sha": e.sha, "base": base, "main": e.main, "why": "the outcome logged for it failed"})
         before[(e.tick, e.main)] = e.sha
 
@@ -711,8 +714,8 @@ def render(rep: dict) -> str:
         what = f"{f['action']} {short(f['sha'])}" if f["sha"] else f["action"]
         lines.append(f"  {what} {hm(f['at'])} failed: {plain(f['error'])}")
     if sound["ok"]:
-        lines.append(f"soundness: every advance ({sound['advances']}) was to a candidate on the logged main, none with a failed "
-                     f"outcome ({sound['passed']} with a logged pass)")
+        lines.append(f"soundness: every advance ({sound['advances']}) was to a candidate the log built on the logged main, none "
+                     f"with a failed outcome ({sound['passed']} with a logged pass)")
     else:
         lines.append(f"soundness: VIOLATED by {len(sound['violations'])} of {sound['advances']} advance(s):")
         lines += [f"  {short(v['sha'])} {hm(v['at'])}: {v['why']} (base {short(v['base'])}, main {short(v['main'])})"
