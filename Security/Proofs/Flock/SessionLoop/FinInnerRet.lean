@@ -49,10 +49,10 @@ set_option synthInstance.maxHeartbeats 1000000
 namespace Loop
 
 /-- **A run that returns**: `x` from the transcript `t` at round `k` returns some value, transcript and round. -/
-def OkAt {α : Type} (x : TMW (StateT ℕ V) α) (t : Transcript) (k : ℕ) : Prop :=
+def OkAt {α : Type} (x : TMW (StateT ℕ V) α) (t : Flock.Transcript) (k : ℕ) : Prop :=
   ∃ a t' k', (x.run t).run k = .ok ((a, t'), k')
 
-theorem okAt_bind {α β : Type} {x : TMW (StateT ℕ V) α} {f : α → TMW (StateT ℕ V) β} {t : Transcript} {k : ℕ}
+theorem okAt_bind {α β : Type} {x : TMW (StateT ℕ V) α} {f : α → TMW (StateT ℕ V) β} {t : Flock.Transcript} {k : ℕ}
     {a : α} {k' : ℕ} (hx : ∃ t', (x.run t).run k = .ok ((a, t'), k')) (hf : ∀ t', OkAt (f a) t' k') :
     OkAt (x >>= f) t k := by
   obtain ⟨t', hx⟩ := hx
@@ -61,10 +61,10 @@ theorem okAt_bind {α β : Type} {x : TMW (StateT ℕ V) α} {f : α → TMW (St
   rw [StateT.run_bind, StateT.run_bind, hx]
   exact hb
 
-theorem okAt_pure {α : Type} (a : α) (t : Transcript) (k : ℕ) : OkAt (pure a : TMW (StateT ℕ V) α) t k :=
+theorem okAt_pure {α : Type} (a : α) (t : Flock.Transcript) (k : ℕ) : OkAt (pure a : TMW (StateT ℕ V) α) t k :=
   ⟨a, t, k, rfl⟩
 
-theorem liftTM_run {α : Type} {x : _root_.Flock.Transcript.TM α} {t : Transcript} {a : α} {t' : Transcript} {k : ℕ}
+theorem liftTM_run {α : Type} {x : _root_.Flock.Transcript.TM α} {t : Flock.Transcript} {a : α} {t' : Flock.Transcript} {k : ℕ}
     (h : x t = .ok (a, t')) : ((liftTM x : TMW (StateT ℕ V) α).run t).run k = .ok ((a, t'), k) := by
   change (monadLift (x t) : StateT ℕ V _).run k = _
   rw [h]
@@ -87,7 +87,7 @@ theorem asksPad_round_ok (C : Array (Array F128)) (c : ByteArray) {k : ℕ}
 /-- **A squeeze answered by `asksPad C`** of `0 < n < 2^64` coins from round `k`, where round `k` is past `C` or holds
 `n` coins, returns round `k`'s coins and moves to round `k + 1`. -/
 theorem squeezeP_pad_ok (C : Array (Array F128)) (kind : UInt8) {n : ℕ} (hn : n ≠ 0) (hn64 : n < 2 ^ 64)
-    (t : Transcript) {k : ℕ} (hC : ∀ cs, C[k]? = some cs → cs.size = n) :
+    (t : Flock.Transcript) {k : ℕ} (hC : ∀ cs, C[k]? = some cs → cs.size = n) :
     ∃ t', ((_root_.Flock.Firewall.Finish.squeezeP (asksPad C) kind n).run t).run k =
       .ok (((Array.range n).map (padCoin C k), t'), k + 1) :=
   ⟨_, by
@@ -98,14 +98,14 @@ theorem squeezeP_pad_ok (C : Array (Array F128)) (kind : UInt8) {n : ℕ} (hn : 
       asksPad_round_ok C _ fun cs hcs => (hC cs hcs).trans (Count.framed_count t kind hn64).symm]
     rfl⟩
 
-theorem sampleVecP_pad_ok (C : Array (Array F128)) {n : ℕ} (hn : n ≠ 0) (hn64 : n < 2 ^ 64) (t : Transcript) {k : ℕ}
+theorem sampleVecP_pad_ok (C : Array (Array F128)) {n : ℕ} (hn : n ≠ 0) (hn64 : n < 2 ^ 64) (t : Flock.Transcript) {k : ℕ}
     (hC : ∀ cs, C[k]? = some cs → cs.size = n) :
     ∃ t', ((_root_.Flock.Firewall.Finish.sampleVecP (asksPad C) n).run t).run k =
       .ok (((Array.range n).map (padCoin C k), t'), k + 1) :=
   squeezeP_pad_ok C 2 hn hn64 t hC
 
 /-- A coin answered by `asksPad C` from round `k`, where round `k` is past `C` or holds one coin, is round `k`'s first. -/
-theorem sampleP_pad_ok (C : Array (Array F128)) (t : Transcript) {k : ℕ} (hC : ∀ cs, C[k]? = some cs → cs.size = 1) :
+theorem sampleP_pad_ok (C : Array (Array F128)) (t : Flock.Transcript) {k : ℕ} (hC : ∀ cs, C[k]? = some cs → cs.size = 1) :
     ∃ t', ((_root_.Flock.Firewall.Finish.sampleP (asksPad C)).run t).run k = .ok ((padCoin C k 0, t'), k + 1) := by
   obtain ⟨t₁, h1⟩ := squeezeP_pad_ok C 1 (by decide) (by norm_num) t hC
   have e : ((Array.range 1).map (padCoin C k)).getD 0 0 = padCoin C k 0 := by
@@ -115,7 +115,7 @@ theorem sampleP_pad_ok (C : Array (Array F128)) (t : Transcript) {k : ℕ} (hC :
   rw [StateT.run_bind, StateT.run_bind, h1, ← e]
   rfl
 
-theorem tauLift_run {hh : ByteArray → ByteArray} {tau : F128} {salt : ByteArray} {t : Transcript} {k : ℕ} :
+theorem tauLift_run {hh : ByteArray → ByteArray} {tau : F128} {salt : ByteArray} {t : Flock.Transcript} {k : ℕ} :
     ((StateT.lift (_root_.Flock.Zk.tauCommitmentWith
       (_root_.Flock.Hashes.ofSha512 hh : _root_.Flock.Hashes (StateT ℕ V)) tau salt) :
       TMW (StateT ℕ V) ByteArray).run t).run k = .ok ((FlockComplete.Replay.InZ.tcOf hh tau salt, t), k) := by
@@ -127,7 +127,7 @@ and `k + 3` is past `C` or holds the count it squeezes (one, `|cons| + 3`, one a
 first coin, is not `0`. -/
 theorem innerP_pad_ok (C : Array (Array F128)) (lay : _root_.Flock.Zk.PadLayout)
     (p : _root_.Flock.Firewall.Finish.PadsZk) (ic : _root_.Flock.Firewall.Finish.InnerCommit) (finalC : F128)
-    (cons : Array (String × _root_.Flock.Zk.Lin)) (hcs : cons.size + 3 < 2 ^ 64) (t : Transcript) {k : ℕ}
+    (cons : Array (String × _root_.Flock.Zk.Lin)) (hcs : cons.size + 3 < 2 ^ 64) (t : Flock.Transcript) {k : ℕ}
     (h0 : ∀ cs, C[k]? = some cs → cs.size = 1) (h1 : ∀ cs, C[k + 1]? = some cs → cs.size = cons.size + 3)
     (h2 : ∀ cs, C[k + 2]? = some cs → cs.size = 1)
     (h3 : ∀ cs, C[k + 3]? = some cs → cs.size = _root_.Flock.Zk.Q)
@@ -184,13 +184,13 @@ theorem v_bind_of {α β : Type} {x : V α} {f : α → V β} {a : α} {b : β} 
   rw [hx]
   exact hf
 
-theorem tmw_bind_run {α β : Type} {x : TMW (StateT ℕ V) α} {f : α → TMW (StateT ℕ V) β} {t : Transcript} {k : ℕ}
-    {a : α} {t' : Transcript} {k' : ℕ} (hx : (x.run t).run k = .ok ((a, t'), k')) :
+theorem tmw_bind_run {α β : Type} {x : TMW (StateT ℕ V) α} {f : α → TMW (StateT ℕ V) β} {t : Flock.Transcript} {k : ℕ}
+    {a : α} {t' : Flock.Transcript} {k' : ℕ} (hx : (x.run t).run k = .ok ((a, t'), k')) :
     ((x >>= f).run t).run k = ((f a).run t').run k' := by
   rw [StateT.run_bind, StateT.run_bind, hx]
   rfl
 
-theorem getThe_bind_run {β : Type} (f : ℕ → TMW (StateT ℕ V) β) (t : Transcript) (k : ℕ) :
+theorem getThe_bind_run {β : Type} (f : ℕ → TMW (StateT ℕ V) β) (t : Flock.Transcript) (k : ℕ) :
     ((getThe ℕ >>= f : TMW (StateT ℕ V) β).run t).run k = ((f k).run t).run k := rfl
 
 /-- **`consWhy` passes** where the rep took the request's rounds and its `zerocheck c_eval` constraints vanish on the
@@ -214,7 +214,7 @@ theorem finInner_ok_of {t : Tab} {rep : ℕ} {dom : ByteArray} {n : ℕ} {q : Re
       (_root_.Flock.Firewall.Finish.padsOf q.draws) (_root_.Flock.Firewall.Finish.saltAt q.draws.salts) :
       V _root_.Flock.Firewall.Finish.InnerCommit) = .ok ic)
     {p : _root_.Flock.Proof} {zl : _root_.Flock.Zk.Level0Msgs} {cons : Array (String × _root_.Flock.Zk.Lin)}
-    {tF : Transcript}
+    {tF : Flock.Transcript}
     (hrep : ((_root_.Flock.Firewall.Finish.repCons (asksPad q.coins)
         (fun lv g s => pure (_root_.Flock.Firewall.Finish.commitFw lv g s)) t.st t.sch t.tPad rep dom t.g t.cm0
         (_root_.Flock.Firewall.Finish.claimsOf q.xs) (_root_.Flock.Firewall.Finish.padsOf q.draws) ic q.vals t.extra

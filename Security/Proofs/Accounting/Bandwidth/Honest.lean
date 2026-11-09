@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Guarantees.Bandwidth
+public import Proofs.Accounting.Lemmas.Bandwidth
 public import Mathlib.RingTheory.WittVector.IsPoly
 public import Mathlib.Tactic.ReduceModChar
 import Mathlib.Algebra.Order.Floor.Extended

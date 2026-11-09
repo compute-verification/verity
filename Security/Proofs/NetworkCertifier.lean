@@ -80,8 +80,9 @@ nontrivial lemmas. `Code` proves the certifier's program
 (`certifier_program`, `NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions.
 `Accepted` proves `security_properties`' `AcceptedRunsAreProgramRuns` through `Code`: a run the network certificate
 check accepts is a run of the constant-rate Program under the declared advice, so the guarantees here count it.
-`SampledAuditAccepted` proves that an accepted sampled audit is `Accepted` except at `ε` at `δ` over the selection.
-`SampledAuditInstance` takes its `KS` hypothesis from `Claims.Sampling.sampling_assembled_of`, at the assembled records.
+`SampledAuditAccepted` proves that an accepted sampled audit is `Accepted` except at `ε` at `δ` over the selection, at
+any compiled sampled verifier where `Claims.SamplingGeneric.Compiled.KS` holds. `SampledAuditInstance` takes that
+`Compiled.KS` from the compiler at Flock (`Claims.SamplingGeneric.flockKS`), at the assembled records.
 `TapRows` bounds the leak at the network certifier's rows (`TapProof.sampledLeak_certifier`): an accepted audit's extracted
 trace carries the network certifier's registered rows outside the incorrect proof blocks, unless its openings collide with the
 network certifier's; `Period` counts with it. `Checked` proves the leak bounds with checked inputs (`SampledLeakChecked`,
@@ -147,13 +148,14 @@ theorem EncardIngressObsDecodableLeContentsPerWindow :
 
 theorem EncardAccSeqsSampledLe : NetTiming.Guarantees.EncardAccSeqsSampledLe := @NetTiming.encard_accSeqsSampled_le
 theorem SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted :=
-  fun hSA => NetTiming.sampledLeak_reg hSA
+  NetTiming.sampledLeak_reg NetTiming.SecurityProofs.SampledAuditAccepted
 theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered := by
-  intro hSA _ _ _ _ _ _ _ _ H D hks hb L K S lay k δ decode hδ hdec reg ops β Dj hβ
+  have hSA := @NetTiming.SecurityProofs.SampledAuditAccepted
+  intro _ _ _ _ _ H D hks hb L K S lay k δ hδ reg ops β Dj hβ
   exact ⟨fun x hx hreg Ω _ _ P =>
-      NetTiming.sampledLeak_registered hSA H D hks hb L K S lay k δ decode hδ hdec reg ops Dj x hx hreg Ω P,
+      NetTiming.sampledLeak_registered hSA H D hks hb L K S lay k δ hδ reg ops Dj x hx hreg Ω P,
     fun x hx s P hs hP op =>
-      (NetTiming.sampledLeak_reg hSA H D hks L K S lay k δ decode hδ hdec reg β Dj hβ).2 x hx s P hs hP op _⟩
+      (NetTiming.sampledLeak_reg hSA H D hks L K S lay k δ hδ reg β Dj hβ).2 x hx s P hs hP op _⟩
 
 theorem PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted := NetTiming.periodLeak
 theorem PooledIncorrectBlocksLe : NetTiming.Guarantees.PooledIncorrectBlocksLe := NetTiming.pooledIncorrectBlocks

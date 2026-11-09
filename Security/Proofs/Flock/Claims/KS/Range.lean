@@ -61,7 +61,7 @@ open Flock
 /-- **A run accepts only at an accepting reply**: some prover messages on which the verifier's step returns `.acc`. -/
 theorem stepWith_acc {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     (vnext : List Claims.Msg → Claims.OC Claims.Out) :
-    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Trace),
+    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
       (Claims.stepWith H P x ω vnext n hist as t).out = .acc → ∃ as', ((vnext as').eval H).1 = .acc := by
   intro n
   induction n with
