@@ -690,7 +690,8 @@ def _table_norm(args: dict) -> None:
             end += c
             if c and (p := int(pos[end - 1])) + 1 > S.table_keys:
                 want[end - 1] = {"layer": S.layer, "request": rid, "batch_index": r, "token": end - 1, "position": p, "n": p + 1}
-    S.tab = {"layer": S.layer, "cache": args.get("mla_kv_cache"), "buf": args.get("topk_indices_buffer"), "want": want}
+    S.tab = {"layer": S.layer, "cache": args.get("mla_kv_cache"), "buf": args.get("topk_indices_buffer"), "want": want,
+             "dtype": args.get("mla_kv_cache_dtype", "auto")}
 
 
 def _table_topk(op: str, flat: list) -> None:
@@ -715,9 +716,10 @@ def _table_topk(op: str, flat: list) -> None:
         else:
             hi = flat[1].reshape(-1)[:rows].long()
             lo = torch.zeros_like(hi)
-        width = buf.stride(0) * buf.element_size() if buf is not None else 0
-        off = out.data_ptr() - buf.data_ptr() if buf is not None else -1
-        view = bool(width) and off >= 0 and off % width == 0 and out.stride(0) == buf.stride(0)
+        same = buf is not None and out.untyped_storage().data_ptr() == buf.untyped_storage().data_ptr()
+        width = buf.stride(0) * buf.element_size() if same else 0
+        off = out.data_ptr() - buf.data_ptr() if same else -1
+        view = same and off >= 0 and off % width == 0 and out.stride(0) == buf.stride(0)
         for i, e in t["want"].items():
             found = ([i - off // width] if 0 <= i - off // width < rows else []) if view else (
                 torch.nonzero(hi - lo == e["n"]).reshape(-1).tolist())
@@ -734,7 +736,8 @@ def _table_convert(args: dict) -> None:
     """A ``--table`` layer's top-k-to-slot conversion: for each kept token, its n latent rows as the paged cache holds them
     (row i at position i, [kv_c | k_pe], the step's own included), the n scores its top-k call ranked, and the top-k the
     conversion maps, which is that call's row as the canonical top-k left it (`dsa_topk`'s plugin rewrites the op's output in
-    place once it returns). A token whose request, keys or top-k don't join is an error of the step."""
+    place once it returns). A token whose request, keys or top-k don't join, or whose cache holds other than the bf16 rows
+    ``DsaLatentRow_v1`` outputs (an fp8 cache), is an error of the step."""
     import torch
     t = S.tab
     if t is None or t["layer"] != S.layer:
@@ -754,6 +757,8 @@ def _table_convert(args: dict) -> None:
                 why = f"the conversion's top-k of token {i} is not {e['op']}'s row {e['op_row']}"
             elif why is None and (cache is None or cache.dim() != 3 or cache.shape[1] != bs):
                 why = f"no paged latent cache [blocks, {bs}, words] at the layer's fused_norm_rope"
+            elif why is None and (cache.dtype != torch.bfloat16 or t["dtype"] not in ("auto", "bfloat16")):
+                why = f"a {cache.dtype} cache written as {t['dtype']}: a table holds bf16 rows only"
             if why:
                 S.errors.append(f"step {S.step} table layer {e['layer']} request {e['request']} token {i}: {why}")
                 continue

@@ -86,7 +86,7 @@ def _canonical(scores, n):
     return sorted(sorted(range(n), key=lambda j: (-scores[j], j))[:K]) if n > K else list(range(n)) + [-1] * (K - n)
 
 
-def _step(capture, *, copied: bool = False, other_request: bool = False):
+def _step(capture, *, copied: bool = False, other_request: bool = False, dtype: str = "auto"):
     """One layer of the step: its cache write, a decode top-k over lengths, a prefill top-k over row bounds, the slot
     conversion and FA3's read. Returns the cache and what each kept row's scores and top-k must be."""
     g = torch.Generator().manual_seed(3)
@@ -98,8 +98,8 @@ def _step(capture, *, copied: bool = False, other_request: bool = False):
     buf = torch.full((8, K), -7, dtype=torch.int32)
     kv_c, k_pe = torch.randn(5, KVL, generator=g).bfloat16(), torch.randn(5, ROPE, generator=g).bfloat16()
     sys.modules[ATTN].fused_norm_rope(pos, torch.zeros(5, 2), None, 1e-6, kv_c, None, 1e-6, k_pe, None, None, None, None, 1e-6,
-                                      None, buf, slot_mapping=slots, mla_kv_cache=cache, kv_c_out=torch.empty_like(kv_c),
-                                      k_pe_out=torch.empty_like(k_pe))
+                                      None, buf, slot_mapping=slots, mla_kv_cache=cache, mla_kv_cache_dtype=dtype,
+                                      kv_c_out=torch.empty_like(kv_c), k_pe_out=torch.empty_like(k_pe))
 
     dec = torch.randn(2, 16, generator=g)
     lengths = torch.tensor([[7], [3]], dtype=torch.int32)
@@ -179,6 +179,14 @@ def test_a_conversion_that_takes_a_kept_token_as_another_request_writes_no_table
     _step(capture, other_request=True)
     assert [e["request"] for e in S.tables] == ["d"]
     assert S.errors == ["step 3 table layer 2 request p token 4: the conversion's token 4 is not of batch index 2"]
+
+
+def test_a_cache_written_as_fp8_writes_no_table(tmp_path, monkeypatch) -> None:
+    _stub(monkeypatch)
+    capture, S = _capture(tmp_path, monkeypatch)
+    _step(capture, dtype="fp8_ds_mla")
+    assert S.tables == [] and len(S.errors) == 2
+    assert all(e.endswith("a torch.bfloat16 cache written as fp8_ds_mla: a table holds bf16 rows only") for e in S.errors)
 
 
 def _rewrite(td: Path, k: int, name: str, fn) -> None:
