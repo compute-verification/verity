@@ -24,7 +24,7 @@ A task is one of:
 
 The window is the tasks that ended in it: a records run at its attempt's end, a step at its `ended_utc`. The attempts are those
 the store's remote holds that started up to `LOOKBACK_H` before the window; blobs are read from the remote and not kept, since a
-day's build logs are gigabytes. Percentiles are nearest-rank, as `research queue stats`'s.
+day's build logs are gigabytes. Percentiles are nearest-rank (`queue_stats.p90`).
 """
 from __future__ import annotations
 

@@ -9,7 +9,7 @@ whose value is used, through any alias (``from os import environ``, ``import os 
 and ``os.getenvb`` alike.  A write, a delete, and passing ``os.environ`` whole (to a subprocess, ``dict(...)``, ``.copy()``)
 are not.  Reads are counted per file, the key the ratchet gate counts by too: an entry ``{"file", "count"}`` allows ``count``
 reads in its file.  A file read more often than its entry allows, or read with no entry, fails.  An entry that allows more
-than is found doesn't: the list can run ahead of a tree, holding the reads of PRs queued below it on ``next``, and ``--prune``
+than is found doesn't: the list can run ahead of a tree, holding the reads of PRs queued below it, and ``--prune``
 deletes and lowers what this tree no longer finds.
 
 An area's settings registry is where reads belong, so it is exempt: a module named ``settings.py``, or one the list marks

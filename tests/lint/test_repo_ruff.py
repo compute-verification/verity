@@ -9,7 +9,7 @@ to the repository and the rule's code, the key the ratchet gate counts by too, s
 file changes nothing here.  An entry ``{"file", "rule", "count"}`` allows ``count`` findings of its pair.  A pair found more
 times than its entry allows, or found with no entry, fails; in the root suite only an error's (`ERRORS`) fails, and the rest
 warn (`tests/conftest.py`'s `BOOKKEEPING`).  An entry that allows more than is found doesn't: the list can run
-ahead of a tree, holding the findings of PRs queued below it on ``next`` that a fix, an ejection or a reorder leaves out, and
+ahead of a tree, holding the findings of PRs queued below it that a fix, an ejection or a reorder leaves out, and
 ``--prune`` deletes and lowers what this tree no longer finds.  ``ruff check --fix PATH`` fixes some (F401, F541, RUF100's
 stale ``# noqa``).
 

@@ -13,7 +13,7 @@ why), which holds two of its packages per handler; here every file is held, per 
 
 Handlers are counted per file, the key the ratchet gate counts by too: an entry ``{"file", "count"}`` allows ``count``
 swallowing handlers in its file.  A file with more than its entry allows, or with one and no entry, fails.  An entry that
-allows more than is found doesn't: the list can run ahead of a tree, holding the handlers of PRs queued below it on ``next``,
+allows more than is found doesn't: the list can run ahead of a tree, holding the handlers of PRs queued below it,
 and ``--prune`` deletes and lowers what this tree no longer finds.  A file that moves takes its entry with it, in the same
 change (``--move``): this lint reads no history, so a renamed file's handlers count under its new path.  The ratchet gate
 (``integrations/vllm/tools/ratchet_gate.py``) fails a change whose Python gains a swallowing handler, or that grows this list

@@ -15,7 +15,7 @@ commits above every line before it.  GitHub's push activity on `main` is such a 
         --jq '.[] | "\(.timestamp) \(.after)"'
 
 Without it `main`'s arrival is unknown, and the old path's `main` is `main` now.  Each PR's ready mark is the newest `ready =
-true` label at a head at or before the event measured from it (`research queue stats` reads the same labels; a head with no
+true` label at a head at or before the event measured from it (a head with no
 label of its own has no mark here), and an old-path ejection is a head whose newest `ready` label is `false` (`research queue
 eject`'s, its reason in `ref`).  `--old-reds` names the old path's after-landing reds, JSON `{tip: [step, ...]}`.
 
