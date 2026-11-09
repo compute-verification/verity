@@ -1597,7 +1597,7 @@
   },
   "Claims.SamplingGeneric.CompiledTwo.Sessions": {
    "owner": "@proofs",
-   "digest": "5253770d66c8ec79d628863b8eef3b61606b53eac42288a7c86850ad18925a20",
+   "digest": "149be8259cd9dff09fbd172876b9d017e0e712985ee92d138c4d2aaff8ebfd43",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -5089,6 +5089,11 @@
   "Flock.SecurityProofs.SessionLoopZK": "a4028bdba4de3cb93455dbf5d27c01dc1e341693a308bf26b99de7a4451e2862",
   "Flock.SecurityProofs.SessionLoopZKDeployed": "19b9ed293bdf1729089ef8b18463bb7f832ece9b92432e1e88d38c7c4a4b9659",
   "Flock.SecurityProofs.SoundAtBridge": "a65a67acd33540e7e76f251161afecd4384bc96480823282207852754b72e8fc",
+  "Flock.SecurityProofs.SpotExfilTwo": {
+   "type_hash": "ac7eedcb10306cfde243f580a97a016d9c3e11b405fd8b68666bbbdf3b51cdf6",
+   "missing": "honest",
+   "why": "honest instance needs a built two-stage layout and frame (PRF-460, open to 30 Nov)"
+  },
   "Flock.SecurityProofs.SpotKSTwo": {
    "type_hash": "3e2f6fea33f0eb0209d45bb69661e2922866f18469fb272b2a1f0b006b17b80d",
    "missing": "honest",
@@ -5276,6 +5281,12 @@
    "type_hash": "6042883e0de54d343be42f372fe18390a11842febc9feda80046b6e3f70bb455",
    "unfolded_hash": "2eec6c9336acfa7539b2c9eecfa82c9810701d4024426048b0116374af511561"
   },
+  "NetTiming.SecurityProofs.PooledLeakChecked": {
+   "type_hash": "50edf1fb52d78599b26fb54aca2b376fa475a86024556bb53ee80f3d695f1ce9",
+   "missing": "honest",
+   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique) and a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check) (CIR-190, open to 30 Nov)",
+   "unfolded_hash": "b47d65cccae8757ba6d024a7f98e4df2611ef0c9227e527821200452ff1733fa"
+  },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "type_hash": "debf2afa03a59d1d37dd902e4a99f3a2a5f9eb834c327dad8c7a697a6b101048",
    "unfolded_hash": "4c87d753bb6cc7f2adc8f9b7e770f4c9f5fa03c0ad4c56679f1269df582c2bb3"
@@ -5283,6 +5294,12 @@
   "NetTiming.SecurityProofs.SampledLeakAccepted": {
    "type_hash": "43970f90d531d3e7171623b15c9ce94eef5f67c55a52c6b00059cca4d554f37d",
    "unfolded_hash": "2d5c3f2482b79633d9c2156355f5f490907054040f4c5f9ea6e397869f81b364"
+  },
+  "NetTiming.SecurityProofs.SampledLeakChecked": {
+   "type_hash": "66ead4ee6ccd3afec409137eea719edbea430e70f6e60a9b6044779ba90db9f2",
+   "missing": "honest",
+   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique) and a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check) (CIR-190, open to 30 Nov)",
+   "unfolded_hash": "15acf0c02b43e20cb978dff94b5e7bba4a3350c3b0303e92bd999d08c1cc568d"
   },
   "NetTiming.SecurityProofs.SampledLeakRegistered": {
    "type_hash": "0eeee44bc28dd8a98e2c2545e9f4418b9741a630c9cfd62f72773757c1f9e3b3",
@@ -5489,23 +5506,6 @@
   "Verity.SecurityProofs.ServingBlockSum": {
    "type_hash": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
    "unfolded_hash": "76801bacbea7a7241bc4900b35606f76be5cb7c45089092a126af20fd85dd6e5"
-  },
-  "Flock.SecurityProofs.SpotExfilTwo": {
-   "type_hash": "ac7eedcb10306cfde243f580a97a016d9c3e11b405fd8b68666bbbdf3b51cdf6",
-   "missing": "honest",
-   "why": "honest instance needs a built two-stage layout and frame (PRF-460, open to 30 Nov)"
-  },
-  "NetTiming.SecurityProofs.PooledLeakChecked": {
-   "type_hash": "50edf1fb52d78599b26fb54aca2b376fa475a86024556bb53ee80f3d695f1ce9",
-   "missing": "honest",
-   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique) and a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check) (CIR-190, open to 30 Nov)",
-   "unfolded_hash": "b47d65cccae8757ba6d024a7f98e4df2611ef0c9227e527821200452ff1733fa"
-  },
-  "NetTiming.SecurityProofs.SampledLeakChecked": {
-   "type_hash": "66ead4ee6ccd3afec409137eea719edbea430e70f6e60a9b6044779ba90db9f2",
-   "missing": "honest",
-   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique) and a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check) (CIR-190, open to 30 Nov)",
-   "unfolded_hash": "15acf0c02b43e20cb978dff94b5e7bba4a3350c3b0303e92bd999d08c1cc568d"
   }
  },
  "witnesses_assumed": {
@@ -32304,7 +32304,7 @@
    }
   },
   "Definitions.Claims.SamplingTwo": {
-   "digest": "51590c15fdfd7241279e4c64f6282a86db6df3edf8e996ab07ce67b97df754c8",
+   "digest": "4175254b4c46d0c2d6965486491b8c674c3bcc3dc0ff0fbd4b3d401430a71048",
    "definitions": {
     "Claims.Sampling.Design.Two": "d1c7605e035e8d2d77209adadc6b25301fae1804f7e8ea858fa1aa597e7d4a00",
     "Claims.Sampling.Design.Two.FirstRate": "c47f092ab4e567a228b5a0bc990750a48733a96b590649f5e7bb87609a4024fc",
@@ -32341,7 +32341,7 @@
     "Claims.SamplingGeneric.CompiledTwo.KS": "a1248a70c0faedf4a598de524bcb491f3f08cd20d7dff39d0502a1dc8c78f936",
     "Claims.SamplingGeneric.CompiledTwo.KSAt": "4d4dc8186592320621f4c1b6660a4ccd78b9cc82fb8429661a796e09467b583c",
     "Claims.SamplingGeneric.CompiledTwo.Scope": "c5b24307da73e3fd56aa75fc4617e03dfd0f41984fb40bccb792e97a43515735",
-    "Claims.SamplingGeneric.CompiledTwo.Sessions": "5253770d66c8ec79d628863b8eef3b61606b53eac42288a7c86850ad18925a20",
+    "Claims.SamplingGeneric.CompiledTwo.Sessions": "149be8259cd9dff09fbd172876b9d017e0e712985ee92d138c4d2aaff8ebfd43",
     "Claims.SamplingGeneric.CompiledTwo.replaySample": "bc99ecaee387a6c05784d9894a69e22031f3ec413d1cbc3efa4f596a3f029841",
     "Claims.SamplingGeneric.CompiledTwo.toCompiled": "0c63c2616b1bb25764ab651b8c1f7e5428848cea5d0fa4e874c241d8ccec06a2",
     "Claims.SamplingGeneric.CompiledTwo.two": "bb5d61d75e180d0e5265c7ed2a38bbd6e337091d093c853487fe82047d09b02e",
@@ -49827,10 +49827,10 @@
    }
   },
   "Proofs.Flock.SamplingGeneric.Guarantees": {
-   "digest": "f6f21834e64ec46146886ec2a522af4905e2660cfad261a0322bf08e5d948e1a",
+   "digest": "b2f9819d4ae07a9b9f4b68d377a969495cc5c803fcaefcf2e3c3be2422190be9",
    "definitions": {
     "Flock.Guarantees.SampledKSTwo": "5a77023c5d1421fffd958bb5178c1f4a2a1102ceb43d35a260f35df541840d0a",
-    "Flock.Guarantees.SpotExfilTwo": "e500e8102d7bc9b9ea40aae7348365475f2fdbcfd13e16460f3fe5a36d0294b9",
+    "Flock.Guarantees.SpotExfilTwo": "21921138b6807a82ad74fb7d6757de5fcc02055fdd2b5da38801a5b431d5bec7",
     "Flock.Guarantees.SpotKSTwo": "239f9e5cf8d2e31bc2e176e6d4ba8b9730e9f3d9378c7241e1b035dd6925dffc"
    }
   },
@@ -49857,12 +49857,12 @@
    }
   },
   "Proofs.Flock.SamplingGeneric.TwoDeployed": {
-   "digest": "6c60db0f04502efb12443c43f17e9b69bb7d91130523d09cf1481cf2f99cafcc",
+   "digest": "8d8973efe2e03433b311eb0f280ac6bed7692e3f25d03fa37ecafcb6024e81ec",
    "definitions": {
     "SamplingDeploy.Code.RefusesTwo": "fb71a8bd7bbb835f632eb5b01629891c333db5c4e9c99ff5ea953210a834d47c",
     "SamplingDeploy.Code.ReplayCap": "298a260f38d15b41703db6644024563644e2efc4ff6bde4922c98692f8d0a0a6",
     "SamplingDeploy.Code.footOf": "26c847cb32d9917981de58b2addca7725aa4c51243368427e0105786cf19ced6",
-    "SamplingDeploy.compiledTwo": "a4cdc38565708df46b46f9ad9e04375771bcf15ee32f7ca290103a78b697443e"
+    "SamplingDeploy.compiledTwo": "51b89742752ac5c1a238648ab808628da6782a82de6f927441e6b0a4c955bd79"
    }
   },
   "Proofs.Flock.SessionLoop.Concrete.Delta": {
@@ -53312,12 +53312,12 @@
    }
   },
   "Proofs.Flock.SpotFlock.Cap": {
-   "digest": "b5da95ced5415bcae6ab061b253798e28cd1637b3de6e8123b7fc58dafc040da",
+   "digest": "9a7de9503993c0d986dbe66ceaf52bae601787ba7c7da4fb00996ecef4f8fc89",
    "definitions": {
     "SpotFlock.cap": "99ed7e1cab2ba8a13b9f4a65e6528e59cf148ac73277c3e605d13f7953f00a0a",
     "SpotFlock.firstK": "e3eedbf1cc72a04a46e7c324bd5bb58f460d36bbc51bb72c3895b8a996debe1a",
     "SpotFlock.firstKOf": "b435bb9acf689cc3664322a1f48e947e6d61f4af6272fc171371bcffc72563c2",
-    "SpotFlock.nBlocks": "21e13668e92a08be8e1b329f1aeeb51a520d24440b6cde2443bdf891566425c8",
+    "SpotFlock.nBlocks": "606463a84e455cc6e60136f81b2fb578f7587883f60a229d736bf13da60878e5",
     "SpotFlock.perBlock": "3cc0001df0be162cb2b40df50e7a251c7c5ae5601e65b494424783f4d0f034fd"
    }
   },
