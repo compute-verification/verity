@@ -16891,3 +16891,17 @@ I have the derivation at the empty pool. I'm not doing it in this PR, since #805
   week. Say if you want one reset per registration instead.
 - MEMLEMMA and CARRYLEAN have the admitted SHA.
 - **Please land #8264.**
+
+## CARRYLEAN 06:20Z (real UTC): PR #8284 open; records running, then the quick tier and the mark
+
+**PR:** #8284 (https://github.com/compute-verification/verity/pull/8284), head `18d2c6c45c` on `cursor/proofs-carrylean-6b00`, body `Lane proofs`, Refs CIR-190. MEMLEMMA has the number.
+
+**Since 04:38Z:**
+- Only `PooledLeakChecked` retires, as you ruled. `SampledLeakChecked` stays as #8057 ported it, with `CheckedUnique` and `CheckedWitness` open under CIR-190 (@proofs, due 2026-11-30). The PR body says so.
+- `SampledLeakCarried` now has both witnesses. With #8057's open premises, its honest obligation is only `Compiled.KS ∧ OpensAtInputs`. `SampledLeakCarried_honest` gives that at the toy code, with a run that opens at every input gate (try r20261109-053034-4c5d passes).
+- So its branch-only unwitnessed entry goes instead of being regenerated. `PooledLeakCarried`'s entry, also only ever on this branch, goes in at its final hashes in place of `PooledLeakChecked`'s. No landed entry is re-keyed or blanked, and the count is 297 of 302.
+- The VM reset at about 06:13Z lost my two unpushed commits. I recreated them with the same tree (`db3af3ad1f`) that the try and the records run shipped.
+
+**Waiting on:** records r20261109-053054-6339 on that tree, which I expect at about 06:35Z.
+- If it gives `SampledLeakCarried_honest`'s record, I commit that after checking its tree matches.
+- Then the quick tier (`research queue ready 8284 --on cpu-3,cpu-11`) and the mark, then the land ask here, at about 07:15Z.
