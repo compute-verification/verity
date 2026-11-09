@@ -1119,7 +1119,7 @@ def test_facts_from_judges_from_a_stored_document_as_a_full_audit_does(tmp_path)
     """Stage B of the lock run (`--facts-from`, `audit_from_facts`) gives the full audit's verdict and record from the
     stored facts document alone, with no build: the control fixture passes both, each lock violation fails both the same,
     and an `--update` writes the same lock byte for byte. The document is schema-versioned and position-free, so no file's
-    bytes, a declaration's line or a module's build path leaks into what drive's after-landing lock run reuses."""
+    bytes, a declaration's line or a module's build path leaks into what the graph's early cutoff compares."""
     noop = lambda *_: None
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))

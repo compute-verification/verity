@@ -5058,7 +5058,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     document there (`facts_document`, `write_facts_document`): the facts and the source and dependency findings a later
     `--facts-from` (`audit_from_facts`) judges from, so the two give the same verdict and record.  ``facts_cache`` (a
     directory, `--facts-only` with the replay and the tests off) writes it instead under its content address
-    (`facts_key`), so the lock run and the records step of one landing share the one document; the report's `facts_key`
+    (`facts_key`), so a build's document is found by the key its tree computes; the report's `facts_key`
     and `facts_document` name it (the caller drops it on a tamper).  With ``facts_reuse`` (`--facts-cache`, a judging
     audit) it is stored with its sidecar (`store_cached_facts`), which `read_cached_facts` checks on a reuse, and only on a
     node whose builds are sandboxed (`sandboxed`), where no build can write the cache (`build_roots_over`); without it
@@ -5636,8 +5636,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--facts-cache", type=Path, metavar="DIR", help="while judging each named package as usual, also store "
                     "its sealed facts document into DIR, keyed by that build (`facts_key`), with a sidecar `<facts_key>.json` "
                     "so a later reuse looks the document up by the key the current tree computes and refuses a tampered or "
-                    "stale one.  lean_changed's records step passes it so drive's lock run reuses the facts the records run "
-                    "already read, rather than recomputing them")
+                    "stale one (`read_cached_facts`).  lean_changed's records step passes it")
     a = ap.parse_args(argv)
     pkgs = [p.resolve() for p in (packages(a.root.resolve()) if a.all else a.package)]
     if not pkgs or (a.all and a.package) or (a.all and (a.update or a.name_instances)):
