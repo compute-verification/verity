@@ -347,6 +347,17 @@ def test_a_binding_s_name_is_its_root_function_its_files_models_or_its_template_
         f"{m}TEMPLATE_PARAMS:token-select-combine", "TEMPLATE_PARAMS", "<registered>"]
 
 
+def test_a_template_entry_at_a_name_is_a_binding_of_its_instances_alone():
+    """``<template>@<name>`` entries (`targets.template_params`) split one template's instances into bindings of their own:
+    each GLM-5.3 RMSNorm launch is one."""
+    m = "verity_flock.subcircuit_templates.circuit-check#TEMPLATE_PARAMS:"
+    got = {label: sorted(TG.BINDINGS[label]) for label, sub, _ in TG.templates() if sub.template.id == "rmsnorm-cuda-vec8"}
+    assert got == {"rmsnorm-cuda-vec8/n6144-b768-eps1e-05/bf16": [f"{m}rmsnorm-cuda-vec8@b768"],
+                   "rmsnorm-cuda-vec8/n6144-b256-eps1e-05/bf16": [f"{m}rmsnorm-cuda-vec8@b256"]}
+    assert [SH.binding((u,)) for (u,) in got.values()] == [f"{m}rmsnorm-cuda-vec8@b768", f"{m}rmsnorm-cuda-vec8@b256"]
+    assert TG.template_of("rmsnorm-cuda-vec8@b256") == TG.template_of("rmsnorm-cuda-vec8") == "rmsnorm-cuda-vec8"
+
+
 def test_the_shard_module_is_outside_the_checker_s_version(tmp_path, monkeypatch):
     """`cache.SHARD` decides which targets a run checks, never what a check computes: an edit to it reruns no target."""
     monkeypatch.setattr(CC, "_HERE", tmp_path)
