@@ -50,6 +50,13 @@ from serving's bytes: the edge's K/V file, or the mirror, which a replay identic
 RID's tokens and logprob bits and the schedule (a dummy's finish reason aside) up to RID's last step, and records what
 the replay took from the run.
 
+``--recompute-hits`` (with ``--shape-only``) recomputes RID's prefix-cache hits rather than loading them, as a sampled
+replay that re-proves its hit does: a dummy computes each leading page it shares with RID over RID's tokens at its
+served launch, and those slots are kept rather than refilled, so each page RID hits is a block this replay computed,
+which `Hits` leaves as it is. A hit page this replay didn't compute in full (its producer ran before the start, or
+computed it from outputs a dummy samples afresh) is counted (``target_pages_unrecomputed``) and fails ``bit_exact``.
+RID must arrive inside the block.
+
 ``--served`` replays an arm `tp_restore.py serve` wrote, at any tensor-parallel size: each edge's state
 (`boundary:save_edge`'s ``state.pkl``) and the first edges' whole-pool dumps (``--dump``) under its scratch directory.
 The engine is built again in this process from the served argv, and every page is loaded, filled or hashed on each rank
@@ -254,6 +261,8 @@ class Hits:
 
     def insert(self, key: Any, src: Any) -> None:
         (blk,) = self.pool.get_new_blocks(1)
+        if self.shape is not None:
+            self.shape.forget((blk.block_id,))
         self.ops[blk.block_id] = src
         self.pool._insert_block_hash(key, blk, self.bs)
         self.pool.free_blocks([blk])
@@ -269,6 +278,10 @@ class Hits:
                 if have is None:
                     self.insert(key, FILL_PAGE)
                     sh.taken["pages_seeded_poisoned"] += 1
+                continue
+            if sh is not None and sh.recompute:
+                done = have is not None and sh.recomputed(have.block_id)
+                sh.taken["target_pages_recomputed" if done else "target_pages_unrecomputed"] += 1
                 continue
             if sh is not None:
                 src = self.pages(q.block_hashes[i])
@@ -635,21 +648,27 @@ class Dummies:
     its finish (``ignore_eos``, ``max_tokens`` its served output count, ``finish``), `poison` fills blocks with
     ``mode`` (zero or NaN, in each layer's dtype) through ``kv`` (`LocalKv`, `RankKv`), and `scheduled` and `flush`
     refill each slot a dummy wrote once the GPU has finished the step, as `Mirror` copies them, never in a block the
-    target holds. `scheduled` also notes each page the target has written (``target_pages``)."""
+    target holds. `scheduled` also notes each page the target has written (``target_pages``). With ``recompute``, a
+    dummy's slots in its leading pages shared with the target (`kept_pages`) are kept, not refilled, and each block
+    they fill is noted (``filled``) until it is refilled, poisoned or handed out again (`forget`)."""
 
     def __init__(self, target: str, mode: str, sched: Any, kvm: Any, kv: Any, block_size: int,
-                 keep_tokens: list[int], finish: dict[str, int], stops: dict[str, int] | None = None) -> None:
+                 keep_tokens: list[int], finish: dict[str, int], stops: dict[str, int] | None = None,
+                 recompute: bool = False) -> None:
         self.target, self.mode, self.sched, self.kvm, self.bs = target, mode, sched, kvm, block_size
-        self.kv, self.finish = kv, finish
+        self.kv, self.finish, self.recompute = kv, finish, recompute
         self.stops = {rid: s for rid, s in (stops or {}).items() if rid != target}
         full = len(keep_tokens) // block_size * block_size
         self.keep = set(page_chain(keep_tokens[:full], block_size))
         self.target_pages: set[bytes] = set()
         self.pending: list[int] = []
+        self.kept: dict[str, int] = {}
+        self.filled: dict[int, set[int]] = {}
         self.taken = {"dummies": 0, "tokens_substituted": 0, "pages_kept_target_shared": 0, "finishes_forced": 0,
                       "blocks_poisoned_at_start": 0, "pages_seeded_poisoned": 0, "slots_poisoned": 0,
                       "target_pages_loaded": 0, "target_pages_overwritten": 0, "target_pages_own": 0,
-                      "target_pages_unavailable": 0, "stops_forced": 0}
+                      "target_pages_unavailable": 0, "stops_forced": 0, "slots_kept_shared": 0,
+                      "target_pages_recomputed": 0, "target_pages_unrecomputed": 0}
 
     def dummy(self, rid: str) -> bool:
         return rid != self.target
@@ -702,7 +721,22 @@ class Dummies:
         ids = sorted(set(blocks) - self.target_blocks())
         if ids:
             self.kv.fill_blocks(ids, self.mode)
+            self.forget(ids)
         return len(ids)
+
+    def kept_pages(self, rid: str) -> int:
+        """How many of dummy ``rid``'s leading full pages are the target's, its tokens there kept (`substitute`)."""
+        if rid not in self.kept:
+            chain = page_chain(list(self.sched.requests[rid].all_token_ids), self.bs)
+            self.kept[rid] = next((i for i, h in enumerate(chain) if h not in self.keep), len(chain))
+        return self.kept[rid]
+
+    def recomputed(self, block: int) -> bool:
+        return len(self.filled.get(block, ())) == self.bs
+
+    def forget(self, blocks: Iterable[int]) -> None:
+        for b in blocks:
+            self.filled.pop(b, None)
 
     def scheduled(self, so: Any) -> None:
         from verity_vllm.engine.step_trace import step_geometry
@@ -716,8 +750,15 @@ class Dummies:
                 self.target_pages.update(q.block_hashes[: (start[rid] + int(n)) // bs])
                 continue
             blocks = self.kvm.get_block_ids(rid)[0]
-            self.pending += [blocks[p // bs] * bs + p % bs for p in range(start[rid], start[rid] + int(n))
-                             if blocks[p // bs] not in mine]
+            kept = self.kept_pages(rid) * bs if self.recompute else 0
+            for p in range(start[rid], start[rid] + int(n)):
+                b = blocks[p // bs]
+                if p < kept:
+                    self.filled.setdefault(b, set()).add(p % bs)
+                    self.taken["slots_kept_shared"] += 1
+                elif b not in mine:
+                    self.pending.append(b * bs + p % bs)
+                    self.filled.pop(b, None)
 
     def flush(self) -> None:
         if not self.pending:
@@ -1044,6 +1085,9 @@ def dummies(a: argparse.Namespace, w: dict[str, Any], st0: dict[str, Any], begin
         held = {r.request_id: list(r.prompt_token_ids) + list(r.output_token_ids) for r in reqs}
         base = {r.request_id: len(r.output_token_ids) for r in reqs}
     arrival = next((r for r in w["arrive"] if r["engine_id"] == rid and r["before_step"] >= first), None)
+    if rid in held and a.recompute_hits:
+        raise SystemExit(f"--recompute-hits: {rid} is held at step {first}, so its prefix would be loaded, not recomputed: "
+                         "start from an edge before it arrives")
     if rid in held:
         mine = held[rid]
     elif arrival is not None:
@@ -1055,7 +1099,8 @@ def dummies(a: argparse.Namespace, w: dict[str, Any], st0: dict[str, Any], begin
     if r_end is None:
         raise SystemExit(f"{rid}: the record has no output of it from step {first}")
     block = {s: v for s, v in w["steps"].items() if s >= first}
-    return Dummies(rid, a.dummy, sched, kvm, kv, bs, mine, served_finish(base, outs, block), served_stops(block)), r_end
+    return Dummies(rid, a.dummy, sched, kvm, kv, bs, mine, served_finish(base, outs, block), served_stops(block),
+                   a.recompute_hits), r_end
 
 
 def shape_view(steps: dict[int, dict], target: str) -> dict[int, dict]:
@@ -1092,7 +1137,7 @@ def shape_report(target: str, shape: Dummies, w: dict[str, Any], steps: dict[int
                           "max_rows": max((len(r["rows"]) for r in lived), default=0)},
         "taken": taken},
         "bit_exact": (target_out["first"] is None and target_out["tokens"] > 0 and sched_diff["steps_differing"] == 0
-                      and shape.taken["target_pages_unavailable"] == 0)}
+                      and shape.taken["target_pages_unavailable"] == 0 and shape.taken["target_pages_unrecomputed"] == 0)}
 
 
 def run(a: argparse.Namespace) -> dict[str, Any]:
@@ -1541,6 +1586,9 @@ def main(argv: list[str] | None = None) -> int:
                          "output; writes shape.json")
     ap.add_argument("--dummy", choices=("zero", "nan"), default="zero",
                     help="what a dummy's K/V holds: zero, or NaN to probe for reads at weight zero")
+    ap.add_argument("--recompute-hits", action="store_true",
+                    help="with --shape-only, RID's prefix-cache hits are the blocks dummies computed over RID's tokens at "
+                         "their served launches, never serving's bytes")
     ap.add_argument("--perturb", type=int, default=0, metavar="N",
                     help="with --shape-only, a control: add one dummy of N prompt tokens at the first step, a row serving "
                          "never ran")
@@ -1554,6 +1602,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--at-step and --mirror-out go together, and not with --from-mirror")
     if a.shape_only and a.mirror_out:
         raise SystemExit("--shape-only starts from an edge or --from-mirror, not with --mirror-out")
+    if a.recompute_hits and not a.shape_only:
+        raise SystemExit("--recompute-hits goes with --shape-only")
     if sys.flags.hash_randomization:
         raise SystemExit("run with PYTHONHASHSEED=0, as the served engine did: the scheduler iterates sets of request ids")
     os.environ.update(VLLM_ENABLE_V1_MULTIPROCESSING="0", VLLM_DISABLE_REQUEST_ID_RANDOMIZATION="1")
@@ -1569,7 +1619,8 @@ def main(argv: list[str] | None = None) -> int:
     (a.out / name).write_text(json.dumps(rec, indent=1, default=str))
     if a.shape_only:
         sh = rec["shape"]
-        print(json.dumps({"bit_exact": rec["bit_exact"], "target": sh["target"], "dummy": a.dummy, "first_step": sh["first_step"],
+        print(json.dumps({"bit_exact": rec["bit_exact"], "target": sh["target"], "dummy": a.dummy,
+                          "recompute_hits": a.recompute_hits, "first_step": sh["first_step"],
                           "target_steps": sh["target_steps"], "target_tokens": sh["target_outputs"]["tokens"],
                           "target_first_differing": sh["target_outputs"]["first"],
                           "steps_differing": sh["schedule"]["steps_differing"], "during_target": sh["during_target"],
