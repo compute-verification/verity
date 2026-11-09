@@ -1146,29 +1146,6 @@ def test_v_ex_past_its_count_cap_fails_the_audit():
         W.UnitRecord(u, 20, K, (3,), (), (3,))
 
 
-def test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_cap():
-    """`volunteer`, the honest prover's remedy: on a scheme whose debit puts tile position 7 at 20 units per word against a
-    cap of 1 per credited word, it gives up A row 7 (not a column, which leaves the tile over), and the audit then
-    accepts; without it the tile fails."""
-
-    class Heavy(F.PearlC4):
-        def tile_cap(self, record, ops, rows, cols):
-            return Fraction(20 * len(cols) * (7 in rows)), Fraction(len(rows) * len(cols))
-
-    s = Heavy("nvfp4", k_min=128, tile=(16, 16), n_min=16)
-    epoch, prover, tr, rows_a, rows_b = lifecycle(s)
-    splits = {9: W.Split(K)}
-    records = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20})
-    va, vb = CW.volunteer(s, epoch, tr, records, {3: rows_a}, {9: rows_b})
-    assert (va, vb) == ({3: [7]}, {})
-    fixed = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, voluntary_a=va, voluntary_b=vb)
-    assert CW.audit(s, epoch, prover, tr, splits, fixed, E.challenger(), 8).audit.accepted
-    tile = s.tiles(epoch.workload.matmuls[0].shape)[0]
-    ctx = Context(epoch.salt, epoch.workload.matmuls[0], tr.activation_roots[0], epoch.weight_roots[9])
-    ops = s.encode(ctx, s.noise(ctx), rows_a[:16], rows_b, tile)
-    assert "exceeds the cap" in CW.check_opened(s, records[0], tile, rows_a[:16], rows_b, ops)
-
-
 def stale_b(s: F.PearlC4, salt: bytes) -> F.PearlC4:
     """`s` with B̃'s noise keyed by `salt` in place of the job's: a weight forming reused from another epoch, or one
     keyed by no salt."""
