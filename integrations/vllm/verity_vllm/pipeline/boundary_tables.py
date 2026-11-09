@@ -34,7 +34,7 @@ from verity.ml.commitments import history as HT
 from verity_vllm.commit import history_tables as H
 
 __all__ = ["ASSIGN", "CAPACITY", "KEY", "ROOTS", "WORDS", "Builder", "Channel", "Latents", "LocalChannel", "StepHook",
-           "assignment", "computed", "key", "mla_layers", "name", "private"]
+           "assignment", "computed", "key", "layers_of", "mla_layers", "name", "private", "private_root"]
 
 #: a span's key in its tables' names (`history_tables.name`): the window's run, the class and the slot
 KEY = "{run}/p{prompt}-o{outputs}/s{slot}"
@@ -274,6 +274,24 @@ def private(directory: Path) -> Path:
     return d
 
 
+def private_root(directory: Path, *public: Path | None) -> Path:
+    """``directory`` for files that stay on the node, refused inside any of ``public`` (a serve's records, its run's
+    directory: what custody uploads)."""
+    d = Path(directory).resolve()
+    for p in public:
+        if p is not None and d.is_relative_to(Path(p).resolve()):
+            raise ValueError(f"the history tables' private directory {d} is inside {p}, which leaves the node: put it "
+                             f"outside every run directory")
+    return d
+
+
+def layers_of(spec: int | Sequence[int]) -> tuple[int, ...]:
+    """The tables' layers from a serve's configuration: a count (the first that many) or the layers themselves."""
+    if type(spec) is int:
+        return tuple(range(spec))
+    return tuple(int(x) for x in spec)
+
+
 def _write(path: Path, doc: Mapping[str, Any]) -> None:
     private(path.parent.parent)
     private(path.parent)
@@ -291,6 +309,12 @@ class Channel:
     def __init__(self, directory: Path, *, timeout_s: float = 900.0, poll_s: float = 0.05,
                  sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic) -> None:
         self.dir, self.timeout_s, self.poll_s, self.sleep, self.clock = Path(directory), timeout_s, poll_s, sleep, clock
+
+    @classmethod
+    def of(cls, cfg: Mapping[str, Any], *public: Path | None) -> Channel:
+        """From a serve's ``tables`` configuration: ``private``, its directory (`private_root` of ``public``), and
+        ``timeout_s``."""
+        return cls(private_root(cfg["private"], *public) / "channel", timeout_s=float(cfg.get("timeout_s", 900.0)))
 
     def assign(self, doc: Mapping[str, Any]) -> None:
         _write(self.dir / "assign" / _stem(doc["window"], doc["run"], doc["prompt"], doc["outputs"]), doc)

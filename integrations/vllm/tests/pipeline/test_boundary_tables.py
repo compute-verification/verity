@@ -2,10 +2,13 @@
 hook on a stand-in for vLLM's Model Runner V2 reading each MLA layer's rows at the step's slots, by request and position,
 across chunked prefill, decode, padding and a recompute after a preemption; the builder's tables over them under the
 class's names and domains, refused for a request whose rows don't match its lengths or after a step the hook couldn't
-read; a cache that doesn't hold bf16 latent rows refused; and the channel between the two processes."""
+read; a cache that doesn't hold bf16 latent rows refused; the channel between the two processes; and the window's boundary
+commitment (`boundary_rows.BoundaryWindows`) waiting for each class's tables' roots and listing them beside its values,
+registered by both verifiers from public items alone."""
 
 from __future__ import annotations
 
+import json
 import stat
 from types import SimpleNamespace as NS
 
@@ -13,10 +16,14 @@ import numpy as np
 import pytest
 import torch
 
+from verity.core.protocols.spot.one_stage import registration as R, verifier as V
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.ml.circuits.types import Array, Value as Bits
 from verity.ml.commitments import history as HT
+from verity.ml.windows import rows as CS
 from verity_vllm.commit import history_tables as H
 from verity_vllm.engine.hooks import Hooks
-from verity_vllm.pipeline import boundary_tables as BT
+from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT
 
 RUN = "a" * 128
 PROGRAM = "cd" * 64
@@ -244,3 +251,126 @@ def test_the_local_channel_builds_at_once():
     ch = BT.LocalChannel(BT.Builder(hook.latents, built()[0]))
     ch.assign(BT.assignment(1, RUN, PROGRAM, 8, 4, [0, 3], CAP, [("a", 5, 4, "stop")]))
     assert len(ch.roots(1, RUN, 8, 4)["tables"]) == 2
+
+
+XOR8 = PrimitiveDefinition("BoundaryTablesTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
+                           register=False)
+PAIR = bind(CompositeDefinition("BoundaryTablesTestPair", 0, (), lambda S_: ((("x", Array(2, Bits(8))),), Bits(8)),
+                                lambda B, S_, x: B.call(XOR8, x[0], x[1]), register=False))
+GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "max_tokens": 4, "min_tokens": 0,
+          "ignore_eos": True, "seed": None, "presence_penalty": 0.0, "frequency_penalty": 0.0, "repetition_penalty": 1.0}
+LAW = {"law": "subset", "k": 1}
+
+
+class Scheduler:
+    """vLLM's V1 scheduler as `BoundaryWindows` wraps it: the step's outputs are ``outputs``."""
+
+    def __init__(self) -> None:
+        self.cache_config, self.outputs = NS(enable_prefix_caching=False), {}
+
+    def add_request(self, request):
+        return None
+
+    def schedule(self):
+        return NS()
+
+    def update_from_output(self, so, mro):
+        out, self.outputs = self.outputs, {}
+        return out
+
+    def finish_requests(self, request_ids, finished_status):
+        return []
+
+
+def windows(tmp_path, latents: BT.Latents, make, lines: list) -> tuple[BR.BoundaryWindows, Scheduler, Hooks]:
+    sched, hooks = Scheduler(), Hooks(tag="test-boundary-tables")
+    bw = BR.BoundaryWindows(tmp_path, PAIR, 0, 1, 10.0, sink=lines.append, clock=lambda: 0.0, serve="s",
+                            tables=BT.LocalChannel(BT.Builder(latents, make)), layers=(0, 3), capacity=CAP)
+    return bw.install(sched, hooks), sched, hooks
+
+
+def finish(sched: Scheduler) -> None:
+    """Requests a (a 5-id prompt, 4 ids served, stopped) and b (a 3-id prompt, 3 served, at its cap), as `serve` computed
+    them, finish in one step: the window closes with a in class (8, 4) and b in class (4, 4)."""
+    for rid, prompt in (("a", [1, 2, 3, 4, 5]), ("b", [6, 7, 8])):
+        sched.add_request(NS(request_id=rid, prompt_token_ids=prompt, sampling_params=NS(**GREEDY)))
+    sched.outputs = {0: NS(outputs=[NS(request_id="a", new_token_ids=[9, 9, 9, 9], finish_reason=NS(name="STOP")),
+                                    NS(request_id="b", new_token_ids=[9, 9, 9], finish_reason=NS(name="LENGTH"))])}
+    sched.schedule()
+    sched.update_from_output(None, None)
+
+
+def test_each_classs_commitment_waits_for_its_tables_and_lists_them_beside_its_values(tmp_path):
+    """The window's two classes each get their span's tables from rank 0 once it closes, at slot 0 of the class, and list
+    their roots after ``b.ingress`` and ``b.egress``; the challenger's copy of each class's layout from ``commit.json``
+    alone names and places every table, and both verifiers accept the registration against it, which lists every root
+    before any coin. The class's files reopen to the same roots."""
+    _runner, hook, _hooks = serve()
+    make, tables, lines = *built(), []
+    bw, sched, hooks = windows(tmp_path, hook.latents, make, lines)
+    try:
+        finish(sched)
+        bw.stop()
+    finally:
+        hooks.uninstall()
+    assert all("error" not in x for x in lines) and hook.latents.requests() == []
+    got = {(x["prompt"], x["outputs"]): x for x in lines}
+    assert sorted(got) == [(4, 4), (8, 4)]
+    made = {t.value: t for t in tables}
+    for (p, o), line in got.items():
+        run, pub = BR.run_root("s", 0), json.loads((tmp_path / "w0" / f"p{p}-o{o}" / BR.COMMIT).read_text())
+        assert pub["values"] == line["values"]
+        names = [BT.name(run, p, o, 0, x) for x in (0, 3)]
+        assert list(pub["values"]) == [*BR.PORTS, *names] and pub["tables"] == {"layers": [0, 3], "capacity": CAP}
+        assert [pub["values"][n]["root"] for n in names] == [made[n].root.hex() for n in names]
+        mine = BR.layout_of(pub, PAIR)
+        assert mine.tables == tuple(names) and mine.ports()[names[1]] == {k: made[names[1]].entry()[k] for k in
+                                                                           ("leaves", "domain")}
+        rec = BR.record(pub, PAIR, LAW)
+        assert [r["port"] for r in rec["roots"]] == [*BR.PORTS, *names]
+        assert R.check(rec, mine.program, mine.grain, LAW, CS.SCHEME, mine.ports()).codes == ()
+        assert V.check(rec, mine.program, mine.grain, LAW, CS.SCHEME, mine.ports()).codes == ()
+        bare = BR.Layout(PAIR, 0, 1, p, o, 1, run)
+        assert R.check(rec, bare.program, bare.grain, LAW, CS.SCHEME, bare.ports()).codes != ()
+        assert BR.reopen(tmp_path / "w0" / f"p{p}-o{o}", PAIR).roots == {k: bytes.fromhex(v["root"])
+                                                                          for k, v in pub["values"].items()}
+    assert [len(made[BT.name(BR.run_root("s", 0), *k, 0, 3)].rows) for k in ((8, 4), (4, 4))] == [8, 5]
+
+
+def test_a_class_registers_nothing_when_rank_0_built_no_tables_or_answered_other_ones(tmp_path):
+    _runner, hook, _hooks = serve()
+    hook.latents.fail("step 9: ValueError: no slot")
+    lines: list = []
+    bw, sched, hooks = windows(tmp_path, hook.latents, built()[0], lines)
+    try:
+        finish(sched)
+        bw.stop()
+    finally:
+        hooks.uninstall()
+    assert [x["error"] for x in lines] == ["ValueError: rank 0 built no history tables: ValueError: rank 0's latent rows "
+                                           "are incomplete: step 9: ValueError: no slot"] * 2
+    assert not list(tmp_path.rglob(BR.COMMIT))
+    L = BR.Layout(PAIR, 0, 1, 8, 4, 1, RUN, layers=(0, 3), capacity=CAP)
+    entries = [HT.HistoryTable(L.partition["program"], n, H.WORDS, CAP).entry() for n in L.tables]
+    assert BR.table_roots({"tables": entries}, L) == {e["value"]: bytes.fromhex(e["root"]) for e in entries}
+    with pytest.raises(ValueError, match="not the class's"):
+        BR.table_roots({"tables": entries[::-1]}, L)
+    for other in ({"leaves": 8}, {"domain": HT.domain(PROGRAM, L.tables[0], H.WORDS, CAP).domain_id.hex()}, {"root": "00"}):
+        with pytest.raises(ValueError, match="isn't at the class's leaves, words and domain"):
+            BR.table_roots({"tables": [entries[0] | other, entries[1]]}, L)
+    with pytest.raises(ValueError, match="committed with their roots, not 0"):
+        BR.commit([BR.Span("a", (1,) * 5, GREEDY, (2,) * 4, "stop")], L, 0)
+
+
+def test_the_tables_private_directory_is_never_under_what_leaves_the_node(tmp_path):
+    cfg = {"check": "c", "tables": {"private": str(tmp_path / "node"), "layers": 2, "capacity": CAP, "timeout_s": 5}}
+    bw = BR.BoundaryWindows.of(cfg, tmp_path / "out", public=[tmp_path / "run"])
+    bw.stop()
+    assert (bw.layers, bw.capacity, bw.tables.timeout_s, bw.tables.dir) == ((0, 1), CAP, 5.0, tmp_path / "node" / "channel")
+    for under in (tmp_path / "out" / "node", tmp_path / "run" / "x"):
+        with pytest.raises(ValueError, match="which leaves the node"):
+            BR.BoundaryWindows.of({**cfg, "tables": {**cfg["tables"], "private": str(under)}}, tmp_path / "out",
+                                  public=[tmp_path / "run"])
+    assert BT.layers_of([3, 61]) == (3, 61)
+    with pytest.raises(ValueError, match="both rank 0's channel and their layers"):
+        BR.BoundaryWindows(tmp_path / "x", PAIR, 0, 1, 10.0, layers=(0,))
