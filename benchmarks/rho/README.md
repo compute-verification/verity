@@ -12,12 +12,12 @@ gives the bound without each assumption, and without both, only as sensitivities
 Every number it reads is a parameter with a public source and a status, so a bound is always at some choice of every
 parameter, and the package shows how the bound moves with each one.
 
-A scenario is one choice from every part: a fleet (its location and dark share), a regime (the envelopes that run), the
+A scenario is one choice from every part: a fleet (its location and unregistered share), a regime (the envelopes that run), the
 NCI registration policy, a monitoring period (its `horizon`, one of core's), a run (the target and its model), the
 algorithm families the adversary may use, and the bounds and attacks applied. For each one the package reports:
 
 - **the slowdown's lower bound** (`Result.lo`): every bound met at once, at the family the adversary picks. Under a
-  bound it is `max(1, 1/(s + a x))` (`theorem.multiple_bound`), with the dark share `s` training like the reference and
+  bound it is `max(1, 1/(s + a x))` (`theorem.multiple_bound`), with the unregistered share `s` training like the reference and
   the bound's other terms `x`, free compute, at `a = 1` under reference efficiency, so that it is the padded size ratio;
   at `a = 1/MFU₀` (peak) without it, Lean's `Nci.Dampener.remoteDampener` and, for a remote regime,
   `Nci.Guarantees.DampenerRemote`'s `ρ`. `benchmarks/nci` reads its compute dampener `D` from `multiple_bound`. It
@@ -25,9 +25,9 @@ algorithm families the adversary may use, and the bounds and attacks applied. Fo
   named `Pr[Break]`), the monitored share (the part of the adversary's counted weight on monitored gates), and the
   time it implies;
 - **the padded size ratio** `|A| / T_0` (`Overhead.padded`): the size of the actual circuit that reaches the target,
-  each serving block padded to its capacity, over the reference construction's size `T_0`. It is the intermediate the
-  serving-block bound gives, and what a contradiction compares;
-- **the best known attack** (`Result.attack`, `FamilyResult.best_attack`): a construction on a serving block's layout,
+  each server block padded to its capacity, over the reference training algorithm's size `T_0`. It is the intermediate the
+  server-block bound gives, and what a contradiction compares;
+- **the best known attack** (`Result.attack`, `FamilyResult.best_attack`): a construction on a server block's layout,
   its slowdown `max(1, MFU₀ · |A| / T_0)`, reported beside the bound, not as an end of an interval around it. A bound
   whose padded size ratio is above an attack's is a **contradiction**:
   one of its premises is false for that algorithm at that budget, and the contradiction names it;
@@ -66,25 +66,25 @@ step's design in place of the FLOP model, after a table of the step beside it (`
 A bound is argued in three parts, as the Notation states it, and each module's docstring says what it implements.
 
 - **The physical model** `𝒜_phys` (`hardware.py`, `data/hardware.toml`): the inventory's locations, each with its
-  capacity `Φ_X` in gates per second and its servers' memory `M_s`, the dark leaves `ε_dark`, and the monitoring
+  capacity `Φ_X` in gates per second and its servers' memory `M_s`, the unregistered leaves `ε_unreg`, and the monitoring
   period (core's `wipe_monitoring.PERIODS`, through `params.py`). `Units`
   is the one place a FLOP-model input becomes gates (`units.gates_per_flop`, with its `units.basis`).
 - **Protocol soundness**, the envelopes (`envelopes.py`, `data/envelopes.toml`): each subprotocol (PoUW, detection and
   sampled proofs, the wipe, the certifier) is one envelope `𝒜_a` with its parameters, its slack (the uncertified gates
   by route: `undecl.*`, `skip.*`, `break.*`, `exfil.incorrect`) and its `δ_a`, split into `δ_coin` and `δ_crypto`. The NCI
-  check is the registration (`Policy`). A regime is the envelopes that run, and builds the serving blocks with their
+  check is the registration (`Policy`). A regime is the envelopes that run, and builds the server blocks with their
   cuts.
 - **The exclusion bound** (`classes.py`, `attacks.py`, `theorem.py`): the training classes as per-block caps
-  `q_T(c, k)`, the attacks as constructions, and the serving-block bound: each serving block's least cut
+  `q_T(c, k)`, the attacks as constructions, and the server-block bound: each server block's least cut
   (`theorem.local`), summed over blocks (`theorem.overhead`), with the minimum of global bounds beside it
   (`theorem.aggregate`).
 
 | Notation | here |
 |---|---|
 | `\|A[X,J]\| ≤ Φ_X \|J\|`, `M_s` | `Location.phi`, `Location.server_memory` |
-| `ε_dark`, `L_dark` | `fleet.<name>.eps_dark`, `Partition.eps_dark` |
+| `ε_unreg`, `L_unreg` | `fleet.<name>.eps_dark`, `Partition.eps_dark` |
 | inference block `(c, k)` | `Blocks("inference")`, `Policy`, `Budget(gates, inputs)` |
-| serving block `S`, `(c_S, k_S)`, `n_S` | `ServingBlock`, `Onsite.budget`, the inference cut's `Blocks.count` |
+| server block `S`, `(c_S, k_S)`, `n_S` | `ServingBlock`, `Onsite.budget`, the inference cut's `Blocks.count` |
 | `q_T(c, k)` | `Cap`, from a class's `Allowance` by `classes.per_block` |
 | `q_U(U) = ω_max U / s_×` | `Structure.weight` (`data/exclusion.toml`) |
 | `ε_undecl`, `ε_skip`, `ε_break` | the routes `undecl.*`, `skip.*`, `break.*`, `exfil.incorrect` (`Cut.uncertified`) |
@@ -92,7 +92,7 @@ A bound is argued in three parts, as the Notation states it, and each module's d
 | `k_wipe`, `r_in`, `r_side` | `Wipe.k_wipe`, `Certifier.rate_in`, `Certifier.timing` and `side` |
 | the padded size ratio `\|A\| / T_0`, the slowdown, the time to the target | `Overhead.padded`, `Overhead.rho`, `Scenario.seconds` |
 
-**The uncertified cap.** A bound counts an uncertified or dark gate at `ω_max / s_×`, `s_×` the fewest gates in any
+**The uncertified cap.** A bound counts an uncertified or unregistered gate at `ω_max / s_×`, `s_×` the fewest gates in any
 counted operation's subcircuit. `structure.reference` takes `s_×` at the reference's gates per counted product, which
 is valid only under the named assumption `draft:no-straddle` (no counted operation straddles certified and uncertified
 gates), so every bound counting such gates cites it. A structure states its `basis`, and `Structure.check` refuses one
@@ -113,7 +113,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 |---|---|
 | `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServingBlock`, `Partition`; `Cap`; `local`, `aggregate`, `overhead`, `padded`, `multiple_bound` |
 | `classes.py` | `Argument.allowance(Profile) → Allowance`, raising `Outside`; `per_block`, `weight_per_gate`; `premise_status`; `Structure` |
-| `attacks.py` | the same `Argument`, side `attack`, on a serving block's layout |
+| `attacks.py` | the same `Argument`, side `attack`, on a server block's layout |
 | `profile.py` | `Profile`: every field a class reads, named as in Lean |
 | `families.py` | `Family.profile(Model, Run) → Profile`, for each algorithm family and any `benchmarks/nci` algorithm by its traits |
 | `instances.py` | `Model`, `Run` (a target and its kind) |
@@ -132,7 +132,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 Every estimate carries the weakest status among its citations, read from the locks (`lean.py`): `proved`,
 `conditional` (proved under named assumptions), `draft` (a statement not yet in Lean, a `draft:` id) or `absent`. Its
 citations are its argument's and those of the cuts that bound it, and `draft:no-straddle` wherever a bound holds
-uncertified or dark gates at a structure whose `s_×` is above 1, with the structure's `evidence` (which no status reads).
+uncertified or unregistered gates at a structure whose `s_×` is above 1, with the structure's `evidence` (which no status reads).
 
 ## Names
 
