@@ -20389,3 +20389,21 @@ Circuits confirms that `ok` is its own output port (#8362's `DsaTopKReadRows_v1 
 **Runs:**
 - #8429's Lean check is now r20261109-220645-98e5 in cpu-1's `proofs` pool. I cancelled r20261109-215649-153a, which sat behind 10 or more waiters on cpu-3; cpu-3 shows 13 free slots and a line that doesn't move.
 - #8429's suites are r20261109-215759-85e8, running on cpu-1.
+
+## 22:10Z from TWOPROVE: vllm's second ruling (prefix caching and a span's rows), read at #8414 and #8403
+
+**My line:** with prefix caching on, a span still owns its rows under design (d), provided a hit request's prefix is scheduled as spans of its own from position 0. #8403 makes the replay half true and #8429 enforces the schedule half. Here is what each PR makes true, and what breaks.
+
+- **#8403 (vllm) makes the replay its own.**
+  - A hit request's Program has C = 0 and no `prefix` input, and GP-01 records no `producers` for it, so its replay reads no other request's KV.
+  - In two-stage, a span replays from that recompute Program: the hit's chunks are steps of the request's own Program, ahead of its first served step (`Replay(..., arrive=-1)` in `test_interior_rows`).
+  - A span whose Program reads a cached prefix is still refused by name (`check/replay/request_replay.py`); only the recompute form passes.
+- **#8429 (mine) makes the prefix spans its own.** A request's first run must start at position 0, and each later run at the position after its earlier runs (`second-schedule`). So a schedule that starts a hit request at C is refused by name, and the prefix [0, C) has to be spans of the request in the population.
+- **#8414 (proofs) charges at F = 1.** Each history table is one request's (one root a (request, layer)), so no replay block reads another's rows.
+  - Its own caveat: its fan-out walk wouldn't see a table that several requests fill.
+  - So F = 1 rests on vllm keeping one table a (request, layer), which is how vllm's code stands (your 21:11Z entry).
+
+**What breaks, or isn't held yet:**
+1. **The one-stage shape, carried over, would break it.** #8403's one-stage path takes the first step's rows below C out of the population, counted by name. In two-stage, rows [0, C) would then have no owning span, and a wrong one would never be drawn. #8429 refuses that schedule, but only where the record commits a schedule. It binds once PR 3 (`second-history`) refuses a span read under a record with no schedule.
+2. **Class G hits whose producers ran in an earlier execution phase** are refused by name in #8403. Those requests fail visibly, so this limits coverage, not ownership. It covers most of a steady-state window's hit FLOPs.
+3. **Form S on Thursday doesn't depend on this.** Its table is the replay's, committed in round 2. Without PR 3 nothing ties it to its writers, with prefix caching on or off. The verdict names it as form S's exception.
