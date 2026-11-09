@@ -8,10 +8,12 @@ element. Each box is per position class (`lm.position_class`, read from position
 before a sequence's first sink host (--hosts, from the hosts part), the run of its token from it and --window - 1
 positions after the run, where attention sinks put their massive activations (position 0, unless the sequence opens
 with tokens that host none, such as Qwen's digits); the tokenizer's special tokens after them (document separators and
-chat delimiters, sinks too); and every other position. Without --hosts the sink class is the first --window positions.
-A box is the honest calibration traffic's largest magnitude with --headroom powers of two (default one; one value, or
-one a class): an element's is the next power of two above its maximum, doubled; a group's is 448 times its largest UE8M0
-scale, doubled (one more exponent step).
+chat delimiters, sinks too); every other position; and, with --run R, every position from the R-th copy of a host
+token in a row to the end of the sequence (a long run forms the sink again and puts sinks on ordinary tokens after
+it), calibrated on `traffic.run_texts`. Without --hosts the sink class is the first --window positions. A box is the
+honest calibration traffic's largest magnitude with --headroom powers of two (default one; one value, or one a class):
+an element's is the next power of two above its maximum, doubled; a group's is 448 times its largest UE8M0 scale,
+doubled (one more exponent step).
 
 Traffic is the hand-written sets (`traffic.CALIBRATION`, `traffic.HELDOUT`) and, with --mixed N, N texts of the pinned
 datasets' (`traffic.mixed`; Pile documents need `--with pyarrow`); --shard i/n splits a part's texts across runs.
@@ -71,7 +73,12 @@ def continued(lm: LM, tok, text: str, new: int, cap: int) -> list[int]:
     return out
 
 
-CLASSES = 3
+CLASSES = 4
+
+
+def padded(amax: torch.Tensor) -> torch.Tensor:
+    """A calibration's per-class maxima with a row for every class (earlier calibrations had no run class)."""
+    return torch.cat([amax, amax.new_zeros(CLASSES - amax.shape[0], amax.shape[1])]) if amax.shape[0] < CLASSES else amax
 
 
 class Stats:
@@ -130,16 +137,23 @@ class Stats:
         s = cls(lm, raw["special"], raw["window"], raw.get("hosts"), raw.get("run"))
         for k in ("amax", "at", "ss", "n", "tokens"):
             setattr(s, k, raw[k])
+        if s.n.shape[0] < CLASSES:
+            s.amax = {k: padded(v) for k, v in s.amax.items()}
+            s.at = {k: torch.cat([v, v.new_full((CLASSES - v.shape[0], *v.shape[1:]), -1)]) for k, v in s.at.items()}
+            s.ss = {k: torch.cat([v, v.new_zeros(CLASSES - v.shape[0], v.shape[1])]) for k, v in s.ss.items()}
+            s.n = torch.cat([s.n, s.n.new_zeros(CLASSES - s.n.shape[0])])
         return s
 
     def boxes(self, headroom: list[int]) -> dict[tuple[str, int], torch.Tensor]:
-        """Each class's box, with `headroom` powers of two (one value, or one a class). The early window and the
-        special tokens are few positions of the calibration traffic, so their boxes also cover every value the
-        ordinary class saw."""
+        """Each class's box, with `headroom` powers of two (one value, or one a class). The early window, the special
+        tokens and the runs are few positions of the calibration traffic, so their boxes also cover every value the
+        ordinary class saw, and the run class's every value the special tokens' saw too."""
         h = torch.tensor(headroom * CLASSES if len(headroom) == 1 else headroom, dtype=torch.float32)[:, None]
         hi = {}
         for k, a in self.amax.items():
-            a = torch.stack([torch.maximum(a[0], a[1]), a[1], torch.maximum(a[2], a[1])])
+            a = padded(a)
+            a = torch.stack([torch.maximum(a[0], a[1]), a[1], torch.maximum(a[2], a[1]),
+                             torch.maximum(torch.maximum(a[3], a[2]), a[1])])
             if k[0] in GROUP_SITES:
                 g = a.view(CLASSES, -1, GROUP).amax(-1)
                 hi[k] = (E4M3_MAX * torch.exp2(h) * ue8m0_scale(g)).repeat_interleave(GROUP, -1)

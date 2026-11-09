@@ -61,18 +61,18 @@ def position_class(pos: torch.Tensor, ids: torch.Tensor | None = None, special: 
     and the `window` - 1 positions after the run (a model forms its attention sink, with its massive activations, at the
     first token that can host one: position 0 unless the sequence opens with tokens that can't, such as Qwen's digits;
     a repeat of the token right after it repeats them, and the token after a run reads more than an ordinary one;
-    `span` (B, 3) from `sink_span`, else the sink is at position 0 and doesn't repeat); and, with `last_long` (B, t)
-    from `long_runs`, every position of a long run of a host token from its `run`-th copy and the `window` - 1
-    positions after it (a long enough run anywhere takes over attention and forms the sink again); 2 for a special
-    token (`special`, the tokenizer's control tokens: document separators and chat delimiters, which act as sinks too)
-    after them; and 1 for every other position. A class reads only positions and token ids, both fixed inputs, never
-    a value."""
+    `span` (B, 3) from `sink_span`, else the sink is at position 0 and doesn't repeat); 2 for a special token
+    (`special`, the tokenizer's control tokens: document separators and chat delimiters, which act as sinks too) after
+    them; 1 for every other position; and, with `last_long` (B, t) from `long_runs`, 3 for every position after them
+    from the `run`-th copy of a host token in a row on (a long enough run takes over attention, forms the sink again,
+    and puts sinks on ordinary tokens for the rest of the sequence). A class reads only positions and token ids, both
+    fixed inputs, never a value."""
     end = window if span is None else (span[:, 2] + window - 1)[:, None]
     c = (pos >= end).long()
-    if last_long is not None:
-        c = torch.where(pos - last_long <= window - 1, 0, c)
     if ids is not None and special is not None and len(special):
         c = torch.where((c == 1) & torch.isin(ids, special), 2, c)
+    if last_long is not None:
+        c = torch.where((c > 0) & (last_long > -NO_HOST), 3, c)
     return c
 
 
@@ -113,8 +113,9 @@ def ue8m0_scale(amax: torch.Tensor) -> torch.Tensor:
 
 
 class Boxes:
-    """Per (site, layer), hi[class, coordinate]: the magnitude box of each coordinate at each position class, with a
-    group site's coordinates sharing their group's (`GROUP_SITES`; its box is E4M3_MAX times the group's scale bound).
+    """Per (site, layer), hi[class, coordinate]: the magnitude box of each coordinate at each position class
+    (`position_class`; class 3 only with a long-run threshold `run`), with a group site's coordinates sharing their
+    group's (`GROUP_SITES`; its box is E4M3_MAX times the group's scale bound).
 
     `cut` counts, per (site, layer), the values the clamps changed (a group site: its groups' coordinates), and `worst`
     the largest |value| / box among them: an honest value cut is a completeness failure."""
