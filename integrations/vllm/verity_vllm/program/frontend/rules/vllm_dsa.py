@@ -4,7 +4,8 @@ over the three leaves `export_compat.dsa_leaves` exports in place of its kernels
     dsa_norm_rope(positions, q_c, q_w, q_eps, kv_c, kv_w, kv_eps, k_pe, cos_sin, index_k?, index_k_w?, index_k_b?, index_k_eps,
                   index_cos_sin?, interleave, kv_c_out!, k_pe_out!) -> (q_c, index K e4m3 [T, D], index K scale f32 [T])
         `_fused_norm_rope_kernel` per token: `dsa_rmsnorm{N,EPS}` of q_c and of kv_c (kv_c_out rebound), `dsa_kv_rope{NHEADS=1,D}` of
-        k_pe (k_pe_out rebound), and on an indexer layer `DsaIndexerKRow_v1{D,ROPE,EPS}` (the index-K cache slot)
+        k_pe (k_pe_out rebound), and on an indexer layer `DsaIndexerKRow_v1{D,ROPE,EPS}` (the index-K cache slot); in class G's
+        batched form (`batched_form`) the two are one `DsaLatentRow_v1{KVL,R,EPS}` per token, its row [kv_c | k_pe]
     dsa_q(positions, q_pe, cos_sin, index_q?, index_cos_sin?, index_weights?, softmax_scale, head_scale, interleave)
         -> (q_pe roped [T, NH, R], index q e4m3 [T, H, D], index weights f32 [T, H])
         `_fused_q_kernel` per token: `dsa_q_rope{NHEADS,D}` of q_pe and on an indexer layer `DsaIndexerQ_v1{H,D,ROPE}`
@@ -17,7 +18,10 @@ over the three leaves `export_compat.dsa_leaves` exports in place of its kernels
         (`DsaButterflySettings_v1{N,K=TOPK}`); on an IndexShare layer the top-k the last indexer layer wrote for the same
         positions; then explicitly pinned `SparseMla_v1{T,...}` or default `SparseMlaSplit_v1{T,NS,...}` over the history's first n
         rows (T = n), or past TOPK over the rows `DsaButterflyRows_v1{N,K=TOPK,W,E=16}` routes at those settings, in ascending
-        index order (T = TOPK; `DsaButterflyRowsPad_v1{T=n,N,...}` where n < N)
+        index order (T = TOPK; `DsaButterflyRowsPad_v1{T=n,N,...}` where n < N).  In the batched form a call's rows past TOPK go in
+        blocks (`long_row_blocks`), each over the history's first N_b rows: `DsaMqaLogits_v3{N=N_b}`, `DsaTopKMaskCounted_v1{N,TOPK}`
+        of the logits and the row's own key count, the settings, and the rows routed from N_b (`DsaButterflyRowsPad_v1{T=N_b,N}`),
+        each op over the block's rows in turn
 
 and two ops around them: the latent absorptions `bmm(q_nope^T, W_UK_T)` and `bmm(attn^T, W_UV)` (`batched_gemm{B,K,N,DOT}` per token)
 and `output.copy_(rows)` (an allocation written whole).  A role the vocabulary lacks refuses by name.  The leaf the shim exports in
@@ -37,7 +41,7 @@ from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, StateRule
 from verity_vllm.program.frontend.rules.common import refuse_cached_prefix, shape
 from verity_vllm.program.frontend.rules.patterns import Consumed
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED, active_target_profile, launch_keys_of
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED, active_target_profile, batched_form, launch_keys_of
 from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.frontend.torch_frontend import _permute, _tensor_type
 from verity.ml.definitions.registry import dsa
@@ -63,6 +67,8 @@ ROLE_KERNELS = {"dsa_rmsnorm": "q_a_layernorm / kv_a_layernorm in _fused_norm_ro
                 "dsa_mqa_logits": "DeepGEMM's fp8 MQA logits (DsaMqaLogits_v3)",
                 "dsa_topk_short_row": "the top-k of a row of at most TOPK keys (DsaTopKShortRow_v1)",
                 "dsa_topk_mask": "the top-TOPK set of a row past TOPK keys, a mask of its logits (DsaTopKMask_v1)",
+                "dsa_topk_mask_counted": "the same over a block's keys, of the row's own (DsaTopKMaskCounted_v1)",
+                "dsa_latent_row": "kv_a_layernorm and k_pe's interleaved RoPE in _fused_norm_rope_kernel as one row (DsaLatentRow_v1)",
                 "dsa_butterfly_settings": "the concentrator's settings for a row's top-TOPK mask (DsaButterflySettings_v1)",
                 "dsa_butterfly_rows": "the history rows sparse MLA reads past TOPK keys, routed in ascending index order at the "
                                       "concentrator's settings (DsaButterflyRows_v1)",
@@ -85,6 +91,26 @@ def long_row_keys(n: int, topk: int) -> int:
     one specialization of the mask form per class (each of its Definitions' bodies grows with its N) at under TOPK keys more a
     row.  The keys past n score `PAD_SCORE` and their history rows are zero: no output of the concentrator reads one."""
     return -(-int(n) // int(topk)) * int(topk)
+
+
+#: the multiple a call's rows past TOPK round their keys up to in the batched form, a block's rows sharing one (`long_row_blocks`)
+LONG_ROW_BLOCK = 256
+
+
+def long_row_blocks(keys: list[int], topk: int) -> list[tuple[int, list[int]]]:
+    """A call's rows past `topk` keys (`keys` in row order, increasing) in the batched form, as (the block's keys, its rows'
+    indices): a row's keys rounded up to a multiple of `LONG_ROW_BLOCK`, at most the call's last row's, so a block's rows share one
+    specialization of each long-row Definition and batch (`prune.batched_form`), each row selecting among its own keys alone
+    (`DsaTopKMaskCounted`)."""
+    out: list[tuple[int, list[int]]] = []
+    for i, n in enumerate(keys):
+        if n > topk:
+            N = min(-(-n // LONG_ROW_BLOCK) * LONG_ROW_BLOCK, keys[-1])
+            if out and out[-1][0] == N:
+                out[-1][1].append(i)
+            else:
+                out.append((N, [i]))
+    return out
 
 
 def pad_words(topk: int, words: int = 1) -> int:
@@ -215,7 +241,7 @@ class DsaNormRopeRule(InPlaceRule):
     def applies(self, node, ctx):
         a = _args(node, _NORM_ROPE)
         has = a.get("index_k") is not None
-        if (r := _missing(ctx, ["dsa_rmsnorm", "dsa_kv_rope"] + (["dsa_indexer_k_row"] if has else []))):
+        if (r := _missing(ctx, ["dsa_rmsnorm", "dsa_latent_row" if batched_form() else "dsa_kv_rope"] + (["dsa_indexer_k_row"] if has else []))):
             return r
         if ctx.registered_values:
             return "numerics_unregistered: the DSA norms take eps as a static; no registered-values twin"
@@ -267,15 +293,23 @@ class DsaNormRopeRule(InPlaceRule):
         Nq, L, R = shape(ctx, a["q_c"])[1], shape(ctx, a["kv_c"])[1], shape(ctx, a["k_pe"])[1]
         cs = ctx.coll(a["cos_sin"])
         qn = ctx.kind("dsa_rmsnorm", node, N=Nq, EPS=float(a["q_eps"]))
-        kn = ctx.kind("dsa_rmsnorm", node, N=L, EPS=float(a["kv_eps"]))
-        kr = ctx.kind("dsa_kv_rope", node, D=R)
         qw, kvw = ctx.coll(a["q_w"]), ctx.coll(a["kv_w"])
         q_out = [ctx.call(qn, qc[i], qw, node=node, rule=self, name=f"{h}/q_c[{i}]") for i in range(T)]
-        kv_out = [ctx.call(kn, kvc[i], kvw, node=node, rule=self, name=f"{h}/kv_c[{i}]") for i in range(T)]
-        pe_out = [ctx.call(kr, kpe[i], cs[pos[i]], node=node, rule=self, name=f"{h}/k_pe[{i}]") for i in range(T)]
+        if batched_form():
+            lr = ctx.kind("dsa_latent_row", node, KVL=L, R=R, EPS=float(a["kv_eps"]))
+            lat = [ctx.call(lr, Coll(Array(L + R, Value(16)), concat([kvc[i].refs, kpe[i].refs])), kvw, cs[pos[i]], node=node, rule=self,
+                            name=f"{h}/latent[{i}]") for i in range(T)]
+            kv_out = [Coll(Array(L, Value(16)), r.refs.slice(0, L)) for r in lat]
+            pe_out = [Coll(Array(R, Value(16)), r.refs.slice(L, L + R)) for r in lat]
+            ids = [qn.id, lr.id]
+        else:
+            kn = ctx.kind("dsa_rmsnorm", node, N=L, EPS=float(a["kv_eps"]))
+            kr = ctx.kind("dsa_kv_rope", node, D=R)
+            kv_out = [ctx.call(kn, kvc[i], kvw, node=node, rule=self, name=f"{h}/kv_c[{i}]") for i in range(T)]
+            pe_out = [ctx.call(kr, kpe[i], cs[pos[i]], node=node, rule=self, name=f"{h}/k_pe[{i}]") for i in range(T)]
+            ids = [qn.id, kn.id, kr.id]
         ctx.rebind(a["kv_c_out"], array_of(kv_out), self, what="kv_c_out")
         ctx.rebind(a["k_pe_out"], array_of(pe_out), self, what="k_pe_out")
-        ids = [qn.id, kn.id, kr.id]
         ik = iks = None
         pre = {"T": T, "positions": [pos[0], pos[-1]], "Nq": Nq, "L": L, "R": R, "q_eps": float(a["q_eps"]), "kv_eps": float(a["kv_eps"]),
                "indexer": has}
@@ -515,7 +549,8 @@ class DsaIndexerAttnRule(StateRule):
             return r
         hist = (ctx.state.get("dsa_history") or {}).get(layer)
         if (len(hist["latent"]) if hist else 0) + T > topk and (
-                r := _missing(ctx, ["dsa_butterfly_rows", "dsa_butterfly_rows_pad"] + (["dsa_topk_mask", "dsa_butterfly_settings"] if has else []))):
+                r := _missing(ctx, ["dsa_butterfly_rows", "dsa_butterfly_rows_pad"] + (
+                    ["dsa_topk_mask_counted" if batched_form() else "dsa_topk_mask", "dsa_butterfly_settings"] if has else []))):
             return r
         L = (shape(ctx, a["kv_c"]) or (0, 0))[-1]
         R = (shape(ctx, a["k_pe"]) or (0, 0))[-1]
@@ -576,6 +611,7 @@ class DsaIndexerAttnRule(StateRule):
                 ctx.node_hints[k], ctx.node_sources[k], ctx.node_fx[k] = f"{h}/pad{w}", node.name, node
             return pads[(w, bits)].slice(0, count)
 
+        blocks = long_row_blocks(keys, TOPK) if batched_form() else []
         if has:
             H, D = shape(ctx, a["index_q"])[1:3]
             iq, iw = _rows(ctx, a["index_q"], 8), _rows(ctx, a["index_weights"], 32)
@@ -583,6 +619,8 @@ class DsaIndexerAttnRule(StateRule):
             sel_fn = ctx.kind("dsa_topk_short_row", node, TOPK=TOPK)
             selected = {}
             for i, (P, n) in enumerate(zip(pos, keys)):
+                if blocks and n > TOPK:
+                    break
                 lg = ctx.kind("dsa_mqa_logits", node, N=n, H=H, D=D)
                 logits = ctx.call(lg, iq[i], iw[i], Coll(Array(n, Array(D, Value(8))), klog.cut(n)), Coll(Array(n, Value(32)), slog.cut(n)),
                                   node=node, rule=self, name=f"{h}/logits[t={P}]")
@@ -596,6 +634,17 @@ class DsaIndexerAttnRule(StateRule):
                                 name=f"{h}/topk_mask[t={P}]")
                 selected[P] = ctx.call(ctx.kind("dsa_butterfly_settings", node, N=N, TOPK=TOPK), mask, node=node, rule=self,
                                        name=f"{h}/topk[t={P}]")
+            for Nb, rows in blocks:
+                N, lg = long_row_keys(Nb, TOPK), ctx.kind("dsa_mqa_logits", node, N=Nb, H=H, D=D)
+                ik, iks = Coll(Array(Nb, Array(D, Value(8))), klog.cut(Nb)), Coll(Array(Nb, Value(32)), slog.cut(Nb))
+                logits = [ctx.call(lg, iq[i], iw[i], ik, iks, node=node, rule=self, name=f"{h}/logits[t={pos[i]}]") for i in rows]
+                counts = [Coll(Value(32), pad(32, keys[i], 1, 1)) for i in rows]
+                tail = [pad(32, PAD_SCORE, pad_words(TOPK), N - Nb)] if N > Nb else []
+                fm, fs = ctx.kind("dsa_topk_mask_counted", node, N=N, TOPK=TOPK), ctx.kind("dsa_butterfly_settings", node, N=N, TOPK=TOPK)
+                masks = [ctx.call(fm, Coll(Array(N, Value(32)), concat([lgt.refs, *tail])), c, node=node, rule=self,
+                                  name=f"{h}/topk_mask[t={pos[i]}]") for i, lgt, c in zip(rows, logits, counts)]
+                for i, m in zip(rows, masks):
+                    selected[pos[i]] = ctx.call(fs, m, node=node, rule=self, name=f"{h}/topk[t={pos[i]}]")
             ctx.state["dsa_topk"] = {"layer": layer, "rows": selected, "keys": dict(zip(pos, keys))}
             source = layer
         else:
@@ -610,6 +659,14 @@ class DsaIndexerAttnRule(StateRule):
             selected, source = last["rows"], last["layer"]
         ql, qr = _rows(ctx, a["ql_nope"], 16), _rows(ctx, a["q_pe"], 16)
         row = Array(L + R, Value(16))
+        rows_of = {}
+        for Nb, rows in long_row_blocks(keys, TOPK) if batched_form() else ():
+            N, hb = long_row_keys(Nb, TOPK), Coll(Array(Nb, row), latent.cut(Nb))
+            rest = (Coll(Array(N - Nb, row), pad(16, 0, pad_words(TOPK, L + R), (N - Nb) * (L + R))),) if N > Nb else ()
+            fr = (ctx.kind("dsa_butterfly_rows_pad", node, T=Nb, N=N, TOPK=TOPK, W=L + R) if rest
+                  else ctx.kind("dsa_butterfly_rows", node, N=N, TOPK=TOPK, W=L + R))
+            for i in rows:
+                rows_of[i] = ctx.call(fr, selected[pos[i]], hb, *rest, node=node, rule=self, name=f"{h}/rows[t={pos[i]}]")
         outs = []
         for i, (P, n, ns) in enumerate(zip(pos, keys, splits)):
             role = "sparse_mla" if pinned_one else "sparse_mla_split"
@@ -617,8 +674,8 @@ class DsaIndexerAttnRule(StateRule):
             if not pinned_one:
                 statics["NS"] = ns
             attn = ctx.kind(role, node, **statics)
-            kv = Coll(Array(n, row), latent.cut(n))
-            if n > TOPK:
+            kv = rows_of[i] if i in rows_of else Coll(Array(n, row), latent.cut(n))
+            if n > TOPK and i not in rows_of:
                 N = long_row_keys(n, TOPK)
                 rest = (Coll(Array(N - n, row), pad(16, 0, pad_words(TOPK, L + R), (N - n) * (L + R))),) if N > n else ()
                 rows = (ctx.kind("dsa_butterfly_rows_pad", node, T=n, N=N, TOPK=TOPK, W=L + R) if rest

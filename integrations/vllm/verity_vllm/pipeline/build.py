@@ -427,10 +427,12 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         import torch
         from verity_vllm.program.frontend.derive import derive_report
         from verity_vllm.program.frontend.rules.vllm_bindings import (VLLM_BINDING_RULES, vllm_ruleset, observe_attention_impls, observe_export_facts,
-                                                            observe_target_profile, declared_derived_accounting, clear_observations, observe_allreduce_settings, observe_launch_context)
+                                                            observe_target_profile, declared_derived_accounting, clear_observations, observe_allreduce_settings, observe_launch_context,
+                                                            observe_batched_form)
         clear_observations()
         observe_target_profile(target)
         observe_launch_context(launch)
+        observe_batched_form(batched)
         res["target"]["host"] = host_facts()
         t0 = time.time()
         with apply_target_profile(target):  # ONE application of the declared target for config, instantiation, export and derive
