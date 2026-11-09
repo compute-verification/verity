@@ -358,15 +358,15 @@ it, so it stays directly below `parse`. -/
   simp only [hl, Array.any_append, rowNums_eq]
   all_goals rfl
 
-/-- A template `parse` returns passed its last two checks (`TmplUnit.readParsed` reads them). -/
-theorem parse_checked {lines : Array String} {t : Tmpl} (h : parse lines = .ok t) :
-    t.ordered = true ∧ t.wellFormed = true := by
+/-- A template `parseAt` returns passed its last two checks (`TmplUnit.readParsedAt` reads them). -/
+theorem parseAt_checked {n : Nat} {line : Nat → String} {nums : Nat → Option (Array Nat)} {t : Tmpl}
+    (h : parseAt n line nums = .ok t) : t.ordered = true ∧ t.wellFormed = true := by
   have bind_eq_ok {α β : Type} {x : V α} {f : α → V β} {b : β} :
       (x >>= f) = .ok b ↔ ∃ a, x = .ok a ∧ f a = .ok b := by
     cases x <;> simp [bind, Except.bind]
   -- the body from the outside in, each join point unfolded once its branch is taken (inlining them all copies the rest
   -- of the body into every check), each check's other branch a `throw`
-  unfold parse at h
+  unfold parseAt at h
   extract_lets at h
   split at h
   · cases h
@@ -400,6 +400,12 @@ theorem parse_checked {lines : Array String} {t : Tmpl} (h : parse lines = .ok t
   try simp -zeta +zetaDelta only [] at h
   cases h
   exact ⟨by simpa using hord, by simpa using hwf⟩
+
+/-- A template `parse` returns passed its last two checks (`TmplUnit.readParsed` reads them). -/
+theorem parse_checked {lines : Array String} {t : Tmpl} (h : parse lines = .ok t) :
+    t.ordered = true ∧ t.wellFormed = true := by
+  rw [parse_eq_fast] at h
+  exact parseAt_checked h
 
 /-- A sorted list with each run of equal columns cut to its length mod 2. -/
 def dropPairs : List Nat → List Nat
