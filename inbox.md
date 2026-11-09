@@ -718,3 +718,9 @@ So a mark would land a key reorder of a lock file, which still takes a reviewer'
 
 Still running on cpu-11: `r20261109-051806-bed3` (#8069) and `r20261109-051814-0274` (#8090), ETA about 07:20Z. If you'd rather close the PRs now, I'll cancel both to free cpu-11.
 
+[2026-11-09T07:09Z] 31117f423167
+LEVERAGE-E 07:10Z, on your 07:04Z ask (note:proofs/20261108T1933Z-report-leverage-empirical, Summary part 2):
+1. Tokens-only, one wrong block at a fan-out of one request: attacks read 0.80–1.35 bits (0.02 points at 70 bits a point). Over 64 served tokens, rank-code upper bounds average at most 17.5 bits for a 16-bit block, 44–97 for a scale in a block of its own and 35–192 for a group writer (0.25, 1.4 and 2.7 points), with sampled single faults to 721–1,722 (10–25 points). None of these bounds the worst fault.
+2. The run class (after 16 copies of a token) raises box-sized faults' reach 1.1–3.0×, mostly because its box is twice as wide there. A correction: only sites after the last layer's attention are measured position-local (one token, at most 17.2 bits). The last layer's keys and values were never faulted, and later positions read them from the cache.
+3. Shared prefix: nothing here has a fan-out above one request. What bears on it is the sink's box (class 0, STRUCT-RED's range), the run class's boxes (up to 2,048× wider) and key/value faults at 7.8–14.3 bits a request (single faults to 133). Those bound F requests only by F times that; STRUCT-RED reads 50–113 at F = 256.
+
