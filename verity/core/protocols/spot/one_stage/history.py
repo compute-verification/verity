@@ -14,13 +14,21 @@ strings and holds the registered root to it (`check`): the prover's root is neve
 ``{"start", "count", "writer", "out", "radix", "base", "step"}``, position ``start + i`` the output ``out`` of unit
 ``base + sum(digit_k(i) * step[k])`` of writer `writer` (``i``'s mixed-radix digits over ``radix``, the first the
 slowest), or ``{"start", "count", "held", "row"}``, position ``start + i`` row ``row + i`` of a value the verifier holds.
+
+`table_strings` reads those strings from the writer's members' public bodies, and `table_roots` holds each table's
+registered root to them, from bodies whose digests the window's leaf layer binds; `resolve` puts the root and domain id
+it computed for table ``H`` in place of a supplied value's sources ``{"history": "H/root"}`` and
+``{"history": "H/domain"}``.
 """
 
 from __future__ import annotations
 
+import hashlib
 import math
+import re
 from typing import Any, Mapping, Sequence
 
+from verity.ml.circuits.codec import canonical_json
 from verity.ml.commitments import hm96
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -181,3 +189,178 @@ def order(runs: Sequence[Mapping[str, Any]], length: int, writer: str, out: str,
     if at != length:
         raise ValueError(f"the runs cover {at} positions, not the table's {length}")
     return srcs
+
+
+_HEX = re.compile(r"(?:[0-9a-f]{2})*")
+
+
+def _hex(x: Any, what: str) -> bytes:
+    if type(x) is not str or not _HEX.fullmatch(x):
+        raise ValueError(f"{what} is not lowercase hex")
+    return bytes.fromhex(x)
+
+
+def member_of(j: Any) -> dict[str, Any]:
+    """A member, ``{"base", "n", "ports", "body"}`` (hex), with ``"tables": {port: rows}`` for a shared-row body."""
+    if not isinstance(j, Mapping):
+        raise ValueError("a member is not an object")
+    ports = j.get("ports")
+    if not (isinstance(ports, list) and all(type(q) is str for q in ports)):
+        raise ValueError("a member's ports are not a list of strings")
+    tables = None
+    if "tables" in j:
+        tables = j["tables"]
+        if not isinstance(tables, Mapping):
+            raise ValueError("a member's tables are not an object")
+        tables = {q: _nat(n, f"tables: {q}'s rows") for q, n in tables.items()}
+    body = _hex(j.get("body"), "a member's body")
+    return {"base": _nat(j.get("base"), "base"), "n": _nat(j.get("n"), "n"), "ports": list(ports), "tables": tables,
+            "body": body}
+
+
+def member_strings(m: Mapping[str, Any], port: str) -> list[bytes]:
+    """Each of a member's ``n`` units' string of row ``port``, from its public body (`Spot.HistoryTable.memberStrings`):
+    ``n`` units' strings of every port, unit-major; or, with ``tables``, each port's table of strings, port-major (``n``
+    rows for a port no table names), then each unit's u32 little-endian ref into each port's table, unit-major."""
+    base, n, ports, body = m["base"], m["n"], m["ports"], m["body"]
+    if port not in ports:
+        raise ValueError(f"the member at unit {base} has no row {port}")
+    j, np_ = ports.index(port), len(ports)
+    if m.get("tables") is None:
+        if len(body) != n * np_ * BC_BYTES:
+            raise ValueError(f"the member at unit {base}: its public body is not {n} units' {np_} strings")
+        return [body[(i * np_ + j) * BC_BYTES:(i * np_ + j + 1) * BC_BYTES] for i in range(n)]
+    counts = [m["tables"].get(q, n) for q in ports]
+    refs_at = BC_BYTES * sum(counts)
+    if len(body) != refs_at + 4 * n * np_:
+        raise ValueError(f"the member at unit {base}: its public body is not its tables' strings and {n} units' refs")
+    off = BC_BYTES * sum(counts[:j])
+    out = []
+    for i in range(n):
+        at = refs_at + 4 * (i * np_ + j)
+        r = int.from_bytes(body[at:at + 4], "little")
+        if counts[j] <= r:
+            raise ValueError(f"the member at unit {base}: unit {base + i}'s ref is past its {port} table")
+        out.append(body[off + r * BC_BYTES:off + (r + 1) * BC_BYTES])
+    return out
+
+
+def table_strings(runs: Sequence[Mapping[str, Any]], length: int, writer: str, out: str, first: int, units: int,
+                  members: Sequence[Mapping[str, Any]], held: Mapping[str, Sequence[bytes]]) -> list[bytes]:
+    """The table's strings in `order`'s positions (`Spot.HistoryTable.tableStrings`): a unit's from the writer's
+    members, which must cover its units ``first .. first + units`` in order, each its run of ``n`` units; a held row from
+    the strings ``held`` keeps of that value."""
+    srcs = order(runs, length, writer, out, units, {v: len(ss) for v, ss in held.items()})
+    mine: list[bytes] = []
+    if any(s[0] == "unit" for s in srcs):
+        at = first
+        for m in sorted(members, key=lambda m: m["base"]):
+            if m["base"] != at:
+                raise ValueError(f"{writer}'s members leave unit {at} without a public body")
+            mine += member_strings(m, out)
+            at += m["n"]
+        if at != first + units:
+            raise ValueError(f"{writer}'s members hold {at - first} of its {units} units")
+    bcs = []
+    for s in srcs:
+        if s[0] == "unit":
+            if s[1] >= len(mine):
+                raise ValueError(f"{writer}'s unit {s[1]} has no string")
+            bcs.append(mine[s[1]])
+        else:
+            rows = held.get(s[1], ())
+            if s[2] >= len(rows):
+                raise ValueError(f"{s[1]} holds no row {s[2]}")
+            bcs.append(bytes(rows[s[2]]))
+    return bcs
+
+
+def leaf_layer(digests: Mapping[str, str]) -> str:
+    """The leaf layer over the members' public bodies' digests: SHA-512 (hex) of their canonical JSON object."""
+    return hashlib.sha512(canonical_json(dict(digests))).hexdigest()
+
+
+def roots_of(leaf: str, j: Any) -> dict[str, tuple[bytes, bytes]]:
+    """Each table's ``(root, domain id)`` (`Spot.HistoryTable.rootsOf`) from ``{"digests": {key: hex}, "tables": [{"name",
+    "program", "writer", "out", "words", "runs", "capacity", "first", "units", "members": [member with "key"]}],
+    "held": {name: {value: [hex]}}, "registered": {name: hex}}`` under the leaf layer ``leaf``: every member's public
+    body hashing to its key's digest, the digests' canonical object hashing to ``leaf``, and each table's registered
+    root `check`'s over `table_strings`; ValueError otherwise."""
+    if not isinstance(j, Mapping) or not isinstance(j.get("digests"), Mapping):
+        raise ValueError("digests is not an object")
+    digests = {k: _str(d, f"digests: {k}") for k, d in j["digests"].items()}
+    if not isinstance(j.get("tables"), list):
+        raise ValueError("tables is not a list")
+    tables = []
+    for t in j["tables"]:
+        if not isinstance(t, Mapping) or not isinstance(t.get("runs"), list) or not isinstance(t.get("members"), list):
+            raise ValueError("a table's runs or members are not a list")
+        [parse_run(r) for r in t["runs"]]
+        members = [(_str(m.get("key") if isinstance(m, Mapping) else None, "a member's key"), member_of(m))
+                   for m in t["members"]]
+        tables.append({"name": _str(t.get("name"), "name"), "program": _str(t.get("program"), "program"),
+                       "writer": _str(t.get("writer"), "writer"), "out": _str(t.get("out"), "out"),
+                       "words": _nat(t.get("words"), "words"), "runs": t["runs"],
+                       "capacity": _nat(t.get("capacity"), "capacity"), "first": _nat(t.get("first"), "first"),
+                       "units": _nat(t.get("units"), "units"), "members": members})
+    if not isinstance(j.get("held"), Mapping):
+        raise ValueError("held is not an object")
+    held = {}
+    for n, vs in j["held"].items():
+        if not isinstance(vs, Mapping):
+            raise ValueError(f"held: {n} is not an object")
+        held[n] = {}
+        for v, ss in vs.items():
+            if not isinstance(ss, list):
+                raise ValueError(f"held {n} {v} is not a list")
+            held[n][v] = [_hex(x, f"held {n} {v}") for x in ss]
+    if not isinstance(j.get("registered"), Mapping):
+        raise ValueError("registered is not an object")
+    registered = {n: _hex(r, f"registered: {n}") for n, r in j["registered"].items()}
+    return table_roots(leaf, digests, tables, held, registered)
+
+
+def table_roots(leaf: str, digests: Mapping[str, str], tables: Sequence[Mapping[str, Any]],
+                held: Mapping[str, Mapping[str, Sequence[bytes]]],
+                registered: Mapping[str, bytes]) -> dict[str, tuple[bytes, bytes]]:
+    """`roots_of` on parsed tables (`Spot.HistoryTable.tableRoots`): each table's members ``[(key, member)]``."""
+    if leaf_layer(digests) != leaf:
+        raise ValueError("the members' public bodies' digests are not the leaf layer")
+    if len({t["name"] for t in tables}) != len(tables):
+        raise ValueError("a history table named twice")
+    out = {}
+    for t in tables:
+        name = t["name"]
+        for k, m in t["members"]:
+            if k not in digests:
+                raise ValueError(f"history {name}: {k} is no member the leaf layer binds")
+            if hashlib.sha512(m["body"]).hexdigest() != digests[k]:
+                raise ValueError(f"history {name}: {k}'s public body is not the one the leaf layer binds")
+        length = sum(r["count"] for r in t["runs"])
+        bcs = table_strings(t["runs"], length, t["writer"], t["out"], t["first"], t["units"],
+                            [m for _, m in t["members"]], held.get(name, {}))
+        if name not in registered:
+            raise ValueError(f"history {name}: the window registers no root for it")
+        check(t["program"], name, t["words"], bcs, registered[name], t["capacity"])
+        out[name] = (bytes(registered[name]), domain(t["program"], name, t["words"], t["capacity"]).domain_id)
+    return out
+
+
+def resolve(roots: Mapping[str, tuple[bytes, bytes]], supplied: Any) -> Any:
+    """``supplied`` (`registered.sources`' form) with each source ``{"history": "H/root"}`` or ``{"history":
+    "H/domain"}`` the bytes ``{"bytes": hex}`` of the root or domain id ``roots`` holds for table ``H``
+    (`Spot.HistoryTable.resolve`); ValueError on a table it holds none of, or another field."""
+    if not isinstance(supplied, Mapping):
+        return supplied
+
+    def source(s: Any) -> Any:
+        if not (isinstance(s, Mapping) and list(s) == ["history"] and type(s["history"]) is str):
+            return s
+        n = s["history"]
+        for suffix, at in (("/root", 0), ("/domain", 1)):
+            if n.endswith(suffix) and n[:-len(suffix)] in roots:
+                return {"bytes": roots[n[:-len(suffix)]][at].hex()}
+        raise ValueError(f"history {n}: the verifier computed no table's root or domain of that name")
+
+    return {v: [[source(s) for s in r] if isinstance(r, list) else r for r in rows] if isinstance(rows, list) else rows
+            for v, rows in supplied.items()}

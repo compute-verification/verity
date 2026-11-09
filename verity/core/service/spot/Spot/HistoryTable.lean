@@ -26,7 +26,11 @@ register rows of its choosing.
   registered root that is not 64 bytes, then a registered root other than `rootAt`'s. `check` is it at `CAPACITY`;
 * `memberStrings`, `tableStrings`: the `bcs` `checkAt` reads, from the writer's members' public bodies (each unit's
   `b ‖ c` of its rows, or a shared-row body's tables and refs) at the positions `order` gives, and from the strings the
-  verifier holds of the table's earlier windows for its held runs.
+  verifier holds of the table's earlier windows for its held runs;
+* `tableRoots`, `rootsOf`: each table's registered root held to `checkAt` over those strings, from members whose public
+  bodies hash to the digests the window's leaf layer binds; `resolve` puts the root and domain id it computed for table
+  `H` in place of a supplied value's sources `{"history": "H/root"}` and `{"history": "H/domain"}`, so a reader's
+  `TableRead` takes the root the verifier computed, never one the prover or the verifier's Python supplies.
 
 What a read that opens against this root returns is stated by `Hash.Guarantees.HistoryReadBinding`: the row behind
 the `b ‖ c` at its index, or SHA-512 collides. That guarantee is stated over `Hash.HistoryTable.root`, and
@@ -275,6 +279,7 @@ def tableRoots (leaf : String) (digests : Array (String × String))
     V (Array (String × ByteArray × ByteArray)) := do
   if (digests.map (·.1)).toList.eraseDups.length != digests.size then throw "a member's key twice among the digests"
   if (← leafLayer digests) != leaf then throw "the members' public bodies' digests are not the leaf layer"
+  if (tables.map (·.1)).toList.eraseDups.length != tables.size then throw "a history table named twice"
   tables.mapM fun (name, h, first, units, ms) => do
     for (k, m) in ms do
       match digests.find? (·.1 == k) with
@@ -404,11 +409,10 @@ def hexObj (j : Json) (what : String) : V (Array (String × ByteArray)) := do
     | .str s => return (k, ← Flock.unhex s)
     | _ => throw s!"{what}: {k} is not a hex string"
 
-/-- `{"leaf_layer", "digests": {key: hex}, "tables": [{"name", "program", "writer", "out", "words", "runs", "capacity",
-"first", "units", "members": [member with "key"]}], "held": {name: {value: [hex]}}, "registered": {name: hex}}` to
-`{"roots": {name: {"root", "domain"}}}`: `tableRoots`', or its refusal. -/
-def rootsPiece (j : Json) : V Json := do
-  let .str leaf := getD j "leaf_layer" | throw "leaf_layer is not a string"
+/-- `tableRoots` over its JSON form under the leaf layer `leaf`: `{"digests": {key: hex}, "tables": [{"name", "program",
+"writer", "out", "words", "runs", "capacity", "first", "units", "members": [member with "key"]}], "held": {name: {value:
+[hex]}}, "registered": {name: hex}}`. -/
+def rootsOf (leaf : String) (j : Json) : V (Array (String × ByteArray × ByteArray)) := do
   let .obj _ := getD j "digests" | throw "digests is not an object"
   let digests ← (entries (getD j "digests")).mapM fun (k, d) => match d with
     | .str s => pure (k, s)
@@ -427,8 +431,36 @@ def rootsPiece (j : Json) : V Json := do
       return (n, ← (entries vs).mapM fun (v, ss) => return (v, ← hexes ss s!"held {n} {v}"))
     | _ => throw "held is not an object"
   let registered ← hexObj (getD j "registered") "registered"
-  let got ← tableRoots leaf digests tables (fun n => ((held.find? (·.1 == n)).map (·.2)).getD #[])
+  tableRoots leaf digests tables (fun n => ((held.find? (·.1 == n)).map (·.2)).getD #[])
     fun n => (registered.find? (·.1 == n)).map (·.2)
+
+/-- The supplied values `supplied` (`Supplied.sources`' form) with each source `{"history": "H/root"}` or
+`{"history": "H/domain"}` the bytes `{"bytes": hex}` of the root or domain id `roots` holds for table `H`; an error on
+a table `roots` holds none of, or another field. Every other source is left as it is, for `Supplied.sources` to read or
+refuse. -/
+def resolve (roots : Array (String × ByteArray × ByteArray)) (supplied : Json) : V Json := do
+  let .obj _ := supplied | return supplied
+  let source : Json → V Json := fun s => match s with
+    | .obj o => match o.toArray with
+      | #[("history", .str n)] =>
+        match roots.find? (n == ·.1 ++ "/root"), roots.find? (n == ·.1 ++ "/domain") with
+        | some (_, r, _), _ => pure (Json.mkObj [("bytes", Json.str (Flock.hexOf r))])
+        | none, some (_, _, d) => pure (Json.mkObj [("bytes", Json.str (Flock.hexOf d))])
+        | none, none => throw s!"history {n}: the verifier computed no table's root or domain of that name"
+      | _ => pure s
+    | _ => pure s
+  return Json.mkObj ((← (entries supplied).mapM fun (v, rows) => match rows with
+    | .arr rs => return (v, Json.arr (← rs.mapM fun r => match r with
+      | .arr ss => return Json.arr (← ss.mapM source)
+      | r => pure r))
+    | rows => pure (v, rows)).toList)
+
+/-- `{"leaf_layer", "digests": {key: hex}, "tables": [{"name", "program", "writer", "out", "words", "runs", "capacity",
+"first", "units", "members": [member with "key"]}], "held": {name: {value: [hex]}}, "registered": {name: hex}}` to
+`{"roots": {name: {"root", "domain"}}}`: `tableRoots`', or its refusal. -/
+def rootsPiece (j : Json) : V Json := do
+  let .str leaf := getD j "leaf_layer" | throw "leaf_layer is not a string"
+  let got ← rootsOf leaf j
   return Json.mkObj [("roots", Json.mkObj (got.toList.map fun (n, r, d) =>
     (n, Json.mkObj [("domain", Json.str (Flock.hexOf d)), ("root", Json.str (Flock.hexOf r))])))]
 

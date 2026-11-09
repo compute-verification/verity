@@ -231,7 +231,8 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
             schemas: Mapping[str, str] | None = None, window_root: str | None = None,
             held: Sequence[str] | None = None, outputs: Mapping[str, Mapping[str, str]] | None = None,
             day: int | None = None, declarations: Sequence[Mapping[str, Any]] | None = None,
-            seed_salt: str | None = None, pool: Mapping[str, Any] | None = None) -> dict[str, Any]:
+            seed_salt: str | None = None, pool: Mapping[str, Any] | None = None,
+            history: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`), `pool` as the verifier holds it:
     the Lean adds its `pin` to the supplied or output values itself."""
     p = {"anchors": list(anchors), "delta": REGISTRATION_DELTA, "law": dict(law), "leaf_layer": leaf_layer,
@@ -262,6 +263,8 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
         p["seed_salt"] = seed_salt
     if pool is not None:
         p["pool"] = dict(pool)
+    if history is not None:
+        p["history"] = dict(history)
     return p
 
 
@@ -274,17 +277,19 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           window_root: str | None = None, held: Sequence[str] | None = None,
           outputs: Mapping[str, Mapping[str, str]] | None = None, day: int | None = None,
           declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None,
-          pool: Mapping[str, Any] | None = None) -> Verdict:
+          pool: Mapping[str, Any] | None = None, history: Mapping[str, Any] | None = None) -> Verdict:
     """`registration.check` (R1-R7) by the verifier, with R2's declared day when it passes `day` and `declarations`,
-    R6's seed salt when it passes `seed_salt`, and R6's pool reset, week and spent mark, a reset at most once a week,
-    and R7's pool chain when it passes `pool`."""
+    R6's seed salt when it passes `seed_salt`, R6's pool reset, week and spent mark, a reset at most once a week,
+    and R7's pool chain when it passes `pool`, and the roots of the history tables it passes as `history`, which the
+    Lean computes from the members' public bodies and puts in place of the supplied values' `history` sources."""
     log = list(log)
     py = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
                  supplied, pinned, binding, outputs=outputs, schemas=schemas, window_root=window_root, held=held,
-                 day=day, declarations=declarations, seed_salt=seed_salt, pool=pool)
+                 day=day, declarations=declarations, seed_salt=seed_salt, pool=pool, history=history)
     got = lean("registration", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
                                                   work_table, registered, supplied, pinned, binding, schemas,
-                                                  window_root, held, outputs, day, declarations, seed_salt, pool),
+                                                  window_root, held, outputs, day, declarations, seed_salt, pool,
+                                                  history),
                        "record": dict(rec)})
     if "codes" in got:
         got = {"ok": not got["codes"], "codes": got["codes"]}

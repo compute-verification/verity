@@ -126,7 +126,7 @@ from verity.ml.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.program import Program
 
-from . import draw as D, partition as P, registered as G
+from . import draw as D, history as HT, partition as P, registered as G
 from .verdict import Verdict, _Collect
 
 FORMAT = "verity/registration/v1"
@@ -211,7 +211,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           schemas: Mapping[str, str] | None = None, window_root: str | None = None,
           held: Sequence[str] | None = None, day: int | None = None,
           declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None,
-          pool: Mapping[str, Any] | None = None) -> Verdict:
+          pool: Mapping[str, Any] | None = None, history: Mapping[str, Any] | None = None) -> Verdict:
     """R1-R7 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
@@ -243,7 +243,11 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     `pool`: the values a window opens and leaves its pool in, the empty pool's root, whether the verifier refused the
     window the public lag back, the window's own reset, which R6 holds it to name, and whether its week's one reset is
     spent (Pool chain, `_pool`), whose `pin` it adds to `outputs` or `supplied` (`pool_values`) and R7 holds to the
-    chain (`R7-pool-chain`).  R3
+    chain (`R7-pool-chain`).  `history`: the history tables the program reads (``{"digests", "held", "registered",
+    "tables"}``, `history.roots_of`), each table's root computed from its writers' public bodies the leaf layer binds
+    and held to the root the window registers for it, which needs `leaf_layer`; a supplied value's source
+    ``{"history": "H/root"}`` or ``{"history": "H/domain"}`` is then the bytes of the root or domain id it computed for
+    table ``H`` (`history.resolve`).  R3
     reads `ports` by name, so its codes come in the ports' sorted order whatever order the mapping has, as the Lean port
     reads them."""
     c = _Collect()
@@ -252,6 +256,13 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     log = list(log)
     pool = _pool(pool, registered or {}, supplied, pinned, outputs, schemas)
     supplied, outputs, schemas = pool_values(pool, program, supplied, outputs, schemas, log)
+    if history is not None:
+        if not isinstance(history, Mapping) or set(history) != {"digests", "held", "registered", "tables"}:
+            raise ValueError("the keys of the history tables are not digests, held, registered, tables")
+        if leaf_layer is None:
+            raise ValueError("history tables are read from members' public bodies the leaf layer binds: the verifier "
+                             "names no leaf_layer")
+        supplied = HT.resolve(HT.roots_of(leaf_layer, history), supplied)
     sup = G.sources(supplied if supplied is not None else {})
     if supplied is not None and not v2:
         raise ValueError("supplied values are registered values: the verifier expects none registered")
