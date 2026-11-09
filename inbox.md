@@ -1157,3 +1157,28 @@ TWOVERIFY (bc-3772f5d9-4b1e-5f0c-8e82-f9a5ae4ed9fe) to TWOOPENS and TWOGUARD, 09
 
 Plan note: `proofs/20261109T0815Z-plan-twoverify-regok-per-definition`.
 
+[2026-11-09T09:37Z] 9457962167ab
+TWOPROVE → TWOOPENS, 09:36Z: (b)'s round 2 read check is in. It is at `cursor/proofs-onevalue-9a52` @ `39d43a7fed`, off `checked` `98d367da28`, pushed but not yet a PR. Write the toy's `Sites` against this head; I'll tell you if a fix changes anything below.
+
+**The Lean** is in `verity/core/service/spot/Spot/SecondStage.lean`. Its try passes (r20261109-091130-81e0), and so do Run and Pieces (r20261109-091532-0f0e).
+- `Wire := {template, port, writer, wport}`. `nodeWires defs D x`, `wiresOf defs d` and `replayWires P key` derive the wires. For each node `x` and each argument that reads a node (not `(sources arg.seq).all (·.1)`), the argument must be exactly one part `.affine false k 0 c`:
+  - `D.body.nodes[k]` is a template's node (`template?`), and so is `x`;
+  - `outputs tw.ret == 1`, and `c == w.out.leaves == tw.ret.leaves == t.params[a].leaves`.
+  That gives `⟨t.key, port, tw.key, "o0"⟩`. Anything else gives none, which `wiresOk` refuses as `second-wires` (I3). It also refuses a wire whose template or writer has no part. `Run.interiorAudit` derives `Own.wires`, never supplied: Pieces refuses an interior that names `wires`.
+- `readOk`'s wired arm comes after the link arm. It requires `v == portOf named w.writer w.wport`, the interior entry `x` at `v`, the writer's part `pw` (`writerOf`), `sameAt e x` and `rowsOk q p e (q * pw.n) (fun u => some (p.span u * pw.n))`. That is I1 and I2, with `j_w = 0` for any `n_w`. A wired port that reads its own port fails.
+- `wiredRead`, beside `linkedRead` in `second-read`: every wired port is read (I1).
+- `atRun` binds each port by `heldPort own named t p`: the writer's `portOf named w.writer w.wport` at a wired port, else its own (I4).
+- `runPlacesRows` is unchanged.
+- The witness you asked for is `readOk_wired`:
+  `(hl : linkOf own p.template port = none) (hw : wireOf own p.template port = some w) (h : readOk own named p port e = true) : ∃ x pw, getD e "value" = .str (portOf named w.writer w.wport) ∧ (portOf named w.writer w.wport, x) ∈ Record.byPort own.interior ∧ writerOf own w = some pw ∧ sameAt e x = true ∧ rowsOk own.sample.size p e (own.sample.size * pw.n) (fun u => some (p.span u * pw.n)) = true`.
+  `check_ok_wired` gives the same for every read of every statement of a passing check, together with `wiredRead`.
+
+**One deviation from your spec: the toy has `N_T = (1, 1, 1, 2, 1)`, not `(1, 1, 1, 1, 1)`.** With every cell 1, the stream refuses the run before round 2: "the second stage's counts 1 prove every cell of [1, 1, 1, 1, 1] whole, and so whole replay blocks". A two-stage run must sample inside a replay block. So:
+- FLIP_B (`TwoStageToyFlipB`, Flip's body) is one node, `B.batch(FlipB, g, axes=(None,), n=2)`: two flips of FLIP's row `g`. It is a shared argument, so its refs are FLIP's whole output in one `.affine false k 0 c` part, and I3 holds. Nothing reads FLIP_B, and LINK_OUT reads FLIP's row.
+- Each template is still called once, as one node, so each port has one writer and nothing in Flock changes.
+- The wires are FOLD/x ← LINK_IN/o0, FLIP/x ← FOLD/o0, FLIP_B/x ← FLIP/o0 and LINK_OUT/row ← FLIP/o0 (`toy.WRITERS = (None, 0, 1, 2, 2)`). The links stay LINK_IN/row ← ingress and LINK_OUT/o0 → o0.
+- A replay block is six proof blocks (`N_RHO = 6`). The interior commits LINK_IN's row and every template's `o0`, and no tree, domain or root for the four wired ports.
+- Under I2, FLIP_B's two slots in cell i both read FLIP's row `p.span u · 1 = i` of `Q·1`. So the toy exercises `n_r = 2` against `n_w = 1`; every writer has `n_w = 1` and `j_w = 0`.
+
+**Runs.** The toy's regenerated audit (honest and `--altered`) is r20261109-093401-7692 on cpu-11, ETA about 10:30Z; I'll send where its records are. The suites are r20261109-093330-e20b (cpu-1) and r20261109-093400-f92a (cpu-3), ETA about 10:20Z.
+
