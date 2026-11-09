@@ -1,8 +1,9 @@
 """The one-stage replay of a warm request whose Program recomputes its prefix-cache hit (`check.replay.recomputed_prefix`), on
 the sampled replay's CPU-served world (`tests.check.test_sampled_replay`): r1 served with its first position from the cache
 (C = 1), so serving committed its first step's per-position members from position 1 on and embedded prompt[1:]. Its prefix
-rows leave its population, every sampled VU replays bit for bit, a read below C is its replay's and never a committed word,
-and without the recompute the same record doesn't pass."""
+rows leave its population, every sampled VU replays bit for bit, a read below C is its replay's and never a committed word
+(with attention, a later position's and every decode's key and value reads of position 0), and without the recompute the
+same record doesn't pass."""
 from __future__ import annotations
 
 import copy
@@ -16,16 +17,21 @@ from verity_vllm.check.replay.opening import CommittedStore
 C = 1
 
 
-@pytest.fixture(scope="module")
-def world():
+@pytest.fixture(scope="module", params=[False, True], ids=["mlp", "attention"])
+def world(request):
     import tests.check.test_sampled_replay as T
 
-    rng = np.random.default_rng(7)
-    inst, woff = T._program()
+    rng = np.random.default_rng(23)
+    inst, woff = T._program(attn=request.param)
     weights = T._bf16(rng, max(hi for _lo, hi in woff.values()), 0.5)
     for f in ("model.model.layers.0.input_layernorm.weight", "model.model.norm.weight"):
         weights[woff[f][0]:woff[f][1]] = 0x3F80
-    return T.Honest(inst, woff, weights, {"r0": [1, 2], "r1": [5, 3]})
+    if request.param:
+        lo, hi = woff["model.model.layers.0.self_attn.rotary_emb.cos_sin_cache"]
+        weights[lo:hi] = (np.asarray(rng.uniform(-1, 1, hi - lo), dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
+    out = T.Honest(inst, woff, weights, {"r0": [1, 2], "r1": [5, 3]})
+    out.attention = request.param
+    return out
 
 
 def _weights(world):
@@ -73,12 +79,17 @@ def test_a_read_below_c_is_the_replay_s_and_one_past_it_is_serving_s_c_rows_earl
         RP.RecomputedPrefix(CommittedStore(bmap, committed), pi, "r1", 2, world.prompts["r1"], _weights(world))
 
 
-def test_the_warm_request_replays_bit_for_bit_with_its_prefix_out_of_its_population(world):
+def test_the_warm_request_replays_bit_for_bit_with_its_prefix_out_of_its_population(world, monkeypatch):
     bmap, committed = _warm(world)
     progs = {rid: world.inst for rid in world.prompts}
     warm = {"r1": {"cached": C, "producers": ["r0"], "prompt": world.prompts["r1"]}}
+    answered, take = [], RP.RecomputedPrefix.take
+    monkeypatch.setattr(RP.RecomputedPrefix, "take", lambda self: answered.extend(got := take(self)) or got)
     rep = SR.sampled_replay(progs, bmap, committed, _weights(world), per_stratum=8, seed=1, workers=0, cached_prefixes=warm)
     assert rep["result"] is True and rep["sample"]["mismatch_n"] == 0, rep.get("why")
+    per = RP.positions(IX.ProgramIndex(world.inst))
+    assert all(rid == "r1" and step == 0 and 0 <= lo < hi <= C * per[(op, m)] for rid, step, op, m, (lo, hi) in answered)
+    assert not world.attention or any("rotary_emb" in op and m == "key" for _r, _s, op, m, _ in answered), answered[:4]
     pi = IX.ProgramIndex(world.inst)
     prefix = [k for k in rep["population"]["not_evaluable_by_family"] if "(recomputed prefix" in k]
     assert sum(rep["population"]["not_evaluable_by_family"][k] for k in prefix) == len(RP.prefix_rows(pi, C))
