@@ -1597,7 +1597,7 @@
   },
   "Claims.SamplingGeneric.CompiledTwo.Sessions": {
    "owner": "@proofs",
-   "digest": "b6f25aba72be25843274f0592d377f8eea27152addca0a3bd43d20bc0d837dda",
+   "digest": "5253770d66c8ec79d628863b8eef3b61606b53eac42288a7c86850ad18925a20",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -3118,6 +3118,12 @@
    "digest": "fb71a8bd7bbb835f632eb5b01629891c333db5c4e9c99ff5ea953210a834d47c",
    "issue": "LEAN-186",
    "due": "2026-11-08"
+  },
+  "SamplingDeploy.Code.ReplayCap": {
+   "owner": "@proofs",
+   "digest": "298a260f38d15b41703db6644024563644e2efc4ff6bde4922c98692f8d0a0a6",
+   "issue": "PRF-466",
+   "due": "2026-11-12"
   },
   "SamplingDeploy.RegMatchesTwo": {
    "owner": "@proofs",
@@ -15499,6 +15505,7 @@
      "Claims.SamplingGeneric.SessionOpensTwo",
      "SamplingDeploy.Code.InteriorFixed",
      "SamplingDeploy.Code.RefusesTwo",
+     "SamplingDeploy.Code.ReplayCap",
      "SamplingDeploy.RegMatchesTwo",
      "SamplingDeploy.SessionsIn"
     ],
@@ -15519,22 +15526,30 @@
     "          (SamplingDeploy.Code.RefusesTwo FlockDeploy.sha512 (SamplingDeploy.toyCode.atOrder SamplingDeploy.toyOrder)",
     "            fun x => Option.none)",
     "          (And",
-    "            (SamplingDeploy.Code.InteriorFixed FlockDeploy.sha512",
-    "              (SamplingDeploy.toyCode.atOrder SamplingDeploy.toyOrder) fun x x_1 x_2 => List.nil)",
+    "            (SamplingDeploy.Code.ReplayCap FlockDeploy.sha512 (SamplingDeploy.toyCode.atOrder SamplingDeploy.toyOrder)",
+    "              (fun x => Option.none)",
+    "              (SamplingDeploy.replayTwo (SamplingDeploy.toyCode.atOrder SamplingDeploy.toyOrder) (fun x => Option.none)",
+    "                (fun x => 0)",
+    "                (SamplingDeploy.bytesFirst SamplingDeploy.toyCode (fun x => 0) SamplingDeploy.toyOrder",
+    "                  SamplingDeploy.toyBytes))",
+    "              fun x => 0)",
     "            (And",
-    "              (Claims.Sampling.SessionRuns FlockDeploy.sha512",
-    "                (SamplingDeploy.deploy Flock.Readable.relation",
-    "                  (SamplingDeploy.codeTwoAt SamplingDeploy.toyCode (fun x => Option.none) (fun x => 0) (fun x => 0)",
-    "                    SamplingDeploy.toyOrder SamplingDeploy.toyBytes SamplingDeploy.toyBytes)))",
+    "              (SamplingDeploy.Code.InteriorFixed FlockDeploy.sha512",
+    "                (SamplingDeploy.toyCode.atOrder SamplingDeploy.toyOrder) fun x x_1 x_2 => List.nil)",
     "              (And",
-    "                (SamplingDeploy.SessionsIn",
-    "                  (SamplingDeploy.codeTwoAt SamplingDeploy.toyCode (fun x => Option.none) (fun x => 0) (fun x => 0)",
-    "                    SamplingDeploy.toyOrder SamplingDeploy.toyBytes SamplingDeploy.toyBytes))",
-    "                (Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512",
+    "                (Claims.Sampling.SessionRuns FlockDeploy.sha512",
     "                  (SamplingDeploy.deploy Flock.Readable.relation",
     "                    (SamplingDeploy.codeTwoAt SamplingDeploy.toyCode (fun x => Option.none) (fun x => 0) (fun x => 0)",
+    "                      SamplingDeploy.toyOrder SamplingDeploy.toyBytes SamplingDeploy.toyBytes)))",
+    "                (And",
+    "                  (SamplingDeploy.SessionsIn",
+    "                    (SamplingDeploy.codeTwoAt SamplingDeploy.toyCode (fun x => Option.none) (fun x => 0) (fun x => 0)",
     "                      SamplingDeploy.toyOrder SamplingDeploy.toyBytes SamplingDeploy.toyBytes))",
-    "                  (fun x => Option.none) fun x x_1 x_2 => List.nil)))))))"
+    "                  (Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512",
+    "                    (SamplingDeploy.deploy Flock.Readable.relation",
+    "                      (SamplingDeploy.codeTwoAt SamplingDeploy.toyCode (fun x => Option.none) (fun x => 0) (fun x => 0)",
+    "                        SamplingDeploy.toyOrder SamplingDeploy.toyBytes SamplingDeploy.toyBytes))",
+    "                    (fun x => Option.none) fun x x_1 x_2 => List.nil))))))))"
    ],
    "assumptions": [],
    "premises": {
@@ -15543,7 +15558,7 @@
     "open": [],
     "reads": ["FlockSoundness.Assumptions.UniformRandomBytes"]
    },
-   "type_hash": "faf92286d2fccc69098dae88a606785cb8b79663c8fbdb049f029ea937e3edbe"
+   "type_hash": "fe645d949a84b923ead012613f96d40384a0a06a3d10c7e666970ba14130a4aa"
   },
   "Flock.SecurityProofs.SamplingClaimsStated": {
    "owner": "@proofs",
@@ -26334,7 +26349,7 @@
    "Pouw.SecurityProofs.PeriodBindingPerProver": "frozen (no-function): a bound on a period's binding (SampledLayer.BindingAt at Declared.periodLayer, which J10-R's tileLayer is) for every circuit, outcomes and openings, not a property of a Lean function's acceptance; it takes ecr/sha-512 at the prover's own fork finder (Claims.ExpectedCR, applied to that finder alone) and states kappa, the unverified-opening and split terms, in full, since no premise bounds them yet (CMP-33).",
    "Pouw.SecurityProofs.PeriodBindingPerProver_honest": "completeness: PeriodBindingPerProver's honest witness (LEAN-66): at onePeriod with every proof accepted and every slot opened to false by a verified path, the proofs are accepted on every coin, kappa is 0 and binding never fails (CMP-33).",
    "Pouw.SecurityProofs.PeriodBindingPerProver_nontrivial": "lemma: PeriodBindingPerProver's nontrivial witness (LEAN-66): at onePeriod with every proof accepted, opening every slot to the coin bit by a verified path, kappa is 0 and the bound at q = 0, which is 0, fails, since the opened bit moves with every fresh sample; a counterexample about no protocol function (CMP-33).",
-   "Flock.SecurityProofs.SampledKSTwo": "frozen (obligation,no-function): ksTwo_code at the deployed round order (SamplingDeploy.codeTwoAt), knowledge sound at SHA-512 from UniformRandomBytes at each challenger call (CallsUniform) and six facts of the code (RegMatchesTwo, Code.RefusesTwo, Code.InteriorFixed, SessionRuns, SessionsIn, SessionOpensTwo), open until Spot.Run.run's checks prove them; it reads SampledKSTwo (Security/Proofs/Flock/SamplingGeneric/Guarantees.lean) over SamplingGeneric's code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.SampledKSTwo": "frozen (obligation,no-function): ksTwo_code at the deployed round order (SamplingDeploy.codeTwoAt), knowledge sound at SHA-512 from UniformRandomBytes at each challenger call (CallsUniform) and seven facts of the code (RegMatchesTwo, Code.RefusesTwo, Code.ReplayCap, Code.InteriorFixed, SessionRuns, SessionsIn, SessionOpensTwo), open until Spot.Run.run's checks prove them; it reads SampledKSTwo (Security/Proofs/Flock/SamplingGeneric/Guarantees.lean) over SamplingGeneric's code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
    "WeightSecurity.SecurityProofs.TheftServed": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (Security/Definitions/WeightSecurity/Served.lean), under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard), the served channel's simulability (WeightSecurity.Assumptions.Simulable) and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the releases' locality as a probability term that the network certifier and the dataflow are to discharge; it reads no function's acceptance.",
    "Pouw.NCP.GameProofs.gapFromTTNCP": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTNCP, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.SecurityProofs.GapFromTT": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TT, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
@@ -32130,7 +32145,7 @@
    }
   },
   "Definitions.Claims.SamplingGeneric": {
-   "digest": "6c157ff622c7e9fc4818f441446194c9a53d5a7ed2da3895cf47952633447741",
+   "digest": "dbeb503f75bae9d40a4b4ccf178b72294dc614675afaf55534a0ac57d57f252b",
    "definitions": {
     "Claims.SamplingGeneric.Arg": "a3523e27db94bc0fc6aa14e539db934e8b8be4d90fc860bd46115063083b28bf",
     "Claims.SamplingGeneric.Arg.E": "af0ca8a8061e3a89bb9774829557e74a7af338ec04da1c21cfd55abc0da27f8e",
@@ -32201,6 +32216,7 @@
     "Claims.SamplingGeneric.Compiled.reveal": "064d7fb1a554f869781289450e75f10b31314d645dc3e8342c250292514df736",
     "Claims.SamplingGeneric.Compiled.rounds": "1b9fef9a22df85adb87c219c6c64f278082c0c062201b936b2cc406ffb1adcf3",
     "Claims.SamplingGeneric.Compiled.runExt": "8cfbf3feeb754a67b2fb856f2719c6e0d1c8131693bf8c1db8ddb1671f43b11c",
+    "Claims.SamplingGeneric.Compiled.scopeCheck": "97ea8047dc2a67b01f2ccb4af90017e0a7b6d7aa5fe1c00d95dc21c12da8096f",
     "Claims.SamplingGeneric.Compiled.sessBlocks": "6565a90db90d5da672368bc49940a7fe17eeecfea5f6f251d821ca7249040056",
     "Claims.SamplingGeneric.Compiled.sessExt": "b1109e59e5fd217fd02d3721702c1ffd7cb5b3cbe19191752f97f73b5a4a8c02",
     "Claims.SamplingGeneric.Compiled.sessSlots": "a422866e0cff98773f808af1362ca7c251d1f4baa24722dd2f56dbd97a7358e6",
@@ -32288,7 +32304,7 @@
    }
   },
   "Definitions.Claims.SamplingTwo": {
-   "digest": "032a7ba973f1745ec4757f1d6a71c6d58e4ffd4c9e69c3723d75ac098e61cf27",
+   "digest": "51590c15fdfd7241279e4c64f6282a86db6df3edf8e996ab07ce67b97df754c8",
    "definitions": {
     "Claims.Sampling.Design.Two": "d1c7605e035e8d2d77209adadc6b25301fae1804f7e8ea858fa1aa597e7d4a00",
     "Claims.Sampling.Design.Two.FirstRate": "c47f092ab4e567a228b5a0bc990750a48733a96b590649f5e7bb87609a4024fc",
@@ -32325,7 +32341,7 @@
     "Claims.SamplingGeneric.CompiledTwo.KS": "a1248a70c0faedf4a598de524bcb491f3f08cd20d7dff39d0502a1dc8c78f936",
     "Claims.SamplingGeneric.CompiledTwo.KSAt": "4d4dc8186592320621f4c1b6660a4ccd78b9cc82fb8429661a796e09467b583c",
     "Claims.SamplingGeneric.CompiledTwo.Scope": "c5b24307da73e3fd56aa75fc4617e03dfd0f41984fb40bccb792e97a43515735",
-    "Claims.SamplingGeneric.CompiledTwo.Sessions": "b6f25aba72be25843274f0592d377f8eea27152addca0a3bd43d20bc0d837dda",
+    "Claims.SamplingGeneric.CompiledTwo.Sessions": "5253770d66c8ec79d628863b8eef3b61606b53eac42288a7c86850ad18925a20",
     "Claims.SamplingGeneric.CompiledTwo.replaySample": "bc99ecaee387a6c05784d9894a69e22031f3ec413d1cbc3efa4f596a3f029841",
     "Claims.SamplingGeneric.CompiledTwo.toCompiled": "0c63c2616b1bb25764ab651b8c1f7e5428848cea5d0fa4e874c241d8ccec06a2",
     "Claims.SamplingGeneric.CompiledTwo.two": "bb5d61d75e180d0e5265c7ed2a38bbd6e337091d093c853487fe82047d09b02e",
@@ -49811,11 +49827,11 @@
    }
   },
   "Proofs.Flock.SamplingGeneric.Guarantees": {
-   "digest": "d919361d0f44aaa9c3f7f872c471cc87096bff2cb202f2bad407b4769ab79614",
+   "digest": "f6f21834e64ec46146886ec2a522af4905e2660cfad261a0322bf08e5d948e1a",
    "definitions": {
-    "Flock.Guarantees.SampledKSTwo": "b2e77b5ff15af3a7d04cc922923581fed00a6caeefa7215686649e00a82fce36",
+    "Flock.Guarantees.SampledKSTwo": "5a77023c5d1421fffd958bb5178c1f4a2a1102ceb43d35a260f35df541840d0a",
     "Flock.Guarantees.SpotExfilTwo": "e500e8102d7bc9b9ea40aae7348365475f2fdbcfd13e16460f3fe5a36d0294b9",
-    "Flock.Guarantees.SpotKSTwo": "9ccc9916f4b5b1013fbf0da14a3de1204f7b5accc0669fe5980d63cbd5fb3db4"
+    "Flock.Guarantees.SpotKSTwo": "239f9e5cf8d2e31bc2e176e6d4ba8b9730e9f3d9378c7241e1b035dd6925dffc"
    }
   },
   "Proofs.Flock.SamplingGeneric.OpensTwo": {
@@ -49841,10 +49857,12 @@
    }
   },
   "Proofs.Flock.SamplingGeneric.TwoDeployed": {
-   "digest": "dfbe25af23794c9cc895d2270ffbf44a686ad302969107da0845dff9ce220624",
+   "digest": "6c60db0f04502efb12443c43f17e9b69bb7d91130523d09cf1481cf2f99cafcc",
    "definitions": {
     "SamplingDeploy.Code.RefusesTwo": "fb71a8bd7bbb835f632eb5b01629891c333db5c4e9c99ff5ea953210a834d47c",
-    "SamplingDeploy.compiledTwo": "12c69bc4b2d997011f74a7f032d15de03c4f7a009d9a0a97d3d4b96102c18b9e"
+    "SamplingDeploy.Code.ReplayCap": "298a260f38d15b41703db6644024563644e2efc4ff6bde4922c98692f8d0a0a6",
+    "SamplingDeploy.Code.footOf": "26c847cb32d9917981de58b2addca7725aa4c51243368427e0105786cf19ced6",
+    "SamplingDeploy.compiledTwo": "a4cdc38565708df46b46f9ad9e04375771bcf15ee32f7ca290103a78b697443e"
    }
   },
   "Proofs.Flock.SessionLoop.Concrete.Delta": {
@@ -53291,6 +53309,16 @@
    "digest": "b636d66cb95d6679b664d54c52b07abc0a2f39d64960f41dc92508019ec63b82",
    "definitions": {
     "FlockSoundness.foldLo": "8a30f04523f730fa470c3bd23ca1e9dd61de0515521a8e0e0da4e8638db9efa1"
+   }
+  },
+  "Proofs.Flock.SpotFlock.Cap": {
+   "digest": "b5da95ced5415bcae6ab061b253798e28cd1637b3de6e8123b7fc58dafc040da",
+   "definitions": {
+    "SpotFlock.cap": "99ed7e1cab2ba8a13b9f4a65e6528e59cf148ac73277c3e605d13f7953f00a0a",
+    "SpotFlock.firstK": "e3eedbf1cc72a04a46e7c324bd5bb58f460d36bbc51bb72c3895b8a996debe1a",
+    "SpotFlock.firstKOf": "b435bb9acf689cc3664322a1f48e947e6d61f4af6272fc171371bcffc72563c2",
+    "SpotFlock.nBlocks": "21e13668e92a08be8e1b329f1aeeb51a520d24440b6cde2443bdf891566425c8",
+    "SpotFlock.perBlock": "3cc0001df0be162cb2b40df50e7a251c7c5ae5601e65b494424783f4d0f034fd"
    }
   },
   "Proofs.Flock.SpotFlock.Code": {
