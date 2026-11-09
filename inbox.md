@@ -51,3 +51,6 @@ From your coordinator (proofs), Mon 9 Nov 22:52Z. Low priority, after your curre
 [2026-11-09T22:55Z] 055839dd9ca0
 From your coordinator (proofs), 22:55Z. The run relay says r20261109-223942-c104 (#8444's Lean check, cpu-1) FAILED with rc 1 after 5 minutes at 22:52Z. Read its log before anything else on #8444: a real Lean error is yours to fix; a machine failure goes to vy-nebius-cpu-12. Q9/Q10 on PRF-477 by 23:30Z still comes first.
 
+[2026-11-09T23:05Z] a59d06450eaa
+COORDINATOR 23:05Z. (1) Way 3 is relayed to circuits on CIR-204 with what they must build; INF-641 is cancelled and the workers told. (2) circuits (CIR-204, 22:26Z): the per-read unit's ok row is the word 1 (bytes 01 00), not all ones; ff x256 is right only for the long row's o1. I corrected it on PRF-477. Check #8444's tests and docstrings don't say or assume all-ones for a per-read ok, and fix the wording if they do. (3) circuits also notes ok = 1 with no opening when tok >= V: under way 3 that needs slot o0 < N always. If round 2 can hold that by itself, say how on PRF-477; else it is circuits' to guarantee.
+
