@@ -881,8 +881,8 @@ def test_a_history_source_is_the_root_the_verifier_computes():
     """A supplied value's source `{"history": "H/root"}` is the root the verifier computes for table H from its writer's
     public bodies the leaf layer binds (`history.roots_of`, the Lean's `HistoryTable.rootsOf`): where the served port x's
     root is that root, it fills the rows `{"port": "x"}` fills, in both verifiers. A body the leaf layer doesn't bind, a
-    table or field the verifier computed none of, or a `history` without the verifier's leaf layer refuses the
-    parameters in both."""
+    registered root that is not the one computed, a table or field the verifier computed none of, or a `history`
+    without the verifier's leaf layer refuses the parameters in both, and the verifier's verdict is `R7-history`."""
     hist, leaf, root = _history()
     rec, check, _, _ = _seeded_case(x_root=root, leaf_layer=leaf)
     check = {**check, "leaf_layer": leaf}
@@ -905,13 +905,18 @@ def test_a_history_source_is_the_root_the_verifier_computes():
     assert lean().get("codes") == []
     tampered = _history(body_flip=True)[0]
     for change in ({"history": tampered},
+                   {"history": {**hist, "registered": {"k_hist": "00" * 64}}},
                    {"supplied": {"pouw.roots": [[{"history": "k/root"}, {"value": "W"}]] * 2}},
                    {"supplied": {"pouw.roots": [[{"history": "k_hist/rows"}, {"value": "W"}]] * 2}},
                    {"history": {**hist, "extra": 1}},
                    {"leaf_layer": None}):
-        with pytest.raises(ValueError):
-            R.check(rec, **{**check, "supplied": sup, "history": hist, **change})
+        args = {**check, "supplied": sup, "history": hist, **change}
+        with pytest.raises(R.HistoryRefused):
+            R.check(rec, **args)
         assert "refused" in lean(**change), change
+        got = V.check(rec, **args)
+        assert not got.ok and got.codes == (R.HISTORY,), (change, got)
+        assert got.verifiers["lean"].keys() == {"refused"} and got.verifiers["python"].keys() == {"refused"}
 
 
 def test_a_supplied_value_is_the_records_own_not_the_logs():

@@ -202,6 +202,14 @@ def receipt(rec: Mapping[str, Any], verifier: str, received: str | None = None) 
             "received": received or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
 
 
+HISTORY = "R7-history"
+"""The verifier's code for a registration whose history tables both its verifiers refuse (`verifier.check`)."""
+
+
+class HistoryRefused(ValueError):
+    """History tables `check` can't read, or whose roots it can't hold to the ones the window registers."""
+
+
 def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
           ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
           log: Iterable[Mapping[str, Any]] = (), partition: Mapping[str, Any] | None = None,
@@ -248,7 +256,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     "tables"}``, `history.roots_of`), each table's root computed from its writers' public bodies the leaf layer binds
     and held to the root the window registers for it, which needs `leaf_layer`; a supplied value's source
     ``{"history": "H/root"}`` or ``{"history": "H/domain"}`` is then the bytes of the root or domain id it computed for
-    table ``H`` (`history.resolve`).  R3
+    table ``H`` (`history.resolve`).  History tables it can't read or hold to their roots raise `HistoryRefused`, which
+    the verifier reports as `HISTORY` where its Lean refuses them too.  R3
     reads `ports` by name, so its codes come in the ports' sorted order whatever order the mapping has, as the Lean port
     reads them."""
     c = _Collect()
@@ -259,11 +268,14 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     supplied, outputs, schemas = pool_values(pool, program, supplied, outputs, schemas, log)
     if history is not None:
         if not isinstance(history, Mapping) or set(history) != {"digests", "held", "registered", "tables"}:
-            raise ValueError("the keys of the history tables are not digests, held, registered, tables")
+            raise HistoryRefused("the keys of the history tables are not digests, held, registered, tables")
         if leaf_layer is None:
-            raise ValueError("history tables are read from members' public bodies the leaf layer binds: the verifier "
-                             "names no leaf_layer")
-        supplied = HT.resolve(HT.roots_of(leaf_layer, history), supplied)
+            raise HistoryRefused("history tables are read from members' public bodies the leaf layer binds: the verifier "
+                                 "names no leaf_layer")
+        try:
+            supplied = HT.resolve(HT.roots_of(leaf_layer, history), supplied)
+        except ValueError as e:
+            raise HistoryRefused(str(e)) from e
     sup = G.sources(supplied if supplied is not None else {})
     if supplied is not None and not v2:
         raise ValueError("supplied values are registered values: the verifier expects none registered")

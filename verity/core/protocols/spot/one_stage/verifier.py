@@ -8,7 +8,8 @@ every call, both outcomes are recorded beside the one of record (a `Verdict`'s `
 alone, or an audit record that does not accept, has no profiles and fails its `verifiers` check. Lean that can't be built
 or run, or that refuses an input (a form its decoders don't read), disagrees with any Python outcome: it fails closed.
 
-* `check`: R1-R7 (`registration.check`), compared on `ok` and the codes; the details are Python's (the Lean reports codes);
+* `check`: R1-R7 (`registration.check`), compared on `ok` and the codes; the details are Python's (the Lean reports codes).
+  History tables both refuse are the registration's refusal, `R.HISTORY`, with both reasons; one refusing alone disagrees;
 * `matches_public`, `check_draw`, `check_proved`, and the proof system's public-items rule (`check_public`) and hold on
   an outcome's verdicts (`check_verdicts`), whose Python verdict the service passes in: compared whole, details included;
 * `select`: the challenger's sample (`service.select_draw`, which the service passes in with the bytes of its coins that
@@ -281,11 +282,17 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     """`registration.check` (R1-R7) by the verifier, with R2's declared day when it passes `day` and `declarations`,
     R6's seed salt when it passes `seed_salt`, R6's pool reset, week and spent mark, a reset at most once a week,
     and R7's pool chain when it passes `pool`, and the roots of the history tables it passes as `history`, which the
-    Lean computes from the members' public bodies and puts in place of the supplied values' `history` sources."""
+    Lean computes from the members' public bodies and puts in place of the supplied values' `history` sources. History
+    tables both verifiers refuse fail it with `R.HISTORY` alone."""
     log = list(log)
-    py = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
-                 supplied, pinned, binding, outputs=outputs, schemas=schemas, window_root=window_root, held=held,
-                 day=day, declarations=declarations, seed_salt=seed_salt, pool=pool, history=history)
+    try:
+        py: Verdict | None = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
+                                     work_table, registered, supplied, pinned, binding, outputs=outputs, schemas=schemas,
+                                     window_root=window_root, held=held, day=day, declarations=declarations,
+                                     seed_salt=seed_salt, pool=pool, history=history)
+        why = None
+    except R.HistoryRefused as e:
+        py, why = None, str(e)
     got = lean("registration", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
                                                   work_table, registered, supplied, pinned, binding, schemas,
                                                   window_root, held, outputs, day, declarations, seed_salt, pool,
@@ -293,6 +300,11 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
                        "record": dict(rec)})
     if "codes" in got:
         got = {"ok": not got["codes"], "codes": got["codes"]}
+    if py is None:
+        verifiers = {"of_record": RECORD_VERDICT, "lean": _summary(got), "python": {"refused": why}}
+        if "refused" in got:
+            return Verdict(False, (R.HISTORY,), {R.HISTORY: {"lean": got["refused"], "python": why}}, verifiers)
+        return Verdict(False, (DISAGREE,), {DISAGREE: {"lean": dict(got), "python": {"refused": why}}}, verifiers)
     return _decide(got, py, whole=False)
 
 
