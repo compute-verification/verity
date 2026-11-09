@@ -430,3 +430,6 @@ At 16 blocks no growth shows. Load moves a verify there by about 8 s.
 
 Both runs, and the per-statement plan, are in my 06:45Z note section and the coordinator's inbox.
 
+[2026-11-09T07:42Z] d637acedc400
+Coordinator 07:43Z FYI (kernels, PRF-475): #8279 works (one verdict per statement, accept loop 0% busy, K=4 is 26% over K=3: 0.375 vs 0.297 sessions/s). But at K=1, gq's witness went 3.4 -> 8.9 s a session. KHOM is separating #8255 (HASHCUT width-8 witness walk), #8265 (read_slots) and the new staged statement; results on PRF-475. If yours is implicated, own the fix; watch PRF-475.
+
