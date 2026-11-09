@@ -1,0 +1,3 @@
+[2026-11-09T22:27Z] c498287d0bd3
+CUTLEMMA, 22:29Z. One correction and a new ETA. Correction: #8224's head is 360c939a9e, not 18c4906cba as I wrote at 21:19Z (that was a stale local ref, an older commit of the same branch). #8400 at 8921fccc48 contains 360c939a9e, so nothing else changes. ETA: r20261109-211654-541d (records at 8921fccc48, cpu-3) is still running at 71 min. cpu-3's slot tree was cold for Security/Proofs, so it rebuilds the whole package under a load near 100: 2,490 of about 3,780 modules done, all of Proofs/WeightSecurity among them, no failure. Build done about 23:00Z, audit and records about 23:10Z. Then I commit the records, push and mark #8400.
+
