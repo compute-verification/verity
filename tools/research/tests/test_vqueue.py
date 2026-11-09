@@ -237,7 +237,8 @@ def test_a_lone_member_reruns_only_its_own_failures_and_is_ejected_at_once_when_
     assert acts == [Eject(5, "h5", "suite:5 failed, and its changed files meet their inputs, no other member's", (hit,)),
                     Drop("c1", "failed: suite:5", Outcome((5,), heads(5), FAIL, (5,), MAIN))]
     nameless = Failed("t", "", frozenset({"elsewhere/"}))
-    assert kinds(decide(snap(cand("c1", MAIN, 5, state=FAIL, failed=(nameless,)), ready=prs(5)))) == [Eject, Drop]
+    acts = decide(snap(cand("c1", MAIN, 5, state=FAIL, failed=(nameless,)), ready=prs(5)))
+    assert kinds(acts) == [Eject, Drop] and acts[0].why.startswith("t failed alone at h5, and no failing task's inputs meet")
 
 
 @pytest.mark.parametrize("before", [
