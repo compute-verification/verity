@@ -21,10 +21,14 @@ def tables(data: dict) -> list[tuple[list[str] | None, dict[str, str]]]:
 
 def meet(a: list[str] | None, b: list[str] | None) -> bool:
     """Whether two tables can rename in one file: [words] meets every table, and two globs meet when one matches the
-    other or both hold a wildcard (no tree is read, so two patterns are taken to share a file)."""
-    wild = re.compile(r"[*?\[]")
-    return a is None or b is None or any(x == y or R._match(x, y) or R._match(y, x) or (wild.search(x) and wild.search(y))
-                                         for x in a for y in b)
+    other or both hold a wildcard and neither's text before its first wildcard rules out the other's (no tree is read,
+    so two such patterns are taken to share a file)."""
+    def head(g: str) -> str:
+        return g[:m.start()] if (m := re.search(r"[*?\[]", g)) else g
+
+    def both(x: str, y: str) -> bool:
+        return head(x) != x and head(y) != y and (head(x).startswith(head(y)) or head(y).startswith(head(x)))
+    return a is None or b is None or any(x == y or R._match(x, y) or R._match(y, x) or both(x, y) for x in a for y in b)
 
 
 def everywhere(data: dict) -> R.Words:
@@ -78,7 +82,7 @@ def test_maps_that_agree_or_compose_pass_and_a_second_name_is_found():
         "'Redraw': b.toml renames it to 'Resample', which c.toml makes 'Resample'; c.toml renames it to 'reroll', which "
         "b.toml makes 'reroll'"]
     apart = {"d.toml": {"words": {}, "words_in": [{"files": ["Security/A.lean"], "words": {"Session": "Run"}}]},
-             "e.toml": {"scope": "prose", "words": {}, "words_in": [{"files": ["bench/x.py"], "words": {"session": "phase"}}]}}
+             "e.toml": {"scope": "prose", "words": {}, "words_in": [{"files": ["bench/**"], "words": {"session": "phase"}}]}}
     assert two_names(apart) == []
     assert two_names({**apart, "f.toml": {"words": {}, "words_in": [{"files": ["Security/*.lean"],
                                                                      "words": {"session": "attachment"}}]}}) == [
