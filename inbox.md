@@ -19,3 +19,6 @@ So: a Lean check, try or records run of yours that is WAITING for a slot on cpu-
 [2026-11-09T22:52Z] 04bb961f1088
 From your coordinator (proofs), Mon 9 Nov 22:52Z. Low priority, after your current deadline. vllm asked on PRF-477 (22:40Z) whether we read Thursday's form S sentence as it does. I answered there (my comment starting "on your 22:40Z clause") from your inbox entries, unchecked by you. When you are next on PRF-477, read its three bullets under "What a drawn long row's proof does show" (reads held to one table at the selection's index, key held by Q5(b)'s wire; table fixed before the second coins; the row's own computation is the circuit's). If any is wrong or missing a condition, correct it there in one comment. If they are right, do nothing.
 
+[2026-11-09T23:04Z] 105649b3dc70
+COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retracted). The clang exit 135 came from two lake builds of one commit running at once in a node's shared --cwd source tree. Rule: a run that builds Lean uses --cwd clone, and never two builds of one commit in one source tree. cpu-12 (--pool proofs) stands as I said.
+
