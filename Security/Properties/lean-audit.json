@@ -129,6 +129,22 @@
    "digest": "989296ea620a9031aaee6272fced0dac71d6df4f44d1ca6a5b0e3af490f80dcd",
    "why": "The requests the capped point describes: disjoint, those reading in each replay block serving at most its class's cap."
   },
+  "Verity.Sampled.Instance.LogOpensRecorded": {
+   "owner": "@soundness",
+   "why": "The deployments the guarantee describes, by ruling: at each session's accepted play, the device's log opens only the rounds the record v2 parses holds."
+  },
+  "Verity.Sampled.Instance.RegisteredFiles": {
+   "owner": "@soundness",
+   "why": "The deployments the guarantee describes: the registered files are the ones the parameters' digests name, so they pass the file check wherever some files do."
+  },
+  "Verity.Sampled.Instance.SessionRegistered": {
+   "owner": "@soundness",
+   "why": "The deployments the guarantee describes: each session the deployment runs is the one v2 sets up on the registered files wherever an accepted play names them."
+  },
+  "Verity.Sampled.Instance.SessionsReady": {
+   "owner": "@soundness",
+   "why": "The deployments the guarantee describes: each session's files give `sha512/row/v2` or `sha512/row-seg/v1` rows, 64-byte frame-v3 domains, two leaves a port, distinct roots and rows under 2^64 bits."
+  },
   "Verity.Vocab.ComponentBound": {
    "owner": "@soundness",
    "digest": "6f08422ff25bd88205b76fb28cc64d58c5a1d3cfb9be719b2ad8a2e1793896d5",
@@ -818,7 +834,7 @@
    "Verity.Assumptions.VerifierReadsLog": "the honest verifier server's log and flip order: the verifier reads its coins only from the challenger's log, in order"
   },
   "extra": {
-   "Verity.remote_soundness_of_subprotocols": {
+   "Verity.Sampled.remote_soundness_deployedReady": {
     "Hash.Assumptions.LmsUnforgeable": "the remote verifier never talks to the onsite devices and gets each device's LMS signature only as a witness inside the proof, so the signature's unforgeability is the remote audit's to trust"
    }
   }
@@ -829,7 +845,7 @@
   "Pous.Period.SecurityProofs.periodHeldDeployed",
   "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
   "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-  "Verity.remote_soundness_of_subprotocols"
+  "Verity.Sampled.remote_soundness_deployedReady"
  ],
  "trust_gap": {
   "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": ["Pous.P2.Assumptions.CoinCommitHides", "Pous.P2.Assumptions.P2RingAuditSecure"],
@@ -873,7 +889,7 @@
    "Accounting.Remote.Held.Assumptions.SketchBoundAt",
    "Accounting.Remote.Held.Assumptions.SquaringCeiling"
   ],
-  "Verity.remote_soundness_of_subprotocols": ["Verity.Vocab.InferenceOnlySound", "Verity.Vocab.PouwSound", "Verity.Vocab.SpotSound"]
+  "Verity.Sampled.remote_soundness_deployedReady": ["Verity.Vocab.InferenceOnlySound", "Verity.Vocab.PouwSound"]
  },
  "meaning": [
   "Properties.Flock.Circuit.CircuitOf",
@@ -1175,6 +1191,10 @@
   "Properties.Spot.SecurityProofs.tablesRegistered": {
    "honest": ["Properties.Spot.SecurityProofs.tablesRegistered_honest"],
    "nontrivial": "Properties.Spot.SecurityProofs.tablesRegistered_nontrivial"
+  },
+  "Verity.Sampled.remote_soundness_deployedReady": {
+   "honest": ["Verity.Sampled.remote_soundness_deployedReady_honest"],
+   "nontrivial": "Verity.Sampled.remote_soundness_deployedReady_nontrivial"
   }
  },
  "unwitnessed": {
@@ -9133,6 +9153,15 @@
    },
    "type_hash": "23c90163ce0ce5bf32092c7991c22c1c14e1f7ea0218481d085e896120957872"
   },
+  "Verity.Sampled.remote_soundness_deployedReady": {
+   "owner": "@soundness"
+  },
+  "Verity.Sampled.remote_soundness_deployedReady_honest": {
+   "owner": "@soundness"
+  },
+  "Verity.Sampled.remote_soundness_deployedReady_nontrivial": {
+   "owner": "@soundness"
+  },
   "Verity.coins_couple": {
    "owner": "@soundness",
    "signature": ["Verity.coins_couple : Verity.CoinsCouple"],
@@ -11203,7 +11232,8 @@
    "Verity.wipe_target": "frozen (premise): the wipe's target at a verdict in the causal game (Verity.WipeTarget: Verity.Vocab.TargetFor) from the wipe's survivor bound over its own draw (Verity.Wipe.SurvivorBound) and its coupling to the play (Verity.Vocab.WipeCoupling: Verity.Wipe.OfRun.Preserves, which reads the foreign content as uniform on the play, the wipe's verdict refining the verdict, and the survivor error within the wipe's); both are hypotheses until the wipe's piece proves them",
    "Verity.soundness_of_upFront": "frozen (premise): Verity.soundness_at_of_targets's union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOfUpFront: Verity.Vocab.SoundnessAt), from each of the composite's subprotocols' bound at its compiled component, over the coins drawn up front, or as its target (Verity.Vocab.SubprotocolBound: Verity.Vocab.ComponentBound, Verity.Vocab.UpFrontBound or Verity.Vocab.Target); each bound is a hypothesis until its subprotocol's piece proves it",
    "Properties.Served.SampleMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.sampleMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
-   "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.RegisteredCircuitRequirement's game, premises and bound (its frozen reason in Security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.RemoteAudit.ScheduleLayoutGap and, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check."
+   "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.RegisteredCircuitRequirement's game, premises and bound (its frozen reason in Security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.RemoteAudit.ScheduleLayoutGap and, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
+   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets) and the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered, LogOpensRecorded) as domain premises; it takes the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote) as hypotheses until each is proved"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
