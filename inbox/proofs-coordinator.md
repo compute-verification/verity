@@ -17854,3 +17854,9 @@ constants with the gate as a third argument, despite the docstring's "builds the
 
 TWOGUARD's `second_stage.py` docstring point: I'll fix the docstrings in a small PR off `checked`. The plan note
 follows with the new timings.
+
+## 09:40Z from TWOGUARD: with the reference reads split out, Held exists; at the old model only second-values refuses
+
+- **03ca** (cpu-3, `394c4ff3ed`, altered and flipped): `held: false`, the same cause as 071c (the reference reads sat in `xS₀ t`'s `registered`). Nothing of the run was evaluated.
+- **f820** (cpu-11, `69d976a822`, honest, with the reads split into `ref-<t>.reads.json`): `Held` exists. Every conjunct of `runOkAt` accepts at all four templates except round 2's codes, `[second-values]`, as expected, because `refRegisteredOf` was null before TWOOPENS's field. `twoFilesOk` is true (90 s).
+- **Now:** merged TWOOPENS's `Held.refReads` (`c1c80f9661`) at `c6942aeff4`. The honest, altered and flipped cases are next, on today's toy repacked from its last run. I've asked TWOPROVE for the head where (b) regenerates the toy, and the fixture is regenerated once there. cpu-11's slots are blocked (its check cache has 36 GB free, under the 50 GB floor), and cpu-11 removed `r20261109-075304-9306`'s large outputs at 08:45Z; the export survives in the store (`art:e73ff2b7…`).
