@@ -181,11 +181,6 @@
    "digest": "393604a253c16a5bf33cba09422d67348f39084ac2e3d341b18e4d07faf93f7c",
    "why": "A separator, the subject of the influence lemma."
   },
-  "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR": {
-   "owner": "@proofs",
-   "digest": "c29b27d7b194c783ad2a91b68e032b214dd164a06bdab08e740dce2f9544d569",
-   "why": "`flock-verify --zk --registered` accepts."
-  },
   "Hash.EmbeddingRead.ok": {
    "owner": "@proofs",
    "digest": "55db410ca03b42f0bcbc44ddb6f42663d04a21375939217812faf046819f1401",
@@ -1998,6 +1993,12 @@
    "digest": "0305188a9c2c597afd37edf4f5a3a72f56407795cb035aab97f9e84167e2697c",
    "issue": "LEAN-186",
    "due": "2026-11-30"
+  },
+  "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR": {
+   "owner": "@proofs",
+   "digest": "c29b27d7b194c783ad2a91b68e032b214dd164a06bdab08e740dce2f9544d569",
+   "issue": "PRF-471",
+   "due": "2026-11-13"
   },
   "FlockSoundness.Discharge.ZkReg.OwnReadsH": {
    "owner": "@proofs",
@@ -4412,6 +4413,14 @@
   "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted": {
    "honest": ["NetTiming.Witness.PeriodLeakAccepted_honest"],
    "nontrivial": "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial"
+  },
+  "Flock.SecurityProofs.EndToEndRegistered": {
+   "honest": ["Flock.SecurityProofs.EndToEndRegistered_honest"],
+   "nontrivial": "Flock.SecurityProofs.EndToEndRegistered_nontrivial"
+  },
+  "Flock.SecurityProofs.EndToEndRegisteredDrawn": {
+   "honest": ["Flock.SecurityProofs.EndToEndRegisteredDrawn_honest"],
+   "nontrivial": "Flock.SecurityProofs.EndToEndRegisteredDrawn_nontrivial"
   }
  },
  "unwitnessed": {
@@ -4930,14 +4939,6 @@
   "Flock.SecurityProofs.EndToEndHiddenFlat": {
    "type_hash": "375eda7a4fb2d0787fec565a444edfa7fcedaf9ab88e07a18892411cb562199b",
    "unfolded_hash": "565e0170b7dbf520cbbf1216f95676f27e48fc5b7f72a79f08463626d4c0d735"
-  },
-  "Flock.SecurityProofs.EndToEndRegistered": {
-   "type_hash": "d34a654d92785b037477ecbb7b8edc9da63a9324a6b281174383dfdf496a9e91",
-   "unfolded_hash": "9583f20a8dadaf5c510b00fa3d3b16c3af8518c68c058b44c581796872decdb6"
-  },
-  "Flock.SecurityProofs.EndToEndRegisteredDrawn": {
-   "type_hash": "5af258b4edf35bdc24ef90dd56ead302a83b3ae798a0b367538a5134c6f31c23",
-   "unfolded_hash": "d6134552afb34fcc71e2b17e9011d4160dfcfa7e1a12eaba2ff380a8f6b18b78"
   },
   "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat": {
    "type_hash": "88c47eba72b89cb5a868f2d7e619aa0dcbf84dd413625703e5d758884812fb48",
@@ -14122,17 +14123,18 @@
      "FlockSoundness.Assumptions.SHA512CRStrict",
      "FlockSoundness.Assumptions.UniformRandomBytes"
     ],
-    "domain": ["FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR"],
+    "domain": [],
     "open": [
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
+     "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR",
      "FlockSoundness.Discharge.ZkReg.OwnReadsHJ"
     ],
     "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
    },
    "type_hash": "d34a654d92785b037477ecbb7b8edc9da63a9324a6b281174383dfdf496a9e91",
-   "unfolded_hash": "9583f20a8dadaf5c510b00fa3d3b16c3af8518c68c058b44c581796872decdb6"
+   "unfolded_hash": "6e2e04806dca8789de41fb0b45ba59e8dbd7bcea5f4cafa74fdeb036e61ef176"
   },
   "Flock.SecurityProofs.EndToEndRegisteredDrawn": {
    "owner": "@proofs",
@@ -14140,17 +14142,18 @@
    "assumptions": [],
    "premises": {
     "assumptions": ["FlockSoundness.Assumptions.SHA512CRExpected", "FlockSoundness.Assumptions.SHA512CRStrict"],
-    "domain": ["FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR"],
+    "domain": [],
     "open": [
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
+     "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR",
      "FlockSoundness.Discharge.ZkReg.OwnReadsHJ"
     ],
     "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
    },
    "type_hash": "5af258b4edf35bdc24ef90dd56ead302a83b3ae798a0b367538a5134c6f31c23",
-   "unfolded_hash": "d6134552afb34fcc71e2b17e9011d4160dfcfa7e1a12eaba2ff380a8f6b18b78"
+   "unfolded_hash": "7e1e5eaae01fc20a2fd6224d77f75defea93604c67ad2c900baeb736b69e687f"
   },
   "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat": {
    "owner": "@proofs",
@@ -14158,17 +14161,83 @@
    "assumptions": [],
    "premises": {
     "assumptions": ["FlockSoundness.Assumptions.SHA512CRExpected", "FlockSoundness.Assumptions.SHA512CRStrict"],
-    "domain": ["FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR"],
+    "domain": [],
     "open": [
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
+     "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR",
      "FlockSoundness.Discharge.ZkReg.OwnReadsHJ"
     ],
     "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
    },
    "type_hash": "88c47eba72b89cb5a868f2d7e619aa0dcbf84dd413625703e5d758884812fb48",
    "unfolded_hash": "a3fe7c62dc4e966d886c03335e0646b0a82c45ebbff2aecb1fa0f72e16ee88a1"
+  },
+  "Flock.SecurityProofs.EndToEndRegisteredDrawn_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SecurityProofs.EndToEndRegisteredDrawn_honest :",
+    "  And (FlockSoundness.Built FlockSoundness.Discharge.ZkReg.Witness.unitNet)",
+    "    (And (FlockSoundness.Discharge.ZkHidden.TagsOkZHJ FlockSoundness.Discharge.ZkReg.Witness.ins)",
+    "      (And",
+    "        (∀ {mPts : Nat} {C : Verity.Boolean.Circuit} {n : Nat} (P : FlockSoundness.Audit.Partition C n) {Reg : Type}",
+    "          (planZ : Finset (Fin n) → Reg → List (FlockSoundness.Discharge.ZkSession.TabZK FlockLevel3.GF128 mPts))",
+    "          (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length) {L : FlockSoundness.Audit.Law n}",
+    "          {decode : FlockSoundness.Discharge.ZkSession.DecoderZK planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}",
+    "          (vb : FlockSoundness.Discharge.ZkLink.ValueBindingZ FlockSoundness.execArith P planZ tab decode Hc) (R : Reg)",
+    "          (τ :",
+    "            FlockSoundness.Audit.Cont L Reg",
+    "              (FlockSoundness.Discharge.ZkLink.batchedSessionZC FlockSoundness.execArith",
+    "                FlockSoundness.Discharge.ZkExec.hs512 planZ)",
+    "              R)",
+    "          (k Rw M : Nat),",
+    "          FlockSoundness.Discharge.ZkLink.LinkCRZC FlockSoundness.execArith FlockSoundness.Discharge.ZkExec.hs512 P",
+    "            planZ tab vb R τ k Rw M (instHPow.hPow 2 256))",
+    "        (∀ {mPts : Nat} (T : FlockSoundness.Discharge.ZkSession.TabZK FlockLevel3.GF128 mPts)",
+    "          (pre post :",
+    "            List",
+    "              ((Fin 2 → Fin mPts → FlockLevel3.GF128) →",
+    "                Verity.Game",
+    "                  (FlockSoundness.Discharge.ZkLink.OutZC FlockLevel3.GF128 FlockSoundness.Refine.Dig (List UInt8))))",
+    "          (cap₀ : FlockSoundness.Model.Cap FlockSoundness.Refine.Dig)",
+    "          (σ :",
+    "            (FlockSoundness.Discharge.ZkLink.sessAtZ pre post",
+    "                (FlockSoundness.Discharge.ZkLink.tabAfterZC FlockSoundness.execArith",
+    "                  FlockSoundness.Discharge.ZkExec.hs512 T cap₀)).Strategy),",
+    "          FlockSoundness.Discharge.ZkLink.SessCRZ FlockSoundness.execArith FlockSoundness.Discharge.ZkExec.hs512 T pre",
+    "            post cap₀ σ (instHPow.hPow 2 257) (instHPow.hPow 2 257))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["FlockSoundness.Assumptions.SHA512CRExpected", "FlockSoundness.Assumptions.SHA512CRStrict"]
+   },
+   "type_hash": "4853151b27b3a333c517d6a92a5a2a46b94c32a504e0384a9ceea217a90c392a"
+  },
+  "Flock.SecurityProofs.EndToEndRegisteredDrawn_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SecurityProofs.EndToEndRegisteredDrawn_nontrivial :",
+    "  Exists fun o =>",
+    "    Exists fun rd =>",
+    "      Exists fun x =>",
+    "        Not",
+    "          (rd.Checked o.fst",
+    "            (FlockSoundness.Discharge.ZkReg.regPathsHJ FlockSoundness.Discharge.ZkReg.Witness.ins",
+    "              FlockSoundness.Discharge.ZkReg.Witness.circW FlockSoundness.Discharge.ZkReg.Witness.pubW o.snd.snd",
+    "              rd.port))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d795e518dda0bbfa34332aa6e31f2952ed3e5059536e85115a2616d3b5f32882"
   },
   "Flock.SecurityProofs.EndToEndRegisteredFlat": {
    "owner": "@proofs",
@@ -14180,11 +14249,12 @@
      "FlockSoundness.Assumptions.SHA512CRStrict",
      "FlockSoundness.Assumptions.UniformRandomBytes"
     ],
-    "domain": ["FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR"],
+    "domain": [],
     "open": [
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
+     "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR",
      "FlockSoundness.Discharge.ZkReg.OwnReadsHJ"
     ],
     "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
@@ -14223,6 +14293,71 @@
     "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
    },
    "type_hash": "9379a1081b06f17ac700b677afa3a3917e440e7d57dee670a1cab1b230c069ce"
+  },
+  "Flock.SecurityProofs.EndToEndRegistered_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SecurityProofs.EndToEndRegistered_honest :",
+    "  And (FlockSoundness.Built FlockSoundness.Discharge.ZkReg.Witness.unitNet)",
+    "    (And (FlockSoundness.Discharge.ZkHidden.TagsOkZHJ FlockSoundness.Discharge.ZkReg.Witness.ins)",
+    "      (And",
+    "        (∀ {mPts : Nat} {C : Verity.Boolean.Circuit} {n : Nat} (P : FlockSoundness.Audit.Partition C n) {Reg : Type}",
+    "          (planZ : Finset (Fin n) → Reg → List (FlockSoundness.Discharge.ZkSession.TabZK FlockLevel3.GF128 mPts))",
+    "          (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length) {L : FlockSoundness.Audit.Law n}",
+    "          {decode : FlockSoundness.Discharge.ZkSession.DecoderZK planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}",
+    "          (vb : FlockSoundness.Discharge.ZkLink.ValueBindingZ FlockSoundness.execArith P planZ tab decode Hc) (R : Reg)",
+    "          (τ :",
+    "            FlockSoundness.Audit.Cont L Reg",
+    "              (FlockSoundness.Discharge.ZkLink.batchedSessionZC FlockSoundness.execArith",
+    "                FlockSoundness.Discharge.ZkExec.hs512 planZ)",
+    "              R)",
+    "          (k Rw M : Nat),",
+    "          FlockSoundness.Discharge.ZkLink.LinkCRZC FlockSoundness.execArith FlockSoundness.Discharge.ZkExec.hs512 P",
+    "            planZ tab vb R τ k Rw M (instHPow.hPow 2 256))",
+    "        (∀ {mPts : Nat} (T : FlockSoundness.Discharge.ZkSession.TabZK FlockLevel3.GF128 mPts)",
+    "          (pre post :",
+    "            List",
+    "              ((Fin 2 → Fin mPts → FlockLevel3.GF128) →",
+    "                Verity.Game",
+    "                  (FlockSoundness.Discharge.ZkLink.OutZC FlockLevel3.GF128 FlockSoundness.Refine.Dig (List UInt8))))",
+    "          (cap₀ : FlockSoundness.Model.Cap FlockSoundness.Refine.Dig)",
+    "          (σ :",
+    "            (FlockSoundness.Discharge.ZkLink.sessAtZ pre post",
+    "                (FlockSoundness.Discharge.ZkLink.tabAfterZC FlockSoundness.execArith",
+    "                  FlockSoundness.Discharge.ZkExec.hs512 T cap₀)).Strategy),",
+    "          FlockSoundness.Discharge.ZkLink.SessCRZ FlockSoundness.execArith FlockSoundness.Discharge.ZkExec.hs512 T pre",
+    "            post cap₀ σ (instHPow.hPow 2 257) (instHPow.hPow 2 257))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["FlockSoundness.Assumptions.SHA512CRExpected", "FlockSoundness.Assumptions.SHA512CRStrict"]
+   },
+   "type_hash": "4853151b27b3a333c517d6a92a5a2a46b94c32a504e0384a9ceea217a90c392a"
+  },
+  "Flock.SecurityProofs.EndToEndRegistered_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SecurityProofs.EndToEndRegistered_nontrivial :",
+    "  Exists fun o =>",
+    "    Exists fun rd =>",
+    "      Exists fun x =>",
+    "        Not",
+    "          (rd.Checked o.fst",
+    "            (FlockSoundness.Discharge.ZkReg.regPathsHJ FlockSoundness.Discharge.ZkReg.Witness.ins",
+    "              FlockSoundness.Discharge.ZkReg.Witness.circW FlockSoundness.Discharge.ZkReg.Witness.pubW o.snd.snd",
+    "              rd.port))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d795e518dda0bbfa34332aa6e31f2952ed3e5059536e85115a2616d3b5f32882"
   },
   "Flock.SecurityProofs.IntegrityBlock": {
    "owner": "@proofs",
@@ -15389,10 +15524,11 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["Flock.SoundAtBridge.RowsSession.RowsAt", "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR"],
+    "domain": ["Flock.SoundAtBridge.RowsSession.RowsAt"],
     "open": [
      "Flock.SoundAtBridge.RowsSession.ServedRegistered",
-     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"
+     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
+     "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR"
     ],
     "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
    },
@@ -27279,7 +27415,8 @@
     "Eq (Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, the grandfathered premise `Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D` restated as `Flock.Desc.parseStmt … = .ok D` so EndToEndRegistered reads templated statements, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.EndToEndRegisteredDrawn": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -27287,7 +27424,8 @@
     "Eq (Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, the grandfathered premise `Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D` restated as `Flock.Desc.parseStmt … = .ok D` so EndToEndRegisteredDrawn reads templated statements, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -48934,11 +49072,45 @@
     "Flock.Guarantees.EndToEndHiddenFlat": "44d4f337abda69405eee890f4b36ba23b3a26c8d1c731e465976a85c99ea84ec"
    }
   },
-  "Proofs.Flock.EndToEndRegistered.Statement": {
-   "digest": "4c9cb9201afb8153fb8548f4b85364b2803ab0b6a2eefe324758e8982b08a36d",
+  "Proofs.Flock.EndToEndRegistered.Honest": {
+   "digest": "fca76d64172399b592438a2ba299c189276b82eb07975cabd22616cbfcc5e512",
    "definitions": {
-    "Flock.Guarantees.EndToEndRegistered": "140eafdb4eed05b6dc485dc46fc861aff5a4cf4be4f464fe1b52c4d5a1e7066b",
-    "Flock.Guarantees.EndToEndRegisteredDrawn": "ac10608024dc87e31abe279b0b30e8122f86fa7cd170febd691bae73456a4735",
+    "FlockSoundness.Discharge.ZkReg.Witness.unitNet": "7fc26b8048d20940f415b556f68fe9542a6c32d5c3d4dd2ee06e7d42a4af5998"
+   }
+  },
+  "Proofs.Flock.EndToEndRegistered.Inputs": {
+   "digest": "c062557f9ed0c2515e588842d46e35aaa35854ca8c690c95492eb4f447049c33",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkReg.Witness.ins": "b227e1ee79021ec0b3d76b56a759c1d5d4762b8fd679d6c91d449e6c191daf59"
+   }
+  },
+  "Proofs.Flock.EndToEndRegistered.Nontrivial": {
+   "digest": "09e772b79c7e64ed5f3bca4c5c085ba2f8da8b00fea61c4f97742d0a7b7a3187",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkReg.Witness.circ0": "6f630421827f23056834d7793830597a079915f493abc3d015238390bf0ba5f5",
+    "FlockSoundness.Discharge.ZkReg.Witness.circW": "9f31063c0427ecff76abe5f2ea683ae54567c9f9b22b218411807fd17501336b",
+    "FlockSoundness.Discharge.ZkReg.Witness.decode0": "f67c4255cfed036f8a254e7df34317d449f1a80a612db330919d0e7ad306ec8f",
+    "FlockSoundness.Discharge.ZkReg.Witness.jn": "23666f9f99dac613d70e59f70ba2d9d287903cb6743812883c8161a1c3448a21",
+    "FlockSoundness.Discharge.ZkReg.Witness.lay0": "026b2edc28c2ad750e467c8fb2d82807c7f63b016c9f32690e26a443208ccdd9",
+    "FlockSoundness.Discharge.ZkReg.Witness.own0": "12dec450709aa968cc00d76a23242a5f7fa78b988fe85b921b771b706ed90bda",
+    "FlockSoundness.Discharge.ZkReg.Witness.part0": "5aea9fb1ea80b7ea8f26b8ea435d41b6a207d88c96e9c10409bf4367897693ba",
+    "FlockSoundness.Discharge.ZkReg.Witness.pathW": "b4e5c4e4398fa3908a043c61c93915df704aa7a8c1f330b4d8b95128808be788",
+    "FlockSoundness.Discharge.ZkReg.Witness.payloadW": "e0ea79061cb020d3ab36adff7509456b2482a8c68f3264f63e9da03964b4d03b",
+    "FlockSoundness.Discharge.ZkReg.Witness.plan0": "8fa6421c643d41d9cc16f0c0e94ff9ed72681013e0f31e9cac69048cc79862c6",
+    "FlockSoundness.Discharge.ZkReg.Witness.portW": "fc24eb0263315aea6580ae1f00b190d5edeed51ad1599515f1f62543e6c4c0e1",
+    "FlockSoundness.Discharge.ZkReg.Witness.pubW": "68fc53d933e6901c3381bd9b081ac155361ac50f42f7d79547b2644687af5424",
+    "FlockSoundness.Discharge.ZkReg.Witness.q0": "d3d775d395c904db2b0b2ababbbbafa723ab11e6c02776fca098ecbb52f2fe8a",
+    "FlockSoundness.Discharge.ZkReg.Witness.rs0": "25310bf87b1fd8a4ff7e801621ed625d45164c1a0958bc59a6e606ac24ffd72e",
+    "FlockSoundness.Discharge.ZkReg.Witness.stmtW": "e672b87f45741b7ea3aa47ed54ff67a26dd79884a05305dc15724d37d9e07b27",
+    "FlockSoundness.Discharge.ZkReg.Witness.tab0": "91bac4c0639c89dfb46135aa27c892cadf99cd613bb1c838aa1227d91b31b9bc",
+    "FlockSoundness.Discharge.ZkReg.Witness.tabW": "a9dbe504a41c50ac1beb2fd6c47367f2adc00a86a78b71ca28af6d6d219c4124"
+   }
+  },
+  "Proofs.Flock.EndToEndRegistered.Statement": {
+   "digest": "d49a1528036cb320c0ff7b754954ebfeecd26a5137df1769f9d7cf69b0c26338",
+   "definitions": {
+    "Flock.Guarantees.EndToEndRegistered": "5271b025511da1584a8add4693715904a5f83945db7ef24e8fc130db86d32b19",
+    "Flock.Guarantees.EndToEndRegisteredDrawn": "d56c242ff8fd69f9bf55390b081684e46b229f130dbb7907d3d84276c78fa800",
     "Flock.Guarantees.EndToEndRegisteredDrawnFlat": "d8d54b928184e11e3198ca049bd3f37de5d931b79c364c1dd8813ba1f25b1e71",
     "Flock.Guarantees.EndToEndRegisteredFlat": "96e483de567485ca042e3c408fa4939c2035aca07c252e2a2b0b4a0be8253552"
    }
