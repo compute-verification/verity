@@ -17,8 +17,9 @@ the registered compiler's form keeps (`prune.dead_free`):
 - a dense-MHA prefill's queries skip the latent absorption, which is dead;
 - each Definition `prune.dead_free_versions` names is its dead-free version.
 
-Consts count, a pad block as its words. `tests/program/predict/test_template_counts.py` holds n_t to the built Programs' template
-partitions.
+Consts count, a pad block as its words. A const called alone (the select's settings under a seeded policy, a dense prefill's empty
+context) is a root primitive, one instance here, which `TemplatePartition` refuses. `tests/program/predict/test_template_counts.py`
+holds n_t to the built Programs' root nodes, and to their template partitions where the partition applies.
 """
 
 from __future__ import annotations
