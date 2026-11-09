@@ -854,3 +854,35 @@ beyond the three allowed, no sibling clash.
 
 Nothing is running now, and there are no marks. (c)–(e) wait for your call on the \(\lceil M/T \rceil\) form.
 
+[2026-11-09T20:08Z] 7ba8d140e5d6
+BINDKSAT (proofs), 20:12Z: the exponent. Draft ask (not posted): `lanes/proofs/20261109T2006Z-draft-ask-bind-exponent.md` (notes `b7b8cbde38`). I recommend A, the joint form over the two-stage audit, as V5 is proved, not reading SPOT's whole-run extractor.
+
+**Do today's figures assume x^M?** Yes. `total_cost._point` plans one two-stage design over all of the period's replay blocks at δ = 0.01, so the period's incorrect replay blocks are capped jointly at about ln(1/δ)/ρ.
+
+**Prices.** The (d) row at the 875 cap, 600 s phases, fused cut as the planner prices it, from run `r20261109-200233-965f` on cpu-4. Its joint rows reproduce BREAKEVEN's 8.45% and 8.28% exactly.
+- **(i) x^M:** world year 8.45% (the audit 4.06%, first-stage rate r₁ = 2.08e-6, 1.0e15 GPU-s). Datacenter year 8.28% (3.89%).
+- **(ii) ⌈M/T⌉ at T = 52,560 phases a year** (each phase at δ/T, the weights over T): world year 6,664× the world's compute (the audit 6,572×, r₁ = 0.36, 7.9e19 GPU-s). Datacenter year 6,340×. That is about 790× (i)'s total and 1,600× its audit.
+- **Today's served cut, card-priced:** (i) 94.75% / 86.24%. Under (ii) it reaches the weights at no β up to 10^4×; there the bound is still 14× / 12× the per-phase cap.
+
+**Effort for the strong form.** A strong form that reads SPOT's whole-run cut extractor doesn't exist at the post's scale.
+- **Why.** Read per committed state, that extractor loses c² = 1 + 2^(0.5−j) per extraction. SPOT[Flock] extracts per machine registration: 2^41.2 a world year, 2^29.3 a datacenter year. That gives c^(2R) = e^(2^31.7) at j = 10. Keeping it to +10% needs j ≈ 43, where the binding term is 2^-24 a run.
+- **What works.** V5 at two stages: each phase's sample misses m incorrect replay blocks with at most x^m (CapTwo), the commitments bind without rewinding, and each second-stage session's soundness is its own Flock KS. Its additive term is per session (Flock's extractor at 2^31.3 reruns, not the cut's W = 2^123.9), expected well below 2^-90 a run; it gets computed when stated.
+- **Pieces, in Lean lines:**
+  - the two-stage window game and its record, 450–600;
+  - the miss bound via CapTwo and `firstRate_subsetInputs`, 250–400;
+  - the sessions' bound, V5's member argument, 250–400;
+  - the period, `period_union` + `period_prod`, 100–150;
+  - the theorem at the post's design, Deployed/Pressure analogues, 250–400.
+  - Total 1,300–1,950 lines, plus records runs.
+- **Dates.** Two workers: on `main` by Fri 13 Nov is possible but tight. The critical path is the window, then the miss bound and the sessions' bound in parallel, then the theorem. One worker: about Tue 17 Nov.
+- **(ii) itself:** 600–1,000 lines, about Wed 11 Nov with one worker, but useless for the headline.
+
+**The middle form.** There is none from per-run KSAt plus independent phases. An always-accepted adversary that hides about 1/ρ incorrect replay blocks every phase meets every per-run tail bound with equality. So any period bound from tails needs M ≳ T/ρ, at least 11,000× the joint M at a year.
+- The supermartingale form, which reads the extractor's proof per committed state, is c^(2R)·x^M.
+- If one extraction covered a whole phase (R = T), the (d) row would be 73.3% at j = 10, 9.46% at j = 16 (binding 2^-33.5 a world year) and 8.51% at j = 20 (2^-25.5). Same run.
+- At SPOT[Flock]'s per-registration extraction it is vacuous.
+
+**Shared Lean:** the two-stage window and its record, which A needs and (ii) would too, are next on `cursor/proofs-hides-cc69`. The miss-bound pieces are already there: `KSAt.wrongBlocks_le` (try `r20261109-192936-9636`) and `firstRate_subsetInputs` (`r20261109-193612-fe6e`).
+
+Refs PRF-466 · Goal proofs/spot-bind-term
+
