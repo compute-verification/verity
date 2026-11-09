@@ -16412,3 +16412,31 @@ through `SamplingDeploy.ks_compiled` and its list-decoding hypothesis `hlist`; t
     nothing else on `checked` reads the pool's keys or `R6`'s conjuncts.
   - When the records pass, I commit them sha-checked, run the quick suites over that commit, mark it, and write its land
     ask. Its base is still #8220's branch; it can be retargeted to `main` now, and the mark counts either way.
+
+## 04:41Z from VERIFYFAST-B: the 2^37-row memory job is launched as r20261109-043748-1674, holding nothing until 09:30Z, table by about 10:45Z; parse-once held as decided; the K2048 pin is skipped because cpu-1 is busy
+
+- **Launched** r20261109-043748-1674 on vy-spot-glm53, detached. It holds nothing until 09:30Z, then stages rmsnorm-v8
+  at 256, 512 and 1,024 blocks into `/dev/shm`. It takes one GPU with `gpu_lease.sh 1 --wait --max-min` (at most 120,
+  ending by 17:30Z) and starts nothing after 16:00Z. Then it runs m = 35, 36 and 37 in that order at k = n, under M1.
+  - The table is `out/table.tsv`: per m, the device peak, the arena's capacity and high-water mark, the rest outside
+    it, the prover's and verifier's host peaks, and the cold and timed session seconds.
+  - Before m = 37 it predicts the device peak from m = 36's run. If that passes 140 GiB, m = 37 isn't started and the
+    table ends at m = 36.
+  - ETA: staged by about 09:50Z, the table by about 10:45Z (11:30Z at the latest).
+  - Checkpoint: `proofs/20261109T0436Z-checkpoint-verifyfast-b`. Note §8 now holds your decisions.
+- **A correction to my 03:41Z proposal.** Upstream registers Fast100 Ligerito configs only for m = 22 to 35, and the
+  prover's lookup is strict, with no fallback to `default_config`. So m = 36 and 37 would have panicked at the first
+  prove call.
+  - The measurement branch (`cursor/proofs-m37-measure-vfb`, 25a1421293; never a PR) derives both configs with
+    upstream's own `derive_profile` and registers just those two. m = 35's derivation reproduces the shipped TOML byte
+    for byte.
+  - Checked on node A's CPU before any GPU: the build took 161 s. rmsnorm-v8 staged at 1,024 blocks in 670 s at a
+    31.7 GB peak, with n not cut. `flock-circuit statement --zk --gpu` accepted it as m = 37 in 88 s, which passes the
+    prover's statement-time checks.
+- **A known risk.** Level 0 at m = 37 holds 2.28 × 10^9 F128 words, past 2^31. A signed 32-bit index anywhere in the
+  device path would fail there, and m = 36 (1.14 × 10^9) is the fallback point.
+- **K2048 at 64 instances: skipped.** cpu-1 was busy at 04:12Z and 04:38Z (load 49 to 80, Lean checks).
+  - PROVECUT (04:32Z, `proofs/20261109T0429Z-report-provecut-verifier-per-block`) priced the per-block verify term:
+    the base goes from 11.46% to 20.98% under the flat reading. PROVECUT backs the pin, plus the same 1, N, 1 run on one
+    small-block type and one large-I/O type, which would decide between its three readings (14.48% to 23.39%).
+  - If you want those on another lane node, name it. Each is about an hour of one CPU node, from my e2e16 harness.
