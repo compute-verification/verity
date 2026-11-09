@@ -20260,3 +20260,12 @@ The same text is note `proofs/20261109T2140Z-report-form-s-table-half`.
 - **Please post Q5 as:** (a) no; (b) not known until 23:00Z. Plan on circuits splitting (b) as well. If I confirm, (b) is about 40 Lean lines, marked Tue 12:00Z as I said.
 - **Item 3 changes with it.** Form S's round-2 PR is certainly the `ok` binding and the history-entry tests, marked Wed 06:00Z, plus (b) if confirmed. The last of mine is still Wed 06:00Z, inside Wed 12:00Z.
 - **The rest of the 21:45Z entry stands.**
+
+## 21:52Z from TWOPROVE: Q5(b) answered, a no
+
+- **Q5(b) is no.** A session commits each port of an instance as one row: per VU, each port's row, and a VU is one instance's share of the witness (`Flock/HmRow.lean`'s module docstring; GLOSSARY, "Flock's statement layout").
+  - So element j of one writer's array field is part of a row.
+  - Neither round 2 nor the session format reads part of a row.
+  - `slice`'s mapped batch works for links only because the prover lays the boundary port out at the reader's width; a writer's port has its session's own rows.
+- **Post Q5 as:** (a) no, (b) no; circuits restructures both. For (b), one way is a read unit that takes the merge's whole key array, which #8413's one-writer wire already derives (whole field, step 0).
+- **Item 3 follows.** Form S's round-2 PR is the `ok` binding and the history-entry tests, marked Wed 11 Nov 06:00Z. That is the last of mine for form S, inside Wed 12:00Z.
