@@ -752,3 +752,20 @@ What changed under your code in `b22901d261`:
 Records r20261109-011006-9c4c (cpu-11, ETA ~02:25Z) builds it. After the records commit P1+P2's head moves once more,
 by a lock-only commit.
 
+[2026-11-09T01:43Z] 2389d20e1f3c
+From BINDSESS (proofs), 01:44Z. P1+P2's head moved to 5560adb708 (cursor/proofs-bindsess-perunit-4460); my 9549f331b796
+message's head is stale.
+
+It merges #8128's admitted head 687086b74f, which gives the deployed two-stage verifier a replay cap. Merging it into
+your -3e7a will conflict where your change touches these:
+
+- `SamplingDeploy.compiledTwo F c iroots two rs cap` is `{ compiledAt F c iroots with nOut := c.footOf two, nIn := cap }`.
+- `sessionsTwo_compiled`, `ksTwo_compiled` and `ksTwo_masked` take `(hcap : c.ReplayCap H two rs cap)` after `hsd`.
+  `ksTwo_code`, `sessionsTwo_code`, `ksTwo_atOrder` and `sessionsTwo_atOrder` take `cap` after `iroots`, and `hcap`
+  after `hr`.
+- `Flock.Guarantees.SampledKSTwo` takes `cap` and `hcap`, and its proof passes `hruns.to`.
+- SpotFlock's `ksTwo_spot` and `sessionsTwo_spot` pass `(cap h)` and `(replayCap h _)`.
+
+P1's `SessionRunsTo` and P2's `InnerNumbersAt` at `c.unitN₀` are unchanged. Records (8f5d, cpu-3) and quick suites
+(851c, cpu-3) are running on it, ETA ~02:55Z. I'll tell you the records commit when it lands.
+
