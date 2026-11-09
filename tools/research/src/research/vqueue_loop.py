@@ -30,7 +30,11 @@ key and failing tests in its base's graph as graph2 listed it, where there are (
 ended once no gating task runs but behind an infra error; else a task whose newest result is graph2's infra error
 (`detail.infra`; graph2's `tree` where `Failed` has one) is infra, else every gating task passed is pass once graph2's own
 verdict, where it has one, can be read and counts none pending (`World._held`, which an inherited fail's end waits on too),
-else pending.  It is pending while its base's check isn't listed, or, with a failure, while graph2 says the base's listing
+else pending.  Whatever else it reads, it is pending while graph2's `verdict` lists a task it needs (on the gate, or read by
+one that is) as failed or infra that the loop read passed, at the key it made from what the task reads or by a label that
+says pass: graph2's word overrides a label only at graph2's key, and `--by executor` is self-asserted (`_disputed`), so it
+holds until the two agree.
+It is pending while its base's check isn't listed, or, with a failure, while graph2 says the base's listing
 failed, the graph it listed of the base can't be read, or a task there hasn't ended, unless it or what it reads there ended in
 an infra error (`World._base`): no failure is the candidate's own, so none ejects or bisects, until the base's keys say.  The
 loop enqueues such a base's check again each `BASE_RETRY_S` while a candidate waits on it for want of its graph, and rings
@@ -65,13 +69,14 @@ graph2's `rerun` it is logged `absent`, and counts as done.  Ring tells `drive.I
 why; a ring to an owner is held, only logged, while another candidate's check or the run beside `main`'s reads infra in the
 same tick, as in an outage (`Loop._outage`); a base candidates wait on for want of its graph is rung to `CI` and
 `drive.INFRA`, once a base and why: at once when its listing failed or its graph can't be read, and when it still isn't listed
-`BASE_RING_S` after it was first asked for (`Loop._bases`).  Red tells `CI` and the owners of what the base fails (as drive
-names them: a test file's suite's, else its job's) that it is red on them, once a base and task.  A test graph2's verdict
-says flaked (`flaky`: a fail a rerun replaced) is told to its file's owner in drive's registry and `CI`, once a key: a test
-that flakes is deleted.  A skip's, ring's, red's or flake's message is logged as about to be posted (`posting`) before it is,
-and its record says whether it was (`posted`): one whose tick stopped in between is told, so no one is told twice, and one
-whose post failed is told again.  Each action and its result is one JSON line in the log, whose directory also holds the
-loop's caches.
+`BASE_RING_S` after it was first asked for (`Loop._bases`); a task a candidate is held on because graph2's verdict and the
+loop's reading disagree on it is rung to `CI` with both keys and both readings, once each (`Loop._disputes`).  Red tells
+`CI` and the owners of what the base fails (as drive names them: a test file's suite's, else its job's) that it is red on
+them, once a base and task.  A test graph2's verdict says flaked (`flaky`: a fail a rerun replaced) is told to its file's
+owner in drive's registry and `CI`, once a key: a test that flakes is deleted.  A skip's, ring's, red's or flake's message
+is logged as about to be posted (`posting`) before it is, and its record says whether it was (`posted`): one whose tick
+stopped in between is told, so no one is told twice, and one whose post failed is told again.  Each action and its result
+is one JSON line in the log, whose directory also holds the loop's caches.
 
 `--shadow` logs advance, eject, ring, red, flake and every message with `shadow: true` and does none of them, and builds,
 drops, retries, reruns and starts the runs beside: its `main` is the newest candidate it advanced (`refs/vqueue/shadow` in the
@@ -343,13 +348,27 @@ class BaseWait:
         return f"{self.why} ({self.detail})" if self.detail else self.why
 
 
+@dataclass(frozen=True)
+class Dispute:
+    """A task graph2's `verdict` says ended ``said`` (fail or infra) at its key ``theirs`` that the loop's own reading passed at
+    the key it read, ``ours`` (`_disputed`): its candidate is held until the two agree, and `CI` is rung (`Loop._disputes`)."""
+    task: str
+    said: str
+    theirs: str
+    ours: str
+
+    def __str__(self) -> str:
+        return f"graph2 says {self.task} {self.said} at {self.theirs}, and the loop reads it {PASS} at {self.ours}"
+
+
 @dataclass
 class Judged:
     """A candidate's verdict with what it rests on: ``mark`` names the terminal infra or list-failed evidence a retry answers,
     ``graph2`` is graph2's own verdict (``theirs`` its whole JSON), ``lacks`` the jobs `main` waits for (`drive.gating`) that no
     task of the graph runs, which drive's `executor = "on"` path takes as no promotion and this verdict as list-failed, and
     `kind K` of each kind of task its base's graph lists that it lists none of (`World._gone`), ``waits_on`` the base whose
-    check its verdict waits on and why, where the loop acts on it (`BaseWait`), and ``slim`` the verdict of the run beside
+    check its verdict waits on and why, where the loop acts on it (`BaseWait`), ``disputed`` the tasks it is held on, which
+    graph2's verdict says failed or erred and the loop read passed (`Dispute`), and ``slim`` the verdict of the run beside
     the check (`vqueue_slim.judge` on its ``record``; pending until it starts), combined into ``verdict``."""
     verdict: Verdict
     mark: str | None = None
@@ -362,6 +381,7 @@ class Judged:
     slim: Verdict | None = None
     record: dict | None = None
     waits_on: tuple[str, BaseWait] | None = None
+    disputed: tuple[Dispute, ...] = ()
 
 
 class _Seen:
@@ -655,7 +675,7 @@ class World:
                 bad += closure.fails(i, failed) or [i]
         infra = [i for i in needed if states[i][0] == PENDING and _infra(seen.got.get(keys[i]) or (), keys[i])]
         erred = frozenset(infra)
-        held = self._held(theirs)
+        held, disputed = self._held(theirs), _disputed(theirs, needed, states, keys)
         ran = all(states[i][0] != PENDING or closure.meets(i, erred) for i in gates)
         passed = all(states[i][0] == PASS or i in allowed for i in gates)
         ended = ran and held is None
@@ -673,7 +693,9 @@ class World:
                      tests=_tests(states[i][1]) | named.get((i, keys[i]), frozenset()),
                      base_tests=based.get(i, (None, None))[1]) for i in dict.fromkeys(bad))
         down = tuple(_failure(i, keys[i], closure.inputs(i), tree=tree.get(i, False)) for i in infra)
-        if fail and not (missing and all(_inherited(f) for f in fail)):    # a fail of its own ejects all the same
+        if disputed:
+            mine = Verdict(PENDING)
+        elif fail and not (missing and all(_inherited(f) for f in fail)):    # a fail of its own ejects all the same
             mine = Verdict(FAIL, fail, down, ended=ended)
         elif missing:
             mine = Verdict(LIST_FAILED)
@@ -692,11 +714,12 @@ class World:
                           *([f"no task of {', '.join(lacks)}, which `main` waits for"] if lacks else []),
                           *([f"no task of kind {', '.join(gone)}, which its base lists"] if gone else []),
                           *([f"waiting for its base {base[:12]}: {waits}"] if waits is not None else []),
+                          *([f"held until graph2 and the loop agree: {'; '.join(map(str, disputed))}"] if disputed else []),
                           *([f"held: {held}"] if held is not None and (mine.state == PENDING and passed
                                                                        or mine.state == FAIL and ran) else []),
                           *([f"allowed: {', '.join(sorted(allowed))}"] if allowed else [])])
         return Judged(mine, mark=mark, note=note, graph2=said, lacks=missing, theirs=theirs,
-                      waits_on=(base, waits) if isinstance(waits, BaseWait) else None)
+                      waits_on=(base, waits) if isinstance(waits, BaseWait) else None, disputed=disputed)
 
     def _gone(self, base: str, tasks: dict[str, dict], pol: policy.Policy) -> tuple[str, ...] | BaseWait:
         """The kinds of task on the merge gate in ``base``'s graph, as graph2 listed it, of which a candidate's ``tasks`` list
@@ -731,8 +754,9 @@ class World:
         """Why graph2's own verdict, from its database, keeps a candidate from passing (or from ending with only inherited
         failures), which the loop's is never more passing than: it can't be read, says pending, cancelled or list-failed, or
         counts a task pending, which no label passes.  Its pending count names no task, so one off the gate holds a candidate
-        too; each failed or infra task it names reads so on its own (`_said`).  None with no graph2 `verdict` to ask (its
-        `ready_verdict` label, the fallback, is written only once nothing is pending)."""
+        too; each failed or infra task it names reads so on its own (`_said`), and one the loop read passed at another key
+        holds it (`_disputed`).  None with no graph2 `verdict` to ask (its `ready_verdict` label, the fallback, is written only
+        once nothing is pending)."""
         if not self.graph2 or "verdict" in self.absent:
             return None
         if not isinstance(theirs, dict):
@@ -1012,9 +1036,10 @@ def _job(t: dict, tasks: dict[str, dict]) -> str:
 
 def _said(theirs: dict | None) -> dict[str, dict]:
     """How graph2's `verdict` says each task it lists as failed or infra ended, from its database, which no label overrides:
-    {key: the fail or the infra error it reads as}.  A task failed by its own fault (an undeclared read, a race: a failed entry
-    with a `why`) has no result labelled at all.  Not from a `ready_verdict` label, which a rerun leaves standing until the
-    check ends again."""
+    {key: the fail or the infra error it reads as}, at graph2's key only (where the loop keys a task otherwise and its labels
+    there pass it, `_disputed` holds the candidate).  A task failed by its own fault (an undeclared read, a race: a failed
+    entry with a `why`) has no result labelled at all.  Not from a `ready_verdict` label, which a rerun leaves standing until
+    the check ends again."""
     if not isinstance(theirs, dict) or "labelled" in theirs:
         return {}
     out = {k: {"key": k, "task": e.get("task"), "status": "error", "detail": {"infra": True, "why": e.get("why")}}
@@ -1025,6 +1050,24 @@ def _said(theirs: dict | None) -> dict[str, dict]:
                       "detail": {"fault": e["why"]} if e.get("why") else {"failed_tests": [
                           t for t in e.get("tests") or () if isinstance(t, str)]}}
     return out
+
+
+def _disputed(theirs: dict | None, ids: Iterable[str], states: dict[str, tuple], keys: dict[str, str]
+              ) -> tuple[Dispute, ...]:
+    """Each task of ``ids`` (the tasks a candidate's verdict needs: on the gate, or read by one that is) that graph2's
+    `verdict` lists as failed (a fail, or its own fault) or infra and the loop's own reading passed (``states``, at ``keys``).
+    graph2's word overrides a label only at graph2's key (`_said`), and a result labelled `--by executor` is self-asserted, so
+    a task the loop keys from the outputs it reads, or one graph2 names at another key, can pass on labels graph2's database
+    doesn't hold.  Not from a `ready_verdict` label, which a rerun leaves standing until the check ends again."""
+    if not isinstance(theirs, dict) or "labelled" in theirs:
+        return ()
+    ids, out = set(ids), {}
+    for said, entries in ((FAIL, theirs.get("failed")), (INFRA, theirs.get("infra"))):
+        for e in entries or ():
+            if (isinstance(e, dict) and isinstance(i := e.get("task"), str) and i in ids and i not in out
+                    and states[i][0] == PASS):
+                out[i] = Dispute(i, said, str(e.get("key")), keys[i])
+    return tuple(out.values())
 
 
 def _named(theirs: dict | None) -> dict[tuple[str, str], frozenset[str]]:
@@ -1390,7 +1433,8 @@ class Loop:
             self.out("\n".join(f"would {_name(a)}: {a}" for a in actions) or "nothing to do")
             return []
         new = [self.record(t, "ignore", sha=sha, ref=name, why=f"origin's queue/{name} is no build of the loop's: no candidate")
-               for name, sha in t.foreign.items() if (name, sha) not in past.ignored()] + self._flaky(t) + self._bases(t)
+               for name, sha in t.foreign.items() if (name, sha) not in past.ignored()] + self._flaky(t) + self._bases(t) \
+            + self._disputes(t)
         new += self._launched(t)
         new += [self._on_main(t, adv, told) for adv, told in t.past.moved()]
         for rec in new:
@@ -1775,6 +1819,31 @@ class Loop:
             return self.record(t, "ring", **line, to=list(to), done=False, posted=False,
                                error=f"ringing {', '.join(to)} about base {base[:12]} failed: the next tick rings again")
         return self.record(t, "ring", **line, to=list(to), done=True, posted=True)
+
+    def _disputes(self, t: Tick) -> list[dict]:
+        """Ring `CI` about each task a candidate is held on (`Judged.disputed`: graph2's `verdict` says it failed or erred,
+        and the loop read it passed), with the task, both keys and both readings: once each, across the candidates that share
+        it (`Past.rung`, by why).  A post that fails is rung again by the next tick; with --shadow it is only logged."""
+        recs, rung = [], {why for _, why in t.past.rung()}
+        for c in t.snap.candidates:
+            for d in t.judged[c.sha].disputed:
+                if (why := str(d)) in rung:
+                    continue
+                rung.add(why)
+                text = (f"the verified queue holds ready:{c.sha} ({' '.join(f'#{n}' for n in c.members)}) while graph2's "
+                        f"verdict and the result labels it reads disagree: {why}. It waits until they agree. Each key's "
+                        "results: `research data labels task:<key> --key result --history`")
+                line = dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=why, text=text, to=[CI],
+                            task=d.task, graph2={"state": d.said, "key": d.theirs}, mine={"state": PASS, "key": d.ours})
+                if self.shadow:
+                    recs.append(self.record(t, "ring", **line, done=False))
+                elif not self._say(t, "ring", text, (CI,), sha=c.sha, why=why):
+                    recs.append(self.record(t, "ring", **line, done=False, posted=False,
+                                            error=f"ringing {CI} about {d.task} on {c.sha[:12]} failed: the next tick rings "
+                                                  "again"))
+                else:
+                    recs.append(self.record(t, "ring", **line, done=True, posted=True))
+        return recs
 
     def _ring(self, a: Ring, c: Candidate, t: Tick) -> list[dict]:
         if (c.sha, a.why) in t.past.rung():
