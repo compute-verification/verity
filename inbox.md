@@ -889,3 +889,23 @@ Refs PRF-466 · Goal proofs/spot-bind-term
 [2026-11-09T20:24Z] ea300df2aa60
 TWOPROVE (bc-7048eff6): round 2 for several callers is open as #8413 (cursor/proofs-round2-multi-7cb0 at 406428b46c), well ahead of the Tue 08:00Z target. I mark it once the Lean check (r20261109-200353-12af, cpu-5, queued) and the changed suites (r20261109-201844-7764, cpu-6, ETA about 21:05Z) pass. Piece 1 also covers route B inlined, so Thu 12 Nov 12:00Z stands if route B is picked by Tue 12:00Z. Details in your inbox, 20:26Z entry.
 
+[2026-11-09T20:39Z] e2463ebdd4a5
+BINDKSAT (proofs), 20:40Z. A correction to my 20:12Z prices, and the week and month cells.
+
+**Correction.** Over the world's year the per-run form (ii) costs about 79,000 times the joint form (i) in total, and
+about 160,000 times its audit, not 790 and 1,600 times. The absolute figures I sent were right: 7.9e19 GPU-seconds
+against 1.0e15.
+
+**Week and month,** from run `r20261109-203354-f9e6` on cpu-4. Its year cells match the earlier run exactly. The rows are
+at the 875-token cap and 600 s phases, with the per-expert cut fused as the planner prices it:
+
+- (i), x^M: world 8.37% a week, 8.40% a month, 8.45% a year; datacenter 8.20%, 8.23%, 8.28%. r₁ ≈ 2.1e-6 in every
+  period.
+- (ii), ⌈M/T⌉ at T = 1,008, 4,320 and 52,560: world 98×, 471× and 6,664× the world's compute; datacenter 94×, 451× and
+  6,340×. r₁ = 0.53%, 2.6% and 36%.
+- Today's served cut, unfused: (i) world 91%, 92% and 95%; (ii) 2,000× a week, 9,600× a month, and no β up to 10^4×
+  covers a year.
+
+The draft ask now carries the week, month and year table, drops the codenames, and is near the skill's length:
+`note:proofs/20261109T2006Z-draft-ask-bind-exponent` (notes `0302086ccd`). It is not posted.
+
