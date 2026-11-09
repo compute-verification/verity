@@ -113,7 +113,6 @@ KNOWN = frozenset({
     "verity_vllm.acquire.sources.attention_source",
     "verity_vllm.acquire.sources.served_compiled_source",
     "verity_vllm.acquire.sources.taps",
-    "verity_vllm.check.batch",
     "verity_vllm.check.checkpoint_index",
     "verity_vllm.check.fold_compare",
     "verity_vllm.check.fp8_ue8m0",
