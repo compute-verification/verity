@@ -324,6 +324,8 @@ LEAN_STEP = "lean-audit"
 LOCKS_JUDGED = (*(s for s in CHECK_STEPS if s.startswith("preflight-")), LEAN_STEP)
 #: a Lake package's lock, which a lock run may regenerate (`merge.LOCK`)
 LOCK = "lean-audit.json"
+#: the subject a lock commit opens with (`lock_message`), before the PRs whose records it regenerated
+LOCK_SUBJECT = "Lock records regenerated for "
 #: a run stopped by SIGTERM (128 + 15): a cancel, or a twin whose sibling won the slot
 SIGTERM_RC = 143
 RUN_RE = re.compile(r"^RUN ((?:r20\d{6}-\d{6}-[0-9a-f]{4} ?)+)$", re.M)
@@ -409,6 +411,29 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
     r = subprocess.run(argv, cwd=repo, capture_output=True, text=True, stdin=subprocess.DEVNULL, env=env)
     m = RUN_RE.search(r.stdout)
     return (m[1].split() if m else []), (r.stdout + r.stderr).strip()[-600:]
+
+
+def lock_path(pkg: str) -> str:
+    """Where a record lock run's Lean report names under ``pkg`` (`merge.regenerated_records`) goes in the tree: the package's
+    lock, or a file of `merge.REPAIRED` at its own path."""
+    from .merge import REPAIRED
+
+    return pkg if pkg in REPAIRED else f"{pkg}/{LOCK}" if pkg not in ("", ".") else LOCK
+
+
+def lock_checked(rid: str, into: str, tip: str) -> str:
+    """A lock commit's `Checked:` line, its parenthesis left open (`lock_message` closes it; a merge onto a moved branch says
+    so first): lock run ``rid`` of ``into``'s ``tip``, whose parent the merge gate vouches for the commit against."""
+    return f"Checked: {rid} (the lock run of `{into}` {tip[:12]}, passed by regenerating them"
+
+
+def lock_message(prs: str, rid: str, into: str, tip: str, warned: list[str], files: list[str]) -> str:
+    """A lock commit's message (`Driver._put_locks`), which the merge gate (`merge.regenerated_parent`), drive's reverts
+    (`Driver._lock_commits`) and post_train read: `Lock records regenerated for PRS`, the bookkeeping the lock run repaired
+    (``warned``, each a warning for the next PR to fix), its `Checked:` line (`lock_checked`) and `Regenerated: FILES`."""
+    repairs = ("Bookkeeping the lock run repaired, each a warning for the next PR to fix:\n" +
+               "".join(f"  {w}\n" for w in warned) + "\n") if warned else ""
+    return f"{LOCK_SUBJECT}{prs}\n\n{repairs}{lock_checked(rid, into, tip)})\nRegenerated: {', '.join(files)}\n"
 
 
 #: how many bookkeeping warnings of a lock run (`_put_locks`) its post lists; the lock commit lists them all
@@ -1409,7 +1434,7 @@ class Driver:
                                                           f"{base}..{tip}").split("\x1e"))):
             c, body = rec.split("\x00", 1)
             named = {int(n) for n in re.findall(r"#(\d+)", body.split("\n")[0])}
-            if not body.startswith("Lock records regenerated for ") or not prs & named:
+            if not body.startswith(LOCK_SUBJECT) or not prs & named:
                 continue
             m = re.search(r"^Regenerated: (.+)$", body, re.M)
             pkgs = [os.path.dirname(f.strip()) for f in (m[1].split(",") if m else [])]
@@ -3009,9 +3034,36 @@ class Driver:
         if not lost and any(st in ACTIVE for st, *_ in states.values()):
             return
         self._timed(drive, "lean", rec["ids"])
+        outcome, why = self._lock_outcome(rec, states, lost)
+        if outcome == "fault":
+            where, again, tail = self._resend_locks(rec, states)
+            if again is None:
+                self._locks_failed(drive, pl, rec, f"it was {why}, and its resend registered no run: {tail}", 0)
+                return
+            q.log(f"research queue drive: {what} was {why}, a machine's fault: again, once, on {where}: {_ids(again)}")
+            q.save_state({**q.load_state(), "drive": drive})
+            return
+        run = {"tip": tip, "ids": rec["ids"]}
+        if outcome == "passed":
+            rec.update(state="passed", run=why)
+            q.log(f"research queue drive: {what} passed ({why})")
+            self._red(drive, pl, run, ended=True, steps=LOCKS_JUDGED)
+            self._commit_locks(drive, pl, rec)
+            return
+        if outcome == "unrun":
+            del pl["locks"]
+            q.log(f"research queue drive: {what} ({_ids(rec)}) never ran or was stopped: it launches again")
+            return
+        self._locks_failed(drive, pl, rec, why, 0 if lost else self._red(drive, pl, run, ended=True, steps=LOCKS_JUDGED))
+
+    def _lock_outcome(self, rec: dict, states: dict, lost: bool) -> tuple[str, str]:
+        """How lock run ``rec`` came out once it ended or was ``lost`` (`_lost`), its runs' ``states`` read: ("fault", what)
+        when its machine failed it (lost, killed, out of disk or memory: `_machine_fault`), and it runs again once elsewhere
+        (`_resend_locks`), never a resend nor in a dry run or the shadow; ("passed", the run that exited 0 with lean-audit
+        passed in its steps.jsonl); ("unrun", "") when every twin exited 75 or was stopped; else ("failed", why)."""
         rcs = [rc for _, rc, *_ in states.values()]
         fault = None
-        if rec.get("resend") or self.dry_run or q.shadow:
+        if rec.get("resend") or self.dry_run or self.q.shadow:
             pass
         elif lost:
             fault = "lost"
@@ -3022,33 +3074,26 @@ class Driver:
         else:
             fault = self._machine_fault(rec["ids"])
         if fault:
-            where = self._elsewhere(states)
-            again, tail = self._started(self.launch_locks(self.repo, tip, where))
-            if again is None:
-                self._locks_failed(drive, pl, rec, f"it was {fault}, and its resend registered no run: {tail}", 0)
-                return
-            rec.update(**again, at=self.now(), resend=True)
-            q.log(f"research queue drive: {what} was {fault}, a machine's fault: again, once, on {where}: {_ids(again)}")
-            q.save_state({**q.load_state(), "drive": drive})
-            return
-        run = {"tip": tip, "ids": rec["ids"]}
+            return "fault", fault
         if lost:
-            why = f"{' '.join(rec['ids'])} lost on its resend"
-        elif ran := [rid for rid, (_, rc, *_) in states.items() if rc == 0]:
+            return "failed", f"{' '.join(rec['ids'])} lost on its resend"
+        if ran := [rid for rid, (_, rc, *_) in states.items() if rc == 0]:
             if not self._unrun(ran, [LEAN_STEP]):
-                rec.update(state="passed", run=ran[0])
-                q.log(f"research queue drive: {what} passed ({ran[0]})")
-                self._red(drive, pl, run, ended=True, steps=LOCKS_JUDGED)
-                self._commit_locks(drive, pl, rec)
-                return
-            why = f"{' '.join(ran)} exited 0 without passing {LEAN_STEP}"
-        elif all(rc in (NOT_STARTED, SIGTERM_RC) for rc in rcs):
-            del pl["locks"]
-            q.log(f"research queue drive: {what} ({_ids(rec)}) never ran or was stopped: it launches again")
-            return
-        else:
-            why = ", ".join(f"{rid} {st} rc={rc}" for rid, (st, rc, *_) in states.items())
-        self._locks_failed(drive, pl, rec, why, 0 if lost else self._red(drive, pl, run, ended=True, steps=LOCKS_JUDGED))
+                return "passed", ran[0]
+            return "failed", f"{' '.join(ran)} exited 0 without passing {LEAN_STEP}"
+        if all(rc in (NOT_STARTED, SIGTERM_RC) for rc in rcs):
+            return "unrun", ""
+        return "failed", ", ".join(f"{rid} {st} rc={rc}" for rid, (st, rc, *_) in states.items())
+
+    def _resend_locks(self, rec: dict, states: dict) -> tuple[str, dict | None, str]:
+        """Launch lock run ``rec`` of ``rec["tip"]`` again, once, after its machine failed it (`_lock_outcome`), on the machines
+        of `on` its runs (``states``) didn't run on (`_elsewhere`): (where, the new launch's fields, which ``rec`` then holds
+        as a resend; None, with train.sh's output's tail, when it registered no run)."""
+        where = self._elsewhere(states)
+        again, tail = self._started(self.launch_locks(self.repo, rec["tip"], where))
+        if again is not None:
+            rec.update(**again, at=self.now(), resend=True)
+        return where, again, tail
 
     def _locks_failed(self, drive: dict, pl: dict, rec: dict, why: str, named: int) -> None:
         """Lock run ``rec`` failed (``why``), with ``named`` of the steps it judges named red (`_red`): no lock run runs on its
@@ -3081,8 +3126,6 @@ class Driver:
         if self.dry_run or q.shadow:
             q.log(f"research queue drive: would commit the records {rid} regenerated on `{into}` {tip[:12]}")
             return
-        from .merge import REPAIRED
-
         q._drive_only(into, "once", False)
         files: list[str] = []
         scratch = Path(tempfile.mkdtemp(prefix="drive-locks-"))
@@ -3091,7 +3134,7 @@ class Driver:
             if locks and not held:
                 _git(self.repo, "checkout", "-q", "-B", into, tip)
                 for pkg, src in sorted(locks.items()):
-                    dst = pkg if pkg in REPAIRED else f"{pkg}/{LOCK}" if pkg not in ("", ".") else LOCK
+                    dst = lock_path(pkg)
                     (self.repo / dst).parent.mkdir(parents=True, exist_ok=True)
                     shutil.copyfile(src, self.repo / dst)
                     files.append(dst)
@@ -3125,13 +3168,9 @@ class Driver:
         q = self.q
         into, base = q.into, q.base
         prs = " ".join(f"#{x.pr}" for x in self.landed_since(self._fresh(pl, tip), tip)) or f"`{into}` {tip[:12]}"
-        subject = f"Lock records regenerated for {prs}"
-        checked = f"Checked: {rid} (the lock run of `{into}` {tip[:12]}, passed by regenerating them"
+        subject, checked = f"{LOCK_SUBJECT}{prs}", lock_checked(rid, into, tip)
         warned = bookkeeping_warnings(q.store, rid, self.fetch)
-        repairs = ("Bookkeeping the lock run repaired, each a warning for the next PR to fix:\n" +
-                   "".join(f"  {w}\n" for w in warned) + "\n") if warned else ""
-        _git(self.repo, "commit", "-q", "-m", f"{subject}\n\n{repairs}{checked})\nRegenerated: {', '.join(files)}\n",
-             env=IDENTITY)
+        _git(self.repo, "commit", "-q", "-m", lock_message(prs, rid, into, tip, warned, files), env=IDENTITY)
         if why := self._unvouched(rid):
             _git(self.repo, "reset", "-q", "--hard", base)
             self.refuse(drive, f"lock-gate:{tip}", f"the lock run {rid} of `{into}` {tip[:12]} passed, but {why}: its records "
@@ -3193,12 +3232,12 @@ class Driver:
                         "run dir on its node")
         return {pkg: path for pkg, (_, path) in (recs or {}).items() if path is not None}, None
 
-    def _unvouched(self, rid: str) -> str | None:
-        """Why the merge gate refuses the lock commit at HEAD (`merge.regenerated_parent`, reading the records itself: from the
+    def _unvouched(self, rid: str, commit: str = "HEAD") -> str | None:
+        """Why the merge gate refuses lock commit ``commit`` (`merge.regenerated_parent`, reading the records itself: from the
         store, else from ``rid``'s run dir on its node), or None when it vouches for it."""
         from .merge import declared_command, produced, regenerated_parent
 
-        if regenerated_parent(self.repo, "HEAD", self.q.store, tool="check", kinds=produced(self.repo, "check"),
+        if regenerated_parent(self.repo, commit, self.q.store, tool="check", kinds=produced(self.repo, "check"),
                               command=declared_command(self.repo, "check"), deferred=rid, fetch=self.fetch):
             return None
         return (f"the merge gate refuses its lock commit: its records aren't byte for byte the ones {rid} regenerated "
