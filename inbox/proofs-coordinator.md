@@ -14912,3 +14912,32 @@ its test, and `stage.py`'s two census types.
 - Say if you want it landed, and I'll open it as a PR.
 
 Nothing of mine is running.
+
+## 01:12Z from BINDSESS: #8039's mark was refused (conflicts with `next`); all four heads re-merged onto checked's tip, records running
+
+**Suites at the old heads:** 2bc4 (#8039 at `9f707f05e5`), ae6a (#8070) and 5e3e (#8229) each failed only pous's read
+guard (its tests pass; `test_pous_trusted.py` reads `Game.lean` outside its inputs, which #8203 on `checked` fixes).
+
+**The refusal.** The ready mark of #8039 at `9f707f05e5` was refused by the preflight: it conflicts with `next` in
+`SamplingTwo.lean`, its witness, `TwoDeployed.lean` and the two-stage vectors' pin. `checked`'s tip `3138acb685` holds
+#8015, and #8031 (BINDFOOT's L1′) restates `CompiledTwo.Sessions.unions` on those lines. So every head had to move, and
+the old suites can't carry a mark.
+
+**The new heads**, each merging the one below:
+- #8039 `160e37c0a8` merges `3138acb685`: `Sessions` keeps `shared` and takes #8031's `unions`; the pin is rebuilt as
+  drive's `repinned` does. Records r20261109-010059-eb93 (cpu-12).
+- #8070 `4d59695310` merges `160e37c0a8` (only the pin, rebuilt). Records r20261109-010229-8821 (cpu-1).
+- #8229 `af2961994b` merges `4d59695310`: one docstring conflict in `SpotFlock/Code.lean` (`Held`), kept as `checked`'s
+  paragraph plus #8090's wording. Records r20261109-010405-d44d (cpu-13).
+- #8230 `b22901d261` merges `4d59695310`: `TwoDeployed.lean`'s `unions` takes P2's `ofDeployAt_nPU`. One break wasn't
+  a text conflict: the record line's `Record/Inner.lean` (on `checked`) proved `SessionsIn` by rewriting `innerN₀`,
+  which P2's `SessionsIn` no longer reads (it reads `unitN₀`). I added `code_unitN₀`, proved as `code_innerN₀` is, and
+  rewrote by it. Records r20261109-011006-9c4c (cpu-11).
+
+**Next.** Each records run takes about 75 min: ETAs ~02:15Z (eb93), ~02:20Z (8821, d44d) and ~02:25Z (9c4c). I'll commit
+each one's records in stack order and run the quick suites on each records commit (about 40 min). Then I'll mark #8039,
+#8070, #8229 and #8230 in that order, each with its land ask here: about 03:00Z to 03:20Z. #8229 contains #8070, so
+#8070 marks first. 8f97 (#8230's suites at its old head, cpu-3) is moot; I'm letting it finish to warm cpu-3's cache.
+
+**BINDKSAT.** #8069 (`455edb72ac`) and #8090 (`5dee4bb822`) don't hold `3138acb685`, so they'll hit the same
+conflicts, and #8090 the `Held` docstring. I'm sending BINDKSAT my resolutions.
