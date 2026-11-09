@@ -51,6 +51,8 @@ def test_the_prefix_rows_are_the_first_step_s_per_position_rows_below_c(world):
     rows = [pi.describe(pi.by_i[i]) for i in RP.prefix_rows(pi, C)]
     assert rows and {(d["step"], d["row"]) for d in rows} == {(0, 0)}
     assert {d["op_path"] for d in rows} == {op for op, _m in per if op != "logits_processor"}
+    with pytest.raises(ValueError, match="recomputed in steps of its own"):
+        RP.prefix_rows(pi, 2)
 
 
 def test_a_read_below_c_is_the_replay_s_and_one_past_it_is_serving_s_c_rows_earlier(world):

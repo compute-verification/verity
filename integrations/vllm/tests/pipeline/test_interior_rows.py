@@ -108,6 +108,16 @@ def test_a_replay_names_what_it_cannot_give(world):
         Replay(cached, "r0", PROMPTS["r0"], _weights(world))
 
 
+def test_a_replay_s_arrival_is_its_program_s_first_step_so_steps_ahead_of_the_request_s_shift_it(world):
+    """A class-G Program that recomputes a hit runs its chunks in steps ahead of the request's first served step: replayed
+    with ``arrive`` that many steps earlier, the request's served step reads the Program's step after them."""
+    op = next(op for (s, _rid, op, m) in world.blocks if s == 1 and m == "out" and op != SAMPLER_OP)
+    ahead = Replay(index_of(world.inst), "r0", PROMPTS["r0"], _weights(world), arrive=-1)
+    got, _ = ahead.words("r0", 0, op, "out", 0, 4)
+    want, _ = _replay(world, "r0").words("r0", 1, op, "out", 0, 4)
+    assert want is not None and np.array_equal(got, want)
+
+
 def test_a_span_pads_to_its_size_class_with_its_last_unit(world):
     s = IR.span(world.inst, _replay(world, "r1"), ROPE)
     got = s.padded(UNITS + 3)

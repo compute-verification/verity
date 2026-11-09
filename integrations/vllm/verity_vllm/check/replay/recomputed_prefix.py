@@ -47,14 +47,21 @@ def positions(pi: ProgramIndex) -> dict[tuple[str, str], int]:
 
 
 def prefix_rows(pi: ProgramIndex, C: int) -> frozenset[int]:
-    """The Program rows that compute the first step's positions below ``C``."""
+    """The Program rows that compute the first step's positions below ``C``, refused where that step computes none past them
+    (a hit recomputed in steps of its own, class G's producer launches, which this replay doesn't address)."""
     per = positions(pi)
-    out = set()
+    out, past = set(), False
     for r in pi.rows:
         d = pi.describe(r)
-        if d is not None and int(d["step"]) == 0 and int(d["row"]) < C and d["members"] and \
-                all((d["op_path"], m[0]) in per for m in d["members"]):
+        if d is None or int(d["step"]) != 0 or not d["members"] or not all((d["op_path"], m[0]) in per for m in d["members"]):
+            continue
+        if int(d["row"]) < C:
             out.add(int(r["i"]))
+        else:
+            past = True
+    if not past:
+        raise ValueError(f"the Program's first step computes no position past its hit's {C}: its hit is recomputed in steps of its "
+                         "own, which the one-stage replay doesn't address")
     return frozenset(out)
 
 

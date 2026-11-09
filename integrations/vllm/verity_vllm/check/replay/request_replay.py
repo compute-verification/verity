@@ -5,7 +5,9 @@
 ``given`` supplies. A row is evaluated only when a read reaches it, so what it evaluates is its readers' cone and never
 the request's batch-mates: a request's Program is its rows alone at its launch shapes. A request served from the prefix
 cache is replayed from its Program compiled with its hit recomputed (`program.predict.steps.compile_steps`'s
-``recompute_hits``), which prefills the hit from its own prompt; a Program that reads a cached prefix is refused.
+``recompute_hits``), which prefills the hit from its own prompt; a Program that reads a cached prefix is refused. Its
+``arrive`` is the engine step of its Program's first step, so where that Program runs its hit's chunks in steps ahead of
+the request's own (class G, `RequestUnit.hit_steps`), it is the request's first served step less their number.
 """
 from __future__ import annotations
 
