@@ -654,10 +654,16 @@ def main() -> int:
                          "(`peel`): saturate, unclamped; box or own, at the final site under --boxes")
     ap.add_argument("--peel-contexts", type=int, default=1,
                     help="rows: box and own peels repeat their faults at this many prompts' last positions and average")
+    ap.add_argument("--lead-run", nargs=2, metavar=("UNIT", "N"),
+                    help="every prompt follows a run of N copies of UNIT, as in traffic.run_texts, so under boxes with "
+                         "a run class its faults sit in it")
     ap.add_argument("--batch", type=int, default=128)
     ap.add_argument("--threads", type=int, default=0)
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
+    if a.lead_run:
+        global PROMPTS
+        PROMPTS = ["The log continues:" + a.lead_run[0] * int(a.lead_run[1]) + " " + p for p in PROMPTS]
     if a.threads:
         torch.set_num_threads(a.threads)
     a.out.mkdir(parents=True, exist_ok=True)
