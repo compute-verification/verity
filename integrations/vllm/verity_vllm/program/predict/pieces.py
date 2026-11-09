@@ -7,26 +7,24 @@ the whole model's compiled Program against the compiled Programs of windows of i
 `pieces(program, world)` puts each node of the program function's body in a part, 0 the prologue, L + 1 layer L, NL + 1 the
 epilogue:
 
-- a node that reads a weight or a peer Input is in the latest part among them: a weight `model.layers.{L}.*` is layer L's (unless
-  a node that reads a later layer's node reads it, as every layer reads vLLM's one rotary cache under layer 0's name: that weight
-  is in no part, named in full), the
+- a node that reads a weight or a peer Input is in the latest part among them: a weight `model.layers.{L}.*` is layer L's, the
   embedding the prologue's and the final norm and `lm_head` the epilogue's; a collective's peer Inputs are in its part (the
-  embedding's all-reduce the prologue, layer L's attention and MLP all-reduces layer L, the logits gather the epilogue); a part
-  earlier than the node before it starts the next launch;
+  embedding's all-reduce the prologue, layer L's attention and MLP all-reduces layer L, the logits gather the epilogue). A layer's
+  weight that a node reading a later layer's node reads is in no part, named in full: every layer reads vLLM's one rotary cache
+  under layer 0's name. A part earlier than the node before it starts the next launch;
 - any other node that reads a node is in the part of the node before it (a layer's residual add after the next layer's fused
   all-reduce and norm is the next layer's);
 - a node that reads neither (a constant, or one computed from constants and the request's Inputs alone) is shared, named by its
   content.
 
 Each part is then the run of its nodes in each launch, in order; the launches are the passes the peer Inputs are laid out by
-(refused otherwise). A node is written with references of its part's own: a node of its part by its index in the part, a node
-of an earlier layer by how many layers and launches back and its index from the end of that layer's run in that launch (a
-window's first layer starts with its own norm, the rest of it as the model's layer), the prologue's or epilogue's by its index
-there, a shared node by
-its content, a weight by its name less `model.layers.{L}.` and how many layers back, a peer Input by its pass, its collective, how
-many layers back and its peer, a request Input by name. Writing the launches' runs part by part in order and resolving each
-reference inverts this, so two Programs with the same header (`Pieces.header`: the program function's id and parameters), the
-same callees and equal parts are equal: comparing parts decomposes digest equality, nothing weaker.
+(refused otherwise). A node is written with references of its part's own: a node of its part by its index in the part; a node of
+an earlier layer by how many layers and launches back and its index from the end of that layer's run in that launch (a window's
+first layer starts with its own norm, the rest of it as the model's layer); the prologue's or epilogue's by its index there; a
+shared node by its content; a weight by its name less `model.layers.{L}.` and how many layers back; a peer Input by its pass, its
+collective, how many layers back and its peer; a request Input by name. Writing the launches' runs part by part in order and
+resolving each reference inverts this, so two Programs with the same header (`Pieces.header`: the program function's id and
+parameters), the same callees and equal parts are equal: comparing parts decomposes digest equality, nothing weaker.
 
 A part of a window and the whole model's part of the same layer are equal when the layer reads the same: a window's first layer
 reads the window's own embedding (the whole model's layer reads the layer before it through the fused all-reduce and norm), and its
