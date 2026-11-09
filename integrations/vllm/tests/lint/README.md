@@ -44,7 +44,7 @@ failure message carries its fix.
  ruff finding in `integrations/vllm` (a stale `noqa` deleted is one) edits `ruff.json` in the same PR.
 - **mypy** (`test_mypy.py`, allowlist `allowlists/mypy.json`): mypy under vLLM's settings (`[tool.mypy]` in
  `integrations/vllm/pyproject.toml`), the library at `follow_imports = "silent"` and `tests/` on its own at `skip`, an error
- keyed by file, error code and enclosing symbol, with a count. `CLEAN` names the directories held to no error. Its findings
+ keyed by file, error code and enclosing symbol, with a count; one the list lacks, or an entry that matches nothing, warns in the suite. `CLEAN` names the directories held to no error. Its findings
  depend on the installed packages, so the list records the environment it was taken in and the lint refuses any other;
  the ratchet gate counts the list but doesn't rerun the lint.
 - **The ratchet itself** (`test_ratchet.py`). A new key fails: fix the new code. A moved violation moves its entry in
