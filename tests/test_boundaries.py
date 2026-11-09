@@ -9,7 +9,8 @@
     ``SOUNDNESS_PATH``, and both only shrink;  ml never imports core;  no unit imports
     another distribution of the workspace (Flock, an integration, a benchmark, a tool) or an external runtime: ``verity``
     imports the standard library, its declared dependencies and itself;  nothing outside ``infra/`` imports ``infra/``;
-    nothing outside ``benchmarks/`` imports ``benchmarks/``, by name or by path (``BENCHMARKS_IMPORTERS``);  only tests name
+    nothing outside ``benchmarks/`` imports ``benchmarks/``, by name or by path (``BENCHMARKS_IMPORTERS``);  circuit-check
+    imports ``verity`` and no other distribution of the workspace (``CIRCUIT_CHECK_IMPORTS``);  only tests name
     a function past a guard (``TEST_ONLY``);  SPOT[Flock] imports none of the network certifier, in its Python, its Lean
     packages or its analysis (``SPOT_NOT_CERTIFIER``).
 
@@ -283,6 +284,16 @@ BENCHMARKS_IMPORTERS = {
                     "and `benchmarks/vllm_encoded/paged.py`"),
     "integrations/vllm/tests/engine/int8_attention_sass.py": "kernels: the PoUW kernels' SASS gate "
                                                              "(`benchmarks/pouw/harness/sass_gate.py`)",
+}
+#: circuit-check's own code, a developer tool of ``verity``: it imports ``verity`` and itself, and no other distribution of
+#: the workspace.  What a check needs of one, that distribution hands it in a sidecar it owns (`circuit_check.sidecars`).
+CIRCUIT_CHECK = "tools/verity/circuit_check/src"
+#: The files of circuit-check that still import another distribution of the workspace, each with the packages it imports:
+#: Flock's lowerings and templates, which its lowering and template checks hold each Definition's Boolean circuit to.  It
+#: only shrinks.
+CIRCUIT_CHECK_IMPORTS = {
+    f"{CIRCUIT_CHECK}/circuit_check/{name}.py": {"verity_flock"}
+    for name in ("ambient", "checks", "sidecars", "structural", "targets")
 }
 #: Functions past a guard, which tests alone may name, since a guard never fails open (AGENTS.md "Working principles"): each
 #: with the file that defines it and why tests need it.
@@ -670,6 +681,60 @@ def test_nothing_outside_infra_imports_it() -> None:
     assert not offenders, "\n".join(offenders)
     stale = sorted(set(INFRA_IMPORTERS) - set(found))
     assert not stale, f"INFRA_IMPORTERS entries that no longer import infra/; remove them: {stale}"
+
+
+def _workspace_packages() -> set[str]:
+    """The import packages of the workspace's distributions other than ``verity``, from each member's wheel configuration."""
+    members = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["tool"]["uv"]["workspace"]["members"]
+    return {Path(p).name for member in members
+            for p in tomllib.loads((ROOT / member / "pyproject.toml").read_text(encoding="utf-8")).get("tool", {})
+            .get("hatch", {}).get("build", {}).get("targets", {}).get("wheel", {}).get("packages", [])}
+
+
+def _circuit_check_imports(texts: dict[str, str], packages: Set[str]) -> dict[str, set[str]]:
+    """{file: the packages among ``packages`` it names} for circuit-check's files ``texts`` that name one: in an import, an
+    import call's string or a ``"module:attr"`` string."""
+    found: dict[str, set[str]] = {}
+    for rel, text in texts.items():
+        names = _imports(ROOT / rel, ROOT / CIRCUIT_CHECK, (), ast.walk(ast.parse(text, filename=rel)))
+        if hits := {name.split(".")[0] for name, _line, _imported in names} & packages:
+            found[rel] = hits
+    return found
+
+
+def test_circuit_check_imports_no_workspace_distribution_but_verity() -> None:
+    """A check that needs another distribution's code would make ``verity``'s tool depend on what attaches to it: an
+    integration, a benchmark, the team's tooling.  The dependency points the other way, through a sidecar."""
+    packages = _workspace_packages() - {"circuit_check"}
+    assert {"verity_vllm", "verity_numerical", "verity_flock", "research"} <= packages, packages
+    texts = {rel: (ROOT / rel).read_text(encoding="utf-8") for rel in _tracked(f"{CIRCUIT_CHECK}/*.py")}
+    assert len(texts) > 10, sorted(texts)
+    found = _circuit_check_imports(texts, packages)
+    offenders = [f"{f}: {pkg}" for f, pkgs in sorted(found.items()) for pkg in sorted(pkgs - CIRCUIT_CHECK_IMPORTS.get(f, set()))]
+    assert not offenders, ("circuit-check imports `verity` and itself, and no other distribution of the workspace. Have the "
+                           "distribution hand circuit-check what the check needs, in a sidecar it owns beside the module that "
+                           "defines it (`<module>.circuit-check.py`: a binding in `circuit_check.targets`' forms, or a reader "
+                           "as `request_program`; `circuit_check.sidecars` finds it without naming the package), or, if the "
+                           "check is the distribution's own, run it from that distribution's command and suite. "
+                           "CIRCUIT_CHECK_IMPORTS only shrinks.\n" + "\n".join(offenders))
+    stale = sorted(f"{f}: {pkg}" for f, pkgs in CIRCUIT_CHECK_IMPORTS.items() for pkg in pkgs - found.get(f, set()))
+    assert not stale, f"CIRCUIT_CHECK_IMPORTS entries circuit-check no longer imports; remove them: {stale}"
+
+
+def test_a_circuit_check_import_of_another_distribution_is_found() -> None:
+    """The check above isn't vacuous: a statement inside a function, an import call's string and a ``"module:attr"`` string
+    are each found; ``verity``, circuit-check's own modules and a third-party package are not."""
+    texts = {
+        f"{CIRCUIT_CHECK}/circuit_check/a.py": ("def check():\n    from verity_vllm.query import required\n"
+                                                "    import verity_numerical.models as M\n"),
+        f"{CIRCUIT_CHECK}/circuit_check/b.py": ("import importlib\nimportlib.import_module('verity_flock.ir_lower')\n"
+                                                "LOAD = 'research.msg:main'\n"),
+        f"{CIRCUIT_CHECK}/circuit_check/c.py": ("import numpy\nfrom verity.ml.circuits import defs\nfrom . import cache\n"
+                                                "from .targets import family\nNOTE = 'verity_vllm binds the vocabulary'\n"),
+    }
+    found = _circuit_check_imports(texts, {"verity_vllm", "verity_numerical", "verity_flock", "research"})
+    assert found == {f"{CIRCUIT_CHECK}/circuit_check/a.py": {"verity_vllm", "verity_numerical"},
+                     f"{CIRCUIT_CHECK}/circuit_check/b.py": {"verity_flock", "research"}}, found
 
 
 def _benchmarks_packages() -> set[str]:

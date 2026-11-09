@@ -28,7 +28,7 @@ from the result cache (`--no-cache` checks it now). It needs about 24 GB a proce
 | `block_held.py` | the Definitions past the Flock block that the report holds rather than fails, each with why; it only shrinks: a held one that fits, or that the whole catalog no longer checks, fails |
 | `bodies.py` | a composite's evaluation and its non-constant gates, body by body |
 | `targets.py` | what a target string names, and the catalog `--all` runs over |
-| `sidecars.py` | each Definition module's bindings and pins, in its `<module>.circuit-check.py` and `.circuit-check.json` |
+| `sidecars.py` | each Definition module's bindings and pins, in its `<module>.circuit-check.py` and `.circuit-check.json`, and where they are found |
 | `ranges.py` | a family a sidecar registers over a range of statics (`RANGES`), checked at its spots (`--ranges`), and the report's `ranges` |
 | `vectors.py` | the edge and seeded random input vectors |
 | `structural.py`, `ambient.py`, `by_calls.py` | `--structural`, `--ambient`, and a Program root checked by its calls alone |
@@ -39,3 +39,8 @@ from the result cache (`--no-cache` checks it now). It needs about 24 GB a proce
 `heavy.json` holds the peak memory, in GiB, of each target that grows past 3 GiB: the `--all` scheduler reads it to
 decide which targets run side by side, never what a check computes. A new Definition gets a binding in its
 module's sidecar: the suite fails any registered Definition family the catalog doesn't reach.
+
+circuit-check imports `verity` and Flock, and no integration. A package under `integrations/` registers itself by a
+sidecar of its own module (`<package>/__init__.circuit-check.py`), and then its sidecars are found like `verity`'s. What
+a check needs of the integration is in that sidecar: the frontend vocabularies' kinds (`_vocabulary_roots`) and the
+reader of a request Program (`request_program`).
