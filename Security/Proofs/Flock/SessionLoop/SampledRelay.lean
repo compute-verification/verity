@@ -79,7 +79,7 @@ variable {Rec Xs P ι W A Θ St : Type} (Q : RelaySessions Rec Xs P ι W A Θ)
 /-- **Session `j`'s run of the model** at its own randomness `ω`: the prover `Pv` at the session's parameters and
 witness, against its verifier, at its statement, the record being `ρ p`. -/
 def run (H : Msg → Msg) (Pv : ι → W → Msg → Prover A) (ρ : P → Rec) (p : P) (χ : Xs) (j : ℕ)
-    (π : Tup (fun _ => A) j) (b : Tup (fun _ => List ByteArray) j) (ω : A) : Trace :=
+    (π : Tup (fun _ => A) j) (b : Tup (fun _ => List ByteArray) j) (ω : A) : Transcript :=
   runStar H (Pv (Q.i j p χ π b) (Q.w j p χ π b) (Q.x j (ρ p) χ b)) (Q.Vs j (ρ p) χ b) (Q.x j (ρ p) χ b) ω
     (Q.θ j (ρ p) χ b)
 

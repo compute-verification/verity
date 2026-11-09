@@ -272,7 +272,7 @@ end Fields
 
 theorem sha512_msg : FlockDeploy.sha512 = Claims.Sampling.sha512Msg := rfl
 
-theorem seen_msgs (t : Claims.Trace) : t.seen.msgs = t.msgs := rfl
+theorem seen_msgs (t : Claims.Transcript) : t.seen.msgs = t.msgs := rfl
 
 theorem drawOf_of {v : Seen} {d : Msg} {a : Claims.Out} (hv : v.msgs[DRAW_ROUNDS]? = some (d, a)) : drawOf v = d := by
   simp only [drawOf, List.getD_eq_getElem?_getD, List.getElem?_map, hv, Option.map_some, Option.getD_some]

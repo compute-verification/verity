@@ -54,7 +54,7 @@ end Work
 
 /-- The piece of `c` inside a set `W` of `d`'s computed gates is small by information when `W` is. -/
 theorem smallInfo_piece {c d : RegisteredCircuit} (M : Containment c.D d.D)
-    (hθ : ∀ g, c.D.isInput g = true → M.emb g ∈ d.θ → g ∈ c.θ) {θc : c.D.Transcript} {θv : d.D.Transcript}
+    (hθ : ∀ g, c.D.isInput g = true → M.emb g ∈ d.θ → g ∈ c.θ) {θc : c.D.Trace} {θv : d.D.Trace}
     (hv : ∀ g ∈ c.θ, M.emb g ∈ d.θ → (θv (M.emb g)).cast (M.emb_w g) = θc g) {Γ : ℕ} {K : ℝ}
     {W : Finset (Fin d.D.N)} (hWc : W ⊆ d.D.computed) (hΓ : d.D.size W ≤ Γ) (hK : novelInfo d θv W ≤ K) :
     SmallInfo c θc Γ K (univ.filter fun g => M.emb g ∈ W) := by
