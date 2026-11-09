@@ -209,7 +209,7 @@ or time; it is the step from the deployed device to the ring model, so no Lean t
 
 Its ring part (`pous-ring-instantiation`) is a standing named assumption. Its PRF part (`prf/sha-512`: the memory
 challenger's SHA-512-derived index streams are as good as uniform bytes, `Drawn`) is an assumption only until the memory
-challenger draws its streams from the OS, when PoUS's storage proofs resume. -/
+challenger samples its streams from the OS, when PoUS's storage proofs resume. -/
 def Instantiates {ΩW ΩQ : Type} (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) : Prop :=
   ∀ (o : ΩW × ΩQ) (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams),
     P.Certified (o.1, o.2, x) →

@@ -183,7 +183,7 @@ Protocols and claims:
   assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
   model's logits.
 - `WorkHardness`, `KeyBinding`, `SketchHashRandom`, `TimedINC` and `pous-ring-instantiation` are standing named
-  assumptions, `prf/sha-512` until the memory challenger draws from the OS; `GGapPerCoin` stays a named conjecture,
+  assumptions, `prf/sha-512` until the memory challenger samples from the OS; `GGapPerCoin` stays a named conjecture,
   `BudgetAbort` a cost-model hypothesis.
 - Only PoUW's guarantees and the memory sketch's may rest on random-oracle assumptions for SHA-512
   (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. Flock's knowledge
