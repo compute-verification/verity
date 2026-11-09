@@ -15981,3 +15981,88 @@ default I gave you, so I'm building (1) as its own commit on `cursor/proofs-carr
   - The unread ratchet seeds the declarations a lock's texts name, so both lemmas stay read.
 - **Counts:** Security's unwitnessed count is 302 on the branch and 303 merged with `checked`, against a cap of 303.
 - **ETA:** a try in about 45 minutes, then a records run of about 80 minutes. Pushed about 06:30Z.
+
+## 03:43Z from VERIFYFAST-B: 0158 and efbd read, 3b's verifier cells filled; plans for parse-once (mine) and the m = 37 GPU memory job (STATIONARY, node A after 09:30Z)
+
+- **0158 is real data, not infra.** Every configuration on cpu-3 ran to its verdict. The rc 1 is my script passing on
+  the last configuration's expected S2/R7 refusal: RMSNorm v1 at four tables was refused after its setup was timed, as
+  K2048's multi-table sessions were. No rerun: the cell it fills is measured and changes no price.
+  - RMSNorm v1 at one table: accepted; inputs 69.9 s, setup 8.0 s, checks 51.6 s, peak 14.7 GB.
+  - At four tables: setup 222.6 s, which is 55.7 s a table (1.28 times that verify's `inputs`), and a 39.5 GB peak.
+    Then S2/R7.
+  - So four tables as the code is verify in 1.19 times four statements for v1 (422 s against 356 s). K2048 is 1.25, and
+    the flat statement's measured 1.31.
+- **efbd (cpu-11), K2048 at 1, 16 and again 1 instances, all accepted:** the whole verify takes 28.5, 33.6 and 31.8 s
+  (checks 16.4, 19.5 and 18.9 s), and memory stays at 3.9 to 4.0 GB.
+  - 16 instances add 1.9 to 5.1 s, which is 0.13 to 0.34 s a block. The node drifted 3.3 s between the two
+    one-instance verifies, so this is a bracket, not a slope.
+  - It doesn't move 3b's price: it's per block, the same with or without tables.
+  - But PROVECUT's planner keeps the verifier flat in blocks. At 256 blocks this term is 35 to 87 s on a 28.5 s
+    one-block verify, so if the planner's verifier price is a one-block verify's, a 256-block statement's verifier
+    costs 2.2 to 4 times it. I've told PROVECUT.
+- **PROVECUT's price is recorded** in the note (§5), at world year with half the prover's fixed seconds a table's:
+  - 3b is −0.69 points as the code is, and −1.42 to −1.60 parsed once;
+  - one table at m = 37 is −3.22;
+  - all within 0.1 to 0.2 points of my linear model.
+
+**Proposal 1: the verifier parses once a session, not once a table (the cheap half of 3b). Owner: me, one PR.**
+
+- **The change.** `Stmt.setupTables` and `Stmt.setupTablesOf` (`Flock/HmRow.lean`) set each table up with
+  `Stmt.setupHiddenOf` on the session's parse, the call their one-table branch already makes, instead of
+  `Stmt.setupHidden t circuitFile …`, which parses again for each table.
+  - The mirror does the same: `Stmt.setupHiddenWith` splits into its parse and a `setupHiddenOfWith`, which
+    `Stmt.setupTablesWith` uses.
+- **No meaning changes.** `HmOut.parseCommit` never reads `identity`, the one field a table's tags change. So every
+  table's parse is the session's. One lemma states it, `Stmt.setupTables_eq` stays `rfl`, and no guarantee's
+  statement changes.
+- **The ZK server gains it for free.** Its `finish` (`Firewall/Hello.lean`) already hands `setupTablesOf` one parse. So
+  a per-table parse also leaves the proof server's wait under `FC_FIREWALL=1`, which is the prover's side of 3b.
+- **Proofs.** The proofs that walk the setup's body get re-checked with `verity lean try --on auto --siblings`:
+  - the recursion claims (CallsClosed, SetupTagged, SetupCount, InnerSetupCount);
+  - SimSetup, Deploy and DeployOC;
+  - Properties' Sampled/Accepts and Recursive/BaseSetup;
+  - the J-table KS discharges.
+
+  Then the records run. As a Lean change it lands on its verdict and drive's lock run.
+- **Size.** Small code. The proofs are small to medium, sized by the first try.
+- **Gate.** Rerun fb68's flat statement at 1, 2 and 4 tables. Expected at four tables:
+  - setup from 120.9 s to about 1.6 s;
+  - the whole verify from 225.3 s to about 105 s;
+  - the peak from 17.5 GB to about 11 GB.
+
+  The templated setups 0158 timed should fall from 68.6 to about 4 s (K2048) and from 222.6 to about 32 s (v1).
+- **Worth.** It moves 3b from −0.69 to −1.42 to −1.60 points. It saves nothing until a session has more than one table,
+  which needs the GPU prover's tables, the large half.
+- **Not in it.** The templated multi-table Σ (S2/R7), `scopeOkT`'s one-table bound, the GPU prover's tables and the
+  proof server's staging.
+- **Your call:** start now, or hold until the GPU prover's tables are decided?
+
+**Proposal 2: the GPU prover's memory at 2^37 rows, one table, on one H200 on node A after 09:30Z. Owner: STATIONARY,
+whose node A harness and rmsnorm-v8 staging it reuses; I prepare the build and the expected figures.**
+
+- **What runs.** rmsnorm-v8 (`RMSNormFusedCudaVector8_v1{N=6144,BLOCK=256}`, blocks of 2^27 rows) at a 1,024-block
+  population, which is one table at m = 37. It is one M1 session on `gpu_lease.sh 1 --wait`.
+- **The build.** Measurement only, on a branch that never lands:
+  - `M_MAX`, `MAX_M` and `--table`'s range go to 37;
+  - m = 36 and 37 take upstream's `default_config` Ligerito ladder;
+  - the coins come from the Rust verifier server on the same branch, since Lean has no schedule past m = 35.
+
+  Nothing is claimed about the proof.
+- **What it measures.** The prover only: the device peak (nvidia-smi sampled), the host peak RSS, and the phases.
+- **Expected device memory.** The arena the prover allocates (`fc_arena_bytes`, and the arena replay at `checked`) is
+  29.9 GiB at m = 35, 55.8 GiB at 36 and 111.5 GiB at 37.
+  - STATIONARY's 35.4 to 36.0 GB peak at m = 35 leaves 3 to 6 GiB outside the arena.
+  - So at m = 37 expect about 115 to 118 GiB of the H200's 140.4 GiB, and up to about 136 GiB if the part outside the
+    arena grows with the population.
+  - The statement-dependent extremes (134.8 GiB of arena) would not fit; rmsnorm-v8's shape sits near the plain arena.
+- **Expected host memory.** About 70 to 126 GiB for the prover (31.6 GiB at m = 35; the witness alone is 48 GiB when
+  the host builds it). Staging and the statement build take about four times the 256-block population's.
+- **Optional first.** m = 36 (a 512-block population, about 62 GiB of device memory) checks the build at half the
+  memory.
+- **What it decides.** Whether one table at m = 37 needs only the schedules and their bounds, or an out-of-core or
+  multi-device level 0.
+
+- **Optional, not launched:** K2048 at 1, 64 and again 1 instances in one run on cpu-1, about an hour, pins the
+  verifier's per-block slope for the planner to about ±0.03 s. It moves no 3b number. Say if you want it.
+- **The note:** `proofs/20261109T0140Z-report-lever3b-verifyfast-b`, synced at 9fa5a681fd (§2, §5 and §8).
+- **Status:** no runs in flight. #8136 is on `checked` (b262db243e), and `main` moves when drive's full check passes.
