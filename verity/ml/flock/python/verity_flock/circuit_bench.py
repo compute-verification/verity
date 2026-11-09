@@ -322,7 +322,7 @@ def serve_plan(a, low, input_set, plan: list[int], out: Path, net: Path, pin: st
 
 
 def main(argv=None) -> int:
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock.input_sets import InputSet
 
     ap = argparse.ArgumentParser(prog="verity_flock.circuit_bench")
     ap.add_argument("--template", required=True)
