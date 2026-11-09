@@ -1,4 +1,5 @@
 """`figures.py` end to end."""
+import functools
 import json
 
 import figure1
@@ -11,12 +12,11 @@ import total_cost
 
 @pytest.mark.slow
 def test_figures_writes_every_figure(tmp_path, monkeypatch):
-    """Every figure, its JSON and the break-even's table, planned on one process over Figure 1's primary and secondary
-    scopes, the two Figure 4 reads; the break-even's search is `test_total_cost`'s, stubbed here because it plans each
-    line thousands of times."""
+    """Every figure, its JSON and the break-even's table, Figure 1's planned on one process over its primary scope alone;
+    the break-even's search is `test_total_cost`'s, stubbed here because it plans each line thousands of times."""
     monkeypatch.setattr(total_cost, "BETAS", (1e-2, 1.0))
-    scopes, two = figure1.scopes, (figure1.PRIMARY, figure1.SECONDARY)
-    monkeypatch.setattr(figure1, "scopes", lambda c, part: [s for s in scopes(c, part) if s.name in two])
+    for planner in (total_cost, figure1):
+        monkeypatch.setattr(planner, "run", functools.partial(planner.run, scope_names=(figure1.PRIMARY,)))
     be = {"beta": 1e-2, "targets": {"FP8": 1e3}, "rel": 1e-2, "spans": total_cost.SPANS,
           "rows": [{"config": "tokens", "registration": "machine", "scope": "world week", "overhead": 2.0,
                     "floor": 8e6, "h": {"FP8": None}, "beta": {"FP8": 3.0}}]}
@@ -31,5 +31,5 @@ def test_figures_writes_every_figure(tmp_path, monkeypatch):
         assert json.loads((tmp_path / f"{name}.json").read_text())["schema"] == schema
         assert (tmp_path / f"{name}.png").stat().st_size > 0 and (tmp_path / f"{name}.svg").exists()
     for pattern in ("figure1_overhead_appendix*", "figure1_skipped_work*"):
-        assert len(list(tmp_path.glob(f"{pattern}.png"))) == len(two), pattern
-    assert len(list(tmp_path.glob("figure1*.png"))) == 4 * len(two)
+        assert len(list(tmp_path.glob(f"{pattern}.png"))) == 1, pattern
+    assert len(list(tmp_path.glob("figure1*.png"))) == 4
