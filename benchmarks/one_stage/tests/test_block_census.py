@@ -1,5 +1,6 @@
 """`block_census.py`: each row's cut (the row itself when it fits, else each slot's coarsest fitting option, else a gap with
-its finest option's reason; a ``COLS`` row or slot at its fitting width of least leakage-weighted proving cost; no proof block
+its finest option's reason; a ``COLS`` or ``WIDE_COORDS`` row or slot at its fitting width of least leakage-weighted proving
+cost; no proof block
 for a row of no gate or no input), the slots of each kind of split the serving rows' tables name, and the census's counts per
 Definition, phase, token and request over the ranks. The sized units are stand-ins: nothing is bound or lowered."""
 
@@ -106,7 +107,7 @@ def test_a_cols_row_takes_its_width_of_least_leakage_weighted_cost_no_smaller_th
 
 
 def test_a_cols_row_smaller_than_the_floor_takes_its_coarsest_fitting_width():
-    """No width is 2^COLS_FLOOR rows or more: the row itself is taken, though its halvings cost less."""
+    """No width is 2^WIDTH_FLOOR rows or more: the row itself is taken, though its halvings cost less."""
     us = halvings("ResidualAdd_v1", "N", 64, 21, 1024)
     kind, units, _ = B.cut("ResidualAdd_v1{N=64}", family("ResidualAdd_v1{N=64}", us, est_log=21, out=(1024,)))
     assert (kind, [(u["spec"], u["n"]) for u in units]) == ("row", [("ResidualAdd_v1{N=64}", 1)])
@@ -121,6 +122,31 @@ def test_a_splits_cols_slot_takes_its_width_of_least_cost_and_its_other_slots_th
     kind, units, why = B.cut(row, family(row, [*resid, norm], est_log=28))
     assert (kind, [(u["spec"], u["n"]) for u in units], why) == (
         "split", [("AllReduceResidualMnnvl_v1{N=16}", 4), ("RmsNormMnnvl_v1{N=64}", 1)], None)
+
+
+def coords(K, N, est_logs):
+    """The block-scaled FP8 GEMM's coordinates of a row N wide at each width c of ``est_logs`` (c: its block's log2 rows),
+    coarse to fine, each c 16-bit outputs."""
+    return [unit(f"ScaledMmFp8BlockSharedScale_v1{{K={K},N={c},G=128}}", N // c, est_log=k, out=(16 * c,))
+            for c, k in sorted(est_logs.items(), reverse=True)]
+
+
+def test_a_gemm_s_coordinates_take_their_width_of_least_leakage_weighted_cost():
+    """``WIDE_COORDS``: a coordinate of c outputs hashes the activation row once for c of them, so 4 outputs fit the 2^25 rows
+    2 need, and cost least: their blocks times their outputs' size class plus the location bits times 2^k.  So the linear's
+    GEMM slot, and a row of the GEMM's own, take coordinates of 4, where the coarsest fitting option would be 16."""
+    cs = coords(6144, 16, {16: 27, 8: 26, 4: 25, 2: 25, 1: 24})
+    costs = {u["spec"]: B.leak_cost([u]) for u in cs}
+    assert min(costs, key=costs.get) == "ScaledMmFp8BlockSharedScale_v1{K=6144,N=4,G=128}"
+    q = unit("Fp8GroupQuantUe8m0_v1{K=6144}")
+    whole = unit("ScaledMmFp8BlockSharedScale_v1{K=6144,N=16,G=128}", est_log=28, out=(256,))
+    row = "DeepGemmFp8Linear_v1{K=6144,N=16}"
+    kind, units, why = B.cut(row, family(row, [q, whole, *cs], est_log=29))
+    assert (kind, [(u["spec"], u["n"]) for u in units], why) == (
+        "split", [("Fp8GroupQuantUe8m0_v1{K=6144}", 1), ("ScaledMmFp8BlockSharedScale_v1{K=6144,N=4,G=128}", 4)], None)
+    own = "ScaledMmFp8BlockSharedScale_v1{K=6144,N=16,G=128}"
+    kind, units, _ = B.cut(own, family(own, cs, est_log=28, out=(256,)))
+    assert (kind, [(u["spec"], u["n"]) for u in units]) == ("split", [("ScaledMmFp8BlockSharedScale_v1{K=6144,N=4,G=128}", 4)])
 
 
 def test_a_row_with_a_slot_no_option_fits_is_a_gap_with_its_finest_options_reason():

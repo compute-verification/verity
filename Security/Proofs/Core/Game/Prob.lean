@@ -17,8 +17,8 @@ they use:
 
 * `prob_mono`, `prob_le_one`, `prob_or_le`: monotonicity and the union bound;
 * `prob_and_const`: an event conjoined with a fact fixed by the strategy;
-* `prob_map`, `Strategy.toMap_ofMap`: relabelling the output (`map`) keeps the game's strategies (`Strategy.ofMap` and
-  `Strategy.toMap`, in `Protocol`).
+* `prob_map`, `Strategy.toMap_ofMap`, `Strategy.ofMap_toMap`: relabelling the output (`map`) keeps the game's
+  strategies (`Strategy.ofMap` and `Strategy.toMap`, in `Protocol`).
 
 The definitions are in `Definitions.Core.Game.Prob`.
 -/
@@ -148,6 +148,14 @@ theorem Strategy.toMap_ofMap (f : α → β) :
       show (⟨m, Strategy.toMap f (k m) (Strategy.ofMap f (k m) s')⟩ : Strategy ((Game.send _ k).map f)) = ⟨m, s'⟩
       rw [Strategy.toMap_ofMap f (k m) s']
   | @Game.coin _ _ _ _ k, s => funext fun c => Strategy.toMap_ofMap f (k c) (s c)
+
+theorem Strategy.ofMap_toMap (f : α → β) :
+    ∀ (g : Game α) (s : Strategy g), Strategy.ofMap f g (Strategy.toMap f g s) = s
+  | .ret _, _ => rfl
+  | .send _ k, ⟨m, s'⟩ => by
+      show (⟨m, Strategy.ofMap f (k m) (Strategy.toMap f (k m) s')⟩ : Strategy (Game.send _ k)) = ⟨m, s'⟩
+      rw [Strategy.ofMap_toMap f (k m) s']
+  | @Game.coin _ _ _ _ k, s => funext fun c => Strategy.ofMap_toMap f (k c) (s c)
 
 theorem prob_true : ∀ (g : Game α) (s : Strategy g), prob (fun _ => True) g s = 1
   | .ret _, _ => by simp [prob]

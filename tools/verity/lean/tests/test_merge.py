@@ -639,7 +639,7 @@ def test_two_sides_restating_one_guarantee_s_inline_premises_merge_premise_by_pr
     added premise a different reason: each keeps theirs', named; with ours' reasons as theirs', the guarantee merges to
     theirs' map, naming none."""
     sides = json.loads((FIXTURES / "inline-scheduled-requirement.json").read_text())
-    g = "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement"
+    g = "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement"
     assert sides["base"]["guarantees"] == sides["ours"]["guarantees"] == sides["theirs"]["guarantees"] and g in sides["base"]["guarantees"]
     base, ours, theirs = (sides[n]["shape"]["inline"][g] for n in ("base", "ours", "theirs"))
     added, dropped = [p for p in theirs if p not in base], [p for p in base if p not in theirs]
@@ -784,7 +784,7 @@ def test_an_inline_premise_one_side_dropped_stays_where_the_other_restated_its_g
 
 
 def test_a_renamed_premise_merges_to_one_entry_and_a_text_a_restated_statement_still_prints_stays():
-    """`TileUnpredictableOfNCPU`'s premise as #7347 renamed its binder `γ₀` to `g₀`, which changed the printed text and no
+    """`TileUnpredictableOfNCPU`'s premise as a rename of its binder `γ₀` to `g₀` left it, which changed the printed text and no
     record.  Theirs renames it, restating the guarantee (another hash of the `Guarantees` definition its signature names),
     while ours has the old text as the base had it: the merge has the new text alone, not the old one beside it (`next`
     held 19 such old texts over its `INLINE` cap).  A base that lists both texts, merged with a side whose `--update` dropped
@@ -1312,20 +1312,65 @@ def test_lists_of_names_merge_where_both_sides_append_one():
         "a value both sides changed is theirs', named"
 
 
-def test_a_witness_entry_the_sides_disagree_on_is_theirs_as_a_candidate():
-    """An `unwitnessed` hash both sides changed (each tree builds the statement differently), and a `witnesses` entry one side
-    removed while the other changed it, merge as theirs', named as candidates; an entry only one side changed is that side's,
-    as before."""
-    base = {"unwitnessed": {"G": "h0", "H": "k0"}, "witnesses": {"W": {"honest": ["W_h"], "nontrivial": "W_n"}}}
-    ours = {"unwitnessed": {"G": "h1", "H": "k1"}, "witnesses": {}}
+def test_a_witness_entry_both_sides_changed_is_ours_unless_theirs_alone_is_at_its_merged_record():
+    """An `unwitnessed` hash both sides changed, which no merged record holds, and a `witnesses` entry both sides changed,
+    which no record keys, merge as ours', named as candidates; a `witnesses` entry one side removed while the other changed
+    it is the changed one, and an entry only one side changed is that side's, as before.  With the guarantee's records,
+    theirs' hash, the merged record's, is theirs'."""
+    base = {"unwitnessed": {"G": "h0", "H": "k0"},
+            "witnesses": {"V": {"honest": ["V_h"], "nontrivial": "V_n"}, "W": {"honest": ["W_h"], "nontrivial": "W_n"}}}
+    ours = {"unwitnessed": {"G": "h1", "H": "k1"}, "witnesses": {"V": {"honest": ["V_h1"], "nontrivial": "V_n"}}}
     theirs = {"unwitnessed": {"G": "h2", "H": "k0"},
-              "witnesses": {"W": {"honest": ["W_h"], "nontrivial": "W_n", "kind": "exclusion"}}}
+              "witnesses": {"V": {"honest": ["V_h2"], "nontrivial": "V_n"},
+                            "W": {"honest": ["W_h"], "nontrivial": "W_n", "kind": "exclusion"}}}
     candidate: list[str] = []
     merged, why = M.merge(base, ours, theirs, candidate)
     assert why == []
-    assert merged["unwitnessed"] == {"G": "h2", "H": "k1"}
-    assert merged["witnesses"] == {"W": {"honest": ["W_h"], "nontrivial": "W_n", "kind": "exclusion"}}
-    assert candidate == ["unwitnessed[G] (theirs)", "witnesses[W] (theirs)"]
+    assert merged["unwitnessed"] == {"G": "h1", "H": "k1"}
+    assert merged["witnesses"] == {"V": ours["witnesses"]["V"], "W": theirs["witnesses"]["W"]}
+    assert candidate == ["unwitnessed[G] (ours, neither side at its merged record)", "witnesses[V] (ours)",
+                         "witnesses[W] (theirs)"]
+    rec = {s: d | {"guarantees": {"G": {"owner": "@lean", "type_hash": h}}}
+           for s, d, h in (("base", base, "h0"), ("ours", ours, "h1"), ("theirs", theirs, "h2"))}
+    merged, _ = M.merge(rec["base"], rec["ours"], rec["theirs"], candidate := [])
+    assert merged["unwitnessed"]["G"] == "h2" and "unwitnessed[G] (theirs, at its merged record)" in candidate
+
+
+V5 = "Flock.SecurityProofs.SampledKSLiveV5"
+
+
+def test_an_unwitnessed_entry_both_sides_changed_is_the_side_at_its_merged_record(tmp_path, capsys):
+    """Drive's merge of #7982 onto `next`: each side re-keyed SampledKSLiveV5's `unwitnessed` entry with its restated record,
+    and the merged record, theirs', holds theirs' entry's hashes, so the entry is theirs'.  Where theirs left the record as
+    the base had it, the merged record is ours', and theirs' entry is a stale value that would re-key ours': it is ours'."""
+    sides = json.loads((FIXTURES / "unwitnessed-at-the-merged-record-onto-next.json").read_text())
+    for n in ("base", "ours", "theirs"):
+        (tmp_path / n).write_text(A.text(sides[n]))
+    assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "Security/lean-audit.json"]) == 0
+    merged = json.loads((tmp_path / "ours").read_text())
+    assert merged["unwitnessed"][V5] == sides["theirs"]["unwitnessed"][V5] != sides["ours"]["unwitnessed"][V5]
+    assert merged["unwitnessed"][V5]["unfolded_hash"] == merged["guarantees"][V5]["unfolded_hash"]
+    assert f"unwitnessed[{V5}] (theirs, at its merged record): kept as named" in capsys.readouterr().err
+    stale = {**sides["theirs"], "guarantees": sides["base"]["guarantees"]}
+    merged, _ = M.merge(sides["base"], sides["ours"], stale, candidate := [])
+    assert merged["guarantees"][V5] == sides["ours"]["guarantees"][V5]
+    assert merged["unwitnessed"][V5] == sides["ours"]["unwitnessed"][V5]
+    assert f"unwitnessed[{V5}] (ours, at its merged record)" in candidate
+
+
+def test_an_unwitnessed_entry_neither_side_has_at_its_merged_record_is_ours_named(tmp_path, capsys):
+    """A merge into a proofs branch (`f7be331`) took theirs' SampledKSLiveV5 entry, a value theirs' own record no longer
+    holds. Neither side's entry holds the merged record's hashes, so the entry is ours', named on stderr: where the merged
+    tree doesn't state it, the Lean check fails it as a witness failure."""
+    sides = json.loads((FIXTURES / "unwitnessed-stale-on-the-incoming-side.json").read_text())
+    assert sides["theirs"]["unwitnessed"][V5]["unfolded_hash"] != sides["theirs"]["guarantees"][V5]["unfolded_hash"]
+    for n in ("base", "ours", "theirs"):
+        (tmp_path / n).write_text(A.text(sides[n]))
+    assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "Security/lean-audit.json"]) == 0
+    assert json.loads((tmp_path / "ours").read_text())["unwitnessed"][V5] == sides["ours"]["unwitnessed"][V5]
+    assert (f"merge.py: Security/lean-audit.json: unwitnessed[{V5}] (ours, neither side at its merged record): kept as "
+            "named; the Lean check of the merged tree judges it, and a stale entry fails there as a witness failure\n"
+            in capsys.readouterr().err)
 
 
 SEC, PROPS, FLOCK, POUS = "Security", "Security/Properties", "verity/core/service/flock", "verity/core/protocols/pous"

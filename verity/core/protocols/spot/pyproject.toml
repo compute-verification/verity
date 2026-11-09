@@ -8,7 +8,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = [
     "tests/test_challenger_coins.py",
     "tests/test_coins.py",
-    "tests/test_plancheck.py",
+    "tests/test_plancheck.py", "tests/test_form_refusals.py",
     "tests/test_proofs.py",
     "tests/test_service.py",
     "tests/test_service_fleet.py",

@@ -54,6 +54,8 @@ claims `CompiledTwo.KS` and `CompiledTwo.Exfil` they read have their `fails` wit
   (replay blocks the proof blocks `{0}`, `{1}`, first stage `all`, `k = 1`), sampling both replay blocks. It meets
   `CompiledTwo.Sessions` at every hash (`twoSessionsTwo_meets`): the first stage misses a set only when it is empty, and
   the second stage misses `X` only when `X` holds no proof block, where each cell escapes.
+* `CapTwo`'s premises hold at `toyTwo`, both rates `1` (`capTwo_honest`), and its conclusion fails at `zeroTwo`, the toy
+  with a second stage that samples nothing (`capTwo_nontrivial`).
 -/
 
 @[expose] public section
@@ -242,6 +244,8 @@ theorem twoLTwo_sessions {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited
       refine (Pr_le_one _).trans (le_of_eq (Finset.prod_eq_one fun ρ _ => Finset.prod_eq_one fun t _ => ?_).symm)
       rw [hc ρ t, Finset.card_empty, Claims.Sampling.escCell_zero]
   slots _ _ := le_rfl
+  unions x s Pt d hs hP _ _ :=
+    (twoLTwo Coin).unions_of_nPU_le (fun _ => le_rfl) (fun _ => le_rfl) x s Pt d hs hP
   refuses x _ _ _ _ _ := twoLTwo_scope x
   interior _ _ _ _ _ _ _ := rfl
   fixed := (twoL_sessions (Coin := Coin) H).fixed
@@ -409,5 +413,92 @@ theorem influenceTwoPatterns_nontrivial :
   rw [patterns_noTwo]
   have := two_le_card_influence_open
   omega
+
+end Claims.Witness.SamplingGeneric
+
+/-! ## The per-window cap says something -/
+
+namespace Claims.Witness.SamplingGeneric
+
+open Claims.Sampling
+open Claims.Witness.Sampling (rejCm toyStmt toyPart toy_Pa)
+
+/-- The toy's first stage `all` catches its one replay block at rate `1`. -/
+theorem toyTwo_firstRate : toyTwo.FirstRate 1 := by
+  intro T hT
+  show toyStmt.design.Pa toyPart T ≤ (1 - 1) ^ T.card
+  rw [toy_Pa, sub_self]
+  split_ifs with hw
+  · have hT0 : T = ∅ := by
+      refine Finset.eq_empty_of_forall_notMem fun v hv => ?_
+      have hlen : toyTwo.part.blocks.length = 1 := rfl
+      have hv0 : v = 0 := by
+        have := Finset.mem_range.1 (hT hv)
+        omega
+      subst hv0
+      have h0w : 0 ∈ Claims.Sampling.window 0 1 T := by simp [Claims.Sampling.window, hv]
+      rw [hw] at h0w
+      simp at h0w
+    subst hT0
+    simp
+  · exact pow_nonneg le_rfl _
+
+/-- The toy's second stage samples its one cell, of one proof block, whole: rate `1`. -/
+theorem toyTwo_secondRate : toyTwo.SecondRate toyPart 1 := by
+  intro ρ hρ t ht _
+  have hlen : toyTwo.part.blocks.length = 1 := rfl
+  have hs : toyPart.strata.length = 1 := rfl
+  obtain rfl : ρ = 0 := by omega
+  obtain rfl : t = 0 := by omega
+  have hc : (cell toyPart toyTwo.part 0 0).card = 1 := by decide
+  rw [hc]
+  norm_num [toyTwo]
+
+/-- **`CapTwo`'s premises hold** at the toy: its first stage catches its replay block at rate `1` and its second stage
+samples its cell at rate `1`. -/
+theorem capTwo_honest : toyTwo.FirstRate 1 ∧ toyTwo.SecondRate toyPart 1 := ⟨toyTwo_firstRate, toyTwo_secondRate⟩
+
+/-- The toy with a second stage that samples nothing (`k = 0`). -/
+def zeroTwo : Design.Two := ⟨toyPart, toyStmt.design, [0]⟩
+
+theorem escCell_k0 (n m : ℕ) : escCell n 0 m = 1 := by simp [escCell]
+
+theorem zeroTwo_esc (fp : ℕ → ℕ → ℕ) (ρ : ℕ) : zeroTwo.esc toyPart fp ρ = 1 := by
+  unfold Design.Two.esc
+  refine Finset.prod_eq_one fun t _ => ?_
+  have hk : zeroTwo.k.getD t 0 = 0 := by cases t <;> simp [zeroTwo]
+  rw [hk, escCell_k0]
+
+/-- A second stage that samples nothing never catches: `P̄_a = 1` at every footprint. -/
+theorem zeroTwo_Pa (fp : ℕ → ℕ → ℕ) : zeroTwo.Pa toyPart fp = 1 := by
+  have hlen : zeroTwo.part.blocks.length = 1 := rfl
+  have h1 : zeroTwo.replay.Pa zeroTwo.part ∅ = 1 := by
+    show toyStmt.design.Pa toyPart ∅ = 1
+    rw [toy_Pa]
+    simp [Claims.Sampling.window]
+  have hps : ({0} : Finset ℕ).powerset = {∅, {0}} := by
+    ext t
+    simp [Finset.subset_singleton_iff]
+  unfold Design.Two.Pa
+  rw [hlen, Finset.range_one, hps, Finset.sum_pair (Finset.singleton_ne_empty 0).symm]
+  simp [zeroTwo_esc, h1]
+
+theorem zeroTwo_wrongBlocks {fp : ℕ → ℕ → ℕ} (h : 1 ≤ fp 0 0) : (zeroTwo.wrongBlocks toyPart fp).card = 1 := by
+  have hlen : zeroTwo.part.blocks.length = 1 := rfl
+  have hs : toyPart.strata.length = 1 := rfl
+  have hp : ∃ t < toyPart.strata.length, 0 < fp 0 t := ⟨0, by rw [hs]; exact Nat.one_pos, h⟩
+  unfold Design.Two.wrongBlocks
+  rw [hlen, Finset.range_one, Finset.filter_singleton, if_pos hp, Finset.card_singleton]
+
+/-- **`CapTwo`'s conclusion fails** at a second stage that samples nothing: the toy's one proof block is incorrect at
+every interior, so the footprint marks its one replay block and the bound at rates `1` and `1` is `0`, while
+`P̄_a = 1`. -/
+theorem capTwo_nontrivial :
+    ¬ (zeroTwo.Pa toyPart (footprint id rejCm toyStmt toyPart zeroTwo.part ⟨[]⟩ fun _ _ => false) ≤
+      (1 - 1 * 1) ^ (zeroTwo.wrongBlocks toyPart
+        (footprint id rejCm toyStmt toyPart zeroTwo.part ⟨[]⟩ fun _ _ => false)).card) := by
+  rw [zeroTwo_Pa, zeroTwo_wrongBlocks (fp := footprint id rejCm toyStmt toyPart zeroTwo.part ⟨[]⟩ fun _ _ => false)
+    (toy_footprint id ⟨[]⟩ _)]
+  norm_num
 
 end Claims.Witness.SamplingGeneric

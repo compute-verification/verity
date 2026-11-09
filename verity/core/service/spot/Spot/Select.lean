@@ -38,7 +38,7 @@ private def split1 (s sep : String) : String × String :=
   | a :: rest => (a, sep.intercalate rest)
   | [] => (s, "")
 
-/-- `draw.parse_law`: `subset:K`, `stratified:K` or `work:K` (`K ≥ 1`), or `bernoulli:NUM/DEN` with `0 < DEN` and
+/-- `draw.parse_design`: `subset:K`, `stratified:K` or `work:K` (`K ≥ 1`), or `bernoulli:NUM/DEN` with `0 < DEN` and
 `NUM ≤ DEN`, split at the first `:` and the first `/`, each number one or more ASCII digits; the sampling design object, a Bernoulli
 law's `p` written without leading zeros. -/
 def parseDesign (text : String) : V Json := do

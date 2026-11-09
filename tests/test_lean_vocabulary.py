@@ -107,7 +107,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Merkle": (),  # nothing in scope declares it
     "Netlist": ("verity/ml/private_circuits/universal.py::Netlist",),
     "Node": (),
-    "Op": (f"{CORE}Boolean.lean::FlockSoundness.Audit.Op",),
+    "Op": (f"{CORE}Boolean.lean::Verity.Boolean.Op",),
     "Opening": ("Security/Definitions/Hash/RowLeaf.lean::Hash.RowLeaf.Opening", "verity/ml/commitments/merkle.py::Opening"),
     "Outcome": (f"{PROTOCOL}::Core.Outcome",),
     "Partition": (f"{CORE}Partition.lean::Verity.Partition", f"{FLOCK}Evaluated.lean::Flock.Extract.Partition"),
@@ -499,7 +499,7 @@ KNOWN: dict[str, str] = {
     "Security/Definitions/Core/Accel/Isa.lean::Verity.Accel.Store": "homonym, a GPU's memory kinds: rename (proofs)",
     "Security/Definitions/Core/Advice.lean::Verity.Advice.Registration":
         "homonym, a hiding commitment to a partition's rows: rename (proofs)",
-    "Security/Definitions/Core/Boolean.lean::FlockSoundness.Audit.Circuit":
+    "Security/Definitions/Core/Boolean.lean::Verity.Boolean.Circuit":
         "duplicate of `Verity.Circuit`: becomes its Boolean case (proofs)",
     "Security/Definitions/Core/Circuit.lean::Verity.Circuit.Transcript":
         "homonym, one run's gate values, which the Glossary calls a trace: rename, then the canonical trace (proofs)",
@@ -661,7 +661,7 @@ KNOWN: dict[str, str] = {
         "homonym, the simulator's model of one served block: rename (network-accounting)",
     "benchmarks/network_sim/workload/lab.py::Session":
         "homonym, the old word for a run, here a simulated read: rename (network-accounting)",
-    "benchmarks/numerical/python/verity_numerical/bench/lowerings.py::Registry":
+    "verity/ml/flock/python/verity_flock/lowerings.py::Registry":
         "homonym, a table of benchmark lowerings: rename (compute-accounting)",
     "verity/ml/flock/python/verity_flock/subcircuit_templates.py::Draw":
         "homonym, one synthetic benchmark draw: rename (compute-accounting)",

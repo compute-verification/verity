@@ -54,7 +54,7 @@ use rayon::prelude::*;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha512};
 
-use crate::{chunk::log2ceil, ir_block::IrUnitNet, lookup::LookupNet};
+use crate::{chunk::log2ceil, ir_block::{IrUnitNet, Row2, Row4, Row8, RowRead, RowWord}, lookup::LookupNet};
 
 pub const FORMAT: &str = "flock-circuit";
 pub const INST_FORMAT: &str = "flock-circuit-inputs";
@@ -1171,7 +1171,7 @@ impl Composite {
         // the bit and its gate's value to zero (elsewhere it would only force A·z · B·z to zero, or free the bit)
         for (n, r) in self.pinned_rows() {
             let net = &self.nets[n].1;
-            if (0..16).any(|t| r.checked_add(t).and_then(|i| net.b.get(i)).map(Vec::as_slice) != Some(&[net.const_pos][..])) {
+            if (0..16).any(|t| r.checked_add(t).is_none_or(|i| i >= net.b.n_rows() || !net.b.row_is(i, &[net.const_pos]))) {
                 return Err(PINNED_LINEAR.into());
             }
         }
@@ -1496,7 +1496,7 @@ impl Composite {
         let ands = ours.map(|n| {
             let net = &self.nets[n].1;
             let port = |r: usize| net.in_groups.iter().chain(&net.out_groups).any(|g| (g.col * WORD..(g.col + g.words) * WORD).contains(&r));
-            self.per_vu[n] * (0..net.useful).filter(|&r| r != net.const_pos && !port(r) && !(net.a[r].is_empty() && net.b[r].is_empty())).count()
+            self.per_vu[n] * (0..net.useful).filter(|&r| r != net.const_pos && !port(r) && !(net.a.row_len(r) == 0 && net.b.row_len(r) == 0)).count()
         }).sum();
         (rows, ands)
     }
@@ -2308,7 +2308,7 @@ pub fn region_word_violation(c: &Composite, regions: &[RegionShape], da: &[(u32,
             match r.kind {
                 Kind::Net(i) => {
                     let net = &c.nets[i].1;
-                    cols.extend((if a { &net.a } else { &net.b }).get(q - slot0).into_iter().flatten().map(|&k| slot0 + k));
+                    cols.extend((if a { &net.a } else { &net.b }).cols_or_empty(q - slot0).map(|k| slot0 + k));
                 }
                 Kind::Mask => cols.push(q),
             }
@@ -2415,19 +2415,6 @@ pub struct Stmt {
     pub identity: Value,
     /// `r1cs.c0_is_identity()`, a function of the statement alone: computed by its first verification or zk replay, read by the rest
     pub c0_identity: OnceLock<bool>,
-}
-
-/// Slot type `net`'s circuit, `CscCircuit::from_matrices` of its rows padded to its slot. The rows are lent to the matrices and
-/// taken back, not copied: the CSC reads only the rows' entries and the column count, so a padding row, which is empty, adds
-/// nothing to it.
-fn net_csc(net: &mut IrUnitNet) -> CscCircuit {
-    let k = 1usize << net.unit_log;
-    let lend = |rows: &mut Vec<Vec<usize>>| SparseBinaryMatrix { num_rows: k, num_cols: k, rows: Arc::new(std::mem::take(rows)) };
-    let (a, b) = (lend(&mut net.a), lend(&mut net.b));
-    let circ = CscCircuit::from_matrices(&a, &b);
-    net.a = Arc::try_unwrap(a.rows).expect("the lent rows have one holder");
-    net.b = Arc::try_unwrap(b.rows).expect("the lent rows have one holder");
-    circ
 }
 
 /// The strongly connected components of the per-VU slot graph (`(net, slot)`, an edge from each wire's source slot to its
@@ -2592,34 +2579,67 @@ fn lanes_into(v: &[u64], n: usize, dst: &mut [u64], stride: usize, off: usize, l
 
 /// Circuit `ni`'s slots (`net`, not a lookup's) from their input words `ins`, as mapped host slots hold them (`HostSlots`
 /// with a, b per slot): slot x's a words then its b words, `uw` F128 words each as (lo, hi) u64 pairs, at `out[4 * uw * x..]`,
-/// written straight from each lane group's bit-sliced rows. Whether every slot's z is a & b word for word, which that layout
-/// requires (if not, `out` holds no layout).
+/// written straight from each lane group's bit-sliced rows, [`unit_wide`] groups a pass. Whether every slot's z is a & b word
+/// for word, which that layout requires (if not, `out` holds no layout).
 pub fn unit_ab_into(net: &IrUnitNet, ni: usize, uw: usize, ins: &[Vec<F128>], out: &mut [u64]) -> bool {
+    unit_ab_into_wide(net, ni, uw, ins, out, unit_wide())
+}
+
+/// [`unit_ab_into`] at `n` lane groups a pass.
+pub fn unit_ab_into_wide(net: &IrUnitNet, ni: usize, uw: usize, ins: &[Vec<F128>], out: &mut [u64], n: usize) -> bool {
     assert_eq!(out.len(), 4 * uw * ins.len(), "unit_ab_into: out is not 4 * uw words per slot");
     let t0 = Instant::now();
     let one_pass = unit_flat() && net.one_pass();
     let flat_s = t0.elapsed().as_secs_f64();
-    let prof = GroupProf::default();
-    let ok = out.par_chunks_mut(64 * 4 * uw).zip(ins.par_chunks(64)).enumerate().all(|(gi, (dst, grp))| {
-        let (zz, aa, bq) = prof.eval(net, ni, gi, grp);
-        let tw = Instant::now();
-        let used = u64::MAX >> (64 - grp.len());
-        let ok = zz.iter().zip(&aa).zip(&bq).all(|((z, a), b)| (z ^ (a & b)) & used == 0);
-        if ok {
-            lanes_into(&aa, grp.len(), dst, 4 * uw, 0, 2 * uw);
-            lanes_into(&bq, grp.len(), dst, 4 * uw, 2 * uw, 2 * uw);
-        }
-        prof.out(tw);
-        ok
+    let prof = GroupProf::new(n);
+    let ok = out.par_chunks_mut(n * 64 * 4 * uw).zip(ins.par_chunks(n * 64)).enumerate().all(|(ti, (dst, slots))| {
+        let mut dst = dst.chunks_mut(64 * 4 * uw);
+        prof.each_group(net, ni, n * ti, slots, |_, grp, (zz, aa, bq)| {
+            let dst = dst.next().expect("out holds 64 slots a group");
+            let tw = Instant::now();
+            let used = u64::MAX >> (64 - grp.len());
+            let ok = zz.iter().zip(&aa).zip(&bq).all(|((z, a), b)| (z ^ (a & b)) & used == 0);
+            if ok {
+                lanes_into(&aa, grp.len(), dst, 4 * uw, 0, 2 * uw);
+                lanes_into(&bq, grp.len(), dst, 4 * uw, 2 * uw, 2 * uw);
+            }
+            prof.out(tw);
+            ok
+        }).into_iter().all(|ok| ok)
     });
     prof.print("slot_ab", ni, net.useful, ins.len(), one_pass, flat_s, t0);
     ok
 }
 
-/// A lane group's evaluation for [`Stmt::slot_zab`] and [`unit_ab_into`] (`eval64_flat`; with `FC_UNIT_CHECK=1` eval64 beside
-/// it, asserted equal), and the times `FC_UNIT_PROFILE` reports.
+/// Circuit `ni`'s slots (`net`, not a lookup's) from their input words `ins`: `(slot, z, a, b)`, `uw` words each, `n` lane
+/// groups a pass.
+#[allow(clippy::type_complexity)]
+fn unit_zab(net: &IrUnitNet, ni: usize, uw: usize, ins: &[Vec<F128>], n: usize) -> Vec<(usize, Vec<F128>, Vec<F128>, Vec<F128>)> {
+    let t0 = Instant::now();
+    let one_pass = unit_flat() && net.one_pass();
+    let flat_s = t0.elapsed().as_secs_f64();
+    let prof = GroupProf::new(n);
+    let items = ins.par_chunks(n * 64).enumerate().flat_map_iter(|(ti, slots)| {
+        prof.each_group(net, ni, n * ti, slots, |gi, grp, (zz, aa, bq)| {
+            let tl = Instant::now();
+            let (z, a, b) = (lanes(&zz, grp.len(), uw), lanes(&aa, grp.len(), uw), lanes(&bq, grp.len(), uw));
+            prof.out(tl);
+            z.into_iter().zip(a).zip(b).enumerate().map(|(l, ((z, a), b))| (64 * gi + l, z, a, b)).collect::<Vec<_>>()
+        }).into_iter().flatten()
+    }).collect();
+    prof.print("slot_zab", ni, net.useful, ins.len(), one_pass, flat_s, t0);
+    items
+}
+
+/// One lane group's bit-sliced (z, a, b) rows.
+type Zab = (Vec<u64>, Vec<u64>, Vec<u64>);
+
+/// Lane groups' evaluation for [`unit_zab`] and [`unit_ab_into`] (`eval64_flat`, or [`IrUnitNet::eval_wide`] for several
+/// groups in one pass; with `FC_UNIT_CHECK=1` eval64 beside it, asserted equal), and the times `FC_UNIT_PROFILE` reports.
 #[derive(Default)]
 struct GroupProf {
+    wide: usize,
+    passes: AtomicU64,
     eval_ns: AtomicU64,
     eval_max: AtomicU64,
     ref_ns: AtomicU64,
@@ -2628,41 +2648,110 @@ struct GroupProf {
     check: OnceLock<bool>,
 }
 
+/// The first `n` groups' words of `v`'s rows, each group's in its own vector, `v` read once.
+fn by_group<W: RowWord>(v: &[W], n: usize) -> Vec<Vec<u64>> {
+    let mut out: Vec<Vec<u64>> = (0..n).map(|_| Vec::with_capacity(v.len())).collect();
+    for w in v {
+        for (g, o) in out.iter_mut().enumerate() {
+            o.push(w.word(g));
+        }
+    }
+    out
+}
+
+/// Up to 64 lanes' bits at input column `col`, lane l in bit l.
+fn lane_bits(grp: &[Vec<F128>], col: usize) -> u64 {
+    grp.iter().enumerate().fold(0u64, |x, (l, r)| x | (bit(&r[col / WORD], col % WORD) << l))
+}
+
 impl GroupProf {
-    fn eval(&self, net: &IrUnitNet, ni: usize, gi: usize, grp: &[Vec<F128>]) -> (Vec<u64>, Vec<u64>, Vec<u64>) {
+    /// At most `wide` lane groups a pass.
+    fn new(wide: usize) -> Self {
+        assert!((1..=8).contains(&wide), "{wide} lane groups a pass: 1 to 8");
+        GroupProf { wide, ..Default::default() }
+    }
+
+    fn eval(&self, net: &IrUnitNet, ni: usize, gi: usize, grp: &[Vec<F128>]) -> Zab {
         let te = Instant::now();
-        let lanes_in = |col: usize| grp.iter().enumerate().fold(0u64, |x, (l, r)| x | (bit(&r[col / WORD], col % WORD) << l));
         let got = if unit_flat() {
             let cols = bit_rows(grp, net.in_words);
             net.eval64_flat(|col| cols[col])
         } else {
-            net.eval64(lanes_in)
+            net.eval64(|col| lane_bits(grp, col))
         };
-        let e = te.elapsed().as_nanos() as u64;
+        self.walked(te);
+        self.against_eval64(net, ni, gi, grp, &got);
+        got
+    }
+
+    /// The lane groups of `slots` (64 slots each, group `gi` first, at most `wide`) in order, each handed to `f(group, its
+    /// slots, (z, a, b))` as [`GroupProf::eval`] returns them: several in one pass of [`IrUnitNet::eval_wide`].
+    fn each_group<R>(&self, net: &IrUnitNet, ni: usize, gi: usize, slots: &[Vec<F128>], mut f: impl FnMut(usize, &[Vec<F128>], Zab) -> R) -> Vec<R> {
+        let grps: Vec<&[Vec<F128>]> = slots.chunks(64).collect();
+        assert!(grps.len() <= self.wide, "{} lane groups, past {} a pass", grps.len(), self.wide);
+        match grps.len() {
+            0 => Vec::new(),
+            1 => vec![f(gi, grps[0], self.eval(net, ni, gi, grps[0]))],
+            _ if !(unit_flat() && net.one_pass()) => grps.iter().enumerate().map(|(g, grp)| f(gi + g, grp, self.eval(net, ni, gi + g, grp))).collect(),
+            2 => self.wide_pass::<Row2, R>(net, ni, gi, &grps, f),
+            3 | 4 => self.wide_pass::<Row4, R>(net, ni, gi, &grps, f),
+            _ => self.wide_pass::<Row8, R>(net, ni, gi, &grps, f),
+        }
+    }
+
+    fn wide_pass<W: RowWord, R>(&self, net: &IrUnitNet, ni: usize, gi: usize, grps: &[&[Vec<F128>]], mut f: impl FnMut(usize, &[Vec<F128>], Zab) -> R) -> Vec<R> {
+        let te = Instant::now();
+        let mut cols = vec![W::splat(0); net.in_words * WORD];
+        for (g, grp) in grps.iter().enumerate() {
+            for (c, x) in cols.iter_mut().zip(bit_rows(grp, net.in_words)) {
+                c.set(g, x);
+            }
+        }
+        let (z, a, b) = net.eval_wide(|col| cols[col]).expect("a one-pass net");
+        self.walked(te);
+        let td = Instant::now();
+        let [z, a, b] = [z, a, b].map(|v| by_group(&v, grps.len()));
+        self.eval_ns.fetch_add(td.elapsed().as_nanos() as u64, Ordering::Relaxed);
+        z.into_iter().zip(a).zip(b).zip(grps).enumerate().map(|(g, (((z, a), b), grp))| {
+            let got = (z, a, b);
+            self.against_eval64(net, ni, gi + g, grp, &got);
+            f(gi + g, grp, got)
+        }).collect()
+    }
+
+    /// One walk over a net, from `since`.
+    fn walked(&self, since: Instant) {
+        let e = since.elapsed().as_nanos() as u64;
+        self.passes.fetch_add(1, Ordering::Relaxed);
         self.eval_ns.fetch_add(e, Ordering::Relaxed);
         self.eval_max.fetch_max(e, Ordering::Relaxed);
+    }
+
+    /// With `FC_UNIT_CHECK=1`, that group `gi`'s rows are `eval64`'s.
+    fn against_eval64(&self, net: &IrUnitNet, ni: usize, gi: usize, grp: &[Vec<F128>], got: &Zab) {
         if *self.check.get_or_init(|| std::env::var("FC_UNIT_CHECK").as_deref() == Ok("1")) {
             let tr = Instant::now();
-            let want = net.eval64(lanes_in);
+            let want = net.eval64(|col| lane_bits(grp, col));
             let r = tr.elapsed().as_nanos() as u64;
             self.ref_ns.fetch_add(r, Ordering::Relaxed);
             self.ref_max.fetch_max(r, Ordering::Relaxed);
-            assert!(want == got, "circuit {ni}, group {gi}: the one-pass evaluation is not eval64's");
+            assert!(want == *got, "circuit {ni}, group {gi}: the one-pass evaluation is not eval64's");
         }
-        got
     }
 
     fn out(&self, since: Instant) {
         self.out_ns.fetch_add(since.elapsed().as_nanos() as u64, Ordering::Relaxed);
     }
 
-    /// `out_sum_s`: the lanes' packed words (`lanes`, or `unit_ab_into`'s writes)
+    /// `eval_sum_s`: every walk's time with its groups' rows taken out of it, `passes` walks; `out_sum_s`: the lanes' packed
+    /// words (`lanes`, or `unit_ab_into`'s writes)
     #[allow(clippy::too_many_arguments)]
     fn print(&self, part: &str, ni: usize, rows: usize, slots: usize, one_pass: bool, flat_s: f64, t0: Instant) {
         if unit_profile() {
             let s = |x: &AtomicU64| x.load(Ordering::Relaxed) as f64 * 1e-9;
             eprintln!("UNITPROF\t{}", serde_json::json!({"part": part, "circuit": ni, "rows": rows, "slots": slots,
-                "one_pass": one_pass, "flat_s": flat_s, "groups": slots.div_ceil(64), "wall_s": t0.elapsed().as_secs_f64(),
+                "one_pass": one_pass, "flat_s": flat_s, "groups": slots.div_ceil(64), "wide": self.wide,
+                "passes": self.passes.load(Ordering::Relaxed), "wall_s": t0.elapsed().as_secs_f64(),
                 "eval_sum_s": s(&self.eval_ns), "eval_max_s": s(&self.eval_max), "out_sum_s": s(&self.out_ns),
                 "check": self.check.get().copied().unwrap_or(false), "eval64_sum_s": s(&self.ref_ns), "eval64_max_s": s(&self.ref_max)}));
         }
@@ -2690,9 +2779,8 @@ fn bit_rows(grp: &[Vec<F128>], words: usize) -> Vec<u64> {
 pub const GPU_NNZ_MAX: u64 = u32::MAX as u64;
 
 /// Refuses a circuit whose A or B side holds more than `limit` nonzeros.
-pub fn nnz_within(name: &str, a: &[Vec<usize>], b: &[Vec<usize>], limit: u64) -> Result<(), String> {
-    let count = |m: &[Vec<usize>]| m.iter().map(|r| r.len() as u64).sum::<u64>();
-    let (na, nb) = (count(a), count(b));
+pub fn nnz_within<R: RowRead + ?Sized>(name: &str, a: &R, b: &R, limit: u64) -> Result<(), String> {
+    let (na, nb) = (a.nnz() as u64, b.nnz() as u64);
     if na.max(nb) > limit {
         return Err(format!("{name}: {na} nonzeros in A and {nb} in B, past the GPU prover's {limit} (32-bit offsets): the CPU prover"));
     }
@@ -2710,6 +2798,17 @@ impl Composite {
 pub fn unit_flat() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
     *ON.get_or_init(|| std::env::var("FC_UNIT_FLAT").as_deref() != Ok("0"))
+}
+
+/// Lane groups of 64 host unit slots evaluated in one pass of [`IrUnitNet::eval_wide`] (`FC_UNIT_WIDE`, 1 to 8; default 8). A
+/// pass reads the net's rows once, whatever its groups, so a wider pass reads them fewer times, on fewer threads: the default
+/// spends the least CPU and memory bandwidth a slot, and 1, a pass a group, the least wall time where cores are idle.
+pub fn unit_wide() -> usize {
+    static N: OnceLock<usize> = OnceLock::new();
+    *N.get_or_init(|| match std::env::var("FC_UNIT_WIDE") {
+        Err(_) => 8,
+        Ok(v) => v.parse().ok().filter(|n| (1..=8).contains(n)).unwrap_or_else(|| panic!("FC_UNIT_WIDE={v}: 1 to 8 lane groups a pass")),
+    })
 }
 
 /// `FC_UNIT_PROFILE=1`: the host witness's parts as `UNITPROF` lines on stderr.
@@ -2766,7 +2865,7 @@ impl StmtCache {
 }
 
 impl Stmt {
-    pub fn new(mut c: Composite, n: usize, identity: Value) -> Result<Self, String> {
+    pub fn new(c: Composite, n: usize, identity: Value) -> Result<Self, String> {
         let blocks_real = n.div_ceil(c.g);
         let nbl = log2ceil(blocks_real.max(1)).max(3);
         shape_in_range(c.k_log + nbl, PT_LOCAL + nbl)?;
@@ -2779,26 +2878,21 @@ impl Stmt {
         // a typed template's generated read layouts, by circuit: their slot types' table-direct B side
         let reads: BTreeMap<usize, TableSide> = c.typed.as_ref().map(|t| t.parts.iter().zip(&t.inst.parts)
             .filter_map(|(&(net, _), &(j, _))| t.inst.reads.get(&j).map(|ln| (net, TableSide::of(ln)))).collect()).unwrap_or_default();
-        for ri in 0..c.ranges.len() {
-            let r = c.ranges[ri].clone();
+        for r in &c.ranges {
             let key = format!("{:?}", r.kind);
-            let t = match type_of.get(&key) {
-                Some(&t) => t,
-                None => {
-                    let circ = match r.kind {
-                        Kind::Net(i) => net_csc(&mut c.nets[i].1),
-                        Kind::Mask => {
-                            let k = 1usize << r.slot_log;
-                            let id = SparseBinaryMatrix { num_rows: k, num_cols: k, rows: (0..k).map(|i| vec![i]).collect::<Vec<_>>().into() };
-                            CscCircuit::from_matrices(&id, &id)
-                        }
-                    };
-                    types.push((r.slot_log, circ));
-                    tables.push(match r.kind { Kind::Net(i) => reads.get(&i).cloned(), Kind::Mask => None });
-                    type_of.insert(key, types.len() - 1);
-                    types.len() - 1
-                }
-            };
+            let t = *type_of.entry(key).or_insert_with(|| {
+                let circ = match r.kind {
+                    Kind::Net(i) => c.nets[i].1.csc(),
+                    Kind::Mask => {
+                        let k = 1usize << r.slot_log;
+                        let id = SparseBinaryMatrix { num_rows: k, num_cols: k, rows: (0..k).map(|i| vec![i]).collect::<Vec<_>>().into() };
+                        CscCircuit::from_matrices(&id, &id)
+                    }
+                };
+                types.push((r.slot_log, circ));
+                tables.push(match r.kind { Kind::Net(i) => reads.get(&i).cloned(), Kind::Mask => None });
+                types.len() - 1
+            });
             ranges.push((t, r.pos0, r.count));
         }
         let regions = Self::regions(&c)?;
@@ -3275,19 +3369,7 @@ impl Stmt {
                     (x, f(zz), f(aa), f(bq))
                 }).collect()
             } else {
-                let t0 = Instant::now();
-                let one_pass = unit_flat() && net.one_pass();
-                let flat_s = t0.elapsed().as_secs_f64();
-                let prof = GroupProf::default();
-                let items = ins.par_chunks(64).enumerate().flat_map_iter(|(gi, grp)| {
-                    let (zz, aa, bq) = prof.eval(net, ni, gi, grp);
-                    let tl = Instant::now();
-                    let (z, a, b) = (lanes(&zz, grp.len(), uw), lanes(&aa, grp.len(), uw), lanes(&bq, grp.len(), uw));
-                    prof.out(tl);
-                    z.into_iter().zip(a).zip(b).enumerate().map(move |(l, ((z, a), b))| (64 * gi + l, z, a, b))
-                }).collect();
-                prof.print("slot_zab", ni, net.useful, ins.len(), one_pass, flat_s, t0);
-                items
+                unit_zab(net, ni, uw, ins, unit_wide())
             };
             items
         }
@@ -3661,30 +3743,37 @@ mod tests {
         let (net, _) = crate::lookup::LookupNet::build("t", table, n, 4, 31);
         let uw = 1usize << (net.unit_log - 7);
         // an assertion row (its own column in A, B the constant) that fails: z is not a & b there
+        use crate::ir_block::RowWrite;
         let mut bad = net.clone();
-        let i = (0..bad.useful).rev().find(|&i| i != bad.const_pos && !bad.a[i].is_empty() && !bad.b[i].is_empty()).unwrap();
-        bad.b[i] = vec![bad.const_pos];
-        bad.a[i].push(i);
-        for (net, slots, wide) in [(&net, 100, false), (&net, 64, false), (&net, 130, true), (&bad, 100, true)] {
+        let i = (0..bad.useful).rev().find(|&i| i != bad.const_pos && !bad.a.row(i).is_empty() && !bad.b.row(i).is_empty()).unwrap();
+        bad.b = bad.b.with_row(i, &[bad.const_pos]);
+        let row: Vec<usize> = bad.a.row_cols(i).chain([i]).collect();
+        bad.a = bad.a.with_row(i, &row);
+        assert!(net.one_pass() && bad.one_pass(), "one-pass nets, so several groups take one wide pass");
+        for (net, slots, wide) in [(&net, 100, false), (&net, 64, false), (&net, 130, true), (&net, 520, true), (&bad, 100, true)] {
             let ins: Vec<Vec<F128>> = (0..slots).map(|_| (0..net.in_words).map(|w| match (w, wide) {
                 (0, false) => F128::new(r() & ((1 << n) - 1), 0),
                 (_, false) => F128::ZERO,
                 _ => F128::new(r(), r()),
             }).collect()).collect();
-            let (mut want, mut ok) = (Vec::new(), true);
-            for grp in ins.chunks(64) {
+            let (mut want, mut want_zab, mut ok) = (Vec::new(), Vec::new(), true);
+            for (gi, grp) in ins.chunks(64).enumerate() {
                 let (z, a, b) = net.eval64(|col| grp.iter().enumerate().fold(0u64, |x, (l, w)| x | (bit(&w[col / WORD], col % WORD) << l)));
                 let (z, a, b) = (lanes(&z, grp.len(), uw), lanes(&a, grp.len(), uw), lanes(&b, grp.len(), uw));
-                for ((z, a), b) in z.iter().zip(&a).zip(&b) {
-                    ok &= z.iter().zip(a).zip(b).all(|((z, a), b)| z.lo == a.lo & b.lo && z.hi == a.hi & b.hi);
-                    want.extend(a.iter().chain(b).flat_map(|x| [x.lo, x.hi]));
+                for (l, ((z, a), b)) in z.into_iter().zip(a).zip(b).enumerate() {
+                    ok &= z.iter().zip(&a).zip(&b).all(|((z, a), b)| z.lo == a.lo & b.lo && z.hi == a.hi & b.hi);
+                    want.extend(a.iter().chain(&b).flat_map(|x| [x.lo, x.hi]));
+                    want_zab.push((64 * gi + l, z, a, b));
                 }
             }
-            let mut out = vec![!0u64; 4 * uw * slots];
-            assert_eq!(unit_ab_into(net, 0, uw, &ins, &mut out), ok, "{slots} slots: z = a & b");
             assert_eq!(ok, !std::ptr::eq(net, &bad), "a lookup's rows hold, the failed assertion does not");
-            if ok {
-                assert!(out == want, "{slots} slots: the packed a, b words");
+            for wide in 1..=8 {
+                let mut out = vec![!0u64; 4 * uw * slots];
+                assert_eq!(unit_ab_into_wide(net, 0, uw, &ins, &mut out, wide), ok, "{slots} slots, {wide} groups a pass: z = a & b");
+                if ok {
+                    assert!(out == want, "{slots} slots, {wide} groups a pass: the packed a, b words");
+                }
+                assert!(unit_zab(net, 0, uw, &ins, wide) == want_zab, "{slots} slots, {wide} groups a pass: the slots' z, a, b words");
             }
         }
     }
@@ -3839,7 +3928,7 @@ mod tests {
         let eq: Vec<F128> = (0..n).map(|_| { s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407); F128::new(s, s.rotate_left(29)) }).collect();
         let mut want = vec![F128::ZERO; n];
         for r in ln.prod0()..ln.prod0() + (ln.k << 5) {
-            for &c in &net.b[r] {
+            for c in net.b.row_cols(r) {
                 want[c] += eq[r];
             }
         }
@@ -3865,10 +3954,7 @@ mod tests {
             }
             let k = 1usize << r.slot_log;
             let (a, b) = match r.kind {
-                Kind::Net(i) => {
-                    let pad = |rows: &Vec<Vec<usize>>| { let mut x = rows.clone(); x.resize(k, Vec::new()); SparseBinaryMatrix { num_rows: k, num_cols: k, rows: x.into() } };
-                    (pad(&c.nets[i].1.a), pad(&c.nets[i].1.b))
-                }
+                Kind::Net(i) => c.nets[i].1.padded(k),
                 Kind::Mask => {
                     let id = SparseBinaryMatrix { num_rows: k, num_cols: k, rows: (0..k).map(|i| vec![i]).collect::<Vec<_>>().into() };
                     (id.clone(), id)
@@ -3974,30 +4060,16 @@ mod tests {
         }
     }
 
-    /// A slot type's circuit from its rows as they are is the one from its rows padded to its slot with empty rows, and the
-    /// rows come back unchanged.
+    /// A slot type's circuit from its rows in place is the one from its rows padded to its slot with empty rows.
     #[test]
-    fn net_csc_is_the_padded_rows_circuit() {
-        let mut s = 11u64;
-        let mut rnd = || { s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407); F128::new(s, s.rotate_left(29)) };
+    fn slot_csc_is_the_padded_rows_circuit() {
         let mut padded = 0;
         for (name, c) in test_circuits() {
             for (nm, net) in &c.nets {
                 let k = 1usize << net.unit_log;
                 padded += usize::from(net.a.len() < k || net.b.len() < k);
-                let pad = |rows: &Vec<Vec<usize>>| {
-                    let mut x = rows.clone();
-                    x.resize(k, Vec::new());
-                    SparseBinaryMatrix { num_rows: k, num_cols: k, rows: x.into() }
-                };
-                let want = CscCircuit::from_matrices(&pad(&net.a), &pad(&net.b));
-                let mut lent = net.clone();
-                let got = net_csc(&mut lent);
-                assert!(lent.a == net.a && lent.b == net.b, "{name} {nm}: the rows changed");
-                let alpha = rnd();
-                let eq: Vec<F128> = (0..k).map(|_| rnd()).collect();
-                assert_eq!(format!("{} {:?}", got.n_cols(), got.fold_alpha_batched(alpha, &eq)),
-                           format!("{} {:?}", want.n_cols(), want.fold_alpha_batched(alpha, &eq)), "{name} {nm}");
+                let (a, b) = net.padded(k);
+                assert!(net.csc() == CscCircuit::from_matrices(&a, &b), "{name} {nm}");
             }
         }
         assert!(padded > 0, "no slot type with a padding row to leave out");

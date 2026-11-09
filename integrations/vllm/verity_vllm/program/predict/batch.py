@@ -114,9 +114,8 @@ def _workload(phi: Phi, shapes: list[tuple[int, int]], policy: dict) -> Any:
     from verity_vllm.program import workload as W
 
     from .score import request_component
-    canon: dict = {}
     pq = Phi.from_json({**phi.to_json(), "sampling": policy})
-    comps = {s: request_component(build_program(pq, "request", LP=s[0], T=s[1]), canon) for s in dict.fromkeys(shapes)}
+    comps = {s: request_component(build_program(pq, "request", LP=s[0], T=s[1])) for s in dict.fromkeys(shapes)}
     reqs = [W.WorkloadRequest(request_id_of(i), i, LP, T + 1, i, comps[(LP, T)], T=T) for i, (LP, T) in enumerate(shapes)]
     return W.WorkloadProgram(reqs, manifest_digest=None, lag=int(phi.target_profile().lag()))
 

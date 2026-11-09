@@ -371,7 +371,7 @@ theorem pr_tape (p : α → Prop) (g : Game α) (s : Strategy g) :
     Claims.Pr (fun x : CoinTape g s => p (CoinTape.run g s x)) = expect (ind p) g s := by
   classical
   rw [← expect_tape]
-  unfold Claims.Pr
+  unfold Claims.Pr Claims.prUniform
   congr 1
   rw [Finset.natCast_card_filter]
   exact Finset.sum_congr rfl fun x _ => by unfold ind; split_ifs <;> simp_all

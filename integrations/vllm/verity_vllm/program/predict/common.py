@@ -1,10 +1,13 @@
 """What every decoder of `build.decoder` writes with: the refusal (`Unexpressible`), the vocabulary's kinds (`kind`), the served
 class, the circuit types of a shape, the tensor-parallel rank's view of the other ranks' partials (`_Peers`), the
 batch a request's calls run in (`launch_batch`, `_Launch`) or a batch-invariant row's launch context (`launch_rows`, `launch_seqlen_q`) and the
-token select over a row's whole-vocabulary logits (`select_token`), and a wrapper's forwards over a decoder (`drive`)."""
+token select over a row's whole-vocabulary logits (`select_token`), a wrapper's forwards over a decoder (`drive`), and a compile's
+collector (`cyclic_gc_off`)."""
 
 from __future__ import annotations
 
+import functools
+import gc
 import re
 from dataclasses import dataclass
 
@@ -341,3 +344,18 @@ def launch_seqlen_q(ctx: dict, own_rows: int, step: int, tp, accepted: bool) -> 
         return own_rows
     except TG.LaunchContextInvalid as e:
         raise Unexpressible(f"vocabulary cannot express: request step {step}: {e}") from None
+
+
+def cyclic_gc_off(f):
+    """`f` with the cyclic collector off while it runs: a compile frees its intermediates by reference counting, and the collector's
+    passes over the bodies it builds cost a quarter of the compile."""
+    @functools.wraps(f)
+    def run(*args, **kwargs):
+        on = gc.isenabled()
+        gc.disable()
+        try:
+            return f(*args, **kwargs)
+        finally:
+            if on:
+                gc.enable()
+    return run

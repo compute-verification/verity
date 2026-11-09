@@ -72,7 +72,7 @@ open scoped ENNReal
 
 /-- **The committed wires the units read or write, summed over the units**: `Σ_u |io u|`, a bound on the commit strings
 any sample reads. -/
-noncomputable def _root_.Flock.Bridge.ioSum {C : FlockSoundness.Audit.Circuit} {n : ℕ}
+noncomputable def _root_.Flock.Bridge.ioSum {C : Verity.Boolean.Circuit} {n : ℕ}
     (P : FlockSoundness.Audit.Partition C n) : ℕ :=
   ∑ u, (P.io u).card
 

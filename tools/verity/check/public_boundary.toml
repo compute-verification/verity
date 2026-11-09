@@ -52,6 +52,8 @@ vllm = ["integrations/vllm"]
 shared = [
     "verity/core/primitives/{randomness,lms}",
     "verity/core/difftest",
+    # the reporting grid every monitoring-period report states: its periods and δs
+    "verity/core/protocols/reporting.py",
     "tools/config",
     # the hardware cards, the data sheets' numbers, which the integration's served device reads (the Lean tables' test reads
     # Accounting's B200 sheet, so it stays private)
@@ -63,6 +65,10 @@ shared = [
     # the second stage's law (`SecondMisses`), which the public sampling proofs import: an entry of its own, apart from
     # Draw.lean's
     "Security/Properties/Spot/Second.lean",
+    # an audit's members side by side as the claims' program (`bitsProgs`, `membersPart`, `filesReplay`) and the lemmas on
+    # Bits' program, which the bridge (`Bridge.Members`) and SPOT[Flock]'s code import: entries of their own
+    "Security/Properties/Spot/Members.lean",
+    "Security/Proofs/Properties/Spot/Bits.lean",
 ]
 # the repository's structure the public tests and the Lean check read
 structure = ["ruff.toml", "Security/lean-audit.json", "Security/Proofs/lean-audit.json", "fixtures/artifacts.json"]
@@ -71,8 +77,12 @@ benchmarks = [
     "benchmarks/{flock_s8_block,recursion_e2e}",
     "benchmarks/one_stage/{served_verdicts,served_pearlplus,served_composite}.sh",
     "benchmarks/one_stage/{served_verdicts,composite,served_cases,inference_only,served_integrity,served_shares}.py",
+    # the block record the served verdicts write, which `served_verdicts.py` loads from `examples/h200/interfaces`
+    "examples/h200/interfaces/verity_e2e_demo/block_record.py",
     "benchmarks/one_stage/{served_overhead,served_compare}.py",
     "benchmarks/one_stage/{pyproject.toml,README.md}",
+    # the CPU reference of the int8 attention's gate, which vLLM's int8 attention tests hold the served kernels to
+    "benchmarks/pouw/edited_gemm/{fattn_ref.py,pyproject.toml}",
 ]
 
 [private]
@@ -108,11 +118,15 @@ protocol_tests = [
     "integrations/vllm/tests/program/test_io_shell.py",
     "integrations/vllm/tests/commit/test_memory_map.py",
     "integrations/vllm/tests/protocols/{remote_bandwidth,test_pous_option.py,pous_gpu.sh,pous_gpu.py}",
+    "integrations/vllm/tests/pipeline/test_serve_remote.py",
+    "integrations/vllm/tests/engine/int8_store_gpu.py",
 ]
-# vLLM's adapter of PoUS, which `verity_vllm.protocols.adapter` loads by name and refuses as not on this tree where it
-# is absent
+# vLLM's test of its int8 attention kernels' PTX and SASS, which runs the PoUW kernels' SASS gate (`benchmarks/pouw/harness`)
+kernel_gates = ["integrations/vllm/tests/engine/{int8_attention_sass,test_int8_attention_sass}.py"]
+# vLLM's adapter of PoUS and driver of the bandwidth audit, which `verity_vllm.protocols.adapter` and `driver` load by name
+# and refuse as not on this tree where they are absent
 adapters = [
-    "integrations/vllm/verity_vllm/protocols/pous.py",
+    "integrations/vllm/verity_vllm/protocols/{pous.py,remote_bandwidth}",
 ]
 # vLLM's migration of superseded Definitions, which runs the circuit check, and the tests that read it
 checks = [
@@ -134,6 +148,17 @@ team = [
     "integrations/vllm/tests/lint/test_merge_allowlist.py",
     "integrations/vllm/tests/pipeline/test_{circuit_db,source_identity,research_tools,workload_fetch}.py",
     "integrations/vllm/tests/regression/test_attempt_resolution.py",
+]
+# Flock's measurement campaigns (their pod scripts, the bench drivers they run, the run and store tool's declarations)
+# and the tests that read the numerical bench, circuit-check or NCI's difftest vectors
+flock_bench = [
+    "verity/ml/flock/pod/{20-pure,30-cell,31-replay,33-ir-cell,50-preflight,61-circuit-cell}.sh",
+    "verity/ml/flock/pod/{74-gemm-hill,76-read-gadget,92-zk-sessions,93-zk-tree-from}.sh",
+    "verity/ml/flock/pod/{gemm_hill,read_gadget}.py",
+    "verity/ml/flock/python/verity_flock/{bench,circuit_bench,ir_bench,register}.py",
+    "verity/ml/flock/{tool.py,verifier/tool.py}",
+    "verity/ml/flock/tests/test_{backend_bench,challengers,class_statement,gemm_hill,ir_lowering_bench}.py",
+    "verity/ml/flock/tests/test_{lean_width_refusals,partition_units}.py",
 ]
 
 # Each entry: globs exported only as far as public files need them, the public groups whose files may pull them in
