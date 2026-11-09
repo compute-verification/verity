@@ -13,6 +13,9 @@ public import Proofs.Flock.EndToEnd.Joint
 public import Proofs.Flock.EndToEnd.Joint.MT.Bound
 public import Proofs.Flock.EndToEnd.Joint.V5.Bound
 public import Proofs.Flock.EndToEndRegistered
+public import Proofs.Flock.EndToEndRegistered.Honest
+public import Proofs.Flock.EndToEndRegistered.Inputs
+public import Proofs.Flock.EndToEndRegistered.Nontrivial
 public import Proofs.Flock.EndToEndRegisteredRows
 public import Proofs.Flock.SoundAtBridge
 public import Proofs.Flock.ZeroKnowledgeHidden
@@ -50,6 +53,7 @@ public import Proofs.Flock.SamplingGeneric.Masked
 public import Proofs.Flock.SamplingGeneric.TwoCode
 public import Proofs.Flock.SamplingGeneric.TwoAt
 public import Proofs.Flock.SamplingGeneric.Guarantees
+public import Proofs.Flock.SpotFlock.Cap
 public import Proofs.Flock.SpotFlock.Code
 public import Proofs.Flock.SpotFlock.Coins
 public import Proofs.Flock.SpotFlock.Accepting
@@ -64,6 +68,8 @@ public import Proofs.Flock.SpotFlock.Reads
 public import Proofs.Flock.SpotFlock.Rows
 public import Proofs.Flock.SpotFlock.RowsOpen
 public import Proofs.Flock.Encodings
+public import Proofs.Flock.SpotFlock.Reveals
+public import Proofs.Flock.SpotFlock.RevealsLe
 public import Proofs.Flock.Bridge
 public import Proofs.Flock.Bridge.Transports
 public import Proofs.Flock.Bridge.TransportsRefs

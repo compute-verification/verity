@@ -99,7 +99,7 @@ theorem stepWith_congr_coins (H : Claims.Msg → Claims.Msg) {Ω : Type} {P P' :
     (hP : ∀ hist : List (Claims.Msg × Claims.Msg),
       hist.map Prod.snd = (List.range hist.length).map (fun j => (Claims.coinSeq r j).bytes) →
         P.next x hist ω = P'.next x hist ω) :
-    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Trace),
+    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
       as.length = hist.length →
       hist.map Prod.snd = (List.range hist.length).map (fun j => (Claims.coinSeq r j).bytes) →
       Claims.stepWith H P x ω (fun as => (V true).next x as ((List.range as.length).map (Claims.coinSeq r))) n hist

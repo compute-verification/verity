@@ -11,7 +11,8 @@ import numpy as np
 from verity_vllm.program.predict import build as PB
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program import prune as PR
-from verity_vllm.program.prune import _read, _renumbered, dead_free, dead_units, kept_records, narrowed, swapped, without_dead_units
+from verity_vllm.program.prune import (_read, _renumbered, batched_form, dead_free, dead_units, kept_records, narrowed, swapped,
+                                       without_dead_units)
 from verity.ml.definitions.boolean import boolean_version
 from verity.ml.definitions.registry import b1, gemm_bias, topp_words as TW
 
@@ -37,7 +38,8 @@ def _shape(body) -> list:
 def test_the_request_wrappers_dead_units_are_the_last_layers_rows_before_the_prefills_last(monkeypatch):
     """TINY's request of 8 prompt rows: the last layer's attention, o projection, MLP and their norms on rows 0-6 (and the rotary
     of their queries) reach no sample; the build drops those 56 units and nothing else, as pruning the unpruned body does, swaps
-    the rest's Definitions with dead gates (`swapped`) and narrows the linears read in part (`narrowed`)."""
+    the rest's Definitions with dead gates (`swapped`) and narrows the linears read in part (`narrowed`). A body handed over
+    (`consume`, as the build hands its Builder's) gives the same form and is emptied; one with nothing to drop is the form, kept."""
     pruned = PB.build_program(PHI, "request", LP=8, T=3)
     monkeypatch.setattr(PB, "dead_free_form", lambda b, **_: (b, list(range(len(b.nodes)))))
     full = PB.build_program(PHI, "request", LP=8, T=3)
@@ -50,7 +52,12 @@ def test_the_request_wrappers_dead_units_are_the_last_layers_rows_before_the_pre
     assert again.offsets[-1] == body.offsets[-1] - sum(body.nodes[k].gates for k in dead)
     form, form_kept = dead_free(body)
     assert form_kept == kept and _shape(form) == _shape(narrowed(swapped(again))[0]) == _shape(pruned.program.fn.body)
+    held = Body(body.params, body.ret_type, list(body.nodes), body.ret, list(body.offsets))
+    consumed, consumed_kept = dead_free(held, batched=True, consume=True)
+    assert consumed_kept == kept and _shape(consumed) == _shape(batched_form(form)[0]) and held.nodes == held.offsets == []
     assert dead_units(pruned.program.fn.body) == [] and dead_free(pruned.program.fn.body)[0] is pruned.program.fn.body
+    kept_body = pruned.program.fn.body
+    assert dead_free(kept_body, consume=True)[0] is kept_body and len(kept_body.nodes) == len(kept_body.offsets) - 1 > 0
     assert pruned.digest != full.digest
     step = PB.build_program(PHI, "step", M=1, pos0=8)
     assert dead_units(step.program.fn.body) == []
@@ -173,6 +180,40 @@ def test_an_attentions_key_sequences_renumber_as_cuts_of_one_renumbered_log():
     for g in reversed(got):
         _read(g, read, done)
     assert read == {0, 2, 3, 5, 6}
+
+
+class _Stepped(list):
+    """A log's parts that count the parts a walk steps over, by iteration or by slice."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.stepped = 0
+
+    def __iter__(self):
+        for p in list.__iter__(self):
+            self.stepped += 1
+            yield p
+
+    def __getitem__(self, i):
+        got = list.__getitem__(self, i)
+        self.stepped += len(got) if isinstance(i, slice) else 1
+        return got
+
+
+def test_liveness_steps_over_each_part_of_a_layers_key_rows_once_reading_the_longest_cut_first():
+    """A layer's key rows, one cut a row, each one row longer: liveness reads them last cut first (it walks the body backward), and
+    steps over each part of the log once in all, not the log's longest prefix once a cut (O(rows^2) a layer at a long context)."""
+    log, n = PartLog(), 512
+    log.parts = parts = _Stepped()
+    cuts = []
+    for k in range(n):
+        log.append(Affine("n", k, 0, 1))
+        cuts.append(log.cut(k + 1, [Affine("n", n + k, 0, 1)]))
+    parts.stepped = 0
+    read, done = set(), {}
+    for c in reversed(cuts):
+        _read(c, read, done)
+    assert read == set(range(2 * n)) and parts.stepped == n
 
 
 DOT = G.GEMM_HOPPER["DOT"]

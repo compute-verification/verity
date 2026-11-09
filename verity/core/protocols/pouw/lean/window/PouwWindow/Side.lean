@@ -2,7 +2,7 @@ module
 
 public import PouwWindow.Entry
 public import PouwCommit.Py
-public import Identity.Domains
+public import Identity.Domains.Pouw
 
 /-!
 # The side trees (`window.py`, "The side trees")
