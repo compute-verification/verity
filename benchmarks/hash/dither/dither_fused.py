@@ -505,7 +505,7 @@ def check(win: DitherState, lib_h1r: str, which: str = "gate", n_ref_units: int 
         if bool(z[m:].any()) or bool(a[m:].any()) or bool(sa[m:].any()):
             zero_bad.append(w)
         if g["y"] is not None:
-            # the op's own body, not the op: an -xl arm serves verity_int8::scaled_mm from exactlin
+            # the reference body, not the op: on CUDA the op serves verity_int8::scaled_mm from int8_fused's kernel
             yr = E.dequantize(zr, sa[:m], REG[w][1].weight_scale)
             if not torch.equal(yr.view(torch.int16), g["y"][w].view(torch.int16)):
                 y_bad.append(w)
