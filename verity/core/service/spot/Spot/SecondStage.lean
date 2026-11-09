@@ -41,10 +41,11 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
   - `second-sample`: its sample is not the verifier's own, the second draw's units in its part as a subset of its slots
     (`ownDraw`);
   - `second-read`: a port's registered read (`readOk`) is not, for a port a link names, the boundary port it names,
-    each slot reading only its cell's replay block's rows (`[S[i]·r, (S[i] + 1)·r)`, `r` the port's leaves over the
-    boundary population); for a port a wire names, its writer's output port of the interior record, each slot of
-    replay block `S[i]` reading only its writer's first instance's rows there (`[i·n_w·r, (i·n_w + 1)·r)`, `r` the
-    port's leaves over the writer's `Q·n_w` slots); else its own port of the interior record, each slot `u` reading
+    each slot reading only its unit's row of its cell's replay block's (`S[i]·r + ρ(j)`, `r` the port's rows a block
+    and `ρ` its units' rows, the port's `Rows`, `j` the slot's unit in its cell, the port's leaves the boundary
+    population's `r` each); for a port a wire names, its writer's output port of the interior record, each slot of
+    replay block `S[i]` reading only its writer unit's row there (`i·n_w + ρ(j)`, the port's leaves the writer's
+    `Q·n_w` slots'); else its own port of the interior record, each slot `u` reading
     only its own rows (`[(u - off_t)·r, (u - off_t + 1)·r)`, `r` the port's leaves over the part's `Q·n_t` slots), or
     a value either registration registers; each at its root, domain and leaves. Or a port a link or a wire names is
     not read.
@@ -63,21 +64,29 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
     which it reads a value a registration registers are fixed before the run: `second-read` alone lets a port no link
     names read any value either registration registers, at any rows.
 * **The links** (`Link`) are the verifier's own, derived from the replay block's registered Definition and never
-  supplied (`replayLinks`): a template its body calls once that reads one of its parameters alone reads that boundary
-  port, and one whose output it returns alone writes its output's, or, where it returns several fields, each one
-  template's whole output, its field's (`o<j>` for field `j`).
-* **The wires** (`Wire`) are the verifier's own too, from the same Definition (`replayWires`): a template its body calls
-  once whose parameter is another such template's whole output row, one row of one instance, reads that template's
-  output port `o0`, its writer's, and the interior commits that value once, at its writer's port (no copy tree). So a
-  wired port reads its writer's output value: `second-read` holds it to that port at its writer's rows, and `atRun`
-  binds it by that port (`heldPort`). A body that reads a node any other way makes no wires.
+  supplied (`replayLinks`). A template is a composite every node calling which is one of the body's, its callers, its
+  units in a replay block theirs in body order, a batch's members one each (`callersOf`). One whose callers each read
+  one aligned row of one of the block's parameters, of the template's parameter's width, reads that boundary port
+  (`slice`), and one whose callers' whole outputs the block returns writes its output's, or, where it returns several
+  fields, the field they are in (`o<j>` for field `j`). Every caller reads a linked port alike, of one value.
+* **The wires** (`Wire`) are the verifier's own too, from the same Definition (`replayWires`): a template whose
+  parameter is, at each caller, one field of one instance of another template's caller reads that template's output
+  port `o<f>` for field `f`, its writer's, and the interior commits that value once, at its writer's port (no copy
+  tree). So a wired port reads its writer's output value: `second-read` holds it to that port at its writer's rows, and
+  `atRun` binds it by that port (`heldPort`). A body that reads a node any other way, an argument gathering several
+  nodes' outputs among them, makes no wires.
+* **The rows** (`Rows`) of each port a link or a wire names are the verifier's own too (`replayRows`): unit `j` of a
+  replay block reads the row its caller names, a link's the row of the parameter its slice is, a wire's its writer's
+  unit, summarized once per Definition as runs (`Run`) and never unrolled, so each of several callers reads its own
+  row, never another unit's.
 * **The interior record's order**: `second-interior-order` when the replay sample the interior record names
   (`window.replay_sample`, which the proof server writes) is not the verifier's own, `S`, in its order
   (`interiorOrderOk`). The record then states that its blocks are `S`'s, block `S[i]`'s cell `off_t + i·n_t`, rather
   than leaving it to convention. It is checked before any statement is read, and fails the check whatever else does.
 * **Over the statements**: `second-cells` when the interior program's strata make no parts, `second-links` when the
-  replay block's Definition makes no links (`linksOf`) or one names a template of no part, `second-wires` when it makes
-  no wires (`wiresOf`) or one names a template of no part, `second-statements` when no
+  replay block's Definition makes no links (`linksOf`) or one names a template of no part or one whose units its rows
+  don't place (`placed`), `second-wires` when it makes no wires (`wiresOf`) or one names a template of no part, one
+  whose units its rows don't place, or a writer of other units a block than its rows, `second-statements` when no
   statements are given, `second-order` for each statement for a part other than the one at its position (round 2 reads
   the statements by position, the `i`-th the `i`-th part's, in the parts' order, the interior program's strata's),
   `second-cover` for each part no statement is for (every part has one, drawn by the second draw or not), and
@@ -129,11 +138,13 @@ def REPORTED_WHY : String :=
 
 def LINKS_WHY : String :=
   "the replay block's Definition reads a parameter, or returns, other than through templates of the interior's " ++
-  "parts, each called once and reading one parameter alone, returned alone, or returned whole as one field each"
+  "parts, each caller reading one aligned row of one parameter alone, or returned whole within one field, alike at " ++
+  "every caller, or a link's rows don't place its part's units"
 
 def WIRES_WHY : String :=
-  "the replay block's Definition reads a node other than as a template's parameter that is one row of another " ++
-  "template's one output, each called once, or a wire names a template of no part"
+  "the replay block's Definition reads a node other than as a template's parameter that is one field of one " ++
+  "instance of another template, alike at every caller, or a wire names a template of no part, or its rows don't " ++
+  "place its part's units or its writer's"
 
 def INTERIOR_ORDER_WHY : String :=
   "the interior record's replay sample (window.replay_sample) is not the verifier's own, in its order"
@@ -150,6 +161,9 @@ def Part.holds (q : Nat) (p : Part) (u : Nat) : Bool := decide (p.lo ≤ u) && d
 
 /-- Slot `u`'s place in the sample: the index of its cell's replay block. -/
 def Part.span (p : Part) (u : Nat) : Nat := (u - p.lo) / p.n
+
+/-- Slot `u`'s unit in its cell: its place among the `n` slots there. -/
+def Part.unit (p : Part) (u : Nat) : Nat := (u - p.lo) % p.n
 
 /-- A stratum's part in a sample of `q` replay blocks: its one range, of a positive multiple of `q` slots. -/
 def partOf (q : Nat) (s : String × Array (Nat × Nat)) : Option Part :=
@@ -251,13 +265,52 @@ def wiresOf? : Json → Option (Array Wire)
     | _, _, _, _ => none
   | _ => none
 
+/-- A run of units' rows: `count` units from unit `unit`, the first reading row `row`, each next `step` rows on. -/
+structure Run where
+  unit : Nat
+  count : Nat
+  row : Nat
+  step : Nat
+  deriving Repr, Inhabited, DecidableEq
+
+/-- The rows template `template`'s units read at its session port `port`, one a link or a wire names: of the value's
+`per` rows a replay block, the boundary port's (a link) or its writer's units' (a wire), unit `j` reads the one its
+`runs` give it (`rowAt`). -/
+structure Rows where
+  template : String
+  port : String
+  per : Nat
+  runs : Array Run
+  deriving Repr, Inhabited, DecidableEq
+
+def Rows.toJson (r : Rows) : Json :=
+  Json.mkObj [("per", Lean.toJson r.per), ("port", Json.str r.port),
+    ("runs", Json.arr (r.runs.map fun x => Json.arr #[Lean.toJson x.unit, Lean.toJson x.count, Lean.toJson x.row,
+      Lean.toJson x.step])), ("template", Json.str r.template)]
+
+/-- Rows from their JSON: a list of objects of exactly `template`, `port`, `per` and `runs`, two strings, a natural
+number and a list of `[unit, count, row, step]`, each a natural number. -/
+def rowsOf? : Json → Option (Array Rows)
+  | .arr rs => rs.mapM fun r => do
+    guard (keys? r == some #["per", "port", "runs", "template"])
+    let .str t := getD r "template" | none
+    let .str p := getD r "port" | none
+    let per ← nat? (getD r "per")
+    let .arr xs := getD r "runs" | none
+    let runs ← xs.mapM fun x => (match x with
+      | .arr #[u, c, w, s] => do pure (Run.mk (← nat? u) (← nat? c) (← nat? w) (← nat? s))
+      | _ => none : Option Run)
+    pure (Rows.mk t p per runs)
+  | _ => none
+
 /-- What the verifier holds of the run: the replay sample `S`, the parts (`parts`), the interior and boundary
 registrations' records, the second draw's units, the design's links (`replayLinks`, none when the replay block's
 Definition makes none), the `{value: root}` the verifiers of record report the sessions read
 (`Record.sessionRegistered`), what they name of each session they accepted (`verifiedOf`), the reference header of each
 template's statement and the registered reads it reads (`refReads`, null for none), as the auditor's params give them
-(`Run.templateCircuits`), taken as given: nothing here verifies the reference statement against them, and the design's
-wires (`replayWires`, none when the Definition makes none). -/
+(`Run.templateCircuits`), taken as given: nothing here verifies the reference statement against them, the design's
+wires (`replayWires`, none when the Definition makes none), and the rows of the ports they and the links name
+(`replayRows`). -/
 structure Own where
   sample : Array Nat
   parts : Option (Array Part)
@@ -270,6 +323,7 @@ structure Own where
   refs : Array (String × Json) := #[]
   refReads : Array (String × Json) := #[]
   wires : Option (Array Wire) := some #[]
+  rows : Array Rows := #[]
 
 /-- The record names its ports by template, `<template>/<port>`. -/
 def byTemplate (rec : Json) : Bool := (Record.byPort rec).any fun (q, _) => q.contains '/'
@@ -302,21 +356,114 @@ def partSources : Flock.Program.Part → List (Bool × Nat)
 /-- What reference `s` reads: its parts' (`partSources`). -/
 def sources (s : Flock.Program.Seq) : List (Bool × Nat) := s.parts.toList.flatMap partSources
 
-/-- The nodes of all of `defs`' bodies that call definition `c`. -/
-def callers (defs : Array Flock.Program.Defn) (c : Nat) : Nat :=
-  defs.foldl (fun n d => n + (d.body.nodes.filter (·.fn == c)).size) 0
+/-- How many nodes of all of `defs`' bodies call each definition, by index. -/
+def callCounts (defs : Array Flock.Program.Defn) : Array Nat :=
+  defs.foldl (fun acc d => d.body.nodes.foldl (fun acc x => acc.modify x.fn (· + 1)) acc) (Array.replicate defs.size 0)
 
-/-- Node `x`'s template: the composite definition it calls or batches, when no other node of `defs` calls it. -/
-def template? (defs : Array Flock.Program.Defn) (x : Flock.Program.Node) : Option Flock.Program.Defn := do
-  let c ← defs[x.fn]?
-  guard ((x.form == .call || x.form == .batch) && !c.prim && callers defs x.fn == 1)
-  pure c
+/-- A replay block's body's templates and their units (`callersOf`). -/
+structure Callers where
+  /-- each node's template, none for a node no template's -/
+  template : Array (Option Flock.Program.Defn)
+  /-- each node's first unit among its definition's -/
+  first : Array Nat
+  /-- each definition's units in the body -/
+  units : Array Nat
 
-/-- The links node `x` of replay block `D`'s body makes: for each argument that reads one of `D`'s parameters, its
-template's parameter there reads that one; none when the argument reads anything else too, or `x` is no template's
-(`template?`). -/
-def nodeLinks (defs : Array Flock.Program.Defn) (D : Flock.Program.Defn) (x : Flock.Program.Node) :
-    Option (List Link) :=
+/-- Replay block `D`'s body's templates and their units, once over `defs` and `D`'s body: each node's template, the
+composite definition it calls or batches when every node of `defs` that calls it is one of `D`'s body's; each node's
+first unit among its definition's in a replay block, its callers before it in body order holding the units before it,
+a batch its members' (`Node.members`), never walked; and each definition's units. -/
+def callersOf (defs : Array Flock.Program.Defn) (D : Flock.Program.Defn) : Callers := Id.run do
+  let all := callCounts defs
+  let here := D.body.nodes.foldl (fun acc x => acc.modify x.fn (· + 1)) (Array.replicate defs.size 0)
+  let mut units := Array.replicate defs.size 0
+  let mut template := #[]
+  let mut first := #[]
+  for x in D.body.nodes do
+    first := first.push (units.getD x.fn 0)
+    units := units.modify x.fn (· + x.members)
+    template := template.push (match defs[x.fn]? with
+      | some c =>
+        if (x.form == .call || x.form == .batch) && !c.prim && all.getD x.fn 0 == here.getD x.fn 0 then some c
+        else none
+      | none => none)
+  return ⟨template, first, units⟩
+
+/-- Node `k`'s template (`callersOf`). -/
+def Callers.of (cs : Callers) (k : Nat) : Option Flock.Program.Defn := cs.template.getD k none
+
+/-- Runs `rs` with run `r` after them: merged into the last when `r` is one unit right after it continuing its rows
+(the last one unit, at a row no later than `r`'s, or `r`'s row the last's next), else appended. -/
+def pushRun (rs : Array Run) (r : Run) : Array Run :=
+  match rs.back? with
+  | some l =>
+    if r.count == 1 && l.unit + l.count == r.unit then
+      if l.count == 1 && l.row ≤ r.row then rs.pop.push { l with count := 2, step := r.row - l.row }
+      else if 1 < l.count && r.row == l.row + l.count * l.step then rs.pop.push { l with count := l.count + 1 }
+      else rs.push r
+    else rs.push r
+  | none => rs.push r
+
+/-- Unit `j`'s row under runs `rs`, in order of their first units: the run holding it (`unit ≤ j < unit + count`),
+found by bisection over their first units, gives `row + (j - unit)·step`; none for a unit no run holds. -/
+def rowAt (rs : Array Run) (j : Nat) : Option Nat := Id.run do
+  let mut lo := 0
+  let mut hi := rs.size
+  for _ in [0:rs.size] do
+    if hi - lo ≤ 1 then break
+    let mid := (lo + hi) / 2
+    if rs[mid]!.unit ≤ j then lo := mid else hi := mid
+  match rs[lo]? with
+  | some r => if r.unit ≤ j && j < r.unit + r.count then some (r.row + (j - r.unit) * r.step) else none
+  | none => none
+
+/-- Runs `rs` hold units `0` to `n - 1`, each once, in order: the first from unit `0`, each next from the last's end,
+none empty, the last ending at `n`. -/
+def fits (rs : Array Run) (n : Nat) : Bool :=
+  rs.foldl (fun (e : Option Nat) r => e.bind fun e => if r.unit == e && 0 < r.count then some (e + r.count) else none)
+    (some 0) == some n
+
+/-- One caller's share of a link or a wire `edge`: its template's index `fn`, the value's rows a replay block `per`,
+and its units' rows `run`. -/
+structure Share (α : Type) where
+  edge : α
+  fn : Nat
+  per : Nat
+  run : Run
+
+/-- Shares `xs` gathered one per template port (`port`), in order of first appearance, each port's runs in order
+(`pushRun`), with its value's rows a block; none when two of a port name different values (`same`) or rows a block,
+or a port's runs don't hold each of its template's `units` once, in order (`fits`). -/
+def gather {α : Type} (port : α → String × String) (same : α → α → Bool) (units : Array Nat) (xs : List (Share α)) :
+    Option (Array (α × Nat × Array Run)) := do
+  let g ← xs.foldlM (fun (acc : Array (Share α × Array Run)) x =>
+    match acc.findIdx? (fun (y, _) => port y.edge == port x.edge) with
+    | some j => do
+      let (y, rs) ← acc[j]?
+      guard (same y.edge x.edge && y.per == x.per)
+      pure (acc.set! j (y, pushRun rs x.run))
+    | none => pure (acc.push (x, #[x.run]))) #[]
+  guard (g.all fun (y, rs) => fits rs (units.getD y.fn 0))
+  pure (g.map fun (y, rs) => (y.edge, y.per, rs))
+
+/-- The row of its collection's rows node `x`'s argument `a` reads, `W` leaves a member, and each next member's step,
+when the argument is one aligned slice of `W` leaves a member of one collection, its one affine part: the same slice
+for every member (a call's argument, or a batch's shared one, step `0`), or a member's from the first, outer axis
+mapped (step `1`); with its space and index. None for any other argument. -/
+def slice (x : Flock.Program.Node) (a : Flock.Program.Arg) (W : Nat) : Option (Bool × Nat × Nat × Nat) := do
+  guard (0 < W)
+  let [.affine p i base c] := a.seq.parts.toList | none
+  guard (base % W == 0)
+  match a.dims with
+  | none => guard (c == W); pure (p, i, base / W, 0)
+  | some (_, L) => guard (x.form == .batch && L == W && c == x.members * W); pure (p, i, base / W, 1)
+
+/-- The links node `k` of replay block `D`'s body makes, each its share (`Share`): for each argument that reads one of
+`D`'s parameters, its template's parameter there reads that one, the parameter's rows a block those of the template
+parameter's width, its units the rows its slice is (`slice`). None when the argument reads anything else too, or
+anything but such a slice, or `k` is no template's. -/
+def nodeLinks (cs : Callers) (D : Flock.Program.Defn) (k : Nat) (x : Flock.Program.Node) :
+    Option (List (Share Link)) :=
   (List.range x.args.size).filterMapM fun a => do
     let arg ← x.args[a]?
     let src := sources arg.seq
@@ -324,54 +471,58 @@ def nodeLinks (defs : Array Flock.Program.Defn) (D : Flock.Program.Defn) (x : Fl
     | none => pure none
     | some (_, i) =>
       guard (src.all (· == (true, i)))
-      let c ← template? defs x
-      let (port, _) ← c.params[a]?
-      let (name, _) ← D.params[i]?
-      pure (some ⟨c.key, port, name⟩)
+      let c ← cs.of k
+      let (port, ty) ← c.params[a]?
+      let (name, pty) ← D.params[i]?
+      let (_, _, row, step) ← slice x arg ty.leaves
+      guard (pty.leaves % ty.leaves == 0)
+      pure (some ⟨⟨c.key, port, name⟩, x.fn, pty.leaves / ty.leaves, ⟨cs.first.getD k 0, x.members, row, step⟩⟩)
 
-/-- The link field `j` of replay block `D`'s return, of type `f`, makes when it is part `r` of the return: when `r` is
-node `k`'s whole output, `k` a template's (`template?`) of one output, that template's `o0` is `D`'s `o<j>`; with it,
-`k`. None when it is anything else. -/
-def fieldLink (defs : Array Flock.Program.Defn) (D : Flock.Program.Defn) (j : Nat) (f : Flock.Program.Ty) :
-    Flock.Program.Part → Option (Nat × Link)
-  | .affine false k 0 c => do
+/-- The field of a value of type `t` from leaf `off`, of `c` leaves: its index among `fields t`; none for none. -/
+def fieldAt (t : Flock.Program.Ty) (off c : Nat) : Option Nat :=
+  ((fields t).zipIdx.foldl (fun (acc : Nat × Option Nat) (f, j) =>
+    (acc.1 + f.leaves, acc.2 <|> if acc.1 == off && f.leaves == c then some j else none)) (0, none)).2
+
+/-- The field of a value of type `t` holding its leaves `[s, s + c)`: its index and first leaf; none for none. -/
+def fieldOf (t : Flock.Program.Ty) (s c : Nat) : Option (Nat × Nat) :=
+  ((fields t).zipIdx.foldl (fun (acc : Nat × Option (Nat × Nat)) (f, j) =>
+    (acc.1 + f.leaves, acc.2 <|> if acc.1 ≤ s && s + c ≤ acc.1 + f.leaves then some (j, acc.1) else none))
+    (0, none)).2
+
+/-- The links replay block `D`'s return makes, each its share (`Share`): each part of its return, which holds all of
+its leaves, node `k`'s whole output, `k` a template's of one output, within one field `j` of the return at a multiple
+of that output's leaves from the field's first, makes the template's `o0` `D`'s `o<j>`, the field's rows a block those
+of the output's width, and `k`'s units the field's rows from there on, one each. None when a part is anything else. -/
+def returnLinks (cs : Callers) (D : Flock.Program.Defn) : Option (List (Share Link)) := do
+  guard (D.body.ret.count == D.ret.leaves)
+  (List.range D.body.ret.parts.size).mapM fun q => do
+    let part ← D.body.ret.parts[q]?
+    let s ← D.body.ret.starts[q]?
+    let .affine false k 0 c := part | none
     let x ← D.body.nodes[k]?
-    guard (c == f.leaves && c == x.out.leaves)
-    let t ← template? defs x
-    guard (outputs t.ret == 1)
-    pure (k, ⟨t.key, "o0", "o" ++ toString j⟩)
-  | _ => none
+    let t ← cs.of k
+    let w := t.ret.leaves
+    guard (outputs t.ret == 1 && 0 < w && c == x.out.leaves && c == x.members * w)
+    let (j, off) ← fieldOf D.ret s c
+    let f ← (fields D.ret)[j]?
+    guard ((s - off) % w == 0 && f.leaves % w == 0)
+    pure ⟨⟨t.key, "o0", "o" ++ toString j⟩, x.fn, f.leaves / w,
+      ⟨cs.first.getD k 0, x.members, (s - off) / w, if x.members == 1 then 0 else 1⟩⟩
 
-/-- The links replay block `D`'s return makes: when it returns node `x`'s output alone, `x` a template's (`template?`)
-of one output and `D` of one, that template's `o0` is `D`'s; when `D` returns several fields, each part of its return
-one field, each one node's whole output and no node's twice (`fieldLink`), each one's template's `o0` is its field's.
-None when it returns anything else. -/
-def returnLinks (defs : Array Flock.Program.Defn) (D : Flock.Program.Defn) : Option (List Link) :=
-  match sources D.body.ret with
-  | [] => some []
-  | (p, k) :: rest =>
-    if outputs D.ret == 1 then do
-      guard (!p && rest.all (· == (false, k)))
-      let x ← D.body.nodes[k]?
-      let c ← template? defs x
-      guard (outputs c.ret == 1)
-      pure [⟨c.key, "o0", "o0"⟩]
-    else do
-      let fs := fields D.ret
-      guard (D.body.ret.parts.size == fs.size)
-      let ls ← (List.range fs.size).mapM fun j => do fieldLink defs D j (← fs[j]?) (← D.body.ret.parts[j]?)
-      guard (ls.all fun (k, _) => (ls.map (·.1)).count k == 1)
-      pure (ls.map (·.2))
-
-/-- **The design's links**, from replay block `defs[d]`'s registered Definition, its parameters and its body: those its
-nodes make (`nodeLinks`) and its return (`returnLinks`), each value its own port's name. None when its body reads a
-parameter, or returns, any other way. -/
-def linksOf (defs : Array Flock.Program.Defn) (d : Nat) : Option (Array Link) := do
+/-- **The design's links** with their rows a block and runs, from replay block `defs[d]`'s registered Definition, its
+parameters and its body: those its nodes make (`nodeLinks`) and its return (`returnLinks`), one per template port
+(`gather`), each value its own port's name. None when its body reads a parameter, or returns, any other way, or a
+template's callers read a linked port unlike each other. -/
+def linkRuns (defs : Array Flock.Program.Defn) (d : Nat) : Option (Array (Link × Nat × Array Run)) := do
   let D ← defs[d]?
   guard (!D.prim)
-  let ins ← D.body.nodes.toList.mapM (nodeLinks defs D)
-  let outs ← returnLinks defs D
-  pure (ins.flatten ++ outs).toArray
+  let cs := callersOf defs D
+  let ins ← (List.range D.body.nodes.size).mapM fun k => do nodeLinks cs D k (← D.body.nodes[k]?)
+  let outs ← returnLinks cs D
+  gather (fun l => (l.template, l.port)) (fun a b => a.value == b.value) cs.units (ins.flatten ++ outs)
+
+/-- **The design's links** (`linkRuns`). -/
+def linksOf (defs : Array Flock.Program.Defn) (d : Nat) : Option (Array Link) := (linkRuns defs d).map (·.map (·.1))
 
 /-- The links of the replay block program `P` defines under descriptor id `key` (`linksOf`), each value the boundary
 registration's port for it, as record `rec` names its ports (`portOf` under `key`). -/
@@ -380,48 +531,80 @@ def replayLinks (P : Flock.Program.Prog) (key : String) (rec : Json) : Option (A
   let ls ← linksOf P.defs d
   pure (ls.map fun l => { l with value := portOf (byTemplate rec) key l.value })
 
-/-- Links `ls` are derived, each for a template one of parts `ps` is of. -/
-def linksOk (ps : Array Part) : Option (Array Link) → Bool
-  | some ls => ls.all fun l => ps.any (·.template == l.template)
-  | none => false
-
 /-- The link that names template `t`'s session port `port`. -/
 def linkOf (own : Own) (t port : String) : Option Link :=
   (own.links.getD #[]).find? fun l => l.template == t && l.port == port
 
-/-- The wires node `x` of replay block `D`'s body makes: for each argument that reads a node, its template's parameter
-there reads that node's whole output, which is one row of the node's template (`template?`), of one output (`o0`) and
-so of one instance, and one row of the parameter. None when such an argument reads anything else too, or part of a
-row, or a node no template's, or `x` is no template's. An argument that reads only `D`'s parameters is a link's
+/-- The wires node `k` of replay block `D`'s body makes, each its share (`Share`): for each argument that reads a node,
+its template's parameter there reads that node's output field `f`, one of its template's (`fieldAt`), the node one
+instance and the argument the field whole, the same for each of `k`'s members: the writer's units a block its rows,
+`k`'s units reading the node's. None when such an argument reads anything else too, or part of a field, several
+nodes, a node no template's, or `k` is no template's. An argument that reads only `D`'s parameters is a link's
 (`nodeLinks`). -/
-def nodeWires (defs : Array Flock.Program.Defn) (D : Flock.Program.Defn) (x : Flock.Program.Node) :
-    Option (List Wire) :=
+def nodeWires (cs : Callers) (D : Flock.Program.Defn) (k : Nat) (x : Flock.Program.Node) :
+    Option (List (Share Wire)) :=
   (List.range x.args.size).filterMapM fun a => do
     let arg ← x.args[a]?
     if (sources arg.seq).all (·.1) then return none
-    let [.affine false k 0 c] := arg.seq.parts.toList | none
-    let w ← D.body.nodes[k]?
-    let tw ← template? defs w
-    let t ← template? defs x
+    let [.affine false k' off c] := arg.seq.parts.toList | none
+    let w ← D.body.nodes[k']?
+    let tw ← cs.of k'
+    let t ← cs.of k
     let (port, ty) ← t.params[a]?
-    guard (outputs tw.ret == 1 && c == w.out.leaves && c == tw.ret.leaves && c == ty.leaves)
-    pure (some ⟨t.key, port, tw.key, "o0"⟩)
+    guard (arg.dims.isNone && w.members == 1 && 0 < c && c == ty.leaves && w.out.leaves == tw.ret.leaves)
+    let f ← fieldAt tw.ret off c
+    pure (some ⟨⟨t.key, port, tw.key, "o" ++ toString f⟩, x.fn, cs.units.getD w.fn 0,
+      ⟨cs.first.getD k 0, x.members, cs.first.getD k' 0, 0⟩⟩)
 
-/-- **The design's wires**, from replay block `defs[d]`'s registered Definition: those its nodes make (`nodeWires`).
-None when its body reads a node any other way. -/
-def wiresOf (defs : Array Flock.Program.Defn) (d : Nat) : Option (Array Wire) := do
+/-- **The design's wires** with their rows a block and runs, from replay block `defs[d]`'s registered Definition:
+those its nodes make (`nodeWires`), one per template port (`gather`). None when its body reads a node any other way,
+or a template's callers read a wired port unlike each other. -/
+def wireRuns (defs : Array Flock.Program.Defn) (d : Nat) : Option (Array (Wire × Nat × Array Run)) := do
   let D ← defs[d]?
   guard (!D.prim)
-  let ws ← D.body.nodes.toList.mapM (nodeWires defs D)
-  pure ws.flatten.toArray
+  let cs := callersOf defs D
+  let ws ← (List.range D.body.nodes.size).mapM fun k => do nodeWires cs D k (← D.body.nodes[k]?)
+  gather (fun w => (w.template, w.port)) (fun a b => a.writer == b.writer && a.wport == b.wport) cs.units ws.flatten
+
+/-- **The design's wires** (`wireRuns`). -/
+def wiresOf (defs : Array Flock.Program.Defn) (d : Nat) : Option (Array Wire) := (wireRuns defs d).map (·.map (·.1))
 
 /-- The wires of the replay block program `P` defines under descriptor id `key` (`wiresOf`). -/
 def replayWires (P : Flock.Program.Prog) (key : String) : Option (Array Wire) := do
   wiresOf P.defs (← P.index[key]?)
 
-/-- Wires `ws` are derived, each between templates parts `ps` are of. -/
-def wiresOk (ps : Array Part) : Option (Array Wire) → Bool
-  | some ws => ws.all fun w => ps.any (·.template == w.template) && ps.any (·.template == w.writer)
+/-- **The design's rows**: those of the ports the links and the wires of the replay block program `P` defines under
+descriptor id `key` name (`linkRuns`, `wireRuns`), none for either it makes none of. -/
+def replayRows (P : Flock.Program.Prog) (key : String) : Array Rows :=
+  match P.index[key]? with
+  | some d =>
+    ((linkRuns P.defs d).getD #[]).map (fun (l, per, rs) => ⟨l.template, l.port, per, rs⟩) ++
+      ((wireRuns P.defs d).getD #[]).map fun (w, per, rs) => ⟨w.template, w.port, per, rs⟩
+  | none => #[]
+
+/-- The rows of template `t`'s session port `port` (`Own.rows`). -/
+def rowsOf (own : Own) (t port : String) : Option Rows := own.rows.find? fun r => r.template == t && r.port == port
+
+/-- Part `p`'s units are placed at its template's session port `port`: its rows' runs hold the `n` units a block of
+`p` (`fits`). -/
+def placed (own : Own) (p : Part) (port : String) : Bool :=
+  match rowsOf own p.template port with
+  | some r => fits r.runs p.n
+  | none => false
+
+/-- The links are derived, each for a template one of parts `ps` is of, whose units its rows place (`placed`). -/
+def linksOk (ps : Array Part) (own : Own) : Bool :=
+  match own.links with
+  | some ls => ls.all fun l => ps.any fun p => p.template == l.template && placed own p l.port
+  | none => false
+
+/-- The wires are derived, each between templates parts `ps` are of, its reader's units placed by its rows (`placed`),
+whose rows a block are its writer's units a block. -/
+def wiresOk (ps : Array Part) (own : Own) : Bool :=
+  match own.wires with
+  | some ws => ws.all fun w =>
+    ps.any (fun p => p.template == w.template && placed own p w.port) &&
+      ps.any fun p => p.template == w.writer && (rowsOf own w.template w.port).any (·.per == p.n)
   | none => false
 
 /-- The wire that names template `t`'s session port `port`. -/
@@ -573,22 +756,52 @@ def rowsOk (q : Nat) (p : Part) (e : Json) (units : Nat) (unit : Nat → Option 
         | _, _ => false
   | _, _, _ => false
 
+/-- Every read of registered-reads entry `e` (slot `reads_from + k` reads row `reads[k]`, null for none) is by one of
+part `p`'s slots `u`, of row `row u`, in a tree of `leaves` rows. -/
+def placedOk (q : Nat) (p : Part) (e : Json) (leaves : Nat) (row : Nat → Option Nat) : Bool :=
+  let first : Option Nat := match getD e "reads_from" with | .null => some 0 | x => nat? x
+  match nat? (getD e "leaves"), getD e "reads", first with
+  | some l, .arr rs, some f =>
+    l == leaves && (List.range rs.size).all fun k =>
+      match rs.getD k .null with
+      | .null => true
+      | x => match nat? x, row (f + k) with
+        | some pos, some r => p.holds q (f + k) && pos == r
+        | _, _ => false
+  | _, _, _ => false
+
+/-- The row slot `u` of part `p` reads at a port a link names, of rows `r`: its unit's (`rowAt`), of the `per` its
+cell's replay block holds in the boundary port. -/
+def linkedRow (own : Own) (p : Part) (r : Rows) (u : Nat) : Option Nat := do
+  let b ← own.sample[p.span u]?
+  let x ← rowAt r.runs (p.unit u)
+  if x < r.per then some (b * r.per + x) else none
+
+/-- The row slot `u` of part `p` reads at a port a wire names, of rows `r`: its unit's writer unit's (`rowAt`), of the
+`per` its cell's replay block holds in the writer's output port. -/
+def wiredRow (p : Part) (r : Rows) (u : Nat) : Option Nat := do
+  let x ← rowAt r.runs (p.unit u)
+  if x < r.per then some (p.span u * r.per + x) else none
+
 /-- Template `p.template`'s session port `port` may read registered-reads entry `e`: a port a link names, only the
-boundary port it names, each slot only its cell's replay block's rows; a port a wire names, only its writer's output
-port of the interior record, each slot only its writer's first instance's rows in its cell's replay block (the
-writer's slot `p.span u · n_w` of its `Q·n_w`); any other, its own port of the interior record, each slot only its own
-rows, or a value either registration registers, never a boundary port. Each at its root, domain and leaves. -/
+boundary port it names, of its rows' `per` a replay block, each slot only its unit's row of its cell's replay block's
+(`linkedRow`); a port a wire names, only its writer's output port of the interior record, of the writer's units a
+block, each slot only its unit's writer unit's row in its cell's replay block (`wiredRow`); any other, its own port of
+the interior record, each slot only its own rows, or a value either registration registers, never a boundary port.
+Each at its root, domain and leaves. -/
 def readOk (own : Own) (named : Bool) (p : Part) (port : String) (e : Json) : Bool :=
   let q := own.sample.size
   match getD e "value", linkOf own p.template port, wireOf own p.template port with
   | .str v, some l, _ =>
-    v == l.value && match (Record.byPort own.boundary).find? (·.1 == v), nat? (getD own.boundary "population") with
-      | some (_, b), some m => sameAt e b && rowsOk q p e m fun u => own.sample[p.span u]?
-      | _, _ => false
+    v == l.value && match (Record.byPort own.boundary).find? (·.1 == v), nat? (getD own.boundary "population"),
+        rowsOf own p.template port with
+      | some (_, b), some m, some r => sameAt e b && placedOk q p e (m * r.per) (linkedRow own p r)
+      | _, _, _ => false
   | .str v, none, some w =>
-    v == portOf named w.writer w.wport && match (Record.byPort own.interior).find? (·.1 == v), writerOf own w with
-      | some (_, x), some pw => sameAt e x && rowsOk q p e (q * pw.n) fun u => some (p.span u * pw.n)
-      | _, _ => false
+    v == portOf named w.writer w.wport && match (Record.byPort own.interior).find? (·.1 == v), writerOf own w,
+        rowsOf own p.template port with
+      | some (_, x), some pw, some r => sameAt e x && pw.n == r.per && placedOk q p e (q * r.per) (wiredRow p r)
+      | _, _, _ => false
   | .str v, none, none =>
     match (Record.byPort own.interior).find? (·.1 == v), (Record.byPort own.boundary).find? (·.1 == v) with
     | some (_, x), _ => v == portOf named p.template port && sameAt e x && rowsOk q p e (q * p.n) fun u => some (u - p.lo)
@@ -638,9 +851,9 @@ where the run places them (`runPlacesRows`). -/
 def READ_ROW_FIELDS : List String := ["reads", "reads_from"]
 
 /-- Template `t`'s session port `port` reads registered-reads entry `e` at rows the run places, which `second-read`
-holds to the run (`rowsOk`): a port a link names, each slot at its cell's replay block's rows, or one reading a port of
-the interior record, its own port each slot at its own rows or, at a port a wire names, its writer's at its writer's
-rows (`readOk`'s first three cases). Any other port reads a value a
+holds to the run (`placedOk`, `rowsOk`): a port a link names, each slot at its unit's row of its cell's replay block's,
+or one reading a port of the interior record, its own port each slot at its own rows or, at a port a wire names, its
+writer's at its writer unit's row (`readOk`'s first three cases). Any other port reads a value a
 registration registers, which `second-read` holds only to the value's root, domain and leaves (`sameAt`), so
 `second-values` holds its rows to the reference statement's, the same rows in every run. A workload whose rows there
 depend on the sampled block (a positional table) would need a rule of its own. -/
@@ -766,13 +979,13 @@ def failures (allow : Bool) (own : Own) (ps : Array Part) (ss : List Json) : Lis
   if found.isEmpty && !allow then [("two-stage-form", Json.str FORM_WHY)] else found
 
 /-- The design is derived over parts `ps`: its links (`linksOk`) and its wires (`wiresOk`). -/
-def designOk (ps : Array Part) (own : Own) : Bool := linksOk ps own.links && wiresOk ps own.wires
+def designOk (ps : Array Part) (own : Own) : Bool := linksOk ps own && wiresOk ps own
 
 /-- `second-links` unless the links are derived over parts `ps` (`linksOk`), then `second-wires` unless the wires are
 (`wiresOk`). -/
 def designFailures (ps : Array Part) (own : Own) : List (String × Json) :=
-  (if linksOk ps own.links then [] else [("second-links", Json.str LINKS_WHY)]) ++
-    if wiresOk ps own.wires then [] else [("second-wires", Json.str WIRES_WHY)]
+  (if linksOk ps own then [] else [("second-links", Json.str LINKS_WHY)]) ++
+    if wiresOk ps own then [] else [("second-wires", Json.str WIRES_WHY)]
 
 /-- **Round 2's statement check** (module docstring) of statements `stmts`, the two-stage form allowed when `allow`
 (`FORM` in the run): each code once, with the detail it first failed with. The interior record's order is checked
@@ -853,7 +1066,7 @@ theorem designFailures_ne_nil {ps : Array Part} {own : Own} (h : ¬designOk ps o
     designFailures ps own ≠ [] := by
   revert h
   unfold designOk designFailures
-  cases linksOk ps own.links <;> cases wiresOk ps own.wires <;> simp
+  cases linksOk ps own <;> cases wiresOk ps own <;> simp
 
 /-- **Off, round 2 never passes**: with the two-stage form refused, every run's check fails. -/
 theorem check_refused (own : Own) (stmts : Option (Array Json)) : (check false own stmts).codes ≠ #[] := by
@@ -905,8 +1118,8 @@ for a part's template, and wires, each between parts' templates, each statement 
 earlier statement's, the part at its position (`orderFailures_nil`), and passes every check at its position
 (`stmtCodes_nil`), every part has a statement, and the reads the verifiers of record report are the statements'. -/
 theorem check_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow own (some ss)).codes = #[]) :
-    allow = true ∧ interiorOrderOk own = true ∧ ∃ ps, own.parts = some ps ∧ linksOk ps own.links = true ∧
-      wiresOk ps own.wires = true ∧
+    allow = true ∧ interiorOrderOk own = true ∧ ∃ ps, own.parts = some ps ∧ linksOk ps own = true ∧
+      wiresOk ps own = true ∧
       (∀ i < ss.size, ∃ s p, Stmt.ofJson? (ss.toList.getD i .null) = some s ∧
         ps.find? (·.template == s.template) = some p ∧ (templates (ss.toList.take i)).contains s.template = false ∧
         ps[i]?.map (·.template) = some s.template ∧
@@ -924,7 +1137,7 @@ theorem check_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow 
     by_cases hl : designOk ps own = true
     case neg => rw [if_neg hl] at h; exact absurd (List.append_eq_nil_iff.1 h).2 (designFailures_ne_nil hl)
     rw [if_pos hl] at h
-    obtain ⟨hl, hw⟩ : linksOk ps own.links = true ∧ wiresOk ps own.wires = true := by simpa [designOk] using hl
+    obtain ⟨hl, hw⟩ : linksOk ps own = true ∧ wiresOk ps own = true := by simpa [designOk] using hl
     simp only [failures] at h
     split at h
     · simp at h
@@ -1047,17 +1260,18 @@ theorem check_ok_refs {allow : Bool} {own : Own} {ss : Array Json} (h : (check a
   obtain ⟨e, he⟩ := refsOk_read hrefs hm
   exact ⟨e, he, Array.all_eq_true_iff_forall_mem.mp hr _ he⟩
 
-/-- **A wired read reads its writer's value** (one value a gate, one leaf a gate): at a port a wire names and no link
-does, a read `readOk` passes is of the wire's writer's output port of the interior record, at that port's root, domain
-and leaves, each slot `u` of part `p` reading only the rows of its writer's slot `p.span u · n_w` among the writer's
-`Q·n_w` (`pw`, the writer's part): its writer's first instance in its cell's replay block. -/
+/-- **A wired read reads its writer unit's value** (one value a gate, one leaf a gate): at a port a wire names and no
+link does, a read `readOk` passes is of the wire's writer's output port of the interior record, at that port's root,
+domain and leaves, the writer's `Q·n_w` slots' (`pw`, the writer's part, `n_w` its rows' `per`), each slot `u` of part
+`p` reading only the row of its unit's writer unit in its cell's replay block (`wiredRow`), as the port's rows give it
+(`r`, the verifier's own). -/
 theorem readOk_wired {own : Own} {named : Bool} {p : Part} {port : String} {e : Json} {w : Wire}
     (hl : linkOf own p.template port = none) (hw : wireOf own p.template port = some w)
     (h : readOk own named p port e = true) :
-    ∃ x pw, getD e "value" = .str (portOf named w.writer w.wport) ∧
+    ∃ x pw r, getD e "value" = .str (portOf named w.writer w.wport) ∧
       (portOf named w.writer w.wport, x) ∈ Record.byPort own.interior ∧ writerOf own w = some pw ∧
-      sameAt e x = true ∧
-      rowsOk own.sample.size p e (own.sample.size * pw.n) (fun u => some (p.span u * pw.n)) = true := by
+      rowsOf own p.template port = some r ∧ pw.n = r.per ∧ sameAt e x = true ∧
+      placedOk own.sample.size p e (own.sample.size * r.per) (wiredRow p r) = true := by
   unfold readOk at h
   rw [hl, hw] at h
   cases hv : getD e "value" with
@@ -1072,16 +1286,19 @@ theorem readOk_wired {own : Own} {named : Bool} {p : Part} {port : String} {e : 
       cases hp : writerOf own w with
       | none => rw [hf, hp] at h; simp at h
       | some pw =>
-        rw [hf, hp] at h
-        have hk : k = portOf named w.writer w.wport := by simpa using Array.find?_some hf
-        subst hk
-        simp only [Bool.and_eq_true] at h
-        exact ⟨x, pw, rfl, Array.mem_of_find?_eq_some hf, rfl, h.1, h.2⟩
+        cases hr : rowsOf own p.template port with
+        | none => rw [hf, hp, hr] at h; simp at h
+        | some r =>
+          rw [hf, hp, hr] at h
+          have hk : k = portOf named w.writer w.wport := by simpa using Array.find?_some hf
+          subst hk
+          simp only [Bool.and_eq_true, beq_iff_eq] at h
+          exact ⟨x, pw, r, rfl, Array.mem_of_find?_eq_some hf, rfl, rfl, h.1.2, h.1.1, h.2⟩
   | _ => rw [hv] at h; simp at h
 
-/-- **Every wired port reads its writer's value**: in a passing check, the `i`-th statement reads registered every port
-a wire names for its template (`wiredRead`), and each of its reads at a port a wire names and no link does is of that
-wire's writer's output port of the interior record, each slot at its writer's first instance's rows in its cell's
+/-- **Every wired port reads its writer unit's value**: in a passing check, the `i`-th statement reads registered every
+port a wire names for its template (`wiredRead`), and each of its reads at a port a wire names and no link does is of
+that wire's writer's output port of the interior record, each slot at its unit's writer unit's row in its cell's
 replay block (`readOk_wired`). -/
 theorem check_ok_wired {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow own (some ss)).codes = #[]) :
     ∃ ps, own.parts = some ps ∧ ∀ i < ss.size, ∃ s p, Stmt.ofJson? (ss.toList.getD i .null) = some s ∧
@@ -1089,10 +1306,10 @@ theorem check_ok_wired {allow : Bool} {own : Own} {ss : Array Json} (h : (check 
       wiredRead own s.template (entries (getD s.registered "ports")) = true ∧
       ∀ port e w, (port, e) ∈ entries (getD s.registered "ports") → linkOf own s.template port = none →
         wireOf own s.template port = some w →
-        ∃ x pw, getD e "value" = .str (portOf (byTemplate own.interior) w.writer w.wport) ∧
+        ∃ x pw r, getD e "value" = .str (portOf (byTemplate own.interior) w.writer w.wport) ∧
           (portOf (byTemplate own.interior) w.writer w.wport, x) ∈ Record.byPort own.interior ∧
-          writerOf own w = some pw ∧ sameAt e x = true ∧
-          rowsOk own.sample.size p e (own.sample.size * pw.n) (fun u => some (p.span u * pw.n)) = true := by
+          writerOf own w = some pw ∧ rowsOf own p.template port = some r ∧ pw.n = r.per ∧ sameAt e x = true ∧
+          placedOk own.sample.size p e (own.sample.size * r.per) (wiredRow p r) = true := by
   obtain ⟨-, -, ps, hp, -, -, hst, -, -⟩ := check_ok h
   refine ⟨ps, hp, fun i hi => ?_⟩
   obtain ⟨s, p, hs, hf, -, -, hc⟩ := hst i hi
@@ -1359,7 +1576,26 @@ private def exReading (value : String) (root dom leaves : Nat) (reads : List Nat
 private def exReported (value : String) (root : Nat) (own : Own := exOwn) : Own :=
   { own with reported := some #[(value, .str (exRoot root))] }
 
-private def exLinked : Own := { exOwn with links := some #[⟨"Pair_v0", "x", "bx"⟩] }
+/-- `exOwn` with `Pair_v0`'s `x` linked to the boundary's `bx`, one row a block, which its three units a block each
+read. -/
+private def exLinked : Own :=
+  { exOwn with links := some #[⟨"Pair_v0", "x", "bx"⟩], rows := #[⟨"Pair_v0", "x", 1, #[⟨0, 3, 0, 0⟩]⟩] }
+
+/-- The boundary registration's record of population 4, its port `bx` of `leaves` leaves. -/
+private def exBoundary (leaves : Nat) : Json :=
+  (exRec 4 [("bx", 5, 6)]).setObjVal! "roots" (Json.arr #[Json.mkObj [("port", "bx"), ("root", exRoot 5),
+    ("domain", exRoot 6), ("leaves", Lean.toJson leaves)]])
+
+/-- `exLinked` with `bx` of `per` rows a block, its units reading rows `runs`. -/
+private def exLinkedAt (per : Nat) (runs : Array Run) : Own :=
+  { exLinked with boundary := exBoundary (4 * per), rows := #[⟨"Pair_v0", "x", per, runs⟩] }
+
+/-- Round 2's codes for the statement reading `bx`, of `leaves` leaves, at rows `reads` over `exLinkedAt per runs`, its
+`bx` of `held` leaves. -/
+private def exAt (per : Nat) (runs : Array Run) (reads : List Nat) (held : Nat := 4 * per) (leaves : Nat := held) :
+    Array String :=
+  (exCheck true (exReported "bx" 5 { exLinkedAt per runs with boundary := exBoundary held })
+    #[exReading "bx" 5 6 leaves reads]).codes
 
 #guard (exCheck true (exReported "x" 1) #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]]).codes.isEmpty
 #guard (exCheck true exOwn #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-reported"]
@@ -1375,6 +1611,22 @@ private def exLinked : Own := { exOwn with links := some #[⟨"Pair_v0", "x", "b
 #guard (exCheck true { exOwn with links := none } #[exHonest]).codes == #["second-links"]
 #guard (check true { exOwn with links := none } none).codes == #["second-links"]
 #guard (check true { exOwn with links := some #[⟨"Other_v0", "x", "bx"⟩] } none).codes == #["second-links"]
+-- a link's units each read the row their caller's slice names, of the block's rows: here units 0, 1 and 2 rows 0, 1
+-- and 2 of three a block, in blocks 1 and 3; another unit's row, or one past the block's, refused
+#guard (exAt 3 #[⟨0, 3, 0, 1⟩] [3, 4, 5, 9, 10, 11]).isEmpty
+#guard exAt 3 #[⟨0, 3, 0, 1⟩] [4, 3, 5, 9, 10, 11] == #["second-read"]
+#guard exAt 3 #[⟨0, 3, 0, 1⟩] [3, 3, 3, 9, 9, 9] == #["second-read"]
+#guard (exAt 3 #[⟨0, 1, 2, 0⟩, ⟨1, 2, 0, 1⟩] [5, 3, 4, 11, 9, 10]).isEmpty
+#guard exAt 3 #[⟨0, 3, 1, 1⟩] [4, 5, 6, 10, 11, 12] == #["second-read"]
+-- the boundary port holds its population's rows a block, and the read is at its leaves
+#guard exAt 3 #[⟨0, 3, 0, 1⟩] [3, 4, 5, 9, 10, 11] (held := 4) == #["second-read"]
+#guard exAt 3 #[⟨0, 3, 0, 1⟩] [3, 4, 5, 9, 10, 11] (leaves := 16) == #["second-read"]
+-- rows that don't place the part's units, or no rows, make no links
+#guard (check true (exLinkedAt 3 #[⟨0, 2, 0, 1⟩]) none).codes == #["second-links"]
+#guard (check true (exLinkedAt 3 #[⟨0, 3, 0, 1⟩, ⟨3, 1, 0, 0⟩]) none).codes == #["second-links"]
+#guard (check true (exLinkedAt 3 #[⟨1, 3, 0, 1⟩]) none).codes == #["second-links"]
+#guard (check true { exLinked with rows := #[] } none).codes == #["second-links"]
+#guard (check true { exLinked with rows := #[⟨"Pair_v0", "out", 1, #[⟨0, 3, 0, 0⟩]⟩] } none).codes == #["second-links"]
 #guard (check true (exReported "x" 1 (exVerifying #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 4]]
   (exReferring #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]] exOwn)))
   (some #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]])).codes == #["second-verified"]
@@ -1522,11 +1774,17 @@ private def exDefs (block : Array Flock.Program.Node) (ret : Array Flock.Program
 private def exParts (parts : Array Flock.Program.Part) : Flock.Program.Arg :=
   { ty := .value 8, seq := .ofParts parts }
 
-#guard linksOf (exDefs #[exNode .call 0 #[exParts #[.explicit #[⟨true, 1, 0⟩, ⟨true, 1, 3⟩]]]] #[]) 1 ==
-  some #[⟨"Pair_v0", "x", "w"⟩]
+-- a caller reads one aligned row of one parameter alone, never explicit leaves; a block returning none of its leaves
+#guard linksOf (exDefs #[exNode .call 0 #[exArg true 1]] #[] (.tuple #[])) 1 == some #[⟨"Pair_v0", "x", "w"⟩]
+#guard linksOf (exDefs #[exNode .call 0 #[exParts #[.explicit #[⟨true, 1, 0⟩]]]] #[] (.tuple #[])) 1 == none
+#guard linksOf (exDefs #[exNode .call 0 #[exArg true 1]] #[]) 1 == none
 #guard linksOf (exDefs #[exNode .call 0 #[exArg false 0]] #[.affine false 0 0 1]) 1 ==
   some #[⟨"Pair_v0", "o0", "o0"⟩]
-#guard linksOf (exDefs #[exNode .call 0 #[exArg true 0], exNode .call 0 #[exArg true 1]] #[]) 1 == none
+-- several callers of a template read a linked port alike, of one value
+#guard linksOf (exDefs #[exNode .call 0 #[exArg true 0], exNode .call 0 #[exArg true 1]] #[] (.tuple #[])) 1 == none
+#guard linkRuns (exDefs #[exNode .call 0 #[exArg true 0], exNode .call 0 #[exArg true 0]] #[] (.tuple #[])) 1 ==
+  some #[(⟨"Pair_v0", "x", "x"⟩, 1, #[⟨0, 2, 0, 0⟩])]
+#guard linksOf (exDefs #[exNode .call 0 #[exArg true 0], exNode .call 0 #[exArg false 0]] #[] (.tuple #[])) 1 == none
 #guard linksOf (exDefs #[exNode .call 0 #[exParts #[.affine true 0 0 1, .affine false 1 0 1]]] #[]) 1 == none
 #guard linksOf (exDefs #[exNode .prim 2 #[exArg true 0]] #[]) 1 == none
 #guard linksOf (exDefs #[exNode .batch 0 #[exArg true 0]] #[.affine true 1 0 1]) 1 == none
@@ -1548,6 +1806,41 @@ private def exTwo (ret : Array Flock.Program.Part) (rty : Flock.Program.Ty) : Ar
 #guard linksOf (exTwo #[.affine false 0 0 1, .affine true 1 0 1] (.tuple #[.value 8, .value 8])) 1 == none
 #guard linksOf (exTwo #[.affine false 0 0 1, .affine false 1 0 1] (.tuple #[.value 8, .array 2 (.value 8)])) 1 == none
 #guard linksOf (exTwo #[.affine false 0 0 1] (.tuple #[.value 8, .value 8])) 1 == none
+
+/-- `exDefs` with the replay block's parameter `x` an array of `n` leaves, its body `block` returning `ret` of type
+`rty`. -/
+private def exDefsN (n : Nat) (block : Array Flock.Program.Node) (ret : Array Flock.Program.Part)
+    (rty : Flock.Program.Ty) : Array Flock.Program.Defn :=
+  (exDefs block ret rty).modify 1 fun d =>
+    let ps : Array (String × Flock.Program.Ty) := #[("x", .array n (.value 8)), ("w", .value 8)]
+    { d with params := ps, body := { d.body with params := ps } }
+
+/-- `Pair_v0` called on leaf `i` of the replay block's `x`. -/
+private def exPairAt (i : Nat) : Flock.Program.Node := exNode .call 0 #[exParts #[.affine true 0 i 1]]
+
+/-- `exDefsN 2` calling `Pair_v0` on `x`'s two leaves in order and returning nodes `ks`' outputs as its two leaves. -/
+private def exReturning (ks : List Nat) : Array Flock.Program.Defn :=
+  exDefsN 2 #[exPairAt 0, exPairAt 1] (ks.toArray.map fun k => .affine false k 0 1) (.array 2 (.value 8))
+
+-- each caller's units read the row of the parameter its slice is, and a template returned whole links its `o0` to
+-- its field's rows, in its units' order; a caller returned twice, or out of order, makes none
+#guard linkRuns (exReturning [0, 1]) 1 ==
+  some #[(⟨"Pair_v0", "x", "x"⟩, 2, #[⟨0, 2, 0, 1⟩]), (⟨"Pair_v0", "o0", "o0"⟩, 2, #[⟨0, 2, 0, 1⟩])]
+#guard linkRuns (exDefsN 3 #[exPairAt 2, exPairAt 0, exPairAt 1] #[] (.tuple #[])) 1 ==
+  some #[(⟨"Pair_v0", "x", "x"⟩, 3, #[⟨0, 1, 2, 0⟩, ⟨1, 2, 0, 1⟩])]
+#guard linksOf (exReturning [1, 0]) 1 == none
+#guard linksOf (exReturning [0, 0]) 1 == none
+-- a batch's members read one row each, an outer axis mapped, or the one row a shared argument is
+#guard linkRuns (exDefsN 2 #[{ exNode .batch 0 #[{ exParts #[.affine true 0 0 2] with dims := some (2, 1) }] with
+    n := 2 }] #[] (.tuple #[])) 1 == some #[(⟨"Pair_v0", "x", "x"⟩, 2, #[⟨0, 2, 0, 1⟩])]
+#guard linkRuns (exDefsN 2 #[{ exNode .batch 0 #[exParts #[.affine true 0 1 1]] with n := 2 }] #[] (.tuple #[])) 1 ==
+  some #[(⟨"Pair_v0", "x", "x"⟩, 2, #[⟨0, 2, 1, 0⟩])]
+#guard linksOf (exDefsN 2 #[{ exNode .batch 0 #[{ exParts #[.affine true 0 0 1] with dims := some (2, 1) }] with
+    n := 2 }] #[] (.tuple #[])) 1 == none
+#guard rowAt #[⟨0, 1, 2, 0⟩, ⟨1, 2, 0, 1⟩] 0 == some 2 && rowAt #[⟨0, 1, 2, 0⟩, ⟨1, 2, 0, 1⟩] 2 == some 1 &&
+  rowAt #[⟨0, 1, 2, 0⟩, ⟨1, 2, 0, 1⟩] 3 == none
+#guard fits #[⟨0, 1, 2, 0⟩, ⟨1, 2, 0, 1⟩] 3 && !fits #[⟨0, 1, 2, 0⟩, ⟨1, 2, 0, 1⟩] 2 && !fits #[⟨1, 2, 0, 1⟩] 2 &&
+  !fits #[⟨0, 0, 0, 0⟩, ⟨0, 2, 0, 1⟩] 2
 
 private def exProg : Flock.Program.Prog :=
   { defs := exDefs #[exNode .batch 0 #[exArg true 0]] #[.affine false 0 0 1], root := 1, programFn := "Block_v0",
@@ -1585,6 +1878,47 @@ private def exChainProg : Flock.Program.Prog :=
 #guard replayWires exChainProg "Block_v0" == some #[⟨"Triple_v0", "x", "Pair_v0", "o0"⟩]
 #guard replayWires exProg "Block_v0" == some #[]
 #guard replayWires exProg "Other_v0" == none
+#guard replayRows exChainProg "Block_v0" == #[⟨"Pair_v0", "x", 1, #[⟨0, 1, 0, 0⟩]⟩,
+  ⟨"Triple_v0", "o0", 1, #[⟨0, 1, 0, 0⟩]⟩, ⟨"Triple_v0", "x", 1, #[⟨0, 1, 0, 0⟩]⟩]
+#guard replayRows exProg "Other_v0" == #[]
+
+/-- `exDefs` with `Triple_v0` (3) and a template `Two_v0` (4) returning two fields, the replay block calling `Two_v0` on
+`x` and `Triple_v0` on `arg`, returning `Triple_v0`'s output. -/
+private def exFields (arg : Flock.Program.Arg) : Array Flock.Program.Defn :=
+  ((exDefs #[{ exNode .call 4 #[exArg true 0] with out := .tuple #[.value 8, .value 8] }, exNode .call 3 #[arg]]
+      #[.affine false 1 0 1]).push
+    (exDefn "Triple_v0" false #["x"] #[exNode .prim 2 #[exArg true 0]] #[.affine false 0 0 1])).push
+    (exDefn "Two_v0" false #["x"] #[exNode .prim 2 #[exArg true 0], exNode .prim 2 #[exArg true 0]]
+      #[.affine false 0 0 1, .affine false 1 0 1] (.tuple #[.value 8, .value 8]))
+
+/-- `exDefs` with `Triple_v0` (3), the replay block calling `Pair_v0` on `x` twice and `Triple_v0` on `arg`, returning
+`Triple_v0`'s output. -/
+private def exTwice (arg : Flock.Program.Node) : Array Flock.Program.Defn :=
+  (exDefs #[exNode .call 0 #[exArg true 0], exNode .call 0 #[exArg true 0], arg] #[]
+      (.tuple #[])).push
+    (exDefn "Triple_v0" false #["x"] #[exNode .prim 2 #[exArg true 0]] #[.affine false 0 0 1])
+
+-- a parameter that is one field of a writer's output wires that field, `o<f>`; one of several callers' outputs wires
+-- its unit's row, at every member of a batch reading it alike
+#guard wiresOf (exFields (exParts #[.affine false 0 1 1])) 1 == some #[⟨"Triple_v0", "x", "Two_v0", "o1"⟩]
+#guard wiresOf (exFields (exParts #[.affine false 0 0 1])) 1 == some #[⟨"Triple_v0", "x", "Two_v0", "o0"⟩]
+#guard wireRuns (exTwice (exNode .call 3 #[exArg false 1])) 1 ==
+  some #[(⟨"Triple_v0", "x", "Pair_v0", "o0"⟩, 2, #[⟨0, 1, 1, 0⟩])]
+#guard wireRuns (exTwice { exNode .batch 3 #[exArg false 0] with n := 2 }) 1 ==
+  some #[(⟨"Triple_v0", "x", "Pair_v0", "o0"⟩, 2, #[⟨0, 2, 0, 0⟩])]
+/-- `exTwice` with `Pair_v0`'s first caller a batch of two members. -/
+private def exBatchWriter (arg : Flock.Program.Node) : Array Flock.Program.Defn :=
+  (exTwice arg).modify 1 fun d => { d with body := { d.body with nodes := d.body.nodes.modify 0 fun x =>
+    { x with form := .batch, n := 2, out := .array 2 (.value 8) } } }
+
+-- a writer's units count its batches' members
+#guard wireRuns (exBatchWriter (exNode .call 3 #[exArg false 1])) 1 ==
+  some #[(⟨"Triple_v0", "x", "Pair_v0", "o0"⟩, 3, #[⟨0, 1, 2, 0⟩])]
+-- both fields, a batch's member, a batched argument, or a gather of two writers' outputs, none
+#guard wiresOf (exFields (exParts #[.affine false 0 0 2])) 1 == none
+#guard wiresOf (exBatchWriter (exNode .call 3 #[exArg false 0])) 1 == none
+#guard wiresOf (exTwice { exNode .batch 3 #[{ exArg false 0 with dims := some (1, 1) }] with n := 1 }) 1 == none
+#guard wiresOf (exTwice (exNode .call 3 #[exParts #[.affine false 0 0 1, .affine false 1 0 1]])) 1 == none
 
 private def exWire : Wire := ⟨"Triple_v0", "x", "Pair_v0", "out"⟩
 
@@ -1598,9 +1932,14 @@ private def exWire : Wire := ⟨"Triple_v0", "x", "Pair_v0", "out"⟩
 private def exWiredInterior : Json :=
   exRec 6 [("Pair_v0/x", 1, 2), ("Pair_v0/out", 3, 4), ("Triple_v0/out", 5, 6)] (exWindow (natsJson #[1, 3]))
 
-/-- `exTwoParts` over `exWiredInterior`, `Triple_v0`'s `x` wired from `Pair_v0`'s `out`. -/
+/-- `exTwoParts` over `exWiredInterior`, `Triple_v0`'s `x` wired from `Pair_v0`'s `out`, its unit reading its writer's
+first unit of three a block. -/
 private def exWired : Own :=
-  { exOwn with parts := some exTwoParts, interior := exWiredInterior, wires := some #[exWire] }
+  { exOwn with parts := some exTwoParts, interior := exWiredInterior, wires := some #[exWire],
+    rows := #[⟨"Triple_v0", "x", 3, #[⟨0, 1, 0, 0⟩]⟩] }
+
+/-- `exWired`, `Triple_v0`'s unit reading its writer's unit `j`, of `per` a block. -/
+private def exWiredAt (per j : Nat) : Own := { exWired with rows := #[⟨"Triple_v0", "x", per, #[⟨0, 1, j, 0⟩]⟩] }
 
 private def exTriple : Part := ⟨"Triple_v0", 6, 1⟩
 
@@ -1609,9 +1948,15 @@ private def exWiredRead (v : String) (root dom : Nat) (reads : List Nat) : Json 
   Json.mkObj [("value", .str v), ("root", exRoot root), ("domain", exRoot dom), ("leaves", Lean.toJson (6 : Nat)),
     ("reads_from", (6 : Nat)), ("reads", natsJson reads.toArray)]
 
--- a wired port reads its writer's output value, each slot the row of its writer's first instance in its replay block
+-- a wired port reads its writer's output value, each slot the row of its writer's unit its rows name, in its replay
+-- block
 #guard readOk exWired true exTriple "x" (exWiredRead "Pair_v0/out" 3 4 [0, 3])
 #guard readOk exWired true exTriple "x" (exWiredRead "Pair_v0/out" 3 4 [0])
+#guard readOk (exWiredAt 3 2) true exTriple "x" (exWiredRead "Pair_v0/out" 3 4 [2, 5])
+#guard !readOk (exWiredAt 3 2) true exTriple "x" (exWiredRead "Pair_v0/out" 3 4 [0, 3])
+#guard !readOk (exWiredAt 3 3) true exTriple "x" (exWiredRead "Pair_v0/out" 3 4 [3, 6])
+#guard !readOk (exWiredAt 2 1) true exTriple "x" (exWiredRead "Pair_v0/out" 3 4 [1, 3])
+#guard !readOk { exWired with rows := #[] } true exTriple "x" (exWiredRead "Pair_v0/out" 3 4 [0, 3])
 -- its own port, which has no tree, another of its writer's rows, another port, or at another root
 #guard !readOk exWired true exTriple "x" (exWiredRead "Triple_v0/x" 3 4 [0, 3])
 #guard !readOk exWired true exTriple "x" (exWiredRead "Pair_v0/out" 3 4 [1, 3])
@@ -1648,5 +1993,10 @@ private def exWiredBinding (own : Own) : Option String := do
   #["second-wires"]
 #guard (check true { exWired with wires := none, links := none } none).codes == #["second-links", "second-wires"]
 #guard (check true { exWired with wires := none } (some #[])).codes == #["second-wires"]
+-- rows that don't place the reader's units, or its writer's, make no wires
+#guard (check true { exWired with rows := #[] } none).codes == #["second-wires"]
+#guard (check true (exWiredAt 2 1) none).codes == #["second-wires"]
+#guard (check true { exWired with rows := #[⟨"Triple_v0", "x", 3, #[⟨0, 2, 0, 0⟩]⟩] } none).codes == #["second-wires"]
+#guard (check true (exWiredAt 3 2) none).codes == #["second-statements"]
 
 end Spot.SecondStage
