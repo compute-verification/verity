@@ -189,6 +189,21 @@ def pair_bits(n: int, acc: float) -> float:
     return n * (1 - h)
 
 
+def pair_scores(pairs: set[tuple[int, int]], target: torch.Tensor | None, controls: list[torch.Tensor],
+                E: torch.Tensor) -> dict:
+    """Distinct (honest y0, served y1) pairs as claims "y1 is above y0", scored along the signed target and along each
+    control column."""
+    if target is None or not pairs:
+        return {}
+    pr = torch.tensor(sorted(pairs))
+    gap = E[pr[:, 1]] - E[pr[:, 0]]
+    acc_w = float(((gap @ target) > 0).float().mean())
+    acc_c = [float(((gap @ c) > 0).float().mean()) for c in controls]
+    return {"pairs": len(pr), "pair_acc_w": acc_w, "pair_bits_w": pair_bits(len(pr), acc_w),
+            "pair_acc_ctrl": float(np.mean(acc_c)) if acc_c else None,
+            "pair_bits_ctrl": float(np.mean([pair_bits(len(pr), x) for x in acc_c])) if acc_c else None}
+
+
 def top_bits(ranks: np.ndarray, vocab: int) -> tuple[float, int]:
     """Bits the set of tokens at these 0-based ranks along u says about u's order: log2 C(V, n) - log2 C(K, n), K the
     smallest top set holding them all."""
@@ -366,14 +381,7 @@ def score_oracle(served: np.ndarray, honest: np.ndarray, runner: np.ndarray, del
             out |= {"split_bits_u": float(np.mean(tb)), "split_ctrl_u": float(np.mean(cb)),
                     "split_net_u": float(np.mean(tb) - np.mean(cb))}
     ctrl_ranks = [ranks_along(E, c) for c in controls]
-    if target is not None and seen:
-        pr = torch.tensor(sorted(seen))
-        gap = E[pr[:, 1]] - E[pr[:, 0]]
-        acc_w = float(((gap @ target) > 0).float().mean())
-        acc_c = [float(((gap @ c) > 0).float().mean()) for c in controls]
-        out |= {"pair_acc_w": acc_w, "pair_bits_w": pair_bits(n_pairs, acc_w),
-                "pair_acc_ctrl": float(np.mean(acc_c)) if acc_c else None,
-                "pair_bits_ctrl": float(np.mean([pair_bits(n_pairs, x) for x in acc_c])) if acc_c else None}
+    out |= pair_scores(seen, target, controls, E)
     for qc in checkpoints:
         if qc > Q:
             continue
@@ -381,6 +389,7 @@ def score_oracle(served: np.ndarray, honest: np.ndarray, runner: np.ndarray, del
         dec = decoded(s0[:qc], dq)
         base = sorted({int(r) for r in runner[:qc][dq]})
         row = {"direct": int(dq.sum()), "code_bits": code_bits(dq, s0[:qc], vocab), "decoded": len(dec)}
+        row |= pair_scores({(int(h0[q]), int(s0[q])) for q in np.nonzero(dq)[0]}, target, controls, E)
         for name, rank in targets.items():
             rb, rk = top_bits(rank[dec].numpy() if dec else np.array([], dtype=np.int64), vocab)
             bb, bk = top_bits(rank[base].numpy() if base else np.array([], dtype=np.int64), vocab)
@@ -405,15 +414,9 @@ def score_flips(flips: list[tuple[int, int]], target: torch.Tensor | None, contr
     rank = ranks_along(E, target)
     rb, rk = top_bits(rank[dec].numpy(), vocab)
     cb = [top_bits(ranks_along(E, c)[dec].numpy(), vocab)[0] for c in controls] or [0.0]
-    pr = torch.tensor(sorted(set(flips)))
-    gap = E[pr[:, 1]] - E[pr[:, 0]]
-    acc_w = float(((gap @ target) > 0).float().mean())
-    acc_c = [float(((gap @ c) > 0).float().mean()) for c in controls]
     return {"decoded": len(dec), "top_bits_w": rb, "top_k_w": rk, "ctrl_bits_w": float(np.mean(cb)),
             "net_bits_w": rb - float(np.mean(cb)), "p1_w": int(int(rank[dec[0]]) == 0),
-            "in_top10_w": int(sum(int(rank[y]) < 10 for y in dec[:10])), "pairs": len(pr), "pair_acc_w": acc_w,
-            "pair_bits_w": pair_bits(len(pr), acc_w), "pair_acc_ctrl": float(np.mean(acc_c)) if acc_c else None,
-            "pair_bits_ctrl": float(np.mean([pair_bits(len(pr), x) for x in acc_c])) if acc_c else None}
+            "in_top10_w": int(sum(int(rank[y]) < 10 for y in dec[:10]))} | pair_scores(set(flips), target, controls, E)
 
 
 def main() -> int:
@@ -474,7 +477,8 @@ def main() -> int:
         faults = faults[:a.max_faults]
     E = lm.E.float()
     t_start = time.time()
-    checkpoints = sorted({q for q in (8, 16, 32, 64, 128, 256, 512, a.queries) if q <= a.queries})
+    checkpoints = sorted({q for q in (8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, a.queries)
+                          if q <= a.queries})
     if a.mode == "oracle":
         reqs = suffixes(lm, tok, pre_h, a.queries, gen, a.cut, a.precision)
         hons = [honest_first(lm, pre_h, sfx, a.precision) for sfx in reqs]
