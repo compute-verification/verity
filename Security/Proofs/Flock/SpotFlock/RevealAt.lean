@@ -173,7 +173,7 @@ structure Site where
   slot : Slot
 
 /-- **Gate `g`'s place**: its site's; a one-bit row where it has none. -/
-def placeOf (site : ℕ → Option Site) (g : ℕ) : (w : ℕ) × Fin w := ((site g).map Site.place).getD ⟨1, 0⟩
+def sitePlace (site : ℕ → Option Site) (g : ℕ) : (w : ℕ) × Fin w := ((site g).map Site.place).getD ⟨1, 0⟩
 
 /-- **Row `q` of instance `n` of a session's first table, as bits**: bit `8 i + t` is bit `t` of the row's byte `i` as
 the row hash reads it (`rowBytes`, after its prefix). -/
@@ -261,7 +261,7 @@ noncomputable def revealCode (site : ℕ → Option Site) (c₀ : Code) : Code :
     own := revealOwn
     ownAt := fun _ _ => revealOwn
     ownAt_depth := fun _ _ => le_rfl
-    place := placeOf site
+    place := sitePlace site
     bits := bitsOf
     salt := saltOf
     π := pathOf }
@@ -272,12 +272,12 @@ theorem depth_revealCode (site : ℕ → Option Site) (c₀ : Code) : depth (rev
 /-! ## The opening facts -/
 
 /-- **The proof blocks at `x`**: `units (base h) x`, read without the frame. -/
-def unitsAt (x : Msg) : ℕ :=
+def unitCount (x : Msg) : ℕ :=
   match parse h x with
   | some s => ((partition h s).getD ⟨[]⟩).blocks.length
   | none => 0
 
-theorem units_eq_unitsAt (x : Msg) : units (base h) x = unitsAt h x := rfl
+theorem units_eq_unitCount (x : Msg) : units (base h) x = unitCount h x := rfl
 
 /-- **A checked unit of a run, with its session's setup**: the values `SlotsAt` quantifies over. The run's statement
 `x` and its parse `s`, its first three messages and the coins of rounds 0 and 1, the rest of its transcript, the
@@ -307,7 +307,7 @@ variable (r : CheckedRun)
 /-- **The run is accepted and `u` is one of its checked units**: `SlotsAt`'s premises. -/
 def Ok : Prop :=
   ∃ Pt d spec, parse h r.x = some r.s ∧ partition h r.s = some Pt ∧ two h r.s = some d ∧ InScopeTwo Pt d r.s ∧
-    stmtOk h r.x r.m₁ r.m₂ r.c₀ r.c₁ = true ∧ r.u ∈ h.reg.checked (unitsAt h r.x) (src r.c₀) (src r.c₁) ∧
+    stmtOk h r.x r.m₁ r.m₂ r.c₀ r.c₁ = true ∧ r.u ∈ h.reg.checked (unitCount h r.x) (src r.c₀) (src r.c₁) ∧
     Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (unitStmt h r.m₂ r.u) r.wF = true ∧
     Pt.blocks[r.u]? = some r.b ∧ replayOf Pt d.part r.u = some r.ρ ∧ d.part.blocks[r.ρ]? = some r.rb ∧
     FlockDeploy.setupOf true (unitStmt h r.m₂ r.u) = some (r.ins, spec, r.sts)
