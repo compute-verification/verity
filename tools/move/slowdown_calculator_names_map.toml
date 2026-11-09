@@ -6,8 +6,9 @@
 # - Its outputs: `rho.md` and `rho.json` are `slowdown.md` and `slowdown.json`.
 # - The joins the move's tools don't follow: `HERE.parent / "rho"` in the two runners that put the calculator on
 #   `sys.path`, and the row `rho/` of `benchmarks/README.md`'s table.
-# - The calculator named "rho" in other benchmarks' prose: "rho's" is "the slowdown calculator's".
-# What stays: the symbol ρ, and every `rho` that is a number (`Overhead.rho`, `Estimate.rho`, the JSON's `rho`).
+# - The calculator named "rho" in the benchmarks' prose: "rho's" is "the slowdown calculator's".
+# What stays: the symbol ρ, every `rho` that is a number (`Overhead.rho`, `Estimate.rho`, the JSON's `rho`), and the
+# red team's codec, whose `rho` is a function of its own ([keep_in]).
 
 [words]
 
@@ -24,8 +25,7 @@ files = ["benchmarks/README.md"]
 words = { "`rho/`" = "`slowdown/`" }
 
 [[words_in]]
-files = ["benchmarks/circuit_properties/**", "benchmarks/harness/pyproject.toml", "benchmarks/nci/README.md",
-         "benchmarks/sampling_plan/**", "benchmarks/spot_figures/**", "benchmarks/slowdown/**"]
+files = ["benchmarks/**"]
 words = { "rho's" = "the slowdown calculator's" }
 
 [rewrite]
@@ -36,3 +36,6 @@ exclude = ["tools/move/**", "uv.lock", "**/*.lock", "benchmarks/spot_figures/car
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
             'lanes/[\w.-]+']
 strings = []
+
+[keep_in]
+"benchmarks/property_redteam/**" = ["rho's"]
