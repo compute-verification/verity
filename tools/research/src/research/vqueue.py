@@ -478,10 +478,10 @@ def _records(s: Snapshot, c1: Candidate) -> list[Action] | None:
     """What a failed lowest candidate whose own failures are all stale lock records (`Failed.records`) calls for: its records
     run (`Regenerate`), launched again once when it ended in infra; nothing while it runs, or a ring of infra while its passed
     run's records can't be read; once it passed, the commit of its records (`Commit`).  None when it fails as any other: the
-    loop regenerates no records (`Snapshot.records`), a failure of its own isn't stale records, it is a records commit
-    already (its records didn't settle them), or its records run refused them (`_refused`)."""
+    loop regenerates no records (`Snapshot.records`), a failure of its own isn't stale records, or `_refused` says why
+    they weren't committed (among them a records commit's, whose records didn't settle them)."""
     own = [f for f in c1.verdict.failed if not _inherited(f)]
-    if not s.records or c1.repairs is not None or not own or not all(f.records for f in own) or _refused(c1):
+    if not s.records or not own or not all(f.records for f in own) or _refused(c1):
         return None
     r = c1.records
     if r is None or r.state == INFRA:
