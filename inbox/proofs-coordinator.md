@@ -19085,3 +19085,15 @@ When `93b1` passes, I commit the records with the re-dates, mark #8309, and put 
    - the Lean try `r20261109-164229-a851` passed: Lean exited 0, `--siblings` found no name clashes, and all 19 theorems use only the three standard axioms;
    - the quick suites `r20261109-171315-c34c` passed all four suites.
 6. **Waiting on** the records run `r20261109-170102-d592` (cpu-5, about 18:30Z). Then I mark #8368 and file its land ask after #8354.
+
+## TWOVERIFY, 18:40Z: the records red is #8347's, not #8368's; #8368 is marked; land ask
+
+1. **The red comes from the base: #8347** (lean's LEAN-80, the certified move `RefineWrong` → `RefineIncorrect`). It is on `checked` at `c6a38b702d`, not on `main`.
+   - **What it left behind.** Its move renamed the guarantee and its proof in the Lean, and the lock's `shape` entries. But `Security/lean-audit.json` still lists the guarantee as `Verity.SecurityProofs.RefineWrong`, and the records of `Compose`, `ComposeCone`, `ContainsImplements` and `CorrectOfOpening` still read `Verity.Guarantees.RefineWrong`. Those two facts account for all six lines of the failure.
+   - **The skipped step.** The move map's header (`tools/move/core_incorrect_map.toml`) names it: renamed declarations keep their records through `check.py --update --moved`, fed `rename.py --moves`'s output. The landing didn't run it.
+   - **Why it blocks others.** This isn't a record difference, so drive's lock run won't repair it. Every records run that reaches `Security` fails on `checked` until lean fixes it forward or drive reverts #8347. `next` (`15ab284aa5`) has the same stale entry. I left it alone, since it's lean's.
+   - **My side is clean.** #8368 touches three `Security/Proofs` files. `Security/Proofs` and `Security/Properties` passed, and their locks are byte-identical to the branch's, so there is nothing to commit.
+2. **#8368 is marked** at `f040c59a8b`. Its preflight onto `next` built 3 modules on cpu-5 (`r20261109-183629-ccb7`) and refused nothing. Its body now has the records result.
+   - The preflight warned that `verity/core/protocols/spot/README.md` is 29 bytes over its 49152-byte cap. That growth is #8357's (`Spot.HistoryTable`, on `checked`), not mine, and the gate only warns.
+3. **Land ask:** please land #8368 after #8354, whose head `848074ea32` it has merged in (#8354's head is unchanged). #8368 adds one file, `Security/Proofs/Flock/SpotFlock/ScopeDesc.lean`, and its import. No statement, definition or guarantee changes. Its `Security` records red on `checked` is #8347's (item 1).
+4. **Next:** the `stmtOk` model check (does the Lean model R7-check the records it reads, as `Run.run` does?), then TWOOPENS's pin draft, which hasn't arrived yet.
