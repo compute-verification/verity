@@ -1091,3 +1091,29 @@ Each figure is a Lean verify of one statement, the median of three, in core-s (u
 - Flat, same tree and node, so far: FlashInfer K2048 339.4 (94.1 GB) and group quant K6144 575.7 (104.0 GB). The rest come from r20261109-191738-c631 and the tail run r20261109-211436-1bcd, about 00:40Z.
 - The card refresh is flat, today's served statement, when the flat runs finish. The templated column is what the served audit costs once it composes templated by default. PR #8425 is the proof server's half; the a5 half's end-to-end run is queued.
 
+[2026-11-09T22:56Z] dcda6582daa9
+From VERIFYFAST-B (proofs), Mon 9 Nov 22:56Z: the verifier column, all eleven types, both forms. This replaces my 21:16Z nine-type message.
+
+Same tree (`checked` 00d07520b3) and node (vy-nebius-cpu-1) for both forms. Each figure is a Lean `flock-verify` in core-s (user plus system), the median of its verifies, with peak memory; every verify was accepted.
+- Templated: `struct_lower` at `iv/hybrid/4`, runs r20261109-194350-d5cf and r20261109-202306-4f0a.
+- Flat: today's served form, runs r20261109-191738-c631 and r20261109-211436-1bcd.
+
+| Type | Card (7 Nov) | Flat now | Templated |
+| --- | ---: | ---: | ---: |
+| FlashInferFp8Linear K2048 | 2,474 | 339.4 s, 94.1 GB | 22.3 s, 3.8 GB |
+| Fp8GroupQuant K6144 | 2,100 | 575.7 s, 104.0 GB | 28.7 s, 2.4 GB |
+| SparseMlaCombine NSPLIT=12 | 1,634 | 316.7 s, 77.6 GB | 32.4 s, 5.6 GB |
+| RMSNormFusedCudaVector8 | 769 | 153.2 s, 31.6 GB | 64.8 s, 15.4 GB |
+| Fp8GroupQuant K2048 | 681 | 132.0 s, 32.7 GB | 17.0 s, 2.3 GB |
+| Fp8GroupQuant K1536 | 508 | 99.4 s, 25.5 GB | 14.9 s, 2.3 GB |
+| SparseMlaCombine NSPLIT=2 | 324 | 61.5 s, 16.8 GB | 24.9 s, 5.5 GB |
+| AllReduceMultimem | 314 | 75.5 s, 15.2 GB | 8.2 s, 0.9 GB |
+| MoeExpertFp8GemmW | 15 | 8.2 s, 1.0 GB | 11.9 s, 1.0 GB |
+| SparseMlaCombine NSPLIT=5 | (family) | 130.2 s, 34.5 GB | 26.2 s, 5.5 GB |
+| ScaledMmFp8BlockSharedScale K2048 | (family) | 7.8 s, 1.2 GB | 6.4 s, 1.2 GB |
+
+- Summed over the eleven: flat 1,899.6 core-s, templated 257.7, a factor of 7.4. MoE W is the one type where templated is slower: its unit is small, so the template's fixed cost dominates.
+- Per monitoring period, one core verifies one block of each of the eleven types, flat, 318 times a week, 1,384 a month and 16,613 a year; templated, 2,347, 10,205 and 122,459. The verifier's cost is per audited block, so its share of the compute it covers is the same for a datacenter as for the world.
+
+What to use: the served audit composes flat today, so the card's types get the flat column. I'm putting that in a card PR now and will send you its `art:` id. The templated column goes on the card only once the served audit composes templated by default: PR #8425, then a5's templated composition, then a GLM-5.3 window audited templated. Until then, quote templated as what the next step reaches, not as today's served cost.
+
