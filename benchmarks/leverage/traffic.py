@@ -259,3 +259,14 @@ HELDOUT_OPENINGS = (
 
 CALIBRATION = PROMPTS[8:] + CALIBRATION_TEXTS
 HELDOUT = PROMPTS[:8] + HELDOUT_TEXTS + HELDOUT_OPENINGS
+
+RUN_UNITS = (" and", " of", " to", " a", " in", " is", " that", "<|im_end|>")
+RUN_LENGTH = 512
+
+
+def run_texts() -> list[tuple[str, str]]:
+    """Calibration texts with a long run of one token after an ordinary opening, then ordinary text: a long enough run
+    forms the sink again, and the text after it puts sinks on ordinary tokens (`lm.long_runs`); for the sink class's
+    boxes, of other tokens than the runs a held-out check repeats."""
+    return [(f"run:{u.strip()}", "The log continues:" + u * RUN_LENGTH + " " + CALIBRATION_TEXTS[i])
+            for i, u in enumerate(RUN_UNITS)]

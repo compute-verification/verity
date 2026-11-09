@@ -55,7 +55,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lm import E4M3_MAX, GROUP, GROUP_SITES, LM, MODELS, Boxes, Cache, ue8m0_scale
-from traffic import CALIBRATION, HELDOUT, long_texts, mixed
+from traffic import CALIBRATION, HELDOUT, long_texts, mixed, run_texts
 
 
 def continued(lm: LM, tok, text: str, new: int, cap: int) -> list[int]:
@@ -215,7 +215,7 @@ def part_calibrate(lm: LM, tok, a) -> dict:
     stats = Stats(lm, lm.special_ids() if a.special else [], a.window,
                   torch.load(a.hosts)["hosts"] if a.hosts else None, a.run)
     t0 = time.time()
-    texts = shard(traffic("calibration", a.mixed), a.shard)
+    texts = shard(traffic("calibration", a.mixed) + (run_texts() if a.run else []), a.shard)
     for j, (name, text) in texts:
         ids = continued(lm, tok, text, a.new, a.cap)
         taps = {k: None for k in lm.sites()}
