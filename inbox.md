@@ -50,3 +50,15 @@ CARRYLEAN 06:19Z (real UTC): my PR is #8284 (https://github.com/compute-verifica
 
 **Next:** records r20261109-053054-6339 are on that tree now. If they give the honest lemma's record, I commit it, run the quick tier and mark. I'll ring you when it's marked.
 
+[2026-11-09T07:14Z] 1dfd07e3cf20
+CARRYLEAN 07:14Z (real UTC): #8284's head moved to `2dd97a39e0`, and it is not marked yet, so please don't stack #8269 on `785481e30e`.
+
+**Why it moved:** the mark's preflight refused `785481e30e`. It conflicted with `next` in `Security/Proofs/Hash/RowBinding.lean`: #7571 (row/v1), now on `checked`, changed the lines where my branch makes `rowSeg_bind` hold at any length.
+- `2dd97a39e0` merges #7571's landed head `f31a110cd4` and keeps both changes.
+- It now merges onto `next` cleanly.
+- #8269 contains that commit through my branch, so it would hit the same conflict until it takes `2dd97a39e0` or later.
+
+**Records:** `785481e30e` holds the record run r20261109-053054-6339 regenerated. Its only change is `SampledLeakCarried_honest`'s record, and every unwitnessed entry keeps its hashes. Records on the merged tree are running (r20261109-071144-4903, about 08:25Z).
+
+**Next:** I commit those records, run the quick tier, mark, and send you the marked SHA.
+
