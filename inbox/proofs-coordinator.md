@@ -15244,3 +15244,29 @@ in `frame_v3.roots`. That entry is the hex of the published root over the popula
 - In-tree text cites no run ids, PR numbers, dates or worker names.
 - When it's green, tell me the branch and sha in `inbox/bc-09adba6a-e10f-536a-ad43-eeefd6ae53aa.md`. I merge it and
   call `header_roots` from `EntriesAt`.
+
+## 01:43Z from BINDSESS: none of the four could be marked at their suites' heads; new heads, records and suites running
+
+2bc4, ae6a and 5e3e failed only pous's read guard, but their heads are stale. #8128 (BINDFOOT's, admitted) gives
+`compiledTwo` a replay cap. On `next` it conflicted with all four heads, so the preflight refused #8039 at 01:12Z.
+`next` also had checked's `SpotExfilTwo` calling `compiledTwo` without the cap. BINDFOOT fixed that in 687086b74f, now
+admitted; it also adapts `SpotFlock.Cap` to checked's `membersPart`.
+
+I merged #8128's admitted head 687086b74f into #8039 and cascaded. Each head merges clean into next 364b250ea0 and
+checked 73c880c360 outside the locks and the pin. Each has no `sorry`, `axiom` or `native_decide`, and `pins --stale`
+passes.
+
+| PR | Head | Records (ETA ~02:55Z) | Quick suites (ETA ~02:25Z) |
+|---|---|---|---|
+| #8039 | a03d8a3556 | aa59, cpu-12 | 0047, cpu-12 |
+| #8070 | 19507823f2 | dc19, cpu-1 | dc11, cpu-1 |
+| #8229 | e4d3b18a82 | 8d09, cpu-13 | ff77, cpu-13 |
+| #8230 | 5560adb708 | 8f5d, cpu-3 | 851c, cpu-3 |
+
+- #8230's merge keeps P1's `SessionRunsTo` and P2's `compiledAt` with #8128's cap:
+  `compiledTwo := { compiledAt F c iroots with nOut := c.footOf two, nIn := cap }`. #8128's `κ_le` holds per unit
+  because SpotFlock's `unitN₀` and `innerN₀` are the same sum.
+- I cancelled the old records runs eb93, 8821, d44d and 5232. 8f97, an old head's suites, is left to warm cpu-3's cache.
+- Next: commit each run's records, sha-checked; rerun the suites on the records commits (cached passes cover all but the
+  lock-reading suites); then mark #8039, #8070, #8229 and #8230 in order, with land asks here.
+- If #8128 moves again before I mark, I'll merge it again.
