@@ -76,7 +76,9 @@ def test_one_mathlib():
 #: the size of each lock's `unwitnessed`, as the regeneration that recorded every guarantee's premises left it: the
 #: guarantees stating what an acceptance means, or an exclusion's bound, that have no `honest` and `nontrivial` witnesses
 #: (`check.py`'s `witness_failures`)
-UNWITNESSED = {"Security": 311, "Security/Properties": 191, "verity/core/service/flock": 7}
+# Security's 303: Flock.SecurityProofs.SpotExfilTwo, NetTiming.SecurityProofs.SampledLeakChecked and PooledLeakChecked carry
+# their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique
+UNWITNESSED = {"Security": 303, "Security/Properties": 191, "verity/core/service/flock": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -241,7 +243,7 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: falsified conjectures they rest on; a renamed or restated premise counts twice, under both texts, until `--update`
 #: drops the one no tree prints
 # Security's 945: merge residue of renamed premise texts, which the lock run's --update drops and the after-landing bookkeeping lowers
-INLINE = {"Security": 945, "Security/Properties": 132, "verity/core/service/flock": 6}
+INLINE = {"Security": 914, "Security/Properties": 132, "verity/core/service/flock": 6}
 
 
 def test_the_inline_list_only_shrinks():
@@ -490,7 +492,7 @@ def test_the_spec_states_no_new_lemma():
 #: the lines a module may run to: one module is one unit of rebuild, so a long one costs every check and train its build
 LONG = 2000
 #: the lines past `LONG` of each package's modules, summed
-OVERLONG = {"Security": 963, "Security/Proofs": 54185, "verity/core/protocols/pouw/lean/check": 281, "verity/core/service/flock": 690}
+OVERLONG = {"Security": 963, "Security/Proofs": 54185, "verity/core/protocols/pouw/lean/check": 281, "verity/core/service/flock": 700}
 
 
 def overlong(lines: dict[str, int]) -> dict[str, int]:

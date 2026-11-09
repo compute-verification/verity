@@ -1,7 +1,8 @@
 """A Definition registered over a range of its statics: a sidecar's ``RANGES``, {rule: its spots}.  A rule is the family's id with
-``lo..hi`` in place of each static it spans and the rest at the values the id spells
-(``SparseMlaSplit_v1{T=1..2048,NS=1..28,NH=8,...}``); a spot gives each spanned static a value (``"T=2048,NS=28"``), and the
-spots reach both ends of each range (`parse` refuses a rule whose spots don't).
+``lo..hi`` in place of each static it spans, or ``lo..hi step s`` for lo, lo + s, ..., hi (a grid of size classes,
+``N=4096..131072 step 2048``), and the rest at the values the id spells (``SparseMlaSplit_v1{T=1..2048,NS=1..28,NH=8,...}``); a
+spot gives each spanned static a value (``"T=2048,NS=28"``), and the spots reach both ends of each range (`parse` refuses a rule
+whose spots don't).
 
 circuit-check never checks a rule itself.  ``--ranges`` adds the rules' spots to a run's targets (`spots`), as named targets,
 so a spot past `targets.MAX_GATES` is checked too (``--all`` keeps only its families' smaller bindings).  The report's ``ranges``
@@ -22,7 +23,7 @@ from . import sidecars as SC
 from .targets import _split
 
 _ID = re.compile(r"([^{]+)\{(.*)\}")
-_SPAN = re.compile(r"(-?\d+)\.\.(-?\d+)")
+_SPAN = re.compile(r"(-?\d+)\.\.(-?\d+)(?: step (\d+))?")
 _INT = re.compile(r"-?\d+")
 
 
@@ -32,7 +33,7 @@ class Rule:
     family: str
     order: tuple[str, ...]
     fixed: tuple[tuple[str, str], ...]
-    over: tuple[tuple[str, int, int], ...]
+    over: tuple[tuple[str, int, int, int], ...]
     spots: tuple[str, ...]
     sidecar: str
 
@@ -43,10 +44,10 @@ class Rule:
             return None
         got = _split(m[2])
         if (tuple(got) != self.order or any(got[k] != v for k, v in self.fixed)
-                or not all(_INT.fullmatch(got[k]) for k, _, _ in self.over)):
+                or not all(_INT.fullmatch(got[k]) for k, *_ in self.over)):
             return None
-        vals = {k: int(got[k]) for k, _, _ in self.over}
-        return vals if all(lo <= vals[k] <= hi for k, lo, hi in self.over) else None
+        vals = {k: int(got[k]) for k, *_ in self.over}
+        return vals if all(lo <= vals[k] <= hi and (vals[k] - lo) % step == 0 for k, lo, hi, step in self.over) else None
 
     def covers(self, did: str) -> bool:
         return self.at(did) is not None
@@ -54,7 +55,7 @@ class Rule:
     def unreached(self, ids: Iterable[str]) -> dict[str, list[int]]:
         """{static: its range's ends that no id of ``ids`` this rule covers takes}, for each spanned static missing one."""
         seen = [v for v in map(self.at, ids) if v is not None]
-        out = {k: [e for e in sorted({lo, hi}) if all(v[k] != e for v in seen)] for k, lo, hi in self.over}
+        out = {k: [e for e in sorted({lo, hi}) if all(v[k] != e for v in seen)] for k, lo, hi, _ in self.over}
         return {k: ends for k, ends in out.items() if ends}
 
 
@@ -66,10 +67,13 @@ def _rule(text: str, where: str = "") -> Rule:
     fixed, over = [], []
     for k, v in statics.items():
         if s := _SPAN.fullmatch(v):
-            lo, hi = int(s[1]), int(s[2])
+            lo, hi, step = int(s[1]), int(s[2]), int(s[3] or 1)
             if lo > hi:
                 raise ValueError(f"{where}RANGES rule {text!r}: {k}={v} is empty (write lo..hi with lo <= hi)")
-            over.append((k, lo, hi))
+            if step < 1 or (hi - lo) % step:
+                raise ValueError(f"{where}RANGES rule {text!r}: {k}={v} doesn't reach hi from lo (write lo..hi step s with s >= 1 "
+                                 f"dividing hi - lo)")
+            over.append((k, lo, hi, step))
         else:
             fixed.append((k, v))
     if not over:
@@ -82,7 +86,7 @@ def parse(text: str, spots: Iterable[str], sidecar: str = "") -> Rule:
     """Rule ``text`` with ``spots``, each made the family's id at the rule's fixed statics."""
     where = f"{sidecar}: " if sidecar else ""
     rule = _rule(text, where)
-    spanned = [k for k, _, _ in rule.over]
+    spanned = [k for k, *_ in rule.over]
     ids = []
     for spot in spots:
         got = _split(spot)

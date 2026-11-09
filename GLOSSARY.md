@@ -49,6 +49,8 @@ and **the slowdown lower bound** (`ARCHITECTURE.md`'s Glossary, "Feasible set").
 | fixed operand B_w | A GEMM operand fixed before the salt and reused across units, by id; model weights are its usual instance, never a first-class notion of their own. | `Pouw.Layout.fixedId`, `Pouw.Workload.fixed`, `Pouw.PearlC.Workload.FixedOK` |
 | inert work, ι | A tile's operations that don't affect its output: left out, the output is bit-for-bit unchanged (an FP32 add that rounding discards, an add into zero). The inert-work bound: on each sampled tile, the verifier computes it exactly and requires at most ι of the tile's credit (1/400 on the H100, 1/1,000 on the RTX PRO 6000); a sampled tile over it is credited nothing. Incorrect work, which sampling bounds, is separate. | `Pouw.PearlC.Skip`; `capOK`, `debitOf` until renamed |
 | SPOT[Π] | SPOT, the Sample-and-PrOve Transform, over Π, read "SPOT over Π", SPOT always in capitals. SPOT is a transform, not a protocol: from a proof system Π knowledge sound for single proof blocks it builds the argument SPOT[Π] for a whole partitioned computation, whose prover commits to every proof block and proves only the sampled ones; a SPOT proof is one run's commitments and Π-proofs. SPOT preserves completeness, zero knowledge and knowledge soundness, relaxed to the sampled relation, and states its costs. The deployed one is SPOT[Flock]; the recursion compiler has no name. | `Claims.SamplingGeneric` (`CompilerKS`, `CompilerZK`, proved); SPOT[Flock]'s claims: `Claims.Sampling` |
+| E, reach | An incorrect proof block's reach E: the set of served outputs it can change downstream, everything after it being locally correct. The wiring alone fixes it, and a set's reach is the union of its members'. Incorrect proof blocks change no served output outside their reach, so \|E\| bounds what they put on the served outputs. | `Population.Dataflow.coneEgress O {u}`, whose size the Lean writes E(u); `WeightSecurity.Served.Local`'s `E` bounds it per incorrect proof block |
+| run (SPOT) | SPOT's unit: the proof system's run of one registration, from its public check through its verdict, with its boundary commitment, live coins, sample, proofs and verdict. The run's serving, the span whose values it commits, is an execution phase. Its length, the run length, is a deployment parameter (600 s in the reference deployment, `window_s`), neither a circuit nor a security concept. | `Spot.Run` |
 | Break, B^τ, 𝒟_b^τ | The event that the fixed finder exhibits a SHA-512 collision, or the fixed forger a valid LMS signature under a device's registered key on a message the device's log never signed, charged as f(Pr[B^τ collides]) + Pr[the forger succeeds] and never assumed away; B^τ and 𝒟_b^τ are the finder and the distinguisher at server block b built from τ, Adv_PRF(𝒟_b^τ) the PRF term. | not yet in Lean |
 | ε_Wipe,b | The streamed wipe's failure bound at server block b, 2^-128 + Adv_PRF. | `StreamedWipeMeetsServer5GB`, not yet in Lean |
 
@@ -146,7 +148,8 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | `verity_sp1.proofs.statement.Statement` (statement formats 2 and 3 on the wire), its `KindProgram` and "kind" | the SP1-era wire encoding of a batch of proof-block obligations, not a statement in this sense; a kind is a subcircuit |
 | "pin", "pinned theorem", "pinned statement"; `pins` in a `lean-audit.json` written before the rename (read as `guarantees`, rewritten by its next `--update`) and in `tools/verity/lean/Facts.lean`'s facts | guarantee |
 | "law", "draw law"; `law` identifiers and record keys (`parse_law`, `same_law`, `law_object`, a registration's `law`), the Lean's `Law` | sampling design |
-| "escape", "escape probability"; the Lean's `*_escape` theorems and `effEscape` | acceptance probability (P_a; `effAcceptProb` is P̄_a at footprint 1) |
+| "escape", "escape probability"; "acceptance probability" for an incorrect proof block's chance to pass the sample, the escape probability's next name, which the Lean's `*_escape` theorems, `effEscape`, `effAcceptProb` and `acceptProb` lemmas keep | miss probability (P_a; `effAcceptProb` is P̄_a at footprint 1), and its complement 1 − P_a the detection probability; acceptance probability keeps its knowledge-soundness sense, a prover's success probability (the δ of κ(δ)) |
+| "egress cone" for the served outputs an incorrect proof block can change, and "the egress a wrong u reaches" for their number, in the Lean's docstrings | reach E, and its size \|E\| (the Lean's E(u)) |
 | "proof unit", "unit class", and "unit" alone meaning one; `unitClasses`, `verity.ml.circuits.parts`, `LinkWindows.proof_unit`, the `"proof-unit"` kind of Flock's Boolean export, a `Spec`'s public-item reasons (its digest hashes them), and the `vu_*` names (below) | proof block; a unit class is a size class, or Flock's proof-block class |
 | "unit" in the audit record's keys `wrong_units` and `proved_units`, until a format version | proof block |
 | "wrong unit", "incorrect unit", "faulty unit", "faulty proof block", "faulty set"; the Lean's `wrong` | incorrect proof block (and correct); the incorrect set F |
@@ -241,6 +244,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "builder", "advice compiler", "circuit builder" for what compiles the advice; `Builder` | registered compiler |
 | "declared advice", "declaring" or "a declaration" of advice; "declared circuit", "declared work"; "declaration block", "declaration period" | reported advice; registered circuit, registered work; execution block, execution phase |
 | a served span: "window", `IntegrityPeriod`, "commit period" for PoUW's span and `window`, "sampling block", until renamed | execution phase |
+| "window" for SPOT's served span with its audit; SPOT's records' `window` (`window.kind`, `window_root`) until a format version | run (`Spot.Run`); its served part is the run's serving, and its length the run length |
 | "sampling period" for work plus its audit | an execution phase and its verification phase |
 | "hm96 rows" in protocol prose (the commitments' docs keep it) | hiding commitments |
 | "proof service" | proof system |
@@ -306,7 +310,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
 - A **sliding window** is a model's term: the span of positions a layer's attention reads (a model config's
   `sliding_window`).
 - In `integrations/vllm`, "family" and "kind" name circuit Definitions and query families, many of them serialized fields (its README's vocabulary).
-- Six words still carry two senses in the code:
+- Seven words still carry two senses in the code:
   - **Footprint**: a replay block's is where sampled proofs read harm (Two-stage design, below). An HBM footprint
     (`Accounting.BoundReceipt.footprint`) and a theorem's (its hypotheses, in Flock's `ASSUMPTIONS.md`) keep the word.
   - **Row**: a commitment row, the bits one leaf hashes (`hm96` rows, the `*/row/*` leaf schemes, the row-form
@@ -321,9 +325,12 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   - **Window**: the code's windows (`verity.ml.windows`, a served window circuit and its window record, PoUW's window and
     its salt) are one period's served steps, and keep the word until renamed. A span of time is a period, a
     server's gates between two memory wipes are a server block, and a sliding window is a model's term (above).
-  - **Escape**: an incorrect proof block's chance to be accepted is its acceptance probability (Older names); the
+  - **Escape**: an incorrect proof block's chance to pass the sample is its miss probability (Older names); the
     integrity profile's `escape` method keeps the old word. In vLLM's Program frontend, a host escape
     (`E_OPAQUE_HOST`) is a value read on the host, such as `.item()`, which the frontend refuses.
+  - **Acceptance probability**: a prover's success probability, the δ of knowledge soundness's κ(δ). An incorrect proof
+    block's chance to pass the sample is its miss probability (Older names), which the Lean's `effAcceptProb` and
+    `acceptProb` lemmas and the docstrings of SPOT's Python verifier still call its acceptance probability.
 
 ## Terms of one area
 
@@ -398,7 +405,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
     for #N...`), and the after-landing run checks that commit.
   - **After-landing run**: the full check of `checked`'s tip after each landing; `main` moves only to tips that passed every step on the merge gate.
   - **Culprit**: the one landing whose change touches what a red's failure names, never found by bisecting; its lane fixes
-    it forward within 2 h, or drive reverts it on `checked`, unless the red is a warn step's.
+    it forward within 30 min, or drive reverts it on `checked`, unless the red is a warn step's.
   - **Pass**: a part of the check, reused while its declared inputs are unchanged. A verdict is a review's, never a pass.
   - **Pure move**: a change that only renames paths, certified by `move_check`. A layout move's PR (`Move: tools/move/MAP.toml`)
     lands from `next` on its review, regenerated by drive on the tip below it and certified there.

@@ -143,7 +143,7 @@ PROFILE_B1_EAGER = Vocabulary(
         "rmsnorm": "target-selected norm: batch-invariant Triton RMSNormTriton_v1{N,EPS}, otherwise "
                    "RMSNormCudaVector8_v1{N,EPS,BLOCK} at the launch's block",
         "rmsnorm_fused": "target-selected fused norm: batch-invariant generic RMSNormFusedCuda_v2{N,EPS}, otherwise "
-                         "RMSNormFusedCudaVector8_v1{N,EPS,BLOCK} at the launch's block",
+                         "RMSNormFusedCudaVector8_v3{N,EPS,BLOCK} at the launch's block",
         "rope": "RoPE_v1{NHEADS,D}: vLLM _C.rotary_embedding NeoX, bf16 cos/sin cache row as Input",
         "attention": "Attention_v1{T,NH,KVH,D}: FA2 causal GQA over [T][KVH][D] caches",
         "silu_mul": "SiluMul_v1{I}: vLLM _C.silu_and_mul",
@@ -153,9 +153,9 @@ PROFILE_B1_EAGER = Vocabulary(
         "rmsnorm_cuda": "RMSNormCudaVector8_v1{N,EPS,BLOCK}: _C.rms_norm's rms_norm_kernel<bf16, 8, 2, true> on one contiguous "
                         "row -- BLOCK threads each FMA-fold eight-element vectors t, t+BLOCK, ... from +0, CUB block reduce, "
                         "bf16_rn((f32(x) * rsqrtf(var/N + EPS)) * f32(w)) (registry.cuda_rmsnorm)",
-        "rmsnorm_fused_cuda": "RMSNormFusedCudaVector8_v1{N,EPS,BLOCK}: _C.fused_add_rms_norm's fused_add_rms_norm_kernel"
+        "rmsnorm_fused_cuda": "RMSNormFusedCudaVector8_v3{N,EPS,BLOCK}: _C.fused_add_rms_norm's fused_add_rms_norm_kernel"
                               "<bf16, 8, true> -- the vectorised residual add kept as the second output, then the same "
-                              "BLOCK-thread reduction and epilogue (registry.cuda_rmsnorm)",
+                              "BLOCK-thread reduction (its sum of squares as batches) and epilogue (registry.cuda_rmsnorm)",
     })
 
 # -- reference: NUMERIC's reference kinds (`verity/ml/definitions/registry/ref_prims.py`, vocabulary `verity-ref-vocab/1`) ----------
@@ -489,6 +489,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsa_topk_mask": lambda N, TOPK: ir_bind(_dsa_topk_mask.DsaTopKMask, N=N, TOPK=TOPK),
            "dsa_butterfly_settings": lambda N, TOPK: ir_bind(_dsa_topk_mask.DsaButterflySettings, N=N, K=TOPK),
            "dsa_butterfly_rows": lambda N, TOPK, W: ir_bind(_dsa_topk_mask.DsaButterflyRows, N=N, K=TOPK, W=W, E=16),
+           "dsa_butterfly_rows_pad": lambda T, N, TOPK, W: ir_bind(_dsa_topk_mask.DsaButterflyRowsPad, T=T, N=N, K=TOPK, W=W, E=16),
            "dsa_rmsnorm": lambda N, EPS: ir_bind(_dsa_norm.DsaRMSNorm, N=N, EPS=EPS),
            "triton_block_rmsnorm": lambda N, BLOCK, WARPS, EPS: ir_bind(_dsa_norm.TritonBlockRMSNorm, N=N, BLOCK=BLOCK, WARPS=WARPS, EPS=EPS),
            "dsa_kv_rope": lambda D: ir_bind(_rope.RoPEHeadGptJV2, D=D),
@@ -648,6 +649,8 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsa_butterfly_rows": "DsaButterflyRows_v1{N,K=TOPK,W,E=16}: the W-word bf16 rows the concentrator routes to its first TOPK "
                                  "outputs at those settings, the mask's members in ascending index order (one Select and one Xor3 per "
                                  "word a switch)",
+           "dsa_butterfly_rows_pad": "DsaButterflyRowsPad_v1{T,N,K=TOPK,W,E=16}: DsaButterflyRows_v1{N} over a row's T history rows "
+                                     "and then N - T pad rows, the history and the pad two arguments",
            "dsa_rmsnorm": "DsaRMSNorm_v1{N,EPS}: _fused_norm_rope_kernel's cc 9.0 PTX reduction",
            "triton_block_rmsnorm": "TritonBlockRMSNorm_v1{N,BLOCK,WARPS,EPS}: the same reduction over N live elements of a masked BLOCK "
                                    "on 32 WARPS threads (_fused_q_kv_rmsnorm_kernel)",

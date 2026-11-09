@@ -614,6 +614,30 @@ def test_an_operand_over_the_input_budget_is_read_lazily_on_the_vectors_words(mo
             "correspondence reads an operand over the input budget lazily"} in e["correspondence"]["realizations"]
 
 
+def test_an_operand_read_lazily_past_the_random_budget_takes_one_edge_vector_and_the_random_floor():
+    """Where the vectors `Options.min_vectors` adds past what `Options.reference_budget` pays for would take the reference's work
+    past `Options.random_budget` (`checks._lazy_vectors`), a Definition read lazily takes ``random_floor + 1`` vectors: one
+    all-edge, the others random in every operand, each the reference on the same words flattened.  Within it, it keeps
+    `_n_vectors`' (the test above)."""
+    from verity.ml.circuits.evaluation import evaluate
+
+    t, opts = _wide_gemm()
+    (x, w), _ = CK.signature_of(t)
+    opts = dataclasses.replace(opts, reference_budget=t.gates - 1, random_budget=opts.min_vectors * t.gates - 1)
+    assert CK._lazy_vectors(t, dataclasses.replace(opts, random_budget=opts.min_vectors * t.gates), [1]) == (opts.min_vectors, False)
+    F = CK.Findings()
+    rec, arrays, ref = CK.correspondence(t, opts, F)
+    assert not F.failures and arrays is None
+    n = rec["vectors"]
+    assert (n, rec["edge_vectors"]) == (opts.random_floor + 1, 1) and n < opts.min_vectors
+    assert rec["wide"][0]["reads"] >= w.leaves * n
+    xs = VX.vectors([x], n, opts.seed, 1)
+    for i in range(n):
+        words = [VX.wide_words(w, i, 1, opts.seed, 1)(k) for k in range(w.leaves)]
+        assert ref[i] == tuple(evaluate(t, VX.instance_args([x], xs, i)[0], words))
+        assert (len(set(words)) == 1) == (i == 0)
+
+
 def _wide_experts(E: int):
     """`MoeExpertFp8Gemm_v1` over E experts at the sidecar's small statics, with an input budget its expert stack's E N K leaves
     are over and 8 vectors of its other parameters fit in."""
@@ -888,11 +912,13 @@ def test_a_call_over_the_budget_fails_all_by_the_name_of_a_callee_that_breaks_q_
     does), checks each callee's partition inside the Call's check and fails by the callee's name, and its summary reads the
     Call partitioned by its callees.  Without the entries the Call is an unchecked warning, which fails nothing: ``--all``
     passes a value computed in two proof blocks."""
-    from circuit_check import cli
+    from circuit_check import block_held, cli
 
     top, twice, mul, opts = _two_callees()
     monkeypatch.setattr(TG, "load_registries", lambda: None)
     monkeypatch.setattr(TG, "suite", lambda: {top.id: top})
+    # the holds name the registry's Definitions, which this one-target catalog doesn't check (block/absent-hold)
+    monkeypatch.setattr(block_held, "HELD", {})
     monkeypatch.setattr(TG, "templates", lambda: [])
     monkeypatch.setattr(TG, "word_call_families", lambda: {TG.family(top)})
     monkeypatch.setattr(TG, "boolean_call_families", lambda words, found=None: set())

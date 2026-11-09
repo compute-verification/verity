@@ -112,7 +112,12 @@ flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] 
 
 Each session `DIR` holds `session.json` (the `flock-live-session/v1` record) and each table's `<table>.rep0.bin` and
 `<table>.rep1.bin`. `verify` prints one `VERDICT {"accepted", "session", "why", …}` line per session and exits 0 iff all
-are accepted.
+are accepted. A verdict names the public file it checked the session against by the SHA-512 of its header's canonical JSON
+(`public_header_sha512`, `publicHeader`: the file's own header, from which a sampled session's statement is drawn), the
+`--registered` file by the SHA-512 of its canonical JSON (`registered_sha512`), a sampled session's sample (`unit_draw`,
+its record's) and the number of tables it set the session up as (`session_tables`: `--session-tables J`, else 1), so a
+caller holds a statement of the session to the files, sample and tables that were checked, never to ones the prover
+names.
 
 A recursive statement is one `verify --zk` per V* part, and no part sees another. Each part's `VERDICT` names its part
 (`rec_part`), the SHA-512 of the shared rows file it checked (`rec_rows_sha512`), of the inner shape file it read

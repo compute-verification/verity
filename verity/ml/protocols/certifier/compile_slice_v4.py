@@ -5,7 +5,7 @@ replaced by records on a bus to `CacheStep_v3`'s stream (`cache_step_v3`), which
         (adv, ing, req, srv, cout, coin, chk) -> verdict[16]
 
 **Why.** CompileSlice_v3 derives each hit, evictable count and return by CacheStep_v2 calls that read and write the
-whole pool table, so its price grows with the pool: 9.2e14 ANDs a 600 s window at GLM-5.3's class. Here a step's pool
+whole pool table, so its price grows with the pool's size. Here a step's pool
 calls are records on a bus, and one stream of NS memory-checked access slots (CacheStep_v3) runs them: a window costs
 its accesses, whatever the pool's size.
 
@@ -23,7 +23,7 @@ A registered row is padded to whole words (`compile_slice.WORD`); its padding mu
 class. The checked witness is a computed check: the valid witness is unique, its coins are drawn after it is committed,
 and a wrong one passes only with the fingerprints' collision probability, which enters the soundness error. It still
 counts as free input at its width until a Lean lemma shows the witnesses the unit accepts are unique (AGENTS.md's
-nondeterminism rule; CIR-190's checked-witness class), so `free_width` counts the advice and the checked witness.
+nondeterminism rule), so `free_width` counts the advice and the checked witness.
 
 **The output**: ``verdict``, 16 bits: CompileSlice_v3's ``load``, ``steps``, ``cache`` (here the step side's bounds on its
 calls), ``served`` and ``carry``, and bit 5 ``pool``: the stream's verdict, its bus product equal to the steps' and its

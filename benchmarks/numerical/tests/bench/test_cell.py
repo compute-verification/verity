@@ -1,7 +1,7 @@
 """The benchmark entry point (``bench.cell``): planning a cell into its backend's jobs, the reasons a cell cannot run, the protocol
-check on two real Flock cells (``data/flock-cells``: art:6d1295ed and art:d1961ba4, the registered bench-result/v1 documents,
-both independently replayed) and their mutations, and registration through ``verity_flock.register`` on the runs behind
-art:1589ffe1 (``data/flock-runs``)."""
+check on two real Flock cells (``data/flock-cells``, the registered bench-result/v1 documents, both independently
+replayed) and their mutations, and registration through ``verity_flock.register`` on the runs behind an H100 BF16 cell
+(``data/flock-runs``)."""
 from __future__ import annotations
 
 import copy
@@ -179,7 +179,7 @@ PROVER_RUN, VERIFIER_RUN = "r20260925-233831-a064", "r20260925-233818-a37e"
 
 
 def _real_runs(tmp_path: Path, mutate=None) -> tuple[Path, Path]:
-    """The runs behind art:1589ffe1 (H100 BF16, the open-connection re-run) as ``verity_flock.register`` reads them: job.json,
+    """The runs behind the H100 BF16 cell (the open-connection re-run) as ``verity_flock.register`` reads them: job.json,
     out/binary.sha256, the prover's result.json (``artifacts`` naming its plateau point p4-16384, as bench.py writes it in the run
     directory) and that point's session logs (prove-s0/s1, loopback-prove-s0/s1)."""
     shutil.copytree(RUNS, tmp_path / "runs")
