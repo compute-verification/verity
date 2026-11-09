@@ -296,10 +296,10 @@ theorem declaredShare_div {κ C U X : ℝ} (hC : 0 < C) (hU : 0 ≤ U) :
   rcases eq_or_ne κ 0 with rfl | hκ
   · simp
   field_simp
-  try ring
+  ring
 
 /-- The declared counted multiplications against a bound `X`, in the form `remote_core` reads: `M_d ≤ C/(C/X)`. -/
-theorem le_div_div {C X Md : ℝ} (hC : 0 < C) (h : Md ≤ X) : Md ≤ C / (C / X) := by
+theorem declared_le_div {C X Md : ℝ} (hC : 0 < C) (h : Md ≤ X) : Md ≤ C / (C / X) := by
   rwa [div_div_cancel₀ hC.ne']
 
 theorem DampenerRemote : Guarantees.DampenerRemote := by
@@ -307,7 +307,7 @@ theorem DampenerRemote : Guarantees.DampenerRemote := by
     Wd val βw βx b hp hε hcap0 hcC hsound hH hΔ hΦ hI hT hcap hθ hw hq hq1 hB0 hwB hS hκ hC hU hmfu hmfu1 hβw hβx hb
     hcomp hval hshare hHard hExp hM0 hM hu hres hx
   have hdecl : (Wd.N : ℝ) ≤ C / (C / Cut.workHE n k (βw * βx) b Wd.O) :=
-    le_div_div hC (Cut.SecurityProofs.CountHE γ V d Wd val c k n βw βx b hβw hβx hb hval hshare hHard hExp hcomp).1
+    declared_le_div hC (Cut.SecurityProofs.CountHE γ V d Wd val c k n βw βx b hβw hβx hb hval hshare hHard hExp hcomp).1
   refine prob_ge_of_not μ ?_ ((prob_or_le μ (fun ω => ε * C < wrongCapacity cap (wrong ω))
     (fun ω => θ * C < ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b)).trans
       (add_le_add (CertificateSlack Ω μ N cap wrong p ε C hp hε hC hcap0 hcC hsound)

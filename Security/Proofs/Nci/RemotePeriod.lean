@@ -353,7 +353,7 @@ theorem DampenerRemotePeriod : Guarantees.DampenerRemotePeriod := by
   obtain ⟨hord, hI, hΦ, hcap, hwB⟩ := hId
   -- each day's verdict bounds its MACs (`CountHE`), pooled over the period's days
   have hdecl : ((∑ i, (Wk i).N : ℕ) : ℝ) ≤ C / (C / ∑ i, Cut.workHE (n i) k (βw * βx) b (Wk i).O) := by
-    refine le_div_div hC ?_
+    refine declared_le_div hC ?_
     rw [Nat.cast_sum]
     exact Finset.sum_le_sum fun i _ => (Cut.SecurityProofs.CountHE γ V (d i) (Wk i) (val i) c k (n i) βw βx b hβw hβx
       hb (hval i) (hshare i) (hHard i) (hExp i) (hcomp i)).1
