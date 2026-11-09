@@ -16,13 +16,15 @@ import research.merge as M
 import research.queue as Q
 import research.vqueue_loop as L
 from research import carry, vqueue, vqueue_slim
-from research.drive import PREFLIGHT
+from research.drive import PREFLIGHT, STALE_EVERY_S, UNLANDABLE_COMMENT
 from research.executor import GRAPH_V2, Executor, FileTransport
 from research.queue import DRIVE_FLAGS
+from research.stale import DAY_S, close_comment
 from research.store import vocab
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Advance, Build, Drop, Eject, Outcome, Red, Rerun, Retry,
                              Ring, Snapshot, Verdict)
 from research.vqueue_loop import Loop, World, _Clone, _said, branch
+from test_drive_stale import _at
 from test_queue import World as Origin, _git, _merge
 
 T0 = 1_900_000_000.0
@@ -915,12 +917,17 @@ def test_each_tick_reads_the_labels_afresh_as_drive_reads_them(env):
 LAND = Lab("reviewer", "land", "2026-01-01T00:00:00Z")
 
 
-def _carry_main(env: Env, mode: str) -> str:
-    """`main` moved to a commit setting drive.toml's `verdict_carry` to ``mode``, its check listed with no task."""
-    main = env.o.change({DRIVE_FLAGS: f'verdict_carry = "{mode}"\n'})
+def _drive_toml(env: Env, text: str, files: dict[str, str] | None = None) -> str:
+    """`main` moved to a commit setting drive.toml to ``text`` (and writing ``files``), its check listed with no task."""
+    main = env.o.change({DRIVE_FLAGS: text, **(files or {})})
     _git(env.o.origin, "update-ref", "refs/heads/main", main)
     env.graph2.list_graph(f"ready:{main}", {"schema": GRAPH_V2, "commit": main, "tasks": []})
     return main
+
+
+def _carry_main(env: Env, mode: str) -> str:
+    """`main` moved to a commit setting drive.toml's `verdict_carry` to ``mode``."""
+    return _drive_toml(env, f'verdict_carry = "{mode}"\n')
 
 
 @pytest.mark.parametrize("mode", ["on", "shadow", "off"])
@@ -1027,7 +1034,8 @@ def test_only_the_loop_s_own_builds_are_candidates_and_another_queue_branch_is_i
     env.clock += 49 * 3600                                          # its build is older than the log's window
     keys = env.listed(sha, {"pytest:a": ["a.txt"]})
     env.result(keys["pytest:a"], "pytest:a", "pass")
-    assert [a for a in _acts(loop.tick()) if a != "ignore"] == ["advance", "on_main"] and env.main() == sha  # the whole log's
+    assert [a for a in _acts(loop.tick()) if a != "ignore"] == ["sweep", "advance", "on_main"] and env.main() == sha  # the whole log's
+    assert f"refs/heads/queue/{forged[:12]}" not in env.queued() and "refs/heads/queue/mine" in env.queued()
 
 
 def test_a_failed_task_s_inputs_hold_its_env_s_spec_files_and_those_of_each_task_it_reads(env):
@@ -1640,6 +1648,200 @@ def test_an_advance_is_logged_once_pushed_and_drive_s_steps_after_it_are_a_step_
     assert (again["action"], again["done"], drop["action"], drop["why"]) == ("on_main", True, "drop", "on main")
     assert calls == [(sha, built["base"], [1], []), (sha, built["base"], [1], ["stacked:9<1"])]   # who was told, kept
     assert loop.tick() == [] and len(calls) == 2
+
+
+def test_after_an_advance_the_pr_sweep_closes_a_landed_pr_naming_its_commit_and_a_stacked_pr_s_owner_is_told_once(
+        env, monkeypatch):
+    """The on_main step is drive's (`Driver._on_main`): the PR sweep (`merge.sweep`) closes each open PR whose head is on `main`
+    with a comment naming the commit it landed in, keeping the branches drive's state says the stale and unlandable rules kept,
+    and the owner of an unmarked PR stacked on a member hears once to merge `main` (`Driver._stacked`)."""
+    one = env.put(1, {"a.txt": "1\n"})
+    env.o.gh.prs[1] = replace(env.o.gh.prs[1], branch="cursor/w-1")
+    env.o.gh.put(2, env.o.change({"b.txt": "2\n"}, base=one), ready=False)
+    closed, kept = [], []
+
+    def gh(repo, *a: str) -> str:
+        if a[:2] == ("pr", "list"):
+            return json.dumps([{"number": p.number, "headRefName": p.branch, "headRefOid": p.head, "baseRefName": p.base}
+                               for p in env.o.gh.prs.values()])
+        if a[:2] == ("pr", "close"):
+            closed.append((int(a[2]), a[a.index("--comment") + 1]))
+            del env.o.gh.prs[int(a[2])]
+        return "[]"
+
+    monkeypatch.setattr(M, "_gh_cli", gh)
+    monkeypatch.setattr(M, "_sweep_after", lambda repo, into, remote, keep=(): kept.append(dict(keep))
+                        or M.sweep(repo, into, remote, keep=keep))
+    loop = env.loop(policy)
+    loop.world.q.handle = lambda pr: pr.owner
+    loop.world.q.save_state({**loop.world.q.load_state(), "drive": {"stale_closed": {"cursor/w-9": 9}}})
+    (built,) = loop.tick()
+    keys = env.listed(sha := built["sha"], {"pytest:a": ["a.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    advance, on_main = loop.tick()
+    subject = _git(env.o.origin, "log", "-1", "--format=%s", sha)
+    assert (advance["action"], on_main["action"], on_main["done"], on_main["told"]) == ("advance", "on_main", True, ["stacked:2<1"])
+    assert closed == [(1, f"Merged into main at {sha[:12]} ({subject}).")] and kept == [{"cursor/w-9": 9}]
+    assert env.posts == [f"@lane-2 queue: #2's base #1 landed in main at {sha[:12]}; merge main into #2"]
+    assert [r["action"] for r in loop.tick()] == ["drop"] and loop.tick() == [] and len(env.posts) == 1
+
+
+def _closing(env: Env, toml: str, files: dict[str, str] | None = None, **kw) -> tuple[Loop, list[tuple[int, str]]]:
+    """A loop on a `main` whose drive.toml is ``toml``, naming each PR's owner by its lane, and the PRs GitHub closed with
+    their comments."""
+    _drive_toml(env, toml, files)
+    closed: list[tuple[int, str]] = []
+
+    def close(n: int, comment: str) -> None:
+        closed.append((n, comment))
+        del env.o.gh.prs[n]
+
+    env.o.gh.close = close
+    loop = env.loop(policy, **kw)
+    loop.world.q.handle = lambda pr: pr.owner
+    return loop, closed
+
+
+STALE_RING = ("@lane-1 queue: stale, not marked ready at their heads and idle 3+ days: #1 (4 d). Push, mark ready or close each; "
+              "drive closes one 7 days idle, its branch kept")
+STALE_CLOSED = "@lane-2 queue: closed after 7 days unmarked and idle, branches kept (reopen one to go on): #2"
+
+
+def test_drive_toml_s_stale_rule_rings_and_closes_hourly_on_drive_s_state_and_never_judges_a_candidate_s_member(env, monkeypatch):
+    """`stale_days` and `stale_close_days` at `main`: drive's stale rule (`Driver._stale`) rings the owner of a PR unmarked and
+    idle 3 days, once a day, and closes one idle 7, its branch kept in drive's state, which `on_main`'s PR sweep keeps; at most
+    once an hour, and never a candidate's member, as drive never judges one on `next`."""
+    loop, closed = _closing(env, "stale_days = 3\nstale_close_days = 7\n")
+    env.o.gh.put(1, _at(env.o, monkeypatch, {"a.txt": "1\n"}, T0 - 4 * DAY_S), ready=False)
+    env.o.gh.put(2, _at(env.o, monkeypatch, {"b.txt": "2\n"}, T0 - 8 * DAY_S), ready=False)
+    env.o.gh.prs[2] = replace(env.o.gh.prs[2], branch="cursor/w-2")
+    env.o.gh.put(3, three := _at(env.o, monkeypatch, {"c.txt": "3\n"}, T0 - 30 * DAY_S))
+    rule, built = loop.tick()
+    assert (rule["action"], rule["done"], built["action"], built["members"]) == ("closers", True, "build", [3])
+    assert rule["said"] == ["research queue drive: closed #2: 8 days unmarked and idle",
+                            f"research queue drive: told {STALE_RING.replace(' queue: ', ': ', 1)}",
+                            f"research queue drive: told {STALE_CLOSED.replace(' queue: ', ': ', 1)}"]
+    assert closed == [(2, close_comment(7))] and env.posts == [STALE_RING, STALE_CLOSED]
+    drive = loop.world.q.load_state()["drive"]
+    assert (drive["stale_closed"], drive["stale_judged"], drive["told"]) == ({"cursor/w-2": 2}, T0, [f"idle:1@{L.stamp(T0)[:10]}"])
+    env.o.gh.ready.discard((3, three))                                  # unmarked, 30 days idle, and a candidate's member
+    env.clock += STALE_EVERY_S - 1
+    assert loop.tick() == []
+    env.clock += 1
+    (rule,) = loop.tick()
+    assert (rule["action"], rule["said"], closed, len(env.posts)) == ("closers", [], [(2, close_comment(7))], 2)
+    assert 3 in env.o.gh.prs
+
+
+def test_drive_toml_s_rules_wait_an_hour_while_another_research_queue_holds_the_clone_s_lock(env, monkeypatch):
+    """drive rewrites its state whole under the lock, so the rules never write it while another holds it."""
+    loop, closed = _closing(env, "stale_days = 3\nstale_close_days = 7\n")
+    env.o.gh.put(2, _at(env.o, monkeypatch, {"b.txt": "2\n"}, T0 - 8 * DAY_S), ready=False)
+    held = Q._lock(loop.world.repo)
+    (rule,) = loop.tick()
+    assert (rule["action"], rule["done"], closed) == ("closers", False, []) and "holds" in rule["error"]
+    held.close()
+    env.clock += STALE_EVERY_S - 1
+    assert loop.tick() == []
+    env.clock += 1
+    (rule,) = loop.tick()
+    assert rule["done"] and closed == [(2, close_comment(7))]
+
+
+def test_with_shadow_drive_toml_s_stale_rule_only_logs_its_rings_and_closes_and_leaves_drive_s_state(env, monkeypatch):
+    loop, closed = _closing(env, "stale_days = 3\nstale_close_days = 7\n", shadow=True)
+    env.o.gh.put(1, _at(env.o, monkeypatch, {"a.txt": "1\n"}, T0 - 4 * DAY_S), ready=False)
+    env.o.gh.put(2, _at(env.o, monkeypatch, {"b.txt": "2\n"}, T0 - 8 * DAY_S), ready=False)
+    (rule,) = loop.tick()
+    assert (rule["action"], rule["shadow"], rule["said"]) == ("closers", True, [
+        "research queue drive: would close #2: 8 days unmarked and idle",
+        f"research queue drive: would tell {STALE_RING.replace(' queue: ', ': ', 1)} [dry run]"])
+    assert closed == [] and env.posts == [] and "drive" not in loop.world.q.load_state()
+    env.clock += STALE_EVERY_S - 1
+    assert loop.tick() == []
+
+
+@pytest.mark.parametrize("mode", ["log", "on"])
+def test_drive_toml_s_unlandable_rule_closes_an_unmarked_pr_whose_change_is_on_main_already_as_close_unlandable_says(env, mode):
+    """`close_unlandable` at `main`: drive's unlandable rule (`Driver._unlandable`) closes such a PR with "on", telling its
+    owner and keeping its branch in drive's state, and only logs it with "log"."""
+    five = env.o.change({"u.txt": "u\n"})
+    loop, closed = _closing(env, f'close_unlandable = "{mode}"\n', {"u.txt": "u\n"})
+    env.o.gh.put(5, five, ready=False)
+    env.o.gh.prs[5] = replace(env.o.gh.prs[5], branch="cursor/w-5")
+    (rule,) = loop.tick()
+    main = env.main()
+    why = (f"its change is on `main` already: the one file it changes is there as its head {five[:12]} has it, since {main[:12]} "
+           f"({_git(env.o.origin, 'log', '-1', '--format=%s', main)})")
+    drive = loop.world.q.load_state()["drive"]
+    assert drive["unlandable_judged"] == T0
+    if mode == "log":
+        assert rule["said"] == [f"research queue drive: would close #5: {why}"] and closed == [] and env.posts == []
+        return
+    told = ("@lane-5 queue: closed #5: nothing would land it as it stands (each PR's comment says why), branches kept; reopen one "
+            "and drive leaves it open at that head")
+    assert rule["said"] == [f"research queue drive: closed #5: {why}", f"research queue drive: told {told.replace(' queue: ', ': ', 1)}"]
+    assert closed == [(5, UNLANDABLE_COMMENT.format(why=why, n=5))] and env.posts == [told]
+    assert (drive["unlandable_closed"], drive["stale_closed"]) == ({"5": five}, {"cursor/w-5": 5})
+
+
+def test_a_queue_branch_no_build_names_is_deleted_an_hour_after_it_was_first_seen_unless_a_candidate_is_built_on_it(env):
+    """A `queue/<sha12>` branch of origin's no build line names (a tick cut off after its push, another loop's) is deleted
+    `SWEEP_AFTER_S` after the loop first logged it, logged once; not one named otherwise, nor one a candidate is built on."""
+    env.put(1, {"a.txt": "1\n"})
+    left, used = env.o.change({"l.txt": "left\n"}), env.o.change({"u.txt": "used\n"})
+    for name, sha in ((left[:12], left), (used[:12], used), ("mine", left)):
+        _git(env.o.origin, "update-ref", f"refs/heads/queue/{name}", sha)
+    loop = env.loop(lambda s: [] if s.candidates else [Build((1,), used, 5)])
+    *ignored, built = loop.tick()
+    assert (_acts(ignored), built["action"], built["base"]) == (["ignore"] * 3, "build", used)
+    env.clock += L.SWEEP_AFTER_S - 1
+    assert loop.tick() == []
+    env.clock += 1
+    (swept,) = loop.tick()
+    assert (swept["action"], swept["ref"], swept["sha"], swept["done"], swept["why"]) == (
+        "sweep", left[:12], left, True, f"origin's queue/{left[:12]} is no build of the loop's and no candidate is built on it, "
+                                        "60 min after it was first seen")
+    assert env.queued() == {branch(built["sha"]): built["sha"], branch(used): used, "refs/heads/queue/mine": left}
+    env.clock += 2 * L.SWEEP_AFTER_S
+    assert loop.tick() == []
+
+
+def test_a_build_left_with_no_line_that_no_build_took_within_the_hour_is_swept_and_its_next_build_pushes_its_own(env):
+    """The build that makes a swept branch's build again pushes its own branch: it never takes the one just deleted."""
+    env.put(1, {"a.txt": "1\n"})
+    build = [True]
+    loop = env.loop(lambda s: [Build((1,), s.main, 5)] if build[0] and not s.candidates else [])
+    w = loop.world
+
+    def died(sha: str, priority: int) -> None:
+        raise RuntimeError("the loop's process died")
+
+    w.enqueue = died
+    with pytest.raises(RuntimeError):
+        loop.tick()
+    (pushed,) = env.queued().values()
+    del w.enqueue
+    build[0] = False
+    assert _acts(loop.tick()) == ["ignore"]
+    env.clock += L.SWEEP_AFTER_S
+    build[0] = True
+    swept, built = loop.tick()
+    assert (swept["action"], swept["sha"], built["action"], built["members"], "adopted" in built) == (
+        "sweep", pushed, "build", [1], False)
+    assert env.queued() == {branch(built["sha"]): built["sha"]}
+
+
+def test_with_shadow_a_queue_branch_no_build_names_is_only_logged_once_an_hour_after_it_was_first_seen(env):
+    left = env.o.change({"l.txt": "left\n"})
+    _git(env.o.origin, "update-ref", f"refs/heads/queue/{left[:12]}", left)
+    loop = env.loop(lambda s: [], shadow=True)
+    assert _acts(loop.tick()) == ["ignore"]
+    env.clock += L.SWEEP_AFTER_S
+    (swept,) = loop.tick()
+    assert (swept["action"], swept["shadow"], swept["done"]) == ("sweep", True, False)
+    env.clock += 2 * L.SWEEP_AFTER_S
+    assert loop.tick() == [] and env.queued() == {branch(left): left}
 
 
 def test_an_outcome_s_inherited_failures_keep_their_tests_and_their_base_s_through_the_log():

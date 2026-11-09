@@ -58,7 +58,10 @@ owner told once per head and base), pushes `queue/<sha12>` (or takes as its own 
 before, as a tick cut off after its push leaves: `adopted`), logs it, enqueues `ready:<sha>` as graph/v2 at its priority and
 starts the run beside its check.
 Advance pushes `main` to the candidate with a lease on its base and logs it; then what drive does when `main` moves
-(`Driver._on_main`) is a step of its own (`on_main`), which the next tick runs again until one is logged done.
+(`Driver._on_main`: the owner of each unmarked PR stacked on a member told once to merge `main`, a member landed at another
+commit than its head closed and its owner told, and the PR sweep, which closes each open PR whose head is on `main` with a
+comment naming the commit and keeps the branches the stale and unlandable rules kept) is a step of its own (`on_main`), which
+the next tick runs again until one is logged done.
 Drop cancels the check (graph2's `cancel`, where it has one) and the run beside it while that runs (one still launching once
 it printed its run ids, a later tick), deletes the branch and logs its outcome, with its base and its inherited failures,
 their inputs whole, which `history` reads back.  Eject withdraws the PR's ready mark at its head (`Queue.eject`, under the
@@ -80,12 +83,19 @@ is logged as about to be posted (`posting`) before it is, and its record says wh
 stopped in between is told, so no one is told twice, and one whose post failed is told again.  Each action and its result
 is one JSON line in the log, whose directory also holds the loop's caches.
 
-`--shadow` logs advance, eject, ring, red, flake and every message with `shadow: true` and does none of them, and builds,
-drops, retries, reruns and starts the runs beside: its `main` is the newest candidate it advanced (`refs/vqueue/shadow` in the
-clone, never pushed, else its log's newest advance) while origin's `main` is below it, a pass its `main` no longer holds is no
-history, and a PR it ejected stays out until marked again.  `--dry-run` prints the snapshot and the actions and writes
-nothing: no ref on origin, no log, no enqueue, no label, no message, no run.  The loop never writes drive's state, its
-priority file, `next`, `checked` or a label, but an eject's without `--shadow`.
+Beside the policy's actions, each tick runs drive's stale and unlandable rules at most once in `drive.STALE_EVERY_S`
+(`closers`: `Driver._stale` and `Driver._unlandable` under drive.toml's `stale_days`, `stale_close_days`, `stale_keep` and
+`close_unlandable` at `main`, on drive's own state under the clone's queue lock, never judging a ready PR or a candidate's
+member), and deletes each of origin's `queue/<sha12>` branches no build line names `SWEEP_AFTER_S` after it was first logged
+(`ignore`), unless a candidate is built on it (`sweep`).
+
+`--shadow` logs advance, eject, ring, red, flake, every message, each close and each sweep with `shadow: true` and does none
+of them, and builds, drops, retries, reruns and starts the runs beside: its `main` is the newest candidate it advanced
+(`refs/vqueue/shadow` in the clone, never pushed, else its log's newest advance) while origin's `main` is below it, a pass its
+`main` no longer holds is no history, and a PR it ejected stays out until marked again.  `--dry-run` prints the snapshot and
+the actions and writes nothing: no ref on origin, no log, no enqueue, no label, no message, no run.  The loop never writes
+drive's priority file, `next`, `checked` or a label but an eject's, nor drive's state but an eject's and the stale and
+unlandable rules', and none of them with `--shadow`.
 
 On the control pod it runs beside drive, from a pinned checkout of this tree, in drive's clone (or its own clone of origin):
 `research queue vqueue --shadow --log /data/vqueue/decisions.jsonl` (`--batch`, `--depth` and `--lean` default to 16, 3 and
@@ -113,7 +123,8 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from . import carry, policy, vqueue
-from .drive import CI, JOB_OF_KIND, RATCHET_STEP, SLIM_STEPS, SUITES_KIND, Driver, cancel_runs, gating, merge_thread_post
+from .drive import (CI, JOB_OF_KIND, RATCHET_STEP, SLIM_STEPS, STALE_EVERY_S, SUITES_KIND, Driver, cancel_runs, gating,
+                    merge_thread_post)
 from .drive import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
 from .queue import (PR, WORKDIR, Entry, Member, Queue, QueueError, StoreLabels, _git, _out, base_drivers, flags_at,
@@ -162,6 +173,9 @@ UNLISTED, BASE_LIST_FAILED, BASE_UNREADABLE = "its check isn't listed yet", "its
 BASE_RETRY_S, BASE_RING_S = 15 * 60, 30 * 60
 #: who ejects, as drive's ejections are by
 EJECTOR = "ci"
+#: how long after the loop first logged a `queue/<sha12>` branch no build of its own made it deletes it (`Loop._swept`): a
+#: build pushed by a tick cut off before its line is adopted by the next tick that makes it again, well within this
+SWEEP_AFTER_S = 3600
 #: the most first-parent commits a candidate's walk reads above its base
 WALK = 64
 #: `vqueue.Failed`'s fields: a verdict fills each it has (`_failure`)
@@ -291,8 +305,16 @@ class Past:
         settled = {r.get("sha") for r in self.of("slim") if r.get("dropped")}
         return {r["sha"]: r for r in self.of("drop") if isinstance(r.get("beside_launching"), dict) and r["sha"] not in settled}
 
-    def ignored(self) -> set[tuple[str, str]]:
-        return {(r.get("ref"), r.get("sha")) for r in self.of("ignore")}
+    def ignored(self) -> dict[tuple[str, str], float]:
+        """When each of origin's `queue/*` branches no build of the loop's made was first logged (`ignore`), by (name, sha)."""
+        out: dict[tuple[str, str], float] = {}
+        for r in self.of("ignore"):
+            out.setdefault((r.get("ref"), r.get("sha")), unstamp(r.get("at")) or 0.0)
+        return out
+
+    def swept(self) -> dict[tuple[str, str], float]:
+        """When each of those was last deleted, or tried or (with --shadow) logged (`sweep`), by (name, sha)."""
+        return {(r.get("ref"), r.get("sha")): unstamp(r.get("at")) or 0.0 for r in self.of("sweep")}
 
     def carries(self) -> dict[tuple[int, str], str]:
         """The newest verdict carry decision logged of each PR's head (`World._carry`), by (number, head)."""
@@ -1046,6 +1068,39 @@ class World:
         self.driver()._on_main({"told": told, "stale_closed": self.q.load_state().get("drive", {}).get("stale_closed", {})},
                                members, base, sha, "")
 
+    def closers(self, main: str, on_next: set[int], dry_run: bool) -> list[str] | None:
+        """drive's stale and unlandable rules (`Driver._stale`, `Driver._unlandable`) under drive.toml's `stale_days`,
+        `stale_close_days`, `stale_keep` and `close_unlandable` at ``main``, on drive's own state (who was rung today, the PRs
+        they closed and their kept branches, which `on_main`'s PR sweep keeps, and `stale_judged` and `unlandable_judged`, so
+        each runs at most hourly whichever of drive and the loop runs it), under the clone's queue lock as `withdraw` takes it.
+        ``on_next``, the PRs the loop is landing, are never judged, as `next`'s members are not by drive.  With ``dry_run``
+        each ring and close is only logged and drive's state is left as it is.  What the rules logged; None when both are off."""
+        from .queue import _lock
+
+        flags, d, q, said = flags_at(self.repo, main), self.driver(), self.q, []
+        d.stale_days, d.stale_close_days, d.stale_keep, d.close_unlandable = (
+            flags.stale_days, flags.stale_close_days, flags.stale_keep, flags.close_unlandable)
+        if not d.stale_days and d.close_unlandable == "off":
+            return None
+        lock, log = None if dry_run else _lock(self.repo), q.log
+        try:
+            state = q.load_state()
+            drive = state.setdefault("drive", {})
+            drive.setdefault("told", [])
+            d.on_next, d.dry_run = (lambda: set(on_next)), dry_run
+            q.log = lambda s: (said.append(s), log(s))
+            try:
+                d._stale(drive, dry_run)
+                d._unlandable(drive, dry_run)
+            finally:
+                if not dry_run:
+                    q.save_state(state)
+        finally:
+            q.log, d.dry_run = log, False
+            if lock is not None:
+                lock.close()
+        return said
+
     def withdraw(self, number: int, head: str, why: str) -> PR:
         """`Queue.eject` under the clone's queue lock, as `research queue eject` takes it: it writes drive's state, which a
         drive tick holding the lock rewrites whole (held, the eject fails and the next tick ejects again)."""
@@ -1536,9 +1591,10 @@ class Loop:
             return []
         new = [self.record(t, "ignore", sha=sha, ref=name, why=f"origin's queue/{name} is no build of the loop's: no candidate")
                for name, sha in t.foreign.items() if (name, sha) not in past.ignored()] + self._carried(t)
-        new += self._flaky(t) + self._bases(t) + self._disputes(t)
+        new += self._swept(t) + self._flaky(t) + self._bases(t) + self._disputes(t)
         new += self._launched(t)
         new += [self._on_main(t, adv, told) for adv, told in t.past.moved()]
+        new += self._closers(t)
         for rec in new:
             self.write(rec)
         logged = [*t.wrote, *new]
@@ -1860,6 +1916,48 @@ class Loop:
         return [self.record(t, "carry", members=[n], heads=[c["head"]], number=n, why=c["why"], old=c["old"],
                             carries=c["carries"]) for n, c in sorted(t.carried.items()) if said.get((n, c["head"])) != c["why"]]
 
+    def _closers(self, t: Tick) -> list[dict]:
+        """drive's stale and unlandable rules (`World.closers`), at most once in `drive.STALE_EVERY_S` (the log's newest
+        `closers`, which holds what they said), never judging a ready PR or a candidate's member; nothing while drive.toml at
+        `main` has both off.  One that fails is logged with its error and runs again an hour on.  With --shadow, each ring and
+        close is only logged."""
+        if (last := t.past.of("closers")) and self.now() - (unstamp(last[-1].get("at")) or 0) < STALE_EVERY_S:
+            return []
+        on_next = {x.number for x in t.snap.ready} | {n for c in t.snap.candidates for n in c.members}
+        try:
+            said = self.world.closers(t.main, on_next, self.shadow)
+        except Exception as e:  # noqa: BLE001 -- the rules wait an hour and the tick goes on
+            return [self.record(t, "closers", why="drive's stale and unlandable rules", done=False,
+                                error=f"{type(e).__name__}: {e}"[-600:])]
+        if said is None:
+            return []
+        return [self.record(t, "closers", why="drive's stale and unlandable rules", said=said, done=True)]
+
+    def _swept(self, t: Tick) -> list[dict]:
+        """Delete each of origin's `queue/<sha12>` branches no build line of the log names (one a tick cut off after its push
+        left, or another loop's) `SWEEP_AFTER_S` after the loop first logged it (`ignore`), unless a candidate is built on it,
+        and take it out of ``t.foreign``, so no build adopts it; logged once a branch and sha (`sweep`).  With --shadow, only
+        logged."""
+        w, first, tried = self.world, t.past.ignored(), t.past.swept()
+        used = {c.base for c in t.snap.candidates}
+        recs = []
+        for name, sha in sorted(t.foreign.items()):
+            at, last = first.get((name, sha)), tried.get((name, sha))
+            if name != sha[:12] or sha in used or at is None or self.now() - at < SWEEP_AFTER_S or last is not None and (
+                    self.shadow or self.now() - last < SWEEP_AFTER_S):
+                continue
+            why = (f"origin's queue/{name} is no build of the loop's and no candidate is built on it, "
+                   f"{int((self.now() - at) // 60)} min after it was first seen")
+            if not self.shadow:
+                try:
+                    w.push("", branch(sha), sha)
+                except (QueueError, OSError, subprocess.SubprocessError) as e:
+                    recs.append(self.record(t, "sweep", sha=sha, ref=name, why=why, done=False, error=str(e)[-600:]))
+                    continue
+                del t.foreign[name]
+            recs.append(self.record(t, "sweep", sha=sha, ref=name, why=why, done=not self.shadow))
+        return recs
+
     def _flaky(self, t: Tick) -> list[dict]:
         """Ring the owners of each test graph2 says flaked (its verdict's `flaky`: a fail a rerun replaced), once a key: a test
         that flakes is deleted, not rerun.  With --shadow, logged only."""
@@ -2054,8 +2152,9 @@ def main(argv: list[str]) -> int:
                          "preflights (research.vqueue_slim), which it otherwise launches on drive's machines beside each "
                          "candidate's check when it builds it; only with --shadow or --dry-run, since `main` would move past "
                          "what that run checks")
-    ap.add_argument("--shadow", action="store_true", help="log advance, eject, ring, red, flakes and messages, and do none of "
-                                                          "them; its own main is refs/vqueue/shadow in the clone")
+    ap.add_argument("--shadow", action="store_true", help="log advance, eject, ring, red, flakes, messages, closes and branch "
+                                                          "sweeps, and do none of them; its own main is refs/vqueue/shadow in the "
+                                                          "clone")
     ap.add_argument("--dry-run", action="store_true", help="print the snapshot and the actions; write nothing")
     ap.add_argument("--once", action="store_true", help="one tick")
     ap.add_argument("--interval", type=float, default=INTERVAL_S, help=f"seconds between ticks (default {INTERVAL_S})")

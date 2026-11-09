@@ -1231,6 +1231,8 @@ class Driver:
         self.planned: Callable[[dict], tuple[dict | None, str | None]] = planned
         #: drive.toml's stale rule (`research.stale`, `_stale`): ring a stale PR's owner once a day, close it at the second
         self.stale_days, self.stale_close_days, self.stale_keep = stale_days, stale_close_days, stale_keep
+        #: the PRs on their way to landing, which `_stale` and `_unlandable` never judge: `next`'s members
+        self.on_next: Callable[[], set[int]] = lambda: {m.pr for m in q.chain()}
         #: drive.toml's bottom ring (`_bottom`): who is rung while `next`'s lowest member waits for a land verdict, and the
         #: minutes it waits before each ring
         self.bottom_ring, self.bottom_wait_min = bottom_ring, bottom_wait_min
@@ -4430,7 +4432,7 @@ class Driver:
                          and not (k.startswith("warn:") and int(k[len("warn:"):].partition("@")[0]) not in prs)]
         if not (dry_run or q.shadow):
             drive["stale_judged"] = now
-        on_next = {m.pr for m in q.chain()}
+        on_next = self.on_next()
         ring: dict[str | None, list[str]] = {}
         keys: dict[str | None, list[str]] = {}
         closed: dict[str | None, list[str]] = {}
@@ -4482,7 +4484,7 @@ class Driver:
 
         reopened = drive.get("unlandable_closed", {})
         try:
-            prs, held, on_next = self._open(), q.rules().hold_label, {m.pr for m in q.chain()}
+            prs, held, on_next = self._open(), q.rules().hold_label, self.on_next()
             judged = [p for p in prs.values() if p.base == "main" and p.head_repo == q.slug and not p.move and held not in p.labels
                       and not keep_open(p) and p.number not in self.stale_keep and p.number not in on_next
                       and reopened.get(str(p.number)) != p.head]
