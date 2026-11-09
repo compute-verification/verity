@@ -13,8 +13,9 @@ stage  each UNIT@N its own `prove_time.sh STEPS=stage PT_DEVICE=cpu` into $FLOCK
        with its reason. Every 2 s: the stagings' RSS over WIN_MEM_GB x 0.95 kills the newest; FLOCK_WORK over WIN_DISK_GB x
        0.97, or under WIN_FREE_GB free, kills the newest and starts nothing more; WIN_UNTIL kills every staging. A failed
        or killed statement's directory is removed, and a statement whose circuit equals an earlier N's has its circuit.txt
-       hard-linked to that one. The build step (flock-circuit with its CUDA prover) runs first, beside the stagings.
-       FLOCK_WORK stays for `prove`.
+       hard-linked to that one. The build step (flock-circuit with its CUDA prover) runs first, beside the stagings, unless
+       FLOCK_WORK already holds a built prover. FLOCK_WORK stays for `prove`. Where /dev/shm is mounted noexec, a FLOCK_WORK
+       there holds `py` and `flock-gpu-link` as symlinks to a built FLOCK_WORK on disk, and only the statements in RAM.
 prove  the statements of UNITS_FILE staged under FLOCK_WORK, a unit's statements on one GPU, in WIN_GPUS groups balanced
        by estimated time, each group one `prove_time.sh STEPS=prove PT_DEVICE=gpu` on its own slice of the job's cores
        under `gpu-lease 1` (the tree's gpu_lease.sh where none is installed). Every 2 s: a group whose GPU holds more than
@@ -232,12 +233,15 @@ def stage(units: list[Unit]) -> int:
     if not (fw / "py/bin/python").exists():
         log(f"prep failed, no venv: {prep.stdout[-2000:]}{prep.stderr[-2000:]}")
         return 1
-    build = Job("build", start("build", ["STEPS=build", f"PT_DEVICE={env('WIN_DEVICE', 'gpu')}"], OUT / "build", {"FLOCK_WORK": str(fw)}), time.time(),
-                rss=16 * GB, disk=20 * GB)
+    running: list[Job] = []
+    if (fw / "flock-gpu-link/flock/target/release/flock-circuit").exists():
+        log("prover already built under FLOCK_WORK: no build")
+    else:
+        running.append(Job("build", start("build", ["STEPS=build", f"PT_DEVICE={env('WIN_DEVICE', 'gpu')}"], OUT / "build",
+                                          {"FLOCK_WORK": str(fw)}), time.time(), rss=16 * GB, disk=20 * GB))
     pending = [(u, n) for u in units for n in u.ns]
-    running: list[Job] = [build]
     atexit.register(stop, running)
-    rows, n_done, last_du, used, closed = [], 0, 0.0, 0, ""
+    rows, n_done, last_du, used, closed, seq = [], 0, 0.0, 0, "", 0
     while pending or running:
         now = time.time()
         for j in [j for j in running if j.proc.poll() is not None]:
@@ -311,7 +315,8 @@ def stage(units: list[Unit]) -> int:
                 rows.append([u.unit, n, "", name(u.unit, n), f"cut: {reason}", "", "", "", "", "", ""])
                 log(f"cut {u.unit}@{n}: {reason}")
                 continue
-            label = f"{len(rows) + len(running):03d}"
+            seq += 1
+            label = f"{seq:03d}"
             d = fw / "data" / f"{name(u.unit, n)}-{k}"
             running.append(Job(label, start(f"{label} {u.unit}@{n}", ["STEPS=stage", "PT_DEVICE=cpu", f"PT_UNITS={u.unit}@{n}",
                                                                          "PT_JOBS=1"], OUT / "units" / label, one),
