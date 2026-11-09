@@ -26,7 +26,7 @@ theorem sources_le {κ C U W ρ μ χ M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC : 
     (hM : M ≤ Mu + Mr + Md + Mx) (hu : Mu ≤ κ * U / 2) (hr : Mr ≤ κ * (C - W) / 2) (hd : Md ≤ C / ρ)
     (hx : Mx ≤ κ * χ * (C + U) / 2) (hμ : Mr + Md ≤ κ * μ * C / 2) :
     efficiency κ M C U ≤
-      unmonitoredShare C U + (1 - unmonitoredShare C U) * min (residualShare W C) μ + declaredShare κ ρ C U + χ := by
+      unregisteredShare C U + (1 - unregisteredShare C U) * min (residualShare W C) μ + declaredShare κ ρ C U + χ := by
   have hS : 0 < C + U := by linarith
   have hκi : κ * κ⁻¹ = 1 := mul_inv_cancel₀ hκ.ne'
   have hSi : (C + U) * (C + U)⁻¹ = 1 := mul_inv_cancel₀ hS.ne'
@@ -43,10 +43,10 @@ theorem sources_le {κ C U W ρ μ χ M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC : 
       linarith
   have hB : 0 ≤ κ * U / 2 + κ * C / 2 * min (residualShare W C) μ + C / ρ + κ * χ * (C + U) / 2 - M := by
     linarith
-  have key : unmonitoredShare C U + (1 - unmonitoredShare C U) * min (residualShare W C) μ + declaredShare κ ρ C U + χ -
+  have key : unregisteredShare C U + (1 - unregisteredShare C U) * min (residualShare W C) μ + declaredShare κ ρ C U + χ -
       efficiency κ M C U =
       2 / κ / (C + U) * (κ * U / 2 + κ * C / 2 * min (residualShare W C) μ + C / ρ + κ * χ * (C + U) / 2 - M) := by
-    simp only [declaredShare, unmonitoredShare, efficiency]
+    simp only [declaredShare, unregisteredShare, efficiency]
     linear_combination (-(U * (C + U)⁻¹ + C * min (residualShare W C) μ * (C + U)⁻¹ + χ * (C + U) * (C + U)⁻¹)) * hκi +
       (-(min (residualShare W C) μ + 2 * κ⁻¹ * ρ⁻¹ + χ)) * hSi
   have hfac : 0 ≤ 2 / κ / (C + U) := div_nonneg (div_nonneg zero_le_two hκ.le) hS.le
@@ -57,11 +57,11 @@ nonnegative here, since the residual and the declared computation hold no negati
 theorem dampener_core {κ C U W ρ μ χ M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC : 0 < C) (hU : 0 ≤ U) (hMr : 0 ≤ Mr)
     (hMd : 0 ≤ Md) (hM : M ≤ Mu + Mr + Md + Mx) (hu : Mu ≤ κ * U / 2) (hr : Mr ≤ κ * (C - W) / 2)
     (hd : Md ≤ C / ρ) (hx : Mx ≤ κ * χ * (C + U) / 2) (hμ : Mr + Md ≤ κ * μ * C / 2) :
-    efficiency κ M C U ≤ unmonitoredShare C U + min (residualShare W C) μ + declaredShare κ ρ C U + χ := by
+    efficiency κ M C U ≤ unregisteredShare C U + min (residualShare W C) μ + declaredShare κ ρ C U + χ := by
   have h := sources_le hκ hC hU hMd hM hu hr hd hx hμ
   have hS : 0 < C + U := by linarith
   have hCi : C * C⁻¹ = 1 := mul_inv_cancel₀ hC.ne'
-  have hs0 : 0 ≤ unmonitoredShare C U := div_nonneg hU hS.le
+  have hs0 : 0 ≤ unregisteredShare C U := div_nonneg hU hS.le
   have hr0 : 0 ≤ residualShare W C := by
     have hCW : 0 ≤ C - W := by
       by_contra hneg
@@ -77,7 +77,7 @@ theorem dampener_core {κ C U W ρ μ χ M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC
     have h1 : κ * μ * C < 0 := mul_neg_of_neg_of_pos (mul_neg_of_pos_of_neg hκ (not_le.1 hneg)) hC
     linarith
   have hm0 : 0 ≤ min (residualShare W C) μ := le_min hr0 hμ0
-  have h2 : (1 - unmonitoredShare C U) * min (residualShare W C) μ ≤ min (residualShare W C) μ := by
+  have h2 : (1 - unregisteredShare C U) * min (residualShare W C) μ ≤ min (residualShare W C) μ := by
     have := mul_nonneg hs0 hm0
     linarith
   linarith
@@ -229,7 +229,7 @@ theorem DampenerThreadedSlots_rate :
       n * F * H ≤ C → α * F * L = R → (e : ℝ) ≤ T.reuse * (2 * R) / (4 * dd * b_w) →
       b_a * ((Mr : ℝ) + T.M.card) ≤ n * ⌈H / L⌉₊ * ((R + α * F * L) * T.bound (R + α * F * L) b_w dd e) →
         efficiency κ M C U ≤
-          unmonitoredShare C U + min (residualShare W C) (memoryCap T.reuse κ R α dd b_w b_a * (1 + L / H)) +
+          unregisteredShare C U + min (residualShare W C) (memoryCap T.reuse κ R α dd b_w b_a * (1 + L / H)) +
             declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ := by
   intro κ C U W χ M Mu Mr Mx n Γ F H L R α b_w b_a c d T σ dd e Mc hκ hC hU hH hL hR hα hbw hba hdd hcomp hB hT hW
     hsize hM hu hr hx hnC hRL he hcap
@@ -249,15 +249,15 @@ theorem DampenerThreaded : Guarantees.DampenerThreaded := by
     hcap
 
 /-- **The bound is attained** (completeness, not a claim): at `κ = 2`, `C = 4`, `U = 0`, `W_cert = 3`, `ρ = 4`, `μ = 1`
-and `χ = 1/4`, with one counted multiplication in each of the residual, the declared computation and a faulty proof
+and `χ = 1/4`, with one counted multiplication in each of the residual, the declared computation and an incorrect proof
 block, every hypothesis of `Nci.Guarantees.Dampener` holds and `η = 3/4 = s + min(r, μ) + ν + χ`: the hypotheses can
 hold together, and the inequality is not loose there. -/
 theorem dampener_attained :
     ((0 : ℕ) : ℝ) ≤ 2 * 0 / 2 ∧ ((1 : ℕ) : ℝ) ≤ 2 * (4 - 3) / 2 ∧ ((1 : ℕ) : ℝ) ≤ 4 / 4 ∧
       ((1 : ℕ) : ℝ) ≤ 2 * (1 / 4) * (4 + 0) / 2 ∧ ((1 : ℕ) : ℝ) + ((1 : ℕ) : ℝ) ≤ 2 * 1 * 4 / 2 ∧
       efficiency 2 ((3 : ℕ) : ℝ) 4 0 =
-        unmonitoredShare 4 0 + min (residualShare 3 4) 1 + declaredShare 2 4 4 0 + 1 / 4 := by
+        unregisteredShare 4 0 + min (residualShare 3 4) 1 + declaredShare 2 4 4 0 + 1 / 4 := by
   refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, ?_⟩
-  norm_num [efficiency, unmonitoredShare, residualShare, declaredShare, min_def]
+  norm_num [efficiency, unregisteredShare, residualShare, declaredShare, min_def]
 
 end Nci.SecurityProofs

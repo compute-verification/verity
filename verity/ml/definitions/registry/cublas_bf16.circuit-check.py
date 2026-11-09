@@ -8,9 +8,12 @@ from typing import Any, Callable
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """The word Definitions: the gate's f32-out GEMM at GLM-5.3's K (6144) over two W rows, the batched GEMM at two members,
     K = 32, N = 3, and both default split-K output types, the bf16-workspace and the serial split-K at K = 64, N = 3, four
-    splits."""
+    splits.  Then every route `cublas_routes.json` records for GLM-5.3's two split-K weights on one TP8 rank (``served-``), up to
+    its m_max: the MoE router's gate (K = 6144, N = 256, f32 out) and the indexer's ``wk`` (K = 6144, N = 160), each at two,
+    three and four splits and non-split (the indexer's is core's `Gemm_v2`); `test_cublas_served` holds them to the table."""
     from verity.ml.circuits.boolean.trace import word_of
     from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops import gemm as G
     from verity.ml.circuits.ops.boolean import gemm as BG
     from verity.ml.definitions.registry import cublas_bf16 as CB
 
@@ -22,6 +25,14 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("CublasSplitKGemm_v1", lambda: bind(CB.CublasSplitKGemmWord, K=64, N=3, SPLIT_K=4, DOT=HOP)),
         ("CublasSplitKGemmBf16Partials_v1", lambda: bind(CB.CublasSplitKGemmBf16PartialsWord, K=64, N=3, SPLIT_K=4, DOT=HOP)),
         ("CublasSerialSplitKGemm_v1", lambda: bind(CB.CublasSerialSplitKGemmWord, K=64, N=3, SPLIT_K=4, DOT=HOP)),
+        ("CublasSplitKGemmF32Out_v1/served-router-2", lambda: bind(CB.CublasSplitKGemmF32OutWord, K=6144, N=256, SPLIT_K=2, DOT=HOP)),
+        ("CublasSplitKGemmF32Out_v1/served-router-3", lambda: bind(CB.CublasSplitKGemmF32OutWord, K=6144, N=256, SPLIT_K=3, DOT=HOP)),
+        ("CublasSplitKGemmF32Out_v1/served-router-4", lambda: bind(CB.CublasSplitKGemmF32OutWord, K=6144, N=256, SPLIT_K=4, DOT=HOP)),
+        ("GemmF32Out_v1/served-router", lambda: bind(CB.GemmF32OutWord, K=6144, N=256, DOT=HOP)),
+        ("CublasSplitKGemm_v1/served-indexer-2", lambda: bind(CB.CublasSplitKGemmWord, K=6144, N=160, SPLIT_K=2, DOT=HOP)),
+        ("CublasSplitKGemm_v1/served-indexer-3", lambda: bind(CB.CublasSplitKGemmWord, K=6144, N=160, SPLIT_K=3, DOT=HOP)),
+        ("CublasSplitKGemm_v1/served-indexer-4", lambda: bind(CB.CublasSplitKGemmWord, K=6144, N=160, SPLIT_K=4, DOT=HOP)),
+        ("Gemm_v2/served-indexer", lambda: bind(G.Gemm, K=6144, N=160, DOT=HOP)),
     ]
 
 

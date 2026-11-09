@@ -1,10 +1,9 @@
 module
 
-public import Flock.HmRow
 public import VStar.In
 
 /-!
-# The trace assigner: the witness the deployed C-Flock prover assigns a part's circuit at its port inputs
+# The trace assigner: the witness the deployed Flock prover assigns a part's circuit at its port inputs
 
 `assign c pin mask` is the hidden vector `flock-circuit prove` commits for circuit `c` at the port inputs `pin`
 (`VStar.In.PartIn`, what the stager writes to the part's `inst.bin`), block-major: bit `col` of block `b` at

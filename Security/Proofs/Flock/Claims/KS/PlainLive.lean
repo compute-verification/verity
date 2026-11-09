@@ -38,7 +38,7 @@ theorem heq_send {M : Type} {k k' : M → Game β} (e : Game.send M k = Game.sen
   obtain rfl := eq_of_heq h
   exact ⟨rfl, HEq.rfl⟩
 
-/-- Equal strategies of equal games drawing a coin agree at each coin. -/
+/-- Equal strategies of equal games sampling a coin agree at each coin. -/
 theorem heq_coin {C : Type} {iF iF' : Fintype C} {iN : Nonempty C} {k k' : C → Game β} (hk : k = k')
     {s : Strategy (@Game.coin β C iF iN k)} {s' : Strategy (@Game.coin β C iF' iN k')} (h : HEq s s') (c : C) :
     HEq (s c) (s' c) := by
@@ -144,13 +144,6 @@ theorem plainSim_subK (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ) (hl : h
     rw [hl, ite_eq_right (Nat.succ_ne_zero k), ite_eq_left hk]
     exact plainSub_round _ _ _ (plainRep_lt spec st (k + 1)) (plainCnt_le x spec st (Nat.succ_ne_zero k))
   exact ⟨_, e, rfl⟩
-
-/-- `plainSim_subK` at the deployed plain verifier (`keep := id`). -/
-theorem plainSim_sub (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ) (hl : hist.length = k + 1)
-    (hk : k + 1 ≤ plainN x) :
-    ∃ s : SubmitJ 1, (plainW spec hw x).sub (((plainSim P x spec st).next x hist (ω, u)).eval sha512).1 = some s ∧
-      s.rep.val = plainRep spec st (k + 1) :=
-  plainSim_subK id (x := x) (spec := spec) (st := st) (hw := hw) (P := P) (ω := ω) (u := u) (hist := hist) (k := k) (hl := hl) (hk := hk)
 
 /-- **The simulator's bytes prover keeps `SchedK`** after `k + 1` messages, with `|plainRepNs| - k` rounds of rep 0
 left. -/

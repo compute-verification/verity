@@ -1,20 +1,56 @@
 module
 
 public import Batteries.Tactic.OpenPrivate
-public import SampledProofs.Bound
 public import Proofs.Flock.Claims.Sampling.Escape
+public import SampledProofs.Bound
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# The deployed count bound, at the claims' strata draws
+# The deployed count bound, at the claims' strata samples
 
-`SampledProofs.Bound.countBound strata δ` is what the sampled verifier publishes as the most wrong units an accepted
+`SampledProofs.Bound.countBound strata δ` is what the sampled verifier publishes as the most incorrect proof blocks an accepted
 transcript holds except with probability `δ`: it multiplies the strata's factors `(n − j − k)/(n − j)` greedily, the
 largest available first, and stops before the product falls below `δ`. Here it is proved, as the code is, against the
 claims' `Design.miss` (`Definitions.Claims.Sampling`):
 
-* `countBound_miss`: **`miss(countBound + 1) < δ`** for every design that is a strata draw over the partition's proof
+* `countBound_miss`: **`miss(countBound + 1) < δ`** for every design that is a strata sample over the partition's proof
   blocks whose strata have the code's sizes and counts, every `0 < δ` (`countBound_strataPa`, through `strataPa_eq_V`
-  and `sum_card_window`); `countBound_miss_design`: the same for every well-formed design whose rules are strata draws
+  and `sum_card_window`); `countBound_miss_design`: the same for every well-formed design whose rules are strata samples
   (`Design.Pa_eq_strataPa`; every one-stage design but Bernoulli's, `OneStage.strata`), `strataOf_subset` the uniform
   `k`-subset's one stratum.
 * `choose_div_eq_gr`: a stratum's escape `C(n − m, k)/C(n, k)` is the product of its first `m` factors, each in
@@ -23,7 +59,7 @@ claims' `Design.miss` (`Definitions.Claims.Sampling`):
   leaves, every choice of at least as many units escapes with probability at most the choice's own.
 * `next_some`, `next_none`: the code's `next` picks a stratum with room whose next factor is largest, or reports that
   none has room; `countBound_good`: the loop keeps the greedy invariant, so whichever way it returns, every `K + 1`
-  wrong units escape with probability at most a number below `δ`.
+  incorrect proof blocks escape with probability at most a number below `δ`.
 -/
 
 @[expose] public section
@@ -37,7 +73,7 @@ open private next reduce atLeast from SampledProofs.Bound
 
 /-! ## A stratum's factors -/
 
-/-- The `j`-th factor of a stratum of `n` units drawing `k`: the probability that its draw misses a further wrong unit
+/-- The `j`-th factor of a stratum of `n` units sampling `k`: the probability that its sample misses a further incorrect proof block
 given that it missed `j`, `(n − j − k)/(n − j)`. -/
 noncomputable def fac (n k j : ℕ) : ℝ := ((n - j - k : ℕ) : ℝ) / ((n - j : ℕ) : ℝ)
 
@@ -60,7 +96,7 @@ theorem fac_anti {n k j j' : ℕ} (h : j ≤ j') : fac n k j' ≤ fac n k j := b
     have : ((n - j' : ℕ) : ℝ) ≤ (n - j : ℕ) := by exact_mod_cast (by omega)
     nlinarith [(Nat.cast_nonneg k : (0 : ℝ) ≤ k)]
 
-/-- Past its `finite` wrong units a stratum's draw cannot miss another. -/
+/-- Past its `finite` incorrect proof blocks a stratum's sample cannot miss another. -/
 theorem fac_of_finite_le {s : Core.Stratum} {m : ℕ} (h : Stratum.finite s ≤ m) : fac s.size s.k m = 0 := by
   unfold Stratum.finite at h
   unfold fac
@@ -122,7 +158,7 @@ section Exchange
 
 variable (S : ℕ) (n k : ℕ → ℕ)
 
-/-- The escape of the counts `m`, stratum `i` holding `m i` wrong units. -/
+/-- The escape of the counts `m`, stratum `i` holding `m i` incorrect proof blocks. -/
 noncomputable def V (m : ℕ → ℕ) : ℝ := ∏ i ∈ range S, gr (n i) (k i) (m i)
 
 /-- `τ` separates the factors the counts `m` take from those they leave: each stratum's later factors are at most
@@ -149,7 +185,7 @@ theorem gr_sep {n k a b : ℕ} {τ : ℝ} (hτ0 : 0 ≤ τ) (hup : ∀ l, b ≤ 
       _ ≤ ∏ j ∈ Ico a b, fac n k j := prod_le_prod₀ (fun _ _ => hτ0) fun j hj => hdn j (mem_Ico.1 hj).2
 
 /-- **The exchange**: when `τ ∈ [0, 1]` separates the factors `mg` takes from those it leaves, every choice `m` of at
-least as many wrong units escapes with probability at most `mg`'s. -/
+least as many incorrect proof blocks escapes with probability at most `mg`'s. -/
 theorem V_le_of_sep {mg : ℕ → ℕ} {τ : ℝ} (hsep : Sep S n k mg τ) (hτ0 : 0 ≤ τ) (hτ1 : τ ≤ 1) {m : ℕ → ℕ}
     (hsum : ∑ i ∈ range S, mg i ≤ ∑ i ∈ range S, m i) : V S n k m ≤ V S n k mg := by
   by_cases hup : ∃ i ∈ range S, mg i < m i
@@ -182,7 +218,7 @@ end Exchange
 
 /-! ## The code's `next` and `reduce` -/
 
-/-- The loop's state at the counts `m`: each stratum with its wrong units so far. -/
+/-- The loop's state at the counts `m`: each stratum with its incorrect proof blocks so far. -/
 def state (strata : Array Core.Stratum) (m : ℕ → ℕ) : Array (Core.Stratum × ℕ) :=
   Array.ofFn fun i : Fin strata.size => (strata[i], m i)
 
@@ -358,7 +394,7 @@ theorem state_modify (strata : Array Core.Stratum) (m : ℕ → ℕ) (i : ℕ) :
     · simp [Function.update_of_ne (Ne.symm hij)]
 
 /-- **The count bound holds the greedy invariant to its return**: with the strata's sizes `n` and counts `k`, every
-choice of `countBound + 1` or more wrong units escapes with probability at most some `c < δ`. -/
+choice of `countBound + 1` or more incorrect proof blocks escapes with probability at most some `c < δ`. -/
 theorem countBound_good (strata : Array Core.Stratum) (n k : ℕ → ℕ)
     (hnk : ∀ i (h : i < strata.size), strata[i].size = n i ∧ strata[i].k = k i) (δ : Core.Ratio)
     (hδ : 0 < δ.num) (hδd : 0 < δ.den) :
@@ -449,7 +485,7 @@ theorem countBound_good (strata : Array Core.Stratum) (n k : ℕ → ℕ)
       refine ⟨_, rfl, rfl, m', state_modify strata m i, hsum', hb, hratio, fun u hu j hj l hl =>
         ((hsep j hj).1 _ le_rfl).trans ((hsep u hu).2 l hl)⟩
 
-/-! ## At the claims' strata draws -/
+/-! ## At the claims' strata samples -/
 
 /-- The slot at which stratum `i` starts: the sizes of the strata before it. -/
 def strataOff (ss : List (ℕ × ℕ)) (i : ℕ) : ℕ := ((ss.take i).map Prod.fst).sum
@@ -500,7 +536,7 @@ theorem sum_card_window : ∀ (ss : List (ℕ × ℕ)) (o : ℕ) (B : Finset ℕ
       omega
     · simp [hv]
 
-/-- **A strata draw's miss is the strata's product of factors**, stratum `i` holding the members of `B` in its
+/-- **A strata sample's miss is the strata's product of factors**, stratum `i` holding the members of `B` in its
 window. -/
 theorem strataPa_eq_V (ss : List (ℕ × ℕ)) (hk : ∀ p ∈ ss, p.2 ≤ p.1) (o : ℕ) (B : Finset ℕ) :
     strataPa ss o B = V ss.length (fun i => (ss.getD i (0, 0)).1) (fun i => (ss.getD i (0, 0)).2)
@@ -512,7 +548,7 @@ theorem strataPa_eq_V (ss : List (ℕ × ℕ)) (hk : ∀ p ∈ ss, p.2 ≤ p.1) 
     exact List.getElem_mem _
   exact choose_div_eq_gr (hk _ hmem) ((card_le_card (window_subset _ _ B)).trans_eq (card_range _))
 
-/-- **The deployed count bound at a strata draw**: for strata with the code's sizes and counts, every set of
+/-- **The deployed count bound at a strata sample**: for strata with the code's sizes and counts, every set of
 `countBound strata δ + 1` or more slots escapes with probability at most some `c < δ`. -/
 theorem countBound_strataPa {ss : List (ℕ × ℕ)} (hk : ∀ p ∈ ss, p.2 ≤ p.1) (strata : Array Core.Stratum)
     (hlen : strata.size = ss.length)
@@ -533,9 +569,9 @@ theorem countBound_strataPa {ss : List (ℕ × ℕ)} (hk : ∀ p ∈ ss, p.2 ≤
     filter_true_of_mem fun v hv => ⟨Nat.zero_le v, by have := mem_range.1 (hB hv); omega⟩]
   exact ht
 
-/-- **The deployed count bound is sound at the claims' design**: for a design that is a strata draw over the
+/-- **The deployed count bound is sound at the claims' design**: for a design that is a strata sample over the
 partition's proof blocks (`Design.Pa_eq_strataPa`), with the code's strata, `miss(countBound strata δ + 1) < δ`: an
-accepted transcript holds at most `countBound strata δ` faulty units except with probability `δ`. -/
+accepted transcript holds at most `countBound strata δ` incorrect proof blocks except with probability `δ`. -/
 theorem countBound_miss {d : Design} {P : Partition} {ss : List (ℕ × ℕ)}
     (hPa : ∀ B ⊆ range P.blocks.length, d.Pa P B = strataPa ss 0 B) (hN : (ss.map Prod.fst).sum = P.blocks.length)
     (hk : ∀ p ∈ ss, p.2 ≤ p.1) (strata : Array Core.Stratum) (hlen : strata.size = ss.length)
@@ -557,7 +593,7 @@ theorem strata_cover {d : Design} {P : Partition} (hw : d.WellFormed P) {sss : L
     ∀ p ∈ (d.rules.zip P.classes).zip sss, (p.2.map Prod.fst).sum = p.1.2.flatten.length := fun p hp => by
   rw [OneStage.strata_sum (hss p hp) (hw.2 p.1 (List.of_mem_zip hp).1), length_flatten_eq_sum]
 
-/-- **A design whose rules are strata draws is one strata draw** over the partition's proof blocks: the classes'
+/-- **A design whose rules are strata samples is one strata sample** over the partition's proof blocks: the classes'
 strata in order. -/
 theorem Design.Pa_eq_strataPa {d : Design} {P : Partition} (hw : d.WellFormed P)
     {sss : List (List (ℕ × ℕ))} (hs : sss.length = P.classes.length)
@@ -582,14 +618,14 @@ theorem sum_flatten_strata : ∀ (rs : List OneStage) (cs : List (List (List (Li
       sum_flatten_strata rs cs sss (by simpa using hl) (by simpa using hs) fun p hp => h p (by simp [hp]),
       List.flatten_cons, List.flatten_append, List.length_append]
 
-/-- The strata of a design that is one strata draw cover the partition's proof blocks. -/
+/-- The strata of a design that is one strata sample cover the partition's proof blocks. -/
 theorem sum_strata_eq_length {d : Design} {P : Partition} (hw : d.WellFormed P) {sss : List (List (ℕ × ℕ))}
     (hs : sss.length = P.classes.length)
     (hss : ∀ p ∈ (d.rules.zip P.classes).zip sss, p.1.1.strata (strataSizes p.1.2) = some p.2) :
     (sss.flatten.map Prod.fst).sum = P.blocks.length :=
   sum_flatten_strata d.rules P.classes sss hw.1 hs (strata_cover hw hss)
 
-/-- **The deployed count bound is sound at every design that draws strata**: `miss(countBound strata δ + 1) < δ` for
+/-- **The deployed count bound is sound at every design that samples strata**: `miss(countBound strata δ + 1) < δ` for
 the classes' strata in order, given as the code's. -/
 theorem countBound_miss_design {d : Design} {P : Partition} (hw : d.WellFormed P)
     {sss : List (List (ℕ × ℕ))} (hs : sss.length = P.classes.length)

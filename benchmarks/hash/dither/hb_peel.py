@@ -2,7 +2,7 @@
 peeled unit (h1u.cu's kh_one_peel: z = O' - sum_d 128^d D_d + 256 (X WB^T + xa B^T) - (X c^T + b B^T) = A B^T, xa where
 the int8 X = A + b wraps). `llm.dither_mod` for that arm, so sbench runs this module's `check` on the gate, control,
 fault, fault_wb and fault_xa captures and `gate_verdict` over them; `install()` (before the engine is built) makes the
-window raise F_FAULT_XA on the fault_xa step.
+execution phase raise F_FAULT_XA on the fault_xa step.
 
 Unchanged from `dither_one.check`: every call's A, admit and z roots and the step's round against commit.py; every receipt
 against h1r v1 (the receipts don't move with the peel); y (dumped) = dequant of the kernel's own z; wb's density by
@@ -44,7 +44,7 @@ F_FAULT_XA = 32     # h1u.cu's: xa of unit 0's row 0 at k = 0 flipped (kh_one_pe
 
 
 def install() -> None:
-    """The window's step hook raises F_FAULT_XA on the fault_xa capture (dither_one's sets the other captures' flags)."""
+    """The execution phase's step hook raises F_FAULT_XA on the fault_xa capture (dither_one's sets the other captures' flags)."""
     before = DO.DitherState.before
 
     def before_xa(self: DO.DitherState, m: int) -> None:
@@ -59,8 +59,8 @@ def install() -> None:
 def xa_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, roots: tuple[bytes, bytes]) -> list[int]:
     """F_FAULT_XA's move of unit 0's z row 0 (rows of `a`, 32 x K; `b` the unit's 32 B rows), mod 2^32: xa at entry
     (0, 0) flipped changes it by 1 - 2 xa, so z[0, j] moves by 256 (1 - 2 xa) B[j, 0], xa = [A = 127 and b = 1]."""
-    from verity.core.protocols.pouw.circuit import h1tile as HT
-    from verity.core.protocols.pouw.circuit import seeds as SD
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import seeds as SD
     rows, _ = HT.noise(SD.seed(salt, position, *roots), HT.Layout(32, 32, a.shape[1]))
     d = -1 if int(a[0, 0]) == 127 and int(rows[0][0][0]) == 1 else 1
     return [(256 * d * int(b[j, 0])) & M32 for j in range(32)]
@@ -94,8 +94,8 @@ def peel_cpu(z_v3: np.ndarray, a32: np.ndarray, b32: np.ndarray, salt: bytes, po
     """v3's z of one unit (s32 [32, 32]) peeled with its own noise (h1tile.noise): exact = z - X c^T - b B^T + 256 xa
     B^T, literal = z - b B^T - A c^T - b c^T (the peel as first written, which takes z for (A + b)(B + c)^T), xa = [A = 127 and
     b = 1]."""
-    from verity.core.protocols.pouw.circuit import h1tile as HT
-    from verity.core.protocols.pouw.circuit import seeds as SD
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import seeds as SD
     rows, cols = HT.noise(SD.seed(salt, position, *roots), HT.Layout(32, 32, a32.shape[1]))
     bits_a = np.array([rows[i][0] for i in range(32)], dtype=np.int64)
     bits_b = np.array([cols[j][0] for j in range(32)], dtype=np.int64)

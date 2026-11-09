@@ -83,6 +83,32 @@ def test_every_check_runs_both_and_records_them():
     assert not bad["accepted"] and bad["verifiers"]["agree"] and bad["verifiers"]["lean"]["failed"] == ["roots"]
 
 
+def test_the_declared_day_is_held_by_both():
+    """R2's declared day (`registration._declared`, `Registration.declaredCode`) by the verifier: the day's own program,
+    another day's, a day with no declaration, an empty log and a day declared twice give the same codes in the Lean and the
+    Python; and the Lean refuses the parameters the Python refuses (`registration._declarations`): a day without
+    declarations or the other way round, a day that isn't a natural number, and a declaration not of the view's form."""
+    rec, program, law = _record(), P.population_program(PAIR, 6), {"law": "subset", "k": 2}
+    mine = {"blocks": [PAIR.id], "day": 0, "program": rec["program"]}
+    other = {"blocks": [], "day": 1, "program": "0" * 128}
+    for day, declared, codes in ((0, [mine, other], ()), (1, [mine, other], ("R2-declared",)),
+                                 (2, [mine, other], ("R2-undeclared",)), (0, [], ("R2-undeclared",)),
+                                 (0, [mine, {**other, "day": 0}], ("R2-declared-twice",))):
+        v = V.check(rec, program, QUERY, law, S.SCHEME, _ports(6), day=day, declarations=declared)
+        side = {"ok": not codes, "codes": list(codes)}
+        assert v.codes == codes and v.verifiers == {"of_record": "lean", "lean": side, "python": side}
+    params = V._params(program, QUERY, law, S.SCHEME, _ports(6), None, (), (), None, None, None)
+    assert V.lean("registration", {"params": params, "record": rec})["codes"] == []
+    for change in ({"day": 0}, {"declarations": [mine]}, {"day": -1, "declarations": [mine]},
+                   {"day": True, "declarations": [mine]}, {"day": 0, "declarations": None},
+                   {"day": 0, "declarations": [{"day": 0, "program": rec["program"]}]},
+                   {"day": 0, "declarations": [{**mine, "program": 7}]}):
+        assert "refused" in V.lean("registration", {"params": {**params, **change}, "record": rec}), change
+        with pytest.raises(ValueError, match="declar"):
+            R.check(rec, program, QUERY, law, S.SCHEME, _ports(6), day=change.get("day"),
+                    declarations=change.get("declarations"))
+
+
 def test_the_record_reads_each_ports_last_root_and_its_own_values_as_the_python_does():
     """`audit_record`'s sessions' roots (`Record.checks`) and the registered reads it keeps (`Record.ownRegistered`), which
     the Lean compiles on a hash map of the registration's roots, against the Python's whole: the sessions' roots all
@@ -216,7 +242,7 @@ def test_the_runs_hello_is_checked_by_both(monkeypatch):
 def test_the_leans_coins_are_a_challengers_entropy_and_never_a_streams(monkeypatch):
     """The Lean verifier's `IO.getRandomBytes` (A3, `verifier.coins`) is a challenger's entropy, never a stream's own
     coins: a stream given it, or no coins, refuses (`NO_OWN_COINS`). A challenger on it commits to its coins, and a
-    stream drawing from that challenger has the Lean's draw of record on coins it released after the registration."""
+    stream sampling from that challenger has the Lean's sample of record on coins it released after the registration."""
     a, b = V.coins(64), V.coins(64)
     assert len(a) == len(b) == 64 and a != b and V.coins(0) == b""
     for coins in (None, V.coins):
@@ -274,8 +300,8 @@ def test_lean_that_cannot_run_fails_closed(monkeypatch):
 
 
 def test_floats_reach_the_lean_as_python_wrote_them():
-    """A float of 10^16 or more is sent with its digits (`Json.parse` would read Python's `1e+22` as an integer), so the
-    Lean writes back what Python does; one it can't read back (-0.0) makes the two disagree."""
+    """A float of 10^16 or more is sent with its digits (`Flock.JsonParse.parse` would read Python's `1e+22` as an
+    integer), so the Lean writes back what Python does; one it can't read back (-0.0) makes the two disagree."""
     assert V._dumps({"a": 1e22, "b": [2.5, 1e16, 3]}) == '{"a":10000000000000000000000.0,"b":[2.5,10000000000000000.0,3]}'
     _, reg, draw = _drawn()
     floats = {"big": 1e22, "small": 1e-7, "third": 1 / 3, "huge": 1.7976931348623157e308, "tiny": 5e-324}

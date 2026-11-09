@@ -6,7 +6,7 @@ A frame hashes `FRAME ‖ be32 |tag| ‖ tag ‖ Σ (be64 |part| ‖ part)` (`in
 is its minimal big-endian bytes, one zero byte for 0 (`uint`, `merkle._uint`). A tree pads its leaves to a power of two
 with `"pad"` leaves and hashes `"node"`s level by level up to its root.
 
-* `hash`, `leaf`, `root`: the frame over a hash `H`, SHA-512 unless the caller names another. C-Flock's SHA-256 statements
+* `hash`, `leaf`, `root`: the frame over a hash `H`, SHA-512 unless the caller names another. Flock's SHA-256 statements
   (`Blake3Row`) name `Sha256.hash`, the one other hash a frame takes.
 * `hashM`, `leafM`, `rootM`: the same over a frame-hash action of a monad. The oracle verifier (`Flock.With`) runs them
   through its oracle (`FV3.hashWith`, `leafWith`, `rootWith`); `hash`, `leaf` and `root` are them in `Id`
@@ -15,15 +15,13 @@ with `"pad"` leaves and hashes `"node"`s level by level up to its root.
   digest size and tagged hash), with its leaf, node, pad and empty root, `levels`, `root`, `climb` and `verifyOpening`;
   `FV3.path` is an opening's path from the levels.
 * `FV3.Sha512`: frame-v3-sha512, the commitment format (`CommitmentDomain(…, hash="sha512")`), for every caller that
-  isn't C-Flock's SHA-256 statement or PoUW's SHA-256 frames: its `scheme`, `Domain` (`FV3.Domain scheme`),
+  isn't Flock's SHA-256 statement or PoUW's SHA-256 frames: its `scheme`, `Domain` (`FV3.Domain scheme`),
   `Domain.make`, `rangeIdentity` and `path`; and the registered rows' climb by 64-byte siblings (`node`, `climbL`,
   `sibs`, `climb`, `leafAs`), which `Flock.Registered` exports.
 * `FV3.Sha256`: the same domain API under SHA-256, for PoUW's SHA-256 frames (Pearl-C's `h0`).
 -/
 module
 
-public import Flock.Hash
-public import Flock.Bytes
 public import Flock.Net
 
 @[expose] public section

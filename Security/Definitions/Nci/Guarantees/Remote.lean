@@ -14,7 +14,7 @@ hypothesis derived, and the two that sampled proofs and PoUW's deficit add:
   (`PouwSound`), the windows whose certificates are wrong hold more than `ε' C` of the capacity with probability at most
   `p/ε'`, by Markov's inequality, which needs no independence between windows;
 * `VerdictLag` ([VERDICT-LAG]): under `TerminalDetection`, the declared work skipped between each identity's first
-  detected faulty proof block and its halt `Δ` later is at most `(JΔ/H) C`, so all faulty blocks skip at most that plus
+  detected incorrect proof block and its halt `Δ` later is at most `(JΔ/H) C`, so all faulty blocks skip at most that plus
   what the blocks accepted before their identity's first detection (`escaped`) skip;
 * `DampenerRemote` composes them with `ThreadedThrottled`'s declared computation, charging the escaped blocks by
   Markov's inequality on their expected work, at most `((1 − q)/q) B` per identity when each faulty block is caught with
@@ -27,6 +27,8 @@ hypothesis derived, and the two that sampled proofs and PoUW's deficit add:
 -/
 
 @[expose] public section
+
+open Verity.Game renaming prPMFReal → prob
 
 namespace Nci.Guarantees
 
@@ -43,7 +45,7 @@ def CertificateSlack : Prop :=
     0 ≤ p → 0 < ε → 0 < C → (∀ i, 0 ≤ c i) → ∑ i, c i ≤ C → Assumptions.PouwSound μ wrong p →
       prob μ (fun ω => ε * C < wrongCapacity c (wrong ω)) ≤ p / ε
 
-/-- **The verdict lag** ([VERDICT-LAG]). Of a developer's faulty proof blocks `bad`, block `b` is run by identity
+/-- **The verdict lag** ([VERDICT-LAG]). Of a developer's incorrect proof blocks `bad`, block `b` is run by identity
 `ident b`, one of the `J = |I|` it controls, at time `τ b`, and skips `w_b` of declared work; those `detected` fail
 their proof. Detection is terminal at a lag `Δ ≥ 0` (`TerminalDetection`), and one identity's blocks within any span
 of `Δ` skip at most `Φ Δ`, its hardware's capacity at `Φ` a unit of time, with `Φ H ≤ C` over the horizon `H > 0`.
@@ -56,9 +58,9 @@ def VerdictLag : Prop :=
     (∀ j t, ∑ b ∈ bad with ident b = j ∧ t ≤ τ b ∧ τ b ≤ t + Δ, w b ≤ Φ * Δ) →
       ∑ b ∈ bad, w b ≤ lagShare I.card Δ H * C + ∑ b ∈ escaped bad detected ident τ, w b
 
-/-- **The compute dampener, remote protocol.** Outcomes `ω` are drawn from `μ` on a finite space. PoUW certifies `N`
+/-- **The compute dampener, remote protocol.** Outcomes `ω` are sampled from `μ` on a finite space. PoUW certifies `N`
 windows of capacities `c_i ≥ 0`, `∑ c_i ≤ C`, each certificate wrong (`wrong ω i`) with probability at most `p ≥ 0`
-(`PouwSound`). The developer's faulty proof blocks `bad ω`, run by `J = |I|` identities, those `detected ω` failing
+(`PouwSound`). The developer's incorrect proof blocks `bad ω`, run by `J = |I|` identities, those `detected ω` failing
 their proof, under `TerminalDetection` at a lag `Δ`, skip `w_b ≥ 0` of declared work each, at most `Φ Δ` per identity
 within any span of `Δ`, `Φ H ≤ C`, as in `VerdictLag`, and at most `B` each; each faulty block with no earlier detection
 of its identity is detected with probability at least `q ∈ (0, 1]` whatever came before (`SampledDetection`), so those
@@ -67,7 +69,7 @@ multiplications `M` are as in `DampenerThreaded`, with no memory cap: unmonitore
 developer, at model-FLOP utilization `MFU₀ ∈ (0, 1]` (`M_U ≤ MFU₀ κ U/2`); the residual trains at full efficiency on the
 monitored compute outside the work certified correctly and run, at least `(1 − ε_W) W_cert` less the wrong windows'
 capacity and the skipped work, `ε_W` PoUW's deficit (`M_r ≤ κ (C − (1 − ε_W) W_cert + wrongCapacity + skipped)/2`); the
-declared computation is bounded by `ThreadedThrottled`; faulty proof blocks inject at most the cheating share `χ`, 0
+declared computation is bounded by `ThreadedThrottled`; incorrect proof blocks inject at most the cheating share `χ`, 0
 with no sampling. Then, at an escape slack `θ > 0`, with probability at least `1 − δ`,
 `δ = p/ε' + J ((1 − q)/q) B/(θ C)`, the compute efficiency is at most
 `s + (1 − s)(r̂ + ε_W W_cert/C + ε' + JΔ/H + θ) + ν_T + χ`, and the hardware multiple the developer needs is at least
@@ -93,11 +95,11 @@ def DampenerRemote : Prop :=
     (∀ ω, Assumptions.ResidualAtMost (Mr ω) κ C εW W (wrongCapacity cap (wrong ω)) (∑ b ∈ bad ω, w b)) →
     (∀ ω, (Mx ω : ℝ) ≤ κ * χ * (C + U) / 2) →
       1 - (p / ε + I.card * ((1 - q) / q * B) / (θ * C)) ≤ prob μ (fun ω => efficiency κ (M ω) C U ≤
-          unmonitoredShare C U +
-              (1 - unmonitoredShare C U) * (residualShare W C + εW * W / C + ε + lagShare I.card Δ H + θ) +
+          unregisteredShare C U +
+              (1 - unregisteredShare C U) * (residualShare W C + εW * W / C + ε + lagShare I.card Δ H + θ) +
             declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ ∧
-        remoteDampener mfu (unmonitoredShare C U)
-            ((1 - unmonitoredShare C U) * (residualShare W C + εW * W / C + ε + lagShare I.card Δ H + θ) +
+        remoteDampener mfu (unregisteredShare C U)
+            ((1 - unregisteredShare C U) * (residualShare W C + εW * W / C + ε + lagShare I.card Δ H + θ) +
               declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ) ≤
           hardwareMultiple mfu κ (M ω) C U)
 

@@ -1,20 +1,55 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.BadLin
-public import Proofs.Flock.Claims.Recursion.KSStated
+public import Definitions.Claims.RecursionLin
+public import Proofs.Flock.Claims.Recursion.BoundForks
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Recursion.BadLin
+import Proofs.Flock.Claims.Recursion.Cost
 
 /-!
 # The recursion's KS, linearly
 
 `KSLin` (`Definitions.Claims.RecursionLin`) at the same premises `KS_of_flockKS_binds` reads, which are the deployed
 route's (`RecDeploy.ksBoundRoute_of_bridge_cols`). The inner stage fails where `E^rep` fails against `P_I`'s aborting runs,
-at a bad rerun, or where the judged draw's inner view rejects (`PrBadGood_le_abort_rej`):
+at a bad rerun, or where the judged sample's inner view rejects (`PrBadGood_le_abort_rej`):
 
 * against `P_I`'s aborting runs, `κ_I + √(γ_I·Pr[B_I])` (`Inner.KSAbort`, `PrBAbort_le_PrBI`), with `B_I` its own
   finder (`Binner` is `BI`, `PrBinner_eq`), not `k(x)·Pr[Be]`;
-* at the `N_I` expected reruns, a bad draw at most `k_I·(Pr[Fdev] + 1/(M+1))` (`Pr_bad_le_PrFdev`, from
+* at the `N_I` expected reruns, a bad sample at most `k_I·(Pr[Fdev] + 1/(M+1))` (`Pr_bad_le_PrFdev`, from
   `Pr_bad_le_lin`), so `β·(Pr[Fdev] + 1/(M+1))` with `β = N_I·k_I`;
-* a rejecting judged draw is a collision at every fork (`Pr_innerRejects_le_fork`), so at most the inner rounds'
+* a rejecting judged sample is a collision at every fork (`Pr_innerRejects_le_fork`), so at most the inner rounds'
   average, `Pr[B_I]` (`Pr_innerRejects_le_PrBI`), which `γ_BI = (√γ_I + 1)²` holds under `B_I`'s root
   (`sqrt_add_le_γBI`).
 
@@ -59,7 +94,7 @@ theorem PrFdev_nonneg (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO
   · exact Pr_nonneg _
   · exact le_rfl
 
-/-- **A bad draw at most `k_I·(Pr[Fdev] + 1/(M+1))`**: `Pr_bad_le_lin`, and no bad draw where the inner protocol takes no
+/-- **A bad sample at most `k_I·(Pr[Fdev] + 1/(M+1))`**: `Pr_bad_le_lin`, and no bad sample where the inner protocol takes no
 rounds. -/
 theorem Pr_bad_le_PrFdev {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (hFk : ForksBind H D I DO) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
@@ -76,7 +111,7 @@ theorem Pr_bad_le_PrFdev {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} 
       le_antisymm ((Pr_mono fun t ht => ht.2 fun j hj => absurd hj (by omega)).trans_eq Pr_false) (Pr_nonneg _)
     rw [hb, h0, Nat.cast_zero, zero_mul]
 
-/-- **A rejecting judged draw costs at most `Pr[B_I]`**: it is a collision at every fork (`Pr_innerRejects_le_fork`),
+/-- **A rejecting judged sample costs at most `Pr[B_I]`**: it is a collision at every fork (`Pr_innerRejects_le_fork`),
 so at most their average over the inner rounds, of which an accepted run shows one (`RoundsMargin`). -/
 theorem Pr_innerRejects_le_PrBI_at {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {x : Msg} (hA : InnerAcceptsCollAt H D I DO x) (hT : CallsTrue H D I DO)

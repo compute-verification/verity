@@ -7,7 +7,7 @@ public import Proofs.Flock.Soundness.Discharge.Tables.Sim
 # Flock's live session as a public-coin verifier
 
 `liveSession dg J mPts N` (`Discharge.Tables.Sim`) is the live game the old end-to-end theorems run: `Commit`'s roots,
-the two link points, at most `N` rounds on the `2J` rep streams (each round's `n` coins drawn after its bytes), then the
+the two link points, at most `N` rounds on the `2J` rep streams (each round's `n` coins flipped after its bytes), then the
 proof files. This file runs it as a `Claims.Verifier` and transports `Claims.run`'s probabilities to it.
 
 * `LCoin nMax`: a round's coin, `nMax` field elements. A round of `n ≤ nMax` coins reads the first `n`; the link points
@@ -27,11 +27,11 @@ proof files. This file runs it as a `Claims.Verifier` and transports `Claims.run
 **The correspondence.** The old games average over each `coin` node's own type (`prob`, `expect`) against a
 `Strategy`, a move at each `send` node that may read every earlier move and coin. `Claims.run H P* (liveV …) x ω r`
 averages over `r : Fin (N x + 2) → LCoin nMax`, the tape `ω` fixed. Round `j`'s message `a_j` is `P*.next x hist ω`;
-its decoding is the move (`Wire`), and its reply carries the coin the session draws next: Commit's the link points, a
+its decoding is the move (`Wire`), and its reply carries the coin the session samples next: Commit's the link points, a
 submission's its `n` coins, the proof files' the decision, which is `d x` on the outcome, its `H` queries the verifier's
 log. `P*` sees every earlier reply, so the decoded strategy (`stratG`) reads exactly what a `Strategy` reads, and the
-coin law (`Coins.ex_playOn`) gives each coin uniform, independent, after the message it answers. A stop (`none`) leaves
-the later round coins unread. The round digest `roundOf dg` computes is the coin server's, not an oracle query.
+coin distribution (`Coins.ex_playOn`) gives each coin uniform, independent, after the message it answers. A stop (`none`) leaves
+the later round coins unread. The round digest `roundOf dg` computes is the challenger's live-coin part's, not an oracle query.
 -/
 
 @[expose] public section
@@ -222,18 +222,6 @@ theorem prob_eqRec {β : Type} {g g' : Game β} (h : g = g') (p : β → Prop) (
     prob p g' (h ▸ s) = prob p g s := by
   subst h
   rfl
-
-/-- **The run is the live session**: its verdict and verifier log are `d`'s on the session's outcome, and the verifier
-reads that outcome off the run's transcript. -/
-theorem run_live (nMax : ℕ) (J mPts N : Msg → ℕ) (dg : ByteArray → ByteArray)
-    (w : (x : Msg) → Wire nMax (J x) (mPts x)) (d : (x : Msg) → LiveOutJ (J x) (mPts x) → OC Bool) (H : Msg → Msg)
-    {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (r : Fin (N x + 2) → LCoin nMax) :
-    (run H P (liveV nMax J mPts N dg w d) x ω r).out = toOut ((d x (liveOut J mPts N dg w H P x ω r)).eval H).1 ∧
-      (run H P (liveV nMax J mPts N dg w d) x ω r).vLog = ((d x (liveOut J mPts N dg w H P x ω r)).eval H).2 ∧
-      liveRead J mPts N dg w x (run H P (liveV nMax J mPts N dg w d) x ω r).msgs =
-        some (liveOut J mPts N dg w H P x ω r) :=
-  run_ofGame H P (fun x => N x + 2) (fun x => sessionK dg (J x) (mPts x) (N x)) (fun x => sessionIf (w x) dg (N x)) d
-    x ω r (sessionLe (w x) dg (N x) _)
 
 open Classical in
 /-- **Acceptance with an event of the outcome**: `Pr_r[run = acc ∧ Q(outcome)]` is `liveSession`'s probability that

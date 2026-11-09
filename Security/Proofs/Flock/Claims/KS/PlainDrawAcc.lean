@@ -1,9 +1,44 @@
 module
 
-public import Proofs.Flock.Claims.KS.PlainDrawAccK
+public import Proofs.Flock.Claims.KS.PlainDraw
+public import Proofs.Flock.Soundness.Discharge.Exec.Rounds
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.PlainDrawAccK
+import Proofs.Flock.Claims.KS.PlainDrawK
+import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
 
 /-!
-# flock-verify's acceptance at a draw value
+# flock-verify's acceptance at a sample value
 
 `PlainDrawAccK`'s lemmas at `keep := id`, where `AcceptsAtDK id` is `AcceptsAtD` (`acceptsAtD_iff_acceptsAtDK_id`) and
 the record decodes through `Record.decode` (`decodeWithK_id_std`):
@@ -12,8 +47,8 @@ the record decodes through `Record.decode` (`decodeWithK_id_std`):
   tag.
 * `accepts_req0D`, `accepts_opens₀LD`: `accepts_req0`, `accepts_opens₀L`.
 * `accepts_repsOneD`: `accepts_reps` and `accepts_repsH` at once, the one table's statement `setupOne`'s at `dr`.
-* `tableAt_of_acceptsD`, `tableAtH_of_acceptsD`: `tableAt_of_accepts`, `tableAtH_of_acceptsI` at the draw `some d`,
-  with no premise on a record's draw.
+* `tableAt_of_acceptsD`, `tableAtH_of_acceptsD`: `tableAt_of_accepts`, `tableAtH_of_acceptsI` at the sample `some d`,
+  with no premise on a record's sample.
 -/
 
 @[expose] public section
@@ -197,8 +232,8 @@ open Flock FlockLevel3 Refine
 open FlockSoundness.Discharge.Exec (Inputs)
 open FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.HiddenExec
 
-/-- **At a draw flock-verify accepts at, the headline's table is `stmtOf` of the statement it accepted**:
-`tableAt_of_accepts` at `AcceptsAtD I (some (dj S))`, with no premise on the record's draw. -/
+/-- **At a sample flock-verify accepts at, the headline's table is `stmtOf` of the statement it accepted**:
+`tableAt_of_accepts` at `AcceptsAtD I (some (dj S))`, with no premise on the record's sample. -/
 theorem tableAt_of_acceptsD {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {c : Flock.Circuit}
     (ht : I.tags.typed = false) (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
     (hh : I.tags.hiddenOutputs = false) (hc1 : I.count ≤ 1) (dj : Finset (Fin n) → Lean.Json)
@@ -210,8 +245,8 @@ theorem tableAt_of_acceptsD {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {c 
       ∃ hwf : StmtWF st, (tableAt ht dj x₀ S).T.S = stmtOf st hwf (regionsOf st) := by
   exact tableAt_of_acceptsDK id ht hc ho hh hc1 dj x₀ ((acceptsAtD_iff_acceptsAtDK_id I _ t).1 h) hS hmPts
 
-/-- **At a draw flock-verify accepts at under hidden outputs, the hidden table is `stmtOf` of the statement it
-accepted**: `tableAtH_of_acceptsI` at `AcceptsAtD I (some (dj S))`, with no premise on the record's draw. -/
+/-- **At a sample flock-verify accepts at under hidden outputs, the hidden table is `stmtOf` of the statement it
+accepted**: `tableAtH_of_acceptsI` at `AcceptsAtD I (some (dj S))`, with no premise on the record's sample. -/
 theorem tableAtH_of_acceptsD {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {c : Flock.Circuit}
     (ht : I.tags.typed = false) (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)
     (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1) (dj : Finset (Fin n) → Lean.Json)

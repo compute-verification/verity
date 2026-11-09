@@ -2,6 +2,44 @@ module
 
 public import Definitions.Claims.SamplingGeneric
 public import Proofs.Flock.Claims.Sampling.KS
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Aggregate
+import Proofs.Flock.Claims.ERepCost
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Sampling.Extract
 
 /-!
 # The sampled compiler: the extraction's failure event and its probability
@@ -22,7 +60,7 @@ inner run are one `Compiled.BlockEC` per slot of the sample (`Compiled.SlotEC`),
 * `inner_bad_le`: at first-stage coins where the sample misses `B` with probability at most `esc`, the union bound at
   the picked slot, the first holding a block of `B` (the sample's slots at most `n_PU`, `Sessions.slots`), gives
   `Pr[acc]·Pr[bad for B] ≤ 2k/K + e^{−k/8} + c·(esc + κ)`.
-* `outer_bad_le`: over the refused sets (at most `2^{n_PU}`, against the waits' slack), with the draw law's weights
+* `outer_bad_le`: over the refused sets (at most `2^{n_PU}`, against the waits' slack), with the sampling design's weights
   averaging at most `P_a(B) ≤ δ`.
 * `pr_fails_le_of`, `pr_fails_le`: **the composition**, `Pr[acc ∧ fails] ≤ κ_δ + √(γ·Pr[B])` with
   `κ_δ = c²·(δ + κ_s) + (1 + c)·(2k/K + e^{−k/8})`: independent of the judged coins, the outer bound at each tape, and
@@ -245,7 +283,7 @@ theorem inner_bad_le (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → 
 
 set_option synthInstance.maxSize 1024 in
 omit [Inhabited Coin] in
-/-- **One tape's outer wait**: on a statement in scope at `(s, Pt)`, where the draw law holds, the sample has at most
+/-- **One tape's outer wait**: on a statement in scope at `(s, Pt)`, where the sampling design holds, the sample has at most
 `n_PU` slots, and the block at the slot any selection picks at first-stage coins `r` is not found with probability at
 most `κr(r)`, the outer wait (times its acceptance) comes up short or, for some refused `B`, keeps only runs bad for
 `B`, with probability at most `T + c·(T + c·(δ + E[κr]))`, `T = 2k/K + e^{−k/8}`. -/
@@ -309,7 +347,7 @@ set_option synthInstance.maxSize 1024 in
 judged run accepts and the extraction's failure event at `found` holds with probability at most `κ(δ) + √(γ·Pr[B])`,
 when the block at the slot any selection picks is not found with probability at most `κ_s + √(k(x)·γ_s·β(ω, r))` for
 a weight `β` averaging at most `Pr[B]`. Out of scope the event is empty. In scope it is independent of the judged
-coins; at each tape, the outer wait's bound (`outer_bad_le`, the draw law from `Sessions.draws` and the slots from
+coins; at each tape, the outer wait's bound (`outer_bad_le`, the sampling design from `Sessions.draws` and the slots from
 `Sessions.slots`) averages, by Jensen, to `κ(δ) + c²·√(k(x)·γ_s·E[β]) ≤ κ(δ) + √(γ·Pr[B])`. -/
 theorem pr_fails_le_of (H : Msg → Msg) (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (hS : L.Sessions H) (x : Msg)
     (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
@@ -383,7 +421,7 @@ theorem pr_fails_le_of (H : Msg → Msg) (L : Compiled Coin A) {δ : ℝ} (hδ :
           Real.sqrt_sq (pow_nonneg hc.le 2)]
 
 set_option synthInstance.maxSize 1024 in
-/-- **The acceptance-probability composition**: from the sessions' knowledge soundness (`SessionKS`) and the draw law
+/-- **The acceptance-probability composition**: from the sessions' knowledge soundness (`SessionKS`) and the sampling design
 (`Sessions.draws`), over tapes, judged coins and the extractor's coins, the judged run accepts and the extraction fails
 (for some set of proof blocks of acceptance probability at most `δ`, no kept run finds a block of it) with probability
 at most `κ(δ) + √(γ·Pr[B])`, `κ(δ) = c²·(δ + κ_s) + (1 + c)·(2k/K + e^{−k/8})`. -/

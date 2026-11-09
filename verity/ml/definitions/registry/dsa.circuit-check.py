@@ -4,6 +4,19 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+#: GLM-5.3's DSA indexer logits at its served shapes over every key count a served row takes, checked at these spots
+#: (`circuit_check.ranges`; ``circuit-check --as-call --ranges DsaMqaLogits_v3``).  Past about 32,480 keys the parameters are over
+#: the partition's leaf budget, so the last spot passes with the partition unchecked; serving cuts a row into N = 1 slices
+#: (`verity_vllm.pipeline.serving_templates.SLICES`), the unit N = 1 checks whole
+RANGES = {
+    "DsaMqaLogits_v3{N=1..32533,H=32,D=128}": (
+        # the ends: one key, and the longest served row
+        "N=1", "N=32533",
+        # a short row, the top-k's identity limit and one past it, and a long row
+        "N=288", "N=2048", "N=2049", "N=8192",
+    ),
+}
+
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the

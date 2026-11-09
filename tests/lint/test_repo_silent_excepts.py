@@ -1,5 +1,6 @@
 """Except handlers that swallow what they catch, in every tracked Python file outside ``integrations/vllm/`` and ``archive/``,
-held to ``allowlists/repo_silent_excepts.json``: S4 of the quality rollout, recorded outcomes, so no area adds one while its owner turns the ones it has into raises and records.
+held to ``allowlists/repo_silent_excepts.json``, so no area adds one while its owner turns the ones it has into raises and
+records.
 
 A handler swallows when every statement in it is ``pass``, ``continue``, ``break``, a bare constant (``...``), or a ``return``
 or an assignment of a default: nothing, ``None``, a constant other than a string or ``False``, a name other than the caught
@@ -15,7 +16,7 @@ swallowing handlers in its file.  A file with more than its entry allows, or wit
 allows more than is found doesn't: the list can run ahead of a tree, holding the handlers of PRs queued below it on ``next``,
 and ``--prune`` deletes and lowers what this tree no longer finds.  A file that moves takes its entry with it, in the same
 change (``--move``): this lint reads no history, so a renamed file's handlers count under its new path.  The ratchet gate
-(``integrations/vllm/tools/ratchet_gate.py``) refuses a change whose Python gains a swallowing handler, or that grows this list
+(``integrations/vllm/tools/ratchet_gate.py``) fails a change whose Python gains a swallowing handler, or that grows this list
 or leaves a renamed file's entry behind, and judges a change to this module by running it as the change's base has it on the
 change's tree.  So it imports only the standard library, ``test_no_new_silent_excepts`` takes no fixture, and the gate reads
 ``LEFT_OUT``, ``FIX``, ``handlers`` and ``parse`` from the base's copy of this module.

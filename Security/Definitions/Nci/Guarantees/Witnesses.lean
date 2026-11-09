@@ -1,7 +1,12 @@
 module
 
 public import Definitions.Nci.Witness
-public import Definitions.Nci.Guarantees
+public import Definitions.Nci.Assumptions
+public import Definitions.Nci.Threads
+public import Definitions.Core.Circuit
+public import Definitions.Core.RegisteredCircuit
+public import Definitions.Core.Partition
+public import Definitions.Nci
 public import Definitions.Nci.Dampener
 public import Definitions.Nci.Reads
 public import Definitions.Nci.Assumptions.Threads
@@ -13,7 +18,6 @@ public import Definitions.Nci.Assumptions.Training
 public import Definitions.Nci.Assumptions.PackedTraining
 public import Definitions.Nci.Support
 public import Definitions.Nci.Guarantees.CoverTraining
-public import Definitions.Nci.Guarantees.CoverChained
 public import Definitions.Nci.Guarantees.Remote
 
 /-!
@@ -32,12 +36,14 @@ witnesses at the toy circuit (`Nci.Capability.Toy`, with the instances of `Nci.W
 The premise each `X_nontrivial` drops is the one the bound rests on: the coverage `κ` when the bound is a share of the
 reference circuit (at the threading `T0` of no counted multiplication, every bound is `0`), `ThetaRegistered` when it is
 in the read cap `k` (at `Dθ`, the declaration registering the token too, the toy complies at `k = 0`), `WindowsHold`
-for the dampener, and PoUW's soundness (`PouwSound`) for the remote dampener. The cover theorem's joins (`Nci.Cover.Guarantees.CoverTraining` and
-`CoverTrainingAligned`) are stated at the multiplication blocks `mb0` of no product, where coverage `α₀ > 0` fails;
-`CoverTrainingChained` at the toy's two products on its bit view, where at depth `0` the cap `α Γ < c_w D` fails.
+for the dampener, and PoUW's soundness (`PouwSound`) for the remote dampener. The cover theorem's join
+(`Nci.Cover.Guarantees.CoverTraining`) is stated at the multiplication blocks `mb0` of no product, where coverage
+`α₀ > 0` fails.
 -/
 
 @[expose] public section
+
+open Verity.Game renaming prPMFReal → prob
 
 namespace Nci.Guarantees
 
@@ -212,7 +218,7 @@ def DampenerThreaded_nontrivial : Prop :=
     ((0 : ℕ) : ℝ) ≤ (T0 D).reuse * (2 * 0) / (4 * (1 : ℕ) * (1 / 2)) ∧
     ¬ Assumptions.WindowsHold (T0 D) 1 1 (1 / 2) 0 1 1 0 (1 / 2) (1 / 2) 1 0 ∧
     ¬ (efficiency 1 1 2 0 ≤
-        unmonitoredShare 2 0 +
+        unregisteredShare 2 0 +
             min (residualShare 0 2) (memoryCap (T0 D).reuse 1 0 ((1 : ℕ) / (2 : ℕ) : ℝ) 1 (1 / 2) (1 / 2) * (1 + 1 / 1)) +
           declaredShare 1 (rhoT ((1 : ℕ) / (2 : ℕ) : ℝ) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0)
 
@@ -238,7 +244,7 @@ def DampenerThreadedSlots_nontrivial : Prop :=
     ((0 : ℕ) : ℝ) ≤ (T0 D).reuse * (2 * 0) / (4 * (1 : ℕ) * (1 / 2)) ∧
     ¬ Assumptions.WindowsHold (T0 D) 1 1 (1 / 2) 0 1 1 0 (1 / 2) (1 / 2) 1 0 ∧
     ¬ (efficiency 1 1 2 0 ≤
-        unmonitoredShare 2 0 +
+        unregisteredShare 2 0 +
             min (residualShare 0 2) (memoryCap (T0 D).reuse 1 0 ((1 : ℕ) / (2 : ℕ) : ℝ) 1 (1 / 2) (1 / 2) * (1 + 1 / 1)) +
           declaredShare 1 (rhoT ((1 : ℕ) / (2 : ℕ) : ℝ) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0)
 
@@ -317,23 +323,6 @@ def IncompressibleThreadedThrottledOn_nontrivial : Prop :=
     T1.Threaded 2 0 1 0 ∧ Assumptions.TrainingIncompressible D ch1 T1 2 0 (1 / 2) (1 / 2) ∧
     ¬ ((1 / 2 : ℝ) * (T1.M ∩ Mθ.S).card ≤ 0 * T1.bound 0 (1 / 2) 1 0 * Dθ.D.size Dθ.D.computed)
 
-/-- **`ContainedFanOutOn`'s premises hold together** at the toy, with `Γ = 2`, `α = 1/2`, `K = 1`, `b_w = b_a = 1/2`
-and the chain `ch1` at `dd = emax = 1`. -/
-def ContainedFanOutOn_honest : Prop :=
-  CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧
-    Assumptions.ActivationsIncompressible D ch1 2 1 (1 / 2) (1 / 2)
-
-/-- **`ContainedFanOutOn` without `ThetaRegistered`**: `Dθ` complies at `α = 0`, and the bound fails, its right side `0`
-and the product at gate `2`, which `Dθ` computes, charged `b_a / max(emax, K/(4 b_w dd)) = 1/2`. -/
-def ContainedFanOutOn_nontrivial : Prop :=
-  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ (0 : ℝ) * 2 ≤ 1 ∧
-    (∀ ℓ, 1 ≤ ch1.d ℓ) ∧ (∀ ℓ, ch1.e ℓ ≤ 1) ∧ CompliesRate 2 0 Dθ ∧
-    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧ Assumptions.ActivationsIncompressible D ch1 2 1 (1 / 2) (1 / 2) ∧
-    ¬ ((1 / 2 : ℝ) / max (1 : ℝ) (1 / (4 * (1 / 2) * 1)) *
-        (univ.filter fun p : (ℓ : Fin ch1.L) × Fin ch1.N × Fin (ch1.e ℓ) × Fin (ch1.d ℓ) =>
-          ch1.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ Mθ.S).card ≤
-      0 * Dθ.D.size Dθ.D.computed)
-
 /-- **`PackedIncompressibleContainedMatMulOn`'s premises hold together**: `IncompressibleContainedMatMulOn_honest`'s
 instance, `ch1` as a packed chain of one product to a gate. -/
 def PackedIncompressibleContainedMatMulOn_honest : Prop :=
@@ -373,26 +362,9 @@ def PackedIncompressibleContainedTrainingOn_nontrivial : Prop :=
         (1 * D.D.size D.D.computed - 2 * (1 * Mθ.dark.card)) ≤
       2 * (0 * Dθ.D.size Dθ.D.computed + (1 - 1) * ∑ v ∈ Mθ.dark, (novelReads D {v} : ℝ)))
 
-/-- **`PackedContainedFanOutOn`'s premises hold together**: `ContainedFanOutOn_honest`'s instance, `ch1` as a packed
-chain of one product to a gate. -/
-def PackedContainedFanOutOn_honest : Prop :=
-  CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧
-    Assumptions.PackedActivationsIncompressible D ch1.toPacked 2 1 (1 / 2) (1 / 2)
-
-/-- **`PackedContainedFanOutOn` without `ThetaRegistered`**: `ContainedFanOutOn_nontrivial`'s instance, `ch1` packed. -/
-def PackedContainedFanOutOn_nontrivial : Prop :=
-  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ (0 : ℝ) * 2 ≤ 1 ∧
-    (∀ ℓ, 1 ≤ ch1.toPacked.d ℓ) ∧ (∀ ℓ, ch1.toPacked.e ℓ ≤ 1) ∧ CompliesRate 2 0 Dθ ∧
-    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
-    Assumptions.PackedActivationsIncompressible D ch1.toPacked 2 1 (1 / 2) (1 / 2) ∧
-    ¬ ((1 / 2 : ℝ) / max (1 : ℝ) (1 / (4 * (1 / 2) * 1)) *
-        (univ.filter fun p : (ℓ : Fin ch1.toPacked.L) × Fin ch1.toPacked.N × Fin (ch1.toPacked.e ℓ) ×
-            Fin (ch1.toPacked.d ℓ) => ch1.toPacked.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ Mθ.S).card ≤
-      0 * Dθ.D.size Dθ.D.computed)
-
 /-- **`DampenerRemote`'s premises hold together** at `DampenerThreaded_honest`'s declaration, threading and charges,
-over the outcomes `Bool` drawn uniformly: one PoUW window of capacity `C = 2`, its certificate never wrong (`p = 0`), all
-of it certified (`W = 2`), no faulty proof block, so that every detection holds at `q = 1` and the residual is `0`, and
+over the outcomes `Bool` sampled uniformly: one PoUW window of capacity `C = 2`, its certificate never wrong (`p = 0`), all
+of it certified (`W = 2`), no incorrect proof block, so that every detection holds at `q = 1` and the residual is `0`, and
 one counted multiplication, the declared one. -/
 def DampenerRemote_honest : Prop :=
   Assumptions.WithinCompute OneWindow.cap 2 ∧ Assumptions.PouwSound (PMF.uniformOfFintype Bool) OneWindow.right 0 ∧
@@ -430,12 +402,12 @@ def DampenerRemote_nontrivial : Prop :=
     ((0 : ℕ) : ℝ) ≤ 2 * 0 * (2 + 0) / 2 ∧
     ¬ (1 - (0 / (1 / 2) + ((∅ : Finset Unit).card : ℝ) * ((1 - 1) / 1 * 0) / (1 / 4 * 2)) ≤
       prob (PMF.uniformOfFintype Bool) (fun _ => efficiency 2 2 2 0 ≤
-          unmonitoredShare 2 0 +
-              (1 - unmonitoredShare 2 0) *
+          unregisteredShare 2 0 +
+              (1 - unregisteredShare 2 0) *
                 (residualShare 2 2 + 0 * 2 / 2 + 1 / 2 + lagShare ((∅ : Finset Unit).card) 0 1 + 1 / 4) +
             declaredShare 2 (rhoT (1 / 2) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0 ∧
-        remoteDampener 1 (unmonitoredShare 2 0)
-            ((1 - unmonitoredShare 2 0) *
+        remoteDampener 1 (unregisteredShare 2 0)
+            ((1 - unregisteredShare 2 0) *
                 (residualShare 2 2 + 0 * 2 / 2 + 1 / 2 + lagShare ((∅ : Finset Unit).card) 0 1 + 1 / 4) +
               declaredShare 2 (rhoT (1 / 2) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0) ≤
           hardwareMultiple 1 2 2 2 0))
@@ -461,40 +433,5 @@ def CoverTraining_nontrivial : Prop :=
     Assumptions.UpdateHardness (mb0 D) 4 1 ∧ (mb0 D).Upstream (fun _ => ∅) 2 ∧ Assumptions.CapBelowDepth 1 1 2 ∧
     Assumptions.BlockFits D 2 1 1 4 ∧ ¬ Nci.Assumptions.Coverage 2 D (mb0 D).P.card ∧
     ¬ (2 * 1 * D.D.size D.D.computed ≤ ((1 / 2 : ℝ) * (1 / 2) * 2 + 1 * (1 / 2)) * D.D.size D.D.computed)
-
-/-- **`CoverTrainingAligned`'s premises hold together**: `CoverTraining_honest`'s instance, with no activation region
-(`Aw = ∅`) at width `f = 1`. -/
-def CoverTrainingAligned_honest : Prop :=
-  Nci.CompliesRate 2 (1 / 2) D ∧ Nci.Assumptions.ThetaRegistered D D M1 ∧ Assumptions.UpdateHardness (mb0 D) 4 1 ∧
-    (mb0 D).Upstream (fun _ => wordBits D ∅) 2 ∧ Assumptions.CapBelowDepth 1 1 2 ∧
-    Assumptions.RegionsAtLeast (mb0 D) (fun _ => ∅) 1 ∧ Assumptions.BlockFits D 2 1 1 4 ∧
-    Nci.Assumptions.Coverage 0 D (mb0 D).P.card
-
-/-- **`CoverTrainingAligned` without coverage**: `CoverTraining_nontrivial`'s instance at width `f = 1`, where
-`α₀ b f size(r) = 4` exceeds `(α² Γ + b f α) size(d) = 2`. -/
-def CoverTrainingAligned_nontrivial : Prop :=
-  (0 : ℝ) < 1 ∧ (0 : ℝ) ≤ 1 / 2 ∧ Nci.CompliesRate 2 (1 / 2) D ∧ Nci.Assumptions.ThetaRegistered D D M1 ∧
-    Assumptions.UpdateHardness (mb0 D) 4 1 ∧ (mb0 D).Upstream (fun _ => wordBits D ∅) 2 ∧
-    Assumptions.CapBelowDepth 1 1 2 ∧ Assumptions.RegionsAtLeast (mb0 D) (fun _ => ∅) 1 ∧
-    Assumptions.BlockFits D 2 1 1 4 ∧ ¬ Nci.Assumptions.Coverage 2 D (mb0 D).P.card ∧
-    ¬ (2 * 1 * ((1 : ℕ) : ℝ) * D.D.size D.D.computed ≤
-        ((1 / 2 : ℝ) * (1 / 2) * 2 + 1 * ((1 : ℕ) : ℝ) * (1 / 2)) * D.D.size D.D.computed)
-
-/-- **`CoverTrainingChained`'s premises hold together** at the toy, with `Γ = 2`, `α = 1/2`, `c_w = 1`, `r = d = Toy.D`
-through the containment of the toy in itself, the toy's two products on its bit view (`mbBits`), which a set of bits
-completes only when it is handed the token's bit, at depth `D = 2` and block size `s = 4`. -/
-def CoverTrainingChained_honest : Prop :=
-  Nci.CompliesRate 2 (1 / 2) D ∧ Nci.Assumptions.ThetaRegistered D D M1 ∧
-    Nci.Assumptions.ParameterHardAt (bitDecl D) mbBits 4 1 ∧ Assumptions.CapBelowDepth 1 1 2 ∧
-    Assumptions.BlockFits D 2 1 1 4
-
-/-- **`CoverTrainingChained` without `α Γ < c_w D`**: at depth `D = 0` both of `mbBits`' products are chained at
-`c_a = 2`, and `c_w c_a |𝓜*| = 4` exceeds `(α² Γ + c_w c_a α) size(d) = 3`. -/
-def CoverTrainingChained_nontrivial : Prop :=
-  (0 : ℝ) ≤ 1 / 2 ∧ Nci.CompliesRate 2 (1 / 2) D ∧ Nci.Assumptions.ThetaRegistered D D M1 ∧
-    Nci.Assumptions.ParameterHardAt (bitDecl D) mbBits 4 1 ∧ ¬ Assumptions.CapBelowDepth 1 1 0 ∧ (0 : ℝ) < 2 ∧
-    Assumptions.BlockFits D 2 1 1 4 ∧
-    ¬ (1 * 2 * (Nci.Assumptions.chainedBlocksAt (bitDecl D) mbBits 0 2).card ≤
-        ((1 / 2 : ℝ) * (1 / 2) * 2 + 1 * 2 * (1 / 2)) * D.D.size D.D.computed)
 
 end Nci.Cover.Guarantees

@@ -2,19 +2,51 @@ module
 
 public import Proofs.Flock.Claims.Bridge.OfGame
 public import Proofs.Flock.Claims.Aggregate
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.Game.Expect
 
 /-!
 # The transport: `Claims.run`'s probabilities are the live game's
 
 For the public-coin verifier of a game (`ofGame k g I d`) and every prover `P*` and tape `ω`, the run on uniform
-coins `r : Fin (k x) → Coin` and the game `g x` played by the decoded strategy `stratG` have one law:
+coins `r : Fin (k x) → Coin` and the game `g x` played by the decoded strategy `stratG` have one sampling design:
 
 * `ex_outcome`: `Ex_r f(outcome r) = expect f (g x) (stratG …)` for every `f`: each game coin uniform, independent,
-  drawn after the message it answers (the coin law, `ex_playOn`);
+  sampled after the message it answers (the coin distribution, `ex_playOn`);
 * `Pr_acc_and`, `Pr_acc`: `Pr_r[run = acc ∧ Q(outcome)]` is the game's `expect` (and `prob`) of `d x` accepting with
   `Q`, for every event `Q` of the outcome; `Pr_acc_replay` reads the event off the run's transcript (`replay`), so it
   holds for every event of the transcript the game sees: acceptance with a given transcript is `Q := (· = some b₀)`;
-* `ex_fork_run`, `forkPr_ofGame`: two runs forked at round `j` (`Claims.forkCoins`) have the law of one play to round
+* `ex_fork_run`, `forkPr_ofGame`: two runs forked at round `j` (`Claims.forkCoins`) have the sampling design of one play to round
   `j` and two independent continuations (`forkX`), so `B`'s collision probability at its round guess `j`
   (`Claims.forkPr`) is `forkX` of the collision of the two decisions' `H` logs, averaged over the tape.
 
@@ -44,7 +76,7 @@ section Transport
 variable {β : Msg → Type} (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (k : Msg → ℕ) (g : (x : Msg) → Game (β x))
   (I : ∀ x, Iface Coin (g x)) (d : (x : Msg) → β x → OC Bool) (x : Msg)
 
-/-- **The coin law for the run**: the run's outcome on uniform coins has the game's law against `stratG`. -/
+/-- **The coin distribution for the run**: the run's outcome on uniform coins has the game's law against `stratG`. -/
 theorem ex_outcome (ω : Ω) (hR : RoundsLe (g x) (I x) (stratOf H P x ω (g x) (I x) [] none) false (k x))
     (f : β x → ℝ) :
     Ex (fun r : Fin (k x) → Coin => f (outcome H P k g I x ω r)) = expect f (g x) (stratG H P g I x ω) :=
@@ -85,7 +117,7 @@ theorem Pr_acc_replay (ω : Ω) (hR : RoundsLe (g x) (I x) (stratOf H P x ω (g 
   refine Pr_congr fun r => ?_
   rw [(run_ofGame H P k g I d x ω r hR).2.2]
 
-/-- **The fork law for the run**: two runs sharing their first `j` coins have the law `forkX` of the game. -/
+/-- **The fork law for the run**: two runs sharing their first `j` coins have the sampling design `forkX` of the game. -/
 theorem ex_fork_run (ω : Ω) (hR : RoundsLe (g x) (I x) (stratOf H P x ω (g x) (I x) [] none) false (k x))
     (j : Fin (k x)) (F : β x → β x → ℝ) :
     Ex (fun rr : (Fin (k x) → Coin) × (Fin (k x) → Coin) =>

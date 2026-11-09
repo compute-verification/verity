@@ -1,6 +1,40 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.DeploySessions
+public import Proofs.Flock.Claims.Recursion.Deploy
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.DeploySessions
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The recursive verifier's schedule: the inner and staging rounds
@@ -12,7 +46,7 @@ accept. Where the statement reads (`readX`), and so wherever it has a V* part (`
   reaches session 0's first round (`reach_sessions`);
 * every later round reads the run's own inner and staging rounds (`innerPairs_reach`), whose last message is the
   staging message that `Stage.ofMsg` reads each part's public file, the inner session's record and V*'s shared rows
-  off, with the coin server's transcript of the inner rounds before it (`stage_reads`).
+  off, with the challenger's live-coin part's transcript of the inner rounds before it (`stage_reads`).
 
 The run lemmas under them hold for any verifier: a round before a run's last is answered by a message
 (`stepWith_mid`), a run whose round is answered by a message runs on or has used its rounds up (`stepWith_full`), and
@@ -230,7 +264,7 @@ theorem innerPairs_reach {xr : XR} (hx : readX x = some xr) {m : ℕ} (hk : IV.k
 
 /-- **F1: the staging round as `Stage.ofMsg` reads it.** Where the statement has a V* part, the run's staging round
 (round `k_I`) is its message `a`, answered by its coin's bytes, and `Stage.ofMsg tr` reads each part's public file,
-the inner session's record and V*'s shared rows off `a`, and the coin server's transcript `tr` of the inner rounds
+the inner session's record and V*'s shared rows off `a`, and the challenger's live-coin part's transcript `tr` of the inner rounds
 before it. -/
 theorem stage_reads (tr : Msg → List (Msg × Out) → ByteArray) (hn : 0 < nS x) :
     ∃ a, (run H P (V IV st) x ω r).msgs[IV.k (xIOf x)]? = some (a, .msg (coinSeq r (IV.k (xIOf x))).bytes) ∧

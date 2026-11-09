@@ -1,11 +1,11 @@
 module
 
-public import Definitions.Accounting.Carrier
 public import Definitions.Accounting.Assumptions.RateAudit
 public import Definitions.Accounting.Assumptions.RateAuditDeployed
-public import Definitions.Accounting.Assumptions.Stacking
 public import Definitions.Accounting.Assumptions.SquaringChain
+public import Definitions.Accounting.Assumptions.Stacking
 public import Definitions.Accounting.Guarantees.Requirement
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Stacking: carriers are a source of bounded capacity in every pass (trusted)
@@ -20,8 +20,8 @@ contents are a circuit's values, which depend on the encodings only through the 
   the store, `I + q·b` for `I` input bits and `q` blocks encoded.
 * `StackedSessionConservationSketchDeployed`: the remote audit's conservation at the deployed parameters
   (`RemoteSessionConservationSketchDeployed`) with a store per pass, made by the append-coin rule: each append's blocks
-  are keyed by a coin drawn after its root has committed their digests, so the writers' choices for it are fixed
-  before (`Accounting.appendCoinBlocks`), and pass `j` reads the blocks its layout names at the session's coins drawn
+  are keyed by a coin flipped after its root has committed their digests, so the writers' choices for it are fixed
+  before (`Accounting.appendCoinBlocks`), and pass `j` reads the blocks its layout names at the session's coins flipped
   before it (`RateSketch.coinStore`, `RateSketch.programmed`), for devices whose rebuilds beyond `X` are their
   carriers' sectors. The stacked stock is charged in every pass's rebuilds: `X` grows by the carriers' bits under the
   property, `8·R_in·life` input bits and `1024·(c_ρ·reads·life)/E` encoded bits over a carrier's life of `life`
@@ -95,9 +95,9 @@ rule (`Accounting.appendCoinBlocks`; remote_bandwidth's PROTOCOL.md §3–§4). 
 positions each, the registration first, whose coin is the seed. Append `a`'s choices `choose c ω a κ_<a` (its
 payloads, which may be a circuit's values over other blocks' encodings, their padding, the run inputs behind them, how
 many blocks, the schedule up to it) read the codec `ω`, the coins of the appends before it and the prefix `c`; its own
-coin `κ a`, drawn once its root has committed every digest, keys its blocks (`enc`). Pass `j` of window `w` certifies
+coin `κ a`, sampled once its root has committed every digest, keys its blocks (`enc`). Pass `j` of window `w` certifies
 the blocks at the layout `slot c` (`RateSketch.coinStore`, `RateSketch.programmed`), at the prefix `c` of the
-session's coins drawn before it (`RateSketch.SketchPrefix`: earlier windows', the window's signs, its earlier
+session's coins flipped before it (`RateSketch.SketchPrefix`: earlier windows', the window's signs, its earlier
 passes'). `ω` and the append coins are uniform and independent of the session's coins, and under the append-coin rule
 the blocks a pass reads are uniform but for `δ` (`Accounting.Assumptions.KeyBinding`). Every pass of the session
 rebuilds at most `X` bits
@@ -106,7 +106,7 @@ decode to those sectors at every store), the carrier chosen at the pass's prefix
 of `life` windows, takes in at most `R_in` input bytes a window and spends at most `c_ρ` nonlinear units a byte of
 certified read, at `reads` bytes a window (the property's parameters; its lifetime cap is `life`, since `L` is the side
 link's bits here), an encode of `x` bits costing `encodeBitsCost` at the deployed codec (p1024, 3 rounds) in the gate
-model's restricted class (at most `B` operand bits a budgeted gate, on more than `εnum/εden` of the draws), `⊤` where
+model's restricted class (at most `B` operand bits a budgeted gate, on more than `εnum/εden` of the samples), `⊤` where
 the model has no circuit computing the words. Under `Accounting.Assumptions.SquaringFloor` at `es` nonlinear units a
 squaring and `Accounting.Assumptions.ChainSum`, at `E ≤ 3 · S · es` nonlinear units a word (`S = 1,021` squarings a
 root) and `ε ≥ 2^−64` (p1024 and 3 rounds are inside the rest of their floor), the shortfall terms are the deployed
@@ -115,7 +115,7 @@ guarantee's at rebuilt bits `X + C` a pass,
   `C = 8·R_in·life + 1024·(c_ρ·reads·life)/E`,
 
 the carriers' bits: inputs, and the bits of the 1024-bit words the circuit can encode with its nonlinear units. The
-error is the deployed guarantee's draws and rank tail, and its per-pass hash terms plus `δ` a pass:
+error is the deployed guarantee's samples and rank tail, and its per-pass hash terms plus `δ` a pass:
 
   `2·2^-40 + n·ε + (n·P·G)·N/2^512 + (n·P)·qtot/2^96 + (n·P)·δ`.
 
@@ -126,23 +126,23 @@ carrier is one it computes rather than reads at its position, a rebuild.
 
 * **Writes during the session.** A pass's store is the one resident going into the step it is bound to (a
   step's record takes effect after its reads, and the pass's plan is that step's reads, `Requirement.PlanMatches`). It
-  may depend on every coin drawn before the pass: a page written from an earlier pass's receipts is in the view, and
+  may depend on every coin flipped before the pass: a page written from an earlier pass's receipts is in the view, and
   what it carries about other blocks is its carrier, chosen at the prefix, so charged in `C`. It may not depend on the
   pass's own coins, its grinding candidates among them: that is the audit rule that a block appended after a pass's seed
   is in no plan of that pass, which the game's store states and which the audit checks.
 * **The append coin.** The game is the protocol's order: an append's choices are fixed when its root commits the
-  digests, and its coin is drawn after, so no choice the writers make reads the encoding it keys, and none is advice.
+  digests, and its coin is flipped after, so no choice the writers make reads the encoding it keys, and none is advice.
   What a writer could once choose by looking at encodings it now chooses before the coin: a payload's padding and
   dead values, the run inputs behind a block, how many blocks an append holds. What the memory map fixes is no choice
   at all: append order and dummy appends (the memory-map unit proves the appends are the map's writes, in order, with
   none extra) and re-keys, each a release and an append of the same payload, at the lifetime cap only. After an
-  append's coin its encoding is fixed: a block decodes only under its digest and coin, a coin is drawn once, and a
+  append's coin its encoding is fixed: a block decodes only under its digest and coin, a coin is flipped once, and a
   re-sent root is refused. What its payload carries about other blocks is its carrier, charged in `C`.
 * **Outside the game.** Two choices can still follow a coin and matter. The layout `slot c` reads the prefix only, the
   protocol stating frees, writes and plans as functions of the served steps, fixed before the coins (PROTOCOL.md §8):
   a layout selected by encodings after their coins (which blocks are freed or planned, or a re-key rather than a free
   at the cap, steered through run inputs or other inputs to the served steps) is a choice among the layouts the
-  writers can steer to, which this game doesn't pay. And registrations: the game's seed is one draw, so a node that
+  writers can steer to, which this game doesn't pay. And registrations: the game's seed is one sample, so a node that
   registers `R` times (`Registry.drawn`) keeps one of `R` seeds and fails at most `R` times this bound.
 * **Life.** `life` is the life of a carrier's whole provenance: the circuit is each carrier's provenance back to values
   that depend on no store sector, and the property's isolation is what bounds it by the inputs and units of `life`
@@ -156,7 +156,7 @@ Proof: `Accounting.SecurityProofs.StackedSessionConservationSketchDeployed`: eac
 bits; an
 unpaid window has a rank-poor sign matrix or an unpaid pass; an unpaid pass is moved to uniform blocks by `KeyBinding`
 at its prefix, where the writers' choices and the layout are fixed, and bounded there by the deployed guarantee's
-one-pass bound; and the draws are causal in the passes' correct receipts.
+one-pass bound; and the samples are causal in the passes' correct receipts.
 
 Frozen (no-function, hash): `RemoteSessionConservationSketchDeployed`'s game with carriers on a store per pass made by
 the append-coin rule, in the random-oracle and ideal encoding models, under the per-pass hash budget,
@@ -232,7 +232,7 @@ there.
 Proof: `Accounting.SecurityProofs.StackedSessionConservationRelay`: each device is simulated by one that reruns its
 carrier's circuit over the side link and answers the carrier's reads from its values, within `L + C` link bits, with
 the same receipts, tier reads and completions; `RemoteSessionConservationRelay`'s argument bounds that session on any
-store drawn before the coins, and `KeyBinding` moves its unpaid words' event to uniform blocks.
+store sampled before the coins, and `KeyBinding` moves its unpaid words' event to uniform blocks.
 
 Frozen (no-function, hash): `RemoteSessionConservationRelay`'s game with carriers on a store made by the append-coin
 rule, in the random-oracle and ideal encoding models, under `SquaringFloor`, `ChainSum` and `KeyBinding`. -/
@@ -314,8 +314,8 @@ def StackedRequirementSketchDeployed : Prop :=
     (choose : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch)
     (slot : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Fin N ↪ Fin T × Fin M)
     (A : RateSketch.SketchDeployedSession n P N 128 ρ 512 S L q 16 G 2773)
-    {V : Type} [DecidableEq V] (W : Requirement.Wiring V) (e : Requirement.Execution V) (ℓ : Requirement.Layout V)
-    (mm : Requirement.Store) (plan : ℕ → Finset ℕ) (win : Window),
+    {V : Type} [DecidableEq V] (W : Requirement.Wiring V) (e : Requirement.Execution V)
+    (ℓ : Requirement.Store.Placement V) (mm : Requirement.Store) (plan : ℕ → Finset ℕ) (win : Window),
     7 ≤ n → 0 < P → 0 < N → 0 < E →
     Assumptions.SketchRank 16 128 12 ε →
     Assumptions.KeyBinding T M δ enc →
@@ -384,8 +384,8 @@ def StackedRequirementRelay : Prop :=
     [Fintype Ca] (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → Pous.Bits b)
     (choose : Ω → (a : Fin T) → ({c : Fin T // c < a} → Ca) → Ch) (slot : Fin N ↪ Fin T × Fin M)
     (A : Rate.DeployedSession n P N b h ρ S Lall q r s d G) (dbar dw : ℝ)
-    {V : Type} [DecidableEq V] (W : Requirement.Wiring V) (e : Requirement.Execution V) (ℓ : Requirement.Layout V)
-    (mm : Requirement.Store) (plan : ℕ → Finset ℕ) (win : Window),
+    {V : Type} [DecidableEq V] (W : Requirement.Wiring V) (e : Requirement.Execution V)
+    (ℓ : Requirement.Store.Placement V) (mm : Requirement.Store) (plan : ℕ → Finset ℕ) (win : Window),
     0 < n → 0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dw ≤ 1 → 0 < E → 0 < Fc.bytes →
     Assumptions.KeyBinding T M δ enc →
     Assumptions.WorkHardness b rounds cRoot cost →

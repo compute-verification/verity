@@ -1,8 +1,28 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.View
-public import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Headline
-public import Proofs.Flock.Soundness.Game.Prob
+public import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Composed.Headline
+import Proofs.Flock.Soundness.Discharge.Composed.Setup
+import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Headline
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.ZK.Hiding
+import Proofs.Flock.Soundness.ZK.Refusal
+import Proofs.Flock.Soundness.ZK.Session
 
 /-!
 # V*'s outer sessions: the honest prover's self-check, and the coins it refuses
@@ -89,7 +109,7 @@ open Game Audit Exec Refine Flock FlockLevel3 Model ZkSession ZkLink ZkExec Deco
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 open Classical in
 /-- **One table at one coin vector** (`coin_close`, the registered values public at `c` alone): the prover's output and
@@ -139,8 +159,8 @@ open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink 
   Placed StrictCR DecodeZL
 open scoped ENNReal
 
-set_option synthInstance.maxHeartbeats 1000000
-set_option maxHeartbeats 4000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the `J` tables' product randomness
+set_option maxHeartbeats 4000000 -- the `J`-table session lemmas below; which of them needs it is unmeasured
 
 open Classical in
 /-- **What the session's honest prover sends** at `J` tables, coin vector `c`, witnesses `w` and prover randomness `p`:
@@ -235,7 +255,7 @@ noncomputable def sendsAllJ {J : ℕ} (C : Fin J → CoinedSetup) (c : ∀ j, Co
   else enc fun j => ZkEveryCoin.outExe (C j) (c j) (w j) (p j).1 (p j).2
 
 /-- **The self-check passes at every rep whose outer coins aren't `1`**, at every coin vector, valid witness whose
-registered values are the public ones and draw (`Composed.innerOf_holds_rep_of` at a setup's table). -/
+registered values are the public ones and sample (`Composed.innerOf_holds_rep_of` at a setup's table). -/
 def SelfCheckAtReps (C : CoinedSetup) : Prop :=
   ∀ (c : CoinsZK C.Rest) (r : Fin 2), (∀ x ∈ C.rOuter c r, x ≠ 1) → ∀ w, C.Valid w →
     (C.T c).tab.sReg w = (C.T c).tab.pubReg → ∀ ω, ¬ (C.T c).tab.StopsAt w ω r
@@ -347,7 +367,7 @@ vector, within `Σ_j 2·|LeafPos_j|·2^-193`. No hypothesis on the coins: where 
 pre-final leaf is unopened and T1 is paid on all of them (`|LeafPos_j| = |Pre_j|`, against `|Hid_j|` where it doesn't).
 
 As `zk_session_viewHJ`, this is honest-verifier zero knowledge at each fixed coin vector; a verifier that chooses its
-coins is covered by the coin server's commitment at `Hello` (`coin_tree.rs`) under `keyed-cr`, which no statement here
+coins is covered by the challenger's live-coin part's commitment at `Hello` (`coin_tree.rs`) under `keyed-cr`, which no statement here
 models yet. -/
 theorem zk_session_view_allHJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false)

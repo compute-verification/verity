@@ -12,26 +12,27 @@ set_option Elab.async false
 /-!
 # The hidden-output headlines over `sha512/row-seg/v1` rows, alone and mixed with `sha512/row/v2` rows, hold of a circuit
 
-`Layout.scopeOkH` admits circuits whose input rows are each a `sha512/row/v2` or a `sha512/row-seg/v1` row, in any mix,
-the output rows `sha512/row/v2`. The pins here say both widenings are not empty and the widened headlines' premises meet
-there, so their guarantees over row-seg rows, and over a PoUW tile's mix of them, hold of something.
+`Layout.scopeOkH` admits circuits whose rows, input and output, are each a `sha512/row/v2` or a `sha512/row-seg/v1` row,
+in any mix, one output port per output row. The pins here say the widenings are not empty and the widened headlines'
+premises meet there, so their guarantees over row-seg rows, and over a PoUW tile's mix of them, hold of something.
 
 * `witnessSeg`: `witnessV2` with its input row `w` a `sha512/row-seg/v1` row of 1,024 bits (one segment of two
   compressions, the outer message in the last). `witnessSeg_scope`: `scopeOkH` admits it and `scopeOk` refuses it, and
-  `scopeOkH` refuses it with its output row segmented (`witnessSegOut`) or with `w` of 896 bits, whose segment's 112
-  bytes and SHA-512's 17 bytes of padding spill past its last block (`witnessSegLate`).
+  `scopeOkH` refuses it with a segmented output row one compression short (`witnessSegBad`) or with `w` of 896 bits,
+  whose segment's 112 bytes and SHA-512's 17 bytes of padding spill past its last block (`witnessSegLate`).
+* `witnessSegOut`: `witnessSeg` with its output row `y` a `sha512/row-seg/v1` row too. `witnessSegOut_scope`: `scopeOkH`
+  admits it and `scopeOk` refuses it.
 * `witnessMix`: a tile's rows: a `sha512/row-seg/v1` row `a` of 17,408 bits (three segments, of 8,192, 8,192 and 1,024
   bits), a `sha512/row/v2` row `b` of 1,024 bits, and the `sha512/row/v2` output row `y`. `witnessMix_scope`: `scopeOkH`
   admits it and `scopeOk` refuses it.
-* `zk_session_soundHJ_nonvacuous_seg`, `zk_session_soundHJ_nonvacuous_mix`: `zk_session_soundHJ_nonvacuous_v2` at
-  them: at a session `verify --zk` accepts whose circuit file parses as the witness, the premises the hidden-output
-  headlines read of the circuit hold together (`Built`, `scopeOkH`, `Hidden.Any.RowsFitS`), with
-  `zk_session_soundHJ_nonvacuous`'s `y₀` and draw hypotheses.
+* `zk_session_soundHJ_nonvacuous_seg`, `zk_session_soundHJ_nonvacuous_segOut`, `zk_session_soundHJ_nonvacuous_mix`:
+  `zk_session_soundHJ_nonvacuous_v2` at them: at a session `verify --zk` accepts whose circuit file parses as the
+  witness, the premises the hidden-output headlines read of the circuit hold together (`Built`, `scopeOkH`,
+  `Hidden.Any.RowsFitS`), with `zk_session_soundHJ_nonvacuous`'s `y₀` and sample hypotheses.
 
 Not covered, as for `zk_session_soundHJ_nonvacuous_v2`: that a session over the witnesses exists, `hRec`, `hpub`, `hpt`,
 `hkd`, `hA3`, the count curve's parameters and `TableCRZ`.
 -/
-
 namespace FlockSoundness.Discharge.ZkHidden
 
 open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec Composed
@@ -49,7 +50,11 @@ def witnessSeg : Flock.Circuit :=
 
 /-- `witnessSeg` with its output row segmented too. -/
 def witnessSegOut : Flock.Circuit :=
-  { witnessSeg with ports := #[witnessSegPort "w" 1024 2, witnessSegPort "y" 1024 2] }
+  { witnessSeg with name := "witness-seg-out", ports := #[witnessSegPort "w" 1024 2, witnessSegPort "y" 1024 2] }
+
+/-- `witnessSegOut` with its output row one compression short: its segment's outer message has no block of its own. -/
+def witnessSegBad : Flock.Circuit :=
+  { witnessSeg with ports := #[witnessSegPort "w" 1024 2, witnessSegPort "y" 1024 1] }
 
 /-- `witnessSeg` with `w` of 896 bits: its one segment's 112 bytes end past its last block once padded. -/
 def witnessSegLate : Flock.Circuit :=
@@ -60,12 +65,18 @@ def witnessMix : Flock.Circuit :=
   { witnessV2 with
     name := "witness-mix", ports := #[witnessSegPort "a" 17408 21, witnessV2Port "b", witnessV2Port "y"] }
 
-/-- **`scopeOkH` admits a circuit with a `sha512/row-seg/v1` row that `scopeOk` refuses**, and refuses it with its output
-row segmented or with a segment that ends past its last block. -/
+/-- **`scopeOkH` admits a circuit with a `sha512/row-seg/v1` row that `scopeOk` refuses**, and refuses it with a
+segmented output row one compression short or with a segment that ends past its last block. -/
 theorem witnessSeg_scope :
     witnessSeg.ports.any (·.segs.isSome) = true ∧ Layout.scopeOkH witnessSeg = true ∧
-      Layout.scopeOk witnessSeg = false ∧ Layout.scopeOkH witnessSegOut = false ∧
+      Layout.scopeOk witnessSeg = false ∧ Layout.scopeOkH witnessSegBad = false ∧
       Layout.scopeOkH witnessSegLate = false := by
+  decide +kernel
+
+/-- **`scopeOkH` admits a circuit whose output row is a `sha512/row-seg/v1` row**, which `scopeOk` refuses. -/
+theorem witnessSegOut_scope :
+    (witnessSegOut.ports[1]!.segs.isSome) = true ∧ Layout.scopeOkH witnessSegOut = true ∧
+      Layout.scopeOk witnessSegOut = false := by
   decide +kernel
 
 /-- **`scopeOkH` admits a circuit mixing a `sha512/row-seg/v1` row of three segments with `sha512/row/v2` rows**, which
@@ -76,7 +87,7 @@ theorem witnessMix_scope :
       Layout.scopeOk witnessMix = false := by
   decide +kernel
 
-/-- **The hidden-output headlines' circuit premises and draw hypotheses hold together at `witnessSeg`**:
+/-- **The hidden-output headlines' circuit premises and sample hypotheses hold together at `witnessSeg`**:
 `zk_session_soundHJ_nonvacuous_v2` at a circuit file that parses as `witnessSeg`. -/
 theorem zk_session_soundHJ_nonvacuous_seg (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZHJ I)
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok witnessSeg) (kd : ℕ) (hdiv : kd % nTab I = 0)
@@ -97,7 +108,28 @@ theorem zk_session_soundHJ_nonvacuous_seg (I : Inputs) (ht : I.tags.typed = fals
   obtain ⟨hy, hall, hok⟩ := zk_session_soundHJ_nonvacuous I ht hTags hc hU hH kd hdiv dj hdj h hd
   exact ⟨hU, hH, hS, rowsFit_of_scopeH ht' hc hH, hy, hall, hok⟩
 
-/-- **The hidden-output headlines' circuit premises and draw hypotheses hold together at `witnessMix`**:
+/-- **The hidden-output headlines' circuit premises and sample hypotheses hold together at `witnessSegOut`**:
+`zk_session_soundHJ_nonvacuous_v2` at a circuit file that parses as `witnessSegOut`. -/
+theorem zk_session_soundHJ_nonvacuous_segOut (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZHJ I)
+    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok witnessSegOut) (kd : ℕ) (hdiv : kd % nTab I = 0)
+    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.subset kd) n)
+    {S : Finset (Fin n)} {t : Exec.Transcript} (h : AcceptsZK I t) (hd : recordDraw t.record = some (dj S)) :
+    Built witnessSegOut.unit ∧ Layout.scopeOkH witnessSegOut = true ∧ Layout.scopeOk witnessSegOut = false ∧
+      Hidden.Any.RowsFitS witnessSegOut ∧
+      Nonempty (DrawSetupZHJ (inputsJ I 0) (mPtsOf witnessSegOut.g (kd / nTab I)) (partS I (dj S) S ⟨0, nTab_pos I⟩)
+        (drawJ I (dj S) 0)) ∧
+      (∀ j : Fin (nTab I), Nonempty
+        (DrawSetupZHJ (inputsJ I j) (mPtsOf witnessSegOut.g (kd / nTab I)) (partS I (dj S) S j) (drawJ I (dj S) j))) ∧
+      ∀ S', DrawOkZKHJ I dj (mPtsOf witnessSegOut.g (kd / nTab I)) S' := by
+  have ht' : (zkTags I).typed = false := (zkTags_typed I).trans ht
+  have P := parse_facts (parse_untyped ht' hc).1
+  obtain ⟨ls, hls⟩ := P.check
+  have hU : Built witnessSegOut.unit := unit_built P (check_facts P.typed hls)
+  obtain ⟨-, hH, hS⟩ := witnessSegOut_scope
+  obtain ⟨hy, hall, hok⟩ := zk_session_soundHJ_nonvacuous I ht hTags hc hU hH kd hdiv dj hdj h hd
+  exact ⟨hU, hH, hS, rowsFit_of_scopeH ht' hc hH, hy, hall, hok⟩
+
+/-- **The hidden-output headlines' circuit premises and sample hypotheses hold together at `witnessMix`**:
 `zk_session_soundHJ_nonvacuous_v2` at a circuit file that parses as `witnessMix`. -/
 theorem zk_session_soundHJ_nonvacuous_mix (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZHJ I)
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok witnessMix) (kd : ℕ) (hdiv : kd % nTab I = 0)

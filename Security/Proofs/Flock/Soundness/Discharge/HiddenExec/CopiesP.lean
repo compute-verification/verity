@@ -67,7 +67,7 @@ theorem flat_unitFactsP (ht : tags.typed = false) (s : Hidden.SpecP tags cf pf c
     exact Hidden.unitFacts_tmpl (st := Hidden.flatTwin st) hT rfl
 
 /-- **An untyped hidden statement at public inputs reads its flat twin's rows at every unit slot's row it keeps**, at
-unsegmented output rows (`unitRowsFlat`, with `Hidden.deltaEntry_kept`). -/
+unsegmented or row-seg output rows (`unitRowsFlat`, with `Hidden.deltaEntry_kept`). -/
 theorem unitRowsFlatP (ht : tags.typed = false) (s : Hidden.SpecP tags cf pf coins tables draw own pi st)
     (hrows : Hidden.Any.OutRowsS st.c) : UnitRowsFlatP st pi := by
   have L := flat_layoutP ht s

@@ -1,4 +1,4 @@
-"""circuit-check's ``block`` (`checks.block_range`): a Definition staged whole as one C-Flock unit fits C-Flock's proved range
+"""circuit-check's ``block`` (`checks.block_range`): a Definition staged whole as one Flock unit fits Flock's proved range
 of 2^`K_MAX` witness bits, read off the Definition before any lowering, and past it fails by name with the fix."""
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ OPTS = CK.Options()
 
 
 def test_a_unit_past_c_flocks_range_is_a_block_failure(monkeypatch):
-    """A Definition staged whole as one C-Flock unit (one `UNIT_OWNERS` owns, PoUW's): its ANDs and port bits, read off it
-    (`verity_flock.circuit.unit_witness`), fit C-Flock's proved range of 2^`K_MAX`, and past it fail by name with the fix, as
+    """A Definition staged whole as one Flock unit (one `UNIT_OWNERS` owns, PoUW's): its ANDs and port bits, read off it
+    (`verity_flock.circuit.unit_witness`), fit Flock's proved range of 2^`K_MAX`, and past it fail by name with the fix, as
     `UnitStager` refuses before lowering.  Any other Definition, and one checked as a template's proof blocks, has its count
     recorded, not failed."""
     from verity_flock import circuit as FC

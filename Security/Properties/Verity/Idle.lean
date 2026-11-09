@@ -1,14 +1,15 @@
 module
 
-public import Properties.Verity.Game
+public import Properties.Verity.Coupling
 
 /-!
 # An idle deployment: two instances of the names the subprotocols define, built by hand
 
 The witnesses of `Verity.Soundness`, `Verity.RemoteSoundness` and `Verity.SoundnessOf` read these: a small hand-built
 descriptor, not a parsed file. The device has no on-chip state, no memory, no ops and no bandwidth (`device`); the
-circuit file is read as empty files under the netlist tags (`fileRead`); the coin commitment has no families, the honest
-prover closes the device at once, no check reads its log, and there are no commitment openings and no gates computed;
+circuit file is read as empty files under the netlist tags (`fileRead`); the coin commitment has no families, the device
+samples nothing at the close and signs nothing (`signer`), the honest prover sends an empty request and closes the device
+at once, no check reads its log, and there are no commitment openings and no gates computed;
 the world charges nothing over an empty window (`world`); the schedule is one
 empty block (`blocks`), and its wipe fills nothing and accepts nothing (`wipe`). Every finder and forger outputs nothing
 on its one coin, and no bound reads a further finder. The circuit file's and the public file's digests in the parameters
@@ -18,6 +19,9 @@ the parameters.
 `vocab δ W` publishes the error `δ` for every subprotocol, the work certificate `W`, and no collision, forgery or loss
 term. At `unbounded` (`δ = ⊤`) every subprotocol's error is `⊤`, so every target holds. At `exact` (`δ = 0`, `W = 1`)
 every error is `0` while PoUW's claim, a gate computed, fails on every play.
+
+`coupling δ` is the period coupling at PoUW that `Verity.TargetOfPeriods`' witnesses read: the run of the coins model
+that charges nothing and accepts everything (`periodRun`), whose claim, a gate of work, fails at every coin.
 -/
 
 @[expose] public section
@@ -77,11 +81,14 @@ def finder : Claims.Finder where
   out _ := none
   cost _ := 0
 
+/-- **The device's signer**: it signs nothing and samples nothing at the close. -/
+def signer : Signer := ⟨fun _ => [], 0, fun _ _ _ _ => [], fun _ _ => []⟩
+
 /-- The forger that saw no signature and outputs nothing, on one coin, with no SHA-512 call. -/
 def forger : Hash.Assumptions.LmsForger where
   S := Unit
   key := []
-  signed := []
+  signed _ := []
   out _ := none
   cost _ := 0
 
@@ -93,6 +100,7 @@ noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
   publicDigest θ := some (sha512 θ.data.toList)
   registered θ := #[θ]
   families _ := []
+  signer _ := signer
   coinsRead _ _ := none
   extract _ _ _ _ _ := 0
   finder _ _ _ _ _ := finder
@@ -104,7 +112,8 @@ noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
   forger _ _ _ _ _ := forger
   forger_calls _ _ _ _ _ _ := Nat.zero_le _
   signatures _ := 0
-  forger_signed _ _ _ _ _ := Nat.zero_le _
+  signs_le _ _ _ _ _ := Nat.le_refl 0
+  forger_signed _ _ _ _ _ _ := Nat.zero_le _
   computed _ _ _ _ _ := ∅
   world _ _ _ _ _ := world
   window _ := ⟨0, 0⟩
@@ -121,13 +130,10 @@ noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
   Seed := Unit
   Spots := Unit
   wipe _ _ := wipe
-  wipeRun θ F c _ := ofRun (play [] θ F c)
+  wipeRun θ F c _ := ofRun (play [] signer θ F c)
   foreignBits _ := 0
-  honest θ F c :=
-    closeThen (fun log => .send (ByteArray × Array ByteArray) fun e => .ret (⟨θ, F, c, log, e.1, e.2⟩ : Exchange))
-      ⟨(.empty, #[]), ⟨⟩⟩ _ _ _
+  honest θ F c := requestThen [] signer θ F c .empty ⟨.empty, fun _ => ⟨(.empty, #[]), ⟨⟩⟩⟩
   certOf _ := ⟨0, W, 0, 0, 0⟩
-  crBound _ _ _ := 0
   delta _ _ _ := δ
   epsForge _ _ _ := 0
   loss _ _ _ := 0
@@ -137,6 +143,49 @@ noncomputable def unbounded : Vocab device Unit := vocab ⊤ 1
 
 /-- **The deployment whose errors are all `0`**, publishing a work certificate of one gate, which no play computes. -/
 noncomputable def exact : Vocab device Unit := vocab 0 1
+
+instance instFintypeSeedUnbounded : Fintype unbounded.Seed := inferInstanceAs (Fintype Unit)
+instance instNonemptySeedUnbounded : Nonempty unbounded.Seed := inferInstanceAs (Nonempty Unit)
+instance instFintypeSpotsUnbounded : Fintype unbounded.Spots := inferInstanceAs (Fintype Unit)
+instance instNonemptySpotsUnbounded : Nonempty unbounded.Spots := inferInstanceAs (Nonempty Unit)
+
+/-- **The period run that charges nothing and accepts everything**, on the committed files' circuit over one coin: no
+work, no memory held, nothing read, every bound on what the network certifiers saw met, and every audit's verdict
+accepting. -/
+def periodRun : PeriodRun device Unit fileRead.circuit fun _ : Unit => Unit where
+  units := fileRead.units
+  parts := fileRead.parts
+  own _ := ()
+  acct _ := ()
+  win := ⟨0, 0⟩
+  schedule _ := world.schedule
+  fits _ := world.fits
+  transcript _ := 0
+  commWithin _ _ := True
+  accepts _ _ := True
+
+/-- **At the run, PoUW's claim fails at a work certificate of one gate**: it charges no work. -/
+theorem periodRun_pouw_fails (c : Certificates) (hW : c.W = 1) (p : Price) (ξ : (i : Unit) → (fun _ : Unit => Unit) i) :
+    ¬ periodRun.Holds c p .pouw ξ := by
+  simp [PeriodRun.Holds, PeriodRun.work, Schedule.work, Schedule.ops, periodRun, world, step, hW]
+
+/-- **The idle deployment's period coupling at PoUW**, at `vocab δ 1`, for every verdict, composite, parameters,
+committed files, commitment, strategy and resolution of the coin trees' coins: the run that charges nothing and accepts
+everything (`periodRun`), over one coin in bijection with the coins flipped up front (the coin commitment has no families
+and the device samples nothing at the close), with no break. Its claim, one gate of work, fails at every coin, so its `world` holds. -/
+def coupling (δ : ℝ≥0∞) (acc : Exchange → Prop) (k : Verity.Registration.Composite) (θ : ByteArray)
+    (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy ((vocab δ 1).game θ F c)) (ρ : TreeCoins) :
+    (vocab δ 1).PeriodCoupling acc k .pouw θ F c σ ρ where
+  C := fileRead.circuit
+  I := Unit
+  Ω _ := Unit
+  coins := ⟨fun _ => (PUnit.unit, fun i => i.elim0), fun _ _ => (), fun _ => rfl,
+    fun _ => Prod.ext rfl (funext fun i => i.elim0)⟩
+  run := periodRun
+  price _ := 0
+  brk _ := False
+  verdict _ _ _ _ := trivial
+  world ξ h := absurd h (periodRun_pouw_fails _ rfl _ ξ)
 
 end
 

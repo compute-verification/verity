@@ -15,7 +15,7 @@ from verity_numerical.bench import cell as C
 from verity_numerical.bench import drivers
 
 DATA = Path(__file__).parent / "data"
-SLICE = DATA / "captured-101" / "slices" / "gemm-coordinate-ampere-bf16-k2048"
+SLICE = Path(__file__).parent.parent.parent.parent.parent / "verity" / "ml" / "flock" / "tests" / "data" / "captured-101" / "slices" / "gemm-coordinate-ampere-bf16-k2048"
 BF16 = ("gemm-coordinate/k1536/sm90-mma-bf16+frame-v3/blake3-keyed", "bench-instances-bf16-hopper-v1")
 #: Two machines as the RunPod API and the probes record them (red-team-flock 12:00Z: the H100 prover and its A40 verifier).
 SEPARATE = {"prover": {"pod_id": "pod-p", "machine_id": "m-h100", "public_ip": "203.0.113.10", "cpu_model": "Xeon 8470"},
@@ -96,7 +96,7 @@ def test_an_input_set_needs_the_lowerings_stage(monkeypatch):
 
 
 def test_a_flock_gemm_cell_on_an_input_set_sends_it_to_both_pods(tmp_path, monkeypatch):
-    """A captured #101 slice at K = 2048: both roles receive the same tarball (their own instance files come from it), the
+    """A captured row 101 slice at K = 2048: both roles receive the same tarball (their own instance files come from it), the
     prover's extra arguments (the CUDA arch) reach the prover only."""
     monkeypatch.setenv("TMPDIR", str(tmp_path))
     monkeypatch.setattr("tempfile.tempdir", None)

@@ -14,9 +14,8 @@ proved.
   ``residual_mfu``, the reference-efficiency assumption: free compute runs no better than the reference). A
   spatial unit's window reads its starting state plus its novel intake, K_w = state + lambda_in L, and contains at most
   K_w Lambda(K_w) / b_a counted multiplications (``ThreadedRuntime``, reads counted by width; counting them by
-  information, which a wipe would bound, is open: ``ThreadedOfState`` rests on the falsified WeightsSupport,
-  ``ThreadedOfStateFmt`` on the falsified WeightsSupportFmt and ``ThreadedOfStateFmt2`` on its restatement
-  WeightsSupportFmt2, not yet signed off), declared or not. The state is all memory,
+  information, which a wipe would bound, is open: its first two support forms were falsified, and
+  ``ThreadedOfStateFmt2`` rests on their restatement WeightsSupportFmt2, not yet signed off), declared or not. The state is all memory,
   disks included unless they're unplugged; after a wipe, the wipe residual R_wipe: memory the fill doesn't reach, the proof of
   space's slack on the filled memory, and what helpers refill within the read deadline; under exhaustion, the HBM the
   declared computation doesn't hold plus the slack. The slack is 1 - delta^(1/k) for k timed rounds (1/19 at k = 86 and
@@ -24,13 +23,13 @@ proved.
   The novel intake is line rate or, under network accounting, side channels plus certified timing plus the declared
   computation's novel intake, alpha F under the inference-only policy once the count check is in the ZK flow.
 * 1/rho_NCI: the declared computation trains at the thread bound, rho_T = b_a / (alpha Lambda(K)) declared gates per
-  counted multiplication with Lambda(K) = max(e, 2K / (4 d b_w)), or at the tighter partial-sum law rho_PS when no dark
+  counted multiplication with Lambda(K) = max(e, 2K / (4 d b_w)), or at the tighter partial-sum rule rho_PS when no dark
   compute can sum the inference blocks' partial sums. The residual reads them on the server for free; unmonitored compute
   reads them through the export (line rate, or side channels plus readable export under network accounting). A relay op
-  reads 2 b_p bits, and the developer relays only as many partial sums as buy more registered work than the relay's gates
-  would train directly.
+  reads 2 b_p bits, and the developer relays only as many partial sums as buy more gates of the registered circuit than
+  the relay's gates would train directly.
 * The verdict lag: from its first incorrect proof block until the halt (a window plus the verdict delay), a developer can skip
-  all registered work, once per identity, in every tier; that capacity joins the residual. Detection must end the
+  the whole registered circuit, once per identity, in every tier; that capacity joins the residual. Detection must end the
   identity and take its hardware out of use, or the capacity after the halt is unmonitored.
 * chi, the cheating share: with sampled proofs at a budget, the incorrect proof blocks the sampling design accepts number
   A ln(1/delta) / q per identity over the whole deployment, q = share / (overhead + replay)
@@ -75,7 +74,7 @@ REFERENCE_THREADED = (10.0, 37248.0)
 #: the clock's ceiling 2430 MHz), pinned from Security/Definitions/Core/Accel/Sm120.lean;
 #: tests/test_tiers.py holds the pin to the file
 CARD = {"sms": 188, "tensor": 1024, "clock_hz": 2430e6}
-#: the clock PoUW credits on sm_120 (H1's SM120 record, verity/core/protocols/pouw/circuit/h1device.py: 2430 MHz)
+#: the clock PoUW credits on sm_120 (H1's SM120 record, verity/ml/protocols/pouw/circuit/h1device.py: 2430 MHz)
 CREDITED_CLOCK_HZ = 2430e6
 #: a server's GPUs at the table's FP8 dense peak, 2 FLOP a MAC
 GPU_FLOPS = 2 * CARD["sms"] * CARD["tensor"] * CARD["clock_hz"]
@@ -124,7 +123,7 @@ SPEC = [
     {"key": "residual", "main": True, "label": "Monitored compute residual r-hat on the GPUs, their share outside the certificate (floor credit at the locked clock 0.323, with an attested clock 0.213; best plausible design 0.01; nothing credited today: 1)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
     {"key": "eps_w", "label": "PoUW's deficit eps_W: the share of certified work a certificate that isn't wrong may credit without its running, which charges eps_W W_cert/C to r (CircuitCredit 0.744%; best plausible design 0.06-0.25%)", "unit": "", "min": 1e-4, "max": 0.1, "log": True, "zero": True},
     {"key": "eps_agg", "label": "Aggregation slack eps': the share of capacity whose PoUW certificates may be wrong, which Markov's inequality over the windows charges to r (1e-4 with per-window failure 3 x 2^-40 gives the theorem's delta of 2.7e-8; each halving costs about 4e-5 of PoUW's deficit)", "unit": "", "min": 1e-8, "max": 1e-2, "log": True, "zero": True},
-    {"key": "clock_share", "label": "GPU capacity above the clock PoUW credits (0: PoUW credits 2,430 MHz, the card table's ceiling and the SKU's maximum, CMP-165; above 0 only on a card whose SKU or firmware reaches past its table)", "unit": "", "min": 1e-4, "max": 0.3, "log": True, "zero": True},
+    {"key": "clock_share", "label": "GPU capacity above the clock PoUW credits (0: PoUW credits 2,430 MHz, the card table's ceiling and the SKU's maximum; above 0 only on a card whose SKU or firmware reaches past its table)", "unit": "", "min": 1e-4, "max": 0.3, "log": True, "zero": True},
     {"key": "host_share", "label": "Host CPUs' compute, as a share of server compute at the card table's peak: 0 under hosts carry no compute; without that assumption, at datasheet peak (Xeon 6776P INT8 AMX 12.6%; hosts without matrix units, two EPYC 9015s, 0.22%)", "unit": "", "min": 1e-6, "max": 0.5, "log": True, "zero": True},
     {"key": "pous_rounds", "main": True, "label": "Proof-of-space rounds per audit (deployed 111; 1/19 needs 86; streamed labels make 74,000 cheap)", "unit": "", "min": 10, "max": 1e6, "log": True},
     {"key": "unfilled_gb", "main": True, "label": "Memory the fill doesn't reach, per server (measured gaps 51 plus about 7 of DPU, BMC and flash; on-chip alone 3.05)", "unit": "GB", "min": 0.01, "max": 1000, "log": True},
@@ -142,19 +141,19 @@ SPEC = [
     {"key": "tau", "label": "Certified timing channel per server (the network appendix's program format: about 860)", "unit": "bit/s", "min": 1, "max": 1e5, "log": True, "zero": True},
     {"key": "export", "label": "Export per server: committed values readable outside the declared computation (today 4.4e9; under the export rule about 2.5e6)", "unit": "bit/s", "min": 1, "max": 1e12, "log": True, "zero": True},
     {"key": "nic", "label": "Line rate per server, without network accounting", "unit": "bit/s", "min": 1e9, "max": 1e13, "log": True},
-    {"key": "share", "label": "Sampled proofs: compute share", "unit": "", "min": 1e-4, "max": 0.5, "log": True},
-    {"key": "overhead", "label": "Sampled proofs: proving cost per unit of step work (sparse draws today 4.8e12; 512 per statement 1.7e10; batched throughput 1.6e8)", "unit": "x", "min": 1, "max": 1e14, "log": True},
-    {"key": "replay", "label": "Sampled proofs: replay cost per drawn step", "unit": "x", "min": 1, "max": 1e7, "log": True},
-    {"key": "step_flop", "label": "Sampled proofs: work per step", "unit": "FLOP", "min": 1e3, "max": 1e15, "log": True},
-    {"key": "p_evade", "label": "Sampled proofs: certificate failure probability delta (planner 2^-40)", "unit": "", "min": 1e-15, "max": 0.99, "log": True},
-    {"key": "luck", "label": "Sampled proofs: luck factor F/(1-p) (spec sheet 8)", "unit": "x", "min": 1, "max": 100, "log": True},
-    {"key": "step_bits", "label": "Sampled proofs: output bits per step (16, or one 32-bit gate)", "unit": "bit", "min": 1, "max": 64, "log": True},
+    {"key": "share", "label": "SPOT: compute share", "unit": "", "min": 1e-4, "max": 0.5, "log": True},
+    {"key": "overhead", "label": "SPOT: proving cost per unit of step work (sparse draws today 4.8e12; 512 per statement 1.7e10; batched throughput 1.6e8)", "unit": "x", "min": 1, "max": 1e14, "log": True},
+    {"key": "replay", "label": "SPOT: replay cost per drawn step", "unit": "x", "min": 1, "max": 1e7, "log": True},
+    {"key": "step_flop", "label": "SPOT: work per step", "unit": "FLOP", "min": 1e3, "max": 1e15, "log": True},
+    {"key": "p_evade", "label": "SPOT: certificate failure probability delta (planner 2^-40)", "unit": "", "min": 1e-15, "max": 0.99, "log": True},
+    {"key": "luck", "label": "SPOT: luck factor F/(1-p) (spec sheet 8)", "unit": "x", "min": 1, "max": 100, "log": True},
+    {"key": "step_bits", "label": "SPOT: output bits per step (16, or one 32-bit gate)", "unit": "bit", "min": 1, "max": 64, "log": True},
     {"key": "intake_x", "label": "Declared novel intake, as a multiple of alpha F (1 once the count check is in the ZK flow; line rate is about 1.3e6)", "unit": "x", "min": 1, "max": 1e7, "log": True},
     {"key": "m", "label": "Recipe multiplier m: frontier progress per counted multiplication of the developer's best recipe under the mechanisms, against the unconstrained recipe (central 1, adversarial 3)", "unit": "x", "min": 0.1, "max": 10, "log": True},
     {"key": "mfu", "label": "Model-FLOP utilization of an unconstrained frontier run (Llama 3 405B: 38-43%)", "unit": "", "min": 0.1, "max": 1, "log": False},
     {"key": "lag_s", "label": "Verdict lag: from a first incorrect proof block to the halt, a window plus the verdict delay (1 hour assumed)", "unit": "s", "min": 1, "max": 1e7, "log": True, "zero": True},
-    {"key": "identities", "label": "Sampled proofs: identities a detection doesn't end", "unit": "", "min": 1, "max": 1e6, "log": True},
-    {"key": "floor_steps", "label": "Sampled proofs: steps in a class drawn at a floor of one", "unit": "", "min": 1, "max": 1e17, "log": True},
+    {"key": "identities", "label": "SPOT: identities a detection doesn't end", "unit": "", "min": 1, "max": 1e6, "log": True},
+    {"key": "floor_steps", "label": "SPOT: steps in a class drawn at a floor of one", "unit": "", "min": 1, "max": 1e17, "log": True},
     {"key": "K", "label": "NCI: novel bits per inference block", "unit": "bit", "min": 1e5, "max": 1e10, "log": True},
     {"key": "Gamma", "label": "NCI: gates per inference block", "unit": "", "min": 1e14, "max": 1e19, "log": True},
     {"key": "d", "label": "Model: entry fee d (thread reads below which a value's fan-out is at most e). 1 is what Lean certifies for a training run from structure alone: its embedding table is updated weights, which Layered's lookups (columns of novel inputs) can't read. ReferenceThreaded gives 10 for Kimi K2 at S = 2e7 (a Dot16 step's 17 legs less E = 7 bf16 embedding columns) under the open conjecture ReferenceLayered, which holds for a training run only once lookups may read weight columns", "unit": "", "min": 1, "max": 65536, "log": True},
@@ -182,7 +181,7 @@ TIERS = {
 
 #: what each step of the model rests on
 STATUS = [
-    ("Declared computation, thread bound", "ThreadedThrottled is proved in Lean (draft #2343) when the declaration "
+    ("Declared computation, thread bound", "ThreadedThrottled is proved in Lean when the declaration "
      "contains the reference circuit gate for gate, and with dark gates (T1', ThreadedThrottledOn) on a branch. It rests "
      "on WeightsIncompressible and Threaded (d, e). (10, 37248) is ReferenceThreaded's for a reference circuit written "
      "in Dot16 steps, as the declarations are (17 legs less 7 bf16 embedding columns; 2,328 steps of 16 products), under "
@@ -192,26 +191,26 @@ STATUS = [
     ("Declared computation, partial-sum law", "Off by default (kappa_chain = 0): its support-form premises were reproduced as false, and "
      "IncompressibleContainedTraining, which states it under TrainingIncompressible, carries no estimate yet."),
     ("Monitored compute residual", "r = r-hat + epsilon_W W_cert/C + eps', as Nci.Guarantees.DampenerRemote states it "
-     "(#3646). PoUW's deficit epsilon_W = 0.744% (CircuitCredit, draft #2638) is a share of credited work, evaluated "
+     "in Lean. PoUW's deficit epsilon_W = 0.744% (CircuitCredit) is a share of credited work, evaluated "
      "with its premises granted. Under the floor credit r-hat = 0.449: GPU floor time 0.323 (honest kernels at 1.72 "
-     "times the floor; run r20261017-123922-e558 has no published outputs), the clock 0 (PoUW credits the card "
-     "table's 2,430 MHz, the SKU's maximum, CMP-165; the premise that a node's cards are that SKU and firmware is "
+     "times the floor, unpublished), the clock 0 (PoUW credits the card "
+     "table's 2,430 MHz, the SKU's maximum; the premise that a node's cards are that SKU and firmware is "
      "unattested) and host CPUs at INT8 AMX peak 0.126. eps' = 1e-4 is what the theorem's delta of 2.7e-8 costs "
      "(Markov over the windows)."),
-    ("Memory cap", "ThreadedRuntime and ThreadedRate (draft #2343) give the closed form's shape; its value needs Threaded "
+    ("Memory cap", "ThreadedRuntime and ThreadedRate give the closed form's shape; its value needs Threaded "
      "at window scale, which fails. The fit bound (FitBoundSlots under ReachSlots and FitsSlots, adopted for dense "
-     "recipes by ASK-68) replaces it at token threads, conditional on F1 and F4 per parameter slot, F3, NET-35 (intake "
-     "held to alpha F), WipeFullUse (not yet stated) and an information form; it charges each server's first window "
+     "recipes) replaces it at token threads, conditional on F1 and F4 per parameter slot, F3, intake "
+     "held to alpha F, WipeFullUse (not yet stated) and an information form; it charges each server's first window "
      "(fitBoundSlots_init, fit.py's left_out). A token-routed MoE has no fit rung: ReachSlots at its active count (54 "
      "at 6 GB for Kimi K2's 32B) needs a measured floor on the active count that reaches the target."),
-    ("Wipe residual", "Streamed labels (MEM-51) replace the reference permutation, which is refuted (a developer passes "
+    ("Wipe residual", "Streamed labels replace the reference permutation, which is refuted (a developer passes "
      "from 1.53% of the store); the slack is proved only for an ideal permutation. Memory outside the fill is measured as "
      "gaps (on-chip 3.05 GB, the GPUs' own about 1.6 GB; GPU reserve 18.4 GB; host 29.5 GB). No theorem bounds help "
      "during a wipe; the helper term is an attack."),
     ("Exhaustion", "Lemma M is proved and locked per audit, and Held for snapshots; nothing bounds memory at every "
      "instant, which the memory cap needs."),
     ("Cheating share", "The bound on accepted incorrect proof blocks over the deployment is proved "
-     "(Population.Exfil.tail_cumPrev, open #2687; the cumulative harm budget over adaptive rounds on a branch, PRF-86). "
+     "(Population.Exfil.tail_cumPrev; the cumulative harm budget over adaptive rounds on a branch). "
      "Each injected bit is worth at most the chord of one inference block's thread bound, 5.76e7 counted "
      "multiplications, with (1, 0)-threading above thread_bits. chi grows with the identities a detection doesn't end and "
      "shrinks with the fleet, so detection must be terminal (J = 1)."),

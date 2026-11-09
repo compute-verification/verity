@@ -1,8 +1,9 @@
 module
 
-public import Definitions.Nci.Guarantees
 public import Proofs.Nci.Inequalities
 public import Proofs.Nci.LoomisWhitney
+public import Proofs.Nci.Cut
+public import Proofs.Nci.CutWitness
 public import Proofs.Core
 public import Proofs.Nci.Chain
 public import Proofs.Nci.Throttling
@@ -37,14 +38,12 @@ public import Proofs.Nci.Covering
 public import Proofs.Nci.CoveringWitness
 public import Proofs.Nci.CoveringTwoCosts
 public import Proofs.Nci.CoveringTwoCostsWitness
-public import Proofs.Nci.CoveringPriced
-public import Proofs.Nci.CoveringPricedWitness
 public import Proofs.Nci.Cover
 public import Proofs.Nci.PartitionCovers
 public import Proofs.Nci.CompliesCK
-public import Proofs.Nci.Ldl
 public import Proofs.Nci.Witnesses
 public import Proofs.Nci.Formalism
+public import Proofs.Nci.Lemmas
 
 /-!
 # Proofs of NCI's guarantees

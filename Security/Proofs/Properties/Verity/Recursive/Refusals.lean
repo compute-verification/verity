@@ -1,13 +1,46 @@
 module
 
-public import Proofs.Properties.Verity.Recursive.Names
-public import Proofs.Properties.Verity.Recursive.BaseSetup
-public import Proofs.Properties.Verity.Recursive.Compiled
-public import Proofs.Properties.Verity.Recursive.PartStatement
-public import Proofs.Flock.Claims.Recursion.DeployChecked
 public import Proofs.Flock.Claims.Recursion.RestVerdictBasesHold
-public import Proofs.Flock.Soundness.Refine.Walk
+public import Proofs.Properties.Verity.Recursive.Names
 import all Init.Data.String.Defs
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Encode
+import Proofs.Flock.Claims.Recursion.DeployChecked
+import Proofs.Flock.Soundness.Refine.Walk
+import Proofs.Properties.Verity.Recursive.BaseSetup
+import Proofs.Properties.Verity.Recursive.Compiled
+import Proofs.Properties.Verity.Recursive.PartStatement
 
 /-!
 # The compiled component's refusals, as `acc_of_accepts` reads them (`Refusals`)
@@ -17,14 +50,14 @@ checks on the inner statement (`InnerOkAt`) and the files the parts' statements 
 words. Each is the compiled component's own refusal:
 
 * **`innerOkAt_of_compiled`.** The compiled `innerHeld` runs `innerOk`: Flock's plain setup of the inner statement on its
-  circuit, public file and draw, at the verifier's partition and program and `--stratified` at the population they give
+  circuit, public file and sample, at the verifier's partition and program and `--stratified` at the population they give
   (`HmRow.stratifiedLaw` at `K = 1`), then each check `FlockDeploy.Ins.setup` runs and the scope check. Where `x` names
   the component's inputs (`Names`), the inner statement `x` carries reads as those inputs (`ins_inner`), so the model's
-  setup is the compiled one step for step (`setup_inner`), its scope check is the compiled one, it carries the draw, and
-  at one table the session's draw is the draw (`RecDeploy.drawTiedS`). That is the model's `innerOk`.
+  setup is the compiled one step for step (`setup_inner`), its scope check is the compiled one, it carries the sample, and
+  at one table the session's sample is the sample (`RecDeploy.drawTiedS`). That is the model's `innerOk`.
 * **`plain_of_compiled`**, beside `Refusals`. The parts' statement `verity/flock-circuit` has no plain leaves: each
   part's verdict refuses them, so an accepted session with a part shows it.
-* **The sizes.** The compiled component refuses a staged public file, inner record, coin server's transcript or staged
+* **The sizes.** The compiled component refuses a staged public file, inner record, live-coin part's transcript or staged
   rows file of `2 ^ 56` bytes or more (`fits`), so each file the blobs show is under `2 ^ 64` bytes (`record_of_compiled`,
   `transcript_of_compiled`, `rows_of_compiled`). `Names` pins every field `x` encodes to a file the component read or the
   canonical bytes of a value it read, so `x` is no longer than the compiled `statementSize` (`x_len_le`), which the
@@ -95,8 +128,8 @@ theorem fits_lt {b : ByteArray} {w : String} (h : VStar.Recursive.fits b w = .ok
 
 /-! ## What `innerHeld` reads -/
 
-/-- **What `innerHeld` read and refused**: the inner circuit, public file and draw blobs, on which the compiled
-`innerOk` passes, and the inner record, the coin server's transcript and the staged rows, each under `2 ^ 56` bytes. -/
+/-- **What `innerHeld` read and refused**: the inner circuit, public file and sample blobs, on which the compiled
+`innerOk` passes, and the inner record, the challenger's live-coin part's transcript and the staged rows, each under `2 ^ 56` bytes. -/
 theorem innerHeld_reads {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs : Core.Blobs}
     {h : VStar.Recursive.InnerHeld} (hh : VStar.Recursive.innerHeld o pr bs = .ok h) :
     ∃ cB pB dB recB trB rowsB,
@@ -138,17 +171,17 @@ theorem innerHeld_reads {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} 
         exact ⟨cB, pB, dB, recB, trB, rowsB, hc, hp, hd, mapError_ok hok, hr, fits_lt hfr, htr, fits_lt hftr, hrw,
           fits_lt hfrw⟩
 
-/-- **The compiled `innerOk`, step by step**: the draw is UTF-8 JSON `j`, the verifier's partition and program give the
-population `n`, and the inner statement's tags (`verity/flock-circuit+plain-leaves` on the os coins) pass each call
-`FlockDeploy.Ins.setup` makes at the setup `(spec, sts)` of the inner circuit and public file at the draw, partition,
+/-- **The compiled `innerOk`, step by step**: the sample is UTF-8 JSON `j`, the verifier's partition and program give the
+population `n`, and the inner statement's tags (`verity/flock-circuit+plain-leaves` on a seed's coins, as without `--coins`) pass each call
+`FlockDeploy.Ins.setup` makes at the setup `(spec, sts)` of the inner circuit and public file at the sample, partition,
 program and `--stratified n`, and the scope check. -/
 theorem innerOk_peel {o : VStar.Recursive.Own} {cB pB dB : ByteArray}
     (h : VStar.Recursive.innerOk o cB pB dB = .ok ()) :
     ∃ t j L n spec sts, String.fromUTF8? dB = some t ∧ Flock.JsonParse.parse t = .ok j ∧
       Flock.HmRow.stratifiedLaw o.partition o.program 1 = .ok (L, n) ∧
-      (Flock.Tags.circuitPlainLeaves.withCoins .os).hm96Rows = true ∧
+      Flock.Tags.circuitPlainLeaves.hm96Rows = true ∧
       Flock.RecSetup.checkInner none none (pure (none, none)) = .ok () ∧
-      Flock.Stmt.setupTables (Flock.Tags.circuitPlainLeaves.withCoins .os) cB pB .os 1 [] (some (Flock.norm j))
+      Flock.Stmt.setupTables Flock.Tags.circuitPlainLeaves cB pB .seed 1 [] (some (Flock.norm j))
         (some o.partition) (some o.program) none (some n) none none = .ok (spec, sts) ∧
       (∀ st ∈ sts, Flock.checkRegistered st none = .ok () ∧ SampledProofs.OneStageZk.checkIdentifier st = .ok ()) ∧
       Flock.Registered.checkFull none (some (Flock.norm j)) = .ok () ∧
@@ -157,9 +190,9 @@ theorem innerOk_peel {o : VStar.Recursive.Own} {cB pB dB : ByteArray}
       sts.forM (Flock.RecCoins.check · none (Flock.RecCoins.Source.atC3 none none none) (Flock.RecSetup.c3 none none))
         = .ok () ∧
       sts.forM (Flock.RecVStar.checkPubRows · none none none) = .ok () ∧
-      Flock.ProvedScope.drawLaw false (Flock.Tags.circuitPlainLeaves.withCoins .os) false (some (Flock.norm j)) =
+      Flock.ProvedScope.drawLaw false Flock.Tags.circuitPlainLeaves false (some (Flock.norm j)) =
         .ok () ∧
-      Flock.ProvedScope.check (Flock.Tags.circuitPlainLeaves.withCoins .os) false cB pB [] 1 false false = .ok () := by
+      Flock.ProvedScope.check Flock.Tags.circuitPlainLeaves false cB pB [] 1 false false = .ok () := by
   have htg : Flock.Tags.find? VStar.Recursive.INNER_STATEMENT = some Flock.Tags.circuitPlainLeaves := rfl
   unfold VStar.Recursive.innerOk at h
   simp only [htg] at h
@@ -169,7 +202,7 @@ theorem innerOk_peel {o : VStar.Recursive.Own} {cB pB dB : ByteArray}
     simp only [ht] at h
     obtain ⟨j, hj, h⟩ := bind_ok h
     obtain ⟨⟨L, n⟩, hL, h⟩ := bind_ok h
-    have hrows : (Flock.Tags.circuitPlainLeaves.withCoins .os).hm96Rows = true := by
+    have hrows : Flock.Tags.circuitPlainLeaves.hm96Rows = true := by
       refine Classical.byContradiction fun hne => ?_
       simp [hne, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
     simp only [hrows, Bool.not_true, Bool.false_eq_true, ↓reduceIte, pure_bind] at h
@@ -189,21 +222,21 @@ theorem innerOk_peel {o : VStar.Recursive.Own} {cB pB dB : ByteArray}
 /-! ## The model's reading of the inner statement -/
 
 /-- **The model's reading of the inner statement** the compiled `innerOk` sets up: `verity/flock-circuit+plain-leaves`
-on the os coins, the circuit and public file, one table and no lookup tables, the verifier's partition and program, the
-draw `j` rebuilt, `--stratified n`, and none of `verify`'s other inputs. -/
+on a seed's coins, the circuit and public file, one table and no lookup tables, the verifier's partition and program, the
+sample `j` rebuilt, `--stratified n`, and none of `verify`'s other inputs. -/
 def innerIns (cB pB : ByteArray) (o : VStar.Recursive.Own) (j : Json) (n : ℕ) : FlockDeploy.Ins where
   stmtTags := Flock.Tags.circuitPlainLeaves
   registered := none
   read :=
-    { I := { tags := Flock.Tags.circuitPlainLeaves.withCoins .os, circuitFile := cB, publicFile := pB, coins := .os,
+    { I := { tags := Flock.Tags.circuitPlainLeaves, circuitFile := cB, publicFile := pB, coins := .seed,
              count := 1, tables := [], partition := some o.partition, program := some o.program, work := none,
              stratified := some n, closure := none }
       zk := false, draw := some (Flock.norm j), publicInputs := none, registered := false }
 
-/-- **The model reads the inner statement as `innerIns`** where its fields are the ones `InnerNames` pins, its draw the
-draw blob and its `--stratified` the population. -/
+/-- **The model reads the inner statement as `innerIns`** where its fields are the ones `InnerNames` pins, its sample the
+sample blob and its `--stratified` the population. -/
 theorem ins_inner {ri : FlockDeploy.Raw} {o : VStar.Recursive.Own} {dB : ByteArray} {t : String} {j : Json} {n : ℕ}
-    (hs : ri.statement = VStar.Recursive.INNER_STATEMENT) (hz : ri.zk = false) (ho : ri.osCoins = true)
+    (hs : ri.statement = VStar.Recursive.INNER_STATEMENT) (hz : ri.zk = false) (ho : ri.osCoins = false)
     (hc : ri.count = 1) (htb : ri.tables = [])
     (hpart : ri.partition.map (FlockDeploy.jsonOf "partition") = some (.ok o.partition))
     (hprog : ri.program = some o.program) (hd : ri.draw = some dB) (hwk : ri.work = none) (hwt : ri.workTable = none)
@@ -223,12 +256,12 @@ theorem ins_inner {ri : FlockDeploy.Raw} {o : VStar.Recursive.Own} {dB : ByteArr
 
 /-- **The model's setup of `innerIns` is the compiled `innerOk`'s**, from `innerOk_peel`'s steps: the hm96-sha512 rows
 check, the inner checks, the session, each table's registered reads and identifier (`noIdentifier_of_check`), the full
-registration, V\*'s checks, check 5, the public rows and the draw's law, with no `--zk` shape check. -/
+registration, V\*'s checks, check 5, the public rows and the sample's law, with no `--zk` shape check. -/
 theorem setup_inner {cB pB : ByteArray} {o : VStar.Recursive.Own} {j : Json} {n : ℕ} {spec : Flock.SessionSpec}
     {sts : Array Flock.Stmt}
-    (hhm : (Flock.Tags.circuitPlainLeaves.withCoins .os).hm96Rows = true)
+    (hhm : Flock.Tags.circuitPlainLeaves.hm96Rows = true)
     (hci : Flock.RecSetup.checkInner none none (pure (none, none)) = .ok ())
-    (hsu : Flock.Stmt.setupTables (Flock.Tags.circuitPlainLeaves.withCoins .os) cB pB .os 1 [] (some (Flock.norm j))
+    (hsu : Flock.Stmt.setupTables Flock.Tags.circuitPlainLeaves cB pB .seed 1 [] (some (Flock.norm j))
       (some o.partition) (some o.program) none (some n) none none = .ok (spec, sts))
     (hregs : ∀ st ∈ sts, Flock.checkRegistered st none = .ok () ∧ SampledProofs.OneStageZk.checkIdentifier st = .ok ())
     (hfull : Flock.Registered.checkFull none (some (Flock.norm j)) = .ok ())
@@ -237,14 +270,14 @@ theorem setup_inner {cB pB : ByteArray} {o : VStar.Recursive.Own} {j : Json} {n 
     (hcoins : sts.forM (Flock.RecCoins.check · none (Flock.RecCoins.Source.atC3 none none none)
       (Flock.RecSetup.c3 none none)) = .ok ())
     (hpub : sts.forM (Flock.RecVStar.checkPubRows · none none none) = .ok ())
-    (hlaw : Flock.ProvedScope.drawLaw false (Flock.Tags.circuitPlainLeaves.withCoins .os) false
+    (hlaw : Flock.ProvedScope.drawLaw false Flock.Tags.circuitPlainLeaves false
       (some (Flock.norm j)) = .ok ()) :
     (innerIns cB pB o j n).setup = .ok (spec, sts) := by
   have hsh : (innerIns cB pB o j n).read.tags.hm96Rows = true := hhm
   have hset : (innerIns cB pB o j n).read.setup = .ok (spec, sts) := hsu
   have hreg : (innerIns cB pB o j n).registered = none := rfl
   have hzk : (innerIns cB pB o j n).read.zk = false := rfl
-  have htg : (innerIns cB pB o j n).read.tags = Flock.Tags.circuitPlainLeaves.withCoins .os := rfl
+  have htg : (innerIns cB pB o j n).read.tags = Flock.Tags.circuitPlainLeaves := rfl
   have hdr : (innerIns cB pB o j n).read.draw = some (Flock.norm j) := rfl
   have hds : (innerIns cB pB o j n).read.draw.isSome = true := rfl
   have hst : (innerIns cB pB o j n).stmtTags = Flock.Tags.circuitPlainLeaves := rfl
@@ -606,7 +639,7 @@ theorem record_of_compiled {p : VStar.Recursive.Params} {c : SampledProofs.OneSt
   rw [e1]
   exact lt_of_lt_of_le hlt (by norm_num)
 
-/-- **`Refusals.transcript`**: the coin server's transcript on the blobs is under `2 ^ 64` bytes where the compiled
+/-- **`Refusals.transcript`**: the challenger's live-coin part's transcript on the blobs is under `2 ^ 64` bytes where the compiled
 component accepts. -/
 theorem transcript_of_compiled {p : VStar.Recursive.Params} {c : SampledProofs.OneStage.Commitment}
     {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {pub : SampledProofs.OneStage.Public} {prof : Core.Integrity}

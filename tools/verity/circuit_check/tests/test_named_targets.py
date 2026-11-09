@@ -3,6 +3,9 @@ check's own cache while their inputs are unchanged, unless told otherwise; each 
 last line, say where its time went (`checks.spent`)."""
 from __future__ import annotations
 
+import json
+import subprocess
+import sys
 import types
 from pathlib import Path
 
@@ -15,6 +18,10 @@ from circuit_check import sidecars as SC
 from circuit_check import targets as TG
 
 GF2K = TG.REPO / "verity" / "ml" / "circuits" / "ops" / "boolean" / "gf2k.circuit-check.py"
+#: the C++ models' sources, one library each (`verity.ml.definitions.numerics._jit`)
+CPP = TG.REPO / "verity" / "ml" / "definitions" / "numerics" / "cpp"
+#: a catalog target whose check runs fa2's C++ model (its twin kernel)
+ATTENTION = "Attention_v3{T=5,NH=2,KVH=1,D=16,BN=128}"
 
 
 def _target(name: str, seconds: float, by: dict, **more) -> dict:
@@ -23,7 +30,7 @@ def _target(name: str, seconds: float, by: dict, **more) -> dict:
 
 @pytest.fixture
 def runs(monkeypatch, tmp_path):
-    """`cli.main` with `cli.run` recorded instead of run, and neither the registries' prebuild nor the tracer started."""
+    """`cli.main` with `cli.run` recorded instead of run, and neither the C++ models' prebuild nor the tracer started."""
     got: list[dict] = []
     traced: list[Path] = []
 
@@ -32,7 +39,7 @@ def runs(monkeypatch, tmp_path):
         return CK.report([_target(s, 2.0, {"correspondence": 1.5, "lowering": 0.4, "ports": 0.01}) for s in specs], opts)
 
     monkeypatch.setattr(cli, "run", run)
-    monkeypatch.setattr(cli.subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(cli, "prebuild", lambda log=None: None)
     monkeypatch.setattr(CC, "trace", traced.append)
     monkeypatch.setattr(cli, "update_pins", lambda rep: {})
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "check"))
@@ -52,6 +59,57 @@ def test_named_targets_run_on_every_core_and_reuse_checks_cache(runs, tmp_path, 
     assert cli.main(["F32Add_v1", "--update-pins"]) == 0 and got[-1]["cache"] is None
     assert cli.main(["F32Add_v1", "--cache", str(tmp_path / "mine"), "-j", "0"]) == 0
     assert got[-1]["cache"] == tmp_path / "mine" and got[-1]["jobs"] == cli.auto_jobs()
+
+
+@pytest.mark.slow
+def test_a_check_that_runs_a_cpp_model_is_stored_after_the_prebuild(tmp_path, monkeypatch):
+    """The C++ models compile on first use, and a check that compiled one would start a program the tracer cannot see, so its
+    verdict would not be stored.  The prebuild builds every one of them before the tracer starts: from an empty build directory,
+    a check of a target that runs fa2's model is stored, and the directory holds one library per source.  The library was
+    loaded before the check, from a build directory its sources don't name, so the entry holds fa2's sources because the check
+    called it (`cache.MODEL`).  In a process of its own, since a model's library path is fixed when its module is imported, run
+    as the ``circuit-check`` script runs, with no working directory on the import path, from outside the tree: torch's bare
+    ``__file__`` names (``_ops.py``) name no file wherever it runs (`cache._module_file`)."""
+    monkeypatch.setenv("VERITY_NUMERICS_BUILD_DIR", str(tmp_path / "libs"))
+    r = subprocess.run([sys.executable, "-P", "-m", "circuit_check", ATTENTION, "--cache", str(tmp_path / "cache"), "-j", "1", "-q",
+                        "--out", str(tmp_path / "report.json")], cwd=tmp_path, capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout[-2000:] + r.stderr[-2000:]
+    assert sorted(p.name for p in (tmp_path / "libs").glob("*.so")) == sorted(f"lib{p.stem}.so" for p in CPP.glob("*.cpp"))
+    c = json.loads((tmp_path / "report.json").read_text())["cache"]
+    assert (c["stored"], c["untraced"]) == (1, []), c
+    (entry,) = [e for p in (tmp_path / "cache").glob("*/*/*.json")
+                if (e := json.loads(p.read_text()))["key"]["request"]["target"][1] == ATTENTION]
+    held = {f"{CPP.relative_to(TG.REPO).as_posix()}/{s}" for s in ("fa2_model.cpp", "tc_model.cpp")}
+    assert held <= set(entry["reads"]["files"]), sorted(entry["reads"]["files"])
+
+
+@pytest.mark.slow
+def test_a_composites_lift_is_checked_and_stored_in_a_worker_of_its_own(tmp_path):
+    """``Lifted[ArgmaxStepF32_v1]_v2{ORD=0}`` checked as ``--all`` checks it: traced, in a worker forked for it, from a process of
+    its own.  Its check passes; what killed it was the worker's account of the check's reads afterwards (`cache.attributed`),
+    which a check run in process or untraced never makes: placing the ``digests`` pin its id was looked up in raised in the
+    on-demand ``Lifted[...]_v2`` family, which lifts primitives only (`test_targets`' cheaper test holds `sidecars.named`).
+    The check passes and its verdict is stored."""
+    target = "Lifted[ArgmaxStepF32_v1]_v2{ORD=0}"
+    r = subprocess.run([sys.executable, "-P", "-m", "circuit_check", target, "--cache", str(tmp_path / "cache"), "-j", "2", "-q",
+                        "--out", str(tmp_path / "report.json")], cwd=tmp_path, capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout[-2000:] + r.stderr[-2000:]
+    rep = json.loads((tmp_path / "report.json").read_text())
+    assert [t["target"] for t in rep["targets"] if t["failures"]] == [], rep["targets"]
+    assert (rep["cache"]["stored"], rep["cache"]["untraced"]) == (1, []), rep["cache"]
+
+
+def test_a_prebuild_that_fails_refuses_the_run_saying_why(tmp_path, monkeypatch, capsys):
+    """A model that doesn't build ends the run before the tracer starts or any check runs, exit 2, with the prebuild's exit
+    status and its error, which it writes here whole: a run that went on would compile the model in a check, untraced."""
+    traced: list[Path] = []
+    monkeypatch.setattr(CC, "trace", traced.append)
+    monkeypatch.setenv("VERITY_NUMERICS_BUILD_DIR", str(tmp_path / "libs"))
+    monkeypatch.setenv("CXX", "false")
+    assert cli.main(["F32Add_v1", "--cache", str(tmp_path / "cache")]) == 2 and not traced
+    err = capsys.readouterr().err
+    assert "Traceback" in err
+    assert "circuit-check: refused: the C++ models' prebuild exited 1 (subprocess.CalledProcessError: " in err
 
 
 def test_as_call_says_a_targets_call_either_way_or_leaves_it_to_is_call(runs):

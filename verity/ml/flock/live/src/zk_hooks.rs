@@ -1,7 +1,7 @@
-//! Zero-knowledge readiness for `verity/flock-circuit` (lane flock-circuit, M0): the masking hooks the prover API
+//! Zero-knowledge readiness for `verity/flock-circuit` (M0): the masking hooks the prover API
 //! carries now, as no-ops, and the prover's own randomness.
 //!
-//! Every random value the prover uses is the operating system's own bytes (`getrandom`), read where it is drawn and kept where it
+//! Every random value the prover uses is the operating system's own bytes (`getrandom`), read where it is sampled and kept where it
 //! is used again, so no premise on a stream generator is left on any of them. Under the outer
 //! firewall the Lean server reads them ([`set_os_source`]), and this process only carries them. A test harness (feature
 //! `seed-injection`) can inject a [`ProverSeed`] instead, and then the prover is a deterministic function of (statement, witness,
@@ -14,7 +14,7 @@
 //! 0's hiding for the table's session, each rep's pads in the rep's state, each block's mask words with the table's witness
 //! sources. Under an injected seed they are ChaCha20 streams of it, addressed by `(purpose, index)` (`set_stream` /
 //! `set_word_pos`). It never reads the transcript, and outside tests every constructor takes a [`ProverSeed`], which a proving
-//! build can only draw from the OS: no fixed or test seed is reachable in a production build.
+//! build can only sample from the OS: no fixed or test seed is reachable in a production build.
 //!
 //! The Merkle leaf salts of `hm96-sha512/v1` are [`LeafSalts`]'s: the OS's bytes too, read tree by tree (decision 4(a)). With an
 //! injected seed they are a ChaCha20 expansion of that seed instead, so a test proof is reproducible. The hm96 key is not prover
@@ -36,7 +36,7 @@ use serde_json::{Value, json};
 pub const STREAM_MASK: u64 = 1;
 pub const STREAM_PAD: u64 = 2;
 pub const STREAM_SALT: u64 = 3;
-/// An injected seed's coin-tree nonce (`coin_tree::SCHEME`); a proving build draws the nonce from the OS.
+/// An injected seed's coin-tree nonce (`coin_tree::SCHEME`); a proving build samples the nonce from the OS.
 pub const STREAM_COIN_NONCE: u64 = 8;
 /// Bytes per `hm96-sha512/v1` leaf salt.
 pub const SALT_BYTES: usize = 192;
@@ -45,11 +45,11 @@ pub const SALT_BYTES: usize = 192;
 /// `purpose | j << TABLE_SHIFT`. Its salt trees are ids `j << TABLE_SHIFT` (level 0) and up, below the next table's. Table 0's
 /// addresses are a one-table session's.
 pub const TABLE_SHIFT: u32 = 32;
-/// Words per piece of [`ProverRng::f128s_lanes`]'s parallel draw under an injected seed. Even: an index addresses 32 bytes,
+/// Words per piece of [`ProverRng::f128s_lanes`]'s parallel sample under an injected seed. Even: an index addresses 32 bytes,
 /// two words, so every piece starts at a whole index.
 const LANE_CHUNK: usize = 1 << 12;
 
-/// The prover's seed: an explicit input of every proof. A proving build can only draw it from the OS, and then expands nothing
+/// The prover's seed: an explicit input of every proof. A proving build can only sample it from the OS, and then expands nothing
 /// from it (every random value is read from the OS where it is sampled). A test harness (feature `seed-injection`, or unit tests)
 /// can inject one, which the prover expands with ChaCha20, so it is a function of (statement, witness, seed, verifier coins).
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -86,6 +86,8 @@ pub struct LeafSalts {
     key: Option<Box<[u8; 32]>>,
     /// the trees kept
     kept: std::sync::Arc<std::sync::Mutex<Kept>>,
+    /// the trees read ahead
+    ahead: std::sync::Arc<Ahead>,
     next: u64,
     level0: u64,
 }
@@ -96,8 +98,28 @@ pub const OS_PIECE: usize = 1 << 16;
 #[derive(Default)]
 struct Kept {
     level0: Option<std::sync::Arc<Vec<u8>>>,
-    /// trees whose salts were sampled elsewhere ([`LeafSalts::preset`]), by tree id and leaf count, taken by the first draw
+    /// trees whose salts were sampled elsewhere ([`LeafSalts::preset`]), by tree id and leaf count, taken by the first sample
     preset: std::collections::BTreeMap<(u64, usize), ZeroOnDrop>,
+}
+
+/// The trees [`SaltsAhead::draw`] reads before their first sample, by tree id and leaf count: those no sample has asked for yet,
+/// and those read. `drawn` is held while a tree is read, so a sample of a planned tree waits for it; a sample of any other tree
+/// never waits on a read ahead.
+#[derive(Default)]
+struct Ahead {
+    planned: std::sync::Mutex<std::collections::BTreeSet<(u64, usize)>>,
+    drawn: std::sync::Mutex<std::collections::BTreeMap<(u64, usize), std::sync::Arc<Vec<u8>>>>,
+}
+
+impl Ahead {
+    /// A planned tree's salts for its first sample: the ones read ahead, once read; None when it is not planned, or no longer is,
+    /// or is not read yet (its sample reads its own, and the read ahead skips it).
+    fn take(&self, id: u64, leaves: usize) -> Option<std::sync::Arc<Vec<u8>>> {
+        if !self.planned.lock().unwrap_or_else(std::sync::PoisonError::into_inner).remove(&(id, leaves)) {
+            return None;
+        }
+        self.drawn.lock().unwrap_or_else(std::sync::PoisonError::into_inner).remove(&(id, leaves))
+    }
 }
 
 /// The coin-tree nonce the prover sends in `Hello` (docs/coin-tree-v2.md §3): 32 fresh bytes from the OS, once per session,
@@ -123,7 +145,7 @@ impl LeafSalts {
             r.fill_bytes(&mut key[..]);
             key
         });
-        LeafSalts { key, kept: Default::default(), next: 1, level0: 0 }
+        LeafSalts { key, kept: Default::default(), ahead: Default::default(), next: 1, level0: 0 }
     }
 
     /// Table `table`'s salts in a session of several tables: the level-0 tree `table << TABLE_SHIFT` and every later tree the
@@ -131,7 +153,7 @@ impl LeafSalts {
     pub fn table(&self, table: u64) -> LeafSalts {
         assert!(table < 1 << TABLE_SHIFT, "a table index below 2^{TABLE_SHIFT}");
         let level0 = table << TABLE_SHIFT;
-        LeafSalts { key: self.key.clone(), kept: Default::default(), next: level0 + 1, level0 }
+        LeafSalts { key: self.key.clone(), kept: Default::default(), ahead: Default::default(), next: level0 + 1, level0 }
     }
 
     /// The level-0 tree's id (both reps of a table bind its one root).
@@ -153,12 +175,12 @@ impl LeafSalts {
             assert_eq!(s.len(), leaves * SALT_BYTES, "level 0's salts are read for one tree size");
             return s.clone();
         }
-        let s = std::sync::Arc::new(self.draw(self.level0, leaves));
+        let s = self.ahead.take(self.level0, leaves).unwrap_or_else(|| std::sync::Arc::new(self.draw(self.level0, leaves)));
         k.level0 = Some(s.clone());
         s
     }
 
-    /// The level-0 tree's salts drawn elsewhere (the Lean session loop's, `Flock.Firewall.Level0`), before anything reads them:
+    /// The level-0 tree's salts sampled elsewhere (the Lean session loop's, `Flock.Firewall.Level0`), before anything reads them:
     /// every later [`Self::level0`] answers these bytes.
     pub fn set_level0(&self, s: Vec<u8>) -> Result<(), String> {
         let mut k = self.kept.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -169,8 +191,8 @@ impl LeafSalts {
         Ok(())
     }
 
-    /// The salts of the next trees from here, drawn elsewhere (the Lean finish's for a firewalled rep's levels ≥ 1,
-    /// `Flock.Firewall.Finish.hiSaltsOf`), in id order, each `leaves` × 192 bytes: the first draw of each such tree at that
+    /// The salts of the next trees from here, sampled elsewhere (the Lean finish's for a firewalled rep's levels ≥ 1,
+    /// `Flock.Firewall.Finish.hiSaltsOf`), in id order, each `leaves` × 192 bytes: the first sample of each such tree at that
     /// size takes them in place of its own read.
     pub fn preset(&self, trees: Vec<Vec<u8>>) -> Result<(), String> {
         let mut k = self.kept.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -188,36 +210,105 @@ impl LeafSalts {
     /// afresh. A device that samples a tree at another size than the Lean finish's gets salts of its own, its tree is not the
     /// finish's and its opening fails the ZK server's check, and nothing panics.
     pub fn expand(&self, id: u64, leaves: usize) -> Vec<u8> {
+        std::sync::Arc::try_unwrap(self.take(id, leaves)).unwrap_or_else(|s| s.to_vec())
+    }
+
+    /// [`Self::expand`]'s salts, shared: level 0's kept ones, a tree's preset or drawn-ahead ones ([`SaltsAhead`]) at that size,
+    /// once, else read afresh.
+    pub fn take(&self, id: u64, leaves: usize) -> std::sync::Arc<Vec<u8>> {
         if id == self.level0 {
-            return self.level0(leaves).to_vec();
+            return self.level0(leaves);
         }
         let preset = self.kept.lock().unwrap_or_else(std::sync::PoisonError::into_inner).preset.remove(&(id, leaves));
         match preset {
-            Some(mut p) => std::mem::take(&mut p.0),
-            None => self.draw(id, leaves),
+            Some(mut p) => std::sync::Arc::new(std::mem::take(&mut p.0)),
+            None => self.ahead.take(id, leaves).unwrap_or_else(|| std::sync::Arc::new(self.draw(id, leaves))),
         }
     }
 
     fn draw(&self, id: u64, leaves: usize) -> Vec<u8> {
-        use rayon::prelude::{IndexedParallelIterator, ParallelIterator, ParallelSliceMut};
-        let mut b = vec![0u8; leaves * SALT_BYTES];
-        match &self.key {
-            Some(key) => b.par_chunks_mut(SALT_BYTES).enumerate().for_each(|(i, s)| {
-                for j in 0..3 {
-                    s[64 * j..64 * j + 64].copy_from_slice(&chacha20_block(key, 3 * i as u64 + j as u64, id));
-                }
-            }),
-            None => os_fill(&mut b),
+        draw_salts(self.key.as_deref(), id, leaves)
+    }
+
+    /// A handle that reads this table's trees ahead of their first sample, from another thread ([`SaltsAhead::draw`]).
+    pub fn ahead(&self) -> SaltsAhead {
+        SaltsAhead { key: self.key.clone(), kept: self.kept.clone(), ahead: self.ahead.clone(), level0: self.level0 }
+    }
+}
+
+fn draw_salts(key: Option<&[u8; 32]>, id: u64, leaves: usize) -> Vec<u8> {
+    let mut b = vec![0u8; leaves * SALT_BYTES];
+    fill_salts(key, id, &mut b);
+    b
+}
+
+/// Writes every byte of `b`, whole leaves: tree `id`'s salts, on the current rayon pool.
+fn fill_salts(key: Option<&[u8; 32]>, id: u64, b: &mut [u8]) {
+    use rayon::prelude::{IndexedParallelIterator, ParallelIterator, ParallelSliceMut};
+    assert_eq!(b.len() % SALT_BYTES, 0, "a tree's salts are whole {SALT_BYTES}-byte leaves");
+    match key {
+        Some(key) => b.par_chunks_mut(SALT_BYTES).enumerate().for_each(|(i, s)| {
+            for j in 0..3 {
+                s[64 * j..64 * j + 64].copy_from_slice(&chacha20_block(key, 3 * i as u64 + j as u64, id));
+            }
+        }),
+        None => os_fill(b),
+    }
+}
+
+/// Reads a table's trees before the prover samples them ([`LeafSalts::ahead`]), so the device's tree callbacks find their salts
+/// read: from the source a sample reads, only earlier (an injected seed's expansion is addressed by tree id and leaf, so its
+/// bytes are the sample's). Each tree is still read once and taken by one sample: a tree sampled first, or at another size,
+/// reads its own, and what was read for it goes unused. Under an OS source ([`set_os_source`], the Lean tap) nothing is read
+/// ahead, so the tap's reads keep the prover's order.
+pub struct SaltsAhead {
+    key: Option<Box<[u8; 32]>>,
+    kept: std::sync::Arc<std::sync::Mutex<Kept>>,
+    ahead: std::sync::Arc<Ahead>,
+    level0: u64,
+}
+
+impl SaltsAhead {
+    /// Reads `trees` (tree id, leaves) in order, level 0's id into level 0's salts (unless they were read already), on the
+    /// current rayon pool. `buf(bytes, fill)` gives each tree's buffer, which `fill` writes whole before a sample can take it: a
+    /// fresh one, or one the caller reuses.
+    pub fn draw(&self, trees: &[(u64, usize)], buf: &mut dyn FnMut(usize, &mut dyn FnMut(&mut [u8])) -> std::sync::Arc<Vec<u8>>) {
+        if OS_SOURCE.get().is_some() {
+            return;
         }
-        b
+        let level0_read = self.kept.lock().unwrap_or_else(std::sync::PoisonError::into_inner).level0.is_some();
+        let planned = || self.ahead.planned.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        planned().extend(trees.iter().filter(|t| !(level0_read && t.0 == self.level0)));
+        for &t in trees {
+            let mut drawn = self.ahead.drawn.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            if drawn.contains_key(&t) || !planned().contains(&t) {
+                continue;
+            }
+            let b = buf(t.1 * SALT_BYTES, &mut |b| fill_salts(self.key.as_deref(), t.0, b));
+            assert_eq!(b.len(), t.1 * SALT_BYTES, "a tree's buffer holds its leaves");
+            drawn.insert(t, b);
+        }
+    }
+
+    /// Trees read ahead that no sample has taken.
+    pub fn untaken(&self) -> usize {
+        self.ahead.drawn.lock().unwrap_or_else(std::sync::PoisonError::into_inner).len()
+    }
+}
+
+impl Drop for SaltsAhead {
+    fn drop(&mut self) {
+        if let Some(key) = self.key.as_mut() {
+            zero(&mut key[..]);
+        }
     }
 }
 
 /// Where a proving build's samples read the OS's bytes when not from `getrandom` itself: under the outer ZK server, the Lean
-/// server's `flock-firewall tap` (`firewall::lean_tap`, PROTOCOL.md §10.4), set once before the process's first draw.
+/// server's `flock-firewall tap` (`firewall::lean_tap`, PROTOCOL.md §10.4), set once before the process's first sample.
 static OS_SOURCE: std::sync::OnceLock<std::sync::Mutex<Box<dyn FnMut(&mut [u8]) + Send>>> = std::sync::OnceLock::new();
 
-/// Makes `source` the OS bytes of every later draw of this process; `Err` when a source is already set.
+/// Makes `source` the OS bytes of every later sample of this process; `Err` when a source is already set.
 pub fn set_os_source(source: Box<dyn FnMut(&mut [u8]) + Send>) -> Result<(), String> {
     OS_SOURCE.set(std::sync::Mutex::new(source)).map_err(|_| "the prover's OS source is already set".to_string())
 }
@@ -301,7 +392,7 @@ pub fn chacha20_block(key: &[u8; 32], counter: u64, nonce: u64) -> [u8; 64] {
     out
 }
 
-/// The prover's random words: in a proving build the OS's, read afresh by every sample (two draws at one address get different
+/// The prover's random words: in a proving build the OS's, read afresh by every sample (two samples at one address get different
 /// words); under an injected seed, ChaCha20 stream `purpose | table << TABLE_SHIFT` from word `8 index`, a function of the seed
 /// and the address alone.
 pub struct ProverRng {
@@ -351,7 +442,7 @@ impl ProverRng {
     /// `n` words for each of `lanes` lanes, on rayon's threads: in a proving build each lane read from the OS; under an injected
     /// seed lane `i` is stream `purpose` at index `i << 32` (`f128s(purpose, (i as u64) << 32, n)`), sampled in [`LANE_CHUNK`]-word
     /// pieces, each worker with its own copy of the generator: a word is a function of the seed and its address alone, so the
-    /// draw is the sequential one's word for word.
+    /// sample is the sequential one's word for word.
     pub fn f128s_lanes(&self, purpose: u64, lanes: usize, n: usize) -> Vec<Vec<F128>> {
         use rayon::prelude::{IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator, ParallelSliceMut};
         let Some(rng) = &self.rng else {
@@ -395,7 +486,7 @@ pub trait Hooks {
     }
 }
 
-/// M0: every hook the identity; the prover randomness drawn per proof all the same (the selftests fill the mask slot from it).
+/// M0: every hook the identity; the prover randomness sampled per proof all the same (the selftests fill the mask slot from it).
 pub struct NoMask {
     pub rng: ProverRng,
 }
@@ -427,7 +518,7 @@ mod tests {
         assert_ne!(r.f128s(STREAM_PAD, 5, 2), a);
     }
 
-    /// Level 0's hiding draws its lanes in parallel (`f128s_lanes`): every lane's words are the sequential draw's, whatever the
+    /// Level 0's hiding samples its lanes in parallel (`f128s_lanes`): every lane's words are the sequential sample's, whatever the
     /// generator read before, in every table, at lane lengths that end inside a ChaCha20 block, at a piece's end, and inside
     /// a later piece.
     #[test]
@@ -474,8 +565,8 @@ mod tests {
         }
     }
 
-    /// Salts drawn elsewhere for the next trees ([`LeafSalts::preset`], the Lean finish's): the first draw of each at its size
-    /// takes them; a second draw, a sample at another size and a tree past them read their own.
+    /// Salts sampled elsewhere for the next trees ([`LeafSalts::preset`], the Lean finish's): the first sample of each at its size
+    /// takes them; a second sample, a sample at another size and a tree past them read their own.
     #[test]
     fn preset_salts_are_the_next_trees() {
         let mut a = LeafSalts::for_seed(&ProverSeed::from_os());
@@ -492,6 +583,67 @@ mod tests {
         let id = a.next_id();
         assert_ne!(a.expand(id, 2), trees[1], "a tree past the preset ones reads afresh");
         assert!(a.preset(vec![vec![0; 5]]).is_err(), "a preset tree is whole leaves");
+    }
+
+    /// Trees read ahead ([`SaltsAhead::draw`]) are the bytes their samples would read, taken once at their size: the same proof
+    /// under an injected seed whether read ahead or not, and a tree sampled first, at another size or twice reads its own.
+    #[test]
+    fn salts_read_ahead_are_the_samples_bytes() {
+        let seed = ProverSeed::injected([6; 32]);
+        let (mut a, mut b) = (LeafSalts::for_seed(&seed), LeafSalts::for_seed(&seed));
+        let (first, second) = (a.next_id(), a.next_id());
+        let mut given = 0;
+        a.ahead().draw(&[(a.level0_id(), 4), (first, 3), (second, 2), (second + 1, 2)], &mut |n, fill| {
+            given += n;
+            fresh(n, fill)
+        });
+        assert_eq!(given, (4 + 3 + 2 + 2) * SALT_BYTES, "every tree read ahead goes into a buffer the caller gives");
+        assert_eq!(*a.level0(4), *b.level0(4));
+        let (b1, b2) = (b.next_id(), b.next_id());
+        assert_eq!(*a.take(first, 3), *b.take(b1, 3));
+        assert_eq!(a.expand(second, 2), b.expand(b2, 2));
+        assert_eq!(a.ahead().untaken(), 1, "the tree no sample took");
+        assert_eq!(a.take(second + 1, 5).len(), 5 * SALT_BYTES, "a sample at another size reads its own");
+        let os = LeafSalts::for_seed(&ProverSeed::from_os());
+        let id = 1;
+        os.ahead().draw(&[(id, 3)], &mut fresh);
+        let t = os.take(id, 3);
+        assert_eq!(os.ahead().untaken(), 0, "the first sample takes the tree read ahead");
+        assert_ne!(*t, os.expand(id, 3), "a second sample of a tree read ahead reads afresh");
+        let late = LeafSalts::for_seed(&ProverSeed::from_os());
+        let l0 = late.level0(2);
+        late.ahead().draw(&[(late.level0_id(), 2)], &mut |_, _| panic!("level 0 was read already"));
+        assert!(std::sync::Arc::ptr_eq(&l0, &late.level0(2)));
+    }
+
+    fn fresh(n: usize, fill: &mut dyn FnMut(&mut [u8])) -> std::sync::Arc<Vec<u8>> {
+        let mut b = vec![0u8; n];
+        fill(&mut b);
+        std::sync::Arc::new(b)
+    }
+
+    /// A tree read ahead into a buffer the caller reuses holds what a fresh buffer would: every byte is written, whatever the
+    /// buffer held (an injected seed's bytes exactly; the OS's, no leaf left as it was).
+    #[test]
+    fn salts_read_into_a_reused_buffer_are_the_samples_bytes() {
+        fn reused(old: &mut std::sync::Arc<Vec<u8>>) -> impl FnMut(usize, &mut dyn FnMut(&mut [u8])) -> std::sync::Arc<Vec<u8>> + '_ {
+            move |n, fill| {
+                let b = std::sync::Arc::get_mut(old).expect("a buffer nothing else holds");
+                assert_eq!(b.len(), n);
+                fill(b);
+                old.clone()
+            }
+        }
+        let leaves = 2 * OS_PIECE / SALT_BYTES + 3;
+        let seed = ProverSeed::injected([7; 32]);
+        let (a, b) = (LeafSalts::for_seed(&seed), LeafSalts::for_seed(&seed));
+        let mut old = std::sync::Arc::new(vec![0xa5u8; leaves * SALT_BYTES]);
+        a.ahead().draw(&[(a.level0_id(), leaves)], &mut reused(&mut old));
+        assert_eq!(*a.level0(leaves), *b.level0(leaves));
+        let os = LeafSalts::for_seed(&ProverSeed::from_os());
+        let mut old = std::sync::Arc::new(vec![0xa5u8; leaves * SALT_BYTES]);
+        os.ahead().draw(&[(os.level0_id(), leaves)], &mut reused(&mut old));
+        assert!(os.level0(leaves).chunks(SALT_BYTES).all(|l| l.iter().any(|&x| x != 0xa5)), "every leaf read from the OS");
     }
 
     /// An injected seed's salts are its ChaCha20 tape: leaf `i` of tree `id` is blocks `3i..3i+2` under the `STREAM_SALT` key with
@@ -544,7 +696,7 @@ mod tests {
         assert_ne!(ProverRng::from_os().f128s(STREAM_MASK, 0, 2), ProverRng::from_os().f128s(STREAM_MASK, 0, 2));
     }
 
-    /// A proving build's words are the OS's: two draws at one address, two tables of one seed at one address, and the lanes of
+    /// A proving build's words are the OS's: two samples at one address, two tables of one seed at one address, and the lanes of
     /// a sample spanning several `getrandom` pieces share no word.
     #[test]
     fn os_draws_are_read_afresh_at_every_address() {
@@ -559,7 +711,7 @@ mod tests {
         }
     }
 
-    /// Two proofs' masks share no bit beyond chance: the M1 draws of two OS seeds (the algebraic phase's pads and dot-product
+    /// Two proofs' masks share no bit beyond chance: the M1 samples of two OS seeds (the algebraic phase's pads and dot-product
     /// mask for both reps, the mask slot, Ligerito level 0's padding and extra lanes) XOR to a balanced bit string. The
     /// protocol-level version is `flock-circuit zkstat`'s cross-run XOR test.
     #[test]

@@ -2,6 +2,10 @@ module
 
 public import Definitions.Pouw.Assumptions.Dimension.H100Dense
 public import Proofs.Pouw.Dimension.H100WProofs
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.NormNum.GCD
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Dimension.EmbedProofs
 
 /-!
 # Dense words and the legacy k8 class in `MH100w`: proofs
@@ -340,7 +344,7 @@ theorem apartCert : ApartCert := by
   linarith
 
 /-- **The γ bound with a legacy class.** -/
-theorem legacyGamma : LegacyGamma := by
+theorem legacyGap : LegacyGap := by
   intro a c pr hpr hca hac ha G F D hconst hD0 S fpSem L P ts T₁ T₂ ε μ hn _ _ hL hwf hacc hdense hsep hd₂ hapart
     ho₁ ho₂ hlive hμ
   have h := denseWritesLegacy a c pr hpr hca hac G F D hconst hD0 S fpSem L P T₁ T₂ hL hwf hacc hdense hsep hd₂

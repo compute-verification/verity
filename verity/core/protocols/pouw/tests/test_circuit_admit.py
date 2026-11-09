@@ -10,7 +10,7 @@ import pytest
 
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.types import Array
-from verity.core.protocols.pouw.circuit import admit as A
+from verity.ml.protocols.pouw.circuit import admit as A
 
 #: a live row's scale, as the u32 of its f32
 LIVE = struct.unpack("<I", struct.pack("<f", 0.5))[0]

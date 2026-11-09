@@ -8,14 +8,12 @@ public import Definitions.Nci.Dark
 # The inference-only policy's guarantees on a reference training circuit, under one assumption
 
 `ThreadedThrottled` and `ThreadedThrottledOn` restated with `TrainingIncompressible` as their only named assumption, in
-place of `WeightsIncompressible`, and the partial-sum law on a reference circuit under it, whole and through a partial
+place of `WeightsIncompressible`, and the partial-sum rule on a reference circuit under it, whole and through a partial
 containment. Each statement names both the chain and the threading the assumption charges, and uses one of them.
 
 The assumption is in reads, so a dark gate of a partial containment absorbs at most its fresh input reads of the partial
 sums, where in support form it absorbed at most its width: the dark-gate term of `IncompressibleContainedMatMulOn` is
-the dark gates' reads. At `μ = 1` that term goes, and with it the partial sums: `ContainedFanOutOn` bounds the products
-a declaration computes under the activations' half of the assumption alone, `ActivationsIncompressible` on the reference
-circuit.
+the dark gates' reads.
 -/
 
 @[expose] public section
@@ -50,7 +48,7 @@ def IncompressibleThreadedThrottledOn : Prop :=
     T.Threaded Γ (α * Γ) dd e → Assumptions.TrainingIncompressible r ch T Γ (α * Γ) b_w b_a →
       b_a * (T.M ∩ M.S).card ≤ α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed
 
-/-- **Training is slowed by the partial-sum law, under training's incompressibility** (`TrainingIncompressible`): when
+/-- **Training is slowed by the partial-sum rule, under training's incompressibility** (`TrainingIncompressible`): when
 the products of a chain `ch` that `r` runs, at 2 flops each, are a fraction `κ` of `r`'s size, every declaration that
 contains `r` and complies at `(c, k)`, with its registered information free of the reference circuit's fresh input
 (`ThetaRegistered`), is larger by a factor of at least `κ F`. `dd` is the chain's smallest inner dimension. -/
@@ -63,7 +61,7 @@ def IncompressibleContainedTraining : Prop :=
     Assumptions.Coverage κ r (2 * ch.G) →
       κ * F α (α * Γ) b_w b_a dd * r.D.size r.D.computed ≤ d.D.size d.D.computed
 
-/-- **The partial-sum law with dark gates, under training's incompressibility** (`TrainingIncompressible`): a
+/-- **The partial-sum rule with dark gates, under training's incompressibility** (`TrainingIncompressible`): a
 declaration `d` that complies at `(c, k)` and contains `r` partly (`PartialContainment`,
 computing the gates `S` of `r` and leaving the rest dark) computes the chain's products in `S`, `G_S` of them, with
 `max (min c₁ c₂) (μ b_a / Λ) · G_S ≤ α size(d) + (1 − μ) ∑_{v dark} novelReads(v)` for each `μ ∈ [0, 1]`,
@@ -84,7 +82,7 @@ def IncompressibleContainedMatMulOn : Prop :=
           ch.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ M.S).card ≤
       α * d.D.size d.D.computed + (1 - μ) * ∑ v ∈ M.dark, (novelReads r {v} : ℝ)
 
-/-- **Training is slowed, by the partial-sum law, with dark gates, under training's incompressibility**
+/-- **Training is slowed, by the partial-sum rule, with dark gates, under training's incompressibility**
 (`TrainingIncompressible`): when the chain's products, at 2 flops each, are a fraction `κ` of
 the reference circuit's size, each product off the books is a dark gate, so
 `max (min c₁ c₂) (μ b_a / Λ) · (κ size(r) − 2 #dark) ≤ 2 (α size(d) + (1 − μ) ∑_{v dark} novelReads(v))`. -/
@@ -100,23 +98,5 @@ def IncompressibleContainedTrainingOn : Prop :=
           (μ * b_a / max (emax : ℝ) (K / (4 * b_w * dd))) *
         (κ * r.D.size r.D.computed - 2 * M.dark.card) ≤
       2 * (α * d.D.size d.D.computed + (1 - μ) * ∑ v ∈ M.dark, (novelReads r {v} : ℝ))
-
-/-- **Products done in the declaration are bounded by their fan-out** (`IncompressibleContainedMatMulOn` at `μ = 1`): a
-declaration `d` that complies at `(Γ, α)` and contains `r` partly computes the chain's products in `S`, `G_S` of them,
-with `b_a / Λ · G_S ≤ α size(d)`, `Λ = max e_max (K / (4 b_w dd))`, and no term for the dark gates, so it holds
-even when every partial sum is added off the books. Each inference block makes at most `Λ` products per `b_a` bits it
-reads: `e_max` per input entry it uses at a position it completes no entry of, one for each row of the multiplication,
-and, at positions it completes entries of, `K / (4 b_w dd)` per `b_a` bits by AM–GM on its weight and input reads. Of
-training's incompressibility it needs only the activations' half, `ActivationsIncompressible` on `r` at read cap
-`K ≥ α Γ`, besides the registered-information premise `ThetaRegistered`. -/
-def ContainedFanOutOn : Prop :=
-  ∀ (Γ : ℕ) (α K b_w b_a : ℝ) (r d : RegisteredCircuit) (ch : Chain r.D) (dd emax : ℕ) (M : PartialContainment r d),
-    0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → α * Γ ≤ K →
-    (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → CompliesRate Γ α d → Assumptions.ThetaRegistered r d M →
-    Assumptions.ActivationsIncompressible r ch Γ K b_w b_a →
-      b_a / max (emax : ℝ) (K / (4 * b_w * dd)) *
-        (Finset.univ.filter fun p : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ) × Fin (ch.d ℓ) =>
-          ch.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ M.S).card ≤
-      α * d.D.size d.D.computed
 
 end Nci.Guarantees

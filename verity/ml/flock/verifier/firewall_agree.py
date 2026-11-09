@@ -5,16 +5,16 @@ the contract's property.
 
     python firewall_agree.py --lean BIN --out DIR [--cases] [--sessions DIR... [--schedule FILE]]
 
-Each session runs through the ZK server with `verity_flock.firewall_transcript` watching what it sends the coin server; the
+Each session runs through the ZK server with `verity_flock.firewall_transcript` watching what it sends the challenger; the
 ZK server's decision is whether the session ended with Finish, the contract's is `Flock.Firewall.Contract.run` on the
 transcript under the verifier's public input, the session's own schedule (`verdicts`, `decide`). `--cases` runs the built-in sessions (`cases`): honest ones (on live coins,
-as `rec_live serve`'s, and on coins the challenger committed to), the red team's six against the firewall (at
-c00b85b0c), challengers whose coins the firewall must refuse (an opening of live coins; of committed ones, an opening that
-does not open, or none), and tamper controls, firewalls that let out what the contract forbids, which the contract must refuse. `leaks` are the firewall review's transcripts that leak a bit, each with its public input and the item the
+as `rec_live serve`'s, and on coins the challenger committed to), the red team's six against the ZK server (at
+c00b85b0c), challengers whose coins the ZK server must refuse (an opening of live coins; of committed ones, an opening that
+does not open, or none), and tamper controls, firewalls that let out what the contract forbids, which the contract must refuse. `leaks` are the ZK server review's transcripts that leak a bit, each with its public input and the item the
 contract must cut. `--sessions` replays
 recorded inner sessions (`rec_live serve`'s output directories: ``session/session.json``, ``public.json``, ``private.json``,
 ``coins.json`` when the challenger committed, and ``schedule.json`` beside them or in their parent, or ``--schedule``) with
-their own coins and salts, checks the replay gives the recorded coin server record and commitments byte for byte, and
+their own coins and salts, checks the replay reproduces the challenger's record and commitments byte for byte, and
 expects both to accept. Each case carries its expectation (``firewall``, ``lean``,
 and a prefix of the contract's reason); one where the two may differ says why (``divergence``). Writes DIR/<case>.json,
 DIR/agreement.tsv and DIR/result.json; exits 1 if any case misses its expectation.
@@ -119,7 +119,7 @@ def requests(hello=None, y=bytes(32), order="prover", finish=True, ping=False):
 
 
 class ForwardsHello(RL.Proxy):
-    """The firewall before d828d3ea9 (red team's gap 2): the challenger records the prover's Hello, not the schedule's."""
+    """The ZK server before d828d3ea9 (red team's gap 2): the challenger records the prover's Hello, not the schedule's."""
 
     def _handle(self, r):
         if r[0] == RL.REQ_HELLO:
@@ -302,7 +302,7 @@ def replay(d: Path, schedule: dict | None = None) -> tuple[FT.Session, str | Non
     diff = next((k for k in got if k in pub and json.dumps(got[k], sort_keys=True) != json.dumps(pub[k], sort_keys=True)), None)
     if diff is None and rec_coins is not None and s.coins.commitment_record() != rec_coins:
         return s, "the replay's commitments to the coins differ from coins.json"
-    return s, (f"the replay's coin server record differs from public.json at {diff}" if diff else None)
+    return s, (f"the challenger's record in the replay differs from public.json at {diff}" if diff else None)
 
 
 def decide(lean: str, out: Path, named: list[tuple[str, dict, dict]]) -> list[dict]:
@@ -335,8 +335,8 @@ def verdicts(lean: str, out: Path, sessions: list[tuple[str, FT.Session]]) -> li
 
 
 def leaks() -> list[tuple[str, dict, dict, dict]]:
-    """The firewall review's transcripts, each a
-    bit the firewall could choose, built from the honest case's transcript: ``(name, transcript, public input,
+    """The ZK server review's transcripts, each a
+    bit the ZK server could choose, built from the honest case's transcript: ``(name, transcript, public input,
     expectation)``, the expectation the contract's verdict (``accepted``), the items it releases (``released``: the cut is
     the next one) and a part of why. B1, the commitments' count and place: one more, one fewer, one moved. B2, a tape
     number naming another's value: a salt's bytes under two numbers, the workers seeing one under another number, the same

@@ -8,7 +8,7 @@ public import Proofs.Core.Game.Seq
 public import Proofs.Flock.Claims.Prob
 
 /-!
-# Soundness at the verifier of record, from its subprotocols' targets
+# Soundness at the verifier, from its subprotocols' targets
 
 A composite's acceptance is its acceptance as a `same` composition and every component's on its own case
 (`accepts_same`, `accepts_components`, from `Properties.Composition`'s `answerAccepts` at the composite, `acceptTied` at
@@ -52,7 +52,7 @@ theorem component_mem {k : Verity.Registration.Composite} {a : Subprotocol} {P :
   cases k <;> cases a <;> simp [component] at h <;> subst h <;>
     simp [componentsOf, Onsite.components, Remote.components]
 
-/-- **Each composite's verifier of record is the one the composites' table lists for it**, with its subprotocols'
+/-- **Each composite's verifier is the one the composites' table lists for it**, with its subprotocols'
 ids. -/
 theorem verifier_mem (k : Verity.Registration.Composite) :
     (verifier k, (componentsOf k).map (·.id)) ∈ Composites.composites := by
@@ -60,14 +60,14 @@ theorem verifier_mem (k : Verity.Registration.Composite) :
   · exact List.mem_cons.2 (Or.inl rfl)
   · exact List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inl rfl)))
 
-/-- **What a composite's verifier of record accepts, it accepted as a `same` composition**: an accepted composition of
-its components whose record subprotocols committed to one record, at onsite PoUS and PoUB-P2 on one store, and at
-remote every window of PoUW's period on the policy's record. -/
+/-- **What a composite's verifier accepts, it accepted as a `same` composition**: an accepted composition of
+its components whose record subprotocols committed to one record, every window of PoUW's period on the policy's record,
+and at onsite PoUS and PoUB-P2 on one store. -/
 theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts k s) : SameAccepts k s := by
   cases k
   · obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
       Properties.Composition.answerAccepts (Onsite.protocol.on s.blobs) s.params s.commitment s.evidence h
-    obtain ⟨hh, hties⟩ := Properties.Composition.acceptTied [Onsite.store] ev
+    obtain ⟨hh, hties⟩ := Properties.Composition.acceptTied Onsite.ties ev
       (Composition.checkSame "verity/onsite/v0" Onsite.tied (s.components .onsite) ps c ev) pub prof hch
     exact ⟨ps, c, ev, ⟨hp, hc, he⟩, pub, prof,
       Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hh, hties⟩
@@ -78,7 +78,7 @@ theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts
     exact ⟨ps, c, ev, ⟨hp, hc, he⟩, pub, prof,
       Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hh, hties⟩
 
-/-- **What a composite's verifier of record accepts, each of its subprotocols' components accepts on its own
+/-- **What a composite's verifier accepts, each of its subprotocols' components accepts on its own
 case.** -/
 theorem accepts_components {k : Verity.Registration.Composite} {s : Sent} (h : Accepts k s) {a : Subprotocol}
     (ha : a ∈ subprotocols k) : ComponentAccepts k a s := by
@@ -136,14 +136,26 @@ theorem remote_soundness_of_subprotocols : RemoteSoundness := by
   · exact hI
   all_goals exact absurd (Finset.mem_filter.1 ha).2 Bool.false_ne_true
 
+open Classical in
+/-- **The close's sample**: from the prover's close, an event's probability is its probability over the device's sample, at
+the bytes the close leaves to the device and the evidence the strategy sends after each sample. -/
+theorem prob_finish (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray) (log : List Release)
+    (p : Exchange → Prop) (t : Game.Strategy (finish D θ F c a log)) :
+    Game.prob p (finish D θ F c a log) t = Game.avg fun ρ : Fin D.draws → Bool =>
+      if p ⟨θ, F, c, a, log, t.1, List.ofFn ρ, D.signatures a log t.1 (List.ofFn ρ), (t.2 ρ).1.1, (t.2 ρ).1.2⟩
+      then 1 else 0 := rfl
+
 /-- An event every play after `θ`, `F` and `c` meets has probability one. -/
-theorem prob_play_eq_one (fs : List (String × ℕ)) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (p : Exchange → Prop)
-    (hp : ∀ log (e : ByteArray × Array ByteArray), p ⟨θ, F, c, log, e.1, e.2⟩) (σ : Game.Strategy (play fs θ F c)) :
-    Game.prob p (play fs θ F c) σ = 1 := by
-  refine (Game.prob_bind_of_const (fun log => Game.send (ByteArray × Array ByteArray) fun e =>
-    Game.ret (⟨θ, F, c, log, e.1, e.2⟩ : Exchange)) p
-    (fun _ => True) (fun log t => ?_) (releases (frames fs) fs []) σ).trans (Game.prob_true _ _)
-  simp [Game.prob, hp]
+theorem prob_play_eq_one (fs : List (String × ℕ)) {D : Signer} (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (p : Exchange → Prop) (hp : ∀ o : Exchange, o.params = θ ∧ o.files = F ∧ o.commitment = c → p o)
+    (σ : Game.Strategy (play fs D θ F c)) : Game.prob p (play fs D θ F c) σ = 1 := by
+  refine (Game.prob_send p ByteArray (fun a => (releases (frames fs) fs []).bind (finish D θ F c a)) σ).trans <|
+    (Game.prob_bind_of_const (finish D θ F c σ.1) p (fun _ => True) (fun log t => ?_)
+      (releases (frames fs) fs []) σ.2).trans (Game.prob_true _ _)
+  rw [prob_finish]
+  refine ((congrArg Game.avg (funext fun ρ => ite_eq_left ?_)).trans (Game.avg_const 1)).trans
+    (Game.prob_true _ _).symm
+  exact hp _ ⟨rfl, rfl, rfl⟩
 
 /-- **Its hypotheses hold at the honest deployment**: at registered files, where each of composite `k`'s subprotocols'
 honest lemma holds (`Vocab.HonestHolds`), the deployment's honest prover meets every target with probability `0` on its
@@ -184,17 +196,20 @@ theorem soundness_nontrivial_of {ι α : Type} [Fintype α] {d : Device ι} (V :
   intro h
   have h1 := prob_play_eq_one (V.families θ) θ F c
     (fun o => (fun _ => True) o.sent ∧ V.Registered o.params o.files ∧ ∃ a ∈ subprotocols k, ¬ V.Holds k θ F c σ a o)
-    (fun _ _ => ⟨trivial, hreg, a, ha, hfail _⟩) σ
+    (fun o h3 => ⟨trivial, h3.1 ▸ h3.2.1 ▸ hreg, a, ha, hfail o⟩) σ
   exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le (h θ F c σ)).trans_lt hlt)
 
 /-- An event no play after `θ`, `F` and `c` meets has probability zero. -/
-theorem prob_play_eq_zero (fs : List (String × ℕ)) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (p : Exchange → Prop)
-    (hp : ∀ log (e : ByteArray × Array ByteArray), ¬ p ⟨θ, F, c, log, e.1, e.2⟩) (σ : Game.Strategy (play fs θ F c)) :
-    Game.prob p (play fs θ F c) σ = 0 := by
-  refine (Game.prob_bind_of_const (fun log => Game.send (ByteArray × Array ByteArray) fun e =>
-    Game.ret (⟨θ, F, c, log, e.1, e.2⟩ : Exchange)) p
-    (fun _ => False) (fun log t => ?_) (releases (frames fs) fs []) σ).trans (Game.prob_false _ _)
-  simp [Game.prob, hp]
+theorem prob_play_eq_zero (fs : List (String × ℕ)) {D : Signer} (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (p : Exchange → Prop) (hp : ∀ o : Exchange, o.params = θ ∧ o.files = F ∧ o.commitment = c → ¬ p o)
+    (σ : Game.Strategy (play fs D θ F c)) : Game.prob p (play fs D θ F c) σ = 0 := by
+  refine (Game.prob_send p ByteArray (fun a => (releases (frames fs) fs []).bind (finish D θ F c a)) σ).trans <|
+    (Game.prob_bind_of_const (finish D θ F c σ.1) p (fun _ => False) (fun log t => ?_)
+      (releases (frames fs) fs []) σ.2).trans (Game.prob_false _ _)
+  rw [prob_finish]
+  refine ((congrArg Game.avg (funext fun ρ => ite_eq_right ?_)).trans (Game.avg_const 0)).trans
+    (Game.prob_false _ _).symm
+  exact hp _ ⟨rfl, rfl, rfl⟩
 
 /-- **One subprotocol's failing instance is the theorem's**: at files that pass the commit phase's check, a strategy at
 which the claim of one of composite `k`'s subprotocols fails with probability above the errors summed makes the
@@ -207,7 +222,7 @@ theorem soundness_nontrivial_of_lt {ι α : Type} [Fintype α] {d : Device ι} (
     ¬ V.SoundnessFor k fun _ => True := by
   intro h
   have hz : Game.prob (fun o => ¬ V.Registered o.params o.files) (V.game θ F c) σ = 0 :=
-    prob_play_eq_zero (V.families θ) θ F c _ (fun _ _ hn => hn hreg) σ
+    prob_play_eq_zero (V.families θ) (D := V.signer θ) θ F c _ (fun _ h3 hn => hn (h3.1 ▸ h3.2.1 ▸ hreg)) σ
   have hle : Game.prob (fun o => ¬ V.Holds k θ F c σ a o) (V.game θ F c) σ ≤
       Game.prob (fun o => (fun _ => True) o.sent ∧ V.Registered o.params o.files ∧
         ∃ a ∈ subprotocols k, ¬ V.Holds k θ F c σ a o) (V.game θ F c) σ :=
@@ -258,19 +273,23 @@ theorem prob_bind_strategy {β γ : Type} (f : β → Game γ) (p : γ → Prop)
   | @Game.coin _ _ _ _ k, s => congrArg Game.avg (funext fun c => prob_bind_strategy f p t ht (k c) (s c))
 
 /-- **Every input whose blobs begin with the committed files is what some play sends**: at any parameters `θ`,
-committed files `F` and commitment `c`, and any evidence `e` and evidence blobs `B`, the strategy that closes the
-device at once and then sends `e` with `B` ends every play with the composite reading
-`⟨θ, c, e, F ++ B⟩`. So the game's event admits every input of that shape the compiled verifier accepts. -/
-theorem sent_reachable (fs : List (String × ℕ)) (θ : ByteArray) (F : Array ByteArray) (c e : ByteArray) (B : Array ByteArray) :
-    ∃ σ : Game.Strategy (play fs θ F c),
-      Game.prob (fun o => o.params = θ ∧ o.files = F ∧ o.sent = ⟨θ, c, e, F ++ B⟩) (play fs θ F c) σ = 1 := by
-  let f : List Release → Game Exchange := fun log =>
-    Game.send (ByteArray × Array ByteArray) fun e' => Game.ret (⟨θ, F, c, log, e'.1, e'.2⟩ : Exchange)
-  let t : (log : List Release) → Game.Strategy (f log) := fun _ => ⟨(e, B), PUnit.unit⟩
+committed files `F` and commitment `c`, and any evidence `e` and evidence blobs `B`, the strategy that sends an empty
+request, closes the device at once with an empty close and then sends `e` with `B` ends every play with the composite
+reading `⟨θ, c, e, F ++ B⟩`. So the game's event admits every input of that shape the compiled verifier accepts. -/
+theorem sent_reachable (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c e : ByteArray)
+    (B : Array ByteArray) :
+    ∃ σ : Game.Strategy (play fs D θ F c),
+      Game.prob (fun o => o.params = θ ∧ o.files = F ∧ o.sent = ⟨θ, c, e, F ++ B⟩) (play fs D θ F c) σ = 1 := by
+  let t : (log : List Release) → Game.Strategy (finish D θ F c .empty log) :=
+    fun _ => ⟨.empty, fun _ => ⟨(e, B), PUnit.unit⟩⟩
   obtain ⟨s⟩ := releases_nonempty (frames fs) fs []
-  refine ⟨Game.Strategy.bind (releases (frames fs) fs []) f s t, ?_⟩
-  refine (prob_bind_strategy f _ t (fun _ => ?_) (releases (frames fs) fs []) s).trans (Game.prob_true _ _)
-  simp [f, t, Game.prob, Exchange.sent]
+  refine ⟨⟨.empty, Game.Strategy.bind (releases (frames fs) fs []) (finish D θ F c .empty) s t⟩, ?_⟩
+  refine (Game.prob_send _ ByteArray (fun a => (releases (frames fs) fs []).bind (finish D θ F c a)) _).trans <|
+    (prob_bind_strategy (finish D θ F c .empty) _ t (fun log => ?_) (releases (frames fs) fs []) s).trans
+      (Game.prob_true _ _)
+  rw [prob_finish]
+  refine (congrArg Game.avg (funext fun ρ => ite_eq_left ?_)).trans (Game.avg_const 1)
+  exact ⟨rfl, rfl, rfl⟩
 
 /-- **The event of `Vocab.SoundnessAt` holds every acceptance of the compiled verifier**: if composite `k`'s compiled
 verifier accepts an input whose blobs are committed files that pass the commit phase's check followed by any evidence
@@ -281,7 +300,7 @@ theorem Vocab.accepts_reachable {ι α : Type} [Fintype α] {d : Device ι} (V :
     (hacc : Accepts k ⟨θ, c, e, F ++ B⟩) (hreg : V.Registered θ F) :
     ∃ σ : Game.Strategy (V.game θ F c),
       Game.prob (fun o => Accepts k o.sent ∧ V.Registered o.params o.files) (V.game θ F c) σ = 1 := by
-  obtain ⟨σ, hσ⟩ := sent_reachable (V.families θ) θ F c e B
+  obtain ⟨σ, hσ⟩ := sent_reachable (V.families θ) (V.signer θ) θ F c e B
   refine ⟨σ, le_antisymm (Game.prob_le_one _ _ _) (hσ.symm.le.trans (Game.prob_mono ?_ _ σ))⟩
   rintro o ⟨hθ, hF, hs⟩
   refine ⟨?_, ?_⟩
@@ -367,6 +386,14 @@ theorem finderCROf_of_expectedCR {G : Game Exchange} {cost : Game.Strategy G →
   unfold finderCROf
   exact List.forall_iff_forall_mem.2 fun f hf => f.cr_of_expectedCR σ (h f hf)
 
+/-- **`B^τ`'s collision premise gives its bound**: where subprotocol `a`'s finder meets `Claims.ExpectedCR`
+(`Vocab.FinderCR`), its calls within its budget (`Vocab.finderSpec`) put its collision probability at most `crBound`
+at the strategy's calls. -/
+theorem Vocab.finderPr_le_crBound {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α) {a : Subprotocol}
+    {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
+    (h : V.FinderCR a θ F c σ) : (V.finder a θ F c σ).Pr sha512Msg ≤ V.crBound θ a (V.cost θ F c σ) :=
+  (V.finderSpec a θ F c).cr_of_expectedCR σ h
+
 namespace Idle
 
 /-- At `unbounded`, every subprotocol's error is `⊤`. -/
@@ -397,7 +424,8 @@ theorem forger_pr (verify : Hash.Msg → Hash.Msg → Hash.Msg → Bool) : forge
 theorem error_exact (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (exact.game θ F c)) :
     exact.error a θ F c σ = 0 := by
   unfold Vocab.error Accounting.condError
-  rw [if_pos ⟨trivial, le_of_eq (finder_pr _), fun _ _ => le_of_eq (forger_pr _)⟩]
+  rw [if_pos ⟨trivial, (finder_pr _).trans_le
+    (div_nonneg (Claims.Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)), fun _ _ => le_of_eq (forger_pr _)⟩]
   simp [exact, vocab]
 
 /-- At `exact`, PoUW's claim fails on every play: it certifies one gate computed, and no play computes one. -/

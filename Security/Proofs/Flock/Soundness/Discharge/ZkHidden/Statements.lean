@@ -2,13 +2,26 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Placed
-public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The statements: flock-verify `--zk`'s acceptance and its tables under hidden outputs
 
 ZkExec's acceptance statements and ZkLink's `TablesAtZKLive` take `hh : I.tags.hiddenOutputs = false`: they are about
-`Stmt.setupH`'s statements, and under hidden outputs (the default `--statement`, PROTOCOL §16.13) `Stmt.setupTables`
+`Stmt.setupH`'s statements, and under hidden outputs (the default `--statement`, `HmOut`) `Stmt.setupTables`
 calls `Stmt.setupHidden`. Each statement here is one of them for the sessions production `--zk` writes, as HiddenExec's
 are for the public path. Where the original names `setupH`, this one names `setupOne` (without `hh`) or
 `setupHidden` (under `hh = true`); otherwise the conclusion is the original's.
@@ -40,7 +53,7 @@ local notation "𝔽" => FlockLevel3.GF128
 /-! ## Acceptance -/
 
 /-- **Each table of a `--zk` acceptance is `setupOne`'s statement** under the `--zk` tags and the coin tree, at some
-draw (the record's, for one table), and passes the `--zk` shape check (`AcceptsZKSetupH` without `hh`). -/
+sample (the record's, for one table), and passes the `--zk` shape check (`AcceptsZKSetupH` without `hh`). -/
 def AcceptsZKSetupOne : Prop :=
   ∀ (I : Inputs) (t : Exec.Transcript), AcceptsZK I t →
     ∃ spec sts, setupOf (zkInputs I) t.record = .ok (spec, sts) ∧
@@ -63,7 +76,7 @@ def AcceptsZKRetainedAny : Prop :=
       ∀ s ∈ sess.streams.toList, AllRetained s.rounds
 
 /-- **A one-table hidden-output `--zk` acceptance is placed** (lp-zkbind's `acceptsZK_accepted` at one table, with
-`AcceptedH` for `Accepted`): the table is setupHidden's statement `st` at the record's draw, it passes the shape check,
+`AcceptedH` for `Accepted`): the table is setupHidden's statement `st` at the record's sample, it passes the shape check,
 and at any regions there is an `AcceptedH` of `st` under the `--zk` tags on the session's files, coins and tables. -/
 def AcceptsZKAcceptedH : Prop :=
   ∀ (I : Inputs) (t : Exec.Transcript), I.tags.hiddenOutputs = true → I.tags.typed = false → ∀ {c : Flock.Circuit},
@@ -99,10 +112,10 @@ variable {n : ℕ} {mPts : ℕ} {Reg : Type}
 
 /-- **Wherever flock-verify accepts a hidden-output session, the `--zk` table is the executable's**
 (`TablesAtZKLive` under `hh = true`). On hidden-output one-table inputs whose `--statement` tags are untyped and whose
-circuit file `HmOut.parse` accepts (at the `--zk` tags) as a circuit whose unit returns the outputs, with `wr` the coin
-server's record (`RecordsLiveZK`): whenever the draw `S` is `DrawOkZKH` and `verify --zk` accepts what `wr` writes for
+circuit file `HmOut.parse` accepts (at the `--zk` tags) as a circuit whose unit returns the outputs, with `wr` the challenger's
+live-coin part's record (`RecordsLiveZK`): whenever the sample `S` is `DrawOkZKH` and `verify --zk` accepts what `wr` writes for
 `o` at it, setupHidden's statement `st` at `dj S` under the `--zk` tags is well formed, `Zk.schedule st.m` is
-`(sch, t_pad)`, the draw has a `DrawSetupZKH` at `st`, `sch` and `t_pad` whose table is `tablesAtZKH … S R`, and at the
+`(sch, t_pad)`, the sample has a `DrawSetupZKH` at `st`, `sch` and `t_pad` whose table is `tablesAtZKH … S R`, and at the
 record's link points `Setup.ofCircuit st`'s extra claims are that table's. -/
 def TablesAtZKHLive : Prop :=
   ∀ (I : Inputs) (_ht : I.tags.typed = false) {c : Flock.Circuit}

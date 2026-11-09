@@ -1,5 +1,5 @@
-"""The whole encoded store through the staging decode on one GPU, one tensor at a time, each held to the plain weights'
-digests; then the exact W8A8 GEMM on one layer's staged matrices.
+"""The whole encoded store through the store's load on one GPU, one tensor at a time, each held to the plain weights'
+digests; then the exact W8A8 GEMM on one layer's loaded matrices.
 
     python full.py --layout LAYOUT --weights M (--w W | --generator G --shape S --weights-seed SEED)
                    --encoded ENC --source HEX --commitment HEX --lib LIB --out OUT [--layers 0-52] [--gemm-layer 51]
@@ -16,7 +16,7 @@ encoded store, read only, under the salt `setup.draw_salt` of the coin and commi
     decodes, each into the buffer poisoned again and timed alone by CUDA events;
   - the last timed decode's bytes back to the host, and each stream tensor it stacks held to the manifest's SHA-256 (in
     `hashers` threads, while the next tensor decodes);
-  - its rows and its buffer freed, so one tensor's rows and staging buffer are on the device at a time.
+  - its rows and its buffer freed, so one tensor's rows and load buffer are on the device at a time.
 - **summary**: each tensor's fastest decode summed, which is the decode of a step measured tensor by tensor, and the peak
   HBM torch allocated and reserved over the pass.
 - **receipts** (`--receipts`): PoUB's pass over the units the store's tensors lie in
@@ -27,13 +27,13 @@ encoded store, read only, under the salt `setup.draw_salt` of the coin and commi
   alone; then y and the root under fresh salts. The summary's `receipts` gives the root, the pass's timestamps, each
   stage's time summed like the decode's, and the overhead on the decode; with `--keep`, σ, y, the salts and the pass go
   to that directory for `bw_ref.py`.
-- **gemm**, after the pass, `--gemm-layer`'s matrices staged again one at a time: x [M, K] s8 and sx [M] f32 seeded on the
+- **gemm**, after the pass, `--gemm-layer`'s matrices loaded again one at a time: x [M, K] s8 and sx [M] f32 seeded on the
   device (rows 0, 1 and 2 all -128, all 127 and all 0), the stream's f32 scales (held to the manifest's SHA-256),
   `int_mm.linear` (s8_linear's int_mm backend, fused epilogue on CUDA) on `n_chunk` output channels at a time, every word against `gemm.twin`, and
   samples for `check.py`; and the pass's peak HBM.
 
 Writes `OUT/full.json` (one record per tensor, the summary, the GEMMs) and `OUT/samples-<matrix>-m<M>.npz`; exits 1 if a
-staged tensor's digest, a refusal or a GEMM word isn't as it should be, and stops at a segment whose SHA-512 differs.
+loaded tensor's digest, a refusal or a GEMM word isn't as it should be, and stops at a segment whose SHA-512 differs.
 """
 from __future__ import annotations
 
@@ -220,7 +220,7 @@ class Audit:
 
 
 def digests(src: L.Weights, t: L.Tensor, host: np.ndarray) -> dict[str, bool]:
-    """Whether each stream tensor `t` stacks has, in `host` (its staged bytes), the SHA-256 the weights manifest gives."""
+    """Whether each stream tensor `t` stacks has, in `host` (its loaded bytes), the SHA-256 the weights manifest gives."""
     out, at = {}, 0
     for name in t.stream_names:
         r = src.rows[name]
@@ -230,7 +230,7 @@ def digests(src: L.Weights, t: L.Tensor, host: np.ndarray) -> dict[str, bool]:
 
 
 def decode(args, lay: L.StoreLayout, segs: Segments, t: L.Tensor, audit: Audit | None = None
-           ) -> tuple[torch.Tensor | None, S.Store, dict]:
+           ) -> tuple[torch.Tensor | None, S.EncodedRows, dict]:
     """`t`'s rows onto the device and decoded into a fresh buffer: the buffer (None if refused), the store and timings.
     With `audit`, the rows are of whole units and the decode sketches them."""
     t0 = time.perf_counter()
@@ -238,7 +238,7 @@ def decode(args, lay: L.StoreLayout, segs: Segments, t: L.Tensor, audit: Audit |
     rows = segs.rows(r)
     sync()
     rows_s = time.perf_counter() - t0
-    store = S.Store(lay, rows, r.start, args.lib, chunk=args.chunk)
+    store = S.EncodedRows(lay, rows, r.start, args.lib, chunk=args.chunk)
     store.sketch = audit.P if audit else None
     w = torch.empty(t.n, t.k, dtype=torch.int8, device=DEVICE)
     S.flat(w).fill_(0xA5)
@@ -252,7 +252,7 @@ def decode(args, lay: L.StoreLayout, segs: Segments, t: L.Tensor, audit: Audit |
     return w, store, rec
 
 
-def sketched(store: S.Store, sk, layer: int, name: str, w: torch.Tensor) -> None:
+def sketched(store: S.EncodedRows, sk, layer: int, name: str, w: torch.Tensor) -> None:
     store.sketch = sk
     S.decode_matrix(store, layer, name, w)
 
@@ -481,7 +481,7 @@ def main(argv=None) -> int:
         read = L.reader(args.w) if args.w else L.generator_reader(args.generator, args.shape, args.weights_seed)
         ok &= gemm_pass(args, lay, src, read, out)
     rc = summary.get("receipts")
-    print(f"full {'PASS' if ok else 'FAIL'}: {summary['tensors']} tensors staged and held to the manifest's SHA-256, "
+    print(f"full {'PASS' if ok else 'FAIL'}: {summary['tensors']} tensors loaded and held to the manifest's SHA-256, "
           f"decode step {summary['decode_step_s']} s"
           + (f"; receipts pass {rc['pass']} over the tensors' {rc['units']} units of the store's {rc['store_units']} "
              f"({rc['padding_units_left_out']} padding units left out), root {rc['root'][:16]}..., step with receipts "

@@ -1,18 +1,53 @@
 module
 
-public import Proofs.Flock.SessionLoop.FinHmkFc
 public import Proofs.Flock.Claims.ZK.FinishInnerRet
-public import Proofs.Flock.Claims.ZK.FinishSwFc
+public import Proofs.Flock.Claims.ZK.FinishSwSrc
+public import Proofs.Flock.Claims.ZK.SimLig
+public import Proofs.Flock.SessionLoop.FinRep
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.FinishSwFc
+import Proofs.Flock.SessionLoop.FinHmkCut
+import Proofs.Flock.SessionLoop.FinHmkFc
 
 /-!
 # The views' masked values below `zp 64`, `final_c`'s included, from the cut session's own return
 
-`Loop.swSrcE_hmk_fw` reaches `final_c` through the firewall's rep, so it needs the firewall's pads commitment to be the
+`Loop.swSrcE_hmk_fw` reaches `final_c` through the ZK server's rep, so it needs the ZK server's pads commitment to be the
 switched cut's (`hicE`), and that holds only where table `j`'s rows do: elsewhere the switched pads are shifted and the
 two roots differ. The cut session's own rep at stream `2j + r`, returning (`hprev`'s body at `k = 2j + r`), needs
 neither: its PIOP returns (`piopCut_of_repCut`, so `swSrcE_hmk_cut` applies without `hpiop`), and the same rep cut at
 its inner proof's first round stops there with that round's body (`repCut_inner_of_ret`), at `repSlot … (innerOff 0)`
-(`Masked.innerAt_slot`), which is `swSrcE_hmk_cut_fc`'s premise. It reads no rows, no firewall run and no level-0 values.
+(`Masked.innerAt_slot`), which is `swSrcE_hmk_cut_fc`'s premise. It reads no rows, no ZK server run and no level-0 values.
 
 * **`Loop.swSrcE_hmk_ret`**: every masked value of the views' source below `zp 64` is the request's plus its pad.
 -/
@@ -44,7 +79,7 @@ theorem swSrcE_hmk_ret (vs : finS.SwVals)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
-    (hc : finS.SwCausal vs)
+    (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs)
     {ν : finS.Nonce} {t : finS.Tape} {κ : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Chk} {m₀ ρ₀ : Msg}
     {ops : List (Msg × Msg)} (hF : FinCtx (LeanRelease.ofLoopLink L₀ src (realOf src)) wk x w ν t κ m₀ ρ₀ ops)
     {s0 : _} {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x))

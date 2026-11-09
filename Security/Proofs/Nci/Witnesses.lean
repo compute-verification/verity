@@ -37,8 +37,6 @@ theorem compliesRate_D : CompliesRate 2 (1 / 2) D := by
 theorem compliesRate_Dθ : CompliesRate 2 0 Dθ := by
   simpa only [Nat.cast_zero, zero_div] using SecurityProofs.compliesRate_of_complies isCK_Dθ (by decide)
 
-theorem boolean_D : D.D.Boolean := ⟨fun _ => rfl, by decide⟩
-
 theorem size_D : D.D.size D.D.computed = 2 := by decide
 
 theorem card_T1 : T1.M.card = 1 := by decide
@@ -51,20 +49,6 @@ theorem not_theta_Dθ : ¬ Assumptions.ThetaRegistered D Dθ Mθ :=
 
 theorem dark_id (r : RegisteredCircuit) : (PartialContainment.ofContainment (c := r) (d := r) (idC r.D)).dark = ∅ :=
   Finset.sdiff_self _
-
-/-- The toy complies at no read cap `0`: its gate `2` reads the token, an unregistered input, which no proof block
-holds. -/
-theorem not_complies_zero : ¬ Complies 2 0 D := by
-  rintro ⟨B, P, hP⟩
-  have h2 : P.unit 2 ≠ none := fun h => absurd ((P.input_iff 2).1 h) (by decide)
-  obtain ⟨u, hu⟩ := Option.ne_none_iff_exists'.1 h2
-  have h1 : P.unit 1 = none := (P.input_iff 1).2 rfl
-  have hmem : (1 : Fin 4) ∈ D.unregistered (P.gates u) := by
-    simp only [RegisteredCircuit.unregistered, Circuit.into, Partition.gates, mem_sdiff, mem_filter, mem_univ, true_and]
-    refine ⟨⟨by simp [h1], 2, hu, by decide⟩, by decide⟩
-  have := hP.reads u
-  rw [Nat.le_zero, card_eq_zero] at this
-  simp [this] at hmem
 
 theorem T1_threaded {k : ℝ} : T1.Threaded 2 k 1 0 := by
   have key : ∀ R : Finset (Fin 4), R ⊆ C.computed → ∀ t : Fin 1, (T1.threadReads R t).card < 1 →
@@ -222,40 +206,6 @@ theorem ch1_spread {n : ℕ} (P : Partition C n) (x : (ℓ : Fin ch1.L) × Fin c
   rw [Partition.mem_gates] at hu hv
   exact Option.some_injective _ (hu.symm.trans hv)
 
-theorem ch1_activations {b_w b_a : ℝ} (hw : 0 ≤ b_w) (ha : 0 ≤ b_a) (hs : b_w + b_a ≤ 1) :
-    Assumptions.ActivationsIncompressible D ch1 2 1 b_w b_a := by
-  intro R hR _ _
-  simp only [ch1_notLinked, not_false_eq_true, filter_const, ↓reduceIte]
-  obtain ⟨hw', hi'⟩ := ch1_nat R hR
-  have hw'' : ((ch1.weightsUsed R).card : ℝ) ≤ novelReads D R := by exact_mod_cast hw'
-  have hi'' : ((ch1.inputsUsed R).card : ℝ) ≤ novelReads D R := by exact_mod_cast hi'
-  have h0 : (0 : ℝ) ≤ novelReads D R := Nat.cast_nonneg _
-  nlinarith
-
-theorem ch1_partialSums {b_w b_a : ℝ} (hw : b_w ≤ 1) :
-    Assumptions.PartialSumsIncompressible D ch1 2 1 b_w b_a := by
-  intro n P _
-  refine ⟨fun _ => 0, ?_, fun u => ?_⟩
-  · refine le_trans (Finset.sum_le_sum fun x _ => Nat.sub_le_of_le_add (ch1_spread P x)) ?_
-    simp
-  · have h := (ch1_nat _ (P.gates_subset_computed u)).1
-    have h' : ((ch1.weightsUsed (P.gates u)).card : ℝ) ≤ novelReads D (P.gates u) := by exact_mod_cast h
-    have h0 : (0 : ℝ) ≤ (ch1.weightsUsed (P.gates u)).card := Nat.cast_nonneg _
-    simp only [CharP.cast_eq_zero, mul_zero, add_zero]
-    nlinarith
-
-theorem not_ch1_activations : ¬ Assumptions.ActivationsIncompressible D ch1 2 1 1 2 := by
-  intro h
-  have := h {2} (by decide) (by decide) (by norm_num [show novelReads D {2} = 1 by decide])
-  simp only [ch1_notLinked, not_false_eq_true, filter_const, ↓reduceIte] at this
-  rw [show (ch1.weightsUsed {2}).card = 1 by decide,
-    show (ch1.inputsUsed {2}).card = 1 by decide, show novelReads D {2} = 1 by decide] at this
-  norm_num at this
-
-theorem smallBlocks_P1 : Assumptions.SmallBlocks D P1 2 1 := by
-  have key : ∀ u : Fin 1, D.D.size (P1.gates u) ≤ 2 ∧ novelReads D (P1.gates u) ≤ 1 := by decide
-  exact fun u => ⟨(key u).1, by exact_mod_cast (key u).2⟩
-
 theorem dark_M1 : M1.dark = ∅ := Finset.sdiff_self _
 
 theorem dark_Mθ : Mθ.dark = ∅ := Finset.sdiff_self _
@@ -275,70 +225,6 @@ theorem not_coverage_ch0 : ¬ Assumptions.Coverage 1 D (2 * (ch0 C).G) := by
   unfold Assumptions.Coverage
   rw [size_D, ch0_G]
   norm_num
-
-/-- The toy's run with the token `0`: admissible, the weight at its registered value. -/
-def tokenZero : C.Transcript := fun g => if g = 1 then 0 else 1
-
-theorem support_pos (T : Finset (Fin 4)) : 1 ≤ support D ones T :=
-  card_pos.2 (Finset.Nonempty.image ⟨ones, mem_filter.2 ⟨mem_univ _, fun _ _ => rfl⟩⟩ _)
-
-/-- A set holding gate `2` takes two values over the toy's admissible runs: `2` holds the token. -/
-theorem support_two (T : Finset (Fin 4)) (h : 2 ∈ T) : 2 ≤ support D ones T := by
-  have hones : ones ∈ admissible D ones := mem_filter.2 ⟨mem_univ _, fun _ _ => rfl⟩
-  have hzero : tokenZero ∈ admissible D ones := mem_filter.2 ⟨mem_univ _, by decide⟩
-  have hne : values (D := C) T ones ≠ values (D := C) T tokenZero := fun he => by
-    have h2 := congrArg (fun v => BitVec.getLsbD v 0) (congrFun he ⟨2, h⟩)
-    simp only [values] at h2
-    rw [eval_two, eval_two] at h2
-    exact absurd h2 (by decide)
-  exact one_lt_card.2 ⟨_, mem_image_of_mem _ hones, _, mem_image_of_mem _ hzero, hne⟩
-
-theorem rpow_le_support (T : Finset (Fin 4)) {x : ℝ} (hx : x ≤ 1) (h0 : 2 ∉ T → x ≤ 0) :
-    (2 : ℝ) ^ x ≤ support D ones T := by
-  by_cases h : 2 ∈ T
-  · calc (2 : ℝ) ^ x ≤ 2 ^ (1 : ℝ) := Real.rpow_le_rpow_of_exponent_le (by norm_num) hx
-      _ = 2 := Real.rpow_one 2
-      _ ≤ support D ones T := by exact_mod_cast support_two T h
-  · calc (2 : ℝ) ^ x ≤ 2 ^ (0 : ℝ) := Real.rpow_le_rpow_of_exponent_le (by norm_num) (h0 h)
-      _ = 1 := Real.rpow_zero 2
-      _ ≤ support D ones T := by exact_mod_cast support_pos T
-
-theorem ch1_count : ∀ T : Finset (Fin 4), (ch1.weightsUsed T).card = (if 2 ∈ T then 1 else 0) ∧
-    (ch1.inputsUsed T).card = (if 2 ∈ T then 1 else 0) := by decide
-
-theorem ch1_charge (R T : Finset (Fin 4)) (b_w b_a : ℝ) :
-    ch1.charge R b_w b_a T = (b_w + b_a) * ((if 2 ∈ T then 1 else 0 : ℕ) : ℝ) := by
-  unfold Chain.charge
-  simp only [ch1_notLinked, not_false_eq_true, filter_const, ↓reduceIte]
-  rw [(ch1_count T).1, (ch1_count T).2]
-  ring
-
-theorem ch1_activationsSupport (k : ℝ) : Assumptions.ActivationsSupport D ones ch1 k (1 / 2) (1 / 2) := by
-  intro R _ T _ _
-  rw [ch1_charge]
-  exact rpow_le_support T (by split_ifs <;> norm_num) fun h => by simp [h]
-
-theorem ch1_partialSumsSupport (c : ℕ) (k : ℝ) : Assumptions.PartialSumsSupport D ones ch1 c k (1 / 2) (1 / 2) := by
-  intro n P _
-  refine ⟨fun _ => 0, ?_, fun u => ?_⟩
-  · refine le_trans (Finset.sum_le_sum fun x _ => Nat.sub_le_of_le_add (ch1_spread P x)) ?_
-    simp
-  · simp only [Nat.cast_zero, mul_zero, add_zero]
-    rw [(ch1_count _).1]
-    exact rpow_le_support _ (by split_ifs <;> norm_num) fun h => by simp [h]
-
-theorem ch0_activationsSupport (k b_w b_a : ℝ) : Assumptions.ActivationsSupport D ones (ch0 C) k b_w b_a := by
-  intro R _ T _ _
-  rw [show (ch0 C).charge R b_w b_a T = 0 by simp [Chain.charge, ch0_weightsUsed, ch0_inputsUsed], Real.rpow_zero]
-  exact_mod_cast support_pos T
-
-theorem ch0_partialSumsSupport (c : ℕ) (k b_w b_a : ℝ) :
-    Assumptions.PartialSumsSupport D ones (ch0 C) c k b_w b_a := by
-  intro n P _
-  refine ⟨fun _ => 0, le_trans (le_of_eq (Finset.sum_eq_zero fun x _ => x.1.elim0)) (Nat.zero_le _), fun u => ?_⟩
-  rw [ch0_weightsUsed]
-  simp only [card_empty, Nat.cast_zero, mul_zero, add_zero, Real.rpow_zero]
-  exact_mod_cast support_pos _
 
 theorem ch1_T1_incompressible {k : ℝ} : Assumptions.TrainingIncompressible D ch1 T1 2 k (1 / 2) (1 / 2) := by
   intro n P
@@ -396,26 +282,12 @@ theorem pch1_T1_incompressible :
       exact_mod_cast hi
     linarith
 
-theorem pch1_activations : Assumptions.PackedActivationsIncompressible D ch1.toPacked 2 1 (1 / 2) (1 / 2) := by
-  intro R hR _ _
-  simp only [pch1_notLinked, not_false_eq_true, filter_const, ↓reduceIte]
-  obtain ⟨hw, hi⟩ := pch1_nat R hR
-  have hw' : ((ch1.toPacked.weightsUsed R).card : ℝ) ≤ novelReads D R := by exact_mod_cast hw
-  have hi' : ((ch1.toPacked.inputsUsed R).card : ℝ) ≤ novelReads D R := by exact_mod_cast hi
-  linarith
-
 /-- The factor the contained bounds charge a product at `μ = 1`, `K = 1`, `b_w = b_a = 1/2`, `dd = emax = 1`: its
 second branch, `μ b_a / max(emax, K/(4 b_w dd)) = 1/2`. -/
 theorem factor_half : (1 / 2 : ℝ) ≤
     max (min ((1 + √1) ^ 2 * (1 / 2 * (1 / 2) * 1 / 1)) (√2 * (1 + √1) * √(1 - 1) * (1 / 2 * √(1 / 2 / 1))))
       (1 * (1 / 2) / max (1 : ℝ) (1 / (4 * (1 / 2) * 1))) :=
   le_max_of_le_right (by rw [max_eq_left (by norm_num : (1 / (4 * (1 / 2) * 1) : ℝ) ≤ 1)]; norm_num)
-
-/-- The factor the fan-out bounds charge a product at `K = 1`, `b_a = b_w = 1/2`, `dd = emax = 1`:
-`b_a / max(emax, K/(4 b_w dd)) = 1/2`. -/
-theorem fanOut_half : (1 / 2 : ℝ) ≤ (1 / 2 : ℝ) / max (1 : ℝ) (1 / (4 * (1 / 2) * 1)) := by
-  rw [max_eq_left (by norm_num : (1 / (4 * (1 / 2) * 1) : ℝ) ≤ 1)]
-  norm_num
 
 theorem not_bound {m x y : ℝ} (hm : 1 / 2 ≤ m) (hx : 1 ≤ x) (hy : y ≤ 0) : ¬ (m * x ≤ y) :=
   fun h => by nlinarith
@@ -430,10 +302,6 @@ theorem mb0_upstream (r : RegisteredCircuit) (A : Empty → Finset (Fin (Cover.C
   disjoint := by intro j; exact j.elim
   disjoint_θ j := j.elim
   upstream j := j.elim
-
-theorem mb0_regionsAtLeast (r : RegisteredCircuit) (Aw : Empty → Finset (Fin r.D.N)) (f : ℕ) :
-    Cover.Assumptions.RegionsAtLeast (mb0 r) Aw f :=
-  fun j => j.elim
 
 theorem mb0_coverage_zero : Assumptions.Coverage 0 D (mb0 D).P.card := by
   unfold Assumptions.Coverage
@@ -453,43 +321,6 @@ theorem D_blockFits : Cover.Assumptions.BlockFits D 2 1 1 4 := by
 theorem capBelowDepth_one_two : Cover.Assumptions.CapBelowDepth 1 1 2 := by
   unfold Cover.Assumptions.CapBelowDepth
   norm_num
-
-/-- The token's bit in the toy's bit view. -/
-def tokenBit : Fin (Cover.bitDecl D).D.N := Fin.cast (by decide : 4 = (Cover.bitDecl D).D.N) 1
-
-theorem tokenBit_read : ∀ j, tokenBit ∈ (Cover.bitDecl D).D.reads (productBit j) := by decide
-
-theorem tokenBit_source : tokenBit ∈ Covering.sources (Cover.bitDecl D).D := by decide
-
-theorem tokenBit_not_θ : tokenBit ∉ (Cover.bitDecl D).θ := by decide
-
-/-- A set of bits that completes one of `mbBits`' products is handed the token's bit, one bit outside the registered
-ones, and there is one weight. -/
-theorem mbBits_parameterHard (s : ℕ) : Assumptions.ParameterHardAt (Cover.bitDecl D) mbBits s 1 := by
-  classical
-  intro S _
-  rw [one_mul]
-  by_cases h : (mbBits.weightsCompleted S).Nonempty
-  · obtain ⟨i, hi⟩ := h
-    obtain ⟨p, hp, -⟩ := mem_image.1 hi
-    have ho : mbBits.o p ∈ S.inner := (mem_filter.1 hp).2 (mem_singleton_self _)
-    obtain ⟨hg, hn⟩ := mem_sdiff.1 ho
-    have htok : tokenBit ∈ S.gates := S.closed _ hg hn (tokenBit_read p.2)
-    have h1 : (mbBits.weightsCompleted S).card ≤ 1 := (card_le_univ _).trans_eq (Fintype.card_fin _)
-    have h2 : 1 ≤ (S.ins \ (Cover.bitDecl D).θ).card :=
-      card_pos.2 ⟨_, mem_sdiff.2 ⟨S.sources_ins _ htok tokenBit_source, tokenBit_not_θ⟩⟩
-    exact_mod_cast h1.trans h2
-  · rw [not_nonempty_iff_eq_empty.1 h]
-    simp
-
-/-- At depth `0` every product is chained, with no activation and no upstream weight. -/
-theorem mbBits_chained_zero (ca : ℝ) : (Assumptions.chainedBlocksAt (Cover.bitDecl D) mbBits 0 ca).card = 2 := by
-  classical
-  have h : Assumptions.chainedBlocksAt (Cover.bitDecl D) mbBits 0 ca = mbBits.P :=
-    filter_true_of_mem fun p hp => ⟨hp, ∅, ∅, empty_subset _, fun a ha => absurd ha (notMem_empty a),
-      Nat.zero_le _, fun i h => absurd h (notMem_empty i), fun _ hQ => absurd hQ (Nat.not_lt_zero _)⟩
-  rw [h]
-  rfl
 
 end Nci.Witness
 
@@ -593,11 +424,11 @@ theorem not_windowsHold_T0 : ¬ Assumptions.WindowsHold (T0 D) 1 1 (1 / 2) 0 1 1
 
 theorem dampener_T0_fails :
     ¬ (efficiency 1 1 2 0 ≤
-        unmonitoredShare 2 0 +
+        unregisteredShare 2 0 +
             min (residualShare 0 2) (memoryCap (T0 D).reuse 1 0 ((1 : ℕ) / (2 : ℕ) : ℝ) 1 (1 / 2) (1 / 2) * (1 + 1 / 1)) +
           declaredShare 1 (rhoT ((1 : ℕ) / (2 : ℕ) : ℝ) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0) := by
   rw [bound_T0, show (T0 D).reuse = 0 from rfl]
-  norm_num [efficiency, unmonitoredShare, residualShare, memoryCap, declaredShare, rhoT]
+  norm_num [efficiency, unregisteredShare, residualShare, memoryCap, declaredShare, rhoT]
 
 theorem DampenerThreaded_honest : Guarantees.DampenerThreaded_honest := by
   refine ⟨compliesRate_D, theta_id D, T1_threaded, T1_weights, by rw [size_D]; norm_num, by decide,
@@ -666,14 +497,6 @@ theorem IncompressibleThreadedThrottledOn_nontrivial : Guarantees.Incompressible
   rw [show (T1.M ∩ Mθ.S).card = 1 by decide]
   norm_num
 
-theorem ContainedFanOutOn_honest : Guarantees.ContainedFanOutOn_honest :=
-  ⟨compliesRate_D, theta_id D, ch1_activations (by norm_num) (by norm_num) (by norm_num)⟩
-
-theorem ContainedFanOutOn_nontrivial : Guarantees.ContainedFanOutOn_nontrivial :=
-  ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, fun _ => le_rfl, fun _ => le_rfl,
-    compliesRate_Dθ, not_theta_Dθ, ch1_activations (by norm_num) (by norm_num) (by norm_num),
-    not_bound fanOut_half (Nat.one_le_cast.2 (by decide)) (by norm_num)⟩
-
 theorem coverage_pch1 : Assumptions.Coverage 1 D (2 * ch1.toPacked.G) := by
   unfold Assumptions.Coverage
   rw [size_D, show ch1.toPacked.G = 1 from rfl]
@@ -697,14 +520,6 @@ theorem PackedIncompressibleContainedTrainingOn_nontrivial :
   ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
     fun _ => le_rfl, fun _ => le_rfl, compliesRate_Dθ, not_theta_Dθ, darkReads_Mθ _, pch1_T1_incompressible,
     coverage_pch1, not_bound factor_half (by rw [size_D, dark_Mθ]; norm_num) (by norm_num)⟩
-
-theorem PackedContainedFanOutOn_honest : Guarantees.PackedContainedFanOutOn_honest :=
-  ⟨compliesRate_D, theta_id D, pch1_activations⟩
-
-theorem PackedContainedFanOutOn_nontrivial : Guarantees.PackedContainedFanOutOn_nontrivial :=
-  ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, fun _ => le_rfl, fun _ => le_rfl,
-    compliesRate_Dθ, not_theta_Dθ, pch1_activations,
-    not_bound fanOut_half (Nat.one_le_cast.2 (by decide)) (by norm_num)⟩
 
 theorem oneWindow_withinCompute : Assumptions.WithinCompute OneWindow.cap 2 := by
   norm_num [Assumptions.WithinCompute]
@@ -738,7 +553,7 @@ theorem DampenerRemote_nontrivial : Guarantees.DampenerRemote_nontrivial := by
   · norm_num at h
   · rintro - ⟨h1, -⟩
     rw [bound_T0] at h1
-    norm_num [efficiency, unmonitoredShare, residualShare, lagShare, declaredShare, rhoT] at h1
+    norm_num [efficiency, unregisteredShare, residualShare, lagShare, declaredShare, rhoT] at h1
 
 end Nci.SecurityProofs
 
@@ -753,21 +568,5 @@ theorem CoverTraining_honest : Guarantees.CoverTraining_honest :=
 theorem CoverTraining_nontrivial : Guarantees.CoverTraining_nontrivial :=
   ⟨by norm_num, by norm_num, compliesRate_D, theta_id D, mb0_updateHardness D 4 1, mb0_upstream D _ 2,
     capBelowDepth_one_two, D_blockFits, mb0_not_coverage_two, by rw [size_D]; norm_num⟩
-
-theorem CoverTrainingAligned_honest : Guarantees.CoverTrainingAligned_honest :=
-  ⟨compliesRate_D, theta_id D, mb0_updateHardness D 4 1, mb0_upstream D _ 2, capBelowDepth_one_two,
-    mb0_regionsAtLeast D _ 1, D_blockFits, mb0_coverage_zero⟩
-
-theorem CoverTrainingAligned_nontrivial : Guarantees.CoverTrainingAligned_nontrivial :=
-  ⟨by norm_num, by norm_num, compliesRate_D, theta_id D, mb0_updateHardness D 4 1, mb0_upstream D _ 2,
-    capBelowDepth_one_two, mb0_regionsAtLeast D _ 1, D_blockFits, mb0_not_coverage_two, by rw [size_D]; norm_num⟩
-
-theorem CoverTrainingChained_honest : Guarantees.CoverTrainingChained_honest :=
-  ⟨compliesRate_D, theta_id D, mbBits_parameterHard 4, capBelowDepth_one_two, D_blockFits⟩
-
-theorem CoverTrainingChained_nontrivial : Guarantees.CoverTrainingChained_nontrivial :=
-  ⟨by norm_num, compliesRate_D, theta_id D, mbBits_parameterHard 4,
-    by unfold Assumptions.CapBelowDepth; norm_num, by norm_num, D_blockFits,
-    by rw [mbBits_chained_zero, size_D]; norm_num⟩
 
 end Nci.Cover.SecurityProofs
