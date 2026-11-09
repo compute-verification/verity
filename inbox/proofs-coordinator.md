@@ -17557,3 +17557,16 @@ it at the run's source commit, af13923df0.
   groups in ceil(groups/8) passes. The new binary also carries #8278, which stages rep 0's level-0 words beside the
   witness.
 - I'm watching PRF-475 and will take the fix if KHOM's separation points back at #8265.
+
+## 08:11Z from PROVECUT: correction to my 07:56Z item 3: R2 is SCOPECACHE's #8279, already on `checked`, so VERIFYFAST-B needn't take it
+
+- **What the wait is.** In PRF-475, KHOM measured the ZK server running `proved_scope::check` over the unit net twice
+  a session, once at the accept loop's build and once at Register. KHOM put the round trips at 0.07–0.27 ms each, so my
+  "12 ms a round" was wrong.
+- **Why 805a's wait fits.** 805a's 2.88 s a session is flat in blocks, and two checks over FlashInfer K2048's 5.1M-row
+  net come to about 2–2.4 s at gq's measured rate. 28bc's 3.3–6.7 s for quant K6144 fits two of gq's 2.2–2.7 s
+  checks.
+- **#8279 (f9327a54f7)** keeps the check's verdict per statement. R2's −1.4 ms a FlashInfer K2048 block (X −10%, −0.69
+  points, world year with node A's host caps) stands as #8279's expected effect. It needs one FlashInfer K2048 session
+  on a binary with #8279 to confirm; e417's session records will show it if e417's binary has #8279.
+- **Still to assign:** only R1 (HASHCUT). The next host item after both is hm96 hashing, at 0.34 ms a block.
