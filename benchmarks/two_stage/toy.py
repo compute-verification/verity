@@ -36,7 +36,7 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.core.protocols.spot import service as S
+from verity.core.protocols.spot import second_stage as SS, service as S
 from verity.core.protocols.spot.one_stage import partition as P, registered as REG, registration as R
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import CompositeDefinition, bind
@@ -290,7 +290,6 @@ def references(q: int, out: Path) -> dict:
     beside it, and its prover file is deleted. Both files are a function of ``q`` and the design alone, byte for byte.
     Its registered reads are `reads`' file with none of the run's fields (`second_stage.blank_reads`): each port the
     value it reads (a link port the boundary port it opens, any other the member's own), its words and schema."""
-    from verity.core.protocols.spot import second_stage as SS
     from verity_flock.class_statement import member_stager
 
     window, names = interior_window("00" * 64, range(q)), boundary_ports(boundary_window(q, q))
