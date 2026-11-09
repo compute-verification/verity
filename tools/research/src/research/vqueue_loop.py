@@ -215,13 +215,19 @@ class _Clone(Queue):
 class World:
     """What the loop reads and changes: git in the clone and on origin, graph2, the labels, the PRs and the merge thread.  Each
     effect is one method, so a test fakes what it doesn't run for real.  With ``labels_at`` (a new `StoreLabels`), each tick
-    reads the labels afresh (`_relabel`), the issuer's keys kept at ``keys``."""
+    reads the labels afresh (`_relabel`).  ``cache`` is where it keeps the heads' own changes and the issuer's keys, not in
+    drive's files."""
 
     def __init__(self, q: Queue, labels, tasks: Executor, *, graph2: tuple[str, ...] = (), priority_file: Path | None = None,
                  post: Callable[[str, tuple[str, ...]], bool] | None = None, now: Callable[[], float] = time.time,
-                 labels_at: Callable[[], StoreLabels] | None = None, keys: Path | None = None):
+                 labels_at: Callable[[], StoreLabels] | None = None, cache: Path | None = None):
         self.q, self.labels, self.tasks, self.graph2 = q, labels, tasks, tuple(graph2)
-        self.priority_file, self.now, self.repo, self.labels_at, self.keys = priority_file, now, q.workdir, labels_at, keys
+        self.priority_file, self.now, self.repo, self.labels_at = priority_file, now, q.workdir, labels_at
+        self.keys = cache / "issuer-keys.json" if cache is not None else None
+        if cache is not None:
+            cache.mkdir(parents=True, exist_ok=True)
+            q._kept_at = cache / "own-changes.json"
+            q._kept = json.loads(q._kept_at.read_text()) if q._kept_at.is_file() else {}
         self.post: Callable[[str, tuple[str, ...]], bool] = post or merge_thread_post
         #: graph2's subcommands it was found to lack (`_graph2`)
         self.lacks: set[str] = set()
@@ -844,7 +850,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--remote", default=None, help="the repository (default the clone's origin)")
     ap.add_argument("--store", default=None, help="evidence store root (default $RESEARCH_STORE or ~/.research/store)")
     ap.add_argument("--lock", type=Path, default=LOCK, help=f"the loop's own lock (default {LOCK})")
-    ap.add_argument("--log", type=Path, default=LOG, help=f"the decision log, one JSON line per action (default {LOG})")
+    ap.add_argument("--log", type=Path, default=LOG, help=f"the decision log, one JSON line per action (default {LOG}); its "
+                                                          f"directory holds the loop's caches")
     ap.add_argument("--state", type=Path, default=STATE, help=f"each tick's candidates, their verdicts beside graph2's and what "
                                                               f"their graphs lack, rewritten each tick (default {STATE})")
     ap.add_argument("--priority-file", type=Path, default=PRIORITY, help=f"drive's priority list (default {PRIORITY})")
@@ -874,7 +881,7 @@ def main(argv: list[str]) -> int:
         q.branch = "main"
         graph2 = tuple(shlex.split(a.graph2))
         world = World(q, labels, Executor(Transport(store, (*graph2, "enqueue"), a.repo)), graph2=graph2,
-                      priority_file=a.priority_file, labels_at=labels_at, keys=a.log.parent / "issuer-keys.json")
+                      priority_file=a.priority_file, labels_at=labels_at, cache=a.log.parent)
         loop = Loop(world, a.log, shadow=a.shadow, dry_run=a.dry_run, batch=a.batch, depth=a.depth, state=a.state)
         if a.once or a.dry_run:
             loop.tick()
