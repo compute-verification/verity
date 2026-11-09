@@ -33,7 +33,7 @@
     {"file": "tests/engine/test_cov_difr_b0.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 2},
     {"file": "tests/engine/test_gen_dense2.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 9},
     {"file": "tests/engine/test_gen_dense2.py", "kind": "F401", "symbol": "<module>", "detail": "`verity_vllm.observe.fold.resolver.Compute` imported but unused"},
-    {"file": "tests/engine/test_gen_dense_gemma2_patterns.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 4},
+    {"file": "tests/engine/test_gen_dense_gemma2_patterns.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 3},
     {"file": "tests/engine/test_gen_dense_gemma2_patterns.py", "kind": "F401", "symbol": "<module>", "detail": "`tests.observe.test_patterns_synthetic.i64` imported but unused"},
     {"file": "tests/engine/test_gen_dense_gemma2_patterns.py", "kind": "F401", "symbol": "<module>", "detail": "`verity_vllm.observe.fold.resolver.Compute` imported but unused"},
     {"file": "tests/engine/test_gen_dense_softcap.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 8},
