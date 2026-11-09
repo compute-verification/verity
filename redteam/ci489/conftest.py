@@ -21,10 +21,10 @@ GRAPH2 = Path(os.environ.get("VQRED_GRAPH2", "/tmp/infra/infra/executor/graph2.p
 VQUEUE = Path(os.environ.get("VQRED_VQUEUE", "/tmp/vqueue/tools/research/src/research/vqueue.py"))
 
 
-def load(name: str, path: Path):
+def load(name: str, path: Path, as_name: str | None = None):
     if not path.is_file():
         pytest.skip(f"{name}: {path} is missing (set VQRED_{name.upper()})")
-    spec = importlib.util.spec_from_file_location(f"vqred_{name}", path)
+    spec = importlib.util.spec_from_file_location(as_name or f"vqred_{name}", path)
     mod = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)
@@ -38,4 +38,6 @@ def g2():
 
 @pytest.fixture(scope="session")
 def vq():
-    return load("vqueue", VQUEUE)
+    """ci's vqueue.py as `research.vqueue`, beside this checkout's `research` (its one import, `store.tool.glob_re`)."""
+    import research  # noqa: F401
+    return load("vqueue", VQUEUE, "research.vqueue")
