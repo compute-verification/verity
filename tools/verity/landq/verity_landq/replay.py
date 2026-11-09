@@ -30,6 +30,7 @@ import re
 import subprocess
 import sys
 import tomllib
+from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import datetime, timedelta
 from itertools import product
@@ -43,6 +44,8 @@ REPO = "compute-verification/verity"
 QUEUE = re.compile(r"Queue: #(\d+)")
 REVERT = re.compile(r'Revert "Queue: #(\d+)')
 LEAN_ENV = ("lean-toolchain", "lake-manifest.json")
+#: the step between the numbers a PR's repeated landings arrive under, above every PR number
+REPEAT = 1_000_000
 
 
 def _git(*a: str) -> str:
@@ -197,10 +200,12 @@ def tasks(plan: dict, lean_suites: str = "tree") -> list[dict]:
 
 def arrivals(doc: dict, bad: float, seed: int, world: sim.World) -> tuple[list[sim.Arrival], datetime]:
     """The trace's arrivals in minutes from its start; each breaks one task it touches with probability ``bad``, and a
-    reverted one always does."""
+    reverted one always does.  Each landing is its own change, so a PR that landed k times before arrives k times, the
+    i-th repeat under the number ``pr + i * REPEAT``, rather than as a new head of the first."""
     t0 = _when(doc["since"])
     rng = random.Random(seed)
     index = sim.Index(world.tasks)
+    seen: Counter[int] = Counter()
     out = []
     for a in doc["arrivals"]:
         paths = frozenset(a["paths"])
@@ -208,21 +213,31 @@ def arrivals(doc: dict, bad: float, seed: int, world: sim.World) -> tuple[list[s
         breaks = frozenset()
         if touched and (a["reverted"] or rng.random() < bad):
             breaks = frozenset({world.tasks[rng.choice(touched)].name})
-        out.append(sim.Arrival(a["pr"], a["head"], _minutes(a["ready"], t0), paths, _minutes(a["reviewed"], t0), breaks))
+        number = a["pr"] + seen[a["pr"]] * REPEAT
+        seen[a["pr"]] += 1
+        out.append(sim.Arrival(number, a["head"], _minutes(a["ready"], t0), paths, _minutes(a["reviewed"], t0), breaks))
     return out, t0
 
 
 def old_path(doc: dict, within: float = 120.0, lag: float = 180.0, every: float = 10.0) -> dict:
     """What the old path did with the same arrivals: ready-to-main from the ready mark to the first push of `main` holding
-    the landing (a reverted one never counts as on `main`), and main's lag from each landing on `checked`."""
+    the landing (a reverted one never counts as on `main`); main's lag as the simulator reads it, the age of the PR held
+    longest off `main` since it was ready and reviewed; and main's lag as the age of the oldest landing on `checked` not yet
+    on `main` (``checked_lag_*``), sampled only from the first push of `checked` the trace holds (``checked_from``), since
+    a landing older than that reads as first seen there."""
     t0, end = _when(doc["since"]), _minutes(doc["until"], _when(doc["since"]))
-    rows, held = [], []
+    rows, held, landed = [], [], []
     for a in doc["arrivals"]:
         on_main = None if a["main"] is None or a["reverted"] else _minutes(a["main"], t0)
         rows.append(sim.Landing(a["pr"], a["head"], _minutes(a["ready"], t0), _minutes(a["reviewed"], t0), on_main, 0, 0))
-        held.append((_minutes(a["checked"], t0), _minutes(a["main"], t0) if a["main"] else end))
+        out = _minutes(a["main"], t0) if a["main"] else end
+        held.append((_minutes(a["reviewed"], t0), out))
+        landed.append((_minutes(a["checked"], t0), out))
     s = sim.summary(sim.Report(tuple(rows), tuple(held), end, 1), within=within, lag=lag, every=every)
-    return {k: s[k] for k in ("prs", "landed", "p50_h", "p90_h", "within", "lag_max_h", "lag_ok")}
+    first = min((a["checked"] for a in doc["arrivals"]), default=doc["since"])
+    c = sim.summary(sim.Report((), tuple(landed), end, 1), lag=lag, every=every, start=_minutes(first, t0))
+    return {**{k: s[k] for k in ("prs", "landed", "p50_h", "p90_h", "within", "lag_max_h", "lag_ok")},
+            "checked_lag_max_h": c["lag_max_h"], "checked_lag_ok": c["lag_ok"], "checked_from": first}
 
 
 def queue(spec: str) -> tuple:
@@ -260,7 +275,8 @@ def _mean(rows: list[dict]) -> dict:
 def _table(old: dict, rows: list[dict]) -> str:
     head = "k  d  nodes   p50 h   p90 h  on main ≤2 h  lag max h  lag ≤3 h  ejects  false  bisect  cands  node use"
     lines = [head, f"old path       {old['p50_h']:6.2f}  {old['p90_h']:6.2f}  {old['within']:12.0%}  {old['lag_max_h']:9.1f}  "
-                   f"{old['lag_ok']:8.0%}"]
+                   f"{old['lag_ok']:8.0%}   (the oldest landing on checked not yet on main, from {old['checked_from'][:16]}: "
+                   f"max {old['checked_lag_max_h']:.1f} h, ≤3 h {old['checked_lag_ok']:.0%})"]
     for r in rows:
         lines.append(f"{r['batch']:<2d} {r['depth']:<2d} {r['nodes']:<5d}  {r['p50_h']:6.2f}  {r['p90_h']:6.2f}  "
                      f"{r['within']:12.0%}  {r['lag_max_h']:9.1f}  {r['lag_ok']:8.0%}  {r['ejects']:6.1f}  "

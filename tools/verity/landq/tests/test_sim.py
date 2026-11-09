@@ -25,6 +25,13 @@ def test_a_pr_lands_after_its_build_its_listing_and_the_tasks_it_touches() -> No
     assert sim.summary(r)["p50_h"] == pytest.approx(0.25)
 
 
+def test_a_new_head_ends_the_hold_on_the_head_it_replaced() -> None:
+    trace = [sim.Arrival(1, "h1", 0.0, frozenset({"a/x.py"})), sim.Arrival(1, "h2", 5.0, frozenset({"a/x.py"}))]
+    r = sim.simulate(trace, W, ONE)
+    assert [(x.head, x.main) for x in r.landings] == [("h1", None), ("h2", 20.0)]
+    assert sorted(r.held) == [(0.0, 5.0), (5.0, 20.0)]
+
+
 def test_a_cold_start_runs_every_task_once_and_later_candidates_read_the_cache() -> None:
     r = sim.simulate([arrive(1, 0.0, "a/x.py"), arrive(2, 100.0, "a/y.py")], sim.World(tasks=(A, B), warm=False), ONE)
     assert mains(r) == {1: 35.0, 2: 115.0}

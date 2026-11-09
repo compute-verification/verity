@@ -37,6 +37,22 @@ def test_the_old_path_counts_a_revert_or_a_pr_off_main_as_never_on_main() -> Non
     assert old["within"] == pytest.approx(1 / 3)
 
 
+def test_a_pr_that_landed_twice_arrives_as_two_changes_and_both_land() -> None:
+    doc = dict(DOC, arrivals=[row(1, "01:00", "02:30", "a/x.py"), {**row(1, "01:10", "05:00", "a/y.py"), "head": "h1b"}])
+    got, _ = replay.arrivals(doc, 0.0, 0, W)
+    assert [(a.pr, a.head) for a in got] == [(1, "h1"), (1 + replay.REPEAT, "h1b")]
+    assert all(x.main is not None for x in sim.simulate(got, W, replay.lq.Policy()).landings)
+
+
+def test_the_old_path_reads_main_lag_from_the_review_and_from_the_landing_on_checked() -> None:
+    old = replay.old_path(DOC)
+    assert old["lag_max_h"] == old["checked_lag_max_h"] == pytest.approx(410 / 60)
+    assert old["checked_from"] == "2000-01-01T01:00:00+00:00"
+    late = dict(DOC, arrivals=[*DOC["arrivals"][:2], {**DOC["arrivals"][2], "checked": "2000-01-01T06:00:00+00:00"}])
+    assert replay.old_path(late)["lag_max_h"] == pytest.approx(410 / 60)
+    assert replay.old_path(late)["checked_lag_max_h"] == pytest.approx(290 / 60)
+
+
 def test_the_table_has_the_old_path_and_one_row_per_combination() -> None:
     s = sim.summary(sim.simulate(replay.arrivals(DOC, 0.0, 0, W)[0], W, replay.lq.Policy()))
     text = replay._table(replay.old_path(DOC), [{"batch": 4, "depth": 2, "nodes": 4, **s}])

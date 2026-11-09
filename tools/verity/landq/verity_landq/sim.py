@@ -213,7 +213,7 @@ class _Sim:
         self.info: dict[tuple[int, str], tuple[frozenset[str], frozenset[str], frozenset[int]]] = {}
         self.row: dict[tuple[int, str], int] = {}
         self.rows: list[dict] = []
-        self.open: dict[tuple[int, str], float] = {}
+        self.open: dict[int, tuple[str, float]] = {}
         self.held: list[tuple[float, float]] = []
         self.counts = dict(candidates=0, bisections=0, retries=0, pages=0, runs=0, cached=0, advances=0)
         self.busy = 0.0
@@ -249,7 +249,7 @@ class _Sim:
             events += 1
             getattr(self, "on_" + kind)(*payload)
         end = self.now
-        for (pr, head), a in self.open.items():
+        for _, a in self.open.values():
             self.held.append((a, end))
         rows = tuple(Landing(r["pr"], r["head"], r["ready"], r["batchable"], r["main"], r["ejects"], r["false"])
                      for r in self.rows)
@@ -265,11 +265,23 @@ class _Sim:
         if self.live:
             self.live &= {c.tree for c in self.state.stack}
 
-    def on_ready(self, pr: int, head: str, reviewed: bool) -> None:
-        paths = self.info[(pr, head)][0]
+    def hold(self, pr: int, head: str, reviewed: bool) -> None:
+        """``head`` is now ``pr``'s: the head it moved from stops counting as held, and a reviewed one is held from now."""
+        old = self.open.get(pr)
+        if old is not None and old[0] != head:
+            self.release(pr, old[0])
         if reviewed:
-            self.open.setdefault((pr, head), self.now)
-        self.feed(lq.Ready(pr, head, paths, reviewed))
+            self.open.setdefault(pr, (head, self.now))
+
+    def release(self, pr: int, head: str) -> None:
+        old = self.open.get(pr)
+        if old is not None and old[0] == head:
+            del self.open[pr]
+            self.held.append((old[1], self.now))
+
+    def on_ready(self, pr: int, head: str, reviewed: bool) -> None:
+        self.hold(pr, head, reviewed)
+        self.feed(lq.Ready(pr, head, self.info[(pr, head)][0], reviewed))
 
     def on_built(self, cid: int, tree: str) -> None:
         self.feed(lq.Built(cid, tree))
@@ -346,7 +358,7 @@ class _Sim:
         self.dispatch()
 
     def on_back(self, pr: int, head: str) -> None:
-        self.open.setdefault((pr, head), self.now)
+        self.hold(pr, head, True)
         self.feed(lq.Ready(pr, head, self.info[(pr, head)][0], True))
 
     # the queue's decisions ------------------------------------------------------------------------------------------------
@@ -376,9 +388,7 @@ class _Sim:
             r = self.rows[self.row[(m.pr, m.head)]]
             if r["main"] is None:
                 r["main"] = self.now
-            a = self.open.pop((m.pr, m.head), None)
-            if a is not None:
-                self.held.append((a, self.now))
+            self.release(m.pr, m.head)
 
     def do_Eject(self, d: lq.Eject) -> None:
         rid = self.row[(d.pr, d.head)]
@@ -386,9 +396,7 @@ class _Sim:
         r["ejects"] += 1
         paths, breaks, _ = self.info[(d.pr, d.head)]
         r["false"] += not breaks
-        a = self.open.pop((d.pr, d.head), None)
-        if a is not None:
-            self.held.append((a, self.now))
+        self.release(d.pr, d.head)
         head = f"{d.head}+"
         self.know(d.pr, head, paths, frozenset(), rid)
         r["head"] = head
