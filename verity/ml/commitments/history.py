@@ -1,6 +1,7 @@
 """History tables: rows other proof blocks output, committed as one table that proof blocks read at hidden positions, as
-registered values are read. The Lean verifier (`Spot.HistoryTable`) is the definition;
-this module mirrors it, held to it by the spot suite's `test_history_difftest.py`.
+registered values are read. The Lean verifier (`Spot.HistoryTable`) is the definition; this module mirrors it, held to it
+by the spot suite's `test_history_difftest.py`, for the prover's committer (`HistoryTable`) and the verifier's side of a
+window (`verity.ml.windows.history`).
 
 A table's tree has a fixed capacity, `CAPACITY` leaves, whatever its length, so its shape says nothing of the request's.
 Its domain is ``CommitmentDomain(B, -2, RangeIndexedDomain(0, capacity))``, ``B`` the identity digest of
@@ -20,6 +21,8 @@ from __future__ import annotations
 
 import math
 from typing import Any, Mapping, Sequence
+
+import numpy as np
 
 from verity.ml.commitments import hm96
 from verity.ml.commitments.identity import identity_digest_sha512
@@ -181,3 +184,100 @@ def order(runs: Sequence[Mapping[str, Any]], length: int, writer: str, out: str,
     if at != length:
         raise ValueError(f"the runs cover {at} positions, not the table's {length}")
     return srcs
+
+
+def string(row: Sequence[int] | np.ndarray, words: int, salt: bytes) -> bytes:
+    """The ``b || c`` of a table row of ``words`` u16 words under ``salt``: its writer's output row's public string."""
+    r = np.asarray(row, dtype="<u2")
+    if r.shape != (words,):
+        raise ValueError(f"a table row is {words} u16 words, not shape {r.shape}")
+    return _INST.commit_string(_INST.default_key, sha512_row_seg_digest(r.tobytes(), 16 * words), bytes(salt))
+
+
+class HistoryTable:
+    """The prover's history table across windows: table ``value`` of ``program`` (`domain`), its rows of ``words`` u16 words
+    appended in position order (`append`), each under its own salt, in a tree of ``capacity`` leaves with `placeholder`'s
+    past its length. The tree is kept whole, so an append rehashes only the leaves and paths it changes: a window's rows
+    cost about ``log2(capacity)`` hashes each, never the table's capacity again. It reads as a registered value does where
+    a window commits one (`verity.ml.windows.interface.Window`'s ``registered``): ``rows``, ``salts``, ``words``,
+    ``word_bits``, ``leaves`` (its capacity), ``root``, ``path`` and ``entry``; ``bcs`` are its rows' public strings."""
+
+    word_bits = 16
+    schema = SCHEMA
+
+    def __init__(self, program: str, value: str, words: int, capacity: int = CAPACITY) -> None:
+        if not cap_ok(capacity):
+            raise ValueError(f"a table's capacity is a power of two of at least 2, not {capacity!r}")
+        if not words_ok(words):
+            raise ValueError(f"a table's rows are at least one word and under 2^64 bits, not {words!r} words")
+        self.program, self.value, self.words, self.leaves = program, value, words, capacity
+        self.domain = domain(program, value, words, capacity)
+        self.rows: list[np.ndarray] = []
+        self.salts: list[bytes] = []
+        self.bcs: list[bytes] = []
+        self._seen: set[bytes] = set()
+        pad = _INST.tree_leaf(_INST.default_key, placeholder(words))
+        self._levels = [bytearray(b"".join(row_leaf(self.domain, r, pad, SCHEMA) for r in range(capacity)))]
+        while len(self._levels[-1]) > DIGEST_BYTES:
+            self._levels.append(bytearray(DIGEST_BYTES * (len(self._levels[-1]) // (2 * DIGEST_BYTES))))
+            self._rehash(len(self._levels) - 2, 0, len(self._levels[-1]) // DIGEST_BYTES)
+
+    def _rehash(self, h: int, lo: int, hi: int) -> None:
+        """Nodes ``[lo, hi)`` of the level above level ``h``, from their children."""
+        below, here, n = memoryview(self._levels[h]), self._levels[h + 1], DIGEST_BYTES
+        for j in range(lo, hi):
+            here[n * j:n * j + n] = self.domain.node(h, j, bytes(below[2 * n * j:2 * n * j + n]),
+                                                     bytes(below[2 * n * j + n:2 * n * j + 2 * n]))
+
+    @property
+    def root(self) -> bytes:
+        return bytes(self._levels[-1])
+
+    def append(self, rows: Any, salts: Sequence[bytes] | None = None) -> range:
+        """Rows ``rows`` (``(k, words)`` u16) at the table's next ``k`` positions, each under its salt (default: fresh from
+        the operating system), refused past the capacity or for a salt used before: equal salts on two rows reveal the XOR
+        of their digests. -> their positions."""
+        rows = np.asarray(rows, dtype=np.uint16)
+        if rows.ndim != 2 or rows.shape[1] != self.words:
+            raise ValueError(f"{self.value}: rows of {self.words} u16 words, not shape {rows.shape}")
+        at, k = len(self.rows), len(rows)
+        if at + k > self.leaves:
+            raise ValueError(f"{self.value}: {at + k} rows past the table's capacity of {self.leaves}")
+        salts = [_INST.fresh_salt() for _ in range(k)] if salts is None else [bytes(s) for s in salts]
+        if len(salts) != k or any(len(s) != _INST.salt_bytes for s in salts):
+            raise ValueError(f"{self.value}: one {_INST.salt_bytes}-byte salt per row")
+        if len(set(salts)) != k or self._seen.intersection(salts):
+            raise ValueError(f"{self.value}: a salt is never reused: equal salts on two rows reveal the XOR of their digests")
+        if not k:
+            return range(at, at)
+        bcs = [string(r, self.words, s) for r, s in zip(rows, salts)]
+        n, level = DIGEST_BYTES, self._levels[0]
+        for i, bc in enumerate(bcs):
+            level[n * (at + i):n * (at + i + 1)] = row_leaf(self.domain, at + i, _INST.tree_leaf(_INST.default_key, bc),
+                                                            SCHEMA)
+        lo, hi = at, at + k - 1
+        for h in range(len(self._levels) - 1):
+            lo, hi = lo >> 1, hi >> 1
+            self._rehash(h, lo, hi + 1)
+        self.rows += [r.copy() for r in rows]
+        self.salts += salts
+        self.bcs += bcs
+        self._seen.update(salts)
+        return range(at, at + k)
+
+    def path(self, position: int) -> bytes:
+        """Position ``position``'s path to the root: its siblings, leaf level first, 64 bytes each (`Opening`'s ``path``,
+        `gates.embedding`'s)."""
+        if not (_int(position) and 0 <= position < self.leaves):
+            raise ValueError(f"{self.value}: position {position!r} outside the table's {self.leaves}")
+        out, n = [], DIGEST_BYTES
+        for level in self._levels[:-1]:
+            j = position ^ 1
+            out.append(bytes(level[n * j:n * j + n]))
+            position >>= 1
+        return b"".join(out)
+
+    def entry(self) -> dict[str, Any]:
+        """What a pin names, as a registered value's: ``{"value", "root", "leaves", "words", "domain"}``."""
+        return {"value": self.value, "root": self.root.hex(), "leaves": self.leaves, "words": self.words,
+                "domain": self.domain.domain_id.hex()}

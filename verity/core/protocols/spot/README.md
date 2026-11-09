@@ -283,9 +283,6 @@ from verity.core.protocols.spot.costfit import fit
 - `registered`: registered values: `Registered.commit` (the prover's rows, salts and tree), `domain`,
   `registered_entries` and `reads` (the verifier's leaf counts, domains and read map, from its own program), `reads_file`
   (the Lean verifier's `--registered`), `verify_read`.
-- `history`: history tables, rows other proof blocks output that table reads open at hidden positions: `domain`,
-  `placeholder` and `root` at the pinned `CAPACITY`, `check` (a registered root held to the root over the writers'
-  public `b || c`) and `order` (each position's source from the program's runs), mirroring `Spot.HistoryTable`.
 - `served`: `register_served`, the one form in which a served path registers its served trees (`ServedTree`s) as ports
   of the verifier's own `--registered` file: the record's `registered` entries, R7's copies and the file.
 - `audit`: `audit_record`, and the profile in its forms: `profile`, `wrong_units`, `integrity_profile`; `core_law` is a

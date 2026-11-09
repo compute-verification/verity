@@ -1,8 +1,8 @@
 /-
-History tables (`one_stage/history.py`): a table of rows that other proof blocks output, read at hidden positions by
-table reads (`EmbeddingRead_v1`). The verifier computes each table's root itself, from the writers' public `b ‖ c` in
-the order its own program gives; the root the prover registers is only checked against it, so the prover can't
-register rows of its choosing.
+History tables (`verity/ml/commitments/history.py`): a table of rows that other proof blocks output, read at hidden
+positions by table reads (`EmbeddingRead_v1`). The verifier computes each table's root itself, from the writers' public
+`b ‖ c` in the order its own program gives; the root the prover registers is only checked against it, so the prover
+can't register rows of its choosing.
 
 * `CAPACITY`: every table's tree is pinned at `2^17` ranks, whatever its length (`len`, its written rows), so its domain,
   depth and positions are public structure and no table's shape tells its length;
