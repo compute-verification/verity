@@ -2,8 +2,10 @@
 drive's), derives a `vqueue.Snapshot` from what is outside it, asks the policy (``decide``, `vqueue.decide`) what to do and
 applies its actions in order, stopping the tick at the first that fails: the next tick derives everything again.  Between ticks
 it keeps only what a snapshot reads: the refs, the labels, graph2's results and the decision log (`--log`), from which come
-`history`, each candidate's `tries`, a retry's and a ring's once-only and the owners already told.  `--state` is a report it
-rewrites each tick: each candidate's verdict beside graph2's, and the jobs its graph lacks.
+the candidates, `history`, each candidate's `tries`, `reruns` and first enqueue, the results a retry or a rerun set aside, the
+record of the run beside each check, a ring's, a red's and a flake's once-only and the owners already told.  `--state` is a
+report it rewrites each tick: each candidate's verdict beside graph2's and the run beside it's, the jobs its graph lacks, and
+the `queue/*` branches it ignores.
 
 The snapshot.  `main` is origin's `main`, fetched into the clone's own refs (`refs/vqueue/`), so drive's clone, its worktree and
 its refs are left as drive keeps them.  `ready` is the open PRs drive would land from `next` now: admitted as drive admits them
@@ -12,34 +14,47 @@ its refs are left as drive keeps them.  `ready` is the open PRs drive would land
 rule (drive.toml's `lowrisk_lane` and `lowrisk_excludes` at `main`), not on `main` yet, ranked by drive's priority file then
 mark time, each after the ready PRs it contains; `files` is its change against its merge base with `main`, `lean` drive's
 Lean-change test (`queue.lean_change`), and `conflict` whether `Queue._merge` merges it onto `main`, kept by (head, `main`).
-`candidates` are origin's `queue/<sha12>` branches, each the `Queue: #N` merges on its first-parent line down to `main` or
-another candidate, lowest first.  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`) on the merge
-gate's tasks, those drive's `executor = "on"` path gates on (none of `drive.SLIM_STEPS`, none off the gate in policy.toml at
-the candidate): a failed or blocked task is fail, each failed task with its key in its base's graph as graph2 listed it, where
-one is made there (`Failed.base_key`: a failure at it is inherited), else a task whose newest result is graph2's infra error
-(`detail.infra`) is infra, else every gating task passed is pass, else pending.  No graph while graph2 says its listing failed
-(`verdict`, else its `ready_verdict` label), a graph that can't be read, or no graph of a candidate the log never enqueued is
-list-failed.  graph2's own verdict, where it has one, is compared and a disagreement logged.
+`candidates` are the loop's own builds: each of origin's `queue/<sha12>` branches at the sha a build line of the log names
+(the window's, else the whole log's), with that line's base and members, lowest first; any other `queue/*` branch is no
+candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s` the command's (`--lean`,
+`--pending-hours`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`), each key's from the
+first a retry or a rerun didn't set aside, on the merge gate's tasks, those drive's `executor = "on"` path gates on (none
+`"gate": false`, of `drive.SLIM_STEPS` or off the gate in policy.toml at the candidate): a failed or blocked task is fail,
+each failed task with its inputs (its own, its env's spec files and those of each task it reads), its failing tests
+(result/v1's `failed_tests`) and its key and failing tests in its base's graph as graph2 listed it, where there are
+(`Failed.base_key`, `Failed.base_tests`), ended once no gating task runs but behind an infra error; else a task whose newest
+result is graph2's infra error (`detail.infra`; graph2's `tree` where `Failed` has one) is infra, else every gating task
+passed is pass, else pending.  No graph while graph2 says its listing failed (`verdict`, else its `ready_verdict` label), a
+graph that can't be read, or no graph of a candidate the log never enqueued is list-failed.  graph2's own verdict, where it
+has one, is compared and a disagreement logged.  With ``slim`` (`research.vqueue_slim`), the run beside the check of what
+graph2 doesn't check is started once a candidate, judged each tick, its record logged whenever it changes, and combined
+with the check's verdict: a candidate passes only when both pass.
 
 The actions.  Build merges its members in order onto its base (`Queue._merge`), leaving out one that doesn't merge (`skip`, its
-owner told once per head and base), pushes `queue/<sha12>` and enqueues `ready:<sha>` as graph/v2 at its priority.  Advance
-pushes `main` to the candidate with a lease on its base and does what drive does when `main` moves (`Driver._on_main`).  Drop
-cancels the check (graph2's `cancel`, where it has one), deletes the branch and logs its outcome, a fail's with its base and
-its inherited failures, their inputs whole, which `history` reads back.  Eject withdraws the PR's ready mark at its head
-(`Queue.eject`, under the clone's queue lock) and tells its owner the failed tasks, their keys and where their logs are.  Retry
-enqueues again, once for each terminal infra or list-failed verdict (by its evidence: the infra results there are, graph2's
-listing verdict).  Ring tells infra's handle (`drive.INFRA`), once a candidate.  Red tells `CI` and the owners of what the base
-fails (as drive names them: a test file's suite's, else its job's) that it is red on them, once a base and task.  Each action
+owner told once per head and base), pushes `queue/<sha12>`, logs it, enqueues `ready:<sha>` as graph/v2 at its priority and
+starts the run beside it.  Advance pushes `main` to the candidate with a lease on its base and does what drive does when
+`main` moves (`Driver._on_main`).  Drop cancels the check (graph2's `cancel`, where it has one), deletes the branch and logs
+its outcome, with its base and its inherited failures, their inputs whole, which `history` reads back.  Eject withdraws the
+PR's ready mark at its head (`Queue.eject`, under the clone's queue lock) and tells its owner the failed tasks, their keys and
+where their logs are.  Retry enqueues again (graph2 reruns what ended in infra errors, lists a check whose listing failed,
+and leaves a pending one as it is), setting the infra results aside, and starts a run beside it that ended in infra again.
+Rerun runs the keys afresh (graph2's `rerun`), their results set aside, a key of the run beside starting that run again;
+without graph2's `rerun` it is logged `absent`, and counts as done.  Ring tells infra's handle (`drive.INFRA`), once a
+candidate and why.  Red tells `CI` and the owners of what the base fails (as drive names them: a test file's suite's, else
+its job's) that it is red on them, once a base and task.  A test graph2's verdict says flaked (`flaky`: a fail a rerun
+replaced) is told to its file's owner in drive's registry and `CI`, once a key: a test that flakes is deleted.  Each action
 and its result is one JSON line in the log, whose directory also holds the loop's caches.
 
-`--shadow` logs advance, eject, ring, red and every message with `shadow: true` and does none of them, and builds, drops and
-retries: its `main` is the newest candidate it advanced (logged) while origin's `main` is below it, a pass its `main` no longer
-holds is no history, and a PR it ejected stays out until marked again.  `--dry-run` prints the snapshot and the actions and
-writes nothing: no ref on origin, no log, no enqueue, no label, no message.  The loop never writes drive's state, its priority
-file, `next`, `checked` or a label, but an eject's without `--shadow`.
+`--shadow` logs advance, eject, ring, red, flake and every message with `shadow: true` and does none of them, and builds,
+drops, retries, reruns and starts the runs beside: its `main` is the newest candidate it advanced (`refs/vqueue/shadow` in the
+clone, never pushed, else its log's newest advance) while origin's `main` is below it, a pass its `main` no longer holds is no
+history, and a PR it ejected stays out until marked again.  `--dry-run` prints the snapshot and the actions and writes
+nothing: no ref on origin, no log, no enqueue, no label, no message, no run.  The loop never writes drive's state, its
+priority file, `next`, `checked` or a label, but an eject's without `--shadow`.
 
 On the control pod it runs beside drive, from a pinned checkout of this tree, in drive's clone (or its own clone of origin):
-`research queue vqueue --shadow --log /data/vqueue/decisions.jsonl`, with `--once` for one tick and `--dry-run` to see one.
+`research queue vqueue --shadow --lean 3 --log /data/vqueue/decisions.jsonl`, with `--once` for one tick and `--dry-run` to
+see one.
 """
 from __future__ import annotations
 
@@ -824,16 +839,15 @@ class Loop:
         written."""
         started, rec = past.slim(sha)
         line = dict(sha=sha, base=base, members=prs, heads=heads)
-        d = self.world.slim_driver(self.dry_run)
-        if not started and not self.dry_run:
-            self.write(got := self._started(n, main, origin, line))
-            wrote.append(got)
-            rec = got["record"]
         if not started and self.dry_run:
             v = Verdict(PENDING)
         else:
+            if not started:
+                self.write(got := self._started(n, main, origin, line))
+                wrote.append(got)
+                rec = got["record"]
             was = json.dumps(rec, sort_keys=True)
-            v = self.slim.judge(d, rec)
+            v = self.slim.judge(self.world.slim_driver(self.dry_run), rec)
             if json.dumps(rec, sort_keys=True) != was and not self.dry_run:
                 self.write(got := self._line(n, main, origin, "slim", **line, why=f"judged {v.state}", record=rec, done=True))
                 wrote.append(got)
@@ -1185,7 +1199,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--no-slim", action="store_true",
                     help="judge each candidate on its graph2 check alone, with no run beside it of lean-agreement and the "
                          "preflights (research.vqueue_slim), which it otherwise launches on drive's machines")
-    ap.add_argument("--shadow", action="store_true", help="log advance, eject, ring, red and messages, and do none of them")
+    ap.add_argument("--shadow", action="store_true", help="log advance, eject, ring, red, flakes and messages, and do none of "
+                                                          "them; its own main is refs/vqueue/shadow in the clone")
     ap.add_argument("--dry-run", action="store_true", help="print the snapshot and the actions; write nothing")
     ap.add_argument("--once", action="store_true", help="one tick")
     ap.add_argument("--interval", type=float, default=INTERVAL_S, help=f"seconds between ticks (default {INTERVAL_S})")
