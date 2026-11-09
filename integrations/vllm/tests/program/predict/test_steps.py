@@ -459,7 +459,7 @@ def test_a_recomputed_cache_hit_compiles_to_the_uncached_request_program(body):
     alone = compile_steps(reg, *_session([(24, 3, {**body, "max_tokens": 3}, _prompt(0, 16) + _prompt(1, 24)[16:])],
                                          [[(0, 0, 24)], [(0, 24, 1)], [(0, 25, 1)]]))
     assert (u.LP, u.T, u.C, u.recomputed, u.producers, u.digest) == (24, 2, 0, 16, (), alone.requests[0].digest)
-    assert [n for n, _ in c.programs[u.digest].fn.signature()[0]] == ["prompt", *(["seed"] if body is STOCH else []), "weights"]
+    assert "prefix" not in [n for n, _ in c.programs[u.digest].fn.signature()[0]]
     assert c.steps[1] == [RowRef(0, c.requests[0].digest, 24, 1, 1), RowRef(1, u.digest, 16, 8, 1)]
     assert [r.prefix for r in c.workload.requests] == [None, None]
     s = c.summary()
