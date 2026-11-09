@@ -121,6 +121,17 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   from the sets the `.olean` files recorded. A replay killed by a signal
   (out of memory) is reported as a kill, not as a verdict. With `--closure` it checks the whole import closure the
   same way (below);
+- with `--build`, a sample of the modules the build didn't compile (restored from the node's artifact cache, or kept
+  from an earlier build) compiles to the outputs the build holds (`sampled_recompile`, failure `sampled`). After the
+  build and before anything reads it, the audit draws `SAMPLE_MIN` (8) of them or `SAMPLE_SHARE` (2%), whichever is
+  more, from fresh randomness nothing the build runs sees (`SAMPLE_RNG`, `secrets.SystemRandom`), moves their outputs out
+  of the build, and compiles them again in the sandbox with no cache. Every output must be equal byte for byte, but a
+  `module` file's `olean.server`, where Lean keeps each message with its source's absolute path, and its `olean.private`,
+  which points past it: compiled at another path those differ, so they are compared as Lean's object graphs, equal but
+  for strings that are absolute paths ending in the module's own source path (`olean_graph.py`). A difference fails
+  naming the module and its file; a pass puts the build's outputs back. The report's `sampled` lists the modules drawn,
+  and the audit prints them under its line (`sampled:`), so a run records what it checked. A draw can miss a wrong module, so the
+  uncached nightly check, which restores nothing, stays the full backstop;
 - each test under `runs` passes on the data whose SHA-256 the record holds (below), and its `generate` and `args` name no
   path outside the package except as `{repo}/...`, which check's scratch tree would not hold;
 - nothing changes this directory, the toolchain's `lean`, `lake` and `leanchecker`, or the `.olean` files of a package
@@ -162,6 +173,10 @@ an own module replays it and what imports it, as without `--closure`. The cache 
 `Replay.lean` pins what the kernel loads: no constant from outside the module's imports, an equation lemma two modules
 realize checked once each, a reused public part's axiom copy taken as Lean's import does (`subsumesInfo`), and the
 quotient's own constants. A change to `Replay.lean` changes every key, so the next run is cold.
+A key vouches for what a module's files hold, not for who wrote the entry. So the cache is used only on a node whose
+builds run in the sandbox, and only where no build can write it: `check.py` refuses a `--replay-cache` or
+`--facts-cache` inside a build's `writable` roots (`build_roots_over`), and on a node without the sandbox the replay
+neither reuses nor stores an entry (the report's `replay_cache` says so).
 The audit prints `closure: N modules checked, M reused` under each package's line. `check`'s lean-audit step runs
 `--closure` against the node's kept cache (`lean_audit.FLAGS`, `lean-replay/`), so a dependency module that skipped the
 kernel fails the merge check, and the `closure_dependency` control fails without `--fresh`. `lean_audit.py --fresh` (the

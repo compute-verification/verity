@@ -729,7 +729,8 @@ class WarmBuilds:
     change, or a change to one module, doesn't rebuild every module. An audited package's is moved in and back only when its
     audit passed: its compile-time code may write in it. A package in the tree only as a path dependency gets a copy, which
     never comes back. The audit still checks every statement against these `.olean` files and replays every declaration
-    through the kernel. The newest `kept` by use stay (`evict`)."""
+    through the kernel, and compiles a random sample of the modules its build kept again (`check.sampled_recompile`). The
+    newest `kept` by use stay (`evict`)."""
 
     def __init__(self, store: Path, kept: int = BUILDS_KEPT, max_gb: float | None = BUILDS_MAX_GB):
         self.store, self.kept, self.max_gb = store, kept, max_gb
@@ -942,7 +943,8 @@ class LakeArtifacts:
     --artifacts`), and never write it; after a run passes, each module its build compiled in the sandbox goes in (`put`). A
     module version any earlier passing run on this node built is then restored whatever tree comes next, not only the one
     its package's kept build (`WarmBuilds`) came from. The audit still checks every statement against the restored `.olean` files and replays
-    every declaration through the kernel.
+    every declaration through the kernel, and compiles a random sample of the modules it restored again, failing on any
+    output that differs (`check.sampled_recompile`), which is what binds a restored `.olean` to its source.
 
     Between nodes, the module versions a recorded check's audit added travel as one bundle in its run's files (`bundle`); the
     launcher sends a URL for each of the newest (`shared_bundles`), and a node takes in each it hasn't yet (`take`). A records

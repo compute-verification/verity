@@ -635,7 +635,7 @@ def made(tree: Path) -> Path:
 PASSES, PASSES_KEPT = "passes", 4000
 PASS_SCHEMA = "lean-records-pass/v2"
 #: `--records`' facts cache, beside its trees and shared by every slot's: each audited package's sealed facts document
-#: (`check.py --facts-cache`), named by its build's content address (`facts_key`), for drive's lock run to reuse
+#: (`check.py --facts-cache`), named by its build's content address (`facts_key`), outside every slot tree's build roots
 FACTS_CACHE = "facts"
 SELF = "tools/verity/lean/lean_changed.py"
 LOCK = "lean-audit.json"
@@ -1540,8 +1540,8 @@ def check_argv(at: Path, out: Path, update: bool, moved: Path | None, own: bool,
     """check.py on ``at`` (a package's directory), without the kernel replay or the tests, its builds reading the node's
     ``artifacts`` cache where given; with ``update``, `--update` and `--moved`. Only PKG's run (``own``) keeps a facts
     document, its own (`--facts named`, which `trusted_size.py --run` reads); a requirer's keeps none. With ``facts_cache``
-    every run also stores its sealed stage-A facts document there (`--facts-cache`, keyed by its build), so drive's lock
-    run reuses the facts this records run read; the run is still a records audit, never the kernel replay."""
+    every run also stores its sealed stage-A facts document there (`--facts-cache`, keyed by its build, read back only by
+    the key a tree computes: `read_cached_facts`); the run is still a records audit, never the kernel replay."""
     return [sys.executable, str(AUDIT_PY), *(["--dev-cache"] if dev else []), "--build", "--no-replay", "--no-runs",
             "--facts", "named" if own else "none", *(["--artifacts", str(artifacts)] if artifacts else []),
             *(["--facts-cache", str(facts_cache)] if facts_cache else []),
