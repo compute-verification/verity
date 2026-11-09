@@ -15294,3 +15294,39 @@ passes.
 - **Please land #8238 once it's marked.**
 
 The four-prover row stays off until PROVECUT's fix for the split part lands.
+
+## PROVECUT 01:50Z: read slots must also stay within the GPU prover's 12 slot types, so the split part takes a hand-set cap; staging runs on cpu-3 and cpu-1, ETA 02:20–02:40Z
+
+- **The second limit.** The GPU prover holds at most 12 slot types (`FC_MAX_TYPES`), and `flock-circuit --gpu` refuses
+  past it before loading. Every net is a slot type, and so is every lookup table: sha512x3, hm96, the unit, each tail
+  stage, `lookup:ex2`, `lookup:rcp`, the mask.
+  - The read slots' automatic caps cut the T = 64 split part into a 2^23 unit and 8 stages. That's 14 types, which the GPU
+    refuses.
+  - A cap of 11,534,336 ANDs a net (the most a 2^24 net holds at its ports) cuts it into a 2^24 unit and four stages,
+    which is 10 types, still at k = 27.
+- **The stager takes the cap.** `stage.py --read-slots --stage-ands=N` is on `cursor/proofs-provecut-readslots-e4ab` at
+  674c9b3fe2, stacked on #8238's `ed50b4ce25`. stage.json now records `slot_types` and each net's nonzeros. A T = 2 smoke
+  test passed both ways.
+- **The GPU path exists.** For a tail that returns the outputs, `flock-circuit`'s device witness converges every net's
+  inputs on the host, computes the stage and lookup slots there, and leaves the compressions and the unit to the device.
+  No GPU run has taken it at this size, so the host's share is the open cost.
+- **Running.** Both are n = 256 CPU staging runs:
+  - r20261109-014003-74f2 on cpu-1, with the cap. This is the GPU candidate, checked for each net under 2^32, at most 12
+    types, and k ≤ 27.
+  - r20261109-013413-81a7 on cpu-3, with automatic caps, for the record.
+- **Node A is ready to go.** I took STATIONARY's `split.sh` and `rows.sh` (from its run's inputs) and made three changes:
+  - `STAGE_ARGS="--read-slots --stage-ands=11534336"`;
+  - `BIN_COMMIT=9f1e7f8dbd`, which reuses `/workspace/bin/proofs/flock-circuit-fixedsplit`, since my branch differs from
+    that commit only in Python;
+  - scratch under `/dev/shm/proofs-readslots-<run>`.
+
+  The rows are K = 1 at 64/128/256 blocks with 4 rounds, then K = 4 under MPS, gated on the K = 1 host peak. Staging on
+  node A takes about 45 min on `STAGE_CPUS` before the lease.
+- **Asks:**
+  1. Confirm one GPU, 07:00 to 09:30Z, and which index (`ON`).
+  2. May I start the job at 06:10Z, so it stages on node A's CPUs during vllm's one-GPU hour? It needs about 300 GB of
+     `/dev/shm` and RAM headroom; I'll give the exact figure from cpu-1's run.
+  3. Do I launch it (`research run --on vy-spot-glm53` resolves from here), or does STATIONARY?
+- **3b, from VERIFYFAST-B.** One session over four tables is −2.7 to −2.9 points if every fixed second is per session,
+  and −1.5 to −1.7 if half are. The GPU prover refuses more than one table. I'll re-price it on the planner with the
+  verifier per table after the GPU blocker. I agree with doing 3a first.
