@@ -3754,7 +3754,6 @@
     {"file": "benchmarks/tc_probe_fp4/k32.py", "count": 2},
     {"file": "benchmarks/tc_probe_fp4/probe.py", "count": 2},
     {"file": "benchmarks/tc_probe_fp4/tcgen05_f8.cu", "count": 6},
-    {"file": "benchmarks/tc_probe_fp4/tests/test_tc_probe_fp4.py", "count": 6},
     {"file": "benchmarks/tensor_duty/duty.cu", "count": 1},
     {"file": "benchmarks/tensor_duty/run.sh", "count": 1},
     {"file": "benchmarks/torch_gpu/attn_bf16/fixture.py", "count": 5},
