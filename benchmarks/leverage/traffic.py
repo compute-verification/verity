@@ -275,5 +275,11 @@ def run_texts(split: str, specials: tuple[str, ...] = ()) -> list[tuple[str, str
     tails = CALIBRATION_TEXTS if split == "calibration" else HELDOUT_TEXTS
     units = RUN_UNITS[split] + (tuple(specials) if split == "calibration" else ())
     lengths = RUN_LENGTHS[split]
-    return [(f"run:{u.strip()}x{n}", "The log continues:" + u * n + " " + tails[(i * len(lengths) + j) % len(tails)])
+    return [(f"run:{u.strip()}x{n}", lead_run(u, n) + tails[(i * len(lengths) + j) % len(tails)])
             for i, u in enumerate(units) for j, n in enumerate(lengths)]
+
+
+def lead_run(unit: str, n: int) -> str:
+    """An ordinary opening and a run of n copies of `unit`, as `run_texts` open: under boxes with a run class, a text
+    after a run of at least the threshold sits in it (`lm.long_runs`)."""
+    return "The log continues:" + unit * n + " "

@@ -46,17 +46,19 @@ from pathlib import Path
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lm import E4M3_MAX, GROUP, LM, MODELS, Boxes, Cache, Edit, Fault, position_class, served_logprobs, ue8m0_scale
+from lm import E4M3_MAX, GROUP, LM, MODELS, Boxes, Cache, Edit, Fault, served_logprobs, ue8m0_scale
 from prompts import PROMPTS
-from traffic import HELDOUT_TEXTS
+from traffic import HELDOUT_TEXTS, lead_run
 
 
 class Prompt:
-    """One prompt's honest prefix: its ids, a batch-1 cache of every layer and the residual stream into each layer."""
+    """One prompt's honest prefix: its ids, a batch-1 cache of every layer and the residual stream into each layer,
+    and its last position's class under lm.boxes."""
 
     def __init__(self, lm: LM, ids: torch.Tensor, l: int):
         self.ids = ids
         self.t0 = ids.shape[1] - 1
+        self.cls = int(lm.boxes.classes(0, ids.shape[1], ids)[0][0, -1])
         self.cache = Cache()
         key = ("resid", l - 1) if l > 0 else ("emb", -1)
         taps = {key: None, ("mlph", l): None}
@@ -65,16 +67,18 @@ class Prompt:
         self.a_j = taps[("mlph", l)][0, self.t0]
 
 
-def pick_prompts(lm: LM, tok, n: int, l: int, cap: int = 48) -> list[Prompt]:
-    """The first (n + 1) // 2 of PROMPTS, then held-out prefixes at their smallest honest margin, smallest first. The
-    prefixes are short because every candidate recomputes every position from layer l up."""
-    out = [Prompt(lm, torch.tensor([tok.encode(t).ids]), l) for t in PROMPTS[:(n + 1) // 2]]
+def pick_prompts(lm: LM, tok, n: int, l: int, cap: int = 48, lead: str = "") -> list[Prompt]:
+    """The first (n + 1) // 2 of PROMPTS, then held-out prefixes at their smallest honest margin, smallest first, each
+    after `lead`, which the prefixes are cut past. The prefixes are short because every candidate recomputes every
+    position from layer l up."""
+    k = len(tok.encode(lead).ids) if lead else 0
+    out = [Prompt(lm, torch.tensor([tok.encode(lead + t).ids]), l) for t in PROMPTS[:(n + 1) // 2]]
     cands = []
     for text in HELDOUT_TEXTS:
-        ids = torch.tensor([tok.encode(text).ids[:cap]])
+        ids = torch.tensor([tok.encode(lead + text).ids[:k + cap]])
         top = served_logprobs(lm.forward(ids, Cache())[0], "bf16").topk(2, -1).values
         margin = top[:, 0] - top[:, 1]
-        margin[:8] = math.inf
+        margin[:k + 8] = math.inf
         p = int(margin.argmin())
         cands.append((float(margin[p]), ids[:, :p + 1]))
     cands.sort(key=lambda c: c[0])
@@ -139,7 +143,8 @@ def sample_reps(vals: torch.Tensor, mass: torch.Tensor, n: int, gen: torch.Gener
     return vals[idx], torch.ones(n, dtype=torch.float64)
 
 
-def attack(lm: LM, l: int, i: int, j: int, unknown: str, a, prompts: list[Prompt], gen: torch.Generator) -> dict:
+def attack(lm: LM, l: int, i: int, j: int, unknown: str, a, prompts: list[Prompt], pc: int,
+           gen: torch.Generator) -> dict:
     W = lm.down_proj(l)
     if unknown == "entry":
         stored, truth = float(W[i, j]), float(W[i, j].to(torch.bfloat16))
@@ -162,8 +167,7 @@ def attack(lm: LM, l: int, i: int, j: int, unknown: str, a, prompts: list[Prompt
 
         def reps_of(vs, ms):
             return sample_reps(vs, ms, a.reps, gen)
-    hi = lm.boxes.hi[("mlph", l)][int(position_class(torch.tensor(prompts[0].t0)))].float()
-    box = float(hi[j])
+    box = float(lm.boxes.hi[("mlph", l)][pc][j])
     scales = [own_scale(p, j) for p in prompts]
     own = [min(E4M3_MAX * s, box) for s in scales]
     lims = own if a.range == "own" else [box] * len(prompts)
@@ -241,6 +245,9 @@ def main() -> int:
                     "largest), and a random unit (and a random entry)")
     ap.add_argument("--prompts", type=int, default=4)
     ap.add_argument("--obs", type=int, default=1, help="served tokens a request returns that the decoder reads")
+    ap.add_argument("--lead-run", nargs=2, metavar=("UNIT", "N"),
+                    help="every prompt follows a run of N copies of UNIT (traffic.lead_run), so under boxes with a run "
+                         "class its faults sit in it")
     ap.add_argument("--range", default="own", choices=("own", "box"),
                     help="fault values: one FP8 code at the token's own group scale (a 16-bit fault), or anywhere in "
                          "the unit's box (beyond the own range, a whole-group writer's)")
@@ -267,20 +274,26 @@ def main() -> int:
     for l in [x if x >= 0 else L + x for x in a.layers]:
         if not 0 <= l < L - 1:
             raise ValueError(f"layer {l} is not interior")
-        prompts = pick_prompts(lm, tok, a.prompts, l)
-        hi = lm.boxes.hi[("mlph", l)][1].float()
+        lead = lead_run(a.lead_run[0], int(a.lead_run[1])) if a.lead_run else ""
+        prompts = pick_prompts(lm, tok, a.prompts, l, lead=lead)
+        classes = sorted({p.cls for p in prompts})
+        if len(classes) != 1:
+            raise ValueError(f"layer {l}: the prompts' last positions are in classes {classes}, and one box needs one "
+                             "class: change --prompts or --lead-run")
+        pc = classes[0]
+        hi = lm.boxes.hi[("mlph", l)][pc].float()
         W = lm.down_proj(l)
         for kind in a.targets.split(","):
             if kind == "widest":
-                by_amax = amax[f"mlph:{l}"][1].argsort(descending=True, stable=True)
+                by_amax = amax[f"mlph:{l}"][pc].argsort(descending=True, stable=True)
                 j = int(by_amax[hi[by_amax].argsort(descending=True, stable=True)][0])
                 i = int(W[:, j].abs().argmax())
             else:
                 j = int(torch.randint(0, W.shape[1], (1,), generator=gen))
                 i = int(torch.randint(0, W.shape[0], (1,), generator=gen))
             for unknown in a.unknowns.split(","):
-                r = attack(lm, l, i, j, unknown, a, prompts, gen)
-                r["target"] = kind
+                r = attack(lm, l, i, j, unknown, a, prompts, pc, gen)
+                r["target"], r["fault_class"] = kind, pc
                 res["targets"].append(r)
                 (a.out / "attack.json").write_text(json.dumps(res, indent=1))
     for unknown in a.unknowns.split(","):

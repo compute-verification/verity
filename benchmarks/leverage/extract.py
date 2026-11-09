@@ -55,6 +55,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lm import E4M3_MAX, GROUP, LM, MODELS, Boxes, Cache, Fault, served_logprobs, ue8m0_scale
 from prompts import PROMPTS
+from traffic import lead_run
 
 LOGPROB_BITS = 32  # a served logprob, as the fp32 float an OpenAI-style API returns
 
@@ -107,12 +108,6 @@ def prefix(lm: LM, tok, text: str) -> tuple[Cache, torch.Tensor, int]:
     return pre, ids[:, t0:], t0
 
 
-def fault_class(lm: LM, pre: Cache, last: torch.Tensor, t0: int) -> int:
-    """The position class of the faulted position t0 under lm.boxes, from its token and the state the prefix recorded,
-    which picks the boxes a fault there is read against."""
-    return int(lm.boxes.classes(t0, 1, last, pre.sink)[0][0, -1])
-
-
 def faulted_logits(lm: LM, pre: Cache, last: torch.Tensor, t0: int, rows: list, taps: dict | None = None):
     f = Fault.of(t0, rows)
     return lm.forward(last.expand(len(rows), 1), pre.expand(len(rows)), fault=f, taps=taps)[:, -1]
@@ -134,7 +129,7 @@ def part_final(lm: LM, tok, a) -> dict:
         z_h = lm.forward(last, pre.expand(1), taps=taps)[:, -1]
         h = taps[("final", L)][0, 0].float()
         if lm.boxes is not None:
-            hi = lm.boxes.hi[("final", L)][fault_class(lm, pre, last, t0)].float()
+            hi = lm.boxes.hi[("final", L)][lm.boxes.class_at(t0, last, pre.sink)].float()
         for amp in specs:
             for sign in (1.0, -1.0):
                 for c0 in range(0, len(cols), a.batch):
@@ -208,7 +203,7 @@ def part_block(lm: LM, tok, a) -> dict:
         taps = {("final", L): None}
         lm.forward(last, pre.expand(1), taps=taps)
         h = taps[("final", L)][0, 0].float()
-        hi = lm.boxes.hi[("final", L)][fault_class(lm, pre, last, t0)].float()
+        hi = lm.boxes.hi[("final", L)][lm.boxes.class_at(t0, last, pre.sink)].float()
         own = E4M3_MAX * ue8m0_scale(h.abs().view(-1, GROUP).amax(-1)).repeat_interleave(GROUP)
         z_h = h[None] @ E.T
         for w in a.widths:
@@ -416,7 +411,7 @@ def peel(lm: LM, tok, pre: Cache, last: torch.Tensor, t0: int, h0: torch.Tensor,
     else:
         runs = []
         for ctx in [(pre, last, t0, h0)] + [context(lm, tok, p) for p in PROMPTS[1:a.peel_contexts]]:
-            pc = fault_class(lm, *ctx[:3])
+            pc = lm.boxes.class_at(ctx[2], ctx[1], ctx[0].sink)
             hi = lm.boxes.hi[("final", L)][pc].float()
             amps = torch.tensor([float(hi[i]) if a.peel == "box" else fault_values("own", i, ctx[3], 0.0, hi, None)[1][0]
                                  for i in range(d)]).to(torch.bfloat16).double()
@@ -503,7 +498,7 @@ def part_rows(lm: LM, tok, a) -> dict:
     z0 = lm.forward(last, pre.expand(1), taps=taps0)[0, -1]
     h0 = taps0[("final", lm.spec.layers)][0, 0].float()
     amax = torch.load(a.boxes)["amax"] if a.boxes is not None else None
-    pc = fault_class(lm, pre, last, t0) if lm.boxes is not None else None
+    pc = lm.boxes.class_at(t0, last, pre.sink) if lm.boxes is not None else None
     T = est = None
     if a.peel:
         T = torch.randperm(V, generator=gen)[:max(reads)]
@@ -670,7 +665,7 @@ def main() -> int:
     a = ap.parse_args()
     if a.lead_run:
         global PROMPTS
-        PROMPTS = ["The log continues:" + a.lead_run[0] * int(a.lead_run[1]) + " " + p for p in PROMPTS]
+        PROMPTS = [lead_run(a.lead_run[0], int(a.lead_run[1])) + p for p in PROMPTS]
     if a.threads:
         torch.set_num_threads(a.threads)
     a.out.mkdir(parents=True, exist_ok=True)

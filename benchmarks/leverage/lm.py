@@ -146,6 +146,11 @@ class Boxes:
         last, runs = long_runs(ids, self.hosts, self.run, pos0, None if prior is None else prior[:, 3:])
         return position_class(pos, ids, self.special, self.window, span, last), torch.cat([span, runs], 1)
 
+    def class_at(self, pos: int, tok: torch.Tensor, prior: torch.Tensor | None) -> int:
+        """The class of position `pos`, holding the token `tok` (1, 1), after a prefix a cache filled under these boxes
+        (`prior`, the state it recorded, `Cache.sink`): the class whose boxes a fault there is read against."""
+        return int(self.classes(pos, 1, tok, prior)[0][0, -1])
+
     def apply(self, key: tuple[str, int], x: torch.Tensor, pos0: int, cls: torch.Tensor | None = None) -> torch.Tensor:
         h = self.hi.get(key)
         if h is None:

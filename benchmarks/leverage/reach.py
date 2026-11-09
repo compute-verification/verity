@@ -52,8 +52,9 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lm import E4M3_MAX, GROUP, GROUP_SITES, LM, MODELS, Boxes, Cache, Fault, position_class, served_logprobs, ue8m0_scale
+from lm import E4M3_MAX, GROUP, GROUP_SITES, LM, MODELS, Boxes, Cache, Fault, served_logprobs, ue8m0_scale
 from prompts import PROMPTS
+from traffic import lead_run
 
 MULTS = (0.0, 1.0, -1.0, 8.0, -8.0, 64.0, -64.0, 512.0, -512.0, 4096.0, -4096.0)
 KINDS = ("rms", "box", "own", "scale", "codes")
@@ -77,15 +78,15 @@ def sites_of(lm: LM, spec: str, layers: str | None = None) -> list[tuple[str, in
     return out
 
 
-def faults_of(lm: LM, site: tuple[str, int], x: torch.Tensor, t0: int, kinds: list[str], mults: list[float],
+def faults_of(lm: LM, site: tuple[str, int], x: torch.Tensor, pc: int, kinds: list[str], mults: list[float],
               coords: int, groups: int, gen: torch.Generator) -> list[tuple]:
-    """(site, layer, coords, values, kind, mult, honest_value, rms_mult) for one site's faults at position t0, x its
-    honest activation there as read (after the clamp)."""
+    """(site, layer, coords, values, kind, mult, honest_value, rms_mult) for one site's faults at a position of class
+    pc (`Boxes.class_at`), x its honest activation there as read (after the clamp)."""
     rms = float(x.pow(2).mean().sqrt())
     out = []
     cs = torch.randperm(x.numel(), generator=gen)[:coords].tolist()
     gs = torch.randperm(x.numel() // GROUP, generator=gen)[:groups].tolist() if x.numel() % GROUP == 0 else []
-    hi = lm.boxes.hi[site][int(position_class(torch.tensor(t0)))].float() if lm.boxes is not None else None
+    hi = lm.boxes.hi[site][pc].float() if lm.boxes is not None else None
     grouped = site[0] in GROUP_SITES
     for kind in kinds:
         if kind == "rms":
@@ -205,6 +206,9 @@ def main() -> int:
     ap.add_argument("--mults", default=",".join(str(m) for m in MULTS))
     ap.add_argument("--kinds", default="rms", help=f"comma-separated, of {KINDS}; all but rms need --boxes")
     ap.add_argument("--boxes", type=Path, help="clamp every read to clamp.py's calibrated boxes.pt")
+    ap.add_argument("--lead-run", nargs=2, metavar=("UNIT", "N"),
+                    help="every prompt follows a run of N copies of UNIT (traffic.lead_run), so under boxes with a run "
+                         "class its faults sit in it")
     ap.add_argument("--topk", type=int, default=20)
     ap.add_argument("--lp-tol", type=float, default=1e-3)
     ap.add_argument("--precision", default="bf16", choices=("bf16", "fp32"), help="the served logits' precision")
@@ -234,11 +238,15 @@ def main() -> int:
                                              "nan")}
     direct_pos, kl_all, lpd_all, rank_all, sur_all = [], [], [], [], []
     t_start = time.time()
+    lead = lead_run(a.lead_run[0], int(a.lead_run[1])) if a.lead_run else ""
+    fault_classes = []
     for pi, text in enumerate(PROMPTS[:a.prompts]):
-        ids = torch.tensor([tok.encode(text).ids])
+        ids = torch.tensor([tok.encode(lead + text).ids])
         t0 = ids.shape[1] - 1
         pre = Cache()
         lm.forward(ids[:, :t0], pre)
+        pc = lm.boxes.class_at(t0, ids[:, t0:], pre.sink) if lm.boxes is not None else 1
+        fault_classes.append(pc)
         taps = {s: None for s in sites}
         c = pre.expand(1)
         lp = served_logprobs(lm.forward(ids[:, t0:], c, taps=taps)[:, -1], a.precision)
@@ -249,7 +257,7 @@ def main() -> int:
         honest = torch.cat(honest)
         faults = []
         for s in sites:
-            faults += faults_of(lm, s, taps[s][0, 0].float(), t0, kinds, mults, a.coords, a.groups, gen)
+            faults += faults_of(lm, s, taps[s][0, 0].float(), pc, kinds, mults, a.coords, a.groups, gen)
         for i in range(0, len(faults), a.batch):
             chunk = faults[i:i + a.batch]
             f = Fault.of(t0, [(s, l, c_, v) for s, l, c_, v, *_ in chunk])
@@ -312,7 +320,8 @@ def main() -> int:
             })
     summary = {"model": a.model, "revision": MODELS[a.model]["revision"], "vocab": V, "bits_per_token": math.log2(V),
                "new": a.new, "prompts": a.prompts, "coords": a.coords, "groups_per_site": a.groups, "mults": mults,
-               "kinds": kinds, "boxes": str(a.boxes) if a.boxes else None, "topk": a.topk,
+               "kinds": kinds, "boxes": str(a.boxes) if a.boxes else None, "lead_run": a.lead_run,
+               "fault_classes": fault_classes, "topk": a.topk,
                "lp_tol": a.lp_tol, "precision": a.precision, "temperature": a.temperature,
                "faults": len(recs["site"]), "seconds": time.time() - t_start, "groups": groups}
     if lm.boxes is not None:
