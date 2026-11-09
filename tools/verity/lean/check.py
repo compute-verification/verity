@@ -4207,7 +4207,7 @@ SAMPLE_RNG: random.Random = secrets.SystemRandom()
 SAMPLE_MIN, SAMPLE_SHARE = 8, 0.02
 #: a module's outputs the sampled recompile compares, as Lake writes them (`sampled_file`)
 SAMPLED_OUTPUTS = ("olean", "ilean", "olean.server", "olean.private", "ir", "ir.sig", "c", "bc")
-#: what Lake writes beside them, set aside with them so Lake compiles the module, and put back with them
+#: what Lake writes beside them, hidden with them in the recompile's overlay so Lake compiles the module
 SAMPLED_BESIDE = ("trace", "setup.json", *(f"{o}.hash" for o in SAMPLED_OUTPUTS))
 #: the outputs that keep the path of the module's source (a message's), compared as object graphs when their bytes differ
 PATH_PARTS = ("olean.server", "olean.private")
@@ -4230,15 +4230,20 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
     module's source. The population is every module of the build (``roots`` and the default targets, the workspace's path
     dependencies included, `module_keys.keys`) with a trace in its package's build and not in ``built`` (the modules Lake
     reported compiling); the sample is `SAMPLE_MIN` of them or `SAMPLE_SHARE`, whichever is more, all when fewer, taken
-    with `SAMPLE_RNG` after the build. Each one's outputs and Lake's files beside them (`SAMPLED_BESIDE`) move to
-    ``work``/`sampled`, out of the sandbox's reach, and `lake build +M...` compiles them in the sandbox (``jobs``: the
-    build's `env` prefix, without the staged cache, so Lake restores nothing). Every output (`SAMPLED_OUTPUTS`) must be
-    there in both or neither and equal byte for byte; where only `PATH_PARTS` differ, the module's parts must be one object
-    graph but for strings that are absolute paths ending in the module's source path (`olean_graph.differs`): Lean keeps a
-    message's file in `olean.server`, so a build at another path differs there. A failure names the module and its file,
-    and leaves the recompiled outputs in place and the build's in ``work``/`sampled`; a pass puts the build's back, as Lake
-    left them for the modules that read them. The audit prints the sample under its line (`sampled:`), so a run records
-    what it checked. The caller holds the build's `.lake` directories (`writing`)."""
+    with `SAMPLE_RNG` after the build.
+
+    The build is never written: other packages' audits read a path dependency's outputs (their tests, their seals' re-hash)
+    while this runs. In the sandbox each of the build's `.lake` directories (`writable`) gets an overlay whose upper layer
+    is under ``work``/`sampled` (`in_overlay`); there the sampled modules' outputs and Lake's files beside them
+    (`SAMPLED_BESIDE`) are removed, and `lake build +M...` compiles them (``jobs``: the build's `env` prefix, without the
+    staged cache, so Lake restores nothing), into the upper layer at the build's own path. Every output (`SAMPLED_OUTPUTS`)
+    must be there in both or neither and equal byte for byte; where only `PATH_PARTS` differ, the module's parts must be
+    one object graph but for strings that are absolute paths ending in the module's source path (`olean_graph.differs`):
+    Lean keeps a message's file in `olean.server`, so a build at another path differs there. A failure names the module
+    and its file, and keeps the recompile's outputs in the upper layers; a pass removes them. Without the sandbox there is
+    no overlay, so nothing is recompiled and the report's `unsampled` says so. The audit prints the sample under its line
+    (`sampled:`), so a run records what it checked. The caller holds the build's `.lake` directories (`writing`), so no
+    build changes an overlay's lower layer while it is mounted."""
     mk, og = sibling("module_keys"), sibling("olean_graph")
     s = time.monotonic()
     keyed = mk.keys(pkg, roots)
@@ -4248,22 +4253,36 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
     rep: dict = {"population": len(pop), "modules": sample}
     if not keyed and isinstance(why := mk.workspace(pkg), str):
         rep["unkeyed"] = why
-    if not sample:
+    if sample and not sandboxed():
+        rep["modules"], rep["unsampled"] = [], ("no sandbox here, and the recompile runs only in an overlay in the "
+                                                "sandbox's mount namespace, never in the build other packages read")
+    if not rep["modules"]:
         rep["seconds"] = round(time.monotonic() - s, 1)
         return [], rep
-    aside = work / "sampled"
-    shutil.rmtree(aside, ignore_errors=True)
-    moved: dict[str, list[tuple[Path, Path]]] = {}
-    for m in sample:
-        b = keyed[m].package.build()
-        for ext in (*SAMPLED_OUTPUTS, *SAMPLED_BESIDE):
-            if (f := sampled_file(mk, b, m, ext)).is_file():
-                to = aside / keyed[m].package.name / f.relative_to(b)
-                to.parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(f, to)
-                moved.setdefault(m, []).append((f, to))
+    top = work / "sampled"
+    _remove_tree(top)
+    lakes = sorted({d.resolve() for d in [*writable(pkg), *(keyed[m].package.dir / ".lake" for m in sample)] if d.is_dir()})
+    layers = {d: top / str(i) for i, d in enumerate(lakes)}
+
+    def upper(f: Path) -> Path | None:
+        f = f.resolve()
+        d = max((d for d in layers if f.is_relative_to(d)), default=None)
+        return d and layers[d] / "upper" / f.relative_to(d)
+
+    gone = [f for m in sample for ext in (*SAMPLED_OUTPUTS, *SAMPLED_BESIDE)
+            if (f := sampled_file(mk, keyed[m].package.build(), m, ext)).is_file()]
+    if out := [f for f in gone if upper(f) is None]:
+        rep["seconds"] = round(time.monotonic() - s, 1)
+        return [Failure("sampled", None, f"sampled: {out[0]} resolves outside the .lake directories the recompile "
+                                         f"overlays ({', '.join(map(str, lakes))}), so it can't be recompiled")], rep
+    top.mkdir(parents=True)
+    (listing := top / "remove.txt").write_text("".join(f"{f.resolve()}\n" for f in gone))
     log(f"sampled: {pkg}: recompiling {len(sample)} of the {len(pop)} modules this build didn't compile")
-    rc, text = run(in_sandbox(pkg, [*jobs, "lake", "build", *(f"+{m}" for m in sample)]), pkg, work / "sampled.log")
+    rc, text = run(in_overlay(layers, ["bash", "-c", 'while IFS= read -r f; do rm -f -- "$f" || exit; done < "$0"; exec "$@"',
+                                       str(listing), *jobs, "lake", "build", *(f"+{m}" for m in sample)]),
+                   pkg, work / "sampled.log")
+    for t in layers.values():
+        _remove_tree(t / "work")
     rep["seconds"] = round(time.monotonic() - s, 1)
     if rc:
         return [Failure("sampled", None, f"sampled: the recompile of {', '.join(sample)} exited {rc}\n{text[-3000:]}")], rep
@@ -4274,37 +4293,54 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
             fails.append(Failure("sampled", m, f"sampled: {m}: Lake didn't recompile it, so its outputs can't be compared"))
             continue
         p = keyed[m].package
-        was = dict(moved.get(m, []))
-        now = {ext: sampled_file(mk, p.build(), m, ext) for ext in SAMPLED_OUTPUTS}
-        old = {ext: was.get(f) for ext, f in now.items()}
-        if one := [ext for ext in SAMPLED_OUTPUTS if now[ext].is_file() != (old[ext] is not None)]:
+        old = {ext: sampled_file(mk, p.build(), m, ext) for ext in SAMPLED_OUTPUTS}
+        now = {ext: upper(f) for ext, f in old.items()}
+        if one := [ext for ext in SAMPLED_OUTPUTS if now[ext].is_file() != old[ext].is_file()]:
             fails.append(Failure("sampled", m, f"sampled: {m}: {', '.join(one)} only in the build or only in the recompile"))
             continue
-        here = [ext for ext in SAMPLED_OUTPUTS if old[ext] is not None]
+        here = [ext for ext in SAMPLED_OUTPUTS if old[ext].is_file()]
         differ = [ext for ext in here if now[ext].read_bytes() != old[ext].read_bytes()]
         if bad := [ext for ext in differ if ext not in PATH_PARTS]:
-            fails.append(Failure("sampled", m, f"sampled: {m}: the build's {now[bad[0]].relative_to(p.dir)} differs from "
-                                               f"what its source compiles to ({', '.join(bad)} differ)"))
+            fails.append(Failure("sampled", m, f"sampled: {m}: the build's {old[bad[0]].relative_to(p.dir)} differs from "
+                                               f"what its source compiles to ({', '.join(bad)} differ; the recompile's is "
+                                               f"{now[bad[0]]})"))
             continue
         if differ:
             parts = [q for q in og.PARTS if q in here]
             if why := og.differs({q: old[q] for q in parts}, {q: now[q] for q in parts}, mk.path_of(m, ".lean").as_posix()):
-                fails.append(Failure("sampled", m, f"sampled: {m}: the build's {now[differ[0]].relative_to(p.dir)} differs "
+                fails.append(Failure("sampled", m, f"sampled: {m}: the build's {old[differ[0]].relative_to(p.dir)} differs "
                                                    f"from what its source compiles to: {why}"))
                 continue
             graphs.append(m)
     rep["by_graph"] = graphs
     if fails:
+        for f in list(top.rglob("*")):
+            if f.is_symlink() or not (f.is_file() or f.is_dir()):
+                f.unlink()                              # whiteouts: the run's files keep regular files only
         return fails, rep
-    for m in sample:
-        b = keyed[m].package.build()
-        for ext in (*SAMPLED_OUTPUTS, *SAMPLED_BESIDE):
-            sampled_file(mk, b, m, ext).unlink(missing_ok=True)
-        for f, to in moved.get(m, []):
-            shutil.move(to, f)
-    shutil.rmtree(aside, ignore_errors=True)
+    _remove_tree(top)
     rep["seconds"] = round(time.monotonic() - s, 1)
     return [], rep
+
+
+def _remove_tree(d: Path) -> None:
+    """Remove ``d``, opening each directory first: the kernel leaves an overlay's work directory unreadable (mode 0)."""
+    with contextlib.suppress(OSError):
+        d.chmod(0o700)
+    for root, dirs, _ in os.walk(d):
+        for sub in (os.path.join(root, x) for x in dirs):
+            if not os.path.islink(sub):
+                with contextlib.suppress(OSError):
+                    os.chmod(sub, 0o700)
+    shutil.rmtree(d, ignore_errors=True)
+
+
+def in_overlay(layers: dict[Path, Path], argv: list[str]) -> list[str]:
+    """``argv`` in the build sandbox with an overlay over each directory of ``layers`` ({directory: its layers'
+    directory}, `sandbox.sh`'s `--overlay`): it reads each directory as it is and writes only into its layers, so the
+    directory itself, which other processes read meanwhile, never changes."""
+    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"),
+            *(a for d, t in sorted(layers.items()) for a in ("--overlay", str(d), str(t))), "--", *argv]
 
 
 def in_sandbox(pkg: Path, argv: list[str]) -> list[str]:
@@ -5928,7 +5964,9 @@ def main(argv: list[str]) -> int:
                       flush=True)
             if s := rep.get("staged"):
                 print(f"  staged: {s['modules']} of its {s['keyed']} keyed modules from the artifact cache", flush=True)
-            if isinstance(s := rep.get("sampled"), dict) and s["population"]:
+            if isinstance(s := rep.get("sampled"), dict) and s.get("unsampled"):
+                print(f"  sampled: none of the {s['population']} modules its build didn't compile: {s['unsampled']}", flush=True)
+            elif isinstance(s, dict) and s["population"]:
                 print(f"  sampled: {len(s['modules'])} of the {s['population']} modules its build didn't compile, recompiled "
                       f"in {s['seconds']} s ({len(s.get('by_graph', []))} equal as object graphs): "
                       f"{', '.join(s['modules'])}", flush=True)
