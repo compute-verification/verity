@@ -24,7 +24,6 @@ public import Proofs.Flock.SamplingGeneric.TwoBernoulli
 public import Proofs.Flock.SamplingGeneric.TwoCap
 public import Proofs.Flock.SamplingGeneric.Complete
 public import Proofs.Flock.SamplingGeneric.TwoRankin
-public import Proofs.Flock.SamplingGeneric.TwoRegSets
 public import Proofs.Flock.SamplingGeneric.TwoRegMiss
 
 /-!
@@ -88,8 +87,8 @@ At a first stage that catches each replay block at rate `r₁` and a second stag
 `P̄_a ≤ (1 − r₁·r₂)^m`, `m` the replay blocks the footprint marks incorrect, so a footprint in `M̄_δ` marks fewer than
 every `K` with `(1 − r₁·r₂)^K ≤ δ` (`SamplingGeneric/TwoCap.lean`: **`CapTwo`** is proved). At two stages, the
 committed form's incorrect set is the grid's incorrect proof blocks at the committed traces, and reads no second-stage
-coin (`SamplingGeneric/TwoRegSets.lean`: `CompiledTwo.FregTwo_eq`, `CompiledTwo.FregTwo_forkOn`). So at rates `r₁`
-and `r₂` the run's sample misses it with probability at most `(1 − r₁·r₂)^{|W|}`, `W` the replay blocks wrong at the
+coin (`SamplingGeneric/TwoCap.lean`: `CompiledTwo.FregTwo_eq`, `CompiledTwo.FregTwo_forkOn`). So at rates `r₁` and
+`r₂` the run's sample misses it with probability at most `(1 − r₁·r₂)^{|W|}`, `W` the replay blocks wrong at the
 committed boundary trace, and the committed form's event gives its threshold form and the headline
 (`SamplingGeneric/TwoRegMiss.lean`: **`CompilerMissTwo`** and **`CompilerHeadlineTwo`** are proved,
 `CompiledTwo.ksRegTwo_of_event`).
