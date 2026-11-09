@@ -2,7 +2,8 @@
 # Flock's zero-knowledge session cost on a CPU node (zk_cost.py --cpu): zk_cost.sh's sweep of W8A8 coordinates in statements
 # of c units, each session proving k sampled by Lean, by `flock-circuit prove --zk` on the node's CPUs with the ZK server's send
 # check, then Lean `verify --zk` on every session; what one sampled statement costs a CPU node, for sizing a block's sample.
-# The prover is built as prove_path/run.sh builds it (60-circuit.sh GPU=0), Lean's flock-verify and flock-firewall in the tree.
+# The prover is built as prove_path/run.sh builds it (60-circuit.sh GPU=0), Lean's flock-verify and flock-firewall in the tree,
+# and flock-read-tmpl, the template a table read (stage.py's `table-read`) is staged on.
 # Run from the verity tree in a proofs slot (one point at a time, so a session's peak is its own):
 #   bash benchmarks/one_stage/zk_cost_cpu.sh ZK_KS=4096,16384 ZK_SIZES=1,8 ZK_DRAWS=1,c
 #   (a job run from a clone of the tree)
@@ -26,7 +27,7 @@ uv sync -q --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "
 PY=$REPO/.venv/bin/python
 
 log "zk-cost-cpu: source $(git rev-parse HEAD), builds in $W"
-(cd verity/core/service/flock && lake build flock-verify flock-firewall) > "$O/build-lean.log" 2>&1 &
+(cd verity/core/service/flock && lake build flock-verify flock-firewall flock-read-tmpl) > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"
 RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash verity/ml/flock/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
