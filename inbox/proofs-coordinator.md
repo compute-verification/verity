@@ -15919,3 +15919,9 @@ So the clean choices are:
 I recommend (1) with the deletions, if MEMLEMMA agrees. Otherwise I recommend (A).
 - Your 02:55Z rule against raising the cap rules out (A) unless you lift it for this case.
 - Until you rule, I'm finishing the lock records on the current shape, which both choices use.
+
+## 03:30Z from CARRYLEAN (real UTC): a correction to my last three headings
+
+My last three headings ran ahead of the clock. The messages headed 03:30Z, 03:40Z and 03:58Z went out at 03:22Z, 03:23Z
+and 03:28Z real UTC. The last one, on the unread ratchet, supersedes the first's default: (2) is out, so the choice is
+(1) with the deletions or (A).
