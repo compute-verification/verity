@@ -1449,27 +1449,31 @@ class Driver:
         return [x for x in out if x.commit not in undone]
 
     def follow_postland(self, drive: dict) -> None:
-        """The after-landing runs, newest first: each launched beside the oldest (``pl["ahead"]``, `_start_ahead`), then the
-        oldest (``pl["run"]``), each followed as the oldest is (`_follow_run`), in its place for the while, so a run that
-        failed below one that passed in the same tick is judged below it.  Once a run passed, those of commits below it can't
-        move `main` or name a red (`_passed_above`) and are cancelled; the oldest left takes ``pl["run"]``.  One beside the
-        oldest that is lost, never ran or registered no run is dropped, never sent again: the next `_start_ahead` launches the
-        newest commit then."""
+        """The after-landing runs, oldest first: the oldest (``pl["run"]``), then each launched beside it (``pl["ahead"]``,
+        `_start_ahead`), each followed as the oldest is (`_follow_run`), in its place for the while.  A run beside the oldest
+        that hasn't passed waits to be judged while one below it still goes (`_defers`).  Once a run passed, those of commits
+        below it can't move `main` or name a red (`_passed_above`) and are cancelled; the oldest left takes ``pl["run"]``.  One
+        beside the oldest that is lost, never ran or registered no run is dropped, never sent again: the next `_start_ahead`
+        launches the newest commit then."""
         if not (pl := drive.get("postland")):
             return
         runs = [r for r in (pl.get("run"), *(pl.get("ahead") or ())) if r]
         if len(runs) < 2:
             self._follow_run(drive)
             return
-        resend, kept = pl.pop("resend", None), []
-        for i in reversed(range(len(runs))):
-            pl["run"] = runs[i]
+        saved, resend, kept = pl.pop("resend", None), None, []
+        for i, run in enumerate(runs):
+            if i and self._defers(run, runs[:i]):
+                kept.append(run)
+                continue
+            pl["run"] = run
             self._follow_run(drive)
             if (after := pl.get("run")) is not None:
-                kept.insert(0, after)
-            if i:
-                pl.pop("resend", None)
-        if "resend" not in pl and resend is not None:
+                kept.append(after)
+            got = pl.pop("resend", None)
+            if not i:
+                resend = got
+        if (resend := resend if resend is not None else saved) is not None:
             pl["resend"] = resend
         v = pl["verified"]
         below = [r for r in kept if r.get("ids") and "tasks" not in r and r["tip"] != v and self._ancestor(r["tip"], v)]
@@ -1484,6 +1488,17 @@ class Driver:
             pl["ahead"] = kept[1:]
         else:
             pl.pop("ahead", None)
+
+    def _defers(self, run: dict, below: list[dict]) -> bool:
+        """Whether ``run``, beside the oldest, waits to be judged: a run of a commit below it still goes or launches, and it
+        hasn't passed in every shard.  Judged now, its red would name a culprit among every landing since verified `main`, those
+        the run below may yet pass among them, and that pass couldn't end a red above its tip; judged once the runs below ended,
+        a red's base is where they passed it (`_base_of`)."""
+        if not any("launch" in r or any(st in ACTIVE for st, *_ in self._states(r.get("ids") or []).values()) for r in below):
+            return False
+        if "launch" in run or not run.get("ids"):
+            return True
+        return not self._every_shard(run, self._states(run["ids"]), lambda rc: rc == 0)
 
     def _follow_run(self, drive: dict) -> None:
         """The after-landing run, once it ends: passed, its tip is verified; failed, `_postland_failed`; never started (every twin

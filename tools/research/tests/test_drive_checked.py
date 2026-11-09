@@ -93,9 +93,9 @@ def test_a_red_after_landing_run_moves_nothing_on_main_and_its_culprit_is_revert
 
 def test_a_run_beside_the_one_going_checks_a_newer_commit_and_main_moves_to_whichever_passes_highest(world, monkeypatch):
     """While an after-landing run goes, a landing above it gets a run of its own once the newest run is `AHEAD_EVERY_S` old,
-    at most `AHEAD_MAX` beside the oldest.  The runs are read newest first: `main` moves to the newest when it passes, a run
-    below it still going is cancelled, and one that failed below it in the same tick moves nothing back, names no red,
-    reverts nothing and runs nowhere again; the landing above them gets the next run."""
+    at most `AHEAD_MAX` beside the oldest.  `main` moves to the newest when it passes, a run below it still going is
+    cancelled, a red the oldest named below it ends there, nothing is reverted or sent again, and the landing above them gets
+    the next run."""
     h = Review(world, monkeypatch, land_into="checked")
     h.d.evidence = lambda repo, ids: [d for d in h.evidence if d.name in ids]
     tips = []
@@ -120,8 +120,41 @@ def test_a_run_beside_the_one_going_checks_a_newer_commit_and_main_moves_to_whic
     assert _main(world) == tips[2] and pl["verified"] == tips[2] and not pl.get("red"), (pl, world.logs)
     assert h.cancelled == ["r-post-1"] and not pl.get("resend") and "ahead" not in pl
     assert [c for c, *_ in h.posted] == [*tips[:3], tips[3]] and pl["run"]["tip"] == tips[3]
-    assert any(f"of `checked` {tips[0][:12]} failed" in x and "below verified" in x for x in world.logs), world.logs
     assert not [p for p in h.posts if "reverted" in p]
+
+
+def test_a_run_beside_the_oldest_that_fails_while_the_oldest_runs_is_judged_above_where_the_oldest_passed(world, monkeypatch):
+    """A run beside the oldest that fails a suite while the oldest still runs names nothing yet: judged then, its culprit would
+    come from every landing since verified `main`, among them one the oldest goes on to pass, and that pass couldn't end a red
+    above its tip.  Judged once the oldest passed, it names none of the landings below the oldest's tip, so the landing whose
+    own run passed is never reverted."""
+    _owning(world, {"lane-1": [], "lane-2": [], "pkg-owner": ["pkg/"]})
+    h = Review(world, monkeypatch, land_into="checked")
+    h.d.evidence = lambda repo, ids: [d for d in h.evidence if d.name in ids]
+    world.gh.put(1, world.change({"pkg/tests/test_x.py": "def test_y():\n    assert True\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    first = _checked(world)
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.review(2)
+    assert h.tick().startswith("landed #2"), world.logs
+    h.clock += D.AHEAD_EVERY_S
+    h.tick()
+    assert [c for c, *_ in h.posted] == [first, _checked(world)]
+    h.run_state["r-post-1"] = ("done", 1, None)
+    h.evidence = [_failed_run(world.tmp / "f", "tests/test_x.py::test_y", "tests/test_x.py:2").rename(world.tmp / "r-post-1")]
+    h.tick()
+    assert not h.postland().get("red") and not _rings(h), world.logs       # the oldest still runs: nothing named
+    passed = _steps_run(world.tmp, "r-post-0", {s: "passed" for s in h.posted[0][1].split(",")})
+    (passed / "suites-lean.json").write_text(json.dumps([{"name": "pkg", "suite": "pkg", "status": "passed"}]))
+    h.run_state["r-post-0"] = ("done", 0, None)
+    h.evidence.append(passed)
+    h.tick()
+    pl = h.postland()
+    assert pl["verified"] == first and (pl.get("red") or {}).get("suite pkg", {}).get("culprit") is None, (pl, world.logs)
+    h.clock += D.FIX_FORWARD_S
+    h.tick()
+    assert not [p for p in h.posts if "reverted" in p], h.posts
 
 
 def test_a_failure_at_or_below_a_tip_that_passed_it_since_is_no_red(world, monkeypatch, tmp_path):
