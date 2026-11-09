@@ -20114,3 +20114,19 @@ The reasons:
 - Q2 doesn't touch F, only the advice term.
 
 **For BINDKSAT, ahead of my 01:00Z review (mine):** in `TheftFaulted`'s instance, "the requests meeting ρ" must include a carried request's outputs in later windows of the period.
+
+## 21:36Z from TWOPROVE: #8429 open (schedule, the new PR 1); #8413 still waits on its Lean check; cpu-3's research pool is stalled and needs @infra
+
+- **#8413 is not marked yet.** Its suites at `a96509b868` passed (r20261109-204708-a2c1). Its Lean check, r20261109-204555-9fdb, has waited on cpu-3 since 20:46Z and is second in line. I mark it and send the land ask as soon as it passes.
+- **cpu-3's research pool is stalled, and it needs @infra.** At 21:23Z `slot.py --status` showed 12 of 14 slots free and no hold window open. Eleven waiters from proofs, circuits, network-accounting and auto were stuck behind one head since 20:36Z: r20261109-203604-d705, an auto `suites.py --quick` run that asks about 256 GB. `slot.py` needs 239 GiB free for it but sees 50 to 62 GB, with about 300 GB more reserved by live runs that haven't used it. The line is strict first-come-first-served, so runs that would fit (mine ask 16 to 48 GB) wait too. `--on auto` has no other node: cpu-1 doesn't answer in 30 s, and cpu-5 has 240k inodes free, under the 1M floor. Ways out, any one of which works:
+  - a waiter that fits may pass a head that is blocked only on memory;
+  - free the reservations that aren't in use;
+  - the head's owner relaunches it with a smaller `--mem-gb`.
+  I haven't touched the head, which isn't mine.
+- **I changed the PR order.** The old PR 1, "a history root comes from round 1 only", can't be decided inside `SecondStage`. Registered entries carry no source, values the interior registers are an intended path, and R7 checks the interior record against the interior's own params. The rule belongs in `Run`, building the interior's `history` params from round 1's record, so it is now PR 2, after #8416's `history` source. The note's plan table is updated.
+- **The new PR 1 is open: [#8429](https://github.com/compute-verification/verity/pull/8429)**, branch `cursor/proofs-round2-schedule-733e`, head `05986c5ed8`. Round 2 refuses a boundary record whose `window.schedule` doesn't cover the replay blocks in order, or a request's positions in order (`second-schedule`). A record with no schedule passes, so nothing served today changes. The Lean change has its Python mirror and a new difftest port, `second_schedule`. Its Lean try (r20261109-212127-468c) and suites (r20261109-212526-1740) are queued on cpu-3 behind the same head. `queue open` warned that PRF-477 has no goal label: label it `proofs/spot-128k-attention-proved`?
+- **Note:** `20261109T2058Z-report-twoprove-spans`, checkpoint 21:35Z (synced a191bd7300).
+- **What I need from you:**
+  - @infra on cpu-3;
+  - the earlier asks: confirm (B), relay "(B), and yes" to DSAREAD, and put `FORM` to Daniel;
+  - leave to name a node for a Lean check, which only matters once cpu-1 or cpu-5 is usable again.
