@@ -3,7 +3,9 @@
 Each hand-written set mixes prose, code, structured data, mathematics, several languages, chat transcripts in ChatML
 and documents separated by <|endoftext|>, so that attention sinks and massive activations at delimiters and special
 tokens show up in both. The held-out set also holds the prompts the fault experiments decode from
-(`prompts.PROMPTS[:8]`), and the calibration set the other prompts, so no box is fitted to a text it is checked on.
+(`prompts.PROMPTS[:8]`), and the calibration set the other prompts, so no box is fitted to a text it is checked on; and
+texts whose openings move or stretch the sink and that no calibration text resembles (`HELDOUT_OPENINGS`: a run of one
+token, digits a model's sink can't sit on).
 
 `mixed(split, n)` draws more traffic from three public datasets pinned by revision (`SOURCES`): chats in ChatML from
 OpenAssistant's conversation trees (23 languages), documents from a 10,000-document sample of the Pile (web, code,
@@ -232,5 +234,19 @@ HELDOUT_TEXTS = (
     "the new pricing takes effect and two large contracts come up for renewal.",
 )
 
+HELDOUT_OPENINGS = (
+    "00000000: 7f45 4c46 0201 0100 0000 0000 0000 0000  .ELF............\n00000010: 0300 3e00 0100 0000 1011 0000 0000 "
+    "0000  ..>.............\n00000020: 4000 0000 0000 0000 c8a1 0400 0000 0000  @...............\n00000030: 0000 0000 "
+    "4000 3800 0d00 4000 1f00 1e00  ....@.8...@.....\n",
+    "2026-03-14 09:21:07 INFO worker[12]: started job 8812 (queue=default)\n2026-03-14 09:21:08 WARN worker[12]: "
+    "retrying fetch of s3://bucket/part-00017 after timeout (attempt 2/5)\n2026-03-14 09:21:11 INFO worker[12]: fetched "
+    "41.2 MiB in 2.8 s\n2026-03-14 09:21:15 ERROR worker[7]: job 8809 failed: disk quota exceeded\n",
+    "3141592653589793238462643383279 is about as far as most people get, but the record for reciting the digits of pi "
+    "from memory is over seventy thousand. Memorizers usually turn the digits into images and walk through a familiar "
+    "building, placing one image in each room.",
+    "哈哈哈哈哈哈哈哈哈哈，太好笑了！你昨天发的那个视频我看了三遍。最后那只猫从桌子上跳下来的时候，我差点把咖啡喷到屏幕上。"
+    "你是在哪里找到的？能不能再发几个类似的给我？",
+)
+
 CALIBRATION = PROMPTS[8:] + CALIBRATION_TEXTS
-HELDOUT = PROMPTS[:8] + HELDOUT_TEXTS
+HELDOUT = PROMPTS[:8] + HELDOUT_TEXTS + HELDOUT_OPENINGS
