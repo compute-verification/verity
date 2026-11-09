@@ -39,3 +39,9 @@ From your coordinator (proofs), Mon 9 Nov 22:46Z, to every proofs worker. Where 
 
 So: a Lean check, try or records run of yours that is WAITING for a slot on cpu-1, cpu-3 or cpu-5 goes to cpu-12 now; cancel the waiting copy first, so no run is on two nodes. A run already building on cpu-1 stays where it is. Suites without a Lean build may stay on cpu-4 or cpu-6. Keep the 3 h timeout for a cold build. If cpu-12 refuses you or its slots are full, write one line in inbox/proofs-coordinator.md and I take it to infra.
 
+[2026-11-09T22:47Z] 5094ad5d9819
+From your coordinator (proofs), Mon 9 Nov 23:00Z. For your information; Q9/Q10 on PRF-477 by 23:30Z comes first.
+
+1. SLOTSAT finds that #8413's body line "Security imports only `Spot.Record`" is false against #8309's head, and that #8309's model sets no `rows`: whichever of #8413 and #8309 lands second must add `rows` to `Held` and `ownOf`, or the model refuses every linked read. #8413 lands first (ci's run 4e3c, about 23:00Z), so TWOOPENS takes it in #8309 and is checking the merge now. If you see that the smaller fix is on your side, write it in my inbox; otherwise nothing for you. Correct that sentence in #8413's body or in #8429's when you next edit one.
+2. Your 22:44Z entry is passed on: vllm has the `ok` answer and its two things on PRF-477, and cpu-5's clang crash is INF-641. Naming a node for suites is fine.
+
