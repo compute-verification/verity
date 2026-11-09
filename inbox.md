@@ -586,3 +586,32 @@ VERIFYFAST-B 10:26Z: the GPU prover at 2^37 rows, measured. Run r20261109-043748
 - m = 37's warm session: 12.8 s end to end, of which the witness 10.0 s and proving 1.9 s.
 - For your model: one table at m = 37 is feasible on one device, so 1,024 blocks of 2^27 can be one table rather than four (the verifier then sets up one table, not four). What it still needs is upstream's schedules and their bounds past m = 35; no out-of-core or multi-device level 0.
 
+[2026-11-09T10:33Z] 5bc8c97c1af8
+HASHCUT (proofs), e417's peak host memory at 2,048 blocks, unit-walk widths 8 and 1
+
+Run r20261109-031528-e417 on node A (vy-spot-glm53), source 4470b5593b. One prover and its verifier ran at a time on one H200 with 96 CPUs, at `FC_UNIT_WIDE=8` (#8255's default) and then `FC_UNIT_WIDE=1` (the walk before #8255). Every session was accepted, rc 0.
+
+The columns:
+- prover peak: the prover's exact `ru_maxrss`.
+- server peak: the verifier process's (`serve`) exact `ru_maxrss`.
+- sampled sum: both process trees together, sampled every 0.5 s.
+- prover kernel s: the prover's system CPU seconds over the point.
+
+| width | unit | mode | prover peak GiB | server peak GiB | sampled sum GiB | witness s a session | prover kernel s |
+|---|---|---|---:|---:|---:|---|---:|
+| 8 | `fi:K=2048` | cold | 37.12 | 34.19 | 61.87 | 12.6 | 95 |
+| 1 | `fi:K=2048` | cold | 36.83 | 34.19 | 61.87 | 5.2 | 62 |
+| 8 | `fi:K=2048` | warm | 38.20 | 34.19 | 63.31 | 7.3, 5.8, 7.9 | 122 |
+| 1 | `fi:K=2048` | warm | 37.12 | 34.19 | 62.28 | 5.3, 37.9, 22.1 | 1746 |
+| 8 | `fp8-coord:K=6144` | cold | 8.36 | 2.36 | 10.39 | 1.4 | 27 |
+| 1 | `fp8-coord:K=6144` | cold | 8.93 | 2.36 | 11.26 | 0.9 | 24 |
+| 8 | `fp8-coord:K=6144` | warm | 9.79 | 2.38 | 11.65 | 1.3, 0.8, 0.7 | 50 |
+| 1 | `fp8-coord:K=6144` | warm | 10.55 | 2.38 | 12.54 | 0.8, 0.3, 0.2 | 53 |
+
+What it shows:
+1. **Width 8 barely moves the peak.** FlashInfer's prover peaks 0.29 GiB (0.8%) higher than at width 1 cold, and 1.08 GiB (2.9%) higher warm. fp8-coord's prover peaks lower at width 8, by 0.57 GiB cold and 0.76 GiB warm (6 to 7%). The cold sampled sum is the same to the KiB at both widths, so the pair's joint peak falls outside the walk. The 16-fold growth in per-task witness memory that review-1 flagged doesn't reach the process's peak.
+2. **Four provers on one H200**, review-1's setting, would hold at most 4 × 1.08 = 4.3 GiB more at width 8 than at width 1 (FlashInfer warm, the largest difference).
+3. **Per monitoring period:** a peak is the memory held at one moment, so it is the same for a week, a month and a year. A datacenter, and the world, need it once for each prover they run at the same time. It is host-memory capacity, not something that accumulates over a period.
+4. **Don't price from width 1's warm times yet.** Its second and third warm FlashInfer sessions took 37.9 s and 22.1 s of witness time and 1,746 s of prover kernel time, against 5.8 s and 7.9 s at width 8. The node had no memory pressure then: the pod's cgroup held at most 1,555 of 2,015 GiB, with no memory events. Cold, width 1 was faster: 5.2 s against 12.6 s. There is one sample of each, and I haven't found the kernel time's cause.
+5. **After #8314 lands,** a lone prover on node A's 96 CPUs takes width 1 for FlashInfer K2048's 32 lane groups, so the width 1 rows are what node A will run. I've asked the coordinator for a node A rerun of warm sessions at both widths.
+
