@@ -9,3 +9,8 @@ in each. If you find a second implementation of the compression on the device, s
 
 The position note (`20261109T2150Z-report-consolidation-position`) is corrected in place: re-read its sections 1 and 2.
 HASH-93's description carries the same change. Nothing else in your brief changes.
+
+Mon 9 Nov 22:30Z: vllm agreed on VLLM-262. `kernels/` is the only target for the CUDA serving code loads, `examples/h200`
+and `verity/ml/kernels` are withdrawn as targets, nothing moves before C5, kernels owns the tier's contents, and your
+census is the list of record for those moves. So section 8 (the proposal) is what the overhaul will move: be exact about
+each file, and list separately anything you are not sure serving code loads.
