@@ -57,8 +57,8 @@ from . import policy, vqueue
 from .drive import CI, JOB_OF_KIND, SLIM_STEPS, Driver, gating, merge_thread_post
 from .drive import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_key, task_target
-from .queue import (PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, flags_at, lean_change, lowrisk,
-                    priority_list, queue_commit, review_owners, rules_at, unreviewed)
+from .queue import (PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, flags_at, label_verifier, lean_change,
+                    lowrisk, priority_list, queue_commit, review_owners, rules_at, unreviewed)
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Drop, Eject, Failed, Outcome,
                      Ready, Retry, Ring, Snapshot, Verdict)
 
@@ -199,20 +199,27 @@ class Transport(QueueTransport):
 
 
 class _Clone(Queue):
-    """The queue in a clone it doesn't bring to the remote's state (drive's, or the loop's own): the loop fetches into `NS`."""
+    """The queue in a clone it doesn't bring to the remote's state (drive's, or the loop's own): the loop fetches into `NS`, and
+    `main` as fetched is its `MAIN`, not drive's `refs/remotes/origin/main`."""
 
     def _clone(self) -> None:
         return None
 
+    @property
+    def base(self) -> str:
+        return MAIN
+
 
 class World:
     """What the loop reads and changes: git in the clone and on origin, graph2, the labels, the PRs and the merge thread.  Each
-    effect is one method, so a test fakes what it doesn't run for real."""
+    effect is one method, so a test fakes what it doesn't run for real.  With ``labels_at`` (a new `StoreLabels`), each tick
+    reads the labels afresh (`_relabel`), the issuer's keys kept at ``keys``."""
 
     def __init__(self, q: Queue, labels, tasks: Executor, *, graph2: tuple[str, ...] = (), priority_file: Path | None = None,
-                 post: Callable[[str, tuple[str, ...]], bool] | None = None, now: Callable[[], float] = time.time):
+                 post: Callable[[str, tuple[str, ...]], bool] | None = None, now: Callable[[], float] = time.time,
+                 labels_at: Callable[[], StoreLabels] | None = None, keys: Path | None = None):
         self.q, self.labels, self.tasks, self.graph2 = q, labels, tasks, tuple(graph2)
-        self.priority_file, self.now, self.repo = priority_file, now, q.workdir
+        self.priority_file, self.now, self.repo, self.labels_at, self.keys = priority_file, now, q.workdir, labels_at, keys
         self.post: Callable[[str, tuple[str, ...]], bool] = post or merge_thread_post
         #: graph2's subcommands it was found to lack (`_graph2`)
         self.lacks: set[str] = set()
@@ -241,7 +248,21 @@ class World:
         if main != self._main:                              # the merges' records onto the `main` before, as a sync drops them
             q = self.q
             q._merge_records, q._merge_keys, q._context, q._merged_from, self._main = {}, {}, None, {}, main
+        if self.labels_at is not None:
+            self._relabel(main)
         return main
+
+    def _relabel(self, main: str) -> None:
+        """New labels, read as drive's tick reads them (one `StoreLabels` keeps what it pulled, so a mark, a verdict or a
+        withdrawal written since would go unread): marks from drive.toml's `marked_after` at ``main`` on (else the queue
+        rules'), authenticated under its `signed_verdicts`, and a head's carried to a new head with the same own change."""
+        q, flags = self.q, flags_at(self.repo, main)
+        self.labels = labels = self.labels_at()
+        labels.since, labels.change = flags.marked_after or q.rules().marked_after, q.own_change
+        if flags.signed_verdicts:
+            labels.verify = label_verifier(self.repo, MAIN, self.keys, q.log)
+        q.ready, q.before_cutoff, q.marked_by, q.marked_at, q.prefetch = (labels.ready, labels.before_cutoff, labels.marked_by,
+                                                                          labels.marked_at, labels.prefetch)
 
     def open(self) -> dict[int, PR]:
         if self._prs is None:
@@ -267,6 +288,7 @@ class World:
                       *(f"+refs/pull/{p.number}/head:{NS}/pr/{p.number}" for p in missing))
         gone = self._missing(p.head for p in prs)
         prs = [p for p in prs if p.head not in gone and not self._ancestor(p.head, main)]
+        labels.prefetch([(p.number, p.head) for p in prs])
         entries = q.entries(prs, q.load_state(), base=main, landed=main, queued=main, open_numbers=set(self.open()))
         flags = flags_at(self.repo, main)
         excludes = tuple(flags.lowrisk_excludes) if flags.lowrisk_lane else ()
@@ -829,14 +851,18 @@ def main(argv: list[str]) -> int:
     try:
         remote, slug = remote_and_repo(a.remote, None, a.repo)
         store = LocalStore(a.store)
-        labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr))
+
+        def labels_at() -> StoreLabels:
+            return StoreLabels(store, log=lambda s: print(s, file=sys.stderr))
+
+        labels = labels_at()
         q = _Clone(a.repo, remote=remote, github=GitHub(slug), ready=labels.ready, store=store,
                    auth=credential_args(a.repo, remote), before_cutoff=labels.before_cutoff, marked_by=labels.marked_by,
                    marked_at=labels.marked_at, prefetch=labels.prefetch, land_into="main")
         q.branch = "main"
         graph2 = tuple(shlex.split(a.graph2))
         world = World(q, labels, Executor(Transport(store, (*graph2, "enqueue"), a.repo)), graph2=graph2,
-                      priority_file=a.priority_file)
+                      priority_file=a.priority_file, labels_at=labels_at, keys=a.log.parent / "issuer-keys.json")
         loop = Loop(world, a.log, shadow=a.shadow, dry_run=a.dry_run, batch=a.batch, depth=a.depth, state=a.state)
         if a.once or a.dry_run:
             loop.tick()

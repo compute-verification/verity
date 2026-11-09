@@ -48,6 +48,9 @@ class Labels:
     def marked_at(self, n: int, head: str) -> str | None:
         return f"2026-01-01T00:00:{n:02d}Z" if (n, head) in self.gh.ready else None
 
+    def before_cutoff(self, n: int, head: str) -> str | None:
+        return None
+
     def prefetch(self, heads) -> None:
         return None
 
@@ -358,6 +361,17 @@ def test_an_action_that_fails_stops_the_tick_with_its_error_logged_and_a_torn_li
     assert env.queued() == {} and env.posts == []                  # the build after it waits for the next tick
     assert [json.loads(x) for x in env.log.read_text().splitlines()[1:]] == [rec]
     assert any("read as none" in x for x in env.out)
+
+
+def test_each_tick_reads_the_labels_afresh_as_drive_reads_them(env):
+    made: list[Labels] = []
+    loop = env.loop(lambda s: [])
+    loop.world.labels_at = lambda: made.append(Labels(env.o.gh)) or made[-1]
+    loop.tick()
+    loop.tick()
+    w = loop.world
+    assert len(made) == 2 and w.labels is made[-1] and w.q.ready == made[-1].ready and w.q.marked_at == made[-1].marked_at
+    assert made[-1].change == w.q.own_change and made[-1].since == w.q.rules().marked_after
 
 
 def test_research_queue_vqueue_is_its_own_command(capsys):
