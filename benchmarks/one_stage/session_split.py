@@ -115,11 +115,11 @@ def main() -> int:
 
     def stop(sig, _frame) -> None:
         # the server's processes run in sessions of their own, so a lease's SIGTERM to this one alone would leave them on the GPU
-        for pid in ps.pids.values():
+        for name, pid in ps.pids.items():
             try:
                 os.killpg(pid, signal.SIGKILL)
             except ProcessLookupError:
-                pass
+                print(f"session_split: {name} (pid {pid}) had already exited at signal {sig}", file=sys.stderr, flush=True)
         os._exit(128 + sig)
 
     was = signal.signal(signal.SIGTERM, stop)
