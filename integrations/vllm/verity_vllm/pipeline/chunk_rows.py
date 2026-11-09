@@ -40,8 +40,8 @@ def reads(tp: Any) -> str:
     k_log 25, proved in 118 s, a 272 s session at 27 GB, accepted by Lean with its three negatives refused) and for its heads' per-key-block Calls, else inline, as step 16's 16-key part and
     five-split combine were proved, and the RMSNorm rows (``RMSNormTriton_v5``, ``RMSNormFusedCuda_v2``, 41 to 56 nonzeros
     an AND inline) at their served shapes; a ``CHAINS`` end, column end and combine inline as that combine. A ``STAGES`` stage
-    reads in slots: a stats part or a probabilities block reads EX2 a lane, thousands of them. A ``_v2`` body reads no table
-    (its EX2 is gates), so it lowers flat either way."""
+    reads in slots: a top-p stats part or probabilities block reads EX2 a lane, thousands of them. A ``_v2`` body reads no table
+    (its EX2 is gates), and nor does a greedy select's stage, so it lowers flat either way."""
     from verity_vllm.pipeline import chain_rows as CH
     from verity_vllm.query.program_view import spec_base, spec_statics
 

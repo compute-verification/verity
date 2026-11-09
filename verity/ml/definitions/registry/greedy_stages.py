@@ -2,7 +2,7 @@
 `CHUNK` logits (the last one the rest): `plan` lists them with their wiring, `cut` counts them by Definition (`b1.CUTS`), and
 `twin` computes every unit's outputs and the token.
 
-    GreedyChunk_v1{N,FIRST}   (x: bf16[N]) -> (bf16, Value<16>): the chunk's best logit and its index in the chunk
+    GreedyChunk_v1{N,FIRST}   (logits: bf16[N]) -> (bf16, Value<16>): the chunk's best logit and its index in the chunk
     GreedyCombine_v1{V,N}     (b0: bf16, i0: Value<16>, .., b{n-1}, i{n-1}) -> (Value<16>, Value<16>): the token's low and
                               high 16 bits, from the n = ceil(V / N) chunks' pairs
 
@@ -57,22 +57,22 @@ def _lanes(N) -> None:
 
 def _chunk_sig(S):
     _lanes(S.N)
-    return (("x", Array(S.N, BF16)),), Tuple(BF16, U16)
+    return (("logits", Array(S.N, BF16)),), Tuple(BF16, U16)
 
 
 @composite("GreedyChunk", 1, ["N", "FIRST"], _chunk_sig, conformance=_CONF)
-def GreedyChunk(B, S, x):
-    """A chunk of N logits -> (its best, that lane's index in the chunk): FIRST, `TokenSelect_v1`'s scan over them from (x[0],
-    0); else the scan from (-inf, 0), (-inf, 0) when no lane is above -inf (the module docstring)."""
+def GreedyChunk(B, S, logits):
+    """A chunk of N logits -> (its best, that lane's index in the chunk): FIRST, `TokenSelect_v1`'s scan over them from
+    (logits[0], 0); else the scan from (-inf, 0), (-inf, 0) when no lane is above -inf (the module docstring)."""
     if S.FIRST:
-        best, at, start = x[0], B.call(const(16, 0)), 1
+        best, at, start = logits[0], B.call(const(16, 0)), 1
     else:
         best, at, start = B.call(const(16, NEG_INF_BF16)), B.call(const(16, 0)), 0
     for i in range(start, S.N):
-        keep = B.call(BitNot, B.call(P.Bf16GtStrict, x[i], best))
+        keep = B.call(BitNot, B.call(P.Bf16GtStrict, logits[i], best))
         if i:
             at = B.call(SelectU16, keep, at, B.call(const(16, i)))
-        best = B.call(P.SelectBf16, keep, best, x[i])
+        best = B.call(P.SelectBf16, keep, best, logits[i])
     return tuple_of(best, at)
 
 
