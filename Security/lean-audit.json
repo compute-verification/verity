@@ -3140,7 +3140,7 @@
   },
   "SamplingDeploy.SessionsIn": {
    "owner": "@proofs",
-   "digest": "53397a0c0b44640a0a3cc3bb501a74b4c13d2b6b4975c9451044ec8ee69f3a7d",
+   "digest": "99857991deb3c674327c159100265d18964d94aaa1e2e9fb073990566e81bcc0",
    "issue": "LEAN-186",
    "due": "2026-11-08"
   },
@@ -4480,6 +4480,46 @@
   "Claims.SamplingGeneric.compilerEfficientTwo": {
    "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest", "Claims.SamplingGeneric.compilerBits_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerEfficientTwo_nontrivial"
+  },
+  "Nci.SecurityProofs.IncompressibleThreadedThrottled": {
+   "honest": ["Nci.SecurityProofs.IncompressibleThreadedThrottled_honest"],
+   "nontrivial": "Nci.SecurityProofs.IncompressibleThreadedThrottled_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.SecurityProofs.IncompressibleThreadedThrottledOn": {
+   "honest": ["Nci.SecurityProofs.IncompressibleThreadedThrottled_honest"],
+   "nontrivial": "Nci.SecurityProofs.IncompressibleThreadedThrottledOn_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.SecurityProofs.ThreadedThrottled": {
+   "honest": ["Nci.SecurityProofs.ThreadedThrottled_honest"],
+   "nontrivial": "Nci.SecurityProofs.ThreadedThrottled_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.SecurityProofs.ThreadedThrottledDark": {
+   "honest": ["Nci.SecurityProofs.ThreadedThrottled_honest"],
+   "nontrivial": "Nci.SecurityProofs.ThreadedThrottledDark_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.SecurityProofs.ThreadedThrottledDarkSlots": {
+   "honest": ["Nci.SecurityProofs.ThreadedThrottledSlots_honest"],
+   "nontrivial": "Nci.SecurityProofs.ThreadedThrottledDarkSlots_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.SecurityProofs.ThreadedThrottledOn": {
+   "honest": ["Nci.SecurityProofs.ThreadedThrottled_honest"],
+   "nontrivial": "Nci.SecurityProofs.ThreadedThrottledOn_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.SecurityProofs.ThreadedThrottledOnSlots": {
+   "honest": ["Nci.SecurityProofs.ThreadedThrottledSlots_honest"],
+   "nontrivial": "Nci.SecurityProofs.ThreadedThrottledOnSlots_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.SecurityProofs.ThreadedThrottledSlots": {
+   "honest": ["Nci.SecurityProofs.ThreadedThrottledSlots_honest"],
+   "nontrivial": "Nci.SecurityProofs.ThreadedThrottledSlots_nontrivial",
+   "kind": "exclusion"
   }
  },
  "unwitnessed": {
@@ -4761,10 +4801,6 @@
    "type_hash": "1910cfb31b79cb8d721cb0edad48b0c09ee74b51a2fe974750f10c5f81b6df1f",
    "unfolded_hash": "6e5e82da1a116a7b2c081ee87a3a495bf99965857bfc85c720d26ea5548bba66"
   },
-  "Accounting.SecurityProofs.RateHonest": {
-   "type_hash": "867f44a334a5c4a2900d0dd15148e7c1a3aba86c9d74f3f29339195eb2bdffad",
-   "unfolded_hash": "f0b8d88960e76bae902507481273e2a55788b3067b772036805f28ed3028de48"
-  },
   "Accounting.SecurityProofs.RateOfAudit": {
    "type_hash": "f06ccbbbc49c0aaf0044100fa98746c08622542d33f710ef72f4e32d0ab54702",
    "unfolded_hash": "28298c4722f26afe64579be88f159720650520df315d074fa50bdb4115276345"
@@ -4785,17 +4821,9 @@
    "type_hash": "9abe9abbcf76b2f2a32e235ec9a686d2d04d48d59a48d9d4d875eb95580e15ac",
    "unfolded_hash": "591b2a5e8d41ac0609a163899771c089a1547d17ef91c39f410152b31293becd"
   },
-  "Accounting.SecurityProofs.RatePartialHonest": {
-   "type_hash": "89076e3adea744a3cd5933e2575b87b47f88a3c0324183258878023b87f9cd53",
-   "unfolded_hash": "1e0b163a0dd3df916ff038aa549d61f1cf46d864de8278763d61f83c12e13165"
-  },
   "Accounting.SecurityProofs.RatePooled": {
    "type_hash": "e61727e981125bd0882fc93a541bd73dc760d696d4ebb876a094ca58ff96d36f",
    "unfolded_hash": "4f839be16e17b28cc955ee786f09a8993d7894f0b7a2f8958686ddab8204d9d0"
-  },
-  "Accounting.SecurityProofs.RateSketchHonest": {
-   "type_hash": "4ec1755f734a0d74b944bba77f1618fb545e84a650aed6fc930c599cb6a229ff",
-   "unfolded_hash": "58efd8a6ca44cd2ffcda3c9b3398178285065bd1ec92b64f2b206ed7a64f343d"
   },
   "Accounting.SecurityProofs.Remote.Held": {
    "type_hash": "156e45cf5c184510b4e81f318c0b50e17b6cab0af1582be40fc592c055f0eac2",
@@ -4832,10 +4860,6 @@
   "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": {
    "type_hash": "b548507034d640166412194e4e7aabc59a646d57368d1120f89faeb1c1f59067",
    "unfolded_hash": "5b9c92f68f7e4537274889602547b01dd65182687db01557a4651b5d563d2a1e"
-  },
-  "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": {
-   "type_hash": "26fd0a6eaacfe57684738f19ad110ac0c51d3fa200a790d2ac498a67532d7fe6",
-   "unfolded_hash": "a467a79bf0f9b8aaf729731f5acb2904c06d190ff22c10fcff357bff2e009ea7"
   },
   "Accounting.SecurityProofs.Remote.SketchBoundDeployed": {
    "type_hash": "42cd7637cbeda10f0dea20c41dddce4b130640fe40f534eede323e10ea9661c0",
@@ -4970,10 +4994,6 @@
   "Bandwidth.SecurityProofs.AuditRelay": {
    "type_hash": "0fe66fd603e783a1c5e889f218ec0a4acaee1afc91e09411b7939048763df73e",
    "unfolded_hash": "c8dab41c1d54b540d47ddeea94436172faa34f2f372b45717e982fcf8f67a585"
-  },
-  "Bandwidth.SecurityProofs.HonestPasses": {
-   "type_hash": "49bc1714ad2ff09df8968490d1fdbbb60cb38a219cc689e27206f0eac7c207e9",
-   "unfolded_hash": "446955f639c687126a969411bb7ddce7b1d1a311a0e572b0516ce665d59d8e58"
   },
   "Flock.SecurityProofs.EndToEnd": {
    "type_hash": "98d68470d723d245aac78106ff238e8d7903feea054a6748e7afe2e5e24e1aff",
@@ -5183,14 +5203,6 @@
    "type_hash": "4ad0e8c3c012b570f1e87d47bbda107dce81f9772c33432b68aabccbf103a0da",
    "unfolded_hash": "2b5ca1219727bee684ddc883d7315af41791455f10d8f6f6109d5ef26cde0b5c"
   },
-  "Nci.SecurityProofs.IncompressibleThreadedThrottled": {
-   "type_hash": "3f0744ed7643bc3edea9b8bcf41a99c0a872164d55e92857ae748cac9d1ba7f6",
-   "unfolded_hash": "8c6f9da424a228bd46e1ad63c4bfea690e6f9ffa632a5b412968062cebda528b"
-  },
-  "Nci.SecurityProofs.IncompressibleThreadedThrottledOn": {
-   "type_hash": "796765adf9071efb9307c0bc132a001510b1a96beab7fb237fdd64013c33899f",
-   "unfolded_hash": "6cb6ca836825e498ba381568fb4abcd6051ee4a56c21b9de16c3ed665788d2a3"
-  },
   "Nci.SecurityProofs.Inference": "9577814bc7cda3860fee9d3428ecde7e11d7299009a1d3bfb405e11c92e5c600",
   "Nci.SecurityProofs.InfoOfState": {
    "type_hash": "9f1583451f17bdeb540e073a017a0ecc297b129c7158de888554305423a979f5",
@@ -5224,30 +5236,6 @@
   "Nci.SecurityProofs.ThreadedReadsSlots": {
    "type_hash": "43deeb35d80d7cf5ccf1ac1d3146368ec5775d06dbb0f5769b2bef1c092e7112",
    "unfolded_hash": "ee45792a2ddd9b39460192763c6b0a2a49454fdb7a3f6cea27b86889dc2c4a61"
-  },
-  "Nci.SecurityProofs.ThreadedThrottled": {
-   "type_hash": "6007575d1460a22e63346ad2afc4a83bc5c4c7fff749b280a150dba09d596041",
-   "unfolded_hash": "80df4629cbbb2662cb37463e1a0017c2007c5951cf00ae1483ef0478c1000bcb"
-  },
-  "Nci.SecurityProofs.ThreadedThrottledDark": {
-   "type_hash": "a3965e5caa03cf2e61926408d5047b84693ac61a62baafca0cca6e13d857dd2e",
-   "unfolded_hash": "5d769971219774dbc4187d28906e6dddbd0a37dd7bd292f93accaed35e197552"
-  },
-  "Nci.SecurityProofs.ThreadedThrottledDarkSlots": {
-   "type_hash": "f0fd651df80a204957a512ee9a4b43bbd40861f8aef36fd77bb331b62fa14301",
-   "unfolded_hash": "26d0cf7adaffc00d64d4d3f0087bb2c1d6d073275f1267394b20b07f38434255"
-  },
-  "Nci.SecurityProofs.ThreadedThrottledOn": {
-   "type_hash": "a7984c474df2870454bd2dfca9bd5e9b030354d05ffbceea7b2f791e14530d65",
-   "unfolded_hash": "bad0930d4b2264b7252f8e356f65407946b5a274915dba69d11ce4757b602406"
-  },
-  "Nci.SecurityProofs.ThreadedThrottledOnSlots": {
-   "type_hash": "1593e5bf02baa087182289a9fedaf463f3d5fdf1bcbc4c08691ceaae7500be91",
-   "unfolded_hash": "e3134193ae8ec8847acaa1ac4a67d8c6c1ac0ba53fdcf527e562182480243bd3"
-  },
-  "Nci.SecurityProofs.ThreadedThrottledSlots": {
-   "type_hash": "6f1cd5018a0f1fbc06386cb1e9c7c06c3b2ec5b19ac3fa470a40e8f77f26e350",
-   "unfolded_hash": "264ef2d2d26499ffc41b4db6746b1f3ba46f2d31be940b4ae7750f23ef2244af"
   },
   "Nci.SecurityProofs.UpdatedMatMulReads": "3d44d307610a81a4747f64dcc7d3945c2dcfe9ea92f7a0339d49a79417e45c83",
   "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": "7ccec3c51a3940931ea87fc0b3800d793566789cdc927ea9d9c011bcd1ef9e72",
@@ -8640,19 +8628,6 @@
    "type_hash": "3bdab97faef190a4d82548574718cab5c5707322b9339b462590644d5e1d43ba",
    "unfolded_hash": "93f98f358610a6f5335c52490425371571f8d6ec9c844ed5366eff0fd4a31df7"
   },
-  "Accounting.SecurityProofs.RateHonest": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.RateHonest : Accounting.Guarantees.RateHonest"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "867f44a334a5c4a2900d0dd15148e7c1a3aba86c9d74f3f29339195eb2bdffad",
-   "unfolded_hash": "f0b8d88960e76bae902507481273e2a55788b3067b772036805f28ed3028de48"
-  },
   "Accounting.SecurityProofs.RateOfAudit": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.RateOfAudit : Accounting.Guarantees.RateOfAudit"],
@@ -8757,19 +8732,6 @@
    "type_hash": "bc163df440fa43c23b650f2c7f04f79f26399e90d792a3bf515f6c9e5635448f",
    "unfolded_hash": "0fc87e28877bf3e93504ec0e02a5d535a5f30aee291ec60104d996de581f1e7d"
   },
-  "Accounting.SecurityProofs.RatePartialHonest": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.RatePartialHonest : Accounting.Guarantees.RatePartialHonest"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "89076e3adea744a3cd5933e2575b87b47f88a3c0324183258878023b87f9cd53",
-   "unfolded_hash": "1e0b163a0dd3df916ff038aa549d61f1cf46d864de8278763d61f83c12e13165"
-  },
   "Accounting.SecurityProofs.RatePartialRebuild": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.RatePartialRebuild : Accounting.Guarantees.RatePartialRebuild"],
@@ -8821,45 +8783,6 @@
    },
    "type_hash": "06613afa1ab109072e1ea27e67fd8d9d8cdde8301790ce1b6d9ba1545b0ba76e",
    "unfolded_hash": "9c9bece54f9a2189d4b74741ac4642db592e8c4d29367197b45d0a3ea2d03066"
-  },
-  "Accounting.SecurityProofs.RateSketchHonest": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.RateSketchHonest : Accounting.Guarantees.RateSketchHonest"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "4ec1755f734a0d74b944bba77f1618fb545e84a650aed6fc930c599cb6a229ff",
-   "unfolded_hash": "58efd8a6ca44cd2ffcda3c9b3398178285065bd1ec92b64f2b206ed7a64f343d"
-  },
-  "Accounting.SecurityProofs.RateSketchTable": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.RateSketchTable : Accounting.Guarantees.RateSketchTable"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "ef5e21f1fb7f8e6ea92d3dee6b3a7bfefa0962a7f8ed1b0fd1470723e25c49fc",
-   "unfolded_hash": "26ce3e32962ba291412c3109d8b30d0f1a1ec5f17f80d494d8d3d5761efaa355"
-  },
-  "Accounting.SecurityProofs.RateTensorSketchTable": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.RateTensorSketchTable : Accounting.Guarantees.RateTensorSketchTable"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "cdc083c895e46c38c26169f93c80eb0246f5bfa14a40f70e66ea77a29999476c",
-   "unfolded_hash": "b1bc36571dc364174076213e99dcf674581f4b38abf39388c9c47470f03b1375"
   },
   "Accounting.SecurityProofs.RateWindowSample": {
    "owner": "@memory-accounting",
@@ -9119,21 +9042,6 @@
    },
    "type_hash": "b548507034d640166412194e4e7aabc59a646d57368d1120f89faeb1c1f59067",
    "unfolded_hash": "5b9c92f68f7e4537274889602547b01dd65182687db01557a4651b5d563d2a1e"
-  },
-  "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": {
-   "owner": "@memory-accounting",
-   "signature": [
-    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork : Accounting.Guarantees.Remote.ReceiptsBindingOfFork"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": ["Accounting.Actual.wordIndex"]
-   },
-   "type_hash": "26fd0a6eaacfe57684738f19ad110ac0c51d3fa200a790d2ac498a67532d7fe6",
-   "unfolded_hash": "a467a79bf0f9b8aaf729731f5acb2904c06d190ff22c10fcff357bff2e009ea7"
   },
   "Accounting.SecurityProofs.Remote.SketchBoundDeployed": {
    "owner": "@lean",
@@ -10803,19 +10711,6 @@
    },
    "type_hash": "b2dd32b10ed99fff97ec8690ab651b337b9e2cdfd7efa3981e29ad5665e6f3f2",
    "unfolded_hash": "e2fb43958c29c67173b593ce88f817f4473a4692c9c5138a755838a8b9292504"
-  },
-  "Bandwidth.SecurityProofs.HonestPasses": {
-   "owner": "@memory-accounting",
-   "signature": ["Bandwidth.SecurityProofs.HonestPasses : Bandwidth.Guarantees.HonestPasses"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "49bc1714ad2ff09df8968490d1fdbbb60cb38a219cc689e27206f0eac7c207e9",
-   "unfolded_hash": "446955f639c687126a969411bb7ddce7b1d1a311a0e572b0516ce665d59d8e58"
   },
   "Bandwidth.SecurityProofs.Mbw": {
    "owner": "@memory-accounting",
@@ -17722,6 +17617,53 @@
    "type_hash": "796765adf9071efb9307c0bc132a001510b1a96beab7fb237fdd64013c33899f",
    "unfolded_hash": "6cb6ca836825e498ba381568fb4abcd6051ee4a56c21b9de16c3ed665788d2a3"
   },
+  "Nci.SecurityProofs.IncompressibleThreadedThrottledOn_nontrivial": {
+   "owner": "@lean",
+   "signature": [
+    "Nci.SecurityProofs.IncompressibleThreadedThrottledOn_nontrivial :",
+    "  Nci.Guarantees.IncompressibleThreadedThrottledOn_nontrivial"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Nci.Small"],
+    "reads": ["Nci.Assumptions.ThetaRegistered", "Nci.Assumptions.TrainingIncompressible"]
+   },
+   "type_hash": "27ce01386af305774c5973ffa9159901e34fd7b1661c5f648afdd5955ef9b1a7",
+   "unfolded_hash": "48732b566218ca9800ede25dedb807802569aed988bfabbc8896a4b44e2e6201"
+  },
+  "Nci.SecurityProofs.IncompressibleThreadedThrottled_honest": {
+   "owner": "@lean",
+   "signature": [
+    "Nci.SecurityProofs.IncompressibleThreadedThrottled_honest : Nci.Guarantees.IncompressibleThreadedThrottled_honest"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Nci.Small"],
+    "reads": ["Nci.Assumptions.ThetaRegistered", "Nci.Assumptions.TrainingIncompressible"]
+   },
+   "type_hash": "cd385dc2fd4cd1e7663e2eecac02a7f776cb5385f3e737857197b94530071bd3",
+   "unfolded_hash": "397399d1ad7d821861925885248a107d51be96e80e0f9c6044fe37936c68673e"
+  },
+  "Nci.SecurityProofs.IncompressibleThreadedThrottled_nontrivial": {
+   "owner": "@lean",
+   "signature": [
+    "Nci.SecurityProofs.IncompressibleThreadedThrottled_nontrivial :",
+    "  Nci.Guarantees.IncompressibleThreadedThrottled_nontrivial"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Nci.Small"],
+    "reads": ["Nci.Assumptions.ThetaRegistered", "Nci.Assumptions.TrainingIncompressible"]
+   },
+   "type_hash": "930bd09b69860cdcf218c8fd8b714ca02cc49642a2b3a119b736c353704c26b9",
+   "unfolded_hash": "228ceb3dc52f49daede759d399013b02bd044a21eec5643d6bffc88a6a39d50f"
+  },
   "Nci.SecurityProofs.InfoOfState": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.InfoOfState : Nci.Guarantees.InfoOfState"],
@@ -18249,6 +18191,34 @@
    "type_hash": "f0fd651df80a204957a512ee9a4b43bbd40861f8aef36fd77bb331b62fa14301",
    "unfolded_hash": "26d0cf7adaffc00d64d4d3f0087bb2c1d6d073275f1267394b20b07f38434255"
   },
+  "Nci.SecurityProofs.ThreadedThrottledDarkSlots_nontrivial": {
+   "owner": "@lean",
+   "signature": [
+    "Nci.SecurityProofs.ThreadedThrottledDarkSlots_nontrivial : Nci.Guarantees.ThreadedThrottledDarkSlots_nontrivial"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Nci.Small"],
+    "reads": ["Nci.Assumptions.ThetaRegistered", "Nci.Assumptions.WeightsIncompressibleSlots"]
+   },
+   "type_hash": "fc553856fa6b34e8dd54f18b468f1e0c72ba800e46e875ff9f55fbdc4d6c7d3f",
+   "unfolded_hash": "4e720ff7c1675b0c273cf6986b13bdddf9c09f3b6a6169b898d1faf18b43fc4d"
+  },
+  "Nci.SecurityProofs.ThreadedThrottledDark_nontrivial": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ThreadedThrottledDark_nontrivial : Nci.Guarantees.ThreadedThrottledDark_nontrivial"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Nci.Small"],
+    "reads": ["Nci.Assumptions.ThetaRegistered", "Nci.Assumptions.WeightsIncompressible"]
+   },
+   "type_hash": "1d141bc2d22d3204a323854b62174bf68117ef718254b80fa4c74a6468fadc40",
+   "unfolded_hash": "d1aa89672835255930606464a211549232295617941f9fb07869f5c7ada0c22f"
+  },
   "Nci.SecurityProofs.ThreadedThrottledOn": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ThreadedThrottledOn : Nci.Guarantees.ThreadedThrottledOn"],
@@ -18285,6 +18255,34 @@
    "type_hash": "1593e5bf02baa087182289a9fedaf463f3d5fdf1bcbc4c08691ceaae7500be91",
    "unfolded_hash": "e3134193ae8ec8847acaa1ac4a67d8c6c1ac0ba53fdcf527e562182480243bd3"
   },
+  "Nci.SecurityProofs.ThreadedThrottledOnSlots_nontrivial": {
+   "owner": "@lean",
+   "signature": [
+    "Nci.SecurityProofs.ThreadedThrottledOnSlots_nontrivial : Nci.Guarantees.ThreadedThrottledOnSlots_nontrivial"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Nci.Small"],
+    "reads": ["Nci.Assumptions.ThetaRegistered", "Nci.Assumptions.WeightsIncompressibleSlots"]
+   },
+   "type_hash": "024d1d64683144e5d5f30ff4fc65301993d50e158bf3eeaeb46551118df3aa4b",
+   "unfolded_hash": "8830b5ccaf91c4ef0f32eefbecb44363f04daed226e51683a6a32d55ce693be4"
+  },
+  "Nci.SecurityProofs.ThreadedThrottledOn_nontrivial": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ThreadedThrottledOn_nontrivial : Nci.Guarantees.ThreadedThrottledOn_nontrivial"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Nci.Small"],
+    "reads": ["Nci.Assumptions.ThetaRegistered", "Nci.Assumptions.WeightsIncompressible"]
+   },
+   "type_hash": "a5ac9f9965815c2884b3a76f84ec9af95c30d3d58a70af433d5488ef7e621143",
+   "unfolded_hash": "54a22b7c11d5e99e28d752e25ff63952c6454a3ad741339e7c353e8df7ec277c"
+  },
   "Nci.SecurityProofs.ThreadedThrottledSlots": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ThreadedThrottledSlots : Nci.Guarantees.ThreadedThrottledSlots"],
@@ -18302,6 +18300,60 @@
    },
    "type_hash": "6f1cd5018a0f1fbc06386cb1e9c7c06c3b2ec5b19ac3fa470a40e8f77f26e350",
    "unfolded_hash": "264ef2d2d26499ffc41b4db6746b1f3ba46f2d31be940b4ae7750f23ef2244af"
+  },
+  "Nci.SecurityProofs.ThreadedThrottledSlots_honest": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ThreadedThrottledSlots_honest : Nci.Guarantees.ThreadedThrottledSlots_honest"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Nci.Small"],
+    "reads": ["Nci.Assumptions.ThetaRegistered", "Nci.Assumptions.WeightsIncompressibleSlots"]
+   },
+   "type_hash": "14ad04ce35ea78050085728bc7626dd1e2216bb592414624abc01426ad9ede42",
+   "unfolded_hash": "1be338bb1deedcd687e801b46892465b340f270bae4cc70b170909ea01d4eb61"
+  },
+  "Nci.SecurityProofs.ThreadedThrottledSlots_nontrivial": {
+   "owner": "@lean",
+   "signature": [
+    "Nci.SecurityProofs.ThreadedThrottledSlots_nontrivial : Nci.Guarantees.ThreadedThrottledSlots_nontrivial"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Nci.Small"],
+    "reads": ["Nci.Assumptions.ThetaRegistered", "Nci.Assumptions.WeightsIncompressibleSlots"]
+   },
+   "type_hash": "196a83579731989fed764e15a4238a34f2aac5099f89616926e0ed7319f21260",
+   "unfolded_hash": "4b6bd0cb0fe194ccf9fefbb35bbcf8856a84609b25789b7efd2def2ae304d7b7"
+  },
+  "Nci.SecurityProofs.ThreadedThrottled_honest": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ThreadedThrottled_honest : Nci.Guarantees.ThreadedThrottled_honest"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Nci.Small"],
+    "reads": ["Nci.Assumptions.ThetaRegistered", "Nci.Assumptions.WeightsIncompressible"]
+   },
+   "type_hash": "4455706a3f2ebea600941fb41fbc2711e78816377fde87dfaef72ae589f6b076",
+   "unfolded_hash": "1ecf77b54c6c095bd8d2986a4aebe7fbb56cf9171fec40b8647a25ca6ece96ea"
+  },
+  "Nci.SecurityProofs.ThreadedThrottled_nontrivial": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ThreadedThrottled_nontrivial : Nci.Guarantees.ThreadedThrottled_nontrivial"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Nci.Small"],
+    "reads": ["Nci.Assumptions.ThetaRegistered", "Nci.Assumptions.WeightsIncompressible"]
+   },
+   "type_hash": "3c476dab760e37309f7853bedaa0deda6c10d31891f6dfbfe2b0b379eeeb2811",
+   "unfolded_hash": "faad399ea9d59870160584b852a6682b95db5678b099dd60725af08f0116604e"
   },
   "Nci.SecurityProofs.ThreadedTraining": {
    "owner": "@lean",
@@ -25166,27 +25218,6 @@
    },
    "type_hash": "abe08a0327d69c6b3856f56deb82396e0b4e690087ba35e549218a68ad163f8a"
   },
-  "Verity.SecurityProofs.RegisteredLeakage_nontrivial_stack": {
-   "owner": "@proofs",
-   "signature": [
-    "Verity.SecurityProofs.RegisteredLeakage_nontrivial_stack :",
-    "  Not",
-    "    (Verity.Assumptions.ZkServerOwnUser fun k x x_1 =>",
-    "      Sum.inr",
-    "        { fst := 0,",
-    "          snd :=",
-    "            { fst := 1,",
-    "              snd := { fst := { fst := Unit.unit, snd := { fst := Bool.true, snd := Unit.unit } }, snd := k } } })"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": ["Verity.Assumptions.ZkServerOwnUser"]
-   },
-   "type_hash": "db94091d1ef9c64f4f279364d97f645b85d1f95ec24b875380e3875e646538bb"
-  },
   "Verity.SecurityProofs.RegisteredStreamLeakage": {
    "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.RegisteredStreamLeakage : Verity.Guarantees.RegisteredStreamLeakage"],
@@ -25287,28 +25318,6 @@
     "reads": []
    },
    "type_hash": "227470e2a45b2f562c586f94d6ec635fc8c29aadceda9f862c71b974181d5940"
-  },
-  "Verity.SecurityProofs.RegisteredStreamLeakage_nontrivial_stack": {
-   "owner": "@proofs",
-   "signature": [
-    "Verity.SecurityProofs.RegisteredStreamLeakage_nontrivial_stack :",
-    "  Not",
-    "    (Verity.Assumptions.ZkServerOwnUser fun k x x_1 x_2 =>",
-    "      Option.some",
-    "        (Sum.inr",
-    "          { fst := 0,",
-    "            snd :=",
-    "              { fst := 1,",
-    "                snd := { fst := { fst := Unit.unit, snd := { fst := Bool.true, snd := Unit.unit } }, snd := k } } }))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": ["Verity.Assumptions.ZkServerOwnUser"]
-   },
-   "type_hash": "bd3e2cd4dede40f0b15d2fdd742229cc3671e1447c617d38fa860dbc6175915e"
   },
   "Verity.SecurityProofs.SampleAfterRecorded": {
    "owner": "@soundness",
@@ -25731,19 +25740,6 @@
    },
    "type_hash": "129a15e5ba38cbf426e8bf108ce5b819f0ed273352179a99b553e2155d002754",
    "unfolded_hash": "34781449a0a3c8f0ab53885fda423f5d6673b49c72fd1be9fc56713f08f055c2"
-  },
-  "WeightSecurity.SecurityProofs.TheftTight": {
-   "owner": "@proofs",
-   "signature": ["WeightSecurity.SecurityProofs.TheftTight : WeightSecurity.Guarantees.TheftTight"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": ["WeightSecurity.Assumptions.LeaksThrough"]
-   },
-   "type_hash": "8e5244a0e2b442ec2d7f535eb5774ec55c7f866c873684cdbd9e4a6342420620",
-   "unfolded_hash": "12187ab64b5baaa5cfccda4088790402e0e8a6c614379af8cbe8d5adb9e4fc61"
   }
  },
  "shape": {
@@ -26140,7 +26136,6 @@
    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
    "Pous.SecurityProofs.P2RingAuditSecureOfReduces": "frozen (no-function,hash): It relates two statements about P2 in the ring model (Security/Definitions/Pous/P2/Cost.lean), not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingReducesToM1p.",
    "Bandwidth.SecurityProofs.AuditRO": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model (Security/Definitions/Accounting/Bandwidth/Game.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the Device it ranges over, not the bandwidth audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, bandwidth-regen-time, bandwidth-instantiation and random-oracle carry it to a deployed device.",
-   "Bandwidth.SecurityProofs.HonestPasses": "completeness: an honest device (no on-chip state, side sources or regeneration, N queries) is accepted on every store, oracle and sample with ingress exactly N * b, so AuditRO's event is not vacuous and the gap between N * b and its floor k * b - S - c - G * b - lam is in the lock",
    "Accounting.SecurityProofs.PouwEndToEndPerRun": "frozen (conjecture,no-function,hash): It is Pouw.SecurityProofs.EndToEnd per run, a consequence of the named open conjecture TT when the cost model truncates (Accounting.BudgetAbort, Security/Definitions/Accounting/PerRun.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal, not over a Lean function.",
    "Accounting.SecurityProofs.ComputeOfPouwPerRun": "frozen (conjecture,no-function,hash): It carries PouwEndToEndPerRun, a consequence of the named open conjecture TT over PoUW's game with a uniform oracle, to the compute audit of an abstract run of the device model (Security/Definitions/Accounting/Pouw.lean), not to a Lean function.",
    "Accounting.SecurityProofs.JointPerRun": "frozen (no-function): Like Joint, it composes the three audits' per-run guarantees, each a hypothesis over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/PerRun.lean), and bounds a Pouw.pr event, which shape.events does not list.",
@@ -26185,12 +26180,10 @@
    "Accounting.SecurityProofs.DerivedStateResidual": "frozen (no-function): Like CovertResidual, it is stated over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/Capacity.lean), and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.RateAudit": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model whose tags absorb a certified stream and whose rebuilt words are paid in compute (Security/Definitions/Accounting/RateAudit.lean), with the device's bounds (S_chip, the side link's cap * T, queries) as fields of the Device it ranges over and the compute budget, c_tag and c_enc as parameters, not the rate audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, rate-codec-work, rate-device, bandwidth-instantiation and random-oracle carry it to a deployed device.",
    "Accounting.SecurityProofs.RateAuditWindows": "frozen (no-function,hash): Like Accounting.SecurityProofs.RateAudit, it bounds acceptance of abstract chip programs in the random-oracle model, one per window and each any function of the other windows' coins (Security/Definitions/Accounting/RateAudit.lean), not the rate audit's code.",
-   "Accounting.SecurityProofs.RateHonest": "completeness: an honest device (no on-chip state or free side sources, a link carrying exactly the certified stream, N queries, nothing rebuilt) is accepted on every store, stream, oracle and sample with footprint and ingress exactly N * b and compute N * c_tag, so RateAudit's event is not vacuous and the gap between N * b and its floor is in the lock",
    "Accounting.SecurityProofs.RateOfAudit": "frozen (no-function,hash): It carries Accounting.SecurityProofs.RateAudit, a bound in the random-oracle model over an abstract chip program, to the bandwidth audit of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/RateAuditJoint.lean), not to a Lean function, and bounds a Pous.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.RateAuditSketch": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model whose tags hash the certified stream and a digest of each tile, for a device that obtains sectors only whole and as they are (Security/Definitions/Accounting/RateAuditSketch.lean), with the device's bounds (held sectors within S_chip, the side link's cap * T, queries) as fields of the Device it ranges over and the digest, the compute budget, c_tag and c_enc as parameters, not the rate audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, rate-codec-work, rate-sketch-verbatim, bandwidth-instantiation and random-oracle carry it to a deployed device.",
    "Accounting.SecurityProofs.RateAuditSketchInteractiveRO": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model that may send bits to side sources answering each read with a whole sector of the store or of the certified stream, as it is, at an address picked from what was sent (Security/Definitions/Accounting/RateAuditSketchInteractive.lean), at Accounting.SecurityProofs.RateAuditSketch's floor and error, with the device's bounds as fields of the InteractiveProver it ranges over, not the rate audit's code; sends are unbounded and free, and the claims rate-sketch-verbatim and random-oracle carry it to a deployed device.",
    "Accounting.SecurityProofs.RateAuditTensorSketch": "frozen (no-function,hash): Like Accounting.SecurityProofs.RateAuditSketch, it bounds acceptance of an abstract chip program in the random-oracle model, at the tensor-core sketch's digest (Accounting.RateSketch.sketch), not the rate audit's code.",
-   "Accounting.SecurityProofs.RateSketchHonest": "completeness: an honest device (nothing held on chip, a link carrying exactly the certified stream's rho sectors, N queries, nothing rebuilt) is accepted at every signs, oracle, data and sample with footprint exactly N * m * w and compute N * c_tag, so Accounting.SecurityProofs.RateAuditSketch's event is not vacuous",
    "Accounting.SecurityProofs.SketchBinds": "frozen (premise): It is a property of Accounting.RateSketch.sketch under the hypothesis SectorsBind σ on the window's signs, which is neither an acceptance of the sketch nor a premise under shape.premises; Accounting.SecurityProofs.RateAuditTensorSketch prices the hypothesis as Pr_σ[¬ SectorsBind σ].",
    "Bandwidth.SecurityProofs.AuditRelay": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model whose side sources may depend on the oracle (Security/Definitions/Accounting/Bandwidth/Relay.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the RelayDevice it ranges over, not the bandwidth audit's code; relayed tags count against the side budget, at m * b bits for m blocks.",
    "Bandwidth.SecurityProofs.AuditInteractive": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model that may send bits to side sources answering any function of the store, the oracle and what was sent (Security/Definitions/Accounting/Bandwidth/Interactive.lean), with the device's bounds (S_chip, the side bits read, T / R_regen, queries) as a field of the InteractiveDevice it ranges over, not the bandwidth audit's code; sends are unbounded and free, and relayed tags count against the side budget as in AuditRelay.",
@@ -26200,7 +26193,6 @@
    "Accounting.SecurityProofs.RateOfAuditInteractive": "frozen (no-function,hash): It carries Accounting.SecurityProofs.RateAuditInteractive, a bound in the random-oracle model over an abstract chip program, to the bandwidth audit of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/RateAuditInteractive.lean), not to a Lean function, and bounds a Pous.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.RateOfAuditInteractiveRO": "frozen (no-function,hash): As Accounting.SecurityProofs.RateOfAuditInteractive, carrying Accounting.SecurityProofs.RateAuditInteractiveRO, for side sources whose answers ignore the oracle at every value of the other audits' coins.",
    "Accounting.SecurityProofs.RateAuditPartial": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model that may complete any x of a word's b bits at cost x (Security/Definitions/Accounting/RateAuditPartial.lean), at RateAudit's floor and error with c_enc = rounds * c_root, under the named assumption Accounting.Assumptions.WorkHardness, with the device's bounds (S_chip, the side link's cap * T, queries) as fields of the PartialDevice it ranges over and the compute budget, c_tag and the cost of a completion as parameters, not the rate audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, rate-codec-work (WorkHardness, at k >= 2 rounds; F27 breaks it at k = 1), rate-device, bandwidth-instantiation and random-oracle carry it to a deployed device.",
-   "Accounting.SecurityProofs.RatePartialHonest": "completeness: RateHonest's honest device as a partial device (no on-chip state or free side sources, a link carrying exactly the certified stream, N queries, nothing completed) is accepted on every store, stream, oracle and sample with footprint and ingress exactly N * b and compute N * c_tag at every price of a completion, so RateAuditPartial's event is not vacuous",
    "Accounting.SecurityProofs.RateOfAuditPartial": "frozen (no-function,hash): It carries Accounting.SecurityProofs.RateAuditPartial, a bound in the random-oracle model over an abstract chip program, to the bandwidth audit of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/RateAuditPartial.lean), with the compute account's work and the game's compute adding by the named assumption Accounting.Assumptions.RateComputeAdditive (W), not to a Lean function, and bounds a Pous.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.RateOfAuditPartialPasses": "frozen (no-function,hash): As Accounting.SecurityProofs.RateOfAuditPartial, with the rebuild term in passes (mu_rebuild <= (1 - tau) * d / (k * x1)) under x1 * b * F <= c_root * BW.",
    "Accounting.SecurityProofs.RatePartialRebuild": "frozen (no-function): It bounds, on every run of an abstract chip program that may complete any x of a word's b bits at cost x (Security/Definitions/Accounting/RateAuditPartial.lean), the bits completed by the completions' compute under the named assumption Accounting.Assumptions.WorkHardness, not the rate audit's code; it is the remote audit's route Accounting.Remote.Run.Rebuild at delta = 0.",
@@ -26251,8 +26243,6 @@
    "Accounting.SecurityProofs.RemoteSessionRunConservationRelay": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.Conservation at the deployed session's run (Accounting.Remote.Run.ofDeployed) with side sources that may relay receipts, Sampled at the horizon's draw and Paid at RatePaid's terms with the run's slack lam + m b, read at the node: abstract chip programs in the random-oracle model, not the rate audit's code.",
    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.Conservation at each window's run (Accounting.Remote.Run.ofDeployedWindow) with side sources that may relay receipts, Sampled at the window's draw and Paid at RatePaid's P G terms with the run's slack lam + m b, read at the node at gamma_w: abstract chip programs in the random-oracle model, not the rate audit's code.",
    "Accounting.SecurityProofs.RateAuditTensorSketchRank": "frozen (no-function,hash): Like Accounting.SecurityProofs.RateAuditTensorSketch, it bounds acceptance of an abstract chip program in the random-oracle model at the tensor-core sketch's digest, here with the guess priced by the signs' rank over Q (Accounting.SecurityProofs.SketchRankFiber), not the rate audit's code; Pr_sigma[exists u, rank < r] is a number of the signs' law evaluated outside Lean.",
-   "Accounting.SecurityProofs.RateSketchTable": "completeness: like Accounting.SecurityProofs.RateSketchHonest, a device (a LayoutDevice of Security/Definitions/Accounting/RateAuditSketchLayout.lean, whose memory holds any function of the store) accepted at every signs, oracle and data, here one that reads N * d bits from a table of card Sig * N * d bits for any digest of at most 2^d values, below Accounting.SecurityProofs.RateAuditSketch's floor: a counterexample outside the verbatim class (rate-sketch-verbatim), not a property of a function",
-   "Accounting.SecurityProofs.RateTensorSketchTable": "completeness: Accounting.SecurityProofs.RateSketchTable at the tensor-core sketch (Accounting.RateSketch.sketch, 32-byte sectors, k_s INT32 words), reading N * 32 * k_s bits at any number of rows k_s: a counterexample outside the verbatim class, not a property of a function",
    "Accounting.SecurityProofs.SketchRankFiber": "frozen (premise): Like Accounting.SecurityProofs.SketchBinds, it is a property of Accounting.RateSketch.sketch under a hypothesis on the window's signs (every sector's block has rank at least r over Q), which is neither an acceptance of the sketch nor a premise under shape.premises; Accounting.SecurityProofs.RateAuditTensorSketchRank prices the hypothesis as Pr_sigma[exists u, rank < r].",
    "Flock.SecurityProofs.RecursiveAuditC3": "restatable: sampled proofs at the recursive configuration (SpotRecursive at RecVerdict, sampled proofs' case at V*'s compiled check, verity/sampled-proofs/recursive/v1, dense form only); (i), a probability statement (Verity.Game.prob, not under shape.events) whose event is the composed verdict and then sampled proofs' claim failing on the extracted transcript, takes beside the decoders' list-decoding spec (decOK) the strategy's recursive session (SessionIn), the draw's and the extraction's hypotheses (hK₀, hdraw, hX, hread, hcoll) and live-verifier (LiveCoins), none a premise; it fits once the session and those hypotheses are derived from the vocabulary or restated as premises, and Verity.Game.prob is listed under shape.events. Its knowledge-soundness term (Dep.ksAt) is t'·2^-λ at λ₂ = 135.7 (route 2C, read off the accepted run at the deployed caps), and at a statement at the deployment's tables (Dep.OneTable) the least of it and route 2C's split bound κ + t'·ε at κ = 2^-167.7 and ε = 2^-174.95 (RecDeploy.kappa_eps_oneTable_cap, at the run's call caps); the bound record's λ (Claims.Recursion.lam), which no theorem evaluates at the deployment, is one (i) doesn't use.",
    "Accounting.SecurityProofs.RemoteSessionConservationSketch": "frozen (no-function,hash): It composes the verbatim-sector tensor-sketch rank bound at every candidate pass with a causal session's pooled draws; the one shared store and every device read, link sector, rebuild and correct receipt are explicit, but the random-oracle game is not the rate audit's code.",
@@ -26498,8 +26488,7 @@
    "NetTiming.SecurityProofs.SampledLeakRegistered": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.NetworkCertifier states it (SampledAuditAccepted, taken as a hypothesis, with Claims.SamplingGeneric.Compiled.KS and CommitmentScheme.Binds at each compiled verifier, and the registration's openings RegOpens), and bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts, not runs of the network check's code; it is NetTiming.sampledLeak_registered's statement with sampledLeak_reg's count, at the registered inputs' registration values (AsReg at regVal) rather than the trace's, a disagreement being a collision Breg finds.",
    "Flock.SecurityProofs.SampledKSLiveV2": "frozen (no-function): the network certifier chain's theorem, proved; it reads SampledKSLiveV2 (Security/Proofs/Flock/Bridge/Canon.lean), the sampled statement at RowsOk circuit files (row/v1, row/v2 and row-seg/v1 ports) at the constants and canonAt, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod": "frozen (no-function): It carries C-Flock's integrity audit over a horizon of windows (Flock.Guarantees.IntegrityHorizon) to the sampled audit's per-period guarantee (PeriodRun.Sound) of an abstract period of the device model whose verdict is a field of the run, not a Lean function, through a realization whose fields are properties of the deployed run (Accounting.RealizesIntegrityOfIntegrityPeriod, Security/Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod.lean): wrong_eq is the program-from-circuit correspondence (M1) until Lowers/progOf/partOf land, and units_eq with gates_nonempty is the partition's public unit-size property. It bounds a Pouw.pr event, which shape.events does not list.",
-   "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": "lemma: the forking step behind the remote audit's receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which PooledSample and the drawn memory-line guarantees charge, over a session and its receipts, not a Lean function: with the held row by definition the plurality of the rows the receipt shows over window t's continuations (Accounting.Remote.Draw.Receipts.held, at Accounting.Remote.Draw.cont) and no premise beyond L_t holding every receipt window t opens, the binding term is at most sum_t sqrt(|L_t| s_t (fork_t + split_t)), fork_t the chance that two runs from window t's cut on independent openings coins hash a SHA-512 collision between one receipt's two openings' checks (Receipts.Broken, Hash.SecurityProofs.RowBinding) and split_t the chance that their roots, ranks or verifiers differ (Receipts.Split); split_t is not bounded here: the deployed prover holds no coin commitment until the session's outcome, but that window t's roots read only its cut is not a premise (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
-   "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": "lemma: ReceiptsBindingOfFork under claim cr/sha-512 (Claims.StrictBirthday) at each window's fork finder (Accounting.Remote.Draw.Receipts.finder, at q_t SHA-512 calls): the receipts' binding term is at most sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), not a Lean function; where the window's cut fixes its roots split_t = 0 and it is sum_t sqrt(|L_t| s_t) q_t/2^256.5 (Accounting.SecurityProofs.Remote.Binding.binding_le_of_fixed), ledger.binding's form, which the code charges at the session's bounds (L_t the most receipts a window of the session can have, s_t its draw cap), not at one record's U_t and s'_t; that the deployed play's cut fixes the roots is not a premise (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
+   "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": "frozen (no-function,hash): the bound on the receipts' binding term that remote_bandwidth's ledger.binding charges: ReceiptsBindingOfFork under claim cr/sha-512 (Claims.StrictBirthday) at each window's fork finder (Accounting.Remote.Draw.Receipts.finder, at q_t SHA-512 calls): the receipts' binding term is at most sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), not a Lean function; where the window's cut fixes its roots split_t = 0 and it is sum_t sqrt(|L_t| s_t) q_t/2^256.5 (Accounting.SecurityProofs.Remote.Binding.binding_le_of_fixed), ledger.binding's form, which the code charges at the session's bounds (L_t the most receipts a window of the session can have, s_t its draw cap), not at one record's U_t and s'_t; that the deployed play's cut fixes the roots is not a premise (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod": "frozen (no-function,hash): It is BandwidthOfAuditPerRun on a period's coins: it carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to PoUB's per-period guarantee (PeriodRun.Sound at .poub) of an abstract period of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/JointPeriod.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.Gates.FoolingCap": "frozen (no-function): A counting bound over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean), every set of inputs and every list of outputs read mod 2^j, not a property of a Lean function: the property's census check has no Lean code yet.",
    "Flock.SecurityProofs.SampledKSLiveV3": "frozen (no-function): SampledKSLiveV2 on the event that the verifiers accept the statement, the files and the draw, proved from it; it reads SampledKSLiveV3 (Security/Proofs/Flock/Bridge/ScopeGate.lean), whose event is flock-verify --zk's acceptance (Flock.PortRoots.check: row/v1, row/v2 or row-seg/v1 ports, distinct names, no colliding per-schema roots; Flock.KsScope.check: an untyped statement in scopeOkH, the --zk tags, a draw the tables divide) and the sampled-proofs run's Slots.popOk, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
@@ -26535,8 +26524,6 @@
    "Pous.SecurityProofs.StreamedWipeMeetsReads": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at every number of reads k with (1 - 1/r)^k <= 2^-129, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeets141GB5": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 5231 reads, an H200's 141 GB fill with its 2.3 GB driver reserve, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Flock.SecurityProofs.RecursiveKS": "restatable: a probability statement (KSLin2On, through RecursiveKSAtRec at the deployed record) whose event is the recursive verifier's acceptance and then the extractor recovering no witness; KSLin2On's probability is not under shape.events, so the shape rule finds no acceptance. It fits once that probability is listed under shape.events or the statement is restated over FlockSoundness.Game.prob.",
-   "RecDeploy.HonestHalfFixture.honest_half_fixture": "completeness: RecursiveKS's honest lemma (LEAN-66, its witnesses entry): at the deployed instance, under the named assumption HonestFixture (the honest run accepted, its witness satisfying, shaped and collision-free), the premises RecursiveKSAt reads hold, so RecursiveKS is not vacuous there.",
-   "Flock.Guarantees.recursiveKS_nontrivial": "completeness: RecursiveKS's nontrivial lemma (LEAN-66, its witnesses entry): under the named assumption KSFixture, the statement is false at the accept-all verifier (not RecursiveKSAtRec at the record that accepts every message), a counterexample for another verifier, not a property of the deployed one.",
    "Flock.SecurityProofs.SampledKSLivePub": "frozen (no-function): SampledKSLiveV2 at a public error, proved from it; it reads SampledKSLivePub (Security/Proofs/Flock/Bridge/Public.lean), SampledKSLiveV2's statement with its error deltaPub read off public parameters, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
    "Accounting.SecurityProofs.JointPeriodLiveECR": "frozen (no-function): Like JointPeriodLive, with ecr/sha-512 asked of each subprotocol's finder: its per-period guarantees are hypotheses over an abstract live period of the device model whose verdicts, openings, extractor, finders, computed gates and world are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
    "Pous.SecurityProofs.StreamedWipeMeetsReadsTight": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at every number of reads k with (1 - 1/r)^k <= 2^-129, with the count of the missing labels' sets (Security/Definitions/Pous/Model/StreamedWipeServer.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
@@ -26567,32 +26554,18 @@
    "Accounting.SecurityProofs.AccelRate": "frozen (no-function): It shows the instructions of runs of the machine model 𝓜 back to back (Verity.Accel.Machine.run) meet a rate at their seconds summed, not a Lean function's acceptance.",
    "Accounting.SecurityProofs.AccelAdditive": "frozen (no-function): It bounds the resource units of disjoint sets of the instructions a period issues on the machine model 𝓜 by the period's rate, not a Lean function's acceptance.",
    "Pouw.SecurityProofs.Dither.WorkMoment": "frozen (verdict): as WorkSound, before its Markov step: the per-replica moment over a quantified service verdict, which FleetSound pools (CMP-152, CMP-136).",
-   "Pouw.SecurityProofs.Dither.WorkMoment_honest": "completeness: WorkMoment's honest witness: every premise outside the named assumptions, and the named assumptions, hold at RT-LEAN L7's toy instance, and its verdict accepts the honest prover there, so WorkMoment is not vacuous (CMP-152).",
-   "Pouw.SecurityProofs.Dither.WorkMoment_nontrivial": "lemma: WorkMoment's nontrivial witness: its conclusion at the toy instance is false at the verifier that accepts everything; a counterexample about no protocol function (CMP-152).",
-   "Pouw.SecurityProofs.Dither.FleetSound_honest": "completeness: FleetSound's honest witness: at a fleet of the toy instance's replicas, each replica's moment, OwnDither and CoinsConfidential hold, and the verdict accepts the honest fleet, so FleetSound is not vacuous (CMP-152).",
-   "Pouw.SecurityProofs.Dither.FleetSound_nontrivial": "lemma: FleetSound's nontrivial witness: at that fleet some prover's event has probability 1 at the verifier that accepts everything, past delta_coin + sum kappa_max; a counterexample about no protocol function (CMP-152).",
-   "Pouw.SecurityProofs.Dither.WorkSound_honest": "completeness: WorkSound's honest witness: every premise, AnswersFit among them, holds at RT-LEAN L7's toy instance, and its verdict accepts the honest prover there within the cap, its answers' calls counted, so WorkSound is not vacuous (CMP-154).",
-   "Pouw.SecurityProofs.Dither.WorkSound_nontrivial": "lemma: WorkSound's nontrivial witness: its conclusion at the toy instance is false at the verifier that accepts everything; a counterexample about no protocol function (CMP-154).",
    "Pouw.SecurityProofs.OnsiteFreed": "frozen (verdict): a probability statement over quantified work and certifier verdicts whose soundness is the premises RemoteWorkFloor and CertifierSeesImports, not a property of one function; it gets the shape when the onsite protocol's verdict is a named Lean function the event reads.",
-   "Pouw.SecurityProofs.OnsiteFreed_honest": "completeness: OnsiteFreed's honest witness: every premise, RemoteWorkFloor from WorkSound's conclusion, OutsourceWithinEgressPeriod from the per-program premise and CertifierSeesImports among them, holds at the toy instance (Definitions.Pouw.Witness), the bound is below 1, and the onsite verdict accepts the honest prover, which exchanges nothing and is counted so, so OnsiteFreed is not vacuous.",
-   "Pouw.SecurityProofs.OnsiteFreed_nontrivial": "lemma: OnsiteFreed's nontrivial witness, in the Lean check's three-part form: at the toy instance with a work check that accepts everything, every premise of OnsiteFreed but RemoteWorkFloor holds, RemoteWorkFloor fails (the quiet prover exchanges nothing, is accepted and spends 0 < F) and the conclusion fails; a counterexample about no protocol function.",
    "Flock.SecurityProofs.DeltaPubDeployed": "frozen (no-function): a fact about SampledKSLivePub's error, not a run of a Lean function: at the deployment's parameters (k = ⌈2^24/e⌉, ρ = 1/2, M = Rw = 2^192, budgets q_F = 2(t' + v), q_S = t' + v and link cost t' + v per run for t', v ≤ 2^80, at most 2^40 committed wires, K₀ ≤ n ≤ K₀·kd) the rate hypothesis holds and deltaPub < 1; it reads DeltaPubDeployed (Security/Proofs/Flock/Bridge/PublicDeployed.lean), so the lock records its text.",
    "Flock.SecurityProofs.SampledKSLiveV5": "frozen (no-function): SampledKSLiveV2 at flock-verify --zk --public-inputs under the law the verifier draws under from the registration (lawOf: drawnLaw, deriveLaw over Partition.strata, else flockLaw, and subset 0 where it names none), never a Bernoulli law (the verifier refuses one, OneStage.coveredLaw, notBernoulli_lawOf), which PopMatches puts on its layout's strata (LawOn, lawOn_drawsUnder), proved by its own assembly at keyProgP, with delta the law's own miss of a set of proof blocks; it reads SampledKSLiveV5 (Security/Proofs/Flock/Bridge/V5/Statement.lean), the sampled statement at the public file's leaf map and the constants constsOfP (each proof block's public input bits), under RecordCustodyZKJPLaw (RecordCustodyZKJP at the registration's law), so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
    "Flock.SecurityProofs.SampledKSLiveV5Honest": "frozen (no-function): the honest witness of SampledKSLiveV5, not a run of a Lean function: from one named premise, ServedFilesParseV5 (that the served registered --zk session art:88544efa's files, pinned by SHA-512, parse to a descriptor in scopeOkH with distinct port names whose public input ports parse and whose public file loads over them, as runs r20261027-025931-f22c and r20261027-114351-93be evaluated), every hypothesis that statement takes of the files holds there (RowsOk, untyped tags, the parse, the public input ports, the public file, scopeOkH, dupName, the draw sizes' divisibility), and its tags are in TagsOkZHJ, the case in which it gives its bound; it reads SampledKSLiveV5Honest (Security/Proofs/Flock/Bridge/V5/Honest.lean), so the lock records its text.",
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound": "frozen (no-function): It is stated over an arbitrary registered circuit (Verity.RegisteredCircuit) with a training class's counted operations, a partition (Verity.Partition) whose units S are the serving blocks and a (c, k)-partition of inference blocks refining it (Verity.Partition.IsCK, Verity.Partition.Refines), and takes the serving blocks' sizes, the per-block caps, the operations' bodies and their overlap, and the uncertified caps as named premises about it (Security/Definitions/Accounting/ServingBlocks.lean), not a function's acceptance; it is Theorem 3 per serving block, summed through Verity.SecurityProofs.ServingBlockSum and Verity.SecurityProofs.InferenceCap, with what a serving block's own cap leaves charged to its unregistered inputs (omega_max mu k_S), and Layer 2's envelopes supply its premises.",
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote": "frozen (no-function): Like Accounting.SecurityProofs.ServingBlocks.ServingBlockBound, it is stated over an arbitrary declaration, its counted operations and partitions under named premises about them, not a function's acceptance; it keeps only the inference cap, the remote case.",
    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary": "frozen (no-function): It is a counting fact about an arbitrary circuit's counted operations and a partition refining another (Verity.Partition.Refines), with no premise, not about a function's acceptance.",
-   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest": "completeness: ServingBlockBound's honest lemma: at Honest (Accounting.ServingBlocks.Honest, Security/Definitions/Accounting/ServingBlocks/Instances.lean), a small faithful serving-block layout (a Boolean declaration with a registered input gate, two serving blocks around one wipe, an operation split across it and a dark remainder), its premises hold together at (c_S, k_S) = (c, k) = (1, 1) and omega_max = mu = 1. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and Layer 2's envelopes supply the deployed premises, each with its probability.",
-   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial": "lemma: ServingBlockBound's nontrivial lemma: at Counter, one gate reading a registered input gate, every premise but the per-block cap at the serving blocks' size (1, 0) holds, that cap fails, and the counted weight 1 is above the bound's right-hand side 0. A counterexample at an instance, not a property of a Lean function.",
-   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_honest": "completeness: ServingBlockBoundRemote's honest lemma: at Honest (as ServingBlockBound_honest's) its premises hold together at (c, k) = (1, 1). It states facts of an instance, not a property of a Lean function, and rests on no run and no art:.",
-   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial": "lemma: ServingBlockBoundRemote's nontrivial lemma: at Counter every premise but the per-block cap at the inference size (1, 0) holds, that cap fails, and the counted weight 1 is above the bound's right-hand side 0. A counterexample at an instance, not a property of a Lean function.",
    "Flock.SecurityProofs.SampledKSLiveHonest": "frozen (no-function): the honest witness of SampledKSLiveV2, SampledKSLiveV3 and SampledKSLivePub, not a run of a Lean function: from one named premise, ServedFilesParse (that the one-stage audit's --zk session files of art:31c671f6's honest case, pinned by SHA-512, parse to a descriptor in scopeOkH whose public file loads with no shared-row tables, as run r20261027-042157-5c54 evaluated beside verify --zk accepting that session), every hypothesis those statements take of the files holds there (Built, TagsOkZHJ, untyped tags, the parse, the public file, scopeOkH); it reads SampledKSLiveHonest (Security/Proofs/Flock/Bridge/Honest.lean), so the lock records its text.",
    "Nci.SecurityProofs.DampenerRemotePeriod": "frozen (no-function): It composes the remote protocol's overhead bound over a monitoring period of T windows on live coins from CertificateSlack, the union over the windows, the per-identity escape tail and VerdictLag, under the named TerminalDetection (Security/Definitions/Nci/Assumptions/Remote.lean), with each protocol's per-window bound (CircuitCredit's conclusion, the sampled-proofs window's draw-miss and knowledge-soundness bounds, NciCheck.Properties.Throttled's conclusion) taken as a hypothesis, not from a function's acceptance; joining the windows to their protocols' verifiers is what would give it one.",
    "Nci.SecurityProofs.DampenerRemotePeriod_honest": "frozen (no-function): It states that DampenerRemotePeriod's premises hold at a constructed honest developer over one window at the remote reference's p = 3 * 2^-40 and eps' = 2p/10^-6, with the failure probability at most 10^-6 and the overhead bound above 1, an existence over the statement's parameters, not a function's acceptance.",
    "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial": "frozen (no-function): It states that at AcceptAll, one window at a PoUW verifier that accepts every certificate, every other premise of DampenerRemotePeriod holds, its PoUW per-window bound fails, and its conclusion fails, so it is false without that bound: a counterexample at an instance, not a function's acceptance.",
    "Verity.SecurityProofs.SampleAfterRecorded": "frozen (no-function): It is stated over an arbitrary sample law, challenger log and verifier, and says what a coin read from a challenger's log, released after the commitments it samples were recorded, establishes about the sample drawn with it, rather than a Lean function's acceptance.",
-   "Verity.SecurityProofs.SampleAfterRecorded_honest": "completeness: SampleAfterRecorded's honest lemma (its witnesses entry): at a built instance, a challenger flipping two fair bits that releases a coin, records a commitment, then releases the coin that samples it, the three premises hold with the verifier reading both coins from its log, and the bound holds there, so it is not vacuous at a log that releases coins.",
-   "Verity.SecurityProofs.SampleAfterRecorded_nontrivial": "completeness: SampleAfterRecorded's nontrivial lemma (its witnesses entry): the bound fails (¬ prCoin … ≤ miss 1) at the challenger of SampleAfterRecorded_nontrivial_log, which flips its coin before recording the commitment it samples, a counterexample for another challenger, not a property of a deployed one.",
    "NetTiming.SecurityProofs.PooledLeakAccepted": "frozen (obligation,no-function,world-unlisted): It is conditional on two per-window inputs taken as plain hypotheses over an abstract monitoring period of windows on a product of live coins (Fin m → Ω), each window's acceptance event and the faulty set W_i of its witness read only from earlier windows' coins: the conditional escape (hesc, Pr_x[acc_i] ≤ (1 − q)^|W_i| + e_i given the earlier coins, q the design's per-window detection probability, which Flock.Guarantees.SampledKSLive would give at each window's history) and the leak relation at that same faulty set (hleak, Pr[acc_i ∧ ¬LeakAt W_i] ≤ e'_i, which the live SampledLeakAccepted, P2, would give), neither discharged. With the network certifier's code (recordingCode: certifierCode and the record of its cells, in any record format RecordFormat whose cells read back on the schedules it holds, RecordFormat.fits, which every schedule in Ss meets, hfit, certifier_cells_read) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), it bounds Pr[every window accepts ∧ ¬PooledGood] by δ + Σ e_i + Σ e'_i at Fmax ≥ ln(1/δ)/q and counts the secrets meeting PooledGood at each draw of the coins by #Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \\ reg_i) · Dj^k_i; it is not a run of the sampled verifier, the challenger's draw or the network check's code, and it is not the deployed system's bound over a monitoring period until both inputs are discharged.",
    "Flock.SecurityProofs.IntegrityHorizonCarried": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a monitoring period's server-time blocks, EndToEndHidden at every session, with the state a block carries across a wipe read at its carried leaves. So it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses, A3 (the verifier's IO.getRandomBytes is uniform), live-verifier custody (RecordCustodyZKJ) and hscope (scopeOk). At each carried leaf it also takes ecr/sha-512 (SHA512CRExpected) at the leaf's finder, whose cost the bound states.",
    "Flock.SecurityProofs.IntegrityBlockCarried": "frozen (hash,world-unlisted,scope): It is IntegrityBlock with the state a block carries across a wipe read at its carried leaves, so it takes what IntegrityBlock takes (TableCRZ, LinkCRZC, A3, RecordCustodyZKJ, hscope) and, at each carried leaf, ecr/sha-512 (SHA512CRExpected) at the leaf's finder, whose cost the bound states, as IntegrityHorizonCarried does; with no carried leaf it is IntegrityBlock (CarriedBlocks.run_ofServer).",
@@ -26609,79 +26582,18 @@
    "Nci.SecurityProofs.RecomputeByGates": "frozen (no-function): It is double counting over an arbitrary declaration's consumers with overlap weights, within any gates (Nci.Capability.Consumers.OverlapWeights, Security/Definitions/Nci/Capability/Consumers.lean), not about a function's code.",
    "Nci.SecurityProofs.RecomputeByState": "frozen (no-function): It is about an arbitrary registration's proof blocks, a held budget and consumers whose recomputation needs state priced above it (Nci.Capability.HeldPriceAtMost, Nci.Capability.Consumers.RequiresState, Security/Definitions/Nci/Capability/Consumers.lean), not about a function's code.",
    "Nci.SecurityProofs.CapabilityFloor": "frozen (no-function): It bounds an event of an arbitrary task's probability (Accounting.Slowdown.Task.prob), which shape.events does not list, over an arbitrary class and computation under coverage (Nci.Assumptions.CoversEfficientMethods, Security/Definitions/Accounting/Assumptions/Coverage.lean), not a function's acceptance.",
-   "Nci.SecurityProofs.HeldBudgetHonest": "completeness: HeldBudget's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), R1 is a (2,1)-partition, every held selection of the value of gates 2 and 3 priced two bits (Y2 2) has an evaluator of at most three bits, and DescriptionHard holds at deficit Λ = 1, all proved, under the toy decoder M, which compresses: it describes 11, an honest run's value, in one bit and every other two-bit string in three; the deficit is spent: DescriptionHard fails at Λ = 0, also proved, so HeldBudget's premises hold together there, not degenerately, and HeldBudget is not vacuous.",
-   "Nci.SecurityProofs.HeldBudgetNontrivial": "completeness: HeldBudget's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), R1 is a (2,1)-partition and every held selection of the value of gates 2 and 3 priced 6 bits (Y2 6) has an evaluator of at most three bits, as in its honest witness (proved), DescriptionHard fails at Λ = 1, since the toy decoder M describes 11, an honest run's value, in one bit, and the proof block holds more than k + clog2 B + aBlk + Λ = 5, so HeldBudget's conclusion is not a tautology and needs description hardness.",
-   "Nci.SecurityProofs.StatHeldBudgetHonest": "completeness: StatHeldBudget's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), R1 is a (2,1)-partition, every run in the support of μ (the token drawn uniformly) is honest, and MinEntropyHard holds for Y 1 at Λ = 0, all proved; it is not degenerate: the product's value is a uniform bit, so StatHeldBudget's premises hold together there and StatHeldBudget is not vacuous.",
-   "Nci.SecurityProofs.StatHeldBudgetNontrivial": "completeness: StatHeldBudget's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), R1 is a (2,1)-partition and every run in the support of μ (the token drawn uniformly) is honest, as in its honest witness (proved), MinEntropyHard fails for the product's value priced 3 bits (Y 3) at Λ = 0, since its value 1 has probability 1/2 above 2^-3, and the proof block holds more than k + Λ = 1, so StatHeldBudget's conclusion is not a tautology and needs min-entropy hardness.",
-   "Nci.SecurityProofs.RecoveredBudgetHonest": "completeness: RecoveredBudget's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), R1 is a (2,1)-partition, the evaluator [true, true, true] has three bits, SourceHard holds with the value of gates 2 and 3 as the source (ℓz = 2, δ = 1) and Recovers with one eligible output per block and a one-bit complement (βv = 2, amb = 1), all proved, under the toy decoder M, which compresses; both are spent: SourceHard fails at δ = 0, since M describes 11 in one bit, and Recovers at amb = 0, since the recovery needs its bit picking the source, also proved, so RecoveredBudget's premises hold together there, not degenerately, and RecoveredBudget is not vacuous.",
-   "Nci.SecurityProofs.RecoveredBudgetNontrivial": "completeness: RecoveredBudget's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), R1 is a (2,1)-partition, the evaluator [true, true, true] has three bits and SourceHard holds at δ = 1, as in its honest witness (proved), Recovers fails at βv = 7, more than the two-bit source can supply, and βv·J = 7 exceeds k + clog2 B + aBlk + δ + amb = 6, so RecoveredBudget's conclusion is not a tautology and needs the recovery.",
-   "Nci.SecurityProofs.ImportOrRecomputeHonest": "completeness: ImportOrRecompute's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the consumers K (the product's use, its region and required gate the token) are upstream and carry overlap weight 1, both proved, so ImportOrRecompute's premises hold together there and ImportOrRecompute is not vacuous.",
-   "Nci.SecurityProofs.ImportOrRecomputeNontrivial": "completeness: ImportOrRecompute's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the consumers K are upstream (proved), OverlapWeights fails at weight 2, above what the use's region allows, and the block finishes weight 2, above its one unregistered input bit and the zero weight it recomputes, so ImportOrRecompute's conclusion is not a tautology and needs overlap weights.",
-   "Nci.SecurityProofs.RecomputeByGatesHonest": "completeness: RecomputeByGates's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the consumers K carry overlap weight 1 and each requires at least one gate (g = 1), both proved, so RecomputeByGates's premises hold together there and RecomputeByGates is not vacuous.",
-   "Nci.SecurityProofs.RecomputeByGatesNontrivial": "completeness: RecomputeByGates's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the consumers K carry overlap weight 1 (proved), the gate count fails at g = 2, above the consumer's one required gate, and the gates S = {1} recompute weight 1, above |S|/g, so RecomputeByGates's conclusion is not a tautology and needs its gate count.",
-   "Nci.SecurityProofs.RecomputeByStateHonest": "completeness: RecomputeByState's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), with two proof blocks (R2), each holding one computed gate's value priced one bit (HeldPriceAtMost R2 W2 1, proved), the consumer K2 requiring both gates requires state 1 (RequiresState, proved); it is not degenerate, so RecomputeByState's premises hold together there and RecomputeByState is not vacuous.",
-   "Nci.SecurityProofs.RecomputeByStateNontrivial": "completeness: RecomputeByState's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), with one proof block holding both gates (R1), the block holds their values priced at most h = 2 (HeldPriceAtMost R1 W2 2, proved), RequiresState fails at h = 2, since the values are priced 2 in all, and the block contains the consumer K2's required gates, so RecomputeByState's conclusion is not a tautology and needs required state.",
-   "Nci.SecurityProofs.CapabilityFloorHonest": "completeness: CapabilityFloor's honest witness (its witnesses entry): at the toy task Accounting.Slowdown.Toy (Security/Definitions/Accounting/CoverageToy.lean), a hidden coin ω sets the target, [ω] at one output position, the covered structure is at least two gates and the cost a run's gate count; CoversEfficientMethods holds at Tmax = 10 and η = 1/2, since a position holds one gate so a run reaches at most one of the two targets, and every covered computation costs at least Lc = 2, both proved; coverage is not empty: the one-gate guess lacks the covered structure and reaches the target on half the coins, so CoversEfficientMethods fails at η = 0, also proved, so CapabilityFloor's premises hold together there, not degenerately, and CapabilityFloor is not vacuous.",
-   "Nci.SecurityProofs.CapabilityFloorNontrivial": "completeness: CapabilityFloor's nontrivial witness (its witnesses entry): at the toy task Accounting.Slowdown.Toy (Security/Definitions/Accounting/CoverageToy.lean), the one-gate guess, costing 1, below min(Lc, Tmax) = 2, reaches the target on half the coins, a positive probability, above η = 0, where coverage fails, so CapabilityFloor's conclusion is not a tautology.",
    "Flock.SecurityProofs.RecursiveKSDeployed": "restatable: a probability statement (KSLin2OnC, through RecursiveKSDeployedAt at the deployed record) bounding the recursive verifier's acceptance at Hello-committed coins by the extractor's success at the simulating prover and RecursiveKS's bound there; KSLin2OnC's probability is not under shape.events, so the shape rule finds no acceptance. It fits once that probability is listed under shape.events or the statement is restated over FlockSoundness.Game.prob.",
    "Accounting.SecurityProofs.TS.LeafGroupSound": "frozen (no-function): a leaf proved as a group of one-unit C-Flock statements, any shape (Accounting.TS.Group.Ix L n: L = T.lanes lanes of n chunks each and one combine, G = L n + 1 sessions), realizes one unit's proof layer (groupLayer, accepted where the leaf verifier's check of the tile and its chunks, PouwWindow.Lanes.checkChunks, passes and flock-verify accepts all G sessions with their known-content, complete and known-read checks at known content ending in the o0 row 1, and pouw-leaf-own's checks of each file, draw and reads pass; its relation any relation of the opened value, or LeafColl, or LeafKnownColl) over every window of fully checked C-Flock sessions, not a Lean function. Its premises are named and on the premises list (Proofs.Accounting.TS.Session.Group.Premises): SessionsCR (RowsSession.CR at every session), WindowLaws (WindowLaw at every statement) and GroupRealizes (accounting-ts-group-realizes: the group's circuits realize the relation at the rows its sessions open, past the group check; proved at the 32 x 32 leaf with one chunk a lane from LaneLowers and CombineLowers, groupRealizes_lanes32, and assumed at other shapes, whose Definitions no Lean states yet). Port uniqueness and the ok port (the known-read check's names), full checking and a unit (the draw check) and registered served roots (the reads built from own and the one-read check) are proved, not assumed. Proved by Accounting.TS.Group.group_soundAt, the argument LeafLanesSound shares: CheckedSessionSound's SoundAt at each session, the unwritten outcomes at probability 0 under WindowLaw, the complete check's registration of every port row and a union bound over the group, at (L n + 1) delta.",
    "Flock.SecurityProofs.LoopInnerRound0Own": "frozen (no-function): the loop's obligation (Flock.Guarantees.LoopInnerRound0, which SessionLoopZK and SessionLoopZKDeployed take) at LeanRelease.withInner, the release whose scheduled round of each rep's inner proof is the frame's own (Loop.innerOf: Frame.innerSched at the round's eps, beta and coin count, on the rep's finish's rounds), proved at every table data, base release, level-0 source and finish's rounds, with no premise; it reads LoopInnerRound0Own (Security/Proofs/Flock/SessionLoop/Inner.lean), a statement of the model's release with no acceptance of a Lean function to take, so the lock records its text.",
    "Verity.SecurityProofs.RegisteredLeakage": "frozen (no-function): It is stated over an arbitrary value service, serving stack and event on the record, and says what a registration whose record carries its number and counts its epoch's sessions leaks through the stack's choice of its session, rather than a Lean function's acceptance.",
-   "Verity.SecurityProofs.RegisteredLeakage_honest": "completeness: RegisteredLeakage's honest lemma (its witnesses entry): at a built value service, the stack that commits one session and registers it reads no key (ZkServerOwnUser) and the bound holds there, so the premise is not vacuous.",
-   "Verity.SecurityProofs.RegisteredLeakage_nontrivial": "completeness: RegisteredLeakage's nontrivial lemma (its witnesses entry): the bound fails (¬ real … ≤ 1 · (ideal + prfAdvantage) + forgeAdvantage) at the stack of RegisteredLeakage_nontrivial_stack, which makes its record tag from the key, a counterexample for another stack, not a property of a deployed one.",
-   "Verity.SecurityProofs.RegisteredLeakage_nontrivial_stack": "completeness: the stack RegisteredLeakage's nontrivial lemma is at reads the key (¬ ZkServerOwnUser), so that lemma's failing bound is ZkServerOwnUser's to prevent.",
-   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorPerProverHonest": "completeness: the honest witness of StagedFloorKPerProver and StagedFloorKOneSidedPerProver (LEAN-66, their witnesses entries): at the identity as sha and kz = 1 (it holds at every sha and kz, StagedFloorPerProverHonest_at, since the honest verifier hashes nothing), on one round of one stage over one cell-block (n = L = B = n' = 1, 7 planes at wRe) in the machine of functions at no cost (funMachine), a HashedService whose verifier accepts the answer true at every seed and refuses false, with the identity coin map and a run map whose one product slot computes the cell-block's target (so every error table is zero, the game accepts every play and no round breaks), meets ServiceSoundStagedPerProver at the fork finders with delta_b = beta_b = delta_z = beta_z = 0, KScopeAffine, KScopeOneSided and ChargeVF3j16 at kappa = 1 (the noise reads carry the one product, since the machine charges nothing). It shows the premises consistent at zero break terms; the floor there is negative, so it does not show the floor met.",
-   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorPerProverHonest": "completeness: the honest witness of OverlapFloorKPerProver and OverlapFloorKOneSidedPerProver (LEAN-66, their witnesses entries): as StagedFloorPerProverHonest on one round of one draw over one cell-block, ServiceSoundOverlapPerProver at the fork finders with zero break terms, KScopeOverlapAffine, KScopeOverlapOneSided and ChargeVF3j16Overlap at kappa = 1 hold in funMachine, with the honest answer accepted at every seed and another refused.",
-   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorJ10RPerProverHonest": "completeness: the honest witness of StagedFloorKOneSidedJ10RPerProver (LEAN-66, its witnesses entry): as StagedFloorPerProverHonest on one round of one call over one cell-block of J10-R's call design (n = L = B = n' = 1), ServiceSoundStagedJ10RPerProver at the fork finders with zero break terms, KScopeOneSidedJ10R and ChargeVF3j16J10R at kappa = 1 hold in funMachine, with the honest answer accepted at every seed and another refused.",
-   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorJ10RPerProverHonest": "completeness: the honest witness of OverlapFloorKOneSidedJ10RPerProver (LEAN-66, its witnesses entry): as StagedFloorJ10RPerProverHonest on one round of one call draw over one cell-block, ServiceSoundOverlapJ10RPerProver at the fork finders with zero break terms, KScopeOverlapOneSidedJ10R and ChargeVF3j16OverlapJ10R at kappa = 1 hold in funMachine, with the honest answer accepted at every seed and another refused.",
-   "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial": "completeness: the nontrivial witness of the six floors per prover (LEAN-66, their witnesses entries): at acceptAllService, the service whose verifier accepts everything, on one round of a fair coin, with the identity coin map and sha, one continuation for each fork finder and the floor F = 1 (as floorPerProver_acceptAll proves at every such service, coin map, sha, kz and positive F), ServiceFloorPerProver at breakPr with the floors' luck 2^-40 and zero break terms fails in funMachine (a constant adversary is accepted at every seed and charged nothing, while its error is 2^-40). Each floor per prover concludes ServiceFloorPerProver at that breakPr, at its own F.",
    "Verity.SecurityProofs.RecZK": "frozen (no-function): It is stated over an arbitrary outer proof system and compiled recursion (Verity.ZkSystem, Verity.Rec.Compiled, Security/Definitions/Core/Rec.lean), and says that zero knowledge carries through the composition (Rec.system) under its premises, a simulation statement against every malicious verifier, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.RegisteredStreamLeakage": "frozen (no-function): It is stated over an arbitrary value service, stream stack, failure budget and event on the stream's admitted records, and says what a stream of numbered registrations, each admitted at its own position or passed over as a failure on the budget, leaks through the stack's choices, rather than a Lean function's acceptance.",
-   "Verity.SecurityProofs.RegisteredStreamLeakage_honest": "completeness: RegisteredStreamLeakage's honest lemma (its witnesses entry): at a built value service, the stack that commits one session at its one position and registers it reads no key (ZkServerOwnUser) and the bound holds there, so the premise is not vacuous.",
-   "Verity.SecurityProofs.RegisteredStreamLeakage_nontrivial": "completeness: RegisteredStreamLeakage's nontrivial lemma (its witnesses entry): the bound fails (¬ streamReal … ≤ Σ (streamIdeal + streamPrfAdvantage) + streamForgeAdvantage) at the stack of RegisteredStreamLeakage_nontrivial_stack, which makes its record tag from the key, a counterexample for another stack, not a property of a deployed one.",
-   "Verity.SecurityProofs.RegisteredStreamLeakage_nontrivial_stack": "completeness: the stack RegisteredStreamLeakage's nontrivial lemma is at reads the key (¬ ZkServerOwnUser), so that lemma's failing bound is ZkServerOwnUser's to prevent.",
    "Flock.SecurityProofs.RecursiveKSCompiledEvery": "restatable: a probability statement (KSCompiledOn, through RecursiveKSCompiledAtRec at the deployed record) whose event is the compiled recursive verifier's acceptance and then the composite extractor over Compiled.EO recovering no witness, at every statement; KSCompiledOn's probability is not under shape.events, so the shape rule finds no acceptance. It fits once that probability is listed under shape.events or the statement is restated over FlockSoundness.Game.prob.",
    "Flock.SecurityProofs.RecursiveKSEvery": "restatable: a probability statement (KSLinkOn, through RecursiveKSEveryAtRec at the deployed record) whose event is the recursive verifier's acceptance and then the composite extractor recovering no witness, at every statement; KSLinkOn's probability is not under shape.events, so the shape rule finds no acceptance. It fits once that probability is listed under shape.events or the statement is restated over FlockSoundness.Game.prob.",
-   "Flock.Guarantees.recursiveKSCompiledEvery_nontrivial": "completeness: RecursiveKSCompiledEvery's nontrivial lemma (its witnesses entry): under the named assumption KSFixture, the statement is false at the accept-all verifier (not RecursiveKSCompiledAtRec at the record that accepts every message), a counterexample for another verifier, not a property of the deployed one.",
-   "Flock.Guarantees.recursiveKSEvery_nontrivial": "completeness: RecursiveKSEvery's nontrivial lemma (its witnesses entry): under the named assumption KSFixture, the statement is false at the accept-all verifier (not RecursiveKSEveryAtRec at the record that accepts every message), a counterexample for another verifier, not a property of the deployed one.",
-   "Nci.Cover.SecurityProofs.CoverTraining_honest": "completeness: CoverTraining's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), CoverTraining's premises hold together at the toy, with c = 2, k = 1, b = 1, r = d = Toy.D through the containment of the toy in itself, the multiplication blocks mb0 of no product at depth D = 2, block size s = 4 = w₀ c + k + width(θ) at w₀ = 1, and α₀ = 0, the share of the toy's gates that are counted products, all proved, so CoverTraining is not vacuous.",
-   "Nci.Cover.SecurityProofs.CoverTraining_nontrivial": "completeness: CoverTraining's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), CoverTraining without coverage: at CoverTraining_honest's instance, α₀ = 2 is no coverage of the toy by mb0's no product, and α₀ b c size(r) = 8 exceeds (k² + b k) size(d) = 4, all proved, so CoverTraining's conclusion is not a tautology and needs the premise it drops.",
-   "Nci.SecurityProofs.ActivationsBoundOn_honest": "completeness: ActivationsBoundOn's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ActivationsBoundOn's premises hold together at the toy, with c = 2, k = K = 1, b_w = b_a = 1/2, r = d = Toy.D, the threading T1 with no links, dd = 1 and e = 1: the token enters one counted multiplication, all proved, so ActivationsBoundOn is not vacuous.",
-   "Nci.SecurityProofs.ActivationsBoundOn_nontrivial": "completeness: ActivationsBoundOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ActivationsBoundOn without ThetaRegistered: Dθ, the toy with the token registered, complies at k = 0, and the bound b_a #(M ∩ S) ≤ (k / c) Λ size(d) fails, its right side 0 and gate 2 a counted multiplication Dθ computes, all proved, so ActivationsBoundOn's conclusion is not a tautology and needs the premise it drops.",
-   "Nci.SecurityProofs.ActivationsTrainingOn_honest": "completeness: ActivationsTrainingOn's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ActivationsTrainingOn's premises hold together: ActivationsBoundOn_honest's instance at coverage κ = 1, all proved, so ActivationsTrainingOn is not vacuous.",
-   "Nci.SecurityProofs.ActivationsTrainingOn_nontrivial": "completeness: ActivationsTrainingOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ActivationsTrainingOn without coverage: at the threading T0, with e = 0, κ = 1 is no coverage and the bound fails, Λ being 0 and no gate dark, all proved, so ActivationsTrainingOn's conclusion is not a tautology and needs the premise it drops.",
-   "Nci.SecurityProofs.DampenerRemote_honest": "completeness: DampenerRemote's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), DampenerRemote's premises hold together at DampenerThreaded_honest's declaration, threading and charges, over the outcomes Bool drawn uniformly: one PoUW window of capacity C = 2, its certificate never wrong (p = 0), all of it certified (W = 2), no faulty proof block, so that every detection holds at q = 1 and the residual is 0, and one counted multiplication, the declared one, all proved, so DampenerRemote is not vacuous.",
-   "Nci.SecurityProofs.DampenerRemote_nontrivial": "completeness: DampenerRemote's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), DampenerRemote without PoUW's soundness: the window's certificate is wrong at every outcome, so the residual holds its capacity, M_r = 2 counted multiplications at the threading T0, all of C = 2 certified, κ = 2, ε' = 1/2 and θ = 1/4. The efficiency 1 exceeds the bound ε' + θ = 3/4 at every outcome, so the event has probability 0, below 1 − δ = 1, all proved, so DampenerRemote's conclusion is not a tautology and needs the premise it drops.",
-   "Nci.SecurityProofs.DampenerThreadedSlots_honest": "completeness: DampenerThreadedSlots's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), DampenerThreadedSlots' premises hold together: DampenerThreaded_honest's instance, the weight in its own parameter slot (σ1), all proved, so DampenerThreadedSlots is not vacuous.",
-   "Nci.SecurityProofs.DampenerThreadedSlots_nontrivial": "completeness: DampenerThreadedSlots's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), DampenerThreadedSlots without WindowsHold: DampenerThreaded_nontrivial's instance, at T0's one parameter slot (σ0), all proved, so DampenerThreadedSlots's conclusion is not a tautology and needs the premise it drops.",
-   "Nci.SecurityProofs.DampenerThreaded_honest": "completeness: DampenerThreaded's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), DampenerThreaded's premises hold together at the toy, with c = 2, k = 1, b_w = b_a = 1/2, the threading T1 at (dd, e) = (1, 0), κ = 1, monitored compute C = 2 all certified (W = 2), no unmonitored compute or fault, one counted multiplication (M = 1, the declared one), one server, F = 2, H = L = R = 1, all proved, so DampenerThreaded is not vacuous.",
-   "Nci.SecurityProofs.DampenerThreaded_nontrivial": "completeness: DampenerThreaded's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), DampenerThreaded without WindowsHold: at the threading T0, with no state (R = 0) and no rate (F = 0), one counted multiplication in the residual (W = 0, M = M_r = 1) is held by no window, and the efficiency 1 exceeds the bound 0, all proved, so DampenerThreaded's conclusion is not a tautology and needs the premise it drops.",
-   "Nci.SecurityProofs.IncompressibleContainedMatMulOn_honest": "completeness: IncompressibleContainedMatMulOn's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), IncompressibleContainedMatMulOn's premises hold together: ContainedMatMulOn_honest's instance, with TrainingIncompressible at the threading T1, all proved, so IncompressibleContainedMatMulOn is not vacuous.",
-   "Nci.SecurityProofs.IncompressibleContainedMatMulOn_nontrivial": "completeness: IncompressibleContainedMatMulOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), IncompressibleContainedMatMulOn without ThetaRegistered: ContainedMatMulOn_nontrivial's instance, all proved, so IncompressibleContainedMatMulOn's conclusion is not a tautology and needs the premise it drops.",
-   "Nci.SecurityProofs.IncompressibleContainedTrainingOn_honest": "completeness: IncompressibleContainedTrainingOn's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), IncompressibleContainedTrainingOn's premises hold together: IncompressibleContainedMatMulOn_honest's instance at coverage κ = 1, all proved, so IncompressibleContainedTrainingOn is not vacuous.",
-   "Nci.SecurityProofs.IncompressibleContainedTrainingOn_nontrivial": "completeness: IncompressibleContainedTrainingOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), IncompressibleContainedTrainingOn without ThetaRegistered: ContainedTrainingOn_nontrivial's instance, all proved, so IncompressibleContainedTrainingOn's conclusion is not a tautology and needs the premise it drops.",
-   "Nci.SecurityProofs.IncompressibleContainedTraining_honest": "completeness: IncompressibleContainedTraining's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), IncompressibleContainedTraining's premises hold together at the toy, with c = 2, k = 1, b_w = b_a = 1/2, κ = 1, the chain ch1 and the threading T1, all proved, so IncompressibleContainedTraining is not vacuous.",
-   "Nci.SecurityProofs.IncompressibleContainedTraining_nontrivial": "completeness: IncompressibleContainedTraining's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), IncompressibleContainedTraining without coverage: ContainedTraining_nontrivial's instance, at the threading T0, all proved, so IncompressibleContainedTraining's conclusion is not a tautology and needs the premise it drops.",
-   "Nci.SecurityProofs.LayeredTraining_honest": "completeness: LayeredTraining's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), LayeredTraining's premises hold together at the toy, with c = 2, k = 1, b_w = b_a = 1/2, κ = 1, the threading T1 keyed with no roots (layered1, d = e = 1, eLk = 0, b = 2) and E = 0, all proved, so LayeredTraining is not vacuous.",
-   "Nci.SecurityProofs.LayeredTraining_nontrivial": "completeness: LayeredTraining's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), LayeredTraining without coverage: at the threading T0 keyed with no roots (layered0), κ = 1 is no coverage, and the bound fails, Λ being 0, all proved, so LayeredTraining's conclusion is not a tautology and needs the premise it drops.",
-   "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn_honest": "completeness: PackedIncompressibleContainedMatMulOn's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), PackedIncompressibleContainedMatMulOn's premises hold together: IncompressibleContainedMatMulOn_honest's instance, ch1 as a packed chain of one product to a gate, all proved, so PackedIncompressibleContainedMatMulOn is not vacuous.",
-   "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn_nontrivial": "completeness: PackedIncompressibleContainedMatMulOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), PackedIncompressibleContainedMatMulOn without ThetaRegistered: IncompressibleContainedMatMulOn_nontrivial's instance, ch1 packed, all proved, so PackedIncompressibleContainedMatMulOn's conclusion is not a tautology and needs the premise it drops.",
-   "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn_honest": "completeness: PackedIncompressibleContainedTrainingOn's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), PackedIncompressibleContainedTrainingOn's premises hold together: PackedIncompressibleContainedMatMulOn_honest's instance at coverage κ = 1, all proved, so PackedIncompressibleContainedTrainingOn is not vacuous.",
-   "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn_nontrivial": "completeness: PackedIncompressibleContainedTrainingOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), PackedIncompressibleContainedTrainingOn without ThetaRegistered: IncompressibleContainedTrainingOn_nontrivial's instance, ch1 packed, all proved, so PackedIncompressibleContainedTrainingOn's conclusion is not a tautology and needs the premise it drops.",
-   "Nci.SecurityProofs.ThreadedTrainingOn_nontrivial": "completeness: ThreadedTrainingOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedTrainingOn without coverage: ThreadedTraining_nontrivial's instance, through the containment with no dark gate, all proved, so ThreadedTrainingOn's conclusion is not a tautology and needs the premise it drops.",
-   "Nci.SecurityProofs.ThreadedTraining_honest": "completeness: ThreadedTraining's and ThreadedTrainingOn's honest witness (their witnesses entries): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedTraining's and ThreadedTrainingOn's premises hold together at the toy, with c = 2, k = 1, b_w = b_a = 1/2, κ = 1, r = d = Toy.D through the containment of the toy in itself, the threading T1 and (dd, e) = (1, 0): a small subcircuit holding gate 2 reads the token, one fresh bit, and is charged half a bit for the weight and half for the token, all proved, so ThreadedTraining and ThreadedTrainingOn are not vacuous.",
-   "Nci.SecurityProofs.ThreadedTraining_nontrivial": "completeness: ThreadedTraining's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedTraining without coverage: at the threading T0 of no counted multiplication, κ = 1 is no coverage, and the bound κ b_a size(r) ≤ 2 (k / c) Λ size(d) fails, Λ being 0, all proved, so ThreadedTraining's conclusion is not a tautology and needs the premise it drops.",
    "WeightSecurity.SecurityProofs.Theft": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an arbitrary datacenter, under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard) and the premise that what leaves goes through a covert channel (WeightSecurity.Assumptions.LeaksThrough), which the audit's guarantees are to discharge (Security/Definitions/WeightSecurity/Assumptions.lean); it reads no function's acceptance.",
-   "WeightSecurity.SecurityProofs.TheftHonest": "completeness: Theft's honest witness (its witnesses entry): at the toy instance (Security/Definitions/WeightSecurity/Toy.lean), honest use reveals the first of two uniform weight bits, so HonestUseHard holds for every party at one query and p = 1/2, and the user's view of the honest datacenter goes through the plain channel with ε = 0, so Theft's premises hold together there and its bound is 1/2, below 1.",
-   "WeightSecurity.SecurityProofs.TheftNontrivial": "completeness: Theft's nontrivial witness (its witnesses entry): at the toy instance, the cheating datacenter appends the second weight bit to each answer; through the silent channel HonestUseHard and Simulable hold, LeaksThrough fails at ε = 0, and the thief steals the weights on every coin, above the bound 1/2.",
-   "WeightSecurity.SecurityProofs.TheftTight": "completeness: at the toy instance, the cheating datacenter's view goes through the one-bit channel with ε = 0 and the thief steals the weights with probability 1, Theft's bound 2 · 1/2 + 0: the factor |S| is attained.",
    "Flock.SecurityProofs.RecursiveZKLoop": "frozen (obligation,no-function): It takes the deployed tables' premises (Tables, Complete, DummyReg, Causal, SwCausal and TapeOK of the loop's session), the firewall's sending the schedule's transcript (FirewallSends) and V*'s statements' honesty and simulator coins (LoopSessions.Honest, Sized) as open obligations, and as a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512.",
    "Flock.SecurityProofs.RecursiveZKLoopAnySum": "frozen (obligation,no-function): RecursiveZKLoop at any inner worker, with no FirewallSends: it takes the deployed tables' premises (Tables, Complete, DummyReg, Causal, SwCausal and TapeOK of the loop's session), V*'s statements' honesty where the inner session finished and their simulator coins (LoopSessions.Honest, Sized) and the release's reading no stop where it didn't (ReleaseReadsNoStop) as open obligations, and as a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512.",
    "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": "frozen (obligation,no-function): RecursiveZKLoopAnySum with Tables, Complete, DummyReg, Causal and TapeOK proved at the deployed tables: it takes SwCausal at the workers' values, V*'s statements' honesty where the inner session finished and their simulator coins (LoopSessions.Honest, Sized) and the release's reading no stop where it didn't (ReleaseReadsNoStop) as open obligations, and as a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512.",
-   "Verity.SecurityProofs.ExpandAndSize_honest": "completeness: ExpandAndSize's honest lemma: at AndPair (as ExpandSize_honest's) the expansion's AND counts are at most the widths of the computed gates and of the unit. It states facts of an instance, not a property of a Lean function, and rests on no run and no art:.",
-   "Verity.SecurityProofs.ExpandAndSize_nontrivial": "lemma: ExpandAndSize's nontrivial lemma: at AndPair both bits of gate 2 are AND gates, each the AND of a bit of gate 0 and one of gate 1, so the expansion's AND count 2 is above the bound's right-hand side lowered by one (gate 2's width 2, less 1), and the bound is tight there. A counterexample at an instance, not a property of a Lean function.",
-   "Verity.SecurityProofs.ExpandSize_honest": "completeness: ExpandSize's honest lemma: at AndPair (Verity.Expand.AndPair, Security/Definitions/Core/Expand/Instances.lean), a declaration whose two-bit input gates 0 and 1 feed a bitwise AND at gate 2, its one unit, with gate 0 registered, its conclusion holds: the expansion's computed bits and its unit's bits are as many as their widths, and its unit's unregistered reads at most the width of the unit's. It states facts of an instance, not a property of a Lean function, and rests on no run and no art:.",
-   "Verity.SecurityProofs.ExpandSize_nontrivial": "lemma: ExpandSize's nontrivial lemma: at AndPair the unit's expansion reads gate 1's two unregistered bits, above the bound's right-hand side lowered by one (gate 1's width 2, less 1), so the bound is tight there. A counterexample at an instance, not a property of a Lean function.",
    "Flock.SecurityProofs.JointSampledV5": "frozen (no-function): A window's sample over several members (JointAuditV5): every member registered at one registration, one live draw (Bridge.execSel on the verifier's bytes under the registration's law on its strata, LawOn) over all their proof blocks, then one SampledKSLiveV5 session per member in order (MemberV5: flock-verify --zk --public-inputs at keyProgP, under RecordCustodyZKJPLaw at subset |S| for its part S, at one link-point count per member, hcls), with A3 for the draw's bytes and TableCRZAt and LinkCRZCAt at each member's session played alone; it bounds the event that every session accepts with a set W of proof blocks incorrect by the law's miss of W plus each member's eps_ks and eps_bind at its part's design, a Verity.Game.prob event of the joint game rather than a run of a Lean function; it reads JointSampledV5 (Security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`.",
    "Flock.SecurityProofs.JointShareV5": "frozen (no-function): A window's sample over several members (JointAuditV5): every member registered at one registration, one live draw (Bridge.execSel on the verifier's bytes under the registration's law on its strata, LawOn) over all their proof blocks, then one SampledKSLiveV5 session per member in order (MemberV5: flock-verify --zk --public-inputs at keyProgP, under RecordCustodyZKJPLaw at subset |S| for its part S, at one link-point count per member, hcls), with A3 for the draw's bytes and TableCRZAt and LinkCRZCAt at each member's session played alone; it bounds the event that every session accepts with more than an eps share of the window's proof blocks incorrect by the law's largest miss of such a set plus the members' eps_ks and eps_bind, a Verity.Game.prob event of the joint game rather than a run of a Lean function; it reads JointShareV5 (Security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`.",
    "Flock.SecurityProofs.JointHorizonV5": "frozen (no-function): JointSampledV5's window audit (JointAuditV5) over a monitoring period of T windows played as one causal game against one adaptive prover (periodG): the probability that every window accepts and the windows' incorrect proof blocks lie outside the period's confidence set at delta (the windows' laws miss them together with probability at least delta, and their ANDs and output bits in all are at most the most any choice in that set holds) is at most delta plus the sum of the windows' eps, under A3 at every window and TableCRZAt and LinkCRZCAt at each member's session played alone at every strategy the period plays its window with (JointPeriodV5.Plays); a Verity.Game.value event over the period's run rather than a run of a Lean function; it reads JointHorizonV5 (Security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`.",
@@ -26695,32 +26607,11 @@
    "Nci.Formalism.SecurityProofs.FitHonestServing": "frozen (no-function): FitServing at Δ = 0 with no decoder, beside it: it is about an arbitrary Boolean declaration and a Verity.Partition of it into session blocks (Nci.Formalism.SessionBlocks, Security/Definitions/Nci/Formalism/Inference.lean), concluding its slowdown, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
    "Nci.Formalism.SecurityProofs.FitTraining": "frozen (no-function): Fit's construction for training: it is about an arbitrary Boolean declaration and a Verity.Partition of it into training blocks (Nci.Formalism.TrainingBlocks, Security/Definitions/Nci/Formalism/Inference.lean), concluding its slowdown, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
    "Nci.Formalism.SecurityProofs.Security": "frozen (no-function): Security: it is about an arbitrary run of a class of methods (Nci.Formalism.Run, Security/Definitions/Nci/Formalism/Runs.lean) and a partition of its declaration into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), under the named CutCost, TokenWork and EfficiencyFloor (Security/Definitions/Assumptions.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.Counting_honest": "completeness: The counting lemma's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), the kind of the token's gates {3, 4} has the cap 1, every inference block at (c, k) = (1, 1) holding at most one of its gates, the partition-level bound 1, which every partition into blocks of one gate meets with its |C| = 4 blocks, and its four gates, each a block of its own, are a partition into inference blocks. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation, A1's checked witness blocks, caps and partition, which no check reads yet, would supply the deployed premises.",
-   "Nci.Formalism.SecurityProofs.Counting_nontrivial": "lemma: The counting lemma's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), at the kind {3, 4} with the cap 1, the partition-level bound 1 and (c, k) = (1, 1), whole, one block of its four gates, is no partition into inference blocks, and the bound max(1/2, 1) = 1, the kind's (|B_K| / |C|) / (cap_K / c) = 1/2 beside the partition-level 1, is above whole's price 1/4. A counterexample at an instance, not a property of a Lean function.",
-   "Nci.Formalism.SecurityProofs.TokenCap_honest": "completeness: The token cap's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), its premises hold together at (c, k) = (1, 1): A1 at the witness block of the token's three gates, which reads the new weight alone, one shared bit and none of the token's state, the token-work bound at the cap 1 on the token gates {3, 4}, and the block of gate 3, an inference block. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation and A1's checked witness blocks, which no check reads yet, would supply the deployed premises.",
-   "Nci.Formalism.SecurityProofs.TokenCap_nontrivial": "lemma: The token cap's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), at the witness block of gates 2 and 4, which reads the new weight and gate 3's value, A1 fails: that witness block reads one shared bit, the new weight, and one bit of the token's state, gate 3, so A1 prices every block that works on the token at two bits, and the block of gate 3 reads one; A1's budget then admits no block that works on the token, so the token-work bound holds at the cap 0, and the block of gate 3, an inference block, holds one of the token gates {3, 4}, above the cap 0. A counterexample at an instance, not a property of a Lean function.",
-   "Nci.Formalism.SecurityProofs.Slowdown_honest": "completeness: Slowdown's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), its premises hold together at (c, k) = (1, 1): its valid annotation, A1 at the witness block of the token's three gates, which reads the new weight alone, one shared bit and none of the token's state, the token-work bound at the cap 1 on the token gates {3, 4}, the cap 1 on the kind of the new weight {1}, the partition-level bound 1, which every partition into blocks of one gate meets with its |C| = 4 blocks, and its four gates, each a block of its own, a partition into inference blocks. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation, A1's checked witness blocks, caps and partition, which no check reads yet, would supply the deployed premises.",
-   "Nci.Formalism.SecurityProofs.Slowdown_nontrivial": "lemma: Slowdown's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), at the witness block of gates 2 and 4, which reads the new weight and gate 3's value, and the rest as in its honest lemma, every premise but A1 holds, the token-work bound at the cap 0 among them, A1 fails: that witness block reads one shared bit, the new weight, and one bit of the token's state, gate 3, so A1 prices every block that works on the token at two bits, and the block of gate 3 reads one, and the bound, ⊤ at the cap 0, is above the blocks' price 1. A counterexample at an instance, not a property of a Lean function.",
-   "Nci.Formalism.SecurityProofs.Security_honest": "completeness: Security's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), its run the one method, with a decoder that outputs nothing, D = ⊤, the loss 0 and ℓ* = 0, its premises hold together, A1, the token-work bound and A2 among them, at p = 1, (c, k) = (1, 1), its four blocks in one period of four, and Slowdown's premises as in Slowdown's honest lemma. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation, A1's checked witness blocks, caps and partition, which no check reads yet, would supply the deployed premises.",
-   "Nci.Formalism.SecurityProofs.Security_nontrivial": "lemma: Security's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), at the witness block of gates 2 and 4, which reads the new weight and gate 3's value, and the rest as in its honest lemma, every premise but A1 holds, the token-work bound and A2 among them, A1 fails: that witness block reads one shared bit, the new weight, and one bit of the token's state, gate 3, so A1 prices every block that works on the token at two bits, and the block of gate 3 reads one, and ρ̲ p H(ℓ*), ⊤ at the token kind's cap 0, is above N n c = 4. A counterexample at an instance, not a property of a Lean function.",
-   "Nci.Formalism.SecurityProofs.FitServing_honest": "completeness: Fit's honest lemma for running θ': at Honest (Nci.Formalism.Honest, Security/Definitions/Nci/Formalism/Instances.lean), a token served from a new weight (a Boolean declaration with a registered weight, a data bit, the new weight computed from both and the token computed from it and the data), its two blocks of one gate are session blocks, each reading a description of one value and one token's one data bit, and Δ + s τ = 2 fits k = 2, with no decoder. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a served model's partition into session blocks, which no check reads yet, would supply the deployed premises.",
-   "Nci.Formalism.SecurityProofs.FitServing_nontrivial": "lemma: Fit's nontrivial lemma for running θ': at Honest (Nci.Formalism.Honest, Security/Definitions/Nci/Formalism/Instances.lean), a token served from a new weight (a Boolean declaration with a registered weight, a data bit, the new weight computed from both and the token computed from it and the data), at k = 1 its session blocks' Δ + s τ = 2 does not fit, and the token's gate reads two values beyond the weight, so no partition into inference blocks exists and ρ = ⊤, above c / (c - d) = 1. A counterexample at an instance, not a property of a Lean function.",
-   "Nci.Formalism.SecurityProofs.FitTraining_honest": "completeness: Fit's honest lemma for training: at Honest (Nci.Formalism.Honest, Security/Definitions/Nci/Formalism/Instances.lean), a token served from a new weight (a Boolean declaration with a registered weight, a data bit, the new weight computed from both and the token computed from it and the data), its two blocks of one gate are compute blocks that fit at k = 2, with Δ = Δ_t = Δ_grad = s = τ = 1 and no decoder. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's partition into training blocks, which no check reads yet, would supply the deployed premises.",
-   "Nci.Formalism.SecurityProofs.FitTraining_nontrivial": "lemma: Fit's nontrivial lemma for training: at Honest (Nci.Formalism.Honest, Security/Definitions/Nci/Formalism/Instances.lean), a token served from a new weight (a Boolean declaration with a registered weight, a data bit, the new weight computed from both and the token computed from it and the data), at k = 1 its blocks don't fit, no partition into inference blocks exists, and ρ = ⊤, above c / (c - d) = 1. A counterexample at an instance, not a property of a Lean function.",
-   "Verity.SecurityProofs.CKSize_honest": "completeness: CKSize's honest lemma: at Honest (Verity.Formalism.Honest, Security/Definitions/Core/Formalism/Instances.lean), the proof blocks {1, 2} and {3} of a chain of three gates after a registered input, its premise holds at (c, k) = (2, 1), the second proof block having one gate, under c. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound and rests on no run and no art:.",
-   "Verity.SecurityProofs.CKSize_nontrivial": "lemma: CKSize's nontrivial lemma: at Counter (Verity.Formalism.Counter, Security/Definitions/Core/Formalism/Instances.lean), the same chain's three operation gates in one proof block, its premise fails at (c, k) = (2, 1), and so does the bound, |C| = 3 > 2 * 1. A counterexample at an instance, not a property of a Lean function.",
    "Nci.Cut.SecurityProofs.Bound": "frozen (no-function): It is about an arbitrary registered circuit, its charged work (Nci.Cut.Work, Security/Definitions/Nci/Cut.lean) and any partition into blocks that each read at most k gates outside θ (ReadsAtMost), with no named assumption, not about the NCI check's code; nothing joins it to a verdict yet, and stating that join among the properties is what would give it an acceptance.",
    "Nci.Cut.SecurityProofs.Slowdown": "frozen (no-function): Like Bound, it is about an arbitrary registered circuit, its charged work and any partition into blocks that each read at most k gates outside θ (ReadsAtMost), each priced at c, with no named assumption, not about the NCI check's code; nothing joins it to a verdict yet.",
    "Nci.Cut.SecurityProofs.HE": "frozen (no-function): Like Bound, it is about an arbitrary registered circuit, its charged work, the values its words carry (ValuesInjective, NoSharedPair) and any partition into blocks that each read at most k gates outside θ, under the named (H) and (E) (Nci.Cut.Assumptions.Hardness and Exports, Security/Definitions/Assumptions.lean), not about the NCI check's code; nothing joins it to a verdict yet.",
    "Nci.Cut.SecurityProofs.HEShared": "frozen (no-function): Like HE, with the matmuls reading shared arrays, each an edge of a graph with no clique of ω + 1 (Arrays) at a cost of at least q (CostsAtLeast), under the named (H) and (E) (Security/Definitions/Assumptions.lean), not about the NCI check's code; nothing joins it to a verdict yet.",
-   "Nci.Cut.SecurityProofs.Cut_honest": "completeness: Bound's, Slowdown's, HE's and HEShared's honest witness (their witnesses entries): at the toy Nci.Cut.Toy (Security/Definitions/Nci/Cut/Toy.lean), one matmul y = w x with two MACs, their premises hold together: a block for each MAC reading two inputs (k = 2), each word its own value, the arrays W and X on the edge of the complete graph on two vertices (ω = 2) at unit costs (q = 1), (H) at those costs and k = 2, and (E) at b = 1, all proved, so none of them is vacuous.",
-   "Nci.Cut.SecurityProofs.Bound_nontrivial": "completeness: Bound's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy Nci.Cut.Toy (Security/Definitions/Nci/Cut/Toy.lean), Bound without the block cap: one block holding both MACs reads three inputs, more than k = 0, and N = 2 exceeds m (k + α) + √(Π(0) m O) = 0, all proved, so Bound's conclusion is not a tautology and needs the premise it drops.",
-   "Nci.Cut.SecurityProofs.Slowdown_nontrivial": "completeness: Slowdown's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy Nci.Cut.Toy (Security/Definitions/Nci/Cut/Toy.lean), Slowdown without the block cap: one block holding both MACs reads three inputs, more than k = 1, and at c = 1 the bound (c / |C|) (N / (k + α) - √(Π(1) O N) / (k + α)^{3/2}) = 1 exceeds m c / |C| = 1/2, all proved, so Slowdown's conclusion is not a tautology and needs the premise it drops.",
-   "Nci.Cut.SecurityProofs.HE_nontrivial": "completeness: HE's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy Nci.Cut.Toy (Security/Definitions/Nci/Cut/Toy.lean), HE without the block cap: Cut_honest's values and (E) at b = 1, with (H) at k = 0; one block holding both MACs reads three inputs, more than k = 0, and N = 2 exceeds the bound, 0, all proved, so HE's conclusion is not a tautology and needs the premise it drops.",
-   "Nci.Cut.SecurityProofs.HEShared_nontrivial": "completeness: HEShared's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy Nci.Cut.Toy (Security/Definitions/Nci/Cut/Toy.lean), HEShared without the block cap: Cut_honest's arrays, values, costs and (E) at b = 1, with (H) at k = 0; one block holding both MACs reads three inputs, more than k = 0, and N = 2 exceeds the bound, 0, all proved, so HEShared's conclusion is not a tautology and needs the premise it drops.",
    "Pouw.SecurityProofs.PeriodBindingPerProver": "frozen (no-function): a bound on a period's binding (SampledLayer.BindingAt at Declared.periodLayer, which J10-R's tileLayer is) for every circuit, outcomes and openings, not a property of a Lean function's acceptance; it takes ecr/sha-512 at the prover's own fork finder (Claims.ExpectedCR, applied to that finder alone) and states kappa, the unverified-opening and split terms, in full, since no premise bounds them yet (CMP-33).",
-   "Pouw.SecurityProofs.PeriodBindingPerProver_honest": "completeness: PeriodBindingPerProver's honest witness (LEAN-66): at onePeriod with every proof accepted and every slot opened to false by a verified path, the proofs are accepted on every coin, kappa is 0 and binding never fails (CMP-33).",
-   "Pouw.SecurityProofs.PeriodBindingPerProver_nontrivial": "lemma: PeriodBindingPerProver's nontrivial witness (LEAN-66): at onePeriod with every proof accepted, opening every slot to the coin bit by a verified path, kappa is 0 and the bound at q = 0, which is 0, fails, since the opened bit moves with every fresh sample; a counterexample about no protocol function (CMP-33).",
    "Flock.SecurityProofs.SampledKSTwo": "frozen (obligation,no-function): ksTwo_code at the deployed round order (SamplingDeploy.codeTwoAt), knowledge sound at SHA-512 from UniformRandomBytes at each challenger call (CallsUniform) and seven facts of the code (RegMatchesTwo, Code.RefusesTwo, Code.ReplayCap, Code.InteriorFixed, SessionRuns, SessionsIn, SessionOpensTwo), open until Spot.Run.run's checks prove them; it reads SampledKSTwo (Security/Proofs/Flock/SamplingGeneric/Guarantees.lean) over SamplingGeneric's code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
    "WeightSecurity.SecurityProofs.TheftServed": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (Security/Definitions/WeightSecurity/Served.lean), under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard), the served channel's simulability (WeightSecurity.Assumptions.Simulable) and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the releases' locality as a probability term that the network certifier and the dataflow are to discharge; it reads no function's acceptance.",
    "WeightSecurity.SecurityProofs.TheftServedReq": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (Security/Definitions/WeightSecurity/Served.lean), per charge unit and with the served channel's covert capacity in bits (WeightSecurity.servedBits), under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard), the served channel's simulability (WeightSecurity.Assumptions.Simulable) and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the releases' isolation (WeightSecurity.Served.Isolated) as a probability term that the network certifier and the dataflow are to discharge; it reads no function's acceptance.",
@@ -26787,14 +26678,11 @@
    "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod": "frozen (no-function,world-unlisted): INT-PERIOD's restatement of CircuitWork over an accounting period of at most n windows of one declared circuit (Accounting.Compose.WindowPlay, each window with its own live coins and draw), credited up to its first window with a refused proof (Accounting.Compose.Outcomes.Credited, RT3-INT-7) and its words counted on each credited window's live tiles only (RT-INT's fix (c) with RT2-INT-1's), which Daniel took (ASK-64 = A, 19 Oct): an accepted period has its accepted prefix's live words fixed right but for a share at cost Lambda ln(1/delta_s) + j min(a, b) D0 at the realized prefix j (LiveWorkAt at rOfPrefix), except with probability delta_s + n (delta_bind + delta_ks); not a Lean function, an Accounting.TS.prob event that shape.events does not list, and its claims (OperandHMu, ReceiptLuckAt and GuessLuckAt per live tile under PerLiveTile, UnitFixed at the period's modes) are not on the premises list. Proved from CircuitWork's lemmas at n rounds: ServiceBudget per window at the live weights, PeriodBudget, PeriodTailMax once at the accepted prefix, SampledRightOff at n rounds with PrefixOf, the period layer's covers (Accounting.SecurityProofs.ComposeMonitoringPeriod.periodCovers: Declared.periodLayer's writers are in their own window by its definition) and UnitFixed's sums. Its Scope holds LayerCommitted (each value the prover writes committed by its IR cut, or a computed value only its own unit reads by the draw, on which a late edge's cone lying in the IR's rests), which today's code doesn't meet, so a live window it serves is out of scope; and the period's record (cap and circuit committed before window 0's first coin, each window's first coin after the previous window's draw, closed at the first refused window) is protocol structure today's code doesn't meet either: the served Credits registers a window when it is received. Its live tiles are the ones live in-circuit: under #2731's tile (#2639's PouwH1Tile_v2) the served gate's admit bits admit a scale_only row block whose tile is dead (RT4-LOGIC-4), and under #2902's PouwH1Tile_v4 a tile's live bit is its admit bits' OR (RT4-LOGIC-20). Its quoted numbers take D0 = 0, which nothing computes for the served circuit, and at D0 > 0 DeadConeDead can fail, so that the statement says nothing (RT4-LOGIC-18). Its numbers are for live windows, which no served path runs yet, and the declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout and an extractor that doesn't exist yet.",
    "Flock.SecurityProofs.SpotKSTwo": "frozen (obligation,no-function): ksTwo_spot at SPOT[Flock]'s two-stage code (SpotFlock.code), knowledge sound at SHA-512 with that code's facts, its coins' bytes and its sessions' runs proved, from two facts of a session layout (SpotFlock.Embeds, SpotFlock.FrameIs), open until a built two-stage layout and frame prove them; it reads SpotKSTwo (Security/Proofs/Flock/SamplingGeneric/Guarantees.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
    "Flock.SecurityProofs.SessionLoopZKAnyDeployed": "frozen (no-function,world-unlisted): Claims.Flock.ZK's bound per outcome at the session loop's release at the deployed tables (Masked.dataE, at the loop's own link and Finish: ofLoopLink, LeanRelease.withFiles, Loop.realOf): as a simulation statement against every malicious verifier it has no acceptance of a function to take; it is at any values whose unswitched round encoding is causal (RefSession.UnCausal), at a relation whose statements' table witnesses are valid (RefSession.Complete), where the transport's trusts at the unswitched prover hold at the relation's statements (LeanRelease.TrustsStop), premises that aren't on the list.",
-   "Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest": "completeness: SessionLoopZKAnyDeployed's honest lemma, and SampledAuditAnyDeployed's (their witnesses entries): at the relation of one pair, the concrete statement and its trace, the honest values and the honest worker of the session loop's release on the tape's samples, the session's table witnesses are valid (RefSession.Complete), the values' unswitched round encoding is causal (RefSession.UnCausal) and the transport's trusts hold (LeanRelease.TrustsStop); a lemma about the honest instance, not a property of a function's acceptance.",
-   "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial": "lemma: SessionLoopZKAnyDeployed's nontrivial lemma (its witnesses entry): at a session without tables, the release whose link carries the witness (Loop.leakL) and the concrete statement under the relation of every pair, Loop.ZkAnyAt fails at t = 2; a lemma about a toy instance, not a property of a function's acceptance.",
    "Pouw.SecurityProofs.EndToEndEps": "frozen (conjecture,no-function,hash): EndToEnd in ε form. It is a consequence of the named open conjecture TT, stated over the PoUW game, whose oracle H is sampled uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.SecurityProofs.NCP.EpsFromTTNCP_U_v1": "frozen (conjecture,no-function,hash): GapFromTTNCP_U_v1 in ε form. It is a consequence of the named open conjecture TTNCP_U, stated over the PoUW game, whose oracle H is sampled uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.EpsFp4Sm120_8192": "frozen (conjecture,no-function,hash): GapFp4Sm120_8192 in ε form. It is a consequence of the named open conjecture TTOutFp4Sm120W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is sampled uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise it bounds guessers only: B̃ is sampled from H, and no W1 program computes the noise (W1 has no oracle instruction), so it says nothing about a program that computes SHA-512's noise until F1 (W1 with the oracle) or D-SK over SHA-512.",
    "Pouw.SecurityProofs.PearlC.EpsSm120v1LoopCast8p72Rev1Cap1000_8192": "frozen (conjecture,no-function,hash): GapSm120v1LoopCast8p72Rev1Cap1000_8192 in ε form. It is a consequence of the named open conjecture TTOutPearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is sampled uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
    "Flock.SecurityProofs.SampledAuditAnyDeployed": "frozen (no-function,world-unlisted): SampledAuditAny's bound (Loop.AuditAnyAt) at sampled sessions of the deployed session loop (Masked.dataE, at the loop's own link and Finish: ofLoopLink, Loop.anySim, Loop.anyErr) and N hm96 leaves at the pinned key: as a simulation statement on the audit's view it has no acceptance of a function to take; it is at a stack that reads no key (ZkServerOwnUser), at sessions whose values' unswitched round encoding is causal (RefSession.UnCausal), at a relation whose statements' table witnesses are valid (RefSession.Complete), where the transport's trusts hold at each session's worker (LeanRelease.TrustsStop), premises that aren't on the list. Its honest witness is SessionLoopZKAnyDeployed's: those premises are its own, at the same session.",
-   "Flock.SecurityProofs.SampledAuditAnyDeployed_nontrivial": "lemma: SampledAuditAnyDeployed's nontrivial lemma (its witnesses entry): at the witnesses' value service with no hm96 leaf and no sampled session, the stack that hands a record of its own, record tag the key, is always admitted with a true commitment that no genuine or ideal record has and forges only at one key, so Loop.AuditAnyAt fails (1 <= 1/2); a lemma about a toy instance, not a property of a function's acceptance.",
    "Accounting.SecurityProofs.PooledSampling": "frozen (no-function): It bounds uniform samples over an abstract causal family of rounds whose good sets are any functions of the earlier rounds' coins and of the round's own coins other than its sample (Security/Definitions/Accounting/RateAuditHorizon.lean, Causal), not a deployed sampler or verifier.",
    "Accounting.SecurityProofs.RatePooled": "frozen (no-function,hash): As Accounting.SecurityProofs.PooledSampling for the passes of a chained window of abstract chip programs in the random-oracle model (Security/Definitions/Accounting/RateAuditRemote.lean, Chain), each pass's correct receipts its good set, not the rate audit's code.",
    "Accounting.SecurityProofs.RateWindowSample": "frozen (no-function,hash): As Accounting.SecurityProofs.PooledSampling's one round at M = P * N, for a chained window of abstract chip programs in the random-oracle model whose single draw opens d of all its passes' receipts after the last root (Security/Definitions/Accounting/RateAuditHorizon.lean, WindowCoins, Chain.correctAll), not the rate audit's code.",
@@ -26809,17 +26697,24 @@
    "Accounting.SecurityProofs.JointPooledLive": "frozen (no-function): Like JointPeriodLive, over a horizon of periods in one causal game: each period's per-period guarantees are hypotheses over an abstract live period of the device model whose verdicts, openings, extractor, finders, computed gates and world are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointPooledBlocksLive": "frozen (no-function): Like JointPooledLive, over a horizon of server-time blocks and the wipes that open them in one causal game: each block's per-period guarantees and each block's PoUS memory term are hypotheses over an abstract live block of the device model whose verdicts are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), each wipe is core's Verity.Wipe, with its survivor bound (Verity.Wipe.SurvivorBound) and a map of the run into the wipe's game at its boundary (Verity.Wipe.OfRun, whose measure preservation is a hypothesis) whose preimage of the survivor event is a disjunct, and it bounds a Verity.Game.prob event, which shape.events does not list.",
    "NetTiming.SecurityProofs.PooledIncorrectBlocksLe": "frozen (no-function): It is a fact of probability over an abstract monitoring period of windows on a product of live coins (Fin m → Ω), each with an abstract draw whose law (a uniform k-subset of its units) is a hypothesis, an abstract set of wrong units read only from earlier windows' coins, and an abstract acceptance event whose soundness error is a hypothesis, not a run of the sampled verifier or of the challenger's draw (Flock.Draw): it bounds Pr[every window accepts ∧ F ≤ Σ wrong units] by (1 − q)^F + Σ ε_i, and the leak those wrong units carry (the count over the monitoring period, with A3 and KS at the deployment) is not stated here.",
-   "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest": "completeness: UncertifiedElementary's honest lemma: at Honest (Accounting.ServingBlocks.Honest, Security/Definitions/Accounting/ServingBlocks/Instances.lean), at its serving block after the wipe with that block as its one inference block, the weight the inference block leaves equals the split weight, which is 1 (gate 2's operation, split across the wipe), so its cap is attained with a right-hand side above 0. It states facts of an instance, not a property of a Lean function, and rests on no run and no art:.",
-   "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial": "lemma: UncertifiedElementary's nontrivial lemma: it takes no premise to drop, so a tighter cap fails at an explicit circuit: at Straddle, at its serving block after the wipe with that block as its one inference block, the operation split across the wipe is left at the split weight, so the cap fails at every right-hand side below it, 0 among them. A counterexample at an instance, not a property of a Lean function.",
-   "Verity.SecurityProofs.FingerprintCollision": "lemma: the collision bound behind a memory check's multiset equality test (Verity.MemCheck.fingerprint, Security/Definitions/Core/MemCheck.lean), over an arbitrary finite field and multisets of packed records, not a Lean function's acceptance: the memory check's verifier, once in Lean, is what a guarantee states it of.",
-   "Verity.SecurityProofs.PrintCollision": "lemma: the collision bound behind a memory check's key prints (Verity.MemCheck.element, Security/Definitions/Core/MemCheck.lean), over an arbitrary finite field and set of packed keys, not a Lean function's acceptance: the memory check's verifier, once in Lean, is what a guarantee states it of.",
-   "Verity.SecurityProofs.MemoryChecked": "lemma: offline memory checking over an abstract access log (Verity.MemCheck.Checked, Security/Definitions/Core/MemCheck.lean), the reference semantics a memory-checked circuit's log is held to, not a Lean function's acceptance: the memory check's verifier, once in Lean, is what a guarantee states it of.",
+   "Verity.SecurityProofs.FingerprintCollision": "frozen (no-function): the collision bound behind a memory check's multiset equality test (Verity.MemCheck.fingerprint, Security/Definitions/Core/MemCheck.lean), over an arbitrary finite field and multisets of packed records, not a Lean function's acceptance: the memory check's verifier, once in Lean, is what a guarantee states it of.",
+   "Verity.SecurityProofs.PrintCollision": "frozen (no-function): the collision bound behind a memory check's key prints (Verity.MemCheck.element, Security/Definitions/Core/MemCheck.lean), over an arbitrary finite field and set of packed keys, not a Lean function's acceptance: the memory check's verifier, once in Lean, is what a guarantee states it of.",
+   "Verity.SecurityProofs.MemoryChecked": "frozen (no-function): offline memory checking over an abstract access log (Verity.MemCheck.Checked, Security/Definitions/Core/MemCheck.lean), the reference semantics a memory-checked circuit's log is held to, not a Lean function's acceptance: the memory check's verifier, once in Lean, is what a guarantee states it of.",
    "Accounting.SecurityProofs.RegisteredCircuitRequirement": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationSketchDeployed's game (sketch receipts at 16 rows, 2,773 openings a window, a store per pass made by the append-coin rule) on a layout that reads the codec and the append coins through an a-bit summary the pass's devices are told (Accounting.Assumptions.SteeredLayout: RateSketch.steeredStore, RateSketch.SketchSummarySession), each append's blocks read within the lifetime cap L of the window it joined (RateSketch.LifetimeCapped), a layer-1 bound on the prover system parametric in its resources a pass within the pass deadline tau (kept S, link Lr*tau, hash budget qr*tau, rebuilds Xr*tau), carriers of a declared circuit passing the stacking property (Gates.Property, Gates.Restricted) within its caps, charged over L windows (Accounting.Assumptions.CircuitCarriers, RateSketch.Provenance.OfCircuit: C = 8*R_L + ceil(1024*L*c*P*N*4096/E), R_L the most run-input bytes of L windows, a window certifying at most P*N*4096 bytes), slack k tiles a pass traded against k+1 query guesses ((qr*tau/2^96)^(k+1), 2^a once per pass), and its shortfall read pass by pass: the distinct sectors each pass read (RateSketch.SketchDeployedWindow.readsIn) from the tiles holding the appended blocks of the circuit's credited reads at the step it is bound to (strictly increasing), against the larger of the circuit's credited live bits in those blocks and its read bits in appended blocks less a block a group (Requirement.bitsAt, bits, OneBlockEach), with the memory map holding the circuit's credited blocks and each pass's plan covering its reads (Requirement.StoreMatches, PlanMatches: one-sided, other blocks may be resident or planned and earn nothing) and the plan's blocks at distinct positions of the pass's store, for a placed execution (Requirement.Placement, Placement.Deadlines: each pass tau ticks of the devices' clocks), layout, groups, binding, memory map, plans and addresses chosen after every coin; abstract verbatim pass devices in the random-oracle and ideal encoding models under the named assumptions SketchRank, SketchHashBudget, SquaringFloor and ChainSum (at their floor, epsilon at least 2^-64), KeyBinding, CircuitCarriers and SteeredLayout, not the rate audit's, the memory map's or the engine's code; attribution to the node's devices and tiers is not here. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest nonlinear units, budgeted units and data products, of Gates.encodeCosts, ⊤ where there is none).",
-   "Verity.SecurityProofs.Counting_honest": "completeness: Counting's honest lemma: at Honest (Verity.Formalism.Honest, Security/Definitions/Core/Formalism/Instances.lean), the proof blocks {1, 2} and {3} of a chain of three gates after a registered input, counting the three operation gates at the weights 1, 1 and 2 with the allowance q = 2, its premises hold at c = 2 and its bound is attained: each proof block weighs q, so (c / q) * 4 = 4 = c * B, and the slowdown bound is attained at every T0 > 0. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound and rests on no run and no art:.",
-   "Verity.SecurityProofs.Counting_nontrivial": "lemma: Counting's nontrivial lemma: at the same Honest, with gate 3 weighing 3, every premise but the allowance holds at c = 2 and q = 2, the second proof block weighs 3, above q, and the bound fails, (c / q) * 5 = 5 > c * B = 4. A counterexample at an instance, not a property of a Lean function.",
    "Flock.SecurityProofs.SpotExfilTwo": "frozen (obligation,no-function): exfil_of_ks on SpotKSTwo at SPOT[Flock]'s two-stage code (SpotFlock.code): what an accepted run serves is in the influence set at δ at SpotKSTwo's errors, and that set has at most Σ_{T admissible} 2^{b(T)} members, from the same two facts of a session layout (SpotFlock.Embeds, SpotFlock.FrameIs), open until a built two-stage layout and frame prove them; it reads SpotExfilTwo (Security/Proofs/Flock/SamplingGeneric/Guarantees.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
    "NetTiming.SecurityProofs.SampledLeakChecked": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.NetworkCertifier states it (SampledAuditAccepted, taken as a hypothesis, with Claims.Sampling.KS at each deployment), on the statements whose check misses with probability at most εchk (CheckedWitness), and bounds AccSeqsChecked, the observation sequences the circuit's Program (circuitProgram) accepts with a valid run, where the check pins its checked inputs (CheckedUnique), not runs of the network check's code; it charges the free inputs outside each statement's registered and checked inputs (freeInputs \\ (reg ∪ chk)).",
-   "NetTiming.SecurityProofs.PooledLeakChecked": "frozen (obligation,no-function,world-unlisted): It is PooledLeakAccepted's bound over one window's pool with the leak relation with checked inputs (LeakAtChecked) for LeakAt, conditional on the period's inputs as named hypotheses (PeriodChannel, PeriodAdaptive, PeriodEscapes, and PeriodLeaksChecked, which the live SampledLeakChecked would give at each window), not discharged; with trusted-host (TrustedHost) it bounds Pr[every window accepts ∧ ¬PooledGoodChecked] by (1 − q)^Fmax + Σ e_i + Σ e'_i and counts the secrets meeting PooledGoodChecked at each draw of the coins by #Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \\ (reg_i ∪ chk_i)) · Dj^k_i; it is not a run of the sampled verifier, the challenger's draw or the network check's code."
+   "NetTiming.SecurityProofs.PooledLeakChecked": "frozen (obligation,no-function,world-unlisted): It is PooledLeakAccepted's bound over one window's pool with the leak relation with checked inputs (LeakAtChecked) for LeakAt, conditional on the period's inputs as named hypotheses (PeriodChannel, PeriodAdaptive, PeriodEscapes, and PeriodLeaksChecked, which the live SampledLeakChecked would give at each window), not discharged; with trusted-host (TrustedHost) it bounds Pr[every window accepts ∧ ¬PooledGoodChecked] by (1 − q)^Fmax + Σ e_i + Σ e'_i and counts the secrets meeting PooledGoodChecked at each draw of the coins by #Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \\ (reg_i ∪ chk_i)) · Dj^k_i; it is not a run of the sampled verifier, the challenger's draw or the network check's code.",
+   "Nci.SecurityProofs.IncompressibleThreadedThrottledOn_nontrivial": "completeness: IncompressibleThreadedThrottledOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), IncompressibleThreadedThrottledOn without ThetaRegistered: ThreadedThrottledOn_nontrivial's instance under TrainingIncompressible at the chain ch1, all proved, so IncompressibleThreadedThrottledOn's conclusion is not a tautology and needs the premise it drops.",
+   "Nci.SecurityProofs.IncompressibleThreadedThrottled_honest": "completeness: IncompressibleThreadedThrottled and IncompressibleThreadedThrottledOn's honest witness (their witnesses entries): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), IncompressibleThreadedThrottled and IncompressibleThreadedThrottledOn's premises hold together: ThreadedThrottled_honest's instance under TrainingIncompressible at the chain ch1, all proved, so IncompressibleThreadedThrottled and IncompressibleThreadedThrottledOn are not vacuous.",
+   "Nci.SecurityProofs.IncompressibleThreadedThrottled_nontrivial": "completeness: IncompressibleThreadedThrottled's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), IncompressibleThreadedThrottled without ThetaRegistered: ThreadedThrottled_nontrivial's instance under TrainingIncompressible at the chain ch1, all proved, so IncompressibleThreadedThrottled's conclusion is not a tautology and needs the premise it drops.",
+   "Nci.SecurityProofs.ThreadedThrottledDarkSlots_nontrivial": "completeness: ThreadedThrottledDarkSlots's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedThrottledDarkSlots without ThetaRegistered: ThreadedThrottledDark_nontrivial's instance, the weight in its own parameter slot (σ1), all proved, so ThreadedThrottledDarkSlots's conclusion is not a tautology and needs the premise it drops.",
+   "Nci.SecurityProofs.ThreadedThrottledDark_nontrivial": "completeness: ThreadedThrottledDark's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedThrottledDark without ThetaRegistered: ThreadedThrottled_nontrivial's instance, with no dark gate: #M = 1 exceeds #dark + α Λ size(d) / b_a = 0, all proved, so ThreadedThrottledDark's conclusion is not a tautology and needs the premise it drops.",
+   "Nci.SecurityProofs.ThreadedThrottledOnSlots_nontrivial": "completeness: ThreadedThrottledOnSlots's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedThrottledOnSlots without ThetaRegistered: ThreadedThrottledOn_nontrivial's instance, the weight in its own parameter slot (σ1), all proved, so ThreadedThrottledOnSlots's conclusion is not a tautology and needs the premise it drops.",
+   "Nci.SecurityProofs.ThreadedThrottledOn_nontrivial": "completeness: ThreadedThrottledOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedThrottledOn without ThetaRegistered: ThreadedThrottled_nontrivial's instance, where Dθ computes gate 2, so that it is in M ∩ S, all proved, so ThreadedThrottledOn's conclusion is not a tautology and needs the premise it drops.",
+   "Nci.SecurityProofs.ThreadedThrottledSlots_honest": "completeness: ThreadedThrottledSlots, ThreadedThrottledOnSlots and ThreadedThrottledDarkSlots's honest witness (their witnesses entries): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedThrottledSlots, ThreadedThrottledOnSlots and ThreadedThrottledDarkSlots's premises hold together: ThreadedThrottled_honest's instance, the weight in its own parameter slot (σ1), all proved, so ThreadedThrottledSlots, ThreadedThrottledOnSlots and ThreadedThrottledDarkSlots are not vacuous.",
+   "Nci.SecurityProofs.ThreadedThrottledSlots_nontrivial": "completeness: ThreadedThrottledSlots's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedThrottledSlots without ThetaRegistered: ThreadedThrottled_nontrivial's instance, the weight in its own parameter slot (σ1), all proved, so ThreadedThrottledSlots's conclusion is not a tautology and needs the premise it drops.",
+   "Nci.SecurityProofs.ThreadedThrottled_honest": "completeness: ThreadedThrottled, ThreadedThrottledOn and ThreadedThrottledDark's honest witness (their witnesses entries): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedThrottled, ThreadedThrottledOn and ThreadedThrottledDark's premises hold together: ThreadedTraining_honest's instance, which needs no coverage: Γ = 2, α = 1/2, b_w = b_a = 1/2, r = d = Toy.D through the containment of the toy in itself, the threading T1 and (dd, e) = (1, 0), all proved, so ThreadedThrottled, ThreadedThrottledOn and ThreadedThrottledDark are not vacuous.",
+   "Nci.SecurityProofs.ThreadedThrottled_nontrivial": "completeness: ThreadedThrottled's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedThrottled without ThetaRegistered: Dθ, the toy with the token registered, complies at α = 0, so at read cap α Γ = 0, and the bound b_a #M ≤ α Λ size(d) fails, its right side 0 and gate 2 the counted multiplication of T1, all proved, so ThreadedThrottled's conclusion is not a tautology and needs the premise it drops."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -27032,7 +26927,10 @@
    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted": {
     "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (instHAdd.hAdd (instHSub.hSub (D.κ δ (R.stmt ξ i)) δ) (instHMul.hMul (D.γ (R.stmt ξ i)) (Claims.PrB H D.V (R.prover ξ i) (R.stmt ξ i))).sqrt) εks": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (Claims.Sampling.Bext H D.V D.E (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (NetTiming.Btap H D.V D.E D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εtap": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (NetTiming.Btap H D.V D.E D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εtap": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (instHAdd.hAdd (instHSub.hSub (Claims.Sampling.κ D δ (R.stmt ξ i)) δ) (instHMul.hMul (Claims.Sampling.γ D (R.stmt ξ i)) (Claims.PrB H D.V (R.prover ξ i) (R.stmt ξ i))).sqrt) εks": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (Claims.Sampling.Bext H D.V (Claims.Sampling.E D decode) (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (NetTiming.Btap H D.V (Claims.Sampling.E D decode) D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εtap": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock": {
     "∀ (t : Nat), SetLike.instMembership.mem (S.sessions b) t → Real.instLE.le q (instHDiv.hDiv (S.W t).kd.cast (S.W t).n.cast)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -27293,9 +27191,6 @@
    "Accounting.SecurityProofs.RateSessionSampledNamedRO": {
     "∀ (w : Fin n) (η : (Subtype fun v => instLTFin.lt v w) → Accounting.Rate.WindowCoins P N b h ρ r s d) (j : Fin P) (ι : (Subtype fun i => instLTFin.lt i j) → Accounting.Rate.PassCoins N b h ρ r s) (E : Accounting.Rate.Store N b) (R : Pous.Bits ρ) (O O' : Accounting.Rate.Oracle N b h ρ), Eq (((A.window w η).device j ι).side E R O) (((A.window w η).device j ι).side E R O')": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Accounting.SecurityProofs.RateSketchTable": {
-    "instLENat.le (Fintype.card Dg) (instHPow.hPow 2 d)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
    "Accounting.SecurityProofs.Recall": {
     "∀ (r r' : Ω), Eq ((S r).crossing (Set.instCompl.compl (Finset.instSetLike.coe X)) (Finset.instSetLike.coe X) (Set.Ico t u)) ((S r').crossing (Set.instCompl.compl (Finset.instSetLike.coe X)) (Finset.instSetLike.coe X) (Set.Ico t u))": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
@@ -27324,9 +27219,6 @@
     "instLTNat.lt m (instHPow.hPow 2 448)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": {
-    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.Coins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": {
     "∀ (t : Fin n) (ω : Accounting.Remote.Draw.Coins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Remote.SketchBoundDeployed": {
@@ -29800,14 +29692,13 @@
    }
   },
   "Definitions.Accounting.Guarantees.Bandwidth": {
-   "digest": "62ebdff7ffc88badedfa8335d0f05759c7104020815692a904d3358183c316f1",
+   "digest": "dafe2a15e545a0fd0035bb38d2000cc30ac7d738234a4a11934afa2b74724105",
    "definitions": {
     "Bandwidth.Guarantees.AuditInteractive": "1bef03110f62c3f1c735ed17a5c1e3361a9451bd09cbb86b2210fd5698289401",
     "Bandwidth.Guarantees.AuditInteractiveRO": "5f55192410076ced7b28ae9e970656abb1bc3de1e81b51118d57af572e282eb8",
     "Bandwidth.Guarantees.AuditJoint": "fd269f1c5d7c2cfc779d03b458c5debc3d9c7152f0e4ed86b8a459ddd8531e11",
     "Bandwidth.Guarantees.AuditRO": "a80d82d03d8980ba94d723901223e0261393c8d251c063dbc6fab2d20c256802",
-    "Bandwidth.Guarantees.AuditRelay": "b5a4809de34678f5ac5ae20d229289906add8eba6edae701955a3c7c6017717e",
-    "Bandwidth.Guarantees.HonestPasses": "ea463a38fea8188b52f9b1c359364c3adc9256df140c00493c7e612ffe2f8f2d"
+    "Bandwidth.Guarantees.AuditRelay": "b5a4809de34678f5ac5ae20d229289906add8eba6edae701955a3c7c6017717e"
    }
   },
   "Definitions.Accounting.Guarantees.Bandwidth.Causal": {
@@ -30072,13 +29963,12 @@
    }
   },
   "Definitions.Accounting.Guarantees.RateAudit": {
-   "digest": "573ad80e6270a90c08de55afc6b932ba203168f753a168741528fc914d2504d0",
+   "digest": "737f8287493a42a8c113247a502ab167d9f77033f95ad9118c000ca2cea8b362",
    "definitions": {
     "Accounting.Guarantees.RateAudit": "b1a5d1241f4947f9f3a65c0cf27c784d47feb89ad78092bec2bf3005f7c5793a",
     "Accounting.Guarantees.RateAuditInteractive": "7daaf037452a80c1a6e1b59fe24371194a0473e85dc424eb5eb61690f7b1aaeb",
     "Accounting.Guarantees.RateAuditInteractiveRO": "26945a7d5a699d5a53ef9db39f54922e464195daba1176be78a6816eeb61c16d",
     "Accounting.Guarantees.RateAuditWindows": "e4a7bb4158473f6ba96a031f5599e6d1e2fcbddf3364a3d72f6cd63b2e7cc4b6",
-    "Accounting.Guarantees.RateHonest": "5cdf930c6cfe936d5605b02cb5757770b5b61c8c60f5e7b9571f1358ba5154cd",
     "Accounting.Guarantees.RateOfAudit": "e82b0a7b58209154b8ce55017ebd5d880f9c36c1e4e1d525a8baffd3d72368a2",
     "Accounting.Guarantees.RateOfAuditInteractive": "82b301b9affbc2cfaf2cd56e04154b6e05c2f56c415489d36188f5938de3baf6",
     "Accounting.Guarantees.RateOfAuditInteractiveRO": "8ba1cb403e748dabba8fd4ea6d5184468ab9b654624fd58754f9491ef01c27ea"
@@ -30120,12 +30010,11 @@
    }
   },
   "Definitions.Accounting.Guarantees.RateAuditPartial": {
-   "digest": "a2265d59f947a0da74fcd63b32731b3a3a5057fe2544e475998c6ffb13bbbf54",
+   "digest": "94aaa5c6adeed7af64ce291d7c65bd3eb275a089db1df781de420e35ef1a6f95",
    "definitions": {
     "Accounting.Guarantees.RateAuditPartial": "610a04bbba973f96a96d7924c5b655c6bcde937c1af3eb2cbba96481030e673f",
     "Accounting.Guarantees.RateOfAuditPartial": "d8d723086d1305c3208b8e71a6d910bad2b837d8e4e82047fd38b49ef7e83894",
     "Accounting.Guarantees.RateOfAuditPartialPasses": "48de8d43aa9d00648e90dfc384c1623bcc23c0e0b9a60d333ac012ed316ab0b7",
-    "Accounting.Guarantees.RatePartialHonest": "d1ef91fcea14dc6f8b7c352fc9e5f5d27b32708c88a8ab7be959271240d8c64f",
     "Accounting.Guarantees.RatePartialRebuild": "1e1de155f07e7ffd64d9ad7d1ead4b449d2b9128fd91aae32065211db430be66"
    }
   },
@@ -30150,15 +30039,12 @@
    }
   },
   "Definitions.Accounting.Guarantees.RateAuditSketch": {
-   "digest": "62e16aa36ad0284491e0db1f5a6d9e8e381cbd73022175c666090ff00f31a40a",
+   "digest": "201d305628c6cb993a66f7c498e55669fa7a8dbd2f4235403d96b89c9d02f24a",
    "definitions": {
     "Accounting.Guarantees.RateAuditSketch": "833ded51bb61392d685b347a781e7a794edfba29af66b47ad893ef71c93d101e",
     "Accounting.Guarantees.RateAuditSketchInteractiveRO": "2575f98773a810ce8d4577bd4bc6df39f9310cc9a556035c62b6ab8dcd34af17",
     "Accounting.Guarantees.RateAuditTensorSketch": "dc7735367e5d2f05b925118356d8ffa9e62df35164fd0f720a56457675860a4a",
     "Accounting.Guarantees.RateAuditTensorSketchRank": "5870b4cca0f74fa70e5acefda79333105d443cf585a36d96ad43bd4c82b15bd0",
-    "Accounting.Guarantees.RateSketchHonest": "c51cc55cd7bc9c52dabc5074fc3c1e44e250292b5ac6fb8ac8afdb88fac64d87",
-    "Accounting.Guarantees.RateSketchTable": "ad94ab3b4978f81c02a225a618afbb16645613e630f496f9e11295cbde01c096",
-    "Accounting.Guarantees.RateTensorSketchTable": "fa3b784ec840c5aeec068caa1bcab7f39b74f47ef4e4a4ff1844fae566b9dc19",
     "Accounting.Guarantees.SketchBinds": "99179ba3846341ab72bb3e352aa5af9b9f1f08f1e1cbe4777affbc2d564eef0d",
     "Accounting.Guarantees.SketchRankFiber": "1a2ac84caab0d65c5e5de1b4b14e143fffa7ac748d288a124b1d6abe705cdbe2"
    }
@@ -30170,10 +30056,9 @@
    }
   },
   "Definitions.Accounting.Guarantees.RemoteBinding": {
-   "digest": "1722b42ccc901b51eba1180b76e537855a04542ebefe8f8ac45366c76f1eeee9",
+   "digest": "47a42a175b0bfbc2cf0d2605816a76a58172caffef0fff57f4b982f740f080ed",
    "definitions": {
-    "Accounting.Guarantees.Remote.ReceiptsBindingOfCR": "f797fe072bae2dce8ae034fbd327b4ce72a609bddeac12389ab289a4f7313ccb",
-    "Accounting.Guarantees.Remote.ReceiptsBindingOfFork": "3e6070a604fa195c6523328eabf00c0d22060c967fa23c56bef1fb0f4ff45b2e"
+    "Accounting.Guarantees.Remote.ReceiptsBindingOfCR": "f797fe072bae2dce8ae034fbd327b4ce72a609bddeac12389ab289a4f7313ccb"
    }
   },
   "Definitions.Accounting.Guarantees.RemoteDraw": {
@@ -31087,33 +30972,6 @@
     "Accounting.RateSketch.InteractiveProver.tags": "25b5df56ba67d5614762c469c62c06f2d7ba65cf6ae1014b6097fa44271d61b7"
    }
   },
-  "Definitions.Accounting.RateAuditSketchLayout": {
-   "digest": "1caab900330602a6e54f81aa2830560a601d52d42fc796bde8fc4026d4c54cb2",
-   "definitions": {
-    "Accounting.RateSketch.Data.store": "47079120cfb95a709f3fb2e01a2526d17eb6bb9db787c59ac7c758619ef44558",
-    "Accounting.RateSketch.LayoutChip": "3dee8b7d2fcc3623c3dc15140847bbcf04bd776e45b5f4f0747e9d5448e1c70a",
-    "Accounting.RateSketch.LayoutChip.below": "fae1a19e67685622118cdbd41389122f2f877b4d07fc854f7817cc80f496a0a1",
-    "Accounting.RateSketch.LayoutChip.brecOn": "212b150de0a2c8025375b2a08374e73caceb0a75154defe837575c2f9351036d",
-    "Accounting.RateSketch.LayoutChip.brecOn.go": "c86e2d2c5eadaf035025ade7fe471fbae3abb74f36d26f8b45ea9c0d985d42ce",
-    "Accounting.RateSketch.LayoutChip.casesOn": "f25a55c3d8353e6204c562968186a0584136d02957a0ffd805837996a5eb8a17",
-    "Accounting.RateSketch.LayoutChip.done": "259e457282287ccc86efbb4063ac11639d42924d1093a807c11447fa93fba6d0",
-    "Accounting.RateSketch.LayoutChip.link": "d9003bcd31d9da50d8dc016d0299914884b1103ada9f38f976d800c367fb1401",
-    "Accounting.RateSketch.LayoutChip.linkSteps": "4554c2a088d326a4376a46591cde9b25522494ea953fc15dc60e1be8439c4ea5",
-    "Accounting.RateSketch.LayoutChip.queries": "5b033405430207e02f1642d67017b1f804d9abab154d540a61219146d63015fe",
-    "Accounting.RateSketch.LayoutChip.read": "4ce71fc5d0971283fe0d3e971b826f32c64162f64b835db61807b74ef9ba02ba",
-    "Accounting.RateSketch.LayoutChip.reads": "2049cbcb0109421bc696f0d61c9e96a498a56608f50ed55f7a5cb5e82334f9f9",
-    "Accounting.RateSketch.LayoutChip.rec": "c29c422976f60582355913e7762ab3d8662e9704afc8ac529a12edff8d1793ae",
-    "Accounting.RateSketch.LayoutChip.run": "d1d7374828a986352cec24e8545c79388f246282e55d2f265c1287ceafe743ea",
-    "Accounting.RateSketch.LayoutChip.tag": "90d94e40e259d3e52c0d4f4b40cb0d171568c3dfe9c6a29dcab238bc3b6cb5da",
-    "Accounting.RateSketch.LayoutDevice": "2ca0e414f514071b99229d294ddce9d1ac70c442c1b9867a0b426daaec205701",
-    "Accounting.RateSketch.LayoutDevice.chip": "ecf2a6fc050b2eb7c53b74050249a22f6fa0fc26334610875d398763f9ffa18b",
-    "Accounting.RateSketch.LayoutDevice.linkSteps": "cb0f2e41f874997b494910c3c384a0de92b34c742a8911f38565a987a87608b5",
-    "Accounting.RateSketch.LayoutDevice.mem": "a1becb3d8b14a49a718edf992089b8b8b67b3eda253ab338baf007c57f506a4a",
-    "Accounting.RateSketch.LayoutDevice.queries": "47de99a15f30d0b3f3e2381672e30b16352e00d1017d89246d24076ec916b348",
-    "Accounting.RateSketch.LayoutDevice.reads": "2d7fb48d2175a0628b7ce2525e0d6e74cd6a55734c5efdef12582453da64335b",
-    "Accounting.RateSketch.LayoutDevice.tags": "a450c6cbdf5d15d5e2d3a26e3462653126cdfc18452bf2fb770775b84b2e24a5"
-   }
-  },
   "Definitions.Accounting.Remote.Deployed": {
    "digest": "0198bf0d38ebe58014fae8cf3a8213402ce1b02ae9b0411b86c2dd497a4ee69e",
    "definitions": {
@@ -31162,13 +31020,11 @@
    }
   },
   "Definitions.Accounting.Remote.Fork": {
-   "digest": "7288e66facd374440989e2c29645b3b72c23970ecc49dba50ca566289a4f7fec",
+   "digest": "b3bcc946423f083402287e3133b4365e88f7fab5e655e98c210e377c95d23681",
    "definitions": {
-    "Accounting.Remote.Draw.Receipts.Broken": "59501d40cf08d6960b9970b1ba1855b835be76d1a4312d9442cef71fd968c75f",
     "Accounting.Remote.Draw.Receipts.Finds": "06dcf7ec24e256e0bb65735650d26b9d25a5edb7703131d147397034af8d6b8f",
     "Accounting.Remote.Draw.Receipts.Split": "e2e80512e764c5d47f892ec8386f81c1f64cbbc51af9f33b00c1544985efa1a4",
     "Accounting.Remote.Draw.Receipts.finder": "d96cd02e3061948ece62c84ff47b72cda6fe2f6041649cc9db9221ccff2925ea",
-    "Accounting.Remote.Draw.Receipts.fork": "ca927660822cd18804b8ea2ab0564c0dc2ba9e27bbb19ac19386f6ac120f47d0",
     "Accounting.Remote.Draw.Receipts.split": "239466009ed13774ffc6ade859df949fd3f9cc4dc8408fc73e5bb154a0695d96"
    }
   },
@@ -35645,7 +35501,7 @@
    }
   },
   "Definitions.Nci.Guarantees.Witnesses": {
-   "digest": "c1d526e2e98bb434b6b7112760857090ba8e1fc1dc934892a253b84ea0940587",
+   "digest": "a6ed75873b6bccf9903e78f9327e003a3aa72a1631d645c9f5b82e57e5eaac47",
    "definitions": {
     "Nci.Cover.Guarantees.CoverTraining_honest": "c9a43a55ce63a654a6dcb28e8e48317d4ff824f9c2820aabf171d806476cf95e",
     "Nci.Cover.Guarantees.CoverTraining_nontrivial": "09d1c7e6bb0ca1f34ff0dcf754bda1e8331e0931631a96ed9086f03345266359",
@@ -35665,12 +35521,23 @@
     "Nci.Guarantees.IncompressibleContainedTrainingOn_nontrivial": "cf1ecb5c97e26edeab227747807d703a71b93af6fba147a13bbbb06f772d8e79",
     "Nci.Guarantees.IncompressibleContainedTraining_honest": "ed10f30023ea1c63932cfafdf1a689be4c88e4e3fd8ac31ca89352d06078d8e1",
     "Nci.Guarantees.IncompressibleContainedTraining_nontrivial": "aeda39b8ec57ff8627554d2f0a90b5fb0a05edc79fc8920c9f075d7405c414c6",
+    "Nci.Guarantees.IncompressibleThreadedThrottledOn_nontrivial": "c5646e3e2bf75aa1087f290184b45568baff28c4348417d2738e4cea7a7c6439",
+    "Nci.Guarantees.IncompressibleThreadedThrottled_honest": "a1fd4a293c09c0d22f50c3baef0cd5d6df000497062fbce9e628b6cd7ca81de2",
+    "Nci.Guarantees.IncompressibleThreadedThrottled_nontrivial": "a7bef3367d4b0b28698ee599df78460371af540424da96149b6989ccefacfcb2",
     "Nci.Guarantees.LayeredTraining_honest": "bfcc1dd5ea8a0cbc4e6386ac42c6d33e56c5f671d11262e87aeeb31c705bde02",
     "Nci.Guarantees.LayeredTraining_nontrivial": "e4639c110234ef852b9e9a3a22ab254ca15ac46da82b561ca2d19894f61e2ebd",
     "Nci.Guarantees.PackedIncompressibleContainedMatMulOn_honest": "d021a740c9462838cb00de63b85fe77c081c1425cbce7f255c6d3a060d4462d6",
     "Nci.Guarantees.PackedIncompressibleContainedMatMulOn_nontrivial": "4a7581c16ddee67a8134601b0036444d715d2db32d596d415a924fce93d09602",
     "Nci.Guarantees.PackedIncompressibleContainedTrainingOn_honest": "bec11b8f87395fdbbb8378570e2e87bf6525ff4926b0766dd4879d611f92c0df",
     "Nci.Guarantees.PackedIncompressibleContainedTrainingOn_nontrivial": "b4d1f34ba8f3d3173ff8cff9e8f13798b7a72efe7b225fb8917bd77f79dfd111",
+    "Nci.Guarantees.ThreadedThrottledDarkSlots_nontrivial": "9905501ecf998130aae17807343cb98b2d3cb75e082ee672c808540dea0f139f",
+    "Nci.Guarantees.ThreadedThrottledDark_nontrivial": "ef4823d6f2d158c187d6ca9a8672890c3abf9fcc25feced2971e306efbeac87b",
+    "Nci.Guarantees.ThreadedThrottledOnSlots_nontrivial": "d5e0569bb81d7e901dced4eb8ccca64419ff3cee61277dc7e47fc5a1a411d990",
+    "Nci.Guarantees.ThreadedThrottledOn_nontrivial": "15314f8a8cc7295d4d7df3d6e8b56da8fe136dee860209567897e0612e4b5889",
+    "Nci.Guarantees.ThreadedThrottledSlots_honest": "a9897d1fd0e6e005fe16eb73216d1747e2c4c03b5482dcac6b3509a21dd66c3d",
+    "Nci.Guarantees.ThreadedThrottledSlots_nontrivial": "d3aee0a1f002d0e9613ddc132780c26356ae6b0932db04b116a5be2215dd6bff",
+    "Nci.Guarantees.ThreadedThrottled_honest": "36127039422d915e0ed568bdfb4613460515fb5a10738ae82369ef869c43ef0d",
+    "Nci.Guarantees.ThreadedThrottled_nontrivial": "977907e91f3dbb856624a350bdfe74dcb8f8e22c736a29d8f6e5f16ae9d2984a",
     "Nci.Guarantees.ThreadedTrainingOn_nontrivial": "9c7307e675d363394a57bf8c89316f87dfc15c069b9337857cc09b5da5d75abd",
     "Nci.Guarantees.ThreadedTraining_honest": "bf43b1af65eb09ea653561fb1ad6c939ff57921867dc4fda95a0a5c1e00d1b3a",
     "Nci.Guarantees.ThreadedTraining_nontrivial": "ae4e40c68ddfd12b55ce6470722b64d71736d7b0b5c7c4e7a3c07057ede58020"
@@ -39482,7 +39349,7 @@
    }
   },
   "Definitions.WeightSecurity.Guarantees": {
-   "digest": "25f0e2a328f6daf22e68bc92435ea9770663e280b90663ca6d85d92af2b8af05",
+   "digest": "d5a5eb18bb40363d9489b1de3f7174732dffad8ceefc552444b38924cfaa557e",
    "definitions": {
     "WeightSecurity.Guarantees.Theft": "243a4531b248cccfef6facd28bc3405391f5da31d56ab1cb55fcb1c107ca67af",
     "WeightSecurity.Guarantees.TheftHonest": "edcebe0ece71b890e6f3ba54fd3daf68deef830b9bcf824f8453dd5b347b07c3",
@@ -39497,8 +39364,7 @@
     "WeightSecurity.Guarantees.TheftServedReqNontrivial": "d11428d102f9f539f37664c507024b5710a6bdf6259a371ac558a8fc8ae788b3",
     "WeightSecurity.Guarantees.TheftServedTied": "d0b48b5e3981916c12656626c038f45f46c0ff7b7af1e885beaecad40905c615",
     "WeightSecurity.Guarantees.TheftServedTiedHonest": "fa4cd3ad6e105b252deb1a9f8086bbefd61d9dda46633600f0c461de1dcd70a7",
-    "WeightSecurity.Guarantees.TheftServedTiedNontrivial": "f4cd05d3ec1b41ee6cede0518de5438f30a01b5140f56f8c597dfa3a98c90992",
-    "WeightSecurity.Guarantees.TheftTight": "2296f0698d7e1ec1bf28bbbaccc1aa43192b428a061a9655fc914627c43af5ac"
+    "WeightSecurity.Guarantees.TheftServedTiedNontrivial": "f4cd05d3ec1b41ee6cede0518de5438f30a01b5140f56f8c597dfa3a98c90992"
    }
   },
   "Definitions.WeightSecurity.Served": {
@@ -39543,7 +39409,7 @@
    }
   },
   "Definitions.WeightSecurity.Toy": {
-   "digest": "dfcbd8e496a9816355030fd48014ff7d76b12fd2d74db669a1ac8c9aa9d5eab0",
+   "digest": "66e73b3102a3b855708bd3f7090ed12c195961a5c6dc115cfd35c1225b58943d",
    "definitions": {
     "WeightSecurity.Toy.C": "2601558493cd49246ab91747c8420d7b8cacb5a3290bb0468ccdfbeebce0c067",
     "WeightSecurity.Toy.Stolen": "dac7d1cb8fa1d47041a3f17e87d5fda79660ecc1c09d20c38ec5ea5183e09d5a",
@@ -39551,7 +39417,6 @@
     "WeightSecurity.Toy.cheatDC": "c1b71e4b9b5bfb9cd863758b3cf804cf42bd1e460eecc183ad2bf7153af3393d",
     "WeightSecurity.Toy.gen": "ac5ac35eff5b7aadd2ce93fcde29fe41e8fd2292406a6f25f22c2c856022c3ec",
     "WeightSecurity.Toy.honestDC": "7658e6ad5698ed81b6aba15914ecb704f6a97318471194935a70831ffbe58c5c",
-    "WeightSecurity.Toy.oneBit": "23e032b2695e69f63db5c3df27298fa2b95d6c00a280f3eea7bef24d7988c4b9",
     "WeightSecurity.Toy.plain": "25632b65b56ca0ce7d732abf034940cbb4ec10ba0909d911a55fb5f2790d5078",
     "WeightSecurity.Toy.silent": "b0b616e206663a6e8094b9a7b6a568306c8544a6490464c898cbc8a97812a48a",
     "WeightSecurity.Toy.thief": "f4c89279c043eba1b9034f27e3ae0cf393472af02867fd1e3f8d528d693db865",
@@ -44131,7 +43996,7 @@
     "Flock.Zk.reader": "ab869b90a567893048ce1ffd9265e03ad2fe88d0520b1d4d43b1f12947db4203"
    }
   },
-  "Identity.Domains": {
+  "Identity.Domains.Pouw": {
    "digest": "83cf68fd53ebe8fe9dc5ed734c8c09e49e3194d6f34bc5ca5e53325b0b42a01b",
    "definitions": {
     "Domains.POUW_H1_OK_ROW_SALT": "04d91afee4f450d741b64026722ba3582125df27fbdec99b8bb708d029dabd3c"
@@ -47868,9 +47733,9 @@
    }
   },
   "Proofs.Flock.Claims.Sampling.Code": {
-   "digest": "8077c8486eec3bdf526a27f58c8ebf36875c833558e8fe62accde1122b9f0867",
+   "digest": "dcb03be3ce134f57eb116af9b32a61feddbd8b6c5339389d28d805e8dd8dadcd",
    "definitions": {
-    "SamplingDeploy.Code": "7b340a3ed296ff58134890fb83cd4510e512aa38efb98b2004e4f254fbbfa73f",
+    "SamplingDeploy.Code": "7765353841338dcb40558f3cd5858b33dbe7d7b8bec84784cc2db0a37fe49144",
     "SamplingDeploy.Code.V": "d87fa7e556392edd76c40dad6d2dd33735886212cdfa36e2fd6d30f029661c87",
     "SamplingDeploy.Code.at_": "2fbd97aefba0e7e572cd516393f1f44357eb1c0a8f02a923b38d371cc1a832ba",
     "SamplingDeploy.Code.bits": "cdb396d99e2162165b81bab2b41313908802b40a205671026e7a57f73da0de8b",
@@ -47883,27 +47748,28 @@
     "SamplingDeploy.Code.parse": "04c68d073116df0498f09ed1cd92a97d6731bff735c38ceb6d6be0b7bc2a42e1",
     "SamplingDeploy.Code.partition": "8ef2323c2dd18dd9042758db96d5a1c0ff050bb5eb4407290b91328e04d95e65",
     "SamplingDeploy.Code.place": "4a9c7d59fb046792f69c55ddd633bdd7fdaa7f0ceaa6fa741ea96f847ce6bc0f",
-    "SamplingDeploy.Code.reads": "ad5b318f2e891f026386832d6e68e61b8217d9e41dbe1e5eaf3fb27123ac5375",
+    "SamplingDeploy.Code.reads": "bab00f9ceb19079591fefdea0783504d74b0f8b5b45f471bd95b1e11711cb811",
     "SamplingDeploy.Code.reveal": "58387d9d0ed34c025410853ab0f60be6a1163b3e312a30378d1ab8bb8b3a00d2",
-    "SamplingDeploy.Code.reveals": "3a6c46e011a8d572dfe5ac8613349938430b13eae84f3e6de5dda41de0e89401",
+    "SamplingDeploy.Code.reveals": "40eaed54d17f612cb62173659933a1d9de08dd751bacb15a21cfbe85246b85e7",
     "SamplingDeploy.Code.rounds": "d68b937e4ceaee3948f91568cdd1bb4a30e3ac9844a33d54d76397c27ca8f841",
     "SamplingDeploy.Code.salt": "b94058801f16d067da73d86019120f52388adfba835d50267486544804584bbf",
     "SamplingDeploy.Code.scopeCheck": "3b9234126a7f973264d59da1650553d930726befcba239be0a7445199bc9bdc8",
     "SamplingDeploy.Code.session": "3e2ccd021db0e43af3925d1ecbbefb4a10d04d3914be5ed304f69f29e0a098dc",
-    "SamplingDeploy.Code.sessions": "baf34bdd3ff061984e87029ec83dcb471dd81de6b1c5c376e323af57194e155e",
+    "SamplingDeploy.Code.sessions": "77fdb3719bc7b2b00e258d50af2170a8a469e084cc91b6c5428dd1c28b785680",
     "SamplingDeploy.Code.stage2": "521b400f0f64776e310d48f172d1b49666592ae950731b9643b067a576d87a09",
-    "SamplingDeploy.Code.step": "8165b7d9708d129d4c292ae63f547697f9f6709b18b5ea7da5926a4f7d626286",
-    "SamplingDeploy.Code.tables": "b4c0209638799ab15abf8ad96df314154ee6b1b5c59d17fd67984f83a8026318",
-    "SamplingDeploy.Code.wit": "b7fd8036f49f2553b25564031c2497130d54cb25e2ab81318995d64b5a80aaa2",
+    "SamplingDeploy.Code.step": "87f6bd7f8ffa311954e9f110aa8fff42ee599400679f23a6241b312fa6358a2c",
+    "SamplingDeploy.Code.tables": "bc560d24973bc8efba4cfefedc51fcc774218d99f021c64d1d557bbbf855cd15",
+    "SamplingDeploy.Code.unitN₀": "5c546aac3128db338fec5f5e9ee925edc6622ffd761412bc05c8dd7c26edf777",
+    "SamplingDeploy.Code.wit": "db8b61b4b37e0cebbbfeddc9261ea6f696583d567e1a1198c61fbddfad5819b9",
     "SamplingDeploy.Code.π": "5061ffad04025b34379a75c447d9cd1d3a6fa3b0c0dbe9e881507b45269a7f14",
     "SamplingDeploy.depth": "89202e70f0b2b793a0d383258ecfcb3f3ac567b356f7b043987d5ba9f4175a71",
     "SamplingDeploy.units": "ce6890fd5cb113ab6f1922a613c8744110ef6cf5cb93aa8a328087fcd7bf5501"
    }
   },
   "Proofs.Flock.Claims.Sampling.Deployed": {
-   "digest": "0f98a3e0c5c5858a8d94e516c219473ac83b85c99ee4583634350c104868acae",
+   "digest": "88f4520f6708b5784844ae73cc501db379d1adfd43d0cd13b460a7b54465d213",
    "definitions": {
-    "SamplingDeploy.SessionsIn": "53397a0c0b44640a0a3cc3bb501a74b4c13d2b6b4975c9451044ec8ee69f3a7d",
+    "SamplingDeploy.SessionsIn": "99857991deb3c674327c159100265d18964d94aaa1e2e9fb073990566e81bcc0",
     "SamplingDeploy.commit": "52c8a78f01ada8e92f5bc5d41d5019b4a541e5d0e72ea6622b884f4421a8cc1c",
     "SamplingDeploy.deploy": "b4a41b32ef1c161a1c084622e19515a4cefa964b3823af9de2f4cb7409ba2f8f",
     "SamplingDeploy.deployOf": "9fc27f776f65f16e1d779798fc0afaeb23940ee0428bd553afcb435d9e8ef716",
@@ -47951,9 +47817,9 @@
    }
   },
   "Proofs.Flock.Claims.Sampling.Reg": {
-   "digest": "ead56550e1c6620f1db8061091afcee85be3c91ebc7cb5d360bbe32bde426bfe",
+   "digest": "6516229f634a499c0dced900e9c5688567c81c81cb19c6cca7607f9925053a4a",
    "definitions": {
-    "SamplingDeploy.Code.atOrder": "83991fc45819a14f1280e61d57bd87a425140123a5644eb6de7b80893a373c84",
+    "SamplingDeploy.Code.atOrder": "c9c6c79ebe69a96a8c2812bd44128bdb89b9c4d800890215d3ed13ebc0ccce4c",
     "SamplingDeploy.Order": "e792cfd93feb1130e3e08748fdee92779db92ee177866cbfe3128777efc8f4f5",
     "SamplingDeploy.Order.first": "d2cc2ae07afdf25872bca01cf6ce048ad81e0653fb1e1acb54205f89c431be64",
     "SamplingDeploy.Order.second": "f5e0bb21160cc6b2859b5086057f018a8cc21728044493990c0faacae00aaa84",
@@ -47978,7 +47844,7 @@
     "SamplingDeploy.RegTwo.templateAt": "70bffada2ca628b49f5ef1c4a69f7fd231769f51804bc07a8f794c2d2622c547",
     "SamplingDeploy.bytesFirst": "b22325e952197d5678dbdbbf62643a152fbded6e789826f85ed7c67a9754f41f",
     "SamplingDeploy.bytesSecond": "1b0c62bbc8f6089a2e7a2a684d4714931ccaa9cb0e4407919b47c9861fd62c50",
-    "SamplingDeploy.codeTwo": "b5163a646ee9308b2b496f6be2bdcf4523c075445a3006d38636b5e3db8c9b91",
+    "SamplingDeploy.codeTwo": "f9f8bd974e1b4ca5ee71976b5a9dac1d93f64a0cdc7be5b090ec87fb1c7904fb",
     "SamplingDeploy.codeTwoAt": "671fc8cf8cef54b6e7c78239c41874db7bab6edfa7fbbfc44d09bfd118be03e0",
     "SamplingDeploy.replayTwo": "e97056cbf61eca5b206aa8415c4c8fccef2a4b49c3d99c9cef58028feedf4750"
    }
@@ -50303,11 +50169,14 @@
    }
   },
   "Proofs.Flock.SamplingGeneric.Deployed": {
-   "digest": "39c97c6dadd54c502481ea996e4516e3048bb6da78756cdd1980441e932b1a89",
+   "digest": "ecafae4b387e839e4f7ecfb9fffe841f33b40fce510fb4195b01cb78b603a4db",
    "definitions": {
-    "Claims.SamplingGeneric.ofDeploy": "da2399ed0af3045f48879b675f186f15ba539cefbd97410e4e83ca1f5671aee9",
+    "Claims.SamplingGeneric.ofDeploy": "27e9d342b1504df7c0e815df487ac105d06ce80eae8c9a9480283ac5652140eb",
+    "Claims.SamplingGeneric.ofDeployAt": "e2636fe6f565c67efbb94fa076c708eaf8954a31d1972f84796ad2b364aa11e1",
+    "Claims.SamplingGeneric.κFAt": "56b5d4f3e9dcdf684db7f3728ff34bf00190ad3d65890e76b147885956beaf9f",
     "SamplingDeploy.Code.InteriorFixed": "aff62c2d86bc6627ee88a2c6e809352ead139afec8ec677001de378782b8ec3b",
-    "SamplingDeploy.compiled": "9f5fd3d13ac04e17f345574dd8b5e9ee80d7ac4560be0e501b684d4870b2d4d6"
+    "SamplingDeploy.compiled": "9f5fd3d13ac04e17f345574dd8b5e9ee80d7ac4560be0e501b684d4870b2d4d6",
+    "SamplingDeploy.compiledAt": "31b404a8834c1ab8860de983841eeff61ffef77ab6597abfc6de8ef8e7022b31"
    }
   },
   "Proofs.Flock.SamplingGeneric.Guarantees": {
@@ -50325,12 +50194,12 @@
    }
   },
   "Proofs.Flock.SamplingGeneric.TwoAt": {
-   "digest": "4f870833afb275504d529fc7b188018e37c5657358574a9c470988f0e7cb21d4",
+   "digest": "d7d3fc1292784ba7e1c2b8ace73a48d5a5d278861c1d7448df875fbdf2177494",
    "definitions": {
     "SamplingDeploy.CallsUniform": "843c1524d45050b8823823ed2154b5a9b3a1eda8b0662d004096ab45c5796cf0",
     "SamplingDeploy.rejV2": "b71044f828348b7a6b1927c95185b50016f758f394d3fef7be25cff41fc2a002",
     "SamplingDeploy.toyBytes": "f99781febbdb5bea67640621c729c901b1467344841a6847441f0d820f8c93af",
-    "SamplingDeploy.toyCode": "ca347286c524356c026787981818a76cff1a98406c1bf10ea601871286aa59e2",
+    "SamplingDeploy.toyCode": "9a270ff00c5d14c939f5fef658316c820b89e15057ab386d8057863bb1fdb4af",
     "SamplingDeploy.toyOrder": "1df79ebb8308638dd62bcb1c4c578d308e282939e77366429f979f8bdfe9331d"
    }
   },
@@ -50341,12 +50210,12 @@
    }
   },
   "Proofs.Flock.SamplingGeneric.TwoDeployed": {
-   "digest": "8d8973efe2e03433b311eb0f280ac6bed7692e3f25d03fa37ecafcb6024e81ec",
+   "digest": "ea21569b5cdc2936f6240b6ce370f48ce2402e6ee728723cb066155d4ce2a235",
    "definitions": {
     "SamplingDeploy.Code.RefusesTwo": "fb71a8bd7bbb835f632eb5b01629891c333db5c4e9c99ff5ea953210a834d47c",
     "SamplingDeploy.Code.ReplayCap": "298a260f38d15b41703db6644024563644e2efc4ff6bde4922c98692f8d0a0a6",
     "SamplingDeploy.Code.footOf": "26c847cb32d9917981de58b2addca7725aa4c51243368427e0105786cf19ced6",
-    "SamplingDeploy.compiledTwo": "51b89742752ac5c1a238648ab808628da6782a82de6f927441e6b0a4c955bd79"
+    "SamplingDeploy.compiledTwo": "f769ceaeb1605ddc3667206c2eff548c9b80b07c9267ab95ad9de253a2487e4c"
    }
   },
   "Proofs.Flock.SessionLoop.Concrete.Delta": {
@@ -53806,7 +53675,7 @@
    }
   },
   "Proofs.Flock.SpotFlock.Code": {
-   "digest": "b50e8c2d2560ee2e81127274faef67b8074e0058c32c8723f187ce98188dc761",
+   "digest": "f7aa5d2ad03102954d1bc9d13d400e2c912c0a315dae7fcf4cc8e9bdad054db8",
    "definitions": {
     "SpotFlock.FORMAT": "2818de3be25a09deb304c2f9123c88ee1a94d1618993288ee535b1cb350d0d56",
     "SpotFlock.Held": "cc5b31e596cc61ffd159bb4e1db5be76a7adae95e6ab8ca01fe85ad3b90a21b3",
@@ -53828,7 +53697,7 @@
     "SpotFlock.Roots.read": "52ce375b070c781247e74bb2dd3d82f93ed596b79cb0db75e5de7badc6024499",
     "SpotFlock.Roots.roots": "de99793b212e2ccb59facc19cb27249342f0e49ecf6c9199f57d2e221a1d6d54",
     "SpotFlock.V": "b6d6c3afcd221335ddb3f1154d389c1a787652119de8c802b6bf675f9d4509d3",
-    "SpotFlock.base": "26e44c396f5cadd71278f76cda488dded8248d440880ec82fb21af090067af0b",
+    "SpotFlock.base": "1956a8c8e12fc4030268619dd7421dfb4dd67d9111b7ed692d78527876f2ed17",
     "SpotFlock.code": "630fc82f4cbbda717e77b63f3f813a5cc7644dd08f59c260a9053657c290838f",
     "SpotFlock.coinByte": "43927e511fb1a08e5466102b42a5299ff18dfcce23d44a15b9f4f051c0dfa44c",
     "SpotFlock.constAt": "750c06f31897d99e7a2754f10a89663282019f01e71579e19f2c4ebd1c67de7e",
@@ -55459,7 +55328,7 @@
    }
   },
   "Spot.OneStage": {
-   "digest": "6d77d80c47d4320f31284d16bc0cd5890e4a5630d3864d9043641c09d3680620",
+   "digest": "9097cfed075bd35eeb6f4f8e2bd5c3778a2758f8467ec89f4685d5e3de5267a8",
    "definitions": {
     "Spot.OneStage.Commitment": "a73c4a90f1c2b83c2840decc48593e672266092719b09da7b4c08282e3862285",
     "Spot.OneStage.Commitment.digest": "5ad7187d0b69df894ed454b1cef1a4593b7e2e8dd1d831e2b80ef6726c4b6e46",
@@ -55493,11 +55362,12 @@
     "Spot.OneStage.coinsWhy": "d2348a8b48bdc5bde91263fc72b80320eb9d3048ff53317b5d2a985f9d71e700",
     "Spot.OneStage.commitmentOf": "545bdd6dcd795cb086ecfe46bb7a34720a759c018d2082b6593bad74ac6be5b6",
     "Spot.OneStage.coveredDesign": "747cd2e2ad73ebf176471b7984c746e0f1ab862eb8a96a128370af38365eaa32",
+    "Spot.OneStage.design": "ae6dc3cfe51dd3509c97a3ec788fca569bdccb8097b227c4a85876d77f2f9ca8",
     "Spot.OneStage.drawnFrom": "5f173518c14bc380f20113c0b99c3d5a869c6b883ad400ca05dcec0c1946f254",
     "Spot.OneStage.evidenceOf": "0f542f2c31def5b78e5ee6d5ab4840e0562b7f0d1cbc768a31246226c9202e77",
     "Spot.OneStage.evidenceParsed": "b41893c95a243f5b9929c68df678f3483f8fa40523b96850745107b669388aad",
     "Spot.OneStage.paramsOfJson": "999d78a093de5052bca080e42c16b5b7b6ed73744fd42218f09e6f3f34202362",
-    "Spot.OneStage.paramsParsed": "5792d42b8dc06f3b5fc67e801e0aa2ed3a38f89ce4d628f20f29a1cc573412ff",
+    "Spot.OneStage.paramsParsed": "e40d303303a36f9eb1e6ec95a248a6cee2156a715a1b8fcb70247f047d399ca7",
     "Spot.OneStage.publicJson": "1eecfca42c0f31de9d361496f31e2620a0c17671e0b9ff47d59552ef11d92e14",
     "Spot.OneStage.recordChecks": "c8f06b53e4b19f87065742547208d843a2f54ebaa146f2581da7b9fceca4eb39",
     "Spot.OneStage.rule": "7ba31f61033f83f3ac5b2be2fd9efd65b893824765e65ede6a53be4109fd4abb",
@@ -55506,7 +55376,7 @@
     "_private.Spot.OneStage.0.Spot.OneStage.logRecord": "2ee6c89989a0e9077f6e2e3d565fe9401b48d3c2e0fabc52908e0333e765517e",
     "_private.Spot.OneStage.0.Spot.OneStage.nats": "73351bcc555d722e7547ba91932388158ad080e5adab13a24503146004be20d9",
     "_private.Spot.OneStage.0.Spot.OneStage.obj": "49d70ec725a2c403c26bcdd493f11cbcdd9f313b74dfe118349e9052e866abff",
-    "_private.Spot.OneStage.0.Spot.OneStage.poolOf": "0ea643c5a5dcc21b01c5d82d66b87958a27a9dc14e5362f3e7a990d05c397fad",
+    "_private.Spot.OneStage.0.Spot.OneStage.poolOf": "fa73781de4867f73a7fe0f36a06d72bf08ed6b5cf4d3a3859f6df9aab3d0c3be",
     "_private.Spot.OneStage.0.Spot.OneStage.poolValues": "090db22a554076342258069372f739a3d10c755192e1274d5afdacdca9b31dd8",
     "_private.Spot.OneStage.0.Spot.OneStage.withField": "b341041c23d2a8e33b1bebc3515c3c53c196cf4285e0c2df875f630f7c0ed0d1"
    }
@@ -55660,6 +55530,15 @@
     "_private.Spot.PyJson.0.Spot.PyJson.scaled": "b77012e1f013aca541e3039128e6b9e108eb58e82c410e95a701e4a16557b8de"
    }
   },
+  "Spot.Rate": {
+   "digest": "142053e320ecadab260d8d99336cfe8bf1314404c65562a12e164d4294d7ca91",
+   "definitions": {
+    "Spot.Rate.count": "cfa90464ebe2462e14980815cc01ea2e0a9160c8ae7db3feff08cd8372677541",
+    "Spot.Rate.floor": "5315cb9b9f43964f7207f192dc136fa908ce5fd576ea12002c3376a0254e94f2",
+    "Spot.Rate.need": "58140f39f35c5bc5e0dabf7dd3690f5c49270ad921c52d356033f7a5c19d4542",
+    "Spot.Rate.stratK": "fee35af0212dae447096c6ec3fe450001c867ed29dbba8f202daa48e79ea02f1"
+   }
+  },
   "Spot.Record": {
    "digest": "d896083664d82903902d747f5e73eb2169f7d32c5ddca44ec76bdde7223f4a5b",
    "definitions": {
@@ -55705,7 +55584,7 @@
    }
   },
   "Spot.Registration": {
-   "digest": "92fb81b958e2ec31a899ebe21e57b6d661218ee550a42621b1f65134ef0746c5",
+   "digest": "26ebeb09cc8bd560f84fd630728d302d2c351e2dcdb56f929eb391fa294dea23",
    "definitions": {
     "Spot.Registration.Earlier": "38a79710ad138599f5f588962cb4957cde8a4a01c11545392f3680d085ffcf5f",
     "Spot.Registration.Earlier.casesOn": "d0ab5c2e32c2df5ff9add433ab5d601ac1a837f07bd68cc17d3188665ddc2d16",
@@ -55716,14 +55595,17 @@
     "Spot.Registration.KEYS_V2": "3166a9ef04172b41490e12f217874e42cbb8e114ecf3b9babcb235591ff31096",
     "Spot.Registration.KINDS": "7a762e49a980bb8e3c092ddcaabfe9973d14fbf09a8268ddf27c25a7ad985e79",
     "Spot.Registration.PROTOCOL": "330d68f67ef9d6e804136c05aea8b5797dd550bbff719b93009b9251f93179ff",
-    "Spot.Registration.Pool": "012469b4cf7e4518d5490e415d9e5037f6048a08c0fbbe6dd9a5d7dc7c407ad7",
-    "Spot.Registration.Pool.chains": "b3cde7aa967ac1e4e5ff40f7e6f2378c553555897b2650bfb8abc46bb235afee",
+    "Spot.Registration.Pool": "dad367aa3770926924e6f4ce780af47a7aee184a012e681e861ba06b9fd3915a",
+    "Spot.Registration.Pool.chains": "afa037da94e467ae76f976d4038f72552a312300334b240dcea48e1ab12277fe",
     "Spot.Registration.Pool.genesis": "8c785fd9c805683e19c1f016a201123516b2da2c316f0d26f4644949cf4fe3eb",
+    "Spot.Registration.Pool.lag": "d5b7e19b4e308e5681cc5fc7614f0eea8ddd72f6fb8b7574000a8dbedb0287b2",
     "Spot.Registration.Pool.pin": "ede35058f38d2655d5e678c8e1a3f4937c7251d36069b30f6cad9322b55ab7c3",
     "Spot.Registration.Pool.pout": "d3693b6beb1228fac43e73c56592cde2b24443e7d8f38d7f848bddaecf09cb63",
-    "Spot.Registration.Pool.refused": "cebbe3a1c0c103a4d6ebac42b27a8ca15632a375e0abf42234c8530cc8ecf5ca",
-    "Spot.Registration.Pool.reset": "951e8a812c7220b09fd367b0c0f9a3b9e5d94109d6c21a5898d2064e955ea325",
-    "Spot.Registration.Pool.spent": "adc31cfdf99260374209e56900e4cd161a3d011d748088c17a63d55ab6eceeeb",
+    "Spot.Registration.Pool.refused": "d3440f743fd910748f54cebcc8074800d62b2443c3b77264a11f10c27c95be36",
+    "Spot.Registration.Pool.reset": "7377e2cc403c9ca34484fa0da38221c1741455dcac982fa0180d52581bdfd0b9",
+    "Spot.Registration.Pool.spentBefore": "6551e6263f04e26a89e3b56be56892b0a9676fdd0ebab7e10ab441e64f196f6b",
+    "Spot.Registration.Pool.verdicts": "b0e03f50593351246758b1d547d4e81b776afc46c8263ee31f5997e1c618e0c2",
+    "Spot.Registration.Pool.week": "435645f8f030f26bb5227425e6fcce8a73e3f962cd64e77ab5e46e40e4963a50",
     "Spot.Registration.PortIndex": "a57bf9d4f61b2bf92b50716ae722d467694518dd183026ec32992a03064f70d1",
     "Spot.Registration.PortIndex.add": "edfc0ae205e33280efb4f8e4527baaa5ea5dd87886dd7a9069e684c640130b73",
     "Spot.Registration.PortIndex.casesOn": "1a054def79f4f099e40209d9be53ff3d7c2c76d62d60ea0d5acd4605c4caf473",
@@ -55758,7 +55640,7 @@
     "Spot.Registration.Verifier.workTable": "5168d61b1a397b0e44483525077ec84869641d8b00306c3c0fc80320c9ef87f2",
     "Spot.Registration.applyOutput": "aa52307ebbf1045737a64458522798582d2a621a5f1a4fd83c1a3b5683dc09ba",
     "Spot.Registration.applyOutputs": "3ca64b38bc80309cc1017365446b3e4db37a956c8ed3ca9b0b9b17744973a9e4",
-    "Spot.Registration.check": "7c07ee69d1791d9868668f614d1dfe1e201f0d419bd1d50c6a89ebe962e59948",
+    "Spot.Registration.check": "aceae0b6af1bf74316057c89c9f88e8e09691b5fc98e4126389db64caa44e85e",
     "Spot.Registration.checkOutputs": "9498a405cb15e09b4f441c8e91177bed68f6fdbe00c99b24962a8ebec206e5d0",
     "Spot.Registration.checkRegistered": "cb67dff3f9efc0829f675eb68a4a79361f38c1d1ce2c97ea210cfe03f203e6ee",
     "Spot.Registration.declaredCode": "ba72591986fa52bc2832f36e5497f1a0813f72402ee1304be0ac209db0eb60f1",
@@ -55774,19 +55656,22 @@
     "Spot.Registration.outputValue": "75269f85623913e424951d3a390dec99521ef2b5129790eb85968e8dbfdd1fe7",
     "Spot.Registration.ownEntries": "babf0231349e26ad72ca67baf9251622bb6b8a18c04d7c08ea52567a811eb571",
     "Spot.Registration.poolChained": "177b0370bcf640190948cbb70b767d3d9d0fbf8b4c61008010584135533b1abb",
+    "Spot.Registration.poolMarks": "fc9c8d707486b4d9d5b1c40df9916859c64f21d07b1de139e41c9c9af3109262",
     "Spot.Registration.poolOpen": "2807178b51567c0b300abc5c16402725d77381d634267201811eebb8ac98aee9",
     "Spot.Registration.portIndex": "149382f90d91140aafab7d0d82a0f9294fd6dd65d225ec1a87153c4588ee8fe1",
     "Spot.Registration.queryDigest": "9af0e784aa6af4426bc77a9a26689df4f072b46108735d5d2712ed34cca6e7b7",
     "Spot.Registration.unwindowed": "921f423113f6fcec3e66971c414f293929f247d8b4a86b7b9a035410bd9898b4",
     "Spot.Registration.valueRoot": "f5a3f3c1a434b1796cebb3810338b821f60d0bf698d27f956435b699300b5819",
     "Spot.Registration.widthOf": "ed1e7d7c5ca5a4a595f3983ef5a3c84cb99615246c243e39070fa9dcfc742d7a",
-    "_private.Spot.Registration.0.Spot.Registration.onceOk": "b9700d9d2886e925d13636714c2dd5dbb454c86ee1562bc6afc3ec5dae2441fb",
+    "_private.Spot.Registration.0.Spot.Registration.onceOk": "f32b5bdac5f4671b021db5bee7715b0e2c3e99ad3d87df01926cadf005aac8a7",
     "_private.Spot.Registration.0.Spot.Registration.optReset": "ce1c40b9aef4dbc7ba370834a16658a7777c7e961e7a25dc4be7dcf63c4a160a",
-    "_private.Spot.Registration.0.Spot.Registration.optStr": "7f4e416d58347fd1a8ee3d1cb12c9280dd6d45b15079ad1509faa856c7704521"
+    "_private.Spot.Registration.0.Spot.Registration.optSpent": "1600c4a436169c987e463ec5e96693088415777b74ba2e3702b1e6f3243ecc11",
+    "_private.Spot.Registration.0.Spot.Registration.optStr": "7f4e416d58347fd1a8ee3d1cb12c9280dd6d45b15079ad1509faa856c7704521",
+    "_private.Spot.Registration.0.Spot.Registration.optWeek": "11c26997de2e58791eb01ce290e327ada6d6a1ce980c0a4dbda36ab9feb4d77a"
    }
   },
   "Spot.Select": {
-   "digest": "3af5fc94e8eb650712dc7ac2bfe45094a3650ce660285af44594c547d2ec399c",
+   "digest": "90bf38825e4c5f7236715bf41f704e543cae139071d8240afd189f5856b61a53",
    "definitions": {
     "Spot.Select.Counts": "2e33b2798b55b40b4b75a8ad1872035306d6a5171c82830a7982e4286890d3ed",
     "Spot.Select.Counts.each": "6662fd5b99a8dce5d39f1b90444f95bf2e5609777cda116202bcd6fb3a15a84f",
@@ -55797,14 +55682,20 @@
     "Spot.Select.Rule.ctorIdx": "85e38848e6358e5467ed7af567160f0e9d25c49e17b5a29da9b103cf32f51562",
     "Spot.Select.Rule.law": "af04f464c89da336f50a1b744e513d2c1eaedc7947fd94c55d1c2bb0b0ca46de",
     "Spot.Select.Rule.lawOver": "410bc0a1ac100752e20b034c7dd241c36527244f630e2e01e08726f5b8863d35",
+    "Spot.Select.Rule.over": "5c68cd6852f0d08b9f99b94988bbb4dacf40b90e3b52d2b43dfc6a37ce6f73e1",
     "Spot.Select.Rule.rec": "dd02fb0216952bff99e435447b8ef31bd58db23b403211317503e5ff5e82138d",
+    "Spot.Select.Rule.tableOver": "d9fd0ec66dc476a738529f93cf15591c9f54ca6e15d97607c1825625c1c641f4",
     "Spot.Select.Rule.twoStage": "b78da5379058d42cc74963db9a8c2be18efef9cdefcdfa8804577ff68965500e",
     "Spot.Select.cellObj": "f922afb9208d9e88ab81d3e10af1654a79c8240978f67ba9a4afecbbced92d1c",
     "Spot.Select.parseDesign": "86dc56daf98efc47d02553adcdbac8ecafe0cc30160f0075121df9193d95e097",
+    "Spot.Select.parseRate": "7928f239ed399dfb87ee43f70881838921e398d8f4dae20951048d366b8e814d",
+    "Spot.Select.parseStrataRate": "0789a937086824062e83f975a9389c34425b5f70e9d273dc7eefcbf66524cab9",
     "Spot.Select.secondLaw": "188e997d8f123192b27d148afb46d00a41450be1e2c20862ea1a22739e922c63",
     "Spot.Select.secondProblem": "0cd1beb3f8acc5d9de6bdd996650b81a6f2a340863f384b34efa62cb2c605ba7",
     "Spot.Select.select": "37c079d53f5b0fcd128e1b82bdb0e6736c1c4947aba564936134c951c5738c21",
     "Spot.Select.selectSecond": "efec5299579f880c15dbf965e4a6c9d55910b06ed47b26f56358fc1b0ee8639b",
+    "Spot.Select.strataSizes": "1f268bbd851d388888435eb61dea2c816a13059dfce51a0ae5b9f79ed17a0702",
+    "Spot.Select.textOver": "b247eab471f6e1357ab5fbaa359d256dafff9ea7ff8055f566cf8a3086ab3ab9",
     "_private.Spot.Select.0.Spot.Select.digits": "87c7fd438f54182c0bfd410dfa239a6895f4b1277de9965eeadc010b2e051d8f",
     "_private.Spot.Select.0.Spot.Select.inRange": "3e8302bc5b8fbb76dd7598526ed2b694ba338d5ff9c22327ee43c8a0fc13c05d",
     "_private.Spot.Select.0.Spot.Select.split1": "93d235224ab77c221cd0d830d327962ca2647f734f774bce82e1ac16b4639df7"

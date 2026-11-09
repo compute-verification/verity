@@ -141,12 +141,14 @@ class Boundary(NamedTuple):
     needed: tuple[Needed, ...]
     when_closed: re.Pattern[str]
     residue: tuple[Residue, ...] = ()
+    #: the fetched fixtures the export ships as tracked files (`public_export.fixtures`)
+    fixtures: re.Pattern[str] = re.compile("(?!)")
 
     @classmethod
     def load(cls, doc: dict | Path = BOUNDARY) -> Boundary:
         if isinstance(doc, Path):
             doc = tomllib.loads(doc.read_text(encoding="utf-8"))
-        if other := sorted(set(doc) - {"public", "private", "needed", "when_closed", "residue"}):
+        if other := sorted(set(doc) - {"public", "private", "needed", "when_closed", "residue", "fixtures"}):
             raise ValueError(f"the boundary has keys it doesn't read: {other}")
         residue = []
         for e in doc.get("residue", []):
@@ -168,7 +170,7 @@ class Boundary(NamedTuple):
             needed.append(Needed(e.get("why", ""), globs(e["paths"]), None if src == "*" else frozenset(src),
                                  None if via == "*" else frozenset(via)))
         return cls(groups, dict(doc.get("public", {})), globs(p for ps in doc.get("private", {}).values() for p in ps),
-                   tuple(needed), globs(doc.get("when_closed", [])), tuple(residue))
+                   tuple(needed), globs(doc.get("when_closed", [])), tuple(residue), globs(doc.get("fixtures", [])))
 
     def group(self, path: str) -> str | None:
         return next((g for g, r in self.groups.items() if r.fullmatch(path)), None)
