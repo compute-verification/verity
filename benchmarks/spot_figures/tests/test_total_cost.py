@@ -43,14 +43,23 @@ def test_a_request_line_is_plotted_at_every_registration_and_compared_in_the_set
         gpus * window, t.POD * gpus * window, c["datacenter_machines"].value * gpus * window]
 
 
+def _falling(gap: float = 1.0):
+    """A bound of 1e6 bits times the overhead's multiple over β, Lean's `gap` times the planner's."""
+    def bound(line, scale, beta, lean=False):
+        y = 1e6 * scale / beta * (gap if lean else 1.0)
+        return {"y": y, "count": y, "binds": "count"} | ({"lean": True, "planner": y / gap} if lean else {})
+    return bound
+
+
 def test_a_break_even_bisects_to_its_target_and_says_when_none_is_in_reach(monkeypatch):
     """The overhead's multiple at which a bound rising in it reaches the target, and the β at which a bound falling in
-    β does, each within its tolerance; None when the span's best end is above the target, the end when its worst is
-    below; and the floor at the least overhead."""
-    monkeypatch.setattr(t, "_bound", lambda line, scale, beta: 1e6 * scale / beta)
+    β does, each within its tolerance on the side where the bound is at most the target; None when the span's best end
+    is above the target, the end when its worst is below; and the floor at the least overhead."""
+    monkeypatch.setattr(t, "_bound", _falling())
     h = t._solve(("h", 1e3, None, 0.01, 1e-3))
-    assert h == pytest.approx(1e-5, rel=2e-3)
-    assert t._solve(("beta", 1e3, None, 0.01, 1e-3)) == pytest.approx(1e3, rel=2e-3)
+    assert h == pytest.approx(1e-5, rel=2e-3) and h <= 1e-5
+    beta = t._solve(("beta", 1e3, None, 0.01, 1e-3))
+    assert beta == pytest.approx(1e3, rel=2e-3) and beta >= 1e3
     assert t._solve(("h", 1e-12, None, 0.01, 1e-3)) is None and t._solve(("h", 1e30, None, 0.01, 1e-3)) == 1e2
     assert t._solve(("beta", 1e-12, None, 0.01, 1e-3)) is None
     assert t._solve(("h", None, None, 0.01, 1e-3)) == pytest.approx(1e6 * 1e-12 / 0.01)
@@ -58,6 +67,54 @@ def test_a_break_even_bisects_to_its_target_and_says_when_none_is_in_reach(monke
           "rows": [{"config": "tokens", "registration": "pod", "scope": "world week", "overhead": 2.0, "floor": 8e6,
                     "h": {"FP8": 2e-5}, "beta": {"FP8": None}}]}
     assert t.breakeven_table(be).splitlines()[1] == "(A) | pod | world week | 2 | 1 MB | 2e-05 | none"
+
+
+def test_lean_certifies_a_break_even_at_or_past_the_solved_point(monkeypatch):
+    """Lean's certificate is the solved point where Lean's bits are at most the target, else the first step outward
+    where they are (up in β, down in the overhead), each step twice the last, and none past `STEPS` steps; the floor
+    is Lean's bound at the least overhead."""
+    monkeypatch.setattr(t, "_bound", _falling(1.0025))
+    beta = t._solve(("beta", 1e3, None, 0.01, 1e-3))
+    cert = t._certify(("beta", 1e3, None, 0.01, 1e-3, beta))
+    assert cert["at"] >= 1002.5 and cert["at"] == pytest.approx(beta * 1.001 ** (2 ** cert["steps"] - 1))
+    assert cert["steps"] >= 2 and cert["at"] / 1002.5 <= 1.001 ** 2 ** (cert["steps"] - 1)
+    assert cert["y"] <= 1e3 and (cert["lean"], cert["binds"]) == (True, "count")
+    h = t._solve(("h", 1e3, None, 0.01, 1e-3))
+    cert = t._certify(("h", 1e3, None, 0.01, 1e-3, h))
+    assert cert["at"] <= 1e-5 / 1.0025 and cert["y"] <= 1e3
+    assert t._certify(("beta", 1e3, None, 0.01, 1e-3, None)) is None
+    monkeypatch.setattr(t, "_bound", _falling(1.1))
+    cert = t._certify(("beta", 1e3, None, 0.01, 1e-3, t._solve(("beta", 1e3, None, 0.01, 1e-3))))
+    assert (cert["at"], cert["steps"]) == (None, t.STEPS) and cert["y"] > 1e3
+    floor = t._certify(("h", None, None, 0.01, 1e-3, 1.0))
+    assert floor["y"] == pytest.approx(1.1e6 * 1e-12 / 0.01) and floor["at"] == t.SPANS["h"][0]
+
+
+def test_the_break_even_table_shows_what_lean_certifies(monkeypatch):
+    """With Lean, each patterns'-form line's row carries a certificate for its floor and each break-even, an overhead
+    for `h`, and the table prints those, marking where the served bits bind and where Lean doesn't certify one."""
+    def solve(job):
+        what, target = job[:2]
+        return 3.0 if target is None else 0.5 if what == "h" else 0.07
+
+    def certify(job):
+        what, target, *_, x = job
+        return {"at": None if what == "h" and (target or 0) > 4.5e12 else x, "steps": 0, "y": 8e6,
+                "binds": "served" if what == "beta" else "count", "count": 9e6, "lean": True, "planner": 8e6,
+                "theta": 1.0}
+
+    monkeypatch.setattr(t, "_solve", solve)
+    monkeypatch.setattr(t, "_certify", certify)
+    be = t.breakeven("GLM-5.3", ("world week",))
+    assert be["lean"]["exe"] == t.plancheck.EXE
+    assert [r["config"] for r in be["rows"]] == [n for n, c in t.CONFIGURATIONS.items() if c.form == "patterns"]
+    for r in be["rows"]:
+        assert r["lean"]["h"]["FP4"]["at"] == pytest.approx(0.5 * r["overhead"]) and r["lean"]["h"]["FP8"]["at"] is None
+        assert r["lean"]["beta"]["FP8"]["at"] == 0.07 and r["lean"]["floor"]["y"] == 8e6
+    row = t.breakeven_table(be).splitlines()[1].split(" | ")
+    assert row[4:] == ["1 MB", "uncertified", f"{0.5 * be['rows'][0]['overhead']:.3g}", "0.07 (served)",
+                       "0.07 (served)"]
+    assert t.breakeven("GLM-5.3", ("world week",), lean=False)["rows"][0].get("lean") is None
 
 
 def test_a_partition_card_cuts_the_circuit_and_keeps_its_macs():

@@ -198,7 +198,7 @@ PRs land through the merge queue (`research queue drive`): its flags are `drive.
 PR. Reviewed PRs land on `checked` (`land_into`); after each landing, one run of the full check checks `checked`'s tip
 with every job, those off the gate too (`train.sh --deferred`), and `main` moves only to a commit whose run passed every step
 on the gate, where `post_train.py` runs the vLLM regression's rebuilds. A red names its culprit by what its failure names,
-never by bisecting: its lane marks a fix within 2 h, or drive reverts it on `checked` (`research.drive`), but a warn step's
+never by bisecting: its lane marks a fix within 30 min, or drive reverts it on `checked` (`research.drive`), but a warn step's
 (drive.toml's `warn_steps`) is never reverted, and its lane fixes it forward in its next PR; a red job off the gate doesn't
 hold `main`. The team skill's "Landing" is the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its
 body) lands from `next` too: drive regenerates it on the tip below it and lands it only if `move_check.py` certifies it there

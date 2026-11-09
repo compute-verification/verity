@@ -24,8 +24,13 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `select_second`: a two-stage rule's second stage, `ks[t]` proof blocks of each cell (a sampled replay block's
   instances of template `t`), from given bytes of the challenger's coins, with the number of bytes it read
   (`Select.selectSecond`);
+* `second_statements`: round 2's statement check of second-stage sessions' statements against the interior
+  registration and the second stage's cells, the two-stage form allowed or not (`SecondStage.check`);
+* `replay_links`: the design's links, from the replay block's Definition in a program (`SecondStage.replayLinks`);
 * `slots`: the claims' partition over the program and query, and the slots of that sample's checked proof blocks
   (`Slots.select`);
+* `fits`: what of v2's inputs and of a session's draw a session's statement would hold at a given number of bytes or
+  more (`OneStageZk.fitsWhy`, `OneStageZk.drawFitsWhy`), which v2 refuses at `2^64`;
 * `file_population`: why the registration's population over a program and query is not a public file's units in order
   (`FilePart.why`);
 * `bound`: the exact bounds on incorrect proof blocks at δ;
@@ -42,8 +47,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `check_public`: the proof system's public-items rule on a registration record (`Service.checkPublic`);
 * `check_verdicts`: the verdicts' share of a proof system outcome (`Service.checkVerdicts`);
 * `run`: the stream's run of one registration from its public check through its verdict (`Run.run`);
-* `template_circuits`: a two-stage run's params naming each template's circuit file by SHA-512, as pairs in the
-  check's order (`Run.templateCircuits`);
+* `template_circuits`: a two-stage run's params naming each template's circuit file by SHA-512 and its statements'
+  reference header, as triples in the check's order (`Run.templateCircuits`);
 * `stream`: the proof system stream's own rules, one op's decision on what they hold of the stream (`Stream.run`);
 * `fleet`: the fleet's rules over its streams' operators, one op's decision on what they hold of the fleet (`Fleet.run`);
 * `hello`: the run's Hello on its record, its coin tree at run scope (`Hello.check`).
@@ -101,6 +106,7 @@ public import Spot.Produced
 public import Spot.HiddenDraw
 public import Spot.PartitionRef
 public import Spot.WiresDrawn
+public import Spot.OneStageZk
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -573,10 +579,10 @@ hex source, `check_public`'s values and declared items, the challenger's name an
 (strings), `check_verdicts`' sessions, verdicts and outputs, and `record`'s statement, δ, served units and session roots,
 with the proved units and instances null for the sample's own, and the coins' evidence (`coins_reason`'s, which a sample
 that read coins must carry); under a two-stage rule, `interior` (`Run.Interior`): `{"params", "replay", "values",
-"record", "received", "source", "coins", "proved_units", "instances", "served", "session_roots"}` in the same forms,
-`replay` one replay block's program object, its params' `proofs` the auditor's naming each template's circuit file
-(`Run.templateCircuits`), and null otherwise. The verifier flips no coins of its own: an input whose `coin_source` is
-not the challenger's is refused. -/
+"record", "received", "source", "coins", "proved_units", "instances", "served", "session_roots", "statements"}` in the
+same forms, `replay` one replay block's program object, its params' `proofs` the auditor's naming each template's
+circuit file and reference header (`Run.templateCircuits`), and no `links`, which the verifier derives; null otherwise.
+The verifier flips no coins of its own: an input whose `coin_source` is not the challenger's is refused. -/
 def run (j : Json) : V Json := do
   let p ← params (getD j "params")
   let rule ← Select.Rule.ofJson (getD j "rule")
@@ -627,19 +633,98 @@ def run (j : Json) : V Json := do
       let values ← valuesOf (getD it "values") "an interior's values"
       let source ← Flock.unhex (← Flock.J.str it "source" "the interior")
       let instances ← instancesOf (getD it "instances")
-      pure (some (Run.Interior.mk ip replay values (getD it "record") received source (getD it "coins") provedUnits
-        instances (getD it "served") (getD it "session_roots") circuits))
+      let statements ← match getD it "statements" with
+        | .null => pure none
+        | .arr ss => pure (some ss)
+        | _ => throw "an interior's statements is a list"
+      if (field? it "links").isSome then
+        throw "an interior names no links: the verifier derives them from the replay block's Definition"
+      pure (some ({ params := ip, replay, values, record := getD it "record", received, source, coins := getD it "coins",
+                    provedUnits, instances, served := getD it "served", sessionRoots := getD it "session_roots",
+                    statements, circuits } : Run.Interior))
   Run.run { params := p, record := getD j "record", rule, values, declared, challenger, received,
             source := ← Flock.unhex (← Flock.J.str j "source" "the run"), closure, sessions, verdicts, outputs,
             statement := getD j "statement", delta := getD j "delta", provedUnits, instances,
             served := getD j "served", sessionRoots := getD j "session_roots", coins := getD j "coins", interior }
 
-/-- `{"proofs", "query"}` to `{"circuits": [[template, circuit], ...]}`: a two-stage run's params naming each template's
-circuit file, as pairs in the order the check's template query names the templates (`Run.templateCircuits`); refused
-where the Python raises. -/
+/-- `second_stage.check`'s input to its verdict (`SecondStage.check`): the two-stage form allowed or not (`allow`), the
+first stage's replay sample, the interior program and query, whose strata make the parts, the interior and boundary
+registrations' records, the second stage's units (`drawn`), the design's links (`replayLinks`'), null for none, the
+verdicts, whose verifiers of record report the sessions' reads (`Record.sessionRegistered`), the reference header of
+each template's statement (`refs`, `{template: header}`, null for none), and the statements, null for none. -/
+def secondStatements (j : Json) : V Json := do
+  let .bool allow := getD j "allow" | throw "allow is not a boolean"
+  let .arr ss := getD j "sample" | throw "sample is not a list"
+  let some sample := ss.mapM nat? | throw "sample is not a list of replay blocks"
+  let .arr ds := getD j "drawn" | throw "drawn is not a list"
+  let some drawn := ds.mapM nat? | throw "drawn is not a list of slots"
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let .obj _ := getD j "query" | throw "query is not an object"
+  let links ← match getD j "links" with
+    | .null => pure none
+    | ls => match SecondStage.linksOf? ls with
+      | some ls => pure (some ls)
+      | none => throw "links is null or a list of {template, port, value}, strings"
+  let .obj _ := getD j "verdicts" | throw "verdicts is not an object"
+  let verdicts := entries (getD j "verdicts")
+  unless verdicts.all fun (_, v) => (v matches .obj _) && (!(truthy (getD v "of_record") &&
+      jeq (getD v "accepted") (.bool true) && (getD v "registered" matches .obj _)) ||
+      (entries (getD v "registered")).all fun (_, e) => (getD e "value" matches .str _) && (field? e "root").isSome) do
+    throw "a verdict is not an object, or one of record reports reads that are not objects with a string value and a root"
+  let strata ← Partition.strata (← Program.parse (← Flock.canon (getD j "program")).toUTF8) (getD j "query")
+  let stmts ← match getD j "statements" with
+    | .null => pure none
+    | .arr xs => pure (some xs)
+    | _ => throw "statements is not a list"
+  let refs : Array (String × Json) ← match getD j "refs" with
+    | .null => pure #[]
+    | rs@(.obj _) => pure (entries rs)
+    | _ => throw "refs is not an object"
+  let own : SecondStage.Own :=
+    { sample, parts := SecondStage.parts sample.size strata, interior := getD j "interior",
+      boundary := getD j "boundary", drawn, links, reported := Record.sessionRegistered verdicts, refs }
+  return (SecondStage.check allow own stmts).toJson
+
+/-- `second_stage.replay_links`' input to the design's links (`SecondStage.replayLinks`): a program object, the replay
+block's descriptor id in it (`replay`) and the boundary registration's record; null for none. -/
+def replayLinks (j : Json) : V Json := do
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let .str key := getD j "replay" | throw "replay is not a string"
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  return match SecondStage.replayLinks p.prog key (getD j "boundary") with
+    | some ls => Json.arr (ls.map SecondStage.Link.toJson)
+    | none => .null
+
+/-- `{"limit", "circuit", "public", "tables", "program", "partition", "registered", "draw"}` to `{"inputs", "draw"}`: what
+of v2's inputs (`OneStageZk.fitsWhy`) and of a session's draw (`OneStageZk.drawFitsWhy`) a session's statement would hold
+at `limit` bytes or more, each null for nothing. The files are hex, the tables `[name, hex]` pairs, the program hex or
+null, and the partition object, the registered reads and the draw null for none. -/
+def fits (j : Json) : V Json := do
+  let some limit := nat? (getD j "limit") | throw "limit is not a natural number"
+  let circuit ← Flock.unhex (← Flock.J.str j "circuit" "the lengths")
+  let pub ← Flock.unhex (← Flock.J.str j "public" "the lengths")
+  let .arr ts := getD j "tables" | throw "tables is not a list"
+  let tables ← ts.toList.mapM fun
+    | .arr #[.str n, .str b] => do pure (n, ← Flock.unhex b)
+    | _ => throw "a table is not its name and its hex"
+  let program ← match getD j "program" with
+    | .null => pure none
+    | .str b => some <$> Flock.unhex b
+    | _ => throw "the program is not hex or null"
+  let given (k : String) : Option Json := match getD j k with
+    | .null => none
+    | x => some x
+  let why := fun (w : Option String) => w.elim Json.null Json.str
+  return Json.mkObj [
+    ("inputs", why (OneStageZk.fitsWhy limit circuit pub tables program (given "partition") (given "registered"))),
+    ("draw", why (OneStageZk.drawFitsWhy limit (given "draw")))]
+
+/-- `{"proofs", "query"}` to `{"circuits": [[template, circuit, header], ...]}`: a two-stage run's params naming each
+template's circuit file and its statements' reference header, in the order the check's template query names the
+templates (`Run.templateCircuits`); refused where the Python raises. -/
 def templateCircuits (j : Json) : V Json := do
-  let pairs ← Run.templateCircuits (getD j "proofs") (getD j "query")
-  return Json.mkObj [("circuits", Json.arr (pairs.map fun (t, c) => Json.arr #[Json.str t, Json.str c]))]
+  let named ← Run.templateCircuits (getD j "proofs") (getD j "query")
+  return Json.mkObj [("circuits", Json.arr (named.map fun (t, c, h) => Json.arr #[Json.str t, Json.str c, h]))]
 
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("unit_gates", unitGates),
@@ -648,12 +733,13 @@ def table : List (String × (Json → V Json)) :=
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
    ("file_population", FilePart.piece),
    ("check_proved", checkProved),
-   ("select_second", selectSecond),
+   ("select_second", selectSecond), ("second_statements", secondStatements), ("replay_links", replayLinks),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
    ("session_registered", sessionRegistered), ("record", record), ("check_public", checkPublic),
    ("check_verdicts", checkVerdicts), ("run", run), ("template_circuits", templateCircuits), ("hello", Hello.check),
+   ("fits", fits),
    ("challenger_commitment", Challenger.commitmentPiece),
    ("challenger_opening", Challenger.openingPiece), ("challenger_reason", Challenger.reasonPiece),
    ("challenger_order", Challenger.orderPiece), ("challenger_key", Challenger.keyPiece),
