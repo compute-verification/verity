@@ -377,10 +377,10 @@ def test_r1_a_composition_reading_another_requests_input_is_refused():
         check_compiled(None, adv, ing, _compile(adv, ing, cross=True), plan)
 
 
-@pytest.mark.parametrize("group", ["schedule", "prefix", "prefix_kv_c", "prefix_kv_pe", "prefix_ik", "prefix_iks", "last_token"])
+@pytest.mark.parametrize("group", ["prefix", "prefix_kv_c", "prefix_kv_pe", "prefix_ik", "prefix_iks", "last_token"])
 def test_r1_a_batch_provenance_input_is_refused(group):
-    """A `schedule` Input is the batch's, and so is a history Input (`batch.HISTORY_GROUPS`) on a request whose history R2 didn't
-    check: neither a hit on its own tokens nor the state a window carries it in with."""
+    """A history Input (`batch.HISTORY_GROUPS`) is the batch's on a request whose history R2 didn't check: neither a hit on its
+    own tokens nor the state a window carries it in with."""
     adv, ing = _mixed()
     with pytest.raises(BatchDependent, match=rf"GP-01: the outputs of owner 0 read request\[r0\]\.{group} .* batch-derived"):
         check_compiled(None, adv, ing, _compile(adv, ing, groups=("weights", "prompt", group)), plan)
@@ -402,8 +402,10 @@ def test_workload_labels_by_provenance():
 
 
 def test_compile_steps_passes_its_own_rule():
-    """At top_p 1 and below: the compiler emits the registered split count, so R3 holds at any top_p."""
+    """At top_p 1 and below: the compiler emits the registered split count, so R3 holds at any top_p; an unseeded request's seed,
+    derived from its id and the window's seed salt, is the one it compiles to alone."""
     from verity.ml.definitions.registry.topp_geometry import registered_splits
+    from verity_vllm.engine.served_seed import derived
     steps = pytest.importorskip("verity_vllm.program.predict.steps")
     I1 = pytest.importorskip("verity.core.protocols.certifier.advice")
     cfg = {**TINY, "max_position_embeddings": 64}
@@ -421,10 +423,12 @@ def test_compile_steps_passes_its_own_rule():
                for i, (lp, _, b) in enumerate(reqs)}
         return adv, ing
 
+    salt = bytes(range(64))
     for b1 in ({**greedy, "max_tokens": 2}, {**topp, "top_p": 1.0}, topp):
         adv, ing = session(b1)
-        c = steps.compile_steps(reg, adv, ing)
-        check_compiled(reg, adv, ing, c, steps.plan_steps)
+        c = steps.compile_steps(reg, adv, ing, salt=salt)
+        check_compiled(reg, adv, ing, c, lambda *a: steps.plan_steps(*a, salt=salt))
         if b1["temperature"]:
             assert c.requests[1].policy == {"kind": "stochastic", "temperature": 0.8, "top_p": b1["top_p"], "top_k": 0, "seeded": True,
                                             "splits": registered_splits(RTX["num_sms"])}
+            assert c.requests[1].seed == derived(salt, "q1")

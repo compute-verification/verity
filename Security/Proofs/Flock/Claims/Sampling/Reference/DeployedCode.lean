@@ -1,6 +1,6 @@
 module
 
-public import SampledProofs.Registration
+public import Spot.Registration
 public import Proofs.Flock.Claims.Sampling.Reference.Deployed
 public import Proofs.Flock.Claims.Sampling.Reg
 import Mathlib.Algebra.Order.Floor.Extended
@@ -39,18 +39,18 @@ import Mathlib.Topology.Sheaves.Init
 # The sampled verifier's code from its Lean sample
 
 `SamplingDeploy.code c reg L bytes sr sess`: the record's code (`SamplingDeploy.Code`) with what the Lean sampled
-verifier (`SampledProofs`) computes taken from it, and the rest `c`'s:
+verifier (`Spot`) computes taken from it, and the rest `c`'s:
 
-* `checked`: the sample of record. `SampledProofs.Slots.select` runs on the registration the statement names (`reg x`, a
+* `checked`: the sample of record. `Spot.Slots.select` runs on the registration the statement names (`reg x`, a
   `Reg`: the selection rule, the verifier's own program, query and work table, and the challenger's closure map, as
-  `SampledProofs.Run.run` reads them) over `L x` bytes of the coins (`bytes`), and every slot of the layout is
+  `Spot.Run.run` reads them) over `L x` bytes of the coins (`bytes`), and every slot of the layout is
   checked where the sample is refused (`drawChecked`). Nothing is checked where the statement names no registration.
 * `sessions`, `session`, `rounds`: one proof session per registration proves every sampled proof block
   (`Stream.session`, where each covered registration's sample is its own tables of the session's statement). So every
   checked unit's session is the run's one session (`sess`) on its rounds (`sr`), and `sessions = 1`.
 
-`SampledProofs.Run.run` takes the session's statement and the verifiers' verdicts as inputs (`Run.Input.statement`,
-`verdicts`, `sessions`), and nothing in `SampledProofs` composes a session's statement, encodes its Flock witness or runs
+`Spot.Run.run` takes the session's statement and the verifiers' verdicts as inputs (`Run.Input.statement`,
+`verdicts`, `sessions`), and nothing in `Spot` composes a session's statement, encodes its Flock witness or runs
 Flock. So `sess`, the reference prover's framing (`step`, `reads`, `wit`), the verifier in public-coin form, its parser,
 scope check and partition, and the commitment's layout stay parameters.
 
@@ -82,11 +82,12 @@ At this code:
 
 namespace SamplingDeploy
 
-open Claims Claims.Sampling Claims.Sampling.Reference Properties.SampledProofs
+open Claims Claims.Sampling Claims.Sampling.Reference Properties.Spot
 open Lean (Json)
 
 /-- **The sampled verifier's code with its Lean sample**: `c` with `checked` the sample of record on the registration
-`reg x` over the bytes `bytes x` of the coins, and one session per registration, `sess`, on the rounds `sr`. -/
+`reg x` over the bytes `bytes x` of the coins, and one session per registration, `sess`, on the rounds `sr`, so every
+unit has the statement's `N₀`. -/
 def code (c : Code) (reg : Msg → Option Reg) (L : Msg → ℕ)
     (bytes : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → Fin (L x) → Fin 256)
     (sr : (x : Msg) → Finset (Fin (c.V.k x))) (sess : Msg → Seen → Option (Msg × Seen)) : Code :=
@@ -94,7 +95,8 @@ def code (c : Code) (reg : Msg → Option Reg) (L : Msg → ℕ)
     checked := fun x r => ((reg x).map fun g => g.checked (bytesOf (bytes x r))).getD []
     rounds := fun x _ => sr x
     sessions := fun _ => 1
-    session := fun x _ v => sess x v }
+    session := fun x _ v => sess x v
+    unitN₀ := fun x _ => c.innerN₀ x }
 
 /-- **One session that every checked unit shares has `SessionSlots`**: the first checked unit's session is every
 checked unit's. -/
@@ -136,8 +138,8 @@ a registration whose program is the statement's descriptor (`Program.parse`), wh
 statement's partition and whose design (`slotDesign`) is the statement's. -/
 def RegMatches : Prop :=
   ∀ x s Pt, c.parse x = some s → c.partition s = some Pt →
-    ∃ g l, reg x = some g ∧ SampledProofs.Program.parse ⟨s.desc.toArray⟩ = .ok g.program ∧
-      SampledProofs.Slots.layout g.program g.query = .ok l ∧ Pt = slotPartition l ∧
+    ∃ g l, reg x = some g ∧ Spot.Program.parse ⟨s.desc.toArray⟩ = .ok g.program ∧
+      Spot.Slots.layout g.program g.query = .ok l ∧ Pt = slotPartition l ∧
       slotDesign g.rule g.program g.query g.table = .ok s.design
 
 /-- **The sample's bytes are uniform when the coins are.** -/

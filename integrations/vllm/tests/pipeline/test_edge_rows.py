@@ -10,8 +10,8 @@ from typing import Any
 import numpy as np
 import pytest
 
-from verity.core.protocols.sampled_proofs.one_stage import registered as REG
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.spot.one_stage import registered as REG
+from verity.core.protocols.spot.one_stage import registration as R
 from verity_vllm.pipeline import edge_rows as ER, serving_rows as SRW
 
 from tests.pipeline import served_edge as SE

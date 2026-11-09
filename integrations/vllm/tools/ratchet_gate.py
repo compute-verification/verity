@@ -18,14 +18,16 @@ settings registries it marks, ``{"file", "registry": true}``, a declaration rath
 counted) and ``test_repo_silent_excepts.py`` its except handlers that swallow what they catch
 (``allowlists/repo_silent_excepts.json``); ``test_repo_lane_text.py`` holds the prose of every file its ``holds`` takes
 (comments, docstrings, Lean comments and Markdown, the integration's too, outside ``archive/``) to a count per file of its
-lane text (``allowlists/repo_lane_text.json``); its slugs stay apart from the integration's.  A change is judged when it touches a
+lane text (``allowlists/repo_lane_text.json``), and ``test_repo_retired_terms.py`` the whole text of the same files to a count
+per file of the terms ``GLOSSARY.md``'s older names retire (``allowlists/repo_retired_terms.json``); its slugs stay apart from
+the integration's.  A change is judged when it touches a
 ratchet, a ``*.py`` file under ``integrations/vllm/tests/lint/`` or ``tests/lint/`` (the lints' code) or a ruff lint's config:
 ``integrations/vllm/ruff.toml``, the root ``ruff.toml`` (both ruff lints') and the ruff the root ``dev`` group pins.  It passes
 when:
 
-* in each ratchet, no kind whose entries record counts (an entry's ``count``: typed_records' or-empty per package, P07's)
+* in each ratchet, no kind whose entries record counts (an entry's ``count``: typed_records' or-empty per file, P07's)
   holds more in total after it than before.  A key may rise, or a new one appear, when the same kind's other keys fall by
-  at least as much, so a move from one package to another passes.  A repository list
+  at least as much, so a move from one file to another passes.  A repository list
   (``repo_ruff``'s and each counted lint's, ``CATCH_UP``) may also raise a key, in any file, up to what its lint, as the
   change's base has it, finds there in the base's tree: a list that records what its base already holds adds no finding,
   so a list behind its tree catches up, while growth past the base's own findings is held as before.  A change that edits
@@ -87,7 +89,7 @@ the whole-tree run of a change that touches a lint.
 
 A counted lint with ``holds`` reads each file its ``holds`` takes, of any kind, rather than each ``*.py`` file, and counts it
 by its path too: the repository's lane text, in the prose of code, Lean and Markdown, whose fix says where the text goes (history
-to git, work to Linear, rulings to Notion, results to the store).
+to git, work to Linear, rulings to Notion, results to the store), and its retired terms, whose fix is the term the glossary gives.
 
 Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR title starts ``Revert``) and a pure move that
 BASE's ``tools/verity/check/move_check.py`` certifies.
@@ -167,7 +169,8 @@ REPO_RUFF_LIST = f"{REPO_LINT}/allowlists/{REPO_RUFF_LINT}.json"
 #: with ``holds`` chooses the files it reads, any kind, and its sites function takes the file's path after its text.
 COUNTED = (("repo_env_reads", "reads", "direct environment read"),          # S1: configuration in one place
            ("repo_silent_excepts", "handlers", "silent except handler"),    # S4: recorded outcomes
-           ("repo_lane_text", "sites", "lane-text site"))                   # S5: what is true now
+           ("repo_lane_text", "sites", "lane-text site"),                   # S5: what is true now
+           ("repo_retired_terms", "sites", "retired-term site"))            # one vocabulary (GLOSSARY.md)
 #: the repository's lists whose keys may rise to what the change's base holds (``held``)
 CATCH_UP = (REPO_RUFF_LINT, *(s for s, *_ in COUNTED))
 #: a git tree entry's modes that are a file ruff reads (a symlink or a submodule isn't)

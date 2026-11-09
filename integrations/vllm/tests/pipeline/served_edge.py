@@ -31,7 +31,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.spot.one_stage import registration as R
 from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import edge as E, edge_rows as ER, serving_rows as SRW
 

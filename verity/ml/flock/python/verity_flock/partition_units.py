@@ -2,7 +2,10 @@
 and checked against the reference evaluator on synthetic inputs lifted through the unit's flat Definition.
 
     uv run python -m verity_flock.partition_units --model tiny [--partition q-word|blocks:64|scatter:8]
-    uv run python -m verity_flock.partition_units --definition 'RoPE_v1{NHEADS=32,D=64}' --vectors 32
+    uv run python -m verity_flock.partition_units --definition 'RoPE_v1{NHEADS=32,D=64}' --resolver MODULE:FUNC --vectors 32
+
+``--definition`` names a Definition by its id, which ``--resolver``'s FUNC(id) binds: a registered Definition is registered by
+the module that defines it, so binding one by id takes a resolver that has loaded them all (`resolver`).
 
 * **Lowering.**  `lower_class` lays one unit of a class out as a `gf2.Circuit` (inputs ``in0 ..``, outputs ``out0 ..``, one word per
   port) through `ir_lower.lower_gates`, so a primitive without a piece names itself.
@@ -236,24 +239,49 @@ def one_call(fn: Any) -> Any:
     return Program(shell)
 
 
+def attribute(spec: str) -> Any:
+    """``MODULE:NAME``'s attribute; MODULE may be a ``.py`` path, loaded from that file."""
+    import importlib
+    import importlib.util
+    from pathlib import Path
+
+    mod, name = spec.rsplit(":", 1)
+    if mod.endswith(".py"):
+        found = importlib.util.spec_from_file_location(Path(mod).stem, mod)
+        m = importlib.util.module_from_spec(found)
+        found.loader.exec_module(m)
+    else:
+        m = importlib.import_module(mod)
+    return getattr(m, name)
+
+
+def resolver(spec: str | None, what: str) -> Callable[[str], Any]:
+    """FUNC of ``--resolver MODULE:FUNC``, FUNC(id) the registered Definition a Definition id names; refused without one, since
+    ``what`` names Definitions by id."""
+    if not spec:
+        raise SystemExit(f"{what} names Definitions by id: --resolver MODULE:FUNC gives FUNC(id), the registered Definition "
+                         "an id names")
+    return attribute(spec)
+
+
 def _program(a: argparse.Namespace) -> Any:
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.program import Program
 
-    from circuit_check import targets as TG
-
-    TG.load_registries()
     if a.model == "tiny":
         from verity.ml.definitions.registry import b1
-        return Program(bind(b1.Serve, C=TG.TINY, LP=3, STEPS=2))
-    return one_call(TG.definition(a.definition))
+        from verity.ml.definitions.tiny import TINY
+        return Program(bind(b1.Serve, C=TINY, LP=3, STEPS=2))
+    return one_call(resolver(a.resolver, "--definition")(a.definition))
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     src = ap.add_mutually_exclusive_group(required=True)
-    src.add_argument("--model", choices=["tiny"], help="circuit-check's tiny Serve_v1 Program (38 Calls)")
-    src.add_argument("--definition", help="a registered Definition id, as a one-Call Program (circuit-check's parser)")
+    src.add_argument("--model", choices=["tiny"], help="the tiny Serve_v1 Program (`verity.ml.definitions.tiny`, 38 Calls)")
+    src.add_argument("--definition", help="a registered Definition id, as a one-Call Program (bound by --resolver)")
+    ap.add_argument("--resolver", default=None, help="MODULE:FUNC (MODULE may be a .py path): FUNC(id), the registered "
+                    "Definition an id names")
     ap.add_argument("--partition", default="q-word", help="q-word[:X/W], q-template-instance[:TEMPLATE], blocks[:B] or scatter[:k[/seed]]")
     ap.add_argument("--vectors", type=int, default=16)
     ap.add_argument("--seed", type=int, default=0)

@@ -24,7 +24,7 @@ failure message carries its fix.
  - P15: no versioned twins;
  - P16: every CLI command has a caller.
 - **Typed records** (`test_typed_records.py`, allowlist `allowlists/typed_records.json`): a `.get(k) or []` or `or {}`,
- counted per package, and a schema id literal (`<namespace>/<name>/vN`) outside `verity_vllm/records/`. Read the record
+ counted per file, and a schema id literal (`<namespace>/<name>/vN`) outside `verity_vllm/records/`. Read the record
  through its type in `verity_vllm/records/` instead, whose `load` refuses a missing or unknown field by name. A hash's
  domain-separation tag reads like one but names no record: a module-level constant named `*_TAG` or `*_DOMAIN` holds it as
  a plain literal, which the rule skips.
@@ -35,6 +35,10 @@ failure message carries its fix.
  `tests/lint/test_repo_silent_excepts.py` holds every other area to the same rule (below).
 - **By-name rules** (`tests/test_no_by_name_rules.py`, allowlist `tests/by_name_allowlist.json`): no verification
  answer comes from a model name, a module path or a family string.
+- **vLLM's surface** (`test_vllm_surface.py`, list `vllm_surface.py`): every vLLM module the library imports whole, and
+ every name it imports from one, is listed with why the integration needs it. An unlisted import fails. An entry nothing
+ imports only warns, so the list may name an import that a change in flight adds. Where vLLM is installed, every entry
+ must resolve at the pin, so moving the pin starts from this list.
 - **Ruff** (`test_ruff.py`, allowlist `allowlists/ruff.json`): `ruff check` under `integrations/vllm/ruff.toml`, which
  extends the root `ruff.toml` (the rules every package selects, and why), keyed like the rules' violations. The formatter stays off. A PR that fixes or adds a
  ruff finding in `integrations/vllm` (a stale `noqa` deleted is one) edits `ruff.json` in the same PR.
@@ -46,8 +50,8 @@ failure message carries its fix.
 exception or raises a recorded count: against the commit below it (on `checked`, its `Queue: #N` merge against the merge
 below; a branch, against its merge base with `main`, or the merge of its merge bases when a branch that merged both `main`
 and a since-landed branch has several), no ratchet holds more entries and no entry's `count` is higher. An entry may move with the violation it allows. A kind whose entries record counts (typed_records' or-empty per
-package, P07's) is held by its total instead: a key may rise, or a new one appear, when the same kind's other keys fall by
-at least as much, so a move from one package to another passes, but the kind's total may not grow. P10's count is a size,
+file, P07's) is held by its total instead: a key may rise, or a new one appear, when the same kind's other keys fall by
+at least as much, so a move from one file to another passes, but the kind's total may not grow. P10's count is a size,
 not a number of findings, so it is never pooled. A change to a lint's own code or thresholds is judged like source: the base's lint code, run on the PR's tree, must find nothing the PR's allowlists don't cover, so loosening a
 lint to drop entries fails. Ruff's lint code is `test_ruff.py`, `integrations/vllm/ruff.toml`, the root `ruff.toml` it
 extends and the root `dev` group's ruff pin, so the gate reruns it with the base's configs at the base's pin. The gate holds
@@ -100,7 +104,9 @@ or a data file), dated attributions and ISO dates, `note:` ids, Notion URLs, Lin
 timestamps and worker codenames (board ids, rounds, lanes, handles), against `tests/lint/allowlists/repo_lane_text.json`.
 AGENTS.md, ARCHITECTURE.md, GLOSSARY.md and the skills hold none. The gate fails a PR that adds one to a file it changes,
 naming each, with where the text goes: history to git, work to Linear, rulings to Notion, results to the store. It takes
-over P11's docstring patterns (board ids, lane tags, rounds and dates) for the whole tree.
+over P11's docstring patterns (board ids, lane tags, rounds and dates) for the whole tree. `tests/lint/test_repo_retired_terms.py`
+reads the whole text of the same files, identifiers included, for the terms `GLOSSARY.md`'s older names retire, against
+`tests/lint/allowlists/repo_retired_terms.json`, and the gate refuses a new one with the term to say.
 Before marking, run `python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD`.
 
 **A `# noqa` is an exception too.** In `integrations/vllm`, a change may add no more

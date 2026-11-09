@@ -109,8 +109,10 @@ The rules in force, each stated as itself; the friction skill has the standing r
 - **Nondeterminism is quantified, never buried.** Every value a circuit reads is the output of one of its
   blocks, a certified input, a registered value, or advice charged at its width. A value the served hardware decides
   (an atomics order, a split choice) that no block computes is never a free witness checked by a relation: serving makes it
-  canonical so a block computes it, or it is advice. A relation check stands in for computing only where its witness is
-  unique, and it is still a function.
+  canonical so a block computes it, or it is advice. A relation check stands in for computing only where its outputs are
+  unique: a Lean lemma, once per Definition and for all its other inputs, that any two witnesses it accepts give the
+  same value on every output wire. Its witness then carries no bits; until the lemma holds, it counts as free input at
+  its width.
 - **Verifier cost: O(circuit description), never O(unrolled circuit).** A verifier works in
   proportion to the descriptor it reads (its Definitions, nodes and references) and never walks every gate, batch member
   or scan iteration: it summarizes once per specialized Definition and multiplies through batches and scans
@@ -193,20 +195,13 @@ unchanged.
 
 A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a
 docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` holds
-only fully checked commits: drive lands `next`'s longest reviewed prefix on `checked`, and its low-risk members (no Lean, lock or
-soundness-path change: drive.toml's `lowrisk_excludes`) on their ready mark alone, runs the full check on its tip itself,
-and moves `main` only to a commit of `checked` whose full check passed every step on the merge gate (how a PR lands: the
-team skill). A red's culprit is the one landing whose change touches what its failure names (its files, the files declaring
-a Lean declaration it names, else the failed suite's or step's declared inputs), never found by bisecting: its lane fixes it
-forward, marking a fix within 2 h, or drive then reverts it on `checked`; a red naming several landings reverts none and
-rings each one's lane. A ready mark admits a PR: the sync's own merge onto `next` (a conflict, drive.toml's `landing_gates`)
-is the only check before it joins, and a body naming no live goal gets a warning, never a refusal. A change a `warn_gates`
-gate flags (drive.toml; a Markdown file over its cap) lands too: drive tells its owner, who fixes it in their next PR. A red
-ratchet-gate step never reverts (drive.toml's `warn_steps`): drive rings the culprit's owner, who fixes it forward in their
-next PR. A Lean, lock or spec change lands on its verdict like any other: drive then runs lean-audit alone on `checked`'s
-tip (its lock run), commits the lock records it regenerated there, and checks that commit, so `main` moves only to a commit
-whose records are the regenerated ones and whose gated steps all passed on it. The lock run never fails on a lock's
-bookkeeping: it repairs it in that commit, with a warning for each repair (The lock, under Lean).
+only fully checked commits: drive lands each marked PR on `checked` once it is reviewed or low-risk, runs the full check on
+its tip, and moves `main` only to a commit of `checked` whose full check passed every step on the merge gate. A red's
+culprit is the one landing whose change touches what its failure names (its files, the files declaring a Lean declaration
+it names, else the failed suite's or step's declared inputs), never found by bisecting: its lane fixes it forward, or drive
+reverts it on `checked`. What drive.toml lets warn (its `warn_gates` and `warn_steps`) and a lock's bookkeeping never
+revert: drive tells the owner, who fixes it in their next PR. How a PR lands, from its ready mark to `main`, and drive's
+rule for each case: the team skill's Landing.
 
 ## Lean
 
@@ -239,13 +234,13 @@ bookkeeping: it repairs it in that commit, with a warning for each repair (The l
 - **The Lean check** (`tools/verity/lean/check.py`) builds every file and replays every declaration through the kernel:
   only `propext`, `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; a
   premise is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, listed by name in the lock: a
-  named assumption (`assumptions`) is declared in `Security/Definitions/Assumptions.lean`, and every other premise is
-  open (`open`, with the Linear issue that discharges it and its due date), a list a PR's `--update` never adds to, unless
-  it is part of what its guarantee says (`domain`, with a one-line why; an honest witness must conclude it). Each
-  deployed guarantee (`deployed`) rests, outside the trust base (`trust.base`: SHA-512's collision resistance, uniform
-  randomness, an honest verifier) and the premises a ruling's rule lets it alone rest on (`trust.extra`, each with its
-  reason), only on the premises its `trust_gap` entry lists, which `--update` never adds to; the check prints each one's
-  gap, the number Daniel drives to zero.
+  named assumption (`assumptions`) is declared in `Security/Definitions/Assumptions.lean` or a module under it, and
+  every other premise is open (`open`, with the Linear issue that discharges it and its due date), a list a PR's
+  `--update` never adds to, unless it is part of what its guarantee says (`domain`, with a one-line why; an honest
+  witness must conclude it). Each deployed guarantee (`deployed`) rests, outside the trust base (`trust.base`: SHA-512's
+  collision resistance, uniform randomness, an honest verifier) and the premises a ruling's rule lets it alone rest on
+  (`trust.extra`, each with its reason), only on the premises its `trust_gap` entry lists, which `--update` never adds
+  to; the check prints each one's gap, the number Daniel drives to zero.
 - **The lock.** Each package's `lean-audit.json` lists its guarantees, and `check.py --update` records each one's
   statement, the definitions it reads and the premises it takes, so a changed statement is a changed record.
   A guarantee that only moved keeps its record (`--update --moved MOVES.json`). Bookkeeping warns rather than fails

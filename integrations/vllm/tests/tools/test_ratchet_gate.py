@@ -13,7 +13,8 @@ fix, one in a registry passing, a read moved within its file passing, a rename m
 the change's base, the list's total held, a loosened lint failing, a base lint that doesn't load leaving the change unjudged),
 the silent-except check beside that (a new swallowing handler, typed or broad, failing by name with the fix, one that
 re-raises or records its outcome passing, a rename moving its entry, the list's total held, a loosened lint failing, both
-counted lints counting one change), a repository list (ruff's, a counted lint's) catching up to what its base holds and no
+counted lints counting one change), the retired-terms check (a new use refused with the term the checkout's glossary gives),
+a repository list (ruff's, a counted lint's) catching up to what its base holds and no
 further, a counted lint's list rising with an edit to its lint at the files the change leaves untouched and no others, a
 counted lint's violations in a lint module the gate runs as the base has it counted on the change's own copy, a
 public command P16's list gains (passing when the file it names runs it, failing when that file doesn't or isn't
@@ -190,12 +191,12 @@ def test_no_counted_kind_grows_and_one_ratchet_does_not_pay_for_another(repo):
 
 
 TYPED = "integrations/vllm/tests/lint/allowlists/typed_records.json"
-CHECK, COMMIT, RECORDS = "verity_vllm/check", "verity_vllm/commit", "verity_vllm/records"
+CHECK, COMMIT, RECORDS = "verity_vllm/check/run.py", "verity_vllm/commit/plan.py", "verity_vllm/records/workload.py"
 
 
-def _or_empty(package: str, n: int) -> dict:
-    """typed_records' count of `.get(k) or []` reads in one package"""
-    return {"file": package, "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": n}
+def _or_empty(file: str, n: int) -> dict:
+    """typed_records' count of `.get(k) or []` reads in one file"""
+    return {"file": file, "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": n}
 
 
 def _schema(file: str) -> dict:
@@ -205,7 +206,7 @@ def _schema(file: str) -> dict:
 
 def test_a_move_between_packages_keeps_its_kinds_total_as_4545_moves_reads_from_check_to_commit(repo):
     """A move of `.get(k) or []` reads from check/ to commit/, to break their cycle, raises commit's count 53 -> 87 as
-    check's falls 252 -> 218.  A new package is paid for the same way; a new per-site entry isn't, by any kind."""
+    check's falls 252 -> 218.  A new file is paid for the same way; a new per-site entry isn't, by any kind."""
     gates = _schema("verity_vllm/check/gates.py")
     repo.commit("typed_records", {TYPED: _allowlist(_or_empty(CHECK, 252), _or_empty(COMMIT, 53), gates)})
     repo.git("checkout", "-q", "-b", "pr")
@@ -214,7 +215,7 @@ def test_a_move_between_packages_keeps_its_kinds_total_as_4545_moves_reads_from_
     assert (c["verdict"], c["before"], c["after"], c["fix"]) == ("passed", 5, 5, [])
     assert c["pooled"] == [f"{TYPED} or-empty 305 -> 305 in total over 2 moved key(s)"]
     assert c["why"] == f"5 -> 5 ratchet exceptions; pooled: {c['pooled'][0]}"
-    repo.commit("a new package, which check pays for", {
+    repo.commit("a new file, which check pays for", {
         TYPED: _allowlist(_or_empty(CHECK, 210), _or_empty(COMMIT, 87), _or_empty(RECORDS, 8), gates)})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["before"], c["after"]) == ("passed", 5, 6)
@@ -239,7 +240,7 @@ def test_a_kinds_total_may_not_grow_and_the_failure_names_the_totals_and_the_key
     assert doc["failures"][0]["fix"] == c["fix"]
     repo.git("checkout", "-q", "-b", "fresh", "main")
     one = {k: v for k, v in _or_empty(RECORDS, 1).items() if k != "count"}
-    repo.commit("a new package of one read, nothing paid", {TYPED: _allowlist(_or_empty(CHECK, 252), _or_empty(COMMIT, 53), one)})
+    repo.commit("a new file of one read, nothing paid", {TYPED: _allowlist(_or_empty(CHECK, 252), _or_empty(COMMIT, 53), one)})
     [c] = G.gate("main", "fresh")["changes"]
     assert c["verdict"] == "failed" and c["why"].startswith(f"grows {TYPED} or-empty 305 -> 306 in total")
     assert c["fix"] == [f"{TYPED}: {G.key(one)} 0 -> 1"]
@@ -1354,6 +1355,27 @@ def test_a_lint_that_comes_to_count_more_records_its_list_at_the_files_it_leaves
     lane_linted.commit("records them with the lint as it is", {REPO_LANE_JSON: _allowlist(DOCS_A, b)})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["fix"]) == ("failed", [f"{REPO_LANE_JSON}: {G.key({'file': 'docs/b.md'})} 0 -> 2"]), c["why"]
+
+
+REPO_TERMS_LINT = "tests/lint/test_repo_retired_terms.py"
+REPO_TERMS_JSON = "tests/lint/allowlists/repo_retired_terms.json"
+TOY_GLOSSARY = '# Glossary\n\n## Older names\n\n| Old name, where it stays | Term |\n|---|---|\n| "teapot" | kettle |\n'
+
+
+def test_a_retired_term_is_counted_as_the_glossary_of_the_tree_the_gate_runs_in_retires_it(repo):
+    """The retired-terms lint, loaded alone from the base, reads the checkout's GLOSSARY.md: a new use in a file the change
+    touches is refused with the term to say, and saying it passes."""
+    repo.commit("retired terms", {REPO_TERMS_LINT: (SCRIPT.parents[3] / REPO_TERMS_LINT).read_text(), "GLOSSARY.md": TOY_GLOSSARY,
+                                  REPO_TERMS_JSON: _allowlist(DOCS_A), "docs/a.md": "# A\n\nA teapot boils it.\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("another use", {"docs/a.md": "# A\n\nA teapot boils it, and a teapot pours it.\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["counted"].get("repo_retired_terms")) == ("failed", ["docs/a.md"]), c["why"]
+    assert c["fix"] == ["docs/a.md:3 'teapot' is retired; say kettle (GLOSSARY.md)"], c["why"]
+    repo.git("checkout", "-q", "-B", "pr", "main")
+    repo.commit("says the term", {"docs/a.md": "# A\n\nA kettle boils it.\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["counted"].get("repo_retired_terms")) == ("passed", ["docs/a.md"]), c["why"]
 
 
 def test_a_site_a_lint_below_it_counts_fails_the_pr_that_adds_it_and_never_a_later_one(lane_linted):

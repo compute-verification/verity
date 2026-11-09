@@ -78,10 +78,10 @@ def collSim (u v : Msg) : Simulator where
   prog _ _ := .hash u fun _ => .hash v fun _ => .ret []
 
 theorem Pr_true {α : Type} [Fintype α] [Nonempty α] : Pr (fun _ : α => True) = 1 := by
-  unfold Pr; simp
+  unfold Pr Claims.prUniform; simp
 
 theorem stepWith_quietP_pLog {N Ω : Type} (H : Msg → Msg) (m x : Msg) (ω : N × Ω) (vnext : List Msg → OC Out) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       (stepWith H (quietP N Ω m) x ω vnext n hist as t).pLog = t.pLog
   | 0, _, _, _ => rfl
   | n + 1, hist, as, t => by

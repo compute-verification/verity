@@ -36,7 +36,7 @@ def Selects {C : Circuit} {ι : Type} (X : Items C ι) (U : Finset ι) (σ : ι 
   ∀ i ∈ U, σ i ∈ X.cells i
 
 /-- **The values of a selection** in the run `T`: its cells' gates, in gate order, as bits. -/
-def selectionBits {C : Circuit} {ι : Type} (T : C.Transcript) (U : Finset ι) (σ : ι → Finset (Fin C.N)) :
+def selectionBits {C : Circuit} {ι : Type} (T : C.Trace) (U : Finset ι) (σ : ι → Finset (Fin C.N)) :
     List Bool :=
   C.bits T ((U.biUnion σ).sort (· ≤ ·))
 

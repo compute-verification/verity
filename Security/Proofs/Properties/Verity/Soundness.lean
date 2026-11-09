@@ -357,7 +357,7 @@ theorem namedFinder_collides {h : Option Hash.Digest} {F R : Array ByteArray} (h
       ∃ u v, (namedFinder h F R).out s = some (u, v) ∧ Claims.Collision sha512Msg u v :=
     fun _ => ⟨_, _, by simp only [namedFinder, if_neg hne], hl, hd⟩
   classical
-  unfold Claims.Finder.Pr Claims.Pr
+  unfold Claims.Finder.Pr Claims.Pr Claims.prUniform
   rw [Finset.filter_true_of_mem fun s _ => hs s, Finset.card_univ]
   exact div_self (Nat.cast_ne_zero.2 Fintype.card_ne_zero)
 
@@ -410,7 +410,7 @@ theorem target_unbounded (k : Verity.Registration.Composite) (a : Subprotocol) :
 
 /-- The idle finder outputs no collision. -/
 theorem finder_pr (H : Claims.Msg → Claims.Msg) : finder.Pr H = 0 := by
-  unfold Claims.Finder.Pr Claims.Pr
+  unfold Claims.Finder.Pr Claims.Pr Claims.prUniform
   simp [finder]
   exact Or.inl rfl
 
@@ -466,7 +466,7 @@ theorem soundness_at_of_targets_nontrivial : ¬ Idle.exact.SoundnessFor .onsite 
 
 /-- **`Soundness`'s honest lemma**: its seven hypotheses hold at the idle deployment's compiled onsite composite. -/
 theorem soundness_of_subprotocols_honest :
-    Idle.unbounded.SampledProofsSound .onsite ∧ Idle.unbounded.PouwSound .onsite ∧
+    Idle.unbounded.SpotSound .onsite ∧ Idle.unbounded.PouwSound .onsite ∧
       Idle.unbounded.InferenceOnlySound .onsite ∧ Idle.unbounded.PousSound .onsite ∧
       Idle.unbounded.BandwidthAuditSound .onsite ∧ Idle.unbounded.NetworkCertifierSound .onsite ∧
       Idle.unbounded.WipeSound .onsite :=
@@ -481,7 +481,7 @@ theorem soundness_of_subprotocols_nontrivial : ¬ Idle.exact.SoundnessFor .onsit
 /-- **`RemoteSoundness`'s honest lemma**: its three hypotheses hold at the idle deployment's compiled remote
 composite. -/
 theorem remote_soundness_of_subprotocols_honest :
-    Idle.unbounded.SampledProofsSound .remote ∧ Idle.unbounded.PouwSound .remote ∧
+    Idle.unbounded.SpotSound .remote ∧ Idle.unbounded.PouwSound .remote ∧
       Idle.unbounded.InferenceOnlySound .remote :=
   ⟨Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _⟩
 

@@ -2,9 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkLink.SessionZ
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Lock
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Off the masked table without a self-clash

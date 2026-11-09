@@ -8,7 +8,7 @@ from math import log, log1p
 import cards
 import figure1 as f
 import pytest
-from render import _lines, appendix_stem, render, render_appendix, stem
+from render import _fit, _lines, _zeros, appendix_stem, render, render_appendix, stem
 
 SCOPES = ("world year", "datacenter week")
 #: the designs every bit charged, which plan in about a second; the capped ones take seconds a point
@@ -94,13 +94,34 @@ def test_every_references_card_adds_its_lines(out):
             assert card["art"] in {r.get("art") for r in out["panels"][panel]["references"]}, (card["art"], panel)
 
 
-def test_a_line_at_zero_is_captioned_and_coincident_lines_plotted_once():
+def test_a_line_at_zero_is_drawn_on_the_floor_and_captioned_and_coincident_lines_plotted_once():
     refs = [{"label": "a", "value": 100.0}, {"label": "b", "value": 101.0}, {"label": "zero", "value": 0.0},
             {"label": "c", "by_scope": {"world year": 1e4}}, {"label": "elsewhere", "by_scope": {"world week": 1.0}}]
     assert _lines(refs, "world year", 1.0) == [(100.0, "a", "dashed"), (1e4, "c", "dashed")]
     assert _lines([refs[0] | {"style": "solid"}], "world year", 1.0) == [(100.0, "a", "solid")]
     assert f.zero_lines({"exfiltration": refs}, "world year") == {"exfiltration": ["zero"]}
-    assert f.captions(1.0, zeros={"exfiltration": ["zero"]})["exfiltration"].endswith(" At 0, so not plotted: zero.")
+    assert f.captions(1.0, zeros={"exfiltration": ["zero"]})["exfiltration"].endswith(
+        " At 0, drawn along the axis's floor: zero.")
+    assert _zeros(refs, "world year") == [("zero", "dashed")] and _zeros(refs, "world week") == [("zero", "dashed")]
+
+
+def test_a_label_wider_than_its_axis_wraps_onto_balanced_lines_inside_it():
+    """From either side, a label is wrapped onto as few lines as keep it inside its axis, none of them a stray word;
+    one that fits stays on one line."""
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(5, 3))
+    frame = ax.get_window_extent(fig.canvas.get_renderer())
+    long = "Advice once the length rule is checked in-circuit, prefix caching off (pending): 0, on the axis's floor"
+    for x, ha in ((.01, "left"), (.99, "right")):
+        t = ax.text(x, .5, long, ha=ha, transform=ax.transAxes, fontsize=15)
+        _fit(t)
+        box, lines = t.get_window_extent(fig.canvas.get_renderer()), t.get_text().split("\n")
+        assert len(lines) > 1 and " ".join(lines) == long and frame.x0 <= box.x0 and box.x1 <= frame.x1
+        assert min(map(len, lines)) > len(long) / (2 * len(lines))
+    short = ax.text(.01, .2, "a short label", transform=ax.transAxes, fontsize=15)
+    _fit(short)
+    assert short.get_text() == "a short label"
+    plt.close(fig)
 
 
 def test_a_capped_caption_says_what_it_rests_on():
@@ -144,13 +165,18 @@ def test_a_references_cards_caption_joins_its_panels_captions():
 
 def test_the_design_card_picks_the_main_panels_lines(out):
     """The main exfiltration panel plots the lines the `design` card's `main_lines` names, in its styles, and the
-    appendix the rest; the other panels plot every line, and the card's notes end the captions."""
+    appendix the rest, at most six among the curves with the designs (a line at 0 is on the floor); the other panels
+    plot every line, and the card's notes end the captions."""
     chosen = out["inputs"]["main_lines"]["value"]["exfiltration"]
     refs = out["panels"]["exfiltration"]["references"]
     main = [r for r in refs if r["main"]]
+    among = [r for r in main if max([r["value"]] if "value" in r else r["by_scope"].values()) > 0]
     assert {r["label"] for r in main} == {"GLM-5.3's weights", "GLM-5.3's weights at FP4 (376.7 GB)",
-                                         "Advice cap 5,582 bits/window (v1, measured on GLM-5.3 TP8)"}
-    assert 0 < len(main) <= 6 - len(f.MAIN["exfiltration"]) and len(refs) > len(main)
+                                         "Advice today: the response length, 18 bits a request (no circuit checks "
+                                         "the stop rule yet)",
+                                         "Advice once the length rule is checked in-circuit, prefix caching off "
+                                         "(pending)"}
+    assert 0 < len(among) <= 6 - len(f.MAIN["exfiltration"]) and len(refs) > len(main)
     for r in main:
         assert r["style"] == next(v for k, v in chosen.items() if r["label"].startswith(k.format(model="GLM-5.3")))
     assert all(r["main"] for p in ("infiltration", "skipped_work") for r in out["panels"][p]["references"])
@@ -183,7 +209,7 @@ def test_the_infiltration_panel_draws_its_card(card_dir, tmp_path):
     assert caption.startswith("Deferred interiors at a layer. At the measured overhead and 1% of compute, this curve "
                               f"is 1e9 bits, {ratio:.2g}× the exfiltration panel's tokens-only two-stage bound")
     assert out["scopes"]["world year"]["captions"]["exfiltration_appendix"].endswith(
-        " At 0, so not plotted: no advice.")
+        " At 0, drawn along the axis's floor: no advice.")
     assert "no advice" not in out["scopes"]["world year"]["captions"]["exfiltration"]
     assert {"label": "a steering vector", "input": "references", "value": 98304.0, "main": True,
             "style": "dashed"} in inf["references"]
@@ -449,4 +475,4 @@ def test_the_json_is_plain_and_renders(out, tmp_path):
                                        "figure1_overhead_appendix_datacenter_week.png",
                                        "figure1_overhead_appendix_datacenter_week.svg"]
     assert all(p.stat().st_size > 0 for p in paths)
-    assert (stem("datacenter year"), appendix_stem("datacenter year")) == ("figure1_overhead", "figure1_overhead_appendix")
+    assert (stem("world year"), appendix_stem("world year")) == ("figure1_overhead", "figure1_overhead_appendix")

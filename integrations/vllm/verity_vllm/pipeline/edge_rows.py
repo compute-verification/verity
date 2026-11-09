@@ -37,7 +37,7 @@ from typing import Any, NamedTuple
 
 import numpy as np
 
-from verity.core.protocols.sampled_proofs.one_stage import registered as REG, registration as R
+from verity.core.protocols.spot.one_stage import registered as REG, registration as R
 from verity.ml.commitments.merkle import tree_levels
 from verity.ml.windows import wiring as WI
 from verity_vllm.program.compact import runs_from_file_items
