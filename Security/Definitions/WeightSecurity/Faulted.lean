@@ -15,7 +15,7 @@ egress is a function of the inputs and the pattern alone.
 
 * `Outsider.withFaults O φ₀`: the outsider asking the faulted function, each query with the pattern `φ₀` beside it;
 * `NoFault size φ₀`: `φ₀` is the empty pattern, of size `0`;
-* `faultChannel … κ Cf size φ₀ T M K`: the covert channel of a deployment whose releases are faulted runs. A covert
+* `faultChannel … κ size φ₀ T M K`: the covert channel of a deployment whose releases are faulted runs. A covert
   string is each window's fault pattern, or a hint of the cut `κ` where `κ` cuts the window's pattern, the sizes
   summing to at most `M`, and then the served channel's string: each window's advice and timing bucket, an overwrite of
   at most `K` released values, and the halt;
@@ -44,19 +44,17 @@ def NoFault (size : F → ℕ) (φ₀ : F) : Prop := size φ₀ = 0
 
 open Classical in
 /-- **The fault channel** over `T` windows, at fault patterns `F` of sizes `size`, through the cut `κ`. A covert string
-is, for each window, a pattern no cut covers (`Cut.Interior`) or a hint of `κ`, the patterns' and hints' sizes summing
-to at most `M`; each window's advice and timing bucket; an overwrite of at most `K` of the `T · |O|` released values;
-and how many windows release before the halt. With it the datacenter evaluates the faulted function at the outsider's
-`n`-th query with the `n`-th advice and the `n`-th pattern, or, at a hint, at `κ`'s query with the empty pattern `φ₀`
-and makes `κ`'s answer of it. For the windows before the halt it tells the outsider that answer with the overwrite
-applied, at the `n`-th bucket; after the halt it tells it nothing. Past the `T`-th query it evaluates the query as
-asked. At `Cut.none` the strings are the interior patterns alone. -/
+is, for each window, a pattern or a hint of `κ`, the patterns' and hints' sizes summing to at most `M`; each window's
+advice and timing bucket; an overwrite of at most `K` of the `T · |O|` released values; and how many windows release
+before the halt. With it the datacenter evaluates the faulted function at the outsider's `n`-th query with the `n`-th
+advice and the `n`-th pattern, or, at a hint, at `κ`'s query with the empty pattern `φ₀` and makes `κ`'s answer of it.
+For the windows before the halt it tells the outsider that answer with the overwrite applied, at the `n`-th bucket;
+after the halt it tells it nothing. Past the `T`-th query it evaluates the query as asked. `TheftFaulted` takes `F` the
+patterns `κ` doesn't cut (`Cut.Interiors`). -/
 noncomputable def faultChannel (R Q Adv O V Tick F : Type) [Fintype Adv] [Fintype O] [DecidableEq O] [Fintype V]
-    [Fintype Tick] [Fintype F] {Θ : Type} (κ : Cut (Q × Adv) (O → V)) (Cf : Θ → (Q × Adv) × F → O → V)
-    (size : F → ℕ) (φ₀ : F) (T M K : ℕ) :
+    [Fintype Tick] [Fintype F] (κ : Cut (Q × Adv) (O → V)) (size : F → ℕ) (φ₀ : F) (T M K : ℕ) :
     Channel R ((Q × Adv) × F) (O → V) (Option ((O → V) × Tick)) where
-  S := {w : Fin T → F ⊕ κ.H // (∀ t φ, w t = .inl φ → κ.Interior Cf size φ₀ φ) ∧
-      ∑ t, Sum.elim size κ.size (w t) ≤ M} × (Fin T → Adv) × (Fin T → Tick) ×
+  S := {w : Fin T → F ⊕ κ.H // ∑ t, Sum.elim size κ.size (w t) ≤ M} × (Fin T → Adv) × (Fin T → Tick) ×
     {d : Fin T × O → Option V // (Finset.univ.filter fun p => d p ≠ none).card ≤ K} × Fin (T + 1)
   ask s _ h x := if hn : h.length < T then
       Sum.elim (fun φ => ((x.1.1, s.2.1 ⟨h.length, hn⟩), φ)) (fun c => (κ.ask (x.1.1, s.2.1 ⟨h.length, hn⟩) c, φ₀))

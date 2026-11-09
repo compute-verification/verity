@@ -23,10 +23,10 @@ the hints, in place of the patterns: the faults cost their hints' bits, with no 
 * `PatternsIn inClass q`: the parties that query the faulted function at patterns of the class, and
   `Outsider.dropFaults`, `faultingAs`: such a party seen as an outsider against a datacenter that faults where it
   would;
-* `Cut.Interior κ Cf size φ₀`: the patterns `κ` doesn't cut, the only ones `TheftFaulted` takes `FaultedUseHard` at.
-  Its fault channel (`faultChannel`) carries a hint for a window whose pattern `κ` cuts, so those faults count by
-  their hints rather than their patterns and need no `FaultedUseHard`. `Cut.none` cuts nothing, and `Cut.map` reads a
-  cut through an encoding of the answers (a token list as the release's `O → V`).
+* `Cut.Interior κ Cf size φ₀`: the patterns `κ` doesn't cut, and `Cut.Interiors`, those as a pattern type: the only
+  ones `TheftFaulted` takes `FaultedUseHard` at, its pattern count among them. Its fault channel (`faultChannel`)
+  carries a hint for a window whose pattern `κ` cuts, so those faults cost only their hints. `Cut.none` cuts nothing,
+  and `Cut.map` reads a cut through an encoding of the answers (a token list as the release's `O → V`).
 
 The cuts are stated for autoregressive decoding (`decode`): position `i`'s token is a function of the tokens before it,
 which holds when the release is tokens only, nothing decodes ahead, and no state is shared across requests. Two
@@ -103,9 +103,19 @@ def Cut.map (κ : Cut X Y) (f : Y → Y') (g : Y' → Y) : Cut X Y' where
 
 /-- **The patterns no cut covers**: the empty pattern `φ₀`, and each pattern `φ` that `κ` doesn't cut, with the faulted
 function at `φ₀` as the honest one (`κ.Cuts (Cf · φ₀) Cf size (· = φ)`). `TheftFaulted` takes `FaultedUseHard` only at
-these: every other pattern costs its hint. At `Cut.none` every pattern is interior. -/
+these (`Cut.Interiors`): every other pattern costs its hint. At `Cut.none` every pattern is interior. -/
 def Cut.Interior (κ : Cut X Y) (Cf : Θ → X × F → Y) (size : F → ℕ) (φ₀ φ : F) : Prop :=
   φ = φ₀ ∨ ¬ κ.Cuts (fun θ x => Cf θ (x, φ₀)) Cf size (· = φ)
+
+/-- **The interior patterns as a pattern type of their own**: `TheftFaulted` takes `FaultedUseHard` at the faulted
+function restricted to them, so its pattern count `N` counts only these. -/
+abbrev Cut.Interiors (κ : Cut X Y) (Cf : Θ → X × F → Y) (size : F → ℕ) (φ₀ : F) : Type :=
+  {φ : F // κ.Interior Cf size φ₀ φ}
+
+noncomputable instance (κ : Cut X Y) (Cf : Θ → X × F → Y) (size : F → ℕ) (φ₀ : F) [Fintype F] :
+    Fintype (κ.Interiors Cf size φ₀) := by
+  classical
+  exact Subtype.fintype _
 
 /-- **A faulted-use party's view rebuilt** from a view without patterns (newest first): each round's query is the
 party's at the rebuilt view so far, its pattern included. -/
