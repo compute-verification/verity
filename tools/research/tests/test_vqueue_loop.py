@@ -637,18 +637,18 @@ def test_a_fault_main_has_too_is_inherited_by_what_it_names_so_no_pr_touching_it
             {"task": "pytest:t", "key": key, "tests": [], "why": f"run {run} exit 1; error: {{}}; {fault}"}]}))
 
     undeclared = "read 2 file(s) outside its declared inputs: x.txt, y.txt"
-    faulted(main, "sha512:t0", "r20261109-101432-ea83 on n1", undeclared)
-    faulted(sha, "sha512:t1", "r20261109-111111-ffff on node-12", undeclared)
+    faulted(main, "sha512:t0", "r20260101-000000-aaaa on n1", undeclared)
+    faulted(sha, "sha512:t1", "r20260101-000001-bbbb on node-12", undeclared)
     (f,) = loop.world.verdict(sha, main).verdict.failed
     assert f.tests == f.base_tests == {"undeclared:x.txt", "undeclared:y.txt"} and vqueue._inherited(f)
-    faulted(sha, "sha512:t1", "r20261109-111111-ffff on n2", "read 3 file(s) outside its declared inputs: x.txt, y.txt, z.txt")
+    faulted(sha, "sha512:t1", "r20260101-000001-bbbb on n2", "read 3 file(s) outside its declared inputs: x.txt, y.txt, z.txt")
     assert not vqueue._inherited(loop.world.verdict(sha, main).verdict.failed[0])            # one the change adds
     race = 'its runner caught a race: {"error": "race (t.txt)"}'
-    faulted(main, "sha512:t0", "r20261109-101432-ea83 on n1", race)
-    faulted(sha, "sha512:t1", "r20261109-111111-ffff on node-12", race)
+    faulted(main, "sha512:t0", "r20260101-000000-aaaa on n1", race)
+    faulted(sha, "sha512:t1", "r20260101-000001-bbbb on node-12", race)
     (f,) = loop.world.verdict(sha, main).verdict.failed
     assert f.tests == f.base_tests == {f"fault:{race}"}
-    assert L._fault_tests("run r20261109-101432-ea83 on n1: storing its artifacts: gone") == {
+    assert L._fault_tests("run r20260101-000000-aaaa on n1: storing its artifacts: gone") == {
         "fault:run: storing its artifacts: gone"}
     acts = loop.tick()
     assert "eject" not in _acts(acts) and "advance" in _acts(acts) and env.main() == sha
