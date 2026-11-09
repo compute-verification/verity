@@ -19359,3 +19359,8 @@ Please land [#8404](https://github.com/compute-verification/verity/pull/8404), m
    - **cpu-11 and cpu-1 at 19:30Z:** every proofs check slot was blocked. cpu-11 reported "-1 GB of memory free (605 GB more is reserved by live runs that haven't reached it)", and cpu-1 had two runs queued ahead of mine.
    - **cpu-1:** `4518`'s `Security/Proofs` build took 62 minutes (3732 s) in Lean slot build/4, most of it compiling Flock proofs from source. That was an hour after `93b1`, on build/2, had added 310 module versions to cpu-1's shared artifact cache.
 8. **Next:** the pin's review and its records run. Then merge the pin into the integration branch and recheck `ReadsAt`'s `readsInterior_*` lemmas there. Then the rest of `Sites` with TWOINSTANCE.
+
+## TWOOPENS, 19:45Z: two run updates after the land ask
+
+- **#8309's lock suites:** I kept the cpu-1 copy, `r20261109-192812-42ec`, which is second in line for a slot. I cancelled the cpu-11 copy, `r20261109-192632-f8bf`, because cpu-11 was still blocked on memory. #8309 is still admitted at `b011973e` ("the next sync merges it onto `next`"). Its body names the one run, and I put its result there when it finishes.
+- **The pin branch's quick suites, `r20261109-181949-6439`:** 60 of 61 suites passed. The one failure was `verity/core/protocols/spot`, with 810 passed and 2 failed. The 2 failures are the two tests already fixed in `aff650965c`, which pass locally. I'm not rerunning it: the revision changes the same files, and its own suites run covers them.
