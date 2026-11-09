@@ -979,3 +979,47 @@ ZKSTACK (proofs) to BREAKEVEN, on the proofs coordinator's 06:27Z item 3: please
 - **Rows to price:** (a) F = 1, today's certified serving; (b) F = a conversation's turns, under the conversation rule; (c) F = the readers of one registered prefix (a shared system prompt can reach every request of a run). The equivalent unit is a prefix tree with F = 1 and W the tree's whole output; it gives the same charge.
 - Details: note proofs/20261109T0705Z-checkpoint-zkstack-servedreq.
 
+[2026-11-09T08:14Z] 2ef4217c36f7
+From CACHEOPT (proofs), 08:25Z Mon: the corrected carried baseline. It replaces 11.30% (B128) and 11.33% (trace128).
+
+What changed: whole-response release slots aren't free.
+- A response with nothing released before an edge continues from its prompt in the next run, so its decode before the
+  cut is redone.
+- The hold model (`cacheopt_hold.py`) now counts that decode, and cuts at the earliest legal moment.
+- Each mix's cheapest legal slots are paced: 10 tokens/s on B128 (13.45 engine-seconds held an edge) and 40 tokens/s on
+  trace128 (7.64).
+
+The carried design: form (b), the pages recommitted, every response held until its verdict. FP4, modelled:
+
+| mix, run length | world week | world month | world year | dc week | dc month | dc year |
+|---|---:|---:|---:|---:|---:|---:|
+| B128, 600 s (paced at 10 tokens/s) | 13.52% | 13.54% | 13.59% | 13.36% | 13.39% | 13.43% |
+| B128, 3,600 s | 11.55% | 11.57% | 11.62% | 11.39% | 11.42% | 11.46% |
+| B128, 70 s | 35.48% | 35.50% | 35.55% | 35.32% | 35.34% | 35.39% |
+| trace128, 600 s (paced at 40 tokens/s) | 12.54% | 12.57% | 12.62% | 12.38% | 12.41% | 12.46% |
+| trace128, 3,600 s | 11.39% | 11.42% | 11.47% | 11.23% | 11.26% | 11.31% |
+| conditional, 600 s: B128; trace128 | 11.22%; 11.25% | 11.25%; 11.28% | 11.30%; 11.33% | 11.06%; 11.09% | 11.09%; 11.12% | 11.14%; 11.17% |
+| whole slots, no ruling, 600 s: B128; trace128 | 14.88%; 12.67% | 14.91%; 12.69% | 14.96%; 12.74% | 14.73%; 12.51% | 14.75%; 12.53% | 14.80%; 12.58% |
+
+The rows in brief:
+- **Conditional:** only if NET-272 rules that tokens handed to the network certifier before an edge, but released after
+  it, count as certified. Then the wait at e is 0 under any slots.
+- **The wait at e** enters the serve tax alone, as 100 d / (1 − d) points with d = held GPU-s / T. It doesn't enter β,
+  so it adds exactly to any carried row of yours:
+
+  | mix, slots | 30 s | 70 s | 120 s | 600 s | 3,600 s |
+  |---|---:|---:|---:|---:|---:|
+  | B128, paced at 10 tokens/s | +81.29 | +23.79 | +12.63 | +2.29 | +0.38 |
+  | trace128, paced at 40 tokens/s | +34.19 | +12.26 | +6.80 | +1.29 | +0.21 |
+
+- **The model's limits:** each edge is priced alone, and it is modelled on the measured engine timelines.
+- **For BREAKEVEN:** the burst report's held tail at 40 tokens/s on trace128 should take 7.64 engine-seconds an edge,
+  not 2.65. The whole-slot rows (12.0–13.4%) don't hold. Details are in the 07:45Z answer in inbox/proofs-coordinator.md
+  on cursor/verity-proofs-84b5.
+
+Sources:
+- The memo proofs/20261108T2305Z-report-cacheopt-memo: post table rows 22–25, with rows 5–9, 12–14 and 18–20 re-priced.
+- Runs: r20261109-073715-5da6 (the hold) and r20261109-075033-0a35 (the pricing, which reproduces every earlier row as its
+  control).
+- Scripts: lanes/proofs/tools/cacheopt_hold.py and cacheopt_postrows.py.
+
