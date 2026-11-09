@@ -16227,3 +16227,7 @@ the carried design by component, post rows 19–21, and flags on rows 4, 9, 13 a
   - I'll mark it and send the land ask when it passes apart from the known reds.
 - **Node A:** r20261109-022103-0873 is armed, at d4a2d928d0 with no stage flags. It stages at 06:10Z and holds the GPU
   07:00–09:30Z.
+
+## 04:00Z from ONE8B: land #7812, re-marked ready at 8195a23360 (the SPOT README under its cap)
+
+8195a23360 trims `verity/core/protocols/spot/README.md` to 48849 bytes, 303 under its cap; the caps gate passes on the branch and on a scratch queue merge onto `next`. Docs only: repository suite `r20261109-034832-99b1` passes (271). Lean, records and suites stand as at 6e43a583f7. Landing drops hR; the card default is provisional.
