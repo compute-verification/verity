@@ -4588,6 +4588,42 @@ def test_a_named_assumption_may_sit_in_a_module_under_assumptions_module():
     assert named & set(codes("P.AssumptionsX"))
 
 
+def test_assumptions_module_may_list_several_homes():
+    """`assumptions_module` may list modules (`Security/Properties` lists `Properties.Assumptions` beside the spec's, for an
+    assumption stated over the code, which the spec can't import): one declared in any of them is a named assumption, one
+    declared outside them all fails naming each, and every listed home is a module the build has. The string form is
+    one home, as the one-element list."""
+    def sound(module):
+        return facts(pins={"P.t": fact(
+            signature="P.t (h : P.Hyp) (s : P.Sound) (n : Nat) : P.f n = n",
+            hyps=fact()["hypotheses"] + [{"binder": "s", "type": "P.Sound", "closed": True, "named": "P.Sound",
+                                          "module": module}],
+            reads=fact()["reads"] + [{"name": "P.Sound", "module": module, "kind": "def", "hash": "5" * 32}])})
+    two = {**POLICY, "assumptions_module": ["P.Assumptions", "P.Defs"],
+           "assumptions": POLICY["assumptions"] | {"P.Sound": {"owner": "@lean"}}}
+    fails, pol = A.judge(two, sound("P.Defs"), FILES, update=True)
+    assert fails == [] and set(pol["assumptions"]) == {"P.Hyp", "P.Sound"}
+    assert pol["guarantees"]["P.t"]["premises"]["assumptions"] == ["P.Hyp", "P.Sound"]
+    assert A.judge(pol, sound("P.Defs"), FILES)[0] == []
+    outside = [x for x in A.judge(pol | {"assumptions_module": ["P.Assumptions", "P.Thms"]}, sound("P.Defs"), FILES)[0]
+               if x.code == "assumptions.outside-module"]
+    assert outside == ["assumptions: P.Sound is declared in P.Defs, not in P.Assumptions or P.Thms, where a named "
+                       "assumption is declared: move its definition there if it is a real one, or move its entry to "
+                       "`open` with the issue that discharges it and its due date, or to `domain` with a one-line `why` "
+                       "if it is part of what the guarantee says"]
+    one = A.judge(POLICY, facts(), FILES, update=True)
+    assert A.judge({**POLICY, "assumptions_module": ["P.Assumptions"]}, facts(), FILES, update=True)[0] == one[0] == []
+    assert A.judge({**POLICY, "assumptions_module": ["P.Assumptions"]}, facts(), FILES, update=True)[1] == \
+        one[1] | {"assumptions_module": ["P.Assumptions"]}
+    missing = A.judge({**POLICY, "assumptions_module": ["P.Assumptions", "P.Nowhere"]}, facts(), FILES, update=True)[0]
+    assert [x for x in missing if x.code == "assumptions.module"] == [
+        "assumptions: `assumptions_module` names 'P.Nowhere', which neither the build nor the packages it requires has a "
+        "module of; name the modules the named assumptions are declared in"]
+    for bad in ([], {"P.Assumptions": 1}, ["P.Assumptions", 2]):
+        assert "assumptions.module-form" in [x.code for x in A.judge({**POLICY, "assumptions_module": bad}, facts(),
+                                                                       FILES, update=True)[0]]
+
+
 def test_an_assumption_is_listed_by_name_with_its_record():
     """Each assumption has an owner and the digest of its definition as `reads` holds it, so a changed assumption is its own
     record; an entry no guarantee reads fails; an update converts a list of assumption modules into the definitions read

@@ -82,10 +82,11 @@
   "Properties.Core.Site",
   "Properties.Verity.Subprotocols",
   "Properties.Verity.Coupling",
-  "Properties.Flock.Nets"
+  "Properties.Flock.Nets",
+  "Properties.Assumptions"
  ],
  "proved_in": ["../Proofs"],
- "assumptions_module": "Definitions.Assumptions",
+ "assumptions_module": ["Definitions.Assumptions", "Properties.Assumptions"],
  "assumptions": {},
  "domain": {
   "Claims.Sampling.InScopeTwo": {
