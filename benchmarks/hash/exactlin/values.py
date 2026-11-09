@@ -14,14 +14,18 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import exactlin as X
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 CALLS = {"row_quant": 0, "product": 0}
 
 
-def counted(name: str, f):
+def counted(name: str, f: Callable[..., object]) -> Callable[..., object]:
     def body(*args):
         CALLS[name] += 1
         return f(*args)

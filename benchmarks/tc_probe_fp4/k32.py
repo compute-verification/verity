@@ -23,12 +23,16 @@ before alignment, and ``BlockScaledAlignAdd`` as its own lossless scale.  The ca
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from verity.ml.circuits.silicon.errors import InvalidArtifact
 from verity.ml.circuits.silicon import models as M
+from verity.ml.circuits.silicon.errors import InvalidArtifact
 from verity.ml.circuits.silicon.term import FORMATS, FP32_MAX_EXPONENT, PRODUCT_WIDTH, ZERO, Term, fp32_term, pack_fp32
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator, Sequence
 
 E2M1_VALUE = np.array([0, 0.5, 1, 1.5, 2, 3, 4, 6, -0.0, -0.5, -1, -1.5, -2, -3, -4, -6], dtype=np.float64)
 #: E2M1 code -> the E4M3 byte of the same value (every E2M1 value is an E4M3 normal or zero)
@@ -105,7 +109,8 @@ class GroupSumCandidate:
             t = self._table[key] = mixed_product(fa, fb, a, b)
         return t
 
-    def step_scaled(self, c_word: int, a_codes, b_codes, a_scales=(), b_scales=()) -> int:
+    def step_scaled(self, c_word: int, a_codes: Sequence[int], b_codes: Sequence[int], a_scales: Sequence[int] = (),
+                    b_scales: Sequence[int] = ()) -> int:
         if (c_word >> 23) & 0xFF == 0xFF:
             raise InvalidArtifact("non-finite FP32 accumulator")
         shift = 0
@@ -181,7 +186,8 @@ def _acc_near(rng, p: np.ndarray, d_lo: int, d_hi: int) -> np.ndarray:
     return ((s << 31) | (e << 23) | f).reshape(p.shape)
 
 
-def families_k32(rng, n_random: int, instr: str, fixed_mult: int = 1):
+def families_k32(rng: np.random.Generator, n_random: int, instr: str,
+                 fixed_mult: int = 1) -> Iterator[tuple[str, np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None, np.ndarray]]:
     """Yield (name, A (n,16,32) codes, Bt (n,8,32), SFA (n,16,1) | None, SFB (n,8,1) | None, C (n,16,8)) for a K=32 row.
     ``fixed_mult`` multiplies the one gated family of fixed size (``signed_zero``, 256 tiles); 1 keeps every earlier stream."""
     fa, fb, scale = ROWS[instr]
@@ -340,7 +346,7 @@ SMALL = {
 }
 
 
-def small_operands(rng, fmt: str, shape) -> tuple[np.ndarray, np.ndarray]:
+def small_operands(rng: np.random.Generator, fmt: str, shape: tuple[int, ...]) -> tuple[np.ndarray, np.ndarray]:
     """(values, codes) of exact small integers of ``fmt``."""
     vals = np.array(sorted(SMALL[fmt]), dtype=np.int64)
     v = vals[rng.integers(0, len(vals), shape)]
