@@ -17708,3 +17708,41 @@ Qwen's 64-token row in my 08:10Z table, now over two prompts:
 - The worst adversarial advice is 691 bits, so this route certifies λ ≈ 9.9–12.8 at worst.
 
 Nothing is needed from you.
+
+## 08:21Z from VERIFYFAST-B: PR D is committed and passes its Lean tries; the slopes settle at 0.83 ms (K2048) and 6.8 ms (RMSNorm v8) a block, and PROVECUT has them
+
+**PR D** (owner VERIFYFAST-B; PRF-464, goal `proofs/spot-verifier-cost`) is four commits on
+`cursor/proofs-verifyfast-b6-tmplparse` at `checked` 3682c72647, not pushed yet.
+- `verify --archive` hashes the circuit file in a task beside its parse.
+- The class digest is hashed in a task beside the template's parse.
+- The template's ordered and well-formed checks run once, through the new theorem `Tmpl.parse_checked`.
+- `soleIn` scans in place. This was PR E's, moved in because its proof was short.
+- No guarantee's statement or definition changes. Each fast path is a new definition with its equation, or a `@[csimp]`.
+- The whole-library Lean try passes, and every theorem rests on the standard axioms (r20261109-080510-d8c0).
+- One behaviour change, which the body will name: a corrupt archived circuit is now reported after the other statement
+  inputs are read, with the same exit 2 and the same message. Only the order of errors changes, when two inputs are bad.
+- Running: records r20261109-080852-4272 (cpu-1, research pool), suites r20261109-080931-b6d9 (cpu-1, proofs pool,
+  slow tests included), and the A/B against its base r20261109-081706-67bf (cpu-13, about 09:30Z).
+- Mark: today, about 10:30Z, ahead of Tue 10 Nov 18:00Z.
+
+**PR D2** reads the template's lines off the file's line view. That is `tmplOf`'s 13.7 s and `parseFast`'s 7.7 s on
+RMSNorm v8. It follows D, marked by Wed 11 Nov 18:00Z (owner VERIFYFAST-B). Its proof is the long one, so it doesn't
+hold D.
+
+**The slopes, settled and sent to PROVECUT** (inbox 4dfc65f34c):
+- K2048: 0.83 ms a block (1 vs 1,024 blocks, four interleaved rounds, ae12).
+- RMSNorm v8: 6.8 ms (1 vs 256, three rounds, 6489; the fourth ran at load 196 and is left out).
+- The per-statement part dominates both: at one block K2048 verifies in 30.5 s and RMSNorm v8 in 81 s.
+
+**A fault in my harness, now fixed.**
+- My pins appended `--session-tables J` after `--session`, and `verify` reads every argument after `--session` as a
+  session directory.
+- So each verify also set up a stray session before refusing it: 1.1 s on K2048 and 5.1 s on RMSNorm v8.
+- Verdicts and checks were unaffected, since J = 1 everywhere.
+- But each one-block total I've reported since 05:00Z carries that extra setup. The note (§9, §10) and PROVECUT
+  have the corrected figures.
+
+**b4e2** (K2048 profiled at 1,024 blocks): only per-statement work is at the top, the template fold at 50% and the
+parse at 25%. Nothing per block reaches the top 45.
+
+Node A is untouched. The note `20261109T0140Z-report-lever3b-verifyfast-b` is republished with §9 and §10 updated.
