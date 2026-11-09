@@ -38,10 +38,17 @@ import Proofs.Flock.Claims.Sampling.KS
 import Proofs.Hash.RowBinding
 import Proofs.NetworkCertifier.Counting
 import Proofs.NetworkCertifier.PooledLeak
+import Proofs.NetworkCertifier.SampledAuditAccepted
 import Proofs.NetworkCertifier.SampledLeak
 
 /-!
-# The leak bound over a carried pool
+# The leak bounds over a carried pool
+
+**One run's guarantee** (`sampledLeakCarried`). The class's run from the trace (`rLeakChecked_of`: the trace's inputs, and
+its values held at the incorrect set's committed gates) reads the trace's values at opening gates that are inputs and
+leaves the trace run's values at the closing gates (`rLeakCarried_of`), so `KSLinOn` moves to the relation at those rows
+as it moves to `RLeakChecked`. At a fixed opened row, a sequence accepted from it is accepted with the opening gates
+registered at its values, so the class's count there charges none of them (`encard_accSeqsCarried_le`).
 
 **One run's step** (`carried_step`). Two runs accepted with a valid run at one incorrect set, whose inputs agree off the
 checked ones and whose held values and jitter codes agree, see one observation sequence, by the class proof's induction
@@ -214,6 +221,143 @@ theorem carried_step {L K S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay 
   refine ⟨rfl, ?_⟩
   rw [hrun, hrun']
   exact hcls _ p.1 p'.1 hf (by simp) hoff hsupp hv1 hv2
+
+/-! ### One run's guarantee -/
+
+/-- **A valid trace run gives the leak relation from the trace's rows**: `rLeakChecked_of`'s run (the trace's inputs, and
+its values held at the incorrect set's committed gates) reads the trace's values at opening gates that are inputs, and
+leaves the trace run's values at the closing gates. -/
+theorem rLeakCarried_of {Coin Col T : Type} (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ}
+    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) {δ : ℝ} (reg : AuditStatement → Finset ℕ)
+    (valid : AuditStatement → (ℕ → Bool) → Prop) (prow nrow : AuditStatement → List ℕ) (hopen : OpensAtInputs prow)
+    (Dj : ℕ) {x : Msg} (hx : ScopeAcc D lay k x) {w : Wit} {s : AuditStatement} {P : Partition}
+    (hs : D.parse x = some s) (hP : D.partition s = some P) (hRel : RelS H D.commit δ s P w)
+    (hdisj : Disjoint (faulty H D.commit s P w) (allSlots s.design P))
+    (hv : valid s (valOver s.prog (traceVal s.prog (w.val H D.commit s))
+      (heldAdv s.prog P (faulty H D.commit s P w) (w.val H D.commit s)))) :
+    RLeakCarried H D.commit D.parse D.partition L K S lay k δ reg valid prow nrow Dj x w := by
+  obtain ⟨⟨s₁, P₁, hs₁, hP₁, hin⟩, s₂, hs₂, hfit⟩ := hx
+  rw [hs] at hs₁ hs₂
+  obtain rfl := Option.some.inj hs₁
+  obtain rfl := Option.some.inj hs₂
+  rw [hP] at hP₁
+  obtain rfl := Option.some.inj hP₁
+  obtain ⟨ι, hι⟩ := SampledAuditProof.correct_of_not_faulty H D.commit s P w
+  have hF := faulty_mem_faultySets hRel hdisj
+  let a : ℕ → Bool := fun g =>
+    if g ∈ freeInputs s.prog (lay s) (k s) then traceVal s.prog (w.val H D.commit s) g else false
+  refine ⟨s, P, hs, hP, fun op o hcar hcov _ _ => ?_⟩
+  have hinp : valOver s.prog (traceVal s.prog (w.val H D.commit s))
+      (heldAdv s.prog P (faulty H D.commit s P w) (w.val H D.commit s)) =
+      valOver s.prog ((lay s).inputOf (k s) ((List.range (k s)).map fun i => op i (o.take i)) a)
+        (heldAdv s.prog P (faulty H D.commit s P w) (w.val H D.commit s)) :=
+    funext (valOver_congr_input s.prog _ fun i hi => by
+      rw [← inputOf_full hcar i]
+      exact inputOf_restrict s.prog (lay s) (k s) _ _ hi)
+  refine ⟨_, hF, a, ⟨fun g _ hg => if_pos hg, fun g hg => if_neg hg⟩,
+    heldAdv s.prog P (faulty H D.commit s P w) (w.val H D.commit s),
+    fun g b h => SampledAuditProof.faultyGate_of_heldAdv h, by rw [← hinp]; exact hv, ?_, by rw [← hinp], ?_⟩
+  · refine List.map_congr_left fun g hg => ?_
+    rw [← inputOf_full hcar g]
+    exact (inputOf_restrict s.prog (lay s) (k s) _ _ (hopen s g hg)).symm
+  · intro t ht
+    obtain ⟨h, hr, hst⟩ := SampledAuditProof.accepted_of hin.1 hin.2.1 hfit ι hι hcar hcov t ht
+    refine ⟨h, ?_, hst⟩
+    have hv' : valOver s.prog ((lay s).inputOf (k s) (ingressUpTo op o t) (traceVal s.prog (w.val H D.commit s)))
+        (heldAdv s.prog P (faulty H D.commit s P w) (w.val H D.commit s)) =
+        valOver s.prog ((lay s).inputOf (k s) (ingressUpTo op o t) a)
+          (heldAdv s.prog P (faulty H D.commit s P w) (w.val H D.commit s)) :=
+      funext (valOver_congr_input s.prog _ fun i hi => inputOf_restrict s.prog (lay s) (k s) _ _ hi)
+    rw [hr]
+    simp only [circuitProgram, hv']
+
+/-- **The leak relation from the trace's rows gives the leak relation**: a sequence accepted with a valid run from a row
+is accepted. -/
+theorem rLeak_of_rLeakCarried {H : Msg → Msg} {Cm : CommitmentScheme Bool} {parse : Msg → Option AuditStatement}
+    {partition : AuditStatement → Option Partition} {L K S : ℕ} {lay : AuditStatement → BoundaryGates L S}
+    {k : AuditStatement → ℕ} {δ : ℝ} {reg : AuditStatement → Finset ℕ} {valid : AuditStatement → (ℕ → Bool) → Prop}
+    {prow nrow : AuditStatement → List ℕ} {Dj : ℕ} {x : Msg} {w : Wit}
+    (h : RLeakCarried H Cm parse partition L K S lay k δ reg valid prow nrow Dj x w) :
+    RLeak H Cm parse partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj x w := by
+  obtain ⟨s, P, hs, hP, h⟩ := h
+  refine ⟨s, P, hs, hP, fun op o hC hCov hl hD => ?_⟩
+  obtain ⟨F, hF, a, ha, free, hfree, -, -, -, hacc⟩ := h op o hC hCov hl hD
+  exact ⟨hl, hD, F, hF, a, ha, free, hfree, hacc⟩
+
+/-- **`KSLinOn` moves from `RAcc δ` to the leak relation from the trace's rows**, on the statements where the check holds
+on the trace's run except with probability `εchk` (`CheckedWitness`), at `κ + εchk`: `ksLinOn_rLeakChecked`'s argument
+at `rLeakCarried_of`. -/
+theorem ksLinOn_rLeakCarried {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+    [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S)
+    (k : AuditStatement → ℕ) {δ : ℝ} (decode : List (ℕ × Col) → List T) (reg : AuditStatement → Finset ℕ)
+    (valid : AuditStatement → (ℕ → Bool) → Prop) (prow nrow : AuditStatement → List ℕ) (hopen : OpensAtInputs prow)
+    (εchk : Msg → ℝ) (Dj : ℕ)
+    (h : KSLinOn H D.V (ScopeAcc D lay k) (RAcc H D.commit D.parse D.partition L K S lay k δ) (E D decode) (κ D δ)
+      (γ D) (fun _ => 1) (Bext H D.V (E D decode))) :
+    KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D decode valid εchk x)
+      (RLeakCarried H D.commit D.parse D.partition L K S lay k δ reg valid prow nrow Dj)
+      (E D decode) (fun x => κ D δ x + εchk x) (γ D) (fun _ => 1) (Bext H D.V (E D decode)) := by
+  intro x hx Ω _ _ P
+  have h1 := h x hx.1 Ω P
+  have h2 := hx.2 Ω P
+  unfold PrBad at h1 ⊢
+  unfold PrCheckMiss at h2
+  refine (Claims.Sampling.Pr_or_le (fun r hr => ?_) h1 h2).trans (le_of_eq ?_)
+  · beta_reduce at hr ⊢
+    obtain ⟨hacc, hng⟩ := hr
+    generalize ((E D decode).eval H P x r.1 r.2.1 r.2.2).1 = ow at hng ⊢
+    rcases ow with _ | w
+    · exact Or.inl ⟨hacc, fun hR => by simp only [Rel.ext] at hR⟩
+    · by_cases hR : RAcc H D.commit D.parse D.partition L K S lay k δ x w
+      · obtain ⟨s, Pt, hs, hP, hRel, hdisj, -⟩ := hR
+        by_cases hv : valid s (valOver s.prog (traceVal s.prog (w.val H D.commit s))
+            (heldAdv s.prog Pt (faulty H D.commit s Pt w) (w.val H D.commit s)))
+        · exact absurd (rLeakCarried_of H D lay k reg valid prow nrow hopen Dj hx.1 hs hP hRel hdisj hv) hng
+        · exact Or.inr ⟨hacc, w, s, Pt, rfl, hs, hP, hdisj, hv⟩
+      · exact Or.inl ⟨hacc, hR⟩
+  · beta_reduce
+    ring
+
+/-- **The sequences accepted from a row number at most the class's count with the opening gates registered**: a sequence
+accepted from `rin` is accepted at the inputs pinned at `reg ∪ prow`, `prow`'s free inputs at `rin`'s values, so
+`encard_accSeqsChecked_le` there charges no free input of `prow`. -/
+theorem encard_accSeqsCarried_le {L K S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay : BoundaryGates L S) (n : ℕ)
+    (hfits : lay.Fits C n) (chk : Finset ℕ) (valid : (ℕ → Bool) → Prop) (hchk : CheckedUnique C P d lay n chk valid)
+    (reg : Finset ℕ) (ρ : ℕ → Bool) (prow nrow : List ℕ) (rin : Hash.Row) (δ : ℝ)
+    (op : ℕ → List (Obs L K S) → List Bool) (D : ℕ) :
+    (AccSeqsCarried C P d lay n (AsReg C lay n reg ρ) valid prow nrow rin δ op D).encard ≤
+      ((2 ^ (freeInputs C lay n \ (reg ∪ chk ∪ prow.toFinset)).card * (faultySets d P δ).card *
+        2 ^ ((faultySets d P δ).sup (faultyBits C P)) * D ^ n : ℕ) : ℕ∞) := by
+  classical
+  let ρ' : ℕ → Bool := fun g => if g ∈ prow then rin.getD (prow.idxOf g) false else ρ g
+  have hsub : AccSeqsCarried C P d lay n (AsReg C lay n reg ρ) valid prow nrow rin δ op D ⊆
+      AccSeqsChecked C P d lay n (AsReg C lay n (reg ∪ prow.toFinset) ρ') valid δ op D := by
+    rintro o ⟨hl, hD, F, hF, rout, a, ⟨hreg, hoff⟩, free, hfree, hv, hp, -, hacc⟩
+    refine ⟨hl, hD, F, hF, a, ⟨fun g hg hgf => ?_, hoff⟩, free, hfree, hv, hacc⟩
+    by_cases hgp : g ∈ prow
+    · have hlt : prow.idxOf g < prow.length := List.idxOf_lt_length_iff.2 hgp
+      simp only [ρ', if_pos hgp]
+      rw [← hp, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_eq_getElem hlt, List.getElem_idxOf hlt]
+      simp [inputOf_free (fun i => op i (o.take i)) a hgf]
+    · simp only [ρ', if_neg hgp]
+      rcases Finset.mem_union.1 hg with hr | hr
+      · exact hreg g hr hgf
+      · exact absurd (List.mem_toFinset.1 hr) hgp
+  calc _ ≤ (AccSeqsChecked C P d lay n (AsReg C lay n (reg ∪ prow.toFinset) ρ') valid δ op D).encard :=
+        Set.encard_le_encard hsub
+    _ ≤ _ := encard_accSeqsChecked_le C P d lay n hfits chk valid hchk (reg ∪ prow.toFinset) ρ' δ op D
+    _ = _ := by rw [Finset.union_right_comm]
+
+/-- **One carried run's leak bound, given `SampledAuditAccepted`**: `Guarantees.SampledLeakCarried`, from
+`ksLinOn_rLeakCarried` at `KSAccepted`'s bound and `encard_accSeqsCarried_le` on the statements whose layout fits. -/
+theorem sampledLeakCarried : Guarantees.SampledLeakCarried := by
+  intro hSA Coin Col T _ _ _ _ _ H D hks L K S lay k δ decode hδ hdec reg chk valid prow nrow hopen εchk Dj
+  refine ⟨ksLinOn_rLeakCarried H D lay k decode reg valid prow nrow hopen εchk Dj
+      (hSA H D L K S lay k hks δ decode hδ hdec), fun x hx s P hs hP hchk op ρ rin => ?_⟩
+  obtain ⟨s', hs', hfits⟩ := hx.2
+  rw [Option.some_injective _ (hs'.symm.trans hs)] at hfits
+  exact encard_accSeqsCarried_le s.prog P s.design (lay s) (k s) hfits (chk s) (valid s) hchk (reg s) ρ (prow s)
+    (nrow s) rin δ op Dj
 
 /-! ### The period -/
 

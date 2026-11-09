@@ -2,20 +2,27 @@ module
 
 public import Definitions.Core.Assumptions
 public import Definitions.NetworkCertifier.Carried
+public import Definitions.NetworkCertifier.Guarantees.SampledAudit
 
 /-!
-# The leak bound over a carried pool
+# The leak bounds over a carried pool
 
-`PooledLeakChecked` over runs that carry the pool: each run opens the row the run before it left, or the empty pool's
-where the chain restarts (`PoolChained`, the record rule), and runs its own offline memory check from it on its own live
-coins. An opened row costs no advice bits: the chain fixes it, the previous run's closing row, which that run's check pins
-(`CheckedClosing`), unless two different rows have one root. Accepted runs open the root of the row the record rule names
-(`CarriedRoots`: each run's check of its roots and the record rule give it with no probability). So the count is the
-product of the runs' counts, each leaving out its opened row (`prow`), and the escape bound adds, for each opening, a
-collision of the hash among what the two rows' digests hashed (`PoolColl`).
+`SampledLeakCarried` is `SampledLeakChecked` for one run that opens a row: except with the same probability, the run's
+observations are accepted with a valid run from the row the extractor's trace holds at the opening gates, leaving the
+trace run's row at the closing gates, so both rows are functions of the extracted witness. At a fixed opened row its count
+charges no bit of it.
+
+`PooledLeakCarried` is `PooledLeakChecked` over runs that carry the pool: each run opens the row the run before it left,
+or the empty pool's where the chain restarts (`PoolChained`, the record rule), and runs its own offline memory check from
+it on its own live coins. An opened row costs no advice bits: the chain fixes it, the previous run's closing row, which
+that run's check pins (`CheckedClosing`), unless two different rows have one root. Accepted runs open the root of the row
+the record rule names (`CarriedRoots`: each run's check of its roots and the record rule give it with no probability). So
+the count is the product of the runs' counts, each leaving out its opened row (`prow`), and the escape bound adds, for
+each opening, a collision of the hash among what the two rows' digests hashed (`PoolColl`).
 
 It is conditional as `PooledLeakChecked` is: its inputs are named (`PeriodChannel`, `PeriodAdaptive`, `PeriodEscapes`,
-`PeriodLeaksCarried`), none discharged yet.
+`PeriodLeaksCarried`), none discharged yet. At rows read off each run's extracted witness (`RLeakCarried`), a collision at
+an opening is one found from two witnesses.
 -/
 
 @[expose] public section
@@ -26,6 +33,38 @@ namespace NetTiming.Guarantees
 set_option linter.unusedVariables false
 
 open Claims Claims.Sampling Finset
+
+/-- **An accepted sampled audit bounds a carried run's leak, given `SampledAuditAccepted`.** `SampledLeakChecked` for a
+run that reads an opened row at its opening gates `prow`, inputs of its circuit (`OpensAtInputs`), and leaves a row at its
+closing gates `nrow`:
+
+* on the statements in scope whose trace run the check holds on except with probability `εchk` (`CheckedWitness`),
+  `Pr[acc ∧ ¬RLeakCarried δ] ≤ δ + ε_ks + ε_bind + εchk`: except with that probability, every observation sequence of
+  length `k` with jitter below `Dj` that the trace's transfer gates carry with every status complete is accepted with a
+  valid run from the trace's values at `prow`, leaving the trace run's values at `nrow`, both read off the witness;
+* on a statement in scope whose check pins `chk` (`CheckedUnique`), at every `ρ` and every opened row `rin`, the
+  sequences accepted from `rin` (`AccSeqsCarried`) number at most
+  `2^#(freeInputs \ (reg ∪ chk ∪ prow)) · #faultySets(δ) · 2^β · Dj^k`, `β` the most committed bits of a possible
+  incorrect set. -/
+def SampledLeakCarried : Prop :=
+  SampledAuditAccepted →
+    ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
+      (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (hks : KS H D) (L K S : ℕ)
+      (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T)
+      (hδ : 0 ≤ δ) (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode)
+      (reg chk : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop)
+      (prow nrow : AuditStatement → List ℕ) (hopen : OpensAtInputs prow) (εchk : Claims.Msg → ℝ) (Dj : ℕ),
+      KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D decode valid εchk x)
+          (RLeakCarried H D.commit D.parse D.partition L K S lay k δ reg valid prow nrow Dj)
+          (E D decode) (fun x => κ D δ x + εchk x) (γ D) (fun _ => 1) (Bext H D.V (E D decode)) ∧
+        ∀ x, ScopeAcc D lay k x → ∀ s P, D.parse x = some s → D.partition s = some P →
+          CheckedUnique s.prog P s.design (lay s) (k s) (chk s) (valid s) →
+          ∀ (op : ℕ → List (Obs L K S) → List Bool) (ρ : ℕ → Bool) (rin : Hash.Row),
+            (AccSeqsCarried s.prog P s.design (lay s) (k s) (AsReg s.prog (lay s) (k s) (reg s) ρ) (valid s) (prow s)
+                (nrow s) rin δ op Dj).encard ≤
+              ((2 ^ (freeInputs s.prog (lay s) (k s) \ (reg s ∪ chk s ∪ (prow s).toFinset)).card *
+                (faultySets s.design P δ).card * 2 ^ ((faultySets s.design P δ).sup (faultyBits s.prog P)) *
+                Dj ^ k s : ℕ) : ℕ∞)
 
 /-- **The leak through the network certifier over a monitoring period whose runs carry the pool** (conditional on its
 named inputs). Over `m` runs on independent live coins, run `i` registered as `sw i` (partition `Pw i`, values `ρ i` at

@@ -34,16 +34,22 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
+import Proofs.NetworkCertifier.Carried
+import Proofs.NetworkCertifier.WitnessesChecked
 
 /-!
-# The nontrivial lemma of the leak bound over a carried pool
+# The nontrivial lemmas of the leak bounds over a carried pool
 
-`PooledLeakCarried`. At one run whose audit always accepts, `q = 1`, `Fmax = 1`, no error, every row the empty pool's,
-and its observations empty where the horizon is one step: no run meets its leak relation, no opening collides (the two
-digests of the empty row hash one message, `poolColl_empty`), and the escape bound reads `1 ≤ 0`.
+* `SampledLeakCarried`. Its acceptance conclusion fails at the accepting verifier `leakD`, as `SampledLeakChecked`'s does,
+  at the check every run passes and no opening or closing gate: a witness in `RLeakCarried` is in `RLeak`
+  (`rLeak_of_rLeakCarried`), and none is (`leakD_noRLeak`).
+* `PooledLeakCarried`. At one run whose audit always accepts, `q = 1`, `Fmax = 1`, no error, every row the empty pool's,
+  and its observations empty where the horizon is one step: no run meets its leak relation, no opening collides (the two
+  digests of the empty row hash one message, `poolColl_empty`), and the escape bound reads `1 ≤ 0`.
 
-Its honest lemma is open: it needs a deployed check that pins its checked inputs (`CheckedUnique`), its closing row
-(`CheckedClosing`) and the roots it opens and leaves (`CarriedRoots`).
+Their honest lemmas are open. `SampledLeakCarried`'s needs a deployed check that pins its checked inputs
+(`CheckedUnique`) and its miss bounded (`CheckedWitness`), and `PooledLeakCarried`'s one that pins its checked inputs, its
+closing row (`CheckedClosing`) and the roots it opens and leaves (`CarriedRoots`).
 -/
 
 @[expose] public section
@@ -51,6 +57,28 @@ Its honest lemma is open: it needs a deployed check that pins its checked inputs
 namespace NetTiming.Witness
 
 open Claims Claims.Sampling
+
+open Claims.Witness Claims.Witness.Sampling in
+/-- **`SampledLeakCarried`'s acceptance conclusion fails at the accepting verifier** `atNot (sksD Bool)` (`leakD`), at
+one step at `δ = 0`, with no input registered and no opening or closing gate, at the check every run passes: at the
+statement `[]`, in scope (`leakD_scopeAcc`) with the check's miss `0` (`checkedWitness_true`), its silent prover's bound
+fails, since no witness is in `RLeakCarried` (`rLeak_of_rLeakCarried`, `leakD_noRLeak`). -/
+theorem SampledLeakCarried_nontrivial :
+    ¬ KSLinOn FlockDeploy.sha512 (atNot (sksD Bool)).V
+      (fun x => ScopeAcc (atNot (sksD Bool)) (fun _ => notLay) (fun _ => 1) x ∧
+        CheckedWitness FlockDeploy.sha512 (atNot (sksD Bool)) (fun _ => [()]) (fun _ _ => True) (fun _ => 0) x)
+      (RLeakCarried FlockDeploy.sha512 (atNot (sksD Bool)).commit (atNot (sksD Bool)).parse
+        (atNot (sksD Bool)).partition 1 1 1 (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅) (fun _ _ => True)
+        (fun _ => []) (fun _ => []) 1)
+      (Claims.Sampling.E (atNot (sksD Bool)) fun _ => [()]) (fun x => Claims.Sampling.κ (atNot (sksD Bool)) 0 x + 0)
+      (Claims.Sampling.γ (atNot (sksD Bool))) (fun _ => 1)
+      (Bext FlockDeploy.sha512 (atNot (sksD Bool)).V (Claims.Sampling.E (atNot (sksD Bool)) fun _ => [()])) := by
+  rw [← leakD_eq_atNot Bool]
+  intro h
+  have hb := h [] ⟨leakD_scopeAcc [], checkedWitness_true _ _ _ []⟩ Unit silentP
+  refine leakD_bound_fails FlockDeploy.sha512 _ _ (Claims.Sampling.κ (leakD Bool) 0 [] + 0) [] ?_
+    (by linarith [leakD_κ (Coin := Bool) []]) hb
+  exact fun w hw => leakD_noRLeak FlockDeploy.sha512 _ [] w (rLeak_of_rLeakCarried hw)
 
 /-- **No collision at an opening of the empty pool**: the digests of the empty row hash one message, twice. -/
 theorem poolColl_empty (G : Hash.Msg → Hash.Digest) {m : ℕ} (chains : Fin m → Bool) (i : Fin m) :

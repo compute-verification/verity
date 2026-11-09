@@ -30,6 +30,8 @@ hashed. So a period's count charges no bit of an opened row, and its escape boun
 * `CarriedRoots`: accepted runs open the root of the row the record rule names, which each run's check of its roots and
   the record rule give, with no probability.
 * `PeriodLeaksCarried`: a period's input at each run's extracted rows. `PoolColl`: a collision at an opening.
+* `AccSeqsCarried`, `OpensAtInputs` and `RLeakCarried`: one run. The sequences accepted from an opened row, and the leak
+  relation at the rows the trace gives, which the extractor's witness fixes.
 -/
 
 @[expose] public section
@@ -121,6 +123,36 @@ def CarriedRoots {L K S m : ℕ} (G : Hash.Msg → Hash.Digest) (lay : AuditStat
     (∀ i, LeakAtCarried lay k reg valid prow nrow Dj (sw i) (Pw i) (ρ i) (op i (runsBefore o i)) (rin i) (rout i) (W i)
       (o i)) →
     ∀ i, Hash.RowSeg.digest G (rin i) = Hash.RowSeg.digest G (poolOpen chains genesis rout i)
+
+/-- **The sequences a sampled audit accepts at `δ` from the row `rin`**: `AccSeqsChecked`, with the run reading `rin` at its
+opening gates `prow` and leaving any row at its closing gates `nrow`. -/
+def AccSeqsCarried {L K S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay : BoundaryGates L S) (n : ℕ)
+    (As : Set (ℕ → Bool)) (valid : (ℕ → Bool) → Prop) (prow nrow : List ℕ) (rin : Hash.Row) (δ : ℝ)
+    (op : ℕ → List (Obs L K S) → List Bool) (D : ℕ) : Set (List (Obs L K S)) :=
+  {o | o.length = n ∧ (∀ x ∈ o, x.jitter < D) ∧
+    ∃ F ∈ faultySets d P δ, ∃ rout, AcceptedCarried C P lay n As valid prow nrow rin rout F op o}
+
+/-- **The opening gates are inputs** of each statement's circuit: a run reads its opened row where values enter it. -/
+def OpensAtInputs (prow : AuditStatement → List ℕ) : Prop :=
+  ∀ s, ∀ g ∈ prow s, s.prog.gates[g]? = some .input
+
+/-- **The leak relation with a valid run from the trace's rows** at `δ`: `RLeakChecked`, with the accepted run reading the
+trace's values at the opening gates `prow` and leaving at the closing gates `nrow` the values of the trace's run (`C` on
+the trace's values, the incorrect proof blocks' committed gates held at them, `heldAdv`). Both rows are functions of the
+witness, so two runs' rows that differ under one root give a collision found from the two witnesses. -/
+def RLeakCarried (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement)
+    (partition : AuditStatement → Option Partition) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
+    (k : AuditStatement → ℕ) (δ : ℝ) (reg : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop)
+    (prow nrow : AuditStatement → List ℕ) (Dj : ℕ) : Rel Wit :=
+  fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧
+    ∀ (op : ℕ → List (Obs L K S) → List Bool) (o : List (Obs L K S)),
+      Carries (lay s) s.prog (w.val H Cm s) op (k s) o → Covered (k s) o → o.length = k s → (∀ y ∈ o, y.jitter < Dj) →
+        ∃ F ∈ faultySets s.design P δ, AcceptedCarried s.prog P (lay s) (k s)
+          (AsReg s.prog (lay s) (k s) (reg s) (traceVal s.prog (w.val H Cm s))) (valid s) (prow s) (nrow s)
+          ((prow s).map (traceVal s.prog (w.val H Cm s)))
+          ((nrow s).map (valOver s.prog (traceVal s.prog (w.val H Cm s))
+            (heldAdv s.prog P (faulty H Cm s P w) (w.val H Cm s))))
+          F op o
 
 /-- **A collision at run `i`'s opening**: two different messages with one digest among those the digests of the row run
 `i` opened (`rin i`) and of the row it must open (`poolOpen`) hashed. -/
