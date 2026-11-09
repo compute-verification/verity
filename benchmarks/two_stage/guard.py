@@ -11,7 +11,9 @@ copies it reads them against (`SpotFlock.Held`), as `tests/TwoGuard.lean` reads 
 * ``c0.bin`` and ``c1.bin``: the bytes of the challenger's coins each stage's sample read (`service.Stream`'s);
 * ``ref-<t>.bin``: template ``t``'s reference statement (`Held.xS₀`), made from what is fixed before the run: its
   reference circuit and public file (`toy.references`), the reference window's partition and program as a5 writes a
-  session's, ``--zk``, one table and the sample of the second stage's size at its first units (`ref_draw`);
+  session's, ``--zk``, one table, the sample of the second stage's size at its first units (`ref_draw`), and the
+  template's registered reads where the params name them (``proofs.json``'s ``templates[t].registered``, as a0 writes a
+  session's ``registered.json``), none where they don't;
 * ``held.json``: the rest of the `Held`, each from the registration and the design: the first stage's `select` input
   (rule, program, query, work table, closure), the second stage's cells ``ns`` and counts ``ks``, the templates'
   names, the design's links (`second_stage.replay_links` at the boundary window's own port names), each template's
@@ -188,14 +190,17 @@ def export(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int)
     if (audit / "partition.json").read_bytes() != part or (audit / "program.json").read_bytes() != prog:
         raise ValueError("the reference window's partition or program is not the one the sessions were verified under")
     stmts = []
+    params = json.loads((run_out / "proofs.json").read_text())["templates"]
     for t, (m, n_t) in enumerate(zip(ref.members, T.N_T)):
         d = run_out / "references" / f"m{t}"
+        reads = params[t].get("registered")
         tables = sorted((d / "tables").glob("*.u32")) if (d / "tables").is_dir() else []
         order_of = [name for name, _ in mufu_tables()]
         (out / f"ref-{t}.bin").write_bytes(raw(
             "verity/flock-circuit", (d / "circuit.txt").read_bytes(), (d / "pub.bin").read_bytes(),
             [(f.stem, f.read_bytes()) for f in sorted(tables, key=lambda f: order_of.index(f.stem))], zk=True,
-            draw=compact(ref_draw(q, n_t, k)), partition=part, program=prog))
+            draw=compact(ref_draw(q, n_t, k)), partition=part, program=prog,
+            registered=None if reads is None else json.dumps(reads, sort_keys=True).encode()))
         stmts.append(session_statement(audit / f"session-m{t}"))
     (out / "m2.bin").write_bytes(enc_list(enc_bytes, stmts))
     (out / "verdicts.json").write_text(json.dumps([verdict(audit / f"session-m{t}") for t in range(len(stmts))]))
