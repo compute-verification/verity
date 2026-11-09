@@ -52,16 +52,38 @@ E4M3_MAX = 448.0
 ST_DTYPES = {"F32": torch.float32, "BF16": torch.bfloat16, "F16": torch.float16}
 
 
+NO_HOST = 1 << 62
+
+
 def position_class(pos: torch.Tensor, ids: torch.Tensor | None = None, special: torch.Tensor | None = None,
-                   window: int = 1) -> torch.Tensor:
-    """0 for the first `window` positions (where attention sinks put their massive activations: position 0, or the
-    first delimiter after a first token that hosts none), 2 for a special token (`special`, the tokenizer's control
-    tokens: document separators and chat delimiters, which act as sinks too) after them, and 1 for every other
-    position. A class reads only positions and token ids, both fixed inputs, never a value."""
-    c = (pos >= window).long()
+                   window: int = 1, span: torch.Tensor | None = None) -> torch.Tensor:
+    """0 for the sink's positions: every position before a sequence's first sink host, the `window` positions from it
+    on, and the run of that token from it (a model forms its attention sink, with its massive activations, at the first
+    token that can host one: position 0 unless the sequence opens with tokens that can't, such as Qwen's digits; and a
+    repeat of the token right after it repeats them; `span` (B, 3) from `sink_span`, else the sink is at position 0); 2
+    for a special token (`special`, the tokenizer's control tokens: document separators and chat delimiters, which act
+    as sinks too) after them; and 1 for every other position. A class reads only positions and token ids, both fixed
+    inputs, never a value."""
+    end = window if span is None else torch.maximum(span[:, 0] + window, span[:, 2])[:, None]
+    c = (pos >= end).long()
     if ids is not None and special is not None and len(special):
         c = torch.where((c == 1) & torch.isin(ids, special), 2, c)
     return c
+
+
+def sink_span(ids: torch.Tensor, hosts: torch.Tensor, pos0: int = 0, prior: torch.Tensor | None = None) -> torch.Tensor:
+    """(B, 3): each row's first position holding a sink host (a token of `hosts`), that token, and the first position
+    after it holding another, from the token ids (B, t) at positions pos0.. and `prior` (B or 1, 3), the earlier
+    positions' answer (NO_HOST, -1 and NO_HOST while not yet seen)."""
+    b, t = ids.shape
+    prior = (torch.tensor([[NO_HOST, -1, NO_HOST]]) if prior is None else prior).expand(b, 3)
+    h = torch.isin(ids, hosts)
+    f = torch.minimum(prior[:, 0], torch.where(h.any(1), pos0 + h.long().argmax(1), NO_HOST))
+    here = (f >= pos0) & (f < pos0 + t)
+    tf = torch.where(here, ids.gather(1, (f - pos0).clamp(0, t - 1)[:, None])[:, 0], prior[:, 1])
+    other = (pos0 + torch.arange(t)[None] > f[:, None]) & (ids != tf[:, None])
+    end = torch.minimum(prior[:, 2], torch.where(other.any(1), pos0 + other.long().argmax(1), NO_HOST))
+    return torch.stack([f, tf, end], 1)
 
 
 def ue8m0_scale(amax: torch.Tensor) -> torch.Tensor:
@@ -76,24 +98,33 @@ class Boxes:
     `cut` counts, per (site, layer), the values the clamps changed (a group site: its groups' coordinates), and `worst`
     the largest |value| / box among them: an honest value cut is a completeness failure."""
 
-    def __init__(self, hi: dict[tuple[str, int], torch.Tensor], special: list[int] | None = None, window: int = 1):
+    def __init__(self, hi: dict[tuple[str, int], torch.Tensor], special: list[int] | None = None, window: int = 1,
+                 hosts: list[int] | None = None):
         self.hi = hi
         self.special = torch.tensor(sorted(special or []), dtype=torch.long)
         self.window = window
+        self.hosts = None if hosts is None else torch.tensor(sorted(hosts), dtype=torch.long)
         self.cut: dict[tuple[str, int], int] = {}
         self.worst: dict[tuple[str, int], float] = {}
 
-    def classes(self, pos0: int, t: int, ids: torch.Tensor | None) -> torch.Tensor:
-        """(B or 1, t): the class of each position pos0.. of each row, from its token ids where given."""
+    def classes(self, pos0: int, t: int, ids: torch.Tensor | None,
+                prior: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor | None]:
+        """(B or 1, t): the class of each position pos0.. of each row, from its token ids where given; and with sink
+        hosts, each row's `sink_span` through them (`prior`: before pos0, which a cache records)."""
         pos = (pos0 + torch.arange(t))[None]
-        return position_class(pos, ids, self.special if ids is not None else None, self.window)
+        if ids is None or self.hosts is None:
+            return position_class(pos, ids, self.special if ids is not None else None, self.window), prior
+        if prior is None and pos0:
+            raise ValueError("the positions before pos0 have no recorded sink span: fill the cache under these boxes")
+        span = sink_span(ids, self.hosts, pos0, prior)
+        return position_class(pos, ids, self.special, self.window, span), span
 
     def apply(self, key: tuple[str, int], x: torch.Tensor, pos0: int, cls: torch.Tensor | None = None) -> torch.Tensor:
         h = self.hi.get(key)
         if h is None:
             return x
         if cls is None:
-            cls = self.classes(pos0, x.shape[1], None)
+            cls = self.classes(pos0, x.shape[1], None)[0]
         hb = h[cls].to(x.dtype)
         if key[0] in GROUP_SITES:
             b, t, w = x.shape
@@ -117,13 +148,13 @@ class Boxes:
 
     def save(self, path: Path, **meta) -> None:
         torch.save({"hi": {f"{s}:{l}": h for (s, l), h in self.hi.items()}, "special": self.special.tolist(),
-                    "window": self.window, **meta}, path)
+                    "window": self.window, "hosts": None if self.hosts is None else self.hosts.tolist(), **meta}, path)
 
     @classmethod
     def load(cls, path: Path) -> "Boxes":
         raw = torch.load(path)
         return cls({(k.split(":")[0], int(k.split(":")[1])): h for k, h in raw["hi"].items()}, raw.get("special"),
-                   raw.get("window", 1))
+                   raw.get("window", 1), raw.get("hosts"))
 
 
 def cache_dir() -> Path:
@@ -225,17 +256,21 @@ class Edit:
 
 
 class Cache:
-    """Per layer (K, V), each (B, kv_heads, S, head_dim); layers may differ in B, a batch-1 entry expanding."""
+    """Per layer (K, V), each (B, kv_heads, S, head_dim); layers may differ in B, a batch-1 entry expanding. Under boxes
+    with sink hosts, `sink` (B or 1, 3) is each row's `sink_span` over the cached positions."""
 
-    def __init__(self, kv: dict[int, tuple[torch.Tensor, torch.Tensor]] | None = None):
+    def __init__(self, kv: dict[int, tuple[torch.Tensor, torch.Tensor]] | None = None,
+                 sink: torch.Tensor | None = None):
         self.kv = kv or {}
+        self.sink = sink
 
     @property
     def length(self) -> int:
         return next(iter(self.kv.values()))[0].shape[2] if self.kv else 0
 
     def expand(self, b: int) -> "Cache":
-        return Cache({l: (k.expand(b, -1, -1, -1), v.expand(b, -1, -1, -1)) for l, (k, v) in self.kv.items()})
+        return Cache({l: (k.expand(b, -1, -1, -1), v.expand(b, -1, -1, -1)) for l, (k, v) in self.kv.items()},
+                     None if self.sink is None else self.sink.expand(b, 3))
 
     def append(self, layer: int, k: torch.Tensor, v: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         if layer in self.kv:
@@ -413,7 +448,9 @@ class LM:
             x = x_in
             if pos0 is None:
                 pos0 = cache.kv[first_layer][0].shape[2] if first_layer in cache.kv else 0
-        self._cls = None if self.boxes is None else self.boxes.classes(pos0, x.shape[1], ids)
+        self._cls = None
+        if self.boxes is not None:
+            self._cls, cache.sink = self.boxes.classes(pos0, x.shape[1], ids, cache.sink)
         if x_in is None:
             x = self._site("emb", -1, x, pos0, fault, taps)
         for l in range(first_layer, s.layers):

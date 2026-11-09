@@ -92,8 +92,8 @@ def outcomes(lm: LM, p: Prompt, l: int, j: int, edit_of, cands: torch.Tensor, v:
         edit = edit_of(cs)
         ck = Cache({m: p.cache.kv[m] for m in range(l)})
         fault = Fault.of(p.t0, [("mlph", l, j, v)] * k) if v is not None else None
-        z = lm.forward(None, ck, fault=fault, edit=edit, x_in=p.x_in.expand(k, -1, -1), first_layer=l, pos0=0,
-                       last_only=True)[:, -1]
+        z = lm.forward(p.ids.expand(k, -1), ck, fault=fault, edit=edit, x_in=p.x_in.expand(k, -1, -1), first_layer=l,
+                       pos0=0, last_only=True)[:, -1]
         toks = [served_logprobs(z, "bf16").argmax(-1)]
         for _ in range(1, n_obs):
             z = lm.forward(toks[-1][:, None], ck, edit=edit)[:, -1]

@@ -4,18 +4,22 @@ traffic.
 Every value a proof block reads from another is clamped by its reader to a box fixed before the period (`lm.Boxes`): a
 linear's input (`lm.GROUP_SITES`) per group of 128 coordinates, through its FP8 per-token-group scale, and every other
 read (the residual stream, a linear's output into the residual add, the attention cache's keys and values) per
-element. Each box is per position class (`lm.position_class`, read from positions and token ids alone): the first
---window positions, where attention sinks put their massive activations (position 0, or the first delimiter after a
-first token that hosts none); the tokenizer's special tokens after them (document separators and chat delimiters,
-sinks too); and every other position. A box is the honest calibration traffic's largest magnitude with --headroom
-powers of two (default one; one value, or one a class): an element's is the next power of two above its maximum,
-doubled; a group's is 448 times its largest UE8M0 scale, doubled (one more exponent step).
+element. Each box is per position class (`lm.position_class`, read from positions and token ids alone): every position
+before a sequence's first sink host (--hosts, from the hosts part), the --window positions from it on and the run of its
+token from it, where attention sinks put their massive activations (position 0, unless the sequence opens with tokens
+that host none, such as Qwen's digits); the tokenizer's special tokens after them (document separators and chat
+delimiters, sinks too); and every other position. Without --hosts the window starts at position 0. A box is the honest
+calibration traffic's largest magnitude with --headroom powers of two (default one; one value, or one a class): an
+element's is the next power of two above its maximum, doubled; a group's is 448 times its largest UE8M0 scale, doubled
+(one more exponent step).
 
 Traffic is the hand-written sets (`traffic.CALIBRATION`, `traffic.HELDOUT`) and, with --mixed N, N texts of the pinned
 datasets' (`traffic.mixed`; Pile documents need `--with pyarrow`); --shard i/n splits a part's texts across runs.
 
 Parts (--part):
 
+  hosts      the sink hosts: every token whose residual-stream peak at --sink-layer, alone at position 0, is over
+             --sink-ratio times the calibration texts' median. Writes hosts.pt, which calibrate takes as --hosts.
   calibrate  honest forwards over the calibration traffic (each text with its own greedy continuation of --new
              tokens) and --first-tokens tokens at position 0, split across shards (-1: the whole vocabulary, which
              covers position 0 of any traffic, since a model's activations there are a function of the token alone). Writes
@@ -28,10 +32,12 @@ Parts (--part):
              every value the clamps cut (an honest value outside its box is a completeness failure), and whether the
              clamped model's served greedy continuation differs from the unclamped one's.
   explain    where honest traffic leaves the boxes, unclamped: each value outside its box with its token and context,
-             and each text's sink-like positions.
+             and each text's sink-like positions with their classes.
 
+  uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/clamp.py --model gpt2 --part hosts \\
+      --window 4 --out "$OUT"
   uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/clamp.py --model gpt2 --part calibrate \\
-      --window 4 --first-tokens -1 --out "$OUT"
+      --window 4 --hosts "$OUT/hosts.pt" --first-tokens -1 --out "$OUT"
   uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/clamp.py --model gpt2 --part complete \\
       --boxes "$OUT/boxes.pt" --out "$OUT"
 """
@@ -46,7 +52,7 @@ from pathlib import Path
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lm import E4M3_MAX, GROUP, GROUP_SITES, LM, MODELS, Boxes, Cache, position_class, ue8m0_scale
+from lm import E4M3_MAX, GROUP, GROUP_SITES, LM, MODELS, Boxes, Cache, position_class, sink_span, ue8m0_scale
 from traffic import CALIBRATION, HELDOUT, mixed
 
 
@@ -73,9 +79,10 @@ class Stats:
 
     SWEEP = 1 << 20
 
-    def __init__(self, lm: LM, special: list[int], window: int):
+    def __init__(self, lm: LM, special: list[int], window: int, hosts: list[int] | None = None):
         self.keys = lm.sites()
         self.special, self.window = torch.tensor(special, dtype=torch.long), window
+        self.hosts = None if hosts is None else torch.tensor(sorted(hosts), dtype=torch.long)
         self.amax = {k: torch.zeros(CLASSES, lm.width(k[0])) for k in self.keys}
         self.at = {k: torch.full((CLASSES, lm.width(k[0]), 2), -1, dtype=torch.long) for k in self.keys}
         self.ss = {k: torch.zeros(CLASSES, lm.width(k[0]), dtype=torch.float64) for k in self.keys}
@@ -86,7 +93,8 @@ class Stats:
         """taps[key]: (B, T, width) for B sequences `seqs` (B,) of token ids (B, T) at positions 0..T-1."""
         b, t = ids.shape
         pos = torch.arange(t)[None].expand(b, t)
-        c = position_class(pos, ids, self.special, self.window).reshape(-1)
+        span = None if self.hosts is None else sink_span(ids, self.hosts)
+        c = position_class(pos, ids, self.special, self.window, span).reshape(-1)
         where = torch.stack([seqs[:, None].expand(b, t).reshape(-1), pos.reshape(-1)], 1)
         for k in self.keys:
             flat = taps[k].abs().float().reshape(b * t, -1)
@@ -112,12 +120,12 @@ class Stats:
 
     def save(self, path: Path) -> None:
         torch.save({k: getattr(self, k) for k in ("amax", "at", "ss", "n", "tokens", "window")}
-                   | {"special": self.special.tolist()}, path)
+                   | {"special": self.special.tolist(), "hosts": None if self.hosts is None else self.hosts.tolist()}, path)
 
     @classmethod
     def load(cls, lm: LM, path: Path) -> "Stats":
         raw = torch.load(path)
-        s = cls(lm, raw["special"], raw["window"])
+        s = cls(lm, raw["special"], raw["window"], raw.get("hosts"))
         for k in ("amax", "at", "ss", "n", "tokens"):
             setattr(s, k, raw[k])
         return s
@@ -171,10 +179,36 @@ def quantiles(x: torch.Tensor) -> dict:
     return {"median": float(x.median()), "p90": float(x.quantile(0.9)), "max": float(x.max())}
 
 
+def part_hosts(lm: LM, tok, a) -> dict:
+    """The sink hosts: every token whose largest residual-stream element at --sink-layer, alone at position 0, is over
+    --sink-ratio times the median one of the hand-written calibration texts past the first --window positions. A model
+    forms its sink at a sequence's first such token, where the position classes start (`lm.position_class`)."""
+    key = ("resid", a.sink_layer if a.sink_layer >= 0 else lm.spec.layers + a.sink_layer)
+    peaks = []
+    for text in CALIBRATION:
+        taps = {key: None}
+        lm.forward(torch.tensor([tok.encode(text).ids[:a.cap]]), Cache(), taps=taps)
+        peaks.append(taps[key][0, a.window:].abs().amax(-1).float())
+    base = float(torch.cat(peaks).median())
+    V = lm.spec.vocab
+    ratio = torch.empty(V)
+    for i in range(0, V, a.batch):
+        taps = {key: None}
+        lm.forward(torch.arange(i, min(V, i + a.batch))[:, None], Cache(), taps=taps)
+        ratio[i:i + a.batch] = taps[key][:, 0].abs().amax(-1).float() / base
+    hosts = (ratio > a.sink_ratio).nonzero()[:, 0].tolist()
+    torch.save({"hosts": hosts, "base": base, "sink_layer": key[1], "sink_ratio": a.sink_ratio}, a.out / "hosts.pt")
+    non = sorted((ratio <= a.sink_ratio).nonzero()[:, 0].tolist(), key=lambda t: float(ratio[t]))
+    return {"part": "hosts", "sink_layer": key[1], "sink_ratio": a.sink_ratio, "base": base, "vocab": V,
+            "hosts": len(hosts), "ratio_quantiles": {q: float(ratio.quantile(q)) for q in (0.001, 0.01, 0.1, 0.5)},
+            "non_hosts": [[tok.decode([t]), t, float(ratio[t])] for t in non]}
+
+
 def part_calibrate(lm: LM, tok, a) -> dict:
     """The shard's texts and its share of the position-0 sweep; with one shard, the boxes too (else `merge` makes
     them)."""
-    stats = Stats(lm, lm.special_ids() if a.special else [], a.window)
+    stats = Stats(lm, lm.special_ids() if a.special else [], a.window,
+                  torch.load(a.hosts)["hosts"] if a.hosts else None)
     t0 = time.time()
     texts = shard(traffic("calibration", a.mixed), a.shard)
     for j, (name, text) in texts:
@@ -204,7 +238,7 @@ def part_rebox(lm: LM, tok, a) -> dict:
     raw = torch.load(a.boxes)
     stats = Stats(lm, raw["special"], raw["window"])
     stats.amax = {(k.split(":")[0], int(k.split(":")[1])): v for k, v in raw["amax"].items()}
-    Boxes(stats.boxes(a.headroom), raw["special"], raw["window"]).save(
+    Boxes(stats.boxes(a.headroom), raw["special"], raw["window"], raw.get("hosts")).save(
         a.out / "boxes.pt", model=a.model, revision=MODELS[a.model]["revision"], headroom=a.headroom,
         amax=raw["amax"])
     return {"part": "rebox", "from": str(a.boxes), "window": raw["window"], "special": len(raw["special"]),
@@ -215,7 +249,7 @@ def calibrated(lm: LM, tok, a, stats: Stats) -> dict:
     """Writes boxes.pt from the merged statistics; per site and class, the boxes against the site's RMS, and the
     largest values (massive activations) with the token each sits on."""
     hi = stats.boxes(a.headroom)
-    Boxes(hi, stats.special.tolist(), stats.window).save(
+    Boxes(hi, stats.special.tolist(), stats.window, None if stats.hosts is None else stats.hosts.tolist()).save(
         a.out / "boxes.pt", model=a.model, revision=MODELS[a.model]["revision"], headroom=a.headroom,
         amax={f"{s}:{l}": v for (s, l), v in stats.amax.items()})
     rows, massive = [], []
@@ -242,7 +276,8 @@ def calibrated(lm: LM, tok, a, stats: Stats) -> dict:
                                 "box": float(hi[k][ci, j]), "seq": seq, "pos": pos,
                                 "token": tok.decode([ids[pos]]) if 0 <= pos < len(ids) else None})
     return {"part": "calibrate", "texts": len(stats.tokens), "first_tokens": a.first_tokens, "new": a.new,
-            "cap": a.cap, "window": stats.window, "special": len(stats.special), "headroom": a.headroom,
+            "cap": a.cap, "window": stats.window, "special": len(stats.special),
+            "hosts": None if stats.hosts is None else len(stats.hosts), "headroom": a.headroom,
             "positions": stats.n.tolist(), "sites": rows, "massive": massive}
 
 
@@ -302,7 +337,7 @@ def part_explain(lm: LM, tok, a) -> dict:
         ids = continued(lm, tok, text, a.new, a.cap)
         taps = {k: None for k in lm.sites()}
         lm.forward(torch.tensor([ids]), Cache(), taps=taps)
-        cls = boxes.classes(0, len(ids), torch.tensor([ids]))[0]
+        cls = boxes.classes(0, len(ids), torch.tensor([ids]))[0][0]
         events = []
         for k in lm.sites():
             x = taps[k][0].float()
@@ -331,7 +366,7 @@ def part_explain(lm: LM, tok, a) -> dict:
         peak, at = r.max(-1)
         med = float(peak.median())
         sinks = [{"pos": t, "context": context_of(tok, ids, t), "peak": float(peak[t]), "coord": int(at[t]),
-                  "over_median": float(peak[t]) / max(med, 1e-30)}
+                  "over_median": float(peak[t]) / max(med, 1e-30), "class": int(cls[t])}
                  for t in range(len(ids)) if float(peak[t]) > a.sink_ratio * med]
         top = [{"ratio": e[0], "site": e[1], "layer": e[2], "pos": e[3], "coord": e[4], "value": e[5],
                 "context": context_of(tok, ids, e[3])} for e in events[:a.top]]
@@ -339,7 +374,7 @@ def part_explain(lm: LM, tok, a) -> dict:
                         for t, e in first.items()), key=lambda r: (r["layer"], -r["ratio"]))
         per_text.append({"text": i, "name": name, "tokens": len(ids), "values_over": len(events),
                          "positions_over": len(first), "top": top, "first_over_by_position": roots[:a.top],
-                         "sinks": sinks})
+                         "sinks": sinks, "sink_class_end": int((cls == 0).long().cumprod(0).sum())})
         print(f"explain {i} {name}: {len(ids)} tokens, {len(events)} values over in {len(first)} positions; worst "
               + (f"{events[0][0]:.2f}x at {events[0][1]}:{events[0][2]} {context_of(tok, ids, events[0][3])!r}"
                  if events else "none")
@@ -352,20 +387,22 @@ def part_explain(lm: LM, tok, a) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="gpt2", choices=sorted(MODELS))
-    ap.add_argument("--part", required=True, choices=("calibrate", "merge", "rebox", "complete", "explain"))
+    ap.add_argument("--part", required=True, choices=("hosts", "calibrate", "merge", "rebox", "complete", "explain"))
     ap.add_argument("--texts", default="heldout", choices=("heldout", "calibration"), help="explain: which traffic")
     ap.add_argument("--mixed", type=int, default=0,
                     help="texts of the pinned datasets (traffic.mixed) added to the hand-written set of the part's split")
     ap.add_argument("--shard", default="0/1", help="i/n: this run's share of the texts (merge joins calibrate's)")
     ap.add_argument("--stats", type=Path, nargs="*", default=[], help="merge: the shards' stats.pt")
-    ap.add_argument("--window", type=int, default=1, help="calibrate: the first positions that form the sink class")
+    ap.add_argument("--window", type=int, default=1,
+                    help="calibrate: the positions from the first sink host on that form the sink class")
+    ap.add_argument("--hosts", type=Path, help="calibrate: the hosts part's hosts.pt, where each sequence's classes start")
     ap.add_argument("--special", action=argparse.BooleanOptionalAction, default=True,
                     help="calibrate: give the tokenizer's special tokens their own class")
     ap.add_argument("--headroom", type=int, nargs="+", default=[1],
                     help="calibrate/merge/rebox: powers of two of headroom on each box, one value or one a class")
-    ap.add_argument("--sink-layer", type=int, default=3, help="explain: the residual stream that marks sinks")
+    ap.add_argument("--sink-layer", type=int, default=3, help="hosts, explain: the residual stream that marks sinks")
     ap.add_argument("--sink-ratio", type=float, default=16.0,
-                    help="explain: a sink-like position's residual peak over the text's median peak")
+                    help="hosts, explain: a sink-like position's residual peak over the honest median peak")
     ap.add_argument("--top", type=int, default=12, help="explain: the largest overshoots and positions listed per text")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--boxes", type=Path, help="complete, explain: the calibrated boxes.pt; rebox: the one to redo")
@@ -385,15 +422,15 @@ def main() -> int:
     lm = LM(a.model)
     tok = lm.tokenizer()
     t = time.time()
-    parts = {"calibrate": part_calibrate, "merge": part_merge, "rebox": part_rebox, "complete": part_complete,
-             "explain": part_explain}
+    parts = {"hosts": part_hosts, "calibrate": part_calibrate, "merge": part_merge, "rebox": part_rebox,
+             "complete": part_complete, "explain": part_explain}
     res = parts[a.part](lm, tok, a)
     res.update({"model": a.model, "revision": MODELS[a.model]["revision"],
                 "args": {k: ([str(x) for x in v] if isinstance(v, list) else str(v) if isinstance(v, Path) else v)
                          for k, v in vars(a).items()},
                 "seconds": time.time() - t})
     (a.out / f"clamp-{a.part}.json").write_text(json.dumps(res, indent=1))
-    print(json.dumps({k: v for k, v in res.items() if k not in ("sites", "massive", "per_text")}, indent=1))
+    print(json.dumps({k: v for k, v in res.items() if k not in ("sites", "massive", "per_text", "non_hosts")}, indent=1))
     return 0
 
 
