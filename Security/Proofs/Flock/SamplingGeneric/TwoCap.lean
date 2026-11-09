@@ -18,6 +18,8 @@ block escapes with probability at most `1 − r₂`, since a cell with one incor
 * `Design.Two.card_wrongBlocks_lt`: so a footprint in `M̄_δ` marks fewer than every `K` with `(1 − r₁·r₂)^K ≤ δ`.
 * `Design.Two.card_wrongBlocks_lt_subsetInputs`: the same at the deployed first stage, a uniform `Q`-subset of the
   population's `N` replay blocks and every input replay block (`Design.Two.subsetInputs_Pa_le`), at `r₁ = Q/N`.
+* `Design.Two.firstRate_subsetInputs`: that first stage catches each replay block at rate `Q/N`, the `FirstRate` the
+  cap reads.
 * `footprint_le_card`: a footprint counts at most its cell, as the cap reads it.
 -/
 
@@ -139,6 +141,22 @@ theorem Design.Two.card_wrongBlocks_lt_subsetInputs (d : Design.Two) (Pt : Parti
   split_ifs
   · exact ⟨le_rfl, hr₁'⟩
   · exact ⟨hr₁', le_rfl⟩
+
+/-- **The deployed first stage catches each replay block at rate `Q/N`** (`Design.Two.FirstRate`): a uniform
+`Q`-subset of the population's `N` replay blocks and every input replay block (`Design.Two.subsetInputs_Pa_le`). -/
+theorem Design.Two.firstRate_subsetInputs (d : Design.Two) {Q : ℕ} (hd : SubsetInputsDesign d.replay Q)
+    {c ic : List (List (List ℕ))} (hP : d.part.classes = [c, ic]) (hQ : Q ≤ c.flatten.length) :
+    d.FirstRate ((Q : ℝ) / c.flatten.length) := by
+  intro T hT
+  have hr : (0 : ℝ) ≤ 1 - (Q : ℝ) / c.flatten.length :=
+    sub_nonneg.2 (div_le_one_of_le₀ (by exact_mod_cast hQ) (Nat.cast_nonneg _))
+  refine (d.subsetInputs_Pa_le hd hP hQ T hT).trans ?_
+  rw [← prod_const]
+  refine prod_le_prod (fun ρ _ => ?_) (fun ρ _ => ?_) <;> split_ifs
+  · exact hr
+  · simp
+  · exact le_rfl
+  · simpa using hr
 
 end Claims.Sampling
 
