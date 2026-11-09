@@ -18388,3 +18388,17 @@ TWOOPENS checkpoint, 12:00Z.
 - **`r20261109-111815-381d`:** yes. With `parts := some (partsAt h q)`, round 2's codes are `[]` at all five templates, against `[second-read]` without it at FOLD, FLIP, FLIP_B and LINK_OUT (t1–t4). Every other conjunct was already true at all five (`r20261109-104406-3ef6`).
 - **TWOOPENS's fix:** pushed at 11:37Z as `e518b742b7` on `cursor/proofs-sessions-onevalue-3e7a`. It sets `parts` in `ownOf` rather than `codesOk`, because proofs state `readOk (ownOf …)`, and has the same effect. So no stand-in was needed. `cursor/proofs-twoguard-onevalue-fe97` at `b51bd33821` merges `6ac7ec5c71`, mirrors the field in `ownOfAt`, and registers the (b) fixture (`art:fcc14a73…`, sha256 `f8bfdbf5…`).
 - **In flight:** pytest of all three cases `r20261109-114803-723b` (cpu-1, rebuilding its tree first), ETA about 12:45Z. Honest `check` with times `r20261109-114829-c2d0` (cpu-5), ETA about 12:15Z.
+
+## 12:21Z from PROVECUT: CIR-195's table reads are sound as designed but can't be proved before Wednesday; today's 128k and 40k figures leave DSA's long rows out entirely
+
+1. **Sound and provable as designed, with no new premise, under four conditions.** I posted them on CIR-195 at 12:19Z:
+   - Lean recomputes each table's root from the writers' `b ‖ c`.
+   - Leaf order comes from public wiring, never `index.json`.
+   - The tree's shape is pinned: a fixed 2^17 means placeholder leaves, about 20M SHA-512 a 131k request.
+   - Prefix caching stays off until CIR-188.
+
+   The read's binding is already proved for any table size.
+2. **Proofs builds four pieces, about 1k to 2k lines, and it isn't small.** They are the table kind in `ml.windows.rows`, the Python verifier's root recomputation, the same check in Lean with a difftest, and the guarantee; the Lean pair is our long pole. Take the note's premise map to @soundness for one ruling, then staff one worker on the Lean pair. I can take the Python pair after K6144.
+3. **It can't be proved end to end before Wednesday however it's staffed.** The critical path is vllm's Program and committer (from Thu 12 Nov), then Lean accepting the form. Proofs' part stays off that path if it lands while vllm builds.
+4. **Today's 128k and 40k figures neither price these rows nor exclude them: they're absent.** Every figure, my 11:40Z table included, prices the census's 288-token request with only the indexer scaled. No long-row Call is in any stratum, yet 82.5% of the 128k plan's computed tokens are past 2,048 keys (57.2% at 40k). Pricing the table form would add only 0.5% to 0.7% to the ANDs, so this is a coverage gap, not a cost gap.
+5. **If they aren't proved by Wednesday, the headline should say so rather than exclude them.** Per Daniel's "treat those rows as unproved", label the 128k and 40k figures as modelled for the table-read form, with the guarantee holding today only up to 2,048 keys. #8265 isn't this port (its slots are MUFU lookups); the prior work is #8020's reads. The K6144 plan is unchanged: c814 is still staging. Details: note:proofs/20261109T1216Z-review-provecut-cir195-table-reads.
