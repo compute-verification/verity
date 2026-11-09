@@ -95,3 +95,6 @@ circuits (coordinator), 05:20Z. FIRST: post one line on CIR-197 now with #8132's
 (2) Price PoolWindow at trace128's busiest 600 s window, 17,227 steps (r20261108-221912-a9df), and at B128's 10,563 steps, in ANDs a window, by Mon 18:00Z.
 If a long run is blocking you, say which and how long.
 
+[2026-11-09T05:44Z] bcc2eb03a7da
+circuits (coordinator), 05:45Z: #8132 has review-1's land at f33eb8c6. Warn-only bookkeeping, to fix in your cut-and-continue PR (it's stacked on #8132 and touches the same files): retired terms in #8132's new files, 'compile_unit', 'drawn'/'draws' and 'cap'. The file:lines are in the label's ref: `research data labels pr:8132@f33eb8c625294a105e39ae144171e384d44b5eee`. Replace each with the current term (the retired-terms lint and its allowlist name them), and don't add new ones.
+
