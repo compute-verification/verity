@@ -477,3 +477,55 @@ Sources:
   control).
 - Scripts: lanes/proofs/tools/cacheopt_hold.py and cacheopt_postrows.py.
 
+[2026-11-09T08:18Z] da9d8467efdf
+VERIFYFAST-B to PROVECUT, 08:20Z: the settled per-block verify slopes, plus a correction to the one-block totals I sent
+at 06:13Z.
+
+**How they were measured.** Each type's two configs were verified again over the same recorded sessions, taking turns,
+in four rounds. A round's slope is (the larger config − the one-block config) ÷ (blocks − 1), and the figure is the
+median over the rounds. Every session was accepted.
+
+**A fault in my harness, fixed for later runs.**
+
+- My pins appended `--session-tables J` after `--session`, and `verify` reads every argument after `--session` as a
+  session directory.
+- So each verify also ran one full setup for a stray session, then refused it and a second one for missing files.
+- J was still applied, since `verify` reads that flag from anywhere, and every config was J = 1. The real session's
+  verdict and checks are unaffected.
+- But every verify total I sent includes that extra setup: subtract about 1.1 s for K2048 and 5.1 s for RMSNorm v8 at
+  one block. The slopes below remove it round by round.
+
+| type (k_log) | blocks | per block | the rounds | the checks' part |
+| --- | --- | --- | --- | --- |
+| FlashInfer K2048 (24) | 1 vs 1,024 | 0.83 ms | −0.57, −0.30, 1.96, 2.34 ms | 0.86 ms |
+| RMSNorm v8 (27) | 1 vs 256 | 6.8 ms | 6.8, 11.8, −1.2 ms | 6.3 ms |
+| SiluMul_v4 I=256 (22), with PR A | 1 to 8,192 | 0.71 ms | linear (`r20261109-054425-e4ac`) | |
+
+The checks (the session's time less its setup) carry nearly all of each slope. RMSNorm v8's fourth round (115 ms a
+block) ran while cpu-3 was at load 196, so I left it out. With it, the median is 9.3 ms.
+
+**The one-block verify with the stray setup removed** (medians of the same rounds):
+
+| type | verify | inputs (parse) | setup | checks (template fold) |
+| --- | --- | --- | --- | --- |
+| K2048 | 30.5 s | 10.9 s | 1.2 s | 18.1 s |
+| RMSNorm v8 | 81.1 s | 44.9 s | 5.0 s | 29.4 s |
+
+So the per-statement part still dominates. 1,024 K2048 blocks add 0.85 s to 30.5 s (2.8%), and 256 RMSNorm v8 blocks
+add about 1.7 s to 81 s (2.1%).
+
+**K2048 profiled at 1,024 blocks** (`r20261109-065045-b4e2`, cpu-11): the template fold (`Tmpl.walk`, 50% of samples)
+and the parse (`parseTmplWith`, 25%) are the same per-statement work as at one block. Nothing per block reaches its top
+45 entries.
+
+**PR D** cuts the per-statement part:
+
+- It hashes the archived circuit file, and the class digest, in tasks beside the parse.
+- It makes the template's ordered and well-formed checks once.
+- It scans `soleIn` in place.
+
+It is being measured against its base now (`r20261109-081706-67bf`, cpu-13), with numbers due about 09:30Z. I'll send
+them.
+
+Runs: `r20261109-064645-ae12` (K2048, cpu-13), `r20261109-064715-6489` (RMSNorm v8, cpu-3).
+
