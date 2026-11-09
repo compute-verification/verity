@@ -249,7 +249,7 @@ def pieces(program, world: int) -> Pieces:
 
     pending: list[str] = []
     seen_shared: dict[str, int] = {}
-    launch, cur, started = 0, 0, set()
+    launch, cur, started, splits = 0, 0, set(), []
     for k, n in enumerate(nodes):
         parts = [p for a in n.args for p in _flat(a.refs)]
         mine = [x for p in parts for x in contributes(p)]
@@ -257,6 +257,10 @@ def pieces(program, world: int) -> Pieces:
             p = max(mine)
             if p < cur:
                 launch += 1
+                if len(splits) < 4:
+                    reads = sorted({(names[field_of(q.base)] if q.idx == wi and not isinstance(q, Explicit) else params[q.idx][0])
+                                    for q in parts if q.space == "p" and contributes(q)})
+                    splits.append(f"node {k} ({fkey(n.fn)[:60]}) in part {p} after part {cur}, reading {reads[:4]}")
         elif any(lab[p.idx] is not None for p in parts if p.space == "n" and not isinstance(p, Explicit)) or any(
                 s == "n" and lab[i] is not None for p in parts if isinstance(p, Explicit) for s, i, _l in p.items):
             p = cur
@@ -280,7 +284,7 @@ def pieces(program, world: int) -> Pieces:
         s.update(repr(entry(n, p)).encode() + b"\n")
     passes = len({r for r, _kind, _part, _q in peers.values()})
     if peers and launch + 1 != passes:
-        raise ValueError(f"the body splits into {launch + 1} launches, its peer Inputs into {passes} passes")
+        raise ValueError(f"the body splits into {launch + 1} launches, its peer Inputs into {passes} passes: " + "; ".join(splits))
     for key in pending:
         streams[E].update(repr(("shared", key)).encode() + b"\n")
     streams[E].update(repr(("ret", tuple(part_key(p, E) for p in _flat(body.ret)))).encode() + b"\n")
