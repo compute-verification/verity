@@ -115,7 +115,9 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
     of record (`rank_replay.load`: refused unless of record and this rank's), from the worker's commit state."""
     from verity_vllm.check import oracle_compare as OC
     from verity_vllm.check.replay import driver as SR
+    from verity_vllm.commit import history_tables as H
     from verity_vllm.pipeline import expert_rows as EX
+    from verity_vllm.pipeline import history_rows as HR
     from verity_vllm.pipeline import serving_rows as SRW
     from verity_vllm.pipeline.tp import rank_replay as RR
 
@@ -125,6 +127,7 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
     if rc.run_root.hex() != tp["roots"].get(str(rank)):
         raise ValueError(f"rank {rank}: its run root {rc.run_root.hex()[:16]} is not the one the TP run root combines")
     p = RR.load(st["replay"], rank, world, definitions=False)
+    hs = H.of_request(request.get("committer"), HR.on(json.loads(Path(request["partition"]).read_text())))
     res = SRW.after_commit(str(Path(request["dir"]) / f"rank{rank}"), partition_file=request["partition"], programs=p.progs, bmap=st["bmap"],
                            committed=OC.OpenedReader(st["com"], rc), weights=SR.model_weights_provider(st["weights"], p.index.prefix),
                            manifest=RR.manifest_of_rank(st.get("manifest_doc"), rank), run_root=run_of(bytes.fromhex(tp["tp_run_root"]), rank),
@@ -132,7 +135,7 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
                            committer=request.get("committer"), tables=EX.of_request(request.get("tables"), rank),
                            workers=1,   # vLLM's TP workers are daemonic: no process pool under them
                            tp={"world": world, "rank": rank, "tp_run_root": tp["tp_run_root"], "run_root": rc.run_root.hex(), "root_tag": tp["root_tag"]},
-                           index={"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,))
+                           index={"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,), histories=hs)
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
 
 

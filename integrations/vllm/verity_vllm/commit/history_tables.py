@@ -121,6 +121,21 @@ class Histories:
         return held
 
 
+#: the serving process's open tables, by the run's committer program, kept across the run's windows
+_OPEN: dict[str, Histories] = {}
+
+
+def of_request(committer: Mapping[str, Any] | None, on: bool) -> Histories | None:
+    """The serving process's tables of the run whose committer is ``committer`` (a window request's: its table registration's
+    ``program``), kept across the run's windows, or None for a window of no history tables (``on`` off)."""
+    if not on:
+        return None
+    program = (committer or {}).get("program")
+    if not isinstance(program, str) or not program:
+        raise ValueError("a window of history tables takes its tables' program from its request's committer: give it")
+    return _OPEN.setdefault(program, Histories(program))
+
+
 def check(t: HT.HistoryTable, strings: Sequence[bytes]) -> bool:
     """Whether table ``t``'s root is the root `history.check` recomputes over ``strings``, the committed strings of its rows in
     position order (a window's public bodies, then the next's)."""

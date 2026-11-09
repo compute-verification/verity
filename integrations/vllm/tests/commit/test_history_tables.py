@@ -100,3 +100,12 @@ def test_the_switch_is_off_by_default_and_refused_with_prefix_caching():
     assert H.refusal({}) is None and H.refusal({H.SWITCH: True}) is None and H.refusal({PREFIX_CACHE: True}) is None
     why = H.refusal({H.SWITCH: True, PREFIX_CACHE: True})
     assert why is not None and H.SWITCH in why and PREFIX_CACHE in why
+
+
+def test_a_run_keeps_one_set_of_tables_across_its_windows_and_a_window_of_none_takes_none():
+    assert H.of_request({"program": PROGRAM}, False) is None
+    first = H.of_request({"program": PROGRAM * 2}, True)
+    assert first is H.of_request({"program": PROGRAM * 2}, True) and first.program == PROGRAM * 2
+    assert H.of_request({"program": PROGRAM * 3}, True) is not first
+    with pytest.raises(ValueError, match="committer"):
+        H.of_request({}, True)

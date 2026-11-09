@@ -177,17 +177,18 @@ def readers(request: str | None, com: Any, rc: Any, weights: Callable, programs:
             arrivals: dict[str, int], loaded: dict[str, dict[str, Any]], manifest: Any, row: str | None,
             digests: Mapping[str, str] | None = None) -> tuple[Callable, Any]:
     """The replay's weights provider and a fresh opened reader for it, as before.  With a ``request``, the serving rows are committed
-    first, through their own opened reader and before the replay's seed exists; a failure is written beside them and changes no
-    verdict."""
+    first, through their own opened reader and before the replay's seed exists, a window of history tables into the process's
+    tables of the run (`commit.history_tables.of_request`); a failure is written beside them and changes no verdict."""
     from verity_vllm.check.oracle_compare import OpenedReader
 
     if request:
         req = json.loads(Path(request).read_text())
         try:
+            hs = H.of_request(req.get("committer"), HR.on(json.loads(Path(req["partition"]).read_text())))
             after_commit(req["dir"], partition_file=req["partition"], programs=programs, bmap=bmap, committed=OpenedReader(com, rc),
                          weights=weights, manifest=manifest if isinstance(manifest, dict) else None, run_root=rc.run_root, run=req.get("run"),
                          row=row or None, arrivals=arrivals, program_dirs={k: v.get("dir") for k, v in loaded.items()},
-                         digests=digests, committer=req.get("committer"), tables=EX.of_request(req.get("tables")))
+                         digests=digests, committer=req.get("committer"), tables=EX.of_request(req.get("tables")), histories=hs)
         except Exception as e:  # noqa: BLE001
             Path(req["dir"]).mkdir(parents=True, exist_ok=True)
             (Path(req["dir"]) / "error.txt").write_text(traceback.format_exc())
