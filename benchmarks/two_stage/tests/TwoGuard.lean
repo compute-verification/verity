@@ -20,12 +20,11 @@ registration, to be proved from the members' facts rather than decided on a run,
 one gate: `Spot.Bits.off` past its last gate, `Spot.Bits.consts`, and `Spot.Bits.owner` at an input gate.
 
 * `check`: `runOkAt` and `twoFilesOk` at the run, with their times and the members' sizes, and `runOkAt`'s records
-  check (`recordsOk`) on its own; where that refuses, `runOkAt` again with the names the run's records name held in
-  place of the registrations' (`recordNames`), which is what the rest of round 2 decides of the run; exit 0 when
-  `runOkAt` and `twoFilesOk` accept, 1 when either refuses, 2 when the reference statements are not in Flock's masked
-  scope (`Held.xS₀_ok`, decided before any `Held` exists).
+  check (`recordsOk`) on its own; exit 0 when `runOkAt` and `twoFilesOk` accept, 1 when either refuses, 2 when the
+  reference statements are not in Flock's masked scope (`Held.xS₀_ok`, decided before any `Held` exists).
 * `diag`: each conjunct of `runOkAt` and `twoFilesOk` on its own, in the order they read them, with its time, then
-  `check`.
+  `check`; where `recordsOk` refuses, `runOkAt` again with the names the run's records name held in place of the
+  registrations' (`recordNames`), which is what the rest of round 2 decides of the run.
 
 Every line starts `GUARD `; the last is `GUARD-RESULT {json}`. The model's statement parsers recurse deeper than a
 default stack holds: give the interpreter a large `--tstack`.
@@ -315,9 +314,10 @@ def main (args : List String) : IO UInt32 := do
   if mode == "diag" then diag h ms x m₁ m₂ s₀ s₁
   let (run, runMs) ← timed "runOk" (fun _ => runOkAt h x m₁ m₂ s₀ s₁) b
   let (records, _) ← timed "recordsOk" (fun _ => recordsOk h x m₁) b
-  -- where the records' names refuse, the rest of round 2's verdict: `runOkAt` with the run's own names held
+  -- where the records' names refuse, the rest of round 2's verdict: `runOkAt` with the run's own names held, which
+  -- takes several times `runOk`'s time, so only under `diag`
   let mut rest : Json := .null
-  if !records then
+  if mode == "diag" && !records then
     if let (some st, some rec) := (decode x, jsonMsg m₁) then
       let h' := { h with boundaryNames := recordNames st.record, interiorNames := recordNames rec }
       rest := Lean.toJson (← timed "runOk at the records' own names" (fun _ => runOkAt h' x m₁ m₂ s₀ s₁) b).1
