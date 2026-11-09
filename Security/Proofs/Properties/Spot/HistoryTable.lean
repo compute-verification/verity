@@ -15,6 +15,7 @@ import all Init.Data.List.Control
 import all Init.Data.Range.Basic
 import all Init.Data.Int.Repr
 import all Init.Data.Repr
+import all Init.Data.Nat.Power2.Basic
 
 /-!
 # An accepted history table's registered root is the model's (`Properties.Spot.HistoryRootIsModel`)
@@ -47,8 +48,8 @@ theorem be64_data (n : ℕ) : (Flock.be64 n.toUInt64).data.toList = Hash.be 8 n 
   have h := Properties.NetworkCertifier.Bytes.be64_bs n.toUInt64
   simp only [Properties.NetworkCertifier.Bytes.bs] at h
   rw [h]
-  simp only [Hash.be, List.range_succ, List.range_zero, List.nil_append, List.map_append, List.map_cons,
-    List.map_nil, List.cons_append, List.cons.injEq, and_true]
+  simp only [Hash.be, List.range_succ, List.range_zero, List.nil_append, List.map_cons, List.map_nil,
+    List.cons_append, List.cons.injEq, and_true]
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> apply UInt8.toNat_inj.1 <;>
     simp [UInt64.toNat_shiftRight, Nat.shiftRight_eq_div_pow] <;> omega
 
@@ -60,8 +61,8 @@ theorem be32_bytes (x : UInt32) :
 
 theorem be32_data (n : ℕ) : (Flock.be32 n.toUInt32).data.toList = Hash.be 4 n := by
   rw [be32_bytes]
-  simp only [Hash.be, List.range_succ, List.range_zero, List.nil_append, List.map_append, List.map_cons,
-    List.map_nil, List.cons_append, List.cons.injEq, and_true]
+  simp only [Hash.be, List.range_succ, List.range_zero, List.nil_append, List.map_cons, List.map_nil,
+    List.cons_append, List.cons.injEq, and_true]
   refine ⟨?_, ?_, ?_, ?_⟩ <;> apply UInt8.toNat_inj.1 <;>
     simp [UInt32.toNat_shiftRight, Nat.shiftRight_eq_div_pow] <;> omega
 
@@ -109,7 +110,8 @@ theorem id_bytes {cap : ℕ} {dom : ByteArray} (h : dom.size = 64) :
     (historyDomain cap dom).id.bytes = dom.data.toList := by
   refine List.ext_getElem (by simp [Verity.Digest.bytes, h]) fun i h1 h2 => ?_
   have hi : i < dom.data.size := by simpa using h2
-  simp [Verity.Digest.bytes, historyDomain, Array.getD, hi]
+  simp only [Verity.Digest.bytes, List.getElem_ofFn, historyDomain, Array.getD_eq_getD_getElem?,
+    Array.getElem?_eq_getElem hi, Option.getD_some, Array.getElem_toList]
 
 theorem position_eq (cap : ℕ) (dom : ByteArray) (r : ℕ) : (historyDomain cap dom).position r = r := rfl
 
@@ -119,12 +121,16 @@ theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {
   | error e => cases h
   | ok a => exact ⟨a, rfl, h⟩
 
+theorem make_id_size (b : ByteArray) (owner : Int) (start count : ℕ) :
+    (FV3.Sha512.Domain.make b owner start count).id.size = 64 :=
+  Sha512.hash_size _
+
 theorem domainAt_size {cap : ℕ} {program table : String} {words : ℕ} {dom : ByteArray}
     (h : domainAt cap program table words = .ok dom) : dom.size = 64 := by
   unfold domainAt at h
   obtain ⟨b, -, hb⟩ := bind_ok h
-  cases hb
-  exact Sha512.hash_size _
+  rw [← Except.ok.inj hb]
+  exact make_id_size _ _ _ _
 
 /-! ## Leaves and levels -/
 
@@ -151,9 +157,9 @@ theorem leafAt_data {cap : ℕ} {dom : ByteArray} (hd : dom.size = 64) (bcs : Ar
     unfold Hash.HistoryTable.string
     split
     · rename_i h
-      rw [treeLeaf_data, if_pos h, getElem!_pos bcs r h]
-    · rename_i h
-      rw [treeLeaf_data, if_neg h]
+      rw [treeLeaf_data]
+      simp only [getElem!_pos bcs r h]
+    · rw [treeLeaf_data]
   rw [leafAt, Registered.leafAs_eq, hash_data, Registered.leafInAs, frame_data, leafF, Hash.HistoryTable.leaf,
     Hash.Tree.leafMsg, id_bytes hd, position_eq]
   simp only [List.map_cons, List.map_nil, uint_data, hp]
@@ -230,6 +236,7 @@ theorem checkAt_ok {cap : ℕ} {program table : String} {words : ℕ} {bcs : Arr
     capOk cap = true ∧ ∃ dom, domainAt cap program table words = .ok dom ∧
       rootAt cap dom bcs (placeholder words) = registered := by
   unfold checkAt at h
+  simp only at h
   split at h
   · exact absurd (Registered.except_bind_ok h) fun ⟨_, h1, _⟩ => Registered.throw_ne_ok _ _ h1
   rename_i hc
