@@ -43,8 +43,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.Served
 import Proofs.Flock.Claims.Sampling.Draws
 import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.VBridge.Full
 import Std.Tactic.BVDecide.Normalize.Bool
 
