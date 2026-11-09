@@ -231,7 +231,8 @@ def part_calibrate(lm: LM, tok, a) -> dict:
     stats = Stats(lm, lm.special_ids() if a.special else [], a.window,
                   torch.load(a.hosts)["hosts"] if a.hosts else None, a.run)
     t0 = time.time()
-    texts = shard(traffic("calibration", a.mixed) + (run_texts("calibration") if a.run else []), a.shard)
+    specials = tuple(tok.decode([i], skip_special_tokens=False) for i in lm.special_ids())
+    texts = shard(traffic("calibration", a.mixed) + (run_texts("calibration", specials) if a.run else []), a.shard)
     for j, (name, text) in texts:
         ids = continued(lm, tok, text, a.new, a.cap)
         taps = {k: None for k in lm.sites()}

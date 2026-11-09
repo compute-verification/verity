@@ -260,16 +260,19 @@ HELDOUT_OPENINGS = (
 CALIBRATION = PROMPTS[8:] + CALIBRATION_TEXTS
 HELDOUT = PROMPTS[:8] + HELDOUT_TEXTS + HELDOUT_OPENINGS
 
-RUN_UNITS = {"calibration": (" and", " of", " to", " a", " in", " is", " that", "<|im_end|>"),
+RUN_UNITS = {"calibration": (" and", " of", " to", " a", " in", " is", " that"),
              "heldout": (" the", "<|endoftext|>", ".", ",", "哈哈哈哈", "0", " I", " de")}
 RUN_LENGTHS = {"calibration": (512,), "heldout": (8, 16, 24, 32, 64, 128, 512)}
 
 
-def run_texts(split: str) -> list[tuple[str, str]]:
+def run_texts(split: str, specials: tuple[str, ...] = ()) -> list[tuple[str, str]]:
     """Texts with a run of one token after an ordinary opening, then an ordinary text of `split`: a long enough run
     forms the sink again, and the text after it puts sinks on ordinary tokens (`lm.long_runs`). Calibration's runs are
-    long and of other tokens than the held-out ones, which also run short of the threshold."""
+    long, of other ordinary tokens than the held-out ones, and of every special token in `specials`, whose runs grow
+    sink-sized values before the threshold, as the position-0 sweep covers every token there. The held-out runs also
+    run short of the threshold, and `<|endoftext|>`'s among them sit in other texts than calibration's."""
     tails = CALIBRATION_TEXTS if split == "calibration" else HELDOUT_TEXTS
-    units, lengths = RUN_UNITS[split], RUN_LENGTHS[split]
+    units = RUN_UNITS[split] + (tuple(specials) if split == "calibration" else ())
+    lengths = RUN_LENGTHS[split]
     return [(f"run:{u.strip()}x{n}", "The log continues:" + u * n + " " + tails[(i * len(lengths) + j) % len(tails)])
             for i, u in enumerate(units) for j, n in enumerate(lengths)]
