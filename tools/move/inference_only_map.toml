@@ -39,7 +39,7 @@ exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "*
 
 [keep]
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
-            'lanes/[\w.-]+', 'draft:[\w.-]+', '\bbenchmarks/nci\b', '(?<![\w/])nci-[a-z]', '(?<!/ )"nci"(?! /)',
+            'lanes/[\w.-]+', 'draft:[\w.-]+', '\bbenchmarks/nci\b', '(?<!\w)nci-', '(?<!/ )"nci"(?! /)',
             '"why": "[\d,]+ [^"\n]*"']
 strings = ["families.Nci"]
 
