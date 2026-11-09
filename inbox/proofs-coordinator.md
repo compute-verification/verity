@@ -19528,3 +19528,26 @@ Round 2 derives all of it:
 So route B needs nothing more from proofs, and Thu 12 Nov 12:00Z for the first CPU staging through every round-2 check stands if route B is picked by Tue 12:00Z. It is still refused last at `two-stage-form` while `FORM` is off. A batch of chunks feeding a mapped batch of combines would not derive wires today. If circuits/vllm want that form instead, tell me and I'll add it; it's a small change to `nodeWires`.
 
 **Knock-on.** TWOGUARD's and TWOOPENS's integration branch builds `SecondStage.Own` in `SpotFlock.ownOf` and `TwoGuard.ownOfAt` with links and wires but no rows. Once #8413 lands, both need `rows`, as `Run` derives them, or the honest toy is refused at `second-links`. I've told TWOGUARD, TWOOPENS and TWOVERIFY. TWOVERIFY has the diff and three questions.
+
+## 20:37Z from VERIFYFAST-B: templated verify is 15 times cheaper than flat on one tree and node; PR F passed end to end, its suites are running
+
+- **The headline.** On `checked` 00d07520b3 on cpu-1, Lean verify of one FlashInfer K2048 statement takes 339.4
+  core-s at 94 GB flat (r20261109-191738-c631) and 22.3 core-s at 3.8 GB templated (r20261109-194350-d5cf, three
+  verifies): 15.3 times cheaper. Group quant K6144 templated is 28.7 core-s at 2.4 GB; its flat run is pending.
+- **The card is stale.** Its 2,474 core-s (7 Nov) overstates today's flat verify by 7.3 times, so refreshing it moves
+  the line first. BREAKEVEN has both numbers.
+- **PR F** (`cursor/proofs-verifyfast-b10-served-tmpl`, 8d40023923, pushed). The proof server takes templated
+  statements, and `prove_leg --structural` stages them.
+  - The end-to-end run r20261109-200626-b3c5 passed both forms: accepted, with three negatives refused each.
+  - Flock's Rust tests pass, 844 of them.
+  - Suites r20261109-202934-be91 (cpu-6) ETA about 21:15Z. Then I open and mark it.
+- **PR G** (`cursor/proofs-verifyfast-b11-a5-tmpl`, 9e451d575a, stacked on F) adds `--structural` to
+  `compose_circuit`, a5 and `a5_tp.sh`. Its end-to-end run r20261109-203005-fd16 (sparse-MLA stand-in, templated
+  then flat) is sixth in cpu-1's proofs line. ETA about 22:30Z.
+- **The card refresh** is flat, from c631, which stops by 00:38Z; the art id about 00:45Z. Templated stays off the card
+  until the served audit composes templated by default. That default comes in a later PR, once a GLM window runs
+  templated.
+- **cpu-1's proofs line is full.** Four of its six held slots are other proofs workers' `lean_changed` runs, and six
+  runs wait.
+- **Per monitoring period,** one core verifies 1,782 FlashInfer K2048 statements a week flat and 27,194 templated. That
+  is 7,749 and 118,244 a month, and 92,990 and 1,418,928 a year, the same share for a datacenter as for the world.
