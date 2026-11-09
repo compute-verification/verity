@@ -44,8 +44,9 @@ failure message carries its fix.
  ruff finding in `integrations/vllm` (a stale `noqa` deleted is one) edits `ruff.json` in the same PR.
 - **Ruff with vLLM's rules** (`test_ruff_vllm.py`, config `ruff_vllm.toml`, allowlist `allowlists/ruff_vllm.json`): vLLM's
  selection less the rules `ruff.toml` selects (so no finding is in both lists) and less line length, with `print` (T201)
- refused in `verity_vllm/` outside `pipeline/cli.py`: a diagnostic goes to the logger. The gate
- judges `ruff_vllm.toml` as this lint's code. Once both lists are small, one config and one list replace the two.
+ flagged in `verity_vllm/` outside `pipeline/cli.py`: a diagnostic goes to the logger. In the suite, a finding the list
+ lacks, or an entry that matches nothing, warns; the gate fails a change that adds a finding, and judges `ruff_vllm.toml`
+ as this lint's code. Once both lists are small, one config and one list replace the two.
 - **The ratchet itself** (`test_ratchet.py`). A new key fails: fix the new code. A moved violation moves its entry in
  the same change. An entry allowing more than is found fails as stale: delete it or lower its count. So an allowlist
  only shrinks, and every failure prints the exact entry lines.
