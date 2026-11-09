@@ -653,7 +653,7 @@ first stage's replay sample, the interior program and query, whose strata make t
 registrations' records, the second stage's units (`drawn`), the design's links (`replayLinks`'), null for none, the
 verdicts, whose verifiers of record report the sessions' reads (`Record.sessionRegistered`) and name the header,
 registered reads and sample each checked (`SecondStage.verifiedOf`), the reference header of each template's
-statement (`refs`, `{template: header}`, null for none) and the registered reads it was verified against (`ref_reads`,
+statement (`refs`, `{template: header}`, null for none) and the registered reads it reads (`ref_reads`,
 `{template: registered}`, each null for none, null for no template's), and the statements, null for none. -/
 def secondStatements (j : Json) : V Json := do
   let .bool allow := getD j "allow" | throw "allow is not a boolean"
