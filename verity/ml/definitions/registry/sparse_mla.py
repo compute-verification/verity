@@ -22,9 +22,15 @@ Registered functions (all `Name_v1`):
   SparseMlaBlock{DR,DV,NVIS,FIRST,BN,DOT,SCALE}   (q: DR+DV bf16, kv: BN x (DV+DR) bf16, m, l[4], o[DV]) -> (m, l[4], o[DV]);
                                                   the first visited block (FIRST) takes q and kv only
   SparseMlaHead{T,DR,DV,BN,DOT,INV,SCALE}         (q_nope: DV bf16, q_rope: DR bf16, kv: T x (DV+DR) bf16) -> DV bf16
+  SparseMlaHeadBlock{DR,DV,NVIS,FIRST,BN,DOT,SCALE}  (q_nope, q_rope, kv: NVIS x (DV+DR), m, l[4], o[DV]) -> (m, l[4], o[DV]);
+                                                  one block of a head's chain, a unit of its own (FIRST takes no state)
+  SparseMlaHeadEnd{DV,INV}                        (l[4], o[DV]) -> DV bf16; the head's epilogue, the chain's last unit
   SparseMla{T,NH,DR,DV,BN,DOT,INV,SCALE}          (q_nope: NH x DV, q_rope: NH x DR, kv: T x (DV+DR)) -> NH x DV bf16
 
 T is the row's valid count (at most `index_topk`), kv its selected rows in order; `SPARSE_MLA_GLM53` holds GLM-5.3's statics.
+A head is cut exactly into its key blocks (`visits`), each a `SparseMlaHeadBlock` carrying the online softmax's state to the next,
+and `SparseMlaHeadEnd`, its epilogue: a full block takes 0.94 of a Flock block at GLM-5.3's statics where a head of two blocks
+needs 2^30 bits whole, so serving stages a `SparseMla` row as that chain (`head_chain`, ``CUTS``).
 """
 from __future__ import annotations
 
@@ -144,27 +150,42 @@ def SparseMlaBlock(B, S, q, kv, m_prev=None, l_prev=None, o_prev=None):
     return block(word_steps(B), S, bind(DotBf16V2, K=S.DR + S.DV, DOT=S.DOT), S.DOT, q, kv, m_prev, l_prev, o_prev)
 
 
+def visits(T: int, BN: int) -> list[tuple[int, int]]:
+    """A head's key blocks over its T keys in FA3's order, last to first: each one's keys [lo, hi); only the first visited one
+    can be partial."""
+    if T < 1:
+        raise ValueError(f"SparseMlaHead: T={T} selected keys")
+    return [(b * BN, min(T, (b + 1) * BN)) for b in range((T + BN - 1) // BN - 1, -1, -1)]
+
+
+def _padded(st: Steps, kv, nvis: int, BN: int, KW: int):
+    """A block's ``nvis`` key rows as the BN rows FA3 loads: the out-of-bounds rows cleared to zero (their columns are masked and
+    never read; their zero P times a zero V leaves O unchanged)."""
+    if nvis == BN:
+        return kv
+    row = Coll(Array(KW, st.bf16), concat([st.zero16().refs] * KW))
+    return Coll(Array(BN, Array(KW, st.bf16)), concat([kv.refs] + [row.refs] * (BN - nvis)))
+
+
 def head(st: Steps, S, tile_of, INV, q_nope, q_rope, kv):
     """`SparseMlaHead`'s body: ``tile_of(nvis, first)`` the bound block, ``INV`` the epilogue's inverse."""
     B, T, DR, DV, BN = st.B, S.T, S.DR, S.DV, S.BN
-    if T < 1:
-        raise ValueError(f"SparseMlaHead: T={T} selected keys")
     KW = DR + DV
     q = Coll(Array(KW, st.bf16), concat([q_rope.refs, q_nope.refs]))
-    nb = (T + BN - 1) // BN
     m = l = o = None
-    for b in range(nb - 1, -1, -1):
-        lo, hi = b * BN, min(T, (b + 1) * BN)
-        nvis = hi - lo
-        kvb = kv[lo:hi]
-        if nvis < BN:  # FA3 clears the out-of-bounds rows; their columns are masked and never read
-            row = Coll(Array(KW, st.bf16), concat([st.zero16().refs] * KW))
-            kvb = Coll(Array(BN, Array(KW, st.bf16)), concat([kvb.refs] + [row.refs] * (BN - nvis)))
-        if b == nb - 1:
-            r = B.call(tile_of(nvis, True), q, kvb)
+    for j, (lo, hi) in enumerate(visits(T, BN)):
+        kvb = _padded(st, kv[lo:hi], hi - lo, BN, KW)
+        if j == 0:
+            r = B.call(tile_of(hi - lo, True), q, kvb)
         else:
-            r = B.call(tile_of(nvis, False), q, kvb, m, l, o)
+            r = B.call(tile_of(hi - lo, False), q, kvb, m, l, o)
         m, l, o = r[0], r[1], r[2]
+    return head_end(st, INV, l, o)
+
+
+def head_end(st: Steps, INV, l, o):
+    """A head's epilogue on its last block's lanes and O: bf16(o * INV((l0 + l2) + (l1 + l3)))."""
+    B = st.B
     inv = B.call(INV, st.add(st.add(l[0], l[2]), st.add(l[1], l[3])))
     return B.batch(st._defs["cvt"], B.batch(st._defs["mul"], o, inv, axes=(0, None)), axes=(0,))
 
@@ -183,6 +204,60 @@ def SparseMlaHead(B, S, q_nope, q_rope, kv):
     return head(word_steps(B), S, tile_of, S.INV, q_nope, q_rope, kv)
 
 
+def head_block(st: Steps, S, dot, DOT, q_nope, q_rope, kv, m_prev=None, l_prev=None, o_prev=None):
+    """`SparseMlaHeadBlock`'s body: `head`'s block call on one block, its query and padding its own."""
+    if S.NVIS != S.BN and not S.FIRST:
+        raise ValueError(f"SparseMlaHeadBlock: NVIS={S.NVIS} keys of BN={S.BN}, and only the first visited block is partial")
+    KW = S.DR + S.DV
+    q = Coll(Array(KW, st.bf16), concat([q_rope.refs, q_nope.refs]))
+    return block(st, S, dot, DOT, q, _padded(st, kv, S.NVIS, S.BN, KW), m_prev, l_prev, o_prev)
+
+
+def _head_block_type(S, bf16=BF16, f32=F32):
+    state = () if S.FIRST else (("m_prev", f32), ("l_prev", Array(4, f32)), ("o_prev", Array(S.DV, f32)))
+    return ((("q_nope", Array(S.DV, bf16)), ("q_rope", Array(S.DR, bf16)), ("kv", Array(S.NVIS, Array(S.DR + S.DV, bf16))))
+            + state, Tuple(f32, Array(4, f32), Array(S.DV, f32)))
+
+
+@composite("SparseMlaHeadBlock", 1, ["DR", "DV", "NVIS", "FIRST", "BN", "DOT", "SCALE"], _head_block_type, conformance=_CONF)
+def SparseMlaHeadBlock(B, S, q_nope, q_rope, kv, m_prev=None, l_prev=None, o_prev=None):
+    """One key block of a `SparseMlaHead_v1`'s chain on the head's own operands: its query ``[q_rope | q_nope]``, its NVIS keys
+    (zero-padded to BN, which only the first visited block (FIRST) needs) and the state the block before it returns, then
+    `SparseMlaBlock_v1`'s steps.  A head of T keys is its blocks in `visits` order, each a Call of this, then
+    `SparseMlaHeadEnd_v1` on the last one's lanes and O: its function, step for step."""
+    check_block_statics(S.DR, S.DV, S.NVIS, S.BN)
+    return head_block(word_steps(B), S, bind(DotBf16V2, K=S.DR + S.DV, DOT=S.DOT), S.DOT, q_nope, q_rope, kv, m_prev, l_prev,
+                      o_prev)
+
+
+def _head_end_type(S, bf16=BF16, f32=F32):
+    return ((("l", Array(4, f32)), ("o", Array(S.DV, f32))), Array(S.DV, bf16))
+
+
+@composite("SparseMlaHeadEnd", 1, ["DV", "INV"], _head_end_type, conformance=_CONF)
+def SparseMlaHeadEnd(B, S, l, o):
+    """A head's end after its last `SparseMlaHeadBlock_v1`: `SparseMlaHead_v1`'s epilogue on the block's lanes and O,
+    bf16(o * INV((l0 + l2) + (l1 + l3))) (`head_end`; `dead_free.AttnHeadEnd_v1{D = DV, INV}`'s steps)."""
+    return head_end(word_steps(B), S.INV, l, o)
+
+
+def head_chain(row) -> list[tuple[object, int]]:
+    """The units a `SparseMla_v1` binding ``row`` is cut into, each Definition bound and how many of it: per head, its first
+    visited block (`SparseMlaHeadBlock_v1`, FIRST, NVIS its keys), each later block (NVIS = BN) and its end
+    (`SparseMlaHeadEnd_v1`).  What `serving_templates` stages a row as, and what circuit-check holds to the block in its
+    place."""
+    if getattr(row, "defn", None) is not SparseMla:
+        raise ValueError(f"head_chain cuts a SparseMla_v1 binding, not {row!r}")
+    S = row.bindings
+    blk = {k: S[k] for k in ("DR", "DV", "BN", "DOT", "SCALE")}
+    (lo, hi), *rest = visits(int(S["T"]), int(S["BN"]))
+    NH = int(S["NH"])
+    out = [(bind(SparseMlaHeadBlock, NVIS=hi - lo, FIRST=True, **blk), NH)]
+    if rest:
+        out.append((bind(SparseMlaHeadBlock, NVIS=int(S["BN"]), FIRST=False, **blk), NH * len(rest)))
+    return out + [(bind(SparseMlaHeadEnd, DV=S["DV"], INV=S["INV"]), NH)]
+
+
 def _mla_type(S, bf16=BF16):
     return ((("q_nope", Array(S.NH, Array(S.DV, bf16))), ("q_rope", Array(S.NH, Array(S.DR, bf16))),
              ("kv", Array(S.T, Array(S.DR + S.DV, bf16)))), Array(S.NH, Array(S.DV, bf16)))
@@ -196,4 +271,7 @@ def SparseMla(B, S, q_nope, q_rope, kv):
     return B.batch(hd, q_nope, q_rope, kv, axes=(0, 0, None))
 
 
-SPARSE_MLA_COMPOSITES = [SparseMlaBlock, SparseMlaHead, SparseMla]
+SPARSE_MLA_COMPOSITES = [SparseMlaBlock, SparseMlaHead, SparseMlaHeadBlock, SparseMlaHeadEnd, SparseMla]
+#: each family serving stages as its cut, never whole, with the cut at a binding's statics (circuit-check's ``block`` holds
+#: each unit to the Flock block in the Call's place)
+CUTS = {"SparseMla_v1": head_chain}

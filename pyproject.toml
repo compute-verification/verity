@@ -105,6 +105,7 @@ untraced = [
     "tests/test_retired_terms.py",
     "tests/test_seed_ports.py",
     "tests/test_verifier_cost.py",
+    "tests/test_vllm_boundary.py",
     "tests/test_vllm_public_api.py",
 ]
 inputs = [".", "AGENTS.md"]   # its lints read the docs: a listed `.md` keys its Markdown too (`suites.markdown`)
