@@ -45,7 +45,6 @@ ALLOWED = {
                     "vllm.LLM beside it"),
     **dict.fromkeys(("benchmarks/kv_filler/serve.py", "benchmarks/kv_filler/step_profile.py"),
                     "memory-accounting: a stock vllm.LLM serving under the KV filler's top-up, and its decode step profiled"),
-    "benchmarks/pous/lateness/vllm_load.py": "memory-accounting: a stock vllm.LLM as load on the responder's GPU",
     "benchmarks/pous/p2_v1/scale.py": "memory-accounting: P2's store held beside a stock vllm.LLM serving",
     **dict.fromkeys(("benchmarks/remote_session/engine.py", "benchmarks/remote_session/serve.py"),
                     "memory-accounting: an in-process LLMEngine under the remote bandwidth audit's binder"),
