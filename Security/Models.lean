@@ -8,7 +8,7 @@ import Definitions.InferenceOnly.Guarantees.Layered
 import Definitions.InferenceOnly.Guarantees.Contained
 import Definitions.InferenceOnly.Guarantees.Fit
 import Definitions.InferenceOnly.Guarantees.FitRate
-import Definitions.InferenceOnly.Guarantees.Dampener
+import Definitions.InferenceOnly.Guarantees.Slowdown
 import Definitions.InferenceOnly.Guarantees.Remote
 import Definitions.InferenceOnly.Guarantees.RemotePeriod
 import Definitions.InferenceOnly.Guarantees.Info

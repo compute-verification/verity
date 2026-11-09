@@ -1,4 +1,4 @@
-import Definitions.InferenceOnly.Guarantees.Dampener
+import Definitions.InferenceOnly.Guarantees.Slowdown
 import Proofs.InferenceOnly.Threads
 
 /-!
@@ -8,13 +8,13 @@ The arithmetic core is `sources_le`: the four sources' bounds, summed, with the 
 the declared computation together, give `η ≤ s + (1 − s) min(r, μ) + ν + χ`; the guarantee drops the factor `1 − s`.
 The window optimization is `window_quadratic` (and `window_quadratic_any` at every window length, with its rounding term
 exact) and `window_linear` (`Λ = e`, one window); `windows_cap` turns the servers' windows into the memory cap's
-hypothesis. `DampenerThreadedSlots` discharges the declared computation's bound with `ThreadedThrottledSlots`, and
-`DampenerThreaded` is its instance at one slot per weight gate.
+hypothesis. `SlowdownThreadedSlots` discharges the declared computation's bound with `ThreadedThrottledSlots`, and
+`SlowdownThreaded` is its instance at one slot per weight gate.
 -/
 
 namespace InferenceOnly.SecurityProofs
 
-open Verity InferenceOnly.Dampener
+open Verity InferenceOnly.Slowdown
 
 /-- **The four sources, summed** (the dampener's arithmetic core, its tight form): with the residual and the declared
 computation under the memory cap together, `η ≤ s + (1 − s) min(r, μ) + ν + χ`. -/
@@ -50,7 +50,7 @@ theorem sources_le {κ C U W ρ μ χ M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC : 
 
 /-- **The four sources, summed**, in the guarantee's form: `η ≤ s + min(r, μ) + ν + χ`. Both `r` and `μ` are
 nonnegative here, since the residual and the declared computation hold no negative count. -/
-theorem dampener_core {κ C U W ρ μ χ M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC : 0 < C) (hU : 0 ≤ U) (hMr : 0 ≤ Mr)
+theorem slowdown_core {κ C U W ρ μ χ M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC : 0 < C) (hU : 0 ≤ U) (hMr : 0 ≤ Mr)
     (hMd : 0 ≤ Md) (hM : M ≤ Mu + Mr + Md + Mx) (hu : Mu ≤ κ * U / 2) (hr : Mr ≤ κ * (C - W) / 2)
     (hd : Md ≤ C / ρ) (hx : Mx ≤ κ * χ * (C + U) / 2) (hμ : Mr + Md ≤ κ * μ * C / 2) :
     efficiency κ M C U ≤ unmonitoredShare C U + min (residualShare W C) μ + declaredShare κ ρ C U + χ := by
@@ -78,9 +78,9 @@ theorem dampener_core {κ C U W ρ μ χ M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC
     linarith
   linarith
 
-theorem Dampener : Guarantees.Dampener := by
+theorem Slowdown : Guarantees.Slowdown := by
   intro κ C U W ρ μ χ M Mu Mr Md Mx hκ hC hU hM hu hr hd hx hμ
-  exact dampener_core hκ hC hU (Nat.cast_nonneg Mr) (Nat.cast_nonneg Md) (by exact_mod_cast hM) hu hr hd hx hμ
+  exact slowdown_core hκ hC hU (Nat.cast_nonneg Mr) (Nat.cast_nonneg Md) (by exact_mod_cast hM) hu hr hd hx hμ
 
 /-- **The window optimization, quadratic regime** (the dampener's memory cap): a server's horizon `H ≥ 0` cut into
 windows of length `L = R/λ`, each reading `R + λL = 2R` bits and holding at most `(2R)²/(2 d b_w b_a)` counted
@@ -178,10 +178,10 @@ theorem windows_cap {κ C n F H L R α reuse e d b_w b_a X : ℝ} (hκ : 0 < κ)
   calc X * b_a = b_a * X := mul_comm _ _
     _ ≤ _ := h3
 
-theorem DampenerWindows : Guarantees.DampenerWindows := by
+theorem SlowdownWindows : Guarantees.SlowdownWindows := by
   intro κ C U W ρ χ M Mu Mr Md Mx n F H L R α reuse e d b_w b_a hκ hC hU hH hL hR hα hreuse hd hbw hba hM hu hr hdecl
     hx hnC hRL he hcap
-  exact Dampener κ C U W ρ (memoryCap reuse κ R α d b_w b_a * (1 + L / H)) χ M Mu Mr Md Mx hκ hC hU hM hu hr hdecl hx
+  exact Slowdown κ C U W ρ (memoryCap reuse κ R α d b_w b_a * (1 + L / H)) χ M Mu Mr Md Mx hκ hC hU hM hu hr hdecl hx
     (windows_cap hκ (Nat.cast_nonneg n) hH hL hR hα hreuse hd hbw hba hnC hRL he hcap)
 
 /-- `Lambda` is `Threading.bound` with real arguments. -/
@@ -213,26 +213,26 @@ theorem declared_le {Γ : ℕ} {α b_w b_a C : ℝ} {c d : Declaration} {T : Thr
     (T.M.card : ℝ) ≤ C / rhoT α b_a (T.bound (α * Γ) b_w dd e) :=
   declared_le_slots hα hbw hba hdd hcomp hB hT (weightsIncompressibleSlots_of (Fit.idSlots T) hbw.le hW) hsize
 
-theorem DampenerThreadedSlots : Guarantees.DampenerThreadedSlots := by
+theorem SlowdownThreadedSlots : Guarantees.SlowdownThreadedSlots := by
   intro κ C U W χ M Mu Mr Mx n Γ F H L R α b_w b_a c d T σ dd e Mc hκ hC hU hH hL hR hα hbw hba hdd hcomp hB hT hW
     hsize hM hu hr hx hnC hRL he hcap
-  exact DampenerWindows κ C U W (rhoT α b_a (T.bound (α * Γ) b_w dd e)) χ M Mu Mr T.M.card Mx n F H L R α T.reuse e dd
+  exact SlowdownWindows κ C U W (rhoT α b_a (T.bound (α * Γ) b_w dd e)) χ M Mu Mr T.M.card Mx n F H L R α T.reuse e dd
     b_w b_a hκ hC hU hH hL hR hα (Nat.cast_nonneg _) (Nat.cast_pos.2 hdd) hbw hba hM hu hr
     (declared_le_slots hα hbw hba hdd hcomp hB hT hW hsize) hx hnC hRL he hcap
 
-/-- `DampenerThreadedSlots` at one slot per weight gate. -/
-theorem DampenerThreaded : Guarantees.DampenerThreaded := by
+/-- `SlowdownThreadedSlots` at one slot per weight gate. -/
+theorem SlowdownThreaded : Guarantees.SlowdownThreaded := by
   intro κ C U W χ M Mu Mr Mx n Γ F H L R α b_w b_a c d T dd e Mc hκ hC hU hH hL hR hα hbw hba hdd hcomp hB hT hW
     hsize hM hu hr hx hnC hRL he hcap
-  exact DampenerThreadedSlots κ C U W χ M Mu Mr Mx n Γ F H L R α b_w b_a c d T (Fit.idSlots T) dd e Mc hκ hC hU hH hL
+  exact SlowdownThreadedSlots κ C U W χ M Mu Mr Mx n Γ F H L R α b_w b_a c d T (Fit.idSlots T) dd e Mc hκ hC hU hH hL
     hR hα hbw hba hdd hcomp hB hT (weightsIncompressibleSlots_of (Fit.idSlots T) hbw.le hW) hsize hM hu hr hx hnC hRL he
     hcap
 
 /-- **The bound is attained** (completeness, not a claim): at `κ = 2`, `C = 4`, `U = 0`, `W_cert = 3`, `ρ = 4`, `μ = 1`
 and `χ = 1/4`, with one counted multiplication in each of the residual, the declared computation and a faulty proof
-block, every hypothesis of `InferenceOnly.Guarantees.Dampener` holds and `η = 3/4 = s + min(r, μ) + ν + χ`: the hypotheses can
+block, every hypothesis of `InferenceOnly.Guarantees.Slowdown` holds and `η = 3/4 = s + min(r, μ) + ν + χ`: the hypotheses can
 hold together, and the inequality is not loose there. -/
-theorem dampener_attained :
+theorem slowdown_attained :
     ((0 : ℕ) : ℝ) ≤ 2 * 0 / 2 ∧ ((1 : ℕ) : ℝ) ≤ 2 * (4 - 3) / 2 ∧ ((1 : ℕ) : ℝ) ≤ 4 / 4 ∧
       ((1 : ℕ) : ℝ) ≤ 2 * (1 / 4) * (4 + 0) / 2 ∧ ((1 : ℕ) : ℝ) + ((1 : ℕ) : ℝ) ≤ 2 * 1 * 4 / 2 ∧
       efficiency 2 ((3 : ℕ) : ℝ) 4 0 =
