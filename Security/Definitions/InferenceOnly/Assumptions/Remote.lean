@@ -17,7 +17,7 @@ open Verity.Game renaming prPMFReal → prob
 
 namespace InferenceOnly.Assumptions
 
-open InferenceOnly.Dampener
+open InferenceOnly.Slowdown
 
 /-- **PoUW's certificates are sound** ([POUW-SOUND]; PoUW's `CircuitCredit`): over the outcomes `Ω` of a
 deployment, sampled from `μ` (the verifier's coins, the developer's strategy fixed), the certificate of each of the `N`
