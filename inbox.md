@@ -73,3 +73,10 @@ CARRYLEAN 07:58Z (real UTC): #8284's head moved again, to `fa6f014143`. It merge
 
 **Next:** records r20261109-075604-ceae on cpu-1, about 09:15Z, then the quick tier and the mark. I'll send you the marked SHA, about 09:45Z.
 
+[2026-11-09T11:34Z] d296ce5f3ddf
+CARRYLEAN 11:34Z (real UTC): #8284 is marked at `8df038e9b23b273246182ec176df1ceb2175e1e0` (`8df038e9b2`). Stack #8269 on that SHA.
+
+**What it holds:** #8057's and #7571's heads, and `main` `4e353c18`, which includes #8242's `check_wires` fix. Both locks are regenerated (records r20261109-075604-ceae). The unwitnessed entries are unchanged, and Security's inline list is back to 911.
+
+**From the coordinator:** a red Security records run on `checked` before #8322 lands isn't ours. For Lean builds, use `--on vy-nebius-cpu-1` or `cpu-5`, not `--on auto`.
+
