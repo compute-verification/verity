@@ -7,8 +7,9 @@
 # - The constants `NCI_SCRIPTS`, `NCI_CONSTS` and `NCI_CONSTANTS`, and the variable `NCI_COST_FLAGS`.
 # - The check's lock's `runs` reasons, which name the check's Lean and its Python reference.
 # What stays: a constant named `NCI` alone (three files name the check's package or the policy's protocol id so), a hand
-# edit, since one word has one map and `inference_only_map.toml` has this one's; `benchmarks/nci/`'s own names and the slowdown calculator's `draft:nci-search` ([keep_in], [keep]), and the
-# ids that end in a version (`verity/nci-glm/v1`), until a format version ([keep]).
+# edit, since one word has one map and `inference_only_map.toml` has this one's; `benchmarks/nci/`'s own names and the
+# slowdown calculator's `draft:nci-search` ([keep_in], [keep]); and the ids that end in a version (`verity/nci-glm/v1`),
+# until a format version ([keep]).
 
 [words]
 "NCI_SCRIPTS" = "INFERENCE_ONLY_SCRIPTS"

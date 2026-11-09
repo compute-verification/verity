@@ -20,15 +20,18 @@
 "dampener_T0_fails" = "slowdown_T0_fails"
 
 [rewrite]
-# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the Glossary's table
-# of older names, the retired-terms lints' own examples, the frozen backends, files whose bytes a digest pins
-# (`rename.py` repins a `TRUSTED.sha256` line itself), lock files, move_check's own tests, and the Lean tools' fixtures,
-# locks as they were on a past tree, which their tests read as such.
-exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "GLOSSARY.md",
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the retired-terms
+# lints' own examples, the frozen backends, files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line
+# itself), lock files, move_check's own tests, and the Lean tools' fixtures, locks as they were on a past tree, which
+# their tests read as such. GLOSSARY.md is rewritten, since its symbol table names the Lean, and its rows of older names
+# stay as they are ([keep]).
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md",
            "tests/test_retired_terms.py", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock",
            "tools/verity/check/tests/test_move_check.py", "tools/verity/lean/tests/fixtures/**"]
 
 [keep]
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
             'lanes/[\w.-]+']
-strings = []
+# GLOSSARY.md's rows of older names.
+strings = ["the Lean's `Nci.Dampener` and `Dampener*` names",
+           "and the Lean's `Nci.Dampener.unmonitoredShare`"]
