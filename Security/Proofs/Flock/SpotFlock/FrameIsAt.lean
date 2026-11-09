@@ -94,7 +94,8 @@ theorem byPort_find_of_namesAt {rec : Json} {ps : List String} (hps : namesAt re
   obtain ⟨r, hr, hrv⟩ := mem_of_mapM_some hps v hv
   try dsimp only at hrv
   have hp : Spot.getD r "port" = .str v := by
-    cases hj : Spot.getD r "port" <;> rw [hj] at hrv <;> cases hrv <;> rfl
+    cases hj : Spot.getD r "port" <;> rw [hj] at hrv <;> cases hrv
+    rfl
   obtain ⟨x, hx, hxv⟩ : ∃ x ∈ Spot.Record.byPort rec, x.1 = v := by
     unfold Spot.Record.byPort
     rw [← Array.foldl_toList]
@@ -115,7 +116,9 @@ theorem byPort_find_of_namesAt {rec : Json} {ps : List String} (hps : namesAt re
       simp only [hp']
       exact ⟨(v, r'), Array.mem_push.2 (.inr rfl), rfl⟩
     case mem =>
-      cases hroots : Spot.getD rec "roots" <;> rw [hroots] at hr <;> simpa using hr
+      cases hroots : Spot.getD rec "roots" <;> rw [hroots] at hr
+      case arr => simpa using hr
+      all_goals simp at hr
   exact Array.find?_isSome.2 ⟨x, hx, by simp [hxv]⟩
 
 variable (h : Held)
@@ -154,7 +157,7 @@ theorem readsInterior_own {x m₁ : Msg} (hr : recordsOk h x m₁ = true) {st re
     exact hf
   · unfold readKey
     rw [hl]
-    exact if_pos hf
+    exact ite_eq_left hf
 
 /-- **The reveal opens the session's rows, and gate `g`'s slot names where they are** (the module's docstring), at a
 checked unit `u` of the run at statement `x` (parsed `s`), round messages `m₀`, `m₁`, `m₂`, coins `c₀` and `c₁` and the
