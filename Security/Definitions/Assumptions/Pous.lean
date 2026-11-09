@@ -7,8 +7,8 @@ public import Definitions.Pous.Model.Audit
 # PoUS's timed incompressibility
 
 `TimedINC D Q β π`, the named assumption PoUS's timed guarantees take: `INC(β, π)` (`Definitions.Pous.Model.Inc`) with
-the expander bounded. It reads only the audit game's schemes, so PoUS's guarantees (`Definitions.Pous.Guarantees`)
-import it without the rest of the named assumptions.
+the expander bounded. It reads only the audit game's schemes, so PoUS's guarantees (`Definitions.Pous.Guarantees`) read
+it without the rest of the named assumptions.
 -/
 
 @[expose] public section
