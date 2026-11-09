@@ -183,7 +183,7 @@ theorem countOf_le {x m₁ m₂ : Msg} {s} {c₀ c₁ : FlockDeploy.Coin} {u : �
   have hH : headerOf ins.read.I.publicFile = some S.header := by
     rw [(ins_reads_public hwi).2]
     exact hSH
-  obtain ⟨-, -, -, hpo, -, -, -, -, hrefs⟩ := Spot.SecondStage.stmtCodes_nil (List.isEmpty_iff.1 hc)
+  obtain ⟨-, -, -, hpo, -, -, -, -, hrefs, -⟩ := Spot.SecondStage.stmtCodes_nil (List.isEmpty_iff.1 hc)
   obtain ⟨hdr, hhdr, hn, htab⟩ :=
     Depths.loadPublic_counts (FlockSoundness.Discharge.Hidden.loadPublic_nil hpop)
   rw [hH, Option.some.injEq] at hhdr

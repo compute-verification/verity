@@ -50,8 +50,9 @@ roots the boundary values are committed under (`portRoots`).
   the replay sample in its order (`SecondStage.interiorOrderOk`); round 2's statement check passes the statement against
   template `t`'s part (`readsOk`, by `SecondStage.stmtCodes`: its public file's header is `xS₀ t`'s placed in the run
   (`SecondStage.atRun`) but for the run's fields, names
-  the part's slots and the interior record's roots, its sample is the second stage's draw within the part, and each
-  registered read is one it may read, the code itself the verifier of record of the session it checks (`codesOk`));
+  the part's slots and the interior record's roots, its sample is the second stage's draw within the part, each
+  registered read is one it may read, and its registered reads are its reference statement's but for the run's fields,
+  the code itself the verifier of record of the session it checks (`codesOk`));
   and it is `xS₀ t` but for its sample, its registered reads and its public file (`pinOk`); it refuses the message
   otherwise;
 * rounds `off t` to `off t + k₀ t − 1`: template `t`'s session, Flock's masked verifier at its statement on the
@@ -365,12 +366,22 @@ def refsOf : Array (String × Json) :=
   ((List.range h.ms.length).filterMap fun t =>
     ((FlockDeploy.decode (h.xS₀ t)).bind fun w₀ => headerOf w₀.publicFile).map fun r => (h.names.getD t "", r)).toArray
 
+/-- **The reference reads** round 2's values check holds each template's statement to (`SecondStage.Own.refReads`):
+template `t`'s name with its reference statement's registered reads as round 2 reads a statement's (`stmtJsonOf`),
+null where it reads none, for each template whose reference statement decodes and whose reads read. -/
+def refRegisteredOf : Array (String × Json) :=
+  ((List.range h.ms.length).filterMap fun t => (FlockDeploy.decode (h.xS₀ t)).bind fun w₀ =>
+    (match w₀.registered with
+      | some b => (FlockDeploy.jsonOf "registered reads" b).toOption
+      | none => some Json.null).map fun r => (h.names.getD t "", r)).toArray
+
 /-- **What the verifier holds of the run** as round 2's statement check reads it (`SecondStage.Own`), at the run's
 statement `st`, round 1's record `rec`, the second stage's draw and round 0's coin: the replay sample, the interior and
-boundary registrations' records, the second draw's units, the design's links and the templates' reference headers. -/
+boundary registrations' records, the second draw's units, the design's links and the templates' reference headers and
+registered reads, which the registration fixes before the run. -/
 def ownOf (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin) : Spot.SecondStage.Own :=
   { sample := h.reg.sample (src c₀), parts := none, interior := rec, boundary := st.record,
-    drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, refs := refsOf h }
+    drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, refs := refsOf h, refReads := refRegisteredOf h }
 
 /-- **The second stage's parts** in a replay sample of `q` blocks, one per template in template order (`partAt`). -/
 def partsAt (q : ℕ) : Array Spot.SecondStage.Part := ((List.range h.ms.length).map (partAt h q)).toArray
