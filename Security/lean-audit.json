@@ -1070,6 +1070,11 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Accounting.ReadUnit.ExpertReadAccepted": {
+   "owner": "@proofs",
+   "issue": "PRF-458",
+   "due": "2026-11-30"
+  },
   "Accounting.Remote.Draw.Assumptions.Counted": {
    "owner": "@memory-accounting",
    "digest": "0895485d6e4a3c7610aa37c855fd729299982dbfdeeb22d75125bbb5997c1dee",
@@ -3452,6 +3457,7 @@
   "Proofs.Flock.ZeroKnowledgeHidden",
   "Proofs.Flock.Masked",
   "Proofs.Accounting.JointBridge.Guarantees",
+  "Proofs.Accounting.ReadUnit.Guarantees",
   "PouwWindow.Lanes",
   "PouwWindow.KnownRows",
   "PouwWindow.OwnPorts",
@@ -4494,6 +4500,10 @@
   "WeightSecurity.SecurityProofs.TheftServedMinEntropy": {
    "honest": ["WeightSecurity.SecurityProofs.TheftServedMinEntropyHonest"],
    "nontrivial": "WeightSecurity.SecurityProofs.TheftServedMinEntropyNontrivial"
+  },
+  "Accounting.SecurityProofs.TableReadBinding": {
+   "honest": ["Accounting.SecurityProofs.TableReadBinding_honest"],
+   "nontrivial": "Accounting.SecurityProofs.TableReadBinding_nontrivial"
   }
  },
  "unwitnessed": {
@@ -5884,7 +5894,8 @@
    "Proofs.Flock.Bytes": "the byte conversion `bs`, which the deployed sampling commitment's SHA-512 (`Claims.Sampling.Path.sha512Msg`) and registration roots read in SampledKSLive; C-Flock is excepted until proofs extracts its spec",
    "Proofs.Flock.SamplingGeneric": "the deployed two-stage guarantee (`Flock.Guarantees.SampledKSTwo`) states KS at the sampled verifier's code record at its round order (`SamplingDeploy.codeTwoAt`, `compiledTwo`) and that code's facts (`RegMatchesTwo`, `Code.RefusesTwo`, `SessionOpensTwo`), still in Proofs; C-Flock is excepted until its spec is extracted",
    "Proofs.Flock.SpotFlock": "SPOT[Flock]'s two-stage guarantees (`Flock.Guarantees.SpotKSTwo`, `SpotExfilTwo`) state KS and its exfiltration bound at SPOT[Flock]'s code record (`SpotFlock.code`, `Held`, `two`, `rs`, `iroots`) and at a session layout's facts (`Layout`, `Embeds`, `FrameIs`), still in Proofs; C-Flock is excepted until its spec is extracted into Definitions/ (PRF-467), which removes this entry",
-   "Proofs.Flock.ZkAny": "the session loop's any-values guarantee states its release at the unswitched prover, the deferred release and the held relay (`RefSession.unP`, `RefSession.UnCausal`, the rounds of `LeanRelease.TrustsStop`), still in Proofs; C-Flock is excepted until its spec is extracted"
+   "Proofs.Flock.ZkAny": "the session loop's any-values guarantee states its release at the unswitched prover, the deferred release and the held relay (`RefSession.unP`, `RefSession.UnCausal`, the rounds of `LeanRelease.TrustsStop`), still in Proofs; C-Flock is excepted until its spec is extracted",
+   "Proofs.Accounting.ReadUnit.Guarantees": "the expert-row read's binding states its ports at C-Flock's unit (`Flock.Bridge.circuitOf`, `copyGate`), still in Proofs; C-Flock is excepted until its spec is extracted"
   }
  },
  "four_names": [
@@ -10325,6 +10336,15 @@
    },
    "type_hash": "c90c867363721f3be047ec0675dcd35abb8cf05a2a17d3b02c05749fb33d6f81",
    "unfolded_hash": "bf3ca864bf3c8c46154c09f81c0e3394fa6a956da0471397b018f4a3a74a84b0"
+  },
+  "Accounting.SecurityProofs.TableReadBinding": {
+   "owner": "@proofs"
+  },
+  "Accounting.SecurityProofs.TableReadBinding_honest": {
+   "owner": "@proofs"
+  },
+  "Accounting.SecurityProofs.TableReadBinding_nontrivial": {
+   "owner": "@proofs"
   },
   "Accounting.SecurityProofs.Tag.DigestNonCollision": {
    "owner": "@memory-accounting",
@@ -25960,6 +25980,10 @@
    },
    "Verity.SecurityProofs.CapacityWithinEstimate": {
     "function": "Verity.DeviceFigures.Accepted",
+    "outcome": "accept"
+   },
+   "Accounting.SecurityProofs.TableReadBinding": {
+    "function": "Flock.ReadNet.check",
     "outcome": "accept"
    }
   },
