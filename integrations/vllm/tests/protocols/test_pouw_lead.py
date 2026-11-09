@@ -14,20 +14,19 @@ import hashlib
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
-
-from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
-from verity.core.protocols.pouw.serving import PassCommitment  # noqa: E402
-from verity_vllm import protocols as PO  # noqa: E402
-from verity_vllm.engine import hooks  # noqa: E402
-from verity_vllm.engine import int8_exact as E  # noqa: E402
-from verity_vllm.engine import int8_experts as X  # noqa: E402
-from verity_vllm.protocols import pouw  # noqa: E402
-from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
-from verity_vllm.protocols.pouw import lead as PL  # noqa: E402
-from verity_vllm.protocols.pouw.lead import feed as F  # noqa: E402
-from verity_vllm.protocols.pouw.lead import record as R  # noqa: E402
-from verity_vllm.protocols.pouw.pearl_c import passes as PP  # noqa: E402
+from tests.protocols._needs_torch import torch
+from verity.core.protocols.pouw.coins import Challenger
+from verity.core.protocols.pouw.serving import PassCommitment
+from verity_vllm import protocols as PO
+from verity_vllm.engine import hooks
+from verity_vllm.engine import int8_exact as E
+from verity_vllm.engine import int8_experts as X
+from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw import lead as PL
+from verity_vllm.protocols.pouw.lead import feed as F
+from verity_vllm.protocols.pouw.lead import record as R
+from verity_vllm.protocols.pouw.pearl_c import passes as PP
 
 K = 64
 ENTRY = f"pouw:{PL.SCHEME}"
@@ -160,7 +159,7 @@ def test_the_lead_refuses_what_it_cannot_be():
     assert any("graph-capturable" in r for r in PO.refusals(eager))
 
 
-def test_the_lead_is_refused_beside_sampled_proofs_and_pous():
+def test_the_lead_is_refused_beside_spot_and_pous():
     """Sampled proofs would trace the lead's call as the stock computation, and under PoUS its GEMMs would read the
     backend's loaded weights, not what PoUS stores."""
     beside = PO.refusals(_ctx(enabled=(ENTRY, "sampled-proofs:rows-sha512"), backend=Backend()))
@@ -210,7 +209,10 @@ def test_a_step_is_a_pass_published_at_its_end_with_one_words_root():
     out = run.end_pass(step=True)
     assert isinstance(out, PassCommitment) and out is record.published and run.passes == [out]
     assert [e[0] for e in log][-1] == "words_root" and [e[0] for e in log].count("words_root") == 1
-    sha = lambda parts: hashlib.sha512(b"".join(parts)).digest()  # noqa: E731
+
+    def sha(parts: list[bytes]) -> bytes:
+        return hashlib.sha512(b"".join(parts)).digest()
+
     assert (out.scheme, out.rank, out.world, out.pass_index, out.salt, out.kernel) == \
         (PL.SCHEME, 1, 2, 0, link.windows[0].salt, "stand-in")
     assert out.units == 2 and out.tiles == sum(R.tiles(c.shape) for c in record.calls)

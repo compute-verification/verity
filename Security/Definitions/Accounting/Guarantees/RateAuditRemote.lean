@@ -61,7 +61,7 @@ words, with the footprint at most the reads summed over the tiers.
 
 Frozen (no-function, hash): as `RateAudit`, a bound in the random-oracle model over an abstract chip program. -/
 def RateConservationRO : Prop :=
-  ∀ (N b h ρ S L q k lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveDevice N b h ρ S L q),
+  ∀ (N b h ρ S L q k lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveProver N b h ρ S L q),
     (∀ E R O O', A.side E R O = A.side E R O') →
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
         k ≤ (A.correct x.1 x.2.1 x.2.2).card ∧
@@ -86,7 +86,7 @@ Proof: `Accounting.SecurityProofs.RateConservation`, `RateAuditInteractive`'s re
 
 Frozen (no-function, hash): as `RateAudit`. -/
 def RateConservation : Prop :=
-  ∀ (N b h ρ S L q k m lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveDevice N b h ρ S L q),
+  ∀ (N b h ρ S L q k m lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveProver N b h ρ S L q),
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
         k ≤ (A.correct x.1 x.2.1 x.2.2).card ∧
           ∑ t, A.tierReads tier t x.1 x.2.1 x.2.2 + A.rebuilt x.1 x.2.1 x.2.2 * b + S + (L - ρ) + lam < (k - m) * b)
@@ -115,7 +115,7 @@ Proof: `Accounting.SecurityProofs.RateConservationCapRO`.
 Frozen (no-function, hash): as `RateAudit`. -/
 def RateConservationCapRO : Prop :=
   ∀ (N b h ρ S L q k F cTag cEnc lam τ : ℕ) (tier : ℕ → Fin τ) (cap : Fin τ → ℕ)
-    (A : Rate.InteractiveDevice N b h ρ S L q),
+    (A : Rate.InteractiveProver N b h ρ S L q),
     (∀ E R O O', A.side E R O = A.side E R O') → A.TierCapped tier cap →
     (∑ t, cap t) * cEnc < floor b ρ S L F cTag cEnc k lam →
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
@@ -131,7 +131,7 @@ the probability that at least `k` committed receipts are correct with the comput
 Frozen (no-function, hash): as `RateAudit`. -/
 def RateConservationCap : Prop :=
   ∀ (N b h ρ S L q k m F cTag cEnc lam τ : ℕ) (tier : ℕ → Fin τ) (cap : Fin τ → ℕ)
-    (A : Rate.InteractiveDevice N b h ρ S L q),
+    (A : Rate.InteractiveProver N b h ρ S L q),
     A.TierCapped tier cap →
     (∑ t, cap t) * cEnc < floor b ρ S L F cTag cEnc (k - m) lam →
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
@@ -156,7 +156,7 @@ is at most `N/2^h + C(q, k)/2^λ`.
 
 Frozen (no-function, hash): as `RateAudit`. -/
 def RateDisplacement : Prop :=
-  ∀ (N b h ρ S L q k D lam τ : ℕ) (tier : ℕ → Fin τ) (t₀ : Fin τ) (A : Rate.InteractiveDevice N b h ρ S L q),
+  ∀ (N b h ρ S L q k D lam τ : ℕ) (tier : ℕ → Fin τ) (t₀ : Fin τ) (A : Rate.InteractiveProver N b h ρ S L q),
     (∀ E R O O', A.side E R O = A.side E R O') →
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
         k ≤ (A.correct x.1 x.2.1 x.2.2).card ∧
@@ -166,7 +166,7 @@ def RateDisplacement : Prop :=
 
 /-- **A chained pass is a fresh audit, with side sources that ignore the oracle.** For every chained prover over `P`
 passes with `r`-bit roots (`Rate.Chain`: pass `j`'s interactive device of `RateAudit`'s class and the root its seed is
-drawn at, each any function of the earlier passes' coins, the root also of the store) whose devices' side sources
+sampled at, each any function of the earlier passes' coins, the root also of the store) whose devices' side sources
 ignore the oracle, over a uniform store and each pass's uniform stream, oracle family and sample, and for every pass
 `j`: the probability that pass `j` is accepted at its seed's oracle with its compute within `F` and its footprint short
 of `RateAudit`'s floor is at most `RateAudit`'s error, `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ`.
@@ -264,7 +264,7 @@ Proof: `Accounting.SecurityProofs.RatePaidRO`, `RateConservationRO`'s guessing a
 
 Frozen (no-function, hash): as `RateAudit`. -/
 def RatePaidRO : Prop :=
-  ∀ (N b h ρ S L q lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveDevice N b h ρ S L q),
+  ∀ (N b h ρ S L q lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveProver N b h ρ S L q),
     (∀ E R O O', A.side E R O = A.side E R O') →
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
         ∑ t, A.tierReads tier t x.1 x.2.1 x.2.2 + A.rebuilt x.1 x.2.1 x.2.2 * b + S + (L - ρ) + lam <
@@ -282,7 +282,7 @@ is at most `C(N, m)·2^L/2^(h·m) + 2^q/2^λ`: `m` relayed receipts, about `L/h`
 
 Frozen (no-function, hash): as `RateAudit`. -/
 def RatePaid : Prop :=
-  ∀ (N b h ρ S L q m lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveDevice N b h ρ S L q),
+  ∀ (N b h ρ S L q m lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveProver N b h ρ S L q),
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
         ∑ t, A.tierReads tier t x.1 x.2.1 x.2.2 + A.rebuilt x.1 x.2.1 x.2.2 * b + S + (L - ρ) + lam + m * b <
           (A.correct x.1 x.2.1 x.2.2).card * b)
@@ -299,7 +299,7 @@ is at most `P·(N/2^h + 2^q/2^λ)`.
 
 **The reading.** The route `Paid` of the remote audit for a window, `correct·b ≤ paid + P·λ`: the reads summed over
 passes and tiers, the rebuilt words, state `S` and link bits `L − ρ` at each pass boundary, and `λ` a pass; nothing
-outside the node, whose side sources cannot query the oracle. No sample is drawn, so it holds with the window-wide
+outside the node, whose side sources cannot query the oracle. No sample is sampled, so it holds with the window-wide
 sample, which the route `Sampled` prices. A word read in pass `j − 1` serves pass `j` only through the `S` bits on chip
 when `root_{j−1}` is fixed, because pass `j`'s oracle is fresh at that root.
 

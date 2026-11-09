@@ -1,35 +1,35 @@
-"""The statements difftest's cases: the arguments of `credit._verified` (the Lean `PouwCheck.Verified`), a served window's
-statements, its period's committed circuit files and the verifier of record's answers.
+"""The statements difftest's cases: the arguments of `credit._verified` (the Lean `PouwCheck.Verified`), a served execution phase's
+statements, its credit period's committed circuit files and the verifier's answers.
 
-A `verified` case is a served window (`pouw_credit_cases.layout`, its descriptor under a prefix or none, its calls over
-one to three rounds), one to six sampled proof blocks, the entries a statement of each drawn call reads (its round's A table of
-its K, its z table and the weights' ``b/<K>``, `credit.registered_file`'s, each registered once), one statement a drawn
+A `verified` case is a served execution phase (`pouw_credit_cases.layout`, its descriptor under a prefix or none, its calls over
+one to three rounds), one to six sampled proof blocks, the entries a statement of each sampled call reads (its round's A table of
+its K, its z table and the weights' ``b/<K>``, `credit.registered_file`'s, each registered once), one statement a sampled
 call in a shuffled order (its circuit and public files' paths and one to three sessions' directories), each K's
-committed circuit file, the window's open root, rounds and Program salt, and `runs`: null, the first of the Lean's two
+committed circuit file, the execution phase's open root, rounds and Program salt, and `runs`: null, the first of the Lean's two
 calls (`credit._lean_verified`), or the answers the served path gives: one a statement `credit._asks` names, in its
 order, until one the Lean refuses at, each session accepted with the units of its call split among them and its
 registered finding the ``--registered`` file's ports at their values and roots.
 
 Its mutations before any run (`PRE_NAMES`, with `runs` null or answered) break the circuit files' form, the statements'
-form or name a call past the window's, give a call two statements or one to a call with no sampled proof block, drop a K's
-circuit file, register the window's ok rows (``ok-registered``) or none of a value a statement reads (``unregistered``),
-and give a descriptor that is no H1 window's. Its mutations of the answers (`RUN_NAMES`) make one statement's verifier
+form or name a call past the execution phase's, give a call two statements or one to a call with no sampled proof block, drop a K's
+circuit file, register the execution phase's ok rows (``ok-registered``) or none of a value a statement reads (``unregistered``),
+and give a descriptor that is no H1 execution phase's. Its mutations of the answers (`RUN_NAMES`) make one statement's verifier
 fail to run (``error``) or refuse it (``refused``), reject one session (``rejected``), open a public table or the ok
 rows at another port, value or root, open no ok row (``ok-none``), and prove a unit of another call (``unit-other``).
 
-A `lanes` case (`lanes_instance`, `LANES_NAMES`) is a 32 × 32 window with one K in the lanes form (``lane<K>`` and
+A `lanes` case (`lanes_instance`, `LANES_NAMES`) is a 32 × 32 execution phase with one K in the lanes form (``lane<K>`` and
 ``combine<K>``, its leaf Programs `leaf_desc`'s, its zy unit's TILE the one they are over) and perhaps one in the tile
-form, one or two drawn leaves at the lanes-form K and perhaps tile-form units, and the lanes evidence: each drawn leaf's
+form, one or two sampled leaves at the lanes-form K and perhaps tile-form units, and the lanes evidence: each sampled leaf's
 lanes and combine statements among the calls' in a shuffled order, and the produced record of their partials under the
-window's draw root. Its answers accept each leaf session with every port of its ``--registered`` file, and the rows it
+execution phase's sample root. Its answers accept each leaf session with every port of its ``--registered`` file, and the rows it
 opened of the partials and the known rows (``openings``). Its mutations: a K outside `LeafLanesSound`'s reach, no lanes
-evidence, a leaf's statement dropped, a leaf Program other than the committed one or not the window's own, a statement
-twice, of an undrawn unit or none of the leaf's, the produced record's P- codes, a table the leaf reads unregistered,
-the draw malformed, the evidence's or the circuit files' lanes form broken; then a leaf session's partials or known row
+evidence, a leaf's statement dropped, a leaf Program other than the committed one or not the execution phase's own, a statement
+twice, of an unsampled unit or none of the leaf's, the produced record's P- codes, a table the leaf reads unregistered,
+the sample malformed, the evidence's or the circuit files' lanes form broken; then a leaf session's partials or known row
 opened at another opening or reported without openings (``P-shared``), its ports at another root, rejected, proving
 other units, a run that fails or refuses, and every leaf run reporting no session (``P-opened``).
 
-`tests/test_verified_difftest.py` draws them for the harness, replaying `runs` as the verifier (`replay`).
+`tests/test_verified_difftest.py` samples them for the harness, replaying `runs` as the verifier (`replay`).
 """
 from __future__ import annotations
 
@@ -42,8 +42,8 @@ import random
 import pouw_credit_cases as C
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import leaf_lanes as LL
-from verity.core.protocols.sampled_proofs.one_stage import produced as PR
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+from verity.core.protocols.spot.one_stage import produced as PR
+from verity.core.protocols.spot.one_stage import proofs as PF
 
 PRE_NAMES = ["files-form", "statements-form", "call-past", "twice", "undrawn", "no-file", "ok-registered",
              "unregistered", "layout"]
@@ -63,7 +63,7 @@ def _starts(lay: dict) -> tuple[list[int], list[int]]:
 
 
 def _reads(lay: dict, prefix: str, steps: int, c: int) -> list[str]:
-    """The values call `c`'s statement reads that the window registers (`credit.registered_file`'s)."""
+    """The values call `c`'s statement reads that the execution phase registers (`credit.registered_file`'s)."""
     k = {lin: k for lin, k, _n in lay["linears"]}[lay["calls"][c][0]]
     return [f"{prefix}a/{k}@{Cr.step_row(lay, steps, c)[0]}", f"{prefix}zy@{c}", f"{prefix}b/{k}"]
 
@@ -222,7 +222,7 @@ def _bc(rng: random.Random) -> str:
 
 
 def lanes_instance(rng: random.Random, name: str = "lanes-honest") -> dict:
-    """A `lanes` case: `verified_instance`'s arguments over a window with a lanes-form K, `name`'s mutation applied
+    """A `lanes` case: `verified_instance`'s arguments over an execution phase with a lanes-form K, `name`'s mutation applied
     (`LANES_NAMES`)."""
     shape_off = name == "lanes-shape" and rng.random() < 0.5
     r, c = (16, 16) if shape_off else (32, 32)
@@ -420,7 +420,7 @@ class Opened(PF.Finding):
 
 
 def replay(runs: list) -> Cr.Run:
-    """A verifier of record that answers `runs` in turn, as `credit._answer` reads its run: a finding with
+    """A verifier that answers `runs` in turn, as `credit._answer` reads its run: a finding with
     ``openings`` (a leaf session's) as `Opened`."""
     answers = iter(runs)
 

@@ -1,6 +1,7 @@
-"""scan_zk's host side: the run it reads (each execution phase's rows the warden's committed ones, each egress bucket
-computing the warden's row from the view its ingress bucket wrote, w63's request 5 in request 1's slot past its egress)
-and each round's host read (`scan_zk.member`, as Lean's registered reads make it, and the references' outputs) as the
+"""scan_zk's host side: the run it reads (each execution phase's rows the network certifier's committed ones, each
+egress bucket computing the network certifier's row from the view its ingress bucket wrote, w63's request 5 in request
+1's slot past its egress) and each round's host read (`scan_zk.member`, as Lean's registered reads make it, and the
+references' outputs) as the
 round's: honest accepted with every output 1, its state and view chains wires through the registered roots
 (`scan_zk.wired`), its state tree the window state a slot's Program reads (`ingress_scan.window_state`); chain's
 ingress member refused at unit A's o1, as is any state tree that skips, repeats or alters a transition, and
@@ -11,7 +12,7 @@ template and link-window, its members the Program's ranges. A warden_serve run's
 synthetic run published as `warden_serve.Publisher` publishes a served one) is read under its deployment's key, its
 registration's ``rows/<direction>/<w>`` roots (`scan_zk.warden_roots`) the root and domain of each row registration in
 ``cells.jsonl``, and refused by name where a row, the key or the schedule isn't the warden's. The honest round on the
-challenger's coins (``--challenger``): its flags refused by name where they can't draw, the group's root bound to the
+challenger's coins (``--challenger``): its flags refused by name where they can't sample, the group's root bound to the
 warden's signed link-windows, and its Spec what the round's registration shows (`service.check_public`) over the units
 its `Stream` takes. w63k4, w63's class at a window circuit's KO 4 and KI 32, serves w63's network certifier at
 egress_cells 5 and reads its rounds as w63's. Nothing here lowers or proves (`scan_zk.prove` does, on a node)."""
@@ -31,7 +32,7 @@ import pytest
 from verity.ml.circuits.codec import canonical_json, encode_program
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.types import Array, Value as Bits
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.spot.one_stage import registration as R
 
 HERE = Path(__file__).resolve().parents[1]
 PERIOD_CASE = HERE.parents[1] / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
@@ -272,8 +273,8 @@ def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int
               late: tuple[int, ...] = ()) -> Path:
     """The synthetic run's records over ``windows`` execution phases (the setup's by default) published as
     warden_serve's `Publisher` publishes a served run's (each record and its certificate, the wire's rows' registration
-    and salts), under a warden key of its own, beside its `deployment.json`; the connections of ``late`` failed late (a
-    void run, their reasons in ``fails.records``)."""
+    and salts), under a network certifier key of its own, beside its `deployment.json`; the connections of ``late``
+    failed late (a void run, their reasons in ``fails.records``)."""
     windows = windows or setup.windows
     reqs = [sz._request(setup, i, p) for i, p in enumerate(setup.prompts)]
     served = sz.traffic.serve(setup.params, reqs, setup.arrivals, [1 << 20] * len(reqs), setup.responses, windows,
@@ -343,9 +344,9 @@ def test_the_registration_names_each_link_windows_warden_rows_its_ports_read(tmp
 
 def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the_prover_committed(tmp_path):
     """The verifier's own ``--registered`` file of each member (`registered_file`: `stage` writes it, `a0.lean_verify`
-    passes it, and a Lean verdict's ``registered`` reports its roots) holds each warden port at the root and domain of
-    the row registration the deployment's key signed (`warden_rows.check_registration`, read here afresh from the
-    run's ``cells.jsonl``), the root `warden_roots` registers for that direction and execution phase. A member whose
+    passes it, and a Lean verdict's ``registered`` reports its roots) holds each network certifier port at the root and
+    domain of the row registration the deployment's key signed (`warden_rows.check_registration`, read here afresh from
+    the run's ``cells.jsonl``), the root `warden_roots` registers for that direction and execution phase. A member whose
     rows the prover committed afresh, under salts of its own, is still read at the signed root, and refused there; and a
     statement whose header names a port registered that the verifier's file doesn't is refused, as Lean refuses it
     (`header_refusal`, `Flock.Registered.check`)."""
@@ -400,7 +401,7 @@ def test_each_link_windows_answer_is_one_stages_on_the_groups_registration():
     counts = sz.counts_of(sz.members_of(sz.TEMPLATES, G, T))
     program = sz.PA.mixed_population_program([(defs[t], counts[t]) for t in sz.TEMPLATES])
     query = sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES])
-    N, law = sum(counts.values()), sz.DR.parse_law(f"stratified:{2 * G * T}")
+    N, law = sum(counts.values()), sz.DR.parse_design(f"stratified:{2 * G * T}")
     reg = R.record(program, query, law, sz.S.SCHEME,
                    [{"port": "rows/egress/1", "root": "aa" * 64, "leaves": T, "domain": "bb" * 64}],
                    {"kind": "stand-in"}, leaf_layer="ee" * 64)
@@ -443,14 +444,15 @@ def _program(G: int, T: int) -> tuple:
     counts = sz.counts_of(sz.members_of(sz.TEMPLATES, G, T))
     defs = {"first": FIRST, "ingress": ING, "egress": EG}
     return (sz.PA.mixed_population_program([(defs[t], counts[t]) for t in sz.TEMPLATES]),
-            sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES]), sz.DR.parse_law(f"stratified:{2 * G * T}"))
+            sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES]), sz.DR.parse_design(f"stratified:{2 * G * T}"))
 
 
 def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail(tmp_path):
-    """A warden run whose warden failed a connection late (its server sent nothing: a FAIL in the egress row the
-    warden signed, its reason in ``fails.records``) is read, not refused: the scan renders the connection's END where
-    the warden wrote FAIL, that bucket alone differs from the warden's row, and the run's one round, honest, is refused
-    ("does not open") at the egress member of the FAIL's execution phase, every other member held."""
+    """A network certifier run whose network certifier failed a connection late (its server sent nothing: a FAIL in the
+    egress row the network certifier signed, its reason in ``fails.records``) is read, not refused: the scan renders the
+    connection's END where the network certifier wrote FAIL, that bucket alone differs from the network certifier's row,
+    and the run's one round, honest, is refused ("does not open") at the egress member of the FAIL's execution phase,
+    every other member held."""
     G, T = 2, sz.TEST.params.window
     h = sz.host(tmp_path / "host", published(tmp_path / "run", sz.TEST, windows=G, late=(1,)), setup=sz.TEST, group=G)
     at = h.at
@@ -468,7 +470,8 @@ def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail
 @pytest.mark.slow
 def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans_answer(tmp_path, monkeypatch):
     """`scan_period.rows_case` of one link-window in the rows form's formats (`NetworkCheck.Period`; its Lean checks the
-    case on a node: scan_period.sh): the deployment's key, session and schedule, the registered Program and its
+    case on a node: scan_period.sh): the deployment's key, session and schedule (its integer fields, the id egress
+    form's), the registered Program and its
     descriptor (``joint/program.json``, the generator form, `scan_zk.scan_root`, whose one-stage reads are each unit's
     slot entries) as the scan, the block's audit (its descriptor, free inputs and no steps; its registration, whose
     ``SlotEntry_v1{…}/c0/o0`` is the scan's ``scan/prog`` root and domain and whose ``scan/state`` is the scan's, and
@@ -481,7 +484,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     registration) at the registration, the chain case (the round's registration of the Program) at its refusal, a block
     whose entries are at another root by name, and one whose root is at its o1, no `SlotEntry_v1` template's entries, at
     the wiring (`period_case.UNWIRED`), and a block whose ``scan/state`` is a state tree that skips a transition, or
-    that names none, at the state tie (`period_case.UNSTATED`); a group of two link-windows is refused by name. Slow
+    that names none, at the state tie (`period_case.UNSTATED`); a group of two link-windows, and a run in the bytes
+    egress form, are refused by name. Slow
     (the test class's Program, about 30 s): the period check reads the scan's templates' signatures, which no stand-in
     can stand for."""
     import scan_period as SP
@@ -504,7 +508,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     state = {"root": st.root.hex(), "leaves": T, "domain": sz.ADV.domain(st.binding, T).domain_id.hex()}
     roots = sz.warden_roots([{"warden": m.warden} for m in h.rounds["honest"]]) + [
         {"port": "scan/prog", **prog}, {"port": "scan/state", **state}]
-    law = sz.DR.parse_law(f"stratified:{2 * T}")
+    law = sz.DR.parse_design(f"stratified:{2 * T}")
     reg, chain = (R.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer=x * 64)
                   for x in ("ee", "ff"))
     other = {**reg, "program": "ab" * 64}
@@ -515,7 +519,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     record = {"accepted": True, "registration": reg, "draw": draw, "proved_units": list(range(2 * T))}
     answer = sz.window_answer(reg, record, sz.Fraction(1, 100), "unused")
     block = sz.PA.mixed_population_program([(defs["block"], E)])
-    bquery, blaw = sz.PA.template_instances_query([defs["block"]]), sz.DR.parse_law(f"stratified:{E}")
+    bquery, blaw = sz.PA.template_instances_query([defs["block"]]), sz.DR.parse_design(f"stratified:{E}")
     entries = PC.entries_port(sz.PA.template_id(defs["block"]))
     assert entries == f"{sz.port_prefix(defs['block'], SimpleNamespace(template='block'))}/o0"
 
@@ -539,8 +543,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     case = SP.rows_case(run, scan)
     p = case["params"]
     assert sorted(p) == PC.ROWS_PARAMS_KEYS
-    assert (p["key"], p["session"], p["schedule"], p["link"]) == (dep["key"]["public"], dep["session"], dep["params"],
-                                                                  WS.LINK)
+    schedule = {k: dep["params"][k] for k in sz.W.INTEGER_FIELDS}
+    assert (p["key"], p["session"], p["schedule"], p["link"]) == (dep["key"]["public"], dep["session"], schedule, WS.LINK)
     assert (p["program"], p["windows"], p["first"]) == (reg["program"], 1, 0)
     assert p["audits"] == [{"free": E * sz.IS.entry_bits(cls), "program": encode_program(block), "steps": 0}]
     key = sz.PA.template_id(defs["block"])
@@ -586,6 +590,9 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
         assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {PC.UNSTATED}"), got
     (scan / "answers.json").write_text(json.dumps({"registration": reg, "windows": [{"window": w} for w in (0, 1)]}))
     with pytest.raises(SystemExit, match="a group of 2 link-windows .* scan_zk.py --group 1"):
+        SP.rows_case(run, scan)
+    (run / "deployment.json").write_text(json.dumps({**dep, "params": {**dep["params"], "egress": "bytes"}}))
+    with pytest.raises(SystemExit, match="the period check's schedule is the id egress form's, not 'bytes''s"):
         SP.rows_case(run, scan)
 
 
@@ -676,10 +683,13 @@ def test_a_row_shorter_than_a_piece_is_found_whole_and_held_to_the_pieces_rule(t
 
 @pytest.mark.parametrize("name", sorted(sz.SETUPS))
 def test_schedule_prints_the_classs_schedule_as_warden_serves_flags(capsys, name):
+    """Its integer fields, which `rehearse --ids` runs in the id egress form: the class's schedule whole."""
     assert sz.main(["schedule", "--class", name]) == 0
     flags = capsys.readouterr().out.split()
-    assert dict(zip(flags[::2], flags[1::2])) == {f"--{k.replace('_', '-')}": str(v)
-                                                  for k, v in asdict(sz.SETUPS[name].params).items()}
+    params = sz.SETUPS[name].params
+    assert dict(zip(flags[::2], flags[1::2])) == {f"--{k.replace('_', '-')}": str(getattr(params, k))
+                                                  for k in sz.W.INTEGER_FIELDS}
+    assert WS._params(WS.parser().parse_args(["rehearse", "--fake", "--ids", "--out", "o", *flags])) == params
 
 
 def test_w63k4_is_w63s_class_at_a_window_circuits_ko_and_ki_its_certifier_w63s_at_egress_cells_ko_plus_1():
@@ -763,10 +773,10 @@ def test_a_forged_cell_row_another_key_or_another_schedule_is_refused_by_name(tm
 
 
 def test_a_fails_reason_outside_its_fails_bucket_is_refused_by_name_and_one_outside_the_group_is_not_read(tmp_path):
-    """A connection's reason in the warden's ``fails`` record is in the bucket of its egress `FAIL` (a void run, whose
-    execution phases the scan answers refused): a reason in a scanned bucket whose egress row has no `FAIL` is refused,
-    naming the run's ``check.json`` problems that say a connection failed closed; one in an execution phase past the
-    group is another group's, and the group is read as if it weren't there."""
+    """A connection's reason in the network certifier's ``fails`` record is in the bucket of its egress `FAIL` (a void
+    run, whose execution phases the scan answers refused): a reason in a scanned bucket whose egress row has no `FAIL`
+    is refused, naming the run's ``check.json`` problems that say a connection failed closed; one in an execution phase
+    past the group is another group's, and the group is read as if it weren't there."""
     run = published(tmp_path / "run")
     rec = WS.ar.unpack_record(WS.ar.read_blobs(run / "responses.records")[0], sz.PARAMS.cell_bytes)
     t, j = next((t, j) for t, row in enumerate(rec.grid) for j, f in enumerate(row) if f is not None)
@@ -799,8 +809,8 @@ def test_a_challenger_draw_that_cant_draw_is_refused_by_name_before_anything_run
 
 
 def test_the_window_root_is_the_wardens_signed_link_windows(tmp_path):
-    """Each run's root is its own (the synthetic run's registrations carry fresh salts), a warden run's is read from its
-    published registrations alone, and a group's covers each of its execution phases."""
+    """Each run's root is its own (the synthetic run's registrations carry fresh salts), a network certifier run's is
+    read from its published registrations alone, and a group's covers each of its execution phases."""
     syn = sz.link(tmp_path / "syn")
     root = sz.window_root(syn)
     assert re.fullmatch("[0-9a-f]{128}", root) and root != sz.window_root(sz.link(tmp_path / "again"))
@@ -832,13 +842,15 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
     schemas = {p: sz.BitRowLeaf.hiding_schema for p in want}
     spec, units, counts = sz.spec_of(pg, members, want, schemas, k, root)
     assert units == [ING, EG] and counts == {sz.PA.template_id(ING): 2 * T, sz.PA.template_id(EG): 2 * T}
-    assert spec.context == bytes.fromhex(root) and spec.selection.to_json() == {"rule": "law", "law": f"stratified:{k}"}
+    rule = f"stratified-rate:{k}/{4 * T}"
+    assert sz.rule_of(k, 4 * T) == rule and sz.rule_of(8 * T, 4 * T) == "stratified-rate:128/128"
+    assert spec.context == bytes.fromhex(root) and spec.selection.to_json() == {"rule": "law", "law": rule}
     assert spec.check.proof_deadline == 4 * sz.MEMBER_DEADLINE_S
 
     def record(ports: dict) -> dict:
         roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **w} for i, (p, w) in enumerate(ports.items())]
-        return R.record(program, query, sz.DR.parse_law(f"stratified:{k}"), sz.S.SCHEME, roots,
-                        {"kind": "stand-in"}, leaf_layer="ee" * 64)
+        law, table = sz.S.params_law(rule, program, query, None)
+        return R.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64, work_table=table)
 
     assert sz.S.check_public(spec, record(want)).ok
     v = sz.S.check_public(spec, record({**want, "scan/other": {"leaves": 1, "domain": "ff" * 64}}))

@@ -2,33 +2,68 @@ module
 
 public import Proofs.Flock.Claims.Bridge.Transport
 public import Proofs.Flock.Claims.Deploy
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import VCVio.Prelude.Core
 
 /-!
 # Committed coins: the `--zk` Hello round
 
-Deployed `--zk` (live `PROTOCOL.md` §9, "The coin commitment") draws every coin at `Hello`, before the prover's first
+Deployed `--zk` (live `PROTOCOL.md` §9, "The coin commitment") flips every coin at `Hello`, before the prover's first
 message, commits to them in the keyed coin tree (`coin-tree/hm96-sha512`: hm96 leaves under SHA-512 trees) and sends
-the root; each round's answer opens that round's coins. `Claims.run` draws each coin after the message it answers. This
+the root; each round's answer opens that round's coins. `Claims.run` flips each coin after the message it answers. This
 file bounds the difference by the tree's hiding distance `δ_hide`.
 
 * `CoinTree Coin T k`: the root `hello r τ` of the coins `r` at the tree's randomness `τ` (the salts), and round `j`'s
   opening `opn r τ j`.
 * `CProver Ω`: a prover that also reads the root before its first message, and each round's opening with that round's
   answer.
-* `runC` (**the committed-coins run**): the verifier draws `r` and `τ`, the prover reads `hello r τ` before its first
+* `runC` (**the committed-coins run**): the verifier samples `r` and `τ`, the prover reads `hello r τ` before its first
   message and `opn r τ j` with the answer to round `j`; the verifier is `V` on the coins `r`.
 * `OnlineSim`, `SimHides C ans S δ_hide` (**the coin tree's hiding at distance `δ_hide`**): the simulator `S` makes a
   root from its own tape `σ`, and round `j`'s opening from `σ` and the answers to rounds `0, …, j`; on uniform `r`,
   `τ` and `σ`, the coins with the tree's root and openings are within `δ_hide` of the coins with `S`'s, on every event.
-  `TreeHides C ans δ_hide`: some simulator is. A statistically hiding tree has one (the simulator that draws each
-  opening from its law given the root, the earlier openings and the coins opened so far; hm96 `PROTOCOL.md` §3), and
+  `TreeHides C ans δ_hide`: some simulator is. A statistically hiding tree has one (the simulator that samples each
+  opening from its sampling design given the root, the earlier openings and the coins opened so far; hm96 `PROTOCOL.md` §3), and
   `δ_hide` is then the hm96 leaves' hiding over the rounds.
 * `AnswersCoin H V x ans`: every message `V` answers round `j` with is `ans` of coin `j` (`answersCoin_deploy`: Flock's
   deployed verifier, with `ans = Coin.bytes`).
 * `simProver S k P`: the prover with `S`'s root and openings in place of the tree's, a prover of `Claims.run` with tape
   `Ω × S.Tape`.
 * `runC_near` (**committed coins are within `δ_hide` of fresh ones**): every event of the committed run, with the tape
-  and the coins, has probability within `δ_hide` of the same event at `Claims.run` of `simProver`, each coin drawn after
+  and the coins, has probability within `δ_hide` of the same event at `Claims.run` of `simProver`, each coin flipped after
   the message it answers. `Pr_runC_le` is the bound a KS proof charges in `κ`; `Pr_runC_le_of_treeHides` the same from
   `TreeHides`.
 -/
@@ -60,7 +95,7 @@ def CProver.at {Ω : Type} (P : CProver Ω) (h : Msg) (π : ℕ → Msg) : Prove
 /-- **The committed-coins run** at tape `ω`, coins `r` and the tree's randomness `τ`: the verifier sends the root of `r`
 before the prover's first message and opens round `j`'s coin with its answer; `V` decides on the coins `r`. -/
 def runC {Coin Ω T : Type} [Inhabited Coin] (H : Msg → Msg) (P : CProver Ω) (V : Verifier Coin) (x : Msg)
-    (C : CoinTree Coin T (V.k x)) (ω : Ω) (r : Fin (V.k x) → Coin) (τ : T) : Trace :=
+    (C : CoinTree Coin T (V.k x)) (ω : Ω) (r : Fin (V.k x) → Coin) (τ : T) : Transcript :=
   run H (P.at (C.hello r τ) (openSeq (C.opn r τ))) V x ω r
 
 /-- **An online simulator** of a coin tree: a root from its tape alone, and round `j`'s opening from its tape and the
@@ -132,7 +167,7 @@ provers whose next messages agree on every history answering each round with its
 theorem stepWith_congr {Coin : Type} (H : Msg → Msg) {Ω Ω' : Type} (P : Prover Ω) (P' : Prover Ω')
     (V : Verifier Coin) (x : Msg) (ω : Ω) (ω' : Ω') (ans : Coin → Msg) (r : ℕ → Coin) (hV : AnswersCoin H V x ans)
     (hP : ∀ hist, Answered ans r hist → P.next x hist ω = P'.next x hist ω') :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), Answered ans r hist →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), Answered ans r hist →
       hist.length = as.length →
       stepWith H P x ω (fun as => V.next x as ((List.range as.length).map r)) n hist as t =
         stepWith H P' x ω' (fun as => V.next x as ((List.range as.length).map r)) n hist as t := by
@@ -198,11 +233,11 @@ theorem abs_Ex_sub_le {α : Type} [Fintype α] [Nonempty α] {f g : α → ℝ} 
 /-- **Committed coins are within `δ_hide` of fresh ones.** Against a verifier that answers each round with its coin
 (`AnswersCoin`), at a tree that hides at distance `δ_hide` against the simulator `S`: every event of the committed run,
 with the prover's tape and the coins, has probability within `δ_hide` of the same event at `Claims.run` of the
-simulating prover (`simProver`), whose every coin is drawn after the message it answers. -/
+simulating prover (`simProver`), whose every coin is flipped after the message it answers. -/
 theorem runC_near {Coin Ω T : Type} [Fintype Coin] [Inhabited Coin] [Fintype Ω] [Nonempty Ω] [Fintype T]
     (H : Msg → Msg) (V : Verifier Coin) (x : Msg) (C : CoinTree Coin T (V.k x)) (ans : Coin → Msg) (S : OnlineSim)
     {δ_hide : ℝ} (hS : SimHides C ans S δ_hide) (hV : AnswersCoin H V x ans) (P : CProver Ω)
-    (Ev : Ω → (Fin (V.k x) → Coin) → Trace → Prop) :
+    (Ev : Ω → (Fin (V.k x) → Coin) → Transcript → Prop) :
     |Pr (fun p : Ω × (Fin (V.k x) → Coin) × T => Ev p.1 p.2.1 (runC H P V x C p.1 p.2.1 p.2.2)) -
       Pr (fun p : (Ω × S.Tape) × (Fin (V.k x) → Coin) => Ev p.1.1 p.2 (run H (simProver S V.k P) V x p.1 p.2))| ≤
       δ_hide := by
@@ -233,7 +268,7 @@ theorem runC_near {Coin Ω T : Type} [Fintype Coin] [Inhabited Coin] [Fintype Ω
 theorem Pr_runC_le {Coin Ω T : Type} [Fintype Coin] [Inhabited Coin] [Fintype Ω] [Nonempty Ω] [Fintype T]
     (H : Msg → Msg) (V : Verifier Coin) (x : Msg) (C : CoinTree Coin T (V.k x)) (ans : Coin → Msg) (S : OnlineSim)
     {δ_hide : ℝ} (hS : SimHides C ans S δ_hide) (hV : AnswersCoin H V x ans) (P : CProver Ω)
-    (Ev : Ω → (Fin (V.k x) → Coin) → Trace → Prop) :
+    (Ev : Ω → (Fin (V.k x) → Coin) → Transcript → Prop) :
     Pr (fun p : Ω × (Fin (V.k x) → Coin) × T => Ev p.1 p.2.1 (runC H P V x C p.1 p.2.1 p.2.2)) ≤
       Pr (fun p : (Ω × S.Tape) × (Fin (V.k x) → Coin) => Ev p.1.1 p.2 (run H (simProver S V.k P) V x p.1 p.2)) +
         δ_hide := by
@@ -245,7 +280,7 @@ is within `δ_hide` of the committed run on every event. -/
 theorem Pr_runC_le_of_treeHides {Coin Ω T : Type} [Fintype Coin] [Inhabited Coin] [Fintype Ω] [Nonempty Ω]
     [Fintype T] (H : Msg → Msg) (V : Verifier Coin) (x : Msg) (C : CoinTree Coin T (V.k x)) (ans : Coin → Msg)
     {δ_hide : ℝ} (hT : TreeHides C ans δ_hide) (hV : AnswersCoin H V x ans) (P : CProver Ω) :
-    ∃ S : OnlineSim, ∀ Ev : Ω → (Fin (V.k x) → Coin) → Trace → Prop,
+    ∃ S : OnlineSim, ∀ Ev : Ω → (Fin (V.k x) → Coin) → Transcript → Prop,
       Pr (fun p : Ω × (Fin (V.k x) → Coin) × T => Ev p.1 p.2.1 (runC H P V x C p.1 p.2.1 p.2.2)) ≤
         Pr (fun p : (Ω × S.Tape) × (Fin (V.k x) → Coin) => Ev p.1.1 p.2 (run H (simProver S V.k P) V x p.1 p.2)) +
           δ_hide :=

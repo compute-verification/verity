@@ -1,7 +1,42 @@
 module
 
 public import Definitions.NetworkCertifier.Guarantees.SampledAudit
-public import Proofs.Flock.Claims.Prob
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
+import Std.Tactic.BVDecide.Normalize.BitVec
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The sampled audit implies `Accepted`
@@ -10,14 +45,14 @@ public import Proofs.Flock.Claims.Prob
 bound with a stronger relation on a smaller scope, so it is `KS` once `R δ x w` gives `RAcc δ x w` at every statement in
 the audit's scope (`rAcc_of_r`), `PrBad` monotone in the relation (`Claims.Pr_mono`). On that scope:
 
-* **No faulty proof block is sampled `all`** (`disjoint_allSlots`): a set that meets a class sampled `all` has that
+* **No incorrect proof block is sampled `all`** (`disjoint_allSlots`): a set that meets a class sampled `all` has that
   class's `P_a` factor `0` (`classesPa_eq_zero`), so it is in no `M_δ` at `δ ≥ 0`.
-* **The advice** (`heldAdv`): every faulty proof block's committed gate (`FaultyGate`) held at the trace's value there,
+* **The advice** (`heldAdv`): every incorrect proof block's committed gate (`FaultyGate`) held at the trace's value there,
   and the other inputs the trace's values.
 * **`Accepted`** (`accepted_of`): at each step before the horizon, `C` run on the ingress up to the step and the advice
   holds the trace's value at every egress gate (`valOver_out`). A gate of a proof block that isn't faulty computes what its
-  proof unit computes on its committed values and interior (`valOver_unit`, by strong induction on the gate, every unit
-  correct there, `runIn_ne_none`), and a value it reads from outside its proof unit is a committed one: a held gate's
+  proof block computes on its committed values and interior (`valOver_unit`, by strong induction on the gate, every unit
+  correct there, `runIn_ne_none`), and a value it reads from outside its proof block is a committed one: a held gate's
   or another correct unit's boundary value, each the trace's. An input reads the ingress the trace carries (`inputOf_eq`): the layout fits the program, so no egress gate of a step depends on a
   later step's ingress (`Good`).
 -/
@@ -48,14 +83,14 @@ theorem exists_of_mem_gates {P : Partition} {g : ℕ} (h : g ∈ P.gates) :
   obtain ⟨v, hv, rfl⟩ := List.getElem_of_mem hu
   exact ⟨v, _, List.getElem?_eq_getElem hv, hg⟩
 
-/-- **A gate is in one proof unit**: two slots whose proof units hold it are one. -/
+/-- **A gate is in one proof block**: two slots whose proof blocks hold it are one. -/
 theorem slot_unique {P : Partition} (hN : P.gates.Nodup) {v v' : ℕ} {u u' : List ℕ} (hu : P.blocks[v]? = some u)
     (hu' : P.blocks[v']? = some u') {g : ℕ} (hg : g ∈ u) (hg' : g ∈ u') : v = v' := by
   obtain ⟨hv, rfl⟩ := List.getElem?_eq_some_iff.1 hu
   obtain ⟨hv', rfl⟩ := List.getElem?_eq_some_iff.1 hu'
   exact idx_eq_of_mem_flatten (L := P.blocks) hN hv hv' hg hg'
 
-/-! ## Boundaries, reads and the proof unit's values -/
+/-! ## Boundaries, reads and the proof block's values -/
 
 theorem boundary_of_read {C : Prog} {u : List ℕ} {g' i : ℕ} {x : BGate} (hx : C.gates[g']? = some x)
     (hi : i ∈ x.reads) (hg' : g' ∉ u) : C.Boundary u i = true := by
@@ -160,7 +195,7 @@ theorem runIn_ne_none {C : Prog} (hT : C.Topological) {ref : ℕ → Option Bool
     · simp only [hiu, ite_false]
       exact (hc g hg).1 x hx i hi hiu
 
-/-! ## `C` run with the faulty proof blocks' gates held -/
+/-! ## `C` run with the incorrect proof blocks' gates held -/
 
 theorem valOver_held {C : Prog} {inp : ℕ → Bool} {free : ℕ → Option Bool} {g : ℕ} {b : Bool} (h : free g = some b) :
     valOver C inp free g = b := by
@@ -177,11 +212,6 @@ theorem valOver_const {C : Prog} {inp : ℕ → Bool} {free : ℕ → Option Boo
     (hx : C.gates[g]? = some (.const b)) : valOver C inp free g = b := by
   rw [valOver_gate h hx]
   rfl
-
-open Classical in
-/-- **The advice's held gates**: every faulty proof block's committed gate, at the trace's value. -/
-noncomputable def heldAdv (C : Prog) (P : Partition) (F : Finset ℕ) (ref : ℕ → Option Bool) (g : ℕ) : Option Bool :=
-  if FaultyGate C P F g then some (traceVal C ref g) else none
 
 theorem heldAdv_of {C : Prog} {P : Partition} {F : Finset ℕ} {ref : ℕ → Option Bool} {g : ℕ} (h : FaultyGate C P F g) :
     heldAdv C P F ref g = some (traceVal C ref g) := by
@@ -206,8 +236,8 @@ variable {C : Prog} {P : Partition} {ref : ℕ → Option Bool} {F : Finset ℕ}
   (hinp : ∀ g, C.gates[g]? = some .input → Good g → inp g = traceVal C ref g)
 include hT hP hι hgood hinp
 
-/-- **A unit that isn't faulty computes what its proof unit does**: at a gate whose inputs read the trace, `C` run with
-the faulty units' gates held has the value the gate's proof unit computes on its committed values and interior. -/
+/-- **A unit that isn't faulty computes what its proof block does**: at a gate whose inputs read the trace, `C` run with
+the incorrect proof blocks' gates held has the value the gate's proof block computes on its committed values and interior. -/
 theorem valOver_unit : ∀ g, Good g → ∀ v u, P.blocks[v]? = some u → v ∉ F → g ∈ u →
     valOver C inp (heldAdv C P F ref) g = (C.runIn (C.refIn u ref (ι v)) u g).getD false := by
   intro g
@@ -275,7 +305,7 @@ theorem valOver_unit : ∀ g, Good g → ∀ v u, P.blocks[v]? = some u → v �
   rw [hb] at hc
   exact Option.some.inj hc
 
-/-- **At a returned gate, `C` run with the faulty proof blocks' gates held has the trace's value.** -/
+/-- **At a returned gate, `C` run with the incorrect proof blocks' gates held has the trace's value.** -/
 theorem valOver_out {g : ℕ} (hout : g ∈ C.outs) (hgd : Good g) :
     valOver C inp (heldAdv C P F ref) g = traceVal C ref g := by
   by_cases hfg : FaultyGate C P F g
@@ -333,9 +363,9 @@ theorem inputOf_eq {L K S : ℕ} {lay : BoundaryGates L S} {C : Prog} {ref : ℕ
     · exact hno i hit hg
     · exact hgd i (by omega) hik hg
 
-/-! ## No faulty proof block is sampled `all` -/
+/-! ## No incorrect proof block is sampled `all` -/
 
-/-- **A set that meets a class drawn `all` has acceptance probability `0`**: that class's factor is `0`. -/
+/-- **A set that meets a class sampled `all` has acceptance probability `0`**: that class's factor is `0`. -/
 theorem classesPa_eq_zero : ∀ (rs : List OneStage) (cs : List (List (List (List ℕ)))) (o : ℕ) (B : Finset ℕ),
     ¬ Disjoint B (allSlotsFrom rs cs o) → classesPa rs cs o B = 0
   | [], _, _, _, h => by simp [allSlotsFrom] at h
@@ -429,10 +459,11 @@ theorem accepted_of {L K S : ℕ} {C : Prog} {P : Partition} {lay : BoundaryGate
   rw [heq σ _ (by simp [slotGates]),
     List.map_congr_left fun g hg => heq σ g (by simp [slotGates, hg])]
 
-variable {Coin Col T : Type}
+variable {Coin : Type} {A : Claims.SamplingGeneric.Arg Coin}
 
 /-- **On the audit's scope the sampling relation gives the audit's**: at `δ ≥ 0`, `R δ x w` gives `RAcc δ x w`. -/
-theorem rAcc_of_r (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
+theorem rAcc_of_r (H : Msg → Msg) (D : Claims.SamplingGeneric.Compiled Coin A) {L K S : ℕ}
+    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
     {δ : ℝ} (hδ : 0 ≤ δ) {x : Msg} (hx : ScopeAcc D lay k x) {w : Wit}
     (hR : R H D.commit D.parse D.partition δ x w) : RAcc H D.commit D.parse D.partition L K S lay k δ x w := by
   obtain ⟨s, P, hs, hP, hM⟩ := hR
@@ -453,14 +484,14 @@ end NetTiming.SampledAuditProof
 
 open NetTiming.SampledAuditProof in
 /-- **The sampled audit implies `Accepted`, at `ε` at `δ` over the selection**
-(`NetTiming.Guarantees.SampledAuditAccepted`): `KS`'s bound at the stronger relation on the smaller scope, `R δ` giving
-`RAcc δ` there (`rAcc_of_r`). -/
+(`NetTiming.Guarantees.SampledAuditAccepted`): `Compiled.KS`'s bound at the stronger relation on the smaller scope,
+`R δ` giving `RAcc δ` there (`rAcc_of_r`). -/
 theorem NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted := by
-  intro Coin Col T _ _ _ _ _ H D L K S lay k hKS δ decode hδ hdec x hx Ω _ _ P
-  have h := hKS δ decode hδ hdec x hx.1 Ω P
+  intro Coin _ _ _ A H D L K S lay k hKS δ hδ x hx Ω _ _ P
+  have h := hKS δ hδ x hx.1 Ω P
   unfold Claims.PrBad at h ⊢
   refine le_trans (Claims.Pr_mono fun s hs => ⟨hs.1, fun hR => hs.2 ?_⟩) h
   revert hR
-  cases ((Claims.Sampling.E D decode).eval H P x s.1 s.2.1 s.2.2).1 with
+  cases (D.E.eval H P x s.1 s.2.1 s.2.2).1 with
   | none => exact id
   | some w => exact rAcc_of_r H D lay k hδ hx

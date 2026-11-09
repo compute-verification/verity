@@ -96,10 +96,12 @@ def _listed(m: int, k: int, c: int, holo: bool = False) -> list[list]:
 @pytest.mark.parametrize("shape", SHAPES)
 def test_the_verifiers_statements_are_the_ones_v_star_stages(tmp_path, shape):
     """The verifier's statements at the shape are V*'s, in order, then RecCap over each later level's tops and over level 0's
-    128 nodes, and each passes the check under its own name and count."""
+    128 nodes, each passes the check under its own name and count, and the hm96 calls they record at most are the
+    stager's count (`rec_budget.recorded_calls`)."""
     inner = _inner(tmp_path / "inner.json", *shape)
     rc, line = _statements(inner)
     assert rc == 0 and line["statements"] == _listed(*shape) and _caps(*shape)[-1] == ["rec-cap/n128", 128], line
+    assert line["recorded"] == RBG.recorded_calls(A.Shape(*shape)), line
     for name, n in (line["statements"][0], line["statements"][-2], line["statements"][-1]):
         rc, line = _statements(inner, "--unit", name, "--instances", str(n))
         assert rc == 0 and line["checked"] == [name, n], line
@@ -337,7 +339,7 @@ def test_the_registered_reads_message_round_ports_are_the_statements(tmp_path):
 def _l16_h1(d: Path, n: int, name: str | None = None) -> Path:
     """`RecOpen{16, 1}` over ``n`` openings (under ``name``, else `rec-open/l16-h1`) as `compose` writes it under its population
     program's partition, staged in ``d`` (`_staged`): the verifier's own bindings of it."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
     from verity_flock import circuit as FC
     from verity_flock import rec_open as R
 

@@ -145,7 +145,7 @@ def toy_cases(S, encode) -> list[tuple[str, SimpleNamespace, dict, str | None]]:
 
 
 def committed_wrong(o: SimpleNamespace, row: bytes) -> dict:
-    """The opening of a pass whose receipt tree commits ``row`` as the drawn leaf: its path holds, its receipt isn't the
+    """The opening of a pass whose receipt tree commits ``row`` as the sampled leaf: its path holds, its receipt isn't the
     block's."""
     rows = list(o.rows)
     rows[o.c] = row

@@ -4,7 +4,6 @@ public import Difftest
 public import PouwCheck.Check
 public import PouwCheck.Chunks
 public import PouwCheck.Opening
-public import PouwCheck.Pass
 public import PouwCheck.Rounds
 
 /-!
@@ -14,24 +13,24 @@ public import PouwCheck.Rounds
 harness (`verity/core/difftest`):
 
 * `opening` (`params` as JSON, `commitment` the registration's bytes as hex, `units` a list of integers or null, `unit`,
-  `pub` the proof's public file as hex, `opening` as JSON, and `salt`, a certified window's salt as hex, null or absent
+  `pub` the proof's public file as hex, `opening` as JSON, and `salt`, a certified execution phase's salt as hex, null or absent
   otherwise): `core_check.opening`'s reason, or null. A refusal of the
   parameters or the registration is a reject, as `core_check.params` and `commitment` raise `Refused` (a ValueError).
 * `registered` (`params`, `commitment`, as `opening` reads them): PoUW's rule over the registration
   (`core_check.registered`), as `{"reason"}`, null when it holds.
 * `pass` (`coins` the challenger's commitment as JSON or null, `raw` the manifest's bytes as hex or null, `context`,
-  `recorded`, `reveal`, `committed`, `stream` and `prover`, a certified window's, as hex, null or absent otherwise, and
+  `recorded`, `reveal`, `committed`, `stream` and `prover`, a certified execution phase's, as hex, null or absent otherwise, and
   `live`, a live Pearl-C pass's verifier's `{key, ledger, main, pins, session}`, null or absent otherwise):
   `core_check.pass_epoch`, as `{"how"}` or `{"refused": [code, why]}`.
 * `draw` (`coins`, `recorded`, `opening`, `stream`, `registration`, `receipt`, `k`, `population`, `units`, each as
   `core_check.draw` takes it): null, or `{"refused": [code, why]}`.
 * `salt` (`key`, `ledger`, `pins`, `main`, `window` and `session` as `rounds` reads them, `weights` and `requests` the
-  window's weights' root and round-0 request table's root, `opening` the salt coin, each as `core_check.salt` takes it):
+  execution phase's weights' root and round-0 request table's root, `opening` the salt coin, each as `core_check.salt` takes it):
   null, or `{"refused": [code, why]}`.
 * `live-salt` (`key`, `ledger`, `pins`, `main` and `session` as `salt` reads them, `manifest` a live Pearl-C pass's
   manifest as JSON, each as `core_check.live_salt` takes it): `{"salt": hex}`, or `{"refused": [code, why]}`.
-* `rounds` (`key` the window's pinned challenger key, `ledger` the auditor's signed ledger's lines, `pins` the challenger
-  host's published pins log, `main` the auditor's own first-parent list of main, `window` the window's identity,
+* `rounds` (`key` the execution phase's pinned challenger key, `ledger` the auditor's signed ledger's lines, `pins` the challenger
+  host's published pins log, `main` the auditor's own first-parent list of main, `window` the execution phase's identity,
   `session` the challenger's session's files, `roots` the round roots, `openings` the round coins, each as
   `core_check.rounds` takes it): null, or `{"refused": [code, why]}`.
 * `chunks` (a natural number K, not an object): `PouwCheck.Chunks.chunks` (`weights.chunks`) as `{"chunks": n}`, or
@@ -88,12 +87,12 @@ def passOf (j : Json) : Except String Json := do
   let .str context ← get j "context" | throw "the input's context is not a string"
   refusal (fun how => Json.mkObj [("how", how)])
     (passEpoch (← get j "coins") raw context (← flag j "recorded") (← hexOrNull j "reveal") (← hexOrNull j "committed")
-      (← hexOrNull j "stream") (← hexOrNull j "prover") (SampledProofs.getD j "live"))
+      (← hexOrNull j "stream") (← hexOrNull j "prover") (Spot.getD j "live"))
 
 def drawOf (j : Json) : Except String Json := do
   let f := get j
   refusal (fun _ => Json.null) (drawCheck (← f "coins") (← flag j "recorded") (← f "opening") (← f "stream")
-    (← f "registration") (← f "receipt") (← f "k") (← f "population") (← f "units") (SampledProofs.getD j "key"))
+    (← f "registration") (← f "receipt") (← f "k") (← f "population") (← f "units") (Spot.getD j "key"))
 
 def saltOf (j : Json) : Except String Json := do
   let f := get j

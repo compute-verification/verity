@@ -13,7 +13,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
                                            | --traffic varied [--rate R] [--prompt-range LO:HI | --prompts < PROMPTS]
                                              [--seed S] [--eos-ids ID,...] [--compact B] [--margin M])
     vy-challenger-gate warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] [--height H]
-                                       [--temperature T] [--top-p P]
+                                       [--temperature T] [--top-p P] [--watermark]
                                        [--scan [--bucket-ms MS]
                                         [--prompts [--scan-class w63|w63k4] [--window-per-group]] < PROMPTS]
     vy-challenger-gate weights-write [--shape h200|tiny]
@@ -33,7 +33,8 @@ tree, one session a window, each recorded in a signed append-only ledger before 
 - **What runs.** `/opt/vy-challenger/current` -> `/opt/vy-challenger/<commit>`, a root-owned `git archive` of that commit
   (`pin.sh`); the commit is the directory's name, and every entry names it (`pinned`). pin.sh pins only a commit on
   origin/main's first-parent history, which it fetches from GitHub itself, and appends `pin_line(commit, main, utc)` to
-  the pins log (`/opt/vy-challenger/pins.jsonl`, root's, `chattr +a`; `record_pin`) before it moves `current`.
+  the pins log (`/opt/vy-challenger/pins.jsonl`, root's, `chattr +a`; `record_pin`, which refuses past `MAX_PINS` lines)
+  before it moves `current`.
   A reserve or an open is refused unless that log records this tree's pin (`pins_refusal`, the verifier's `pins_reason`),
   and each open seals the log as it stands (`pins: {lines, sha512}`), so `pinned_session` can hold the session to a pin
   the log records, and that pin to the auditor's own first-parent list of main. The key (`/var/lib/vy-challenger/key`,
@@ -56,7 +57,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   open's answer also carries the session's coin commitment root (`commitment`, from the record serve.py signs before it
   listens; `status` gives it too), so the serving side checks the hello's commitment against it before its first coin.
   Before the first reserve the ledger held one-step v2 opens (`--commit`), which still verify; none follows a reserve.
-- **A withheld session** (`reserve --withhold`, a sampled-proofs window's: its draw reads only such a session's coins,
+- **A withheld session** (`reserve --withhold`, a sampled-proofs window's: its sample reads only such a session's coins,
   `challenger.withheld_on`) keeps its coin commitment's root on this host until the prover's commitments are in. Its
   reserve and open bodies carry `withheld: true`, and serve.py serves it `--withhold`, so it answers the hello with the
   layout alone and releases the root, salts and paths only at the client's close. Until the session's `end` entry the
@@ -81,8 +82,9 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   exempts only the coin openings that open against the session's committed coin root, counts everything else, and
   writes `coin-link.json`, which the `end` entry's `files` seals. The hop from the certifier to the server crosses the
   prover's NIC, so it is the certifier's counted ingress, not a path this side trusts. The challenger side rests on the
-  premises `CoinsConfidential` (the stream reaches the certifier only on auditor hosts, here this one) and `OneClock`
-  (one clock for both, this host's), stated in `verity/core/protocols/sampled_proofs/README.md`.
+  premises `CoinsConfidential` (`Pouw.Assumptions.CoinsConfidential`; here the stream reaches the certifier only on
+  this auditor host) and `OneClock` (one clock for both, this host's), named in
+  `verity/core/protocols/spot/README.md`.
 
   `serve.py --peer`, its own `ssh -R` to the peer, which the prover's sshd decrypts, is the development path alone
   (`run.sh`), and it refuses a window's session (`--root`).
@@ -112,10 +114,22 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   complete} (root null for a reserve never opened; complete when its end is in the ledger and complete), with `complete` true only when it lists at least one window and all are: an
   incomplete window is the period's visible failure. Period entries are taken under the gate's lock, so no window is
   admitted between a close's reading of the ledger and its entry.
+- **A day's declaration** (`declare`, a lane's own gate key, or vy-admin's `--for LANE`): the program a lane serves on
+  a UTC day (`day_of`: the days from 1970-01-01), declared before the day's first window opens. `declare --program
+  SHA512 [--blocks K,...] [--day D]` takes the program's SHA-512 and its blocks' descriptor keys, and the auditor
+  appends the lane's `declaration` entry (session null), `{by, [for], blocks, day, declared_utc, pinned, program}`:
+  `declared_utc` is this host's clock and `day` today's, or the later day `--day` names, never an earlier one. A lane
+  declares a day once: another declaration of it is refused, and the same request again gets its entry back
+  (`earlier: true`) with nothing written. Once a lane has declared, an `open` on a day it hasn't declared is refused
+  (`open_refusal`), so the ledger orders each day's declaration before every coin of the day; a lane that never
+  declares opens as before. `verify_ledger` refuses a ledger that breaks either, and `challenger.declared_day` reads a
+  window's day and its lane's declarations from the ledger.
 - **The ledger** (`/var/lib/vy-challenger/windows.jsonl`, `chattr +a`) is one JSON object a line: `schema`, `seq` (from 0),
   `prev` (SHA-512 of the previous line's bytes, 128 zeros first), `kind`, `session`, `body` and `sig`, an LMS signature under
   the challenger key over `entry_message(I, entry)`. Its entries' LMS leaves strictly increase (`append` refuses an entry
-  whose leaf isn't after the last one, as a restored key state would sign), and each record's leaf lies between its
+  whose leaf isn't after the last one, as a restored key state would sign), it holds at most `MAX_LEDGER_LINES` lines of
+  at most `MAX_LEDGER_LINE` characters (`append` refuses an entry past either, as v2 refuses such a ledger;
+  `remote`'s "The device's caps"), and each record's leaf lies between its
   session's open and end and is no entry's. v2 entries follow the host's v1 entries in one chain, and `verify_ledger`, the
   reference check, reads both, and checks each window's reserve, open and end in that order, its expiry, and the periods
   (`verify_periods` returns them). Infra publishes the ledger and each ended session to the store (`publish.sh`, the control
@@ -197,7 +211,11 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   (G = `scan_group_windows` of the tokens), so that group g's cells are exactly windows g·G … (g+1)·G − 1, which
   `out/groups.json` publishes, and `--minutes` must cover `warden_group_minutes` of its groups. The demo's stand-in (`benchmarks/network_traces/demo_stub.py`) serves the demo's class, prompts of exactly 8
   byte ids and exactly 24 out, id-form, and prints its prompts: `demo_stub.py prompts | … warden-rehearse --scan
-  --prompts --tokens 24`. Its request carries `device: warden`; it
+  --prompts --tokens 24`. `--watermark` (recorded and passed on only when given) has the warden also send the
+  endpoint, through the same tunnel, the watermark stream an engine admitting at certified ticks waits on
+  (`verity.core.protocols.certifier.release`: `POST /verity/watermark`, one line `t n` a tick, then the releases of
+  bucket t its server connections lost); the warden reads nothing
+  back, and nothing it signs, certifies or publishes changes. Its request carries `device: warden`; it
   shares the certifier rehearsal's directory, run names, unit, `status` and `fetch`, and one of either runs at a time.
   The warden writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and certifier salt
   with its certificate), the cells' salts (each link-window's rows' and wiring's), the traffic, the client's log and
@@ -221,7 +239,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   loopback, where the prover's `load_relay.py sink --streams N --weights W --witness S` listens, and `warden_serve.py
   rehearse --load-store` relays the store over them: each value's bytes held to its digest and committed as they
   cross (`load_relay.relay_load`), every row's salts sent on with them. The witness (4.85 GB at H200) is the sink's
-  `--witness` file on the prover's host and nowhere here: this host never writes a salt. The prover then starts its
+  `--witness` file on the developer's host and nowhere here: this host never writes a salt. The developer then starts its
   endpoint on the weights the sink wrote, and the warden's one signer (its publisher process) signs the load's 733
   heads in the serving session before its first window, so one key and one session carry the load and the windows;
   `out/` publishes `load.json` (the load's registrations, which the block record pins) and `load-relay.json` (the
@@ -241,13 +259,13 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   `warden_minutes` counts. A warden rehearsal's key signs `WARDEN_WINDOW_LEAVES` one-time signatures a link-window,
   after a load's heads, and its signer refuses every window past its 2^H: so a request whose `warden_windows` its
   height can't sign is refused, with the least height that can (`warden_height`; the gate's most requests at the
-  scan's schedule take 13). The rehearsal draws each serve's session itself (32 fresh random bytes, `--session`), as
-  the challenger it plays: the challenger here draws none, since a rehearsal is none of its windows.
+  scan's schedule take 13). The rehearsal samples each serve's session itself (32 fresh random bytes, `--session`), as
+  the challenger it plays: the challenger here samples none, since a rehearsal is none of its windows.
 
-Every signature of the key (`reserve`'s, `admit`'s, a period's, `end`'s, and `serve.py`'s record and close,
-`--sign-lock`) is taken under `sign.lock`, each opening the key's leaf state only to sign, so `lms.LeafState`, which
-refuses a second signer, never sees two, and sessions run side by side. The ledger's reference check, `verify_ledger`
-and `verify_periods`, is `verity.core.protocols.sampled_proofs.challenger`'s, the verifier's own.
+Every signature of the key (`reserve`'s, `admit`'s, a period's, a declaration's, `end`'s, and `serve.py`'s record and
+close, `--sign-lock`) is taken under `sign.lock`, each opening the key's leaf state only to sign, so `lms.LeafState`,
+which refuses a second signer, never sees two, and sessions run side by side. The ledger's reference check,
+`verify_ledger` and `verify_periods`, is `verity.core.protocols.spot.challenger`'s, the verifier's own.
 """
 from __future__ import annotations
 
@@ -270,7 +288,7 @@ import threading
 import time
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
@@ -278,11 +296,12 @@ HERE = Path(__file__).resolve().parent
 TREE = HERE.parents[1]
 sys.path.insert(0, str(TREE))
 
-from verity.core.protocols.sampled_proofs.challenger import (LEDGER_ROLE as ROLE, LEDGER_SCHEMA as SCHEMA,  # noqa: E402
-                                                             LEDGER_SCHEMA_V1 as SCHEMA_V1,
-                                                             LEDGER_TAGS as TAGS, PERIOD_KINDS, RESERVED,
-                                                             SESSION_KINDS, cap_of as _cap_of,
-                                                             circuit_of as _circuit_of, extends, lane_of, leaf_of,
+from verity.core.protocols.spot.challenger import (DECLARATION, LEDGER_ROLE as ROLE,  # noqa: E402
+                                                             LEDGER_SCHEMA as SCHEMA, LEDGER_SCHEMA_V1 as SCHEMA_V1,
+                                                             LEDGER_TAGS as TAGS, MAX_LEDGER_LINE, MAX_LEDGER_LINES,
+                                                             MAX_PINS, PERIOD_KINDS, RESERVED, SESSION_KINDS,
+                                                             cap_of as _cap_of,
+                                                             circuit_of as _circuit_of, day_of, extends, lane_of, leaf_of,
                                                              ledger_message as entry_message, ledger_text, pin_line,
                                                              pins_reason, pins_seal, root_of, verify_ledger, verify_periods)
 from verity.ml.crypto import lms  # noqa: E402
@@ -290,7 +309,7 @@ from verity.ml.crypto import lms  # noqa: E402
 ZERO = "0" * 128
 PORTS = range(7811, 7900)
 MINUTES = (1, 720)
-#: the most a period-open's draw K may be (PoUW's `credit.MAX_K`)
+#: the most a period-open's sample K may be (PoUW's `credit.MAX_K`)
 MAX_DRAW_K = 1 << 24
 ROOT = re.compile(r"[0-9a-f]{128}")
 PINNED = re.compile(r"[0-9a-f]{40}")
@@ -302,6 +321,12 @@ LEAF_FILE = re.compile(r"(lane|combine)([1-9][0-9]{0,7})")
 LEAF_PROGRAMS = "leaf_programs"
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}")
 SCHEME = re.compile(r"[a-z0-9][a-z0-9/._-]{0,127}")
+#: a declared block's descriptor key: 1 to 256 printable ASCII characters but space and comma
+BLOCK = re.compile(r"[\x21-\x2b\x2d-\x7e]{1,256}")
+#: a declaration's `--blocks`, its most characters: a gate request's over ssh
+MAX_BLOCKS = 8192
+#: a declared day as `--day` takes it: the days from 1970-01-01 (`day_of`), in at most 7 digits (9999-12-31 is 2932896)
+DAY = re.compile(r"0|[1-9][0-9]{0,6}")
 SESSION = re.compile(r"s\d{8}T\d{6}Z-[0-9a-f]{4}")
 CERTIFIER_RUN = re.compile(r"c\d{8}T\d{6}Z-[0-9a-f]{4}")
 #: a rehearsal's --minutes: at most 170, so that a run stays inside its unit's RuntimeMaxSec=3h (vy-certifier@.service)
@@ -492,11 +517,15 @@ def append_only(path: Path) -> None:
 def record_pin(log: Path, commit: str, main: str, now: datetime, *, seal: Callable[[Path], None] = append_only) -> str:
     """pin.sh's last step before it moves `current`, as root: `pin_line(commit, main, now)` appended to the pins log `log`,
     which is root's, 0644, and append-only (`chattr +a`, which only root can lift, as the ledger) before any line is
-    written. A failure here fails the pin, so `current` never names a tree the log doesn't."""
+    written. A failure here fails the pin, so `current` never names a tree the log doesn't; a log that holds `MAX_PINS`
+    lines, the most v2 reads, takes no more."""
     try:
         line = pin_line(commit, main, utc(now))
     except ValueError as e:
         raise Refused(f"pin {commit!r} at main {main!r}: {e}") from None
+    if len(read_pins(log)) >= MAX_PINS:
+        raise Refused(f"pin {commit}: {log} holds {MAX_PINS} lines, the most v2 reads (MAX_PINS), so no pin is logged "
+                      "and `current` doesn't move")
     if not log.exists():
         log.touch()
         log.chmod(0o644)
@@ -558,7 +587,7 @@ def cap_of(v: Any) -> int:
 
 
 def draw_k_of(s: str) -> int:
-    """A period-open's draw K (`--draw-k`, written as `draw_k`): a positive integer at most 2^24, or Refused."""
+    """A period-open's sample K (`--draw-k`, written as `draw_k`): a positive integer at most 2^24, or Refused."""
     if not re.fullmatch(r"[1-9][0-9]{0,7}", s) or int(s) > MAX_DRAW_K:
         raise Refused(f"--draw-k {s!r}: the draw K the proof system selects each window's units with, 1 to 2^24")
     return int(s)
@@ -686,6 +715,11 @@ def roots_of(lines: list[bytes]) -> dict[str, str]:
     return {root_of(s["open"]): sid for sid, s in sessions_of(lines).items() if "open" in s}
 
 
+def declarations_of(lines: list[bytes], lane: str) -> dict[int, dict]:
+    """day -> lane `lane`'s `declaration` entry of that day."""
+    return {e["body"]["day"]: e for e in entries(lines) if e["kind"] == DECLARATION and lane_of(e) == lane}
+
+
 @contextmanager
 def locked(path: Path) -> Iterator[None]:
     with open(path, "a") as f:
@@ -699,9 +733,14 @@ def locked(path: Path) -> Iterator[None]:
 def append(host: Host, kind: str, session: str, body_of: Callable[[list[bytes]], dict], I: bytes,
            sign: Callable[[bytes], bytes]) -> dict:
     """Append one signed entry, its body `body_of` the ledger as it stands (which may refuse), under the ledger's lock;
-    fsynced. Refused, unwritten, when the signature's leaf isn't after the ledger's last entry's (a restored key state)."""
+    fsynced. Refused, unwritten, when the ledger holds `MAX_LEDGER_LINES` lines (before it signs), when the entry's line
+    is past `MAX_LEDGER_LINE` characters, or when the signature's leaf isn't after the ledger's last entry's (a restored
+    key state): v2 refuses a ledger past either bound."""
     with locked(host.root / "ledger.lock"):
         lines = read_ledger(host.ledger)
+        if len(lines) >= MAX_LEDGER_LINES:
+            raise Refused(f"the ledger holds {len(lines)} lines, the most v2 reads (MAX_LEDGER_LINES), so no {kind} entry "
+                          "is written")
         entry = {"schema": SCHEMA, "seq": len(lines), "prev": hashlib.sha512(lines[-1]).hexdigest() if lines else ZERO,
                  "kind": kind, "session": session, "body": body_of(lines)}
         with locked(host.root / "sign.lock"):
@@ -709,9 +748,13 @@ def append(host: Host, kind: str, session: str, body_of: Callable[[list[bytes]],
         if lines and leaf_of(entry["sig"]) <= leaf_of(json.loads(lines[-1])["sig"]):
             raise Refused(f"the key signed at leaf {leaf_of(entry['sig'])}, not after the ledger's last entry's: its key state "
                           "was restored or forked, and no entry is written under it")
+        text = ledger_text(entry)
+        if len(text) > MAX_LEDGER_LINE:
+            raise Refused(f"the {kind} entry's line is {len(text)} characters, past the {MAX_LEDGER_LINE} v2 reads "
+                          "(MAX_LEDGER_LINE), so it is not written")
         fd = os.open(host.ledger, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
         try:
-            os.write(fd, ledger_text(entry).encode() + b"\n")
+            os.write(fd, text.encode() + b"\n")
             os.fsync(fd)
         finally:
             os.close(fd)
@@ -952,7 +995,8 @@ def cap_refusal(lines: list[bytes], lane: str) -> str | None:
 
 def open_refusal(lines: list[bytes], session: str, opener: str, root: str, now: datetime) -> str | None:
     """Why `opener` may not open `session` at `root` now, or None: the session is reserved, not yet opened, unexpired,
-    the opener's own (its reserve's `by` or `for`), its period still open, and the root no open's yet (v1 and v2 too)."""
+    the opener's own (its reserve's `by` or `for`), its period still open, the root no open's yet (v1 and v2 too), and,
+    once its lane has declared a day, today (`day_of`) one its lane declared."""
     s = sessions_of(lines).get(session, {})
     if "reserve" not in s:
         return f"session {session} has no reserve in the ledger: reserve first"
@@ -967,6 +1011,10 @@ def open_refusal(lines: list[bytes], session: str, opener: str, root: str, now: 
         return f"session {session}'s period {held[0]} has closed, listing it unopened"
     if (sid := roots_of(lines).get(root)) is not None:
         return f"root {root[:16]}… already has its session ({sid}) in the ledger: one session a root, ever"
+    lane = lane_of(s["reserve"])
+    if (days := declarations_of(lines, lane)) and (day := day_of(utc(now))) not in days:
+        return (f"lane {lane} declares its days and hasn't declared day {day} ({utc(now)[:10]}), the day this open "
+                "registers its window on: declare it first (declare --program SHA512)")
     return None
 
 
@@ -1057,6 +1105,56 @@ def gate_status(session: str, host: Host, active: Callable[[str], bool], now: da
     return {"session": session, "reserve": s.get("reserve"), "open": s.get("open"), "end": s.get("end"),
             "active": "open" in s and "end" not in s and active(session), "expired": expired,
             "commitment": None if root_held(s) else commitment_of(host.sessions / session / "out")}
+
+
+def parse_declare(argv: list[str], *, admin: bool = False) -> dict:
+    """A day's declaration: its program's SHA-512 (`--program`), its blocks' descriptor keys (`--blocks K,...`), the
+    day (`--day D`, a UTC day number, `day_of`; today's by default) and, vy-admin's alone, the lane (`--for LANE`)."""
+    p = argparse.ArgumentParser(prog="vy-challenger-gate declare", exit_on_error=False, add_help=False, allow_abbrev=False)
+    p.add_argument("--program", required=True)
+    p.add_argument("--blocks", default="")
+    p.add_argument("--day", default=None)
+    if admin:
+        p.add_argument("--for", dest="lane", default=None)
+
+    def refuse(why: object) -> None:
+        raise Refused(f"declare: {why}; {' '.join(p.format_usage().split())} (the day's program, declared before the "
+                      "day's first window opens; the day is the challenger's UTC day, today's unless --day names a later "
+                      "one)")
+
+    p.error = refuse
+    try:
+        a = p.parse_args(argv)
+    except argparse.ArgumentError as e:
+        refuse(e)
+    if not ROOT.fullmatch(a.program):
+        raise Refused("--program: the day's program's SHA-512, 128 lowercase hex digits")
+    blocks = a.blocks.split(",") if a.blocks else []
+    if len(a.blocks) > MAX_BLOCKS or not all(BLOCK.fullmatch(k) for k in blocks):
+        raise Refused(f"--blocks: descriptor keys, comma-separated, each 1 to 256 printable ASCII characters but space "
+                      f"and comma, up to {MAX_BLOCKS} characters in all")
+    if a.day is not None and not DAY.fullmatch(a.day):
+        raise Refused(f"--day {a.day!r}: a UTC day, the days from 1970-01-01")
+    lane = getattr(a, "lane", None)
+    if lane is not None and (not NAME.fullmatch(lane) or lane in HOST_ACCOUNTS):
+        raise Refused(f"--for {lane!r}: a lane's name")
+    return {"program": a.program, "blocks": blocks, **({"day": int(a.day)} if a.day is not None else {}),
+            **({"for": lane} if lane else {})}
+
+
+def gate_declare(argv: list[str], host: Host, *, by: str, admin: bool, now: datetime,
+                 declare: Callable[[list[str]], dict]) -> dict:
+    """Validate a day's declaration and hand it to `declare` (as `auditor`), which signs the lane's `declaration` entry
+    for the day, or refuses a day before today or one the lane has declared; a request the ledger holds already, the same
+    program and blocks for that day, gets its entry back (`earlier`), and nothing is written."""
+    req = parse_declare(argv, admin=admin)
+    lane = req.get("for") or by
+    with locked(host.root / "gate.lock"):
+        held = declarations_of(read_ledger(host.ledger), lane).get(req.get("day", day_of(utc(now))))
+        if held is not None and held["body"]["program"] == req["program"] and held["body"]["blocks"] == req["blocks"]:
+            return {"seq": held["seq"], "kind": held["kind"], "body": held["body"], "earlier": True}
+        e = declare([lane, by, req["program"], json.dumps(req["blocks"]), str(req.get("day", READ_ONLY))])
+    return {"seq": e["seq"], "kind": e["kind"], "body": e["body"]}
 
 
 def gate_fetch(session: str, host: Host) -> bytes:
@@ -1309,7 +1407,8 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
     the sampling (`sampling`) and the key's height. `--prompts` (with `--scan`) marks the request's prompts as the gate's stdin,
     `--scan-class` (with `--prompts`, recorded only when given) the scan's class they are of (`SCAN_CLASSES`: its
     schedule, prompt ids and tokens), and `--window-per-group` (with `--prompts`) sends them a group a link-window's
-    span; `warden_prompts` reads them and checks what depends on them. With `load` (`load-relay`) it is the serving session with its load first
+    span; `warden_prompts` reads them and checks what depends on them. `--watermark` (recorded only when given) sends
+    the endpoint the watermark stream. With `load` (`load-relay`) it is the serving session with its load first
     (`parse_load`: the request's ``load``), whose minutes come out of `--minutes` before the rehearsal's."""
     p = argparse.ArgumentParser(prog=f"vy-challenger-gate {'load-relay' if load else 'warden-rehearse'}",
                                 exit_on_error=False, add_help=False, allow_abbrev=False)
@@ -1323,6 +1422,7 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
     p.add_argument("--prompts", action="store_true")
     p.add_argument("--scan-class", default=None)
     p.add_argument("--window-per-group", action="store_true")
+    p.add_argument("--watermark", action="store_true")
     if load:
         p.add_argument("--sink-port", required=True)
         p.add_argument("--program", required=True)
@@ -1343,6 +1443,7 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
         raise Refused(f"--scan-class {a.scan_class!r}: one of {sorted(SCAN_CLASSES)}")
     tick = {} if a.bucket_ms is None else {"bucket_ms": bounded("--bucket-ms", a.bucket_ms, *SCAN_BUCKET_MS)}
     loaded = {"load": parse_load(a, host, port)} if load else {}
+    watermark = {"watermark": True} if a.watermark else {}
     spent = loaded["load"]["minutes"] if load else 0
     if minutes <= spent:
         raise Refused(f"--minutes {minutes}: the {loaded['load']['shape']} load takes {spent} minutes (its weights "
@@ -1355,7 +1456,7 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
                 "requests": None if a.requests is None else bounded("--requests", a.requests, *WARDEN_PROMPT_REQUESTS),
                 **({} if a.tokens is None else {"tokens": bounded("--tokens", a.tokens, *tokens)}),
                 "scan": True, **tick, "prompts": True, **cls,
-                **({"window_per_group": True} if a.window_per_group else {})} | a.sampling | loaded
+                **({"window_per_group": True} if a.window_per_group else {})} | a.sampling | watermark | loaded
     requests = bounded("--requests", a.requests or "100", *WARDEN_REQUESTS)
     given = ({} if a.tokens is None else {"tokens": bounded("--tokens", a.tokens, *WARDEN_TOKENS)}) | \
         ({"scan": True} if a.scan else {}) | tick
@@ -1366,7 +1467,7 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
     warden_key(warden_windows(requests, a.scan, tick.get("bucket_ms", SCAN["--bucket-ms"])), a.height,
                f"{requests} requests", load_heads(loaded["load"]["shape"]) if load else 0)
     return {"device": "warden", "peer": a.peer, "port": port, "minutes": minutes, "requests": requests,
-            "height": a.height} | a.sampling | given | loaded
+            "height": a.height} | a.sampling | given | watermark | loaded
 
 
 def _after_load(spent: int) -> str:
@@ -1569,6 +1670,7 @@ USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--m
          "| period-open --name P --cap N --circuit SHA512 [--draw-k K] [--rows T] [--model M | --weights-root W] [--circuit-files JSON] "
          "[--length JSON] [--lane LANE: vy-admin's] "
          "| period-close --name P "
+         "| declare --program SHA512 [--blocks K,...] [--day D] [--for LANE: vy-admin's] "
          "(a lane's own gate key, or vy-admin) "
          "| model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR (vy-admin's) "
          "| model-key --model M --circuit SHA512 [--weights-root W] (a lane's own gate key, or vy-admin) "
@@ -1577,7 +1679,7 @@ USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--m
          "[--traffic varied [--rate R] [--prompt-range LO:HI | --prompts: the prompts on stdin] [--seed S] "
          "[--eos-ids ID,...] [--compact B] [--margin M]: no --in-flight, --profile or sampling] "
          "| warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] [--temperature T] "
-         "[--top-p P] [--scan [--bucket-ms MS] [--prompts [--window-per-group]]: the prompts on stdin] "
+         "[--top-p P] [--watermark] [--scan [--bucket-ms MS] [--prompts [--window-per-group]]: the prompts on stdin] "
          "(a lane's own gate key, or vy-admin) "
          "| weights-write [--shape h200|tiny] "
          "| load-relay --peer NAME --port PORT --sink-port PORT --program SHA512 --minutes M [--shape h200|tiny] "
@@ -1667,8 +1769,13 @@ def gate(argv: list[str], host: Host = Host(), **hooks: Any) -> tuple[int, bytes
                 raise Refused("this key reads only: a period is opened and closed with its lane's own gate key, or by vy-admin")
             name, lane, extra = parse_period(verb, rest, lane=None if admin else by)
             with locked(host.root / "gate.lock"):
-                e = (hooks.get("period") or as_auditor_period)([verb, name, lane or READ_ONLY, by, *extra])
+                e = (hooks.get("period") or as_auditor_entry)([verb, name, lane or READ_ONLY, by, *extra])
             doc = {"seq": e["seq"], "kind": e["kind"], "body": e["body"]}
+        elif verb == "declare":
+            if by is None:
+                raise Refused("this key reads only: a day is declared with its lane's own gate key, or by vy-admin")
+            doc = gate_declare(rest, host, by=by, admin=admin, now=now,
+                               declare=hooks.get("declare") or (lambda args: as_auditor_entry(["declare", *args])))
         elif verb == "model-register":
             if not admin:
                 raise Refused("a model is registered by vy-admin alone (sudo vy-challenger-gate model-register ...)")
@@ -1728,7 +1835,8 @@ def as_auditor_step(verb: str, session: str) -> None:
                       else f"{verb} exited {p.returncode}")
 
 
-def as_auditor_period(args: list[str]) -> dict:
+def as_auditor_entry(args: list[str]) -> dict:
+    """A signed entry's step (a period's or a declaration's) run as `auditor`: the entry it prints, or Refused."""
     p = subprocess.run(_auditor(args), capture_output=True, text=True)
     if p.returncode:
         raise Refused(p.stderr.strip().splitlines()[-1].removeprefix("refused: ") if p.stderr.strip()
@@ -1875,6 +1983,36 @@ def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, a
     return append(host, verb, None, body_of, I, sign)
 
 
+def declare(host: Host, args: list[str], *, signer, pinned: str, now: datetime) -> dict:
+    """`declare LANE BY PROGRAM BLOCKS DAY` (BLOCKS a JSON list of descriptor keys, DAY a UTC day number or - for
+    today's): the lane's signed `declaration` entry of the day, at `now` (`declared_utc`, this host's clock), or Refused
+    for a day before today (`day_of(now)`) or one the lane has declared already: a lane declares a day once."""
+    if len(args) != 6 or args[0] != "declare":
+        raise Refused(f"declare: {args}")
+    _, lane, by, program, text, day = args
+    try:
+        blocks = json.loads(text)
+    except ValueError as e:
+        raise Refused(f"declare: {args}") from e
+    if (not (NAME.fullmatch(lane) and NAME.fullmatch(by) and ROOT.fullmatch(program)) or type(blocks) is not list
+            or not all(type(k) is str and BLOCK.fullmatch(k) for k in blocks)
+            or not (day == READ_ONLY or DAY.fullmatch(day))):
+        raise Refused(f"declare: {args}")
+    today = day_of(utc(now))
+    d = today if day == READ_ONLY else int(day)
+    if d < today:
+        raise Refused(f"day {d} is before today, day {today} ({utc(now)[:10]}): a day is declared before it ends")
+    I, sign, _ = signer
+
+    def body_of(lines: list[bytes]) -> dict:
+        if (held := declarations_of(lines, lane).get(d)) is not None:
+            raise Refused(f"lane {lane} has declared day {d} already (entry {held['seq']}, program "
+                          f"{held['body']['program'][:16]}...): a lane declares a day once")
+        return {"by": by, **({"for": lane} if lane != by else {}), "blocks": blocks, "day": d, "declared_utc": utc(now),
+                "pinned": pinned, "program": program}
+    return append(host, DECLARATION, None, body_of, I, sign)
+
+
 def serve_argv(host: Host, session: str, open_body: dict, tree: Path = TREE) -> list[str]:
     """serve.py for the session: it listens on this host's 127.0.0.1 at the open's port, which its peer's certifier coin
     link carries to the peer (no `--peer`: serve.py opens no tunnel of its own), and serves it `--withhold` when its open
@@ -1935,8 +2073,8 @@ def watch_link(link: subprocess.Popen, serve: subprocess.Popen, served: threadin
 
 def record_of(out: Path):
     """The challenger record the session signed in `out` (`remote.RECORD`), with its JSON; (None, None) until it has one."""
-    from verity.core.protocols.sampled_proofs import challenger as C
-    from verity.core.protocols.sampled_proofs import remote
+    from verity.core.protocols.spot import challenger as C
+    from verity.core.protocols.spot import remote
     try:
         doc = json.loads((out / remote.RECORD).read_text())
         return C.ChallengerRecord.from_json(doc), doc
@@ -1963,8 +2101,8 @@ def await_commitment(host: Host, session: str, active: Callable[[str], bool],
 def released_of(out: Path) -> tuple[dict[str, int] | None, int | None]:
     """(coins released by family, counted from the release log under the commitment the record signs; the record's leaf),
     each None when the session left no such file."""
-    from verity.core.protocols.sampled_proofs import challenger as C
-    from verity.core.protocols.sampled_proofs import remote
+    from verity.core.protocols.spot import challenger as C
+    from verity.core.protocols.spot import remote
     record, doc = record_of(out)
     if record is None:
         return None, None
@@ -2119,12 +2257,14 @@ def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: 
     requests on the gate's traffic (`WARDEN_RATE`, `WARDEN_SEED`, `WARDEN_TAIL_S`) at its sampling (`sampling_argv`),
     for a scan rehearsal id requests (`--ids`) at the scan's schedule at the request's tick and class
     (`scan_schedule`), of its prompts (`--prompts`, the gate's `PROMPTS` in `out`, the witness) and in groups
-    (`--window-per-group`) when the request says so, and the most tokens a request asks for only when the request has
-    it. A `load-relay` request's load goes first: the `store`'s stream of its shape relayed to `sinks` (the sink
-    tunnels' local ends) for its program, the endpoint given `LOAD_READY_S` to come up after it."""
+    (`--window-per-group`) when the request says so, the watermark stream (`--watermark`) when it says so, and the most
+    tokens a request asks for only when the request has it. A `load-relay` request's load goes first: the `store`'s
+    stream of its shape relayed to `sinks` (the sink tunnels' local ends) for its program, the endpoint given
+    `LOAD_READY_S` to come up after it."""
     scan = ["--ids", *scan_schedule(req.get("bucket_ms"), req.get("scan_class"))] if req.get("scan") else []
     prompts = ["--prompts", str(out / PROMPTS)] if req.get("prompts") else []
     grouped = ["--window-per-group"] if req.get("window_per_group") else []
+    watermark = ["--watermark"] if req.get("watermark") else []
     given = ["--max-tokens", str(req["tokens"])] if "tokens" in req else []
     load = req.get("load")
     loaded = [] if not load else ["--load-store", str(store), "--load-shape", load["shape"], "--load-sinks",
@@ -2134,7 +2274,7 @@ def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: 
             "--upstream", url.removeprefix("http://"), "--out", str(out), *height_argv(req),
             "--requests", str(req["requests"]),
             "--rate", str(WARDEN_RATE), "--seed", str(WARDEN_SEED), "--tail", str(WARDEN_TAIL_S), *sampling_argv(req),
-            *scan, *prompts, *grouped, *given, *loaded]
+            *scan, *prompts, *grouped, *watermark, *given, *loaded]
 
 
 def weights_command(req: dict, out: Path, store: Path, tree: Path = TREE) -> list[str]:
@@ -2323,6 +2463,8 @@ def main(argv: list[str] | None = None) -> int:
             e = period(host, argv, signer=key_signer(host), pinned=pinned_commit(), now=datetime.now(timezone.utc),
                        active=unit_active)
             print(json.dumps(e))
+        elif argv[:1] == ["declare"]:
+            print(json.dumps(declare(host, argv, signer=key_signer(host), pinned=pinned_commit(), now=datetime.now(UTC))))
         elif argv[:1] == ["run"] and len(argv) == 2:
             e = run(host, argv[1], signer=key_signer(host), pinned=pinned_commit(), now=lambda: datetime.now(timezone.utc))
             print(json.dumps({"seq": e["seq"], "session": e["session"], "rc": e["body"]["rc"]}))
@@ -2345,7 +2487,8 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(doc))
         else:
             print("usage: auditor.py gate VERB ... | reserve SESSION | admit SESSION | run SESSION | period-open NAME LANE BY CAP CIRCUIT [DRAW_K] "
-                  "| period-close NAME LANE|- BY | certifier-run RUN | pinned COMMIT MAIN | keygen", file=sys.stderr)
+                  "| period-close NAME LANE|- BY | declare LANE BY PROGRAM BLOCKS DAY|- | certifier-run RUN "
+                  "| pinned COMMIT MAIN | keygen", file=sys.stderr)
             return 2
     except Refused as e:
         print(f"refused: {e}", file=sys.stderr)

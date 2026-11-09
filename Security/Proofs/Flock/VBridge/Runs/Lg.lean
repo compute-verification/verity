@@ -3,8 +3,24 @@ module
 public import Proofs.Flock.VBridge.Algebra.LigeritoConverse
 public import Proofs.Flock.VBridge.Compiled
 public import Proofs.Flock.Soundness.Refine.RepConverse
-public import Proofs.Flock.Soundness.Refine.Seam
-public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+import Proofs.Flock.Soundness.Refine.Seam
+import Proofs.Flock.VBridge.Algebra.Lincheck
+import Proofs.Flock.VBridge.Algebra.RingSwitch
 
 /-!
 # `prog_of_checks`' Ligerito hypothesis from E
@@ -16,7 +32,7 @@ round `k₂ + n + 1` at ring switching's `T` and switched claims (`rsT`, `rsSws`
 on every record whose rounds from there retain the bytes it frames.
 
 * `ligerito_of_residuals_at`: `ligerito_of_residuals` with its start round, the rounds the zerocheck, the lincheck and
-  ring switching draw (`zerocheck_coins`, `lincheck_coins`, `ringSwitch_spec`).
+  ring switching sample (`zerocheck_coins`, `lincheck_coins`, `ringSwitch_spec`).
 * `levelsLoop_count`, `ligeritoRun_conss`: V*'s Ligerito records one consistency context per level, so the proof's
   query and consistency nonces (`decodeProof_sizes`) are as many as the verifier consumes.
 -/
@@ -239,7 +255,7 @@ theorem hlg_of_residuals {sh : Shape} {d : Compiled.RepData} {st : Setup} {sch :
 
 /-- A record fits the bytes `F` from round `k₀` to its end when its coins are `c`'s, its rounds well formed and each
 retains `F`'s bytes. -/
-theorem fits_of {F : ℕ → ByteArray} {rs : Array Round} {k₀ : ℕ} (hcoins : ∀ j < rs.size, c[j]! = (rs[j]!).coins)
+theorem fits_of {F : ℕ → ByteArray} {rs : Array Round} {k₀ : ℕ} (hcoins : ∀ j < rs.size, (c)[j]! = (rs[j]!).coins)
     (hwf : RoundsWF rs) (hb : ∀ j, k₀ ≤ j → j < rs.size → (rs[j]!).bytes = some (F j)) :
     RecAlgebra.Fits c F rs k₀ rs.size := fun j hj hj' =>
   ⟨rs[j]!, by rw [getElem!_pos rs j hj']; exact getElem?_pos rs j hj', by rw [hcoins j hj', hwf j hj'],

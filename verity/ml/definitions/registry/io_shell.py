@@ -11,7 +11,23 @@ An id's field is `id_width(V)` characters (6 for a 128,256-entry vocabulary), ``
 padding is the fewest spaces that bring the body to a multiple of 128 bytes (1,024 bits), so the warden's attested blocks and the
 parse unit's input rows line up and a registered read opens whole blocks (128 B divides the warden's 4 KiB cells).  So the byte
 layout is a function of (MODEL, LP, V) alone, never of the prompt's digits: a template's statics carry no prompt content.  Greedy
-only (``"temperature":0``); the seeded top-p schema comes next.
+only (``"temperature":0``).
+
+Ingress schema v1 is v0 sampled: ``temperature``, ``top_p`` and ``seed`` are fields of the body, so a request's sampling is as
+private as its prompt, and ``user`` is the request's id, which its seed derives from where it names none (the padding again
+the fewest spaces to whole blocks):
+
+    {"model":"<MODEL>","prompt":[<id>,...],"max_tokens":<m>,"temperature":<T>,"top_p":<P>,"seed":<s>,"user":"<RID bytes>",
+     "stream":true}<spaces>
+
+``temperature`` and ``top_p`` are `RATIO_WIDTH` characters, a digit, ``.`` and six digits (the network certifier's id request's
+``%8.6f``), each read as an integer in millionths; ``seed`` is `SEED_WIDTH` characters, spaces then either decimal digits as an
+id's (at least one, no leading zero) or ``null``; ``user`` is RID bytes of printable ASCII without a quote or backslash, its
+length public as the prompt's is. `boolean_io_shell.IngressSampled_v1{MODEL, LP, V, RID}` (body) -> (ok, ids, max_tokens,
+temperature, top_p, seeded: bit, seed: i64, user: Array<RID, u8>) parses it: ``ok`` is v0's checks, each ratio's form,
+``top_p`` in (0, 1], the seed either ``null`` (``seeded`` 0) or below 2^63, and each byte of ``user``; ``seed`` is its field's
+low nibbles at their decimal places, whose nineteen characters sum below 2^64 whatever they are, so its bit 63 is the bound
+(`sampled_reference` is the function).
 
 `IngressPrompt_v1{MODEL, LP, V}` (body: Array<N, Value<8>>) -> (ok: bit, ids: Array<LP, i32>, max_tokens: i32) checks every byte
 against the layout and decodes the fields.  ``ok`` is 1 exactly when the body is in the schema: each literal byte is the layout's
@@ -53,14 +69,19 @@ NP ids (after a Program's NP + KO − 1 positions the state's w is lp − NP −
 (``max_tokens`` past KO and no stop id among them). The scan refuses a Program's n over KO at its anchor
 (`ingress_scan`), and the egress renders no output past KO − 1 (`egress.computed`), so such a record fails visibly.
 
-A collector's rows and an entry's are a few i32s at a small KO, under the 112 bytes C-Flock's composer needs in some row
+A collector's rows and an entry's are a few i32s at a small KO, under the 112 bytes Flock's composer needs in some row
 of a proof block, so a window proves them inside its token select's combine: `SelectCollect_v1{V, C, KO, FIRST}` is
 `dead_free.TokenSelectCombine_v2{V, C}`'s select, then `OutCollect_v1{KO, FIRST}` over it, (the select, the state), and
 `SelectEntry_v1{V, C, KO, FIRST, IDB, NP, STOP}` the last position's: the select, its collector, then `SlotEntry_v1` over
-that state, the entry alone. Each is Calls of those Definitions, no gate of its own.
+that state, the entry alone. Each is Calls of those Definitions, no gate of its own. `SelectCollect_v2{V, C, KO, FIRST,
+ROUND}` is v1 at a round no gate reads: where a window holds a position's select to a row of a round's input-ids table, each
+round's collectors are a template of their own, so a sample stratified by template has a reader of every round's table.
 
 Registered functions:
   IngressPrompt{MODEL,LP,V}  (body: N u8) -> (ok: bit, LP i32, max_tokens: i32)
+  IngressSampled{MODEL,LP,V,RID}
+                             (body: N u8 bits) -> (ok: bit, LP i32, max_tokens, temperature, top_p: i32, seeded: bit, seed: i64,
+                             user: RID u8), schema v1 (`boolean_io_shell`)
   TokenFeed{NP,FIRST}        (slot: NP + 1 i32[, sel: i32]) -> (tok: i32, slot: NP + 1 i32)
   ScanSlots{NS,NP,...}       (state: NS u16 bits) -> (tok: i32 bits, slot: NP + 1 i32 bits, occ: i32 bits, head: 2 i32 bits)
                              a lane (`boolean_io_shell`)
@@ -68,6 +89,8 @@ Registered functions:
   SlotEntry{KO,IDB,NP,STOP}  (occ: i32, state: KO + 2 i32) -> ⌈(33 + KO·IDB) / 16⌉ u16 bits
   SelectCollect{V,C,KO,FIRST}
                              (x0: bf16, best: n bf16, idx: n i32, head | state) -> (tok: i32, state: KO + 2 i32)
+  SelectCollect{V,C,KO,FIRST,ROUND}
+                             v2: v1's, ROUND read by no gate
   SelectEntry{V,C,KO,FIRST,IDB,NP,STOP}
                              (x0: bf16, best: n bf16, idx: n i32, head | state, occ: i32) -> SlotEntry's entry
 """
@@ -94,6 +117,11 @@ from verity.ml.definitions.registry.prims import BIT, I32
 from verity.ml.definitions.registry.sampling import bit_at
 
 MAX_TOKENS_WIDTH = 6
+#: schema v1's ``temperature`` and ``top_p``: a digit, ``.`` and six digits
+RATIO_WIDTH = 8
+#: schema v1's ``seed``: nineteen characters, whose low nibbles at their decimal places sum below 2^64
+SEED_WIDTH = 19
+NULL = b"null"
 #: one SHA-512 block in bytes (1,024 bits): the body is padded with spaces to a whole number of them
 BLOCK = 128
 
@@ -111,7 +139,7 @@ def refuse(S: dict) -> str | None:
     """A binding the schema has no layout for: a model name that isn't printable ASCII without a quote or backslash (it is a JSON
     string's bytes as they are), no prompt, or a vocabulary of fewer than 2 ids or over 2^31.  Only the statics bound so far."""
     m, lp, v = S.get("MODEL", "m"), S.get("LP", 1), S.get("V", 2)
-    if not (isinstance(m, str) and m and all(0x20 <= ord(c) < 0x7F and c not in '"\\' for c in m)):
+    if not (isinstance(m, str) and _name(m)):
         return f"MODEL must be printable ASCII without '\"' or '\\\\' (got {m!r})"
     if not (type(lp) is int and lp >= 1):
         return f"LP must be at least 1 (got {lp!r})"
@@ -120,14 +148,25 @@ def refuse(S: dict) -> str | None:
     return None
 
 
+def sampled_refuse(S: dict) -> str | None:
+    """`refuse`, and an id of no bytes."""
+    rid = S.get("RID", 1)
+    return refuse(S) or (None if type(rid) is int and rid >= 1 else f"RID must be at least 1 (got {rid!r})")
+
+
+def _name(s: str) -> bool:
+    return bool(s) and all(0x20 <= ord(c) < 0x7F and c not in '"\\' for c in s)
+
+
 def length(MODEL: str, LP: int, V: int) -> int:
     """The body's length in bytes, its padding included: `layout`'s, without building it."""
     fixed = len(f'{{"model":"{MODEL}","prompt":[],"max_tokens":,"temperature":0,"stream":true}}') + MAX_TOKENS_WIDTH
     return -(-(fixed + max(LP * (id_width(V) + 1) - 1, 0)) // BLOCK) * BLOCK
 
 
-def layout(MODEL: str, LP: int, V: int) -> tuple[list[tuple[int, int]], list[tuple[int, int]], int]:
-    """(literal bytes as (offset, byte), fields as (offset, width): the LP ids then max_tokens, the body's length)."""
+def layout(MODEL: str, LP: int, V: int, RID: int | None = None) -> tuple[list[tuple[int, int]], list[tuple[int, int]], int]:
+    """(literal bytes as (offset, byte), fields as (offset, width): the LP ids then max_tokens, and under schema v1 (an id of
+    ``RID`` bytes) temperature, top_p, seed and user; the body's length)."""
     lits: list[tuple[int, int]] = []
     fields: list[tuple[int, int]] = []
     n = 0
@@ -149,40 +188,103 @@ def layout(MODEL: str, LP: int, V: int) -> tuple[list[tuple[int, int]], list[tup
         field(id_width(V))
     lit('],"max_tokens":')
     field(MAX_TOKENS_WIDTH)
-    lit(',"temperature":0,"stream":true}')
+    if RID is not None:
+        for key, w in (("temperature", RATIO_WIDTH), ("top_p", RATIO_WIDTH), ("seed", SEED_WIDTH)):
+            lit(f',"{key}":')
+            field(w)
+        lit(',"user":"')
+        field(RID)
+        lit('","stream":true}')
+    else:
+        lit(',"temperature":0,"stream":true}')
     lit(" " * (-n % BLOCK))
     return lits, fields, n
 
 
-def encode(MODEL: str, ids, max_tokens: int, V: int) -> bytes:
-    """A request's ingress v0 bytes."""
+def _encode(schema: str, MODEL: str, ids, max_tokens: int, V: int, tail: str) -> bytes:
     if why := refuse({"MODEL": MODEL, "LP": len(ids), "V": V}):
-        raise ValueError(f"ingress v0: {why}")
+        raise ValueError(f"{schema}: {why}")
     if not all(0 <= int(t) < V for t in ids) or not 1 <= max_tokens < 10 ** MAX_TOKENS_WIDTH:
-        raise ValueError(f"ingress v0: ids must be in [0, {V}) and max_tokens in [1, 10^{MAX_TOKENS_WIDTH})")
+        raise ValueError(f"{schema}: ids must be in [0, {V}) and max_tokens in [1, 10^{MAX_TOKENS_WIDTH})")
     w = id_width(V)
     body = (f'{{"model":"{MODEL}","prompt":[' + ",".join(f"{int(t):>{w}}" for t in ids)
-            + f'],"max_tokens":{max_tokens:>{MAX_TOKENS_WIDTH}},"temperature":0,"stream":true}}').encode()
+            + f'],"max_tokens":{max_tokens:>{MAX_TOKENS_WIDTH}},{tail},"stream":true}}').encode()
     return body + b" " * (-len(body) % BLOCK)
+
+
+def encode(MODEL: str, ids, max_tokens: int, V: int) -> bytes:
+    """A request's ingress v0 bytes."""
+    return _encode("ingress v0", MODEL, ids, max_tokens, V, '"temperature":0')
+
+
+def _ratio(x: float, what: str) -> str:
+    s = "%8.6f" % x if isinstance(x, (int, float)) and not isinstance(x, bool) else ""
+    if not (s and 0 <= x < 10 and float(s) == x):
+        raise ValueError(f"ingress v1: {what} is a number in [0, 10) of at most six decimals, not {x!r}")
+    return s
+
+
+def sampled_encode(MODEL: str, ids, max_tokens: int, V: int, *, temperature: float, top_p: float, seed: int | None,
+                   user: str) -> bytes:
+    """A request's ingress v1 bytes; a ``seed`` of None is ``null``."""
+    t, p = _ratio(temperature, "temperature"), _ratio(top_p, "top_p")
+    if not 0 < top_p <= 1:
+        raise ValueError(f"ingress v1: top_p is in (0, 1], not {top_p!r}")
+    if seed is not None and not (type(seed) is int and 0 <= seed < 1 << 63):
+        raise ValueError(f"ingress v1: a seed is None or an int in [0, 2^63), not {seed!r}")
+    if not (isinstance(user, str) and _name(user)):
+        raise ValueError(f"ingress v1: a user is printable ASCII without '\"' or '\\\\', not {user!r}")
+    s = (NULL.decode() if seed is None else str(seed)).rjust(SEED_WIDTH)
+    return _encode("ingress v1", MODEL, ids, max_tokens, V, f'"temperature":{t},"top_p":{p},"seed":{s},"user":"{user}"')
+
+
+def _int_field(s: bytes) -> tuple[bool, int]:
+    """A field's checks (`_field`'s) and its low nibbles' decimal sum."""
+    w = len(s)
+    sp = [c == 0x20 for c in s]
+    dig = [0x30 <= c <= 0x39 for c in s]
+    ok = all(a or b for a, b in zip(sp, dig)) and not sp[-1] and all(sp[k - 1] or not sp[k] for k in range(1, w))
+    ok &= not any(s[k] == 0x30 and (k == 0 or sp[k - 1]) for k in range(w - 1))
+    return ok, sum((c & 15) * 10 ** (w - 1 - k) for k, c in enumerate(s))
+
+
+def _fields(body: bytes, schema: str, MODEL: str, LP: int, V: int, RID: int | None) -> tuple[bool, list[int], list]:
+    """(the literal bytes', the ids' and max_tokens' checks, their values, the fields after them)."""
+    lits, fields, n = layout(MODEL, LP, V, RID)
+    if len(body) != n:
+        raise ValueError(f"{schema} at LP={LP}: the body is {n} bytes, not {len(body)}")
+    ok = all(body[i] == c for i, c in lits)
+    vals = []
+    for off, w in fields[:LP + 1]:
+        f_ok, v = _int_field(body[off:off + w])
+        ok &= f_ok
+        vals.append(v)
+    ok &= all(v <= V - 1 for v in vals[:-1]) and vals[-1] >= 1
+    return ok, vals, [body[off:off + w] for off, w in fields[LP + 1:]]
 
 
 def reference(body: bytes, MODEL: str, LP: int, V: int) -> tuple[int, list[int], int]:
     """`IngressPrompt_v1`'s function on a body of the layout's length: (ok, ids, max_tokens), each field's value its low nibbles'
     decimal sum whether or not the body is in the schema."""
-    lits, fields, n = layout(MODEL, LP, V)
-    if len(body) != n:
-        raise ValueError(f"ingress v0 at LP={LP}: the body is {n} bytes, not {len(body)}")
-    ok = all(body[i] == c for i, c in lits)
-    vals = []
-    for off, w in fields:
-        s = body[off:off + w]
-        sp = [c == 0x20 for c in s]
-        dig = [0x30 <= c <= 0x39 for c in s]
-        ok &= all(a or b for a, b in zip(sp, dig)) and not sp[-1] and all(sp[k - 1] or not sp[k] for k in range(1, w))
-        ok &= not any(s[k] == 0x30 and (k == 0 or sp[k - 1]) for k in range(w - 1))
-        vals.append(sum((c & 15) * 10 ** (w - 1 - k) for k, c in enumerate(s)))
-    ok &= all(v <= V - 1 for v in vals[:-1]) and vals[-1] >= 1
+    ok, vals, _ = _fields(body, "ingress v0", MODEL, LP, V, None)
     return int(ok), vals[:-1], vals[-1]
+
+
+def sampled_reference(body: bytes, MODEL: str, LP: int, V: int, RID: int) -> tuple:
+    """`IngressSampled_v1`'s function on a body of schema v1's length: (ok, ids, max_tokens, temperature, top_p, seeded, seed,
+    user), each ratio its seven digits' low nibbles at their places (millionths), the seed its field's sum and the user its
+    bytes, whether or not the body is in the schema."""
+    ok, vals, (t, p, s, u) = _fields(body, "ingress v1", MODEL, LP, V, RID)
+    ok &= all(0x20 <= c < 0x7F and c not in b'"\\' for c in u)
+    ratios = []
+    for r in (t, p):
+        ok &= r[1] == 0x2E and all(0x30 <= c <= 0x39 for k, c in enumerate(r) if k != 1)
+        ratios.append(sum((c & 15) * 10 ** (6 - k) for k, c in enumerate(r[:1] + r[2:])))
+    ok &= 1 <= ratios[1] <= 10 ** 6
+    s_ok, seed = _int_field(s)
+    null = s == NULL.rjust(SEED_WIDTH)
+    ok &= null or (s_ok and seed < 1 << 63)
+    return int(ok), vals[:-1], vals[-1], ratios[0], ratios[1], int(not null), seed, list(u)
 
 
 class Ops(D.Ops):
@@ -212,8 +314,20 @@ def _is(o, bits: list, c: int):
 
 
 def _field(o, chars: list) -> tuple[list, object]:
-    """A field's checks (each character a space or a digit, the spaces leading, the last a digit, no leading zero) and its value,
-    the low nibbles at their decimal places."""
+    """A field's checks (`field_checks`) and its value, the low nibbles at their decimal places."""
+    oks, bits = field_checks(o, chars)
+    w = len(chars)
+    v = None
+    for k, b in enumerate(bits):
+        for j in range(4):
+            t = o.isel(b[j], o.word((1 << j) * 10 ** (w - 1 - k)), o.word(0))
+            v = t if v is None else o.iadd(v, t)
+    return oks, v
+
+
+def field_checks(o, chars: list) -> tuple[list, list]:
+    """A field's checks (each character a space or a digit, the spaces leading, the last a digit, no leading zero) and its
+    characters' bits."""
     w = len(chars)
     bits = [[o.bit(c, i) for i in range(8)] for c in chars]
     sp, dig, zero = [], [], []
@@ -226,25 +340,26 @@ def _field(o, chars: list) -> tuple[list, object]:
     oks = [o.bnot(o.band(o.bnot(sp[k]), o.bnot(dig[k]))) for k in range(w)] + [o.bnot(sp[-1])]
     oks += [o.bnot(o.band(sp[k], o.bnot(sp[k - 1]))) for k in range(1, w)]
     oks += [o.bnot(zero[k] if k == 0 else o.band(zero[k], sp[k - 1])) for k in range(w - 1)]
-    v = None
-    for k, b in enumerate(bits):
-        for j in range(4):
-            t = o.isel(b[j], o.word((1 << j) * 10 ** (w - 1 - k)), o.word(0))
-            v = t if v is None else o.iadd(v, t)
-    return oks, v
+    return oks, bits
 
 
-def parse(o, S, body: list) -> tuple:
-    """`IngressPrompt_v1`'s body: (ok, ids, max_tokens) of the module docstring."""
-    lits, fields, _ = layout(S.MODEL, S.LP, S.V)
+def parse_head(o, S, body: list, RID: int | None = None) -> tuple[list, list, Any, list[tuple[int, int]]]:
+    """The literal bytes', the ids' and max_tokens' checks, the ids, max_tokens, and the fields after it (schema v1's)."""
+    lits, fields, _ = layout(S.MODEL, S.LP, S.V, RID)
     oks = [_is(o, [o.bit(body[i], j) for j in range(8)], c) for i, c in lits]
     vals = []
-    for off, w in fields:
+    for off, w in fields[:S.LP + 1]:
         f_oks, v = _field(o, body[off:off + w])
         oks += f_oks
         vals.append(v)
     oks += [o.ile(v, o.word(S.V - 1)) for v in vals[:-1]] + [o.ile(o.word(1), vals[-1])]
-    return _all(o, oks), vals[:-1], vals[-1]
+    return oks, vals[:-1], vals[-1], fields[S.LP + 1:]
+
+
+def parse(o, S, body: list) -> tuple:
+    """`IngressPrompt_v1`'s body: (ok, ids, max_tokens) of the module docstring."""
+    oks, ids, m, _ = parse_head(o, S, body)
+    return _all(o, oks), ids, m
 
 
 @composite("IngressPrompt", 1, ["MODEL", "LP", "V"], ingress_sig(WORDS), conformance="exact-model-tested", refuse=refuse)
@@ -488,6 +603,22 @@ def SelectCollect(B, S, x0, best, idx, a):
     return tuple_of(tok, B.call(bind(OutCollect, KO=S.KO, FIRST=S.FIRST), a, tok))
 
 
+def round_refuse(S: dict) -> str | None:
+    """`SelectCollect_v2`'s refusal: v1's, or a ROUND that isn't a natural number."""
+    r = S.get("ROUND", 0)
+    return select_refuse(S) or (None if type(r) is int and r >= 0 else f"ROUND={r!r}: a round is a natural number")
+
+
+@composite("SelectCollect", 2, ["V", "C", "KO", "FIRST", "ROUND"], select_collect_sig, refuse=round_refuse,
+           conformance="not-yet-established: vLLM's sample at a position and its output ids so far: SelectCollect_v1, "
+                       "at a round")
+def SelectCollectV2(B, S, x0, best, idx, a):
+    """`SelectCollect_v1{V, C, KO, FIRST}`'s body; ``ROUND``, the round of the input-ids table its select is held to, is read
+    by no gate."""
+    tok = B.call(_select(S), x0, best, idx)
+    return tuple_of(tok, B.call(bind(OutCollect, KO=S.KO, FIRST=S.FIRST), a, tok))
+
+
 @composite("SelectEntry", 1, ["V", "C", "KO", "FIRST", "IDB", "NP", "STOP"], select_entry_sig, refuse=select_refuse,
            conformance="not-yet-established: vLLM's last sample, its request's outputs and their count, "
                        "TokenSelectCombine_v2, OutCollect_v1, then SlotEntry_v1")
@@ -499,4 +630,4 @@ def SelectEntry(B, S, x0, best, idx, a, occ):
     return B.call(bind(SlotEntry, KO=S.KO, IDB=S.IDB, NP=S.NP, STOP=S.STOP), occ, state)
 
 
-IO_SHELL_COMPOSITES = [IngressPrompt, TokenFeed, OutCollect, SlotEntry, SelectCollect, SelectEntry]
+IO_SHELL_COMPOSITES = [IngressPrompt, TokenFeed, OutCollect, SlotEntry, SelectCollect, SelectEntry, SelectCollectV2]

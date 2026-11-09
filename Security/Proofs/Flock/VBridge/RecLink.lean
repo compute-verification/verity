@@ -344,7 +344,6 @@ theorem varSlices_linkPorts (UB PB : ℕ) : OfVStar.varSlices 0 (VStar.linkPorts
       vars (3584 + auxBits UB PB) 1536, vars (5120 + auxBits UB PB) (auxBits UB PB)] :=
   varSlices_link (VStar.auxWords (UB + PB))
 
-set_option maxHeartbeats 1000000 in -- the kernel's check of the builder's `run_input_bind` rewrite needs about 5x
 /-- **V*'s unit is `linkRun`**: its builder's state and outputs are `linkRun`'s from its input bits, its input rows
 `VStar.linkRows` (over `VStar.linkPorts`' words) and its output ports `rin`, `rout`. -/
 theorem linkUnit_ok {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = .ok U) :
@@ -353,8 +352,10 @@ theorem linkUnit_ok {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = 
       U.inPorts = VStar.linkRows UB PB ∧ U.outPorts = [VStar.LINK_OUT_WORDS, VStar.LINK_OUT_WORDS] := by
   unfold VStar.linkUnit at h
   unfold linkRun linkIn
-  -- Opaque, so that none of the kernel's checks below can evaluate the builder.
-  generalize VStar.linkSteps UB PB = S at h ⊢
+  -- Opaque, so that none of the kernel's checks below can evaluate the builder: an `Exists` eliminator's variable, not
+  -- `generalize`'s, which the elaborated term substitutes back.
+  obtain ⟨S, hS⟩ : ∃ S, VStar.linkSteps UB PB = S := ⟨_, rfl⟩
+  rw [hS] at h ⊢
   cases hc : RecLinkTree.checkShape UB PB with
   | error e => simp [hc, bind, Except.bind] at h
   | ok _ =>
@@ -447,7 +448,7 @@ open FlockSoundness FlockSoundness.Audit
 (`laid_linkUnit`): let the verifier build `net` from the layout of `VStar.linkUnit UB PB` (`netOf`), and let unit `u` be
 an instance of `k` stacked copies of the net's rows, the transcript `tr` carrying 1 at the stack's constant. Then at copy
 `j`'s column values (`copyVal`), `laid_linkUnit` holds. -/
-theorem unit_linkUnit {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {net : Flock.Net} (hB : Built net)
+theorem unit_linkUnit {C : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {net : Flock.Net} (hB : Built net)
     {k : ℕ} (I : P.IsRowsUnit u ((Rows.ofNet hB).stack k)) (tr : Fin C.N → Bool) {j : ℕ} (hj : j < k)
     (hone : tr (I.wire ((Rows.ofNet hB).stack k).one) = true) {UB PB : ℕ} {U : VStar.UnitC}
     (hU : VStar.linkUnit UB PB = .ok U) {l : Laid} (hl : U.laid = .ok l) {name : String}

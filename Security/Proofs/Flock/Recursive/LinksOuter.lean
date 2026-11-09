@@ -1,15 +1,46 @@
 module
 
-public import Proofs.Flock.Recursive.LinksInner
 public import Proofs.Flock.Claims.Recursion.KSLinks
-public import Proofs.Flock.Claims.Recursion.InnerAccepts
-public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
-public import Proofs.Flock.Claims.Recursion.MoreSlots
-public import Proofs.Flock.VBridge.RecLink
-public import Proofs.Flock.VBridge.Pinned
-public import Proofs.Flock.Recursive.VStarCheck
-public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
-public import Proofs.Flock.C3.VStarList.Shape
+public import Proofs.Flock.Recursive.LinksBind
+public import Proofs.Flock.Verifier.RecLinks
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.C3.VStarList.Shape
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Recursion.SlotsCheck
+import Proofs.Flock.Claims.Scope.Setup
+import Proofs.Flock.Recursive.VStarCheck
+import Proofs.Flock.Soundness.Discharge.Hm.Commit
+import Proofs.Flock.VBridge.Pinned
 
 /-!
 # The link part on the outer side: what an accepted run's link part fixes
@@ -17,8 +48,8 @@ public import Proofs.Flock.C3.VStarList.Shape
 The links bind (`Claims.Recursion.LinkBindsAt`) when an accepted run whose extracted witness fails the link clause gives
 a collision among what the link finder reads. This file holds the outer side's pieces that chain reads:
 
-* `Claims.Recursion.EO_judged_of_E`: where `E*` extracts, `E_O` gave outer witnesses at its judged draw (else the inner
-  view there is rejected and the inner `E^rep` stops), so the link finder reads them off the first draw.
+* `Claims.Recursion.EO_judged_of_E`: where `E*` extracts, `E_O` gave outer witnesses at its judged sample (else the inner
+  view there is rejected and the inner `E^rep` stops), so the link finder reads them off the first sample.
 * `collision_of_collides`, `commit_bind`: the verifier's `Collides` pair is a `Collision` of the deployed SHA-512, and two
   equal commit strings are one row or a collision of the row's or the salt's evaluations.
 * `linkName_inj`, `linkName_params`, `linkParams_of_check`: the name `rec-link/u<UB>-p<PB>` determines `UB` and `PB`
@@ -41,12 +72,12 @@ section Judged
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-private theorem evalBindFst {R α β : Type} (H : Msg → Msg) (run : R → Trace) (p : RP R α) (f : α → RP R β) :
+private theorem evalBindFst {R α β : Type} (H : Msg → Msg) (run : R → Transcript) (p : RP R α) (f : α → RP R β) :
     ((p.bind f).eval H run).1 = ((f (p.eval H run).1).eval H run).1 :=
   (RP.eval_bind H run p f).1
 
-/-- **Where `E*` extracts, `E_O` gave outer witnesses at its judged draw**: else `dec` reads a rejected inner view there
-and the inner `E^rep` stops at its judged draw. -/
+/-- **Where `E*` extracts, `E_O` gave outer witnesses at its judged sample**: else `dec` reads a rejected inner view there
+and the inner `E^rep` stops at its judged sample. -/
 theorem EO_judged_of_E (H : Msg → Msg) (A : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (r₀ : Fin (A.V.k x) → Coin)
     (c : (E H A I DO decO).C x) {w : W} (h : ((E H A I DO decO).eval H P x ω r₀ c).1 = some w) :

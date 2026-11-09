@@ -1,24 +1,38 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
-public import Proofs.Flock.Soundness.Discharge.Integrate.Headline
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
+import Proofs.Flock.Soundness.Discharge.Hm.Site
 
 /-!
 # One plain sampled session of `J` tables: the plan, sites, layout and rows
 
 `flock-verify verify --plain-tables --session-tables J` (no `--zk`) accepts a public-output session of up to
-`Tags.MAX_TABLES` tables at a subset draw (`ProvedScope.checkP`, `ProvedScope.drawLaw` at `plainTables`). `Stmt.setupTables` sets table
-`j` up under `tagsAt` at its draw `Composed.drawJ` (the session's draw at one table, its part `j` at several). These are
-`Composed.DefsJ`'s public shadow pieces at the plain inputs themselves, so the layout and rows are e2e-layout's directly,
+`Tags.MAX_TABLES` tables at a subset sample (`ProvedScope.checkP`, `ProvedScope.drawLaw` at `plainTables`). `Stmt.setupTables` sets table
+`j` up under `tagsAt` at its sample `Composed.drawJ` (the session's sample at one table, its part `j` at several). These are
+`Composed.DefsJ`'s public shadow pieces at the plain inputs themselves, so the layout and rows are `Discharge/Layout`'s directly,
 with no transfer to compiled tables:
 
 * `inputsPJ`, `tablePJ`, `planPJ`, `tabPJ`: table `j`'s inputs (`tagsAt`), its table (the `DrawSetup` table where
-  flock-verify sets one up at table `j`'s inputs and draw, else a reference setup `x₀`'s refused table), the plan of
-  `nTab I` tables, and each drawn unit's table (`partOf`).
-* `sitesPJ`, `sitesPJ_parse`, `sitesPJ_bcSite`: each drawn unit's acceptance, VU and block, the one circuit they parse,
-  and e2e-layout's site fact.
+  flock-verify sets one up at table `j`'s inputs and sample, else a reference setup `x₀`'s refused table), the plan of
+  `nTab I` tables, and each sampled proof block's table (`partOf`).
+* `sitesPJ`, `sitesPJ_parse`, `sitesPJ_bcSite`: each sampled proof block's acceptance, VU and block, the one circuit they parse,
+  and `Discharge/Layout`'s site fact.
 * `layPJ`, `rsPJ`, `rsPJ_computes`: `keyedLayout`, `keyedRowsOuts` and `hHm` at those sites.
-* `DrawOkPJ`, `opnPJ`: the coin server's draw at each table, and table `j`'s openings.
+* `DrawOkPJ`, `opnPJ`: the challenger's live-coin part's sample at each table, and table `j`'s openings.
 -/
 
 @[expose] public section
@@ -47,22 +61,22 @@ variable {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.
   {d₀ : Lean.Json} (x₀ : DrawSetup (inputsPJ I 0) mPts S₀ d₀)
 
 open Classical in
-/-- **Table `j` at draw `S`**: the table flock-verify sets up at table `j`'s inputs and draw when it sets one up, and
+/-- **Table `j` at sample `S`**: the table flock-verify sets up at table `j`'s inputs and sample when it sets one up, and
 otherwise the reference setup `x₀`'s refused table (a setup at table 0's inputs, which every session flock-verify
-accepts at a draw `DrawOkPJ` admits has: `setupPJ_of_verifiesP`). -/
+accepts at a sample `DrawOkPJ` admits has: `setupPJ_of_verifiesP`). -/
 noncomputable def tablePJ (S : Finset (Fin n)) (j : Fin (nTab I)) : Integrate.Table mPts (partS I (dj S) S j) :=
   if h : Nonempty (DrawSetup (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
     (Classical.choice h).table (typedPJ ht j)
   else x₀.refused (typedPJ ht 0) _
 
-/-- **The plan of `J` tables**: at draw `S`, table `j` is `tablePJ … S j`, for every registration. -/
+/-- **The plan of `J` tables**: at sample `S`, table `j` is `tablePJ … S j`, for every registration. -/
 noncomputable def planPJ : Finset (Fin n) → Reg → List (TabSpec mPts) :=
   fun S _ => List.ofFn fun j => (tablePJ ht dj x₀ S j).T
 
 theorem planPJ_length (S : Finset (Fin n)) (R : Reg) : (planPJ (Reg := Reg) ht dj x₀ S R).length = nTab I :=
   List.length_ofFn
 
-/-- Each drawn unit is in the table it is drawn into (`partOf`). -/
+/-- Each sampled proof block is in the table it is sampled into (`partOf`). -/
 noncomputable def tabPJ : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planPJ (Reg := Reg) ht dj x₀ S R).length :=
   fun S _ u => Fin.cast List.length_ofFn.symm (partOf I (dj S) u.val)
 
@@ -71,7 +85,7 @@ theorem tabOfPJ_eq (S : Finset (Fin n)) (R : Reg) (u : Fin n) :
   simp only [Partition.tabOf, planPJ, tabPJ, List.get_ofFn]
   rfl
 
-/-- **Table `j` where flock-verify sets it up**: at a `DrawSetup` of table `j`'s inputs and draw, `tablePJ` is the table of
+/-- **Table `j` where flock-verify sets it up**: at a `DrawSetup` of table `j`'s inputs and sample, `tablePJ` is the table of
 one with the same statement. -/
 theorem tablePJ_of {S : Finset (Fin n)} {j : Fin (nTab I)}
     (x : DrawSetup (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) :
@@ -81,7 +95,7 @@ theorem tablePJ_of {S : Finset (Fin n)} {j : Fin (nTab I)}
   unfold tablePJ
   rw [dite_eq_left_of_eq_true (eq_true ⟨x⟩)]
 
-/-- **The plan's sites**: each drawn unit's acceptance, VU and block are its table's. -/
+/-- **The plan's sites**: each sampled proof block's acceptance, VU and block are its table's. -/
 noncomputable def sitesPJ : Placed.Sites (planPJ (Reg := Reg) ht dj x₀) (tabPJ ht dj x₀) where
   acc S R u _ := recastAcc (tablePJ ht dj x₀ S (partOf I (dj S) u.val)).acc
     (congrArg TabSpec.S (tabOfPJ_eq ht dj x₀ S R u)).symm
@@ -140,7 +154,7 @@ theorem sitesPJ_bcSite (ho : c.outNet = c.unitNet) :
 
 variable (hU : Built c.unit) (hscope : Layout.scopeOk c = true)
 
-/-- **`lay` at `J` tables**: e2e-layout's `keyedLayout` at `sitesPJ`, the program's outputs the returned outputs' bits,
+/-- **`lay` at `J` tables**: `Layout.keyedLayout` at `sitesPJ`, the program's outputs the returned outputs' bits,
 the rows' salts at the `hm96` slots' salt columns, the registration's bits the population's returned outputs. -/
 noncomputable abbrev layPJ :
     Binding.Layout ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) (planPJ (Reg := Reg) ht dj x₀)
@@ -149,7 +163,7 @@ noncomputable abbrev layPJ :
         (Layout.keyPlace (sitesPJ_parse ht dj x₀ hc) (Layout.outsOf c hU n))) :=
   Layout.keyedLayout (sitesPJ_parse ht dj x₀ hc) (Layout.outsOf c hU n) Hm.saltCol fun _ => pub
 
-/-- **`rs` at `J` tables**: e2e-layout's `keyedRowsOuts` at `sitesPJ`, its circuit conditions from `scopeOk`. -/
+/-- **`rs` at `J` tables**: `Layout.keyedRowsOuts` at `sitesPJ`, its circuit conditions from `scopeOk`. -/
 noncomputable abbrev rsPJ : Binding.HmRows (layPJ ht dj x₀ hc hU (pub := pub) (Reg := Reg)) :=
   Layout.keyedRowsOuts (sitesPJ_parse ht dj x₀ hc) Hm.saltCol hc (Layout.scopeOk_spec hU hscope).1
     (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1
@@ -163,10 +177,10 @@ theorem rsPJ_computes : (rsPJ ht dj x₀ hc hpub hpt hU hscope (Reg := Reg)).Com
 
 end Plan
 
-/-! ## The coin server's draws, and table `j`'s openings -/
+/-! ## The challenger's live-coin part's samples, and table `j`'s openings -/
 
-/-- **The coin server's draw at `S`, at `J` tables** (`DrawOk` at table `j`'s inputs and draw): each table's draw proves
-the drawn units it is given (`partS`), and setupH sets each table up at it with `mPts` link points. -/
+/-- **The challenger's live-coin part's sample at `S`, at `J` tables** (`DrawOk` at table `j`'s inputs and sample): each table's sample proves
+the sampled proof blocks it is given (`partS`), and setupH sets each table up at it with `mPts` link points. -/
 def DrawOkPJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
   ∀ j : Fin (nTab I),
     (∀ D, Draw.UnitDraw.ofJson (drawJ I (dj S) j) = .ok D → ∀ u ∈ partS I (dj S) S j, u.val ∈ D.proved) ∧
@@ -174,7 +188,7 @@ def DrawOkPJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : 
       (some (drawJ I (dj S) j)) I.partition I.program = .ok st → st.mPts = mPts
 
 /-- **Table `j`'s openings** (`DecodeZLJ.opnJ` at `drawJ`): `opnOf` at the statement setupH sets up under table `j`'s tags
-at its draw, and its `fast100` schedule, on proof files `2j` and `2j + 1`. -/
+at its sample, and its `fast100` schedule, on proof files `2j` and `2j + 1`. -/
 noncomputable def opnPJ (I : Inputs) (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (dj : Finset (Fin n) → Lean.Json) (S : Finset (Fin n)) (R : Reg) (proofs : Array ByteArray)
     (j : Fin (plan S R).length) : Opens 𝔽 Dig × Salts (List UInt8) :=

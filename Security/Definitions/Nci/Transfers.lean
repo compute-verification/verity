@@ -14,17 +14,17 @@ computes it and `b` takes it as an input. Everything else `R_b` reads from outsi
 input gate of `C` (`inputsRead`), since a gate outside every machine is an input gate. So
 `in(R_b) = transfersInto b ∪ inputsRead b`, two disjoint sets: what reaches `b` over the wire, and the inputs it reads.
 A transfer gate's value reaches `b` once, in `w g` bits, so `width (transfersInto b)` is the bits on the wire into `b`,
-and in the Boolean profile (`w = 1`, `FlockSoundness.Audit.Circuit.toCircuit`) `|transfersInto b|` is.
+and in the Boolean profile (`w = 1`, `Verity.Boolean.Circuit.toCircuit`) `|transfersInto b|` is.
 
 The machines are a partition rather than a family of `Covering.Subcircuit`s for two reasons. A machine's gates are what
 compute credit counts, each computed gate credited to the one machine that computes it, so the credits add up to
-`size(C)`. And a partition is `Complies`'s division into IUs, so when each machine (one whole-node session) is one IU, the
-machines are that division. Subcircuits may overlap and recompute, so neither holds of them. Each machine is still a
-subcircuit (`machine`): `R_m ∪ in(R_m)`, with inputs `in(R_m)` and the gates of `R_m` that have no predecessors, which a
-subcircuit holds as inputs (`Covering.sources`). In the subcircuits' terms, the transfer gates from `a` to `b` are
-`(machine a).inner ∩ (machine b).ins`, apart from one kind of gate. A gate of `R_a` with no predecessors (a constant:
-a computed gate that reads nothing) is an input of `machine a`, not an inner gate, but `transfers` counts it, since `b`
-reads it from `a` and `novelReads` charges `b` for it.
+`size(C)`. And a partition is `CompliesRate`'s division into IUs, so when each machine (one whole-node session) is one
+IU, the machines are that division. Subcircuits may overlap and recompute, so neither holds of them. Each machine is
+still a subcircuit (`machine`): `R_m ∪ in(R_m)`, with inputs `in(R_m)` and the gates of `R_m` that have no predecessors,
+which a subcircuit holds as inputs (`Covering.sources`). In the subcircuits' terms, the transfer gates from `a` to `b`
+are `(machine a).inner ∩ (machine b).ins`, apart from one kind of gate. A gate of `R_a` with no predecessors (a
+constant: a computed gate that reads nothing) is an input of `machine a`, not an inner gate, but `transfers` counts it,
+since `b` reads it from `a` and `novelReads` charges `b` for it.
 -/
 
 @[expose] public section

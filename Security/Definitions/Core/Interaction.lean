@@ -2,12 +2,14 @@ module
 
 public import Mathlib
 public import Definitions.Core.Hash
+public import Definitions.Core.Uniform
 
 /-!
 # Interaction: the live-coin model every proof system's claims are stated in
 
-The vocabulary the claims of every proof system read, inner or outer: C-Flock's (`Definitions/Claims.lean`), the
-recursion's (`Definitions/Claims/Recursion.lean`) and the sampled proofs' (`Definitions/Claims/Sampling.lean`). It is
+The vocabulary the claims of every proof system read, inner or outer: Flock's (`Definitions/Claims.lean`), the
+recursion's (`Definitions/Claims/Recursion.lean`), the sampled proofs' (`Definitions/Claims/Sampling.lean`) and the
+composition of zero knowledge through a recursion (`Definitions/Core/Rec.lean`). It is
 Core's, and keeps the namespace `Claims` its records were written under. Its forms:
 
 * A run is between a prover on a tape and a verifier on live coins (`Prover`, `Verifier`, `run`): the verifier reads
@@ -23,7 +25,10 @@ Core's, and keeps the namespace `Claims` its records were written under. Its for
 * `t` counts both parties' SHA-512 calls, so the hash side's constant is `255.5` (`lamOf`).
 * Zero knowledge is against a malicious verifier of the protocol's rounds, with a black-box simulator (`ZKmalR`), and
   its bound adds `γ` times the probability that the honest prover's SHA-512 calls in two real runs on one nonce hold a
-  collision (`Fork`). The simulator's cost is its expected calls over its coins (`SimCost`).
+  collision (`Fork`). The simulator's cost is its expected calls over its coins (`SimCost`). A protocol of sessions in
+  turn is zero knowledge on statement-indexed tapes (`ZKmalRx`). A prover that releases another's run cut at a public
+  round (`CutsOf`, the cut transcript `cutT` of `interact`'s) leaks at most `log₂` of the number of rounds it may cut
+  at, a one-sided bound (`ZKmalRLeak`).
 * Efficiency is the structural cost claims: reruns of the prover (`ExtractRunsLe`, `ExtractRunsExpLe`, `ERepCost`), and
   `RP.eval` also counts SHA-512 calls.
 * Completeness is at a hash whose outputs are 64 bytes (`Out64`) and at a nonempty tape type (`Complete`); the readable
@@ -48,7 +53,7 @@ abbrev Msg := Hash.Msg
 abbrev Collision (H : Msg → Msg) (u v : Msg) : Prop := Hash.Collision H u v
 
 /-- **`H`'s outputs are 64 bytes**: the deployed oracle is SHA-512 with its whole output, and the random-oracle model
-draws 64-byte outputs. Completeness reads it (`Complete`); it fixes the length, not `H`. -/
+samples 64-byte outputs. Completeness reads it (`Complete`); it fixes the length, not `H`. -/
 def Out64 (H : Msg → Msg) : Prop := ∀ m, (H m).length = 64
 
 /-! ## Relations -/
@@ -106,7 +111,7 @@ structure Verifier (Coin : Type) where
   next : Msg → List Msg → List Coin → OC Out
 
 /-- A run: the messages `(a_j, b_j)`, each party's `H` calls, and the decision. -/
-structure Trace where
+structure Transcript where
   msgs : List (Msg × Out)
   pLog : List (Msg × Msg)
   vLog : List (Msg × Msg)
@@ -117,23 +122,51 @@ structure Seen where
   msgs : List (Msg × Out)
   out : Out
 
-def Trace.seen (t : Trace) : Seen := ⟨t.msgs, t.out⟩
+def Transcript.seen (t : Transcript) : Seen := ⟨t.msgs, t.out⟩
 
 /-- Rounds against a verifier given by its next message `vnext` (from the prover's messages so far), from the history
 `hist` and the prover's messages `as`, with `n` rounds left. A verifier that has not decided when the rounds run out
 rejects. -/
 def stepWith {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out) :
-    ℕ → List (Msg × Msg) → List Msg → Trace → Trace
+    ℕ → List (Msg × Msg) → List Msg → Transcript → Transcript
   | 0, _, _, t => { t with out := .rej }
   | n + 1, hist, as, t =>
     let pa := (P.next x hist ω).eval H
     let as' := as ++ [pa.1]
     let vb := (vnext as').eval H
-    let t' : Trace := { t with msgs := t.msgs ++ [(pa.1, vb.1)], pLog := t.pLog ++ pa.2, vLog := t.vLog ++ vb.2 }
+    let t' : Transcript := { t with msgs := t.msgs ++ [(pa.1, vb.1)], pLog := t.pLog ++ pa.2, vLog := t.vLog ++ vb.2 }
     match vb.1 with
     | .msg m => stepWith H P x ω vnext n (hist ++ [(pa.1, m)]) as' t'
     | .acc => { t' with out := .acc }
     | .rej => { t' with out := .rej }
+
+/-! ## Transcripts -/
+
+/-- The transcript of `n` rounds of the prover's next message `pm` against the verifier's answers `ask`, from the
+history `hist`. -/
+def interact (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) : ℕ → List (Msg × Msg) → List (Msg × Out)
+  | 0, _ => []
+  | n + 1, hist =>
+    match ask (hist.map Prod.fst ++ [pm hist]) with
+    | .msg m => (pm hist, .msg m) :: interact ask pm n (hist ++ [(pm hist, m)])
+    | .acc => [(pm hist, .acc)]
+    | .rej => [(pm hist, .rej)]
+
+/-- A verifier answer's message, `[]` for a decision. -/
+def msgOf : Out → Msg
+  | .msg m => m
+  | _ => []
+
+/-- The prover's history after the transcript `τ`. -/
+def histOf (τ : List (Msg × Out)) : List (Msg × Msg) := τ.map fun p => (p.1, msgOf p.2)
+
+/-- The cut prover: `τ`'s messages before round `t`, then the stop. -/
+def cutMsg (stop : Msg) (t : ℕ) (τ : List (Msg × Out)) (h : List (Msg × Msg)) : Msg :=
+  if h.length < t then ((τ[h.length]?).map Prod.fst).getD stop else stop
+
+/-- **The transcript `τ` cut at round `t`**: `n` rounds of `τ`'s messages before `t`, then the stop, against `ask`. -/
+def cutT (ask : List Msg → Out) (stop : Msg) (t n : ℕ) (τ : List (Msg × Out)) : List (Msg × Out) :=
+  interact ask (cutMsg stop t τ) n []
 
 /-- The coins `r_1, …, r_{k(x)}` as a sequence. -/
 def coinSeq {Coin : Type} [Inhabited Coin] {k : ℕ} (r : Fin k → Coin) (i : ℕ) : Coin :=
@@ -141,14 +174,12 @@ def coinSeq {Coin : Type} [Inhabited Coin] {k : ℕ} (r : Fin k → Coin) (i : �
 
 /-- `run(P*, V, x)` at tape `ω` and coins `r`. -/
 def run {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin) (x : Msg) (ω : Ω)
-    (r : Fin (V.k x) → Coin) : Trace :=
+    (r : Fin (V.k x) → Coin) : Transcript :=
   stepWith H P x ω (fun as => V.next x as ((List.range as.length).map (coinSeq r))) (V.k x) [] [] ⟨[], [], [], .rej⟩
 
-/-! ## Probability: uniform averages over finite coin spaces -/
+/-! ## Probability: uniform averages over finite coin spaces
 
-open Classical in
-noncomputable def Pr {α : Type} [Fintype α] (p : α → Prop) : ℝ :=
-  ((Finset.univ.filter p).card : ℝ) / Fintype.card α
+`Pr p` is in `Definitions/Core/Uniform.lean`. -/
 
 /-- The expectation of `f` under uniform coins. -/
 noncomputable def Ex {α : Type} [Fintype α] (f : α → ℝ) : ℝ := (∑ a, f a) / Fintype.card α
@@ -164,7 +195,7 @@ inductive RP (R α : Type) where
 
 /-- Run against `H` and the prover's runs `run`: the result, the SHA-512 calls (its own and every rerun's, both
 parties'), and the reruns. -/
-def RP.eval {R α : Type} (H : Msg → Msg) (run : R → Trace) : RP R α → α × ℕ × ℕ
+def RP.eval {R α : Type} (H : Msg → Msg) (run : R → Transcript) : RP R α → α × ℕ × ℕ
   | .ret a => (a, 0, 0)
   | .hash q k =>
     let e := RP.eval H run (k (H q))
@@ -249,7 +280,7 @@ def StrictBirthday (H : Msg → Msg) (F : Finder) : Prop :=
 
 /-- **`ExpectedCR` (`ecr/sha-512`): the linear expected-time bound**, at one finder: `F` finds a collision with
 probability at most its expected SHA-512 calls over `2^256`. Read for finders whose cost is an expectation
-(extraction-based and rewinding ones, which have no worst-case `q`: `KSLin`, C-Flock's link) and, where one record
+(extraction-based and rewinding ones, which have no worst-case `q`: `KSLin`, Flock's link) and, where one record
 should serve every break, for the others too. It is the weaker claim there: at a fixed cost `q ≤ 2^257`,
 `StrictBirthday`'s `q²/2^513` is at most `q/2^256`. PoUW's service premises per prover read it at their binding and
 zero-knowledge finders through `ecrBound`, at a budget computed from the adversary's time. -/
@@ -258,7 +289,7 @@ def ExpectedCR (H : Msg → Msg) (F : Finder) : Prop :=
 
 open Classical in
 /-- **`ecr/sha-512` at one finder as a number, at a cost budget, or no bound**: `q / 2^256` where the finder meets
-`ExpectedCR` and its expected SHA-512 calls are at most the budget `q`, and `⊤` otherwise, as C-Flock's link bound reads
+`ExpectedCR` and its expected SHA-512 calls are at most the budget `q`, and `⊤` otherwise, as Flock's link bound reads
 its collision assumption (`⊤` at a prover whose link finders fail it, the number read at the session's calls `t'`).
 The assumption is a predicate on one finder, since some finder outputs a collision after no calls, so it is asked of
 this finder only.
@@ -271,6 +302,15 @@ above `q / 2^256`, and gets `⊤`. `ENNReal.ofReal (F.Pr H) ≤ ecrBound H F q` 
 through `ecrBound` takes no hypothesis on `H`. The one break term the protocols' per-prover bounds share. -/
 noncomputable def ecrBound (H : Msg → Msg) (F : Finder) (q : ℝ) : ENNReal :=
   if ExpectedCR H F ∧ Ex (fun s => (F.cost s : ℝ)) ≤ q then ENNReal.ofReal (q / 2 ^ (256 : ℝ)) else ⊤
+
+open Classical in
+/-- **`cr/sha-512` at one finder as a number, at a cost budget, or no bound**: `q / 2^256.5`, the square root of the
+strict birthday bound at `q`, where the finder meets `StrictBirthday` and declares at most `q` SHA-512 calls on every
+coin, and `⊤` otherwise. `ecrBound`'s reading for `StrictBirthday`, under the root the birthday term takes
+(`√(γ·Pr[B])`): `√(F.Pr H) ≤ sbBound H F q` wherever it is finite, so a bound stated through it takes no hypothesis on
+`H`, and the reader computes `q` from the adversary, as for `ecrBound`. -/
+noncomputable def sbBound (H : Msg → Msg) (F : Finder) (q : ℝ) : ENNReal :=
+  if StrictBirthday H F ∧ ∀ s, (F.cost s : ℝ) ≤ q then ENNReal.ofReal (q / 2 ^ (256.5 : ℝ)) else ⊤
 
 /-- The first collision among the `(input, output)` pairs `l`: two different inputs with one output. -/
 def findColl : List (Msg × Msg) → Option (Msg × Msg)
@@ -287,7 +327,7 @@ abbrev BCoins (Ω Coin : Type) (k : ℕ) := Fin k × Ω × (Fin k → Coin) × (
 def forkCoins {Coin : Type} {k : ℕ} (j : Fin k) (r r' : Fin k → Coin) : Fin k → Coin :=
   fun i => if i.val < j.val then r i else r' i
 
-/-- **`B`** (extraction-free): guess `j`, draw `ω, r_1..r_j`, run twice from the shared start with fresh continuations,
+/-- **`B`** (extraction-free): guess `j`, sample `ω, r_1..r_j`, run twice from the shared start with fresh continuations,
 and output the first collision among the verifier's SHA-512 calls in the two runs. Its cost is both runs' calls, both
 parties'. -/
 def B {Ω Coin : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg)
@@ -304,6 +344,18 @@ def B {Ω Coin : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin] [Nonempty Coin]
 noncomputable def PrB {Ω Coin : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg) : ℝ :=
   if hk : 0 < V.k x then (B H V P x hk).Pr H else 0
+
+/-- **`B` declared at `q` SHA-512 calls**: `B`'s outcome, its cost the budget `q` for its two runs' whole SHA-512 work,
+the prover's own included, which the reader computes from the prover's time (`Claims.Sampling.KSAt`). -/
+def BAt {Ω Coin : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg)
+    (V : Verifier Coin) (P : Prover Ω) (x : Msg) (hk : 0 < V.k x) (q : ℕ) : Finder :=
+  { B H V P x hk with cost := fun _ => q }
+
+/-- The birthday term's number at the budget `q`: `sbBound` at `B` declared at `q`, `0` for a verifier that takes no
+rounds at `x` (as `PrB`). -/
+noncomputable def sbB {Ω Coin : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+    (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg) (q : ℕ) : ENNReal :=
+  if hk : 0 < V.k x then sbBound H (BAt H V P x hk q) q else 0
 
 /-- **The trusted base**: what the claims rest on that no Lean statement here can say. -/
 def trustedBase : List String :=
@@ -362,7 +414,7 @@ structure VStar (Θ : Type) where
   next : Msg → List Msg → Θ → OC Out
 
 /-- The honest prover `P(w)` at tape `ω` against `V*` at tape `θ`. -/
-def runStar {Ω Θ : Type} (H : Msg → Msg) (P : Prover Ω) (Vs : VStar Θ) (x : Msg) (ω : Ω) (θ : Θ) : Trace :=
+def runStar {Ω Θ : Type} (H : Msg → Msg) (P : Prover Ω) (Vs : VStar Θ) (x : Msg) (ω : Ω) (θ : Θ) : Transcript :=
   stepWith H P x ω (fun as => Vs.next x as θ) (Vs.k x) [] [] ⟨[], [], [], .rej⟩
 
 /-- A simulator program: it may call `H` and ask the verifier (black box) its answer to any prover messages. -/
@@ -415,6 +467,35 @@ def ZKmalR {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H 
     |Pr (fun ω : N × Ω => Ev (runStar H (P w) Vs x ω θ).msgs) - Pr (fun c : S.C x => Ev (S.out H Vs θ x c))|
       ≤ εzk x + γ x * (Fork H (P w) Vs θ x).Pr H
 
+/-- **`ZKmalR` on statement-indexed tapes**: the prover at `x` runs on a nonce `N x` and a rest `Ω x`, so its tape may
+grow with the statement, as a protocol of a session per unit's does. At one tape at every statement it is `ZKmalR`. -/
+def ZKmalRx (N Ω : Msg → Type) [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)] [∀ x, Fintype (Ω x)]
+    [∀ x, Nonempty (Ω x)] (H : Msg → Msg) (k : Msg → ℕ) (P : W → (x : Msg) → Prover (N x × Ω x)) (R : Rel W)
+    (S : Simulator) (εzk γ : Msg → ℝ) : Prop :=
+  ∀ x w, R x w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = k x → ∀ (Ev : List (Msg × Out) → Prop),
+    |Pr (fun ω : N x × Ω x => Ev (runStar H (P w x) Vs x ω θ).msgs) - Pr (fun c : S.C x => Ev (S.out H Vs θ x c))|
+      ≤ εzk x + γ x * (Fork H (P w x) Vs θ x).Pr H
+
+/-- **The released prover's leak**: every event of the released prover `P'`'s transcript (its tape the reference
+prover `P`'s and the server's own coins `K x`) is at most `L x` times as likely at `S`, plus `ε_zk(x)` and `γ(x)` times
+the probability that `Fork` finds a collision among `P`'s SHA-512 calls in two runs against `V*`: `P'` leaks at most
+`log₂ L(x)` bits. One-sided, on statement-indexed tapes as `ZKmalRx` is. -/
+def ZKmalRLeak (N Ω K : Msg → Type) [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)] [∀ x, Fintype (Ω x)]
+    [∀ x, Nonempty (Ω x)] [∀ x, Fintype (K x)] [∀ x, Nonempty (K x)] (H : Msg → Msg) (k : Msg → ℕ)
+    (P' : W → (x : Msg) → Prover ((N x × Ω x) × K x)) (P : W → (x : Msg) → Prover (N x × Ω x)) (R : Rel W)
+    (S : Simulator) (L εzk γ : Msg → ℝ) : Prop :=
+  ∀ x w, R x w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = k x → ∀ (Ev : List (Msg × Out) → Prop),
+    Pr (fun ω : (N x × Ω x) × K x => Ev (runStar H (P' w x) Vs x ω θ).msgs) ≤
+      L x * Pr (fun c : S.C x => Ev (S.out H Vs θ x c)) + εzk x + γ x * (Fork H (P w x) Vs θ x).Pr H
+
+/-- **`P'` releases `P`'s run cut at a public position**: at every `V*`, tape and server coins, `P'`'s transcript is
+`P`'s with its messages from round `t` on replaced by `stop`, for some `t ∈ pos x`. -/
+def CutsOf {N Ω K : Msg → Type} (H : Msg → Msg) (k : Msg → ℕ) (P' : W → (x : Msg) → Prover ((N x × Ω x) × K x))
+    (P : W → (x : Msg) → Prover (N x × Ω x)) (stop : Msg) (pos : Msg → Finset ℕ) : Prop :=
+  ∀ x w (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = k x → ∀ (ω : N x × Ω x) (κ : K x), ∃ t ∈ pos x,
+    (runStar H (P' w x) Vs x (ω, κ) θ).msgs =
+      cutT (fun as => ((Vs.next x as θ).eval H).1) stop t (k x) (runStar H (P w x) Vs x ω θ).msgs
+
 /-- **The simulator's cost, expected**: over its coins, the simulator makes at most `bound(x)` calls (hash and ask) in
 expectation, against every verifier. -/
 def SimCost (H : Msg → Msg) (S : Simulator) (bound : Msg → ℝ) : Prop :=
@@ -460,10 +541,11 @@ structure Recorded {Coin : Type} (V : Verifier Coin) where
   as : List Msg
   r : Fin (V.k x) → Coin
 
-/-- **Nontriviality**: there are recorded runs, and the verifier accepts each when it is replayed. It is established by
-a test against recorded sessions, not by a Lean proof, and none is expected: `check`'s `lean-agreement` job
-(`tools/verity/check/ci.toml`) replays recorded honest sessions through the compiled Lean verifier
-(`verity/ml/flock/verifier/agree.py`) and fails unless it accepts each. This states what that test checks. -/
+/-- **Nontriviality**: there are recorded runs, and the verifier accepts each when it is replayed. It is for a test
+against recorded sessions to establish, not a Lean proof, and none is expected: `check`'s `lean-agreement` job
+(`tools/verity/check/ci.toml`) replays recorded honest sessions through the compiled Lean verifier's checks
+(`flock-verify agree`, `verity/ml/flock/verifier/agree.py`) and fails unless each passes them. Its sessions are of
+forms the verifier then refuses, so it reaches this acceptance only up to those refusals. -/
 def Nontrivial {Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (recs : List (Recorded V)) : Prop :=
   recs ≠ [] ∧ ∀ e ∈ recs, (run H (replay e.as) V e.x () e.r).out = .acc
 

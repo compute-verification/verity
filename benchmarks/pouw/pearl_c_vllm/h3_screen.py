@@ -99,7 +99,7 @@ def _calls(d: Path) -> dict:
     """An eager pass's calls held to the reference: the row seeds, E_A's committed rows and its padding rows."""
     import verify_run as VR
     from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
-    from verity.core.protocols.pouw.schemes import pearl_c as C
+    from verity.ml.protocols.pouw.schemes import pearl_c as C
 
     man = json.loads((d / "manifest.json").read_text())
     s, files, out = _scheme(man), VR.Files(d), []

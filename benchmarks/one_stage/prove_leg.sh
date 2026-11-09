@@ -10,8 +10,9 @@
 #      LEG_DEFS="gemm:1b:2048 rope:1b ..." (vLLM's served Definitions, prove_leg.py defs, in place of the stand-in)
 #      LEG_CENSUS=1 (with LEG_DEFS: size each shape only)  LEG_LOWER_REFUSED=1 (with LEG_DEFS: lower a shape the census
 #      refuses, for Flock's own refusal)  LEG_READS=slots|inline (with LEG_DEFS: a unit's MUFU table reads in lookup
-#      slots or inline; unset, its template's own, chunk_rows.reads)
-# Kept in $OUT/leg: the leg's records (leg.json, audit.json, registration, draw), the public files and the sessions; never a
+#      slots or inline; unset, its template's own, chunk_rows.reads)  FLOCK_CHALLENGER=1 (each verifier's coin trees from
+#      a challenger of its own, its audit in the leg's verdicts)
+# Kept in $OUT/leg: the leg's records (leg.json, audit.json, registration, sample), the public files and the sessions; never a
 # prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive. $OUT/summary.json: the verdicts. They are
 # kept however the job ends, a timeout or a cancel included.
 set -uo pipefail
@@ -33,7 +34,8 @@ export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/t
 # the prover's worker threads overflow the default stack on wide units
 export RUST_MIN_STACK=${RUST_MIN_STACK:-67108864}
 setup
-(cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+SPD=; [ "${FLOCK_CHALLENGER:-0}" = 1 ] && SPD=sampled-proofs-difftest
+(cd verity/core/service/spot && lake build sampled-proofs-verifier $SPD) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 FW=
 if [ "${LEG_FIREWALL:-1}" = 1 ]; then
@@ -52,7 +54,7 @@ if [ -n "${LEG_DEFS:-}" ]; then
     "${SHAPES[@]}" --mem-gb "$HZ_MEM_GB" ${LEG_READS:+--reads "$LEG_READS"} $NEG $CENSUS $LR 2>&1 | tee -a "$OUT/leg.log" | cut -c1-4000
   rc=${PIPESTATUS[0]}
 else
-  log "leg: stand-in, n ${LEG_N:-4}, ks ${LEG_KS:-128,256}, firewall ${FW:-off}, negatives ${LEG_NEGATIVES:-1}"
+  log "leg: stand-in, n ${LEG_N:-4}, ks ${LEG_KS:-128,256}, firewall ${FW:-off}, negatives ${LEG_NEGATIVES:-1}, challenger ${FLOCK_CHALLENGER:-0}"
   REG=; [ "${LEG_REGISTERED:-0}" = 1 ] && REG=--registered
   "$PY" benchmarks/one_stage/prove_leg.py standin --bin "$BIN" --lean "$LEAN" ${FW:+--firewall "$FW"} --out "$W/leg" \
     --n "${LEG_N:-4}" --ks "${LEG_KS:-128,256}" $NEG $REG 2>&1 | tee -a "$OUT/leg.log" | cut -c1-4000

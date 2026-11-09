@@ -65,7 +65,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.certifier import advice as I1
+import verity.core.protocols.certifier.advice as I1
 from verity.ml.circuits.codec import canonical_json
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine import step_trace as ST
@@ -104,7 +104,7 @@ def registered_compiler(name: str = COMPILER, digest: str | None = None, cap_bit
     if digest is None:
         # TODO: COMPILER's own registered digest once compile_steps lands with one
         from verity_vllm.pipeline import source_identity as SI
-        digest = compiler_digest(name, SI.code_identity(SI.TREE)["sha256"])
+        digest = compiler_digest(name, SI.code_identity_of("the advice digest", SI.TREE)["sha256"])
     return AW.Capped(Compiler(name, digest), cap_bits)
 
 
@@ -492,7 +492,8 @@ def write(run: str | Path, out: str | Path | None = None, *, trace: str | Path |
 def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, io: str | Path | None, *, T: int, tau: float,
                  compiler: Any, window: int | None = None, registered_roots: dict[str, str] | None = None) -> dict[str, Any]:
     """A server's advice, one a closed Commit window (`windows_of`; only ``window`` when given): each under ``out/w<k>/`` as
-    `write_one` writes it, its registration naming the window's Commit (its run id and run root, from windows.jsonl).  The
+    `write_one` writes it, its registration naming the window's Commit (its run id and run root, from windows.jsonl, or
+    from seals.jsonl while the window's line waits for its PoUW H1 release, which reads this advice: `serve_tie`).  The
     windows are read in order, each opening with what the last one left (`from_trace`'s ``carry``), so ``window`` reads the
     ones before it too.  A window whose advice is refused (a finish the advice can't say, a trace the Commit record contradicts)
     is named in ``refused``, and the others are written; the window after a refused one opens on nothing carried.  Until the
@@ -502,9 +503,11 @@ def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, 
         raise ValueError("a served run's advice needs its Commit record, requests.jsonl")
     io_all = io_record(io)
     final = stopped(run)
-    lines = (run / "windows.jsonl").read_text().splitlines() if (run / "windows.jsonl").exists() else []
-    commits = {int(d["window"]): {"run_id": d.get("run_id"), "run_root": d.get("run_root")}
-               for d in (json.loads(line) for line in lines if line.strip())}
+    commits: dict[int, dict[str, Any]] = {}
+    for name in ("seals.jsonl", "windows.jsonl"):       # a window's line waits for its H1 release; its seal's comes first
+        lines = (run / name).read_text().splitlines() if (run / name).exists() else []
+        commits.update({int(d["window"]): {"run_id": d.get("run_id"), "run_root": d.get("run_root")}
+                        for d in (json.loads(line) for line in lines if line.strip())})
     per, still_open = windows_of(recs)
     if window is not None and window not in per:
         raise ValueError(f"window {window} is not a closed window with steps (closed: {sorted(per)}; open: {still_open})")

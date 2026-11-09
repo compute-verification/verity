@@ -1,10 +1,10 @@
 module
 
 public import Definitions.Pouw.Assumptions.Dimension.Forest
-public import Proofs.Pouw.Dimension.PipeProofs
 public import Mathlib.LinearAlgebra.Matrix.Rank
-public import Mathlib.LinearAlgebra.Matrix.Block
-public import Mathlib.Tactic.Module
+public import Proofs.Pouw.Dimension.PipeProofs
+public import Proofs.Pouw.Dimension.Proofs
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Theorem 1 of `a1-cost.md` (the forest argument): proofs

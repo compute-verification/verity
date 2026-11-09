@@ -1,7 +1,11 @@
 module
 
-public import Proofs.Flock.Soundness.CompiledLock
 public import Proofs.Flock.C3.Fork.CouplingGame
+public import Proofs.Flock.Soundness.CompiledLock
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Game
+import VCVio.Prelude.Core
 
 /-!
 # a1l, step 2: R's compiled stream is rep 0's, read at index 2

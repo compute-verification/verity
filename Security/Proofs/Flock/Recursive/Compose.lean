@@ -1,18 +1,20 @@
 module
 
 public import Proofs.Flock.Recursive.Defs
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Recursion: commit-and-prove composition
 
 `commit_and_prove` bounds the recursive audit's soundness error, `Pr[the outer session accepts ∧ P's statement for the
 drawn units is false]`, by four terms, given **reference openings** `ref ω p c`, one message for each commitment `c`
-sent after the draw `ω` and the transcript `p`:
+sent after the sample `ω` and the transcript `p`:
 
 * `εo`, outer soundness: the outer session accepts but the witness decoded from the prover's strategy for it and its
   output (`dec`) does not make the inner verifier accept its own statement and messages on the transcript's public coins;
 * `εP`, the circuit's binding: the decoded statement is not `x R ω`, the statement of the circuit registered behind
-  `c_P` for the draw;
+  `c_P` for the sample;
 * `εb k`, stage `k`'s binding: the decoded round-`k` message is not the reference opening of `c_k`;
 * `εin`, inner soundness (`InnerSound`) at the simulated inner prover (`refStrat`), which sends `ref p c_k` at the node
   where the recursive prover sends `c_k`, before the coin `ρ_k`.
@@ -91,7 +93,7 @@ variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {β : Type}
   {outer : Reg → L.Ω → List (Cm × I.Coin) → Game β}
 
 /-- **Commit-and-prove composition, up to what the inner verifier reads.** `Acc R ω t b`: the outer session accepts with
-output `b` after the registration `R`, the draw `ω` and the round transcript `t`; `dec` decodes a witness from the
+output `b` after the registration `R`, the sample `ω` and the round transcript `t`; `dec` decodes a witness from the
 prover's strategy for the outer session and its output, with its statement `wstmt` and round messages `wmsg`. `same k ρs` relates two
 round-`k` messages the inner verifier can't tell apart at the coins `ρs` (`hsame`: its verdict doesn't change when each
 message is replaced by a related one), and stage `k`'s binding asks the decoded message only to be related to the

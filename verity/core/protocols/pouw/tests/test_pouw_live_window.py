@@ -1,8 +1,8 @@
-"""PoUW's live window, the proof system's challenger's first client (`window.live_challenger`, `rounds_reason`,
-`round_key`, `mode`): the epoch's coins are committed before it and each round's coin opens once, after the verifier
+"""PoUW's live execution phase, the proof system's challenger's first client (`window.live_challenger`, `rounds_reason`,
+`round_key`, `mode`): the execution phase's coins are committed before it and each round's coin opens once, after the verifier
 recorded that round's root; the verifier refuses a round coin opened twice, one opened before its round's root was
-recorded and a foreign epoch's; each round's noise key is its own coin's and root's; the check item's ``coins`` names
-the window's mode, and a seeded window is as it was."""
+recorded and a foreign execution phase's; each round's noise key is its own coin's and root's; the check item's ``coins`` names
+the execution phase's mode, and a seeded execution phase is as it was."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ import pytest
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.spot import challenger as Ch
 
 _spec = importlib.util.spec_from_file_location(
     "pouw_rounds_cases", Path(__file__).resolve().parents[1] / "lean/check/tests/pouw_rounds_cases.py")
@@ -31,7 +31,7 @@ def entropy(seed: str):
 
 def window(rounds: int = 4, k: int | None = None, epoch: int = 7, seed: str = "a"
            ) -> tuple[Ch.LiveChallenger, list[bytes], list[Ch.LiveOpening]]:
-    """A live epoch's challenger and a window that recorded `k` round roots, each round's coin opened after its root."""
+    """A live execution phase's challenger and an execution phase that recorded `k` round roots, each round's coin opened after its root."""
     ch = Wd.live_challenger(epoch, rounds, entropy(seed))
     rec = Ch.LiveRecord(ch, Wd.ROUND)
     for r in range(rounds if k is None else k):
@@ -85,7 +85,7 @@ def test_only_a_live_epochs_coins_carry_a_window():
 
 def test_a_windows_draw_session_is_its_draw_coin_alone():
     """`draw_epoch_reason`: `LIVE_SCHEME` over `DRAW_FAMILIES` alone, the session the gate opens withheld on the
-    window's draw root. The window's own layout, a draw beside the rounds, and another scheme are refused."""
+    execution phase's sample root. The execution phase's own layout, a sample beside the rounds, and another scheme are refused."""
     draw = Wd.draw_challenger(7, entropy("d")).commitment
     assert draw.families == ((Wd.DRAW, 1),) and Wd.draw_epoch_reason(draw) is None
     assert Wd.live_epoch_reason(draw) is not None
@@ -122,7 +122,7 @@ def test_the_round_key_is_its_own_coin_and_root():
 
 def test_core_checks_rounds_reads_the_challengers_own_session():
     """The round rule of record reads the challenger's coins only through the session the auditor's signed ledger opens
-    and ends for the window, under the window's pinned key: a window whose coins an in-process challenger sampled, whose
+    and ends for the execution phase, under the execution phase's pinned key: an execution phase whose coins an in-process challenger sampled, whose
     log no one signed, or whose ledger is cut before the session's end, is refused however honest its coins."""
     d, s = rounds_cases.honest_rounds(random.Random("a"))
     d = rounds_cases.with_ledger(d, s, random.Random("l"))
@@ -153,7 +153,7 @@ def _params(check: dict) -> dict:
 
 
 def test_the_check_item_names_the_windows_coin_mode():
-    """The check item names the window's coin mode, and a live window's parameters, and only a live window's, hold the
+    """The check item names the execution phase's coin mode, and a live execution phase's parameters, and only a live execution phase's, hold the
     inputs its salt session is read through (`core_check.LIVE`)."""
     assert (Wd.mode({}), Wd.mode({"coins": "live"}), Wd.mode({"coins": "seeded"})) == ("seeded", "live", "seeded")
     for coins in ({}, {"coins": "live"}, {"coins": "seeded"}):

@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.5: the circuit file: line 1 is `<format> <name>`, line 2 is `META <json>` (the layout), then
+The circuit file: line 1 is `<format> <name>`, line 2 is `META <json>` (the layout), then
 `<keyword> <name> <lines>` blocks, each an expanded circuit in `flock-ir-unit/v2` form (format and keyword are the
 statement's `Tags`). The parser refuses every part the verifier would have to evaluate (a `CUT` line; the META keys `tail`,
 `cut`, `cut_words`, `public_ports`, `public`, `native`, `outputs_by_tail`), and checks the layout's generic shape; the row
@@ -7,12 +7,9 @@ leaf checks its own ranges (`RowLeaf.checkLayout`). Lookup slots are built from 
 -/
 module
 
-public import Lean.Data.Json
 public import Flock.Lookup
 public import Flock.TmplAt
-public import Flock.Tags
 public import Flock.Typed
-public import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -135,7 +132,7 @@ structure Circuit where
   leafCuts : Array (Nat × Nat × Nat) := #[]
   /-- a typed template's block (item 1e): the unit is its instance's root, beside its parts -/
   typed : Option TypedBlock := none
-  /-- a typed statement's unit class (item 1e): its derivation's inputs and `deriveChecked`'s run on them -/
+  /-- a typed statement's size class (item 1e): its derivation's inputs and `deriveChecked`'s run on them -/
   cls : Option Typed.Class := none
   /-- a templated unit: its template, layouts and committed net (`Tmpl.unitNet`, its rows built only when read),
   which `Stmt.partialRangesT` folds from the template at the net's range -/

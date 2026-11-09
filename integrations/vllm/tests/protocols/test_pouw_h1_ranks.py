@@ -1,7 +1,7 @@
 """`protocol_options.pouw_h1_ranks`: a window split over two ranks (pipeline stages, or tensor-parallel ranks through
 `install`), each rank's calls recorded where its linears are and the window held whole beside the scheduler, commits what
 one process serving the same linears commits: the same calls at the same positions, the same tables, round roots, coins,
-calls root and draw root."""
+calls root and sample root."""
 from __future__ import annotations
 
 import hashlib
@@ -16,7 +16,7 @@ torch = pytest.importorskip("torch")
 
 from verity.core.protocols.pouw import window as Wd  # noqa: E402
 from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
-from verity.core.protocols.sampled_proofs.challenger import LiveRecord  # noqa: E402
+from verity.core.protocols.spot.challenger import LiveRecord  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.engine.hooks import Hooks  # noqa: E402
 from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402

@@ -8,6 +8,7 @@ import hashlib
 import json
 import shutil
 import threading
+from concurrent.futures import Future
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -82,9 +83,8 @@ def _commit(com: Any, steps: dict[int, list[tuple[str, bytes]]]) -> Any:
 
 def _window_a() -> tuple[Any, Any, dict[str, Any]]:
     from tests.check.opened import committer
-    from verity_vllm.commit import step_rows
 
-    com = committer(commit_scheme=step_rows.NAME)
+    com = committer()
     com.pool = PP.PinnedPool(1 << 14, exact=False, populate_threads=0)
     rc = _commit(com, A)
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
@@ -177,6 +177,44 @@ def test_the_pool_is_warmed_before_serving_in_blocks_that_hold_any_one_take(monk
         pool.take(n)
     assert pool.allocs == 3 and len(pool.in_use) == 3, "the first window's takes are served from the warmed blocks"
     pool.mode = None
+
+
+def test_every_committer_method_the_serving_modules_call_is_the_collectors():
+    """serve-openai's tests hand its modules stand-in committers, so a call to a method the collector does not have (a warm step
+    before serving, say) would fail only on a GPU, before the first request: every ``com.<method>(...)`` the serving modules make
+    names a method of the collector `pipeline.commit.make_committer` builds for `serve_seal.DECLARED_COMMITTER`."""
+    import ast
+
+    from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
+
+    assert ss.DECLARED_COMMITTER == "native_collect_v2b"
+    calls: dict[str, str] = {}
+    for f in sorted(Path(ss.__file__).parent.glob("serve_*.py")):
+        for n in ast.walk(ast.parse(f.read_text())):
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and isinstance(n.func.value, ast.Name) and n.func.value.id == "com":
+                calls.setdefault(n.func.attr, f"{f.name}:{n.lineno}")
+    assert "size_arena" in calls and "enable_windows" in calls
+    assert not {a: at for a, at in calls.items() if not callable(getattr(NativeCollectCommitter, a, None))}
+
+
+def test_the_pool_warms_on_the_committer_itself(monkeypatch):
+    """`warm_pool` reads the real committer (its offline core, CPU only), not a stand-in: the pool it grows is the committer's own."""
+    from tests.check.opened import committer
+
+    monkeypatch.setattr(ss, "WARM_BLOCK", 1 << 20)
+    monkeypatch.setattr(PP, "_shared_map", lambda n: (torch.zeros(n, dtype=torch.uint8), None))
+    monkeypatch.setattr(PP, "_populate", lambda *_a: True)
+    monkeypatch.setattr(PP, "_register", lambda *_a: None)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    com = committer()
+    pool = com.pool
+    try:
+        assert ss.warm_pool(com, 3 * (1 << 20) / ss.GB)["blocks"] == 3 and pool.allocs == 1 and pool.reserved_bytes == pool.block_bytes
+        for _ in range(3):
+            pool.take(1 << 20)
+        assert pool.allocs == 1, "the takes are served from the block the warm-up made"
+    finally:
+        pool.mode = None
 
 
 def test_a_close_waits_for_room_only_while_the_windows_awaiting_their_seal_hold_the_bound():
@@ -310,6 +348,64 @@ def test_the_engine_serves_the_next_windows_while_a_seal_is_held(tmp_path, monke
     assert records(tmp_path / "OUT", "seals.jsonl") == seals and (tmp_path / "OUT" / "windows.jsonl").read_bytes() == (out / "windows.jsonl").read_bytes()
 
 
+class SealWaits:
+    """An arm whose release, like `serve_tie.WindowTie`'s, ends only once it has heard its window's seal line (``sealed``):
+    its close hands back a `Future` resolved then."""
+
+    def __init__(self) -> None:
+        self.futures: dict[int, Future] = {}
+        self.heard: list[dict[str, Any]] = []
+
+    def open(self, window: int) -> None:
+        self.futures[window] = Future()
+
+    def close(self, window: int) -> Future:
+        return self.futures[window]
+
+    def sealed(self, window: int, line: dict[str, Any]) -> None:
+        self.heard.append(line)
+        self.futures[window].set_result({"window": window, "sealed": "error" not in line})
+
+    def summary(self) -> dict[str, Any]:
+        return {"windows": len(self.futures)}
+
+
+def test_an_arm_hears_each_windows_seal_line_while_the_windows_line_waits_for_its_release(tmp_path, monkeypatch):
+    """An arm whose release waits for its window's seal hears each window's seals.jsonl line once it is written, a failed
+    seal's error too, while that window's line waits for the release: no seal waits on the line, so every window's seal
+    and line are written, each line carrying its arm's outcome."""
+    def seal(com: Any, rc: Any, d: Path, **kw: Any) -> dict[str, Any]:
+        if kw["rec"]["window"] == 1:
+            raise RuntimeError("store")
+        return {"row_dir": str(d)}
+
+    monkeypatch.setattr(sc, "seal_window", seal)
+    sealer, arm, out = ss.Sealer(1 << 40), SealWaits(), tmp_path / "serve"
+    out.mkdir()
+    s = Sealed(out, sealer=sealer)
+    s.windows.arm = arm
+    with s:
+        for i in range(3):
+            s.post("/v1/completions", _body(i))
+    sealer.close()
+    seals = records(out, "seals.jsonl")
+    assert [x["window"] for x in seals] == [0, 1, 2] and arm.heard == seals and seals[1]["error"] == "RuntimeError: store"
+    assert [w["pouw_h1"] for w in records(out, "windows.jsonl")] == [{"window": w, "sealed": w != 1} for w in range(3)]
+
+
+def test_an_arm_hears_why_a_window_has_no_seal():
+    heard: list[tuple[int, dict[str, Any]]] = []
+    w = SimpleNamespace(arm=SimpleNamespace(sealed=lambda k, line: heard.append((k, line))))
+    w._sealed = lambda line: sc.CommitWindows._sealed(w, line)
+    sc.CommitWindows._no_seal(w, {"window": 4, "error": "RuntimeError: finalize failed"}, None)
+    sc.CommitWindows._no_seal(w, {"window": 5}, {"error": "under the disk floor"})
+    sc.CommitWindows._no_seal(w, {"window": 6, "empty": True}, None)
+    assert heard == [(4, {"window": 4, "error": "not sealed: RuntimeError: finalize failed"}),
+                     (5, {"window": 5, "error": "not sealed: under the disk floor"}),
+                     (6, {"window": 6, "error": "not sealed: the window has no seal"})]
+    sc.CommitWindows._sealed(SimpleNamespace(arm=None), {"window": 7})       # an arm without ``sealed`` hears nothing
+
+
 def test_while_a_windows_finalize_blocks_the_loop_opens_the_next_window_and_serves_a_request_there(tmp_path, monkeypatch):
     """The finalize of a window detached at its close runs on the sealer's thread: while window 0's is held, the loop has
     closed window 0, opened window 1 and served a request in it, and window 0's records (its line, its requests' checks)
@@ -395,35 +491,6 @@ def test_with_a_seal_process_each_execution_block_is_sealed_there_and_its_refusa
     assert got == [(0, True), (1, True)] and [x["window"] for x in seals] == [0, 1]
     assert seals[0]["error"] == "ValueError: the step-input port's positions aren't the ones the window's rows ran"
     assert "error" not in seals[1] and seals[1]["row_dir"] == str(tmp_path / "windows" / "w1")
-
-
-def test_a_seal_process_seals_each_execution_block_only_after_its_draw_gated_release(tmp_path, monkeypatch):
-    """With ``release`` (`serve_release.Draws`), the seal in the sealer's ``process`` follows the window's draw-gated release,
-    as `seal_window` does, so the store it writes holds only the drawn leaves; its line carries the release's record."""
-    monkeypatch.setattr(sc, "seal_window", lambda *_a, **_k: pytest.fail("sealed on the sealer's thread"))
-    order: list[tuple[str, int]] = []
-
-    class Release:
-        def release(self, window: int, com: Any, clock: Any) -> dict[str, Any]:
-            order.append(("release", window))
-            return {"window": window, "kept": 1}
-
-    class Process:
-        def seal(self, com: Any, rc: Any, d: Path, *, written: Any = None, **kw: Any) -> dict[str, Any]:
-            order.append(("seal", kw["rec"]["window"]))
-            written()
-            return {"row_dir": str(d)}
-
-    sealer = ss.Sealer(1 << 40)
-    sealer.process = Process()
-    s = Sealed(tmp_path, sealer=sealer, com=Detached)
-    s.windows.release = Release()
-    with s:
-        for i in range(2):
-            assert events(s.post("/v1/completions", _body(i))[1])[-1] == "[DONE]"
-    sealer.close()
-    assert order == [("release", 0), ("seal", 0), ("release", 1), ("seal", 1)]
-    assert [x["release"] for x in records(tmp_path, "seals.jsonl")] == [{"window": 0, "kept": 1}, {"window": 1, "kept": 1}]
 
 
 def test_serve_openais_seals_run_where_its_sealing_options_say():

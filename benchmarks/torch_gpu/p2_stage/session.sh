@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# One staging run on vy-dc-h200, from build.sh's lib, the weights module, the weights manifest with
+# One load run on an H200, from build.sh's lib, the weights module, the weights manifest with
 # digests memory-accounting held W to, and the store's fixture (its layout JSON, `p2_v1/store.py layout`,
 # and its toy, `p2_v1/store-toy/`); cwd = the source tree's root:
 #
 #   tar -C BUILD_RUN/out -cf /tmp/p2lib.tar .
 #   tar -C benchmarks/pous/p2_v1/store-toy -cf /tmp/store-toy.tar toy.json spot.json c-star.bin spot-c.bin
-#   research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 240m \
-#     --env GPU_LEASE_WHO=LANE [--env ENCODED=1] [--env STEPS=toy,stage,gemm,check] \
+#   research run --on H200_NODE --project verity --source . --cwd source --timeout 240m \
+#     [--env ENCODED=1] [--env STEPS=toy,stage,gemm,check] \
 #     --send /tmp/p2lib.tar --send examples/h200/e2e_h200/served_weights.py --send h200-manifest.json \
 #     --send store-layout.json \
 #     --send /tmp/store-toy.tar [--send SLICE/setup.json --send SLICE/00000.c --send SLICE/00000.json ...] \
@@ -30,7 +30,7 @@
 set -uo pipefail
 O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
 D=benchmarks/torch_gpu/p2_stage
-PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
+PY=$(. benchmarks/harness/env.sh && echo "$VENV/bin/python") || exit 2
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 LAYER=${LAYER:-0}
 SRC=${SRC:-/workspace/tmp/p2-stage/stream-l$LAYER}

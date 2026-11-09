@@ -1,10 +1,9 @@
 /-
-PROTOCOL.md §16.1: sparse F2 matrices, and Flock's BLAKE3 compression circuit as a pinned file (`flock-r1cs-rows/v1`)
+`Flock.Statement`: sparse F2 matrices, and Flock's BLAKE3 compression circuit as a pinned file (`flock-r1cs-rows/v1`)
 whose statement digest `D_b3` the verifier recomputes and compares with the pinned value.
 -/
 module
 
-public import Lean.Data.Json
 public import Flock.Canon
 public import Flock.Hash
 public import Flock.JsonParse
@@ -45,6 +44,54 @@ it, so it stays directly below `rd32`. -/
 @[csimp] theorem rd32_eq_rd32Fast : @rd32 = @rd32Fast :=
   funext fun b => funext fun o => (rd32Fast_eq b o).symm
 
+/-- `rd32` at `o`, its bytes read with `uget`. -/
+@[inline] def rd32U (data : ByteArray) (o : USize) (h : o.toNat + 4 ≤ data.size) (hs : o.toNat + 4 ≤ USize.size) :
+    Nat :=
+  ((data.uget o (by omega)).toUInt32 |||
+    ((data.uget (o + USize.ofNat 1) (by rw [toNat_add_ofNat o 1 (by omega)]; omega)).toUInt32 <<< 8) |||
+    ((data.uget (o + USize.ofNat 2) (by rw [toNat_add_ofNat o 2 (by omega)]; omega)).toUInt32 <<< 16) |||
+    ((data.uget (o + USize.ofNat 3) (by rw [toNat_add_ofNat o 3 (by omega)]; omega)).toUInt32 <<< 24)).toNat
+
+theorem rd32U_eq (data : ByteArray) (o : USize) (h : o.toNat + 4 ≤ data.size) (hs : o.toNat + 4 ≤ USize.size) :
+    rd32U data o h hs = rd32 data o.toNat := by
+  rw [← rd32Fast_eq]
+  unfold rd32U rd32Fast
+  rw [uget_eq_get! data o o.toNat rfl,
+    uget_eq_get! data _ (o.toNat + 1) (toNat_add_ofNat o 1 (by omega)),
+    uget_eq_get! data _ (o.toNat + 2) (toNat_add_ofNat o 2 (by omega)),
+    uget_eq_get! data _ (o.toNat + 3) (toNat_add_ofNat o 3 (by omega))]
+
+theorem toNat_toUSize (s : Nat) (h : s < USize.size) : s.toUSize.toNat = s := by
+  have hsz : USize.size = 2 ^ System.Platform.numBits := rfl
+  rw [Nat.toUSize, USize.toNat_ofNat', Nat.mod_eq_of_lt (by omega)]
+
+/-- `f` over the `k` entries from byte `o` of `data`, read with `rd32U`. -/
+@[specialize] def rowFoldU {β : Type} (data : ByteArray) (f : β → Nat → β) :
+    (k : Nat) → (o : USize) → o.toNat + 4 * k ≤ data.size → o.toNat + 4 * k < USize.size → β → β
+  | 0, _, _, _, acc => acc
+  | k + 1, o, h, hs, acc =>
+    rowFoldU data f k (o + USize.ofNat 4) (by rw [toNat_add_ofNat o 4 (by omega)]; omega)
+      (by rw [toNat_add_ofNat o 4 (by omega)]; omega) (f acc (rd32U data o (by omega) (by omega)))
+
+theorem rowFoldU_eq {β : Type} (data : ByteArray) (s : Nat) (f : β → Nat → β) :
+    ∀ (k t : Nat) (o : USize), o.toNat = s + 4 * t → (h : o.toNat + 4 * k ≤ data.size) →
+      (hs : o.toNat + 4 * k < USize.size) → ∀ acc : β,
+      rowFoldU data f k o h hs acc = (List.range' t k).foldl (fun acc u => f acc (rd32 data (s + 4 * u))) acc
+  | 0, _, _, _, _, _, _ => rfl
+  | k + 1, t, o, ho, h, hs, acc => by
+    rw [rowFoldU, List.range'_succ, List.foldl_cons, rd32U_eq, ho,
+      rowFoldU_eq data s f k (t + 1) _ (by rw [toNat_add_ofNat o 4 (by omega), ho]; omega)]
+
+/-- `f` over the `k` numbers from `i`, without building the list. -/
+@[specialize] def foldFrom {β : Type} (f : β → Nat → β) : Nat → Nat → β → β
+  | 0, _, acc => acc
+  | k + 1, i, acc => foldFrom f k (i + 1) (f acc i)
+
+theorem foldFrom_eq {β : Type} (f : β → Nat → β) :
+    ∀ (k i : Nat) (acc : β), foldFrom f k i acc = (List.range' i k).foldl f acc
+  | 0, _, _ => rfl
+  | k + 1, i, acc => by rw [foldFrom, List.range'_succ, List.foldl_cons, foldFrom_eq f k (i + 1)]
+
 def findByte (b : ByteArray) (x : UInt8) (from_ : Nat := 0) : Option Nat := Id.run do
   for i in [from_:b.size] do
     if b.get! i == x then return some i
@@ -60,6 +107,46 @@ def pushLe32 (b : ByteArray) (x : Nat) : ByteArray := Id.run do
   for i in [0:4] do out := out.push ((x >>> (8 * i)) % 256).toUInt8
   return out
 
+theorem pushLe32_eq (b : ByteArray) (x : Nat) :
+    pushLe32 b x = (((b.push (x % 256).toUInt8).push ((x >>> 8) % 256).toUInt8).push ((x >>> 16) % 256).toUInt8).push
+      ((x >>> 24) % 256).toUInt8 := by
+  simp only [pushLe32, Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, List.range', Id.run]
+  rfl
+
+theorem toUInt8_shiftRight (x : Nat) (k : UInt32) (hx : x ≤ 4294967295) (hk : k.toNat < 32) :
+    (x.toUInt32 >>> k).toUInt8 = ((x >>> k.toNat) % 256).toUInt8 := by
+  apply UInt8.toNat_inj.mp
+  rw [UInt32.toNat_toUInt8, UInt32.toNat_shiftRight, Nat.mod_eq_of_lt hk]
+  have h1 : x.toUInt32.toNat = x := by
+    simp [Nat.toUInt32, UInt32.toNat_ofNat']
+    omega
+  rw [h1]
+  simp [Nat.toUInt8, UInt8.toNat_ofNat']
+
+/-- `pushLe32` as compiled code computes it (`pushLe32_eq_fast`): the bytes cut from a `UInt32` when `x` fits one. The
+bound is `≤ 4294967295`, not `< 2 ^ 32`: compiled code parses a literal past `UInt32` from its decimal string each
+call. -/
+def pushLe32Fast (b : ByteArray) (x : Nat) : ByteArray :=
+  if x ≤ 4294967295 then
+    let w := x.toUInt32
+    (((b.push w.toUInt8).push (w >>> 8).toUInt8).push (w >>> 16).toUInt8).push (w >>> 24).toUInt8
+  else pushLe32 b x
+
+/-- Compiled code runs `pushLe32Fast`; the kernel and every proof see `pushLe32`. `@[csimp]` rewrites only code compiled
+after it, so it stays directly below `pushLe32`. -/
+@[csimp] theorem pushLe32_eq_fast : @pushLe32 = @pushLe32Fast := by
+  funext b x
+  unfold pushLe32Fast
+  split
+  · rename_i hx
+    have h0 := toUInt8_shiftRight x 0 hx (by decide)
+    rw [UInt32.shiftRight_zero] at h0
+    dsimp only
+    rw [pushLe32_eq, h0, toUInt8_shiftRight x 8 hx (by decide), toUInt8_shiftRight x 16 hx (by decide),
+      toUInt8_shiftRight x 24 hx (by decide)]
+    rfl
+  · rfl
+
 /-- A sparse F2 matrix with `rows` rows over `width` columns: row `i`'s columns are the le32 words
 `data[start[i] ..][0 .. len[i]]`. Rows past `rows` are empty. -/
 structure Sparse where
@@ -74,6 +161,28 @@ namespace Sparse
 
 def row (m : Sparse) (i : Nat) : Array Nat :=
   (Array.range (m.len.getD i 0)).map fun t => rd32 m.data (m.start.getD i 0 + 4 * t)
+
+/-- `(m.row i).foldl f init` (`rowFold_eq`) without building the row: with `rowFoldU` where the row lies in `m.data` and
+its offsets fit a `USize`. -/
+@[inline] def rowFold {β : Type} (m : Sparse) (i : Nat) (f : β → Nat → β) (init : β) : β :=
+  let s := m.start.getD i 0
+  let k := m.len.getD i 0
+  if h : s + 4 * k ≤ m.data.size ∧ (s + 4 * k).toUSize.toNat = s + 4 * k then
+    have := USize.toNat_lt_size (s + 4 * k).toUSize
+    have hs := toNat_toUSize s (by omega)
+    rowFoldU m.data f k s.toUSize (by omega) (by omega) init
+  else (m.row i).foldl f init
+
+theorem rowFold_eq {β : Type} (m : Sparse) (i : Nat) (f : β → Nat → β) (init : β) :
+    m.rowFold i f init = (m.row i).foldl f init := by
+  unfold rowFold
+  dsimp only
+  split
+  · rename_i h
+    have := USize.toNat_lt_size (m.start.getD i 0 + 4 * m.len.getD i 0).toUSize
+    rw [rowFoldU_eq m.data (m.start.getD i 0) f _ 0 _ (by rw [toNat_toUSize _ (by omega)]; omega)]
+    simp only [row, ← Array.foldl_toList, Array.toList_map, List.foldl_map, Array.toList_range, List.range_eq_range']
+  · rfl
 
 /-- Rows given explicitly; every column must be below `width`. -/
 def ofRows (rows : Array (Array Nat)) (width : Nat) : V Sparse := do
@@ -106,7 +215,7 @@ def foldRows (m : Sparse) (e : Array F128) : Nat → Nat → Array F128 → Arra
 /-- `Xᵀ e`: `out[c] = Σ_{i : c ∈ row i} e[i]` for `c < width`. -/
 def foldT (m : Sparse) (e : Array F128) : Array F128 := m.foldRows e (min m.rows e.size) 0 (Array.replicate m.width 0)
 
-/-- `Mat(X)` of the circuit digest (§16.1), appended to `buf`, flushing into `h` every 64 KiB. -/
+/-- `Mat(X)` of the circuit digest (`Flock.Statement`), appended to `buf`, flushing into `h` every 64 KiB. -/
 def absorbMat (m : Sparse) (rows : Nat) (h0 : Blake3.Hasher) (buf0 : ByteArray) : Blake3.Hasher × ByteArray := Id.run do
   let mut h := h0
   let mut buf := pushLe64 (pushLe64 buf0 rows) m.width
@@ -150,7 +259,7 @@ structure Comp where
 namespace Comp
 
 /-- `D = BLAKE3("flock-r1cs-stmt-v2" ‖ le64 m ‖ le64 k_log ‖ le64 k_skip ‖ le64 useful_bits ‖ u8 1 ‖ le64 pin ‖ u8 0
-‖ Mat(A) ‖ Mat(B) ‖ Mat(I))`, upstream's circuit digest (§16.1). -/
+‖ Mat(A) ‖ Mat(B) ‖ Mat(I))`, upstream's circuit digest (`Flock.Statement`). -/
 def digestOf (sp : CompSpec) (a b : Sparse) : ByteArray := Id.run do
   let n := 2 ^ sp.kLog
   let mut buf := "flock-r1cs-stmt-v2".toUTF8

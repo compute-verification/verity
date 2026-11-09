@@ -1,13 +1,47 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.PartsVStar
-public import Proofs.Flock.Claims.Recursion.OpensReads
-public import Proofs.Flock.Claims.Recursion.VStarPartsSparse
-public import Proofs.Flock.Claims.Recursion.CapLowerPin
 public import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
-public import Proofs.Flock.C3.PubRows.Check
-public import Proofs.Flock.C3.Reps.AtList
-public import VStarRecursive
+public import Proofs.Flock.Claims.Recursion.CapLowerPin
+public import VStarRecursive.Protocol
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.C3.PubRows.Check
+import Proofs.Flock.C3.Reps.AtList
+import Proofs.Flock.Claims.Recursion.DeployMargin
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Recursion.OpensReads
+import Proofs.Flock.Claims.Recursion.PartsVStar
+import Proofs.Flock.Claims.Scope.Check
+import Proofs.Flock.Claims.Scope.Setup
 
 /-!
 # The statement the recursive component's inputs name, and its reading
@@ -17,16 +51,16 @@ The compiled component (`VStar.Recursive.checkBlobs`) reads parameters, evidence
 
 * `x` decodes (`RecDeploy.decodeX`) to `w`, and `w`'s inner statement to Flock's plain statement `ri`
   (`FlockDeploy.decode`);
-* `InnerNames`: `ri` is the inner session `innerHeld` reads: the inner circuit, public file and draw are the blobs the
-  verifier's own digests name (`Own`), its partition and program the verifier's own, its statement `INNER_STATEMENT` on
-  Flock's os coins at one table with no lookup table, `--stratified` at the population the verifier's partition and
+* `InnerNames`: `ri` is the inner session `innerHeld` reads: the inner circuit, public file and sample are the blobs the
+  verifier's own digests name (`Own`), its partition and program the verifier's own, its statement `INNER_STATEMENT`
+  without `--coins` (a seed's, as `Raw.ins` reads a plain statement) at one table with no lookup table, `--stratified` at the population the verifier's partition and
   program give (`HmRow.stratifiedLaw` at `K = 1`, as the compiled `innerOk` sets it up) and none of `verify`'s other
   inputs; `w`'s inner shape is
   `innerHeld`'s; `w`'s registration the registration blob `Own` names; and `w` carries no link table;
 * `PartNames`: one part per part of the verifier's, part `j`'s raw statement the one `partVerdict` runs: its circuit
   the part's circuit blob, its form `PartForm` (statement `STATEMENT` under `--zk` at one table), the part's partition,
   program and registered reads, the part's own bindings (`PartX.bindings`) the verifier's bindings of that part, and
-  its draw the one compiled part `j` reads off the part's record blob. The part's public file and V*'s shared rows are
+  its sample the one compiled part `j` reads off the part's record blob. The part's public file and V*'s shared rows are
   the staged ones (`Stage.pub`, `Stage.rows`), which `PartStatement` and `RowsShow` relate to the run.
 
 `readX_of_names`: where the component's inner session is held (`innerHeld`), V*'s list at its shape has one statement
@@ -50,7 +84,7 @@ def partCoins (tags0 : Tags) : Flock.Coins := .tree (Zk.coinSpec (tags0.tableNam
 
 /-- The tags the compiled part's session is set up under: `--zk`'s, at the part circuit's mask log and one table. -/
 def partTags (tags0 : Tags) (circuitB : ByteArray) : Tags :=
-  Zk.tags (tags0.withCoins (partCoins tags0)) (Zk.maskLogOf circuitB) 1
+  Zk.tags tags0 (Zk.maskLogOf circuitB) 1
 
 /-- **The inner statement `ri` is the inner session the component holds**, and `w`'s inner shape and registration
 are the component's. Each parsed field is pinned twice: what it parses to, and its bytes, the canonical bytes
@@ -61,7 +95,7 @@ structure InnerNames (o : VStar.Recursive.Own) (pr : VStar.Recursive.Proofs) (bs
   pub : bs.get o.pub "the inner public file" = .ok ri.publicFile
   statement : ri.statement = VStar.Recursive.INNER_STATEMENT
   plain : ri.zk = false
-  os : ri.osCoins = true
+  os : ri.osCoins = false
   count : ri.count = 1
   tables : ri.tables = []
   partition : ri.partition.map (jsonOf "partition") = some (.ok o.partition)
@@ -90,8 +124,8 @@ def PartForm (b : FlockDeploy.Raw) : Prop :=
 
 /-- **Part `j`'s statement is the one the component's part `j` runs**, but for its staged public file and the staged
 shared rows: its circuit, form, partition, program and registered reads `po`'s, its own bindings `po`'s bindings, and its
-draw the one compiled part `j` reads off its record `pp.record` (`if tags.hm96Rows then Witness.recordDraw record else
-none`, at the part's tags), as the model's `Raw.ins` reads a draw. Its public file is the one the component reads for
+sample the one compiled part `j` reads off its record `pp.record` (`if tags.hm96Rows then Witness.recordDraw record else
+none`, at the part's tags), as the model's `Raw.ins` reads a sample. Its public file is the one the component reads for
 part `j` (`publicFile`; the model's part session replaces it with the staged one), and each parsed field's bytes are the
 canonical bytes of what the component read (`partitionB`, `registeredB`, `bindingsB`, `drawB`). -/
 structure PartNames (po : VStar.Recursive.PartOwn) (pp : VStar.Recursive.PartProof) (bs : Core.Blobs) (j : ℕ)
@@ -105,7 +139,7 @@ structure PartNames (po : VStar.Recursive.PartOwn) (pp : VStar.Recursive.PartPro
   draw : ∀ tags0 recordB record, Flock.Tags.find? VStar.Recursive.STATEMENT = some tags0 →
     bs.get pp.record s!"part {j}'s record" = .ok recordB → String.fromUTF8? recordB = some record →
     (q.base.draw.mapM (jsonOf "draw")).map (Option.map Flock.norm) =
-      .ok (if (Flock.Zk.tags (tags0.withCoins (Flock.Coins.tree (Flock.Zk.coinSpec (tags0.tableNames 1))))
+      .ok (if (Flock.Zk.tags tags0
           (Flock.Zk.maskLogOf q.base.circuit) 1).hm96Rows then Flock.Witness.recordDraw record else none)
   publicFile : bs.get pp.pub s!"part {j}'s public file" = .ok q.base.publicFile
   partitionB : (VStar.Recursive.canonBytes po.partition).map some = .ok q.base.partition
@@ -113,7 +147,7 @@ structure PartNames (po : VStar.Recursive.PartOwn) (pp : VStar.Recursive.PartPro
   bindingsB : VStar.Recursive.canonBytes po.bindings = .ok q.bindings
   drawB : ∀ tags0 recordB record, Flock.Tags.find? VStar.Recursive.STATEMENT = some tags0 →
     bs.get pp.record s!"part {j}'s record" = .ok recordB → String.fromUTF8? recordB = some record →
-    (if (Flock.Zk.tags (tags0.withCoins (Flock.Coins.tree (Flock.Zk.coinSpec (tags0.tableNames 1))))
+    (if (Flock.Zk.tags tags0
         (Flock.Zk.maskLogOf q.base.circuit) 1).hm96Rows then Flock.Witness.recordDraw record else none).mapM
       VStar.Recursive.canonBytes = .ok q.base.draw
 
@@ -127,8 +161,8 @@ def Names (p : VStar.Recursive.Params) (e : VStar.Recursive.Evidence) (bs : Core
     ∀ j q po pp, w.parts[j]? = some q → p.own.parts[j]? = some po → e.proofs.parts[j]? = some pp →
       PartNames po pp bs j q
 
-/-- **Flock's own checks on the inner statement** (`RecDeploy.innerOk`: Flock's plain setup with the draw, partition
-and program, its scope check, a draw, the header's draw at one table), which `Names` reads. The compiled `innerHeld`
+/-- **Flock's own checks on the inner statement** (`RecDeploy.innerOk`: Flock's plain setup with the sample, partition
+and program, its scope check, a sample, the header's sample at one table), which `Names` reads. The compiled `innerHeld`
 runs them as `VStar.Recursive.innerOk`, at `--stratified` the population the verifier's partition and program give
 (`InnerNames.stratified`), so its acceptance gives it (`RefusalsOf.innerOkAt_of_compiled`). -/
 def InnerOkAt (x : Msg) : Prop := ∀ w, decodeX x = some w → innerOk w.inner = .ok ()

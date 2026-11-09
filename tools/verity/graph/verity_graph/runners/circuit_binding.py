@@ -6,11 +6,12 @@ check read is unchanged (`circuit_check.cache`), so the cache is the machine's, 
 directory's: a rerun checks only the targets whose reads changed.  circuit-check keys its records and results by the
 ``VERITY_*`` and ``CIRCUIT_CHECK_*`` environment, which this passes on as it is.
 
-A pass is circuit-check's exit 0; a fail its exit 1 (a target's new failure), its refusal of a name no catalog binding has
+A pass is circuit-check's exit 0; a fail its exit 1 (a target's failure), its refusal of a name no catalog binding has
 (`NO_BINDING`) or the catalog task's marker that it made no slice of that name (`absent`); anything else is an error: another
 refusal (a slice not of this tree), a kill, no report.  `detail`: the binding's targets, how many passed, failed and were
-reused, and the new failures' names.  Its one output is every failure of its Definition targets, each by its check, code and
-Definition (`FIELDS`).  `checker`, `pack` and `unpack` are the circuit-catalog and circuit-coverage runners' too."""
+reused, and the failures' names, as the report's summary names them (``failure_names``, `circuit_check.checks.summarize`'s).
+Its one output is every failure of its Definition targets, each by its check, code and Definition (`FIELDS`).  `checker`,
+`pack` and `unpack` are the circuit-catalog and circuit-coverage runners' too."""
 from __future__ import annotations
 
 import gzip
@@ -31,7 +32,7 @@ NO_BINDING = "the catalog has no binding of that name"
 REPORT = "report.json"
 #: the tarball's directory of records, as check's records step tars it (`check.py`'s `cc_records`)
 TOP = "cache"
-#: the new failures `detail` names, at most
+#: the failures `detail` names, at most
 NAMED = 100
 #: what the ``failures`` output keeps of a failure
 FIELDS = ("check", "code", "definition")
@@ -44,14 +45,14 @@ def cache() -> Path:
     return Path.home() / ".cache" / "verity-check" / "circuit-check"
 
 
-def checker(task: dict, work: Path, *args: str) -> tuple[int, dict | None]:
-    """`circuit-check ARGS` from the root on the task's cores and memory, its report in the work directory: (its exit, the
-    report, None when it wrote none)."""
+def checker(task: dict, work: Path, *args: str, env: dict[str, str] | None = None) -> tuple[int, dict | None]:
+    """`circuit-check ARGS` from the root on the task's cores and memory in ``env`` (this process's when None), its report in
+    the work directory: (its exit, the report, None when it wrote none)."""
     out = work / REPORT
     out.unlink(missing_ok=True)
     r = task["resources"]
     rc = call([sys.executable, "-m", "circuit_check", *args, "-q", "--jobs", str(max(1, int(r["cores"]))),
-               "--mem-gb", str(max(1, int(r["mem_gb"]))), "--out", str(out)], work, ROOT)
+               "--mem-gb", str(max(1, int(r["mem_gb"]))), "--out", str(out)], work, ROOT, env)
     try:
         return rc, json.loads(out.read_text())
     except (OSError, ValueError):
@@ -126,10 +127,10 @@ def run(task: dict, work: Path) -> dict:
     out = work / task["outputs"][0]["path"]
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps({"binding": name, "failures": [dict(zip(FIELDS, f)) for f in facts]}, sort_keys=True) + "\n")
-    new = set(rep["summary"]["new_failures"])
-    failed = sorted({t["target"] for t in rep["targets"] if any(f.get("name") in new for f in t.get("failures", []))})
+    named = set(rep["summary"]["failure_names"])
+    failed = sorted({t["target"] for t in rep["targets"] if any(f.get("name") in named for f in t.get("failures", []))})
     detail = {"targets": len(rep["targets"]), "passed": len(rep["targets"]) - len(failed), "failed": len(failed),
               "reused": (rep.get("cache") or {}).get("hits", 0)}
-    if new:
-        detail["failures"] = sorted(new)[:NAMED]
+    if named:
+        detail["failures"] = sorted(named)[:NAMED]
     return {"status": "fail" if rc else "pass", "detail": detail}

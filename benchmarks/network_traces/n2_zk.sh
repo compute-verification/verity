@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # N2's verdict of record from zero-knowledge proofs of its registered proof block (n2_zk.py) on a CPU machine, on
-# hidden_zk's builds (its job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean
+# hidden_zk's builds (its job.sh, sourced: Flock's flock-circuit and the Lean flock-verify) with the ZK server's Lean
 # frame, N2's network-records and the sampled-proofs verifier built in the tree. From a clone, as a job of 96 GB whose
 # input is the runs' tarball n2-runs.tar.gz:
 #   env N2_MEM_GB=96 N2_RUNS=n2-runs.tar.gz bash benchmarks/network_traces/n2_zk.sh
@@ -21,7 +21,7 @@ source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
 export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
-(cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/core/service/spot && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 (cd verity/core/protocols/network/lean && lake build network-records) > "$OUT/build-network-records.log" 2>&1 \
   || { tail -40 "$OUT/build-network-records.log"; exit 7; }

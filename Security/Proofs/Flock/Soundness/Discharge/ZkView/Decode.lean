@@ -2,6 +2,24 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkView.Statements
 public import Proofs.Flock.Soundness.Refine.Frames
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import VCVio.Prelude.Core
 
 /-!
 # `Zk.decode` inverts `encZk`
@@ -123,8 +141,7 @@ theorem Reads.u64 (x : UInt64) : Reads Reader.u64 (le64 x) x := by
 
 theorem le32_data (x : UInt32) :
     (le32 x).data.toList = (List.range 4).map fun i => (x >>> (8 * i).toUInt32).toUInt8 := by
-  simp [le32, List.range', ByteArray.push, List.range_succ]
-  rfl
+  simp [le32, List.range', ByteArray.push, List.range_succ] <;> rfl
 
 theorem le32_size (x : UInt32) : (le32 x).size = 4 := by
   rw [← ByteArray.size_data, ← Array.length_toList, le32_data]

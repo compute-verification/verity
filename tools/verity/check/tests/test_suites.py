@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import re
 import shutil
@@ -160,6 +161,59 @@ def test_suites_refuse_a_python_that_imports_the_trees_packages_from_elsewhere(t
     assert S.main(["--list"]) == 0 and len(probed) == 1
 
 
+def test_a_fresh_trees_own_environment_installs_the_workspace_once_and_runs_again(tmp_path, monkeypatch, capsys):
+    """`uv run tools/verity/check/suites.py` on a freshly shipped tree installs only the runner's dependencies; the runner syncs the
+    workspace and runs again in place of refusing, once, and an environment it can't fill is still refused."""
+    (tmp_path / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg"]\n')
+    (tmp_path / "pkg" / "tests").mkdir(parents=True)
+    (tmp_path / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S, "foreign", lambda pkgs, env: "verity from nowhere (not importable)")
+    monkeypatch.setattr(S, "fresh", lambda env: True)
+    resynced = []
+    monkeypatch.setattr(S, "resync", resynced.append)
+    monkeypatch.setattr(sys, "argv", ["tools/verity/check/suites.py", "--fresh", "pkg"])
+    assert S.main() == 2 and resynced == [["tools/verity/check/suites.py", "--fresh", "pkg"]]
+    monkeypatch.setattr(sys, "argv", ["tools/verity/check/suites.py", "--synced", "--fresh", "pkg"])
+    assert S.main() == 2 and len(resynced) == 1
+    assert f"`{' '.join(S.SYNC)} && uv run tools/verity/check/suites.py` there" in capsys.readouterr().err
+    assert S.main(["--fresh", "pkg"]) == 2 and len(resynced) == 1
+
+
+def test_resync_installs_the_workspace_and_runs_the_command_again_marked_synced(tmp_path, monkeypatch):
+    S = _suites(monkeypatch, tmp_path)
+    synced, ran = [], []
+    monkeypatch.setattr(S.subprocess, "run", lambda cmd, cwd: synced.append((cmd, cwd)) or subprocess.CompletedProcess(cmd, 0))
+    monkeypatch.setattr(S.os, "execv", lambda exe, args: ran.append((exe, args)))
+    S.resync(["tools/verity/check/suites.py", "--fresh", "pkg"])
+    assert synced == [(S.SYNC, tmp_path)]
+    assert ran == [(sys.executable, [sys.executable, "tools/verity/check/suites.py", "--synced", "--fresh", "pkg"])]
+    monkeypatch.setattr(S.subprocess, "run", lambda cmd, cwd: subprocess.CompletedProcess(cmd, 1))
+    S.resync(["tools/verity/check/suites.py"])
+    assert len(ran) == 1
+
+
+def test_only_the_trees_own_environment_without_the_workspace_or_torch_is_fresh(tmp_path, monkeypatch):
+    """Probed as `foreign` probes, under the tests' PYTHONPATH: a launcher's shim of the root package doesn't make a fresh tree's
+    environment look installed (r20261109-053655-afb9: research's pyshim held a `verity`)."""
+    (tmp_path / "pyproject.toml").write_text('[tool.hatch.build.targets.wheel]\npackages = ["src/rootpkg"]\n')
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S.shutil, "which", lambda name: "/usr/bin/uv")
+    origins, probed = {"rootpkg": None, "torch": None}, []
+
+    def run(cmd, env, capture_output, text):
+        probed.append((cmd[4:], env))
+        return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(origins) + "\n")
+
+    monkeypatch.setattr(S.subprocess, "run", run)
+    assert not S.fresh({}) and probed == []
+    monkeypatch.setattr(sys, "prefix", str(tmp_path / ".venv"))
+    assert S.fresh({"PYTHONPATH": "x"}) and probed == [(["rootpkg", "torch"], {"PYTHONPATH": "x"})]
+    origins["torch"] = "/venv/lib/python3.12/site-packages/torch/__init__.py"
+    assert not S.fresh({})
+
+
 def test_a_declared_build_output_keys_the_suite(tmp_path, monkeypatch):
     """Git ignores build outputs, so a suite whose tests run or skip on one declares it (`[tool.verity.tests] artifacts`), and
     its pass is reused only for the same build."""
@@ -229,7 +283,8 @@ def test_jobs_default_to_no_more_test_processes_than_available_memory_holds(tmp_
 
 
 def test_jobs_default_to_no_more_test_processes_than_the_runs_own_memory_limit_holds(tmp_path, monkeypatch):
-    """r20261019-045749-398f: an `--on auto` agent-test's 16 GiB scope on a node with 1.5 TB available started 32 processes."""
+    """The run's own memory limit, not the node's available memory, bounds the default jobs: an `--on auto` agent-test's
+    16 GiB scope on a node with 1.5 TB available would otherwise start 32 processes."""
     S = _suites(monkeypatch, tmp_path)
     monkeypatch.setattr(S, "cpus", lambda: 32)
     meminfo = tmp_path / "meminfo"
@@ -462,9 +517,10 @@ def test_changed_origin_main_in_a_shipped_tree_without_it_fetches_it_or_names_th
     clone` the shipped tree, whose origin/main is a remote-tracking ref), takes a SHA as given, and otherwise names the fix."""
     bare, tree, main, head = _shipped(tmp_path)
     S = _suites(monkeypatch, tree)
-    with pytest.raises(S.Unresolved, match=r"nor could it be fetched from origin .*--changed \$\(git rev-parse origin/main\)"):
+    with pytest.raises(S.Unresolved, match=r"nor could it be fetched from origin .*--changed \$\(git fetch -q origin main && "
+                                           r"git merge-base HEAD FETCH_HEAD\)"):
         S.changed_base("origin/main")
-    assert S.main(["--list", "--changed", "origin/main"]) == 2 and "Pass main's SHA" in capsys.readouterr().err
+    assert S.main(["--list", "--changed", "origin/main"]) == 2 and "a fetched main" in capsys.readouterr().err
     assert S.changed_base(main) == S.changed_base(main[:12]) == main
     assert S.main(["--list", "--changed", main]) == 0
     assert f"the change from {main[:12]} touches 1: a" in capsys.readouterr().out
@@ -484,6 +540,50 @@ def test_changed_origin_main_in_a_shipped_tree_without_it_fetches_it_or_names_th
     with pytest.raises(S.Unresolved, match=r"has no commit origin/main \(a tree"):
         S.changed_base("origin/main")
     assert S.changed_base(main) == main
+
+
+def test_the_changed_refusals_advice_run_in_a_stale_checkout_gets_past_it(tmp_path, monkeypatch, capsys):
+    """The refusal's own advice, run as it says (in the lane's checkout, whose origin/main is as old as its snapshot), names a
+    base the shipped tree holds, and the change from it is the branch's alone; that checkout's `git rev-parse origin/main`
+    names an older main, whose diff takes in main's progress since."""
+    github, work = tmp_path / "github.git", tmp_path / "work"
+    _git(tmp_path, "init", "-q", "--bare", str(github))
+    work.mkdir()
+    _workspace(work)
+
+    def commit(path: str, body: str, msg: str) -> str:
+        (work / path).write_text(body)
+        _git(work, "add", "-A")
+        _git(work, "commit", "-q", "-m", msg)
+        return _git(work, "rev-parse", "HEAD")
+
+    _git(work, "add", "-A")
+    _git(work, "commit", "-q", "-m", "main")
+    _git(work, "push", "-q", str(github), "HEAD:refs/heads/main")
+    lane = tmp_path / "lane"
+    _git(tmp_path, "clone", "-q", str(github), str(lane))                         # the snapshot: origin/main as of then
+    fork = commit("b/tests/test_b.py", "def test_b():\n    assert 1\n", "main moves b")
+    head = commit("a/tests/test_a.py", "def test_a():\n    assert 1\n", "the branch moves a")
+    _git(work, "push", "-q", str(github), f"{fork}:refs/heads/main", f"{head}:refs/heads/topic")
+    _git(lane, "fetch", "-q", "origin", "topic:topic")
+    _git(lane, "-c", "advice.detachedHead=false", "checkout", "-q", "topic")
+
+    bare = tmp_path / "verity.git"                                                # the machine's repository, as `_shipped`
+    _git(tmp_path, "init", "-q", "--bare", str(bare))
+    _git(work, "push", "-q", str(bare), f"{head}:refs/research/ship")
+    tree = tmp_path / "src" / head
+    _git(tmp_path, "clone", "-q", "--shared", "--no-checkout", str(bare), str(tree))
+    _git(tree, "-c", "advice.detachedHead=false", "checkout", "-q", "--detach", head)
+    S = _suites(monkeypatch, tree)
+    with pytest.raises(S.Unresolved) as refused:
+        S.changed_base("origin/main")
+    advice = re.search(r"`--changed (\$\(.+?\))`", str(refused.value))[1]
+    stale = _git(lane, "rev-parse", "origin/main")
+    base = subprocess.run(["bash", "-c", f"echo {advice}"], cwd=lane, capture_output=True, text=True, check=True).stdout.strip()
+    assert base == fork != stale
+    assert S.main(["--list", "--changed", base]) == 0 and "touches 1: a" in capsys.readouterr().out
+    assert S.main(["--list", "--changed", stale]) == 0
+    assert "touches 2: a, b" in capsys.readouterr().out, "the stale base takes in main's own change to b"
 
 
 def test_markdown_rekeys_and_selects_only_the_suites_that_list_markdown(tmp_path, monkeypatch):
@@ -851,9 +951,9 @@ def _env_workspace(root: Path, members: dict[str, str]) -> None:
 
 
 def test_the_tests_get_neither_the_runners_research_variables_nor_its_pycache_prefix(tmp_path):
-    """Inside a `research run`, the run's RESEARCH_* and the machine's PYTHONPYCACHEPREFIX reached the tests, which check's steps
-    never get: test_remote_cwd's inner run inherited the prefix and wrote no bytecode where it looked (r20261008-010104-2b69,
-    passing with the prefix unset in r20261008-010441-bb7b). A VERITY_ switch still reaches them."""
+    """Inside a `research run`, the tests get neither the run's RESEARCH_* nor the machine's PYTHONPYCACHEPREFIX, which check's
+    steps never get either: an inner run that inherits the prefix writes no bytecode where test_remote_cwd looks for it. A
+    VERITY_ switch still reaches them."""
     root = tmp_path / "tree"
     _env_workspace(root, {"pkg": "import os\n\ndef test_env():\n    assert os.environ.get('VERITY_SWITCH') == '1'\n"
                                  "    assert not [k for k in os.environ if k.startswith('RESEARCH_') or k == 'PYTHONPYCACHEPREFIX']\n"})
@@ -863,9 +963,9 @@ def test_the_tests_get_neither_the_runners_research_variables_nor_its_pycache_pr
 
 
 def test_inside_a_research_run_the_tests_get_its_custody_key_and_require_the_store(tmp_path):
-    """The tests lose RESEARCH_*, the machine's store among them, so a fixture fetch skipped as "the evidence store is not
-    reachable" here and passed under a bare pytest (r20261024-030225-1ea6). With the run's custody key staged they get it as
-    check's steps do, and the store is required; with none, neither."""
+    """The tests lose RESEARCH_*, the machine's store among them, so a fixture fetch would skip as "the evidence store is not
+    reachable" here and pass under a bare pytest. With the run's custody key staged they get it as check's steps do, and the
+    store is required; with none, neither."""
     root = tmp_path / "tree"
     run = tmp_path / "research" / "runs" / "r1"
     custody = tmp_path / "research" / "requests" / "r1" / "custody"
@@ -881,6 +981,44 @@ def test_inside_a_research_run_the_tests_get_its_custody_key_and_require_the_sto
     (custody / "store.toml").write_text("[remote]\n")
     (custody / "cred.json").write_text("{}")
     p = _run_suite(root, tmp_path, "--fresh", extra={**extra, "WANT_C": str(custody.resolve()), "WANT_R": "1"})
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+
+
+def test_inside_a_research_run_the_fixture_fetch_gets_its_custody_key_and_fetches_a_fixture_only_the_store_has(tmp_path):
+    """A run carries no store config, so the runner's own fetch read the public export alone, and a fixture registered since it
+    was made failed its suite before any test, though the tests reach the store with the run's custody key.  The fetch gets
+    that key too, and the fixture comes from the store."""
+    import json
+
+    from research.store import fixtures as F
+    from research.store.local import LocalStore, manifest_key, object_key
+    from research.store.remote import FsRemote
+
+    origin, remote = LocalStore(tmp_path / "origin"), FsRemote(tmp_path / "remote")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "big.proof").write_bytes(b"in the store alone\n")
+    art = origin.put_artifact(F.FIXTURE_KIND, {}, None, file=tmp_path / "src" / "big.proof")
+    for h, _ in origin.get_manifest(art).blobs():
+        remote.put(object_key(h), origin.object_path(h))
+    remote.put(manifest_key(art.split(":", 1)[1]), origin.manifest_path(art.split(":", 1)[1]))
+    root = tmp_path / "tree"
+    _env_workspace(root, {"pkg": "from pathlib import Path\n\ndef test_reads_it():\n    assert (Path(__file__).parent / 'fixtures' / "
+                                 "'big.proof').read_bytes() == b'in the store alone\\n'\n"})
+    (root / "fixtures").mkdir()
+    (root / "fixtures" / "artifacts.json").write_text(json.dumps({art: "pkg/tests/fixtures/big.proof"}))
+    (root / ".gitignore").write_text("pkg/tests/fixtures/big.proof\n")                  # as the root's lists each fetched entry
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "registered")
+    run, custody = tmp_path / "research" / "runs" / "r1", tmp_path / "research" / "requests" / "r1" / "custody"
+    run.mkdir(parents=True)
+    custody.mkdir(parents=True)
+    extra = {"RESEARCH_RUN_ID": "r1", "RESEARCH_RUN_DIR": str(run), "RESEARCH_STORE_CONFIG": "", "RESEARCH_PUBLIC_URL": "",
+             "HOME": str(tmp_path / "home")}
+    p = _run_suite(root, tmp_path, "--fresh", extra=extra)
+    assert p.returncode == 1 and "its fixtures could not be fetched: pkg/tests/fixtures/big.proof" in p.stdout, p.stdout + p.stderr
+    (custody / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "remote"}"\n')
+    (custody / "cred.json").write_text("{}")
+    p = _run_suite(root, tmp_path, "--fresh", extra=extra)
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
 
 
@@ -1757,8 +1895,9 @@ def test_a_parallel_suite_starts_the_test_its_kept_pass_says_is_longest(tmp_path
 
 
 def test_a_run_of_some_files_starts_the_longest_test_it_collects(tmp_path):
-    """The guard got the suite's `workers` longest kept tests, and a run of some of its files collected none of them: a sixth of
-    verity-vllm's files (r20261025-202541-cb5f) ran its own longest two back to back on one worker while three sat idle."""
+    """The guard gets more of the suite's longest kept tests than its `workers` (`HEAVY_CANDIDATES`), so a run of some of its
+    files that collects none of the `workers` longest still starts its own longest at the workers' heads, rather than two
+    back to back on one worker while the others sit idle."""
     import json
 
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
@@ -1812,7 +1951,7 @@ def test_a_parallel_suite_that_declares_worker_gb_runs_as_many_workers_as_mem_gb
     assert S.wide_workers(heavy, 69, 350) == 21 and S.wide_workers(heavy, 8, 350) == 8 and S.wide_workers(heavy, 69, 10) == 1
     assert S.wide_workers(heavy, 69, None) == 69, "no --mem-gb: the lane's processes"
     assert S.wide_workers(S.Suite("light", "l", (), (), parallel=True), 69, 350) == 350 // S.TEST_PROCESS_GB, \
-        "no worker_gb: TEST_PROCESS_GB each (r20261016-140947-47fc: pous_check's undeclared workers reached 11 GB)"
+        "no worker_gb: TEST_PROCESS_GB each (pous_check's undeclared workers can reach 11 GB)"
 
 
 def test_parallel_suites_share_what_mem_gb_leaves_beside_the_one_process_suites(tmp_path, monkeypatch):
@@ -1968,7 +2107,7 @@ def test_a_failure_red_on_main_is_reported_failed_and_says_whether_it_failed_for
 
 def test_a_report_a_dying_pytest_left_empty_or_cut_short_is_no_report(monkeypatch, tmp_path):
     """A suite whose pytest dies in its session finish leaves its report empty or half-written; reading it must not raise,
-    which took the invocation's other suites down before they reported (r20261027-114144-e99b)."""
+    which would take the invocation's other suites down before they report."""
     S = _suites(monkeypatch, tmp_path)
     report = tmp_path / "report.json"
     assert S.read_report(report) is None

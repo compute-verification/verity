@@ -1,35 +1,72 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Json.Decode
 public import Proofs.Flock.Claims.Recursion.SameJAt
-public import Proofs.Flock.Claims.Recursion.VerdictFramed
-public import Proofs.Flock.Claims.Recursion.VerdictFramedJson
-public import Proofs.Flock.Claims.Recursion.VerdictPublics
-public import Proofs.Flock.Claims.Recursion.VerdictRowG
 public import Proofs.Flock.Claims.Recursion.VerdictParts
-public import Proofs.Flock.Claims.Recursion.InnerForm
-public import Proofs.Flock.Claims.Recursion.SchedDense
-public import Proofs.Flock.Claims.Recursion.SchedCount
-public import Proofs.Flock.Claims.Complete.Json.Stmt
-public import Proofs.Flock.Recursive.HoloRepCoins
-public import Proofs.Flock.C3.Compose.HoloStreamSizes
-public import Proofs.Flock.VBridge.Family.Lig
-public import Proofs.Flock.VBridge.Family.Encode
-import all Lean.Data.Json.Basic
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
+import all Lean.Data.Json.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.C3.Compose.HoloStreamSizes
+import Proofs.Flock.Claims.Complete.Json.Stmt
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Recursion.InnerForm
+import Proofs.Flock.Claims.Recursion.SchedCount
+import Proofs.Flock.Claims.Recursion.SchedDense
+import Proofs.Flock.Claims.Recursion.VerdictFramed
+import Proofs.Flock.Claims.Recursion.VerdictFramedJson
+import Proofs.Flock.Claims.Recursion.VerdictRowG
+import Proofs.Flock.Recursive.HoloRepCoins
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.VBridge.Family.Lig
 
 /-!
 # The record the verdict reads decodes, at a decision of `nextR`
 
 At a dense inner statement where the last step reads and the base checks hold, the record value the verdict reads
 (`jAt`) decodes at the setup SHA-512 gives (`decode_at`, `TargetDecode` with `At` unfolded), with no JSON
-premise: the verifier keeps the public header and the draw normalized, so both are well-formed (`unitDraw_of`,
-`draw_wf`), and the statement's coin tree is its coins' (`setupOne_stmt`), none at `.os` or `.seed` (`tree?_none`). `jAt` is the reader's record (`recJ`) with its digests and coins
+premise: the verifier keeps the public header and the sample normalized, so both are well-formed (`unitDraw_of`,
+`draw_wf`), and the statement's coin tree is its coins' (`setupOne_stmt`), none at `.seed` (`tree?_none`). `jAt` is the reader's record (`recJ`) with its digests and coins
 substituted, so it is alike the honest record whose rounds hold the fill's coins (`same_coinSubJ`, with the fill finding
 a coin wherever `liveOf` reads, `fill_of_live`), and an honest record of a one-table statement decodes
 (`decodeJ_same`). What `decodeJ_same` asks:
 
-* **The statement** (`dense_stmt`): one table, no coin tree, a non-empty Σ, a printable draw that decodes to the
+* **The statement** (`dense_stmt`): one table, no coin tree, a non-empty Σ, a printable sample that decodes to the
   statement's instances, two link points, at most 1024 regions, and a `fast100` schedule.
 * **The link's `root_B`** is round 0's level-0 nodes joined, which the first proof's cap is, so it is non-empty (the
   `shaped` base check).
@@ -71,8 +108,8 @@ theorem foldl_append_pos {l : List ByteArray} {b : ByteArray} (hb : b ∈ l) (h 
 
 /-! ## The statement -/
 
-/-- **The inner statement is drawn**: the plain verifier sets an inner statement the reader accepts up at a draw
-(`checkForm_ok`: a draw of every one of the files' units). -/
+/-- **The inner statement is sampled**: the plain verifier sets an inner statement the reader accepts up at a sample
+(`checkForm_ok`: a sample of every one of the files' units). -/
 theorem inner_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.accepts (readOf r) = true)
     {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : FlockDeploy.setupOf false r.w.inner = some (s, spec, sts)) : s.read.draw.isSome = true := by
@@ -89,9 +126,8 @@ theorem inner_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.ac
       some (innerFormOf r.innerRaw), r.innerRaw.program⟩) := by rw [filesOf, hp]; rfl
   rw [hfs] at hsh
   obtain ⟨spec', st', hstm, -, -, -, -, hform⟩ := checkShape_files hsh
-  obtain ⟨hs1, hs2, -, b, d, D, hb, hjd, -, -⟩ := checkForm_ok hform
+  obtain ⟨hs1, -, b, d, D, hb, hjd, -, -⟩ := checkForm_ok hform
   have hs1 : r.innerRaw.statement = Tags.circuitPlainLeaves.name := hs1
-  have hs2 : r.innerRaw.osCoins = true := hs2
   have hb : r.innerRaw.draw = some b := hb
   obtain ⟨hdec, -, -⟩ := readX_inner hr
   obtain ⟨hins, -⟩ := FlockDeploy.setupOf_some hset
@@ -104,14 +140,14 @@ theorem inner_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.ac
     · cases hw
     change r.innerRaw.ins.toOption = some s at hw
     exact ⟨not_not.1 hz, toOption_eq_some hw⟩
-  obtain ⟨-, -, -, -, -, -, -, -, ⟨dr, hm, hd9⟩, -⟩ := ins_plainLeaves hw.2 hw.1 hs1 hs2
+  obtain ⟨-, -, -, -, -, -, -, -, ⟨dr, hm, hd9⟩, -⟩ := ins_plainLeaves hw.2 hw.1 hs1
   rw [hb] at hm
   simp only [Option.mapM_some, hjd, Functor.map, Except.map, Except.ok.injEq] at hm
   rw [hd9, ← hm]
   rfl
 
 /-- **What the record needs of a dense inner statement**: the plain verifier sets it up as one table, with no coin
-tree, a non-empty Σ, a printable draw that decodes to its instances, two link points, at most 1024 regions and a
+tree, a non-empty Σ, a printable sample that decodes to its instances, two link points, at most 1024 regions and a
 `fast100` schedule. -/
 theorem dense_stmt {xo : Msg} {sto : Claims.Recursion.CompiledStatement}
     (hst : parse xo = some sto) (hf : Claims.Recursion.Form.Dense sto.form) {s : FlockDeploy.Ins}

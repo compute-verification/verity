@@ -1,10 +1,41 @@
 module
 
-public import Mathlib
+public import Definitions.Pous.Model.StreamedWipe
 public import Definitions.Accounting.Actual.Sampler
 public import Definitions.Accounting.TS.Drawn
 public import Definitions.Hash.RowLeaf
-public import Definitions.Pous.Model.StreamedWipe
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The remote audit's opening draw (trusted)
@@ -13,7 +44,7 @@ The draw `audit.pooled` reads, as the verifier runs it. A session has `n` window
 `U_t ≤ m` receipts and their roots, which fix which of them are correct unless an opening collides (`Receipts`). Then
 the challenger releases window `t`'s
 openings coin, live, to the verifier and the prover, and the verifier opens `s'_t = min(s_t, U_t)` distinct receipts of
-the `U_t` (`RemoteAudit.draws`, `Session.close`): `Key.subset(s'_t, U_t, "openings")` under the key
+the `U_t` (`RemoteAudit.receiptSample`, `Session.close`): `Key.subset(s'_t, U_t, "openings")` under the key
 `derive(coin_t, OPENINGS_DOMAIN, {registration, window: t})` (`verity/ml/randomness`), a partial Fisher–Yates whose step
 `i` swaps position `i` with position `i + Key.uniform(U_t − i)`, read from the keyed SHA-512 stream at
 `("s", "openings", i)`. `Key.uniform(N)` is exact rejection sampling: it reads `w`-bit big-endian words,
@@ -39,8 +70,8 @@ the `U_t` (`RemoteAudit.draws`, `Session.close`): `Key.subset(s'_t, U_t, "openin
   blocks, `(g_t/U_t)^(s'_t)` with `g_t` its correct receipts, `0` when `g_t < s'_t`.
 * `Committed`: **a session read through a coin commitment.** The challenger commits every coin before the first is
   released, as hm96-sha512 leaves (192-byte salts) in a frame-v3-sha512 tree (`coins.py`). It sends the prover each
-  coin as it releases it and the root only after the prover's last root, with the outcome (`audit.Session.disclose`;
-  soundness's ruling of 27 Oct, no hiding premise on the root), so the session the prover plays is a `Session` and the
+  coin as it releases it and the root only after the prover's last root, with the outcome (`audit.Session.disclose`,
+  which needs no hiding premise on the root), so the session the prover plays is a `Session` and the
   guarantees take it plainly. A root is a function of every coin, so a prover holding it from the start could size a
   window off window `t`'s openings coin, and that session is not `Live` (red team RD-12). `view c` is the session
   played holding commitment `c`; `play com` holds `com ω` at coins `ω` (the salts among the other coins `x`).
@@ -81,7 +112,7 @@ the `U_t` (`RemoteAudit.draws`, `Session.close`): `Key.subset(s'_t, U_t, "openin
   opening, of row `v`, at the receipt's root and rank as that run has them. `held D prf rest t ω p` is **the row the
   root holds for it**, a definition, not the prover's: the plurality of the rows `p` shows over window `t`'s
   continuations of `ω` (`Accounting.TS.plural` at `cont t`, ties broken by `Classical.epsilon`), as
-  `Accounting.TS.DrawnLayer.committed` is a position's. It reads only `ω`'s cut, and no row is shown on more of the
+  `Accounting.TS.SampledLayer.committed` is a position's. It reads only `ω`'s cut, and no row is shown on more of the
   cut's continuations (`Accounting.SecurityProofs.Remote.Binding.held_cont`, `tally_le_held`). A root alone fixes no
   row: the prover may present another one. `Moved D prf rest t ω p` is the verifier accepting the presented opening at
   the receipt's root and rank with a row other than the held one. `binding D prf rest` is **the receipts' binding
@@ -150,7 +181,7 @@ def below (δ P : ℝ) (u : Pous.Bits 512) : Prop := P ≤ δ ∨ Pous.bitsVal u
 /-- A session's coins: the other coins and window `t`'s openings coin. -/
 abbrev Coins (n κ : ℕ) (X : Type) : Type := X × (Fin n → Pous.Bits κ)
 
-/-- A session of `n` windows of at most `m` receipts, window `t` drawing `min(s_t, U_t)` of its `U_t`. -/
+/-- A session of `n` windows of at most `m` receipts, window `t` sampling `min(s_t, U_t)` of its `U_t`. -/
 structure Session (n m : ℕ) (s : Fin n → ℕ) (κ : ℕ) (X : Type) where
   /-- Window `t`'s receipt count `U_t`. -/
   size : Fin n → Coins n κ X → Fin (m + 1)
@@ -160,7 +191,7 @@ structure Session (n m : ℕ) (s : Fin n → ℕ) (κ : ℕ) (X : Type) where
 /-- `audit.pooled`'s budget: `S·(1 − δ^(1/S))` (`-expm1(log δ / S)·S`). -/
 noncomputable def budget (S : ℕ) (δ : ℝ) : ℝ := S * (1 - δ ^ ((S : ℝ)⁻¹))
 
-/-- The pooled bound of windows of sizes `U` drawing `d`: the most `Σ_t f_t·U_t` over the shares `f` with
+/-- The pooled bound of windows of sizes `U` sampling `d`: the most `Σ_t f_t·U_t` over the shares `f` with
 `0 ≤ f_t ≤ 1 − d_t/U_t` and `Σ_t d_t·f_t ≤ budget (Σ_t d_t) δ`. -/
 noncomputable def pooled (n : ℕ) (U d : Fin n → ℕ) (δ : ℝ) : ℝ :=
   sSup ((fun f : Fin n → ℝ => ∑ t, f t * U t) ''
@@ -171,13 +202,13 @@ namespace Session
 variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Session n m s κ X)
 
 /-- Window `t`'s draw count, `min(s_t, U_t)`. -/
-def draws (t : Fin n) (ω : Coins n κ X) : ℕ := min (s t) (D.size t ω)
+def samples (t : Fin n) (ω : Coins n κ X) : ℕ := min (s t) (D.size t ω)
 
 /-- The receipts window `t` opens at coins `ω`: its draw on the first blocks `prf t` gives its coin, with the fallbacks
 `rest ω t` where the sampler rejects a first word. -/
 def opened (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) (t : Fin n)
     (ω : Coins n κ X) : Finset ℕ :=
-  openings (D.size t ω) (D.draws t ω) (prf t (ω.2 t)) (rest ω t)
+  openings (D.size t ω) (D.samples t ω) (prf t (ω.2 t)) (rest ω t)
 
 /-- Window `t`'s correct receipts among its `U_t`. -/
 def good (t : Fin n) (ω : Coins n κ X) : ℕ :=
@@ -185,12 +216,12 @@ def good (t : Fin n) (ω : Coins n κ X) : ℕ :=
 
 /-- Window `t`'s bound on uniform first blocks: `(g_t/U_t)^(s'_t)`, `0` when `g_t < s'_t`. -/
 noncomputable def bound (t : Fin n) (ω : Coins n κ X) : ℝ :=
-  if D.draws t ω ≤ D.good t ω then ((D.good t ω : ℝ) / (D.size t ω : ℕ)) ^ D.draws t ω else 0
+  if D.samples t ω ≤ D.good t ω then ((D.good t ω : ℝ) / (D.size t ω : ℕ)) ^ D.samples t ω else 0
 
 /-- Window `t`'s test at outcome `ω` on first blocks `b`: its draw of `s'_t` of its `U_t` lands in its correct
 receipts. -/
 def lands (t : Fin n) (ω : Coins n κ X) (b : Blocks m) : Prop :=
-  test (D.size t ω) (D.draws t ω) (D.correct t ω) b
+  test (D.size t ω) (D.samples t ω) (D.correct t ω) b
 
 /-- **Window `t`'s distinguisher** on coins `y.1 = (ω, u)` and first blocks `y.2`: windows `j < t` land on `prf j` at
 their coins in `ω`, window `t` lands on `y.2`, and the threshold coin `u` falls below `∏_{j ≤ t} bound j`. -/
@@ -206,11 +237,11 @@ def potential (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : ℕ) (
     below δ (∏ j ∈ univ.filter (fun j : Fin n => (j : ℕ) < t), D.bound j z.1) z.2
 
 /-- The session's wrong receipts, `Σ_t (U_t − good_t)`. -/
-def wrong (ω : Coins n κ X) : ℕ := ∑ t, ((D.size t ω : ℕ) - D.good t ω)
+def incorrect (ω : Coins n κ X) : ℕ := ∑ t, ((D.size t ω : ℕ) - D.good t ω)
 
 /-- The session's pooled bound at `δ`, at the sizes and draw counts of outcome `ω`. -/
 noncomputable def pooled (δ : ℝ) (ω : Coins n κ X) : ℝ :=
-  Draw.pooled n (fun t => D.size t ω) (fun t => D.draws t ω) δ
+  Draw.pooled n (fun t => D.size t ω) (fun t => D.samples t ω) δ
 
 end Session
 

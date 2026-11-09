@@ -1,32 +1,48 @@
 module
 
-public import Proofs.Flock.Recursive.Sound
-public import Proofs.Flock.Recursive.Multi
-public import Proofs.Flock.Soundness.Discharge.ZkReg.Sound
-public import Proofs.Flock.Recursive.ZkReg.Vals
-public import Proofs.Flock.Recursive.ZkReg.Off
 public import Proofs.Flock.Recursive.Finds
-public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
+public import Proofs.Flock.Recursive.Sound
+public import Proofs.Flock.Soundness.Discharge.Composed.Sound
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+public import Proofs.Flock.Recursive.ZkReg.Off
 public import Proofs.Flock.Soundness.Assumptions.CustodyZk
+public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Recursion: the outer proof, `--zk --registered` sessions of fixed public verifiers V*
 
-The outer proof at a history `(R, ω, t)` (the registration, the draw of the hidden circuit's units, the rounds'
+The outer proof at a history `(R, ω, t)` (the registration, the sample of the hidden circuit's units, the rounds'
 commitments and coins) is `S` sessions in a row, session `j` one `flock-verify verify --zk --registered F` session of
-the public circuit `(Vs j).c` under its law `(Vs j).law` (`VStmt`), with hidden outputs and `(Vs j).J` tables, and with
-inputs `zs R ω t j` (`ZkOuter`: public file, registered reads, the coin server's record). The audit accepts when every
+the public circuit `(Vs j).c` under its sampling design `(Vs j).law` (`VStmt`), with hidden outputs and `(Vs j).J` tables, and with
+inputs `zs R ω t j` (`ZkOuter`: public file, registered reads, the challenger's live-coin part's record). The audit accepts when every
 session accepts (`Accepts`), and the decoded witness is each session's value layer (`XplurZC`, `ZkOuter.layer`).
 
-* `ZkOuter.Good`: a layer with no wrong unit whose every unit reads, at each of its registered reads, the registrant's
+* `ZkOuter.Good`: a layer with no incorrect proof block whose every unit reads, at each of its registered reads, the registrant's
   value (`RegAgree`). `rd` records those values, the hidden circuit's rows as registered and the values the verifier
   registers itself (its coins, the comb `coef`).
-* `execOS_subset_full_mem`, `execOS_subset_full_escape`: V*'s live law, the full draw, draws every unit at every value
+* `execOS_subset_full_mem`, `execOS_subset_full_escape`: V*'s live law, the full sample, samples every unit at every value
   of the source's bytes, so it escapes no nonempty set of units, with no assumption on those bytes (A3).
-* `ZkOuter.accepts_le`: an accepted session whose layer is not `Good` is at most `bound` likely: the draw misses every
-  bad unit (`miss 1`, which the full draw never does); or a drawn unit computes wrongly or reads a registered value
+* `ZkOuter.accepts_le`: an accepted session whose layer is not `Good` is at most `bound` likely: the sample misses every
+  bad unit (`miss 1`, which the full sample never does); or a sampled proof block computes wrongly or reads a registered value
   other than the registrant's at a leaf that is the registrant's (`zk_session_regDrawnR`:
-  `ksAvgStrictZ + linkBoundZC + regTermZC`); or a drawn row's
+  `ksAvgStrictZ + linkBoundZC + regTermZC`); or a sampled row's
   registered leaf is not the registrant's while the verifier's registered check passes (`ReadsX.prob_offOn_le`:
   `qR²/2^513`). The units are bad at the strategy alone, so one sampling step covers all three.
 * `sessions`: the `S` sessions in a row, each played by a strategy the prover names at its start (`seqC`, `ofBase`);
@@ -34,7 +50,7 @@ session accepts (`Accepts`), and the decoded witness is each session's value lay
 * `outerV`: the outer proof at a history: the prover registers `R₂`, the values V*'s sessions read that the history
   does not fix (V*'s running sums `rec-acc`, which every level's session and the algebra read, and each level's opened
   rows and their siblings, `rec-rows-L<level>` and `rec-aux-L<level>`), then V*'s sessions at `R₂` (`zs R ω t R₂ j`) in
-  a row. `R₂` is one registration for all of them, sent before any session's draw, so each session's `own`, `rd` and
+  a row. `R₂` is one registration for all of them, sent before any session's sample, so each session's `own`, `rd` and
   `hown` may read its roots and values, and `Good` ties every session to the same values. Its binding is in each
   session's `bound`: `regTermZC` at the registrant's leaf and `qR²/2^513` off it.
 * `VBridge`: what V*'s circuits compute: when every session accepts and every layer is `Good`, the messages `wmsg` reads
@@ -45,7 +61,7 @@ session accepts (`Accepts`), and the decoded witness is each session's value lay
   registration the prover sends and the strategy it names there (`sumV`).
 * `ZkOuter.Fork`: a run of one of `CR`'s finders or of the link finder, from the prover's own strategy, outputs a
   SHA-512 collision; with none, `CR` holds at budget `0` (`ZkOuter.cr_of_not_fork`) and `boundIf` there is at most
-  `ZkOuter.boundCR`, the miss and the drawn units' statistical errors (`ZkOuter.boundIf_le`).
+  `ZkOuter.boundCR`, the miss and the sampled proof blocks' statistical errors (`ZkOuter.boundIf_le`).
 -/
 
 @[expose] public section
@@ -61,13 +77,13 @@ open scoped ENNReal
 set_option genSizeOfSpec false in
 set_option genInjectivity false in
 /-- **V*'s `--zk --registered` session at one history, but for its record's custody**: what its soundness takes besides
-the circuit `c` (fixed: V* is public), its number of tables `J`, the law `Lv` of V*'s units, the record's custody
+the circuit `c` (fixed: V* is public), its number of tables `J`, the sampling design `Lv` of V*'s units, the record's custody
 (`ZkOuter.hRec`), the count curve and the prover's strategy. V*'s sessions hide their outputs: the circuit file parses
 under `HmOut` (`hcH`), the tags are `TagsOkZHJ`, each table is set up by setupHidden (`y₀`, `hDraw`). `rd` is the
 registrant's record of the registered reads: the hidden circuit's rows from its registration, the values of the outer
-proof's registration `R₂` (`outerV`), and the values the verifier registers itself (the draw, the coins, the comb
-`coef`). `hown`: at an accepted outcome, the reads at the rows of the drawn units are the verifier's own (`OwnReadsHJ`:
-its ports, at the positions its program reads, in the table each unit is drawn into). -/
+proof's registration `R₂` (`outerV`), and the values the verifier registers itself (the sample, the coins, the comb
+`coef`). `hown`: at an accepted outcome, the reads at the rows of the sampled proof blocks are the verifier's own (`OwnReadsHJ`:
+its ports, at the positions its program reads, in the table each unit is sampled into). -/
 structure ZkOuterD (mPts nv J : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Built c.unit)
     (hscope : Layout.scopeOk c = true) (Lv : Law nv) where
   I : Inputs
@@ -99,7 +115,7 @@ structure ZkOuter (mPts nv J : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Buil
   hRec : FlockSoundness.Assumptions.Zk.RecordsCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg') dj y₀ S R).length)
     wr
 
-/-- **The names of a session's strategies**: a registration and, at each of the law's coins, a strategy of the live
+/-- **The names of a session's strategies**: a registration and, at each of the sampling design's coins, a strategy of the live
 session of `J` tables; they read the same at every history. -/
 abbrev baseGame {nv : ℕ} (Lv : Law nv) (Reg' : Type) (dg : ByteArray → ByteArray) (J mPts N : ℕ) :
     Game (LiveOutJ J mPts) :=
@@ -116,7 +132,7 @@ theorem castLive_castLive {J J' : ℕ} (h : J' = J) (dg : ByteArray → ByteArra
   rfl
 
 /-- **Implications at every outcome of `liveOfZJ`'s live audit bound probabilities**: at the registration the prover
-sends, each of the law's draws and each output of the live session of `J` tables written by `wr`. -/
+sends, each of the sampling design's samples and each output of the live session of `J` tables written by `wr`. -/
 theorem prob_auditLive_liveOfZJ_mono {n : ℕ} {L : Law n} {Reg : Type} {mPts : ℕ} (dg : ByteArray → ByteArray) (N : ℕ)
     {planZ : Finset (Fin n) → Reg → List (TabZK FlockLevel3.GF128 mPts)}
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZ S R).length mPts → Exec.Transcript)
@@ -132,8 +148,8 @@ theorem prob_auditLive_liveOfZJ_mono {n : ℕ} {L : Law n} {Reg : Type} {mPts : 
   rw [prob_map, prob_map]
   exact prob_mono (fun o' => h ω o') _ _
 
-/-- **Every outcome of `liveOfZJ`'s live audit is one `wr` writes**: at the registration the prover sends, some draw of
-the law and some output of the live session. -/
+/-- **Every outcome of `liveOfZJ`'s live audit is one `wr` writes**: at the registration the prover sends, some sample of
+the sampling design and some output of the live session. -/
 theorem outcome_auditLive_liveOfZJ {n : ℕ} {L : Law n} {Reg : Type} {mPts : ℕ} (dg : ByteArray → ByteArray) (N : ℕ)
     {planZ : Finset (Fin n) → Reg → List (TabZK FlockLevel3.GF128 mPts)}
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZ S R).length mPts → Exec.Transcript)
@@ -147,7 +163,7 @@ theorem outcome_auditLive_liveOfZJ {n : ℕ} {L : Law n} {Reg : Type} {mPts : �
     (liveSession dg (planZ (L.draw ω) τ.1).length mPts N) _ ht
   exact ⟨ω, x, rfl⟩
 
-/-- **A live subset draw that succeeds is `Flock.Draw.subset` on the source's one stream.** -/
+/-- **A live subset sample that succeeds is `Flock.Draw.subset` on the source's one stream.** -/
 theorem runOS_subset {L : Fin 1 → ℕ} (f : (i : Fin 1) → Fin (L i) → Fin 256) (k n : ℕ) {d : Flock.Draw.UnitDraw}
     (hd : Law.runOS f (.subset k) n = some d) : Flock.Draw.subset k n (Law.streamOf (f 0)) = some d.units := by
   unfold Law.runOS at hd
@@ -168,8 +184,8 @@ theorem runOS_subset {L : Fin 1 → ℕ} (f : (i : Fin 1) → Fin (L i) → Fin 
       rw [h2] at h1
       rw [← hD]; exact h1
 
-/-- **The full draw draws every unit**: a run of `subset n` over `[0, n)` that succeeds is a permutation's values on
-all of `[0, n)`, and a run that reads past the source's bytes draws every unit. -/
+/-- **The full sample samples every unit**: a run of `subset n` over `[0, n)` that succeeds is a permutation's values on
+all of `[0, n)`, and a run that reads past the source's bytes samples every unit. -/
 theorem execOS_subset_full_mem {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ω : Ω) (u : Fin n) :
     u ∈ (Law.execOS (n := n) t (.subset n) n).draw ω := by
@@ -191,7 +207,7 @@ theorem execOS_subset_full_mem {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] 
       Finset.mem_image.1 (by rw [himg]; exact Finset.mem_range.2 u.isLt : u.val ∈ (Finset.range n).image π)
     exact (hmem u.val).2 ⟨i, Finset.mem_range.1 hi, hiu⟩
 
-/-- **The full draw escapes no nonempty set of units**: every draw holds every unit (`execOS_subset_full_mem`), with
+/-- **The full sample escapes no nonempty set of units**: every sample holds every unit (`execOS_subset_full_mem`), with
 no assumption on the source's bytes. -/
 theorem execOS_subset_full_escape {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) {B : Finset (Fin n)} (hB : B.Nonempty) :
@@ -255,8 +271,8 @@ theorem ofBase_surj (τ : Strategy (zo.game dg N)) : ∃ τ₀, zo.ofBase dg N �
           (liveOfZJ dg (planZHJ zo.dj zo.y₀) N zo.wr (Lv.draw ω) R) (s ω)))))) = s ω
   rw [castLive_castLive, h1, h2]
 
-/-- **Every outcome of V*'s session is a transcript `wr` writes** at the registration the prover sends: some draw of
-the law and some output of the live session (`outcome_auditLive_liveOfZJ`). -/
+/-- **Every outcome of V*'s session is a transcript `wr` writes** at the registration the prover sends: some sample of
+the sampling design and some output of the live session (`outcome_auditLive_liveOfZJ`). -/
 theorem outcome_writes (τ : Strategy (zo.game dg N)) {o : Reg' × Finset (Fin nv) × Exec.Transcript}
     (h : Game.Outcome (zo.game dg N) τ o) : ∃ ω x, o = (τ.1, Lv.draw ω, zo.wr (Lv.draw ω) τ.1 x) :=
   outcome_auditLive_liveOfZJ dg N zo.wr τ h
@@ -283,7 +299,7 @@ def TabCR (qF qS : ℝ) (τ : Strategy (zo.game dg N)) : Prop :=
 
 /-- **`cr/sha-512` at the strategy `τ`**: for the knowledge finders of its simulation (`TabCR`) at budgets `qF, qS`,
 for its registered-value finders at `rd` (`RegCRZC`) at budget `qW`, and for the finder that plays the session once and
-outputs the extractor's pair of an off-leaf read at a drawn row (`ReadsX.pick`) at budget `qR`. -/
+outputs the extractor's pair of an off-leaf read at a sampled row (`ReadsX.pick`) at budget `qR`. -/
 def CR (k Rw : ℕ) (qF qS qW qR : ℝ) (τ : Strategy (zo.game dg N)) : Prop :=
   zo.TabCR dg N qF qS τ ∧
     RegCRZC execArith hs512 ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀) (tabZHJ zo.dj zo.y₀)
@@ -292,7 +308,7 @@ def CR (k Rw : ℕ) (qF qS qW qR : ℝ) (τ : Strategy (zo.game dg N)) : Prop :=
     (StrictCR.oneRun (zo.game dg N) τ fun o =>
       (zo.rd.restrict (rowIn o.2.1)).pick o.1 (regPathsHJ zo.I c zo.pub o.2.2 zo.rd.port)).CR H512 qR
 
-/-- **The outer bound at the strategy `τ`**: the model's miss at one bad unit (`Lm` the model's law), the drawn units'
+/-- **The outer bound at the strategy `τ`**: the model's miss at one bad unit (`Lm` the model's law), the sampled proof blocks'
 `ksAvgStrictZ + linkBoundZC + regTermZC`, and the registered paths' `qR²/2^513`. -/
 noncomputable def bound (Lm : Law nv) (k Rw M : ℕ) (ρ t' qF qS qW qR : ℝ) (τ : Strategy (zo.game dg N)) : ℝ≥0∞ :=
   Lm.miss 1 +
@@ -309,8 +325,8 @@ noncomputable def boundIf (Lm : Law nv) (k Rw M : ℕ) (ρ t' qF qS qW qR : ℝ)
   if zo.CR dg N k Rw qF qS qW qR τ then zo.bound dg N Lm k Rw M ρ t' qF qS qW qR τ else 1
 
 /-- **A fork of the session at the strategy `τ`**: a run of one of `CR`'s finders, or of the link finder, from the
-prover's own continuations in its simulation, outputs a SHA-512 collision: the knowledge finders of a drawn table
-(`TableForkZ`), the registered-value finders (`RegForkZC`), the run that opens a drawn row's registered leaf off the
+prover's own continuations in its simulation, outputs a SHA-512 collision: the knowledge finders of a sampled table
+(`TableForkZ`), the registered-value finders (`RegForkZC`), the run that opens a sampled row's registered leaf off the
 registrant's (`ReadsX.pick`), or the link finder (`LinkForkZC`). -/
 def Fork (k Rw M : ℕ) (τ : Strategy (zo.game dg N)) : Prop :=
   (∃ ω j, TableForkZ execArith hs512 (planZHJ zo.dj zo.y₀ (Lv.draw ω) (reg (zo.sim dg N τ))) j
@@ -334,7 +350,7 @@ theorem cr_of_not_fork {k Rw M : ℕ} {τ : Strategy (zo.game dg N)} (h : ¬ zo.
       Finder.cr_of_not_finds (fun hf => h (Or.inr (Or.inr (Or.inl hf)))) 0⟩,
     linkCRZC_of_not_fork _ _ _ _ _ _ _ _ fun hf => h (Or.inr (Or.inr (Or.inr hf)))⟩
 
-/-- **The outer bound in fork form**: the model's miss at one bad unit and the drawn units' statistical errors, the
+/-- **The outer bound in fork form**: the model's miss at one bad unit and the sampled proof blocks' statistical errors, the
 tables' (`tableErrZ`), the link's (`linkErrZC`) and the waits' (`waitErrZC`); `bound` with no finder budgets and no
 SHA-512 evaluations to count. -/
 noncomputable def boundCR (Lm : Law nv) (k Rw M : ℕ) (ρ : ℝ) (τ : Strategy (zo.game dg N)) : ℝ≥0∞ :=
@@ -366,7 +382,7 @@ def RegAgree (bits : Fin (Layout.keyN c hU nv) → Bool) : Prop :=
   ∀ u, ∀ g ∈ ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u, zo.rd.isRead (zo.lay.pos g) →
     bits g = zo.lay.bit (zo.rd.wv (zo.lay.pos g)) g
 
-/-- **A good layer**: no wrong unit, and agreement with the registrant. -/
+/-- **A good layer**: no incorrect proof block, and agreement with the registrant. -/
 def Good (bits : Fin (Layout.keyN c hU nv) → Bool) : Prop :=
   ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).wrong bits = ∅ ∧ zo.RegAgree bits
 
@@ -406,9 +422,9 @@ theorem badUnits_nonempty (k Rw : ℕ) (τ : Strategy (zo.game dg N)) (hG : ¬ z
       exact Finset.mem_singleton_self u'
   · exact (Finset.nonempty_iff_ne_empty.2 hw).mono (Finset.subset_union_left.trans Finset.subset_union_left)
 
-/-- **An off-leaf registered read at a drawn row**, at an accepted outcome, is at most `qR²/2^513` likely, under
+/-- **An off-leaf registered read at a sampled row**, at an accepted outcome, is at most `qR²/2^513` likely, under
 `cr/sha-512` for the finder that plays V*'s session once (`ReadsX.prob_offOn_le`): the verifier's registered check
-holds at the drawn rows (`checked_of_acceptsHJ`, on `hown`). -/
+holds at the sampled rows (`checked_of_acceptsHJ`, on `hown`). -/
 theorem off_le {qR : ℝ} (τ : Strategy (zo.game dg N))
     (hR : (StrictCR.oneRun (zo.game dg N) τ fun o =>
       (zo.rd.restrict (rowIn o.2.1)).pick o.1 (regPathsHJ zo.I c zo.pub o.2.2 zo.rd.port)).CR H512 qR) :
@@ -437,8 +453,8 @@ theorem off_le {qR : ℝ} (τ : Strategy (zo.game dg N))
     _ hacc _ (zo.hown ω R' o' hacc)
 
 /-- **V*'s session at one history, at one strategy**: an accepted outcome at which V*'s value layer is not `Good` is at
-most `bound` likely. The bad units are fixed by the strategy: the draw misses them all, which the full draw never does
-(`execOS_subset_full_escape`, no assumption on the source's bytes), or meets a wrong unit or a registered-value
+most `bound` likely. The bad units are fixed by the strategy: the sample misses them all, which the full sample never does
+(`execOS_subset_full_escape`, no assumption on the source's bytes), or meets an incorrect proof block or a registered-value
 disagreement at the registrant's leaf (`zk_session_regDrawnR`), or an off-leaf registered read (`off_le`). -/
 theorem accepts_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
     (zo : ZkOuter mPts nv J Reg' c hU hscope (Law.execOS (n := nv) src (.subset nv) nv))
@@ -470,7 +486,7 @@ theorem accepts_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (
 
 end ZkOuter
 
-/-- **The law of a public verifier's units**: the full draw, the live subset law of all `nv` units over `[0, nv)` on a
+/-- **The sampling design of a public verifier's units**: the full sample, the live subset sampling design of all `nv` units over `[0, nv)` on a
 byte source (`live`, `--draw subset:<units>`, as V* is staged), and the model's uniform `nv`-subset it escapes no more
 often than (`model`, which misses no unit). -/
 structure VLaw (nv : ℕ) : Type 1 where
@@ -486,16 +502,16 @@ namespace VLaw
 
 variable {nv : ℕ} (law : VLaw nv)
 
-/-- The live full draw on the source's bytes. -/
+/-- The live full sample on the source's bytes. -/
 abbrev live : Law nv := Law.execOS (n := nv) law.src (.subset nv) nv
 
-/-- The model's full draw. It reads nothing of the law but its unit count; the argument is there so that
+/-- The model's full sample. It reads nothing of the sampling design but its unit count; the argument is there so that
 `(Vs j).law.model` names it. -/
 abbrev model (_law : VLaw nv) : Law nv := Law.subset nv nv le_rfl
 
 end VLaw
 
-/-- **A public verifier**: its circuit `c` over `nv` units, proved in sessions of `J` tables, and its law. -/
+/-- **A public verifier**: its circuit `c` over `nv` units, proved in sessions of `J` tables, and its sampling design. -/
 structure VStmt : Type 1 where
   nv : ℕ
   mPts : ℕ

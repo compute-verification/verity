@@ -2,6 +2,9 @@ module
 
 public import Proofs.Flock.Soundness.ExtractWait
 public import Proofs.Flock.Soundness.Assumptions
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Extract
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The link finder: a trial, then further trials until one reads the same string
@@ -10,7 +13,7 @@ The link theorem's collision finder (DESIGN.md §3), for any trial. A trial (`T`
 reads a set of values behind one commit string (`rd`). The finder (`finderG`) runs a trial and then
 up to `M` more. It succeeds (`Succ`) if
 
-* its first trial reads two values (two drawn units opened the string differently), or
+* its first trial reads two values (two sampled proof blocks opened the string differently), or
 * its first trial reads one value, and the first further trial that reads anything reads another.
 
 With `p v` the probability that a trial reads exactly `v`, `s` that it reads two or more values and

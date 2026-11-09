@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.Guarantees.Compose
 public import Proofs.Accounting.TS.Stages
+public import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # The service's window budget: proof
@@ -21,6 +22,8 @@ public import Proofs.Accounting.TS.Stages
 -/
 
 @[expose] public section
+
+open Claims renaming Ex → expect
 
 namespace Accounting.SecurityProofs.Compose.Budget
 
@@ -80,7 +83,7 @@ theorem miss_le : ∀ (K N : ℕ) (B : Finset (Fin N)),
       by_cases hp : p ∈ B
       · rw [ite_eq_left hp, mul_zero]
         refine (prob_mono (q := fun _ : Equiv.Perm (Fin n) => False) fun e he => ?_).trans
-          (le_of_eq (by unfold prob; simp))
+          (le_of_eq (by unfold prob Claims.prUniform; simp))
         have := (forall_mem_subsetDraw _ _).mp he 0 (Nat.succ_pos K)
         rw [Equiv.Perm.decomposeFin_symm_apply_zero] at this
         exact this hp

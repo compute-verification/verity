@@ -387,6 +387,24 @@ def test_s3_tiny_greedy_serve_matches_serve_v1():
     assert rep.provenance["mutation_effects"] == []
 
 
+def test_s3_a_stop_config_returns_the_length_rule_as_the_programs_last_check():
+    """With a `stop` config (the Build's `--stop`) the derived Program returns `StopCheck_v1` over its outputs as its last check,
+    the Call `predict.build` makes for the same config, and claims no family; a config the rule can't take is refused."""
+    from verity.ml.circuits.defs import bind as ir_bind
+    from verity.ml.definitions.registry import stop_check as SC
+    from verity_vllm.program.frontend import stop_rule as SR
+    LP, STEPS = 3, 2
+    C, stop = _tiny_config(), SR.spec([7, 9], max_tokens=8, prompt_len=LP, max_model_len=64, outputs=STEPS + 1, finish=1)
+    with torch.device("meta"):
+        m = ex.GreedyServe(C, STEPS)
+    rep = derive_report(m, (_meta(LP, dtype=torch.int32),), **PROF, config={**C, "stop": stop}, name="Serve")
+    assert rep.ok, rep.unsupported
+    rule = rep.flat_definition.body.nodes[-1]
+    assert rule.fn.id == ir_bind(SC.StopCheck, T=STEPS + 1, STOP=(7, 9), MAX_TOKENS=8, PROMPT_LEN=LP, MAX_MODEL_LEN=64, FINISH=1).id
+    assert rep.provenance["checks"]["of"] == [SR.what(stop)] and not rep.family
+    _unsupported(m, (_meta(LP, dtype=torch.int32),), "shape", **PROF, config={**C, "stop": {**stop, "stops": []}})
+
+
 def test_s3_final_norm_on_all_rows_is_a_different_program():
     C = _tiny_config()
     with torch.device("meta"):
@@ -508,7 +526,7 @@ def test_neg_profile_mode_refuses_a_batch_invariant_linear_on_a_target_without_b
     "fused,expected",
     [
         (False, "RMSNormCudaVector8_v1{N=6144,EPS=1e-05,BLOCK=768}"),
-        (True, "RMSNormFusedCudaVector8_v1{N=6144,EPS=1e-05,BLOCK=1024}"),
+        (True, "RMSNormFusedCudaVector8_v3{N=6144,EPS=1e-05,BLOCK=1024}"),
     ],
 )
 def test_profile_mode_binds_the_non_batch_invariant_cuda_rmsnorm(fused, expected, monkeypatch):

@@ -2,11 +2,12 @@ module
 
 public import Batteries.Tactic.OpenPrivate
 public import Properties.Pouw.LiveSalt
+public import Spot.Challenger
 public import Std.Data.String.ToNat
 import all Init.Data.Array.QSort.Basic
-import all Lean.Data.Json.Basic
-import all Init.Data.Ord.String
 import all Init.Data.Int.Repr
+import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
 
 /-!
 # The coins' binding has one canonical form per layout
@@ -28,7 +29,7 @@ open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.B
 namespace Properties.Pouw.LiveSalt.Canon
 
 open Lean (Json)
-open SampledProofs.Challenger (familiesJson)
+open Spot.Challenger (familiesJson)
 
 /-! ## Sorting three keys in order -/
 

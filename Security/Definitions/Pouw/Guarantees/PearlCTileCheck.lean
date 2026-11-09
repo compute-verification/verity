@@ -3,7 +3,6 @@ module
 public import Definitions.Pouw.PearlC.TileCheck8
 public import Definitions.Pouw.PearlC.TileCheck4
 public import Definitions.Pouw.PearlC.Device
-public import Definitions.Pouw.PearlC.DeviceFp4
 
 /-!
 # Pearl-C's tile checks compute the words (trusted)

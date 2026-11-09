@@ -2,8 +2,42 @@ module
 
 public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
 public import Proofs.Flock.SamplingGeneric.Efficient
-public import Proofs.Flock.Claims.Sampling.Wait
-public import Proofs.Flock.Claims.Sampling.Cost
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Sampling.Cost
+import Proofs.Flock.Claims.Sampling.Wait
+import Proofs.Flock.SamplingGeneric.Bits
 
 /-!
 # Refutation witnesses: the generic sampled compiler's cost claims
@@ -62,9 +96,11 @@ theorem sksL_es (x : Msg) : (sksL Coin).es x = 1 := by
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem sksL_work (x : Msg) : (sksL Coin).work x ≤ 2 ^ 100 := by
   have he := sksL_es (Coin := Coin) x
-  have hk : (sksL Coin).k x = 2 ^ 40 * 3 := rfl
+  have hko : (sksL Coin).kOut x = 2 ^ 10 * 3 := rfl
+  have hki : (sksL Coin).kIn x = 2 ^ 10 * 3 := rfl
   unfold Compiled.work
-  rw [he, hk, show (sksL Coin).nPU x = 1 from rfl, show (sksL Coin).openCalls x = 0 from rfl]
+  rw [he, hko, hki, show (sksL Coin).nSess x = 1 from rfl, show (sksL Coin).nPU x = 1 from rfl,
+    show (sksL Coin).openCalls x = 0 from rfl]
   norm_num
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
@@ -150,6 +186,8 @@ noncomputable def effL (Coin : Type) : Compiled Coin (findA Coin) where
   iroots _ _ _ := []
   reveal _ _ _ _ := [([], opening₀)]
   openCalls _ := 0
+  nOut _ := 1
+  nIn _ := 1
   Tape := Unit
   P _ := silentP
   δc _ _ := 0
@@ -161,13 +199,13 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg 
 theorem exists_cons_of_length_pos {α : Type} {l : List α} (h : 0 < l.length) : ∃ a l', l = a :: l' :=
   List.exists_cons_of_ne_nil (List.ne_nil_of_length_pos h)
 
-theorem ownLog_flatMapRP_head {R β γ : Type} (H : Msg → Msg) (run : R → Trace) (f : β → RP R (List γ)) (b : β)
+theorem ownLog_flatMapRP_head {R β γ : Type} (H : Msg → Msg) (run : R → Transcript) (f : β → RP R (List γ)) (b : β)
     (bs : List β) : (ownLog H run (f b)).length ≤ (ownLog H run (flatMapRP f (b :: bs))).length := by
   rw [Claims.Sampling.ownLog_flatMapRP, List.map_cons, List.sum_cons]
   exact Nat.le_add_right _ _
 
-/-- A wait whose first draw is accepted keeps it first. -/
-theorem waitAccC_head {R : Type} (H : Msg → Msg) (run : R → Trace) {k : ℕ} (hk : 0 < k) (r : R) (rs : List R)
+/-- A wait whose first sample is accepted keeps it first. -/
+theorem waitAccC_head {R : Type} (H : Msg → Msg) (run : R → Transcript) {k : ℕ} (hk : 0 < k) (r : R) (rs : List R)
     (hr : (run r).out = .acc) : ∃ l, ((waitAccC k (r :: rs) []).eval H run).1 = (r, (run r).seen) :: l := by
   rw [Claims.Sampling.waitAccC_eval_nil, Claims.Sampling.accList,
     List.filter_cons_of_pos (p := fun r => decide ((run r).out = .acc)) (decide_eq_true hr), List.take_cons hk,
@@ -175,30 +213,35 @@ theorem waitAccC_head {R : Type} (H : Msg → Msg) (run : R → Trace) {k : ℕ}
   exact ⟨_, rfl⟩
 
 /-- **The compiled extractor makes a SHA-512 call of its own** wherever every run is accepted and each accepted run's
-extractions make one: its waits keep their first draws, so the first inner run's extractions are made. -/
+extractions make one: its waits keep their first samples, so the first inner run's extractions are made. -/
 theorem ownLog_E_pos (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (r₀ : Fin (L.V.k x) → Coin) (c : L.E.C x) {s : AuditStatement} (hs : L.parse x = some s)
-    (hacc : ∀ r, (run H P L.V x ω r).out = .acc) (hk : 0 < L.k x) (hcap : 0 < L.cap x)
+    (hacc : ∀ r, (run H P L.V x ω r).out = .acc)
     (hrun : ∀ r v c', 0 < (ownLog H (run H P L.V x ω) (L.runExt x s r v c')).length) :
     0 < (ownLog H (run H P L.V x ω) (L.E.ext x r₀ c)).length := by
   have h₀ : (run H P L.V x ω r₀).seen.out = .acc := hacc r₀
-  obtain ⟨a, as, ha⟩ := exists_cons_of_length_pos (l := List.finRange (L.k x)) (by rw [List.length_finRange]; exact hk)
+  obtain ⟨a, as, ha⟩ :=
+    exists_cons_of_length_pos (l := List.finRange (L.kOut x)) (by rw [List.length_finRange]; exact L.kOut_pos x)
+  obtain ⟨b, bs, hb⟩ :=
+    exists_cons_of_length_pos (l := List.finRange (L.kIn x)) (by rw [List.length_finRange]; exact L.kIn_pos x)
   obtain ⟨l₀, ls, hl⟩ :=
-    exists_cons_of_length_pos (l := List.finRange (L.cap x)) (by rw [List.length_finRange]; exact hcap)
+    exists_cons_of_length_pos (l := List.finRange (L.capOut x)) (by rw [List.length_finRange]; exact L.capOut_pos x)
+  obtain ⟨m₀, ms, hm⟩ :=
+    exists_cons_of_length_pos (l := List.finRange (L.capIn x)) (by rw [List.length_finRange]; exact L.capIn_pos x)
   simp only [Compiled.E, ownLog, hs, ite_eq_left h₀]
   rw [Claims.Sampling.ownLog_bind, Claims.Sampling.ownLog_of_noHash _ _ (Claims.Sampling.NoHash.waitAccC _ _ _),
     List.nil_append, Claims.Sampling.ownLog_bind, List.length_append]
   refine Nat.lt_of_lt_of_le ?_ (Nat.le_add_right _ _)
   rw [hl, List.map_cons]
-  obtain ⟨o, ho⟩ := waitAccC_head H (run H P L.V x ω) hk (c.1 l₀) (ls.map c.1) (hacc _)
+  obtain ⟨o, ho⟩ := waitAccC_head H (run H P L.V x ω) (L.kOut_pos x) (c.1 l₀) (ls.map c.1) (hacc _)
   rw [ho, ha, List.zip_cons_cons]
   refine Nat.lt_of_lt_of_le ?_ (ownLog_flatMapRP_head _ _ _ _ _)
   dsimp only
   rw [Claims.Sampling.ownLog_bind, Claims.Sampling.ownLog_of_noHash _ _ (Claims.Sampling.NoHash.waitAccC _ _ _),
-    List.nil_append, List.map_cons]
-  obtain ⟨o', ho'⟩ := waitAccC_head H (run H P L.V x ω) hk (forkOn (L.stage2 x) (c.1 l₀) (c.2.1 a l₀))
-    (ls.map fun l => forkOn (L.stage2 x) (c.1 l₀) (c.2.1 a l)) (hacc _)
-  rw [ho', List.zip_cons_cons]
+    List.nil_append, hm, List.map_cons]
+  obtain ⟨o', ho'⟩ := waitAccC_head H (run H P L.V x ω) (L.kIn_pos x) (forkOn (L.stage2 x) (c.1 l₀) (c.2.1 a m₀))
+    (ms.map fun l => forkOn (L.stage2 x) (c.1 l₀) (c.2.1 a l)) (hacc _)
+  rw [ho', hb, List.zip_cons_cons]
   refine Nat.lt_of_lt_of_le ?_ (ownLog_flatMapRP_head _ _ _ _ _)
   exact hrun _ _ _
 
@@ -210,17 +253,23 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
 /-- Each of `effL`'s runs' extractions makes a SHA-512 call of its own: its one slot's session finds `()` at once, and
 checking the opening it reveals makes `callCm`'s one call. -/
-theorem effL_runExt (H : Msg → Msg) (x : Msg) (run : (Fin ((effL Coin).V.k x) → Coin) → Trace)
+theorem effL_runExt (H : Msg → Msg) (x : Msg) (run : (Fin ((effL Coin).V.k x) → Coin) → Transcript)
     (r : Fin ((effL Coin).V.k x) → Coin) (v : Seen) (c : (effL Coin).SlotEC x) :
     0 < (ownLog H run ((effL Coin).runExt x toyStmt r v c)).length := by
   have h1 : 0 < (effL Coin).nPU x := Nat.one_pos
   obtain ⟨d, ds, hd⟩ :=
     exists_cons_of_length_pos (l := List.finRange ((effL Coin).nPU x)) (by rw [List.length_finRange]; exact h1)
+  obtain rfl : d = ⟨0, h1⟩ := Fin.ext (show d.val = 0 by
+    have := d.isLt
+    have h : (effL Coin).nPU x = 1 := rfl
+    omega)
   unfold Compiled.runExt
-  rw [hd, show (effL Coin).checked x r = [0] from rfl, List.zip_cons_cons]
+  rw [hd]
+  simp only [show (effL Coin).checked x r = [0] from rfl, List.zip_cons_cons]
   refine Nat.lt_of_lt_of_le ?_ (ownLog_flatMapRP_head _ _ _ _ _)
   dsimp only
-  rw [dite_eq_left h1, Compiled.unitExt, show (effL Coin).session x 0 v = some (x, ⟨[], .acc⟩) from rfl]
+  rw [dite_eq_left (show 0 < (effL Coin).nPU x ∧ ((effL Coin).sessSlots x [0] 0).head? = some 0 from ⟨h1, rfl⟩),
+    Compiled.sessExt, Compiled.sessWit, show (effL Coin).session x 0 v = some (x, ⟨[], .acc⟩) from rfl]
   dsimp only
   rw [dite_eq_left (show (findA Coin).shape x = (effL Coin).sh x 0 from rfl)]
   exact Nat.succ_pos _
@@ -231,11 +280,10 @@ theorem compiledEfficient_fails (H : Msg → Msg) : ¬ (effL Coin).Efficient H :
   rintro ⟨-, -, h⟩
   have c : (effL Coin).E.C [] := Classical.arbitrary _
   have h1 := h [] Unit silentP () (fun _ => default) c
-  have h0 : (effL Coin).k [] ^ 2 * (effL Coin).nPU [] * (effL Coin).openCalls [] = 0 := by
+  have h0 : (effL Coin).kOut [] * (effL Coin).kIn [] * (effL Coin).nPU [] * (effL Coin).openCalls [] = 0 := by
     rw [show (effL Coin).openCalls [] = 0 from rfl, mul_zero]
   have hpos := ownLog_E_pos (effL Coin) H silentP [] () (fun _ => default) c (s := toyStmt) rfl
-    (fun r => run_accV_out _ _ _ _ r) (by unfold Compiled.k; positivity)
-    (by unfold Compiled.cap Compiled.k; positivity) fun r v c' => effL_runExt H [] _ r v c'
+    (fun r => run_accV_out _ _ _ _ r) fun r v c' => effL_runExt H [] _ r v c'
   exact Nat.lt_irrefl 0 (Nat.lt_of_lt_of_le hpos (h1.trans_eq h0))
 
 end Efficient

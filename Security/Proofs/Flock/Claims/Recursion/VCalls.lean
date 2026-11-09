@@ -1,19 +1,53 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.BoundMerged
 public import Proofs.Flock.Claims.Recursion.BoundMergedLin
+public import Proofs.Flock.Claims.Recursion.PlurLin
 public import Proofs.Flock.Claims.Recursion.VCallsAt
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
 
 /-!
-# `Fdev`'s link over the draws' evaluations
+# `Fdev`'s link over the samples' evaluations
 
-`Bound.Pr_badO_le_PrFdev` reads `InnerAcceptsCollAt` and `ForksBindAt` at the two draws its link forks. With their
-twins over the draws' evaluations (`InnerAcceptsCollAtV`, `ForksBindAtV`), the link's collision is one among the two
-draws' evaluations (`drawCalls`), which `FdevV`'s output searches:
+`Bound.Pr_badO_le_PrFdev` reads `InnerAcceptsCollAt` and `ForksBindAt` at the two samples its link forks. With their
+twins over the samples' evaluations (`InnerAcceptsCollAtV`, `ForksBindAtV`), the link's collision is one among the two
+samples' evaluations (`drawCalls`), which `FdevV`'s output searches:
 
 * `Bound.fork_collOV`: `Bound.fork_collO` with the escapes `drawCalls` holds, through `Bound.fork_collO_coreBy` at
-  each draw's `callsAt`;
-* `Bound.PrBAbort_le_PrBinnerV`: `B` at `P_O`'s aborting runs is at most `B_I` over the draws' evaluations;
-* `Bound.linkOutV_collO`, `Bound.Pr_badO_le_linV`, `Bound.Pr_badO_le_PrFdevV`: `P_O`'s bad draws at most
+  each sample's `callsAt`;
+* `Bound.PrBAbort_le_PrBinnerV`: `B` at `P_O`'s aborting runs is at most `B_I` over the samples' evaluations;
+* `Bound.linkOutV_collO`, `Bound.Pr_badO_le_linV`, `Bound.Pr_badO_le_PrFdevV`: `P_O`'s bad samples at most
   `k_I·(Pr[FdevV] + 1/(M+1))`.
 -/
 
@@ -29,8 +63,8 @@ variable {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited C
   [DecidableEq Col'] {Bd : Bound Coin Col T} {decI : List (ℕ × Col) → List T} {H : Msg → Msg} {D : Deploy Coin}
   {DO : Flock.Deploy Coin Col' T'} {decO : List (ℕ × Col') → List T'} {Ω : Type} {P : Prover Ω} {x : Msg}
 
-/-- **Two draws forked at inner round `j`, with witnesses, whose openings differ at `j`, collide among their
-evaluations.** A rejecting inner view is a collision among its draw's evaluations (`InnerAcceptsCollAtV`). Inner views
+/-- **Two samples forked at inner round `j`, with witnesses, whose openings differ at `j`, collide among their
+evaluations.** A rejecting inner view is a collision among its sample's evaluations (`InnerAcceptsCollAtV`). Inner views
 that differ at message `j` are `ForksBindAtV`'s. Inner views that agree at message `j` are `fork_collO_core`'s,
 whose collision among the recorded calls is one among the evaluations. -/
 theorem Bound.fork_collOV (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
@@ -79,7 +113,7 @@ theorem Bound.fork_collOV (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock 
   exact Bound.fork_collO_coreBy (cl := fun x r ws => D.callsAt H x r ws) hB hV
     (fun ω r c ws hg => callsAt_true_of (hT decO x Ω P ω r c ws hg)) hL j hj t hws hws' hacc₁ hacc₂ hraw hne hlift'
 
-/-- **A link that succeeds at `P_O`'s reading names a collision among its draws' evaluations**: `linkOut_collO`, with
+/-- **A link that succeeds at `P_O`'s reading names a collision among its samples' evaluations**: `linkOut_collO`, with
 `fork_collOV`, the pair `linkOutV` outputs. -/
 theorem Bound.linkOutV_collO (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
     (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogCollAt H D (Inner.ofFlock Bd.deploy decI) DO)
@@ -106,7 +140,7 @@ theorem Bound.linkOutV_collO (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlo
   simp only [linkOutV, hg', hv', ↓reduceIte, Option.getD_some]
   exact hfc
 
-/-- **`P_O`'s bad draws, linearly, over the draws' evaluations**: `Pr_badO_le_lin` with `FdevV`. -/
+/-- **`P_O`'s bad samples, linearly, over the samples' evaluations**: `Pr_badO_le_lin` with `FdevV`. -/
 theorem Bound.Pr_badO_le_linV (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
     (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogCollAt H D (Inner.ofFlock Bd.deploy decI) DO)
     (hN0 : CallsNil H D) (hFk : ForksBindAtV H D (Inner.ofFlock Bd.deploy decI) DO x)
@@ -179,7 +213,7 @@ theorem Bound.Pr_badO_le_linV (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFl
         rw [Finset.sum_add_distrib, ← hF, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul,
           mul_one_div]
 
-/-- **`P_O`'s bad draws at most `k_I·(Pr[FdevV] + 1/(M+1))`**: `Pr_badO_le_linV`, and no bad draw where the inner
+/-- **`P_O`'s bad samples at most `k_I·(Pr[FdevV] + 1/(M+1))`**: `Pr_badO_le_linV`, and no bad sample where the inner
 protocol takes no rounds. -/
 theorem Bound.Pr_badO_le_PrFdevV (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
     (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogCollAt H D (Inner.ofFlock Bd.deploy decI) DO)
@@ -202,8 +236,8 @@ theorem Bound.Pr_badO_le_PrFdevV (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.o
       le_antisymm ((Pr_mono fun t ht => ht.2 fun j hj => absurd hj (by omega)).trans_eq Pr_false) (Pr_nonneg _)
     rw [hb, h0, Nat.cast_zero, zero_mul]
 
-/-- **`B` at `P_O`'s aborting runs finds only collisions `B_I` finds over the draws' evaluations**: `PrBAbort_le_by` at
-the calls a finder searches at a draw (`Deploy.callsAt`, `CallsLogCollAt`), which the draws' evaluations hold
+/-- **`B` at `P_O`'s aborting runs finds only collisions `B_I` finds over the samples' evaluations**: `PrBAbort_le_by` at
+the calls a finder searches at a sample (`Deploy.callsAt`, `CallsLogCollAt`), which the samples' evaluations hold
 (`drawCalls`). -/
 theorem Bound.PrBAbort_le_PrBinnerV (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
     (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)

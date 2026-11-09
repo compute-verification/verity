@@ -29,20 +29,22 @@ import pytest
 ROOT = Path(__file__).resolve().parents[3]
 LIVE = ROOT / "benchmarks" / "live_challenger"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(LIVE))
 sys.path.insert(0, str(ROOT / "verity" / "core" / "protocols" / "remote_bandwidth" / "tests"))
 
 import auditor as A  # noqa: E402
 import auditor_line as al  # noqa: E402
-import challengers  # noqa: E402
-import verifier  # noqa: E402
-import wire  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import challengers  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import verifier  # noqa: E402
+from benchmarks.remote_session import verifier_process as VP  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import wire  # noqa: E402
 from test_remote_bandwidth import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
 from verity.core.protocols.certifier import certificate as cert  # noqa: E402
 from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Record, fill  # noqa: E402
 from verity.core.protocols.remote_bandwidth import coins  # noqa: E402
-from verity.core.protocols.sampled_proofs.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
+from verity.core.protocols.spot.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 
 P = lms.Params(64, 4, 4)
@@ -116,7 +118,7 @@ class Host:
 
     def gate(self, out: Path, *, pin: str | None = None, period: str = "p-1", main: list[str] | None = MAIN,
              call=None, peer: str = "cpu-node") -> challengers.ChallengerGate:
-        return challengers.ChallengerGate(out, call or self.call, peer, pin or self.pin, period, main,
+        return challengers.ChallengerGate(out, call or self.call, peer, pin or self.pin, period, main, VP.lms_verify,
                                           address=self.address, pause=self.pause, polls=3)
 
     def period(self, name: str = "p-1", circuit: str = CIRCUIT) -> None:
@@ -179,7 +181,7 @@ def test_a_session_whose_coins_the_gates_session_released_is_held_to_the_ledger_
     assert not (tmp_path / "out" / sid / "secret").exists()
     key = gate.key()
     heads = [tmp_path / "out" / f"{sid}.ledger.jsonl"]
-    assert s.trusted_reason(tmp_path / "out" / sid / "out", heads, key, PINS, MAIN, challengers.lms_verify, "p-2") == (
+    assert s.trusted_reason(tmp_path / "out" / sid / "out", heads, key, PINS, MAIN, VP.lms_verify, "p-2") == (
         "the challenger's session for this session's window is not trusted: the auditor's ledger holds the session's "
         "window in period p-1, not the audit's period p-2")
 
@@ -209,7 +211,7 @@ def test_a_gate_session_is_refused_as_coins_unless_the_hosts_pins_log_and_the_ve
                        f"{PIN}, which the host's pins log records but which is not on main's first-parent line in the "
                        "verifier's copy (`git rev-list --first-parent origin/main`): a branch commit merged into main "
                        "is in main's history but no tree main's check ran on; repin the challenger host to a commit "
-                       "on main's first-parent line (vy-challenger-pin) and rerun the window there"),
+                       "on main's first-parent line (with its pin command) and rerun the window there"),
         "no-pins": ("the auditor's session is not readable: the challenger gate answered pins with exit 3: "
                     '{"refused": "usage"}')}[case]
 
@@ -217,7 +219,8 @@ def test_a_gate_session_is_refused_as_coins_unless_the_hosts_pins_log_and_the_ve
 def test_a_gate_verifier_needs_the_auditors_first_parent_list_of_main(tmp_path):
     """`--challenger gate` without `--challenger-main FILE`, or with a FILE it can't read, is refused before the run
     starts, so no gate run takes coins it would refuse at every session's end."""
-    flags = dict(ssh="-i /nonexistent/key research@192.0.2.1", peer="cpu-node", pin="ab" * 64, period="p-1")
+    flags = dict(verify=VP.lms_verify, ssh="-i /nonexistent/key research@192.0.2.1", peer="cpu-node", pin="ab" * 64,
+                 period="p-1")
     with pytest.raises(ValueError, match=re.escape("--challenger-main FILE (the auditor's own `git rev-list "
                                                    "--first-parent origin/main`)")):
         challengers.of("gate", tmp_path / "out", None, None, **flags)
@@ -225,6 +228,35 @@ def test_a_gate_verifier_needs_the_auditors_first_parent_list_of_main(tmp_path):
         challengers.of("gate", tmp_path / "out", None, None, **flags, main=tmp_path / "absent")
     (tmp_path / "main.txt").write_text("".join(c + "\n" for c in MAIN))
     assert challengers.of("gate", tmp_path / "out", None, None, **flags, main=tmp_path / "main.txt").main == MAIN
+
+
+@pytest.mark.parametrize("kind", ["serve", "gate"])
+def test_a_served_or_gate_verifier_needs_the_verify_and_the_challengers_process_its_entry_hands_in(tmp_path, kind):
+    """The verifier reads no `verity.ml` code, so the LMS verify a served or gate session's signatures are checked with,
+    and the challenger's process `--challenger serve` starts, come from its process's entry (`verifier_process.py`): a
+    run handed neither is refused before its first session."""
+    (tmp_path / "main.txt").write_text("".join(c + "\n" for c in MAIN))
+    flags = dict(serve=("python", "serve.py")) if kind == "serve" else dict(
+        ssh="-i /nonexistent/key research@192.0.2.1", peer="cpu-node", pin="ab" * 64, period="p-1",
+        main=tmp_path / "main.txt")
+    key = tmp_path / "key" if kind == "serve" else None
+    with pytest.raises(ValueError, match=re.escape(f"--challenger {kind} checks the challenger's signatures with the "
+                                                   "LMS verify its process's entry hands in")):
+        challengers.of(kind, tmp_path / "out", key, None, **flags)
+    source = challengers.of(kind, tmp_path / "out", key, None, **flags, verify=VP.lms_verify)
+    assert source.verify is VP.lms_verify
+    if kind == "serve":
+        assert source.command == ("python", "serve.py")
+        with pytest.raises(ValueError, match="starts the challenger's process its entry hands in"):
+            challengers.of(kind, tmp_path / "out", key, None, verify=VP.lms_verify)
+
+
+def test_the_verifiers_entry_hands_its_main_the_lms_verify_and_the_live_challengers_serve(monkeypatch):
+    got = {}
+    monkeypatch.setattr(VP.verifier, "main", lambda argv, **kw: got.update(argv=argv, **kw) or 0)
+    assert VP.main(["--port", "7781"]) == 0
+    assert got == {"argv": ["--port", "7781"], "verify": VP.lms_verify,
+                   "serve": (sys.executable, str(LIVE / "serve.py"))}
 
 
 def test_a_challenger_key_other_than_the_pinned_one_is_refused_before_a_reserve(store, host, tmp_path):
@@ -283,12 +315,9 @@ def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tm
         host.period()
         source = host.gate(tmp_path / "out")
     else:
-        python = tmp_path / "python"
-        python.write_text(f"#!/bin/sh\nexec {shlex.quote(sys.executable)} "
-                          f"{shlex.quote(str(LIVE / 'tests' / 'stub_serve.py'))} \"$@\" --keygen-workers 1\n")
-        python.chmod(0o755)
         (tmp_path / "served").mkdir()
-        source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", python=str(python))
+        serve = (sys.executable, str(LIVE / "tests" / "stub_serve.py"), str(LIVE / "serve.py"), "--keygen-workers", "1")
+        source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", command=serve, verify=VP.lms_verify)
     pace = verifier.pace_of("1:4:160:2", 1.0)
     (honest, dropper), _ = run_sessions("honest,skip:0.0625", paces=[pace, pace], challenger=source,
                                         defer_openings=False)
@@ -311,7 +340,7 @@ def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tm
 def gate_run(host: Host, out: Path, plan: str, defer_openings: bool,
              peer: str = "cpu-node", groups_per_coin: int = 1) -> tuple[list[dict], dict, bytes]:
     """A gate run of `plan`'s sessions in period p-1, which committed the descriptor of the verifier that ran them, its
-    verifier at the challenger host as `peer`, each session's windows drawn `groups_per_coin` a coin: the sessions,
+    verifier at the challenger host as `peer`, each session's windows sampled `groups_per_coin` a coin: the sessions,
     their registration and that descriptor."""
     desc = al.descriptor("ab" * 20)
     host.period(circuit=hashlib.sha512(desc).hexdigest())
@@ -480,7 +509,7 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
 def test_a_session_drawn_four_windows_a_coin_is_credited_by_the_line_of_record_and_a_skipper_is_not(
         host, tmp_path, monkeypatch):
     """`--groups-per-coin 4` at two windows in flight: `auditor_line`'s line of record over a gate run of an honest
-    session and a prover that skips half its reads, each paced in twelve windows drawn on three openings coins, which
+    session and a prover that skips half its reads, each paced in twelve windows sampled on three openings coins, which
     the gate reserves and releases (⌈12/4⌉). The period closes complete; the honest session, which the Lean accepts
     and whose record names g, is credited, its twelve windows' last roots read on the challenger's clock off its
     three openings coins and the challenges after them (`auditor_seen`), its pooled bound over its three draws
@@ -540,15 +569,15 @@ def test_a_session_whose_pin_isnt_a_logged_commit_on_mains_first_parent_line_ear
                "window on a host whose gate seals its pins log in each open")
     elif sealed != PINS:
         why = (f"session {sid} ran commit {PIN}, which the host's pins log doesn't record as a commit of main's "
-               "history: repin the challenger host to a commit origin/main contains (vy-challenger-pin) and rerun the "
-               "window there")
+               "history: repin the challenger host to a commit origin/main contains (with its pin command) and "
+               "rerun the window there")
     elif main is None:
         why = NO_MAIN
     else:
         why = (f"session {sid} ran commit {PIN}, which the host's pins log records but which is not on main's "
                "first-parent line in the verifier's copy (`git rev-list --first-parent origin/main`): a branch commit "
                "merged into main is in main's history but no tree main's check ran on; repin the challenger host to a "
-               "commit on main's first-parent line (vy-challenger-pin) and rerun the window there")
+               "commit on main's first-parent line (with its pin command) and rerun the window there")
     assert s["credit"]["complete"]["ok"]
     assert s["credit"]["credited"]["ok"] is False and s["credit"]["credited"]["reason"] == why
     assert s["credit"]["pinned"] == {"commit": PIN, "seal": None if sealed is None else pins_seal(sealed), "ok": False,
@@ -794,7 +823,7 @@ def test_a_session_inside_the_providers_lockdown_rests_on_it_and_any_other_on_no
 
 
 def test_the_boundary_check_needs_the_certifiers_windows_that_meet_the_span_to_cover_it():
-    """A credited span from σ_0's release at 100 ns to the last root's arrival at 250 ns is covered by windows
+    """A credited span from chal_0's release at 100 ns to the last root's arrival at 250 ns is covered by windows
     [0, 120) and [120, 251), whatever lies beyond it, and not with a gap at 120 or a last window ending at 250."""
     seen = [{"released_ns": 100, "arrivals_ns": [150]}, {"released_ns": 160, "arrivals_ns": [250]}]
 
@@ -808,7 +837,7 @@ def test_the_boundary_check_needs_the_certifiers_windows_that_meet_the_span_to_c
 
 
 def test_the_clock_rate_beside_the_line_doesnt_read_the_first_coins_round_trip():
-    """Coins 110 ms apart on a challenger clock 30 ppm fast, σ_0 and σ_1 stamped a 100 ms round trip before the
+    """Coins 110 ms apart on a challenger clock 30 ppm fast, chal_0 and chal_1 stamped a 100 ms round trip before the
     challenger released them and every later coin 50 ms after: the cross-check's rate reads 30 ppm, where the ratio end
     to end reads the round trip over the session's span."""
     ms = 1_000_000

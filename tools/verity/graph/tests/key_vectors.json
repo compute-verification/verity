@@ -338,6 +338,7 @@
      "disk_gb": 4
     },
     "timeout_s": 60,
+    "priority": 3,
     "key": null
    },
    "env_digest": "sha512:fd7c401afee02bd6d98bf95edaf358d0aac84c529f3f5f9b8b1aa7499bc0811c115c7d8b2120109b484815defc0427d063a47171d20615742c869c6069f82892",

@@ -17,23 +17,23 @@ and `eps`, the union of those deltas as an exact ratio string.
 `build(m, seed, small)` makes a period with one change `m` (`EXPECT`, each aimed at one path of the check, or malformed
 parameters, commitments, evidence and cases). In the clock form: the link-windows of one link from the session's window
 `first`, each registered under the link's Program with its provenance, certified at both ends by a small LMS key in a
-drawn network certifier session, its clock certificate signing a sync of Σ_sync salted (`clock_commitment`, the sync and
+sampled network certifier session, its clock certificate signing a sync of Σ_sync salted (`clock_commitment`, the sync and
 the salt in no case), and answered by one-stage with its one unit proved. In the rows form (a change named `rows-…`):
-each link-window's ingress and egress rows committed and registered under a small drawn schedule
+each link-window's ingress and egress rows committed and registered under a small sampled schedule
 (`warden_rows.Cells.commit` and `registration`, signed by the same key), its three records certified (`past-slots`:
-none of them and neither registration, as the warden leaves a window in which it refused a connection), and the scan's
+none of them and neither registration, as the network certifier leaves a window in which it refused a connection), and the scan's
 registration holding both rows' roots and domains and its `prog` (`PROG`) at the root and domain of the entries port of
 that link-window's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1` at its smallest circuit-check row, a
 pinned Definition, with one member a slot) in its own audit's registration and Program (`_prog_tied`, `_wired`), and its
 state (`STATE`) at the root and domain of that audit's `SCAN_STATE` (`_state_tied`), answered by one-stage with a
-stratified or subset draw at the period's δ; the scan's Program is its generator form, stand-ins of its three templates
+stratified or subset sample at the period's δ; the scan's Program is its generator form, stand-ins of its three templates
 at small widths in the Boolean profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in
 the checker form is a bad scan (`bad_scans`), as is each check's negative of what `NetTiming.Layout.Fits` asks
 (`scan_negatives`). Beside them, the compute audits (in the rows form at least one, whose registrations' `roots` hold the
 scans' `prog`), each registered over its Program, a population of one or two stand-in templates whose units commit from
 8 to 320 bits, with its slot entries' in the rows form (`audit_descriptor`), and answered with a subset or stratified
-draw (a work law's) and its bound on wrong units, every unit drawn for an audit a scan's `prog` is tied to
-(`tied-undrawn`: one such audit drawn `subset:k`, k < N), and a link-window whose scan's state is not its wired audit's
+sample (a work sampling design's) and its bound on incorrect proof blocks, every unit sampled for an audit a scan's `prog` is tied to
+(`tied-undrawn`: one such audit sampled `subset:k`, k < N), and a link-window whose scan's state is not its wired audit's
 `SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions, at another root
 or domain, or none, `UNSTATES`). `case(kind, seed, form)` is a small period of the form aimed at a verdict, or at a
 decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with its answer, as a
@@ -60,11 +60,11 @@ from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.certificate import (SALT_BYTES, Certificate, Direction, LmsKey,
                                                             certificate_digest, clock_digest)
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
-from verity.core.protocols.certifier.warden import WardenParams
+from verity.core.protocols.certifier.warden import INTEGER_FIELDS, WardenParams
 from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity.core.protocols.sampled_proofs.one_stage.draw import stratum_k
-from verity.ml.circuits import boolean as BL, codec, metadata as AN, population
+from verity.core.protocols.spot.one_stage import registration as R
+from verity.core.protocols.spot.one_stage.draw import stratum_k
+from verity.ml.circuits import boolean as BL, codec, population
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.defs import REGISTRY
 from verity.ml.circuits.program import Program
@@ -78,7 +78,7 @@ ID = "verity/certifier/v0"
 COMMITMENT_TAG = "verity-network-certifier/period/v0"
 ONE_STAGE = R.PROTOCOL
 FORMATS = (R.FORMAT, R.FORMAT_V2)
-#: a proof unit's public outputs are at most 16 bits (the values it commits can be wider)
+#: a proof block's public outputs are at most 16 bits (the values it commits can be wider)
 OUT_BITS = 16
 UNIT = "unit"
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
@@ -86,7 +86,7 @@ ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 PARAMS_KEYS = ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "session", "sync_set", "windows"]
 ROWS_PARAMS_KEYS = ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule",
                     "session", "windows"]
-SCHEDULE_KEYS = sorted(f.name for f in dataclasses.fields(WardenParams))
+SCHEDULE_KEYS = sorted(INTEGER_FIELDS)
 CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
 CLOCK_WINDOW_KEYS = ["answer", "certificates", "clock"]
 ROWS_WINDOW_KEYS = ["answer", "certificates", "registrations"]
@@ -223,7 +223,8 @@ def _sync_set(j) -> SyncSet:
 
 
 def _schedule(j) -> WardenParams:
-    """`scheduleOf`: `WardenParams`' fields, each a positive integer, B past a cell's header, and B, S and T u32s."""
+    """`scheduleOf`: `WardenParams`' integer fields, each a positive integer, B past a cell's header, and B, S and T
+    u32s, in the id egress form."""
     _exactly(j, SCHEDULE_KEYS, "schedule")
     values = {k: _nat(j[k], "schedule") for k in SCHEDULE_KEYS}
     try:
@@ -391,7 +392,7 @@ FUEL = 2 ** 62
 
 
 def _walkable(j: dict) -> bool:
-    """`NciCheck.Desc.walkable` as C-Flock's decoder gives a Program (its layout, callees first and the root without
+    """`NciCheck.Desc.walkable` as Flock's decoder gives a Program (its layout, callees first and the root without
     parameters): `(A + 1) · (H + 2)` at most half of `FUEL`, for the root's activations `A` (its own and each composite
     node member's, multiplied through batches and scans) and the depth `H` they nest to, and no scan of no iterations
     with output leaves. `rootLaidOut` and `inputsAtRoot` the decoder gives too."""
@@ -434,12 +435,12 @@ def _topological(j: dict) -> bool:
 
 def slot_entry_digest(j: dict, key: str) -> str:
     """`slotEntryDigest`: the SHA-512, in hex, of the canonical JSON object that maps each Definition `key` reaches
-    (itself, its nodes' callees, theirs, …) to its `annotations.definition_digest`: the template's whole body."""
+    (itself, its nodes' callees, theirs, …) to its `codec.definition_digest`: the template's whole body."""
     defs, callees, seen, todo = j["definitions"], j["callees"], {}, [key]
     while todo:
         k = todo.pop()
         if k not in seen:
-            seen[k] = AN.definition_digest(j, k)
+            seen[k] = codec.definition_digest(defs[k], j)
             if defs[k]["form"] == "composite":
                 todo += [callees[x["fn"]] for x in defs[k]["body"]["nodes"]]
     return hashlib.sha512(codec.canonical_json(seen)).hexdigest()
@@ -448,7 +449,7 @@ def slot_entry_digest(j: dict, key: str) -> str:
 def _audit(a, ctx: str) -> Audit:
     """`auditOf`: the layout terms and the Program's descriptor, whose root's template instances are the audit's units,
     each committing its template's return; a root with no template refused; its slot entries' templates with their
-    closure digests. It reads the descriptor's root nodes, signatures and the slot entries' Definitions; C-Flock's
+    closure digests. It reads the descriptor's root nodes, signatures and the slot entries' Definitions; Flock's
     decoder, which Lean runs on it, refuses no descriptor this module writes."""
     _exactly(a, ["free", "program", "steps"], ctx)
     free, steps, j = _nat(a["free"], ctx), _nat(a["steps"], ctx), a["program"]
@@ -473,7 +474,7 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     computes (`_own_returns`), each ingress row and every template's row, state and egress argument one input node's
     leaves (`_input_arg`), no egress argument an ingress row's, bucket t's `prog<j>` row `j · T / every + ⌊t / every⌋`
     of one input node of the slot entries (`_reads_entries`), and the Program topological (`_topological`). It reads
-    the descriptor's nodes, signatures and returns; C-Flock's decoder, which Lean runs on it, refuses no descriptor
+    the descriptor's nodes, signatures and returns; Flock's decoder, which Lean runs on it, refuses no descriptor
     this module writes."""
     if not isinstance(j, dict) or j.get("schema") != SCHEMA:
         raise D.Reject("scan: not a Program's descriptor")
@@ -746,7 +747,7 @@ def _holds(reg: dict, doc: dict) -> bool:
 #: the scan's Programs' row in its registration: its `roots` entry's port, or its `registered` entry's value
 PROG = "scan/prog"
 #: the scan's state in a registration: its `roots` entry's port (`stateName`), or its `registered` entry's value, the
-#: value a window circuit registers the scan's state rows as (`stateValue`, `ingress_scan`'s `SCAN_STATE`)
+#: value a window circuit registers the scan's state rows as (`stateValue`, the certifier's `blocks.SCAN_STATE`)
 STATE = "scan/state"
 SCAN_STATE = "verity/certifier/scan-state/v1"
 
@@ -869,7 +870,7 @@ def _rows_window_check(p: Params, audits: list[dict], w: int, reg: dict,
 
 
 def _facts(what: str, prof: dict, pub) -> Facts:
-    """`factsOf`: one level drawn `subset:k` or stratified, and the public's bound."""
+    """`factsOf`: one level sampled `subset:k` or stratified, and the public's bound."""
     if len(prof["levels"]) != 1:
         raise Finding(REJECT, f"{what}: profile: not one level")
     (lv,) = prof["levels"]
@@ -888,7 +889,7 @@ def _facts(what: str, prof: dict, pub) -> Facts:
 
 def _audit_check(i: int, audit: Audit, reg: dict, a: dict, tied: bool = False) -> Facts:
     """`auditCheck`: the registration names the audit's Program, the answer's units are the Program's, and one tied to
-    a link-window's scan (`_tied_in`, in the rows form) has every unit drawn."""
+    a link-window's scan (`_tied_in`, in the rows form) has every unit sampled."""
     what = f"audit {i}"
     if reg.get("program") != audit.program:
         raise Finding(REJECT, f"{what}: registration: not its Program")
@@ -1069,7 +1070,7 @@ def clock_commitment(salt: bytes, sync: ClockSync) -> bytes:
 
 def _accepted(digest: bytes, program: str, query: str, size: int, k: int, delta: str, bound: int,
               strata: list[dict] | None = None) -> dict:
-    """One-stage's answer accepting `k` of `size` units drawn `subset:k`, or drawn stratified over `strata` (each
+    """One-stage's answer accepting `k` of `size` units sampled `subset:k`, or sampled stratified over `strata` (each
     `{k, name, size}`, k and size their sums), as `OneStage.check`'s public and profile have it."""
     units = list(range(k))
     draw = {"subset": k} if strata is None else {"law": "stratified", "strata": strata}
@@ -1241,7 +1242,7 @@ def _unit_sig(S):
     return (("x", Array(1, U16)),), Array(S.OUT, BYTE)
 
 
-#: A compute audit's stand-in unit: it commits `OUT` bytes, a proof unit's 16-bit public output (`OUT` = 2) or more or
+#: A compute audit's stand-in unit: it commits `OUT` bytes, a proof block's 16-bit public output (`OUT` = 2) or more or
 #: fewer, each one gate.
 AUDIT_UNIT = CompositeDefinition("NetworkPeriodAuditUnit", 0, ("OUT",), _unit_sig,
                                  lambda B, S, x: B.batch(LOW, x[0], axes=(None,), n=S.OUT), register=False)
@@ -1363,7 +1364,7 @@ def _output_entries(rp: random.Random, i: int, ties: dict, T: int, aimed: int, u
 
 
 def build(m: str, seed: int, small: bool = False) -> dict:
-    """A period's case with the change `m`, in the form `m` names (`form_of`), every choice drawn from `seed`; `small`:
+    """A period's case with the change `m`, in the form `m` names (`form_of`), every choice sampled from `seed`; `small`:
     the toy key, as few link-windows and audits as `m` needs."""
     r = random.Random(f"network-period {m} {seed}")
     rp = random.Random(f"network-period prog {m} {seed}")
@@ -1381,7 +1382,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         1 if m.startswith("audit") or m in ("undecided-and-reject", "count-audits") else 0
     n_windows = r.randint(least_windows, least_windows if small else 3)
     n_audits = r.randint(least_audits, max(least_audits, 1) if small else 2)
-    # a rows link-window's own audit, and at times one no link-window ties, which may leave units undrawn
+    # a rows link-window's own audit, and at times one no link-window ties, which may leave units unsampled
     n_audits = max(n_audits, n_windows + (0 if small else rp.randint(0, 1))) if rows else n_audits
     first = r.choice([0, 0, r.randrange(1, 6)])
     if rows:
@@ -1729,7 +1730,8 @@ def _bad_params(p: dict, n: int) -> list:
                       p | {"sync_set": ss | {"rhos": [[1, 2], [2, 4]]}}, p | {"sync_set": ss | {"x": 0}}]
     s = p["schedule"]
     return out + [p | {"schedule": {k: v for k, v in s.items() if k != SCHEDULE_KEYS[n % len(s)]}},
-                  p | {"schedule": s | {"x": 1}}, p | {"schedule": [s]}, p | {"schedule": s | {"delay": 0}},
+                  p | {"schedule": s | {"x": 1}}, p | {"schedule": s | {"egress": "bytes"}}, p | {"schedule": [s]},
+                  p | {"schedule": s | {"delay": 0}},
                   p | {"schedule": s | {"lanes": True}}, p | {"schedule": s | {"window": -1}},
                   p | {"schedule": s | {"queue": "1"}}, p | {"schedule": s | {"cell_bytes": 10}},
                   p | {"schedule": s | {"cell_bytes": U32}}, p | {"schedule": s | {"lanes": U32}},
@@ -1972,7 +1974,7 @@ def verdict_of(kind: str) -> str:
 
 def case(kind: str, seed: int = 0, form: str = "clock") -> dict:
     """A small period of the form (`build(..., small=True)`: the toy key, as few link-windows and audits as its change
-    needs) aimed at `kind`, its change and every choice drawn from `seed`."""
+    needs) aimed at `kind`, its change and every choice sampled from `seed`."""
     ms = AIMS[form][kind]
     return build(ms[random.Random(f"network-period {kind} {seed}").randrange(len(ms))], seed, small=True)
 

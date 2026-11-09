@@ -1,6 +1,6 @@
 """Torch-free recomputation of vLLM d9105ea80's Gumbel-max sampler noise -- the executable half of an `rng` root class.
 
-vLLM's sampler (`vllm/v1/worker/gpu/sample/gumbel.py::_gumbel_sample_kernel`) draws no random tensor from a torch
+vLLM's sampler (`vllm/v1/worker/gpu/sample/gumbel.py::_gumbel_sample_kernel`) samples no random tensor from a torch
 generator: for every logits row it evaluates, inside the kernel, a *pure function* of three integers --
 
     gumbel_seed = tl.randint(seed, pos)                    # Philox4x32-10, key = request seed (int64), counter = position
@@ -9,7 +9,7 @@ generator: for every logits row it evaluates, inside the kernel, a *pure functio
     g          = -log(-log1p(-u))                          # fp32 (libdevice logf / log1pf on the GPU)
     token      = argmax_v(logits[v] / T + g[v])            # fp32, first index on ties
 
--- where `seed` is the request's `SamplingParams.seed` (or a host-side `np.random.randint` draw when None:
+-- where `seed` is the request's `SamplingParams.seed` (or a host-side `np.random.randint` sample when None:
 `sample/states.py`), and `pos` is the absolute position of the sampled token.  This module recomputes the chain with numpy
 integers and IEEE fp32 arithmetic (Triton's `python/triton/language/random.py`, v3.7.1, transcribed line by line), so a
 validator can decide whether a captured sampled token is *explained* by (seed, position, logits) alone.
@@ -114,7 +114,7 @@ def gumbel_seed_of(seed: int, pos: int, *, is_drafting: bool = False) -> int:
 
 def gumbel_noise(seed: int, pos: int, vocab_size: int, *, is_drafting: bool = False, use_fp64: bool = False) -> np.ndarray:
     """The noise vector the kernel adds to row `pos` of a request with `seed`: fp32[vocab_size] (or fp64 when USE_FP64).
-    `keys` = the vocab index, so the same token draws the same noise wherever it appears (kernel docstring)."""
+    `keys` = the vocab index, so the same token samples the same noise wherever it appears (kernel docstring)."""
     gs = gumbel_seed_of(seed, pos, is_drafting=is_drafting)
     keys = np.arange(int(vocab_size), dtype=np.int32)
     if use_fp64:

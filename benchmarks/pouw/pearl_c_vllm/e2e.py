@@ -29,8 +29,8 @@ The run:
 - **The verify passes** (``--retain``): after the timing, the first timed prefill prompt and the decode prompts are replayed
   in the arm, each a retained pass on poisoned buffers, whose commitment must equal its timed pass's.  Then the negative
   control: one decode prompt as a retained pass writing none of the commitment (`CONTROL_OMITS`).  The three manifests go to
-  `verify_run.py` after the window: the first two must be replay-verified (development shortcut; the protocol's check is
-  a ZK proof, PROTOCOL.md) and the control rejected (the panel's rule).
+  `verify_run.py` after the execution phase: the first two must be replay-verified (development shortcut; the protocol's check is
+  a ZK proof, PouwCheck) and the control rejected (the panel's rule).
 - **The panel's shapes:** `SHAPES`, under ``pearl-c-sm120`` v1-h3; `panel_rows.py` writes the rows.
 
 ``--whole-step`` (with ``--graphs``) builds the arm engine with vLLM's FULL decode graphs (no compile, the decode batch's
@@ -51,7 +51,7 @@ hm96-sha512 row leaves of frame-v3-sha512 trees, once after the forward (served_
 -h3 trees.  Its gate (`Statement.check`) holds the device's roots to Python's over the rows a whole replay staged, and
 the no-write control's not; prefill's rows are not committed in it.
 
-Every rep records the SM clock (the panel's clock rule).  ``--smoke`` (`smoke`) is the untimed check before a window: both
+Every rep records the SM clock (the panel's clock rule).  ``--smoke`` (`smoke`) is the untimed check before an execution phase: both
 engines resident, the arm's install and gates, and each engine's first sampling calls.  ``--perplexity`` (`perplexity`) is
 the untimed quality run: WikiText-2's test split through bf16, stock fp8, and Pearl-C v1 and v2.
 """
@@ -126,7 +126,7 @@ SERVED_RECORD = "served.json"
 QUALITY = {"pearlc-v1": "pearl-c-sm120-v1-h3", "pearlc-v2": "pearl-c-sm120-unpromoted-v1-h3"}
 #: WikiText-2 (raw), its test split, at the revision cached on the RTX PRO 6000 node
 WIKITEXT = ("Salesforce/wikitext", "b08601e04326c79dfdd32d625aee71d232d685c3", "wikitext-2-raw-v1/test-00000-of-00001.parquet")
-#: the quality run's windows: BOS and 2,047 tokens each, non-overlapping; its batch budget, one window a step
+#: the quality run's execution phases: BOS and 2,047 tokens each, non-overlapping; its batch budget, one execution phase a step
 WINDOW, PPL_BATCH, PPL_WINDOWS_A_PASS = 2048, 2048, 8
 #: the panel's shape names for the two phases
 SHAPES = {"prefill_8192": "e2e-llama31-8b-vllm-m8192", "decode_b32_step": "e2e-llama31-8b-vllm-m32"}
@@ -215,7 +215,7 @@ def find_model(llm):
 
 def install(model, args, coins):
     """Every LinearBase layer's apply, found by type (`verity_vllm.protocols.linear.vllm_site`), through one `Stack` whose executor is a
-    `PearlCDeviceRun` over the layers' own weights, attached through `engine.hooks`.  The epoch's salt is `coins`' salt coin,
+    `PearlCDeviceRun` over the layers' own weights, attached through `engine.hooks`.  The execution phase's salt is `coins`' salt coin,
     asked for once the weights are committed (`Coins`).  Returns the run, the weights by id and the stack; the stack starts
     inactive (vLLM's own apply), and `arm_of` gives each mode's arm."""
     from verity.core.protocols.pouw.audit import weights_root
@@ -280,7 +280,7 @@ def arm_of(mode: str, run, args):
 def gate(run, weights: dict, whole: bool = False) -> list[dict]:
     """Served y against x·Wᵀ, and with hashing the same call's commitment twice and the negative control, at every
     distinct (n, k) and both m; with `whole` (``--whole-step``), `whole_check` too.  The checks that compare passes repeat
-    one pass's call indices (`PearlCDeviceRun.begin`'s ``at``), since the epoch numbers calls across passes."""
+    one pass's call indices (`PearlCDeviceRun.begin`'s ``at``), since the execution phase numbers calls across passes."""
     import torch
     out, seen = [], set()
     gen = torch.Generator(device=next(iter(weights.values())).device).manual_seed(20260930)
@@ -532,7 +532,7 @@ def clocks() -> dict:
 
 def serve(conn, args, group: str, coins: dict) -> None:
     """One engine, resident in its own process: ``base`` (stock FP8) or ``arm`` (BF16 with the Pearl-C wrapper), answering
-    the controller's commands one at a time.  `coins` is the epoch's published coin commitment; the arm's install asks the
+    the controller's commands one at a time.  `coins` is the execution phase's published coin commitment; the arm's install asks the
     controller, which holds the challenger, for the salt coin (`PipeCoins`)."""
     try:
         configure(args)
@@ -664,8 +664,8 @@ def serve(conn, args, group: str, coins: dict) -> None:
 
 
 def prompt_logprobs(llm, sampling_params, timed, windows: list[list[int]]) -> dict:
-    """Each window's prompt log-probs (vLLM's ``prompt_logprobs=1``), a pass per `PPL_WINDOWS_A_PASS` windows: the summed
-    negative log-likelihood of every token after the window's first, their count, and each position's top-1 token."""
+    """Each execution phase's prompt log-probs (vLLM's ``prompt_logprobs=1``), a pass per `PPL_WINDOWS_A_PASS` execution phases: the summed
+    negative log-likelihood of every token after the execution phase's first, their count, and each position's top-1 token."""
     sp = sampling_params(temperature=0.0, max_tokens=1, prompt_logprobs=1)
     nll, count, top1 = 0.0, 0, []
     for i in range(0, len(windows), PPL_WINDOWS_A_PASS):
@@ -681,16 +681,16 @@ def prompt_logprobs(llm, sampling_params, timed, windows: list[list[int]]) -> di
 
 
 class Coins:
-    """The challenger's side of one epoch in the controller: its coins (`coins.Challenger`), committed before any engine
-    starts, drawn from `entropy` (by default the Lean verifier's, `pouw.verifier.coins`, `IO.getRandomBytes`),
+    """The challenger's side of one execution phase in the controller: its coins (`coins.Challenger`), committed before any engine
+    starts, sampled from `entropy` (by default the Lean verifier's, `pouw.verifier.coins`, `IO.getRandomBytes`),
     which a claim instance must name (`challenger.served_claim`). A coin opens once; an engine started again in the same
-    epoch (the ABAB blocks) asking for it after the same record gets the one opening again, and after any other record a
+    execution phase (the ABAB blocks) asking for it after the same record gets the one opening again, and after any other record a
     refusal, so nothing resamples."""
 
     def __init__(self, epoch: int, entropy=None):
         from verity.core.protocols.pouw import verifier
         from verity.core.protocols.pouw.coins import Challenger
-        from verity.core.protocols.sampled_proofs.challenger import served_claim
+        from verity.core.protocols.spot.challenger import served_claim
         entropy = verifier.coins if entropy is None else entropy
         served_claim(entropy)
         self.challenger, self.opened = Challenger(epoch, entropy), {}
@@ -707,7 +707,7 @@ class Coins:
 
 
 class PipeCoins:
-    """The engine's side: the epoch's commitment, and each coin asked of the controller's `Coins` over the pipe."""
+    """The engine's side: the execution phase's commitment, and each coin asked of the controller's `Coins` over the pipe."""
 
     def __init__(self, conn, commitment: dict):
         from verity.core.protocols.pouw.coins import CoinCommitment
@@ -747,7 +747,7 @@ class Worker:
                              f"({PROMPT} + 1 + {STEPS})): vLLM would queue or preempt requests inside the timed step; raise --mem-*")
 
     def recv(self, timeout: float = 1200) -> dict:
-        """The engine's answer; a coin it asks for on the way is answered from the epoch's `Coins`."""
+        """The engine's answer; a coin it asks for on the way is answered from the execution phase's `Coins`."""
         from verity.core.protocols.pouw.protocol import DomainError
         while True:
             if not self.conn.poll(timeout):
@@ -863,7 +863,7 @@ def split(results: dict) -> dict:
 def state_entropy(path: str):
     """The challenger's entropy held in the file `path` (readable only by its owner; when absent, created from the Lean
     verifier's coins, `pouw.verifier.coins`, before any engine starts): the same coins for the controller here
-    and for the challenger process that later draws the window's units (`served_commit.py challenger --state`), so named
+    and for the challenger process that later samples the execution phase's units (`served_commit.py challenger --state`), so named
     by the Lean's claim instance (`verifier.CLAIM`)."""
     from verity.core.protocols.pouw import verifier
     from verity.core.protocols.pouw.coins import COIN_BYTES, HM96, LABELS
@@ -884,7 +884,7 @@ def state_entropy(path: str):
 
 
 def epoch_coins(args, epoch: int) -> Coins:
-    """The run's epoch coins, committed before any engine starts; with ``--retain`` the commitment is published beside the
+    """The run's execution-phase coins, committed before any engine starts; with ``--retain`` the commitment is published beside the
     passes (``coins.json``), where `verify_run.py --coins` reads it.  ``POUW_COIN_STATE`` names a file holding the
     challenger's entropy (`state_entropy`)."""
     state = settings.POUW_COIN_STATE

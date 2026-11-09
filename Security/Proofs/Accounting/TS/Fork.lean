@@ -2,11 +2,12 @@ module
 
 public import Definitions.Accounting.Guarantees.TS
 public import Proofs.Pouw.RelativeSecurity
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # Binding from the fork form
 
-`Accounting.SecurityProofs.TS.BindingOfFork : Accounting.Guarantees.TS.BindingOfFork`, C-Flock's rewinding step
+`Accounting.SecurityProofs.TS.BindingOfFork : Accounting.Guarantees.TS.BindingOfFork`, Flock's rewinding step
 (`Proofs/Flock/Recursive/Fork.lean`) over the TS model's uniform coins. Fix the coins `x` before round `w`; its
 continuations are `splice w x z` over every `z`. With `n` of them proved and `n_v` opening round `w`'s leaves to `v`,
 the reference opening has the most, `n_*`, so `x`'s moved continuations are `n − n_*`, and its forked pairs are
@@ -156,7 +157,7 @@ theorem moved_le_forked [Fintype Ω] (w : Fin S) :
   have hcM : (Finset.univ.filter fun x => pf.Moved x w).card = M := by rw [Finset.card_filter]
   have hcF : (Finset.univ.filter fun p : Paths Ω S × Paths Ω S => pf.Forked w p.1 p.2).card = Fk := by
     rw [Finset.card_filter, Fintype.sum_prod_type]
-  unfold prob
+  unfold prob Claims.prUniform
   rw [hcM, hcF, Fintype.card_prod, ← hC]
   rcases Nat.eq_zero_or_pos C with h0 | hpos
   · simp [h0]

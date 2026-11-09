@@ -19,8 +19,9 @@ def _outside_imports(tree: ast.Module) -> list[str]:
 
 
 def test_every_lint_is_one_the_ratchet_gate_can_run() -> None:
-    """`tools/ratchet_gate.py` runs each lint's `test_no_new*` tests, as the base has them, on a change's tree, under drive's
-    Python: the standard library and a stand-in for pytest's marks.  So each lint (a module here whose `NAME`, a string
+    """`tools/ratchet_gate.py` runs each lint's `test_no_new*` tests, as the base has them, on a change's tree, under the
+    Python that runs it (`python3` before marking, the check's own in its step): the standard library and a stand-in for
+    pytest's marks.  So each lint (a module here whose `NAME`, a string
     literal, names its allowlist) needs one that takes no fixture, and it and the helpers here import nothing else."""
     lints = 0
     for p in sorted(R.HERE.glob("test_*.py")):
@@ -37,11 +38,11 @@ def test_every_lint_is_one_the_ratchet_gate_can_run() -> None:
         assert runnable, (f"{p.name}: no `test_no_new*` test without arguments, which the ratchet gate runs to judge a change "
                           "to this lint; name the test that refuses violations its allowlist doesn't cover `test_no_new_*`")
         bad = _outside_imports(tree)
-        assert not bad, f"{p.name} imports {bad}, which drive's Python lacks, so the ratchet gate couldn't run it"
+        assert not bad, f"{p.name} imports {bad}, which the Python that runs the ratchet gate may lack, so it couldn't run it"
     assert lints
     for p in sorted(R.HERE.glob("_*.py")):
         bad = _outside_imports(ast.parse(p.read_text(encoding="utf-8")))
-        assert not bad, f"{p.name}, which the lints import, imports {bad}, which drive's Python lacks"
+        assert not bad, f"{p.name}, which the lints import, imports {bad}, which the Python that runs the ratchet gate may lack"
 
 
 def test_new_and_stale_entries(tmp_path, monkeypatch) -> None:

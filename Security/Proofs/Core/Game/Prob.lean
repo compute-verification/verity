@@ -1,6 +1,11 @@
 module
 
+public import Definitions.Core.Game
+public import Mathlib.Data.Fintype.Pi
 public import Proofs.Core.Game.Union
+import Mathlib.Basic.ENNReal.BigOperators
+import Proofs.Core.Game.Basic
+public import Definitions.Core.Game.Prob
 
 /-!
 # Probabilities for a fixed prover strategy
@@ -12,8 +17,10 @@ they use:
 
 * `prob_mono`, `prob_le_one`, `prob_or_le`: monotonicity and the union bound;
 * `prob_and_const`: an event conjoined with a fact fixed by the strategy;
-* `prob_map`, `Strategy.toMap_ofMap`: relabelling the output (`map`) keeps the game's strategies (`Strategy.ofMap` and
-  `Strategy.toMap`, in `Protocol`).
+* `prob_map`, `Strategy.toMap_ofMap`, `Strategy.ofMap_toMap`: relabelling the output (`map`) keeps the game's
+  strategies (`Strategy.ofMap` and `Strategy.toMap`, in `Protocol`).
+
+The definitions are in `Definitions.Core.Game.Prob`.
 -/
 
 @[expose] public section
@@ -142,18 +149,20 @@ theorem Strategy.toMap_ofMap (f : α → β) :
       rw [Strategy.toMap_ofMap f (k m) s']
   | @Game.coin _ _ _ _ k, s => funext fun c => Strategy.toMap_ofMap f (k c) (s c)
 
+theorem Strategy.ofMap_toMap (f : α → β) :
+    ∀ (g : Game α) (s : Strategy g), Strategy.ofMap f g (Strategy.toMap f g s) = s
+  | .ret _, _ => rfl
+  | .send _ k, ⟨m, s'⟩ => by
+      show (⟨m, Strategy.ofMap f (k m) (Strategy.toMap f (k m) s')⟩ : Strategy (Game.send _ k)) = ⟨m, s'⟩
+      rw [Strategy.ofMap_toMap f (k m) s']
+  | @Game.coin _ _ _ _ k, s => funext fun c => Strategy.ofMap_toMap f (k c) (s c)
+
 theorem prob_true : ∀ (g : Game α) (s : Strategy g), prob (fun _ => True) g s = 1
   | .ret _, _ => by simp [prob]
   | .send _ k, s => prob_true (k s.1) s.2
   | @Game.coin _ _ _ _ k, s => by
       rw [prob_coin]
       exact (congrArg avg (funext fun c => prob_true (k c) (s c))).trans (avg_const 1)
-
-/-- A strategy for `g.bind f`, restricted to `g`. -/
-def Strategy.ofBind (f : α → Game β) : (g : Game α) → Strategy (g.bind f) → Strategy g
-  | .ret _, _ => PUnit.unit
-  | .send _ k, s => ⟨s.1, Strategy.ofBind f (k s.1) s.2⟩
-  | @Game.coin _ _ _ _ k, s => fun c => Strategy.ofBind f (k c) (s c)
 
 /-- **Additive composition, for a fixed strategy.** If from every doomed output of `g` the
 continuation succeeds with probability at most `ε₂` whatever the prover does, the composition

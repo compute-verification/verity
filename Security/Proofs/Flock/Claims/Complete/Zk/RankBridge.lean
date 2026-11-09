@@ -1,7 +1,48 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Zk.Coins
+public import Proofs.Flock.Claims.Complete.Zk.MaskRank
 public import Proofs.Flock.Claims.KS.Range
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.Int.Star
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Coins
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Scope.Setup
+import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
+import Std.Tactic.BVDecide.Normalize.BitVec
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The rank bound at the verifier's coins
@@ -461,7 +502,7 @@ theorem coin_tauFin {k : ℕ} (r : Fin k → Coin) (f : Fin 4 → Fin 10 → ℕ
 open Classical in
 theorem pr_rankBound {k D κ : ℕ} {fix : Fin k → Fin D → Option GF128} (h : RankBound k D fix κ) :
     Claims.Pr (fun R : Fin k → Fin D → GF128 => ¬ RankFull fun i t => (fix i t).getD (R i t)) ≤ 1 / 2 ^ κ := by
-  unfold Claims.Pr
+  unfold Claims.Pr Claims.prUniform
   unfold RankBound at h
   have hc : (0 : ℝ) < Fintype.card (Fin k → Fin D → GF128) := by exact_mod_cast Fintype.card_pos
   rw [div_le_div_iff₀ hc (by positivity), one_mul]

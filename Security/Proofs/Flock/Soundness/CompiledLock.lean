@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Model.Compiled
-public import Proofs.Flock.Soundness.Game.Lock
+public import Proofs.Flock.Soundness.Game
 public import Proofs.Flock.Soundness.LigeritoMid
 
 /-!
@@ -631,11 +631,6 @@ noncomputable def tableCmp (A : Arith F K) (H : List UInt8 → D) (E : Merkle.En
       fun pend => Game.send (Opens F D) fun o => Game.ret
         ⟨pend.1.verdict o && pend.2.verdict o &&
           decide (OpensOK H E cap₀ 0 pend.1 o ∧ OpensOK H E cap₀ 1 pend.2 o), cap₀, pend, o⟩
-
-theorem tableC_eq (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) :
-    tableC A H E S sch hm ptLocal mPts = Game.send (Cap D) (tableCmp A H E S sch hm ptLocal mPts) :=
-  rfl
 
 /-- **The table's leaf relation** below the level-0 cap. -/
 def TopRel (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedule) (C₀ : Oracle F)

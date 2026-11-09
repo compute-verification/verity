@@ -22,6 +22,12 @@ spec = importlib.util.spec_from_file_location("check_for_lean_records", ROOT / "
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
 
+
+@pytest.fixture(autouse=True)
+def no_store(monkeypatch):
+    """No test asks this machine's store (`stored`, through `research`)."""
+    monkeypatch.setattr(LC, "stored", lambda *a, **k: None)
+
 #: `check.py` as far as `--records` sees it: its arguments, working directory, threads, Lean slot and the lock files it holds
 #: open logged; reports under `--out` as `--no-replay` leaves them (no replay time); `--update` writing a record
 FAKE_AUDIT = """\
@@ -114,7 +120,9 @@ def test_the_audit_runs_without_the_replay_on_the_trees_own_copy_of_the_audits_d
     assert LC.audit_records("a", deps, tree) == 0
     (call,) = _calls(tmp_path)
     arts = ["--artifacts", str((tmp_path / "lean-artifacts").resolve())]
-    assert _argv(call) == ["--build", "--no-replay", "--no-runs", *arts, "--out", "OUT", str(tree / "a")]
+    facts = ["--facts-cache", str(LC.facts_dir())]
+    assert _argv(call) == ["--build", "--no-replay", "--no-runs", "--facts", "named", *arts, *facts, "--out", "OUT",
+                           str(tree / "a")]
     assert (call["cwd"], call["threads"]) == (str(tree), "2")
     assert (tree / "a" / "Aa.lean").is_file() and (tree / "p" / "Pp.lean").is_file() and not (tree / "c").exists()
     copied, kept = tree / "a" / ".lake" / "packages" / "dep" / "Dep.olean", deps / k / "dep" / "Dep.olean"
@@ -124,8 +132,8 @@ def test_the_audit_runs_without_the_replay_on_the_trees_own_copy_of_the_audits_d
     assert f"dependencies copied ({k[:12]})" in out and "lean-records: a: check.py exit 0" in out
 
     assert LC.audit_records("a", deps, tree, update=True) == 0
-    assert _argv(_calls(tmp_path)[0]) == ["--build", "--no-replay", "--no-runs", *arts, "--update", "--out", "OUT",
-                                          str(tree / "a")]
+    assert _argv(_calls(tmp_path)[0]) == ["--build", "--no-replay", "--no-runs", "--facts", "named", *arts, *facts,
+                                          "--update", "--out", "OUT", str(tree / "a")]
     assert (repo / "a" / "lean-audit.json").read_text() == '{"guarantees": {"A.t": {}}}', "the record comes back to the checkout"
     out = capsys.readouterr().out
     assert f"lean-records: wrote {repo / 'a' / 'lean-audit.json'}" in out
@@ -135,7 +143,7 @@ def test_the_audit_runs_without_the_replay_on_the_trees_own_copy_of_the_audits_d
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "run"))
     moved = tmp_path / "moved.json"
     assert LC.audit_records("a", deps, tree, update=True, moved=moved, out=tmp_path / "reports") == 0
-    assert _calls(tmp_path)[0]["argv"][5:] == ["--update", "--moved", str(moved), "--out", str(tmp_path / "reports"),
+    assert _calls(tmp_path)[0]["argv"][7:] == [*facts, "--update", "--moved", str(moved), "--out", str(tmp_path / "reports"),
                                                str(tree / "a")]
     assert (repo / "a" / "lean-audit.json").read_text() == "{}", "a recorded run's source tree is shared by its commit's runs"
 
@@ -155,13 +163,14 @@ def test_its_result_is_of_its_own_kind_which_check_and_research_merge_refuse(rep
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     assert LC.audit_records("p", tmp_path / "deps", tree) == 0
-    assert _calls(tmp_path)[0]["argv"][3:7] == ["--artifacts", str((tmp_path / "lean-artifacts").resolve()), "--out",
-                                                str(run / "lean-audit")]
+    assert _calls(tmp_path)[0]["argv"][5:11] == ["--artifacts", str((tmp_path / "lean-artifacts").resolve()),
+                                                 "--facts-cache", str(LC.facts_dir()), "--out", str(run / "lean-audit")]
     doc = json.loads((run / "lean-audit" / "audit.json").read_text())
     assert doc["kind"] == LC.FAST_KIND == "lean-fast/v1" and [r["kind"] for r in doc["packages"]] == [LC.FAST_KIND]
     assert json.loads((run / "lean-audit" / "audit-x" / "report.json").read_text())["kind"] == LC.FAST_KIND
     res = result.check(run, "r1")
     assert res.valid and res.doc["kind"] == LC.FAST_KIND and res.validation_status == "passed"
+    assert res.doc["outcome"] == LC.PASS and res.doc["records"]["p"]["outcome"] == LC.PASS
     assert res.doc["artifacts"] == ["lean-audit"] and res.doc["workload_fingerprint"]["replay"] is False
     assert LC.FAST_KIND in REFUSED_KINDS
     assert CHECK.lean_fast(run).startswith(f"refused: {tree / 'p'}: a lean-fast/v1 result")
@@ -170,6 +179,44 @@ def test_its_result_is_of_its_own_kind_which_check_and_research_merge_refuse(rep
     assert LC.audit_records("p", tmp_path / "deps", tree) == 1
     res = result.check(run, "r1")
     assert res.valid and res.doc["kind"] == LC.FAST_KIND and res.validation_status == "failed", "a failure has the kind too"
+    assert res.doc["outcome"] == LC.FAILED, "a failure that isn't a record difference"
+
+
+def test_in_a_run_what_its_passing_builds_added_to_the_artifact_cache_goes_into_its_reports_as_one_bundle(repo, tmp_path,
+                                                                                                         monkeypatch):
+    """At the path `shared_bundles` lists, holding only what `LakeArtifacts.put` added, which it does only after a build
+    passed (and `put` itself only for a sandboxed one). Outside a run, or with nothing added, there is no bundle."""
+    import tarfile
+
+    entry, art = f"{LC.LA.MK.INDEX}/{'a' * 128}.json", "0123456789abcdef.olean"
+
+    def put(self, reports, since=None, log=print):
+        for name in (entry, f"artifacts/{art}"):
+            (self.store / name).parent.mkdir(parents=True, exist_ok=True)
+            (self.store / name).write_text(name)
+        self.added.append((entry, [art]))
+        return 1
+
+    monkeypatch.setattr(LC.LA.LakeArtifacts, "put", put)
+    tree = tmp_path / "cache" / "lean-records" / "tree"
+    for i, rc in enumerate(["0", "1"]):
+        run = tmp_path / f"run-{i}"
+        run.mkdir()
+        monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
+        monkeypatch.setenv("AUDIT_RC", rc)
+        assert LC.audit_records("a", tmp_path / "deps", tree) == int(rc)
+        got = sorted(str(f.relative_to(run)) for f in run.rglob("lean-artifacts*"))
+        if rc == "1":
+            assert got == [], "a failed build adds nothing to the artifact cache, so nothing to bundle"
+            continue
+        assert got == ["lean-audit/lean-artifacts.tar.gz"] and LC.LA.BUNDLE_FILE.fullmatch(got[0])
+        with tarfile.open(run / got[0]) as t:
+            assert t.getnames() == [entry, f"artifacts/{art}"] and all(LC.LA.MEMBER.fullmatch(n) for n in t.getnames())
+
+    monkeypatch.delenv("RESEARCH_RUN_DIR")
+    monkeypatch.delenv("AUDIT_RC")
+    assert LC.audit_records("a", tmp_path / "deps", tree, out=tmp_path / "reports") == 0
+    assert not list((tmp_path / "reports").rglob("lean-artifacts*")), "outside a run no one would take it"
 
 
 def test_the_copy_is_taken_from_hard_links_after_the_dependencies_lock_is_released(repo, tmp_path, monkeypatch):
@@ -256,9 +303,13 @@ def test_the_packages_whose_records_read_the_build_are_audited_after_it(repo, tm
     assert LC.audit_records("p", deps, tree, update=True, out=out) == 0
     calls = _calls(tmp_path)
     arts = ["--artifacts", str((tmp_path / "lean-artifacts").resolve())]
+    facts = ["--facts-cache", str(LC.facts_dir())]
     assert [c["argv"] for c in calls] == [
-        ["--build", "--no-replay", "--no-runs", *arts, "--update", "--out", str(out), str(tree / "p")],
-        ["--build", "--no-replay", "--no-runs", *arts, "--out", str(out / "requirer-a"), str(tree / "a")]]
+        ["--build", "--no-replay", "--no-runs", "--facts", "named", *arts, *facts, "--update", "--out", str(out),
+         str(tree / "p")],
+        ["--build", "--no-replay", "--no-runs", "--facts", "none", *arts, *facts, "--out", str(out / "requirer-a"),
+         str(tree / "a")]], \
+        "only PKG's audit keeps its facts document, which `trusted_size.py --run` reads; a requirer's is read by nobody"
     assert json.loads((out / "requirer-a" / "audit.json").read_text())["kind"] == LC.FAST_KIND
     assert json.loads((tree / LC.LINKS).read_text()) == {"a": k}
     assert LC.audit_records("a", deps, tree) == 0 and len(_calls(tmp_path)) == 1, "nothing requires a"

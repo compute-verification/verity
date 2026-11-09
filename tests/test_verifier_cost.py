@@ -1,12 +1,15 @@
-"""A verifier of record costs O(circuit description), never O(unrolled circuit) (AGENTS.md "Design rules").
+"""A verifier costs O(circuit description), never O(unrolled circuit) (AGENTS.md "Design rules").
 
-A scan over the Lean under `verity/core/` (the verifiers of record and the code they run) refuses the forms an unrolled
+A scan over the Lean under `verity/core/` (the verifiers and the code they run) refuses the forms an unrolled
 walk takes there: locating gates one by one through the canonical layout (`P.gate g`, `Flock.Program.Prog.gate`), a
 range or loop bounded by a Definition's gate count (`List.range (P.defs[P.root]!).gates`, `[0:defn.gates]`), and an
 array or loop bounded by a name bound to one (`let n := defn.gates` … `Array.mkEmpty n`, `for j in [0:n]`), a range or
 loop over a node's members (`for m in [0:node.members]`, `List.range node.members`: every batch member or scan iteration),
 and outside the tests a templated unit unrolled (`Tmpl.unroll`, `Tmpl.unrollAt`, `Tmpl.unitFull`, `Tmpl.posMap`, `Tmpl.foldRef`):
 a templated unit is read from its description (`Tmpl.unrollOk`, `Tmpl.unitNet`, `Tmpl.foldUnit`). Outside the tests it
+also refuses a template query's units' gates asked one by one under a map over the units (`(Array.range pop).mapM fun u
+=> … TemplateQuery.gates d rs u`), each of which walks every earlier root node: they are read a range at a time
+(`TemplateQuery.unitGates`). Outside the tests it
 also refuses the recursive inner's two: the comb (`.folded`) in a file that sets the inner statement up from its flat
 file (`Stmt.setupTables innerTags …`), which `partialRangesT` folds row by row since a flat file carries no template, and
 V*'s circuit text emitted outside V*'s namespace (`VStar.emitCircuitOf`), the whole unit laid out again. The fix is in the
@@ -47,9 +50,13 @@ ALLOWED: dict[str, str] = {
         "open (PRF-72): Q_call v1 owns every computing gate, so its Gates lays out one activation of each distinct "
         "Call's Definition, batch members and scan iterations unrolled (its reads deduplicated in linear time, "
         "dedupReads, proved equal to the quadratic loop it replaced: gates_ref); no served window names Q_call",
-    "verity/core/service/sampled_proofs/SampledProofs/PartitionRef.lean":
+    "verity/core/service/spot/Spot/PartitionRef.lean":
         "committedBitsRef, the walk of one activation Partition.committedBits replaced by reading Flock.Qcall.gates' "
         "layout (Gates.readTo): the reference the committed_bits difftest piece holds it to; the verifier never runs it",
+    "verity/core/service/flock/Flock/TemplateQuery.lean":
+        "TemplateQuery.unitGatesRef, every unit's gates unit by unit, the walk unitGates replaced: the reference the "
+        "unit_gates difftest piece holds it to, and unitGates' answer on ranges evaluate never gives (not contiguous "
+        "from unit 0, or a root that isn't a definition)",
     "verity/core/service/flock/Flock/RecCoins.lean":
         "open (PRF-283 Decision 1): Inner.load's comb, CircuitFold.folded on the inner statement set up from its flat "
         "file, folds every row of the unrolled inner unit, until PR 8 folds a templated inner once per Definition "
@@ -60,17 +67,22 @@ ALLOWED: dict[str, str] = {
     "verity/core/service/flock/Flock/NetAt.lean":
         "Tmpl.unrollAt, a templated unit's rows at their committed positions: the reference Tmpl.unitNet is proved "
         "equal to (FlockSoundness.TmplFold.unitNet_eq) and Flock.Test.NetAt compares it with; Tmpl.unitFull, its rows "
-        "behind Tmpl.unitNet's thunks, built only where a check reads them, which none on the templated statement's "
-        "path does (benchmarks/verifier_cost/flock_tmpl stmt)",
+        "behind Tmpl.unitNet's thunks, built only where a check reads them: open on the templated statement's path, "
+        "where verify --zk's KsScope.checkOf reads them (ProvedScope.scopeOkH's portReadsB) before refusing the "
+        "statement as a version it doesn't serve (ProvedScope.servedForm; benchmarks/verifier_cost/flock_served)",
     "verity/core/service/flock/Flock/HmRow.lean":
         "HmOut.unrolled (and HmOut.parseStmt), a templated file's statement circuit, the flat circuit its template "
         "unrolls to (ASK-112 option A), which the soundness statements read; no check runs it: verify sets up on and "
-        "checks the committed circuit (HmOut.parseCommit), its template by its description (ProvedScope.scopeOkT)",
+        "checks the committed circuit (HmOut.parseCommit), its template by its description (ProvedScope.scopeOkT), "
+        "but KsScope.checkOf's scope check reads its unit's rows (NetAt.lean's entry)",
     "verity/core/service/flock/Flock/TmplLayout.lean":
         "Tmpl.posMap, every column's committed position: the reference Tmpl.posOf is proved to read (posMap_tree)",
     "verity/core/service/flock/Flock/TmplFold.lean":
         "Tmpl.foldRef, the fold over the unrolled rows: the reference Tmpl.foldUnit is difftested against "
         "(Flock.Test.TmplFold) and proved equal to (foldUnit_eq_project)",
+    "verity/core/service/flock/Flock/Gate.lean":
+        "Prog.gateAt, one gate's location as Flock.Program.Gate: verity-evaluate's `gate` serves it so the difftest holds "
+        "layout.Gate to it; no verifier calls it",
 }
 
 FIX = ("a verifier of record does work proportional to the description, never to the unrolled circuit (AGENTS.md "
@@ -97,6 +109,13 @@ INNER = re.compile(r"\bStmt\.setup\w*\s+(?:\w+\.)*innerTags\b")
 COMB = re.compile(r"\.(?:folded|foldedPartial)\b(?![\w'])")
 #: V*'s circuit text emitted from outside V*'s namespace: the unit laid out and written again
 EMIT = re.compile(r"(?<![\w'.])VStar\.emitCircuit(?:Of|Holo)?\b(?![\w'])")
+#: a range mapped unit by unit (`(Array.range pop).mapM fun u =>`), and the body it maps: the rest of its line and two more
+UNIT_MAP = re.compile(r"\b(?:List|Array)\.range\b[^\n]*?\bfun\s+(\w+)\s*=>([^\n]*(?:\n[^\n]*){0,2})")
+
+
+def _unit_gates(unit: str) -> re.Pattern:
+    """A template query's gates of one unit, `TemplateQuery.gates d rs unit`."""
+    return re.compile(rf"(?<![\w'.])(?:(?:Flock\.)?TemplateQuery\.)?gates\s+[\w.]+\s+\w+\s+{re.escape(unit)}\b(?![\w'.])")
 
 
 def offenses(source: str, test: bool = False) -> list[tuple[int, str]]:
@@ -108,6 +127,8 @@ def offenses(source: str, test: bool = False) -> list[tuple[int, str]]:
         if INNER.search(src):
             hits += [(m.start(), "the comb over the flat inner circuit") for m in COMB.finditer(src)]
         hits += [(m.start(), "V*'s unrolled circuit text regenerated") for m in EMIT.finditer(src)]
+        hits += [(m.start(), "a template query's units' gates asked one by one (TemplateQuery.unitGates reads them a "
+                  "range at a time)") for m in UNIT_MAP.finditer(src) if _unit_gates(m.group(1)).search(m.group(2))]
     hits += [(m.start(), "a range over a gate count") for m in RANGE.finditer(src)]
     hits += [(m.start(), "a range over a node's members") for m in MEMBERS.finditer(src)]
     for b in BOUND.finditer(src):
@@ -148,15 +169,20 @@ def test_the_scan_sees_each_form():
     def k (node : Node) := for m in [0:node.members] do pure ()
     def l (body : Body) := (List.range (body.nodes[k]!).members).map id ++ List.range node.membersOf
     def n (f : Files) := do
-      let (_, sts) ← Stmt.setupTables innerTags f.circuit f.pub Coins.os 1
+      let (_, sts) ← Stmt.setupTables innerTags f.circuit f.pub RecVStar.innerTree 1
       (Setup.ofCircuit sts[0]!).fold.folded a b lw rho ts
     def o (s : VStar.Stmt) := VStar.emitCircuitOf holo put u l s.sub b
     def p (t : Tmpl) := Tmpl.foldUnit t lays sl a lw rho rr
     """
-    assert [line for line, _ in offenses(src)] == [3, 4, 7, 8, 12, 13, 15, 16, 19, 20]
+    assert [line for line, _ in offenses(src)] == [3, 4, 7, 8, 11, 12, 13, 15, 16, 19, 20]
     assert [line for line, _ in offenses(src, test=True)] == [3, 4, 7, 8, 15, 16]
     plain = """
     def lincheck (c : CircuitFold) := c.folded alpha beta lw rho ts
     def stage := emitCircuitOf holo put u l sub b
+    def one (u : Nat) := TemplateQuery.gates d rs u
+    def laid := (Array.range pop).map fun i => match TemplateQuery.locate rs i, gatesOf i with
+      | some l, some g => (l, g)
+      | _, _ => none
+    def other := (Array.range pop).mapM fun u => gates d rs v
     """
     assert offenses(plain) == []

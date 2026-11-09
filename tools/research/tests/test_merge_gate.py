@@ -976,22 +976,22 @@ def test_the_canary_passes_only_while_every_gate_refuses_the_bad_attempts_and_ad
 
 
 def _deferred_lock(feat: Path, tip: str, files: dict[str, str], checked: str) -> str:
-    """Drive's lock commit on ``tip`` for a landing made with `--defer`, naming its check ``checked``."""
+    """Drive's lock commit on ``tip``, naming its lock run ``checked``."""
     _git(feat, "reset", "-q", "--hard", tip)
     for rel, text in files.items():
         (feat / rel).parent.mkdir(parents=True, exist_ok=True)
         (feat / rel).write_text(text)
         _git(feat, "add", rel)
-    _git(feat, "commit", "-q", "-m", f"Lock records regenerated for #1\n\nChecked: {checked} (the Lean check of {tip[:12]}, passed "
-                                     f"by regenerating them)\nRegenerated: {', '.join(files)}")
+    _git(feat, "commit", "-q", "-m", f"Lock records regenerated for #1\n\nChecked: {checked} (the lock run of `checked` {tip[:12]}, "
+                                     f"passed by regenerating them)\nRegenerated: {', '.join(files)}")
     return _git(feat, "rev-parse", "HEAD")
 
 
 def test_a_deferred_landings_lock_commit_is_vouched_for_only_by_the_records_its_running_check_regenerated(tmp_path):
-    """Drive lands with `--defer` while the train's check runs, so the gate reads that check's records from its run dir on
-    its node, hashing the bytes it fetches; a lock commit whose records differ, that names another check, that leaves out a
-    package the check regenerated, or whose check ran on another commit is refused, and without drive's verdict (`deferred`)
-    the check, having no passing attempt, vouches for nothing."""
+    """Drive commits a lock run's records as soon as it passed, so the gate reads them from its run dir on its node, hashing
+    the bytes it fetches; a lock commit whose records differ, that names another run, that leaves out a package the run
+    regenerated, or whose run ran on another commit is refused, and without drive's verdict (`deferred`) the run, a check of
+    lean-audit alone with no passing attempt of the whole check, vouches for nothing."""
     from research.merge import regenerated_parent
     from research.store.local import LocalStore
     from test_queue_drive import _live_run
@@ -1017,45 +1017,34 @@ def test_a_deferred_landings_lock_commit_is_vouched_for_only_by_the_records_its_
     assert vouched(_deferred_lock(feat, tip, {lock: '{"records": 2}\n'}, "r20261020-000003-0003"), "r20261020-000003-0003", elsewhere) is None  # it checked main
 
 
-def test_a_rekeyed_checks_lock_commit_is_vouched_for_only_across_trees_that_differ_in_low_risk_files(tmp_path):
-    """Drive moved a running Lean check of ``tip`` to another commit (`Driver._rekey_lean`, the low-risk lane's `_move_lean`), and
-    lands its regenerated records there: with ``rekeyed_from`` naming the commit the check ran on, the gate vouches when that
-    commit's tree and the lock commit's parent's differ only in files the low-risk rule allows, and refuses a difference in a
-    file `lowrisk_excludes` names, in what a Lean check reads whatever the excludes say, with no excludes, or a check that ran
-    elsewhere."""
-    from research.merge import regenerated_parent
+def test_a_lock_commit_carries_the_caps_its_lock_run_repaired_and_no_other_file(tmp_path):
+    """The lock run's `--bookkeeping warn` repairs files beside the locks (`REPAIRED`, its report's `repaired`): a lock commit
+    holding the repaired copy byte for byte is vouched for; one whose copy differs, one that leaves it out, and one changing
+    any other file is refused."""
+    import json
+
+    from research.merge import REPAIRED, regenerated_parent
     from research.store.local import LocalStore
     from test_queue_drive import _live_run
 
     main, feat, tip = _repos(tmp_path)
-    rid, store, lock = "r20261020-000001-0001", LocalStore(), "pkg/lean-audit.json"
-    _, fetch, _ = _live_run(tmp_path, rid, tip, {"pkg": '{"records": 2}\n'})
-    excludes = ("*.lean", "lean-audit.json", "lakefile.*", "verity/core/")
+    store, lock, caps, rid = LocalStore(), "pkg/lean-audit.json", "tests/test_lean_packages.py", "r20261020-000005-0005"
+    assert caps in REPAIRED
+    d, fetch, _ = _live_run(tmp_path, rid, tip, {"pkg": '{"records": 2}\n'})
+    (d / "lean-audit" / "repaired" / "tests").mkdir(parents=True)
+    (d / "lean-audit" / "repaired" / caps).write_text('UNWITNESSED = {"pkg": 3}\n')
+    audit = json.loads((d / "lean-audit" / "audit.json").read_text())
+    audit["repaired"] = {caps: f"/workspace/research/runs/{rid}/lean-audit/repaired/{caps}"}
+    (d / "lean-audit" / "audit.json").write_text(json.dumps(audit))
 
-    def moved(files: dict[str, str]) -> str:
-        """``tip`` with ``files`` changed: the commit drive moved the check to."""
-        _git(feat, "reset", "-q", "--hard", tip)
-        for rel, text in files.items():
-            (feat / rel).parent.mkdir(parents=True, exist_ok=True)
-            (feat / rel).write_text(text)
-            _git(feat, "add", rel)
-        _git(feat, "commit", "-q", "--allow-empty", "-m", "Queue: #2 change 2")
-        return _git(feat, "rev-parse", "HEAD")
+    def vouched(files: dict[str, str]) -> str | None:
+        return regenerated_parent(feat, _deferred_lock(feat, tip, files, rid), store, tool="check", kinds=frozenset({"check/v1"}),
+                                  command=CHECKED, deferred=rid, fetch=fetch)
 
-    def vouched(files: dict[str, str], ran: str | None = tip, ex=excludes) -> str | None:
-        commit = _deferred_lock(feat, moved(files), {lock: '{"records": 2}\n'}, rid)
-        return regenerated_parent(feat, commit, store, tool="check", kinds=frozenset({"check/v1"}), command=CHECKED,
-                                  deferred=rid, fetch=fetch, rekeyed_from=ran, excludes=ex)
-
-    assert vouched({"docs/x.md": "x\n"}) == rid
-    assert vouched({}, ex=()) == rid                                             # the same tree
-    assert vouched({"docs/x.md": "x\n"}, ran=None) is None                       # it didn't run on the parent
-    assert vouched({"docs/x.md": "x\n"}, ran=_git(main, "rev-parse", "HEAD")) is None   # nor on the commit named
-    assert vouched({"verity/core/v.py": "v\n"}) is None                          # a file `lowrisk_excludes` names
-    assert vouched({"pkg/lean-audit.json": '{"records": 7}\n', "docs/x.md": "x\n"}) is None    # a lock
-    assert vouched({"pkg/B.lean": "b\n"}, ex=("verity/core/",)) is None          # Lean, whatever the excludes say
-    assert vouched({"tools/verity/lean/check.py": "c\n"}, ex=("verity/core/",)) is None
-    assert vouched({"docs/x.md": "x\n"}, ex=()) is None                          # no excludes: nothing is low-risk
+    assert vouched({lock: '{"records": 2}\n', caps: 'UNWITNESSED = {"pkg": 3}\n'}) == rid
+    assert vouched({lock: '{"records": 2}\n', caps: 'UNWITNESSED = {"pkg": 9}\n'}) is None
+    assert vouched({lock: '{"records": 2}\n'}) is None
+    assert vouched({lock: '{"records": 2}\n', caps: 'UNWITNESSED = {"pkg": 3}\n', "a.txt": "x\n"}) is None
 
 
 def test_a_report_naming_a_regenerated_record_the_stores_files_lack_is_unreadable_not_none(tmp_path, monkeypatch):

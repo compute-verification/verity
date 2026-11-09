@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from test_cache import REPO, _bindings, _edit, _tree
+from test_cache import REPO, _bindings, _edit, _run, _tree
 
 #: one cached `--all` run over the synthetic bindings with the catalog's records; prints its cache stats and each target's value
 HARNESS = """
@@ -62,15 +62,6 @@ print(json.dumps({"stats": rep["cache"], "hits": sorted(t["target"] for t in rep
 BINDINGS = ('(("_sized_roots",), sized)', '(("_xor_roots",), xor)')
 
 
-def _run(root: Path, harness: str = HARNESS) -> dict:
-    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
-    r = subprocess.run([sys.executable, "-c", harness, str(root), str(REPO)], capture_output=True, text=True, cwd=REPO, env=env)
-    assert r.returncode == 0, r.stderr
-    out = json.loads(r.stdout.strip().splitlines()[-1])
-    assert not out["stats"]["untraced"] and not out["stats"]["errors"] and not out["stats"]["changed"], out
-    return out
-
-
 def _fresh(root: Path, harness: str = HARNESS) -> dict:
     """``root``'s verdicts as a full build gives them now: a copy of the tree without its cache."""
     copy = root.parent / f"{root.name}-fresh"
@@ -97,14 +88,14 @@ def test_a_definition_module_edit_rebuilds_exactly_the_bindings_that_read_it(tmp
     reach), rechecks what changed, and gives the verdicts a full build gives."""
     root = _tree(tmp_path / "t")
     _bindings(root, *BINDINGS)
-    first = _run(root)
+    first = _run(root, HARNESS)
     assert first["hits"] == [] and first["stats"]["units"] == {"stored": 5}
     assert set(first["values"]) == {"SynAdd_v1", "SynK_v1{K=2}", "SynOther_v1", "SynSub_v1", "SynTop_v1", "SynX_v1", "SynXor_v1"}
     for rel, old, new, unit in [("syn/xdef.py", "B.call(SynXor, a, b)", "B.call(SynXor, b, a)", "_xor_roots"),
                                 ("syn/kdef.py", "out = B.call(SynAdd, out, b)", "out = B.call(SynAdd, b, out)", "_sized_roots"),
                                 ("syn/sub.py", "B.call(SynAdd, a, b)", "B.call(SynAdd, b, a)", "_core_roots")]:
         _edit(root, rel, old, new)
-        out = _run(root)
+        out = _run(root, HARNESS)
         assert out["stats"]["units"]["rebuilt"] == [unit], (rel, out["stats"]["units"])
         assert out["stats"]["units"]["reused"] == 4 and out["stats"]["units"]["stored"] == 1
         assert out["values"] == _fresh(root)["values"]
@@ -116,13 +107,13 @@ def test_a_missing_or_unreadable_record_rebuilds_its_binding(tmp_path):
     target is reused as before."""
     root = _tree(tmp_path)
     _bindings(root, *BINDINGS)
-    _run(root)
+    _run(root, HARNESS)
     (bad,) = _records(root, ("_xor_roots",))
     bad.write_text("{")
     (gone,) = _records(root, ("_sized_roots",))
     gone.unlink()
     _edit(root, "syn/idle.py", "B.call(SynAdd, a, a)", "B.call(SynAdd, b, b)")    # no binding reads it: the task list misses
-    out = _run(root)
+    out = _run(root, HARNESS)
     assert sorted(out["stats"]["units"]["rebuilt"]) == ["_sized_roots", "_xor_roots"]
     assert out["stats"]["units"]["stored"] == 2 and out["hits"] == sorted(out["values"])
     assert len(_records(root, ("_sized_roots",))) == 1
@@ -241,11 +232,11 @@ def test_what_a_body_build_registers_leaves_every_record_counting(tmp_path):
     (root / "syn/late.py").write_text(LATE.lstrip("\n"))
     _edit(root, "syn/catalog.py", "BINDINGS = [", LATE_BINDING + "BINDINGS = [")
     _bindings(root, '(("_late_roots",), late)')
-    first = _run(root)
+    first = _run(root, HARNESS)
     assert first["stats"]["units"] == {"stored": 4}
     assert {"SynLate_v1", "SynLater_v1"} <= set(first["values"])
     _edit(root, "syn/late.py", "(a - b)", "(b - a)")
-    out = _run(root)
+    out = _run(root, HARNESS)
     assert out["stats"]["units"]["rebuilt"] == ["_late_roots"] and out["stats"]["units"]["reused"] == 3, out["stats"]["units"]
     assert out["values"] == _fresh(root)["values"] and out["values"]["SynLate_v1"] == [0x0105 - 3]
 
@@ -278,11 +269,11 @@ def test_an_edit_of_a_registered_roots_module_rebuilds_only_the_record_that_hold
     alone, SynIdle's counts, and the run gives the verdicts a full build gives."""
     root = _tree(tmp_path / "t")
     _edit(root, "syn/catalog.py", "BINDINGS = [", TWO_REGISTERED + "BINDINGS = [")
-    first = _run(root)
+    first = _run(root, HARNESS)
     assert first["stats"]["units"] == {"stored": 4}
     assert {"SynIdle_v1", "SynX_v1", "SynXor_v1"} <= set(first["values"])
     _edit(root, "syn/xdef.py", "B.call(SynXor, a, b)", "B.call(SynXor, b, a)")
-    out = _run(root)
+    out = _run(root, HARNESS)
     assert out["stats"]["units"]["rebuilt"] == ["<registered>:1"], out["stats"]["units"]
     assert out["stats"]["units"]["reused"] == 3 and out["stats"]["units"]["stored"] == 1
     assert out["values"] == _fresh(root)["values"]
@@ -294,9 +285,9 @@ def test_a_binding_that_makes_no_root_is_held_by_every_record(tmp_path):
     SynKn is checked at its new body."""
     root = _tree(tmp_path / "t")
     _bindings(root, '(("_set_roots",), setknob)', '(("_knobbed_roots",), knobbed)')
-    assert _run(root)["stats"]["units"] == {"stored": 5}
+    assert _run(root, HARNESS)["stats"]["units"] == {"stored": 5}
     _edit(root, "syn/ksize.py", "K = 1", "K = 2")
-    out = _run(root)
+    out = _run(root, HARNESS)
     assert out["stats"]["units"] == {"stored": 5} and out["hits"] == ["SynAdd_v1", "SynOther_v1", "SynSub_v1", "SynTop_v1"]
     assert out["values"] == _fresh(root)["values"] and out["values"]["SynKn_v1"] == [3 + 3 * 0x0105]
 
@@ -342,20 +333,20 @@ def test_two_definitions_of_one_id_are_the_one_the_catalog_keeps(tmp_path):
     (root / "syn/step.py").write_text(STEP.lstrip("\n"))
     _edit(root, "syn/catalog.py", "BINDINGS = [", STEP_BINDINGS + "BINDINGS = [")
     _bindings(root, '(("_unbound_roots",), unbound)', '(("_bound_roots",), bound)')
-    first = _run(root)
+    first = _run(root, HARNESS)
     assert first["stats"]["units"] == {"stored": 5}, first["stats"]["units"]
     step = "SynStep_v1{OP=SynInner_v1}"
     assert step in first["values"]
     _edit(root, "syn/idle.py", "B.call(SynAdd, a, a)", "B.call(SynAdd, b, b)")    # no binding reads it: the task list misses
-    out = _run(root)
+    out = _run(root, HARNESS)
     assert out["stats"]["units"].get("reused") == 5 and out["stats"]["units"].get("rebuilt") == [], out["stats"]["units"]
     assert out["hits"] == sorted(out["values"])
     _set_pin(root, step, {"and": 1})
-    out = _run(root)
+    out = _run(root, HARNESS)
     assert out["stats"]["units"].get("reused") == 5 and "stale" not in out["stats"]["units"], out["stats"]["units"]
     assert out["hits"] == sorted(set(out["values"]) - {step})
     _edit(root, "syn/step.py", "B.call(SynAdd, b, a)", "B.call(SynAdd, a, b)")
-    out = _run(root)
+    out = _run(root, HARNESS)
     assert sorted(out["stats"]["units"]["rebuilt"]) == ["_bound_roots", "_unbound_roots"], out["stats"]["units"]
     assert out["values"] == _fresh(root)["values"]
 
@@ -428,14 +419,29 @@ def test_bindings_built_apart_give_a_full_builds_targets_keys_and_records(tmp_pa
     again = _run(root, FORKED)
     assert again["stats"]["task_list"] and again["hits"] == sorted(again["values"]) and again["here"] == []
     _edit(root, "syn/idle.py", "B.call(SynAdd, a, a)", "B.call(SynAdd, b, b)")    # no binding reads it: the task list misses
-    out = _run(root)
+    out = _run(root, HARNESS)
     assert out["stats"]["units"]["reused"] == 5 and out["hits"] == sorted(out["values"]), out["stats"]["units"]
     for tree in (root, here):
         _edit(tree, "syn/xdef.py", "B.call(SynXor, a, b)", "B.call(SynXor, b, a)")
-    out, built = _run(root, FORKED), _run(here)
+    out, built = _run(root, FORKED), _run(here, HARNESS)
     assert out["stats"]["units"]["rebuilt"] == ["_xor_roots"] and out["stats"]["units"]["reused"] == 4, out["stats"]["units"]
     assert out["stats"]["units"]["stored"] == 1 and out["here"] == [] and out["values"] == _fresh(root)["values"]
     assert out["hits"] == built["hits"] and "SynX_v1" not in out["hits"], (out["hits"], built["hits"])
+
+
+@pytest.mark.slow
+def test_the_task_list_a_forked_run_stores_holds_what_only_a_bindings_own_process_imported(tmp_path):
+    """A binding built apart hands back its record's reads and the in-tree modules its build imported (`cache.modules_since`),
+    and with ``--jobs`` the task list's entry holds them beside this process's own reads: SynTop's body builder's helper, moved
+    into a subpackage `load_registries` doesn't enumerate, is imported in the core binding's process alone, and is in it."""
+    from test_cache import FILES, _entry
+
+    lazy = {"syn/lazy/__init__.py": "", "syn/lazy/shape.py": FILES["syn/shape.py"],
+            "syn/top.py": FILES["syn/top.py"].replace("from syn.shape import", "from syn.lazy.shape import")}
+    root = _tree(tmp_path / "t", lazy)
+    _bindings(root, *BINDINGS)
+    assert _run(root, FORKED)["here"] == []
+    assert "syn.lazy.shape" in _entry(root, "--all")["reads"]["modules"]
 
 
 @pytest.mark.slow
@@ -630,7 +636,7 @@ def vtop():
 
 """
 #: the check's value also says whether a Boolean Definition of the target's word is registered where it is checked, as
-#: C-Flock's lowering looks one up (`verity_flock.ir_lower`'s ``_boolean_build``)
+#: Flock's lowering looks one up (`verity_flock.ir_lower`'s ``_boolean_build``)
 WORDED = """def worded(fid):
     from verity.ml.circuits.defs import REGISTRY
 
@@ -753,9 +759,9 @@ def test_bindings_built_apart_keep_a_pinned_target_and_read_no_pin(tmp_path):
     assert out["values"] == whole["values"] and out["hits"] == sorted(set(out["values"]) - {"SynK_v1{K=2}"}), out["hits"]
 
 
-#: a unit staged whole (`checks.UNIT_OWNERS` is ``syn.pouw.`` in `BLOCKED`): SynTile, made by `syn.build`'s function, which binds
-#: it at no top level, and bound at the top level of `syn.pouw.tile` alone, which only SynHolder's body imports; the tiled
-#: binding makes SynTile from `syn.build`, and the held one reaches it through SynHolder's body
+#: SynTile, made by `syn.build`'s function, which binds it at no top level, and bound at the top level of `syn.pouw.tile` alone,
+#: which only SynHolder's body imports; the tiled binding makes SynTile from `syn.build`, and the held one reaches it through
+#: SynHolder's body
 TILE_FILES = {
     "syn/build.py": """
 from verity.ml.circuits import composite
@@ -811,20 +817,19 @@ def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
     return {"failures": F.failures, "warnings": [], "gates": fn.gates,
             "value": [evaluate(fn, 3, 0x0105), w["applies"], [f["name"].split(" ")[0] for f in F.failures]]}
 """
-#: `FORKED` with C-Flock's range at 2^5 witness bits, which SynTile's 48 port bits are past, and ``syn.pouw.`` PoUW's; a unit
-#: counted here first, so what counting imports (the kernels its pieces register) is here before any check, as the catalog's
-#: registries have it
+#: `FORKED` with Flock's range at 2^5 bits, which every target's block (2^`K_MIN` at the least) is past; a unit counted here
+#: first, so what counting imports (the kernels its pieces register) is here before any check, as the catalog's registries
+#: have it
 BLOCKED = FORKED.replace("rep = cli.run(", "from verity_flock import circuit as FC\nfrom syn.prims import SynAdd\nFC.unit_witness(SynAdd)\n"
-                         "FC.K_MAX, CK.UNIT_OWNERS = 5, ('syn.pouw.',)\nrep = cli.run(")
+                         "FC.K_MAX = 5\nrep = cli.run(")
 
 
 @pytest.mark.slow
 def test_a_unit_past_the_range_fails_block_on_the_fast_path_as_in_a_full_build(tmp_path):
-    """The fail-open case: from the bindings' records, built apart or reused, with ``--jobs`` or without, a unit staged whole
-    and past C-Flock's range fails ``block/past-range`` as a full build fails it, though the module that makes it PoUW's
-    (`sidecars.owner`, `checks.UNIT_OWNERS`) is imported only by another binding's body, which a full build builds before any
-    check: once the records count and SynTile alone misses (its new pin), no process here builds SynHolder's body.  A lookup
-    that read only what the checking process imported would skip the check."""
+    """From the bindings' records, built apart or reused, with ``--jobs`` or without, every unit checked whole and past
+    Flock's range fails ``block/past-range`` as a full build fails it, SynTile among them, though the module that binds it at a
+    top level is imported only by another binding's body, which a full build builds before any check: once the records count
+    and SynTile alone misses (its new pin), no process here builds SynHolder's body."""
     from test_cache import _set_pin
 
     trees = []
@@ -840,8 +845,8 @@ def test_a_unit_past_the_range_fails_block_on_the_fast_path_as_in_a_full_build(t
     root, here = trees
     in_turn = BLOCKED.replace(", jobs=2, isolate=True, fork=True)", ")")
     whole = _run(here, in_turn)
-    assert whole["values"]["SynTile_v1"][1:] == [True, ["block/past-range"]], whole["values"]
-    assert not [fid for fid, v in whole["values"].items() if v[2] and fid != "SynTile_v1"], whole["values"]
+    assert "SynTile_v1" in whole["values"], whole["values"]
+    assert all(v[1:] == [True, ["block/past-range"]] for v in whole["values"].values()), whole["values"]
     first = _run(root, BLOCKED)
     assert first["here"] == [] and first["stats"]["units"]["reused"] == 0, (first["here"], first["stats"]["units"])
     assert first["values"] == whole["values"], (first["values"], whole["values"])
@@ -854,8 +859,9 @@ def test_a_unit_past_the_range_fails_block_on_the_fast_path_as_in_a_full_build(t
 
 def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_kinds(monkeypatch):
     """`units.call_families` gives `targets.call_families`' Calls: a word Call family made on demand (`Const32[0x..]_v1`) has
-    its Boolean version among them though no record holds one, and a vocabulary kind that doesn't bind refuses them by name, as
-    `targets.word_call_families` does (left out, its family's partition would be judged as no Call's)."""
+    its Boolean version among them though no record holds one, `targets.CALLEE_CALLS`' families are among them, and a vocabulary
+    kind that doesn't bind refuses them by name, as `targets.word_call_families` does (left out, its family's partition would be
+    judged as no Call's)."""
     from circuit_check import targets as TG, units as UN
 
     nothing = UN.Derived([], {}, {})
@@ -863,7 +869,7 @@ def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_
         m.setattr(TG, "word_call_families", lambda: {"Const32[0x00000001]_v1", "GatherI32x16_v1"})
         m.setattr(TG, "boolean_call_candidates", lambda words: set())
         assert UN.call_families([], nothing, {}) == {"Const32[0x00000001]_v1", "GatherI32x16_v1",
-                                                    "Const32[0x00000001]_v2", "GatherI32x16_v2"}
+                                                    "Const32[0x00000001]_v2", "GatherI32x16_v2", *TG.CALLEE_CALLS}
     monkeypatch.setattr(TG, "_SHORT", {})
     monkeypatch.setattr(TG, "_BOUND", {})
     monkeypatch.setattr(TG, "load_registries", lambda: None)

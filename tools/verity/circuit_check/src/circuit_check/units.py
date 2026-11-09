@@ -23,9 +23,9 @@ A record counts only when its every read is unchanged where it was (never throug
 looked for only by whether it is there, `_unchanged`) and the roots its binding made now are the ones it lists; else its
 binding is built as the catalog builds it and its record stored again.  The task list is then
 what `cli._tasks` would build: `targets.select` over what the roots reach in `targets.reachable`'s order, PoUW's roots whole,
-each target's units (`targets.BINDINGS`), whether it is a Call (`targets.call_families`: the word Call families, and the
-Boolean version of each suite Definition of one, made from its binding where no built binding holds it, `_materialize`) and
-its key.  Two bindings can reach two Definitions of one id (`AttnDotStep_v1` with its DOT bound, from `boolean_version`, and
+each target's units (`targets.BINDINGS`), whether it is a Call (`targets.call_families`: the word Call families,
+`targets.CALLEE_CALLS`, and the Boolean version of each suite Definition of one, made from its binding where no built binding
+holds it, `_materialize`) and its key.  Two bindings can reach two Definitions of one id (`AttnDotStep_v1` with its DOT bound, from `boolean_version`, and
 unbound, from its sidecar): `targets.reachable` keeps the one it pops first, and so each id is taken from the record of the
 binding it is first reached through (`derive`).  A target that misses is made from that binding, along the path its record
 lists, and its descriptor computed again: one that differs from its record's is `Stale`, and the run builds the whole
@@ -47,13 +47,13 @@ where it can, building no body (`make`).
 A ``--catalog-units`` run that forks its targets' processes (`cli.run` with ``--jobs``) builds its bindings so too: each
 binding whose record doesn't count, and every one when none does or there are none, is built in a process forked for it alone
 (``apart`` in `plan`), which returns what its roots reach with each one's descriptor, what its build read (its record's reads,
-`cache.unit_reads`) and its share of the task list's reads (`cache.task_list_reads` of its roots).  This process builds no
-body.  A target that misses, through such a binding or one whose record counted, is made where it is checked (`cli._made`,
+`cache.unit_reads`) and the in-tree modules it imported (`cache.modules_since`), which with its record's reads are its share
+of the task list's reads.  This process builds no body.  A target that misses, through such a binding or one whose record counted, is made where it is checked (`cli._made`,
 `make`): by the zygote that forks the checks of that binding's targets, each under a recording its check then holds
 (`cli._prepare`), so the bodies they share are built once, as a full build builds them, and no target is built or described
 here one after another; the target is held to the descriptor its binding's build gave or its record holds, and one that
 differs is its check's error.  A primitive its id makes, which has no body, is made here (`built_here`), and so is each
-Boolean Definition a binding's build registered (`made_words`, or its module imported): C-Flock lowers a word primitive by the
+Boolean Definition a binding's build registered (`made_words`, or its module imported): Flock lowers a word primitive by the
 first one registered of that word, so a check forked from here finds the one a full build's would.  A binding whose process
 dies fails the run, as it would kill a build in one process.  When every binding was built apart, the task list's entry is
 stored as a full build stores it, its reads every binding's share and this process's own; it and each record are digested
@@ -69,7 +69,7 @@ every binding's record counts, a ``--binding`` run makes only that binding's roo
 them, held to the ids the record lists (`plan`'s ``binding``).  Beside each binding's root ids the record holds what making
 them did beyond them, and so for working out the Call families (`_noting`: each Definition registered and each in-tree module
 imported, in order); the run does that in each one's place, in catalog order (`_replay`), so its registry and its modules are
-a full plan's: C-Flock lowers a word primitive by its registered Boolean Definition, which another binding's roots can be the
+a full plan's: Flock lowers a word primitive by its registered Boolean Definition, which another binding's roots can be the
 first to register (a ``MoeSelectBf16x{E}``'s, made per E).
 
 Every binding's record is still read so, and the roots record holds every binding file's digest, so one binding's edit
@@ -83,8 +83,7 @@ what changed; the shared part only where what a binding registers or imports, th
 
 A run from the records, forked or not, has no process that imported every module a full build has imported before its
 checks, and `sidecars.owner` reads those: a Definition a factory makes is owned by the module that binds it at its top level,
-which only another binding's body may import, and the block check (`checks.UNIT_OWNERS`) and a by-calls root's callees go by
-that owner.  So each Definition's owner is handed down as a full build has it (`owners`, `sidecars.HANDED`).
+which only another binding's body may import, and a by-calls root's callees go by that owner.  So each Definition's owner is handed down as a full build has it (`owners`, `sidecars.HANDED`).
 """
 from __future__ import annotations
 
@@ -120,8 +119,9 @@ class Stale(Exception):
 class Entry:
     """One binding as this run has it: its units, kind and label (`targets.catalog_units`), its key, the roots it made now,
     what they reach (its record's, or `_reach` of the bodies built now) and whether its record counted, with that record's
-    reads.  Built in a process of its own (``apart``, `built_apart`), with what that process read: its record's reads and its
-    share of the task list's (``listed``), and the CPU seconds it took (``seconds``, kept beside its record).  ``words``: the
+    reads.  Built in a process of its own (``apart``, `built_apart`), with what that process read: its record's reads and the
+    in-tree modules it imported (``listed``, `cache.modules_since`), and the CPU seconds it took (``seconds``, kept beside its
+    record).  ``words``: the
     Boolean Definitions its build registered (`_words`), where a process built it apart.  ``made`` None: its roots are the ids
     the catalog's roots record lists (``ids``, `plan`'s ``binding``), made by ``make`` when first read and held to those ids.
     ``effects``: what making its roots did beyond them (`_noting`), or doing that in their place (`_replay`).  ``n``: which of
@@ -350,10 +350,10 @@ def _materialize(entries: list[Entry], objects: dict[str, Any], fid: str, in_uni
 
 def call_families(entries: list[Entry], d: Derived, objects: dict[str, Any], in_unit: bool = True) -> set[str]:
     """The families of `targets.call_families` the suite's Definitions are of: the word Call families (`targets.
-    word_call_families`, which refuses a vocabulary kind that doesn't bind), the Boolean version of each one made on demand
-    (`targets.on_demand_boolean_families`) and of those Boolean versions of a suite Definition of one (`targets.boolean_family`)
-    that are of a suite family: each from its object, made (`_materialize`) only where it could be of a suite family no other
-    one gave (`targets.boolean_links`)."""
+    word_call_families`, which refuses a vocabulary kind that doesn't bind), `targets.CALLEE_CALLS`, the Boolean version of each
+    one made on demand (`targets.on_demand_boolean_families`) and of those Boolean versions of a suite Definition of one
+    (`targets.boolean_family`) that are of a suite family: each from its object, made (`_materialize`) only where it could be of
+    a suite family no other one gave (`targets.boolean_links`)."""
     words = TG.word_call_families()
     wordy = [fid for fid in d.ids if (n := d.nodes[fid])["f"] in words and n["k"] != "R" and not n["b"]]
     found = TG.on_demand_boolean_families(words)
@@ -369,7 +369,7 @@ def call_families(entries: list[Entry], d: Derived, objects: dict[str, Any], in_
             if fid not in objects and (n.get("di", fid) in keys or n.get("n") in names):
                 if (f := TG.boolean_family(_materialize(entries, objects, fid, in_unit, d.via.get(fid)))) is not None:
                     found.add(f)
-    return words | found
+    return words | found | set(TG.CALLEE_CALLS)
 
 
 def _sited(v: Any) -> Any:
@@ -622,7 +622,7 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
         effects["raised"].update((e.label, e.effects) for e in todo if id(e) in gone)
         entries = [e for e in entries if id(e) not in gone]
         if side is not None and len(kept) == len(entries):
-            listed = merged(e.listed for e in kept)
+            listed = merged([*(e.reads for e in kept), *(e.listed for e in kept)])
     made: list[dict[str, Any]] = []
     for e in entries:
         made.append({fn.id: fn for fn in e.made or () if _kind(fn) is not None})
@@ -733,7 +733,7 @@ def _word_steps(plan: Plan) -> Iterator[list]:
 def made_words(plan: Plan, steps: Iterable[list] | None = None) -> int:
     """Made here: each Boolean Definition (a ``word`` and a ``build``) that a binding's build registered where this process
     didn't build it (``words``: built apart, or its record's) and that this process doesn't hold, from the record that reaches
-    it (`make`), else by importing the module that holds it (`_words`: one it registers as it is imported).  C-Flock lowers a
+    it (`make`), else by importing the module that holds it (`_words`: one it registers as it is imported).  Flock lowers a
     word primitive by the build of the first registered Boolean Definition of that word (`verity_flock.ir_lower`'s
     ``_boolean_build``), so each check forked from here finds the build a full build's would.  ``steps``: those a full plan
     took (`slices`), else `_word_steps`; each one taken is in ``plan.words``, with whether an object built here already
@@ -1151,10 +1151,10 @@ def _child(e: Entry, out: Any, described: bool = False, side: list[str] | None =
            pinned: frozenset[str] | None = None) -> None:
     """In a process forked for ``e``: its nodes or its error put in ``out`` (`_put`), and out through `os._exit`, so nothing of
     the parent's (its atexit, its buffers) runs twice.  With ``side`` (traced: the units of the bindings that make no root):
-    what its build read (`cache.unit_reads`), its share of the task list's reads (`cache.task_list_reads` of its roots) and
-    what it did that the tracer cannot see (`cache.untraced`, past the parent's ``untraced``); and the Boolean Definitions its
-    build registered (`_words`).  ``pinned``: the parent's (`targets.pinned`), so the pins are no read of the binding's
-    build."""
+    what its build read (`cache.unit_reads`), the in-tree modules it imported (`cache.modules_since`), which with those are
+    its share of the task list's reads, and what it did that the tracer cannot see (`cache.untraced`, past the parent's
+    ``untraced``); and the Boolean Definitions its build registered (`_words`).  ``pinned``: the parent's (`targets.pinned`),
+    so the pins are no read of the binding's build."""
     from verity.ml.circuits.defs import REGISTRY
 
     from . import cli
@@ -1163,12 +1163,12 @@ def _child(e: Entry, out: Any, described: bool = False, side: list[str] | None =
     code = 0
     try:
         start = cli._rss_gb()
-        before = set(REGISTRY.defs)
+        before, loaded = set(REGISTRY.defs), set(sys.modules)
         try:
             got = {"nodes": _reach_one(e, described, pinned), "start": start, "words": _words(before)}
             if side is not None:
                 got.update(reads=CC.unit_reads((*e.units, *side) if e.units != REGISTERED else side, e.roots),
-                           listed=CC.task_list_reads(e.roots), untraced=CC.untraced()[untraced:])
+                           listed=CC.modules_since(loaded), untraced=CC.untraced()[untraced:])
         except BaseException as ex:  # noqa: BLE001  (a model's is named, as the catalog names it; any other fails the build)
             got = {"error": f"{type(ex).__name__}: {str(ex)[:200]}", "start": start}
         _put(out, got)

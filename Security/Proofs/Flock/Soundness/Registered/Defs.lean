@@ -2,11 +2,12 @@ module
 
 public import Proofs.Flock.Soundness.Binding.Rows
 public import Proofs.Flock.Verifier.Registered
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # Registered reads: the model's objects
 
-A session reads some of its rows from values registered once before (PROTOCOL.md §16.10): each such row's leaf opens the
+A session reads some of its rows from values registered once before (`Flock.HmRow`): each such row's leaf opens the
 registered root the verifier holds, at the position the verifier's own program reads (`Flock.Registered.check_ok`).
 
 * `TwoOpenings`: two openings of one position under one registered root. They conflict (`Conflict`) when the verifier
@@ -47,7 +48,7 @@ def pair (o : TwoOpenings) : List UInt8 × List UInt8 :=
 
 end TwoOpenings
 
-variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}

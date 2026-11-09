@@ -1,7 +1,8 @@
 module
 
-public import Definitions.Pouw.Assumptions.Pinned
-public import Proofs.Pouw.Prob
+public import Definitions.Pouw.Witness.Honest
+import Mathlib.Tactic.Positivity.Finset
+public import Definitions.Pouw.Assumptions.GameStatements
 
 /-!
 # Facts about the named instance `D1.m1`
@@ -109,9 +110,6 @@ theorem elQ_unique (s s' : Salt) (u u' : ℕ) (A A' : Mat) (w w' : ℕ) (hu : u 
   · simp at h
   · simp at h
 
-/-- Sixteen milestone-shape units on one zero weight: one full group of `2^16` rows, the least the domain allows. -/
-def sixteen : Workload := ⟨⟨16, fun _ => milestoneShape, fun _ => 0⟩, fun _ => 0⟩
-
 theorem milestone_m1Shape : M1Shape milestoneShape := by
   unfold M1Shape milestoneShape; norm_num
 
@@ -161,7 +159,7 @@ theorem rowShare_le (work mu rows c : ℕ) (hrows : 0 < rows) (h : work * mu ≤
   generalize rows * c = b at *
   omega
 
-theorem groupRows_le_rowsOf (L : Layout) (u : ℕ) : m1GroupRows L u ≤ L.rowsOf (L.wid u) :=
+theorem groupRows_le_rowsOf (L : Layout) (u : ℕ) : m1GroupRows L u ≤ L.rowsOf (L.fixedId u) :=
   Finset.sum_le_sum_of_subset (Finset.monotone_filter_right _ fun _ _ h => h.2)
 
 theorem m1Wref_le (L : Layout) (hD : m1Domain L) (u : ℕ) (hu : u < L.N) :
@@ -177,7 +175,7 @@ theorem m1Wref_le (L : Layout) (hD : m1Domain L) (u : ℕ) (hu : u < L.N) :
     refine rowShare_le _ _ _ _ (lt_of_lt_of_le (by norm_num) hg) ?_
     rw [hn]
     nlinarith
-  have h2 : rowShare ((16 + 20) * (L.shape u).k * (L.shape u).n) (L.shape u).m (L.rowsOf (L.wid u)) ≤
+  have h2 : rowShare ((16 + 20) * (L.shape u).k * (L.shape u).n) (L.shape u).m (L.rowsOf (L.fixedId u)) ≤
       36 * 2 ^ 16 * (L.shape u).m := by
     refine rowShare_le _ _ _ _ (lt_of_lt_of_le (by norm_num) (hg.trans hw)) ?_
     rw [hk, hn]
@@ -206,17 +204,17 @@ theorem m1Wref_real (L : Layout) (hD : m1Domain L) (u : ℕ) (hu : u < L.N) :
 end M1
 
 /-- **The named instance.** -/
-theorem milestoneInstance : Pinned.MilestoneInstance := fun Wref =>
+theorem milestoneInstance : GameStatements.MilestoneInstance := fun Wref =>
   ⟨M1.isMilestone Wref, M1.noiseRange Wref, M1.queryBound Wref,
     fun s s' u u' A A' w w' hu hu' x hx hx' => M1.elQ_unique Wref s s' u u' A A' w w' hu hu' x hx hx',
     fun _ => ((4 : Fin 7), true), ⟨0, M1.salt_zero_lt⟩, M1.sixteen, 0, M1.sixteen_inDomain,
     by norm_num [M1.sixteen], M1.noise_ne_zero Wref _ 0⟩
 
-/-- **The milestone's `W_ref`**: `W_mm ≤ m1Wref ≤ (65769/65536)·W_mm` on the domain, and `γ = 14017/1644225`. -/
-theorem milestoneWref : Pinned.MilestoneWref :=
+/-- **The milestone's `W_ref`**: `W_mm ≤ m1Wref ≤ (65769/65536)·W_mm` on the domain, and `g = 14017/1644225`. -/
+theorem milestoneWref : GameStatements.MilestoneWref :=
   ⟨fun U hU u hu => ⟨M1.Wmm_le_m1Wref U.layout u, M1.m1Wref_real U.layout hU.2.1 u hu⟩,
     by unfold D1.m1Omega; norm_num,
-    by unfold reductionGamma Params.γ0 D1.m1Omega; norm_num⟩
+    by unfold reductionGap Params.gap0 D1.m1Omega; norm_num⟩
 
 /-- **`E_R` is separated across (weight, group)**, beside `MilestoneInstance`'s `E_L` clause: the `E_R` queries of
 two (weight, group) pairs with weight ids below `2^64` and groups below `2^60` meet only if the pairs are equal. -/

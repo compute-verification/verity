@@ -32,7 +32,7 @@ where the torch op materialises a `DT` tensor.  With `DT="f32"` the widen/narrow
   `DotRef{K}`, `LinearRef{K,N,DT,BIAS}`, `RMSNormRef{N,EPS,DT}`, `LayerNormRef{N,EPS,DT}`, `GeluRefElem{APPROX}` /
   `GeluRef{N,DT,APPROX}`, `SiluRefElem` / `SiluRef{N,DT}`, `SoftmaxRef{N,DT}`, `RoPERef{D,DT}` / `RoPEHeadsRef{NHEADS,D,DT}`,
   `RoPEInterleavedRef{D,DT}` (GPT-J pairing), `EagerAttentionHeadRef{T,D,DT,SCALE_OP}` / `EagerAttentionRef{T,NH,KVH,D,DT,SCALE_OP}`,
-  `EmbeddingRef{V,H,DT}`, `AddRef{N,DT}`, `MulRef{N,DT}`, `ReluRef{N,DT}`, `ArgmaxStepF32` / `ArgmaxRef{V,DT}`.
+  `EmbeddingRef{V,H,DT}`, `AddRef{N,DT}`, `MulRef{N,DT}`, `ReluRef{N,DT}`, `ArgmaxStepF32` / `ArgmaxRef{V,DT}`, `LogSoftmaxRef{N,DT}`.
   Profile-mode additions, NOT in the reference digest: `RoPEHeadGptJ{D}` / `RoPEGptJ{NHEADS,D}` (vLLM
   `rotary_embedding(is_neox=False)`, proof-supported through the `RopeOut`/`RopeOutAdd` twins; superseded by `boolean_rope`'s v2).
 
@@ -334,14 +334,6 @@ def _retype(t, v: Value):
     raise TypeError(t)
 
 
-def _widen1(B, x: _Coll, DT: str) -> _Coll:
-    return x if DT == "f32" else B.call(P.Bf16ToF32, x)
-
-
-def _narrow1(B, y: _Coll, DT: str) -> _Coll:
-    return y if DT == "f32" else B.call(P.F32ToBf16Rn, y)
-
-
 def _seq_sum(B, terms: list[_Coll]) -> _Coll:
     """acc_0 = Const32[+0]; acc_{i+1} = F32Add(acc_i, terms[i]) — sequential, ascending index."""
     acc = B.call(b1.ZERO32)
@@ -523,6 +515,22 @@ def SoftmaxRef(B, S, x):
     s = _seq_sum(B, [e[i] for i in range(N)])
     r = B.call(P.F32Div, B.call(b1.f32c(1.0)), s)
     return _narrow(B, B.batch(P.F32Mul, e, r, axes=(0, None)), DT)
+
+
+@composite("LogSoftmaxRef", 1, ["N", "DT"], lambda S: ((("x", Array(S.N, _dt(S.DT))),), Array(S.N, _dt(S.DT))), conformance=_REF_CONF)
+def LogSoftmaxRef(B, S, x):
+    """`F.log_softmax(x, dim=-1)` on one row, reference arithmetic: `m = max_i x_i` (`F32MaxRef_v1` fold, ascending);
+      `d_i = RN(x_i - m)`;  `s = Σ_i exp(d_i)` (`F32ExpRn_v1`) sequential ascending from +0;  `out_i = DT(RN(d_i - log(s)))`
+      (`F32LogRn_v1`).  torch's CPU and CUDA kernels both subtract the max and then the log of the sum, never their sum."""
+    N, DT = S.N, S.DT
+    xf = _widen(B, x, DT)
+    m = xf[0]
+    for i in range(1, N):
+        m = B.call(F32MaxRef, m, xf[i])
+    d = B.batch(F32Sub, xf, m, axes=(0, None))
+    e = B.batch(F32ExpRn, d, axes=(0,))
+    s = _seq_sum(B, [e[i] for i in range(N)])
+    return _narrow(B, B.batch(F32Sub, d, B.call(F32LogRn, s), axes=(0, None)), DT)
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -766,8 +774,8 @@ def ArgmaxRef(B, S, logits):
 
 REF_PRIMITIVES.append(I64ToI32)
 REF_COMPOSITES = [DotRef, LinearRef, RMSNormRef, LayerNormRef, GeluRefElem, GeluRef, SiluRefElem, SiluRef, SoftmaxRef,
-                  RoPERef, RoPEHeadsRef, EagerAttentionHeadRef, EagerAttentionRef, EmbeddingRef, AddRef, MulRef, ReluRef,
-                  RoPEInterleavedRef, ArgmaxStepF32, ArgmaxRef]
+                  LogSoftmaxRef, RoPERef, RoPEHeadsRef, EagerAttentionHeadRef, EagerAttentionRef, EmbeddingRef, AddRef, MulRef,
+                  ReluRef, RoPEInterleavedRef, ArgmaxStepF32, ArgmaxRef]
 #: profile-mode kinds registered here (vLLM GPT-J rotary); NOT part of the reference vocabulary digest —
 #: they belong to the profile vocabulary (`b1.py` conventions, bf16 cache row, one rounding) and are proof-supported.
 PROFILE_ADDITIONS = [RoPEHeadGptJ, RoPEGptJ]
@@ -824,5 +832,5 @@ __all__ = ["REF_VOCAB_VERSION", "DTYPES", "REF_PRIMITIVES", "REF_COMPOSITES", "S
            "ref_vocab_digest", "gather_f32", "F32Sub", "F32Sqrt", "F32MaxRef", "F32GtStrict", "F32ExpRn", "F32LogRn", "F32ErfRn",
            "F32TanhRn",
            "DotRef", "LinearRef", "RMSNormRef", "LayerNormRef", "GeluRefElem", "GeluRef", "SiluRefElem", "SiluRef", "SoftmaxRef",
-           "RoPERef", "RoPEHeadsRef", "EagerAttentionHeadRef", "EagerAttentionRef", "EmbeddingRef", "AddRef", "MulRef",
+           "LogSoftmaxRef", "RoPERef", "RoPEHeadsRef", "EagerAttentionHeadRef", "EagerAttentionRef", "EmbeddingRef", "AddRef", "MulRef",
            "ArgmaxStepF32", "ArgmaxRef", "f32_exp_rn_bits", "f32_log_rn_bits", "f32_erf_rn_bits", "f32_tanh_rn_bits"]

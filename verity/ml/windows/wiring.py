@@ -1,11 +1,11 @@
-"""A window's wiring across statements (`verifier/PROTOCOL.md` §16.13 ``Wiring``): a wired member (``serving_rows.Member.wired``,
+"""A window's wiring across statements (`HmOut` ``Wiring``): a wired member (``serving_rows.Member.wired``,
 one ``(port, out, writers)`` per wire) reads, unit by unit, other units' output rows: its unit i's ``port`` row is global unit
 ``writers[i]``'s ``out`` row, committed under that row's salt, so the two rows' ``b || c`` are one string.  Lean's links hold
 inside one statement; these join statements (one coordinate's K-chunks, chunk c's ``acc`` chunk c - 1's output; split partials,
 a combine unit's ``in<j>.s`` split s's), so the verifier holds them on the public bodies the leaf layer binds, and a sampled proof block's input is the committed output of
 the unit that wrote it.  A unit whose wired row is not its writer's row is incorrect in the wired flattening (its outputs
 are not its Definition's on its writers' committed outputs), so the verifier holds the wires of the units it samples
-(`check_drawn`, `SampledProofs.Wires.Summary.drawnOk` in Lean, whose `drawnOk_iff` makes it the expanded check on the
+(`check_drawn`, `Spot.Wires.Summary.drawnOk` in Lean, whose `drawnOk_iff` makes it the expanded check on the
 sampled proof blocks); `check`, every unit's, is the reference.  A member may be wired and read registered rows (a GEMM slice: its
 ``x`` its writer's output, its ``w`` a weight row): it is then a shared-row member, its wired port a table of its units' own
 rows, and a unit's string is the row its ref names (`_strings`), the one its statement reads."""
@@ -37,14 +37,15 @@ def _writers(members: Sequence[Any], ws: Sequence[int], bases: np.ndarray) -> li
 
 def validate(members: Sequence[Any]) -> None:
     """Refuse a wiring that is not one row per unit of a reader port, each another member's output row of its words and schema,
-    and each port wired at most once. A shared-row member's wired port is a table of its units' own rows, one a unit."""
+    and each port wired at most once. A shared-row member's wired port is a table of its units' own rows, one a unit, or,
+    with no tree of its own (``rows.Member.wired_trees``), its writer's output rows, which `rows.Binding` holds."""
     total, at = sum(m.n for m in members), bases(members)
     for m in members:
         if len({p for p, _o, _ws in m.wired}) != len(m.wired):
             raise ValueError(f"{m.key}: ports {[p for p, _o, _ws in m.wired]} are wired more than once")
         for p, o, ws in m.wired:
-            if (dict(m.tables).get(p, m.n) != m.n or p not in dict(m.rows) or len(ws) != m.n or min(ws) < 0
-                    or max(ws) >= total):
+            if ((getattr(m, "wired_trees", True) and dict(m.tables).get(p, m.n) != m.n) or p not in dict(m.rows)
+                    or len(ws) != m.n or min(ws) < 0 or max(ws) >= total):
                 raise ValueError(f"{m.key}: wiring {p!r} is not one writer in [0, {total}) per unit of an input port of its own rows")
             for wm, _mine, _theirs in _writers(members, ws, at):
                 if dict(wm.out_rows).get(o) != dict(m.rows)[p] or wm.schema(o) != m.schema(p):
@@ -113,7 +114,7 @@ def check(members: Sequence[Any], publics: Mapping[str, bytes]) -> dict[str, str
 
 def check_drawn(members: Sequence[Any], publics: Mapping[str, bytes], units: Any) -> dict[str, str]:
     """`check` on the sampled proof blocks alone (``units``, global unit indices): each sampled proof block's wired rows' ``b || c`` are its
-    writers' output rows', work proportional to the sampled proof blocks.  ``{member: why}``; empty when every drawn wire holds."""
+    writers' output rows', work proportional to the sampled proof blocks.  ``{member: why}``; empty when every sampled wire holds."""
     drawn = np.unique(np.asarray(list(units), dtype=np.int64))
     bad: dict[str, str] = {}
     at = bases(members)

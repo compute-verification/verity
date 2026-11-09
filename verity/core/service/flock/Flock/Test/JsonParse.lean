@@ -9,10 +9,14 @@ module
 
 public import Flock.JsonParse
 public import Lean.Data.Json
+public import Lean.Data.Json.Parser
+public import Lean.Data.Json.Printer
+import all Init.Data.Ord.String
+import all Init.Data.Repr
 meta import Flock.JsonParse
 meta import Lean.Data.Json
-import all Init.Data.Repr
-import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
+import all Init.Data.String.Defs
 
 @[expose] public section
 
@@ -53,7 +57,7 @@ def toks : Array String := #["{", "}", "[", "]", ",", ":", " ", "\n", "\"", "\\"
   "u", "a", "é", "日", "0", "1", "9", "-", "+", ".", "e", "E", "true", "false", "null", "\"k\"", "\"v\"", "\t", "\u0001",
   "x", "12", "\\n", "\\\"", "\\/", "fa", "nu", "1e", "\\ud83d", "\\ude00", "\\uDE00", "D", "f"]
 
-/-- Text `seed` of the fuzz: `n` tokens drawn from `toks`. -/
+/-- Text `seed` of the fuzz: `n` tokens sampled from `toks`. -/
 def gen (seed n : Nat) : String := Id.run do
   let mut g := mkStdGen seed
   let mut s := ""

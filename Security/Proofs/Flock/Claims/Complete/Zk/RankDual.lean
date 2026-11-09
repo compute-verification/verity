@@ -12,7 +12,7 @@ projection `π_S` (`pairing_zS`). So the deficient coins are at most the sum ove
 where some `μ` of support `S` survives (`card_deficient_le`).
 
 * `NS_mul_le`: at most `|F|^|S| / |π_S U|` functionals of support `S` kill `U`.
-* `NS_step`, `dual_col`, `dual_iter`: a coordinate that draws freshly takes `U` to `U + c·U`, and on average over its
+* `NS_step`, `dual_col`, `dual_iter`: a coordinate that samples freshly takes `U` to `U + c·U`, and on average over its
   coin divides the surviving functionals of support `S` by `|π_S U|`.
 * `sum_ns_le`: so with the coordinates `Ys` fresh, a functional of support `S` survives with probability at most
   `E[min(1, |F|^|S| / |π_S U_Xs|^(|Ys| + 1))]`, the span `U_Xs` over the other coordinates.
@@ -354,8 +354,6 @@ variable {ι F : Type} [Fintype ι] [DecidableEq ι] [Field F] [Fintype F] [Deci
 def spanX (c : Fin D → ι → F) (Xs : Finset (Fin D)) : AddSubgroup (ι → F) :=
   AddSubgroup.closure (Set.range fun x : Fin D → Bool => ∏ t ∈ Xs, if x t then c t else 1 + c t)
 
-theorem spanX_univ (c : Fin D → ι → F) : spanX c univ = span c := rfl
-
 theorem spanX_congr {c c' : Fin D → ι → F} {Xs : Finset (Fin D)} (h : ∀ t ∈ Xs, c t = c' t) :
     spanX c Xs = spanX c' Xs := by
   unfold spanX
@@ -473,7 +471,7 @@ open Classical
 
 variable {ι F : Type} [Fintype ι] [DecidableEq ι] [Field F] [Fintype F] [DecidableEq F] [CharP F 2] {D : ℕ}
 
-/-- **One dual step at the coins**: at a coordinate `t` every point draws freshly, the functionals of support `S`
+/-- **One dual step at the coins**: at a coordinate `t` every point samples freshly, the functionals of support `S`
 killing the span with `t` are, on average over `t`'s coins, those killing it without `t` over `|π_S U|`. -/
 theorem dual_col (τ : F →+ ZMod 2) {z : F} (hz : τ z = 1) (S : Finset ι) (fix : ι → Fin D → Option F)
     {Xs : Finset (Fin D)} {t : Fin D} (ht : t ∉ Xs) (hfree : ∀ i, fix i t = none)
@@ -599,7 +597,7 @@ theorem sum_ns_le (τ : F →+ ZMod 2) {z : F} (hz : τ z = 1) (S : Finset ι) (
 
 /-- **The rank bound's reduction to the spans' sizes**: the coins at which the points are rank-deficient number at
 most `Σ_{S ≠ ∅} Σ_r min(1, |F|^|S|/|π_S U_{X_S}|^(|X_Sᶜ|+1))`, for any choice of coordinates `X_S` per support off
-which every point draws freshly. -/
+which every point samples freshly. -/
 theorem card_deficient_le (τ : F →+ ZMod 2) {z : F} (hz : τ z = 1) (fix : ι → Fin D → Option F)
     (Xs : Finset ι → Finset (Fin D)) (hfree : ∀ S, ∀ t ∉ Xs S, ∀ i, fix i t = none) :
     ((univ.filter fun r : ι → Fin D → F => span (col fix r) ≠ ⊤).card : ℝ) ≤

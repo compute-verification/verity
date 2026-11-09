@@ -1,14 +1,50 @@
 module
 
+public import Definitions.Claims
 public import Proofs.Flock.Claims.ERep
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
 
 /-!
 # `E^rep`'s expected reruns, and `ERepCost`
 
 At a tape `ω` a run accepts with probability `ε`. `E^rep` replays the judged run (one rerun), and only an accepted judged
-run (probability `ε`) starts the `m` waits. A wait that stops at `k` accepted runs among `K` fresh draws makes
+run (probability `ε`) starts the `m` waits. A wait that stops at `k` accepted runs among `K` fresh samples makes
 `N(K, a)` reruns in expectation from `a` accepted so far, and `ε · N(K, a) ≤ k − a` (`waitRuns_exp`, by induction on
-the draws: `ε·N(K+1, a) = ε + ε·(ε·N(K, a+1)) + (1−ε)·(ε·N(K, a))`). So the waits add at most `ε · m · k/ε = m·k`, and
+the samples: `ε·N(K+1, a) = ε + ε·(ε·N(K, a+1)) + (1−ε)·(ε·N(K, a))`). So the waits add at most `ε · m · k/ε = m·k`, and
 `E^rep` reruns the prover at most `1 + m·k` times in expectation (`ERep_runs_exp`), the second half of `ERepCost`
 (`ERep_cost`).
 
@@ -73,12 +109,12 @@ theorem Ex_sum_pi {E : Type} [Fintype E] [Nonempty E] (f : E → ℝ) :
 
 /-! ## One wait's reruns -/
 
-/-- A wait's reruns over the coin draws `rs`, from `a` accepted so far. -/
-def waitRuns {R : Type} (run : R → Trace) (k : ℕ) : List R → ℕ → ℕ
+/-- A wait's reruns over the coin samples `rs`, from `a` accepted so far. -/
+def waitRuns {R : Type} (run : R → Transcript) (k : ℕ) : List R → ℕ → ℕ
   | [], _ => 0
   | r :: rs, a => if k ≤ a then 0 else waitRuns run k rs (if (run r).out = .acc then a + 1 else a) + 1
 
-theorem waitAcc_runs_eq {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) :
+theorem waitAcc_runs_eq {R : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) :
     ∀ (rs : List R) (acc : List Seen), ((waitAcc k rs acc).eval H run).2.2 = waitRuns run k rs acc.length := by
   intro rs
   induction rs with
@@ -88,10 +124,10 @@ theorem waitAcc_runs_eq {R : Type} (H : Msg → Msg) (run : R → Trace) (k : �
     simp only [waitAcc, waitRuns]
     split_ifs with h hacc
     · simp [RP.eval]
-    all_goals simp [RP.eval, ih, Trace.seen, hacc]
+    all_goals simp [RP.eval, ih, Transcript.seen, hacc]
 
 /-- The waits rerun the prover at most as often as the waits do, each on its own. -/
-theorem firstWait_runs_le_sum {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (opens : Seen → List Op)
+theorem firstWait_runs_le_sum {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) :
     ∀ rss : List (List R), ((firstWait k opens assemble check rss).eval H run).2.2 ≤
       (rss.map fun rs => waitRuns run k rs 0).sum := by
@@ -108,12 +144,12 @@ theorem firstWait_runs_le_sum {R W Op : Type} (H : Msg → Msg) (run : R → Tra
       · exact ih
     · exact ih
 
-/-- `N(K, a)`: one wait's expected reruns over `K` uniform draws, from `a` accepted so far. -/
-noncomputable def waitExp {D : Type} [Fintype D] (run : D → Trace) (k K a : ℕ) : ℝ :=
+/-- `N(K, a)`: one wait's expected reruns over `K` uniform samples, from `a` accepted so far. -/
+noncomputable def waitExp {D : Type} [Fintype D] (run : D → Transcript) (k K a : ℕ) : ℝ :=
   Ex fun σ : Fin K → D => (waitRuns run k ((List.finRange K).map σ) a : ℝ)
 
 /-- **One wait's expected reruns**: `ε · N(K, a) ≤ k − a`, so a wait makes at most `k/ε` reruns in expectation. -/
-theorem waitRuns_exp {D : Type} [Fintype D] [Nonempty D] (run : D → Trace) (k K : ℕ) :
+theorem waitRuns_exp {D : Type} [Fintype D] [Nonempty D] (run : D → Transcript) (k K : ℕ) :
     ∀ a, a ≤ k → Pr (fun d => (run d).out = .acc) * waitExp run k K a ≤ k - a := by
   induction K with
   | zero => intro a ha; simp [waitExp, waitRuns, Ex, ha]
@@ -149,8 +185,8 @@ theorem waitRuns_exp {D : Type} [Fintype D] [Nonempty D] (run : D → Trace) (k 
       linarith
     · simp [waitExp, waitRuns, List.finRange_succ, Ex]
 
-/-- The waits' bound, over the judged run's coins and `m` waits of `K` draws: `𝔼[1[acc] · Σᵢ wait_i + 1] ≤ 1 + m·k`. -/
-theorem waits_exp {D : Type} [Fintype D] [Nonempty D] (run : D → Trace) (k m K : ℕ) :
+/-- The waits' bound, over the judged run's coins and `m` waits of `K` samples: `𝔼[1[acc] · Σᵢ wait_i + 1] ≤ 1 + m·k`. -/
+theorem waits_exp {D : Type} [Fintype D] [Nonempty D] (run : D → Transcript) (k m K : ℕ) :
     Ex (fun s : D × (Fin m → Fin K → D) => (if (run s.1).out = .acc then (1 : ℝ) else 0) *
       ∑ i, (waitRuns run k ((List.finRange K).map (s.2 i)) 0 : ℝ) + 1) ≤ (1 : ℝ) + m * k := by
   have hin : ∀ d : D, (Ex fun ρ : Fin m → Fin K → D => (if (run d).out = .acc then (1 : ℝ) else 0) *

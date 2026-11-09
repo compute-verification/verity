@@ -25,6 +25,7 @@ so the compile fails on it. A header Lean refuses gives the imports read before 
 and the compile fails on it too. The auditor's fixture packages (`lean_audit.packages` leaves them out) have no tasks."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -107,6 +108,16 @@ def rel(root: Path, p: Path) -> str:
     return r
 
 
+def options(table: dict, prefix: str = "") -> dict:
+    """A lakefile's `leanOptions` as Lake reads them (`decodeLeanOptions`): TOML reads a dotted key (`backward.proofsInPublic
+    = true`) as a nested table, and Lake joins its keys into one option's name, since `lean --setup` refuses a table as an
+    option's value."""
+    out: dict = {}
+    for k, v in table.items():
+        out |= options(v, f"{prefix}{k}.") if isinstance(v, dict) else {f"{prefix}{k}": v}
+    return out
+
+
 def packages(root: Path, files: list[str]) -> dict[str, Package]:
     """{directory: package} for each Lake package of the tree but the auditor's fixtures."""
     root = root.resolve()
@@ -129,7 +140,7 @@ def packages(root: Path, files: list[str]) -> dict[str, Package]:
                                  f"it; teach families/lean_module.py and runners/lean_module.py, or set it elsewhere")
         inputs = mk.input_files(root / d, doc)
         out[d] = Package(d, rel(root, p.src), p, f, tuple(rel(root, root / d / i) for i, _ in inputs),
-                         doc.get("leanOptions", {}), tuple(rel(root, q.dir) for q in ws[0]))
+                         options(doc.get("leanOptions", {})), tuple(rel(root, q.dir) for q in ws[0]))
     return out
 
 
@@ -148,23 +159,60 @@ def modules(root: Path, files: list[str]) -> tuple[dict[str, Package], dict[str,
     return pkgs, owner
 
 
+#: the last `imports` of this process: (its tree and files, {each file it read: that file's digest then}, what it returned).
+#: The lean-module, lean-lock and lean-env listers each ask for it, so one listing reads and resolves the headers once
+_LAST: list = []
+#: what a package's modules resolve against beside its sources and headers, each read where a package's directory is
+_CONFIG = ("lakefile.toml", "lake-manifest.json", "lean-toolchain", "lean-audit.json")
+
+
+def _digests(root: Path, read: list[str]) -> dict[str, str | None]:
+    """{each of ``read``: its content's SHA-512, None where there is no file}."""
+    out: dict[str, str | None] = {}
+    for f in read:
+        p = root / f
+        out[f] = hashlib.sha512(p.read_bytes()).hexdigest() if p.is_file() else None
+    return out
+
+
 def imports(root: Path, files: list[str]) -> tuple[dict[str, Package], dict[str, tuple[str, str]],
                                                    dict[str, dict[str, How]], set[str], dict[str, frozenset[str]]]:
     """(the packages, and of the modules the check builds `modules`' entry for each, {source file: {the source file of each
     of the tree's modules its header imports: how}}, the `module` files and {source file: the env's modules its header
-    imports, `Init` among them unless it says `prelude`})."""
+    imports, `Init` among them unless it says `prelude`}). Taken from the last call (`_LAST`) on the same tree and files while
+    every file that call read has the digest it had then: each header it parsed, the `_CONFIG` files of each package and of
+    each its workspace holds, and the packages' input files. Callers don't change what it returns, which the next call
+    may return again."""
+    at = (str(Path(root).resolve()), tuple(files))
+    if _LAST and _LAST[0] == at and _digests(root, list(_LAST[1])) == _LAST[1]:
+        return _LAST[2]
+    got = _imports(root, files)
+    pkgs, _owner, direct, _system, _env = got
+    dirs = {q for p in pkgs.values() for q in (p.dir, *p.workspace)}
+    read = sorted({*direct, *(f"{d}/{c}" if d != "." else c for d in dirs for c in _CONFIG),
+                   *(i for p in pkgs.values() for i in p.inputs)})
+    _LAST[:] = [at, _digests(root, read), got]
+    return got
+
+
+def _imports(root: Path, files: list[str]) -> tuple[dict[str, Package], dict[str, tuple[str, str]],
+                                                    dict[str, dict[str, How]], set[str], dict[str, frozenset[str]]]:
     pkgs, owner = modules(root, files)
     have = set(files)
-
-    def workspace(d: str) -> list[Package]:
-        return [pkgs[q] for q in pkgs[d].workspace if q in pkgs]
+    spaces = {d: [pkgs[q] for q in p.workspace if q in pkgs] for d, p in pkgs.items()}
+    resolved: dict[tuple[str, str], str | None] = {}
+    outer: dict[tuple[str, str], bool] = {}
 
     def resolve(d: str, mod: str) -> str | None:
-        found = [p.file(mod) for p in workspace(d) if p.lake.claims(mod) and p.file(mod) in have]
-        return found[0] if len(found) == 1 and found[0] in owner else None
+        if (k := (d, mod)) not in resolved:
+            found = [p.file(mod) for p in spaces[d] if p.lake.claims(mod) and p.file(mod) in have]
+            resolved[k] = found[0] if len(found) == 1 and found[0] in owner else None
+        return resolved[k]
 
     def external(d: str, mod: str) -> bool:
-        return not any(p.lake.claims(mod) or p.file(mod) in have for p in workspace(d))
+        if (k := (d, mod)) not in outer:
+            outer[k] = not any(p.lake.claims(mod) or p.file(mod) in have for p in spaces[d])
+        return outer[k]
 
     def roots(d: str) -> list[str]:
         try:

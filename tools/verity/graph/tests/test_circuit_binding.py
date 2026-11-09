@@ -1,7 +1,7 @@
 """The circuit-binding family: its listing is circuit-check's catalog bindings, read from the binding files' syntax without
 running them, the same bytes on every listing; its runners tell a pass, a fail and an error apart from circuit-check's exit and
-report (here a stand-in's), the records tarball is the records' bytes alone, and each binding's task reads only its own slice
-and the shared part."""
+report (a stand-in's run, its reports made by circuit-check's own writers), the records tarball is the records' bytes alone,
+and each binding's task reads only its own slice and the shared part."""
 from __future__ import annotations
 
 import json
@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 
 import pytest
+from circuit_check import checks as CK
+from circuit_check import shard as SH
 from conftest import git, toy_tree
 
 from verity_graph import ROOT, contract, graph, runners
@@ -256,20 +258,28 @@ def _binding_run(tmp_path, monkeypatch, rc, report, say="", piece: dict | None =
 
 
 def _failure(name: str) -> dict:
-    """A failure as `checks.Findings.fail` makes it, from its name ``<check>/<code> <definition>[ <what>]``."""
+    """A failure as circuit-check makes it (`checks.Findings.fail`), from its name ``<check>/<code> <definition>[ <what>]``."""
     check, _, rest = name.partition("/")
     code, _, rest = rest.partition(" ")
-    return {"check": check, "code": code, "definition": rest.partition(" ")[0], "name": name}
+    definition, _, what = rest.partition(" ")
+    found = CK.Findings()
+    found.fail(check, code, definition, what)
+    return found.failures[0]
 
 
-def _report(*targets: tuple[str, list[str]], new: list[str] = (), hits: int = 0) -> dict:
-    return {"targets": [{"kind": "definition", "target": t, "failures": [_failure(n) for n in fs]} for t, fs in targets],
-            "summary": {"new_failures": list(new)}, "cache": {"hits": hits}}
+def _report(*targets: tuple[str, list[str]], hits: int = 0, others: tuple[dict, ...] = ()) -> dict:
+    """The report `circuit-check --binding` writes of its Definition ``targets`` (each a name and its failures' names) and the
+    records ``others``: unjoined, as a shard's (`shard.unjoined`, whose summary is `checks.summarize`'s), with the cache's
+    counts `cli.run` adds."""
+    records = [*({"kind": "definition", "target": t, "failures": [_failure(n) for n in fs], "warnings": []} for t, fs in targets),
+               *others]
+    return {**SH.unjoined(records, CK.Options()), "peaks": [],
+            "cache": {"hits": hits, "stored": 0, "untraced": [], "errors": [], "changed": []}}
 
 
 @pytest.mark.parametrize(("rc", "report", "say", "status", "detail"), [
-    (0, _report(("A", []), ("B", ["known/x B"]), hits=1), "", "pass", {"targets": 2, "passed": 2, "failed": 0, "reused": 1}),
-    (1, _report(("A", ["eval/mismatch A"]), ("B", []), new=["eval/mismatch A"]), "", "fail",
+    (0, _report(("A", []), ("B", []), hits=1), "", "pass", {"targets": 2, "passed": 2, "failed": 0, "reused": 1}),
+    (1, _report(("A", ["eval/mismatch A"]), ("B", [])), "", "fail",
      {"targets": 2, "passed": 1, "failed": 1, "reused": 0, "failures": ["eval/mismatch A"]}),
     (0, _report(), "", "pass", {"targets": 0, "passed": 0, "failed": 0, "reused": 0}),
     (2, None, f"circuit-check: refused: --binding verity.ml.x.circuit-check#_b_roots: {CB.NO_BINDING}\n", "fail",
@@ -301,13 +311,32 @@ def test_a_binding_the_catalog_made_no_slice_for_fails_as_a_name_the_catalog_lac
     assert calls == [] and res["outputs"] == {}
 
 
-def test_a_binding_s_output_is_each_failure_of_its_definition_targets_known_ones_too_by_check_code_and_definition(
-        tmp_path, monkeypatch):
+@pytest.mark.parametrize(("targets", "status", "detail"), [
+    ((("A", []), ("B", [])), "pass", {"targets": 2, "passed": 2, "failed": 0, "reused": 2}),
+    ((("A", ["eval/mismatch A at bit 3", "partition/gate-recomputed A"]), ("B", []), ("C", ["eval/mismatch C"])), "fail",
+     {"targets": 3, "passed": 1, "failed": 2, "reused": 2,
+      "failures": ["eval/mismatch A at bit 3", "eval/mismatch C", "partition/gate-recomputed A"]})])
+def test_a_binding_s_verdict_is_circuit_check_s_on_the_report_its_own_writers_make(tmp_path, monkeypatch, targets, status,
+                                                                                  detail):
+    """The report and exit `circuit-check --binding` ends with, made by its own writers: `shard.unjoined`, whose summary is
+    `checks.summarize`'s, and `cli.verdict`, which writes it and exits 1 on a failure.  The binding fails on the failures that
+    summary names (``failure_names``), naming each, and passes with none."""
+    from circuit_check import cli
+
+    rep = _report(*targets, hits=2)
+    out = tmp_path / "circuit-check.json"
+    rc = cli.verdict(rep, out=out, what=f"binding {B_ROOTS}: {len(rep['targets'])} target(s)")
     _machine(tmp_path, monkeypatch)
+    res, _ = _binding_run(tmp_path, monkeypatch, rc, json.loads(out.read_text()))
+    assert (rc, res["status"], res["detail"]) == (int(status == "fail"), status, detail), res
+
+
+def test_a_binding_s_output_is_each_failure_of_its_definition_targets_by_check_code_and_definition(tmp_path, monkeypatch):
+    _machine(tmp_path, monkeypatch)
+    template = {"kind": "template", "target": "t", "failures": [_failure("structural/mismatch t")], "warnings": []}
     rep = _report(("B_v1{n=2}", ["partition/gate-recomputed B_v1{n=2}", "eval/mismatch B_v1{n=2} at bit 3"]),
                   ("B_v1{n=3}", ["partition/gate-recomputed B_v1{n=3}", "partition/gate-recomputed B_v1{n=3}"]), ("A", []),
-                  new=["eval/mismatch B_v1{n=2} at bit 3"])
-    rep["targets"].append({"kind": "template", "target": "t", "failures": [_failure("structural/mismatch t")]})
+                  others=(template,))
     res, _ = _binding_run(tmp_path, monkeypatch, 1, rep)
     out = tmp_path / "work" / F.failures(B_ROOTS)["path"]
     assert json.loads(out.read_text()) == {"binding": B_ROOTS, "failures": [
@@ -341,12 +370,15 @@ def test_the_catalog_s_run_builds_every_record_into_a_fresh_cache_tars_it_and_gi
         (work / d / "stale" / "old.json").write_text("{}")
     calls = _stand_in(monkeypatch, CB, rc, report, records={"v/k1/a.json": '{"a": 1}', "v/k2/b.json": '{"b": 2}'},
                       slices=SLICED)
+    monkeypatch.setenv("OMP_NUM_THREADS", "64")
     doc = _graph(CATALOG)
     res = runners.execute(doc["tasks"][0], doc, work, circuit_catalog.run)
     assert contract.result_errors(res, doc["tasks"][0]) == [], res
     assert (res["status"], res["detail"]) == (status, detail), res
     (c,) = calls
     assert c["argv"][3:9] == ["--all", "--records-only", "--cache", str(work / "cache"), "--slices", str(work / "slices")]
+    assert c["env"] == {**os.environ, **circuit_catalog.THREADS} and c["env"]["OMP_NUM_THREADS"] == "1", \
+        "each of its builds, one per core at once, has one-thread pools"
     assert not c["cache"] and not (work / "cache").exists() and not (work / "slices").exists(), "both are the task's scratch"
     if status == "pass":
         CB.pack(_records(tmp_path / "same", {"v/k1/a.json": '{"a": 1}', "v/k2/b.json": '{"b": 2}'}), tmp_path / "same.tar.gz")

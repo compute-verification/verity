@@ -11,12 +11,12 @@
     "CoreComposition.Tie",
     "NciCheck.Protocol",
     "PouwCheck.Period",
-    "SampledProofs.OneStage",
-    "SampledProofs.OneStageZk",
+    "Spot.OneStage",
+    "Spot.OneStageZk",
     "VStarRecursive.Sampled"
    ],
    "except": [],
-   "why": "the program is code: the core interface, C-Flock's Lean and its components' ports, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: the core interface, C-Flock's Lean and its components' ports, no Mathlib and nothing of Security"
   }
  },
  "dependencies": {

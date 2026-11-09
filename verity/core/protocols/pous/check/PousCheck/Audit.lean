@@ -1,6 +1,5 @@
 module
 
-public import PousCheck.Wire
 public import PousCheck.Certificate
 
 /-!

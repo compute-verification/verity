@@ -11,10 +11,11 @@ tree's root changed, or a bit row's port with its words or width changed.
 `--zk` holds the files to the form `SampledKSLiveV4` covers, or at a shared-row public file `SampledKSLiveV5`'s
 (`Flock.PortRoots`, `Flock.KsScope`). The rows of all three and their shared-row public files are in it, so each session
 is accepted.
-A plain session of the row/v1 stage (`PLAIN`: no `--zk`, the verifier's own stratified draw) is accepted on that file too,
-and refused with the root changed and without `--registered`.
+A plain session of the row/v1 stage (`PLAIN`: no `--zk`, the verifier's own stratified sample, on the challenger's coin tree,
+its coins the ones the challenger's release log shows) is accepted on that file too, and refused with the root changed and
+without `--registered`.
 Each verify sets up an m = 25 table (about 10 s), so the module is slow; it is the one test of `register_served`'s file on
-a proved session, which the Python round trip (`verity/core/protocols/sampled_proofs/tests/test_served.py`) can't
+a proved session, which the Python round trip (`verity/core/protocols/spot/tests/test_served.py`) can't
 reach."""
 from __future__ import annotations
 
@@ -29,23 +30,24 @@ from pathlib import Path
 import pytest
 
 from verity.ml.circuits.codec import canonical_json, encode_program
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
-from verity.core.protocols.sampled_proofs.one_stage.served import register_served
+from verity.core.protocols.spot.one_stage import registered as G
+from verity.core.protocols.spot.one_stage.served import register_served
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: `pod/89-served-registered.sh`'s fixture for each row format (`SCHEMA=`): stage/ (circuit.txt, pub-32.bin, program.json,
-#: partition.json, served.json, registered.json, tables/), session/ (the drawn --zk session's record and proofs), live.json
+#: partition.json, served.json, registered.json, tables/), session/ (the sampled --zk session's record and proofs), live.json
 #: (the prover's LIVE record)
 FIXTURES = {
-    G.SCHEMA: "art:891ffb0bfc8ae3032e5b113d766ffe594c6e8446d293f0bfe5cba62286437edf",
-    G.SCHEMA_V2: "art:cd47a8fe806ef14308e22d07275d125334595b3a73d63ef8626ed762a7b9c181",
-    G.SCHEMA_SEG: "art:5be3f6b0639f3dda47fe19366da782ffdc0b4b5fc886ccf45b36feb3f4fcfc34",
+    G.SCHEMA: "art:54456e32d1e801018ba6c9da92548482a0e9c8c8fd5c2fc956086cb6e3d8bd4b",
+    G.SCHEMA_V2: "art:f14126710f23f62410d0387454ab8c69b236f75f5b92df10ddc214ebc45f37e6",
+    G.SCHEMA_SEG: "art:ae8f5cf2b166710fd2418eea10dddc217102587c75d00db85abf2474b2d0864c",
 }
 #: `pod/89-served-registered.sh ZK=0`'s fixture (row/v1): the same stage, with the verifier's own stratified sample of `PLAIN_K`
-#: (stage/draw.json), and session/ a plain session (no --zk, OS coins) sampled by it; vectors/ is vectors.json's live set
-PLAIN = "art:da138c653377954f4eb906a002814ea73a89a766daa9a0c979f6e31fe18ba60f"
+#: (stage/draw.json), session/ a plain session (no --zk) sampled by it on the challenger's coin tree, and challenger/ its
+#: record and release log; vectors/ is vectors.json's live set
+PLAIN = "art:e43917db0ffa59b34e6beae04917b27a70489a4d7ab778d734ddb10c85c5af7b"
 PLAIN_K = 16
 STATEMENT = "verity/flock-circuit"
 
@@ -54,7 +56,6 @@ pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean t
 
 @pytest.fixture(scope="module")
 def built():
-    pytest.importorskip("verity_numerical")
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
 
 
@@ -70,11 +71,11 @@ def fx(request, built, tmp_path_factory):
     return request.param, root
 
 
-def _verify(fx: Path, registered: Path | None, mode: tuple[str, ...] = ("--zk",)) -> dict:
+def _verify(fx: Path, registered: Path | None, mode: tuple[str, ...] = ("--zk",), public: Path | None = None) -> dict:
     st = fx / "stage"
     reads = ["--registered", str(registered)] if registered else []
     p = subprocess.run([str(BIN), "verify", *mode, "--statement", STATEMENT, "--circuit", str(st / "circuit.txt"), "--public",
-                        str(st / "pub-32.bin"), "--partition", str(st / "partition.json"), "--program",
+                        str(public or st / "pub-32.bin"), "--partition", str(st / "partition.json"), "--program",
                         str(st / "program.json"), *reads, "--session", str(fx / "session")],
                        capture_output=True, text=True, check=False)
     (line,) = [json.loads(x.split(" ", 1)[1]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
@@ -104,9 +105,45 @@ def test_a_session_verified_on_the_file_register_served_wrote_is_accepted_and_a_
     assert bad["accepted"] is False and f"does not open {SR.VALUE}'s registered root" in bad["why"], bad
 
 
+def test_the_verdict_names_the_files_and_the_sample_it_checked_the_session_against(fx, tmp_path):
+    """`verify`'s verdict names the public file it checked the session against by its header's digest
+    (``public_header_sha512``, the SHA-512 of the header's canonical JSON, `publicHeader`: the population's header, which
+    the sampled statement is drawn from, never the drawn one), the registered reads by the digest of their file
+    (``registered_sha512``, the SHA-512 of its canonical JSON), the session's sample (``unit_draw``, its record's) and
+    its tables (``session_tables``, one here), which the second stage's audit holds each statement to. On a public file
+    whose header is another's (one more key), or a registered file at another root, the session is refused, and its
+    verdict names that file, never the one it was proved on."""
+    import served_registered as SR
+
+    def digest(j) -> str:
+        return hashlib.sha512(canonical_json(j)).hexdigest()
+
+    _, fx = fx
+    program, query = SR.program()
+    tree, x_tree, out_port = SR.load(fx / "stage")
+    doc = SR.registered_file(program, query, tree, x_tree, out_port)
+    reads = SR.write_registered(doc, tmp_path / "registered.json")
+    pub = (fx / "stage" / "pub-32.bin").read_bytes()
+    nl = pub.index(b"\n")
+    header = json.loads(pub[:nl])
+    ok = _verify(fx, reads)
+    assert ok["accepted"] is True, ok
+    assert ok["public_header_sha512"] == digest(header) and ok["registered_sha512"] == digest(doc)
+    assert ok["unit_draw"] == json.loads((fx / "session" / "session.json").read_text())["unit_draw"]
+    assert ok["session_tables"] == 1
+    other = {**header, "staged_for": "another file"}
+    (tmp_path / "pub-32.bin").write_bytes(json.dumps(other).encode() + pub[nl:])
+    bad = _verify(fx, reads, public=tmp_path / "pub-32.bin")
+    assert bad["accepted"] is False, bad
+    assert bad["public_header_sha512"] == digest(other) != ok["public_header_sha512"]
+    moved = SR.registered_file(program, query, dataclasses.replace(tree, root="00" * 64), x_tree, out_port)
+    bad = _verify(fx, SR.write_registered(moved, tmp_path / "registered-root.json"))
+    assert bad["accepted"] is False and bad["registered_sha512"] == digest(moved) != ok["registered_sha512"], bad
+
+
 def test_the_provers_record_carries_the_sha512_of_the_public_file_the_verifier_reads(fx):
     """`live.json`'s ``public_file_sha512`` is the SHA-512 of ``stage/pub-32.bin``, the file `verify --public` reads. Its
-    ``public_sha512`` is Σ's public digest, over the drawn statement's header, which no file holds."""
+    ``public_sha512`` is Σ's public digest, over the sampled statement's header, which no file holds."""
     _, fx = fx
     live = json.loads((fx / "live.json").read_text())
     assert live.get("public_file_sha512") == hashlib.sha512((fx / "stage" / "pub-32.bin").read_bytes()).hexdigest()
@@ -168,16 +205,30 @@ def plain(built, tmp_path_factory):
         pytest.skip(f"the evidence store is not reachable: {e}")
 
 
+def test_the_plain_sessions_coins_are_the_challengers(plain):
+    """The plain session's coin tree is one the challenger's release log shows it sampled, with the rounds it opened; with
+    one of its link points changed, it is refused at them."""
+    from verity.core.protocols.spot import challenger as C, remote as R
+
+    trees = C.coin_trees_of(R.log_lines(plain / "challenger" / R.RELEASES))
+    rec = json.loads((plain / "session" / "session.json").read_text())
+    tables = dict.fromkeys(rec["link"]["root_b"])
+    assert len(trees) == 1 and C.sessions_tree_reason(trees, [("session", tables, rec)]) is None
+    c = rec["link"]["points"][0][0]
+    rec["link"]["points"][0][0] = ("0" if c[0] != "0" else "1") + c[1:]
+    assert "link points are not the coins" in C.sessions_tree_reason(trees, [("session", tables, rec)])
+
+
 def test_a_plain_session_on_registered_reads_is_accepted_and_refused_without_its_reads(plain, tmp_path):
     """Without `--zk`, a shared-row public file at hidden outputs and `hm96-sha512/v1` leaves is a covered form when the
     verifier holds its own registered reads (`ProvedScope.sharedRowsOk`, `FailClosed.SoundExecHR`): the plain session sampled by
-    the verifier's own stratified law is accepted on `register_served`'s file, and refused on it with the tree's root changed
+    the verifier's own stratified sampling design is accepted on `register_served`'s file, and refused on it with the tree's root changed
     (the registered check opens no row) and without `--registered`."""
     import served_registered as SR
 
     program, query = SR.program()
     tree, x_tree, out_port = SR.load(plain / "stage")
-    mode = ("--stratified", str(PLAIN_K), "--coins", "os")
+    mode = ("--stratified", str(PLAIN_K), "--coins", "tree")
     ok = _verify(plain, SR.write_registered(SR.registered_file(program, query, tree, x_tree, out_port),
                                             tmp_path / "registered.json"), mode)
     assert ok["accepted"] is True, ok

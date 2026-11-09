@@ -3,7 +3,7 @@ module
 public import Properties.Pouw.LiveSalt
 public import Proofs.Properties.Pouw.LiveSalt.Ledger
 public import Proofs.Properties.Pouw.Commit
-public import Proofs.Properties.NetworkRecords.Bytes
+public import Proofs.Flock.Bytes
 import all Lean.Data.Json.Basic
 
 /-!
@@ -32,7 +32,7 @@ namespace Properties.Pouw.LiveSalt
 open Lean (Json)
 open Std.Do
 open Properties.NetworkCertifier.Bytes (bs bs_append bs_length bs_inj)
-open SampledProofs.Challenger (Audited ChallengerKey LedgerEntry LiveCommitment LiveOpening Roots familiesJson liveReason
+open Spot.Challenger (Audited ChallengerKey LedgerEntry LiveCommitment LiveOpening Roots familiesJson liveReason
   pinnedSession sessionNamed)
 open Properties.Pouw.LiveSalt.Ledger (bind_ok of_triple ok_spec throw_spec ledgerShows_of sessionNamed_root)
 
@@ -134,21 +134,21 @@ theorem saltSession_ok {key ledger pins main window session : Json} {res : Audit
   obtain ⟨cr, hcr, rfl⟩ := h
   exact ⟨ck, hck, ha, hcr⟩
 
-theorem field_eq (j : Json) (k : String) : PouwWindow.field? j k = SampledProofs.field? j k := by
+theorem field_eq (j : Json) (k : String) : PouwWindow.field? j k = Spot.field? j k := by
   cases j <;> rfl
 
-theorem at_eq (j : Json) (k : String) : PouwCheck.at? j k = SampledProofs.getD j k := by
-  simp only [PouwCheck.at?, SampledProofs.getD, field_eq]
+theorem at_eq (j : Json) (k : String) : PouwCheck.at? j k = Spot.getD j k := by
+  simp only [PouwCheck.at?, Spot.getD, field_eq]
 
 theorem jsonStrIs_eq {j : Json} {s : String} (h : PouwCheck.jsonStrIs j s = true) : j = .str s := by
   cases j <;> simp_all [PouwCheck.jsonStrIs]
 
-theorem int_of_intOf {j : Json} {n : Int} (h : PouwWindow.intOf? j = some n) : SampledProofs.int? j = some n := by
+theorem int_of_intOf {j : Json} {n : Int} (h : PouwWindow.intOf? j = some n) : Spot.int? j = some n := by
   cases j with
   | num x =>
     obtain ⟨m, e⟩ := x
     cases e with
-    | zero => simpa [PouwWindow.intOf?, SampledProofs.int?] using h
+    | zero => simpa [PouwWindow.intOf?, Spot.int?] using h
     | succ e => simp [PouwWindow.intOf?] at h
   | _ => simp [PouwWindow.intOf?] at h
 
@@ -192,9 +192,9 @@ theorem none_of {x : Option String} (h : ∀ why, x = some why → False) : x = 
 
 theorem carries_names {s : Json} {sid : String} {seq : Nat} {root : ByteArray} {cm : String}
     (h : PouwCheck.carries s sid seq root cm = true) :
-    SampledProofs.getD s "session" = .str sid ∧ SampledProofs.int? (SampledProofs.getD s "seq") = some (seq : Int) ∧
-      SampledProofs.getD s "root" = .str (Flock.hexOf root) ∧ SampledProofs.getD s "commitment" = .str cm ∧
-      SampledProofs.field? s "secret" = none := by
+    Spot.getD s "session" = .str sid ∧ Spot.int? (Spot.getD s "seq") = some (seq : Int) ∧
+      Spot.getD s "root" = .str (Flock.hexOf root) ∧ Spot.getD s "commitment" = .str cm ∧
+      Spot.field? s "secret" = none := by
   cases s with
   | obj kv =>
     simp only [PouwCheck.carries, Bool.and_eq_true, Option.isNone_iff_eq_none, beq_iff_eq] at h
@@ -227,10 +227,10 @@ theorem accepted_of {key ledger pins main session : Json} {kv : Std.TreeMap.Raw 
       List.find? (fun x => x.kind == "open") (PouwCheck.sessionEntries ledger res.1.session),
       List.find? (fun x => x.kind == "end") (PouwCheck.sessionEntries ledger res.1.session)) =
         (some rv, some op, some en))
-    (hfam : SampledProofs.jeq (SampledProofs.getD rv.body "families") (familiesJson PouwWindow.SALT_FAMILIES) = true)
-    (hres : (SampledProofs.int? (SampledProofs.getD op.body "reserve") == some (rv.seq : Int)) = true)
-    (hcomp : (PouwCheck.jsonTrue (SampledProofs.getD en.body "complete") &&
-      SampledProofs.jeq (SampledProofs.getD en.body "released")
+    (hfam : Spot.jeq (Spot.getD rv.body "families") (familiesJson PouwWindow.SALT_FAMILIES) = true)
+    (hres : (Spot.int? (Spot.getD op.body "reserve") == some (rv.seq : Int)) = true)
+    (hcomp : (PouwCheck.jsonTrue (Spot.getD en.body "complete") &&
+      Spot.jeq (Spot.getD en.body "released")
         (Json.mkObj [(PouwWindow.SALT, Lean.toJson (1 : Nat))])) = true)
     (hrecv : (res.2.2 == [(PouwWindow.SALT,
       [PouwCheck.epochOpenRoot (PouwCheck.weightsRootAt 64 "verity/pouw/weights/v1" us.2) k])]) = true)

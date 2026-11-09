@@ -2,6 +2,7 @@ module
 
 public import Proofs.Accounting.Headline.EpsJl
 public import Proofs.Accounting.Headline.Sm120
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # sm_120's headline on its measured vector

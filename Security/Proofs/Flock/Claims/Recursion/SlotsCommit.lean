@@ -1,7 +1,43 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.FinOpen
 public import Proofs.Flock.Claims.Recursion.RecOpen
-public import Proofs.Flock.Soundness.Discharge.Hm.Commit
+public import Proofs.Flock.Claims.Recursion.RecRecord
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.Discharge.Hm.Commit
+import Proofs.Flock.Soundness.Discharge.Hm.Mask
+import Std.Tactic.BVDecide.Normalize.BitVec
 
 /-!
 # `ReadersTrue` at `layoutBTops`, from the hm96 slots' commit strings
@@ -281,7 +317,7 @@ theorem readersTrue_layoutBTops {Col T : Type} (fin : Msg → List (ℕ × List 
 
 /-! ## `KSLin2` and `BitsLin2` with the slots' commit strings -/
 
-/-- **`KSLin2` at the model of the coin server's record (`recTr`), with `ReadersTrue` as the slots' commit strings**:
+/-- **`KSLin2` at the model of the challenger's live-coin part's record (`recTr`), with `ReadersTrue` as the slots' commit strings**:
 `ksLin2_deployed_rec`, with `ReadersTrue` from `HmSlotsCommit` (`readersTrue_layoutBTops`). What stays open at the dense
 form is `PartChecksBV`, `PartOpensB`, `DecompB` and `HmSlotsCommit` (`ksLin2_deployed_full` proves it). -/
 theorem ksLin2_deployed_slots (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
@@ -308,7 +344,7 @@ theorem ksLin2_deployed_slots (b : Brings) (aux : Msg → ℕ → Flock.RecRecor
   exact ksLin2_deployed_rec b aux nOf hd rest fin wE join final w hP
     (readersTrue_layoutBTops (finOpen fin) Bd.IVStar bR (deployZkRec _root_.Flock.Readable.relation) hS)
 
-/-- **`BitsLin2` at the model of the coin server's record (`recTr`), with `ReadersTrue` as the slots' commit strings**:
+/-- **`BitsLin2` at the model of the challenger's live-coin part's record (`recTr`), with `ReadersTrue` as the slots' commit strings**:
 `bitsLin2_deployed_rec`, with `ReadersTrue` from `HmSlotsCommit`. It reads `StrictBirthday` and `ExpectedCR`, the named
 SHA-512 collision assumptions, and `ksLin2_deployed_slots`' open premises: a bound on a number under named premises, not
 a proved security level. -/

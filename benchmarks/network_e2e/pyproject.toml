@@ -1,7 +1,7 @@
 [project]
 name = "verity-network-e2e"
 version = "0.0.0"
-description = "Network accounting end to end: a certifier-serve rehearsal, N2's verdicts, the proved head checks, the negatives and the chain (advice bits, prove path), as one report."
+description = "Network certification end to end: a certifier-serve rehearsal, N2's verdicts, the proved head checks, the negatives and the chain (advice bits, prove path), as one report."
 requires-python = ">=3.12"
 dependencies = ["verity"]
 
@@ -37,4 +37,4 @@ inputs = ["benchmarks/network_traces", "benchmarks/network_e2e/encodings/derived
           "integrations/vllm/verity_vllm/pipeline/window_advice.py",
           "verity/core/protocols/certifier/README.md", "benchmarks/live_challenger/auditor.py",
           "benchmarks/live_challenger/host.json",
-          "verity/core/protocols/network/lean/lakefile.toml", "verity/core/service/sampled_proofs/lakefile.toml"]
+          "verity/core/protocols/network/lean/lakefile.toml", "verity/core/service/spot/lakefile.toml"]

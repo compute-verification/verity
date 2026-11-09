@@ -5,14 +5,14 @@ public import PouwCheck.Verified
 /-!
 # A served window's live statements verified (`credit._live_verified`)
 
-The verifier of record of a window's live@<s> statements, which `credit.window` and `credit.period_credit` take each
+The verifier of a window's live@<s> statements, which `credit.window` and `credit.period_credit` take each
 round's live proof outcome from (`credit._lean_live_verified`, through `pouw-check-difftest`'s `credit-live-verified`),
 with `credit._live_verified` the Python reference the difftest (`tests/test_live_verified_difftest.py`) holds to it,
 string for string. `Credit.Internal.live` then holds those outcomes to the window, as `credit._live` does.
 
 A window's live evidence carries its live Program's descriptor and its statements, one a round (`LIVE_STATEMENT_KEYS`:
 the round, the paths of its circuit file and its public file, and its sessions' directories), never a verdict. The
-C-Flock verifier of record runs outside this process, so `liveVerified` is asked twice, as `Verified.verified` is:
+Flock verifier runs outside this process, so `liveVerified` is asked twice, as `Verified.verified` is:
 
 * with no answers (`runs` null), it names each verifier run (`asks`): in statement order, up to the first statement a
   check before the verifier refuses, the statement's index, the live template's circuit file's SHA-512 the period's open
@@ -60,11 +60,11 @@ def round? (s : Json) : Option Nat :=
   | _, _, _, _, _ => none
 
 /-- A known value's port of a `--registered` file (`live_reads.reads_file`'s `known`): the value `v`'s rows `rows` (each
-with its salt), a row/v2 value of 16-bit leaves of `words` words under `SampledProofs.Registered.domainAt` of `program`
+with its salt), a row/v2 value of 16-bit leaves of `words` words under `Spot.Registered.domainAt` of `program`
 binding the window's open root `window`, read at each row of `rowsRead` by unit `s` alone, one port a row. -/
 def knownPorts (program window v : String) (rows : Array (Array Nat × ByteArray)) (words s : Nat)
     (rowsRead : List Nat) : R (List Json) := do
-  let d ← (SampledProofs.Registered.domainAt program v words rows.size 16 (some window)).mapError fun why =>
+  let d ← (Spot.Registered.domainAt program v words rows.size 16 (some window)).mapError fun why =>
     (LIVE, why)
   let root ← knownRoot program window v rows words
   pure (rowsRead.map fun row => Json.mkObj [("value", Json.str v), ("root", Json.str root),
@@ -93,9 +93,9 @@ def readsFile (program pre window session : String) (t steps s m : Nat) (roots :
     (maxTokens : List Nat) : R Json := do
   let (sv, rv) := (s!"{pre}{SLOTS}@{s}", s!"{pre}{REQUESTS}@0")
   let reads := fun (row : Nat) => Json.arr ((List.replicate s Json.null ++ [toJson row]).toArray)
-  let sd ← (SampledProofs.Registered.domainAt program sv SLOT_WORDS t 16 (some window)).mapError fun why =>
+  let sd ← (Spot.Registered.domainAt program sv SLOT_WORDS t 16 (some window)).mapError fun why =>
     (LIVE, why)
-  let rd ← (SampledProofs.Registered.domainBound program rv HEADER_WORDS t 16 "session" session).mapError fun why =>
+  let rd ← (Spot.Registered.domainBound program rv HEADER_WORDS t 16 "session" session).mapError fun why =>
     (LIVE, why)
   let port := fun (v : String) (words : Nat) (d : ByteArray) (schema : String) (row : Nat) =>
     Json.mkObj [("value", Json.str v), ("root", Json.str ((roots.lookup v).getD "")), ("leaves", toJson t),

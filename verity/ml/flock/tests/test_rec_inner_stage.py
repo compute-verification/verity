@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 from test_rec_outer import BIN
-from verity.core.protocols.sampled_proofs.one_stage import partition as P
+from verity.core.protocols.spot.one_stage import partition as P
 from verity.ml.circuits.codec import program_digest
 
 POD = Path(__file__).resolve().parents[1] / "pod"
@@ -68,7 +68,7 @@ def _window(src: Path, n: int, part: dict, d: Path) -> bytes:
 
 def test_an_inner_statement_past_the_verifiers_rows_is_refused_before_staging(tmp_path):
     """`stage` and `stage_window` refuse a population of more than `rec_budget.MAX_INNER_ROWS` units with
-    `RecBudget.innerRows`'s message, before they draw or write anything."""
+    `RecBudget.innerRows`'s message, before they sample or write anything."""
     from verity_flock import rec_budget as RB
 
     ri, n = _rec_inner(), RB.MAX_INNER_ROWS + 1

@@ -1,9 +1,21 @@
 module
 
 public import Proofs.Flock.Soundness.LigeritoMid
+import ArkLib.Data.CodingTheory.JohnsonBound.Family
+import ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.Johnson.Probability
+import Proofs.Flock.Soundness.Accounting.Fast100
+import Proofs.Flock.Soundness.Accounting.Numbers
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Game
+import Proofs.Core.Game.Poly
+import Proofs.Flock.Soundness.LigeritoCoins
+import Proofs.Flock.Soundness.LigeritoWeights
+import Proofs.Flock.Soundness.LincheckPhase
+import Proofs.Flock.Soundness.OpeningPhase
+import Proofs.Flock.Soundness.Rounds
 
 /-!
-# Ligerito is sound (PROTOCOL.md §13)
+# Ligerito is sound (`Flock.Ligerito`)
 
 From a claim `Σ_y f(y)·b(y) = T` false for every message near the committed level-0 table,
 Ligerito accepts with probability at most `εLig`:

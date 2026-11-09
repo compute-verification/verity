@@ -1,7 +1,7 @@
 """`verity.ml.commitments.gates.block_check`, PoUB's opening unit: the Boolean unit equals its Python reference on toy
 openings, appended and registered, honest and with each wrong one (`block_check_cases`: a tampered block, a payload not the
 committed one or not the committed KV, a word at or above p, a wrong append coin, a wrong receipt leaf, salt or path, a plan
-without the block at the drawn position, a receipt the pass's tree commits but the block doesn't give), and the reference
+without the block at the sampled position, a receipt the pass's tree commits but the block doesn't give), and the reference
 names the check each fails; its rows hold every parameter and refuse a shape off the codec, and its parts cost the gates
 pinned here. The toy blocks are the codec's encodings (`fixtures/block_check_toy.json`); PoUB's tests hold that fixture, the
 reference at the deployed fields, and the parts' rounds and binding to the codec, receipts and trees

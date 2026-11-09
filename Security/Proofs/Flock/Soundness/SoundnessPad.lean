@@ -1,11 +1,19 @@
 module
 
-public import Proofs.Flock.Soundness.LigeritoPadSound
-public import Proofs.Flock.Soundness.Soundness
 public import Proofs.Flock.Soundness.Accounting.PaddedNumbers
+public import Proofs.Flock.Soundness.LigeritoPadLevel0
+public import Proofs.Flock.Soundness.LigeritoPadSound
+public import Proofs.Flock.Soundness.LigeritoPhase
+public import Proofs.Flock.Soundness.BindSound
+import Proofs.Flock.Soundness.Accounting.Fast100
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.LincheckPhase
+import Proofs.Flock.Soundness.OpeningPhase
+import Proofs.Flock.Soundness.RepSound
 
 /-!
-# Soundness of a table with C-Flock ZK's padded level 0
+# Soundness of a table with Flock ZK's padded level 0
 
 **`table_sound_pad`.** For every prover strategy, the probability that the verifier accepts a table
 with the padded level 0 (both reps, each folding its own `e` extra lanes) while no family of witness
@@ -304,9 +312,9 @@ theorem table_sound_pad (A : Arith F K) (hA : A.Correct)
         _ ≤ ENNReal.ofReal ε * ENNReal.ofReal ε := mul_le_mul' h0 h1
     · rw [padTableError, ENNReal.ofReal_add hlink0 (by positivity), sq, ENNReal.ofReal_mul hε]
 
-/-! ## At C-Flock ZK's values -/
+/-! ## At Flock ZK's values -/
 
-/-- C-Flock ZK's schedules have the `fast100` shape. -/
+/-- Flock ZK's schedules have the `fast100` shape. -/
 theorem m1_shape : ∀ m, 25 ≤ m → m ≤ 35 →
     2 ≤ (m1Schedule m).levels.length ∧
       ((m1Schedule m).levels.headD default).lanes = (m1Schedule m).k0 ∧
@@ -315,7 +323,7 @@ theorem m1_shape : ∀ m, 25 ≤ m → m ≤ 35 →
   intro m h1 h2
   interval_cases m <;> decide +kernel
 
-/-- **The table theorem at C-Flock ZK's values** (`verity/ml/flock/live/PROTOCOL.md` §7 item 6): every `m`
+/-- **The table theorem at Flock ZK's values** (`verity/ml/flock/live/PROTOCOL.md` §7 item 6): every `m`
 the verifier serves, `25 ≤ m ≤ 35`, level-0 query counts `277, 242, 229` at `m = 25, 26, 27`, 219 at
 `m = 28..31` and 218 at `m = 32..35`, padding `t = 2q₀`, a pair of extra lanes per rep. For every prover
 strategy, the verifier accepts a table while the committed values do not satisfy the statement with

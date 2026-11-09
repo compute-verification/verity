@@ -1,6 +1,39 @@
 module
 
 public import Proofs.Flock.Claims.Bridge.Coins
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The public-coin verifier of a game, and its run, path by path
@@ -148,7 +181,7 @@ variable {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (d : 
   (cs : ℕ → Coin)
 
 /-- What a run from a round boundary gives, for the induction. -/
-def Concl (n : ℕ) (b : β) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace) : Prop :=
+def Concl (n : ℕ) (b : β) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) : Prop :=
   (stepWith H P x ω (fun as => walk d P0 (as.zip ((List.range as.length).map cs))) n hist as t).out =
       toOut ((d b).eval H).1 ∧
     (stepWith H P x ω (fun as => walk d P0 (as.zip ((List.range as.length).map cs))) n hist as t).vLog =
@@ -158,7 +191,7 @@ def Concl (n : ℕ) (b : β) (hist : List (Msg × Msg)) (as : List Msg) (t : Tra
 
 /-- The induction hypothesis at a round boundary, `n` rounds left. -/
 def Inv (n : ℕ) : Prop :=
-  ∀ (g : Game β) (I : Iface Coin g) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+  ∀ (g : Game β) (I : Iface Coin g) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
     pos P0 (as.zip ((List.range as.length).map cs)) = ⟨g, I⟩ → replayPos P0 t.msgs = ⟨g, I⟩ →
     RoundsLe g I (stratOf H P x ω g I hist none) false n →
     Concl H P x ω d P0 cs n (playOn g I (stratOf H P x ω g I hist none) none fun i => cs (as.length + i)) hist as t
@@ -166,7 +199,7 @@ def Inv (n : ℕ) : Prop :=
 /-- **One round, once its message is open**: the prover's message `a` has taken the verifier to the pending position
 `⟨g', I'⟩`; the round's reply and the rounds after give the outcome of the game played from there. -/
 theorem after_open (n : ℕ) (IH : Inv H P x ω d P0 cs n) (g' : Game β) (I' : Iface Coin g')
-    (hist : List (Msg × Msg)) (as : List Msg) (t : Trace) (a : Msg) (hpa : ((P.next x hist ω).eval H).1 = a)
+    (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) (a : Msg) (hpa : ((P.next x hist ω).eval H).1 = a)
     (hw : walk d P0 ((as ++ [a]).zip ((List.range (as ++ [a]).length).map cs)) = reply d ⟨g', I'⟩ (cs as.length))
     (hp : pos P0 ((as ++ [a]).zip ((List.range (as ++ [a]).length).map cs)) = close ⟨g', I'⟩ (cs as.length))
     (hrp : ∀ o, replayPos P0 (t.msgs ++ [(a, o)]) = closeR ⟨g', I'⟩ o)

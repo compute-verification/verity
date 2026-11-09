@@ -1,8 +1,43 @@
 module
 
 public import Definitions.Accounting.Guarantees.RemoteBinding
-public import Proofs.Accounting.TS.Drawn
+public import Proofs.Accounting.Lemmas.RemoteBinding
 public import Proofs.Hash.RowBinding
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Accounting.TS.Drawn
+import Proofs.Pouw.RelativeSecurity
+import Proofs.Pous.Prob
 
 /-!
 # The receipts' binding bound: the proof
@@ -57,7 +92,7 @@ theorem sum_prob_le {Y P : Type} [Fintype Y] (L : Finset P) (F : P → Y → Pro
       _ = ∑ y, ∑ p ∈ L, (if F p y then 1 else 0 : ℕ) := Finset.sum_comm
       _ ≤ ∑ y, k * (if ∃ p ∈ L, F p y then 1 else 0) := Finset.sum_le_sum fun y _ => key y
       _ = k * (univ.filter fun y => ∃ p ∈ L, F p y).card := by rw [← Finset.mul_sum, Finset.card_filter]
-  unfold prob
+  unfold prob Claims.prUniform
   rw [← Finset.sum_div, mul_div_assoc']
   refine div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg _)
   have := (Nat.cast_le (α := ℝ)).2 hn
@@ -93,18 +128,18 @@ theorem tally_le_held [Fintype X] (D : Session n m s κ X) (R : Receipts n κ X)
   Accounting.SecurityProofs.TS.Plurality.tally_le_plural ω v
 
 theorem toReal_pr {α : Type} [Fintype α] (P : α → Prop) : (Pous.pr P).toReal = prob P := by
-  unfold Pous.pr prob
+  unfold prob Claims.prUniform; simp only [Pous.pr_eq_card]
   rw [ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
 
 theorem claims_pr {α : Type} [Fintype α] (P : α → Prop) : Claims.Pr P = prob P := by
-  unfold Claims.Pr prob
+  unfold Claims.Pr prob Claims.prUniform
   congr
 
 /-- A window opens at most `s_t` receipts: its draws, `min(s_t, U_t)`. -/
 theorem card_opened_le (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : Coins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : Coins n κ X) : (D.opened prf rest t ω).card ≤ s t := by
   unfold Session.opened openings
-  exact Finset.card_image_le.trans ((Finset.card_range _).le.trans (by unfold Session.draws; exact min_le_left _ _))
+  exact Finset.card_image_le.trans ((Finset.card_range _).le.trans (by unfold Session.samples; exact min_le_left _ _))
 
 /-- **Window `t`'s share of the binding term** is at most `√(|L_t|·s_t·(fork_t + split_t))`. -/
 theorem window_le [Fintype X] (D : Session n m s κ X) (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
@@ -209,7 +244,7 @@ theorem binding_le_of_fixed [Fintype X] [Nonempty X] (D : Session n m s κ X) (R
       funext y
       exact propext ⟨fun ⟨p, _, _, h⟩ => h (hF t y.1 y.2 p), False.elim⟩
     rw [this]
-    unfold prob
+    unfold prob Claims.prUniform
     simp
   have h2 : √((2 : ℝ) ^ (513 : ℝ)) = 2 ^ (256.5 : ℝ) := by
     rw [Real.sqrt_eq_rpow, ← Real.rpow_mul (by norm_num)]

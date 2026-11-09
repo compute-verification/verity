@@ -1,4 +1,4 @@
-"""Store honing (2026-09-23): eviction, partial fetch / listing, labels durability, catalog schema versions, vocabulary hygiene,
+"""Store honing: eviction, partial fetch / listing, labels durability, catalog schema versions, vocabulary hygiene,
 tar-streamed pulls, dead-pod errors, multipart upload, parallel `where`.  Temp stores and an `FsRemote` directory only; no network."""
 from __future__ import annotations
 
@@ -100,7 +100,7 @@ def test_evict_store_only_verified_blobs_largest_first_and_honest_presence(store
 
 
 def test_evict_keeps_every_blob_a_registry_artifact_holds(store, fs_remote, tmp_path, capsys):
-    """Node 1's runs fetch fixtures only from the public export, which lacked rec-coins on 11 Oct: a blob any artifact of the
+    """Node 1's runs fetch fixtures only from the public export, which can lack a fixture: a blob any artifact of the
     registry holds stays, even when another, unlisted artifact shares it."""
     from research.store import evict as EV
 
@@ -167,6 +167,13 @@ def test_evict_runs_only_preserved_terminal_quiet_runs_and_leaves_a_restore_reco
     store.put_attempt(_attempt(run_id="r20260922-105909-0004", outputs={"run_files": art}))
     assert [p["run"] for p in EV.plan_runs(store, runs, min_bytes=1000)] == [RUN], "a run dir touched in the last 30 min is skipped"
     assert fresh.exists()
+    for p in fresh.rglob("*"):
+        os.utime(p, (1_700_000_000, 1_700_000_000))
+    capsys.readouterr()
+    EV.plan_runs(store, runs, min_bytes=1000, now=1_700_000_000 + 2 * 3600, log=print)
+    assert "r20260922-105909-0004: touched 120 min ago" in capsys.readouterr().out, "by default a run ended 2 h ago is still being collected"
+    EV.plan_runs(store, runs, min_bytes=1000, quiet_s=30 * 60, now=1_700_000_000 + 2 * 3600, log=print)
+    assert "r20260922-105909-0004: touched" not in capsys.readouterr().out, "a node's evictor passes its 30 min window"
 
     free = {"n": 0}
     rep = EV.evict_runs(store, runs, target_free_bytes=5000, dry_run=True, min_bytes=1000, free_fn=lambda: free["n"])
@@ -185,9 +192,40 @@ def test_evict_runs_only_preserved_terminal_quiet_runs_and_leaves_a_restore_reco
     assert out["runs"]["runs_root"] == str(runs) and out["store"]["reached_target"]
 
 
+def test_evict_runs_on_a_vm_counts_a_tree_found_on_the_remote_that_its_catalog_never_verified(store, fs_remote, tmp_path, capsys):
+    """An agent VM's run dirs are `research fetch` copies, and its catalog records no verified remote replica of their trees, so
+    `--runs` alone evicts nothing there. `--verify-remote` HEADs each tree's manifest and blobs instead, and records nothing."""
+    from research.store import evict as EV
+
+    runs = tmp_path / "runs"
+    rd = _tree(runs / RUN, {"trace/a.bin": os.urandom(4000), "trace/b.bin": os.urandom(3000), "result.json": b"{}"})
+    art = store.put_artifact("run-files/v1", {"run": RUN}, tree=rd)
+    store.put_attempt(_attempt(outputs={"run_files": art}))
+    other = "r20260922-105910-0005"
+    od = _tree(runs / other, {"trace/c.bin": os.urandom(5000)})
+    art2 = store.put_artifact("run-files/v1", {"run": other}, tree=od)
+    store.put_attempt(_attempt(run_id=other, outputs={"run_files": art2}))
+    for p in [*rd.rglob("*"), *od.rglob("*")]:
+        os.utime(p, (1_600_000_000, 1_600_000_000))
+    assert store.push(art)["preserved"] and store.push(art2)["preserved"]
+    (fs_remote / "objects/sha256" / store.get_manifest(art2).payload.files[0].sha256).unlink()        # one blob gone from the remote
+    store.index.db.execute("DELETE FROM replicas WHERE location = 'remote'")
+    store.index.db.commit()
+
+    assert EV.plan_runs(store, runs, min_bytes=1000) == [], "the catalog verifies nothing"
+    plan = EV.plan_runs(store, runs, min_bytes=1000, remote_check=True, log=print)
+    assert [p["run"] for p in plan] == [RUN] and [f["path"] for f in plan[0]["files"]] == ["trace/a.bin", "trace/b.bin"]
+    assert f"{other}: {art2[:20]} not on the remote" in capsys.readouterr().out
+    assert EV.verified_remote(store) == set(), "a HEAD is not a verified replica"
+    assert main(["evict", "--target-free-gb", "1000000", "--runs", "--runs-dir", str(runs), "--min-mb", "0.001", "--verify-remote",
+                 "--json"]) == 1
+    out = json.loads(capsys.readouterr().out)
+    assert out["runs"]["evicted_bytes"] == 7000 and not (rd / "trace/a.bin").exists() and (od / "trace/c.bin").exists()
+
+
 def test_evict_runs_takes_the_files_of_a_preserved_tree_output_from_under_its_tree_path(store, fs_remote, tmp_path, capsys):
-    """Node 1's dispatcher runs (2026-10-02): 465 GB of Build, verdict and slim-replay outputs, every artifact verified on the
-    remote, and none evictable, because only the `run_files` tree was matched against the run dir."""
+    """A dispatcher run's Build, verdict and slim-replay outputs (hundreds of GB), every artifact verified on the remote, are
+    evictable: not only the `run_files` tree is matched against the run dir."""
     from research.store import evict as EV
 
     runs = tmp_path / "runs"
@@ -386,7 +424,7 @@ def test_catalog_schema_version_forward_migration_and_refusal_of_newer(env, tmp_
 
     p = tmp_path / "store" / "catalog.sqlite"
     p.parent.mkdir(parents=True)
-    db = sqlite3.connect(p)                                                                     # a v0 catalog as the 2026-09-22 code left it
+    db = sqlite3.connect(p)                                                                     # a v0 catalog as older code left it
     db.executescript(IX.SCHEMA.replace("CREATE TABLE IF NOT EXISTS replicas(id TEXT, location TEXT, verified_utc TEXT, detail TEXT, PRIMARY KEY(id, location));",
                                        "CREATE TABLE IF NOT EXISTS replicas(id TEXT, location TEXT, verified_utc TEXT, detail TEXT, verified TEXT, PRIMARY KEY(id, location));"))
     db.execute("INSERT INTO replicas VALUES ('art:a', 'remote', '2026-09-22T00:00:00Z', 'fs:x', 'etag-md5')")

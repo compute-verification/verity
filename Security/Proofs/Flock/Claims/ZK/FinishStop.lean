@@ -1,22 +1,60 @@
 module
 
-public import Proofs.Flock.Claims.ZK.PadFree
+public import Batteries.Data.ByteArray
+public import Flock.Firewall.Finish
 public import Proofs.Flock.Claims.ZK.FinishRep
+public import Proofs.Flock.Claims.ZK.PadFree
+public import Proofs.Flock.Claims.ZK.Worker
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.FinishInner
+import Proofs.Flock.Soundness.Refine.Arith
+import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
-# The firewall's stop at a worker's values
+# The ZK server's stop at a worker's values
 
 `repFw` stops where a constraint it hands the inner proof fails on the rep's pads (`failingOn`). Here that stop is put in
-the analysis's terms, at a worker's clear values, toward `LeanRelease.FinishIs`: where the firewall goes on, the
+the analysis's terms, at a worker's clear values, toward `LeanRelease.FinishIs`: where the ZK server goes on, the
 worker's rows hold (`Table.RowsAt`), so the switched view is the worker's own (`Table.swView`).
 
 * `failingOn_eq_empty_iff`: no constraint fails on the pads exactly where each vanishes there (`linAt`).
 * `rowsOf_castAdd`: the first seven of rep `r`'s rows read no triple input `(ρ, σ)`.
 * **`rowsAt_of_rows`**: where the first seven rows vanish at a worker's clear values at zero pads, for both reps, at the
-  mask slot `u` and level 0's hiding `V`, its rows hold there at every pad: the residual at every draw through `(u, V)`
+  mask slot `u` and level 0's hiding `V`, its rows hold there at every pad: the residual at every sample through `(u, V)`
   is the rows' batch at the clear values (`resid_padFree`), and the triple's rows vanish at zero pads (`triple_zero`).
 * **`noFail_iff_rows`**: at constraints whose forms are rep `r`'s first seven rows on the masked values `v' = v + h`,
-  each on the layout's length, at pads with `h_ab = h_fa·h_fb` and `h_tw = h_tx·h_ty`, the firewall's stop does not
+  each on the layout's length, at pads with `h_ab = h_fa·h_fb` and `h_tw = h_tx·h_ty`, the ZK server's stop does not
   fire on the pads exactly where those rows vanish at the clear values at zero pads (`rows_padFree`). The stop bit is
   `1[some row fails at v]`, a function of the witness, the worker's values, the mask slot and level 0's hiding, never of
   the pads.
@@ -48,7 +86,7 @@ theorem rowsOf_castAdd {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : Coin
     rowsOf Tz st c r v sh T' ρσ (Fin.castAdd 3 k) = rowsOf Tz st c r v sh T' ρσ' (Fin.castAdd 3 k) := by
   simp only [rowsOf, Fin.append_left]
 
-/-- **The firewall's stop at a worker's values is its rows' at zero pads**: at constraints whose forms are rep `r`'s
+/-- **The ZK server's stop at a worker's values is its rows' at zero pads**: at constraints whose forms are rep `r`'s
 first seven rows on the masked values `v' = v + h`, each on the layout's length, at pads with `h_ab = h_fa·h_fb` and
 `h_tw = h_tx·h_ty`, none fails on the pads exactly where those rows vanish at the clear values `v` at zero pads. -/
 theorem noFail_iff_rows {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestOf Tz st)) (r : Fin 2) {nE : ℕ}
