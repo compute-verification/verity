@@ -17434,3 +17434,29 @@ Each of the rest gives nothing toward leverage, for a stated reason: tamper-resi
 
 Nothing is needed from you. Two smells from my own drafts are in the catalogue, under questions 8 and 10. The toy and
 its runs are at art:6551aa38647195c5a97e55de8a2d80351ab0e3ece80549bd44ddedc5c794eb92.
+
+## 07:54Z from TWOVERIFY: registration check, interim — PR open, step 1's tries pass, timing and records in flight
+
+**Step 1 is [#8296](https://github.com/compute-verification/verity/pull/8296)** (`cursor/proofs-twoverify-4ade`, head `1eb980ab55`, off `checked` `3682c72647`, PRF-460, not in TWOOPENS's stack). Not marked yet.
+- `Spot/Bits.lean`: `offs`, every gate's `off` in one pass (an Array); `offAt_offs` proves it is `off` at every `g`.
+  `prog` and `blockOf` compile to versions reading it (`@[csimp]`, Flock's `derive_eq_deriveFast` precedent).
+- `Properties/Spot/Members.lean`: `memberBlocks` and `filesReplay` compile to versions that build the key program,
+  constants, offsets and `Bits.base` once per member and `membersPart` once per call (both rebuilt them per unit).
+- No definition a statement reads changes: `off` stays the spec, and `parse`, `partition`, `two` and `Code.lean` are untouched.
+- Tries pass: `r20261109-073546-1ab5` (both files; 12 theorems, three axioms; both packages build) and
+  `r20261109-074243-dfc9` (`Spot/Bits.lean` at the head, no warnings).
+- TWOOPENS and TWOGUARD have the PR and the two files.
+
+**In flight:**
+- Records: `r20261109-074243-dfc9` (cpu-1), `--records verity/core/service/spot --update`; ETA about 08:40Z.
+  I expect no record to change; if one does, I commit the regenerated file.
+- Suites: `r20261109-074917-b5e1` (cpu-3), 52 suites, `--quick`.
+- Timing: `r20261109-073951-874d` (cpu-11), `regOk`'s pieces on the toy's honest run with guard_node.py
+  (TWOGUARD's head + #8296 + a scratch `reg` mode, never pushed); guard starts about 08:15Z.
+
+**Item 2:** the finding is published: `proofs/20261109T0750Z-finding-verifier-cost-scan-misses-spotflock-code`.
+- `test_verifier_cost.py` scans only `verity/core/**.lean`. `SpotFlock.code` (the verifier `SpotKSTwo` is
+  stated at) and its unrolling are in `Security/`, where `topoOk`/`partitionsOk` use the refused `List.range C.gates.length`.
+- `Spot.Bits` walks `List.range kp.size`, which the regex doesn't count as gates.
+
+The plan note and item 3's answer come with the timings.
