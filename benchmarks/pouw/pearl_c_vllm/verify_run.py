@@ -46,6 +46,10 @@ match, but the run's B is no registered value, so it never reads as a tie. A W t
 written before W registered the weights: it is held to the calls alone, as it was then, and the tie names its weights
 untied (``"weights": WEIGHTS_UNTIED``, in the answer's tie and the verdict's line), so its accept never reads as a tie of
 the weights; a version-1 W that registers a ``pearl-b/`` value is refused (`V1_WEIGHTS`).
+With the window's class too (``window_class``, `served_passes.py verify --class`), the tied passes must be the class's fixed load
+(`held_to_load`: a pass a round of the class's outputs, each call's rows `window_class.PearlTables`'), or the run is
+refused before the coin in the class's own words (`off_load`); W's header names no class, so the verdict takes it as
+an input, and the tie names the class it held.
 
 The prover may drop passes from its retention before the coin (`served_passes.py retain`: a pass its CPU replay didn't
 finish, or one left over a cap): the verdict is over the retained passes alone, each at its round, and the dropped ones
@@ -589,6 +593,44 @@ def tie(w: dict, passes: list[Pass], rounds: list[int] | None = None, dropped: t
     return {"record": REG.digest(w), "tables": len(want), **({} if tied else {"weights": WEIGHTS_UNTIED})}
 
 
+def load_class(load: Any) -> tuple[int, int, int]:
+    """A window class's public caps as (slots, prompt ids, outputs) (`window_class.WindowClass`'s), each a positive
+    integer; ValueError otherwise."""
+    cls = tuple(load) if isinstance(load, (list, tuple)) else ()
+    if len(cls) != 3 or not all(type(v) is int and v >= 1 for v in cls):
+        raise ValueError(f"a window class is SLOTS, PROMPT, OUTPUTS, each a positive integer, not {load!r}")
+    return cls
+
+
+def off_load(load: tuple[int, int, int]) -> str:
+    """Why passes that aren't the class ``load``'s fixed load are refused. The text is the class's alone: it names no
+    round, call or count of the passes', which a rejection's line would publish."""
+    slots, prompt, outputs = load
+    return (f"the passes are not the fixed load of the window's class ({slots} slots, {prompt} prompt ids, {outputs} "
+            f"outputs): a pass a round of its {outputs}, each retained or dropped, every call of round 0 of "
+            f"{slots * prompt} rows and of a later round of {slots}, committed in rows padded to a multiple of {PD.ROW_ALIGN}")
+
+
+def load_rows(load: tuple[int, int, int], s: int) -> tuple[int, int]:
+    """A round-``s`` call's (rows, committed A rows) under the class's fixed load: `window_class.PearlTables`' ``rows``
+    and ``a_rows``."""
+    rows = load[0] * load[1] if s == 0 else load[0]
+    return rows, -(-rows // PD.ROW_ALIGN) * PD.ROW_ALIGN
+
+
+def held_to_load(load: tuple[int, int, int], passes: list[Pass], rounds: list[int] | None = None,
+                 dropped: tuple[int, ...] = ()) -> bool:
+    """Whether the retained passes, pass i as round ``rounds[i]`` (default i), are the class's fixed load
+    (`window_class.FixedLoad`, `PearlTables`): the retained and the ``dropped`` rounds are each of the class's
+    ``outputs`` rounds once, and every call of a retained round has that round's rows and committed A rows
+    (`load_rows`). Only then are the passes', the calls' and W's tables' counts the class's and the model's, and so
+    protocol structure."""
+    ss = list(range(len(passes)) if rounds is None else rounds)
+    if len(ss) != len(passes) or sorted([*ss, *dropped]) != list(range(load[2])):
+        return False
+    return all((r.real_rows, r.matmul.shape.m) == load_rows(load, s) for s, p in zip(ss, passes) for r in p.records)
+
+
 def epsilon(t: int, delta: Fraction, over: int = 0) -> Fraction:
     """One more than the least k with Σ_{i ≤ over} C(t, i) (k/10⁹)^i (1 − k/10⁹)^(t − i) ≤ δ, over 10⁹, exactly (at
     ``over`` = 0, (1 − ε)^t ≤ δ): of t work-weighted draws, ``over`` landed on tiles over their inert-work bound and the
@@ -653,7 +695,8 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
                   source: bytes | None = None,
                   fast: bool = False, cross_check: int = 0, delta: Fraction = DELTA, window: dict | None = None,
                   rounds: list[int] | None = None, dropped: tuple[int, ...] = (), record: Path | None = None,
-                  draw: Any = node_draw, over_cap: str = UNCREDITED, test_instance: bool = False) -> dict:
+                  draw: Any = node_draw, over_cap: str = UNCREDITED, test_instance: bool = False,
+                  window_class: tuple[int, int, int] | None = None) -> dict:
     """One served run's verdict over all its passes, in core's answer form (`core_check.answer_of`): every pass is read
     and held to what it published, and to the window record `window` where there is one (`tie`), then one source of the
     verifier's coins (`pouw.verifier.coins`), drawn after, keys `draws` work-weighted tiles over every pass's tickets
@@ -670,6 +713,11 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     a pass of another is a test instance's, read only with ``test_instance``, whose verdict credits nothing (``credited``
     0), as ``--recorded``'s salt claims nothing.
 
+    ``window_class`` is the window's class, (slots, prompt ids, outputs), where the run is a window's (``window``): passes held
+    to W whose rows by round aren't the class's fixed load are refused (`held_to_load`, `off_load`), before the coin, and
+    the tie names the class it held (``"load"``). Without it the verdict holds the passes to no load, and its counts of
+    passes, calls and tables are structure only where something else fixed the load.
+
     ``paths`` are the passes the prover retained, pass i the served run's round ``rounds[i]`` (default i), the rounds
     ``dropped`` left out before the coin: they credit nothing, and W may register them (`tie`).  ``record`` is the
     verifier's record of its coin: the first verdict writes the run's commitment and the source there before any replay,
@@ -680,6 +728,10 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     returns (S, the record's ``draw``).  A given ``source`` (a test's) is recorded as the node's."""
     if over_cap not in OVER_CAP:
         raise ValueError(f"over_cap {over_cap!r} is none of {', '.join(OVER_CAP)}")
+    cls = None if window_class is None else load_class(window_class)
+    if cls is not None:
+        if window is None:
+            raise ValueError("a class's fixed load is held with the window record the passes are tied to: no window")
     named = [read(x)[2] for x in paths]
     out = {"passes": named, "verifier_commit": commit, "draws": draws, "delta": str(delta), "over_cap": over_cap,
            **({"test_instance": True} if test_instance else {}),
@@ -707,6 +759,10 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
             raise ValueError(f"pass {i}'s instance is k_min {s.k_min} at {s.tile[0]} x {s.tile[1]} tiles, not the served "
                              f"{K_MIN} at {TILE} x {TILE}: a test instance is read only as one, crediting nothing")
         tied = None if window is None else tie(window, passes, rounds, dropped)
+        if cls is not None:
+            if not held_to_load(cls, passes, rounds, dropped):
+                raise ValueError(off_load(cls))
+            tied["load"] = list(cls)
     except Exception as ex:  # noqa: BLE001 - a run that can't be checked is rejected, with the reason
         return reject(f"{type(ex).__name__}: {ex}")
     if tied is not None:
@@ -782,7 +838,8 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
                "exclusion_tiles": excluded, "tiles": [[i, t] for i, t, *_ in verdicts]}
     ys = [r for p in passes for r in y_roots(p)]
     tie_clause = "" if tied is None else (f", tied to W {tied['record'][:16]} on its {tied['tables']} tables"
-                                          + (f", {tied['weights']}" if "weights" in tied else ""))
+                                          + (f", {tied['weights']}" if "weights" in tied else "")
+                                          + (f", at its class's fixed load ({', '.join(map(str, cls))})" if cls else ""))
     if dropped:
         tie_clause += f", {len(dropped)} passes dropped before the coin (rounds {', '.join(map(str, dropped))})"
     if over_draws:

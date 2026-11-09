@@ -1047,7 +1047,8 @@ def honest_pass(tmp_path, request):
 
 def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), key: bytes | None = None,
                 live: int | None = None, seed: int = 11, spike: float | None = None, bad_b: int | None = None,
-                tile: tuple[int, int] = (16, 16), zero_a: int | None = None):
+                tile: tuple[int, int] = (16, 16), zero_a: int | None = None,
+                load: tuple[int, int] | None = None):
     """Two matmuls of a test instance (k = 128, 16 x 16 tiles), one with 12 filler rows and one liveness-failing row, proved by
     the scheme's reference prover and written in the device run's layout, for each promoted device scheme (hm96 trees, their
     salts under the prover's key, which the manifest retains; the unpromoted record's debit isn't stated, so clear_work can't
@@ -1063,16 +1064,19 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     `bad_b`, that row of the second call's weight fails liveness as the first call's row 5 does, and is excluded.  `tile`
     is the instance's tile: at 64 x 64 each weight has 64 rows and each matmul is one tile, partial down its rows, k_min 32
     keeping it a test instance.  With `zero_a`, that real row of the first call is all +0: it fails liveness and is
-    excluded, its U is +0 and so is every word of its served y."""
+    excluded, its U is +0 and so is every word of its served y.  With `load` (rows, committed rows), both calls are of
+    that many real rows in that many committed ones, as a round of a class's fixed load is (`verify_run.held_to_load`),
+    the first call's failing row its row 1."""
     if key is None:
         key = bytes([1]) * 32 if SchemeId.parse(scheme).device == "h100" else bytes(32)
     s = PPD.scheme_of(scheme, k_min=32, tile=tile)
     rng, k = np.random.default_rng(seed), 128
     n0, n1 = max(16, tile[1]), max(32, tile[1])
     wrows = {0: bf16_words(rng, n0, k), 1: bf16_words(rng, n1, k)}
-    a0 = bf16_words(rng, 32, k)
-    a0[20:] = 0
-    a0[5, [1, 2, 3]] = np.float32(1e4).view(np.uint32) & 0xFFFF0000
+    (real, m0), m1, bad = (load, load[1], 1) if load else ((20, 32), 16, 5)
+    a0 = bf16_words(rng, m0, k)
+    a0[real:] = 0
+    a0[bad, [1, 2, 3]] = np.float32(1e4).view(np.uint32) & 0xFFFF0000
     if spike is not None:
         a0[9, 1] = np.float32(spike * np.sqrt(np.mean(a0[9, ::8].view(np.float32) ** 2))).view(np.uint32) & 0xFFFF0000
     if bad_b is not None:
@@ -1080,9 +1084,11 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     if zero_a is not None:
         a0[zero_a] = 0
     i0, i1 = indices
-    acts = {i0: a0, i1: bf16_words(rng, 16, k)}
+    acts = {i0: a0, i1: bf16_words(rng, m1, k)}
+    if load:
+        acts[i1][real:] = 0
     rows = lambda x: [r.tobytes() for r in x]
-    work = Workload((Matmul(i0, Shape(32, k, n0), 0), Matmul(i1, Shape(16, k, n1), 1)))
+    work = Workload((Matmul(i0, Shape(m0, k, n0), 0), Matmul(i1, Shape(m1, k, n1), 1)))
     prover = Prover(s, {w: rows(x) for w, x in wrows.items()}, salt_key=key)
     salted = lambda v, nonce, i: v + hm96_salt(prover.salt_key, nonce, i)  # noqa: E731
     if live is None:
@@ -1094,8 +1100,8 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     tr = prover.prove(epoch, {i: rows(x) for i, x in acts.items()})
     splits = {w: PW.Split(k) for w in wrows}
     records = CW.declare(s, epoch, {i: rows(x) for i, x in acts.items()}, {w: rows(x) for w, x in wrows.items()}, splits,
-                         real_rows={i0: 20})
-    assert records[0].excluded_a == tuple(sorted({5} | ({zero_a} - {None})))
+                         real_rows={i0: real, **({i1: real} if load else {})})
+    assert records[0].excluded_a == tuple(sorted({bad} | ({zero_a} - {None})))
     assert bad_b is None or records[1].excluded_b == (bad_b,)
     (tmp_path / "calls").mkdir(parents=True)
     (tmp_path / "weights").mkdir()
@@ -2144,6 +2150,87 @@ def test_a_tie_over_a_retention_holds_each_retained_pass_at_its_round_and_passes
                                  ([0], (1,), "W's pearl-a/0/0: its root")):
         r = VR.verify_passes([b], 3, 1, "test", coins, b"verifier" * 4, window=w, rounds=rounds, dropped=dropped, test_instance=True)
         assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, (why, r["line"])
+
+
+def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path):
+    """With the window's class (``window_class``, ``served_passes.py verify --class``), a tied run accepts only where its passes
+    are the class's fixed load: a pass a round of the class's outputs, each retained or dropped, every call of round 0
+    of slots x prompt rows and of a later round of slots, committed in rows padded to 16.  Here the class is 2 slots of 8
+    prompt ids and 2 outputs: round 0's calls of 16 rows, round 1's of 2 in 16.  The tie then names the class, and so
+    does the line.  Passes of another load (a round short or over, the rounds in another order, a call of other rows or
+    of other committed rows) are refused before the coin, each in the same words, the class's alone (`off_load`), which
+    name no round, call or count of the passes'.  A class is read only beside the window record."""
+    cls = (2, 8, 2)
+    a = proved_pass(tmp_path / "a", PROMOTED[0], (0, 1), load=(16, 16))[0]
+    b = proved_pass(tmp_path / "b", PROMOTED[0], (2, 3), load=(2, 16))[0]
+    wide = proved_pass(tmp_path / "wide", PROMOTED[0], (4, 5), load=(2, 32))[0]
+    coins, w = published(a), window_record(a, b)
+
+    def run(paths, window=w, **kw):
+        return VR.verify_passes(paths, 3, 1, "test", coins, b"verifier" * 4, window=window, test_instance=True, **kw)
+
+    r = run([a, b], window_class=cls)
+    assert r["answer"]["verdict"] == "accept", r["line"]
+    assert r["answer"]["public"]["tie"] == {"record": REG.digest(w), "tables": 10, "load": [2, 8, 2]} == r["tie"]
+    assert "on its 10 tables, at its class's fixed load (2, 8, 2)" in r["line"]
+    r = run([a, b])
+    assert r["answer"]["verdict"] == "accept" and "load" not in r["tie"] and "fixed load" not in r["line"]
+    for paths, kw in (([a], {"rounds": [0], "dropped": (1,)}), ([b], {"rounds": [1], "dropped": (0,)})):
+        r = run(paths, window_class=cls, **kw)
+        assert r["answer"]["verdict"] == "accept" and r["tie"]["load"] == [2, 8, 2], r["line"]
+    off = [([a, b], w, (2, 8, 3), {}), ([a, b], w, (2, 8, 1), {}), ([a, b], w, (4, 4, 2), {}), ([a, b], w, (2, 4, 2), {}),
+           ([a, b], w, (1, 16, 2), {}), ([b, a], window_record(b, a), cls, {}),
+           ([a, wide], window_record(a, wide), cls, {}), ([a], w, cls, {"rounds": [0], "dropped": (1, 2)}),
+           ([b], window_record(a, a, b), cls, {"rounds": [2], "dropped": (0, 1)})]
+    for paths, window, c, kw in off:
+        r = run(paths, window, window_class=c, **kw)
+        assert (r["answer"]["verdict"], r["answer"]["reason"]) == ("reject", f"ValueError: {VR.off_load(c)}"), (c, r["line"])
+        assert "source" not in r and "tie" not in r and "refused" not in r
+    assert VR.off_load(cls) == (
+        "the passes are not the fixed load of the window's class (2 slots, 8 prompt ids, 2 outputs): a pass a round of "
+        "its 2, each retained or dropped, every call of round 0 of 16 rows and of a later round of 2, committed in rows "
+        "padded to a multiple of 16")
+    with pytest.raises(ValueError, match="no window"):
+        run([a, b], None, window_class=cls)
+    for bad in ((2, 8), (2, 8, 0), (2, 8, True), "2,8,2"):
+        with pytest.raises(ValueError, match="a window class is SLOTS, PROMPT, OUTPUTS"):
+            run([a, b], window_class=bad)
+    d = _serve_dir(tmp_path, [a, b])
+    (wfile := tmp_path / "w.json").write_text(json.dumps(w))
+    rc, doc, answer = served_verify(d, tmp_path / "verify.json", "--tie", str(wfile), "--class", "2,8,2")
+    assert rc == 0 and doc["class"] == [2, 8, 2] and answer["public"]["tie"]["load"] == [2, 8, 2], doc["line"]
+    rc, doc, answer = served_verify(d, tmp_path / "off.json", "--tie", str(wfile), "--class", "2,8,3")
+    assert rc == 1 and answer["reason"] == f"ValueError: {VR.off_load((2, 8, 3))}" and doc["class"] == [2, 8, 3]
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    for argv in (["--class", "2,8,2"], ["--tie", str(wfile), "--class", "2,8"], ["--tie", str(wfile), "--class", "2,0,2"]):
+        with pytest.raises(SystemExit):
+            SP.main(["verify", "--passes", str(d), "--out", str(tmp_path / "no.json"), *argv])
+    assert SP.lean_argv(Path("exe"), Path("c"), 3, Path("r"), [a], wfile, load=[2, 8, 2])[9:] == [
+        "--tie", str(wfile), "--class", "2,8,2", str(a)]
+
+
+def test_the_load_check_takes_the_run_of_records_shape():
+    """The class of record's run (r20261109-042638-614b: class 4, 32, 4 over Llama 3.2 1B's 64 cut linears) is its fixed
+    load, so the check accepts its shape: 64 calls a pass, round 0's of 4 x 32 = 128 rows in 128, each later round's of 4
+    in 16 (`window_class.PearlTables`' ``rows`` and ``a_rows``), also with a round dropped; and no other."""
+    NS = types.SimpleNamespace
+
+    def passes(rows):
+        return [NS(records=[NS(real_rows=real, matmul=NS(shape=NS(m=m))) for _ in range(64)]) for real, m in rows]
+    cls, shape = (4, 32, 4), [(128, 128), (4, 16), (4, 16), (4, 16)]
+    assert [VR.load_rows(cls, s) for s in range(4)] == shape
+    assert VR.held_to_load(cls, passes(shape)) and VR.held_to_load(cls, passes(shape), [0, 1, 2, 3])
+    assert VR.held_to_load(cls, passes(shape[:3]), [0, 1, 2], (3,))
+    assert VR.held_to_load(cls, passes(shape[1:]), [1, 2, 3], (0,))
+    for rows, rounds, dropped in ((shape[:3], None, ()), (shape + [(4, 16)], None, ()), (shape[::-1], None, ()),
+                                  (shape, [1, 2, 3, 4], (0,)), (shape, [0, 1, 2, 2], ()), (shape, [0, 1, 2], ()),
+                                  ([(128, 128), (4, 16), (3, 16), (4, 16)], None, ()),
+                                  ([(128, 128), (4, 16), (4, 64), (4, 16)], None, ()),
+                                  ([(127, 128), (4, 16), (4, 16), (4, 16)], None, ())):
+        assert not VR.held_to_load(cls, passes(rows), rounds, dropped), (rows, rounds, dropped)
+    odd = passes(shape)
+    odd[2].records[40].real_rows = 5
+    assert not VR.held_to_load(cls, odd)
 
 
 def test_a_tie_refuses_two_passes_that_commit_one_weight_under_two_roots(tmp_path):

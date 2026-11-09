@@ -8,7 +8,7 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
   served_passes.py volunteer --passes DIR --out volunteer.json [--jobs J] [--device DEBIT_CUBIN [--device-check N]]
   served_passes.py volunteer-needed [--over-cap reject|uncredited] [--verdict run|pass]
   served_passes.py retain --passes DIR [--volunteer volunteer.json] [--drop ROUND ...] [--window-record W]
-  served_passes.py verify --passes DIR [--manifest M ...] [--tie W] --out verify.json [--answer answer.json]
+  served_passes.py verify --passes DIR [--manifest M ...] [--tie W [--class S,P,O]] --out verify.json [--answer answer.json]
                           [--draws 459] [--delta 1/100] [--jobs J] [--fast] [--coin-record R]
   served_passes.py lean --passes DIR --verify verify.json --exe pouw-pearlplus --out pearlplus-lean.json [--check C]
                         [--timeout S]
@@ -85,7 +85,9 @@ reads every pass, holds the window record ``--tie W`` (``retain --window-record 
 (`verify_run.tie`: each call's ``pearl-a/<s>/<c>`` and ``pearl-y/<s>/<c>`` entry its root and its domain recomputed from
 the salt and the call's index, and each weight's ``pearl-b/<w>`` its epoch's weight root and `audit.weight_binding`'s
 domain; a W that states no version, written before W registered the weights, ties the calls alone, its weights named
-untied, `verify_run.WEIGHTS_UNTIED`), takes the verifier's coin (with ``PEARLC_CHALLENGER_GATE`` and ``PEARLC_CHALLENGER_PEER``
+untied, `verify_run.WEIGHTS_UNTIED`), and with ``--class SLOTS,PROMPT,OUTPUTS`` (the window's class, read only beside
+``--tie``) refuses passes whose rows by round aren't that class's fixed load (`verify_run.held_to_load`), then
+takes the verifier's coin (with ``PEARLC_CHALLENGER_GATE`` and ``PEARLC_CHALLENGER_PEER``
 set, a draw session's on the auditor host opened on the run's commitment, `bench_arm.LiveDraw`, reserved under
 ``PEARLC_CHALLENGER_LANE`` once that lane has no period open, and as its first reserve after the Pearl-C period the salt
 session joined closed (``served.json``'s ``coins.reserved.period``); else the node's, `verify_run.node_draw`; the format is
@@ -107,11 +109,11 @@ PouwCheck).
 the passes ``verify --out``'s document (``--verify``) names, read as `verify` reads them and held to the names and SHA-256s
 that document gives them, the epoch's ``DIR/coins.json``, that document's draws, over-cap rule and test instance, the
 verifier's coin record it wrote (``DIR/coin.json``), which pins the Lean's source to the Python's, the W ``verify --tie``
-held the passes to, and, on a live session's coins, ``--of-record``, under which the Lean takes only a challenger draw
+held the passes to with the class ``verify --class`` held them at, and, on a live session's coins, ``--of-record``, under which the Lean takes only a challenger draw
 (`lean_argv`, the one place the Lean's command line is written). It holds the Lean's printout to the Python's verdict on
 every field both give (`LEAN_HELD`: the verdict, its reason and refusal, the run's commitment and source, the over-cap
-rule, each opened tile's verdict, and an accepted run's work), and its ``tie`` to the Python's: the same W, or none on
-both. Where they agree it writes the Lean's answer to ``--out`` (`lean_answer`: the
+rule, each opened tile's verdict, and an accepted run's work), and its ``tie`` to the Python's: the same W at the
+same class's load, or none on both. Where they agree it writes the Lean's answer to ``--out`` (`lean_answer`: the
 printout with W at ``tie``), the file `served_verdicts.pearlplus_of_record` reads; where they don't, or the Lean doesn't
 answer within ``--timeout`` seconds, it writes none and removes any there. Either way both verdicts, the Lean's command
 line and the executable's SHA-256 go to ``--check`` (default `LEAN_CHECK` beside ``--out``). Prints one line and exits
@@ -536,7 +538,7 @@ def verify(args: argparse.Namespace) -> int:
     served = json.loads((passes / "served.json").read_text()) if (passes / "served.json").exists() else None
     record = Path(args.coin_record) if args.coin_record else (passes / COIN if served is not None and not args.manifest else None)
     doc = {"schema": SCHEMA, "passes_dir": str(passes), "served_run": (served or {}).get("run"), "tie_record": args.tie,
-           "coin_record": None if record is None else str(record)}
+           "class": None if args.cls is None else list(args.cls), "coin_record": None if record is None else str(record)}
     paths, rounds, dropped = None, None, ()
     if served is not None and served.get("retained") is False:
         doc.update(refused=list(UNRETAINED), **VR.rejected(": ".join(UNRETAINED), args.commit))
@@ -557,7 +559,7 @@ def verify(args: argparse.Namespace) -> int:
                                     cross_check=args.cross_check, delta=args.delta, window=window, rounds=rounds,
                                     dropped=dropped, record=record, draw=draw,
                                     over_cap=over_cap_rule(VR.verify_passes, args.over_cap),
-                                    test_instance=args.test_instance))
+                                    test_instance=args.test_instance, window_class=args.cls))
         if served is not None and not args.manifest and doc["answer"]["verdict"] == "accept":
             doc["timed"] = timed_credit(served, doc["answer"]["public"]["work"], coins, rounds)
     out = Path(args.out)
@@ -584,15 +586,30 @@ def arm(args: argparse.Namespace) -> int:
     return 0
 
 
+def window_class(text: str) -> tuple[int, int, int]:
+    """``--class``'s SLOTS,PROMPT,OUTPUTS, each a positive integer (`verify_run.load_class`'s form)."""
+    try:
+        cls = tuple(int(x) for x in text.split(","))
+    except ValueError:
+        cls = ()
+    if len(cls) != 3 or min(cls) < 1:
+        raise argparse.ArgumentTypeError(f"a window class is SLOTS,PROMPT,OUTPUTS, each a positive integer, not {text!r}")
+    return cls
+
+
 def lean_argv(exe: Path, coins: Path, draws: int, record: Path, manifests: list[Path], tie: Path | None,
-              over_cap: str = OVER_CAP[1], test_instance: bool = False, of_record: bool = False) -> list[str]:
+              over_cap: str = OVER_CAP[1], test_instance: bool = False, of_record: bool = False,
+              load: list[int] | None = None) -> list[str]:
     """``pouw-pearlplus``'s command line on the run's retained passes (`manifests`, in order), the epoch's coin commitment,
     the draws, the verifier's coin record, which pins the Lean's source to the one the Python drew, the over-cap rule and
-    test instance the Python ran under, the window record W (`tie`) the passes are held to where there is one, and
-    ``--of-record`` (`of_record`, a run on a live session's coins), under which the Lean takes only a challenger draw:
-    ``--coins COINS --draws T --record RECORD --over-cap RULE [--test-instance] [--tie W] [--of-record] MANIFEST...``."""
+    test instance the Python ran under, the window record W (`tie`) the passes are held to where there is one, with
+    the class whose fixed load they are held at (`load`, ``verify --class``'s), and ``--of-record`` (`of_record`, a run
+    on a live session's coins), under which the Lean takes only a challenger draw:
+    ``--coins COINS --draws T --record RECORD --over-cap RULE [--test-instance] [--tie W [--class S,P,O]] [--of-record]
+    MANIFEST...``."""
     return [str(exe), "--coins", str(coins), "--draws", str(draws), "--record", str(record), "--over-cap", over_cap,
             *(["--test-instance"] if test_instance else []), *(["--tie", str(tie)] if tie is not None else []),
+            *(["--class", ",".join(map(str, load))] if load is not None else []),
             *(["--of-record"] if of_record else []), *map(str, manifests)]
 
 
@@ -655,7 +672,7 @@ def lean(args: argparse.Namespace) -> int:
         return done(f"the epoch's coins can't be read: {type(e).__name__}: {e}", 2)
     rec["argv"] = lean_argv(exe, passes / "coins.json", doc["draws"], record, paths,
                             Path(doc["tie_record"]) if doc.get("tie_record") else None, doc.get("over_cap", OVER_CAP[0]),
-                            doc.get("test_instance", False), of_record=live)
+                            doc.get("test_instance", False), of_record=live, load=doc.get("class"))
     try:
         p = subprocess.run(rec["argv"], capture_output=True, text=True, timeout=args.timeout, check=False)
     except subprocess.TimeoutExpired:
@@ -676,7 +693,7 @@ def lean(args: argparse.Namespace) -> int:
         differ.append("drawn")
     tie = answer["tie"]
     if (tie is not None and not isinstance(tie, dict)) or any((tie or {}).get(k) != (doc.get("tie") or {}).get(k)
-                                                              for k in ("record", "weights")):
+                                                              for k in ("record", "weights", "load")):
         differ.append("tie")
     rec["differ"] = differ
     if differ:
@@ -802,6 +819,9 @@ def main(argv: list[str] | None = None) -> int:
                    help="a pass's manifest, in order, repeated (default: those DIR/served.json names, else DIR/pass-*/)")
     v.add_argument("--tie", metavar="W", help="the window record retain --window-record wrote: each retained round's "
                    "calls' A and y entry must be its root and recomputed domain (verify_run.tie)")
+    v.add_argument("--class", dest="cls", type=window_class, metavar="SLOTS,PROMPT,OUTPUTS",
+                   help="with --tie, the window's class: passes whose rows by round aren't its fixed load are refused "
+                        "(verify_run.held_to_load)")
     v.add_argument("--out", required=True)
     v.add_argument("--answer", help="where the core answer goes (default: answer.json beside --out)")
     v.add_argument("--draws", type=int, default=DRAWS)
@@ -833,6 +853,8 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--lean", required=True, help="lean's --out answer: the Lean verdict of record")
     c.add_argument("--out", required=True, help="the case's parts and blobs (0700)")
     args = p.parse_args(argv)
+    if args.cmd == "verify" and args.cls is not None and not args.tie:
+        p.error("verify --class holds the passes --tie W ties to its class's fixed load: it is read only beside --tie")
     return {"serve": serve, "same": same, "volunteer": volunteer, "volunteer-needed": volunteer_needed, "retain": retain,
             "verify": verify, "lean": lean, "case": case, "arm": arm}[args.cmd](args)
 
