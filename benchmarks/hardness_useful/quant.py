@@ -14,6 +14,9 @@ latent weight on every training forward (no gradient), and frozen with the codes
 With rotate, each linear's latent weight is W·R and its input x·R (`rotation.py`: a random-sign Hadamard rotation, exact
 in real arithmetic), so the codes quantize a near-Gaussian row and the clip a target needs spares the outliers.
 
+With `add_lora`, a QLinear's latent weight is W + B·A, W frozen and A, B (rank r) trained, and every code, scale and c
+is of that sum, so what is served is one matrix of codes, as without it; `merge_lora` folds B·A into W.
+
 `Served` is how the activations reach the codes: bf16, int8 per token, or design U's int8 plus live 2-bit noise, each
 matrix in its own mode (`set_served`).
 """
@@ -21,6 +24,7 @@ matrix in its own mode (`set_served`).
 from __future__ import annotations
 
 import ctypes
+import math
 
 import torch
 import torch.nn as nn
@@ -122,6 +126,29 @@ class _FQ(torch.autograd.Function):
     def backward(ctx, g):
         mask, s = ctx.saved_tensors
         return g.float() * mask / s[:, None], None
+
+
+class _FQLoRA(torch.autograd.Function):
+    """`_FQ` of the latent W + B·A at clip c, W frozen: (codes, scales), the scales of the sum and without gradient, and
+    the gradient to A and B only. The clip's mask is recomputed from the sum in the backward rather than saved (an n×K
+    bool per matrix), and the sum is formed in fp32 whatever the autocast."""
+
+    @staticmethod
+    @torch.amp.custom_fwd(device_type="cuda", cast_inputs=torch.float32)
+    def forward(ctx, w, a, b, c):
+        u = torch.addmm(w, b, a)
+        s = row_scale(u, c)
+        ctx.save_for_backward(w, a, b, s)
+        ctx.mark_non_differentiable(s)
+        return torch.round(u.div_(s[:, None]).clamp_(-127, 127)).to(torch.bfloat16), s
+
+    @staticmethod
+    @torch.amp.custom_bwd(device_type="cuda")
+    def backward(ctx, g, _gs):
+        w, a, b, s = ctx.saved_tensors
+        u = torch.addmm(w, b, a).div_(s[:, None])
+        gu = g.float().mul_(u.abs_() <= 127).div_(s[:, None])
+        return None, b.T @ gu, gu @ a.T, None
 
 
 class Rotation(nn.Module):
@@ -294,16 +321,27 @@ class QLinear(nn.Module):
         self.rot = rot
         self.served, self.mode, self.noised = None, "a16", False
         self._frozen = None
+        self.register_parameter("lora_a", None)
+        self.register_parameter("lora_b", None)
 
     def train(self, mode: bool = True):
         self._frozen = None
         return super().train(mode)
 
+    @torch.no_grad()
+    def latent(self) -> torch.Tensor:
+        """The latent weight the codes are of: W, or W + B·A (formed in fp32, as `_FQLoRA` forms it)."""
+        if self.lora_a is None:
+            return self.weight.detach()
+        with torch.autocast(self.weight.device.type, enabled=False):
+            return torch.addmm(self.weight, self.lora_b, self.lora_a)
+
     def frozen(self) -> tuple[torch.Tensor, torch.Tensor]:
         """The served codes and scales (int8-valued bf16, fp32), from the current latent weight."""
         if self._frozen is None:
-            s = row_scale(self.weight, self.c)
-            self._frozen = (codes(self.weight, s).to(torch.bfloat16), s)
+            w = self.latent()
+            s = row_scale(w, self.c)
+            self._frozen = (codes(w, s).to(torch.bfloat16), s)
         return self._frozen
 
     def product(self, x, q, s, mode: str, wnoise: bool = True):
@@ -330,7 +368,9 @@ class QLinear(nn.Module):
         return None
 
     def forward(self, x):
-        if self.training:
+        if self.training and self.lora_a is not None:
+            q, s = _FQLoRA.apply(self.weight, self.lora_a, self.lora_b, self.c)
+        elif self.training:
             s = row_scale(self.weight, self.c)
             q = _FQ.apply(self.weight.float(), s)
         else:
@@ -548,12 +588,44 @@ def recalibrate(model, target: float | None) -> dict[str, dict]:
         if not isinstance(m, QLinear):
             continue
         if target is not None:
-            m.c, ov = calibrate(m.weight, target)
+            m.c, ov = calibrate(m.latent(), target)
         else:
-            ov = strassen1(m.weight, None)
+            ov = strassen1(m.latent(), None)
         m._frozen = None
         info[name] = {"c": m.c, "strassen1": ov}
     return info
+
+
+def add_lora(model, r: int, seed: int = 0) -> int:
+    """Freeze every parameter and give every QLinear a trained rank-r update of its latent weight, B·A, with A Gaussian
+    at 1/√K and B zero, so the codes start as they were; returns the number of parameters added."""
+    for p in model.parameters():
+        p.requires_grad_(False)
+    g = torch.Generator().manual_seed(seed)
+    added = 0
+    for _name, parent, attr in block_linears(model):
+        m = getattr(parent, attr)
+        if type(m) is not QLinear:
+            continue
+        n, k = m.weight.shape
+        m.lora_a = nn.Parameter((torch.randn(r, k, generator=g) / math.sqrt(k)).to(m.weight.device))
+        m.lora_b = nn.Parameter(torch.zeros(n, r, device=m.weight.device))
+        added += r * (n + k)
+    return added
+
+
+@torch.no_grad()
+def merge_lora(model) -> int:
+    """Fold each QLinear's B·A into its latent weight (`QLinear.latent`'s sum) and drop A and B; returns how many."""
+    merged = 0
+    for _name, parent, attr in block_linears(model):
+        m = getattr(parent, attr)
+        if type(m) is QLinear and m.lora_a is not None:
+            m.weight.copy_(m.latent())
+            m.lora_a = m.lora_b = None
+            m._frozen = None
+            merged += 1
+    return merged
 
 
 def stats(model) -> dict[str, dict]:

@@ -7,7 +7,10 @@ each linear quantizes W·R and reads x·R (`rotation.py`). The teacher is the sa
 forward KL(teacher ‖ student) at temperature 1 over every position, on FineWeb-Edu packed into --seq windows in file
 order (`prep.py`); every arm reads the same tokens in the same order.
 AdamW (0.9, 0.95), no weight decay, linear warmup then cosine to 0, gradients clipped at 1. Every --recal steps each
-matrix's c is solved again, so the overflow stays at the target as the weights move.
+matrix's c is solved again, so the overflow stays at the target as the weights move. Every parameter trains, or with
+--lora R only a rank-R update B·A of each block linear's latent weight (`quant.add_lora`) and the RMSNorm gains, which
+fits an 8B student in fp32 on one GPU; B·A is merged into the latent weight before the final c, codes and evals.
+--teacher-device puts the teacher on another GPU.
 
 Quality, before training (the post-training quantization at the same scales) and after:
 - perplexity at --seq on WikiText-2's test split (raw, joined by blank lines, non-overlapping windows) and on the first
@@ -224,6 +227,9 @@ def main(argv=None) -> int:
     ap.add_argument("--lr", type=float, default=1e-5)
     ap.add_argument("--warmup", type=float, default=0.03, help="share of steps")
     ap.add_argument("--recal", type=int, default=50, help="steps between solving every matrix's c again")
+    ap.add_argument("--lora", type=int, default=0, metavar="R",
+                    help="train a rank-R update of each block linear and the RMSNorm gains only (0: every parameter)")
+    ap.add_argument("--teacher-device", default="cuda", help="the teacher's device (default the student's)")
     ap.add_argument("--eval-every", type=int, default=100)
     ap.add_argument("--val-tokens", type=int, default=1_048_576)
     ap.add_argument("--ppl-sets", default="wikitext2,fineweb_val", help="the perplexity sets to measure")
@@ -255,6 +261,11 @@ def main(argv=None) -> int:
     t_start = time.time()
     tok = AutoTokenizer.from_pretrained(args.model)
     meta = json.loads((args.data / "meta.json").read_text())
+    if meta["model"] != args.model:
+        data_tok = AutoTokenizer.from_pretrained(meta["model"])
+        assert (data_tok.get_vocab(), data_tok.bos_token_id, data_tok.eos_token_id) == \
+            (tok.get_vocab(), tok.bos_token_id, tok.eos_token_id), \
+            f"{args.data} is tokenized by {meta['model']}, whose vocabulary isn't {args.model}'s: prep.py --model it"
     train_ids = np.memmap(args.data / "train.bin", dtype=np.uint32, mode="r")
     val_ids = np.memmap(args.data / "val.bin", dtype=np.uint32, mode="r")
     wt_ids = wikitext_ids(tok)
@@ -306,12 +317,20 @@ def main(argv=None) -> int:
     (args.out / "result.json").write_text(json.dumps(res, indent=1))
 
     if steps > 0:
+        tdev = torch.device(args.teacher_device)
         teacher = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.bfloat16,
-                                                       attn_implementation="sdpa").cuda().eval()
+                                                       attn_implementation="sdpa").to(tdev).eval()
         teacher.config.use_cache = False
         for p in teacher.parameters():
             p.requires_grad_(False)
+        if args.lora:
+            res["lora_params"] = quant.add_lora(model, args.lora)
+            for n, p in model.named_parameters():
+                if n.endswith("norm.weight"):
+                    p.requires_grad_(True)
         params = [p for p in model.parameters() if p.requires_grad]
+        res["trained_params"] = sum(p.numel() for p in params)
+        log("training", res["trained_params"], "parameters", f"(lora {args.lora})" if args.lora else "(all)")
         opt = torch.optim.AdamW(params, lr=args.lr, betas=(0.9, 0.95), weight_decay=0.0, eps=1e-8, fused=True)
         warm = max(1, int(args.warmup * total))
         accum = args.batch // args.micro
@@ -331,7 +350,7 @@ def main(argv=None) -> int:
                 x = torch.from_numpy(train_ids[off:off + args.micro * args.seq].astype(np.int64)
                                      .reshape(args.micro, args.seq)).cuda(non_blocking=True)
                 with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16):
-                    tl = teacher(x).logits
+                    tl = teacher(x.to(tdev)).logits.to(x.device)
                 with torch.autocast("cuda", dtype=torch.bfloat16):
                     sl = model(x).logits
                 loss = KD.apply(sl, tl) / accum
@@ -357,6 +376,8 @@ def main(argv=None) -> int:
                         "peak_mem_gb": torch.cuda.max_memory_allocated() / 2**30}
         del teacher, opt
         torch.cuda.empty_cache()
+        if args.lora:
+            res["train"]["lora_merged"] = quant.merge_lora(model)
         if target is not None:
             res["calibration_after"] = quant.recalibrate(model, target)
     model.eval()
