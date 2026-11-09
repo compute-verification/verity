@@ -24,7 +24,8 @@ session and the frame's slot for the row, all fixed before the run. Nothing here
   a gate the unit needs, its value and data the base frame's first opening there (`Reveal.frameAt`), is the site's
   (`openAt_revealCode`), under `FrameIs`'s roots (`roots_opening`); its row is the one the row hash reads
   (`row_opening`) where the site's port is an unsegmented bit row of its place's width whose bit at the place is the
-  one the layout reads (`RowAt`); its salt is that row's (`salt_opening`) and its path `pathAt`'s (`path_opening`).
+  one the layout reads (`RowAt`, with the row's format a hypothesis); its salt is that row's (`salt_opening`) and its
+  path `pathAt`'s (`path_opening`).
 
 The frame's own ports are one port of `2^64` leaves (`revealOwn`), so its depth is 64 (`depth_revealOwn`): round 2
 reads no port of more leaves.
@@ -319,12 +320,11 @@ noncomputable abbrev opening (S : Site) (g : ℕ) : List Msg × Opening Bool :=
 /-- The roots the program opens gate `g` of the unit under (`Reveal.rootsAt`). -/
 abbrev roots (g : ℕ) : List Msg := Reveal.rootsAt (partition h) (two h) (iroots []) r.s r.u r.seen g
 
-/-- **The site's row is the one the row hash reads**, at gate `g`: the site's port of the session's first table is an
-unsegmented bit row (`sha512/row/v2`) of `16 w` bits, its place's width, and the bit the row holds at the place, at the
-unit's instance, is the one the layout reads. -/
+/-- **The site's place reads the row the row hash reads**, at gate `g`: its width is the `16 w` bits of the site's
+port of the session's first table, and the bit the row holds at the place, at the unit's instance, is the one the
+layout reads. -/
 def RowAt (S : Site) (g : ℕ) : Prop :=
-  (r.sts[0]!.c.ports[S.port r.u]!).v2 = true ∧ (r.sts[0]!.c.ports[S.port r.u]!).segs = none ∧
-    S.place.1 = 16 * (r.sts[0]!.c.ports[S.port r.u]!).words ∧
+  S.place.1 = 16 * (r.sts[0]!.c.ports[S.port r.u]!).words ∧
     _root_.Flock.InnerRows.bitAt r.p r.wF 0 (r.n h / r.sts[0]!.c.g)
       (FlockSoundness.Typed.msgCol r.sts[0]!.c (r.n h % r.sts[0]!.c.g) (S.port r.u) (S.place.2 / 8) (S.place.2 % 8)) =
       _root_.Flock.InnerRows.bitAt r.p r.wF 0 (r.β h) (r.wire h g)
@@ -381,10 +381,11 @@ theorem roots_opening (hr : r.Ok h) (S : Site) (g : ℕ) :
   exact Reveal.rootsAt_eq (partition h) (two h) (iroots []) hP h2 hρ hrb
 
 theorem row_opening {site : ℕ → Option Site} {c₀ : Code} {S : Site} {g : ℕ} (hs : site g = some S)
+    (hv2 : (r.sts[0]!.c.ports[S.port r.u]!).v2 = true) (hseg : (r.sts[0]!.c.ports[S.port r.u]!).segs = none)
     (hR : r.RowAt h S g) :
     row (revealCode h site c₀).place (revealCode h site c₀).bits (r.opening h S g).2 =
       _root_.Flock.InnerRows.rowBytes r.p r.wF 0 (r.n h) (S.port r.u) := by
-  obtain ⟨hv2, hseg, hw, hcopy⟩ := hR
+  obtain ⟨hw, hcopy⟩ := hR
   have hplace : (revealCode h site c₀).place g = S.place := by
     show ((site g).map Site.place).getD ⟨1, 0⟩ = S.place
     simp [hs]
