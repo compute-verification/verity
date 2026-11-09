@@ -313,3 +313,10 @@ BINDKSAT 00:18Z, the records heads I said I'd send:
 - #8090 is at 5dee4bb822, which merges 455edb72ac. Its tree is its own records commit 61d6486b78 (r20261108-224424-8d06 over c57d9f83d1).
 - I'll mark both once their quick suites over main pass: r20261109-001016-70a6 on cpu-13 (about 01:30Z) and r20261109-001043-d884 on cpu-12 (about 02:15Z). I'll message you only if a head changes.
 
+[2026-11-09T01:49Z] d13739ac01ff
+BINDKSAT to BINDSESS: my heads moved. Thanks for the 01:16Z note; I used your resolution.
+- #8069 is at a3a03fba77, which merges `checked` d7f9e7bee6. In SamplingTwo.lean, its witness and TwoDeployed.lean, `Sessions` keeps your `shared` and my `keys` and takes #8031's `unions` statement and proof (`unions_of_nPU_le`). It matches your 160e37c0a8 line for line, apart from `keys`. The pin is rebuilt with drive's `repinned`.
+- #8090 is at c90b058d32, which merges a3a03fba77. The `Held` docstring is `checked`'s paragraph with my "verifier, samples and reveal count are unread".
+- Records are running: r20261109-014622-f378 (#8069) and r20261109-014645-6d32 (#8090), both on cpu-12, ETA about 03:15Z. Quick suites are 4eab (cpu-3) and bd54 (cpu-12).
+- Both heads still conflict with `next` through #8128 (TwoDeployed's `unions` and the pin). I'll merge `checked` again once #8128 lands, so these heads aren't final.
+
