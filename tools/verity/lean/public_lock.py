@@ -145,17 +145,17 @@ def unruled(lock: dict) -> list[str]:
     return out
 
 
-def _lane(node, where: str = "") -> Iterator[str]:
+def lane_fields(node, where: str = "") -> Iterator[str]:
     """Where ``node`` holds a lane field, at any depth, or as the lock a section of them."""
     if isinstance(node, dict):
         for k, v in node.items():
             here = f"{where}.{k}".lstrip(".")
             if k in LANE_FIELDS or not where and k in LANE_SECTIONS:
                 yield here
-            yield from _lane(v, here)
+            yield from lane_fields(v, here)
     elif isinstance(node, list):
         for v in node:
-            yield from _lane(v, where)
+            yield from lane_fields(v, where)
 
 
 def missing(lock: dict, has: Callable[[str, str], bool]) -> list[str]:
@@ -163,7 +163,7 @@ def missing(lock: dict, has: Callable[[str, str], bool]) -> list[str]:
     files lack, and `WHERE: a lane field` for each `owner`, `issue` or `due` at any depth and each of `LANE_SECTIONS`.
     A lock `public` returned has none, and the export refuses one it wrote that does."""
     return [f"{where}: {name}" for where, kind, name in named(lock) if not has(kind, name)] + \
-        [f"{where}: a lane field" for where in _lane(lock)]
+        [f"{where}: a lane field" for where in lane_fields(lock)]
 
 
 def public(lock: dict, has: Callable[[str, str], bool]) -> tuple[dict, dict[str, list[str]]]:

@@ -472,6 +472,190 @@ def test_the_export_refuses_an_edge_counted_cut_that_its_rewrite_kept(judged, tm
         PE.export(tree, PE.PB.Boundary.load(root / "boundary.toml"), j, tmp_path_factory.mktemp("export"), {})
 
 
+LOCK_BOUNDARY = """
+when_closed = ["tests"]
+[public]
+a = ["lean"]
+[private]
+team = ["lean/Lib/Hidden.lean", "lean/Lib/Hidden"]
+"""
+
+#: a Lake package the export copies less `Lib.Hidden` and the modules under it, and its lock
+LOCK_TREE = {
+    "lean/lakefile.toml": 'name = "lib"\n[[lean_lib]]\nname = "Lib"\n',
+    "lean/Lib.lean": "import Lib.Shown\n",
+    "lean/Lib/Shown.lean": ("namespace Lib\nstructure Shape where\n  side : Nat\ntheorem Kept : True := trivial\n"
+                            "theorem _root_.Lib.Rooted : True := trivial\ndef walk : Nat := go 0\n"
+                            "where go (n : Nat) : Nat := n\nend Lib\n"),
+    "lean/Lib/Hidden.lean": "namespace Lib\ntheorem Withheld : True := trivial\ndef walk.aside : Nat := 0\nend Lib\n",
+    "lean/Lib/Hidden/Deep.lean": "namespace Lib.Inner\ntheorem Deep : True := trivial\nend Lib.Inner\n",
+}
+
+
+def _record(**more) -> dict:
+    return {"owner": "@lane", "signature": [], "assumptions": [],
+            "premises": {"assumptions": [], "domain": [], "open": [], "reads": []}, "type_hash": "00"} | more
+
+
+def _lock() -> dict:
+    return {
+        "format": 3,
+        "roots": ["Lib"],
+        "exempt": {"Lib.Hidden": "a runner"},
+        "open": {"Lib.Kept": {"owner": "@lane", "digest": "01", "issue": "LANE-1", "due": "2026-01-01"},
+                 "Lib.Withheld": {"owner": "@lane", "digest": "02", "issue": "LANE-2", "due": "2026-01-02"}},
+        "default_owner": "@lane",
+        "escapes": {"Lib.walk.go": "its loop", "Lib.walk.aside": "a partial def"},
+        "layers": {"Lib": {"imports": ["Lib", "Mathlib", "Lib.Hidden"], "why": "all of it, since #1234"}},
+        "four_names": ["Lib", "Lib.Inner"],
+        "guarantees": {"Lib.Rooted": _record(premises={"assumptions": [], "domain": [], "open": ["Lib.Kept"],
+                                                       "reads": ["Lib.Shape.mk"]}),
+                       "Lib.Withheld": _record(premises={"assumptions": [], "domain": [], "open": ["Lib.Withheld"],
+                                                         "reads": []}),
+                       "Lib.Outgrown": _record()},
+        "reads": {"Lib.Shown": {"digest": "03", "definitions": {"Lib.Shape": "04", "Lib.Shape.casesOn": "05"}},
+                  "Lib.Hidden.Deep": {"digest": "06", "definitions": {}}},
+    }
+
+
+def _lean(root: Path, lock: dict):
+    """The tree of `LOCK_TREE` with ``lock`` as its package's, tracked, and its judgment."""
+    files = LOCK_TREE | {"lean/lean-audit.json": PE.LEAN_CHECK.text(lock)}
+    for f, text in files.items():
+        (root / f).parent.mkdir(parents=True, exist_ok=True)
+        (root / f).write_text(text, encoding="utf-8")
+    (root / "boundary.toml").write_text(LOCK_BOUNDARY, encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "add", *files], cwd=root, check=True)
+    tree, boundary = PE.PB.Tree(root, files=files), PE.PB.Boundary.load(root / "boundary.toml")
+    return tree, boundary, PE.PB.judge(tree, boundary)
+
+
+def test_the_export_writes_a_lock_that_states_only_what_it_copies(tmp_path_factory) -> None:
+    """An entry stays only if a copied file declares its name, or is its module, and none carries its owner, issue or due
+    date; the rest of the lock reads as it did."""
+    tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), _lock())
+    assert "lean/Lib/Hidden.lean" not in j.public and "lean/lean-audit.json" in j.public
+    dest = tmp_path_factory.mktemp("export")
+    got = PE.export(tree, boundary, j, dest, {})
+    wrote = (dest / "lean/lean-audit.json").read_text(encoding="utf-8")
+    source = _lock()
+    public = {
+        "format": 3,
+        "roots": ["Lib"],
+        "exempt": {},
+        "open": {"Lib.Kept": {"digest": "01"}},
+        "escapes": {"Lib.walk.go": "its loop"},
+        "layers": {"Lib": {"imports": ["Lib", "Mathlib"], "why": "all of it, since #1234"}},
+        "four_names": ["Lib"],
+        "guarantees": {"Lib.Rooted": {k: v for k, v in source["guarantees"]["Lib.Rooted"].items() if k != "owner"}},
+        "reads": {"Lib.Shown": source["reads"]["Lib.Shown"]},
+    }
+    assert json.loads(wrote) == public
+    assert wrote == PE.LEAN_CHECK.text(public)
+    for word in ("Withheld", "Hidden", "Outgrown", "aside", "Inner", "@lane", "LANE-", "2026-01"):
+        assert word not in wrote
+    assert got["rewrites"]["lean/lean-audit.json"] == [
+        "exempt Lib.Hidden", "open Lib.Withheld", "escapes Lib.walk.aside", "layers.*.imports Lib.Hidden",
+        "four_names Lib.Inner", "guarantees Lib.Withheld", "guarantees Lib.Outgrown", "reads Lib.Hidden.Deep"]
+    report = got["locks"]["lean/lean-audit.json"]
+    assert report["kept"] == {"roots": 1, "open": 1, "escapes": 1, "layers": 1, "layers.*.imports": 2, "four_names": 1,
+                              "guarantees": 1, "reads": 1}
+    assert report["dropped"] == {"exempt": 1, "open": 1, "escapes": 1, "layers.*.imports": 1, "four_names": 1,
+                                 "guarantees": 2, "reads": 1}
+    assert report["undeclared"] == ["guarantees: Lib.Outgrown"]
+    assert report["lane_fields"] == 3 + 2 * 3 + 1
+    assert report["sites"] == {"layers": 1} and report["site_list"] == [["layers", "Lib", "pr: #1234"]]
+    assert report["bytes"] == [len(PE.LEAN_CHECK.text(source)), len(wrote)]
+
+
+def test_the_export_leaves_a_lock_that_is_public_as_it_stands(tmp_path_factory) -> None:
+    lock = {"format": 3, "roots": ["Lib"], "layers": {"Lib": {"imports": ["Lib", "Mathlib"], "why": "all of it"}}}
+    tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), lock)
+    dest = tmp_path_factory.mktemp("export")
+    got = PE.export(tree, boundary, j, dest, {})
+    assert (dest / "lean/lean-audit.json").read_bytes() == (tree.root / "lean/lean-audit.json").read_bytes()
+    assert "lean/lean-audit.json" not in got["rewrites"]
+    assert got["locks"]["lean/lean-audit.json"]["dropped"] == {}
+
+
+def test_the_export_refuses_a_lock_it_wrote_that_names_what_no_copied_file_has(tmp_path_factory, monkeypatch) -> None:
+    """The export reads back each lock it wrote: one that still names a declaration or a module no copied file has, or
+    carries an owner, fails by name rather than ship."""
+    tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), _lock())
+    monkeypatch.setattr(PE, "rewrite_lock", lambda text, here, held: (text, []))
+    with pytest.raises(ValueError) as e:
+        PE.export(tree, boundary, j, tmp_path_factory.mktemp("export"), {})
+    said = str(e.value)
+    assert "lean/lean-audit.json, as the export wrote it, still names what no copied file has" in said
+    for named in ("exempt: Lib.Hidden", "open: Lib.Withheld", "escapes: Lib.walk.aside", "layers[Lib].imports: Lib.Hidden",
+                  "four_names: Lib.Inner", "guarantees: Lib.Withheld", "guarantees: Lib.Outgrown", "reads: Lib.Hidden.Deep",
+                  "guarantees[Lib.Withheld].premises.open: Lib.Withheld", "guarantees.Lib.Rooted.owner: a lane field",
+                  "open.Lib.Kept.due: a lane field", "default_owner: a lane field"):
+        assert named in said
+
+
+def test_the_export_refuses_a_public_guarantee_that_rests_on_a_premise_it_does_not_copy(tmp_path_factory) -> None:
+    lock = _lock()
+    lock["guarantees"]["Lib.Rooted"]["premises"]["open"] = ["Lib.Withheld"]
+    tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), lock)
+    with pytest.raises(ValueError, match=r"cite what it doesn't copy.*guarantees\[Lib.Rooted\].premises.open: Lib.Withheld"):
+        PE.export(tree, boundary, j, tmp_path_factory.mktemp("export"), {})
+
+
+def test_the_export_drops_a_witness_entry_whose_witness_it_does_not_copy(tmp_path_factory) -> None:
+    lock = _lock() | {"witnesses": {"Lib.Rooted": {"honest": ["Lib.Kept"], "nontrivial": "Lib.Withheld"}}}
+    tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), lock)
+    dest = tmp_path_factory.mktemp("export")
+    got = PE.export(tree, boundary, j, dest, {})
+    wrote = json.loads((dest / "lean/lean-audit.json").read_text(encoding="utf-8"))
+    assert wrote["witnesses"] == {} and "Lib.Rooted" in wrote["guarantees"]
+    assert "witnesses.*.nontrivial Lib.Rooted" in got["rewrites"]["lean/lean-audit.json"]
+    assert got["locks"]["lean/lean-audit.json"]["dropped"]["witnesses.*.nontrivial"] == 1
+
+
+def test_what_the_copied_files_hold_of_the_trees_lean(tmp_path_factory) -> None:
+    tree, _, j = _lean(tmp_path_factory.mktemp("tree"), _lock())
+    held, L = PE.Held(tree, set(j.public)), PE.PUBLIC_LOCK
+    has = {kind: [n for n in names if held.has("lean", kind, n)] for kind, names in {
+        L.DECLARATION: ["Lib.Kept", "Lib.Rooted", "Lib.Shape", "Lib.Withheld", "Lib.walk.go", "Lib.Inner.Deep"],
+        L.CONSTANT: ["Lib.walk", "Lib.walk.go", "Lib.Shape.mk", "Lib.walk.aside", "Lib.Withheld.go", "Lib.Shape.mk.inner"],
+        L.NAMESPACE: ["Lib", "Lib.Shape", "Lib.Inner", "Other"],
+        L.MODULE: ["Lib", "Lib.Shown", "Lib.Hidden", "Lib.Hidden.Deep", "Mathlib"],
+        L.IMPORT: ["Lib", "Lib.Shown", "Lib.Hidden", "Lib.Hidden.Deep", "Mathlib", "Mathlib.Tactic"],
+        L.PACKAGE: [".", "../lean", "../gone"],
+    }.items()}
+    assert has == {
+        L.DECLARATION: ["Lib.Kept", "Lib.Rooted", "Lib.Shape"],
+        L.CONSTANT: ["Lib.walk", "Lib.walk.go", "Lib.Shape.mk"],
+        L.NAMESPACE: ["Lib", "Lib.Shape"],
+        L.MODULE: ["Lib", "Lib.Shown"],
+        L.IMPORT: ["Lib", "Lib.Shown", "Mathlib", "Mathlib.Tactic"],
+        L.PACKAGE: [".", "../lean"],
+    }
+    assert [n for n in ("Lib.Outgrown", "Lib.Withheld", "Lib.Kept") if held.undeclared(L.DECLARATION, n)] == ["Lib.Outgrown"]
+    assert [m for m in ("Gone", "Lib.Hidden", "Lib") if held.undeclared(L.MODULE, m)] == ["Gone"]
+    with pytest.raises(ValueError, match="a kind it doesn't know"):
+        held.has("lean", "theorem", "Lib.Kept")
+
+
+def test_every_section_the_lean_check_writes_has_its_rule_for_the_export() -> None:
+    """A section added to the lock's schema (`check.ORDER`) with no rule in `public_lock.py` would refuse every lock that
+    holds it on the export's day; it fails here first."""
+    L = PE.PUBLIC_LOCK
+    ruled = {s.partition(".")[0] for s in L.RULED}
+    assert not sorted(set(PE.LEAN_CHECK.ORDER) - ruled), "give each its rule in tools/verity/lean/public_lock.py"
+    assert ruled <= set(PE.LEAN_CHECK.ORDER) | {"four_names_except"}
+
+
+def test_a_locks_leftovers_are_named_by_section_and_entry() -> None:
+    lock = {"format": 3, "exempt": {"Lib.Run": "a runner, since #4321"}, "deployed": ["Lib.G"],
+            "shape": {"frozen": {"Lib.G": "frozen: see note:lean/20260101T0000Z-report-x"}, "events": ["Lib.E"]}}
+    sites = PE.lock_sites(lock)
+    assert [(section, entry) for section, entry, _ in sites] == [("exempt", "Lib.Run"), ("shape.frozen", "Lib.G")]
+    assert sites[0][2] == "pr: #4321" and sites[1][2].startswith("note: ")
+
+
 def test_the_export_ships_the_fetched_fixtures_its_boundary_names(judged, tmp_path_factory, monkeypatch) -> None:
     """A fetched fixture (a registry entry git doesn't track) that the boundary's `fixtures` names is fetched and committed as
     tracked files, a tree's every file; the other public fetched fixtures are listed as not shipped, and a private one isn't

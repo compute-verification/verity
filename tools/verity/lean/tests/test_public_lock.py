@@ -165,9 +165,9 @@ def test_the_lock_it_is_given_is_left_as_it_was():
 def test_no_entry_carries_an_owner_an_issue_or_a_due_date():
     source = lock()
     owners = len(source["guarantees"]) + len(source["assumptions"]) + len(source["domain"]) + len(source["open"])
-    assert len(list(PL._lane(source))) == owners + 2 * len(source["open"]) + len(PL.LANE_SECTIONS)
+    assert len(list(PL.lane_fields(source))) == owners + 2 * len(source["open"]) + len(PL.LANE_SECTIONS)
     out, _ = PL.public(source, has)
-    assert list(PL._lane(out)) == []
+    assert list(PL.lane_fields(out)) == []
     assert not set(PL.LANE_SECTIONS) & set(out)
     assert out["open"] == {"Lib.O": {"digest": "05"}}
     assert out["assumptions"] == {"Lib.A": {"digest": "01"}}
