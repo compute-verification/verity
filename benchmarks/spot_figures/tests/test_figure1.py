@@ -128,9 +128,10 @@ def test_a_label_wider_than_its_axis_wraps_onto_balanced_lines_inside_it():
 def test_a_capped_caption_says_what_it_rests_on():
     """The capped sentences name each form's status, the patterns' form only in the appendix, beside every panel's own
     sentences."""
-    caps = f.captions(1.0, boundary_hash_share=1e-7, served=(144000.0, 4500, 32, 3.36e11, 1.5e16))
+    caps = f.captions(1.0, boundary_hash_share=1e-7,
+                      served=(144000.0, 4500, 32, "every one of the request's tokens", 3.36e11, 1.5e16))
     assert "Capped (dash-dot; card_influenceTwo_le_served_min): two-stage with each request charged at most the " \
-           "144,000 bits it serves (4,500 tokens of 32 bits)" in caps["exfiltration"]
+           "144,000 bits it serves (4,500 tokens of 32 bits, every one of the request's tokens)" in caps["exfiltration"]
     assert "never above the 1.5e+16 bits the scope serves (card_influenceTwo_le_min)" in caps["exfiltration"]
     assert "Patterns" not in caps["exfiltration"]
     assert "Patterns (dash-dot-dot; card_influenceTwo_le_patterns)" in caps["exfiltration_appendix"]
