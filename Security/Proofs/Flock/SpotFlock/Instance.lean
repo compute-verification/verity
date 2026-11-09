@@ -28,15 +28,16 @@ embeds the statement (`embeds_held`); and round 2's parts are the one template's
 
 ## What this does not show
 
-`SpotKSTwo` reads three premises of a registration: `Built h`, `Sites h` and `Embeds h (layoutFor h)`. At
-`held R bnd0 …` (`bnd0`, `SpotFlock.InstanceBoundary`'s concrete boundary) the design evaluates and `Built` and
-`Embeds` hold for every `R : Ref`. `Sites` is not proved here. So the two-stage guarantee's non-vacuity is reduced, not
-proved: it rests on one existence fact, a `Ref`, that is, a reference statement with hidden outputs and
-`sha512/row/v2` ports whose registered reads carry roots and whose masked setup (`Stmt.setupHidden`, through
-`FlockDeploy.setupOf true`) holds at the open guarantee that the verifier's fixed nets build
-(`Properties.Flock.Nets.FixedNetsBuild`). No such statement is proved in Lean. That one exists is evidence, not
-proof: the Lean verifier accepts the honest run of the two-stage toy (`benchmarks/two_stage/`), whose reference
-statements are of this kind.
+`SpotKSTwo` reads two premises of a registration, `Built h` and `Sites h`; SPOT's layout embeds the statement at every
+registration (`embeds_layoutFor`). At `held R bnd0 …` (`bnd0`, `SpotFlock.InstanceBoundary`'s concrete boundary) the
+design evaluates, the second stage takes the counts and `Built` holds, for every `R : Ref`. `Sites` is not proved here.
+So the two-stage guarantee's non-vacuity is reduced, not proved: it rests on one existence fact, a `Ref`, that is, a
+reference statement with hidden outputs and `sha512/row/v2` ports, in the two-stage scope at two units a request,
+whose registered reads carry roots and whose masked setup (`Stmt.setupHidden`, through `FlockDeploy.setupOf true`)
+holds at the open guarantee that the verifier's fixed nets build (`Properties.Flock.Nets.FixedNetsBuild`). No such
+statement is proved in Lean. That one exists is evidence, not proof: the Lean verifier accepts the honest run of the
+two-stage toy (`benchmarks/two_stage/`), whose reference statements are of this kind, one of its templates at two
+units a request.
 -/
 
 @[expose] public section
