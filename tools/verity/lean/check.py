@@ -365,11 +365,11 @@ def plugin_targets(pkg: Path) -> list[str]:
 
 def lake_env() -> dict[str, str]:
     """The environment of every `lake` and `setup.sh` the audit runs. `setup.sh` restores nothing from the build cache
-    (`cache.py`). Lake builds from source; with `--artifacts`, each build step restores the modules `stage_build` staged for
-    it. With `--dev-cache`, `setup.sh` restores Mathlib's cache and main's verified build (`cache.py get`) and Lake reads its
-    local cache: the replay still checks our packages' declarations, but a dependency's are taken as their `.olean` states
-    them, which only the gate's from-source build (the cache's root) and the nightly `--fresh` vouch for, so such a run is
-    never a verdict."""
+    (`cache.py`). Lake builds from source; with `--artifacts` on a node whose builds are sandboxed, each build step restores
+    the modules `stage_build` staged for it. With `--dev-cache`, `setup.sh` restores Mathlib's cache and main's verified
+    build (`cache.py get`) and Lake reads its local cache: the replay still checks our packages' declarations, but a
+    dependency's are taken as their `.olean` states them, which only the gate's from-source build (the cache's root) and
+    the nightly `--fresh` vouch for, so such a run is never a verdict."""
     env = dict(os.environ)
     env["PATH"] = f"{Path.home() / '.elan' / 'bin'}{os.pathsep}{env.get('PATH', '')}"
     env.setdefault("LEAN_NUM_THREADS", str(cores()))
@@ -5248,7 +5248,11 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     if build:
         rep["sandbox"] = sandboxed()
         n = build_threads(pkg)
-        mk = sibling("module_keys") if ARTIFACTS else None
+        if ARTIFACTS and not rep["sandbox"]:
+            rep["staged"] = ("not used: this node builds without the sandbox, where nothing samples what a build restores "
+                             "(`sampled_recompile`)")
+            log(f"build: {pkg}: the artifact cache is {rep['staged']}; every module is compiled")
+        mk = sibling("module_keys") if ARTIFACTS and rep["sandbox"] else None
         cache = ARTIFACTS / mk.STAGE / f"{os.getpid()}-{tag}" if mk else None
         pre = [*(["-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}"] if cache else []),
                *([f"LEAN_NUM_THREADS={n}"] if n is not None else [])]
@@ -5978,7 +5982,9 @@ def main(argv: list[str]) -> int:
                       f"{rep['replay']['checked']} checked, {rep['replay']['reused']} reused; replay "
                       f"{rep['seconds'].get('replay')} s ({rep['replay']['phases']}), peak {rep['replay']['peak_gib']} GiB",
                       flush=True)
-            if s := rep.get("staged"):
+            if isinstance(s := rep.get("staged"), str):
+                print(f"  staged: the artifact cache is {s}", flush=True)
+            elif s:
                 print(f"  staged: {s['modules']} of its {s['keyed']} keyed modules from the artifact cache", flush=True)
             if isinstance(s := rep.get("sampled"), dict) and s.get("unsampled"):
                 print(f"  sampled: none of the {s['population']} modules its build didn't compile: {s['unsampled']}", flush=True)
