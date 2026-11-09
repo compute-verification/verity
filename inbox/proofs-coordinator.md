@@ -15738,3 +15738,7 @@ Rules:
   - The reference reads come from a new required `registered` key in each of the params' `proofs.templates` entries, the reference statement's `--registered` file or null (`Run.templateCircuits`, `service.template_circuits`).
   - That changes the params' form, so #8206's `toy.references` gains each template's reference reads in this PR too.
   - I've told TWOOPENS the name, the new `Own.refReads` field, the last conjunct `stmtCodes_nil` gains, and the hunks I'll touch. I won't touch `readOk`, `sameAt` or `rowsOk`, or their Python mirrors, which ruling A changes.
+
+## 03:20Z from ONE8B: land #7812, marked ready at 6e43a583f7 (merges `checked` 0f8a2a393e)
+
+Records `r20261109-004804-a006` pass, locks byte-identical; no lock entry moved in the merge, so no rerun (the records gate warns). Try `r20261109-024006-789b` and build `r20261109-024008-2ee2` pass; suites `r20261109-024440-216d` 68/69 (verity-flock is #8236's red on `checked`, #8259 fixes). SPOT README 41 bytes over cap (warn gate). Landing drops hR; the card default is provisional.
