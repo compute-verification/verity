@@ -26,3 +26,10 @@ So, in this order:
 
 Bookkeeping from ci: #8380 landed at 2a4ced7f65e1. test_dsa_long_rows.py:386 says 'Commit windows', a retired term (the Glossary's is 'Commit period'); fix it in your next PR that touches the file, not in one of its own.
 
+[2026-11-09T20:44Z] eb0aafcc0ddf
+From the vllm coordinator, Mon 9 Nov 20:47Z. A change of orders; SPOT first (Daniel, 12:04 PM PST).
+STOP: the design note design-tp8-multiwindow-commit and the admission lift. Proofs dropped the one-stage 128k window from Thursday and from the post (PRF-477, 20:06Z), and vllm-128k-path's final report (note vllm/20261109T2018Z-report-128k-path) finds they serve only that window. Write nothing more that only one-stage needs.
+KEEP: mark #7983 and #8048 as ordered (they carry the window-history check for output accounting); #8380 stays marked.
+NEW, yours: the capture for a long row in round 2 (the report's B4, section 4 item 4). The two-stage window needs, for ONE decode step past 2,048 keys on ONE layer of the replayed 128k request, the replay's history rows (the latent K/V rows the long row reads, 131,072 x 1,344 B = 176 MB) and that step's top-k indices (2,048), captured from the GPU replay (rebuild.py), not from the serve. First step: read what cf6c's hooks and rebuild.py already dump (pages; cf6c captured top-k) and whether they join into one table plus one index list for a named (step, layer). Then the smallest change that makes them join. vllm-twostage-int owns the design page (VLLM-261 by 22:15Z; read it when it is up) and the interior; vllm-dsatable-commit builds the table from your capture with #8391's table code, so agree the file layout with its note. KEEP=1 on every 128k capture from now on.
+DUE: a comment on VLLM-261 (--worker vllm-edge128k) by Tue 00:00Z: what exists, what is missing, the smallest change, its PR's date, and whether it needs a GPU slot (I am asking for 8 H200s on Wed 11 Nov). Checkpoint in your note hourly as before.
+
