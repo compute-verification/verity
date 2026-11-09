@@ -15,7 +15,7 @@ from research import merge
 from research.drive import CI, LAUNCH_LOST_S, LEAN_STEP, LOCK_SUBJECT, NOT_STARTED, lock_message
 from research.queue import Member
 from research.vqueue import FAIL, INFRA, PASS, PENDING, RecordsRun
-from research.vqueue_records import SHOWN, commit, judge, start
+from research.vqueue_records import commit, judge, start
 from test_queue import World, _git
 from test_queue_drive import Harness, _live_run, _steps_run
 
@@ -104,15 +104,15 @@ def test_start_launches_nothing_in_a_dry_run_and_none_without_drives_machines_or
 
 
 def test_a_records_run_is_pending_while_it_runs_and_passes_once_its_records_say_the_same(world, monkeypatch):
-    """Passed (exited 0, lean-audit passed in its steps.jsonl), with no record it regenerated changing what a guarantee says,
-    it passes; the verdict is kept with the run that passed, and read from there."""
+    """Passed (exited 0, lean-audit passed in its steps.jsonl), it passes; the verdict is kept with the run that passed, and
+    read from there."""
     h, sha = _harness(world, monkeypatch)
     rec = start(h.d, sha)
     (rid,) = rec["ids"]
     assert judge(h.d, rec) == RecordsRun(PENDING) and "verdict" not in rec
     _passes(h, rid, sha, reports={"pkg": {"review": ["guarantee T: printed differently, the same statement"]}})
     assert judge(h.d, rec) == RecordsRun(PASS)
-    assert rec["verdict"] == {"state": PASS, "why": "", "owners": [], "run": rid}
+    assert rec["verdict"] == {"state": PASS, "why": "", "run": rid}
     h.run_state.clear()                                                  # kept: no state is read again
     h.d.fetch = None
     assert judge(h.d, rec) == RecordsRun(PASS)
@@ -197,37 +197,53 @@ def test_a_passed_records_run_that_regenerated_nothing_passes_and_makes_no_recor
     assert commit(h.d, sha, rid, (1,)) is None and _git(h.q.workdir, "for-each-ref") == refs
 
 
-def test_regenerated_records_that_change_what_a_guarantee_says_are_refused_naming_the_review_and_rung_to_their_owners(
+def test_regenerated_records_that_change_what_a_guarantee_says_pass_and_their_records_commit_names_each_change(
         world, monkeypatch):
     """A package whose regenerated record changes what a guarantee says (its report's `statement_changes`: a guarantee's
-    statement, a definition one reads, a listed premise) is a claim change: refused, its review's lines named, and the owners
-    the candidate's lock gives what they name are the ones to ring, in the order the review names them, each once."""
-    h, sha = _harness(world, monkeypatch)
+    statement, a definition one reads, a listed premise) refuses nothing: the run passes, and its records commit carries every
+    record it regenerated and names each change, its details aside, under its package with the owners the candidate's lock
+    gives what it names, in the order it names them, each once, and `CI` for one naming nothing the lock gives an owner.  The
+    spec DM shows each change once it lands."""
+    lib = {"guarantees": {"W": {"owner": "@proofs"}}, "reads": {}}
+    h, sha = _harness(world, monkeypatch, {**CHANGE, "lib/lean-audit.json": json.dumps(lib)})
     rec = start(h.d, sha)
     (rid,) = rec["ids"]
     review = ["guarantee U: changed", "  before:", "    theorem U : 1 = 1", "  after:", "    theorem U : 2 = 2",
               "definition Pkg.d (Pkg.M), read by T, U: changed", "assumption H: changed (its statement or a definition it reads)",
-              "guarantee T: printed differently, the same statement"]
-    _passes(h, rid, sha, reports={"pkg": {"review": review, "statement_changes": True}})
-    got = judge(h.d, rec)
-    assert (got.state, got.owners) == (FAIL, ("@memory-accounting", "@proofs", "@lean")), got
-    assert got.why == (f"regenerating the records of pkg ({rid}) changes what a guarantee says, which the change's own records "
-                       "must say for its owners to review: guarantee U: changed; definition Pkg.d (Pkg.M), read by T, U: "
-                       "changed; assumption H: changed (its statement or a definition it reads); guarantee T: printed "
-                       "differently, the same statement")
-    assert rec["verdict"] == {"state": FAIL, "why": got.why, "owners": list(got.owners), "run": rid}
-    assert judge(h.d, rec) == got
+              "guarantee V: changed", "definition Pkg.e (Pkg.M): new"]
+    _passes(h, rid, sha, {"pkg": REGENERATED, "lib": json.dumps({**lib, "reads": {"N": "1"}}) + "\n"},
+            reports={"pkg": {"review": review, "statement_changes": True},
+                     "lib": {"review": ["guarantee W: printed differently, the same statement"]}})
+    assert judge(h.d, rec) == RecordsRun(PASS) and rec["verdict"] == {"state": PASS, "why": "", "run": rid}
+    made, files, told = commit(h.d, sha, rid, (1,))
+    assert files == ["lib/lean-audit.json", "pkg/lean-audit.json"] and told is None
+    named = ["pkg: guarantee U: changed (@memory-accounting)",
+             "pkg: definition Pkg.d (Pkg.M), read by T, U: changed (@proofs, @memory-accounting)",
+             "pkg: assumption H: changed (its statement or a definition it reads) (@lean)",
+             f"pkg: guarantee V: changed ({CI})", f"pkg: definition Pkg.e (Pkg.M): new ({CI})"]
+    body = _git(h.q.workdir, "log", "-1", "--format=%B", made)
+    assert body == lock_message("#1", rid, f"queue/{sha[:12]}", sha, [], files, named).strip(), body
+    assert body.startswith(f"{LOCK_SUBJECT}#1\n\nWhat these records change of what a guarantee says, which the spec DM shows "
+                           "once they land:\n" + "".join(f"  {n}\n" for n in named) + f"\nChecked: {rid} "), body
+    assert re.search(rf"^Checked: {rid} ", body, re.M) and re.search(r"^Regenerated: \S", body, re.M)
+    assert (_git(h.q.workdir, "show", f"{made}:pkg/lean-audit.json"), _vouched(h, made, rid)) == (REGENERATED.strip(), rid)
 
 
-def test_a_statement_change_naming_nothing_its_lock_gives_an_owner_rings_ci_and_a_long_review_is_cut(world, monkeypatch):
+def test_a_records_commit_is_held_while_its_lean_report_cant_be_read_to_name_its_changes(world, monkeypatch):
+    """Never a records commit naming none of the changes it makes: held, with why, in words that stay the same tick to tick."""
+    import research.vqueue_records as R
+
     h, sha = _harness(world, monkeypatch)
-    rec = start(h.d, sha)
-    (rid,) = rec["ids"]
-    review = [f"definition Pkg.d{i} (Pkg.M): new" for i in range(SHOWN + 2)] + ["guarantee V: changed"]
-    _passes(h, rid, sha, reports={"pkg": {"review": review, "statement_changes": True}})
-    got = judge(h.d, rec)
-    assert got.state == FAIL and got.owners == (CI,), got
-    assert got.why.endswith(f"definition Pkg.d{SHOWN - 1} (Pkg.M): new; and 3 more in its Lean report"), got.why
+    rid = start(h.d, sha)["ids"][0]
+    _passes(h, rid, sha, reports={"pkg": {"review": ["guarantee T: changed"], "statement_changes": True}})
+    refs = _git(h.q.workdir, "for-each-ref")
+    monkeypatch.setattr(R, "lean_report", lambda *a: (_ for _ in ()).throw(OSError(f"gone: {h.world.tmp}/scratch-{len(refs)}")))
+    got = commit(h.d, sha, rid, (1,))
+    assert got == (f"{rid}'s Lean report ({merge.AUDIT}) can't be read (OSError), so a records commit couldn't name what its "
+                   "records change of what a guarantee says") and got == commit(h.d, sha, rid, (1,)), got
+    monkeypatch.setattr(R, "lean_report", lambda *a: None)
+    assert commit(h.d, sha, rid, (1,)).startswith(f"{rid}'s Lean report ({merge.AUDIT}) can't be read (QueueError)")
+    assert _git(h.q.workdir, "for-each-ref") == refs
 
 
 # -- commit

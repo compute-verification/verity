@@ -605,15 +605,6 @@ def test_a_records_run_that_failed_drops_its_candidate_ejects_its_lean_members_a
                     Build((2, 4), MAIN, 2)]
 
 
-def test_a_records_run_whose_records_change_what_a_guarantee_says_rings_their_owners():
-    why = "regenerating the records of Security (r1) changes what a guarantee says: guarantee G: changed"
-    r = RecordsRun(FAIL, why, ("@proofs", "@memory-accounting"))
-    acts = decide(snap(waiting("c1", MAIN, 1, records=r), ready=[lean(1)], records=True))
-    refused = f"its records run refused its records: {why}"
-    assert acts == [Ring("c1", f"c1's records run refused its records: {why}", to=("@proofs", "@memory-accounting")),
-                    Eject(1, "h1", refused), Drop("c1", refused, Outcome((1,), heads(1), FAIL, (1,), MAIN))]
-
-
 def test_a_records_run_that_ended_in_infra_twice_refuses_and_rings_infra():
     r = RecordsRun(INFRA, "it never ran or was stopped (r1)", starts=2)
     acts = decide(snap(waiting("c1", MAIN, 1, 2, records=r), ready=[lean(1), pr(2)], records=True))
@@ -850,20 +841,6 @@ def test_two_lean_prs_whose_records_go_stale_only_together_land_together_with_th
              regenerates=lambda tree, c: {1, 2} <= tree).run(12)
     assert sorted(p.landed) == [1, 2, 3] and not p.ejected and p.main == "c1r" and p.built == 1
     assert p.count(Commit) == 1 and p.count(Regenerate) == 0 and not any(o.state == FAIL for o in p.history)
-
-
-def test_a_lean_pr_whose_records_change_what_a_guarantee_says_is_ejected_its_owner_rung_and_the_rest_land():
-    """#1's records, regenerated on any tree it is in, change what a guarantee says: its records run refuses them, so the
-    batch is dropped, #1 ejected and the guarantee's owner rung, and #2 and #3, with no Lean member left, are checked at once
-    and land."""
-    def records(tree, c):
-        why = "regenerating the records of Security (r1) changes what a guarantee says: guarantee G: changed"
-        return RecordsRun(FAIL, why, ("@proofs",)) if 1 in tree else RecordsRun(PASS)
-
-    p = Play([lean(1), pr(2), pr(3)], lambda tree, c: Verdict(PASS), {"records": True}, records=records).run(12)
-    assert sorted(p.landed) == [2, 3] and [e.number for e in p.ejected] == [1] and p.count(Commit) == 0
-    assert [a.to for acts in p.acts for a in acts if isinstance(a, Ring)] == [("@proofs",)]
-    assert "changes what a guarantee says" in p.ejected[0].why
 
 
 def test_a_lean_pr_whose_records_run_regenerates_nothing_lands_as_built_and_nothing_is_built_while_a_check_waits():

@@ -7,15 +7,16 @@ The run is drive's lock run (`Driver.launch_locks`: `train.sh SHA MACHINES --def
 takes it), on drive's machines (`Driver.on`), judged as `Driver._follow_locks` judges drive's (`Driver._lock_outcome`): one
 its machine failed (lost, killed, out of disk or memory) runs again once on the other machines (`Driver._resend_locks`); one
 that registered no run, never ran or was stopped is infra, which the loop launches again once; one that failed refuses.  A
-passed run's Lean report (`merge.lean_report`) says the rest: it refuses when a package it regenerated changes what a
-guarantee says (the report's `statement_changes`: a guarantee's statement, a definition one reads, a listed premise or listed
-compile-time code), a claim change for its owners: each guarantee's and premise's `owner` in the candidate's lock that the
-review names (`_owners`), else `CI`.
+passed run passes once its Lean report (`merge.lean_report`) can be read: every package it regenerated is committed, and a
+change to what a guarantee says (the report's `statement_changes`: a guarantee's statement, a definition one reads, a listed
+premise or listed compile-time code) refuses nothing.  The records commit names each such change (`changes`), and the spec DM
+shows Daniel each one once it lands on `main` (`merge.caught_up`, on the loop's `on_main`): that DM is the check.
 
 A records commit is drive's lock commit (`Driver._put_locks`): the records the run regenerated (`Driver._locks`, from the
 store, else from its run dir on its node), each at its path in the tree (`drive.lock_path`), committed on top of the candidate
-with drive's message (`drive.lock_message`: `Lock records regenerated for #N...`, the bookkeeping the run repaired,
-`Checked:` the run of `queue/<sha12>` and `Regenerated:` the files) as `queue.IDENTITY`, and vouched for by the merge gate
+with drive's message (`drive.lock_message`: `Lock records regenerated for #N...`, each change to what a guarantee says with
+the owners of what it names, the bookkeeping the run repaired, `Checked:` the run of `queue/<sha12>` and `Regenerated:` the
+files) as `queue.IDENTITY`, and vouched for by the merge gate
 against the run (`Driver._unvouched`, `merge.regenerated_parent`), so post_train reads it as drive's and drive reverts it with
 the PRs it names (`Driver._lock_commits`); the loop tells the bookkeeping the run repaired as drive tells it
 (`drive.bookkeeping_told`: to `lean` and each owner a warning names).  A run that regenerated nothing, or only the records the
@@ -38,8 +39,6 @@ from .merge import AUDIT, bookkeeping_warnings, lean_report
 from .queue import IDENTITY, QueueError, _git, _out
 from .vqueue import FAIL, INFRA, PASS, PENDING, RecordsRun
 
-#: the most review lines a refusal names; the run's Lean report has them all (review.txt in each package's reports)
-SHOWN = 8
 #: what is told of the bookkeeping a records run repaired, and to whom (`drive.bookkeeping_told`)
 Told = tuple[str, tuple[str, ...]]
 #: a review line naming a guarantee or a listed premise (`check.py`'s `review` and `assumption_changes`), by the lock's
@@ -108,9 +107,8 @@ def judge(driver: Driver, rec: dict | None) -> RecordsRun:
 
 
 def _passed(driver: Driver, rec: dict, rid: str) -> RecordsRun:
-    """The verdict of records run ``rid``, passed, on its Lean report: fail when a package it regenerated changes what a
-    guarantee says (`statement_changes`), naming the review's lines and the owners of what they name; else pass.  Pending,
-    with why, while its report can't be read."""
+    """The verdict of records run ``rid``, passed: pass once its Lean report can be read, whatever its records change of what a
+    guarantee says (the records commit names it: `_changes`); pending, with why, while it can't be."""
     try:
         report = lean_report(driver.q.store, rid, driver.fetch)
     except Exception as e:  # noqa: BLE001  (unread, it holds the commit: it is never taken as passed)
@@ -118,58 +116,63 @@ def _passed(driver: Driver, rec: dict, rid: str) -> RecordsRun:
     if not isinstance(report, dict):
         return RecordsRun(PENDING, f"{rid} passed, but its Lean report ({AUDIT}) can't be read yet from the store or from its "
                                    "run dir on its node")
-    regen = report.get("regenerated") if isinstance(report.get("regenerated"), dict) else {}
-    reports = {pkg: r for pkg, path in regen.items() for r in report.get("packages") or ()
-               if isinstance(r, dict) and (r.get("package") == pkg or r.get("regenerated") == path)}
-    if changed := sorted(pkg for pkg, r in reports.items() if r.get("statement_changes")):
-        lines = [x for pkg in changed for x in reports[pkg].get("review") or () if isinstance(x, str) and x[:1] != " "]
-        more = f"; and {len(lines) - SHOWN} more in its Lean report" if len(lines) > SHOWN else ""
-        why = (f"regenerating the records of {', '.join(changed)} ({rid}) changes what a guarantee says, which the change's "
-               f"own records must say for its owners to review: {'; '.join(lines[:SHOWN])}{more}")
-        return _keep(rec, RecordsRun(FAIL, why, _owners(driver.repo, rec["tip"], {pkg: reports[pkg] for pkg in changed})),
-                     rid)
     return _keep(rec, RecordsRun(PASS), rid)
 
 
 def _keep(rec: dict, r: RecordsRun, run: str | None = None) -> RecordsRun:
     """``r``, kept in ``rec`` (``verdict``), with ``run``, the run that passed."""
-    rec["verdict"] = {"state": r.state, "why": r.why, "owners": list(r.owners), **({"run": run} if run else {})}
+    rec["verdict"] = {"state": r.state, "why": r.why, **({"run": run} if run else {})}
     return r
 
 
 def _kept(got: dict) -> RecordsRun:
-    return RecordsRun(str(got.get("state") or INFRA), str(got.get("why") or ""), tuple(got.get("owners") or ()))
+    return RecordsRun(str(got.get("state") or INFRA), str(got.get("why") or ""))
 
 
-def _owners(repo: Path, tip: str, reports: dict[str, dict]) -> tuple[str, ...]:
-    """The owners, in ``tip``'s locks of each package of ``reports``, of every guarantee and premise its review names; `CI`
-    when none is found."""
-    out: list[str] = []
-    for pkg, r in reports.items():
-        got = _git(repo, "show", f"{tip}:{lock_path(pkg)}", check=False)
+def _changes(driver: Driver, rid: str, tip: str) -> list[str]:
+    """What the records passed records run ``rid`` regenerated change of what a guarantee says: each line of the review of each
+    package it regenerated whose report says its records do (`statement_changes`), its details aside, under the package and
+    with the owners of what it names in ``tip``'s lock (`_owners`).  Raises `QueueError` when its Lean report can't be read."""
+    report = lean_report(driver.q.store, rid, driver.fetch)
+    if not isinstance(report, dict):
+        raise QueueError(f"{rid}'s Lean report ({AUDIT}) can't be read from the store or from its run dir on its node")
+    regen = report.get("regenerated") if isinstance(report.get("regenerated"), dict) else {}
+    out = []
+    for pkg, path in sorted(regen.items()):
+        r = next((r for r in report.get("packages") or () if isinstance(r, dict)
+                  and (r.get("package") == pkg or r.get("regenerated") == path)), None)
+        if r is None or not r.get("statement_changes"):
+            continue
+        got = _git(driver.repo, "show", f"{tip}:{lock_path(pkg)}", check=False)
         try:
             lock = json.loads(got.stdout) if not got.returncode else {}
         except ValueError:
             lock = {}
-        for line in r.get("review") or ():
-            if not isinstance(line, str):
-                continue
-            named = [(s, m[1]) for s, rx in NAMED if (m := rx.match(line))]
-            if m := READ_BY.match(line):
-                named += [("guarantees", g.strip()) for g in m[1].split(",")]
-            for section, name in named:
-                entry = (lock.get(section) if isinstance(lock.get(section), dict) else {}).get(name)
-                if isinstance(entry, dict) and isinstance(owner := entry.get("owner"), str) and owner.startswith("@"):
-                    out.append(owner)
+        out += [f"{pkg}: {line} ({', '.join(_owners(lock, line))})" for line in r.get("review") or ()
+                if isinstance(line, str) and line[:1] != " "]
+    return out
+
+
+def _owners(lock: dict, line: str) -> tuple[str, ...]:
+    """The owners, in ``lock``, of each guarantee and premise review line ``line`` names; `CI` when none is found."""
+    named = [(s, m[1]) for s, rx in NAMED if (m := rx.match(line))]
+    if m := READ_BY.match(line):
+        named += [("guarantees", g.strip()) for g in m[1].split(",")]
+    out = []
+    for section, name in named:
+        entry = (lock.get(section) if isinstance(lock.get(section), dict) else {}).get(name)
+        if isinstance(entry, dict) and isinstance(owner := entry.get("owner"), str) and owner.startswith("@"):
+            out.append(owner)
     return tuple(dict.fromkeys(out)) or (CI,)
 
 
 def commit(driver: Driver, sha: str, rid: str, prs: Iterable[int]) -> tuple[str, list[str], Told | None] | str | None:
     """Candidate ``sha``'s records commit of passed records run ``rid``, its members ``prs``: (the commit, its files, what
     drive tells of the bookkeeping the run repaired and to whom, `drive.bookkeeping_told`, None when it repaired none), the
-    records the run regenerated committed on top of ``sha`` in drive's lock commit's form and vouched for by the merge gate.
-    None when there is none to make: the run regenerated nothing (`Driver._locks`), or only the records ``sha`` holds.  Why
-    not, instead, while its records can't be read or the gate refuses the commit."""
+    records the run regenerated committed on top of ``sha`` in drive's lock commit's form, naming what they change of what a
+    guarantee says (`_changes`), and vouched for by the merge gate.  None when there is none to make: the run regenerated
+    nothing (`Driver._locks`), or only the records ``sha`` holds.  Why not, instead, while its records or its Lean report can't
+    be read, or the gate refuses the commit."""
     repo, into = driver.repo, f"queue/{sha[:12]}"
     scratch = Path(tempfile.mkdtemp(prefix="vqueue-records-"))
     try:
@@ -192,9 +195,14 @@ def commit(driver: Driver, sha: str, rid: str, prs: Iterable[int]) -> tuple[str,
         shutil.rmtree(scratch, ignore_errors=True)
     if tree == _out(repo, "rev-parse", f"{sha}^{{tree}}"):
         return None
+    try:
+        changed = _changes(driver, rid, sha)
+    except Exception as e:  # noqa: BLE001  (a commit naming none of the changes its records make never lands)
+        return (f"{rid}'s Lean report ({AUDIT}) can't be read ({type(e).__name__}), so a records commit couldn't name what "
+                "its records change of what a guarantee says")
     prs = " ".join(f"#{n}" for n in prs) or f"`{into}` {sha[:12]}"
     warned = bookkeeping_warnings(driver.q.store, rid, driver.fetch)
-    message = lock_message(prs, rid, into, sha, warned, files)
+    message = lock_message(prs, rid, into, sha, warned, files, changed)
     made = _git(repo, "commit-tree", tree, "-p", sha, "-m", message, env=IDENTITY).stdout.strip()
     if not made:
         raise QueueError(f"git commit-tree of {sha[:12]}'s records commit printed no commit")

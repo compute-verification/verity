@@ -427,13 +427,17 @@ def lock_checked(rid: str, into: str, tip: str) -> str:
     return f"Checked: {rid} (the lock run of `{into}` {tip[:12]}, passed by regenerating them"
 
 
-def lock_message(prs: str, rid: str, into: str, tip: str, warned: list[str], files: list[str]) -> str:
+def lock_message(prs: str, rid: str, into: str, tip: str, warned: list[str], files: list[str],
+                 changed: Iterable[str] = ()) -> str:
     """A lock commit's message (`Driver._put_locks`), which the merge gate (`merge.regenerated_parent`), drive's reverts
-    (`Driver._lock_commits`) and post_train read: `Lock records regenerated for PRS`, the bookkeeping the lock run repaired
-    (``warned``, each a warning for the next PR to fix), its `Checked:` line (`lock_checked`) and `Regenerated: FILES`."""
+    (`Driver._lock_commits`) and post_train read: `Lock records regenerated for PRS`, what its records change of what a
+    guarantee says (``changed``, which the spec DM shows once they land), the bookkeeping the lock run repaired (``warned``,
+    each a warning for the next PR to fix), its `Checked:` line (`lock_checked`) and `Regenerated: FILES`."""
+    said = ("What these records change of what a guarantee says, which the spec DM shows once they land:\n" +
+            "".join(f"  {c}\n" for c in changed) + "\n") if (changed := list(changed)) else ""
     repairs = ("Bookkeeping the lock run repaired, each a warning for the next PR to fix:\n" +
                "".join(f"  {w}\n" for w in warned) + "\n") if warned else ""
-    return f"{LOCK_SUBJECT}{prs}\n\n{repairs}{lock_checked(rid, into, tip)})\nRegenerated: {', '.join(files)}\n"
+    return f"{LOCK_SUBJECT}{prs}\n\n{said}{repairs}{lock_checked(rid, into, tip)})\nRegenerated: {', '.join(files)}\n"
 
 
 #: how many bookkeeping warnings of a lock run (`_put_locks`) its post lists; the lock commit lists them all

@@ -24,10 +24,10 @@ A batch with a member that changes Lean, a lock or a spec (`Ready.lean`) has its
 drive's lock run regenerated them once such a change landed (`Build.records`): its records run, drive's lock run on its tree,
 runs first, its check waits for it (`Candidate.waits`), and nothing is built on it meanwhile.  Once the run passed, its check
 starts on it as built when the run regenerated nothing, else on a records commit of them on top of it, which is checked in its
-place (`Commit`); a run that ended in infra is launched once more (`Regenerate`).  One that failed, ended in infra twice, or
-whose records change what a guarantee says refuses them: the candidate is dropped, its Lean members are ejected, and the owners
-the refusal names are rung.  A records commit still held `pending_s` after it was first drops its candidate, whose members are
-built again.
+place (`Commit`), whatever its records change of what a guarantee says; a run that ended in infra is launched once more
+(`Regenerate`).  One that failed or ended in infra twice refuses them: the candidate is dropped and its Lean members are
+ejected, and infra is rung of infra.  A records commit still held `pending_s` after it was first drops its candidate, whose
+members are built again.
 
 `decide` is the whole policy: a pure function from a `Snapshot` (what the refs, the labels and graph2's results say now) to
 the `Action`s that bring the world closer to it.  The loop builds the snapshot, applies the actions and keeps nothing between
@@ -88,12 +88,10 @@ class Verdict:
 class RecordsRun:
     """A candidate's records run (`Build.records`, `Regenerate`): drive's lock run on its tree, before its check, which
     regenerates the lock records it finds stale.  Pending while it launches or runs, or with ``why`` while its passed run's
-    records can't be read yet; pass once it passed with records that may be committed (`Commit`); fail when it failed or its
-    records change what a guarantee says, which ``owners`` (handles) are rung about; infra when it registered no run or never
+    records can't be read yet; pass once it passed (`Commit`); fail when it failed; infra when it registered no run or never
     ran, launched again while ``starts`` is under 2."""
     state: str = PENDING
     why: str = ""
-    owners: tuple[str, ...] = ()
     starts: int = 1                # how many times it was launched
 
 
@@ -194,8 +192,8 @@ class Rerun:
 @dataclass(frozen=True)
 class Ring:
     """Tell infra that ``sha``'s check keeps ending in infra errors or failing to list, or stays pending, or that its verdict is
-    malformed, or that its records run's records can't be read; or tell the owner of ``pr``, its lone member, that its check
-    keeps erring; or tell ``to`` (handles) why its records run refused its records, or that its records commit is held."""
+    malformed, or that its records run's records can't be read or ended in infra twice; or tell the owner of ``pr``, its lone
+    member, that its check keeps erring; or tell ``to`` (handles) that its records commit is held."""
     sha: str
     why: str
     pr: int | None = None
@@ -496,8 +494,8 @@ def _first(s: Snapshot, c: Candidate, ready: dict[int, Ready]) -> tuple[list[Act
     still waits.  Its run is launched (`Regenerate`; once more when it ended in infra); while it runs nothing happens, and
     infra is rung while its passed run's records can't be read; once it passed, its check starts (`Commit`), and a records
     commit still held `pending_s` after it was first drops it, its members built again.  A run that failed or ended in infra
-    twice refuses its records: the owners its refusal names are rung (infra, for infra), its Lean members are ejected, and it
-    is dropped, an outcome suspecting them."""
+    twice refuses its records: infra is rung of infra, its Lean members are ejected, and it is dropped, an outcome suspecting
+    them."""
     r = c.records
     if r is None or (r.state == INFRA and r.starts < 2):
         return [Regenerate(c.sha)], None
@@ -511,7 +509,7 @@ def _first(s: Snapshot, c: Candidate, ready: dict[int, Ready]) -> tuple[list[Act
     said = f"refused its records: {r.why}" if r.state == FAIL else f"ended in infra twice: {r.why}"
     lean = tuple(m for m in c.members if m in ready and ready[m].lean) or c.members
     heads = dict(zip(c.members, c.heads))
-    acts: list[Action] = [Ring(c.sha, f"{c.sha[:12]}'s records run {said}", to=r.owners)] if r.owners or r.state == INFRA else []
+    acts: list[Action] = [Ring(c.sha, f"{c.sha[:12]}'s records run {said}")] if r.state == INFRA else []
     acts += [Eject(n, heads[n], f"its records run {said}") for n in lean]
     acts.append(Drop(c.sha, f"its records run {said}", Outcome(c.members, c.heads, FAIL, lean, c.base)))
     return acts, set(lean)
