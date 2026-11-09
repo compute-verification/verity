@@ -18,6 +18,7 @@ from verity_vllm.commit import history_tables as H
 from verity_vllm.program.predict.reads import PREFIX_CACHE
 
 PORT = "DsaLatentRow_v1/c0/o0"
+PROGRAM = "ab" * 64
 
 
 def _rows(seed: int, k: int) -> np.ndarray:
@@ -41,7 +42,7 @@ def test_a_tables_root_after_each_windows_appends_is_the_root_over_its_committed
     from the edge: after each, the table's registered root is `history.check`'s recomputation over the strings the windows
     committed, in position order, at the full 2^17 capacity; a string the window didn't commit fails it. The window commits
     the rows from the table's strings with the root hashing them in full under the table's salts makes."""
-    hs = H.Histories()
+    hs = H.Histories(PROGRAM)
     one, two = _rows(1, 5), _rows(2, 4)
     assert list(hs.append("r0", 3, 0, one)) == [0, 1, 2, 3, 4] and hs.edge("r0", 3) == 5
     t = hs.table("r0", 3)
@@ -49,8 +50,8 @@ def test_a_tables_root_after_each_windows_appends_is_the_root_over_its_committed
     assert b"".join(strings1) == hs.strings("r0", 3, range(5)) and H.check(t, strings1)
     assert _committed(one, b"", hs.strings("r0", 3, range(5)))[0] == root1
     entry1 = hs.entries()[("r0", 3)]
-    assert entry1 == {"value": H.table(3), "root": t.root.hex(), "leaves": HT.CAPACITY, "words": H.WORDS,
-                      "domain": HT.domain("r0", H.table(3), H.WORDS).domain_id.hex()}
+    assert entry1 == {"value": H.name("r0", 3), "root": t.root.hex(), "leaves": HT.CAPACITY, "words": H.WORDS,
+                      "domain": HT.domain(PROGRAM, H.name("r0", 3), H.WORDS).domain_id.hex()}
     assert list(hs.append("r0", 3, 5, two)) == [5, 6, 7, 8]
     _root2, strings2 = _committed(two, hs.salts("r0", 3, range(5, 9)))
     assert H.check(t, strings1 + strings2) and not H.check(t, strings1)
@@ -64,7 +65,7 @@ def test_a_tables_root_after_each_windows_appends_is_the_root_over_its_committed
 def test_a_table_appends_in_position_order_from_its_edge_once():
     """A table is append-only from its edge: a gap and a rewrite of a held position are refused, as are a reused salt and
     rows past its capacity (`history.HistoryTable`); each (request, layer) has its own domain."""
-    hs = H.Histories(capacity=8)
+    hs = H.Histories(PROGRAM, capacity=8)
     hs.append("r0", 0, 0, _rows(3, 3))
     for start in (4, 2, 0):
         with pytest.raises(ValueError, match="appends at its edge 3"):
@@ -84,7 +85,7 @@ def test_tables_are_retained_per_request_until_it_ends():
     """Every row and salt of a request's tables is held, 1,344 bytes a row a layer, until the request ends; ending one
     request releases only its tables."""
     assert H.ROW_BYTES == 1344
-    hs = H.Histories(capacity=16)
+    hs = H.Histories(PROGRAM, capacity=16)
     hs.append("r0", 0, 0, _rows(9, 5))
     hs.append("r0", 1, 0, _rows(10, 5))
     hs.append("r1", 0, 0, _rows(11, 2))

@@ -4,8 +4,9 @@ registration's switch `SWITCH`.
 
 Table ``(request, layer)``'s leaf i is the ``hm96-sha512/row-seg/v1`` string (``b || c``) of the latent row the request's own
 ``DsaLatentRow_v1`` unit outputs at position i at that layer, under that row's own salt; every leaf past its length is the
-placeholder's. Its domain is `history.domain` at the request's program (``program``), the layer's table name (`table`),
-`WORDS` words and the capacity `history.CAPACITY`, so its tree's shape says nothing of the request's length. A window
+placeholder's. Its domain is `history.domain` at the serving run's program (``program``), its own name (`name`, the
+request's and the layer's, which a window's `interface.History` declares it by), `WORDS` words and the capacity
+`history.CAPACITY`, so its tree's shape says nothing of the request's length. A window
 appends its own rows in position order from the table's length (`Histories.append`): a request open at a window's edge keeps
 its tables, and the next window appends from that edge. The window's registration carries each table's root after the
 window's appends (`Histories.entries`), fixed before the window's coins; the verifier recomputes it from the writers'
@@ -22,7 +23,7 @@ memory-checked pool, and no hit is derived by trusted Python.
 """
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 from verity.ml.commitments import history as HT
@@ -50,17 +51,20 @@ def refusal(config: Mapping[str, Any] | None) -> str | None:
     return None
 
 
-def table(layer: int) -> str:
-    """Layer ``layer``'s history table name, the table its long rows read."""
-    return f"model.layers.{int(layer)}.self_attn.latent"
+def name(request: str, layer: int) -> str:
+    """Request ``request``'s history table at layer ``layer``: the table that layer's long rows read, a registered parameter
+    of its own."""
+    return f"history/{request}/model.layers.{int(layer)}.self_attn.latent"
 
 
 class Histories:
     """The committer's open history tables across windows, by (request, layer): each a `history.HistoryTable` of `WORDS`-word
-    rows at the request's program (``program`` of the request id, the request id itself by default) and its layer's `table`
-    name, appended window by window from its edge and kept until its request ends."""
+    rows at the serving run's ``program`` under its `name`, appended window by window from its edge and kept until its request
+    ends."""
 
-    def __init__(self, program: Callable[[str], str] = str, words: int = WORDS, capacity: int = HT.CAPACITY) -> None:
+    def __init__(self, program: str, words: int = WORDS, capacity: int = HT.CAPACITY) -> None:
+        if not isinstance(program, str) or not program:
+            raise ValueError("a history table's domain binds the serving run's program: give it")
         self.program, self.words, self.capacity = program, int(words), int(capacity)
         self.tables: dict[tuple[str, int], HT.HistoryTable] = {}
 
@@ -68,7 +72,7 @@ class Histories:
         """Request ``request``'s table at layer ``layer``, empty until its first append."""
         key = (str(request), int(layer))
         if key not in self.tables:
-            self.tables[key] = HT.HistoryTable(self.program(key[0]), table(key[1]), self.words, self.capacity)
+            self.tables[key] = HT.HistoryTable(self.program, name(*key), self.words, self.capacity)
         return self.tables[key]
 
     def edge(self, request: str, layer: int) -> int:
