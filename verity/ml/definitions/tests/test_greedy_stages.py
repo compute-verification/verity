@@ -173,3 +173,10 @@ def test_a_combine_of_chunks_whose_index_is_no_16_bit_word_is_refused(V, N):
     and a row past 2^32 lanes (its token is no two words)."""
     with pytest.raises(ValueError):
         bind(G.GreedyCombine, V=V, N=N).signature()
+
+
+@pytest.mark.parametrize("first", ["false", 0, None])
+def test_a_chunk_whose_first_is_no_bool_is_refused(first):
+    """An id's ``FIRST=false`` parsed as a Python literal is the string 'false', which is true: refused, not the first chunk."""
+    with pytest.raises(ValueError, match="FIRST"):
+        bind(G.GreedyChunk, N=8, FIRST=first).signature()

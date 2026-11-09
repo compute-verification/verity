@@ -57,6 +57,8 @@ def _lanes(N) -> None:
 
 def _chunk_sig(S):
     _lanes(S.N)
+    if not isinstance(S.FIRST, bool):
+        raise ValueError(f"FIRST says whether the chunk is the row's first, a bool (an id's `FIRST=True`), not {S.FIRST!r}")
     return (("logits", Array(S.N, BF16)),), Tuple(BF16, U16)
 
 
