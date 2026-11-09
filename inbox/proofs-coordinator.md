@@ -20139,3 +20139,60 @@ The reasons:
    - the guarded FA2 tap at `/workspace/cp/fa2/build/matReqG` (sm 9.0, CUDA 12.9);
    - the collector JIT dir under `/workspace/cp/nc_build`;
    - the apt package `cuda-cuobjdump-12-9`, which the tap build needs and the 12.9 toolkit lacked.
+## DSAREAD, 21:40Z: form S's table half is PR #8431; the test vector; what a drawn span publishes; the round-2 table
+
+**Where it stands:** PR [#8431](https://github.com/compute-verification/verity/pull/8431), branch `cursor/proofs-dsaread-form-s`, head `efdb5df045`. It is a draft stacked on #8416. Locally, its three new tests pass, and the `V.check` cases ran the Lean verifier built from this tree (Lean and Python agree on every case). The Lean check, the changed suites and the Security records are running; the run ids are at the end. Tue 10 Nov 08:00Z, marked, holds.
+
+**What it changes:**
+- `Spot.Supplied.digests` and `digestLeaves`, with their Python mirror `registered.digests` and `digest_leaves`. A parameter whose leaves are whole `Digest`s (`Array<8, Array<64, Value<1>>>`, or an array of them) reads each 64 bytes in `digest_bits`' order.
+- Every other parameter keeps the 32-bit halves, so PoUW is unchanged.
+- The docstring now says "SPOT's service".
+
+**The test vector:** `verity/core/protocols/spot/tests/fixtures/history_read_vector.json`. Its test fails if the code commits other bytes.
+
+**The bytes vllm's side must produce.** All of it is Python a worker can call without Lean, from `verity.ml.commitments.history` (`HT`) and `verity.core.protocols.spot.one_stage.registered` (`G`).
+
+1. **The table's domain id.** `HT.domain(program, table, words, capacity).domain_id`, 64 bytes. It is the id of a `CommitmentDomain` with:
+   - binding `identity_digest_sha512("verity/one-stage/history-table/v1", {"capacity": capacity, "program": program, "schema": "hm96-sha512/row-seg/v1", "table": table, "words": words})`;
+   - owner -2;
+   - range [0, capacity).
+
+   `program` is the program digest (hex) the verifier's `history` entry names; for form S, the interior program's. `table` is the table's name and `words` its row width in u16 words (576 for a latent row, 66 for an index-K row). The vector gives the id at capacity 8 with 4 words, and at `2^17` with 576 words, under its own `program`.
+2. **A row's string (`b ‖ c`, 128 bytes).** `HT.string(row, words, salt)`: the hm96 commit string, under the default key and the row's 192-byte salt, of the row's `sha512/row-seg/v1` digest over its u16 words, little-endian, at `16·words` bits.
+3. **The table's root.** `HT.root(dom, strings, HT.placeholder(words))`: the frame-v3-sha512 root over `capacity` leaves. Leaf `r` is the `row-seg/v1` frame leaf at rank `r` over the hm96 tree leaf of string `r`. Past the table's length every leaf is the placeholder's (the zero row under the zero salt).
+4. **The reads' `root` and `domain` values.** These are a parameter of type `Array<2, Digest>`, registered at 512 words a row. Row 0 is the table's root and row 1 its domain id, from the sources `{"history": "<table>/root"}` and `{"history": "<table>/domain"}`. Each row is a `Digest`'s 512 leaves: leaf `64·i + j` is bit `j` of `int.from_bytes(d[8i:8i+8], "big")`, for word `i` from 0 to 7 and bit `j` from 0 to 63. That is `rowleaf.digest_bits(d)`, which `G.digest_leaves` now matches.
+   - Commit it with `G.supplied_value(program, value, rows, rec, supplied)`, or equivalently `G.Registered.commit(program_digest, value, rows, G.supplied_salts(program_digest, value, 2), word_bits=16)`.
+   - At `word_bits` 16 each one-bit leaf is one u16 word, rows are `sha512/row/v1`, and row `i` is salted under the program's digest, the value's name and `i`.
+   - The vector gives each row's bits as a string of 0s and 1s, the salts, and the registered entry (root, domain, leaves, words).
+   - Its first check is that the rows equal `digest_bits` of the root and of the domain id.
+
+**What a drawn span publishes in all (form S).**
+- The table side publishes one table, layer ℓ's latent K/V: the strings of rows 0 to L, at 128 bytes each. That is at most `2^17 · 128` B = 16,777,216 B, about 16.8 MB.
+- There is no index-K table in form S, because the index scores are the replay's.
+- The verifier's cost is one `checkAt`: about 1.3 core-seconds, my estimate, not measured.
+- vllm's own round-2 commitments for the span come on top. Those are theirs to state.
+- With all 78 layers it would be 78 tables, about 1.3 GB and about 98 core-seconds. Form S reads one layer.
+
+**How form S squares with "a table root only from round 1".**
+- It isn't a third place. SPOT has two registrations, round 1's boundary registration (`register`) and round 2's interior registration (`register_interiors`). On #8416 both take `history`.
+- In form S the table is in the interior registration, made after the first coins drew the span and before the second coins. The exact sentence for the post:
+
+> In form S the history table is registered in round 2, in the drawn span's interior registration, after the first coins chose the span and before the second coins: nothing stops the prover choosing the table's rows (and the index scores) after seeing which span was drawn, so the table is the replay's, and the verdict says only that each read returned the row this one table holds at the index its selection chose. The table is fixed before the second coins, and every read of the span is held to its one root, so the reads can't be steered by the second draw.
+
+- TWOPROVE's rule (a root only from round 1) is form P's. For form S, round 2 has to accept the interior registration's `history` under form S's template alone, and the verdict has to say so, or form S is refused at that check. That is TWOPROVE's to write and yours to rule.
+
+**For TWOPROVE: function names.** Nothing new from my side is needed. On #8416:
+- `Spot.HistoryTable.rootsOf` and `resolve` turn the interior's `history` and `{"history": ...}` sources into bytes;
+- `Spot.Supplied.root` holds the registered entry to them, inside `OneStage.paramsParsed`;
+- on #8431, `Spot.Supplied.digests` and `digestLeaves` fix the leaf order.
+
+Round 2's `readOk` registered-value arm reads that entry by `sameAt`. It needs to read only entries the interior registration's check has held.
+
+**Runs on `efdb5df045`:**
+- r20261109-213556-3449: the Lean check, cpu-1. ETA about 22:45Z.
+- r20261109-213652-6421: the changed suites, quick, cpu-1. ETA about 22:30Z.
+- r20261109-213729-a890: the Security records, cpu-3, which has a queue of check slots. ETA about 00:30Z Tue.
+
+**One thing to know:** the new test's `V.check` built Spot's verifier executable locally (`lake build sampled-proofs-verifier`, about 3 minutes, 211 MB under the worktree's `.lake`). I won't run `V.check` tests locally again.
+
+The same text is note `proofs/20261109T2140Z-report-form-s-table-half`.
