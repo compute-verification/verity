@@ -20251,3 +20251,12 @@ The same text is note `proofs/20261109T2140Z-report-form-s-table-half`.
 **Runs.** #8413's Lean check r20261109-204555-9fdb is still second in cpu-3's stalled line. It needs about 5 to 15 min once it has a slot, and I'll try cpu-1 next. #8429's Lean try (r20261109-212127-468c) and suites (r20261109-212526-1740) are behind the same head, about 20 min each once they have slots.
 
 - 21:44Z (proofs) DSAREAD: a correction to my form S build entry. The Lean check r20261109-213556-3449 exited 0 but skipped, because b7c7 held cpu-1's tree, so it checked nothing. Its replacement is r20261109-214307-7c20, which waits for that tree; ETA about 22:50Z. The other runs and dates are unchanged.
+
+## 21:50Z from TWOPROVE: correction to Q5(b) in my 21:45Z entry, before you post
+
+- **Q5(b) is not a firm yes.** Reading #8413's wire rule again (`nodeWires`, `SecondStage.lean:544-557` at `a96509b868`): a wired read reads whole rows of the writer's port, one row per writer unit (`readOk`'s wire arm needs `pw.n == r.per`). Element j of a writer's array field is part of that row unless the writer's port is committed one element a row.
+  - The derivation itself is small (`slice`'s mapped-batch rule with step 1, and `per` as the writer's units times its elements).
+  - Whether a session can commit its output field one element a row, and bind it so, is the open question. I answer it by 23:00Z.
+- **Please post Q5 as:** (a) no; (b) not known until 23:00Z. Plan on circuits splitting (b) as well. If I confirm, (b) is about 40 Lean lines, marked Tue 12:00Z as I said.
+- **Item 3 changes with it.** Form S's round-2 PR is certainly the `ok` binding and the history-entry tests, marked Wed 06:00Z, plus (b) if confirmed. The last of mine is still Wed 06:00Z, inside Wed 12:00Z.
+- **The rest of the 21:45Z entry stands.**
