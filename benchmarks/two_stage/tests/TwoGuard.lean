@@ -49,7 +49,8 @@ def secondDrawAt (h : Held) (s₀ s₁ : ByteArray) : Option Json :=
 /-- `SpotFlock.ownOf` at the first stage's bytes `s₀`. -/
 def ownOfAt (h : Held) (st : Roots) (rec draw : Json) (s₀ : ByteArray) : Spot.SecondStage.Own :=
   { sample := h.reg.sample s₀, parts := none, interior := rec, boundary := st.record,
-    drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, refs := refsOf h, refReads := refRegisteredOf h }
+    drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, wires := h.wires, refs := refsOf h,
+    refReads := refRegisteredOf h }
 
 /-- `SpotFlock.readsOk` at the stages' bytes. -/
 def readsOkAt (h : Held) (t : ℕ) (x m₁ xS : Claims.Msg) (s₀ s₁ : ByteArray) : Bool :=
@@ -139,12 +140,13 @@ def heldOf (held : Json) (refs : Array Claims.Msg) (reads : Array Json) : IO (Op
   let desc ← hexOf "desc" (field held "desc")
   let k ← natsOf "k" (field held "k")
   let links := Spot.SecondStage.linksOf? (field held "links")
+  let wires := Spot.SecondStage.wiresOf? (field held "wires")
   if hz : 0 < refs.size ∧ (List.range refs.size).all (fun t => zkOk (refs.getD t [])) = true then
     let verifier : Spot.Registration.Verifier :=
       { program := P, query := queryJ, law := .null, workTable := table, scheme := "", ports := #[], leafLayer := none,
         anchors := #[], log := #[], partition := none }
     let h₀ : Held :=
-      { desc, vus, query, k, names, links, xS₀ := refAt refs, xS₀_ok := refAt_ok refs hz,
+      { desc, vus, query, k, names, links, wires, xS₀ := refAt refs, xS₀_ok := refAt_ok refs hz,
         refReads := fun t => reads.getD t .null, frame := SamplingDeploy.toyCode,
         reg := { first := { verifier, rule, closure := none }, ns := ns.toArray, ks := ks.toArray,
                  blockOf := fun _ _ _ => 0, always := fun _ => false } }
@@ -233,7 +235,7 @@ def diag (h : Held) (ms : Spot.Bits.Members) (x m₁ m₂ : Claims.Msg) (s₀ s�
     | some st, some rec, some draw, some w =>
       let own : Spot.SecondStage.Own :=
         { sample := h.reg.sample s₀, parts := none, interior := rec, boundary := st.record,
-          drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, refs, refReads }
+          drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, wires := h.wires, refs, refReads }
       let _ ← timed s!"t{t} interiorOrderOk" (fun _ => Spot.SecondStage.interiorOrderOk own) b
       let (S?, _) ← timed s!"t{t} stmtJsonOf" (fun _ => stmtJsonOf h t w) (fun S => b S.isSome)
       if let some S := S? then

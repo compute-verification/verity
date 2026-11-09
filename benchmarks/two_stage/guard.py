@@ -18,7 +18,8 @@ copies it reads them against (`SpotFlock.Held`), as `tests/TwoGuard.lean` reads 
   ``templates[t].registered``, canonical JSON as a0 writes a session's ``registered.json``), ``null`` where they don't;
 * ``held.json``: the rest of the `Held`, each from the registration and the design: the first stage's `select` input
   (rule, program, query, work table, closure), the second stage's cells ``ns`` and counts ``ks``, the templates'
-  names, the design's links (`second_stage.replay_links` at the boundary window's own port names), each template's
+  names, the design's links (`second_stage.replay_links` at the boundary window's own port names) and wires
+  (`second_stage.replay_wires`, each derived from the replay Definition), each template's
   units ``vus``, the statement program's descriptor ``desc`` and the check's query.
 
 Nothing in ``held.json`` or a ``ref-<t>.*`` is read from the run's records, sessions or coins; `export` checks the
@@ -178,6 +179,7 @@ def export(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int)
     brec = json.loads((run_out / "boundary" / "registration.json").read_text())
     if links != SS.replay_links(replay, key, brec):
         raise ValueError("the design's links at the boundary window's ports are not the run's")
+    wires = SS.replay_wires(replay, key)
     part, prog = json.dumps(ref.partition, sort_keys=True).encode(), canonical_json(encode_program(ref.program))
     names, base = [m.template for m in ref.members], 0
     vus = []
@@ -187,6 +189,8 @@ def export(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int)
     query = stream.spec.check.query
     held = {"first": first, "ns": list(stream.cells), "ks": list(stream.counts), "names": names,
             "links": None if links is None else [{"template": x.template, "port": x.port, "value": x.value} for x in links],
+            "wires": None if wires is None else [{"template": w.template, "port": w.port, "writer": w.writer,
+                                                  "wport": w.wport} for w in wires],
             "vus": vus, "desc": prog.hex(),
             "query": {"name": query["name"], "version": query["version"], "params": canonical_json(query["params"]).hex()},
             "k": list(stream.counts)}
