@@ -4,8 +4,7 @@ beside a busy stream (bf16 GEMM loops, a square one and decode's skinny one, a d
 priority, and in launches capped at a number of CTAs), and commit_gpu's raw SHA-512 compression rate on the same device.  Each form's
 root of a small padded domain is checked against step_rows before it is timed.  Measurement only; JSON to $OUT/rows_floor.json.
 
-    . benchmarks/harness/env.sh && "$VENV/bin/python" benchmarks/served_commit/rows_floor.py
-                                                    (ROWS: row bytes, default 256 1024 4096; WINDOW_MB, default 256; REPS, default 9;
+    bash benchmarks/served_commit/rows_floor.sh     (ROWS: row bytes, default 256 1024 4096; WINDOW_MB, default 256; REPS, default 9;
                                                      MINB: the leaf kernel's min CTAs per SM, default 1 2 3;
                                                      CAPS: CTAs per launch to time, default none; BESIDE: the row
                                                      sizes timed beside the busy loops, default the worker's)
