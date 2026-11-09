@@ -1,8 +1,8 @@
 """`research.vqueue_loop` (ci's W3b) with `research.vqueue.decide` (W3a) on ci's own harness: a throwaway origin, a fake
 GitHub, graph2 as files (`test_vqueue_loop.Env`).
 
-It runs inside ci's tests directory, whose conftest isolates the store and git: in a checkout of `cursor/ci-vqueue-loop` with
-`cursor/ci-vqueue-core`'s vqueue.py in place (the merge ci plans),
+It runs inside ci's tests directory, whose conftest isolates the store and git: in a checkout of `cursor/ci-vqueue-loop` at
+7c2e6589f1 or later (which merges W3a's `decide`; at 32e8a92f5e, put `cursor/ci-vqueue-core`'s vqueue.py in place first),
 
     cp redteam/ci489/test_loop.py tools/research/tests/test_vqred_loop.py
     PYTHONPATH=tools/research/src:tools/research/tests pytest tools/research/tests/test_vqred_loop.py
