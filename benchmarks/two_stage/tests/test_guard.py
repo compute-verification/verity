@@ -30,19 +30,19 @@ both cases."""
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 import tarfile
 from pathlib import Path
 
 import pytest
+from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import guard as G  # noqa: E402
 
-EXE = os.environ.get("VERITY_TWO_STAGE_GUARD")
+EXE = of(__file__).VERITY_TWO_STAGE_GUARD
 FIXTURE = HERE / "fixtures" / "guard.tar.xz"
 pytestmark = pytest.mark.skipif(not EXE, reason="VERITY_TWO_STAGE_GUARD names the command that runs TwoGuard.lean "
                                 "(guard_node.py --pytest makes it)")

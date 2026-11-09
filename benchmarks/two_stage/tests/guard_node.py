@@ -23,6 +23,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from verity_config.settings import of
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "verity" / "lean"))
@@ -68,7 +70,7 @@ def runner(tree: Path, lake: str) -> Path | None:
 def together(exe: Path, argv: list[str]) -> int:
     """``exe`` on each run ``argv`` names (``DIR MODE [M2]``, runs separated by ``+``) at once, each's output in
     ``$OUT/guard-<i>.log``; prints each one's exit and result line. -> 0 when every run printed its result."""
-    out = Path(os.environ.get("OUT") or ".")
+    out = Path(of(__file__).OUT or ".")
     jobs, cur = [], []
     for a in [*argv, "+"]:
         if a != "+":
