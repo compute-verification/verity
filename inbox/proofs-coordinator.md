@@ -16191,3 +16191,39 @@ the carried design by component, post rows 19–21, and flags on rows 4, 9, 13 a
 - r20261109-033227-8e32 (cpu-12) ran the five scripts on both traces with 0 errors. Its B128 outputs reproduce the
   memo's 62 GPU-s, 1.83 points, 182 s, 67% and 0.044%.
 - r20261109-034001-d749 (cpu-1) priced the rows: 144 rows, 0 errors, reproducing 27.43%, 25.16%, 74.01% and 11.29%.
+
+## PROVECUT 03:57Z: at full statements the base is 11.46% (12.17% at 3,600 s), not 11.30%. 4a saves 0.74 points, and the rows with 4a don't move. #8265 is open, with its suites running
+
+- **4a at full statements**, with HASHCUT's r20261109-022437-13ae (the unit walk at 2,048 slots, 32 lane groups). The
+  figures are at world year on the carried baseline, with 3,600 s in parentheses:
+  - **The base:** 11.46% (12.17%) with #8255's width 8, against the card's 11.30% (12.02%). It's 11.80% (12.52%) at
+    width 1, so #8255 itself is worth about 0.35 points.
+  - **4a alone:** −0.74, not −0.58. Its per-block part is −0.47, not −0.31.
+  - **The combined figures with 4a are unchanged:** 7.37% (8.06%) with 1, 2, 4a, 4b and 5, and 6.86% (7.54%) adding 3a.
+    The GPU witness replaces the host walk.
+  - **Without 4a,** 1+2+3a+4b+5 is 7.34% (8.03%), against the card's 7.18% (7.87%).
+  - **A datacenter year:** the base is 11.30% at full statements against 11.14% from the card. 6.74% with 3a and 4a.
+    All six scopes and the pooled GPU-seconds are in note 20261109T0355Z-report-provecut-4a-full-statements.
+  - **Why the base moves.** The card holds the walk once, for one lane group. FlashInfer K2048 is priced from a warm
+    two-block session's 2-to-64-block marginal, and the quant types' seconds a block are `proof_overhead`'s
+    `--arm dev` card, the device witness. At a full statement the walk does 32 groups.
+  - **How it's priced.** P5 runs four dense provers a GPU, so the walk's CPU-seconds come out of the GPU's 12 host
+    vCPUs (node A's 96 over 8). FlashInfer K2048 gains 0.49 ms a block at width 8 and 2.7 ms at width 1. FlashInfer's
+    walk adds 0.03 points to the base and the quant types' 0.13.
+  - **Caveats:** gq K2048's walk is measured, but K6144, K1536 and K256 are scaled by K. With 16 vCPUs a GPU the base is
+    11.42%. HASHCUT's e417 on node A (from 06:05Z) replaces FlashInfer's reading with a measured 2,048-block session.
+    Runs: r20261109-033554-edd6, r20261109-034334-3460 and r20261109-035018-369d on cpu-11, 284 rows, 0 errors.
+- **The 16x memory caveat** applies to lever 5 and to P5's own `dense_k = 4`. #8255's width-8 witness holds about 16x
+  the per-task memory. Lever 5 runs four split-part provers an H200, and P5 runs four dense provers a GPU where today's
+  host memory fits two. Neither is measured at width 8. Node A's 0873 runs a pre-#8255 binary, so its K = 4 gate reads a
+  width-1 peak.
+- **PR #8265** (https://github.com/compute-verification/verity/pull/8265), `cursor/proofs-provecut-readslots-e4ab`
+  at bd632fdcd2, linked to PRF-468:
+  - `checked` is merged in.
+  - It now also carries HASHCUT's two-line `zk_cost.py` fix (cherry-picked 4470b5593b). That passes a census point's
+    `tables/` to `serve` and `prove`, which this PR's stager now writes for a slot statement.
+  - r20261109-033011-4cfa (cpu-12) runs the quick suites changed since `main`, then verity-flock's slow tier, with an
+    ETA of 04:30–05:00Z.
+  - I'll mark it and send the land ask when it passes apart from the known reds.
+- **Node A:** r20261109-022103-0873 is armed, at d4a2d928d0 with no stage flags. It stages at 06:10Z and holds the GPU
+  07:00–09:30Z.
