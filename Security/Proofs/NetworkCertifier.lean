@@ -30,6 +30,7 @@ public import Proofs.NetworkCertifier.Tap
 public import Proofs.NetworkCertifier.RecordRows
 public import Proofs.NetworkCertifier.Witnesses
 public import Proofs.NetworkCertifier.Checked
+public import Proofs.NetworkCertifier.ResponseCap
 public import Proofs.NetworkCertifier.WitnessesChecked
 public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Mathlib.Algebra.Order.Floor.Extended
