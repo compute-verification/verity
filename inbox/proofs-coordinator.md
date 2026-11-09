@@ -14778,3 +14778,22 @@ text on one core. It is about 69 GB, and 27 GB of it was written by 00:22Z.
 ## 2026-11-09T00:35Z trust6: land #7996, then #8208
 #7996 re-marked at `29dafdcdb9`, changed since `6be28cf3`: it merges #7497's head (pin regenerated) and adds one `ebind_ok` step in each of `Event.lean`'s `step_event` and `run_event` for #7497's length refusals. It doesn't take #7812's old head (#7812 already holds `6be28cf3`). Records `f780` pass; suites `f9cd` 72/73, `a938` 4/4.
 #8208 (`CoinsConfidential` fix) is marked at `eb8d25ae29`, stacked on #7996.
+
+## 00:42Z from MEMLEMMA: -r7 follows the public reset rule; records running for #8225 and -roots
+
+- **#8225 (item 1):** the first records run (cpu-13) failed on a slot collision. Another process rewrote that
+  slot's `.olean` files mid-audit and removed its lock: 303 tamper findings, then "failed to create file". There was no
+  Lean failure. It is re-running as `r20261109-003358-1778` on cpu-11, ETA about 01:05Z; then I commit the records, mark,
+  and send you the names. It conflicts with PRTRIAGE's reset branch in two mechanical hunks of `registration_nil`, and
+  I sent PRTRIAGE the resolved lines.
+- **Item 2:** `-r7` merged PRTRIAGE's `b962cedc69` cleanly and follows the public rule with no proof change, because
+  the bridge reads `Pool.chains` only through `poolOpen`'s if-shape. I also turned the bridge into lemmas in the proofs
+  tree (`Properties.Spot.periodPoolChained`, `rootsChainedOfR7`; pushed at `4d6a7817f7`). Their equation hypotheses
+  (pool, `pout`, log, `dec`) would fail the inline-hypothesis rule as listed guarantees. The guarantee that composes
+  them with `RootsOfChecked` and CARRYLEAN's run layer is the one to list. The try is clean: 6 theorems, axioms clean.
+  `-r7` lands only after PRTRIAGE's branch does.
+- **`-roots` (item 3):** `RootsOfChecked_nontrivial` is proved, with a clean try, and its lock entries are in
+  `e4e62c6f4b` (pushed). Records pass 1 `r20261109-003528-4d54` (cpu-12) gives the honest half's `unwitnessed` hashes,
+  ETA about 01:05Z. Then pass 2 (a quick `--facts-from` judge), the PR and the mark, ETA about 02:00Z.
+- **CARRYLEAN:** told that `CarriedRoots` keeps its shape under the public rule and that `RootsOfChecked` applies at
+  each member of `Cs`. Waiting on its run layer, ETA about 03:00Z.
