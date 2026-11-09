@@ -779,8 +779,8 @@ theorem reset {P : Prop} {j : Unit → Array String → Id (Array String)} (h : 
 theorem not_false_iff' (a : Bool) : ((!a) = false) ↔ a = true := by cases a <;> decide
 
 theorem kept_nil (b : Bool) (c : Array String) (x : String) :
-    (if b = true then c else addCode c x) = #[] ↔ c = #[] ∧ b = true := by
-  cases b <;> simp [addCode_ne_nil]
+    Registration.kept b c x = #[] ↔ c = #[] ∧ b = true := by
+  cases b <;> simp [Registration.kept, addCode_ne_nil]
 
 theorem any_false_iff {α : Type} (xs : Array α) (p : α → Bool) : xs.any p = false ↔ ∀ x ∈ xs, p x = false := by
   rw [Bool.eq_false_iff, ne_eq, Array.any_eq_true']

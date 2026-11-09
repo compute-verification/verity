@@ -416,6 +416,10 @@ def PortIndex.find (ix : PortIndex) (p : String) : Option Json :=
 
 def PortIndex.has (ix : PortIndex) (p : String) : Bool := (ix.find p).isSome
 
+/-- The codes `c`, with `code` added unless `ok`. It names `c` once, where `if ok then c else addCode c code` names it
+twice, so `check_eq_checkRef`'s `simp`, which leaves it folded, doesn't copy the codes before it into both cases. -/
+def kept (ok : Bool) (c : Array String) (code : String) : Array String := if ok then c else addCode c code
+
 /-- `registration.check`'s failure codes, R1–R7 in order: empty when the record holds. -/
 def check (rec : Json) (v : Verifier) : Array String := Id.run do
   let v2 := !v.registered.isEmpty
@@ -474,15 +478,15 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
   if let some (stream, prover) := v.binding then
     if !jeq (getD (get "window") "stream") (Json.str stream) then c := addCode c "R6-stream"
     if !jeq (getD (get "window") "prover") (Json.str prover) then c := addCode c "R6-prover"
-  -- terms, not statements: a statement's join point doubles what `check_eq_checkRef`'s `simp` unfolds
-  c := if jeq (getD (get "window") "seed_salt") (optStr v.seedSalt) then c else addCode c "R6-seed-salt"
-  c := if jeq (getD (get "window") "pool_reset") (optReset v.pool) then c else addCode c "R6-pool-reset"
+  -- `kept` terms, not statements: a statement's join point doubles what `check_eq_checkRef`'s `simp` unfolds
+  c := kept (jeq (getD (get "window") "seed_salt") (optStr v.seedSalt)) c "R6-seed-salt"
+  c := kept (jeq (getD (get "window") "pool_reset") (optReset v.pool)) c "R6-pool-reset"
   -- R7
   if v2 then
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
       v.outputs v.log
-    c := if poolChained rec v then c else addCode c "R7-pool-chain"
+    c := kept (poolChained rec v) c "R7-pool-chain"
   return c
 
 /-- `check` as first written, R3 quadratic in the ports: each root's port compared, re-canonicalized, with every port
@@ -546,14 +550,14 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
   if let some (stream, prover) := v.binding then
     if !jeq (getD (get "window") "stream") (Json.str stream) then c := addCode c "R6-stream"
     if !jeq (getD (get "window") "prover") (Json.str prover) then c := addCode c "R6-prover"
-  c := if jeq (getD (get "window") "seed_salt") (optStr v.seedSalt) then c else addCode c "R6-seed-salt"
-  c := if jeq (getD (get "window") "pool_reset") (optReset v.pool) then c else addCode c "R6-pool-reset"
+  c := kept (jeq (getD (get "window") "seed_salt") (optStr v.seedSalt)) c "R6-seed-salt"
+  c := kept (jeq (getD (get "window") "pool_reset") (optReset v.pool)) c "R6-pool-reset"
   -- R7
   if v2 then
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
       v.outputs v.log
-    c := if poolChained rec v then c else addCode c "R7-pool-chain"
+    c := kept (poolChained rec v) c "R7-pool-chain"
   return c
 
 /-! ## `check` is `checkRef` -/
