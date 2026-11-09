@@ -123,9 +123,10 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   same way (below);
 - with `--build`, a sample of the modules the build didn't compile (restored from the node's artifact cache, or kept
   from an earlier build), taken after the build with randomness nothing the build runs sees, compiles again in the
-  sandbox with no cache to the outputs the build holds: byte for byte, and `olean.server` and `olean.private`, which
-  keep the source's absolute path, as object graphs (`sampled_recompile`, `olean_graph.py`; failure `sampled`). The
-  report's `sampled` names the modules. A sample can miss a wrong module, so the uncached nightly check stays the backstop;
+  sandbox with no cache, in an overlay that never writes the build, to the outputs the build holds: byte for byte, and
+  `olean.server` and `olean.private`, which keep the source's absolute path, as object graphs (`sampled_recompile`,
+  `olean_graph.py`; failure `sampled`). The report's `sampled` names the modules (with no sandbox, none: `unsampled`). A
+  sample can miss a wrong module, so the uncached nightly check stays the backstop;
 - each test under `runs` passes on the data whose SHA-256 the record holds (below), and its `generate` and `args` name no
   path outside the package except as `{repo}/...`, which check's scratch tree would not hold;
 - nothing changes this directory, the toolchain's `lean`, `lake` and `leanchecker`, or the `.olean` files of a package

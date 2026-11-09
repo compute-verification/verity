@@ -4971,14 +4971,16 @@ def test_the_sampled_recompile_follows_the_build_and_its_failure_fails_the_audit
 def test_a_planted_olean_among_the_restored_modules_fails_once_it_is_sampled(tmp_path, monkeypatch):
     """An index entry of the node's artifact cache that names another version's `.olean`, digest and all, passes every
     check `stage` makes, and Lake restores it with the rest of the build, compiling nothing. Once the sampled recompile
-    takes it, it fails naming the module and the file; a sample that misses it passes, and leaves the build as it was. `P.M5`
-    logs a warning, which keeps its source's path, so restored from another tree it is equal only as an object graph."""
+    takes it, it fails naming the module and the file, and keeps what its source compiles to in the overlay's upper layer;
+    a sample that misses it passes. Either way the build is never written. `P.M5` logs a warning, which keeps its source's
+    path, so restored from another tree it is equal only as an object graph."""
     import random
+    if not A.sandboxed():
+        pytest.skip("no sandbox here, so the recompile has no overlay to run in")
     spec = importlib.util.spec_from_file_location("lean_audit_for_sampled", HERE.parent / "lean_audit.py")
     LA = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(LA)
     mk = A.sibling("module_keys")
-    monkeypatch.setattr(A, "sandboxed", lambda: False)
     lean = {f"P/M{i}.lean": f"module\n\n@[expose] public section\n\ndef P.v{i} : Nat := {i}\n" for i in range(10)}
     lean["P/M5.lean"] += "\ndef P.unused (m : Nat) (k : Nat) : Nat := k\n"
     lean["P.lean"] = "module\n\n" + "".join(f"public import P.M{i}\n" for i in range(10))
@@ -5021,7 +5023,7 @@ def test_a_planted_olean_among_the_restored_modules_fails_once_it_is_sampled(tmp
     lib = b / ".lake" / "build" / "lib" / "lean"
     assert (lib / "P/M2.olean").read_bytes() == (v / ".lake/build/lib/lean/P/M2.olean").read_bytes(), "planted"
     build = b / ".lake" / "build"
-    before = {p: p.read_bytes() for p in build.rglob("*") if p.is_file()}
+    before = files_of(build)
     mods = sorted(["P", *(f"P.M{i}" for i in range(10))])
     samples = {s: random.Random(s).sample(mods, A.SAMPLE_MIN) for s in range(100)}
     miss = next(s for s, d in samples.items() if "P.M2" not in d and "P.M5" in d)
@@ -5031,16 +5033,71 @@ def test_a_planted_olean_among_the_restored_modules_fails_once_it_is_sampled(tmp
     fails, rep = A.sampled_recompile(b, ["P"], tmp_path / "w1", set(), [], log=lambda s: None)
     assert fails == [] and rep["population"] == 11 and rep["modules"] == sorted(samples[miss]), rep
     assert rep["by_graph"] == ["P.M5"]
-    assert {p: p.read_bytes() for p in build.rglob("*") if p.is_file()} == before, "the build's outputs are put back"
+    assert files_of(build) == before, "the build is never written"
+    assert not (tmp_path / "w1" / "sampled").exists(), "a pass removes the overlay's layers"
 
     monkeypatch.setattr(A, "SAMPLE_RNG", random.Random(hit))
     fails, rep = A.sampled_recompile(b, ["P"], tmp_path / "w2", set(), [], log=lambda s: None)
     assert rep["modules"] == sorted(samples[hit]) and [(x.code, x.entry) for x in fails] == [("sampled", "P.M2")], fails
-    assert ".lake/build/lib/lean/P/M2.olean differs from what its source compiles to (olean differ)" in fails[0]
-    assert (tmp_path / "w2" / "sampled" / "p" / "lib/lean/P/M2.olean").read_bytes() == before[lib / "P/M2.olean"]
+    assert ".lake/build/lib/lean/P/M2.olean differs from what its source compiles to (olean differ" in fails[0]
+    assert files_of(build) == before, "the build is never written"
+    upper = tmp_path / "w2" / "sampled" / "0" / "upper" / "build"
+    assert (upper / "lib/lean/P/M2.olean").read_bytes() == (a / ".lake/build/lib/lean/P/M2.olean").read_bytes()
+    assert not (tmp_path / "w2" / "sampled" / "0" / "work").exists()
+    assert all(f.is_file() or f.is_dir() for f in (tmp_path / "w2" / "sampled").rglob("*")), "no whiteout is kept"
 
     fails, rep = A.sampled_recompile(b, ["P"], tmp_path / "w3", set(mods), [], log=lambda s: None)
     assert fails == [] and rep == {"population": 0, "modules": [], "seconds": rep["seconds"]}, "a module it compiled is never sampled"
+
+
+def files_of(build: Path) -> dict[Path, tuple[int, int, bytes]]:
+    """Each file under ``build``, by its inode, its modification time and its bytes: equal only if nothing wrote it."""
+    return {p: (p.stat().st_ino, p.stat().st_mtime_ns, p.read_bytes()) for p in build.rglob("*") if p.is_file()}
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_another_package_reads_a_sampled_dependency_s_build_unchanged_while_the_recompile_runs(tmp_path, monkeypatch):
+    """A dependent's sample takes modules of its path dependency, whose `.lake/build` other packages' audits read at the same
+    time: their tests open its `.olean` files, and `main` re-hashes every package's sealed `.olean` files after each audit
+    (`tampered`). Both look inside the recompile's window, as it starts and as Lake returns, and find every file of both
+    builds at its path with its bytes; afterwards no file was written. #8258 moved the sample's outputs out and back, and
+    this failed in the window: `D.olean` was missing."""
+    if not A.sandboxed():
+        pytest.skip("no sandbox here, so the recompile has no overlay to run in")
+    d, p = tmp_path / "ws" / "d", tmp_path / "ws" / "p"
+    for at, name, text, req in ((d, "D", "def D.v : Nat := 1\n", ""),
+                                (p, "P", "import D\n\ndef P.v : Nat := D.v + 1\n", '\n[[require]]\nname = "d"\npath = "../d"\n')):
+        at.mkdir(parents=True)
+        (at / "lakefile.toml").write_text(f'name = "{name.lower()}"\ndefaultTargets = ["{name}"]\n{req}\n'
+                                          f'[[lean_lib]]\nname = "{name}"\n')
+        shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", at)
+        (at / f"{name}.lean").write_text(text)
+    r = subprocess.run(["lake", "build"], cwd=p, capture_output=True, text=True, env=A.lake_env())
+    assert r.returncode == 0, r.stdout + r.stderr
+    builds = [d / ".lake" / "build", p / ".lake" / "build"]
+    seals = {str(f): A.sha256(f) for b in builds for f in A.olean_files(b / "lib" / "lean")}
+    dep = d / ".lake" / "build" / "lib" / "lean" / "D.olean"
+    before, olean = [files_of(b) for b in builds], dep.read_bytes()
+    window = []
+
+    def look():
+        window.append((A.tampered(dict(seals), []), dep.read_bytes() if dep.is_file() else None))
+
+    real = A.run
+
+    def run(argv, cwd, log=None, **kw):
+        if "lake" not in argv or not any(a.startswith("+") for a in argv):
+            return real(argv, cwd, log, **kw)
+        look()
+        got = real(argv, cwd, log, **kw)
+        look()
+        return got
+
+    monkeypatch.setattr(A, "run", run)
+    fails, rep = A.sampled_recompile(p, ["P"], tmp_path / "w", set(), [], log=lambda s: None)
+    assert fails == [] and rep["modules"] == ["D", "P"], (fails, rep)
+    assert window == [([], olean), ([], olean)], "a reader in the window finds the dependency's build as it was"
+    assert [files_of(b) for b in builds] == before, "nothing wrote either build"
 
 
 def test_a_guarantee_is_proved_by_exactly_one_package():
@@ -5562,6 +5619,29 @@ def test_a_seal_takes_a_fresh_directory_so_a_reused_pid_reads_no_stale_copy(tmp_
     A.Seals(base).sweep(proc=gone)
     assert not stale.exists() and not (base / "999999-abcd").exists(), \
         "sweep removes a directory whose pid prefix names a gone process, old `<pid>` and new `<pid>-<suffix>` alike"
+
+
+def test_two_packages_of_one_name_sealed_side_by_side_get_a_directory_each(tmp_path, monkeypatch):
+    """`pous/check` and `pouw/lean/check` took their seals at once and both copied into `check-25`, numbered by the
+    seals finished, so one's facts looked for an `.olean` under the other's numbering of the roots (a missing object
+    file). Here the second seal is taken while the first is copying."""
+    a, b = tmp_path / "pous" / "check", tmp_path / "pouw" / "lean" / "check"
+    seals = A.Seals(tmp_path / "sealed")
+    dirs = []
+
+    def take(self, roots, exempt, work, log=print):
+        dirs.append(self.dir)
+        if self.pkg == a:
+            seals.take(b, "x", [], [], work)
+        return self
+
+    monkeypatch.setattr(A.Sealed, "take", take)
+    try:
+        seals.take(a, "x", [], [], tmp_path)
+        assert len(dirs) == 2 and dirs[0] != dirs[1], dirs
+        assert seals.take(a, "x", [], [], tmp_path).dir == dirs[0] and len(dirs) == 2, "a package seals once"
+    finally:
+        seals.close()
 
 
 @pytest.mark.slow
