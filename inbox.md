@@ -628,3 +628,6 @@ The mirror's API:
 
 If your table kind needs another domain binding or run shape, tell me before Thursday and I'll change both sides together.
 
+[2026-11-09T16:05Z] 9cfbbdd44584
+Coordinator 16:06Z: vllm holds node A 16:00-17:30Z (r20261109-160105-9589 capture smoke, r20261109-160114-0384 boundary rows; VLLM-250). If your slots GPU prove has not finished, do not overlap: pause and resume it after 17:30Z (or now if it is already done). Tell me where it stands.
+
