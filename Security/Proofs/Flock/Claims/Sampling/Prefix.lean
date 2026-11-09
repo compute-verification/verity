@@ -26,7 +26,7 @@ prover that sends `[2]`, which the Flock verifier refuses at once (`twoP`). The 
 
 namespace SamplingDeploy
 
-open Claims (Msg Out Seen Trace Prover Verifier stepWith run coinSeq)
+open Claims (Msg Out Seen Transcript Prover Verifier stepWith run coinSeq)
 open Claims.Sampling (Deploy nPU SessionRuns)
 open FlockDeploy (Coin)
 open RecDeploy (histOf sview)
@@ -40,7 +40,7 @@ variable {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
 
 /-- **A run that accepts a round ends accepted.** -/
 theorem stepWith_acc_out (vn : List Msg → Claims.OC Out) :
-    ∀ (f i : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace) (a : Msg),
+    ∀ (f i : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) (a : Msg),
       (stepWith H P x ω vn f hist as t).msgs[t.msgs.length + i]? = some (a, .acc) →
       (stepWith H P x ω vn f hist as t).out = .acc
   | 0, i, _, _, t, a, h => by simp [stepWith] at h
@@ -64,7 +64,7 @@ theorem stepWith_acc_out (vn : List Msg → Claims.OC Out) :
 /-- **A run goes past the next `m` rounds** where its verifier answers a message at each, whatever the prover sends,
 and rounds are left. -/
 theorem stepWith_long (vn : List Msg → Claims.OC Out) :
-    ∀ (m f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), m < f →
+    ∀ (m f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), m < f →
       (∀ bs : List Msg, as.length < bs.length → bs.length ≤ as.length + m → ∃ mm, ((vn bs).eval H).1 = .msg mm) →
       t.msgs.length + m < (stepWith H P x ω vn f hist as t).msgs.length
   | 0, 0, _, _, _, h, _ => absurd h (Nat.lt_irrefl 0)
@@ -96,7 +96,7 @@ theorem run_acc_of_mem {C : Type} [Inhabited C] (V : Verifier C) (r : Fin (V.k x
 
 /-- **A run ends accepted or refused.** -/
 theorem stepWith_out_dec (vn : List Msg → Claims.OC Out) :
-    ∀ (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    ∀ (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       (stepWith H P x ω vn f hist as t).out = .acc ∨ (stepWith H P x ω vn f hist as t).out = .rej
   | 0, _, _, _ => by simp [stepWith]
   | f + 1, hist, as, t => by
@@ -198,7 +198,7 @@ theorem run_pre (hS : PrefixAt H V FV x p n ok stmt) {Ω : Type} (P : Prover Ω)
     (ok (((run H P V x ω r).msgs.take p).map Prod.fst) ((List.range p).map (coinSeq r)) = false →
       (run H P V x ω r).out = .rej) ∧
     (ok (((run H P V x ω r).msgs.take p).map Prod.fst) ((List.range p).map (coinSeq r)) = true →
-      ∃ t : Trace, t.msgs = (run H P V x ω r).msgs.take p ∧
+      ∃ t : Transcript, t.msgs = (run H P V x ω r).msgs.take p ∧
         run H P V x ω r = stepWith H P x ω (fun as => V.next x as ((List.range as.length).map (coinSeq r))) n
           (((run H P V x ω r).msgs.take p).map histOf) (((run H P V x ω r).msgs.take p).map Prod.fst) t) := by
   have hp := hS.pos
@@ -233,8 +233,8 @@ theorem run_pre (hS : PrefixAt H V FV x p n ok stmt) {Ω : Type} (P : Prover Ω)
     have hR2 := hR.trans (RecDeploy.stepWith_succ_rej H P x ω
       (fun as => V.next x as ((List.range as.length).map (coinSeq r))) n (t'.msgs.map histOf) (t'.msgs.map Prod.fst)
       t' hvb)
-    have hRm : R.msgs = t'.msgs ++ [(pa, Out.rej)] := congrArg Trace.msgs hR2
-    have hRo : R.out = .rej := congrArg Trace.out hR2
+    have hRm : R.msgs = t'.msgs ++ [(pa, Out.rej)] := congrArg Transcript.msgs hR2
+    have hRo : R.out = .rej := congrArg Transcript.out hR2
     have htk : R.msgs.take p = t'.msgs ++ [(pa, Out.rej)] := by
       rw [hRm]
       exact List.take_of_length_le (by rw [List.length_append, hl1, List.length_singleton]; omega)
@@ -363,7 +363,7 @@ theorem sview_run (hS : PrefixAt H V FV x p n ok stmt) {Ω : Type} (P : Prover �
   have ht : ((run H P V x ω r).msgs.drop p).take n = (run H P V x ω r).msgs.drop p :=
     List.take_of_length_le (by rw [List.length_drop]; omega)
   unfold sview
-  simp only [Trace.seen, RecDeploy.fixLast_true, ht]
+  simp only [Transcript.seen, RecDeploy.fixLast_true, ht]
   rcases run_out_dec H P x ω V r with h | h
   · simp [h]
   · have hseg : RecDeploy.segOut ((run H P V x ω r).msgs.drop p) = .rej := by
@@ -497,7 +497,7 @@ theorem sessionRuns_prefix {Col T : Type} [DecidableEq Col] [Zero Col] (H : Msg 
       have hs := (run_session hS hF P ω r r' (hagree r' hr') hok).1
       rw [hcoins r'] at hs
       have ho := congrArg Seen.out hs
-      simp only [sview, Trace.seen] at ho
+      simp only [sview, Transcript.seen] at ho
       rw [ho]
       constructor
       · intro h
