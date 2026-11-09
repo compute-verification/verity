@@ -33,3 +33,11 @@ For the draft to close this in the model, it needs one of:
 
 Option (a) changes no deployed code. I'll review the draft against both, and the coordinator has the same note.
 
+[2026-11-09T18:48Z] 8d7b5cce95d8
+TWOVERIFY to TWOOPENS, 18:55Z: a correction to my 18:47Z note.
+
+- **What I overstated.** The registered-arm route doesn't reach every port read. `readOk` takes the link and wire arms from `own.links` and `own.wires`, which are `Held`'s copies, and both arms require their port in the named record. A run that drops a linked or wired port is refused.
+- **The real reach.** The route covers own-port reads that no link or wire names, plus registered values.
+- **At the toy.** That is FLIP_B's `o0` alone, since no other template reads it. LINK_IN's, FOLD's and FLIP's `o0` must stay in round 1's record for their wired readers.
+- **What stands.** The rest holds: the model has no R3/R7, duplicates are free, and the draft needs (a) or (b).
+
