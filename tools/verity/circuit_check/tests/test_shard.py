@@ -318,7 +318,8 @@ def test_the_modules_whose_source_inspect_looked_for_are_every_binding_s_loaded_
 def test_update_reads_adds_what_each_run_read_to_what_reads_declares(tmp_path, monkeypatch):
     """`cli.update_reads` adds what a run read to each binding's declared set, and to ``registries`` and ``loaded``: a
     binding's runs read otherwise by how they ran (``--binding`` makes only its own binding's roots), so its declaration holds
-    each way.  A run of every binding drops a binding the catalog no longer has."""
+    each way.  A run of every binding drops a binding the catalog no longer has.  A probe is written as `cache.probed`
+    declares it, one `READS` held already too."""
     monkeypatch.setattr(cli, "READS", tmp_path / "reads")
 
     def rep(bindings: dict, loaded: list[str], files: tuple[str, ...] = ("r.py",)) -> dict:
@@ -335,6 +336,9 @@ def test_update_reads_adds_what_each_run_read_to_what_reads_declares(tmp_path, m
     assert got["loaded"] == ["m", "n"] and got["registries"]["files"] == ["r.py", "s.py"]
     cli.update_reads(rep({"a": a1}, []), every=True)
     assert set(cli._reads_file()["bindings"]) == {"a"}
+    under = {**b, "probes": ["no-such-dir/pins/X_v1.json", "no-such-dir/pins/Y_v1.json"]}
+    cli.update_reads(rep({"b": under}, []), every=False)
+    assert cli._reads_file()["bindings"]["b"]["probes"] == ["no-such-dir"]
 
 
 def test_a_binding_s_name_is_its_root_function_its_files_models_or_its_template_entry():
