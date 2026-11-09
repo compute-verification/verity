@@ -296,7 +296,8 @@ def _research(module: str, name: str) -> ModuleType:
         return importlib.import_module(module)
     except ModuleNotFoundError:
         from verity_vllm.config import run_store
-        return run_store(module, f"research_tools.{name}")
+        run_store(module, f"research_tools.{name}")
+        raise
 
 
 def __getattr__(name: str) -> Any:
