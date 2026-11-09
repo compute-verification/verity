@@ -1406,6 +1406,25 @@ def test_a_worker_whose_message_never_became_a_run_is_recorded_dropped_for_its_l
         ("dropped", W1_, "run-w", "2026-10-18T19:45:00Z", "2026-10-18T19:32:53Z", "circuits", "worker")]
 
 
+def test_a_worker_seen_active_then_idle_is_a_run_that_ended_however_old_its_latest_run_id(tmp_path):
+    """circuits' CC-KEY (INF-390): resumed by Task, it kept a 2 Nov latestRunId through ten runs on 9 Nov, and each IDLE after
+    its work read as a message that never became a run. A message that reaches it while IDLE is still dropped."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker ({W1_})")
+    st = {**worker("ACTIVE", "2026-10-18T19:40:00Z", name="CC-KEY"), "latestRunId": "run-w"}
+    api, clock, w = coordinators(tmp_path, [], {"run-w": {"status": "FINISHED", "updatedAt": "2026-10-18T19:00:00Z"}},
+                                 workers={W1_: st}, notes=notes)
+    w.sweep(lambda r: None)
+    st.update(status="IDLE", updatedAt="2026-10-18T19:45:00Z")
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert [r for r in records(tmp_path) if r["kind"] == "dropped"] == [], "it ran and stopped: nothing was dropped"
+    st.update(updatedAt="2026-10-18T20:05:00Z")
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert [r["since"] for r in records(tmp_path) if r["kind"] == "dropped"] == ["2026-10-18T20:05:00Z"]
+
+
 def test_the_workers_heard_most_recently_are_read_first_when_more_are_new_than_a_sweep_reads(tmp_path, monkeypatch):
     """A backlog of workers heard days ago, sorted ahead by id, kept a reviewer heard today from being read for hours."""
     monkeypatch.setattr(W, "WORKERS_NEW", 1)

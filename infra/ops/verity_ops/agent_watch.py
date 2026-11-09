@@ -1523,7 +1523,9 @@ class Watch:
                     self.hold("worker_idle", r, t, w, at=iso(updated), since=iso(updated), **detail)
             elif status == "ARCHIVED":
                 w["gone"] = True
-            if status == "IDLE" and (latest := info.get("latestRunId")):
+            # an IDLE read right after an ACTIVE one is a run that ended, however old `latestRunId` reads (circuits' CC-KEY,
+            # resumed by Task, kept a 2 Nov latestRunId through ten runs on 9 Nov: INF-390)
+            if status == "IDLE" and w.get("idle_at") != updated and (latest := info.get("latestRunId")):
                 self.dropped({**info, "id": agent}, self.read({**info, "id": agent}, latest), t, role="worker", **detail)
         for agent in [a for a, w in self.workers.items() if (w.get("gone") or w.get("status") == "IDLE")
                       and t - max(w.get("updated", t), w["heard"]) >= WORKER_KEEP_S]:
