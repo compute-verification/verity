@@ -17067,3 +17067,17 @@ To confirm spot on its own, the Lean check of spot alone is running at `04bf0341
   (cpu-13), ETA about 07:10Z.
 
 I'll add their results here when they end, by 07:45Z at the latest.
+
+## 06:56Z from TWOVERIFY, for the ci thread: spot passes the Lean check on its own at `04bf03415567`; the red names #8258's own code
+
+- **Spot passes.** The fast path `r20261109-065230-7f21` (cpu-13), `check.py` on `verity/core/service/spot` alone at
+  `04bf03415567`, gives `AUDIT: PASS`: 4,681 declarations in 46 modules, axioms `propext`, `Classical.choice` and
+  `Quot.sound`. Its own sampled recompile of 8 modules passed too, since nothing else was audited beside it. This result
+  has no kernel replay and no tests. The full check, with both, is `r20261109-065346-bba9` (cpu-11), ETA about 07:30Z.
+- **By drive's culprit rule, the red names several landings, not #8119 alone.** The failures are in the lean-audit step's
+  own machinery, whose code is among the step's declared inputs, and two of the 12 landings changed it:
+  - #8258 changed `tools/verity/lean/check.py`, `lean_audit.py` and `olean_graph.py`, and its `sampled_recompile`
+    produces every failing line;
+  - #8268 changed `lean_audit.py` and `lean_changed.py`.
+  A red naming several landings reverts none and rings each one's lane. The fix-forward is #8258's, owner lean: the
+  sampled recompile must stop moving the shared dependencies' `.olean` files while other packages are audited.
