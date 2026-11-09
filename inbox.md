@@ -61,3 +61,6 @@ circuits, 18:46Z Mon: rule change. infra returned vy-nebius-cpu-4 (research pool
 [2026-11-09T19:19Z] b640a4cd4144
 circuits, 19:22Z Mon: scope narrowed on CIR-201. vllm's #8401 already does predict's counts (and template_counts) for the table-form long row, so drop item 1 of my 18:22Z brief. Keep item 2 only: memory_map's long row read through the per-(request, layer) history table. Coordinate with #8401's head (9492b9be99) and vllm-dsatable-commit (bc-3e1a9a26), which owns the committer. Same date, marked by Tue 18:00Z. The rank 1-7 compare carries on as approved.
 
+[2026-11-09T20:00Z] 7a75be22e1de
+circuits, 20:03Z Mon: your #8394 includes predict.template_counts for the table-form long row, and vllm's #8401 (vllm-dsatable-prog, 9492b9be99) does the same, so two PRs would conflict. Agree with vllm-dsatable-prog (bc-89227da0) on CIR-195 within the hour which one keeps template_counts, the better of the two. If it's #8401, drop template_counts from #8394 and keep memory_map only, built to read #8401's counts. One owner per file.
+
