@@ -147,6 +147,35 @@ def _lag(held: tuple[tuple[float, float], ...], start: float, end: float, every:
     return out
 
 
+class Index:
+    """Which of ``tasks`` a change touches, as `model.touches` reads their inputs, without a scan of every input."""
+
+    def __init__(self, tasks: tuple[Task, ...]) -> None:
+        self.exact: dict[str, list[int]] = {}
+        self.globs: list[tuple[str, int]] = []
+        self.roots: list[int] = []
+        for i, t in enumerate(tasks):
+            for s in t.inputs:
+                if s in lq.ROOTS:
+                    self.roots.append(i)
+                elif lq.GLOB.intersection(s):
+                    self.globs.append((s, i))
+                else:
+                    self.exact.setdefault(s.rstrip("/"), []).append(i)
+
+    def touch(self, paths: frozenset[str]) -> frozenset[int]:
+        """The indices of the tasks whose inputs a change to ``paths`` touches."""
+        hit: set[int] = set(self.roots) if paths else set()
+        for p in paths:
+            parts = p.split("/")
+            for i in range(1, len(parts) + 1):
+                hit.update(self.exact.get("/".join(parts[:i]), ()))
+        for g, i in self.globs:
+            if i not in hit and lq.touches(paths, frozenset({g})):
+                hit.add(i)
+        return frozenset(hit)
+
+
 def _bit(pr: int, head: str) -> int:
     return int.from_bytes(hashlib.sha512(f"{pr}@{head}".encode()).digest()[:8], "big")
 
@@ -165,17 +194,7 @@ class _Sim:
         self.tasks = world.tasks
         self.names = [t.name for t in self.tasks]
         self.index = {t.name: i for i, t in enumerate(self.tasks)}
-        self.exact: dict[str, list[int]] = {}
-        self.globs: list[tuple[str, int]] = []
-        self.roots: list[int] = []
-        for i, t in enumerate(self.tasks):
-            for s in t.inputs:
-                if s in lq.ROOTS:
-                    self.roots.append(i)
-                elif lq.GLOB.intersection(s):
-                    self.globs.append((s, i))
-                else:
-                    self.exact.setdefault(s.rstrip("/"), []).append(i)
+        self.touch = Index(self.tasks).touch
         self.rng = random.Random(world.seed)
         self.state = lq.State.start(main)
         self.now = 0.0
@@ -214,17 +233,6 @@ class _Sim:
             raise ValueError(f"Arrival #{pr}@{head} breaks tasks the world doesn't list: {unknown}")
         self.info[(pr, head)] = (paths, frozenset(self.index[b] for b in breaks if self.index[b] in touch), touch)
         self.row[(pr, head)] = rid
-
-    def touch(self, paths: frozenset[str]) -> frozenset[int]:
-        hit: set[int] = set(self.roots) if paths else set()
-        for p in paths:
-            parts = p.split("/")
-            for i in range(1, len(parts) + 1):
-                hit.update(self.exact.get("/".join(parts[:i]), ()))
-        for g, i in self.globs:
-            if i not in hit and lq.touches(paths, frozenset({g})):
-                hit.add(i)
-        return frozenset(hit)
 
     def push(self, t: float, kind: str, payload) -> None:
         heapq.heappush(self.heap, (t, self.n, kind, payload))
