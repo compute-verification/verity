@@ -260,13 +260,16 @@ HELDOUT_OPENINGS = (
 CALIBRATION = PROMPTS[8:] + CALIBRATION_TEXTS
 HELDOUT = PROMPTS[:8] + HELDOUT_TEXTS + HELDOUT_OPENINGS
 
-RUN_UNITS = (" and", " of", " to", " a", " in", " is", " that", "<|im_end|>")
-RUN_LENGTH = 512
+RUN_UNITS = {"calibration": (" and", " of", " to", " a", " in", " is", " that", "<|im_end|>"),
+             "heldout": (" the", "<|endoftext|>", ".", ",", "哈哈哈哈", "0", " I", " de")}
+RUN_LENGTHS = {"calibration": (512,), "heldout": (8, 16, 24, 32, 64, 128, 512)}
 
 
-def run_texts() -> list[tuple[str, str]]:
-    """Calibration texts with a long run of one token after an ordinary opening, then ordinary text: a long enough run
-    forms the sink again, and the text after it puts sinks on ordinary tokens (`lm.long_runs`); for the sink class's
-    boxes, of other tokens than the runs a held-out check repeats."""
-    return [(f"run:{u.strip()}", "The log continues:" + u * RUN_LENGTH + " " + CALIBRATION_TEXTS[i])
-            for i, u in enumerate(RUN_UNITS)]
+def run_texts(split: str) -> list[tuple[str, str]]:
+    """Texts with a run of one token after an ordinary opening, then an ordinary text of `split`: a long enough run
+    forms the sink again, and the text after it puts sinks on ordinary tokens (`lm.long_runs`). Calibration's runs are
+    long and of other tokens than the held-out ones, which also run short of the threshold."""
+    tails = CALIBRATION_TEXTS if split == "calibration" else HELDOUT_TEXTS
+    units, lengths = RUN_UNITS[split], RUN_LENGTHS[split]
+    return [(f"run:{u.strip()}x{n}", "The log continues:" + u * n + " " + tails[(i * len(lengths) + j) % len(tails)])
+            for i, u in enumerate(units) for j, n in enumerate(lengths)]
