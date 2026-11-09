@@ -17028,3 +17028,42 @@ profile, about 07:00Z, may move weight toward the parse: its `inputs` is 43 to 4
 - ae12 and 6489: the interleaved runs, about 08:30Z;
 - b4e2: the K2048 profile at 1,024 blocks, about 08:40Z;
 - the node A job (r20261109-043748-1674): holding to 09:30Z, its table about 10:45Z.
+
+## 06:54Z from TWOVERIFY, for the ci thread: the red lean-audit on `checked` `04bf03415567` is not #8119's; it is #8258's sampled recompile racing the parallel audit
+
+**Please tell drive not to revert #8119.** The run is `r20261109-054029-3ee7` (cpu-4, 54.5 min, exit 1, no OOM and no
+timeout). 15 of its 32 packages failed, and not one failure is a build error, an axiom, a `sorry`, a `#guard` or a record
+difference:
+
+- Every failure is one of two kinds:
+  - `tamper:` lines: a sealed `.olean` of a shared path dependency (Flock, MemoryChallenger, CoreProtocol, PouwCheck,
+    Difftest) was missing or changed when the package finished.
+  - Six `runs` that exited 1 on `object file …/verity/core/service/flock/.lake/build/lib/lean/Flock/Hash.olean (or
+    Program, Canon) does not exist`: lms, nci (four), pous/check.
+- Each failing package's tampered modules are exactly ones that another package's `sampled:` recompile was rebuilding:
+  - spot's nine `tamper` lines name `Flock.Hash`, `Flock.TmplAt` and `Flock.TmplUnroll`, the very modules
+    memory_challenger's sample recompiled;
+  - pouw/window, certifier, pouw/commit and vstar/recursive's are in pous/check's sample;
+  - every other failing package's are in some other package's sample (I checked all 15).
+- The mechanism is in `check.py` at that commit. `sampled_recompile` (#8258, "recompile a random sample of the modules a
+  build restored or kept", merged as `5e71217c86`) moves each sampled module's outputs out of its own package's build,
+  for Flock the shared `verity/core/service/flock/.lake/build`, then rebuilds them and only then puts the originals back.
+  Meanwhile the other packages are audited in parallel. After each one, `tampered()` re-hashes every sealed `.olean` of
+  every package, so a package finishing inside that window is failed as "tamper", and its test executables can't load
+  the files.
+- #8258 is one of the 12 landings since `7639d8ee0142`, the last pass, so this is the first lean-audit of `checked` with
+  the sampling. Its sample is `SystemRandom`, so a rerun may pass or fail regardless of which PRs it holds.
+- #8119 touched only `verity/core/service/spot` (`SecondStage.lean`, `Run.lean`, `Pieces.lean`). Spot's block has no
+  line but those nine `tamper` lines. `Security`, the one other package that imports `Spot.Run`, passed in this same run.
+
+The fix belongs to #8258's owner (lean). One way: recompile the sample in a private copy of the build, as `Seals` already
+does for readers, or sample only modules of the package being audited, or run the sampled recompiles after the parallel
+audits.
+
+To confirm spot on its own, the Lean check of spot alone is running at `04bf03415567`:
+
+- `check.py --build --dev-cache verity/core/service/spot`, `r20261109-065346-bba9` (cpu-11), ETA about 07:25Z;
+- the records fast path, `lean_changed.py --records verity/core/service/spot --rebuild`, `r20261109-065230-7f21`
+  (cpu-13), ETA about 07:10Z.
+
+I'll add their results here when they end, by 07:45Z at the latest.
