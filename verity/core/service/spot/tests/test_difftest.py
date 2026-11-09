@@ -393,6 +393,7 @@ EVIDENCE_KEYS = {"draw", "instances", "proved_units", "receipt", "served", "sess
                  "statement", "verdicts"}
 RATIO = re.compile(r"(0|[1-9][0-9]*)(?:/(0|[1-9][0-9]*))?")
 DIGITS = re.compile(r"[0-9]+")
+HEX_DIGITS = re.compile(r"[0-9a-f]*")
 
 
 def _nat(x) -> bool:
@@ -1090,6 +1091,25 @@ def file_population(j):
     except (P.QueryRefused, ValueError) as e:
         raise D.Reject(str(e)) from None
     return {"why": PF.population_why(indices, strata)}
+
+
+def tables_held(j):
+    """`OneStageZk.tablesPiece` (`proofs.tables_why`): v2's refusal of blobs under `digests` (even-length lowercase hex)
+    whose pinned MUFU tables are not the lookups of a circuit whose META is ``{"lookups": lookups}`` (`proofs.lookups_of`;
+    ``{}`` without ``lookups``)."""
+    j = _json(j)
+    ds = j.get("digests") if isinstance(j, dict) else None
+    if not isinstance(ds, list):
+        raise D.Reject("digests is not a list")
+    if not all(isinstance(d, str) for d in ds):
+        raise D.Reject("digests is not a list of hex strings")
+    if not all(len(d) % 2 == 0 and HEX_DIGITS.fullmatch(d) for d in ds):
+        raise D.Reject("not lowercase hex")
+    try:
+        lookups = PF.lookups_of({"lookups": j["lookups"]} if "lookups" in j else {})
+    except ValueError as e:
+        return {"why": str(e)}
+    return {"why": PF.tables_why(lookups, ds)}
 
 
 def bound(j):
@@ -2304,6 +2324,8 @@ POPULATION_ORDER = ("population-order: the program's proof blocks under the quer
                     "population units in order")
 #: `OneStageZk.sessionTables`: the tables of the one session v2 reads, its statement's (`proofs.STATEMENT`) one
 V2_TABLES = ["circuit"]
+#: A stand-in circuit file: v2 reads its META alone, for the lookups it holds the blobs' tables to (`OneStageZk.tablesHeld`)
+STAND_IN_CIRCUIT = b"not a circuit file\nMETA {}\n"
 
 
 #: `OneStageZk.KEY_PARAMS`
@@ -2373,7 +2395,7 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
     rng = random.Random("v2-verdicts")
-    circuit, public = b"not a circuit file", _public_of(rec)
+    circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
 
     def audit(trees: int, keys: list[str] | None = None) -> tuple[Drawn, dict, dict, dict]:
         ch, d, coins = _challenger_draw(rng, s, law, rec, trees, keys)
@@ -2461,7 +2483,7 @@ def test_v2_refuses_a_population_out_of_order(server, server_v2):
     of order (`test_the_run_refuses_a_population_out_of_order`); `SETUPS[3]`'s audit goes on to its session's
     verdict."""
     law = {"k": 2, "law": "subset"}
-    circuit = b"not a circuit file"
+    circuit = STAND_IN_CIRCUIT
     for s, ok in ((SETUPS[4], False), (SETUPS[5], False), (SETUPS[3], True)):
         assert P.in_order(s.program, s.query, s.population) is ok, s.templates
         rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
@@ -2498,7 +2520,7 @@ def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
     law = {"k": 2, "law": "subset"}
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
-    circuit, public = b"not a circuit file", _public_of(rec)
+    circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
     for order in ORDERS:
         ch, d, coins = _challenger_draw(random.Random(f"v2-order-{order}"), s, law, rec, 1, order=order)
         proved = DR.proved(d)
@@ -2543,7 +2565,7 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
     after = bytes.fromhex(R.digest(rec))
-    circuit, public = b"not a circuit file", _public_of(rec)
+    circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
     failed = {"flock-verify/s": {"accepted": False, "of_record": True}}
 
     def audit_of(d: Drawn, draw: dict, coins, **params) -> dict:
@@ -3268,6 +3290,17 @@ def file_population_publics(draw) -> dict:
 FILE_POPULATION = D.Port(PIECES, "file_population", file_population,
                          st.one_of(file_populations(), file_populations(), file_population_publics(),
                                    file_population_publics(), JSON), package=PACKAGE)
+TABLE_DIGEST = st.one_of(st.sampled_from(sorted(PF.MUFU_SHA512.values())), st.binary(max_size=64).map(bytes.hex))
+LOOKUPS = st.one_of(st.dictionaries(st.one_of(st.sampled_from(sorted(PF.MUFU_SHA512)), st.text("abx", max_size=4)),
+                                    st.just({}), max_size=5),
+                    st.none(), st.integers(-9, 9), st.text("abx", max_size=4), st.lists(st.sampled_from(sorted(PF.MUFU_SHA512))))
+TABLES_HELD = D.Port(PIECES, "tables_held", tables_held, st.one_of(
+    st.builds(lambda ds, lk: {"digests": ds, "lookups": lk}, st.lists(TABLE_DIGEST, max_size=5), LOOKUPS),
+    st.builds(lambda ds, lk: {"digests": ds, "lookups": lk}, st.lists(TABLE_DIGEST, max_size=5), LOOKUPS),
+    st.lists(TABLE_DIGEST, max_size=5).map(lambda ds: {"digests": ds}),
+    st.lists(st.one_of(TABLE_DIGEST, st.sampled_from(["0", "AB", "0g", PF.MUFU_SHA512["rcp"].upper()]), st.integers(0, 3)),
+             min_size=1, max_size=4).map(lambda ds: {"digests": ds}),
+    JSON), package=PACKAGE)
 
 STRATA = st.lists(st.builds(lambda name, size, dk: {"k": max(0, size - dk), "name": name, "size": size},
                             st.sampled_from(["a", "b", "c", "unit"]), st.integers(0, 14), st.integers(0, 14)),
@@ -4805,7 +4838,7 @@ pieces = D.server_fixture(DECODE)
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATES, 300),
               (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
-              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (FILE_POPULATION, 400),
+              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (FILE_POPULATION, 400), (TABLES_HELD, 300),
               (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
@@ -6271,7 +6304,7 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
         out = server.exchange(case)
         assert out == answer(case) | {"reason": out["reason"]} and out["verdict"] == "reject", (kind, out)
         assert out["reason"].startswith(stage) and "soundness statement doesn't cover" in out["reason"], (kind, out)
-        circuit, public, record = b"not a circuit file", b"not a public file", b"{}"
+        circuit, public, record = STAND_IN_CIRCUIT, b"not a public file", b"{}"
         base = {k: v for k, v in evidence.items() if k != "verdicts"}
         d = Drawn(random.Random(kind), params=[DEPLOYED])
         v2 = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec),

@@ -34,6 +34,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   more (`OneStageZk.fitsWhy`, `OneStageZk.drawFitsWhy`), which v2 refuses at `2^64`;
 * `file_population`: why the registration's population over a program and query is not a public file's units in order
   (`FilePart.why`);
+* `tables_held`: v2's refusal of blobs whose pinned MUFU tables are not a circuit's lookups, on a META's `lookups` and
+  the blobs' digests (`OneStageZk.tablesHeld`);
 * `bound`: the exact bounds on incorrect proof blocks at δ;
 * `harm_bound`: the harm they hold at δ in closed form (`Bound.densityBound`);
 * `max_harm`: a certificate's bracket around `Flock.Guarantees.JointStratified`'s exact supremum of that harm
@@ -764,7 +766,7 @@ def table : List (String × (Json → V Json)) :=
    ("registration", registration),
    ("registered", registered),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
-   ("file_population", FilePart.piece),
+   ("file_population", FilePart.piece), ("tables_held", OneStageZk.tablesPiece),
    ("check_proved", checkProved),
    ("select_second", selectSecond), ("second_statements", secondStatements), ("replay_links", replayLinks),
    ("replay_wires", replayWires),
