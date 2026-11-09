@@ -156,9 +156,10 @@ probability at most `δ` (`Served.UndetectedLe`), then the outsider steals the w
 `Pr[gen ω ∉ Typ] + |S| · N^(λ - 1) · p + δ + Pr[a release isn't faithful]`. `|S|` is the fault channel's covert
 strings: each window's interior pattern or, where the cut `κ` cuts the window's pattern, `κ`'s hint, times the served
 channel's at the overwrite budget `(L + 1) · |O|`. So interior faults cost `N^λ = 2^(λ · C_arb)`, `N` and `λ` reading
-only the interior patterns, and a fault `κ` cuts costs only its hint and needs no `FaultedUseHard`, where
-`TheftServed` charges every value their reach `E` can overwrite. At `Cut.none` every pattern is interior. `φ₀` is the
-empty pattern (`NoFault`). -/
+only the interior patterns, and a fault `κ` cuts adds only its hint to `|S|` and nothing to `N`, needing no
+`FaultedUseHard`, where `TheftServed` charges every value their reach `E` can overwrite. `N^(λ - 1)` still multiplies
+every string, those whose faults are all cut included. At `Cut.none` every pattern is interior. `φ₀` is the empty
+pattern (`NoFault`). -/
 def TheftFaulted : Prop :=
   ∀ {Ω R Θ Q Adv O V Tick F Θ' : Type} [Fintype Ω] [Fintype R] [Fintype Adv] [Inhabited Adv] [Fintype O]
     [DecidableEq O] [Fintype V] [Fintype Tick] [Inhabited Tick] [Fintype F]

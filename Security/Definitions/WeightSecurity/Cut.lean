@@ -25,8 +25,9 @@ the hints, in place of the patterns: the faults cost their hints' bits, with no 
   would;
 * `Cut.Interior κ Cf size φ₀`: the patterns `κ` doesn't cut, and `Cut.Interiors`, those as a pattern type: the only
   ones `TheftFaulted` takes `FaultedUseHard` at, its pattern count among them. Its fault channel (`faultChannel`)
-  carries a hint for a window whose pattern `κ` cuts, so those faults cost only their hints. `Cut.none` cuts nothing,
-  and `Cut.map` reads a cut through an encoding of the answers (a token list as the release's `O → V`).
+  carries a hint for a window whose pattern `κ` cuts, so those faults count in its strings by their hints and not in
+  the pattern count. `Cut.none` cuts nothing, and `Cut.map` reads a cut through an encoding of the answers (a token
+  list as the release's `O → V`).
 
 The cuts are stated for autoregressive decoding (`decode`): position `i`'s token is a function of the tokens before it,
 which holds when the release is tokens only, nothing decodes ahead, and no state is shared across requests. Two
