@@ -194,6 +194,18 @@ paths = ["integrations/vllm/verity_vllm/pipeline"]
 
 [[tool.verity.tests.reads]]
 tests = [
+    "tests/check/test_fold_sampler_construction.py",
+    "tests/check/test_g4_addressed_instances.py",
+    "tests/pipeline/test_circuit_db.py",
+    "tests/pipeline/test_single_request_build_path.py",
+    "tests/program/test_sampling_rows.py",
+    "tests/regression/test_step_segmentation.py",
+    "tests/regression/test_store_io.py",
+]
+paths = ["tools/research/src/research"]
+
+[[tool.verity.tests.reads]]
+tests = [
     "tests/check/test_gates_fixtures.py",
     "tests/engine/test_env.py",
     "tests/observe/test_fold_build_versions.py",
@@ -249,16 +261,6 @@ tests = [
     "tests/pipeline/test_serve_seal.py",
 ]
 paths = ["integrations/vllm", "verity"]
-
-[[tool.verity.tests.reads]]
-tests = [
-    "tests/pipeline/test_circuit_db.py",
-    "tests/pipeline/test_single_request_build_path.py",
-    "tests/program/test_sampling_rows.py",
-    "tests/regression/test_step_segmentation.py",
-    "tests/regression/test_store_io.py",
-]
-paths = ["tools/research/src/research"]
 
 [[tool.verity.tests.reads]]
 tests = [

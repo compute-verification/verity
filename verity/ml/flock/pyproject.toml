@@ -67,6 +67,7 @@ untraced = [
     "tests/test_ligerito_folds.py",
     "tests/test_pod_lean_verdicts.py",
     "tests/test_pouw_rows.py",
+    "tests/test_proof_server.py",
     "tests/test_read_tmpl.py", "tests/test_read_tmpl_stager.py",
     "tests/test_rec_algebra.py",
     "tests/test_rec_inner_stage.py",
@@ -242,6 +243,7 @@ paths = ["verity/core/protocols/pouw/lean/check/models.json"]
 tests = ["tests/test_partition_units.py", "tests/test_rec_shape.py"]
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
+    "integrations/vllm/verity_vllm",
     "verity/core/protocols/certifier",
     "verity/core/protocols/pous",
     "verity/ml",
@@ -262,10 +264,6 @@ paths = [
     "verity/ml/flock/python/verity_flock/templates",
     "verity/ml/windows",
 ]
-
-[[tool.verity.tests.reads]]
-tests = ["tests/test_rec_shape.py"]
-paths = ["integrations/vllm/verity_vllm"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_sha512_leaves.py"]

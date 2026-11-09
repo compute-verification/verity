@@ -219,7 +219,7 @@ tests = ["tests/test_hidden_zk_summarize_rows.py"]
 paths = ["benchmarks/pouw/hidden_zk"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_partials.py"]
+tests = ["tests/test_partials.py", "tests/test_served_h1_partials.py"]
 paths = [
     "benchmarks/pouw/served_h1/partials.py",
     "integrations/vllm/verity_vllm",
@@ -252,4 +252,13 @@ paths = ["verity/core/protocols/pouw/lean/check/tests"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_theory_cpw.py"]
-paths = ["verity/core/protocols/pouw", "verity/ml/circuits", "verity/ml/kernels"]
+paths = [
+    "benchmarks/pouw/eps_budget.py",
+    "benchmarks/pouw/lean_headline.py",
+    "benchmarks/pouw/machine_model/verity_machine_model",
+    "verity/core/protocols/pouw",
+    "verity/ml/circuits",
+    "verity/ml/kernels",
+    "verity/ml/protocols/__init__.py",
+    "verity/ml/protocols/pouw",
+]
