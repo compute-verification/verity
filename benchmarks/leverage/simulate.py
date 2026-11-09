@@ -421,6 +421,7 @@ def main() -> int:
                     raw = int((ys[j] != yh).sum())
                     rec = {"model": a.model, "prompt": pi, "offset": off, "t0": t0, **f, **per[j],
                            "flip": bool(ys[j, 0] != yh[0]), "raw": raw, "silent": raw == 0, "direct": int(D0[j].sum()),
+                           "direct_at": D0[j].nonzero().flatten().tolist(),
                            "forced_bits": float(forced[j]),
                            "edit_bits": float(code_e[best]) if best is not None else float("inf"),
                            "edit_direct": int(De[best].sum()) if best is not None else None,
