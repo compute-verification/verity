@@ -136,7 +136,9 @@ template-major, so each cell is a range of the interior's proof blocks and the s
 holds of that code (`SamplingDeploy.ksTwo_code`, `Security/Proofs/Flock/SamplingGeneric/TwoCode.lean`). Its premises
 are that the registration is the design's (`RegMatchesTwo`), that each stage's coin bytes are uniform and the sessions'
 rounds don't move them, and the refusals, interior roots and sessions that one-stage's `SamplingDeploy.ks_masked` takes.
-Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage runs.
+Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage runs. A boundary record may commit a
+step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of positions of its requests), which round 2
+refuses unless it covers the replay blocks in order and each request's positions in order (`second-schedule`).
 
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (a tile family built with `each` over the proof blocks nests in them by construction).
