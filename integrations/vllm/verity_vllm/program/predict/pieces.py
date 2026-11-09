@@ -64,6 +64,7 @@ class Pieces:
     shared: int
     callees: dict[str, str] = field(repr=False)
     header: str = ""
+    entries: dict[str, list[str]] | None = field(default=None, repr=False)
 
     def classes(self) -> list[list[str]]:
         """The layers grouped by equal parts, in order of first layer."""
@@ -132,8 +133,9 @@ def _weight_parts(t: RecordType) -> tuple[list[int], list[tuple[int | None, str]
     return list(field_starts(t)), NLs
 
 
-def pieces(program, world: int) -> Pieces:
-    """`program` (a request Program, `build.build_program`'s) by part, at a tensor-parallel world of `world` (module docstring)."""
+def pieces(program, world: int, entries: bool = False) -> Pieces:
+    """`program` (a request Program, `build.build_program`'s) by part, at a tensor-parallel world of `world` (module docstring).
+    `entries`: also each part's lines as written, to find where two parts differ."""
     body = program.fn.body
     params = body.params
     wi = next((i for i, (n, _) in enumerate(params) if n == WEIGHTS), None)
@@ -159,6 +161,13 @@ def pieces(program, world: int) -> Pieces:
     skey: dict[int, str] = {}
     count = [0] * (E + 1)
     streams = [hashlib.sha512() for _ in range(E + 1)]
+    lines: list[list[str]] | None = [[] for _ in range(E + 1)] if entries else None
+
+    def write(p: int, x) -> None:
+        b = repr(x)
+        streams[p].update(b.encode() + b"\n")
+        if lines is not None:
+            lines[p].append(b)
     fn_key: dict[int, str] = {}
     ty_key: dict[int, str] = {}
     keep: list = []
@@ -302,26 +311,26 @@ def pieces(program, world: int) -> Pieces:
         cur = p
         lab[k], local[k] = p, count[p]
         count[p] += 1
-        s = streams[p]
         if (p, launch) not in started:
             started.add((p, launch))
-            s.update(repr(("run", launch)).encode() + b"\n")
+            write(p, ("run", launch))
         for key in pending:
-            s.update(repr(("shared", key)).encode() + b"\n")
+            write(p, ("shared", key))
         pending = []
-        s.update(repr(entry(n, p)).encode() + b"\n")
+        write(p, entry(n, p))
     passes = len({r for r, _kind, _part, _q in peers.values()})
     if peers and launch + 1 != passes:
         raise ValueError(f"the body splits into {launch + 1} launches, its peer Inputs into {passes} passes: " + "; ".join(splits))
     for key in pending:
-        streams[E].update(repr(("shared", key)).encode() + b"\n")
-    streams[E].update(repr(("ret", tuple(part_key(p, E) for p in _flat(body.ret)))).encode() + b"\n")
+        write(E, ("shared", key))
+    write(E, ("ret", tuple(part_key(p, E) for p in _flat(body.ret))))
 
     root_id = descriptor_id(program.root)
     callees = {fid: definition_digest(definition_entry(fn)) for fid, fn in definitions(program).items() if fid != root_id}
     header = hashlib.sha512(repr((descriptor_id(program.fn), tuple((n, tkey(t)) for n, t in params))).encode()).hexdigest()
     return Pieces(layers=NL, launches=launch + 1, parts={_part_name(p, NL): s.hexdigest() for p, s in enumerate(streams)},
-                  sizes={_part_name(p, NL): count[p] for p in range(E + 1)}, shared=len(skey), callees=callees, header=header)
+                  sizes={_part_name(p, NL): count[p] for p in range(E + 1)}, shared=len(skey), callees=callees, header=header,
+                  entries={_part_name(p, NL): x for p, x in enumerate(lines)} if lines is not None else None)
 
 
 def compare(model: Pieces, window: Pieces, at: int) -> dict:
