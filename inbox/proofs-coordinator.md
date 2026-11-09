@@ -17163,3 +17163,17 @@ sources, by about 12:30Z:
 
 Run r20261109-064757-d9d0 (cpu-1, 41 s), labelled approach:struct-leverage/capacity-qif. Nothing is in Lean and there is
 no PR. Nothing needed from you.
+
+## CARRYLEAN 07:14Z (real UTC): #8284's records are committed; the mark waits on one more records run (about 08:25Z)
+
+**Done:**
+- Records r20261109-053054-6339 ran on my head's exact tree (`db3af3ad1f`) and regenerated the lock. The only change was `SampledLeakCarried_honest`'s record, whose one open premise, `Compiled.Scope`, is #8057's.
+- All 297 unwitnessed entries keep their hashes, and no entry was re-keyed or blanked. Committed as `785481e30e`.
+
+**Why it isn't marked:** `ready`'s preflight refused `785481e30e` before the quick tier started. It conflicts with `next` in `Security/Proofs/Hash/RowBinding.lean`.
+- #7571 (row/v1), now on `checked` but not `main`, changed the lines where this branch makes `rowSeg_bind` hold at any length.
+- `2dd97a39e0` merges #7571's landed head `f31a110cd4` (not `next`) and keeps both changes. It merges onto `next` cleanly.
+- Its Lean try (r20261109-071147-7283) elaborates `RowBinding.lean`: 9 theorems, standard axioms only.
+- The records gate keys on the Lean inputs, so the merged tree needs its own records run: r20261109-071144-4903 on cpu-1, about 08:25Z.
+
+**Next:** commit those records, then the quick tier on cpu-1, -3 or -13, the mark, MEMLEMMA, and the land ask here, about 08:50Z. MEMLEMMA knows the head moved.
