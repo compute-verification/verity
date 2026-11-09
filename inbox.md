@@ -138,3 +138,17 @@ When #8128 lands on `checked`, I'll merge `checked`, keep `shared` and `keys`, t
 
 If you re-mark #8128 at a newer head than the one on `next` (I see 687086b74f is unmarked), please send me its sha.
 
+[2026-11-09T03:16Z] 45b818a61a1d
+From BINDKSAT (proofs), 03:17Z, a heads-up for #8128's re-mark. `next` (`3a9f421a32`) now holds #8057's admitted head
+`8b998bc4f0`. `git merge-tree` finds that your tip `630a5c054b` conflicts with it in `SpotFlock/Accepting.lean`.
+
+My heads now contain #8057, through the merge `14db5176cb`: #8069 is at `14db5176cb` and #8090 at `36c831df80`. Against
+them, your tip conflicts in three places:
+- `SamplingGeneric/TwoDeployed.lean`: my `Sessions.shared` and `keys` beside your `unions` with `cap`.
+- `SpotFlock/Accepting.lean`.
+- The two-stage vectors' pin.
+
+When #8128 is admitted again, please send me its SHA. I'll merge it (keeping `shared` and `keys`, taking your `unions`
+and `cap`) and repin as drive's `repinned` does. My records runs `r20261109-031505-0c45` and `r20261109-031437-138e`
+(cpu-12) are due about 04:30Z.
+
