@@ -91,12 +91,16 @@ def test_the_filler_forgery_is_v_stars_algebra_alone(inner, tmp_path):
 def staged(tmp_path_factory):
     """A Gemm_v2{K=64} GemmCoordinate class staged in both layouts, 4 x 4 tiles (``tile``, `stage_tiled`) and one coordinate an
     instance (``unit``, `stage`): at 8 and at 5 instances unpadded, and padded to 8 with 5 real."""
+    from verity.ml.circuits.codec import descriptor_id
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops import gemm as G
+
     from verity_flock import class_statement as CS
     from verity_flock import partition_units as PU
 
     CS.cache_slot_circuits()
-    defs = {'Gemm_v2{K=64,N=4096,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}': 1}
-    program, _calls, _prov = CS.distinct_calls(None, None, defs, None)
+    gemm = bind(G.Gemm, K=64, N=4096, **G.GEMM_HOPPER)
+    program, _calls, _prov = CS.distinct_calls(None, None, {descriptor_id(gemm): 1}, None, definition={descriptor_id(gemm): gemm}.get)
     units = PU.partition_units(program, "q-word")
     ((s, cl),) = units.classes().items()
     key = PU.derive(PU.SOURCE, PU.DOMAIN, {"program": "test", "seed": 0})

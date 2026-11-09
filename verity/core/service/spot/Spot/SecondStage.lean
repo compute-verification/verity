@@ -15,6 +15,14 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
 * **Its checks**, each a code (`stmtCodes`, `stmtFailures`):
   - `second-statement`: it is not one;
   - `second-template`: its template is none of the parts', or an earlier statement's;
+  - `second-verified`: no accepted verdict of record names its header, its registered reads and its sample: the
+    SHA-512 of the canonical JSON of the public file's header and of the `--registered` file it checked the session
+    against (`public_header_sha512`, `registered_sha512`, none for none) and the sample it checked it at (`unit_draw`;
+    `Checked`, `verifiedOf`). So the checks below read only a header, reads and a sample that were verified;
+  - `second-tables`: an accepted verdict of record naming its header, registered reads and sample set its session up as
+    other than one Flock table (`session_tables`, `tablesOk`): round 2 reads one session of one table for each part, so
+    a session split across tables (Flock's `tableDraw`) is refused, as one split across statements is
+    (`second-template`);
   - `second-header`: its header is not the reference header the auditor's params give its template (`Own.refs`, the
     registered reference statement's, fixed before the run) placed in the run (`atRun`), both with the run's fields
     blanked (`RUN_FIELDS`: `instances`, `units.indices`, `frame_v3.roots` and `frame_v3.domain_ids`, which the next two
@@ -146,6 +154,38 @@ def Stmt.ofJson? (j : Json) : Option Stmt :=
   | .str t, .obj h, .obj d, .obj r => some ⟨t, .obj h, .obj d, .obj r⟩
   | _, _, _, _ => none
 
+/-- What an accepted verdict of record names of the session it checked (`flock-verify verify`'s verdict): the digests
+of the public file's header and of the `--registered` file it checked the session against (`public_header_sha512`,
+`registered_sha512`, null for none), the sample it checked it at (`unit_draw`) and the number of tables it set the
+session up as (`session_tables`). -/
+structure Checked where
+  header : String
+  registered : Json
+  draw : Json
+  tables : Json
+
+/-- What each accepted verdict of record among `verdicts` that names a header names (`Checked`). -/
+def verifiedOf (verdicts : Array (String × Json)) : Array Checked :=
+  verdicts.filterMap fun (_, v) =>
+    match getD v "public_header_sha512" with
+    | .str h =>
+      if truthy (getD v "of_record") && jeq (getD v "accepted") (.bool true) then
+        some ⟨h, getD v "registered_sha512", getD v "unit_draw", getD v "session_tables"⟩
+      else none
+    | _ => none
+
+/-- One table: the `session_tables` a verdict of record names of a session round 2 reads. -/
+def ONE_TABLE : Json := Lean.toJson (1 : Nat)
+
+/-- What a verdict of record that checked statement `s`'s session, as round 2 reads one, names of it (`Checked`): its
+header's digest, its registered reads' (null for none), its sample and one table; none when one isn't canonical JSON. -/
+def Stmt.checked (s : Stmt) : Option Checked := do
+  let h ← (canonSha512 s.header).toOption
+  let r ← match s.registered with
+    | .null => pure Json.null
+    | r => (canonSha512 r).toOption.map Json.str
+  pure ⟨h, r, s.draw, ONE_TABLE⟩
+
 /-- A link of the two-stage design: template `template`'s session port `port` reads the boundary registration's port
 `value`. -/
 structure Link where
@@ -169,8 +209,8 @@ def linksOf? : Json → Option (Array Link)
 /-- What the verifier holds of the run: the replay sample `S`, the parts (`parts`), the interior and boundary
 registrations' records, the second draw's units, the design's links (`replayLinks`, none when the replay block's
 Definition makes none), the `{value: root}` the verifiers of record report the sessions read
-(`Record.sessionRegistered`), and the reference header of each template's statement, as the auditor's params give
-it (`Run.templateCircuits`). -/
+(`Record.sessionRegistered`), what they name of each session they accepted (`verifiedOf`), and the reference header of
+each template's statement, as the auditor's params give it (`Run.templateCircuits`). -/
 structure Own where
   sample : Array Nat
   parts : Option (Array Part)
@@ -179,6 +219,7 @@ structure Own where
   drawn : Array Nat
   links : Option (Array Link) := some #[]
   reported : Option (Array (String × Json)) := none
+  verified : Array Checked := #[]
   refs : Array (String × Json) := #[]
 
 /-- The record names its ports by template, `<template>/<port>`. -/
@@ -455,6 +496,21 @@ def readOk (own : Own) (named : Bool) (p : Part) (port : String) (e : Json) : Bo
 def linkedRead (own : Own) (t : String) (reads : Array (String × Json)) : Bool :=
   (own.links.getD #[]).all fun l => l.template != t || reads.any (·.1 == l.port)
 
+/-- Statement `s` states what an accepted verdict of record checked: one names its header's digest, its registered
+reads' and its sample (`Stmt.checked`). -/
+def verifiedOk (own : Own) (s : Stmt) : Bool :=
+  match s.checked with
+  | some c => own.verified.any fun v => v.header == c.header && jeq v.registered c.registered && jeq v.draw c.draw
+  | none => false
+
+/-- Every accepted verdict of record that names statement `s`'s header, registered reads and sample set its session up
+as one table (`ONE_TABLE`): a session split across Flock tables is no session round 2 reads. -/
+def tablesOk (own : Own) (s : Stmt) : Bool :=
+  match s.checked with
+  | some c => own.verified.all fun v =>
+    !(v.header == c.header && jeq v.registered c.registered && jeq v.draw c.draw) || jeq v.tables ONE_TABLE
+  | none => true
+
 /-- Statement `s` reads registered every port its header shares rows at (`shared_rows`: the tables whose rows its
 instances read by the refs in its public file's body). At such a port the session's verifier holds each instance's ref
 to the row at the position the read gives its unit (`Flock.Registered.check`); at any other it only bounds a ref by its
@@ -467,7 +523,9 @@ def refsOk (s : Stmt) : Bool :=
 def stmtCodes (own : Own) (named : Bool) (k : Nat) (p : Part) (s : Stmt) : List String :=
   let q := own.sample.size
   let reads := entries (getD s.registered "ports")
-  [("second-header", headerOk own named k s.template s.header),
+  [("second-verified", verifiedOk own s),
+   ("second-tables", tablesOk own s),
+   ("second-header", headerOk own named k s.template s.header),
    ("second-population", populationOk q p s.header),
    ("second-roots", rootsOk named own.interior s.template s.header (reads.map (·.1))),
    ("second-sample", jeq s.draw (ownDraw q p own.drawn)),
@@ -723,10 +781,12 @@ theorem check_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow 
         · assumption
         · simp at hrep
 
-/-- A passing statement's checks: its header at its position, population, roots, sample and registered reads, every
-port a link names among them, and every port its header shares rows at read registered. -/
+/-- A passing statement's checks: an accepted verdict of record checked its header, registered reads and sample, every
+one that did checked its session as one table, and its header at its position, population, roots, sample and
+registered reads, every port a link names among them, and every port its header shares rows at read registered. -/
 theorem stmtCodes_nil {own : Own} {named : Bool} {k : Nat} {p : Part} {s : Stmt} (h : stmtCodes own named k p s = []) :
-    headerOk own named k s.template s.header = true ∧ populationOk own.sample.size p s.header = true ∧
+    verifiedOk own s = true ∧ tablesOk own s = true ∧
+      headerOk own named k s.template s.header = true ∧ populationOk own.sample.size p s.header = true ∧
       rootsOk named own.interior s.template s.header ((entries (getD s.registered "ports")).map (·.1)) = true ∧
       jeq s.draw (ownDraw own.sample.size p own.drawn) = true ∧
       (entries (getD s.registered "ports")).all (fun (port, e) => readOk own named p port e) = true ∧
@@ -774,7 +834,7 @@ theorem check_ok_header {allow : Bool} {own : Own} {ss : Array Json} (h : (check
   obtain ⟨-, -, ps, hp, -, hst, -, -⟩ := check_ok h
   refine ⟨ps, hp, fun i hi => ?_⟩
   obtain ⟨s, p, hs, -, -, hi', hc⟩ := hst i hi
-  obtain ⟨r, r', hr, ha, hj⟩ := headerOk_ref (stmtCodes_nil hc).1
+  obtain ⟨r, r', hr, ha, hj⟩ := headerOk_ref (stmtCodes_nil hc).2.2.1
   exact ⟨s, r, r', hs, hi', hr, ha, hj⟩
 
 /-- **A passing `second-refs`**: every port statement `s`'s header shares rows at is one of its registered reads. -/
@@ -801,10 +861,60 @@ theorem check_ok_refs {allow : Bool} {own : Own} {ss : Array Json} (h : (check a
   obtain ⟨-, -, ps, hp, -, hst, -, -⟩ := check_ok h
   refine ⟨ps, hp, fun i hi => ?_⟩
   obtain ⟨s, p, hs, hf, -, -, hc⟩ := hst i hi
-  obtain ⟨-, -, -, -, hr, -, hrefs⟩ := stmtCodes_nil hc
+  obtain ⟨-, -, -, -, -, -, hr, -, hrefs⟩ := stmtCodes_nil hc
   refine ⟨s, p, hs, hf, fun port c hm => ?_⟩
   obtain ⟨e, he⟩ := refsOk_read hrefs hm
   exact ⟨e, he, Array.all_eq_true_iff_forall_mem.mp hr _ he⟩
+
+/-- **A verified entry is a verdict's**: each of `verifiedOf verdicts` is read off an accepted verdict of record among
+`verdicts`, its header's digest that verdict's `public_header_sha512`, its registered reads' its `registered_sha512`,
+its sample its `unit_draw` and its tables its `session_tables`. -/
+theorem mem_verifiedOf {verdicts : Array (String × Json)} {c : Checked} (h : c ∈ verifiedOf verdicts) :
+    ∃ x ∈ verdicts, getD x.2 "public_header_sha512" = .str c.header ∧ truthy (getD x.2 "of_record") = true ∧
+      jeq (getD x.2 "accepted") (.bool true) = true ∧ c.registered = getD x.2 "registered_sha512" ∧
+      c.draw = getD x.2 "unit_draw" ∧ c.tables = getD x.2 "session_tables" := by
+  obtain ⟨⟨k, v⟩, hm, hv⟩ := Array.mem_filterMap.mp h
+  refine ⟨(k, v), hm, ?_⟩
+  dsimp only at hv ⊢
+  generalize hg : getD v "public_header_sha512" = g at hv
+  cases g with
+  | str hdr =>
+    dsimp only at hv
+    split at hv
+    · next ha =>
+      cases hv
+      simp only [Bool.and_eq_true] at ha
+      exact ⟨rfl, ha.1, ha.2, rfl, rfl, rfl⟩
+    · cases hv
+  | _ => simp at hv
+
+/-- **What `second-verified` says**: a statement passing it is, by what a verdict names of it (`Stmt.checked`), one an
+accepted verdict of record checked (`mem_verifiedOf`): its header's digest, its registered reads' and its sample are
+that verdict's. -/
+theorem verifiedOk_some {own : Own} {s : Stmt} (h : verifiedOk own s = true) :
+    ∃ c, s.checked = some c ∧ ∃ v ∈ own.verified, v.header = c.header ∧ jeq v.registered c.registered = true ∧
+      jeq v.draw c.draw = true := by
+  unfold verifiedOk at h
+  cases hc : s.checked with
+  | none => simp [hc] at h
+  | some c =>
+    have h' : ∃ (i : Nat) (_ : i < own.verified.size), (own.verified[i].header = c.header ∧
+        jeq own.verified[i].registered c.registered = true) ∧ jeq own.verified[i].draw c.draw = true := by
+      simpa [hc, Bool.and_eq_true, beq_iff_eq] using h
+    obtain ⟨i, hi, ⟨h1, h2⟩, h3⟩ := h'
+    exact ⟨c, rfl, own.verified[i], Array.getElem_mem hi, h1, h2, h3⟩
+
+/-- **What `second-tables` says**: every verified entry that names a statement passing it as `Stmt.checked` does, its
+header's digest, its registered reads' and its sample, set its session up as one table (`mem_verifiedOf`: that verdict's
+`session_tables` is 1). -/
+theorem tablesOk_one {own : Own} {s : Stmt} {c : Checked} (h : tablesOk own s = true) (hc : s.checked = some c)
+    {v : Checked} (hv : v ∈ own.verified) (h1 : v.header = c.header) (h2 : jeq v.registered c.registered = true)
+    (h3 : jeq v.draw c.draw = true) : jeq v.tables ONE_TABLE = true := by
+  unfold tablesOk at h
+  simp only [hc] at h
+  obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hv
+  have := Array.all_eq_true.1 h i hi
+  simpa [h1, h2, h3] using this
 
 private def exRoot (i : Nat) : String := String.ofList (List.replicate 128 (Char.ofNat (48 + i)))
 
@@ -849,6 +959,16 @@ private def exStmt (indices units : List Nat) : Json :=
     ("draw", Json.mkObj [("law", "subset"), ("population", (6 : Nat)), ("k", Lean.toJson units.length),
       ("units", natsJson units.toArray)])]
 
+/-- `own` with a verifier of record that checked statements `ss`' sessions, naming each one's header, registered reads
+and sample (`Stmt.checked`). -/
+private def exVerifying (ss : Array Json) (own : Own := exOwn) : Own :=
+  { own with verified := ss.filterMap fun j => (Stmt.ofJson? j).bind Stmt.checked }
+
+/-- Round 2's check of statements `ss`, each one's session checked by a verifier of record. -/
+private def exCheck (allow : Bool) (own : Own) (ss : Array Json) : Check := check allow (exVerifying ss own) (some ss)
+
+private def exHonest : Json := exStmt [0, 1, 2, 3, 4, 5] [2, 4]
+
 -- Python's `window_binding("program-0", "partition-0", "x", "hm96-sha512/row/v2", 6, "run-0")`
 #guard portBinding exInterior "x" "hm96-sha512/row/v2" exRun == some
   "009d0ab56f7953138bd8853c525c88a1ede372e270f1243e8c7b1980de7390130205daa6b324fe330e87a215a663b19a011fd6dbe3391eb47c5e7116ca32192f"
@@ -857,15 +977,45 @@ private def exStmt (indices units : List Nat) : Json :=
 #guard setName exRun 2 == "served/run-0/m2"
 
 #guard exOwn.parts == some #[{ template := "Pair_v0", lo := 0, n := 3 }]
-#guard (check false exOwn (some #[exStmt [0, 1, 2, 3, 4, 5] [2, 4]])).codes == #["two-stage-form"]
-#guard (check true exOwn (some #[exStmt [0, 1, 2, 3, 4, 5] [2, 4]])).codes.isEmpty
-#guard (check true exOwn (some #[exStmt [0, 1, 2, 3, 4, 6] [2, 4]])).codes == #["second-population"]
-#guard (check true exOwn (some #[exStmt [0, 1, 2, 3, 4, 5] [1, 4]])).codes == #["second-sample"]
-#guard (check true exOwn (some #[exStmt [0, 1, 2, 3, 4, 5] [2, 4], exStmt [0, 1, 2, 3, 4, 5] [2, 4]])).codes ==
-  #["second-template"]
+#guard (exCheck false exOwn #[exHonest]).codes == #["two-stage-form"]
+#guard (exCheck true exOwn #[exHonest]).codes.isEmpty
+#guard (exCheck true exOwn #[exStmt [0, 1, 2, 3, 4, 6] [2, 4]]).codes == #["second-population"]
+#guard (exCheck true exOwn #[exStmt [0, 1, 2, 3, 4, 5] [1, 4]]).codes == #["second-sample"]
+#guard (exCheck true exOwn #[exHonest, exHonest]).codes == #["second-template"]
 #guard (check true exOwn (some #[])).codes == #["second-cover"]
 #guard (check true exOwn none).codes == #["second-statements"]
 #guard (check true { exOwn with parts := parts 4 #[("Pair_v0", #[(0, 6)])] } none).codes == #["second-cells"]
+
+/-- The honest statement, its header naming circuit file `c` by digest. -/
+private def exNaming (c : Nat) : Json :=
+  exHonest.setObjVal! "header" ((getD exHonest "header").setObjVal! "circuit_sha512" (exRoot c))
+
+/-- `exOwn`, the params giving its template the reference header that names circuit file `c` (`exNaming`). -/
+private def exNamed (c : Nat) : Own := { exOwn with refs := #[("Pair_v0", getD (exNaming c) "header")] }
+
+/-- The verdict of record a verifier that checked statement `j`'s session as `tables` tables writes, accepted or not;
+naming no table count with none. -/
+private def exVerdict (j : Json) (accepted : Bool := true) (tables : Option Nat := some 1) : Json :=
+  Json.mkObj ([("of_record", Json.bool true), ("accepted", Json.bool accepted),
+    ("public_header_sha512", Json.str ((canonSha512 (getD j "header")).toOption.getD "")),
+    ("unit_draw", getD j "draw")] ++ (tables.map fun n => [("session_tables", Lean.toJson n)]).getD [])
+
+#guard (check true exOwn (some #[exHonest])).codes == #["second-verified"]
+#guard (check true { exOwn with verified := verifiedOf #[("lean", exVerdict exHonest)] } (some #[exHonest])).codes.isEmpty
+#guard (check true { exOwn with verified := verifiedOf #[("lean", exVerdict exHonest false)] } (some #[exHonest])).codes ==
+  #["second-verified"]
+#guard (verifiedOf #[("lean", (exVerdict exHonest).setObjVal! "of_record" (.bool false))]).isEmpty
+#guard (check true (exVerifying #[exNaming 7] (exNamed 7)) (some #[exNaming 7])).codes.isEmpty
+#guard (check true (exVerifying #[exNaming 7] (exNamed 8)) (some #[exNaming 8])).codes == #["second-verified"]
+#guard (check true (exVerifying #[exStmt [0, 1, 2, 3, 4, 5] [1, 4]]) (some #[exHonest])).codes == #["second-verified"]
+#guard (check true { exOwn with verified := verifiedOf #[("lean", exVerdict exHonest (tables := some 2))] }
+  (some #[exHonest])).codes == #["second-tables"]
+#guard (check true { exOwn with verified := verifiedOf #[("lean", exVerdict exHonest (tables := none))] }
+  (some #[exHonest])).codes == #["second-tables"]
+#guard (check true { exOwn with verified := verifiedOf #[("a", exVerdict exHonest),
+  ("b", exVerdict exHonest (tables := some 2))] } (some #[exHonest])).codes == #["second-tables"]
+#guard (check true { exOwn with verified := verifiedOf #[("a", exVerdict exHonest),
+  ("b", exVerdict (exNaming 9) (tables := some 2))] } (some #[exHonest])).codes.isEmpty
 
 /-- `exStmt`'s honest statement, its header `f` of the honest one. -/
 private def exHeader (f : Json → Json) : Json :=
@@ -875,8 +1025,8 @@ private def exHeader (f : Json → Json) : Json :=
 /-- Header `h` with its object `k`'s field `f` set to `v`. -/
 private def exIn (k f : String) (v : Json) (h : Json) : Json := h.setObjVal! k ((getD h k).setObjVal! f v)
 
-/-- Round 2's codes, the form allowed, for `exHeader f` alone. -/
-private def exCodes (own : Own) (f : Json → Json) : Array String := (check true own (some #[exHeader f])).codes
+/-- Round 2's codes, the form allowed, for `exHeader f` alone, its session checked by a verifier of record. -/
+private def exCodes (own : Own) (f : Json → Json) : Array String := (exCheck true own #[exHeader f]).codes
 
 #guard (exCodes exOwn id).isEmpty
 #guard (exCodes { exOwn with refs := #[("Pair_v0", getD (exHeader id) "header")] } id).isEmpty
@@ -895,7 +1045,7 @@ private def exCodes (own : Own) (f : Json → Json) : Array String := (check tru
 #guard exCodes { exOwn with interior := exInterior (exWindow (.arr #[.bool true, Lean.toJson (3 : Nat)])) } id ==
   #["second-interior-order"]
 #guard exCodes { exOwn with interior := exInterior (exWindow .null) } id == #["second-interior-order"]
-#guard (check false { exOwn with interior := exInterior (exWindow (natsJson #[3, 1])) } (some #[exHeader id])).codes ==
+#guard (exCheck false { exOwn with interior := exInterior (exWindow (natsJson #[3, 1])) } #[exHeader id]).codes ==
   #["second-interior-order"]
 #guard (check true { exOwn with interior := exInterior (exWindow (natsJson #[3, 1])) } none).codes ==
   #["second-interior-order", "second-statements"]
@@ -912,7 +1062,7 @@ private def exCodes (own : Own) (f : Json → Json) : Array String := (check tru
 #guard exCodes exOwn (exIn "frame_v3" "domain_ids" (Json.mkObj [("x", exRoot 2)])) == #["second-roots"]
 #guard exCodes { exOwn with refs := #[] } id == #["second-header"]
 #guard exCodes { exOwn with refs := #[("Other_v0", exRef)] } id == #["second-header"]
-#guard (check false { exOwn with refs := #[] } (some #[exHeader id])).codes == #["second-header"]
+#guard (exCheck false { exOwn with refs := #[] } #[exHeader id]).codes == #["second-header"]
 
 /-- Port `x`'s statement reading `value`'s tree of `leaves` leaves at root `root`, domain `dom`, slot `k` its `reads[k]`. -/
 private def exReading (value : String) (root dom leaves : Nat) (reads : List Nat) : Json :=
@@ -925,21 +1075,22 @@ private def exReported (value : String) (root : Nat) (own : Own := exOwn) : Own 
 
 private def exLinked : Own := { exOwn with links := some #[⟨"Pair_v0", "x", "bx"⟩] }
 
-#guard (check true (exReported "x" 1) (some #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]])).codes.isEmpty
-#guard (check true exOwn (some #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]])).codes == #["second-reported"]
-#guard (check true (exReported "x" 1) (some #[exReading "x" 1 2 6 [1, 1, 2, 3, 4, 5]])).codes == #["second-read"]
-#guard (check true (exReported "out" 3) (some #[exReading "out" 3 4 6 [0, 1, 2, 3, 4, 5]])).codes == #["second-read"]
-#guard (check true (exReported "bx" 5 exLinked) (some #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]])).codes.isEmpty
-#guard (check true (exReported "bx" 5 exLinked) (some #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 2]])).codes == #["second-read"]
-#guard (check true (exReported "bx" 5) (some #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]])).codes == #["second-read"]
-#guard (check false (exReported "bx" 5 exLinked) (some #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]])).codes ==
+#guard (exCheck true (exReported "x" 1) #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]]).codes.isEmpty
+#guard (exCheck true exOwn #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-reported"]
+#guard (exCheck true (exReported "x" 1) #[exReading "x" 1 2 6 [1, 1, 2, 3, 4, 5]]).codes == #["second-read"]
+#guard (exCheck true (exReported "out" 3) #[exReading "out" 3 4 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-read"]
+#guard (exCheck true (exReported "bx" 5 exLinked) #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]]).codes.isEmpty
+#guard (exCheck true (exReported "bx" 5 exLinked) #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 2]]).codes == #["second-read"]
+#guard (exCheck true (exReported "bx" 5) #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]]).codes == #["second-read"]
+#guard (exCheck false (exReported "bx" 5 exLinked) #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]]).codes ==
   #["two-stage-form"]
-#guard (check true (exReported "x" 1 exLinked) (some #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]])).codes ==
-  #["second-read"]
-#guard (check true exLinked (some #[exStmt [0, 1, 2, 3, 4, 5] [2, 4]])).codes == #["second-read"]
-#guard (check true { exOwn with links := none } (some #[exStmt [0, 1, 2, 3, 4, 5] [2, 4]])).codes == #["second-links"]
+#guard (exCheck true (exReported "x" 1 exLinked) #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-read"]
+#guard (exCheck true exLinked #[exHonest]).codes == #["second-read"]
+#guard (exCheck true { exOwn with links := none } #[exHonest]).codes == #["second-links"]
 #guard (check true { exOwn with links := none } none).codes == #["second-links"]
 #guard (check true { exOwn with links := some #[⟨"Other_v0", "x", "bx"⟩] } none).codes == #["second-links"]
+#guard (check true (exReported "x" 1 (exVerifying #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 4]]))
+  (some #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]])).codes == #["second-verified"]
 
 /-- Port `p`'s read of the interior record's own port `p` at root `root`, domain `dom`, slot `k` reading row `reads[k]`. -/
 private def exOwnRead (p : String) (root dom : Nat) (reads : List Nat := [0, 1, 2, 3, 4, 5]) : String × Json :=
@@ -963,19 +1114,19 @@ private def exShares (shared : List String) (read : List (String × Nat)) : Own 
     reported := some (read.toArray.map fun (v, r) => (v, .str (exRoot r))) }
 
 -- a header sharing rows at `out` and `x` reads both registered, each slot its own row
-#guard (check true (exShares ["out", "x"] [("out", 3), ("x", 1)])
-  (some #[exSharing ["out", "x"] (some [exOwnRead "out" 3 4, exOwnRead "x" 1 2])])).codes.isEmpty
-#guard (check true (exShares ["x"] [("x", 1)]) (some #[exSharing ["x"] (some [exOwnRead "x" 1 2])])).codes.isEmpty
+#guard (exCheck true (exShares ["out", "x"] [("out", 3), ("x", 1)])
+  #[exSharing ["out", "x"] (some [exOwnRead "out" 3 4, exOwnRead "x" 1 2])]).codes.isEmpty
+#guard (exCheck true (exShares ["x"] [("x", 1)]) #[exSharing ["x"] (some [exOwnRead "x" 1 2])]).codes.isEmpty
 -- `out` shared and not read registered: its refs are bounded only, so one could name another unit's row
-#guard (check true (exShares ["out", "x"] [("x", 1)]) (some #[exSharing ["out", "x"] (some [exOwnRead "x" 1 2])])).codes ==
+#guard (exCheck true (exShares ["out", "x"] [("x", 1)]) #[exSharing ["out", "x"] (some [exOwnRead "x" 1 2])]).codes ==
   #["second-refs"]
-#guard (check true (exShares ["out", "x"] []) (some #[exSharing ["out", "x"] none])).codes == #["second-refs"]
+#guard (exCheck true (exShares ["out", "x"] []) #[exSharing ["out", "x"] none]).codes == #["second-refs"]
 -- a shared port read at another slot's row, which the session's verifier would hold slot 0's ref to
-#guard (check true (exShares ["out", "x"] [("out", 3), ("x", 1)])
-  (some #[exSharing ["out", "x"] (some [exOwnRead "out" 3 4, exOwnRead "x" 1 2 [1, 0, 2, 3, 4, 5]])])).codes ==
+#guard (exCheck true (exShares ["out", "x"] [("out", 3), ("x", 1)])
+  #[exSharing ["out", "x"] (some [exOwnRead "out" 3 4, exOwnRead "x" 1 2 [1, 0, 2, 3, 4, 5]])]).codes ==
   #["second-read"]
 -- rows shared where the template's reference shares none
-#guard (check true (exReported "x" 1) (some #[exSharing ["out", "x"] (some [exOwnRead "x" 1 2])])).codes ==
+#guard (exCheck true (exReported "x" 1) #[exSharing ["out", "x"] (some [exOwnRead "x" 1 2])]).codes ==
   #["second-header", "second-refs"]
 
 /-- A statement for template `t`'s part. -/
@@ -990,7 +1141,7 @@ private def exTwoParts : Array Part := #[⟨"Pair_v0", 0, 3⟩, ⟨"Triple_v0", 
 #guard (orderFailures exTwoParts [exFor "Pair_v0", exFor "Pair_v0", exFor "Other_v0", .null]).isEmpty
 #guard (check true { exOwn with parts := some exTwoParts } (some #[exFor "Triple_v0", exFor "Pair_v0"])).codes.contains
   "second-order"
-#guard (check true { exOwn with parts := some exTwoParts, drawn := #[2] } (some #[exStmt [0, 1, 2, 3, 4, 5] [2]])).codes ==
+#guard (exCheck true { exOwn with parts := some exTwoParts, drawn := #[2] } #[exStmt [0, 1, 2, 3, 4, 5] [2]]).codes ==
   #["second-cover"]
 
 private def exArg (p : Bool) (i : Nat) : Flock.Program.Arg :=

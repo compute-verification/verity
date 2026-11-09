@@ -426,11 +426,12 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         from verity_vllm.program.frontend.triton_capture import TritonLaunchLog
         import torch
         from verity_vllm.program.frontend.derive import derive_report
-        from verity_vllm.program.frontend.rules.vllm_bindings import (VLLM_BINDING_RULES, vllm_ruleset, observe_attention_impls, observe_export_facts,
+        from verity_vllm.program.frontend.rules.vllm_bindings import (VLLM_BINDING_RULES, vllm_ruleset, observe_attention_impls, observe_export_facts, observe_batched_form,
                                                             observe_target_profile, declared_derived_accounting, clear_observations, observe_allreduce_settings, observe_launch_context)
         clear_observations()
         observe_target_profile(target)
         observe_launch_context(launch)
+        observe_batched_form(batched)
         res["target"]["host"] = host_facts()
         t0 = time.time()
         with apply_target_profile(target):  # ONE application of the declared target for config, instantiation, export and derive
@@ -682,8 +683,7 @@ def _write_manifest(out: str, res: dict) -> None:
          "model": {"class": res.get("model_class"), "hf_config": res.get("hf_config"), "pin": res.get("model_pin"),
                    # `hf_config.tie_word_embeddings` above is what vLLM SET for loading (False when the checkpoint ships an
                    # lm_head); the loader's re-tie decision, reproduced from the checkpoint's bytes, is the served model's fact
-                   "lm_head_tying": res.get("lm_head_tying")},
-         "code_rev": res.get("code_rev"), "profile": res.get("profile"),
+                   "lm_head_tying": res.get("lm_head_tying")}, "code_rev": res.get("code_rev"), "profile": res.get("profile"),
          # v3: `target.declared` = the TargetProfile (the only source of every applied value); `target.applied` / `applied_after_export` =
          # read back from vLLM inside the applied shim; `target.host` = the construction host (informational, in no identity);
          # `target.consulted` = config facts + env split into consulted / ignored (dead in this pin) / non-vLLM

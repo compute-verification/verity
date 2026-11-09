@@ -1340,9 +1340,10 @@ V5 = "Flock.SecurityProofs.SampledKSLiveV5"
 
 
 def test_an_unwitnessed_entry_both_sides_changed_is_the_side_at_its_merged_record(tmp_path, capsys):
-    """Drive's merge of #7982 onto `next`: each side re-keyed SampledKSLiveV5's `unwitnessed` entry with its restated record,
-    and the merged record, theirs', holds theirs' entry's hashes, so the entry is theirs'.  Where theirs left the record as
-    the base had it, the merged record is ours', and theirs' entry is a stale value that would re-key ours': it is ours'."""
+    """Drive's merge of a lock change onto `next`: each side re-keyed SampledKSLiveV5's `unwitnessed` entry with its
+    restated record, and the merged record, theirs', holds theirs' entry's hashes, so the entry is theirs'.  Where
+    theirs left the record as the base had it, the merged record is ours', and theirs' entry is a stale value that
+    would re-key ours': it is ours'."""
     sides = json.loads((FIXTURES / "unwitnessed-at-the-merged-record-onto-next.json").read_text())
     for n in ("base", "ours", "theirs"):
         (tmp_path / n).write_text(A.text(sides[n]))

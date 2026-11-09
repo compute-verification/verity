@@ -50,7 +50,7 @@ theorem not_theta_Dθ : ¬ Assumptions.ThetaRegistered D Dθ Mθ :=
 theorem dark_id (r : RegisteredCircuit) : (PartialContainment.ofContainment (c := r) (d := r) (idC r.D)).dark = ∅ :=
   Finset.sdiff_self _
 
-theorem T1_threaded : T1.Threaded 2 1 1 0 := by
+theorem T1_threaded {k : ℝ} : T1.Threaded 2 k 1 0 := by
   have key : ∀ R : Finset (Fin 4), R ⊆ C.computed → ∀ t : Fin 1, (T1.threadReads R t).card < 1 →
       (T1.threadMults R t).card ≤ 0 * (T1.threadReads R t).card := by decide
   exact fun R hR t => key R hR.1 t
@@ -58,7 +58,7 @@ theorem T1_threaded : T1.Threaded 2 1 1 0 := by
 theorem T1_weights_nat : ∀ R : Finset (Fin 4), R ⊆ C.computed →
     (T1.weightsUsed R).card + (T1.threadReads R (0 : Fin 1)).card ≤ 2 * novelReads D R := by decide
 
-theorem T1_weights : Assumptions.WeightsIncompressible D T1 2 1 (1 / 2) (1 / 2) := by
+theorem T1_weights {k : ℝ} : Assumptions.WeightsIncompressible D T1 2 k (1 / 2) (1 / 2) := by
   intro R hR
   have h := T1_weights_nat R hR.1
   have hs : ∑ t, (T1.threadReads R t).card = (T1.threadReads R (0 : Fin 1)).card := Fin.sum_univ_one _
@@ -66,7 +66,7 @@ theorem T1_weights : Assumptions.WeightsIncompressible D T1 2 1 (1 / 2) (1 / 2) 
   have h' : ((T1.weightsUsed R).card : ℝ) + (T1.threadReads R (0 : Fin 1)).card ≤ 2 * novelReads D R := by exact_mod_cast h
   linarith
 
-theorem T1_weightsSlots : Assumptions.WeightsIncompressibleSlots D T1 σ1 2 1 (1 / 2) (1 / 2) := by
+theorem T1_weightsSlots {k : ℝ} : Assumptions.WeightsIncompressibleSlots D T1 σ1 2 k (1 / 2) (1 / 2) := by
   have key : ∀ R : Finset (Fin 4), R ⊆ C.computed →
       (σ1.slotsUsed R).card + (T1.threadReads R (0 : Fin 1)).card ≤ 2 * novelReads D R := by decide
   intro R hR
@@ -226,7 +226,7 @@ theorem not_coverage_ch0 : ¬ Assumptions.Coverage 1 D (2 * (ch0 C).G) := by
   rw [size_D, ch0_G]
   norm_num
 
-theorem ch1_T1_incompressible : Assumptions.TrainingIncompressible D ch1 T1 2 1 (1 / 2) (1 / 2) := by
+theorem ch1_T1_incompressible {k : ℝ} : Assumptions.TrainingIncompressible D ch1 T1 2 k (1 / 2) (1 / 2) := by
   intro n P
   refine ⟨fun _ => 0, ?_, fun u hu => ⟨?_, T1_weights _ hu⟩⟩
   · refine le_trans (Finset.sum_le_sum fun x _ => Nat.sub_le_of_le_add (ch1_spread P x)) ?_
@@ -343,6 +343,48 @@ theorem ThreadedTrainingOn_nontrivial : Guarantees.ThreadedTrainingOn_nontrivial
   rw [bound_T0, size_D, dark_id]
   norm_num
 
+theorem ThreadedThrottled_honest : Guarantees.ThreadedThrottled_honest :=
+  ⟨compliesRate_D, theta_id D, T1_threaded, T1_weights⟩
+
+theorem ThreadedThrottled_nontrivial : Guarantees.ThreadedThrottled_nontrivial := by
+  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, compliesRate_Dθ, not_theta_Dθ, T1_threaded, T1_weights,
+    ?_⟩
+  rw [card_T1]
+  norm_num
+
+theorem ThreadedThrottledOn_nontrivial : Guarantees.ThreadedThrottledOn_nontrivial := by
+  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, compliesRate_Dθ, not_theta_Dθ, T1_threaded, T1_weights,
+    ?_⟩
+  rw [show (T1.M ∩ Mθ.S).card = 1 by decide]
+  norm_num
+
+theorem ThreadedThrottledDark_nontrivial : Guarantees.ThreadedThrottledDark_nontrivial := by
+  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, compliesRate_Dθ, not_theta_Dθ, T1_threaded, T1_weights,
+    ?_⟩
+  rw [card_T1, dark_Mθ]
+  norm_num
+
+theorem ThreadedThrottledSlots_honest : Guarantees.ThreadedThrottledSlots_honest :=
+  ⟨compliesRate_D, theta_id D, T1_threaded, T1_weightsSlots⟩
+
+theorem ThreadedThrottledSlots_nontrivial : Guarantees.ThreadedThrottledSlots_nontrivial := by
+  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, compliesRate_Dθ, not_theta_Dθ, T1_threaded,
+    T1_weightsSlots, ?_⟩
+  rw [card_T1]
+  norm_num
+
+theorem ThreadedThrottledOnSlots_nontrivial : Guarantees.ThreadedThrottledOnSlots_nontrivial := by
+  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, compliesRate_Dθ, not_theta_Dθ, T1_threaded,
+    T1_weightsSlots, ?_⟩
+  rw [show (T1.M ∩ Mθ.S).card = 1 by decide]
+  norm_num
+
+theorem ThreadedThrottledDarkSlots_nontrivial : Guarantees.ThreadedThrottledDarkSlots_nontrivial := by
+  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, compliesRate_Dθ, not_theta_Dθ, T1_threaded,
+    T1_weightsSlots, ?_⟩
+  rw [card_T1, dark_Mθ]
+  norm_num
+
 theorem ActivationsBoundOn_honest : Guarantees.ActivationsBoundOn_honest :=
   ⟨compliesRate_D, theta_id D, entersAtMost_T1, drawsAtLeast_noLinks _ _, activations_T1⟩
 
@@ -439,6 +481,21 @@ theorem IncompressibleContainedTrainingOn_nontrivial : Guarantees.Incompressible
   ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
     fun _ => le_rfl, fun _ => le_rfl, compliesRate_Dθ, not_theta_Dθ, darkReads_Mθ _, ch1_T1_incompressible, coverage_ch1,
     not_bound factor_half (by rw [size_D, dark_Mθ]; norm_num) (by norm_num)⟩
+
+theorem IncompressibleThreadedThrottled_honest : Guarantees.IncompressibleThreadedThrottled_honest :=
+  ⟨compliesRate_D, theta_id D, T1_threaded, ch1_T1_incompressible⟩
+
+theorem IncompressibleThreadedThrottled_nontrivial : Guarantees.IncompressibleThreadedThrottled_nontrivial := by
+  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, compliesRate_Dθ, not_theta_Dθ, T1_threaded,
+    ch1_T1_incompressible, ?_⟩
+  rw [card_T1]
+  norm_num
+
+theorem IncompressibleThreadedThrottledOn_nontrivial : Guarantees.IncompressibleThreadedThrottledOn_nontrivial := by
+  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, compliesRate_Dθ, not_theta_Dθ, T1_threaded,
+    ch1_T1_incompressible, ?_⟩
+  rw [show (T1.M ∩ Mθ.S).card = 1 by decide]
+  norm_num
 
 theorem coverage_pch1 : Assumptions.Coverage 1 D (2 * ch1.toPacked.G) := by
   unfold Assumptions.Coverage
