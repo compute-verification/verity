@@ -4560,11 +4560,14 @@ class Seals:
         key = pkg.resolve()
         with self.lock:
             lock = self.locks.setdefault(key, threading.Lock())
+            # numbered as it first asks, not by the seals finished: two packages of one name (`pous/check`,
+            # `pouw/lean/check`) sealed side by side would share a directory, each copy numbering the roots its own way
+            n = list(self.locks).index(key)
         with lock:
             if key in self.sealed:
                 return self.sealed[key]
             tag = re.sub(r"[^A-Za-z0-9]+", "_", pkg.name)
-            s = Sealed(pkg, toolchain, self.dir / f"{tag}-{len(self.sealed)}")
+            s = Sealed(pkg, toolchain, self.dir / f"{tag}-{n}")
             # hold the package's `writable` directories while the copy reads them, so a build that shares one (a sibling
             # that requires the same path dependency) cannot rewrite a file mid-copy (`writing`)
             with writing(pkg, log):

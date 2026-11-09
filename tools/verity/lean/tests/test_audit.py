@@ -5621,6 +5621,29 @@ def test_a_seal_takes_a_fresh_directory_so_a_reused_pid_reads_no_stale_copy(tmp_
         "sweep removes a directory whose pid prefix names a gone process, old `<pid>` and new `<pid>-<suffix>` alike"
 
 
+def test_two_packages_of_one_name_sealed_side_by_side_get_a_directory_each(tmp_path, monkeypatch):
+    """`pous/check` and `pouw/lean/check` took their seals at once and both copied into `check-25`, numbered by the
+    seals finished, so one's facts looked for an `.olean` under the other's numbering of the roots (a missing object
+    file). Here the second seal is taken while the first is copying."""
+    a, b = tmp_path / "pous" / "check", tmp_path / "pouw" / "lean" / "check"
+    seals = A.Seals(tmp_path / "sealed")
+    dirs = []
+
+    def take(self, roots, exempt, work, log=print):
+        dirs.append(self.dir)
+        if self.pkg == a:
+            seals.take(b, "x", [], [], work)
+        return self
+
+    monkeypatch.setattr(A.Sealed, "take", take)
+    try:
+        seals.take(a, "x", [], [], tmp_path)
+        assert len(dirs) == 2 and dirs[0] != dirs[1], dirs
+        assert seals.take(a, "x", [], [], tmp_path).dir == dirs[0] and len(dirs) == 2, "a package seals once"
+    finally:
+        seals.close()
+
+
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_seal_skips_an_exempt_module_with_no_olean(tmp_path):
