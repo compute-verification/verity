@@ -330,3 +330,57 @@ def test_refused_orders(pieces, name, j):
     assert pieces.call("history_order", j)[0] == "reject"
     with pytest.raises(D.Reject):
         reference_order(j)
+
+
+def _body(rows: list[list[bytes]]) -> str:
+    """A member's public body of one row a unit a port, as `rows.Committed.public_body` writes it: unit-major."""
+    return b"".join(b"".join(r) for r in rows).hex()
+
+
+def _shared(tables: list[list[bytes]], refs: list[list[int]]) -> str:
+    """A shared-row member's public body: each port's table rows, port-major, then each unit's refs (u32 LE, unit-major)."""
+    return (b"".join(b"".join(t) for t in tables) + b"".join(r.to_bytes(4, "little") for u in refs for r in u)).hex()
+
+
+def _strings(**change) -> dict:
+    """Writer `W`'s units 0-4 in two members, `x` then `o` a unit: positions 2-4 its units 4, 3, 2's `o`, after an earlier
+    window's rows 1 and 2 of `E`."""
+    a = [[_bc(2, 10 * u), _bc(3, u)] for u in range(3)]
+    b = [[_bc(2, 10 * u), _bc(3, u)] for u in range(3, 5)]
+    j = {"runs": [{"start": 2, "count": 3, "writer": "W", "out": "o", "radix": [3], "base": 4, "step": [-1]},
+                  {"start": 0, "count": 2, "held": "E", "row": 1}],
+         "length": 5, "writer": "W", "out": "o", "first": 7, "units": 5,
+         "members": [{"base": 10, "n": 2, "ports": ["x", "o"], "body": _body(b)},
+                     {"base": 7, "n": 3, "ports": ["x", "o"], "body": _body(a)}],
+         "held": {"E": _hex_of([_bc(4, r) for r in range(3)])}}
+    return {**j, **change}
+
+
+def test_strings_from_the_writers_public_bodies(pieces):
+    """Each position's string is its writer unit's `o` string as its member's body holds it, the members in unit order,
+    and a held run's the verifier's own of the earlier window."""
+    want = [_bc(4, 1), _bc(4, 2), _bc(3, 4), _bc(3, 3), _bc(3, 2)]
+    assert _call(pieces, "history_strings", _strings()) == {"bcs": _hex_of(want)}
+
+
+def test_strings_from_a_shared_row_body(pieces):
+    """A shared-row body: unit `u`'s string is the row its ref names in its port's table."""
+    xs, os_ = [_bc(5, 0)], [_bc(6, 0), _bc(6, 1)]
+    refs = [[0, 1], [0, 0], [0, 1]]
+    j = {"runs": [{"start": 0, "count": 3, "writer": "W", "out": "o", "radix": [3], "base": 0, "step": [1]}],
+         "length": 3, "writer": "W", "out": "o", "first": 0, "units": 3, "held": {},
+         "members": [{"base": 0, "n": 3, "ports": ["x", "o"], "tables": {"x": 1, "o": 2}, "body": _shared([xs, os_], refs)}]}
+    assert _call(pieces, "history_strings", j) == {"bcs": _hex_of([os_[1], os_[0], os_[1]])}
+    past = dict(j, members=[dict(j["members"][0], body=_shared([xs, os_], [[0, 2], [0, 0], [0, 1]]))])
+    assert pieces.call("history_strings", past)[0] == "reject"
+
+
+@pytest.mark.parametrize("name, j", [
+    ("a unit no member's body holds", _strings(members=_strings()["members"][:1])),
+    ("members that leave a gap", _strings(first=6)),
+    ("a body that is not its units' strings", _strings(members=[dict(m, n=m["n"] + 1) for m in _strings()["members"]])),
+    ("a member without the table's row", _strings(out="y", runs=[{"start": 0, "count": 5, "writer": "W", "out": "y",
+                                                                 "radix": [5], "base": 0, "step": [1]}])),
+], ids=lambda x: x if isinstance(x, str) else "")
+def test_refused_strings(pieces, name, j):
+    assert pieces.call("history_strings", j)[0] == "reject"

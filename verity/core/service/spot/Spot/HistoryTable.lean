@@ -23,7 +23,10 @@ register rows of its choosing.
   its value; a run of another template or output is refused, so a position's writer is the table's own;
 * `checkAt cap program table words bcs registered`: the refusals, in order: a capacity that is not a power of two of at
   least 2, a row of no words or of `2^64` bits or more, more rows than the capacity, a `b ‖ c` that is not 128 bytes, a
-  registered root that is not 64 bytes, then a registered root other than `rootAt`'s. `check` is it at `CAPACITY`.
+  registered root that is not 64 bytes, then a registered root other than `rootAt`'s. `check` is it at `CAPACITY`;
+* `memberStrings`, `tableStrings`: the `bcs` `checkAt` reads, from the writer's members' public bodies (each unit's
+  `b ‖ c` of its rows, or a shared-row body's tables and refs) at the positions `order` gives, and from the strings the
+  verifier holds of the table's earlier windows for its held runs.
 
 What a read that opens against this root returns is stated by `Hash.Guarantees.HistoryReadBinding`: the row behind
 the `b ‖ c` at its index, or SHA-512 collides. That guarantee is stated over `Hash.HistoryTable.root`, and
@@ -183,6 +186,66 @@ def checkAt (cap : Nat) (program table : String) (words : Nat) (bcs : Array Byte
 def check (program table : String) (words : Nat) (bcs : Array ByteArray) (registered : ByteArray) : V Unit :=
   checkAt CAPACITY program table words bcs registered
 
+/-! ## The rows' strings, from the writers' public bodies -/
+
+/-- One member of the table's writer template: its first unit `base` and its `n` units, its rows' names in order
+(`ports`, inputs then outputs), each shared-row table's rows (`tables`, none for a body of one row a unit a port) and its
+public body, the bytes the leaf layer binds. -/
+structure Member where
+  base : Nat
+  n : Nat
+  ports : Array String
+  tables : Option (Array (String × Nat)) := none
+  body : ByteArray
+
+/-- **Each of a member's units' `b ‖ c` of its row `port`**, from its public body as the circuit prover writes it: every
+unit's `b ‖ c`, ports in order, unit-major; or, with shared-row tables, each port's table rows (`n` for a port no table
+names), port-major, then each unit's ref into each port's table (u32 little-endian, unit-major), a unit's string the
+row its ref names. Refused where the member has no row `port`, the body is not that length, or a ref is past its
+table. -/
+def memberStrings (m : Member) (port : String) : V (Array ByteArray) := do
+  let some j := m.ports.findIdx? (· == port) | throw s!"the member at unit {m.base} has no row {port}"
+  let np := m.ports.size
+  match m.tables with
+  | none =>
+    if m.body.size != m.n * np * BC_BYTES then
+      throw s!"the member at unit {m.base}: its public body is not {m.n} units' {np} strings"
+    return (Array.range m.n).map fun i => m.body.extract ((i * np + j) * BC_BYTES) ((i * np + j + 1) * BC_BYTES)
+  | some ts =>
+    let counts := m.ports.map fun q => ((ts.find? (·.1 == q)).map (·.2)).getD m.n
+    let refsAt := BC_BYTES * counts.foldl (· + ·) 0
+    if m.body.size != refsAt + 4 * m.n * np then
+      throw s!"the member at unit {m.base}: its public body is not its tables' strings and {m.n} units' refs"
+    let off := BC_BYTES * (counts.extract 0 j).foldl (· + ·) 0
+    let rows := counts[j]!
+    (Array.range m.n).mapM fun i => do
+      let r := (Flock.u32OfLE m.body (refsAt + 4 * (i * np + j))).toNat
+      if rows ≤ r then throw s!"the member at unit {m.base}: unit {m.base + i}'s ref is past its {port} table"
+      return m.body.extract (off + r * BC_BYTES) (off + (r + 1) * BC_BYTES)
+
+/-- **A table's rows' strings in position order** (`order`'s sources): a unit run's from the writer's members, which
+must hold its units `[first, first + units)` in order, each its units' `out` strings (`memberStrings`); a held run's
+from the strings the verifier holds of the table's earlier windows (`held`, by value). -/
+def tableStrings (runs : Array Run) (len : Nat) (writer out : String) (first units : Nat) (members : Array Member)
+    (held : Array (String × Array ByteArray)) : V (Array ByteArray) := do
+  let heldOf := fun v => (held.find? (·.1 == v)).map (·.2)
+  let srcs ← order runs len writer out units fun v => (heldOf v).map (·.size)
+  let mut mine : Array ByteArray := #[]
+  if srcs.any (· matches .unit _) then
+    let mut at_ := first
+    for m in members.qsort (·.base < ·.base) do
+      if m.base != at_ then throw s!"{writer}'s members leave unit {at_} without a public body"
+      mine := mine ++ (← memberStrings m out)
+      at_ := at_ + m.n
+    if at_ != first + units then throw s!"{writer}'s members hold {at_ - first} of its {units} units"
+  srcs.mapM fun
+    | .unit u => match mine[u]? with
+      | some s => pure s
+      | none => throw s!"{writer}'s unit {u} has no string"
+    | .held v r => match (heldOf v).bind (·[r]?) with
+      | some s => pure s
+      | none => throw s!"{v} holds no row {r}"
+
 /-! ## The difftest's pieces -/
 
 /-- A JSON list of lowercase hex strings, as bytes. -/
@@ -267,5 +330,30 @@ def orderPiece (j : Json) : V Json := do
   return Json.mkObj [("sources", Json.arr (srcs.map fun
     | .unit u => Json.mkObj [("unit", Lean.toJson u)]
     | .held v r => Json.mkObj [("held", Json.str v), ("row", Lean.toJson r)]))]
+
+/-- A member: `{"base", "n", "ports", "body"}` (hex), with `"tables": {port: rows}` for a shared-row body. -/
+def memberOf (j : Json) : V Member := do
+  let .arr ps := getD j "ports" | throw "a member's ports are not a list"
+  let ports ← ps.mapM fun | .str s => pure s | _ => throw "a member's port is not a string"
+  let tables ← match field? j "tables" with
+    | none => pure none
+    | some t@(.obj _) => some <$> (entries t).mapM fun (p, n) => match nat? n with
+      | some k => pure (p, k)
+      | none => throw s!"tables: {p}'s rows are not a natural number"
+    | some _ => throw "a member's tables are not an object"
+  let .str b := getD j "body" | throw "a member's body is not a hex string"
+  return { base := ← natField j "base", n := ← natField j "n", ports, tables, body := ← Flock.unhex b }
+
+/-- `{"runs", "length", "writer", "out", "first", "units", "members", "held": {value: [hex]}}` to `{"bcs": [hex]}`:
+`tableStrings`' strings, or its refusal. -/
+def stringsPiece (j : Json) : V Json := do
+  let .arr rs := getD j "runs" | throw "runs is not a list"
+  let .arr ms := getD j "members" | throw "members is not a list"
+  let held ← match getD j "held" with
+    | h@(.obj _) => (entries h).mapM fun (v, ss) => return (v, ← hexes ss s!"held {v}")
+    | _ => throw "held is not an object"
+  let bcs ← tableStrings (← rs.mapM runOf) (← natField j "length") (← strField j "writer") (← strField j "out")
+    (← natField j "first") (← natField j "units") (← ms.mapM memberOf) held
+  return Json.mkObj [("bcs", Json.arr (bcs.map (Json.str ∘ Flock.hexOf)))]
 
 end Spot.HistoryTable
