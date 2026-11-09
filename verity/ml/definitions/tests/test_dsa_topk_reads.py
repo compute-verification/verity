@@ -151,7 +151,7 @@ def test_the_long_row_reads_todays_kv_rows() -> None:
     N = 20 (TOPK 4, blocks of 8 keys: three blocks), each row of scores at several n past TOPK up to Nb, from a table of
     V = 32 rows of H = 2 words, the openings at the mask's members by position: kv is `DsaButterflyRowsPad_v1`'s over the
     history and its zero pad at `DsaButterflySettings_v1` of `DsaTopKMaskCounted_v1`, ok all 1; a flipped row bit, another
-    member's salt and another position's path each give ok 0 at their slot alone."""
+    member's salt and another position's path each give ok 0 at their slot alone, whose kv is the row it was opened with."""
     rng = random.Random("dsa-topk-reads")
     TOPK, block, V, H, Nb = 4, 8, 32, 2, 18
     N = -(-Nb // TOPK) * TOPK
@@ -167,17 +167,17 @@ def test_the_long_row_reads_todays_kv_rows() -> None:
     today = np.asarray(E.evaluate_batch(bind(M.DsaButterflyRowsPad, T=Nb, N=N, K=TOPK, W=H, E=16), sw, hist, pad))
     today = today.reshape(len(cases), TOPK, H).tolist()
 
-    args, bad = [], []
+    args, bad, want = [], [], []
     for i, m in enumerate(mask.tolist()):
         members = [j for j, b in enumerate(m) if b]
         assert len(members) == TOPK
         opened = [EM.arguments(V, t, table.root, dom.domain_id, rows[t], salts[t], _path(table, t)) for t in members]
         wrong = rng.randrange(TOPK)
         t = members[wrong]
+        given = list(rows[t])
         if i % 3 == 0:
-            r = list(rows[t])
-            r[0] ^= 1 << rng.randrange(16)
-            opened[wrong] = EM.arguments(V, t, table.root, dom.domain_id, r, salts[t], _path(table, t))
+            given[0] ^= 1 << rng.randrange(16)
+            opened[wrong] = EM.arguments(V, t, table.root, dom.domain_id, given, salts[t], _path(table, t))
         elif i % 3 == 1:
             opened[wrong] = EM.arguments(V, t, table.root, dom.domain_id, rows[t], salts[(t + 1) % Nb], _path(table, t))
         else:
@@ -187,6 +187,7 @@ def test_the_long_row_reads_todays_kv_rows() -> None:
             args.append([_bits(scores[i], 32).reshape(-1), _bits(ns[i], 32).reshape(-1), *map(np.asarray, o[0][1:3]),
                          *(np.concatenate([np.asarray(x[k]) for x in o]) for k in (3, 4, 5))])
             bad.append(w)
+            want.append([given if s == w else today[i][s] for s in range(TOPK)])
     t = bind(R.DsaTopKReadRows, N=N, TOPK=TOPK, BLOCK=block, READ=READ)
     cols = [np.stack([a[k] for a in args]).astype(np.uint8) for k in range(len(args[0]))]
     got = np.asarray(BS.evaluate_bits(t, *cols)).reshape(len(args), -1)
@@ -194,7 +195,7 @@ def test_the_long_row_reads_todays_kv_rows() -> None:
     for k, (g, b) in enumerate(zip(got, bad)):
         kv = [_words(g[s * w:(s + 1) * w], 16) for s in range(TOPK)]
         ok = [int(x) for x in g[TOPK * w:]]
-        assert kv == today[k // 2], k
+        assert kv == want[k], k
         assert ok == [int(s != b) for s in range(TOPK)], (k, ok)
 
 
