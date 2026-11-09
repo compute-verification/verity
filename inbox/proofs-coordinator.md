@@ -15474,3 +15474,54 @@ counts each release frame as `other`; the new link test asserts that. Three note
   - Both tried clean in `r20261109-015843-61fb` (cpu-3): lean exit 0, 8 theorems, the three axioms.
   - `resetPatterns`, with card at most `m + 1` and the pattern's membership, is in try `r20261109-020555-0047` (cpu-3).
   - **Two premises Lean doesn't derive**, since `spent` and `refused` are verifier params (`OneStage.poolOf`). `hspent`: every window after the week's reset has `spent` set. `hrefused`: `refused` is false on the all-accept event. Both are the honest verifier's bookkeeping across windows. When `hcs` is composed into a listed guarantee, each becomes a named Prop under `domain` or `open`, unless the verifier's history is modelled. Which one is your call. I'd name them `PoolSpentAfterReset` and `PoolRefusedVerdict`, and list them `open` against CIR-190.
+
+## PROVECUT 02:35Z: the served split part already reads in slots; its gaps were the caps (14 slot types) and a census statement that wasn't the served one. Both fixed, and node A is relaunched on the served statement
+
+- **Correction to the premise.** The served path doesn't lay the 64-key split part's reads inline. The served composer
+  (`benchmarks/one_stage/compose_circuit.py --template`, the circuit a5 composes) stages `chunk_rows.unit_rows(tp)` under
+  `chunk_rows.statement(tp)`. That is `{"reads": "slots"}` for a `SPLITS` part of whole blocks (T ≥ BN), with
+  `read_slots`' automatic caps. So serving already uses read slots, and no `--read-slots` is needed there.
+- **The two real gaps, both fixed on `cursor/proofs-provecut-readslots-e4ab`** (stacked on #8238's ed50b4ce25):
+  1. **The automatic caps ignored the GPU's 12 slot types.** They cut the 64-key part into a unit and 8 stages, which is
+     14 types, so `flock-circuit --gpu` refuses it. That hit the served statement and the benchmark alike.
+     - Fix (ead14118c2): `read_slots._auto` stops lowering L once a placement needs more nets than
+       `GPU_SLOT_TYPES − FIXED_TYPES − tables`, which is 12 − 3 − 2 = 7 for this part.
+     - One test pins `GPU_SLOT_TYPES` to `FC_MAX_TYPES` in the Rust FFI, the CUDA header and the CLI's refusal. Another
+       shows the bound keeps the uncapped placement when a capped one would need one net more.
+  2. **The census stager's statement wasn't the served one.** `stage.py` staged one row per parameter, with reads
+     inline, under its own unit name. My `--read-slots` and `--stage-ands=N` changed only the reads, and the hand cap
+     isn't served.
+     - Fix (2b4d961852, d4a2d928d0): a census type now makes exactly the served composer's call. That means
+       `chunk_rows.unit_rows`, `chunk_rows.statement`, the automatic caps and the served unit name, plus the MUFU
+       `tables/` beside the circuit.
+     - The proof server hands `tables/` to the prover, and a slot statement doesn't parse without it. The old flag path
+       would have hit that on node A at 07:00Z.
+     - The flags are gone, and `stage.py` refuses any option it doesn't take.
+- **Checked:** at 16 keys, the census statement's `class_sha512` equals `compose_circuit.py --template`'s for the same
+  template (4169ddcc…). Only the pin differs, by the binding. The same check at 64 keys is running (below).
+- **The spec for CIR-198: files and owners.**
+  - `verity/ml/flock/python/verity_flock/read_slots.py` and `verity/ml/flock/tests/test_read_slots.py`: proofs
+    (PROVECUT). Done.
+  - `benchmarks/served_units/stage.py`: PROVECUT. Done, on STATIONARY's #8238 branch; it lands with or after #8238.
+  - No change to `compose_circuit.py`, `chunk_rows.py`, `split_rows.py` or any circuit, so circuits has nothing to wire
+    for the split part.
+  - The only effect on serving: a fresh compose of the 64-key part gets the bounded layout. The compose cache keys on
+    the tree, so it recomposes. Statements already within 12 types, such as a5's 16-key parts, are unchanged.
+- **The post's figure:** keep "benchmark statement layout" until node A's numbers land. They come from the served
+  statement itself, so the caveat can go then, provided the 64-key digests match.
+- **Running:**
+  - r20261109-021925-e946 (cpu-3): the 64-key census statement, n = 256, at d4a2d928d0. It checks at most 12 types,
+    every net's A and B under 2^32, and k_log. ETA 03:15–03:30Z.
+  - r20261109-021948-a4ed (cpu-13): the served composer's 64-key statement at the same commit, for the class digest.
+    ETA about 03:15Z.
+  - r20261109-021257-c899 (cpu-12): the flock, one_stage and unit_lowering suites at 2b4d961852. ETA about 03:00Z.
+  - **Node A: r20261109-022103-0873**, relaunched at d4a2d928d0 with no stage flags, so on the served layout. The plan is
+    the one you approved:
+    - it sleeps until 06:10Z, then stages on CPUs 24–95 into /dev/shm after the disk gate;
+    - it takes one GPU through `gpu_lease.sh 1 --wait --max-min` (at most 150) from 07:00Z, and ends by 09:30Z;
+    - its scratch is deleted by path.
+  - Cancelled as superseded: r20261109-015719-a287 (node A, the hand cap; its trap removed its /dev/shm and
+    /workspace/tmp paths), r20261109-013413-81a7 and r20261109-014003-74f2.
+- **Next:** the combined lever figure on both baselines, the carried 11.30% at 600 s and the 12.02% at 3,600 s. It uses
+  HASHCUT's 4a (−0.59, overlapping 3a by about 0.27) and 4b (−0.03), with VERIFYFAST-B's 3b timing from 02:02Z folded in.
+  ETA about 04:00Z.
