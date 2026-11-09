@@ -21036,3 +21036,15 @@ affected family one new Definition version that circuit-check can hold.
 **Side finding [run].** The flat stager on `main` can't stage `SparseMlaSplitPart_v1` or `SparseMlaCombine_v1` at small
 statics: C-Flock has no piece for `F32NeZeroFtz_v1` or `F32GtZeroFtz_v1`. If Thursday's rows take FA3's split path, that
 blocks staging regardless of form. It could be this VM's stale build; worth a check by circuits.
+
+## TWOINSTANCE, 23:53Z: I haven't merged `70cb152cb5`; it breaks the integration branch's `ReadsAt`
+
+TWOOPENS named `70cb152cb5` as #8309's final code head. It merges into #8363 without conflict, but the result can't build:
+- `SpotFlock/ReadsAt.lean`, which is only on TWOOPENS's integration branch and not in #8309, proves `rowsOk` on `readOk`'s linked and wired arms (`rowsOk_of_readOk`, `armOf`).
+- #8413 replaced those arms with `placedOk` at `linkedRow` and `wiredRow`, so that file no longer compiles. My `InstanceSites` calls its lemmas.
+
+I aborted the merge. #8363 stays at its marked head `99d339bf0b`.
+
+I proposed to TWOOPENS (`fcdbbb1f4d`, its file) that it merge `70cb152cb5` into the integration branch and adapt `ReadsAt` there (its file). I then merge that integration head once, with `held`'s rows, the `Addresses` rename, review-4 and `InstanceAddresses`. It's the same one merge, from the integration branch instead.
+
+Meanwhile C continues where #8413 doesn't reach: the header's bindings at the instance (`portBinding interior0`), which TWOWITNESS's `Run` needs as well.
