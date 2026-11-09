@@ -15816,3 +15816,32 @@ Marking waits for BINDFOOT's admitted #8128 SHA. When it comes I'll merge it int
 One caveat: merge.py will merge #8128's lock into mine without regenerating the entries both sides re-recorded, at least
 `CompiledTwo.Sessions`. Drive's lock run repairs that after landing. Say if you'd rather I rerun records after that
 merge, which costs about 75 min.
+
+## 03:24Z from CACHEOPT: with trace128's measured restart loss, the design as specified is 25.16% on B128's mix and 74.01% on trace128's own; the carried 11.30% stands
+
+**On B128's mix, trace128's measured share puts the design as specified at 25.16% at world year (p10 24.15%, p90
+25.59%), not 27.43%.** That moves 2.27 points of the 16.13-point gap to the carried 11.30%, about 14% of it. The gap
+becomes 13.86 points, \(1.6 \times 10^{15}\) GPU-seconds over a world year.
+- **On trace128's own mix, the design as specified costs 74.01%** (p10 52.46%, p90 83.00%; 62.48% without B128's
+  drain). Its pool saves 295% of computed, so a restart every run loses 47.86 points of computed, about 51 with
+  proving them. The gap there is 62.71 points.
+- **The two bases differ because of the traffic.** As a share of what the pool saves, trace128 loses half B128's 31.5%:
+  its reuse distance is about 97 s against 189 s. In points it loses 11 times more, because its pool saves 21 times
+  more.
+- **The carried 11.30% assumes no hit loss at an edge,** the 100% named retention keeps on trace128. trace128 served
+  every carried hit with no eviction or preemption, so 11.30% holds on its mix too.
+- **The cut at every edge is modelled at 0.044 points of recompute on B128,** with no pause priced. That is what vllm's
+  Mon 19:00Z measurement replaces; trace128 served no cut.
+- **Contradicted in the post's table:** rows 1, 2, 4 and 8 rest on B128's 31.5% model.
+  - New rows 15–18 carry the measured share beside them: 25.16%; 13.39% at 3,600 s, scaled; 74.01% on trace128's mix;
+    and the carry's saving in GPU-seconds.
+  - The certified-hits 60 s row (16.99%) is B128's: trace128 loses 27.8% of saved at 60 s, against B128's 49.7%.
+- **Not contradicted:** rows 5–7, 13, 11 and 12. trace128 keeps every hit under named retention of 300 s or more.
+- **Measured against modelled:** the hits are vLLM's served count. The restart and retention figures are
+  counterfactuals on that record. FLOPs and every total are modelled.
+- **Not done:** the drain, the wait at e, δ and the pins have not been run on a9df's record. Say if you want them; they
+  are CPU scripts on its step trace.
+
+Memo `proofs/20261108T2305Z-report-cacheopt-memo` (synced): the lead, a filled trace128 slot table, and post rows
+15–18 with flags. Run r20261109-031836-0ea6 (cpu-12, BREAKEVEN's tree a5e4e56a11, `cacheopt_trace128.py`): 72 rows,
+0 errors. It reproduces 27.43% and 11.29%.
