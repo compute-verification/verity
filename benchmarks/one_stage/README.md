@@ -107,7 +107,7 @@ input. What the guarantee rests on: `verity/core/protocols/spot/README.md`.
   picked. No line counts a window's requests: the serve dir's request lists, serve-openai's log and the load's records,
   timings and log stay on the node, and leave it only as `served_overhead.py metrics`' aggregate, less the load's counts,
   tokens and span, which `publish` holds in the serve dir's private/out.
-- `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
+- A6 runs on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified sampling design, stand-in values
   staged by Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
   share proved under `--zk` across its template's statements and held by the Lean verifier with the units it derives itself.
@@ -141,18 +141,14 @@ input. What the guarantee rests on: `verity/core/protocols/spot/README.md`.
   a few thousand blocks with every opening proved by the opening unit (`remote_bandwidth.opening`) under `--zk` and held by
   Lean, honest and with a tampered block, a scan of everything the verifier received for the sampled proof blocks' bytes, and the
   prover's cost per opening. `a8_gpu.sh` takes its cost points on sm_120 (`flock-circuit prove --zk --gpu`), as a GPU host
-  job, and `a8_cost.py` reads a run's sessions into the one cost model's observations (`benchmarks/sampling_plan`).
-- `a7.sh`: run A7's entry point, on the same builds; the remote session's checks 1-3 and 5 on each sampled receipt are
+  job.
+- A7 runs on the same builds; the remote session's checks 1-3 and 5 on each sampled receipt are
   proved, not opened, by the opening unit (`remote_bandwidth.opening`, `verity.ml.commitments.gates.block_check`) in a
   second statement. A7 is the requirement's plan and memory-map units
   (`verity.ml.circuits.requirement_units`), one of each per step of a stand-in decoder's requirement, under the stratified
   sampling design, their witness rows bound to canonical commitments, then wired to PoUB's ledger as its
   requirement link (`audit.RequirementLink`), its ε the most share of the linked credit the units its sample leaves
   unproved can carry and its δ the sample's.
-- `plan_shards.py`: the sharded plan unit (`PlanShard_v1`) on a recorded remote session (vllm's `remote_session.json` and the
-  remote verifier's `verifier.json`): each pass's plan cut into the store's shards, every instance held to the unit's
-  reference, each distinct one to the circuit, and one staged by `UnitStager` for its fit in the circuit prover's block. A CPU job; it
-  builds nothing.
 - `zk_cost.sh`: Flock's zero-knowledge session cost on sm_120, for the sampling planner's cost model (`zk_cost.py`, a GPU
   host job, or a preemptible guest job on a shared node). A6's W8A8 coordinates at K = 4096 and 14336 are
   staged in statements of 1 to 512 units, and sessions of 1 to 512 sampled proof blocks are proved by `flock-circuit prove --zk
@@ -206,9 +202,8 @@ input. What the guarantee rests on: `verity/core/protocols/spot/README.md`.
   the request Program's root Calls by Definition kind and tries one unit of each through the circuit prover (a kind whose word units it
   refuses, through its Boolean version's); `a11_slice.py` cuts the
   capture's values and the checkpoint's tensors for a few layers off the serving node; `a11.py` stages each lowering kind's
-  units from those values, one template each, under the stratified sampling design, proved under `--zk` and held by the Lean verifier;
-  `a11_table.py` renders the per-kind table and its gap lines from the audits' summaries.
-- `a9.sh`: run A9's entry point, on the same builds. A9 is GLM-5.3's routed-expert FP8 GEMMs in the registry's Boolean
+  units from those values, one template each, under the stratified sampling design, proved under `--zk` and held by the Lean verifier.
+- A9 runs on the same builds. A9 is GLM-5.3's routed-expert FP8 GEMMs in the registry's Boolean
   static pair form (`boolean_fp8_moe`): `a9.py` holds one coordinate of each launch's first routed pair to the capture in
   its word and Boolean forms, cuts an up/gate coordinate whose rows overflow the circuit prover's block into its gather and
   block-coordinate units, and saves the units for `a11.py --load-values`, whose audit proves them. `A9_SAVED` audits a

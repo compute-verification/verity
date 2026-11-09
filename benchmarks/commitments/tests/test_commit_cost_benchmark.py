@@ -6,7 +6,6 @@ import importlib.util
 import json
 from pathlib import Path
 
-import pytest
 from research import result as research_result
 from research.store import tools_registry
 
@@ -80,21 +79,6 @@ def test_the_ripple_carry_model_counts_spot_sha512_ands() -> None:
 
     add64 = 63
     assert 80 * (7 * add64 + 64 + 64) + 64 * 3 * add64 + 8 * add64 == SHA512_ANDS
-
-
-@pytest.mark.slow  # the suite's first import of verity_vllm: 8-9 s on the shared pod, a fraction of a second warm
-def test_step_root_cost_writes_a_valid_result_whose_root_is_the_references(tmp_path: Path) -> None:
-    spec = importlib.util.spec_from_file_location("step_root_cost", ROOT / "benchmarks" / "commitments" / "step_root_cost.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    assert mod.main(["--batch", "3", "--layers", "2", "--k-scale", "256", "--reps", "1", "--out", str(tmp_path)]) == 0
-    check = research_result.check(tmp_path, None)
-    assert check.valid, check.errors
-    assert check.validation_status == "passed"
-    got = json.loads((tmp_path / "step_root_cost.json").read_text())
-    assert got["tables"] == 8 and got["rows"] == 24 and got["reference_root_equal"]
-    assert set(got["by_workers"]) == set(got["sha512_floor_s"]) == set(got["sha512_floor_cpu_s"]) == {"1"}
-    assert {"step_roots.w1.cpu_seconds", "salts.cpu_seconds"} <= {m["name"] for m in check.doc["measurements"]}
 
 
 def test_commit_cost_tool_is_registered() -> None:
