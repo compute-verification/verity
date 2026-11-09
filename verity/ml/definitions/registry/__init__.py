@@ -87,9 +87,11 @@ def _register_lazy_families() -> None:
     # [GLM-5.3] the canonical top-k row's accelerator, one per (row length, TOPK), built while deriving a row past TOPK
     register_lazy_family(r"^DsaTopKLongRowCheck(\d+)x(\d+)_v1$", lambda m: _dsa_topk().long_row_check(int(m[1]), int(m[2])))
     # the mask form's accelerators, one per (row length, TOPK): the threshold `DsaTopKMask` compares each key with (its key and its
-    # index), and a slot of the ascending top set (`DsaTopKRow`)
+    # index) and `DsaTopKMaskCounted`'s, and a slot of the ascending top set (`DsaTopKRow`)
     register_lazy_family(r"^DsaTopKThreshold(Key|Index)(\d+)x(\d+)_v1$",
                          lambda m: _dsa_topk_mask().threshold(int(m[2]), int(m[3]))[m[1] == "Index"])
+    register_lazy_family(r"^DsaTopKCountedThreshold(Key|Index)(\d+)x(\d+)_v1$",
+                         lambda m: _dsa_topk_mask().counted_threshold(int(m[2]), int(m[3]))[m[1] == "Index"])
     register_lazy_family(r"^DsaTopKSlot(\d+)x(\d+)_v1$", lambda m: _dsa_topk_mask().slot(int(m[1]), int(m[2])))
     # the top-p keep word (one per vocabulary; the split count S is its i32 `splits` OPERAND) and the bit extractor
     register_lazy_family(r"^TopPMaskWordx(\d+)_v1$", lambda m: _sampling().topp_mask_word(int(m[1])))
