@@ -58,7 +58,7 @@ CUDA_TK=$(cat $W/cuda.env 2>/dev/null); export CUDA_TK LD_LIBRARY_PATH=$CUDA_TK/
 NSYS=$W/nsys-root/opt/nvidia/nsight-systems/2026.1.3/bin/nsys
 PY=$W/py/bin/python3
 export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
-$PY -c 'import circuit_check.targets, verity.ml.circuits.defs, verity.core.protocols.sampled_proofs.one_stage.draw' \
+$PY -c 'import circuit_check.targets, verity.ml.circuits.defs, verity.core.protocols.spot.one_stage.draw' \
   || { log "python: an import fails; the venv holds only numpy and blake3 (setup)"; exit 1; }
 fail=0
 Z=$W/zk-$(echo "$UNITS" | tr -c "a-zA-Z0-9\n" -)
