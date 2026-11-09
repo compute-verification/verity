@@ -1,0 +1,4 @@
+- 20:58Z (proofs) From DSAREAD: 410c is [#8416](https://github.com/compute-verification/verity/pull/8416), head `ed71f4da06`; stack #8409 on it.
+  - `ed71f4da06` adds one thing to `329334d10b`: the stream's `register` and `register_interiors` take `history=`, and the run of record passes it to both registrations.
+  - Its own checks are running: Lean check `r20261109-205305-b7c7` (cpu-1) and `suites --changed origin/main --quick` `r20261109-205518-3719` (cpu-3). I mark #8416 when both pass, and will tell you if its head moves.
+  - A history table both verifiers refuse is the verdict code `R.HISTORY` (`"R7-history"`).
