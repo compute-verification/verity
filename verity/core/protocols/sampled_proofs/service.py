@@ -1096,7 +1096,11 @@ class Stream:
     registration's population program is their mixed population (`partition.mixed_population_program`) at the counts
     `register` is given, under one sample by the Spec's sampling design (`stratified:K`: a stratum per template, each sampled at least
     once; `work:K`: at least the work table's floor). It is one program and one query, as for one template, so the
-    verifier of record's sample and run (`Select.select`, `Run.run`) read it in the same form. `budget` (b), `delta`
+    verifier's sample and run (`Select.select`, `Run.run`) read it in the same form. A window's templates
+    may instead come with `program`, the challenger's own population program of every registration (a generator form
+    that wires its templates' instances, the network certifier's scan's): its proof blocks are the templates'
+    instances, each template's in one or more runs in their order, read stratum by stratum in order
+    (`partition.in_order`), and every registration's N is its population, which the stream's digest names. `budget` (b), `delta`
     (the profile's) and `rounds` (R, the most registrations open at once, and so the most one `ProofRun` covers) are
     public parameters of the stream. `coins` is
     the auditor's challenger's coins, a `coins.ChallengerCoins` (n bytes a call, read in order by `OwnRandomness`), which
@@ -1138,7 +1142,8 @@ class Stream:
     def __init__(self, spec: Spec, unit: SpecializedDefinition | Sequence[SpecializedDefinition], *, budget: int, delta: float, challenger: str,
                  coins: ChallengerCoins | None = None, clock: Callable[[], float] = time.monotonic,
                  sampler: Sampler | None = None, rounds: int = 1, prover: str | None = None,
-                 values: Sequence[tuple[str, int, int]] = (), log: Sequence[Mapping[str, Any]] = ()) -> None:
+                 program: Program | None = None, values: Sequence[tuple[str, int, int]] = (),
+                 log: Sequence[Mapping[str, Any]] = ()) -> None:
         if spec.check.window is not None or spec.check.deadline is not None:
             raise ValueError("the service doesn't prove a window statement or run a timed session yet")
         if spec.check.proof_deadline is None:
@@ -1156,6 +1161,7 @@ class Stream:
         if dict(spec.check.query) != query:
             raise ValueError("the check's query is not the template query over the challenger's unit (a window's: "
                              "Q_template_instances over its templates, in its order)")
+        counts = None if program is None else self._counts_of(program, unit, units, query)
         if not (type(budget) is int and budget >= 1):
             raise ValueError(f"a failure budget is a positive integer, not {budget!r}")
         if not (isinstance(delta, float) and 0 < delta < 1):
@@ -1170,6 +1176,9 @@ class Stream:
         if values and isinstance(unit, SpecializedDefinition):
             raise ValueError("a stream of one template's instances takes no values: a window with values is a mixed "
                              "population of its templates (give its unit as a sequence of them)")
+        if values and program is not None:
+            raise ValueError("a stream's own population program holds whatever values it takes: give `program` or "
+                             "`values`, not both")
         if values:
             P.mixed_population_program([(u, 1) for u in units], values=values)
         try:
@@ -1180,11 +1189,13 @@ class Stream:
                              f"entries name their value, domain and root: {type(e).__name__}: {e}") from None
         self.spec, self.unit, self.budget, self.delta, self.challenger = spec, unit, budget, delta, challenger
         self.templates = None if isinstance(unit, SpecializedDefinition) else units
+        self.population, self._population_counts = program, counts
         self.rounds, self.values = rounds, values
         self._coins, self._clock, self._sampler = coins, clock, sampler
         self.digest = _sha512({"format": STREAM, "spec": spec.digest(), "budget": budget, "delta": delta,
                                "challenger": challenger, **({"rounds": rounds} if rounds > 1 else {}),
                                **({"prover": prover} if prover is not None else {}),
+                               **({"population": P.program_digest(program)} if program is not None else {}),
                                **({"coins": "challenger"} if isinstance(coins, ChallengerCoins) else {}),
                                **({"values": [list(v) for v in values]} if values else {})})
         self.binding = None if prover is None else R._binding({"stream": self.digest, "prover": prover})
@@ -1368,10 +1379,11 @@ class Stream:
         each by the verifier (`verifier.check_public`, `verifier.check`), against the challenger's own copies:
         the population program it builds from `unit` and the record's N (a window's: the mixed population of its
         templates, in its order, at `counts`, the challenger's own `{template's descriptor id: instances}` of the window,
-        every template's at least one, taking the stream's `values`), the check's query, the selection rule's sampling
-        design, `SCHEME`, the stream's log (the records of it R6 and R7 read, `_earlier`), and the per-registration
-        copies given here (`ports`, `leaf_layer`, `anchors`, `registered`, `work_table`, `supplied`, `pinned`,
-        `schemas`, `window_root`, `held` and `outputs`, as `registration.check` takes them). Then the receipt. Under
+        every template's at least one, taking the stream's `values`; or the stream's own `program`, at its N and
+        counts), the check's query, the selection rule's sampling design, `SCHEME`, the stream's log (the records of it
+        R6 and R7 read, `_earlier`), and the per-registration copies given here (`ports`, `leaf_layer`, `anchors`,
+        `registered`, `work_table`, `supplied`, `pinned`, `schemas`, `window_root`, `held` and `outputs`, as
+        `registration.check` takes them). Then the receipt. Under
         `Check.registration_deadline` the challenger first reads its clock (`received_at`): a registration received more
         than the deadline after the salt's release, or before any salt, is refused (`late-registration`, with both
         readings) whatever it holds, logged, and ends the epoch; an on-time one carries both readings
@@ -1446,10 +1458,40 @@ class Stream:
                                     "salted_at": reg.salted_at, "received_at": reg.received_at})
         return reg
 
+    @staticmethod
+    def _counts_of(program: Program, unit: SpecializedDefinition | Sequence[SpecializedDefinition],
+                   units: Sequence[SpecializedDefinition], query: Mapping[str, Any]) -> dict[str, int]:
+        """`{template's descriptor id: instances}` of a window's own population `program` under `query`; raises
+        ValueError unless `unit` is a window's and the program's proof blocks are `units`' instances, each template's
+        runs in its order, read stratum by stratum in order."""
+        refused = ValueError("a stream's own population program is a window's, its proof blocks its templates' "
+                             "instances, each template's in its order and every one read stratum by stratum in order "
+                             "(partition.in_order)")
+        if isinstance(unit, SpecializedDefinition):
+            raise refused
+        try:
+            ranges = P.ranges(program, query)
+        except (P.QueryRefused, ValueError) as e:
+            raise refused from e
+        ids, seen = [P.template_id(t) for t in units], []
+        for tid, _lo, _n in ranges:
+            if not seen or seen[-1] != tid:
+                seen.append(tid)
+        counts: dict[str, int] = {}
+        for tid, _lo, n in ranges:
+            counts[tid] = counts.get(tid, 0) + n
+        if seen != ids or not P.in_order(program, query, sum(counts.values())):
+            raise refused
+        return counts
+
     def _program(self, n: int, counts: Mapping[str, int] | None) -> Program | None:
-        """The challenger's population program for a registration of N = `n`: `unit`'s N instances, or a window's mixed
-        population at `counts` (`register`'s), which number N in all, taking the stream's `values`; None when `counts`
-        don't fit the stream."""
+        """The challenger's population program for a registration of N = `n`: `unit`'s N instances, a window's mixed
+        population at `counts` (`register`'s), which number N in all, taking the stream's `values`, or the stream's own
+        population program, whose population is N and whose counts `counts` are if given; None when `counts` don't fit
+        the stream."""
+        if self.population is not None:
+            mine = self._population_counts
+            return self.population if n == sum(mine.values()) and (counts is None or dict(counts) == mine) else None
         if self.templates is None:
             return P.population_program(self.unit, n) if counts is None else None
         ids = [P.template_id(t) for t in self.templates]

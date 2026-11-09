@@ -9,7 +9,8 @@ import pytest
 
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array, Value as Bits
+from verity.ml.circuits.refs import array_of, coll_concat
+from verity.ml.circuits.types import Array, Tuple, Value as Bits
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V
 
@@ -47,15 +48,15 @@ def _program(counts=COUNTS, window=WINDOW, values=()):
     return P.mixed_population_program([(t, counts[P.template_id(t)]) for t in window], values=values)
 
 
-def _ports(counts=COUNTS, values=()) -> dict:
-    part = P.partition(_program(counts, values=values), QUERY)
+def _ports(counts=COUNTS, values=(), program=None) -> dict:
+    part = P.partition(program or _program(counts, values=values), QUERY)
     n = sum(counts.values())
     return {p: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), p, SCHEMA, leaves, RUN)}
             for p, leaves in (("x", n), ("out", 2 * n))}
 
 
 def _record(counts=COUNTS, program=None, query=QUERY, law=None, values=(), **kw) -> dict:
-    ports = _ports(counts, values)
+    ports = _ports(counts, values, program if query == QUERY else None)
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **ports[p]} for i, p in enumerate(ports)]
     return R.record(program or _program(counts, values=values), query, law or {"law": "stratified", "k": 3}, S.SCHEME,
                     roots, {"kind": "served", "run": RUN, "row": 0}, **kw)
@@ -121,6 +122,48 @@ def test_a_registration_of_another_window_is_refused():
     assert _refused(lambda: pair_stream().register(pair_record(), pair_ports(6), counts={pair: 6})) == ("population",)
     reg = stream.register(_record(), _ports(), counts=COUNTS)
     assert reg.order == 0
+
+
+def _wired(n: int = 9) -> Program:
+    """A generator form of PAIR x 1 and TRIPLE x n: each TRIPLE instance reads two inputs of its own and PAIR's
+    output, so its program is no mixed population."""
+    def signature(S_):
+        return (("0.x", Array(1, Array(2, Bits(8)))), ("1.x", Array(S_.n, Array(2, Bits(8))))), \
+            Tuple(Array(1, Bits(8)), Array(S_.n, Bits(8)))
+
+    def body(B, S_, first, rest):
+        p = B.batch(PAIR, first, axes=(0,))
+        xs = array_of([array_of([rest[i][0], rest[i][1], p[0]]) for i in range(S_.n)])
+        return coll_concat(signature(S_)[1], [p, B.batch(TRIPLE, xs, axes=(0,))])
+
+    return Program(bind(CompositeDefinition("ServiceTestWired", 0, ("n",), signature, body, register=False), n=n))
+
+
+def test_a_windows_own_population_program_is_every_registrations():
+    """A window's stream given its own population program (a generator form, `Stream(program=…)`): a record over it
+    runs to an accepted outcome by the Lean run, its counts the program's, and the stream's digest names it; a record
+    over the mixed population at the same counts is refused (`R2-program`), as are counts other than the program's
+    (`population`), and a program whose proof blocks aren't the window's templates in their order is refused, as is a
+    program given with `values`, which the program holds itself."""
+    wired = _wired()
+    stream = FC.Stream(_spec(), WINDOW, budget=2, delta=DELTA, challenger="challenger-test", clock=Clock(),
+                       program=wired)
+    assert stream.digest != _stream().digest
+    ports = _ports(program=wired)
+    assert "R2-program" in _refused(lambda: stream.register(_record(), _ports(), counts=COUNTS))
+    other = {P.template_id(PAIR): 2, P.template_id(TRIPLE): 8}
+    assert _refused(lambda: stream.register(_record(program=wired), ports, counts=other)) == ("population",)
+    assert stream._program(10, COUNTS) is wired and stream._program(11, None) is None
+    reg = stream.register(_record(program=wired), ports)
+    draw = stream.select(reg)
+    assert stream.deliver(draw, [SESSION]) is None
+    assert stream.outcome(draw, _lean(), {"statement": "stub"}).accepted
+    assert "run" not in stream.records[-1]["audit"]["checks"]
+    for bad in (P.mixed_population_program([(TRIPLE, 9), (PAIR, 1)]), P.population_program(PAIR, 10)):
+        with pytest.raises(ValueError, match="own population program"):
+            S.Stream(_spec(), WINDOW, budget=2, delta=DELTA, challenger="c", program=bad)
+    with pytest.raises(ValueError, match="not both"):
+        FC.Stream(_spec(), WINDOW, budget=2, delta=DELTA, challenger="c", clock=Clock(), program=wired, values=(VALUE,))
 
 
 def test_a_stratum_short_of_its_floor_is_refused():
