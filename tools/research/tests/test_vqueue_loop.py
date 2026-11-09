@@ -441,10 +441,13 @@ def test_an_action_that_fails_stops_the_tick_with_its_error_logged_and_a_torn_li
     assert any("read as none" in x for x in env.out)
 
 
-def test_a_build_whose_enqueue_failed_is_logged_stops_the_tick_and_is_enqueued_by_the_next(env):
+@pytest.mark.parametrize("slim", [False, True])
+def test_a_build_whose_enqueue_failed_is_logged_stops_the_tick_and_is_enqueued_by_the_next(env, slim):
+    """With the run beside each check too, which doesn't start for it, so it is list-failed and not pending."""
     env.put(1, {"a.txt": "1\n"})
     env.put(2, {"b.txt": "2\n"})
-    loop = env.loop(lambda s: policy(s) + ([] if s.candidates else [Build((2,), s.main, 0)]))
+    loop = env.loop(lambda s: policy(s) + ([] if s.candidates else [Build((2,), s.main, 0)]), slim=Slim() if slim else None)
+    loop.world.slim_driver = lambda: "drive"
     real, calls = loop.world.enqueue, []
 
     def enqueue(sha: str, priority: int) -> None:
@@ -720,17 +723,20 @@ def test_a_red_is_told_once_a_base_and_task_across_a_restart(env):
 
 class Slim:
     """`research.vqueue_slim`'s three functions, faked: each start registers a run, judged as ``verdicts`` says (pending
-    unless it names it), and a verdict other than pending is kept in its record, as `judge` keeps it."""
+    unless it names it), and a verdict other than pending is kept in its record, as `judge` keeps it.  Each record judged is
+    kept in ``judged``."""
 
     def __init__(self):
         self.started: list[tuple] = []
         self.verdicts: dict[str, str] = {}
+        self.judged: list = []
 
     def start(self, driver, sha: str, base: str) -> dict:
         self.started.append((driver, sha, base))
         return {"ids": [f"run-{len(self.started)}"], "tip": sha, "base": base}
 
     def judge(self, driver, rec: dict | None) -> Verdict:
+        self.judged.append(rec)
         if rec is None:
             return Verdict(INFRA, (), (vqueue.Failed("the run beside its check registered no run", ":no run", frozenset()),))
         state = rec.get("verdict") or self.verdicts.get(rec["ids"][0], PENDING)
@@ -746,18 +752,19 @@ class Slim:
         return Verdict(state, graph.failed + slim.failed, graph.infra + slim.infra)
 
 
-def test_the_run_beside_each_check_starts_once_a_candidate_its_record_is_kept_and_both_must_pass(env):
+def test_the_run_beside_a_check_starts_once_its_check_passed_its_record_is_kept_and_both_must_pass(env):
     main = env.main()
     env.put(1, {"a.txt": "1\n"})
     slim = Slim()
     loop = env.loop(vqueue.decide, slim=slim)
-    loop.world.slim_driver = lambda dry_run=False: "drive"
-    built, started = loop.tick()
+    loop.world.slim_driver = lambda: "drive"
+    (built,) = loop.tick()
     sha = built["sha"]
-    assert (started["action"], started["sha"], started["why"], started["record"]) == (
-        "slim", sha, "started", {"ids": ["run-1"], "tip": sha, "base": main})
     keys = env.listed(sha, {"pytest:a": ["a.txt"]})
     env.result(keys["pytest:a"], "pytest:a", "pass")
+    (started,) = loop.tick()
+    assert (started["action"], started["sha"], started["why"], started["record"]) == (
+        "slim", sha, "started", {"ids": ["run-1"], "tip": sha, "base": main})
     assert loop.tick() == [] and slim.started == [("drive", sha, main)]      # graph2's passed, the run beside still runs
     slim.verdicts["run-1"] = INFRA
     judged, retry, again = loop.tick()
@@ -769,22 +776,54 @@ def test_the_run_beside_each_check_starts_once_a_candidate_its_record_is_kept_an
     assert (kept["record"]["verdict"], advance["action"], drop["action"]) == (PASS, "advance", "drop") and env.main() == sha
     assert len(slim.started) == 2 and loop.tick() == []
     started_again = env.loop(vqueue.decide, clone="again", slim=slim)         # a restart reads its records from the log
-    started_again.world.slim_driver = lambda dry_run=False: "drive"
+    started_again.world.slim_driver = lambda: "drive"
     assert started_again.tick() == [] and len(slim.started) == 2
+
+
+def test_the_run_beside_starts_for_no_candidate_above_another_or_whose_check_runs_and_a_dry_run_neither_starts_nor_judges(env):
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"b.txt": "2\n"})
+    slim = Slim()
+    loop = env.loop(vqueue.decide, slim=slim, batch=1)
+    loop.world.slim_driver = lambda: "drive"
+    (one,) = loop.tick()
+    (two,) = loop.tick()
+    assert (one["members"], two["members"], two["base"]) == ([1], [2], one["sha"])
+    keys = env.listed(two["sha"], {"pytest:b": ["b.txt"]})
+    env.result(keys["pytest:b"], "pytest:b", "pass")                # above a candidate
+    keys = env.listed(one["sha"], {"pytest:a": ["a.txt"], "pytest:z": ["z.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", "pass")                # its check still runs
+    assert loop.tick() == [] and slim.started == [] and slim.judged == []
+    env.result(keys["pytest:z"], "pytest:z", "pass")
+    dry = env.loop(vqueue.decide, slim=slim, batch=1, dry_run=True)        # its world has no Driver: a start or judge raises
+    assert dry.tick() == [] and slim.started == [] and slim.judged == [] and "beside: pending" in "\n".join(env.out)
+    (started,) = loop.tick()
+    assert (started["action"], started["sha"], slim.started) == ("slim", one["sha"], [("drive", one["sha"], main)])
+    slim.verdicts["run-1"] = PASS
+    assert _acts(loop.tick()) == ["slim", "advance", "drop"]
+    (above,) = loop.tick()                                          # the lowest now, its check passed
+    assert (above["action"], above["sha"], slim.started[-1]) == ("slim", two["sha"], ("drive", two["sha"], one["sha"]))
 
 
 def test_a_dropped_candidate_s_run_beside_its_check_is_cancelled_while_it_runs_and_one_that_ended_is_left(env):
     env.put(1, {"a.txt": "1\n"})
     slim = Slim()
     loop = env.loop(vqueue.decide, slim=slim)
-    loop.world.slim_driver = lambda dry_run=False: "drive"
-    built, _ = loop.tick()
+    loop.world.slim_driver = lambda: "drive"
+    (built,) = loop.tick()
+    keys = env.listed(built["sha"], {"pytest:a": ["a.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    (started,) = loop.tick()
     env.o.gh.ready.discard((1, built["heads"][0]))                  # its ready mark withdrawn: dropped
     (drop,) = loop.tick()
-    assert (drop["action"], drop["beside_cancelled"]) == ("drop", ["run-1"])
+    assert (started["action"], drop["action"], drop["beside_cancelled"]) == ("slim", "drop", ["run-1"])
     assert env.cancelled == [(["run-1"], f"vqueue: candidate {built['sha'][:12]} was dropped: #1's ready mark was withdrawn")]
     env.put(2, {"b.txt": "2\n"})
-    two, _ = loop.tick()
+    (two,) = loop.tick()
+    keys = env.listed(two["sha"], {"pytest:b": ["b.txt"]})
+    env.result(keys["pytest:b"], "pytest:b", "pass")
+    assert _acts(loop.tick()) == ["slim"]
     slim.verdicts["run-2"] = FAIL
     env.o.gh.ready.discard((2, two["heads"][0]))
     judged, drop = loop.tick()
@@ -794,17 +833,23 @@ def test_a_dropped_candidate_s_run_beside_its_check_is_cancelled_while_it_runs_a
 def test_a_candidate_older_than_the_log_s_window_keeps_its_tries_first_enqueue_results_set_aside_and_run_beside(env):
     env.put(1, {"a.txt": "1\n"})
     slim, seen = Slim(), []
-    loop = env.loop(lambda s: seen.append(s) or vqueue.decide(s), slim=slim, pending_s=100 * 3600)
-    loop.world.slim_driver = lambda dry_run=False: "drive"
-    built, _ = loop.tick()
+    loop = env.loop(lambda s: seen.append(s) or vqueue.decide(s), slim=slim, pending_s=200 * 3600)
+    loop.world.slim_driver = lambda: "drive"
+    (built,) = loop.tick()
     keys = env.listed(sha := built["sha"], {"pytest:a": ["a.txt"]})
     env.result(keys["pytest:a"], "pytest:a", "error", infra=True)
     (retry,) = loop.tick()
     assert (retry["action"], retry["counts"], retry["priority"]) == ("retry", {keys["pytest:a"]: 1}, built["priority"])
-    env.clock += 49 * 3600                                          # its build, its run beside and its retry: past the window
-    assert loop.tick() == [] and len(slim.started) == 1
+    env.clock += 49 * 3600                                          # its build and its retry: past the window
+    assert loop.tick() == [] and slim.started == []
     c = seen[-1].candidates[0]
     assert (c.sha, c.verdict.state, c.tries, c.enqueued) == (sha, PENDING, 2, T0)
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    assert _acts(loop.tick()) == ["slim"]
+    env.clock += 49 * 3600                                          # its run beside too
+    assert loop.tick() == [] and len(slim.started) == 1
+    c = seen[-1].candidates[0]
+    assert (c.verdict.state, c.tries, c.enqueued) == (PENDING, 2, T0)
 
 
 def test_a_check_rung_for_staying_pending_is_rung_once_still_when_its_ring_is_older_than_the_log_s_window(env):
@@ -828,13 +873,16 @@ def test_a_fail_whose_every_failure_is_inherited_lands_once_the_run_beside_it_pa
     slim = Slim()
     slim.combine = vqueue_slim.combine                              # it keeps no `ended`: the loop carries it
     loop = env.loop(vqueue.decide, slim=slim)
-    loop.world.slim_driver = lambda dry_run=False: "drive"
-    built, _ = loop.tick()
+    loop.world.slim_driver = lambda: "drive"
+    (built,) = loop.tick()
     red = {"pytest:r": "sha512:red"}
     env.listed(main, {"pytest:r": ["red.txt"]}, keys=red)
-    env.listed(built["sha"], {"pytest:r": ["red.txt"]}, keys=red)
+    keys = env.listed(built["sha"], {"pytest:a": ["a.txt"], "pytest:r": ["red.txt"]}, keys=red)
     env.result("sha512:red", "pytest:r", "fail")
-    assert loop.tick() == []                                        # the run beside still runs: the fail hasn't ended
+    assert loop.tick() == [] and slim.started == []                 # `pytest:a` still runs: the fail hasn't ended
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    assert _acts(loop.tick()) == ["slim"]                           # it reads as a pass: the run beside starts
+    assert loop.tick() == []                                        # and still runs: the fail hasn't ended
     slim.verdicts["run-1"] = PASS
     assert _acts(loop.tick()) == ["slim", "red", "advance", "drop"] and env.main() == built["sha"]
 
