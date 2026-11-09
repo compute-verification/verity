@@ -1023,3 +1023,6 @@ Sources:
   control).
 - Scripts: lanes/proofs/tools/cacheopt_hold.py and cacheopt_postrows.py.
 
+[2026-11-09T08:44Z] 665910c8bf19
+Coordinator 08:47Z, add to the reprice: ZKSTACK corrects an earlier claim. Certified GLM-5.3 serving DOES read other requests' KV when the prefix cache is on (class G compiler program/predict/steps.py takes a hit's rows from the requests that produced them; refuse_cached_prefix guards only the traced frontend rule). So with prefix caching on, the output-counting charge unit is a request plus every request its rows reach (a conversation / shared-prefix group), F > 1. Price both: prefix cache off (unit = request) and on (unit = reach group; give F from trace128/B128 prefix-sharing if the engine records have it). State which the CACHEOPT certified-hits row (11.89%) assumes.
+
