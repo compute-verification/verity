@@ -652,10 +652,13 @@ theorem TheftFaultedNontrivial : Guarantees.TheftFaultedNontrivial := by
   have hc : Fintype.card (faultChannel Unit Unit Unit Unit (Fin 16) Unit WeightSecurity.ToyServed.Fault
       (Cut.none _ _) WeightSecurity.ToyServed.Cf WeightSecurity.ToyServed.size none 2 0
       ((0 + 1) * Fintype.card Unit)).S ≤ 144 := by
-    rw [card_faultChannel]
-    refine (Nat.mul_le_mul (Fintype.card_le_one_iff_subsingleton.2 ToyFaulted.strings_subsingleton)
-      ((card_servedChannel_le Unit Unit Unit Unit (Fin 16) Unit 2 _).trans (by simp [Finset.sum_range_succ]))).trans ?_
-    norm_num
+    calc Fintype.card (faultChannel Unit Unit Unit Unit (Fin 16) Unit WeightSecurity.ToyServed.Fault
+          (Cut.none _ _) WeightSecurity.ToyServed.Cf WeightSecurity.ToyServed.size none 2 0
+          ((0 + 1) * Fintype.card Unit)).S
+        ≤ Fintype.card (servedChannel Unit Unit Unit Unit (Fin 16) Unit 2 ((0 + 1) * Fintype.card Unit)).S :=
+          Fintype.card_le_of_injective (fun s => s.2) fun a b h =>
+            Prod.ext (@Subsingleton.elim _ ToyFaulted.strings_subsingleton _ _) h
+      _ ≤ 144 := (card_servedChannel_le Unit Unit Unit Unit (Fin 16) Unit 2 _).trans (by simp [Finset.sum_range_succ])
   simp only [hsteal, hfa, avg_const, add_zero, htyp, ENNReal.ofReal_zero, zero_add, hN, one_mul] at h
   have hlt : ENNReal.ofReal ((Fintype.card (faultChannel Unit Unit Unit Unit (Fin 16) Unit
       WeightSecurity.ToyServed.Fault (Cut.none _ _) WeightSecurity.ToyServed.Cf WeightSecurity.ToyServed.size none 2 0
