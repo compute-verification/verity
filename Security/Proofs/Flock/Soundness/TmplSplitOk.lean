@@ -667,8 +667,9 @@ theorem addK_spec (as : Array ℕ) (ws : Array F128) (t : ℕ) (f : F128) {s : �
         if as.getD k 0 + t = s then pd.getD s 0 + ws.getD k 0 * f else pd.getD s 0 := by
       by_cases he : as.getD k 0 + t = s
       · rw [getD_modify _ _ (by rw [hpd]; omega)]
-        simp only [he, ↓reduceIte]
-      · simp only [Array.getD_eq_getD_getElem?, Array.getElem?_modify, he, ↓reduceIte]
+      · rw [ite_eq_right he]
+        generalize as.getD k 0 + t = i at he ⊢
+        simp only [Array.getD_eq_getD_getElem?, Array.getElem?_modify, ite_eq_right he]
     rw [h2, hm, Finset.sum_range_succ']
     simp only [Nat.add_zero, show ∀ j, k + 1 + j = k + (j + 1) from fun j => by omega]
     split_ifs <;> (try simp only [of_add, of_mul]) <;> ring
@@ -764,7 +765,7 @@ theorem refsK_exp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ
   refine ⟨h1, ?_⟩
   rw [h2]
   have hz : pendK pt as nk s L H cx ws py (Array.replicate 64 0) = 0 := by
-    simp [pendK, getD_replicate, of_zero']
+    simp only [pendK, getD_replicate, of_zero', zero_mul, Finset.sum_const_zero]
   dsimp only at h
   rw [hz, add_zero] at h
   unfold pendP
