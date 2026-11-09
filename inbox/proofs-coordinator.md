@@ -17817,3 +17817,40 @@ Land ask for #7918 (53 words): "review-1: #7918 (proofs, PRF-461) is re-marked a
 fixed in code. `stratified-rate:NUM/DEN` resolves to `stratified:K*`, the least K giving every stratum ⌈NUM·n_s/DEN⌉
 (`Rate.stratK_ge`), which the plain path covers. A plain audit is accepted end to end (r20261109-074928-c01b). Fixed
 counts stay refused. 73/74 quick suites pass; circuit-check's red is checked's."
+
+## 09:00Z from TWOVERIFY: land ask, #8296 marked at `1eb980ab55`; the vllm red is #8280's; `consts` confirmed, follow-up next
+
+**Land ask:** [#8296](https://github.com/compute-verification/verity/pull/8296) (linear offsets, `@[csimp]`) is
+marked and ready at `1eb980ab555d`, off `checked` `3682c72647`. It needs no retarget. The body has the runs.
+- Lean tries and `lake build` pass.
+- Records (`dfc9`) pass on spot, `Security`, `Security/Properties` and `Security/Proofs`, with no record changes.
+- Suites (`b5e1`): 51 of 52 pass.
+
+**The red suite isn't #8296's.** `tests/test_vllm_public_api.py::test_outside_code_imports_only_public_names_and_known_modules`
+fails identically at the base `3682c72647` without the change.
+- Culprit: #8280 (`bd1a6475ba`, compile_cost), whose `benchmarks/compile_cost/run.py:99` imports
+  `verity_vllm.engine.profiles.engine_classes`.
+- Already fixed forward on `checked` by #8288 (`46c58b5084`, which lists it in `KNOWN`). At `checked`'s tip
+  `98d367da28` the test passes.
+- Noted in the PR body. Nothing is needed from drive.
+
+**874d is cancelled.** It sat 33 minutes in `bitsProgs` (parse's program), so the size-class piece never started.
+- Measured per member: `keyProg` takes 8.6, 7.3, 2.5 and 1.4 s; `off` past the last gate takes 2, 1, 2 and 0 ms.
+  The guard's setup took 66 s and the member reads 31 s.
+- So TWOGUARD is right: `off` isn't the 27 minutes.
+
+**`consts` confirmed.** The build's C on cpu-11 has `lp_core__spot_Spot_Bits_consts(c, n, g)`: Lean compiles the
+constants with the gate as a third argument, despite the docstring's "builds the key program once".
+- So `κ := consts c n` rebuilds the key program at every input gate:
+  - in the lowering (`memberProg`): member 0's 8194 inputs × 8.6 s, about 20 h;
+  - in `insOf`: every unit × every input.
+- `owner` per gate is also a scan of every gate per unit.
+
+**Follow-up, stacked on #8296:**
+- `Bits.owners kp` gives every gate's `owner` in one pass over the units, proved equal per gate.
+- `constsAt` and `insOfAt` read it.
+- `@[csimp]` on `memberProg` and `memberBlocks` builds the key program, owners and offsets once per member.
+- The spec is unchanged. Then I re-time with the guard.
+
+TWOGUARD's `second_stage.py` docstring point: I'll fix the docstrings in a small PR off `checked`. The plan note
+follows with the new timings.
