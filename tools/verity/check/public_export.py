@@ -909,11 +909,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {p}")
     print(f"Lean locks: {len(report['locks'])}, each stating only what the export holds:")
     for f, lock in report["locks"].items():
+        more = [f"{n} {what}" for n, what in ((len(lock["undeclared"]), "dropped names no tracked file declares"),
+                                              (len(lock["witness_withheld"]), "entries gone with a witness it doesn't copy"),
+                                              (lock["lane_fields"], "lane fields removed"),
+                                              (len(lock["also_withheld"]), "kept names a file left out declares too"),
+                                              (sum(lock["sites"].values()), f"leftovers in kept entries {lock['sites']}")) if n]
         print(f"  {f}: {lock['bytes'][0]} to {lock['bytes'][1]} bytes; entries kept {sum(lock['kept'].values())}, dropped "
-              f"{sum(lock['dropped'].values())} ({len(lock['undeclared'])} that no tracked file declares, "
-              f"{len(lock['witness_withheld'])} with a witness the export doesn't copy); {lock['lane_fields']} lane fields "
-              f"removed; {len(lock['also_withheld'])} kept names a file left out declares too; leftovers in kept entries: "
-              f"{lock['sites'] or 'none'}")
+              f"{sum(lock['dropped'].values())}" + "".join(f"; {m}" for m in more))
     lt = report["lean_targets"]
     print(f"Lake packages: {len(lt)}, {sum(len(t['modules']) for t in lt.values())} modules to build; root files the export "
           f"lacks: {[f'{p}: {r}' for p, t in lt.items() for r in t['missing_roots']]}")
