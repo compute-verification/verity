@@ -45,6 +45,8 @@ from verity_vllm.engine import pool_row as PR
 
 #: the coins each window's memory check is drawn under
 COIN_SEED = 0
+#: the replay's scheduler, under the name the advice decoder's module gives it where it has it
+SCHED = getattr(RP, "_Sched", None) or RP.Scheduler
 
 
 # --- the cut run -----------------------------------------------------------------------------------------------------
@@ -58,7 +60,7 @@ def cut_replay(engine: RP.Engine, requests: Sequence[RP.RequestIO], admit: Seque
     the steps, each window's members and each edge's cut set in preemption order."""
     if every < 1:
         raise ValueError(f"a window of {every} steps")
-    s = RP._Sched(engine, requests)
+    s = SCHED(engine, requests)
     n, nxt, edge = len(requests), 0, every
     steps: list[RP.Step] = []
     queue: deque = deque()
