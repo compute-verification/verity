@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.ZK.GK.Sim
 public import Proofs.Flock.Soundness.Assumptions
-import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.ZK.Masking
 import VCVio.Prelude.Core
 

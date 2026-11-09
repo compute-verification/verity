@@ -56,7 +56,7 @@ def test_no_escape_hatches():
 
 AUDIT = PROOFS / "Flock" / "Soundness" / "Audit"
 AUDIT_STATEMENTS = PROOFS / "Flock" / "Lemmas" / "Audit.lean"
-AUDIT_IMPORTS = re.compile(r"(Mathlib\.|Definitions\.Flock\.|Proofs\.Flock\.Soundness\.Game\.|"
+AUDIT_IMPORTS = re.compile(r"(Mathlib\.|Definitions\.Flock\.|Proofs\.Flock\.Soundness\.Game(?:\.|$)|"
                            r"Proofs\.Flock\.Soundness\.Audit\.|Proofs\.Flock\.Lemmas\.Audit$)")
 IMPORT = re.compile(r"(?:public )?(?:meta )?import (?:all )?(\S+)")
 

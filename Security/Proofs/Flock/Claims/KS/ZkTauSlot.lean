@@ -42,7 +42,7 @@ import Proofs.Flock.Claims.KS.ZkBatchSim
 import Proofs.Flock.Claims.KS.ZkLiveSched
 import Proofs.Flock.Claims.KS.ZkStep
 import Proofs.Flock.Soundness.Defs
-import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The masked simulated fork's alignment at `τ`
