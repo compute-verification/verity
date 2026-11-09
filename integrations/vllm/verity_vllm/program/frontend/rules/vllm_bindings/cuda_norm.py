@@ -97,7 +97,7 @@ class CudaFusedAddRmsNormRule(InPlaceRule):
             "weight is bf16 [N], eps is a static float, and both mutated operands are rebound",
             "BLOCK is cuda_rmsnorm.launch_block(number of token rows, N, fused=True)",
         ),
-        evidence_domain="structural; numerics: RMSNormFusedCudaVector8_v1 (capture pending)",
+        evidence_domain="structural; numerics: RMSNormFusedCudaVector8_v3 (capture pending)",
     )
 
     def targets(self):

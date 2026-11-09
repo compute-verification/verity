@@ -173,6 +173,47 @@ def test_a_buffer_several_calls_wrote_in_parts_is_wired_to_each_call_for_its_row
     assert (w["unproved_calls"], w["advice_bits"], w["gap_bits"]) == ({"aten::copy_": 1}, 0, 0)
 
 
+@pytest.fixture()
+def full_graph(tmp_path, monkeypatch):
+    """A full-graph decode step's MLA layer as GLM-5.3 TP8 records it: 5 tokens padded to 8, attention run at the padded
+    batch, so the absorb's ``out=`` (heads x tokens x 256, a transposed view of o_proj's ``[8, 2048]`` input) writes all 8
+    rows, padding rows included, and the FP8 o_proj reads the buffer whole."""
+    stage = _stage(monkeypatch)
+    rng = np.random.default_rng(7)
+    b = _Blobs(tmp_path)
+    attn, o, stale, y, hidden = (rng.integers(0, 2 ** 16, s, dtype=np.uint16)
+                                 for s in ((8, 8, 512), (8, 2048), (8, 2048), (8, 6144), (8, 6144)))
+    heads = [256, 2048, 1]
+    out = b.ref(o.reshape(8, 8, 256).transpose(1, 0, 2), stride=heads)
+    events = [
+        _ev(0, "fa3_sparse_mla", {}, {"r0": b.ref(attn)}),
+        _ev(1, "aten::bmm", {"self": b.ref(attn.transpose(1, 0, 2), stride=[512, 4096, 1]),
+                             "out": b.ref(stale.reshape(8, 8, 256).transpose(1, 0, 2), stride=heads)},
+            {"out": out, "ret0": dict(out)}),
+        _ev(2, "aten::new_empty", {"self": b.ref(o)}, {"ret0": b.ref(o[:1, :1].reshape(1))}),
+        _ev(3, "vllm::dynamic_flashinfer_deepgemm_blockscale_gemm",
+            {"input": b.ref(o), "weight": {"param": "w", "shape": [6144, 2048], "dtype": "torch.float8_e4m3fn"}},
+            {"ret0": b.ref(y)}),
+        _ev(4, "model_output", {}, {"hidden": b.ref(hidden)}),
+    ]
+    _commit(tmp_path, events, {"w": {"shape": [6144, 2048], "dtype": "torch.float8_e4m3fn", "sha512": "cd" * 64}},
+            {f"req{i}": 1 for i in range(5)})
+    rec = stage.Capture(tmp_path, 0)
+    return stage, rec, stage.Wires(rec)
+
+
+def test_a_buffer_a_full_graph_step_wrote_with_its_padding_rows_is_wired_to_the_writer_for_its_real_rows(full_graph) -> None:
+    stage, rec, wires = full_graph
+    ev = rec.events[0]
+    assert (rec.padded(0), rec.real_rows(0, 8)) == (8, 5)
+    src = wires.source(0, ev[3]["in"]["input"])
+    assert src == {"kind": "block", "rank": 0, "seq": 1, "op": "aten::bmm", "out": "ret0",
+                   "into": {"seq": 3, "op": "vllm::dynamic_flashinfer_deepgemm_blockscale_gemm", "in": "input"},
+                   "cover": {"stride": [256, 2048, 1], "offset": 0, "rows": 5}}
+    w = stage.wiring({"A": {"gate": [{"key": [0, 3, 0], "sources": [src]}]}})
+    assert (w["unproved_calls"], w["advice_bits"], w["gap_bits"]) == ({}, 0, 0)
+
+
 def test_a_call_that_passes_its_inputs_bytes_on_is_passed_over_and_dense_fa3_is_no_populations(mixed) -> None:
     stage, rec, wires = mixed
     ev = rec.events[0]

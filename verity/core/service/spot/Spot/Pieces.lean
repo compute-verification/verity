@@ -29,6 +29,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `replay_links`: the design's links, from the replay block's Definition in a program (`SecondStage.replayLinks`);
 * `slots`: the claims' partition over the program and query, and the slots of that sample's checked proof blocks
   (`Slots.select`);
+* `fits`: what of v2's inputs and of a session's draw a session's statement would hold at a given number of bytes or
+  more (`OneStageZk.fitsWhy`, `OneStageZk.drawFitsWhy`), which v2 refuses at `2^64`;
 * `file_population`: why the registration's population over a program and query is not a public file's units in order
   (`FilePart.why`);
 * `bound`: the exact bounds on incorrect proof blocks at δ;
@@ -104,6 +106,7 @@ public import Spot.Produced
 public import Spot.HiddenDraw
 public import Spot.PartitionRef
 public import Spot.WiresDrawn
+public import Spot.OneStageZk
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -692,6 +695,30 @@ def replayLinks (j : Json) : V Json := do
     | some ls => Json.arr (ls.map SecondStage.Link.toJson)
     | none => .null
 
+/-- `{"limit", "circuit", "public", "tables", "program", "partition", "registered", "draw"}` to `{"inputs", "draw"}`: what
+of v2's inputs (`OneStageZk.fitsWhy`) and of a session's draw (`OneStageZk.drawFitsWhy`) a session's statement would hold
+at `limit` bytes or more, each null for nothing. The files are hex, the tables `[name, hex]` pairs, the program hex or
+null, and the partition object, the registered reads and the draw null for none. -/
+def fits (j : Json) : V Json := do
+  let some limit := nat? (getD j "limit") | throw "limit is not a natural number"
+  let circuit ← Flock.unhex (← Flock.J.str j "circuit" "the lengths")
+  let pub ← Flock.unhex (← Flock.J.str j "public" "the lengths")
+  let .arr ts := getD j "tables" | throw "tables is not a list"
+  let tables ← ts.toList.mapM fun
+    | .arr #[.str n, .str b] => do pure (n, ← Flock.unhex b)
+    | _ => throw "a table is not its name and its hex"
+  let program ← match getD j "program" with
+    | .null => pure none
+    | .str b => some <$> Flock.unhex b
+    | _ => throw "the program is not hex or null"
+  let given (k : String) : Option Json := match getD j k with
+    | .null => none
+    | x => some x
+  let why := fun (w : Option String) => w.elim Json.null Json.str
+  return Json.mkObj [
+    ("inputs", why (OneStageZk.fitsWhy limit circuit pub tables program (given "partition") (given "registered"))),
+    ("draw", why (OneStageZk.drawFitsWhy limit (given "draw")))]
+
 /-- `{"proofs", "query"}` to `{"circuits": [[template, circuit, header], ...]}`: a two-stage run's params naming each
 template's circuit file and its statements' reference header, in the order the check's template query names the
 templates (`Run.templateCircuits`); refused where the Python raises. -/
@@ -712,6 +739,7 @@ def table : List (String × (Json → V Json)) :=
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
    ("session_registered", sessionRegistered), ("record", record), ("check_public", checkPublic),
    ("check_verdicts", checkVerdicts), ("run", run), ("template_circuits", templateCircuits), ("hello", Hello.check),
+   ("fits", fits),
    ("challenger_commitment", Challenger.commitmentPiece),
    ("challenger_opening", Challenger.openingPiece), ("challenger_reason", Challenger.reasonPiece),
    ("challenger_order", Challenger.orderPiece), ("challenger_key", Challenger.keyPiece),
