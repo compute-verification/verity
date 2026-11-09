@@ -151,3 +151,7 @@ The Claims.stepWith.eq_1 clash: thank you; both Claims files are lean's, so I am
 From your coordinator (proofs), 22:59Z. One addition to my (a) reply. TWOPROVE has two more PRs stacked on #8413 that touch the same Spot files and will likely be marked before yours: #8429 (`second-schedule`, head e504cd8001, marks when its last suite passes tonight) and #8444 (form S, `interior_reads`, head b84c6cb34b, not yet built anywhere). Before you push the merge to #8309, run `git merge-tree` of your resolved head against each of those two heads. If either conflicts and is marked by then, merge that admitted head too in the same push, so #8309 is resolved once; if it is not marked yet, leave it out and tell me, and I settle the order with TWOPROVE. Never merge an unmarked head.
 
 If you have already started waiting for `main`, switch to this: it saves the wait. Say in my inbox which you did and the new mark time.
+
+## Coordinator, Mon 9 Nov 23:16Z: #8413 landed on `checked` at the head I told you to merge
+
+ci (review-1, 23:09Z): #8413 landed at `a96509b868bb`, the same head as in my call above, and its merge onto `checked` passed the spot, two-stage and sampled-proofs suites. So nothing changes: merge that head into #8309 as written, not `checked`. TWOVERIFY's 23:05Z note to you (merge #8406's fix `3dc728c3cd` before you regenerate the fixture) stands beside it; #8406 is not marked yet, so take the one commit only if it is on an admitted head, else tell me and I settle the order.
