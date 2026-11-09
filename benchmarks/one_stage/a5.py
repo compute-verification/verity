@@ -736,7 +736,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
               "shared_rows": header.get("shared_rows") == ({**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}
                                                            if m.tables else None)}
         for p_name in fv["roots"]:
-            name = m.port(p_name)
+            name = mine.held(m, p_name)
             reg = roots.get(name)
             ok[f"root:{p_name}"] = (name in want and reg is not None and reg["root"] == fv["roots"][p_name]
                                     and reg["domain"] == fv["domain_ids"][p_name] == want[name]["domain"])
@@ -908,7 +908,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         lean_v = got[f"lean-verify/m{k}"]
         return {"mm": mm, "sdir": sdir, "staged_s": s["staged_s"], "verdicts": got, "lean_verify": lean_v,
                 "served": [m.base + u for u in draw_t.get("units", []) if m.base + u in drawn_units],  # a closure's are `proved`
-                "roots": {m.port(p_name): r for p_name, r in ((live or {}).get("roots") or {}).items()},
+                "roots": {mine.held(m, p_name): r for p_name, r in ((live or {}).get("roots") or {}).items()},
                 "proved": a0.proved_units(mm["header"], live or {}), "instances": (live or {}).get("instances", 0),
                 "statement": {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
                               "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},

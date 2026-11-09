@@ -365,11 +365,11 @@ def plugin_targets(pkg: Path) -> list[str]:
 
 def lake_env() -> dict[str, str]:
     """The environment of every `lake` and `setup.sh` the audit runs. `setup.sh` restores nothing from the build cache
-    (`cache.py`). Lake builds from source; with `--artifacts`, each build step restores the modules `stage_build` staged for
-    it. With `--dev-cache`, `setup.sh` restores Mathlib's cache and main's verified build (`cache.py get`) and Lake reads its
-    local cache: the replay still checks our packages' declarations, but a dependency's are taken as their `.olean` states
-    them, which only the gate's from-source build (the cache's root) and the nightly `--fresh` vouch for, so such a run is
-    never a verdict."""
+    (`cache.py`). Lake builds from source; with `--artifacts` on a node whose builds are sandboxed, each build step restores
+    the modules `stage_build` staged for it. With `--dev-cache`, `setup.sh` restores Mathlib's cache and main's verified
+    build (`cache.py get`) and Lake reads its local cache: the replay still checks our packages' declarations, but a
+    dependency's are taken as their `.olean` states them, which only the gate's from-source build (the cache's root) and
+    the nightly `--fresh` vouch for, so such a run is never a verdict."""
     env = dict(os.environ)
     env["PATH"] = f"{Path.home() / '.elan' / 'bin'}{os.pathsep}{env.get('PATH', '')}"
     env.setdefault("LEAN_NUM_THREADS", str(cores()))
@@ -2536,23 +2536,53 @@ def printed(text: str) -> str:
 NAMES = re.compile(r"(?<![\w.'!?])([^\W\d][\w'!?]*(?:\.[^\W\d][\w'!?]*)*)")
 
 
-def paired(was: str, now: str, consts: set[str], facts: dict, known: set[str]) -> bool:
-    """Whether the premise ``now`` prints (``consts``: the constants it names) is the grandfathered ``was`` under renames:
-    the two texts split alike at their names (`NAMES`), and each name that differs is, in ``now``, a declaration with the
-    fields after it that ``was`` has after the old name, one new name for each old one, neither kept elsewhere in the
-    text; and the old name `--moved` moved to the new one, or is gone from the build (`constants`) and shares the new
-    one's root namespace while the lock read no definition of the new name (``known``), or is a definition or theorem
-    with the new one's SHA-256. A constructor is renamed only by `--moved`, and a field or projection never."""
+def moved_fields(op: list[str], np: list[str], start: int, fields: dict, moves: dict) -> list[tuple[str, str]] | None:
+    """The renames that take the dotted name ``op`` to ``np`` (each split at its dots) through its fields: the two alike up
+    to ``start`` (past a variable, or the constant ``np`` starts with) and as long, and each field that differs standing,
+    in ``np``, for one constant (``fields``), which `--moved` moved from the constant of the old field's name; None for
+    any other pair."""
+    if len(op) != len(np) or op[:start] != np[:start]:
+        return None
+    out = []
+    for k in range(start, len(np)):
+        if op[k] == np[k]:
+            continue
+        if len(cs := fields.get((".".join(np[:k]), np[k])) or set()) != 1:
+            return None
+        n = next(iter(cs))
+        o = n[:len(n) - len(np[k])] + op[k]
+        if not n.endswith("." + np[k]) or renamed(o, moves) != n:
+            return None
+        out.append((o, n))
+    return out or None
+
+
+def paired(was: str, now: str, consts: set[str], facts: dict, known: set[str], fields: dict | None = None) -> bool:
+    """Whether the premise ``now`` prints (``consts``: the constants it names; ``fields``: {(an object as printed, a
+    field): the constants that `x.f` stands for}, `Facts.lean`'s `fieldsShown`) is the grandfathered ``was`` under
+    renames: the two texts split alike at their names (`NAMES`), and each name that differs is, in ``now``, a declaration
+    with the fields after it that ``was`` has after the old name, or the same object with fields that differ
+    (`moved_fields`), one new name for each old one, neither kept elsewhere in the text (a field kept stands for what
+    ``fields`` says); and the old name `--moved` moved to the new one, or is gone from the build (`constants`) and shares
+    the new one's root namespace while the lock read no definition of the new name (``known``), or is a definition or
+    theorem with the new one's SHA-256. A constructor or a field (`x.f`) is renamed only by `--moved`, and a projection
+    (`p.1`) never."""
     a, b, constants = NAMES.split(was), NAMES.split(now), facts.get("constants")
     if len(a) != len(b) or a[::2] != b[::2] or constants is None:
         return False
+    moves, fields = facts.get("moves") or {}, fields or {}
     subst, kept = {}, set()
     for o, n in zip(a[1::2], b[1::2]):
         parts = n.split(".")
         i = next((i for i in range(len(parts), 0, -1) if ".".join(parts[:i]) in consts), 0)
         c, tail, op = ".".join(parts[:i]), parts[i:], o.split(".")
+        kept.update(x for k in range(max(i, 1), min(len(op), len(parts))) if op[:k + 1] == parts[:k + 1]
+                    for x in fields.get((".".join(parts[:k]), parts[k])) or ())
         if o == n:
             kept.add(c)
+        elif (f := moved_fields(op, parts, max(i, 1), fields, moves)) is not None:
+            if any(subst.setdefault(x, y) != y for x, y in f):
+                return False
         elif not c or len(op) <= len(tail) or op[len(op) - len(tail):] != tail or \
                 subst.setdefault(".".join(op[:len(op) - len(tail)]), c) != c:
             return False
@@ -2560,7 +2590,7 @@ def paired(was: str, now: str, consts: set[str], facts: dict, known: set[str]) -
         return False
     for o, n in subst.items():
         x, y = constants.get(o), constants.get(n)
-        if renamed(o, facts.get("moves") or {}) == n:
+        if renamed(o, moves) == n:
             continue
         if y is None or "constructor" in (y.get("kind"), (x or {}).get("kind")):
             return False
@@ -2642,11 +2672,14 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
         if bad:
             offenders[g] = bad
         consts: dict[str, set[str]] = {}
+        fields: dict[str, dict[tuple[str, str], set[str]]] = {}
         for p in pin["inline"]:
             consts.setdefault(printed(p["type"]), set()).update(p.get("consts") or [])
+            for x, f, c in p.get("fields") or []:
+                fields.setdefault(printed(p["type"]), {}).setdefault((x, f), set()).add(c)
         gone, rekeyed = [o for o in old if o not in bad], {}
         for b in [b for b in bad if b not in old]:
-            if (o := next((o for o in gone if paired(o, b, consts[b], facts, known)), None)) is not None:
+            if (o := next((o for o in gone if paired(o, b, consts[b], facts, known, fields.get(b))), None)) is not None:
                 rekeyed[b] = old[o]
                 gone.remove(o)
         if still := {b: old[b] for b in bad if b in old} | rekeyed:
@@ -4224,6 +4257,21 @@ SAMPLED_OUTPUTS = ("olean", "ilean", "olean.server", "olean.private", "ir", "ir.
 SAMPLED_BESIDE = ("trace", "setup.json", *(f"{o}.hash" for o in SAMPLED_OUTPUTS))
 #: the outputs that keep the path of the module's source (a message's), compared as object graphs when their bytes differ
 PATH_PARTS = ("olean.server", "olean.private")
+#: (its package's build, module) of each module a build step of this process compiled (`note_compiled`): another
+#: package's build reuses what this run compiled into a path dependency's build, which without the sandbox is as cold as
+#: its own (`sampled_recompile`)
+RUN_COMPILED: set[tuple[Path, str]] = set()
+_RUN_COMPILED_LOCK = threading.Lock()
+
+
+def note_compiled(keyed: dict, log: Path) -> None:
+    """Add each module of ``keyed`` (`module_keys.keys`) that the build step whose output is ``log`` compiled
+    (`build_seconds`) to `RUN_COMPILED`, a failed step's too. The caller still holds the step's `writing`, so once it is
+    released the set holds every module this run compiled into those builds, before another package's build can find
+    them up to date and compile nothing."""
+    got = {(keyed[m].package.build().resolve(), m) for m in build_seconds([log]) if m in keyed}
+    with _RUN_COMPILED_LOCK:
+        RUN_COMPILED.update(got)
 
 
 def sampled_file(mk, build: Path, mod: str, ext: str) -> Path:
@@ -4254,12 +4302,16 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
     one object graph but for strings that are absolute paths ending in the module's source path (`olean_graph.differs`):
     Lean keeps a message's file in `olean.server`, so a build at another path differs there. A failure names the module
     and its file, and keeps the recompile's outputs in the upper layers; a pass removes them. Without the sandbox there is
-    no overlay, so nothing is recompiled and the report's `unsampled` says so. The audit prints the sample under its line
-    (`sampled:`), so a run records what it checked. The caller holds the build's `.lake` directories (`writing`), so no
-    build changes an overlay's lower layer while it is mounted."""
+    no overlay, so nothing is recompiled and the report's `unsampled` says so; a module of the population that no build of
+    this process compiled (`RUN_COMPILED`) was restored or kept, which nothing would check, so it fails the audit, and only
+    a cold run passes there (`lean_audit.sandboxed`'s probe can pass where this one fails). The audit prints the sample
+    under its line (`sampled:`), so a run records what it checked. The caller holds the build's `.lake` directories
+    (`writing`), so no build changes an overlay's lower layer while it is mounted."""
     mk, og = sibling("module_keys"), sibling("olean_graph")
     s = time.monotonic()
     keyed = mk.keys(pkg, roots)
+    with _RUN_COMPILED_LOCK:
+        cold = set(RUN_COMPILED)
     pop = sorted(m for m, k in keyed.items()
                  if m not in built and sampled_file(mk, k.package.build(), m, "trace").is_file())
     sample = sorted(SAMPLE_RNG.sample(pop, min(len(pop), max(SAMPLE_MIN, math.ceil(SAMPLE_SHARE * len(pop))))))
@@ -4269,6 +4321,13 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
     if sample and not sandboxed():
         rep["modules"], rep["unsampled"] = [], ("no sandbox here, and the recompile runs only in an overlay in the "
                                                 "sandbox's mount namespace, never in the build other packages read")
+        if warm := [m for m in pop if (keyed[m].package.build().resolve(), m) not in cold]:
+            rep["seconds"] = round(time.monotonic() - s, 1)
+            return [Failure("sampled", None, (
+                f"sampled: the sandbox probe failed here (`sandboxed`), yet {len(warm)} of the {len(pop)} modules "
+                f"this build didn't compile were restored or kept, not compiled by a build of this run "
+                f"({', '.join(warm[:5])}{', ...' if len(warm) > 5 else ''}), and without the sandbox nothing checks "
+                f"them against their source: rerun on a node whose builds are sandboxed, or after fixing the probe"))], rep
     if not rep["modules"]:
         rep["seconds"] = round(time.monotonic() - s, 1)
         return [], rep
@@ -5248,7 +5307,11 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     if build:
         rep["sandbox"] = sandboxed()
         n = build_threads(pkg)
-        mk = sibling("module_keys") if ARTIFACTS else None
+        if ARTIFACTS and not rep["sandbox"]:
+            rep["staged"] = ("not used: this node builds without the sandbox, where nothing samples what a build restores "
+                             "(`sampled_recompile`)")
+            log(f"build: {pkg}: the artifact cache is {rep['staged']}; every module is compiled")
+        mk = sibling("module_keys") if ARTIFACTS and rep["sandbox"] else None
         cache = ARTIFACTS / mk.STAGE / f"{os.getpid()}-{tag}" if mk else None
         pre = [*(["-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}"] if cache else []),
                *([f"LEAN_NUM_THREADS={n}"] if n is not None else [])]
@@ -5256,6 +5319,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         if n is not None:
             rep["build_threads"] = n
         staged: dict[tuple[str, str], str] = {}
+        keyed: dict | None = None
         pipe = Pipeline(pkg, policy, rep["toolchain"], work, replay_cache, closure, log=log) \
             if pipelined(pkg, build, replay, replay_cache, lifts) else None
         try:
@@ -5272,11 +5336,17 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                     continue
                 if callable(argv) and not (argv := argv()):
                     continue
+                if argv is not None and keyed is None:
+                    keyed = sibling("module_keys").keys(pkg, policy["roots"])
                 with contextlib.nullcontext() if argv is None else writing(pkg, log):
                     s = time.monotonic()
-                    rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else \
-                        run(argv, pkg, work / f"{step}.log") if pipe is None else \
-                        run(argv, pkg, work / f"{step}.log", on_line=pipe.line)
+                    try:
+                        rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else \
+                            run(argv, pkg, work / f"{step}.log") if pipe is None else \
+                            run(argv, pkg, work / f"{step}.log", on_line=pipe.line)
+                    finally:
+                        if argv is not None:
+                            note_compiled(keyed, work / f"{step}.log")
                     rep["seconds"][step] = round(time.monotonic() - s, 1)
                 if rc:
                     rep["failures"].append(Failure(step, None, f"{step}: exit {rc}\n{text[-3000:]}"))
@@ -5978,7 +6048,9 @@ def main(argv: list[str]) -> int:
                       f"{rep['replay']['checked']} checked, {rep['replay']['reused']} reused; replay "
                       f"{rep['seconds'].get('replay')} s ({rep['replay']['phases']}), peak {rep['replay']['peak_gib']} GiB",
                       flush=True)
-            if s := rep.get("staged"):
+            if isinstance(s := rep.get("staged"), str):
+                print(f"  staged: the artifact cache is {s}", flush=True)
+            elif s:
                 print(f"  staged: {s['modules']} of its {s['keyed']} keyed modules from the artifact cache", flush=True)
             if isinstance(s := rep.get("sampled"), dict) and s.get("unsampled"):
                 print(f"  sampled: none of the {s['population']} modules its build didn't compile: {s['unsampled']}", flush=True)

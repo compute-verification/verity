@@ -53,8 +53,10 @@ its sandbox lets it write, never a shared symlink) and back afterwards only when
 they're dropped, so a run's compile-time code cannot leave the next run a cache it wrote. Lake rebuilds nothing it built in an
 earlier passing run. The package's own `.lake/build` is kept the same way (`WarmBuilds`), under its toolchain, manifest and
 lakefile less the paths to what it requires (`build_key`), not under its path: Lake decides what is up to date by content
-hashes, not paths or mtimes, so a moved package rebuilds nothing. The audit's `dependencies` check still compares their
-`.olean` files with the package's record, and the kernel replay still covers the package's own modules and their whole import
+hashes, not paths or mtimes, so a moved package rebuilds nothing. On a node whose builds aren't sandboxed (`sandboxed`) a
+run takes no kept build, no artifact bundle and no artifact cache, and keeps nothing it built: every package builds cold.
+The audit's `dependencies` check still compares their `.olean` files with the package's record, and the kernel replay
+still covers the package's own modules and their whole import
 closure, the toolchain's, Mathlib's and ArkLib's modules included (`check.py --closure`): each module whose `.olean` files, and
 those of every module it imports, transitively, passed an earlier replay here or in a recorded check whose verdict pack this
 one imported (`check.gather_verdicts`) is reused (`check.py --replay-cache`, `lean-replay/` beside the passes, its
@@ -128,6 +130,13 @@ MK = _module(Path(__file__).resolve().parent / "module_keys.py", "lean_module_ke
 SETTINGS = _module(Path(__file__).resolve().parent / "settings.py", "lean_settings_for_lean_audit")
 #: the task graph's contract, which `module_keys` keys each module with (`module_keys.CONTRACT`)
 CONTRACT = "tools/verity/graph/verity_graph/contract.py"
+
+
+def sandboxed() -> bool:
+    """Whether check.py builds in its sandbox on this node, by its own probe (`check.sandboxed`). Outside it a build's
+    compile-time code runs as the user and may leave any output, and the sampled recompile, which binds a restored module to
+    its source, doesn't run, so nothing a build restores would be checked."""
+    return _module(Path(__file__).resolve().parent / "check.py", "lean_check_for_lean_audit").sandboxed()
 
 
 def _sha(p: Path) -> str:
@@ -1330,7 +1339,8 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     ``regenerate`` (`check.py --regenerate`, the Lean check of `next`) passes a package whose every failure is a record
     difference; such a pass is never stored, since its lock changes when drive commits the record.  Each passing package's build in
     the sandbox goes into the artifact cache (`LakeArtifacts.put`), and ``bundle`` (a recorded check) writes the module versions it
-    indexed to ``out`` for other nodes (`LakeArtifacts.bundle`).  Returns (the failed, the audited)."""
+    indexed to ``out`` for other nodes (`LakeArtifacts.bundle`).  Where builds aren't sandboxed (`sandboxed`) none of that
+    happens and no kept build or artifact cache is read: every package builds cold.  Returns (the failed, the audited)."""
     deps.mkdir(parents=True, exist_ok=True)
     # beside the dependencies: moves, not copies. Resolved, because check.py names each package by its resolved path, and a
     # cache reached through a symlink would otherwise match no report to its package
@@ -1343,13 +1353,17 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     audited: list[str] = []
     failed: list[str] = []
     since = time.time()
+    cold = not fresh and not sandboxed()
     try:
         union = sorted({f for p in missed for f in inputs(p, files)})
         scratch_tree(work, union)
         audited = sorted(missed)
         with ThreadPoolExecutor(max_workers=max(1, len(audited))) as ex:
             list(ex.map(lambda p: warm.take(work / p, log), audited))
-        if not fresh:
+        if cold:
+            log("lean-audit: this node builds without the sandbox, so no kept build, artifact bundle or artifact cache is "
+                "used and none is kept: every package builds cold")
+        elif not fresh:
             for p in sorted({*audited, *(d for q in audited for d in path_deps(q))}):
                 builds.take(work, p, p in audited, log)
             try:
@@ -1361,7 +1375,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         (out / "audit.json").unlink(missing_ok=True)
         r = subprocess.run([sys.executable, str(work / "tools" / "verity" / "lean" / "check.py"), *FLAGS, *(str(work / p) for p in audited),
                             "--replay-cache", str((work if fresh else cache.parent) / "lean-replay"),
-                            *([] if fresh else ["--artifacts", str(artifacts.store)]),
+                            *([] if fresh or cold else ["--artifacts", str(artifacts.store)]),
                             *(["--regenerate"] if regenerate else []), *(["--bookkeeping", "warn"] if bookkeeping else []),
                             "--repo", str(ROOT), "--out", str(out)], cwd=work, env=env)
         log(f"lean-audit: {', '.join(audited)} audited in {time.monotonic() - t0:.0f} s (exit {r.returncode})")
@@ -1387,7 +1401,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         passed = {work / p for p in audited if p in reports and (not reports[p].get("failures") or transient(reports[p]))}
     finally:
         warm.give_back(passed)
-        if not fresh:
+        if not fresh and not cold:
             ok = [p for p in audited if p in reports and not reports[p].get("failures")]
             kept = {work / p for p in ok}
             try:
@@ -1399,6 +1413,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
             except OSError as e:
                 log(f"lean-audit: the artifact cache was not written: {e}")
             builds.give_back(work, kept)
+        if not fresh:
             if n := prune_replays(cache.parent / "lean-replay"):
                 log(f"lean-audit: {n} old replay entries removed")
             if n := prune_facts(cache):

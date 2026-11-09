@@ -29,6 +29,8 @@ import torch  # noqa: E402
 from torch import nn  # noqa: E402
 
 PIN = {"model": "HuggingFaceTB/SmolLM2-135M", "revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2", "dtype": "bfloat16"}
+#: the engine args a compiled `TargetProfile.engine_args()` adds for the execution it serves; `make_vllm_config` sets its own
+COMPILED_KEYS = ("enforce_eager", "compilation_config")
 
 
 def _free_port() -> int:
@@ -44,8 +46,11 @@ def make_vllm_config(model: str = PIN["model"], revision: str = PIN["revision"],
     """vLLM's own `EngineArgs.create_engine_config()` for the eager, bf16 profile at `tensor_parallel_size` (no engine, no GPU allocation).
     `attention_backend` is the TargetProfile's knob (`EngineArgs(attention_backend=AttentionBackendEnum[name])`; None = vLLM's
     selector) — the ONLY attention-backend input this vLLM pin reads (env `VLLM_ATTENTION_BACKEND` is not defined in its `envs`).
-    `tensor_parallel_size` is the row's TP structural input: the parallel layers shard from `parallel_config` + the TP group."""
+    `tensor_parallel_size` is the row's TP structural input: the parallel layers shard from `parallel_config` + the TP group.
+    The config is eager whatever the target executes: a compiled target's `COMPILED_KEYS` are its served engine's, which the Build
+    declares through `TargetProfile.modelled_engine()`, so they are left out here; its other engine args pass through."""
     from vllm.engine.arg_utils import EngineArgs
+    kw = {k: v for k, v in kw.items() if k not in COMPILED_KEYS}
     if attention_backend is not None:
         from vllm.v1.attention.backends.registry import AttentionBackendEnum
         kw["attention_backend"] = AttentionBackendEnum[attention_backend]
@@ -88,15 +93,26 @@ class SeededWithPeers(WithPeers):
         return self._run((prompt, seed), peers)
 
 
+class SeedRuleWithPeers(WithPeers):
+    """`WithPeers` over a stochastic request wrapper, its seed rule's inputs (`seed_rule.PARAMS`) after its seed:
+    `forward(prompt, seed, seeded, body_seed, seed_salt, user, *peers)`."""
+
+    def forward(self, prompt: torch.Tensor, seed: torch.Tensor, seeded: torch.Tensor, body_seed: torch.Tensor, seed_salt: torch.Tensor,
+                user: torch.Tensor, *peers: torch.Tensor):
+        return self._run((prompt, seed, seeded, body_seed, seed_salt, user), peers)
+
+
 def with_peers(inner: nn.Module, inputs: tuple, bus) -> tuple[nn.Module, tuple]:
     """A tensor-parallel rank's traced wrapper over `inner` (a `make_wrapper` module) and its example inputs: `inner`'s own inputs (the
-    prompt, and a stochastic wrapper's `seed`), then the bus's example peers in collective order."""
-    forms = {1: WithPeers, 2: SeededWithPeers}
+    prompt, and a stochastic wrapper's `seed` and a request wrapper's seed rule's inputs), then the bus's example peers in collective
+    order."""
+    forms = {1: WithPeers, 2: SeededWithPeers, 6: SeedRuleWithPeers}
     if getattr(inner, "C", 0):
         raise ValueError(f"with_peers: a rank Program with a cached prefix (C={inner.C}) has no peer form yet (its prefix is the rank's own "
                          f"KV heads, an input before the peers)")
     if len(inputs) not in forms:
-        raise ValueError(f"with_peers: a wrapper takes 1 or 2 inputs of its own (prompt, seed), {type(inner).__name__} takes {len(inputs)}")
+        raise ValueError(f"with_peers: a wrapper takes {sorted(forms)} inputs of its own (prompt, seed, a request's seed rule's), "
+                         f"{type(inner).__name__} takes {len(inputs)}")
     return forms[len(inputs)](inner, bus), tuple(inputs) + tuple(bus.example_peers())
 
 
@@ -369,7 +385,10 @@ class StochasticRequest(nn.Module):
     the position of the logits row (LP-1 for the prefill sample, LP-1+k for the k-th sample: vLLM's `positions[logits_indices]`, the
     stream offset of `tl.randint(seed, pos)`).  `seed` is a forward INPUT (one per request; B2/B8 rows have one per component).
     `S` is the registered split count (`topp_geometry.registered_splits(num_SMs)`), the one every served event runs at: every
-    select's split count is that constant (`Const32[S]` in the Program)."""
+    select's split count is that constant (`Const32[S]` in the Program).
+
+    The seed rule's inputs (`seed_rule.PARAMS`: ``seeded``, ``body_seed``, ``seed_salt``, ``user``, bool tensors of their bits)
+    follow ``seed``; the forward reads none of them, and `derive` adds the check over them and ``seed`` (`seed_rule.in_derive`)."""
 
     DERIVE_SOURCE = "verity-vllm/stochastic-request/v1"
 
@@ -389,7 +408,8 @@ class StochasticRequest(nn.Module):
             logits = self.model.compute_logits(hidden[-1:])
             return iface.gumbel_topp_token_select(logits, seed, self.temperature, self.top_p, pos0 + ids.shape[0] - 1, self.S)
 
-    def forward(self, prompt: torch.Tensor, seed: torch.Tensor) -> torch.Tensor:
+    def forward(self, prompt: torch.Tensor, seed: torch.Tensor, seeded: torch.Tensor, body_seed: torch.Tensor, seed_salt: torch.Tensor,
+                user: torch.Tensor) -> torch.Tensor:
         return self._request(prompt, 0, seed)
 
     def _request(self, prompt: torch.Tensor, C: int, seed: torch.Tensor) -> torch.Tensor:
@@ -402,7 +422,8 @@ class StochasticRequest(nn.Module):
 
 
 class CachedStochasticRequest(StochasticRequest):
-    """`StochasticRequest` with a cached prefix of `C` rows (see `CachedGreedyRequest`): `forward(prompt, seed, prefix)`."""
+    """`StochasticRequest` with a cached prefix of `C` rows (see `CachedGreedyRequest`): `forward(prompt, seed, seeded, body_seed,
+    seed_salt, user, prefix)`, the prefix after the request's other inputs."""
 
     DERIVE_SOURCE = "verity-vllm/cached-stochastic-request/v1"
 
@@ -410,7 +431,8 @@ class CachedStochasticRequest(StochasticRequest):
         super().__init__(model, LP, T, temperature, top_p, S=S)
         self.C = C
 
-    def forward(self, prompt: torch.Tensor, seed: torch.Tensor, prefix: torch.Tensor) -> torch.Tensor:
+    def forward(self, prompt: torch.Tensor, seed: torch.Tensor, seeded: torch.Tensor, body_seed: torch.Tensor, seed_salt: torch.Tensor,
+                user: torch.Tensor, prefix: torch.Tensor) -> torch.Tensor:
         from verity_vllm.program.frontend.rules.vllm_iface import iface
         iface.kv_prefix(prefix)
         return self._request(prompt, self.C, seed)
@@ -461,9 +483,10 @@ def make_wrapper(kind: str, model: nn.Module, *, pos0: int = 8, M: int = 1, LP: 
     two or more `chunks`: the greedy request's `ChunkedGreedyRequest` (with a cached prefix or another policy, refused).
     [X-05] `sampling` is the row's declared policy: the greedy wrappers author `torch.argmax`; `{"kind": "stochastic", "temperature",
     "top_p", "top_k": 0, "seeded": True, "splits": S, "geometry": {"num_sms": ...}}` authors `vllm_iface.gumbel_topp_token_select`
-    with the seed as a second forward input (step / request wrappers; padded is greedy-only), at S, which must be the registered
-    split count the served engine pins (`build.sampler_geometry`, `registered_policy_splits`).  Any other `splits` is REFUSED
-    , as is any other policy (derive_step refuses earlier)."""
+    with the seed as a second forward input (on the request wrapper the seed rule's inputs next, `seed_rule.inputs` at the policy's
+    ``rid``, which it requires; step / request wrappers; padded is greedy-only), at S, which must be the registered split count the
+    served engine pins (`build.sampler_geometry`, `registered_policy_splits`).  Any other `splits` is REFUSED, as is any other
+    policy (derive_step refuses earlier)."""
     if len(chunks or ()) > 1:
         if (kind, C, (sampling or {"kind": "greedy"}).get("kind")) != ("request", 0, "greedy"):
             raise ValueError(f"make_wrapper authors a prefill in chunks for the greedy request without a cached prefix only, not a "
@@ -483,8 +506,9 @@ def make_wrapper(kind: str, model: nn.Module, *, pos0: int = 8, M: int = 1, LP: 
             ids = torch.empty((M,), dtype=torch.int32, device="meta")
             return StochasticEngineStep(model, pos0, M, temp, p, S=S), (ids, seed_in)
         if kind == "request":
-            prompt = torch.empty((LP,), dtype=torch.int32, device="meta")
-            return StochasticRequest(model, LP, T, temp, p, S=S), (prompt, seed_in)
+            from verity_vllm.program.frontend import seed_rule
+            prompt, rule = torch.empty((LP,), dtype=torch.int32, device="meta"), seed_rule.inputs(s)
+            return StochasticRequest(model, LP, T, temp, p, S=S), (prompt, seed_in, *rule)
         raise ValueError(f"wrapper {kind!r} has no stochastic form (padded is greedy-only)")
     if kind_s != "greedy":
         raise ValueError(f"make_wrapper authors greedy token selection only; the row's sampling policy is {sampling}")

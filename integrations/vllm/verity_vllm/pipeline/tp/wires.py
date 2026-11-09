@@ -28,8 +28,9 @@ for the stages every rank reads, `ALL`); then position. `Sites.order` lists thos
 * each gather's K one-word rows, from its rank's producer units in position order;
 * each combine unit's parts, row p from rank p's partial row at its chunk (a gather's, else a producer unit's);
 * each token row's chunks, from the combine units in order, and the norm's r, that row whole;
-* each read of a combine's output (NDAUDIT row 11), from the units computing those leaves (a gather's: the ranks' partial
-  rows), the reader's port cut so each row is one writer row. A read the grains don't fit (part of a writer row, a port
+* each read of a combine's output, from the units computing those leaves (a gather's: the ranks' partial rows), so a value
+  a unit reads is the output of the unit that computed it, never a free witness; the reader's port is cut so each row is one
+  writer row. A read the grains don't fit (part of a writer row, a port
   another read cuts otherwise) stays a free input, listed by name in `Sites.unwired`.
 
 With ``ranks``, the window of those ranks alone: their units, the units every rank reads, and the wires between them, every

@@ -691,7 +691,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     C..LP-1, or on the sparse-attention decoder also a request a Commit window carries in at decode C >= LP, its first decode fed
     the `last_token` Input (`common.request_passes`); on that decoder either's SRC config holds `{"history": C}`, and no Build
     traces it yet. A request on one rank drops its dead units (`program.prune`, as the Build's derive does): the last layer's rows
-    before the prefill's last, which no sample reads. `stop`: its length rule, the last check (`stop_rule`).
+    before the prefill's last, which no sample reads. A stochastic request takes its seed rule's `seed_rule.PARAMS` after its
+    seed, at its policy's ``rid``, and checks the rule (`seed_rule.check`); `stop`: its length rule, the last check (`stop_rule`).
     `dead_free`: a tensor-parallel rank's request too (the Build's `--dead-free`), each dead collective's peer rows then unread.
     `batched`: that form batched (`prune.batched_form`, the Build's `--batched`): class G's request Programs.
     `finish`: the body's last step in place of that drop, (body, decoder, parameters) -> (body, what it says beside the Program,
@@ -703,6 +704,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     (its wrapper's class unchanged); one chunk is the request wrapper. `edge`: the history groups (`dsa.Net.edge_groups`) a request
     a Commit window leaves at position LP + T (inside its prompt too: T < 0, sampling nothing) returns after its samples and checks,
     every layer's rows [0, LP + T) of each as `prefix_params(LP + T)` lays them out (`common.with_edge`); its SRC config holds them."""
+    from verity_vllm.program.frontend import seed_rule as SEED
     t0 = time.time()
     net = decoder(phi, M, pos0 + M if wrapper == "step" else int(LP) + int(T))
     kind = (phi.sampling or {}).get("kind", "greedy")
@@ -720,7 +722,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     n = M if wrapper == "step" else int(LP)
     params: list[tuple[str, Type]] = [("input_ids" if wrapper == "step" and world == 1 else "prompt", Array(n, I32))]
     if kind == "stochastic":
-        params.append(("seed", Array(1, I64)))
+        params += [("seed", Array(1, I64)), *(SEED.params(SEED.rid_in(phi.sampling)) if wrapper == "request" else ())]
     history = len(params)
     if C:
         params += net.prefix_params(C)   # `vllm_meta.prefix_input`
@@ -759,7 +761,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     out = Coll(Array(1, I32), toks[0].refs) if wrapper == "step" else Coll(Array(len(toks), I32), concat([t.refs for t in toks]))
     if peers.n != len(peers.inputs):
         raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs")
-    out, checks = with_checks(model, out, B, stop)
+    out, checks = with_checks(model, out, B, stop, inputs[1:2 + len(SEED.PARAMS)] if (wrapper, kind) == ("request", "stochastic") else None)
     out = with_edge(model, out, edge)
     B.ret_type = out.type
     body, names = B.finish(out), None

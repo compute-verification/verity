@@ -70,7 +70,7 @@ flat Flock circuit file of one instance of it (`verity_flock.class_statement.Uni
 `structural=False`, as one-stage's sessions verify against theirs), which binds the interior registration's partition
 and program digests. The auditor names each file by its SHA-512 in the run's interior params, `proofs.templates`
 (`template_circuits`), beside the header of the template's registered reference statement and the registered reads it
-was verified against, which round 2 holds each statement's header and registered reads to but for the run's fields
+reads, which round 2 takes as given and holds each statement's header and registered reads to but for the run's fields
 (`second_stage.RUN_FIELDS`, `second_stage.blank_reads`), and reproduces the file from public data
 alone: the template's Definition and rows, the interior's
 partition and program digests, the values it reads (`reads`), its AND gates per stage (`stage_ands`) and the leaf
@@ -872,7 +872,7 @@ def template_circuits(proofs: Mapping[str, Any] | None, query: Mapping[str, Any]
     """The auditor's params naming each template's circuit file and its registered reference statement's header and
     registered reads (the module docstring), a two-stage run's `interior.params.proofs`: `{"templates": [{"template":
     <descriptor id>, "circuit": <SHA-512, lowercase hex>, "header": <the registered reference statement's header>,
-    "registered": <the registered reads it was verified against, null for none>}, ...]}`, as (template, circuit, header,
+    "registered": <the registered reads it reads, null for none>}, ...]}`, as (template, circuit, header,
     registered) in the order the check's template query `query` names the templates, which is REPLAY_c's first-instance
     order (`replay_cells`). None names no file and gives none. Raises `ValueError` for any other form, a circuit that
     isn't 128 lowercase hex digits, a header that isn't an object, registered reads neither an object nor null, and a
@@ -2021,7 +2021,8 @@ class Stream:
         (`interior_program`, the check's query, `subset:Q·n_rho`, every one committed, `SCHEME`, the log, whose last
         record is the registration it follows, and the copies given here, as `register` takes them), and
         `population-order`. Its receipt follows the log as a registration's does, and it is logged; it reads no clock.
-        It names no links: the verifier derives them from the replay block's Definition (`second_stage.replay_links`).
+        It names no links or wires: the verifier derives them from the replay block's Definition
+        (`second_stage.replay_links`, `second_stage.replay_wires`).
         Raises `Refused`: `rule` (a one-stage stream), `unknown`, `not-drawn`, `final`, `delivered`,
         `interior-registered` (it has one), or either check failing."""
         first = draw.replay_sample or draw
@@ -2355,8 +2356,9 @@ class Stream:
                    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         """`outcome`'s audit records under a two-stage design, once the verdicts hold: the interior registration's over
         the second stage's sample, with round 2's check of `statements` (`second_stage.check`, over the parts the
-        interior program's strata make, the design's links, which it derives from the replay block's Definition
-        (`second_stage.replay_links`), the reads the verdicts report, what they name of each session they accepted
+        interior program's strata make, the design's links and wires, which it derives from the replay block's
+        Definition (`second_stage.replay_links`, `second_stage.replay_wires`), the reads the verdicts report, what they
+        name of each session they accepted
         (`second_stage.verified_of`), and the reference header and registered reads the params `proofs` give each
         template, `template_circuits`), and the registration's
         over the replay sample, each taking the sessions' reads of its own ports at their own roots (`own_reads`), both
@@ -2381,7 +2383,8 @@ class Stream:
                      ireg.record, reg.record, tuple(D.proved(second.draw)),
                      SS.replay_links(e.program, descriptor_id(self.replay), reg.record),
                      A.session_registered(verdicts), SS.verified_of(verdicts),
-                     tuple((t, h) for t, _c, h, _r in named), tuple((t, r) for t, _c, _h, r in named))
+                     tuple((t, h) for t, _c, h, _r in named), tuple((t, r) for t, _c, _h, r in named),
+                     wires=SS.replay_wires(e.program, descriptor_id(self.replay)))
         rec = SS.attach(rec, SS.check(SS.FORM, own, statements))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
                                   verdicts, self.delta, e.sessions, None, replay_session_roots, own_reads=True)
