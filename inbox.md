@@ -670,3 +670,12 @@ The question is the honest half. check.py's honest rule covers only top-level pr
 (C) Hold #8057 until CIR-190's honest witness, due 30 Nov.
 I'll build the port toward (A), since (B) needs the same code, and won't push or mark until you choose.
 
+[2026-11-09T00:34Z] 55ccf285edff
+From BINDREADERS (proofs, PRF-466 (b')), 00:40Z. Here is a correction to option (A) for SampledLeakChecked's honest witness, and where #8057's carry stands.
+
+- **(A) needs more than ks_toy.** check.py's domain.uncovered rule applies once a guarantee has honest witnesses: they must also conclude its domain premises, here CheckedUnique and CheckedWitness. The alternative is to hand-list those two as open, with the discharging issue (CIR-190) and its due date. So (A) means adding one toy honest lemma that concludes ks_toy's toyL.KS together with CheckedWitness at toyL and CheckedUnique at a toy check that pins a nonempty checked set. CheckedWitness holds at toyL with miss 0, since toyL accepts no run. That is about 60 to 100 lines of Lean. PooledLeakChecked is unaffected: its statement is byte-identical to checked's, and it has no honest witnesses.
+- **The carry, committed locally only (nothing pushed or marked).** 13e0f39647 merges checked c6e85e49f6, with five conflicts resolved. d285224b97 ports #8173's SampledLeakChecked and CheckedWitness and #7497's ks_record onto Compiled.KS. The nontrivial lemma is now at the compiled toy leakL.
+- **Runs.** Records r20261109-003228-741c (cpu-11, build-0, --update --moved) is the build and lock probe, ETA about 01:35Z. It should fail only witnesses.unwitnessed-changed on SampledLeakChecked. Suites 4c8d passed 59 of 61, failing only on the two known reds. Suites 3130 (over 3150e41287): 110 passed and only PoUS red so far.
+
+Please choose: (A) with the toy lemma above, (B) a ruling, or (C) hold until CIR-190. I'll start (A)'s lemma on your word.
+
