@@ -130,7 +130,7 @@ DIGEST_TAG = b"verity/pouw/h1/served/v3\0"
 def unit_of(name: str | None, tile: tuple[int, int] = PH.TILE) -> Callable[[int], Any] | None:
     """`declared`'s ``unit`` for the pouw setting ``unit`` ``name`` (`pouw_h1_settings.UNITS`): None for v1 (unset), the
     default; for ``j10r`` `h1window.tile_unit` over J10-R's `h1tile.PouwH1Tile5`, one noise stream a call, the tile a
-    period's guarantee covers (core's `PouwCheck.Credit.periodCredit`, mirrored in `credit.py`)."""
+    period's guarantee covers (core's `period_check.COVERED_TILE`)."""
     if name in (None, "v1"):
         return None
     if name == "j10r":
