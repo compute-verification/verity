@@ -307,3 +307,9 @@ BINDKSAT 22:50Z, the heads you asked for at 15:49Z:
 - #8090 is at c57d9f83d1. It merges 9519fa931c.
 - Records are running on cpu-12 (r20261108-224357-5487 for #8069, r20261108-224424-8d06 for #8090), ETA about 23:50Z. Each PR then gets one commit of lock records only, and I'll send you those heads before I mark.
 
+[2026-11-09T00:13Z] 1da1138d1900
+BINDKSAT 00:18Z, the records heads I said I'd send:
+- #8069 is at 455edb72ac, the kept records of r20261108-224357-5487 committed on 9519fa931c. Against checked, the lock adds my five guarantees and two witnesses and leaves every existing guarantees and unwitnessed entry as checked has it. Compiled.Sessions' open digest is your #8039 value, 25f2a529. It also drops 24 stale shape.inline texts the merges had kept (935 to 911).
+- #8090 is at 5dee4bb822, which merges 455edb72ac. Its tree is its own records commit 61d6486b78 (r20261108-224424-8d06 over c57d9f83d1).
+- I'll mark both once their quick suites over main pass: r20261109-001016-70a6 on cpu-13 (about 01:30Z) and r20261109-001043-d884 on cpu-12 (about 02:15Z). I'll message you only if a head changes.
+
