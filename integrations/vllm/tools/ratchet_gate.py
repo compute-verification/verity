@@ -25,9 +25,9 @@ ratchet, a ``*.py`` file under ``integrations/vllm/tests/lint/`` or ``tests/lint
 ``integrations/vllm/ruff.toml``, the root ``ruff.toml`` (both ruff lints') and the ruff the root ``dev`` group pins.  It passes
 when:
 
-* in each ratchet, no kind whose entries record counts (an entry's ``count``: typed_records' or-empty per package, P07's)
+* in each ratchet, no kind whose entries record counts (an entry's ``count``: typed_records' or-empty per file, P07's)
   holds more in total after it than before.  A key may rise, or a new one appear, when the same kind's other keys fall by
-  at least as much, so a move from one package to another passes.  A repository list
+  at least as much, so a move from one file to another passes.  A repository list
   (``repo_ruff``'s and each counted lint's, ``CATCH_UP``) may also raise a key, in any file, up to what its lint, as the
   change's base has it, finds there in the base's tree: a list that records what its base already holds adds no finding,
   so a list behind its tree catches up, while growth past the base's own findings is held as before.  A change that edits

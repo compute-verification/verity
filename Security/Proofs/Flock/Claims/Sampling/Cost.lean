@@ -60,14 +60,14 @@ open Claims
 
 /-! ## The block's rerun programs: reruns and own calls -/
 
-theorem ofOC_runs {R α : Type} (H : Msg → Msg) (run : R → Trace) :
+theorem ofOC_runs {R α : Type} (H : Msg → Msg) (run : R → Transcript) :
     ∀ o : OC α, ((ofOC o : RP R α).eval H run).2.2 = 0
   | .ret _ => rfl
   | .query q k => by
     simp only [ofOC, RP.eval]
     exact ofOC_runs H run (k (H q))
 
-theorem flatMapRP_runs {R β γ : Type} (H : Msg → Msg) (run : R → Trace) (f : β → RP R (List γ)) :
+theorem flatMapRP_runs {R β γ : Type} (H : Msg → Msg) (run : R → Transcript) (f : β → RP R (List γ)) :
     ∀ l : List β, ((flatMapRP f l).eval H run).2.2 = (l.map fun b => ((f b).eval H run).2.2).sum
   | [] => rfl
   | b :: bs => by
@@ -76,20 +76,20 @@ theorem flatMapRP_runs {R β γ : Type} (H : Msg → Msg) (run : R → Trace) (f
     simp [RP.eval]
 
 /-- A bound program's own calls: the first part's, then the continuation's on its result. -/
-theorem ownLog_bind {R α β : Type} (H : Msg → Msg) (run : R → Trace) (p : RP R α) (f : α → RP R β) :
+theorem ownLog_bind {R α β : Type} (H : Msg → Msg) (run : R → Transcript) (p : RP R α) (f : α → RP R β) :
     ownLog H run (p.bind f) = ownLog H run p ++ ownLog H run (f (p.eval H run).1) := by
   induction p with
   | ret a => simp [RP.bind, ownLog, RP.eval]
   | hash q k ih => simp only [RP.bind, ownLog, RP.eval, ih, List.cons_append]
   | rerun r k ih => simp only [RP.bind, ownLog, RP.eval, ih]
 
-theorem ownLog_of_noHash {R α : Type} (H : Msg → Msg) (run : R → Trace) {p : RP R α} (hp : NoHash p) :
+theorem ownLog_of_noHash {R α : Type} (H : Msg → Msg) (run : R → Transcript) {p : RP R α} (hp : NoHash p) :
     ownLog H run p = [] := by
   induction hp with
   | ret a => rfl
   | rerun r k _ ih => exact ih _
 
-theorem ownLog_flatMapRP {R β γ : Type} (H : Msg → Msg) (run : R → Trace) (f : β → RP R (List γ)) :
+theorem ownLog_flatMapRP {R β γ : Type} (H : Msg → Msg) (run : R → Transcript) (f : β → RP R (List γ)) :
     ∀ l : List β, (ownLog H run (flatMapRP f l)).length = (l.map fun b => (ownLog H run (f b)).length).sum
   | [] => rfl
   | b :: bs => by
@@ -109,7 +109,7 @@ theorem NoHash.waitAccC {R : Type} (k : ℕ) :
     · exact NoHash.ret _
     · exact NoHash.rerun r _ fun v => ih _
 
-theorem waitAccC_runs_eq {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) :
+theorem waitAccC_runs_eq {R : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) :
     ∀ (rs : List R) (acc : List (R × Seen)),
       ((waitAccC k rs acc).eval H run).2.2 = waitRuns run k rs acc.length := by
   intro rs
@@ -126,7 +126,7 @@ theorem waitAccC_runs_eq {R : Type} (H : Msg → Msg) (run : R → Trace) (k : �
       · have hs : ¬ (run r).seen.out = .acc := ha
         simp [hs, ha]
 
-theorem waitRuns_le_length {R : Type} (run : R → Trace) (k : ℕ) :
+theorem waitRuns_le_length {R : Type} (run : R → Transcript) (k : ℕ) :
     ∀ (rs : List R) (a : ℕ), waitRuns run k rs a ≤ rs.length := by
   intro rs
   induction rs with
@@ -138,7 +138,7 @@ theorem waitRuns_le_length {R : Type} (run : R → Trace) (k : ℕ) :
     · exact Nat.zero_le _
     · exact Nat.add_le_add_right (ih _) 1
 
-theorem waitAccC_length_le {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) :
+theorem waitAccC_length_le {R : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) :
     ∀ (rs : List R) (acc : List (R × Seen)), acc.length ≤ k → ((waitAccC k rs acc).eval H run).1.length ≤ k := by
   intro rs
   induction rs with
@@ -156,13 +156,13 @@ theorem waitAccC_length_le {R : Type} (H : Msg → Msg) (run : R → Trace) (k :
       · exact h
 
 /-- The weights `g` of a wait's accepted samples among `rs`, from `a` accepted so far. -/
-noncomputable def accSum {R : Type} (run : R → Trace) (k : ℕ) (g : R → ℝ) : List R → ℕ → ℝ
+noncomputable def accSum {R : Type} (run : R → Transcript) (k : ℕ) (g : R → ℝ) : List R → ℕ → ℝ
   | [], _ => 0
   | r :: rs, a =>
     if k ≤ a then 0 else if (run r).out = .acc then g r + accSum run k g rs (a + 1) else accSum run k g rs a
 
 /-- **The accepted reruns' weights**: those `waitAccC` keeps are the accepted samples `accSum` counts. -/
-theorem waitAccC_sum {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (g : R → ℝ) :
+theorem waitAccC_sum {R : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (g : R → ℝ) :
     ∀ (rs : List R) (acc : List (R × Seen)),
       (((waitAccC k rs acc).eval H run).1.map fun p => g p.1).sum =
         (acc.map fun p => g p.1).sum + accSum run k g rs acc.length := by
@@ -184,12 +184,12 @@ theorem waitAccC_sum {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) 
         simp only [hs, ha, ↓reduceIte]
 
 /-- `G(K, a)`: the accepted samples' weights over `K` uniform samples, from `a` accepted so far. -/
-noncomputable def accExp {D : Type} [Fintype D] (run : D → Trace) (k : ℕ) (g : D → ℝ) (K a : ℕ) : ℝ :=
+noncomputable def accExp {D : Type} [Fintype D] (run : D → Transcript) (k : ℕ) (g : D → ℝ) (K a : ℕ) : ℝ :=
   Ex fun σ : Fin K → D => accSum run k g ((List.finRange K).map σ) a
 
 /-- **The accepted samples' weights**: `ε · G(K, a) ≤ (k − a) · 𝔼[1[acc] · g]`, so the `k` accepted samples weigh at most
 `k · 𝔼[g | acc]` in expectation. -/
-theorem accExp_le {D : Type} [Fintype D] [Nonempty D] (run : D → Trace) (k : ℕ) (g : D → ℝ) (hg : ∀ d, 0 ≤ g d)
+theorem accExp_le {D : Type} [Fintype D] [Nonempty D] (run : D → Transcript) (k : ℕ) (g : D → ℝ) (hg : ∀ d, 0 ≤ g d)
     (K : ℕ) : ∀ a, a ≤ k → Pr (fun d => (run d).out = .acc) * accExp run k g K a ≤
       (k - a) * Ex (fun d => (if (run d).out = .acc then (1 : ℝ) else 0) * g d) := by
   have hμ : 0 ≤ Ex (fun d => (if (run d).out = .acc then (1 : ℝ) else 0) * g d) :=
@@ -242,7 +242,7 @@ theorem accExp_le {D : Type} [Fintype D] [Nonempty D] (run : D → Trace) (k : �
         _ = (k - a) * μ := by ring
     · simp [accExp, accSum, List.finRange_succ, Ex]
 
-theorem waitRuns_map {R R' : Type} (run : R → Trace) (k : ℕ) (f : R' → R) :
+theorem waitRuns_map {R R' : Type} (run : R → Transcript) (k : ℕ) (f : R' → R) :
     ∀ (l : List R') (a : ℕ), waitRuns run k (l.map f) a = waitRuns (run ∘ f) k l a := by
   intro l
   induction l with
@@ -263,14 +263,14 @@ theorem LogColl.mono {l l' : List (Msg × Msg)} (h : LogColl l) (hs : ∀ q ∈ 
   obtain ⟨p, hp, p', hp', hne, heq⟩ := h
   exact ⟨p, hs p hp, p', hs p' hp', hne, heq⟩
 
-theorem ownLog_ofOC {R α : Type} (H : Msg → Msg) (run : R → Trace) :
+theorem ownLog_ofOC {R α : Type} (H : Msg → Msg) (run : R → Transcript) :
     ∀ c : OC α, ownLog H run (ofOC c : RP R α) = (c.eval H).2
   | .ret _ => rfl
   | .query q k => by
     simp only [ofOC, ownLog, OC.eval]
     rw [ownLog_ofOC H run (k (H q))]
 
-theorem eval_ofOC {R α : Type} (H : Msg → Msg) (run : R → Trace) :
+theorem eval_ofOC {R α : Type} (H : Msg → Msg) (run : R → Transcript) :
     ∀ c : OC α, ((ofOC c : RP R α).eval H run).1 = (c.eval H).1
   | .ret _ => rfl
   | .query q k => by
@@ -278,7 +278,7 @@ theorem eval_ofOC {R α : Type} (H : Msg → Msg) (run : R → Trace) :
     exact eval_ofOC H run (k (H q))
 
 /-- What `flatMapRP` returns comes from one element's program, whose own calls are among the whole program's. -/
-theorem flatMapRP_mem {R β γ : Type} (H : Msg → Msg) (run : R → Trace) (f : β → RP R (List γ)) :
+theorem flatMapRP_mem {R β γ : Type} (H : Msg → Msg) (run : R → Transcript) (f : β → RP R (List γ)) :
     ∀ (l : List β), ∀ c ∈ ((flatMapRP f l).eval H run).1,
       ∃ b ∈ l, c ∈ ((f b).eval H run).1 ∧ ∀ q ∈ ownLog H run (f b), q ∈ ownLog H run (flatMapRP f l)
   | [] => by simp [flatMapRP, RP.eval]
@@ -295,7 +295,7 @@ theorem flatMapRP_mem {R β γ : Type} (H : Msg → Msg) (run : R → Trace) (f 
 
 /-- **What `checkRevealed` returns passes its check**: each pair is one of `rs`, its opening passes the commitment's
 check under its roots, and that check's calls are among `checkRevealed`'s own. -/
-theorem checkRevealed_mem {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : CommitmentScheme Bool)
+theorem checkRevealed_mem {R : Type} (H : Msg → Msg) (run : R → Transcript) (Cm : CommitmentScheme Bool)
     (rs : List (List Msg × Opening Bool)) :
     ∀ p ∈ ((checkRevealed (R := R) Cm rs).eval H run).1, p ∈ rs ∧ Cm.Opens H p.1 p.2 = true ∧
       ∀ q ∈ ((Cm.opens p.1 p.2).eval H).2, q ∈ ownLog H run (checkRevealed (R := R) Cm rs) := by
@@ -309,7 +309,7 @@ theorem checkRevealed_mem {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm :
     exact ⟨hp', hok, fun q h => hq q (List.mem_append_left _ h)⟩
   · simp at hc
 
-theorem checkRevealed_runs {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : CommitmentScheme Bool)
+theorem checkRevealed_runs {R : Type} (H : Msg → Msg) (run : R → Transcript) (Cm : CommitmentScheme Bool)
     (rs : List (List Msg × Opening Bool)) : ((checkRevealed (R := R) Cm rs).eval H run).2.2 = 0 := by
   unfold checkRevealed
   rw [flatMapRP_runs]

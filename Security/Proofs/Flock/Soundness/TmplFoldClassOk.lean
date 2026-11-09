@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.TmplFoldClass
+public import Proofs.Flock.Soundness.TmplPosMap
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.Data.Nat.Totient
 import Proofs.Flock.Level3.FoldedBase
@@ -177,8 +178,9 @@ theorem lanes_call (t : Tmpl) (lays : Array Lay) (fuel d i : ℕ) (hi : i < (t.d
       else ((lays.getD d default).places.getD i default).ms.log2) +
         lanes t lays fuel ((t.defs.getD d default).calls.getD i default).def_) _ 0).2 i (List.mem_range.mpr hi)
 
-/-- What the fold reads of the layout: each copy binds its callee's inputs, and a run of lanes takes `2^m ≥ count`
-lanes, its copies side by side (`cs = 1`). -/
+/-- What the fold reads of the layout: each copy binds its callee's inputs, a run of lanes takes `2^m ≥ count`
+lanes, its copies side by side (`cs = 1`), and every Definition's layout is in order (`DefPos`), which the split fold's
+position tables read. -/
 structure LayOk (t : Tmpl) (lays : Array Lay) : Prop where
   bound : ∀ d i j, i < (t.defs.getD d default).calls.size →
     (((t.defs.getD d default).calls.getD i default).bound id j).length =
@@ -187,6 +189,7 @@ structure LayOk (t : Tmpl) (lays : Array Lay) : Prop where
     ((lays.getD d default).places.getD i default).cs = 1 ∧
       2 ^ ((lays.getD d default).places.getD i default).ms.log2 = ((lays.getD d default).places.getD i default).ms ∧
       ((t.defs.getD d default).calls.getD i default).count ≤ ((lays.getD d default).places.getD i default).ms
+  pos : ∀ d < t.defs.size, DefPos t lays d
 
 theorem getD_lanes (as : Array ℕ) (B n k : ℕ) (hk : k < as.size * n) :
     ((Array.range (as.size * n)).map fun i => as.getD (i / n) 0 + B * (i % n)).getD k 0 =
@@ -388,7 +391,7 @@ theorem exp_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s <
       intro i hi b r hr hq
       by_cases hm : ((lays.getD d default).places.getD i default).ms = 1
       · have hm' : (((lays.getD d default).places.getD i default).ms == 1) = true := by rw [hm]; rfl
-        rw [if_pos hm'] at hr
+        rw [ite_eq_left hm'] at hr
         obtain ⟨bJ, hJ, hr⟩ := except_bind_ok hr
         cases hr
         have keyJ := forIn_range_sum
@@ -406,7 +409,7 @@ theorem exp_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s <
         cases hr
         refine ⟨_, rfl, ?_⟩
         have hl := lanes_call t lays fuel d i hi
-        rw [if_pos hm, zero_add] at hl
+        rw [ite_eq_left hm, zero_add] at hl
         obtain ⟨hchS, hchV⟩ := (ih _ β _ as ch hch (by omega) (by omega)).1 h6 has
         refine (bind_exp pt hs ip
           (fun k y => as.getD k 0 + 2 ^ β * (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y))
@@ -441,19 +444,19 @@ theorem exp_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s <
         beta_reduce
         rw [getD_bound ((t.defs.getD d default).calls.getD i default) (readExp t lays pt d β h as ip k) j t' pt.qc (by rw [hlay.bound d i j hi]; exact Finset.mem_range.mp ht')]
       · have hm' : ¬ ((((lays.getD d default).places.getD i default).ms == 1) = true) := by rw [beq_iff_eq]; exact hm
-        rw [if_neg hm'] at hr
+        rw [ite_eq_right hm'] at hr
         by_cases hal : ((h + ((lays.getD d default).places.getD i default).nb) % ((lays.getD d default).places.getD i default).ms != 0) = true
-        · rw [if_pos hal] at hr; cases hr
-        rw [if_neg hal] at hr
+        · rw [ite_eq_left hal] at hr; cases hr
+        rw [ite_eq_right hal] at hr
         have hal' : (h + ((lays.getD d default).places.getD i default).nb) % ((lays.getD d default).places.getD i default).ms = 0 := by simpa using hal
         obtain ⟨hcs, hpow, hcnt⟩ := hlay.lanes d i hi hm
         have hl := lanes_call t lays fuel d i hi
-        rw [if_neg hm] at hl
+        rw [ite_eq_right hm] at hl
         have hB : 2 ^ β * ((lays.getD d default).places.getD i default).ms = 2 ^ (β + ((lays.getD d default).places.getD i default).ms.log2) := by rw [Nat.pow_add, hpow]
         have hh : h + ((lays.getD d default).places.getD i default).nb = ((lays.getD d default).places.getD i default).ms * ((h + ((lays.getD d default).places.getD i default).nb) / ((lays.getD d default).places.getD i default).ms) :=
           (Nat.mul_div_cancel' (Nat.dvd_of_mod_eq_zero hal')).symm
         by_cases hlt : β + ((lays.getD d default).places.getD i default).ms.log2 < 6
-        · rw [if_pos hlt] at hr
+        · rw [ite_eq_left hlt] at hr
           obtain ⟨ch, hch, hr⟩ := except_bind_ok hr
           obtain ⟨b4, hJ, hr⟩ := except_bind_ok hr
           cases hr
@@ -518,7 +521,7 @@ theorem exp_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s <
             of ((ch.u.getD t' #[]).getD (k * ((t.defs.getD d default).calls.getD i default).count + j) 0) * Gs pt s (readExp t lays pt d β h as ip k v)) _ 0).trans ?_)
           rw [hlay.bound d i j hi]
           exact Finset.sum_congr rfl fun t' _ => by rw [zero_add]
-        · rw [if_neg hlt] at hr
+        · rw [ite_eq_right hlt] at hr
           obtain ⟨ch, hch, hr⟩ := except_bind_ok hr
           obtain ⟨pP, hP, hr⟩ := except_bind_ok hr
           obtain ⟨b4, hJ, hr⟩ := except_bind_ok hr
@@ -649,10 +652,10 @@ theorem sum_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ}
       intro i hi b r hr hq
       by_cases hm : ((lays.getD d default).places.getD i default).ms = 1
       · have hm' : (((lays.getD d default).places.getD i default).ms == 1) = true := by rw [hm]; rfl
-        rw [if_pos hm'] at hr
+        rw [ite_eq_left hm'] at hr
         by_cases hc1 : (((t.defs.getD d default).calls.getD i default).count != 1) = true
-        · rw [if_pos hc1] at hr; cases hr
-        rw [if_neg hc1] at hr
+        · rw [ite_eq_left hc1] at hr; cases hr
+        rw [ite_eq_right hc1] at hr
         obtain ⟨bJ, hJ, hr⟩ := except_bind_ok hr
         cases hr
         have keyJ := forIn_range_sum (fun o : Out => of (eLow pt β a) * (sumVal (t.defs.getD d default).ins (gLow pt s β a) (Gs pt s pt.qc) (fun t' => Gs pt s (ip.getD t' pt.qc))) o) (fun o : Out => Shape (t.defs.getD d default).ins 1 o ∧ PZero o) (fun j =>
@@ -665,7 +668,7 @@ theorem sum_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ}
         cases hr
         refine ⟨_, rfl, ?_⟩
         have hl := lanes_call t lays fuel d i hi
-        rw [if_pos hm, zero_add] at hl
+        rw [ite_eq_left hm, zero_add] at hl
         obtain ⟨hchS, hchZ, hchV⟩ := (ih _ β _ as ch hch (by omega) (by omega)).2 h6
         obtain ⟨hA1, hA2, hA3⟩ := add_sum (gLow pt s β a) (Gs pt s pt.qc) (fun t' => Gs pt s (ip.getD t' pt.qc)) 1 1 hq.1 hchS.1
         refine (bind_sum t lays pt hR h6 hk2 ha ip (fun t' k => (ch.u.getD t' #[]).getD k 0)
@@ -690,14 +693,14 @@ theorem sum_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ}
         beta_reduce
         ring
       · have hm' : ¬ ((((lays.getD d default).places.getD i default).ms == 1) = true) := by rw [beq_iff_eq]; exact hm
-        rw [if_neg hm'] at hr
+        rw [ite_eq_right hm'] at hr
         by_cases hal : ((h + ((lays.getD d default).places.getD i default).nb) % ((lays.getD d default).places.getD i default).ms != 0) = true
-        · rw [if_pos hal] at hr; cases hr
-        rw [if_neg hal] at hr
+        · rw [ite_eq_left hal] at hr; cases hr
+        rw [ite_eq_right hal] at hr
         have hal' : (h + ((lays.getD d default).places.getD i default).nb) % ((lays.getD d default).places.getD i default).ms = 0 := by simpa using hal
         obtain ⟨hcs, hpow, hcnt⟩ := hlay.lanes d i hi hm
         have hl := lanes_call t lays fuel d i hi
-        rw [if_neg hm] at hl
+        rw [ite_eq_right hm] at hl
         have hB : 2 ^ β * ((lays.getD d default).places.getD i default).ms = 2 ^ (β + ((lays.getD d default).places.getD i default).ms.log2) := by rw [Nat.pow_add, hpow]
         have hh : h + ((lays.getD d default).places.getD i default).nb = ((lays.getD d default).places.getD i default).ms * ((h + ((lays.getD d default).places.getD i default).nb) / ((lays.getD d default).places.getD i default).ms) := (Nat.mul_div_cancel' (Nat.dvd_of_mod_eq_zero hal')).symm
         have hc' : ((t.defs.getD d default).calls.getD i default).count ≤ 2 ^ ((lays.getD d default).places.getD i default).ms.log2 := hcnt.trans_eq hpow.symm

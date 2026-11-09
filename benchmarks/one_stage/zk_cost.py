@@ -300,7 +300,7 @@ def stage(a) -> int:
             jsonl(out / "records" / "stage.jsonl", rec)
             statement = hashlib.sha512(canonical_json({"partition": P.digest(part), "pin": st["pin"]})).hexdigest()
             for k, arms in draws(c, a.draws):
-                law = D.derive(program, query, D.parse_law(f"stratified:{k}"))
+                law = D.derive(program, query, D.parse_design(f"stratified:{k}"))
                 p = a0.challenger_draw(a.lean, ["--program", str(sd / "program.json"), "--partition",
                                                 str(sd / "partition.json"), "--stratified", str(k)], law, c, statement,
                                        sd / f"draw-k{k}.log")
@@ -326,7 +326,8 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
     o.mkdir(parents=True, exist_ok=True)
     port = free_port()
     if "unit" in pt:
-        inst, pub, tables = pt["inst"], pt["pub"], []
+        inst, pub = pt["inst"], pt["pub"]
+        tables = ["--tables", str(d / "tables")] if (d / "tables").is_dir() else []
         fw_files = {"partition_file": pt["partition"]}
     else:
         inst, pub, tables = str(d / f"inst-{c}.bin"), str(d / f"pub-{c}.bin"), ["--tables", str(d / "tables")]

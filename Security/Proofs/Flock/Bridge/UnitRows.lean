@@ -80,7 +80,7 @@ of the parsed file, every transcript `tr` gives, for each copy `j < units_per_vu
 `z` that satisfy the unit net's rows (`Rows.ofNet`), whose constant is `tr`'s bit at the unit's constant gate, and
 which are the bits of `u`'s local evaluation of `tr` at every column of the copy. (`X` is a token here: ArkLib's global
 `notation3 "X"` comes in through `CircuitOf`'s imports.) -/
-theorem rows_localEval (tr : (circuitOf D hU n).Transcript) (u : Fin n) {j : ℕ} (hj : j < D.unroll.upv) :
+theorem rows_localEval (tr : (circuitOf D hU n).Trace) (u : Fin n) {j : ℕ} (hj : j < D.unroll.upv) :
     ∃ z : ℕ → Bool, (Rows.ofNet hU).Sat (fun c => z c.val) ∧
       z (Rows.ofNet hU).one.val = (tr (constGate D hU n u)).getLsbD 0 ∧
       ∀ c : Fin (Rows.ofNet hU).w, z c.val = ((partsOf D hU n).localEval tr u (copyGate D hU n u hj c)).getLsbD 0 := by
@@ -148,7 +148,7 @@ theorem constGate_mem_io (u : Fin n) (hupv : 0 < D.unroll.upv) : constGate D hU 
       ((unitInst D hU n u).wire ((Placed.circuitRows D.unroll hU).comp ⟨0, h0⟩)))).args.toFinset := by
     intro g hg
     rw [(unitInst D hU n u).op ⟨0, h0⟩]
-    simp only [coreOp, Audit.Op.args, List.mem_toFinset, List.mem_append, List.mem_map]
+    simp only [coreOp, Verity.Boolean.Op.args, List.mem_toFinset, List.mem_append, List.mem_map]
     exact Or.inl ⟨_, hrow, hg.symm⟩
   rw [Verity.Partition.io, Finset.mem_filter]
   exact ⟨hcom, Or.inr ⟨_, (unitInst D hU n u).mem ⟨0, h0⟩, hread _ rfl⟩⟩

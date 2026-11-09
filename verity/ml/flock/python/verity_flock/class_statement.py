@@ -48,7 +48,7 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 import numpy as np
 
@@ -445,22 +445,21 @@ SAMPLER = class_sweep.SAMPLER
 
 
 def distinct_calls(graph_path: str | None, modules: str | None = None, definitions: dict[str, int] | None = None,
-                   exclude: re.Pattern | None = None) -> tuple[Any, dict[str, int], list[dict]]:
+                   exclude: re.Pattern | None = None, *, definition: Callable[[str], Any]) -> tuple[Any, dict[str, int], list[dict]]:
     """A served row's distinct Call Definitions, from its program graph (``vllm-program-graph/v1``): (a Program with one Call of
     each, the row's Call count of each by descriptor id, a provenance row per Definition). ``modules``: a module-path prefix
-    (``model.model.layers.0.``) to keep. Each Definition is bound from the registry and its definition digest
+    (``model.model.layers.0.``) to keep. Each Definition is bound by ``definition`` (its id to the registered Definition,
+    `partition_units.resolver`) and its definition digest
     (`codec.definition_digest`) is checked against the graph's ``definitions_index`` where the graph has it (every group's
     spec; attention's smallest and largest T).
     A per-Call partition (``Q_word``, an owner function) cuts this Program's Calls exactly as the row's, so its classes are the
     row's and the row's unit counts are the per-Call counts times the Call counts. ``definitions`` ({descriptor id: Call count})
-    adds Definitions without a graph (bound from the registry, no digest to check); ``exclude`` drops the ids it matches."""
-    from circuit_check import targets as TG
+    adds Definitions without a graph (bound the same way, no digest to check); ``exclude`` drops the ids it matches."""
     from verity.ml.circuits.codec import definition_digest, descriptor_id
     from verity.ml.circuits.defs import CompositeDefinition
     from verity.ml.circuits.program import Program
     from verity.ml.definitions.encoding import encode_specialization
 
-    TG.load_registries()
     g = json.loads(open(graph_path).read()) if graph_path else {"groups": []}
     index = g.get("definitions_index") or {}
     calls: dict[str, int] = dict(definitions or {})
@@ -471,9 +470,9 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
     fns, prov = [], []
     for fid in calls:
         readable = re.sub(r'\{"f64":"([^"]+)"\}', lambda m: repr(float.fromhex(m[1])), fid)
-        fn = TG.definition(readable)
+        fn = definition(readable)
         if descriptor_id(fn) != fid:
-            raise ValueError(f"{fid}: the registry binds {descriptor_id(fn)}")
+            raise ValueError(f"{fid}: the resolver binds {descriptor_id(fn)}")
         want = index.get(fid)
         got = definition_digest(encode_specialization(fn)[1][fid]) if want else None
         if want and got != want:
@@ -1226,6 +1225,22 @@ class UnitStager:
                 "unit_nnz": counts["nnz_a"] + counts["nnz_b"], "circuit_sha512": self.pin}
 
 
+def member_stager(definition, member, bind: dict | None, circuit: Path | None = None) -> UnitStager:
+    """A window member's template as its sessions prove it and an auditor's params name it: the flat statement, a
+    `UnitStager` named ``unit/<definition id>``, over each of ``member``'s input rows (its Definition's input of that name)
+    and each of its output rows, ``(row, words)`` in ``member.rows`` and ``member.outs``, at ``member.schema(row)`` and 16
+    bits a word, bound to ``bind`` (``{"partition", "program"}``). Its file, and so its SHA-512 (``pin``), is a function of
+    those alone, the one an auditor rebuilds from public data with every switch this module reads at import unset: so a
+    process with any of them set (FLOCK_PACK_WORDS, FLOCK_CORE_ROWS, FLOCK_PLAIN_LEAVES, FLOCK_OWN_ROWS,
+    FLOCK_GEMM_TILE) is refused, naming each one set."""
+    switched = [v for v, on in (("FLOCK_PACK_WORDS", PACK_WORDS), ("FLOCK_CORE_ROWS", CORE_ROWS), ("FLOCK_PLAIN_LEAVES", PLAIN_LEAVES),
+                                ("FLOCK_OWN_ROWS", OWN_ROWS), ("FLOCK_GEMM_TILE", GEMM_TILE)) if on]
+    if switched:
+        raise ValueError(f"{definition.id}: {', '.join(switched)} set: a member's file is the one made with all five unset")
+    return UnitStager(definition, f"unit/{definition.id}", [(r, member.schema(r), w * 16, [r]) for r, w in member.rows],
+                      [(member.schema(r), (j,)) for j, (r, _w) in enumerate(member.outs)], circuit=circuit, bind=bind)
+
+
 def stage_unit(definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]], out_rows: Sequence[tuple[str, Sequence[int]]],
                rows: dict[str, np.ndarray], out_dir: Path, salt_key: bytes, salts: dict | None = None,
                public_inputs: dict | None = None, bind: dict | None = None, indices: Sequence[int] | None = None,
@@ -1751,6 +1766,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     src.add_argument("--program-graph", help="a served row's program graph: its distinct Call Definitions (distinct_calls)")
     src.add_argument("--definitions", help="a JSON file {descriptor id: Call count}: those Call Definitions, one Call of each (distinct_calls)")
     ap.add_argument("--modules", default=None, help="with --program-graph: keep groups whose module path starts with this")
+    ap.add_argument("--resolver", default=None, help="with --program-graph, --definitions or --definition, which name Definitions "
+                    "by id: MODULE:FUNC (MODULE may be a .py path), FUNC(id) the registered Definition an id names")
     ap.add_argument("--partition", default="q-word")
     ap.add_argument("--out", required=True)
     ap.add_argument("--binary", default=os.environ.get("FLOCK_CIRCUIT", "flock-circuit"))
@@ -1809,19 +1826,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     calls: dict[str, int] | None = None
     if a.program_graph or a.definitions:
         defs = json.loads(Path(a.definitions).read_text()) if a.definitions else None
-        program, calls, prov = distinct_calls(a.program_graph, a.modules, defs, SAMPLER if a.select else None)
+        program, calls, prov = distinct_calls(a.program_graph, a.modules, defs, SAMPLER if a.select else None,
+                                              definition=PU.resolver(a.resolver, "--program-graph or --definitions"))
         Path(a.out).mkdir(parents=True, exist_ok=True)
         (Path(a.out) / "calls.json").write_text(json.dumps({"calls": calls, "provenance": prov}, indent=1))
     elif a.program_module:
-        import importlib.util
-        mod, fn = a.program_module.rsplit(":", 1)
-        spec = importlib.util.spec_from_file_location("stress_program", mod) if mod.endswith(".py") else None
-        if spec:
-            m = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(m)
-        else:
-            m = importlib.import_module(mod)
-        program = getattr(m, fn)()
+        program = PU.attribute(a.program_module)()
     else:
         program = PU._program(a)
     units = PU.partition_units(program, a.partition)

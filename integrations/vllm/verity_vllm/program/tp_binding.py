@@ -10,6 +10,10 @@ order, since dead-free compilation drops a dead collective with its producer at 
 name: a collective live at some ranks only, ranks that combine a site with different Definitions, a peer segment that isn't
 one slice of the Input its rank sends, a collective read inside a batch or a scan.
 
+Each site also records, per rank, who reads its combine's output (``Site.readers``): every call reading leaves of it, which
+the window wires from the combine units that compute those leaves: at a collective site too, every value a unit reads is the
+output of the unit that computed it, never a free witness. A combine's output read inside a batch or a scan is refused by name.
+
 The prover and the verifier derive the binding from the rank Programs of record alone, so it is part of the registered circuit
 and never supplied; `pipeline.tp.wires` lowers it to a window's wires."""
 from __future__ import annotations
@@ -30,29 +34,36 @@ PEERS = "peers_"
 Run = tuple[int, int, int]
 #: a site's key: the peer Inputs' collective index k and the slice ``[lo, hi)`` of them its combine reads
 Key = tuple[int, int, int]
+#: a read of a combine's output: the reading call node, its argument, the leaf of that argument the read fills from, and the
+#: leaves ``[lo, hi)`` of the combine's output it reads
+Reader = tuple[int, int, int, int, int]
 
 
 @dataclass(frozen=True)
 class RankSites:
     """One rank's collectives in one request Program (`rank_sites`): by site, its combine node, the parameter its parts are,
-    and its own partial's runs; ``fns`` the combine and producer nodes' Definitions, by node."""
+    and its own partial's runs, and the reads of its combine's output (``readers``); ``fns`` the combine, producer and reader
+    nodes' Definitions, by node."""
     world: int
     rank: int
     digest: str
     sites: Mapping[Key, tuple[int, str, tuple[Run, ...]]]
     fns: Mapping[int, Any] = field(compare=False, repr=False)
+    readers: Mapping[Key, tuple[Reader, ...]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class Site:
     """One collective of a request at every rank: ``k`` and ``[lo, hi)`` its key, and per rank its combine (``combine[r]``: the
-    node and its parts parameter) and its own partial (``own[r]``: runs of producer outputs, one run of one node's whole
-    output for a collective per row). Rank r's segment p is rank p's own partial."""
+    node and its parts parameter), its own partial (``own[r]``: runs of producer outputs, one run of one node's whole
+    output for a collective per row) and the reads of its combine's output (``readers[r]``, in node order). Rank r's
+    segment p is rank p's own partial."""
     k: int
     lo: int
     hi: int
     combine: tuple[tuple[int, str], ...]
     own: tuple[tuple[Run, ...], ...]
+    readers: tuple[tuple[Reader, ...], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -66,7 +77,8 @@ class RequestBinding:
 
     def record(self) -> dict[str, Any]:
         return {"world": self.world, "ranks": list(self.ranks),
-                "sites": [[s.k, s.lo, s.hi, [list(c) for c in s.combine], [[list(r) for r in o] for o in s.own]] for s in self.sites]}
+                "sites": [[s.k, s.lo, s.hi, [list(c) for c in s.combine], [[list(r) for r in o] for o in s.own],
+                           [[list(r) for r in rs] for rs in s.readers]] for s in self.sites]}
 
     @cached_property
     def digest(self) -> str:
@@ -133,7 +145,20 @@ def rank_sites(body: Any, world: int, rank: int, digest: str = "") -> RankSites:
         sites[key] = (at, node.fn.signature()[0][read[0]][0], tuple((i, lo, hi) for _, i, lo, hi in segs[rank]))
         fns[at] = node.fn
         fns.update((i, body.nodes[i].fn) for _, i, _, _ in segs[rank])
-    return RankSites(world, rank, digest, sites, fns)
+    combines = {node: key for key, (node, _, _) in sites.items()}
+    readers: dict[Key, list[Reader]] = {}
+    for at, node in enumerate(body.nodes):
+        for a, arg in enumerate(node.args):
+            off = 0
+            for s, i, lo, hi in runs(arg.refs):
+                if s == "n" and i in combines:
+                    if node.form != "call":
+                        raise ValueError(f"{where}: node {at} ({node.fn.id}) reads collective node {i}'s output in a "
+                                         f"{node.form} node: a combine's output is read by calls")
+                    readers.setdefault(combines[i], []).append((at, a, off, lo, hi))
+                    fns[at] = node.fn
+                off += hi - lo
+    return RankSites(world, rank, digest, sites, fns, {k: tuple(v) for k, v in readers.items()})
 
 
 def pair(ranks: Sequence[RankSites]) -> RequestBinding:
@@ -155,7 +180,8 @@ def pair(ranks: Sequence[RankSites]) -> RequestBinding:
         if len(set(ids)) != 1:
             r = next(r for r, i in enumerate(ids) if i != ids[0])
             raise ValueError(f"collective {key[0]}'s [{key[1]}, {key[2]}): rank 0 combines it with {ids[0]}, rank {r} with {ids[r]}")
-        sites.append(Site(*key, tuple(x.sites[key][:2] for x in ranks), tuple(x.sites[key][2] for x in ranks)))
+        sites.append(Site(*key, tuple(x.sites[key][:2] for x in ranks), tuple(x.sites[key][2] for x in ranks),
+                          tuple(x.readers.get(key, ()) for x in ranks)))
     return RequestBinding(world, tuple(x.digest for x in ranks), tuple(sites), {x.rank: x.fns for x in ranks})
 
 

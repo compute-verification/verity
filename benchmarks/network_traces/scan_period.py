@@ -6,7 +6,8 @@ and its Lean.
         NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
 * **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
-  and one schedule), the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
+  and one schedule, its integer fields: the period check reads the id egress form, and a run in another is refused),
+  the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps),
   jitter bound 1 (K's jitter term 0, assumed (J), not met at 1), and the scan that Program's
   descriptor (``joint/program.json``), off which the period check reads the scan's terms; the commitment the audits'
@@ -43,6 +44,7 @@ sys.path.insert(0, str(HERE))
 
 import scan_zk as SZ  # noqa: E402
 import warden_serve as WS  # noqa: E402
+from verity.core.protocols.certifier.warden import INTEGER_FIELDS  # noqa: E402
 from verity.core.protocols.spot.one_stage import registration as RG  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 
@@ -69,6 +71,8 @@ def rows_case(run: Path, scan: Path, round_: str = "honest") -> dict:
     ``scan``: honest, ``answers.json``'s; forged, the honest one with a certificate's signature changed; a refused round
     (tampered, chain), that round's registration and its refusal."""
     dep = json.loads(SZ._found(run, "deployment.json").read_text())
+    if dep["params"].get("egress", "id") != "id":
+        raise SystemExit(f"{run}: the period check's schedule is the id egress form's, not {dep['params']['egress']!r}'s")
     doc = json.loads((scan / "answers.json").read_text())
     if len(doc["windows"]) != 1:
         raise SystemExit(f"{scan}: a group of {len(doc['windows'])} link-windows is one registration over all their "
@@ -89,7 +93,7 @@ def rows_case(run: Path, scan: Path, round_: str = "honest") -> dict:
     params = {"audits": [{k: a[k] for k in ("free", "program", "steps")} for a in audits], "cells": [],
               "first": x["window"], "jitter": 1, "key": dep["key"]["public"], "link": WS.LINK,
               "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
-              "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": dict(dep["params"]),
+              "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": {k: dep["params"][k] for k in INTEGER_FIELDS},
               "session": dep["session"], "windows": 1}
     commitment = canonical_json({"audits": [a["registration"] for a in audits], "windows": [reg]})
     evidence = canonical_json({"audits": [a["answer"] for a in audits], "windows": [

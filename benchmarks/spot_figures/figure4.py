@@ -110,7 +110,7 @@ def caption(out: dict) -> str:
             f"leave only through T/b incorrect blocks, each escaping a sample at rate q with probability 1 - q: at most "
             f"δ = 2^-40 once q >= b ln(1/δ)/T (thin, black), whatever the scope. The planner's exact form also charges "
             f"which of the scope's blocks are the incorrect ones, so its rate rises with the scope: over a {p} (thick) "
-            f"and a {s}, the stretch scope (dashed). At 16-bit blocks over a {p} it is {_g(q)}: proving one block in "
+            f"and a {s} (dashed). At 16-bit blocks over a {p} it is {_g(q)}: proving one block in "
             f"{_g(1 / q)} keeps the weights in, {log10(1 / q):.1f} orders of magnitude below proving every block "
             f"({_g(out['need'][s][first])} over a {s}). ")
     rows = "; ".join(f"{b['label']}" + (f" (h = {_g(b['h'])})" if b["config"] else "") + f" buys q = {_g(b['rate'])} "
@@ -141,8 +141,7 @@ def render(out: dict, outdir: Path) -> list[Path]:
     ax.plot(xs, out["simple"], color="#222222", lw=1.6, label="q = b ln(1/δ)/T", zorder=4)
     for scope, ls, lw, color in ((out["primary"], "-", 3.4, "#08306B"), (out["secondary"], (0, (5, 2)), 2.0, "#6A51A3")):
         ax.plot(xs, [r["rate"] for r in out["exact"][scope]], color=color, ls=ls, lw=lw, zorder=3,
-                label=f"The planner's exact rate, over a {scope}" + (" (the stretch scope)"
-                                                                       if scope == out["secondary"] else ""))
+                label=f"The planner's exact rate, over a {scope}")
     for b, color in zip(out["bought"], ("#D95F02", "#1B9E77", "#888888")):
         ax.axhline(b["rate"], color=color, lw=2.2, ls=(0, (1.5, 1.5)), zorder=2,
                    label=f"{out['goal']:.0%} of serving compute buys, {b['label']}"

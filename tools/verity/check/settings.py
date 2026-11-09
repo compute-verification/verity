@@ -119,6 +119,8 @@ SETTINGS: dict[str, Setting] = _declare(
       "`suites.py` refuses another checkout's environment"),
     S("XDG_CACHE_HOME", str, None, WHERE, "the cache root under which VERITY_TEST_CACHE defaults", "as VERITY_TEST_CACHE"),
     S("TMPDIR", str, None, WHERE, "scratch: train.sh's worktrees and logs; unset, /tmp", "scratch space"),
+    S("LD_LIBRARY_PATH", str, None, WHERE, "where the loader looks first: neutrality_tier.sh puts the driver's libcuda it "
+      "unpacks there, on a node with none", "vLLM only loads it at import; neutrality hides every device"),
     # ---- the run this one is part of (`research run` sets them)
     S("RESEARCH_RUN_ID", str, None, WHERE, "the research run this process is part of: a check inside one is recorded, a run of "
       "record", "it names the run"),

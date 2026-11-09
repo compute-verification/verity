@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Core.Coins
 public import Definitions.Spot.Dataflow
 public import Mathlib.Basic.Real.Basic
 public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
@@ -12,10 +13,11 @@ from a distribution `π` fixed before the transcript, checks each sampled proof 
 set `A`. There are no hashes: binding is free, and the protocol fixes the oracle's shape.
 
 * `chk u σ`: unit `u`'s check on the transcript. `bad chk σ` is the wrong set `B(σ)`, the units whose check fails.
-* `Dist π`: a sample distribution, nonnegative weights summing to one. `mass π B` is its weight on `B`.
+* `π : PMF U`: the sample distribution. `mass π B` is its weight on `B`, the probability that a sample lands in `B`.
 * `Accepts chk A d σ`: at the sample `d : Fin k → U`, every always-proved check and every sampled check passes.
-* `prob π k E`: the probability of an event of the sample over `k` independent samples from `π`, as an explicit finite
-  sum. A transcript committed before the coins is a `σ` that the event reads but that does not depend on `d`.
+* `prob π k E`: the probability of an event of the sample over `k` independent samples from `π`, core's
+  `Verity.Game.prPMFReal` under `iid π k`. A transcript committed before the coins is a `σ` that the event reads but
+  that does not depend on `d`.
 * `Certified chk π A ε σ`, **the certificate's conclusion**: no always-proved unit is wrong, and `π(B) ≤ ε`.
 * `Local reads chk`: unit `u`'s check reads only the oracle positions `reads u`. A population's checks are local by
   type (`Dataflow.Fns`).
@@ -48,27 +50,22 @@ open Classical in
 /-- The wrong set: the units whose check fails on the transcript. -/
 noncomputable def bad [Fintype U] (chk : U → T → Prop) (σ : T) : Finset U := univ.filter fun u => ¬ chk u σ
 
-/-- The sample's weight on a set of units. -/
-def mass (π : U → ℝ) (B : Finset U) : ℝ := ∑ u ∈ B, π u
-
-/-- A sample distribution over units: nonnegative weights summing to one. -/
-structure Dist [Fintype U] (π : U → ℝ) : Prop where
-  nonneg : ∀ u, 0 ≤ π u
-  sum_one : ∑ u, π u = 1
+/-- The sample's weight on a set of units: the probability that a sample from `π` lands in it. -/
+noncomputable abbrev mass (π : PMF U) (B : Finset U) : ℝ := Verity.Game.prPMFReal π (· ∈ B)
 
 /-- The verifier accepts the transcript `σ` at the sample `d`: every always-proved unit's check passes, and every sampled
 proof block's. -/
 def Accepts (chk : U → T → Prop) (A : Finset U) {k : ℕ} (d : Fin k → U) (σ : T) : Prop :=
   (∀ u ∈ A, chk u σ) ∧ ∀ i, chk (d i) σ
 
-open Classical in
-/-- The probability of an event of the sample, over `k` independent samples from `π`. -/
-noncomputable def prob [Fintype U] (π : U → ℝ) (k : ℕ) (E : (Fin k → U) → Prop) : ℝ :=
-  ∑ d : Fin k → U, if E d then ∏ i, π (d i) else 0
+/-- The probability of an event of the sample, over `k` independent samples from `π`: core's `Verity.Game.prPMFReal`
+under their law `iid π k`. -/
+noncomputable abbrev prob [Fintype U] (π : PMF U) (k : ℕ) (E : (Fin k → U) → Prop) : ℝ :=
+  Verity.Game.prPMFReal (Verity.Game.iid π k) E
 
 /-- **The certificate's conclusion** about the transcript `σ`: no always-proved unit is wrong, and the sample's weight on
 the incorrect proof blocks is at most `ε`. -/
-def Certified [Fintype U] (chk : U → T → Prop) (π : U → ℝ) (A : Finset U) (ε : ℝ) (σ : T) : Prop :=
+def Certified [Fintype U] (chk : U → T → Prop) (π : PMF U) (A : Finset U) (ε : ℝ) (σ : T) : Prop :=
   Disjoint (bad chk σ) A ∧ mass π (bad chk σ) ≤ ε
 
 /-- **Local checks**: unit `u`'s check reads only the oracle positions `reads u`. -/

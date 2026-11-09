@@ -372,10 +372,11 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
              salt_key: bytes | None = None) -> Interior:
     """The replay sample's spans (``spans[i]`` replay block ``sample[i]``'s: one template's span, or one a template in the
     check's order, as `pieces` gives a token select's), template t's each padded to its n_t units (``n_rho``, as
-    `interior_window` takes it) by whole instances (`Span.padded`), committed template-major and registered after ``previous`` (the boundary registration's
-    digest ``boundary`` by default) under the window ``{kind, run, row, interior: true}``: ``row`` the served workload's
-    row, ``replay`` the replay's run when given. Every leaf's salt is fresh from the OS; ``salt_key``: tests only, the salts
-    derived from it (`ml.windows.rows.commit`)."""
+    `interior_window` takes it) by whole instances (`Span.padded`), committed template-major and registered after
+    ``previous`` (the boundary registration's digest ``boundary`` by default) under the window ``{kind, run, row,
+    interior: true, replay_sample}``: ``row`` the served workload's row, ``replay_sample`` the replay sample in order
+    (round 2's ``second-interior-order``), ``replay`` the replay's run when given. Every leaf's salt is fresh from the OS;
+    ``salt_key``: tests only, the salts derived from it (`ml.windows.rows.commit`)."""
     if not spans or len(spans) != len(sample):
         raise ValueError(f"{len(spans)} spans for a replay sample of {len(sample)}")
     per = [(s,) if isinstance(s, Span) else tuple(s) for s in spans]
@@ -395,7 +396,8 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
         data.append(d)
     fresh = None if salt_key is not None else {p: os.urandom(v["leaves"] * CS.SALT_BYTES) for p, v in ports.items()}
     c = CS.commit(window, data, salt_key=salt_key, salts_of=fresh)
-    provenance = {"row": row, "interior": True, **({"replay": replay} if replay is not None else {})}
+    provenance = {"row": row, "interior": True, "replay_sample": [int(u) for u in sample],
+                  **({"replay": replay} if replay is not None else {})}
     rec = CS.registration(c, provenance, boundary if previous is None else previous, kind=kind, registrar=R)
     layer = CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(window.members)})
     return Interior(rec, ports, layer, c, [[s.entries for s in p] for p in per])

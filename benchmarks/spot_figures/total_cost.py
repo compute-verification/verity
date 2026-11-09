@@ -48,11 +48,15 @@ planned on its own.  The serve tax is outside β; the token ids' hashing is in t
 two-stage statement holds one Definition's sampled proof blocks of a sampled request, or of a registration's sampled
 requests, its sessions padded to a public cap that every registration pays (`optimize.two_stage_statements`), each
 Definition taking whichever costs less.  `breakeven` gives each patterns'-form
-line's marginal overhead and β at which its bound reaches the weights, at FP8 and FP4.
+line's marginal overhead and β at which its bound reaches the weights, at FP8 and FP4, each certified by Lean unless
+`lean` is off (`certify`: at the β it gives, the bits Lean certifies for the planner's design are at most the weights).
+Only that side is Lean's: Lean bounds a design's bits from above, so nothing certifies that a smaller β can't reach the
+weights; and what a design costs, so which design fits a β, is the planner's pricing of the proof_overhead card.
 
     uv run python benchmarks/spot_figures/total_cost.py priced-card --model GLM-5.3 --out CARD.json
     uv run python benchmarks/spot_figures/total_cost.py render DIR/figure1.json [--scope "world year"] [--out DIR]
-    uv run python benchmarks/spot_figures/total_cost.py breakeven --model GLM-5.3 --out DIR [--scope S] [--workers N]
+    uv run python benchmarks/spot_figures/total_cost.py breakeven --model GLM-5.3 --out DIR [--scope S] [--workers N] \
+        [--no-lean]
 """
 from __future__ import annotations
 
@@ -199,8 +203,11 @@ def priced_card(model: str = "GLM-5.3") -> dict:
     ticks = {"part": "certified-tick rule", "share": 1 / TICKS[0] - 1, "low": 1 / TICKS[0] - 1,
              "high": 1 / TICKS[1] - 1,
              "source": f"throughput {TICKS[0]} of vLLM's on the mean run and {TICKS[1]} on the worst, a queue-dependent "
-                       "tick on Llama-3.2-1B traces, simulated and validated against them; on GLM-5.3 at TP8 it leaves "
-                       "at most 44 bits of advice a 600 s window, the references card's tick line"}
+                       "tick on Llama-3.2-1B traces, simulated and validated against them; on GLM-5.3 at TP8, with "
+                       "certified arrivals and prefix caching off, it leaves no scheduling advice but the response "
+                       "length, which stays advice until a circuit checks the stop rule; the run with the real network "
+                       "certifier is pending (a client stood in for it in the measured runs, which served with prefix "
+                       "caching on)"}
     tokens = hashed("token ids", c["token_bytes"].value, "the design card's token_bytes")
     window = c["window"].value
     edge = {"part": "step record, token commits and replay-block edge snapshot",
@@ -257,6 +264,51 @@ def cut(c: dict[str, f1.InputCard], card: dict) -> dict[str, f1.InputCard]:
     art = f" ({card['art']})" if card.get("art") else ""
     return c | {"partition": replace(part, value=part.value | {"strata": strata},
                                      source=f"{part.source}; cut by the partition card {v['name']}{art}")}
+
+
+def verifier_seconds(v: dict, block: str) -> tuple[float, str]:
+    """The verifier's core-seconds a statement of `block`'s type from a `verifier_cost` card's value, and how they are
+    known: its measured type's, its family's line through its members (or through the fixed seconds at size 0 and its
+    one member; the member's own where the block gives no size), else the measured types' median."""
+    by = {t["block"]: t["core_seconds"] for t in v["types"]}
+    for prefix, seconds in by.items():
+        if block.startswith(prefix):
+            return seconds, "measured"
+    for fam in v["families"]:
+        if block.startswith(tuple(fam["types"])):
+            size = fam["size"] and re.search(rf"[{{,]{fam['size']}=(\d+)", block)
+            if not size:
+                return by[fam["members"][0]], "family"
+            pts = [(int(re.search(rf"[{{,]{fam['size']}=(\d+)", m)[1]), by[m]) for m in fam["members"]]
+            (x0, y0), (x1, y1) = pts if len(pts) == 2 else [(0, v["fixed_seconds"]), *pts]
+            return y0 + (int(size[1]) - x0) * (y1 - y0) / (x1 - x0), "family"
+    return median(by.values()), "assumed"
+
+
+def _verify_sentence(inputs: dict) -> str:
+    """The caption's sentence on the verifier's share of β, empty where the inputs leave it out."""
+    if "verifier_cost" not in inputs:
+        return " β counts proving only: the verifier's CPU is not in it."
+    seconds = [x["verify_core_seconds"] for x in inputs["partition"]["value"]["strata"] if x["per_token"] > 0]
+    return (f" β also pays the verifier: each statement's verify, its type's core-seconds on one core "
+            f"({min(seconds):,.0f} s to {max(seconds):,.0f} s), at {inputs['verifier_cost']['value']:.3g} "
+            "core-seconds a GPU-second, adds to its fixed seconds, so total compute is serve tax, proving and "
+            "verifying.")
+
+
+def verified(c: dict[str, f1.InputCard], card: dict) -> dict[str, f1.InputCard]:
+    """The priced inputs with each statement's verify, its type's core-seconds (`verifier_seconds`) at the card's
+    core-seconds a GPU-second, added to the statement's fixed GPU-seconds."""
+    v, part = card["value"], c["partition"]
+    strata = []
+    for x in part.value["strata"]:
+        seconds, how = verifier_seconds(v, x["block"])
+        strata.append(x | {"fixed_seconds": x["fixed_seconds"] + seconds / v["core_seconds_per_gpu_second"],
+                           "verify_core_seconds": seconds, "verify_priced": how})
+    art = f" ({card['art']})" if card.get("art") else ""
+    return c | {"partition": replace(part, value=part.value | {"strata": strata}),
+                "verifier_cost": f1.InputCard(v["core_seconds_per_gpu_second"], "core-s/GPU-s", card["status"],
+                                              f"the verifier_cost card{art}: {card['source']}", card["provisional"])}
 
 
 def _definition(block: str) -> tuple[str, int | None]:
@@ -498,7 +550,8 @@ def captions(out: dict, scope: str) -> dict[str, str]:
             "block's and its statement's fixed ones, and a type not yet measured at its staged witness bits (computed): "
             f"the registered circuit's marginal proof overhead comes to {out['overhead']:.3g}×, "
             f"{_share(conf['tokens']['computed_share'])} of it computed, measured on benchmark values, which a "
-            "replayed served step's values cost the same as. Every β has its own plan, the one with the "
+            f"replayed served step's values cost the same as.{_verify_sentence(out['inputs'])} Every β has its own "
+            "plan, the one with the "
             "least bound. Replay is full-batch: the model's tokens come out bit-exact only in their served batch, so a "
             f"sampled request replays its replay block, one machine's {out['inputs']['window']['value']:g} s, whole "
             f"from its edge, {out['registrations']['machine']['requests']:,.0f} requests at {out['inputs']['replay_factor']['value']:g}× "
@@ -610,15 +663,19 @@ def run(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None = None,
         return _run(model_name, scope_names, request, pool.map if pool else map, lean)
 
 
-def _lines(model_name: str, request: str) -> tuple:
-    """The model's cards and, for each configuration it has the cut of, its priced inputs, its line (proof blocks a
-    token, fill and marginal overhead) and which of its cells' types are computed."""
+def _lines(model_name: str, request: str, verify: bool = True) -> tuple:
+    """The model's cards and, for each configuration it has the cut of, its priced inputs (with each statement's
+    verify where `verify` and the model has a `verifier_cost` card), its line (proof blocks a token, fill and marginal
+    overhead) and which of its cells' types are computed."""
     sc = f1.slot_cards(model_name)
     c = f1.cards(model_name, request)
     cuts = {card["value"]["name"]: card for card in spot_cards.load_all("partition", model_name)}
     confs = {n: conf for n, conf in CONFIGURATIONS.items() if conf.partition is None or conf.partition in cuts}
     inputs = {n: priced(cut(c, cuts[conf.partition]) if conf.partition else c, sc["proof_overhead"])
               for n, conf in confs.items()}
+    if verify and (vc := spot_cards.load("verifier_cost", model_name, required=False)):
+        sc |= {"verifier_cost": vc}
+        inputs = {n: verified(i, vc) for n, i in inputs.items()}
 
     def line(i: dict[str, f1.InputCard]) -> tuple:
         strata = i["partition"].value["strata"]
@@ -709,49 +766,89 @@ def weights(c: dict[str, f1.InputCard]) -> dict[str, float]:
     return {"FP8": 8 * c["weights_bytes"].value, "FP4": 4 * c["params"].value}
 
 
-def _bound(line: tuple, scale: float, beta: float) -> float:
-    """A request-grain line's exfiltration bound at β with its marginal overhead times `scale`: `_point`'s, at most the
-    scope's served bits."""
+def _bound(line: tuple, scale: float, beta: float, lean: bool = False) -> dict:
+    """A request-grain line's exfiltration point at β with its marginal overhead times `scale`: `_point`'s, its `y` at
+    most the scope's served bits, with Lean's check of its design if `lean`."""
     name, i, (tb, fl, oh), s, computed, conf, gpu_s, replays = line
     m = f1.model(i, tb, s, oh * scale, fl)
     g = Grain(m.replay.replay_blocks, m.cells, m.replay.cost * replays, m.served)
-    job = (name, m, g, beta * s.gpu_seconds, computed, conf.form, g.replay_blocks * gpu_s / s.gpu_seconds, False)
-    return _point(job)["exfiltration"]["y"]
+    job = (name, m, g, beta * s.gpu_seconds, computed, conf.form, g.replay_blocks * gpu_s / s.gpu_seconds, lean)
+    return _point(job)["exfiltration"]
+
+
+def _at(what: str, line: tuple, beta: float, x: float, lean: bool = False) -> dict:
+    """The point a break-even searches: at the overhead's multiple `x` and β (`what` "h"), or at β = `x` and the line's
+    own overhead ("beta")."""
+    return _bound(line, x, beta, lean) if what == "h" else _bound(line, 1.0, x, lean)
 
 
 def _solve(job: tuple) -> float | None:
     """The multiple of a line's marginal overhead (`what` "h") at which its bound at β reaches `target` bits, or the β
-    ("beta") at which it does at its own overhead, by bisection in log to `rel` over its `SPANS`; None where the bound
-    is above the target over the whole span, and the span's end where it is below it throughout.  At a target of None,
-    the floor: the bound at the least overhead."""
+    ("beta") at which it does at its own overhead, by bisection in log to `rel` over its `SPANS`: the end of the last
+    bracket at which the bound is at most the target, so within 1 + `rel` of the break-even on its safe side; None
+    where the bound is above the target over the whole span, and the span's end where it is below it throughout.  At a
+    target of None, the floor: the bound at the least overhead."""
     what, target, line, beta, rel = job
     lo, hi = SPANS[what]
     if target is None:
-        return _bound(line, lo, beta)
-
-    def bound(x: float) -> float:
-        return _bound(line, x, beta) if what == "h" else _bound(line, 1.0, x)
-
+        return _bound(line, lo, beta)["y"]
     rising = what == "h"
-    if bound(lo if rising else hi) > target:
+    if _at(what, line, beta, lo if rising else hi)["y"] > target:
         return None
-    if bound(hi if rising else lo) <= target:
+    if _at(what, line, beta, hi if rising else lo)["y"] <= target:
         return hi if rising else lo
     while hi / lo > 1 + rel:
         mid = (lo * hi) ** 0.5
-        lo, hi = (mid, hi) if (bound(mid) <= target) == rising else (lo, mid)
-    return (lo * hi) ** 0.5
+        lo, hi = (mid, hi) if (_at(what, line, beta, mid)["y"] <= target) == rising else (lo, mid)
+    return lo if rising else hi
 
 
 #: the spans a break-even searches: the marginal overhead's multiple, and β
 SPANS = {"h": (1e-12, 1e2), "beta": (1e-6, 1e6)}
+#: the most steps outward from a solved break-even that Lean's certificate takes, the i-th of (1 + `rel`)^(2^i)
+STEPS = 6
+
+
+def certify(at, x: float, target: float, rising: bool, rel: float) -> dict:
+    """Lean's certificate that a line's exfiltration bound at a break-even's point is at most `target` bits.  `at(x)` is
+    the line's point at `x` with Lean's check of its design (`_point`'s exfiltration with `lean`): its count is the
+    bits Lean certifies for the design the planner picks there (`lean_two`), rounded up to a float, so `y`, that count
+    or the served bits if fewer, at most the target is the certificate.  Where it is above the target (Lean's bits
+    above the planner's, at a point the planner puts near the target), `x` steps outward (down for a bound rising in
+    it, up for one falling), the i-th step by (1 + `rel`)^(2^i), at most `STEPS` times; `at` None says no step reached
+    it."""
+    for step in range(STEPS + 1):
+        pt = at(x)
+        if pt["y"] <= target:
+            return _certificate(x, step, pt)
+        x = x / (1 + rel) ** 2 ** step if rising else x * (1 + rel) ** 2 ** step
+    return _certificate(None, STEPS, pt)
+
+
+def _certificate(x: float | None, steps: int, pt: dict) -> dict:
+    return {"at": x, "steps": steps, "y": pt["y"], "binds": pt["binds"],
+            **{k: pt.get(k) for k in ("count", "lean", "planner", "theta")}}
+
+
+def _certify(job: tuple) -> dict | None:
+    """`certify` at a break-even `_solve` found, at `x`; None where it found none.  At a target of None, the floor:
+    Lean's bound at the least overhead."""
+    what, target, line, beta, rel, x = job
+    if x is None:
+        return None
+    if target is None:
+        return _certificate(SPANS["h"][0], 0, _bound(line, SPANS["h"][0], beta, True))
+    return certify(lambda v: _at(what, line, beta, v, True), x, target, what == "h", rel)
 
 
 def breakeven(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None = None, request: str = "census",
-              workers: int = 1, rel: float = 0.01) -> dict:
+              workers: int = 1, rel: float = 0.01, lean: bool = True) -> dict:
     """Each patterns'-form line's break-even on each scope: the marginal overhead at which its bound at β =
     `RATIO_BUDGET` reaches each of the weights (`weights`), the β at which it does at the line's own overhead, and its
-    floor, the bound at the least overhead `SPANS` searches."""
+    floor, the bound at the least overhead `SPANS` searches.  With `lean`, each has Lean's certificate (`certify`): a
+    row's `lean` holds, for its floor and each break-even, the point Lean certifies (`at`, an overhead for `h`), the
+    bits it certifies there and which of them and the served bits binds, so its β is an upper bound on the β at which
+    the line's bound reaches the weights, and its overhead a lower bound on the overhead at which it does."""
     _, c, _, confs, inputs, lines, computed = _lines(model_name, request)
     targets = weights(c)
     chosen = [s for s in f1.scopes(c, lines["tokens"][0]) if scope_names is None or s.name in scope_names]
@@ -760,32 +857,54 @@ def breakeven(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None =
                        registration_gpu_seconds(confs[n].registration, c), batch(confs[n], s, c)), f1.RATIO_BUDGET, rel)
             for n, s in keys for what, t in [("h", None)] + [(w, t) for w in SPANS for t in targets.values()]]
     with ProcessPoolExecutor(workers) if workers > 1 else nullcontext() as pool:
-        it = iter(list((pool.map if pool else map)(_solve, jobs)))
+        each = pool.map if pool else map
+        solved = list(each(_solve, jobs))
+        certs = list(each(_certify, [j + (x,) for j, x in zip(jobs, solved)])) if lean else None
+    it, cit = iter(solved), iter(certs or [])
     rows = []
     for n, s in keys:
         oh, floor_bits = lines[n][2], next(it)
         at = {what: {name: next(it) for name in targets} for what in SPANS}
-        rows.append({"config": n, "scope": s.name, "registration": confs[n].registration, "overhead": oh,
-                     "floor": floor_bits, "h": {k: None if v is None else v * oh for k, v in at["h"].items()},
-                     "beta": at["beta"]})
-    return {"beta": f1.RATIO_BUDGET, "targets": targets, "rel": rel, "spans": SPANS, "rows": rows}
+        row = {"config": n, "scope": s.name, "registration": confs[n].registration, "overhead": oh,
+               "floor": floor_bits, "h": {k: None if v is None else v * oh for k, v in at["h"].items()},
+               "beta": at["beta"]}
+        if lean:
+            row["lean"] = {"floor": next(cit), **{what: {name: next(cit) for name in targets} for what in SPANS}}
+            for cert in [row["lean"]["floor"], *row["lean"]["h"].values()]:
+                if cert and cert["at"] is not None:
+                    cert["at"] *= oh
+        rows.append(row)
+    return {"beta": f1.RATIO_BUDGET, "targets": targets, "rel": rel, "spans": SPANS, "rows": rows,
+            "lean": {"exe": plancheck.EXE, "slack": str(plancheck.SLACK), "search": plancheck.SEARCH,
+                     "precision": plancheck.TWO_P, "steps": STEPS} if lean else None}
 
 
 def breakeven_table(be: dict) -> str:
     """The break-even as a table: a row per line and scope, its floor, the marginal overheads at which its bound at β
-    reaches each weights size and the β at which it does at its own overhead."""
-    names = list(be["targets"])
+    reaches each weights size and the β at which it does at its own overhead.  With Lean's certificates, each is the
+    point Lean certifies, marked "(served)" where the served bits bind there, and "uncertified" where Lean's bits stay
+    above the target."""
+    names, lean = list(be["targets"]), be.get("lean") is not None
     head = (["line", "registration", "scope", "h", "floor"] + [f"h for {n} at β = {_share(be['beta'])}" for n in names]
             + [f"β for {n}" for n in names])
 
     def fmt(v: float | None, end: float) -> str:
         return "none" if v is None else (">" if v >= end else "") + f"{v:.3g}"
 
+    def cell(r: dict, what: str, n: str, end: float) -> str:
+        if not lean:
+            return fmt(r[what][n], end)
+        cert = r["lean"][what][n]
+        if cert is None or cert["at"] is None:
+            return "none" if cert is None else "uncertified"
+        return fmt(cert["at"], end) + (" (served)" if cert["binds"] == "served" else "")
+
     rows = [[CONFIGURATIONS[r["config"]].label.split(" ")[0]
              + (" batch-invariant" if CONFIGURATIONS[r["config"]].replay == "request" else ""),
              r["registration"], r["scope"], f"{r['overhead']:.3g}",
-             _size(r["floor"])] + [fmt(r["h"][n], be["spans"]["h"][1] * r["overhead"]) for n in names]
-            + [fmt(r["beta"][n], be["spans"]["beta"][1]) for n in names] for r in be["rows"]]
+             _size(r["lean"]["floor"]["y"] if lean else r["floor"])]
+            + [cell(r, "h", n, be["spans"]["h"][1] * r["overhead"]) for n in names]
+            + [cell(r, "beta", n, be["spans"]["beta"][1]) for n in names] for r in be["rows"]]
     return "\n".join(" | ".join(x) for x in [head] + rows) + "\n"
 
 
@@ -806,8 +925,8 @@ def at_budgets(out: dict) -> list[dict]:
 
 
 PRIMARY, SECONDARY = f1.PRIMARY, f1.SECONDARY
-#: the line the headline scope's exfiltration panel also plots over the stretch scope, and its style there
-STRETCH_LINE, STRETCH_STYLE = "tokens", ("#6A51A3", (0, (5, 2)), 2.0)
+#: the line the headline scope's exfiltration panel also plots over the secondary scope, and its style there
+SECONDARY_LINE, SECONDARY_STYLE = "tokens", ("#6A51A3", (0, (5, 2)), 2.0)
 #: references closer than this factor stagger their labels: the lowest below its line, the rest alternating sides
 CROWDED = 2.5
 #: each configuration's colour, line style and width: a line's registrations dark to light, each narrower so that one
@@ -838,12 +957,12 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
     import textwrap
 
     from matplotlib.ticker import FixedLocator, FuncFormatter, NullLocator
-    from render import CAPTION_DROP, OFF_SCALE, REFERENCE_STYLE, _bytes, _decades, _lines, _power
+    from render import CAPTION_DROP, OFF_SCALE, REFERENCE_STYLE, _bytes, _decades, _fit, _floor, _lines, _power, _zeros
 
     p, tax = out["panels"][panel], out["taxes"]
     series = [s for s in p["series"] if s["scope"] == scope]
-    stretch = [s for s in p["series"] if (scope, panel, s["scope"], s["config"])
-               == (PRIMARY, "exfiltration", SECONDARY, STRETCH_LINE)]
+    secondary = [s for s in p["series"] if (scope, panel, s["scope"], s["config"])
+               == (PRIMARY, "exfiltration", SECONDARY, SECONDARY_LINE)]
     scale = 1 / 8 if p["unit"] == "bit" else 1 / out["inputs"]["h100_hour_flop"]["value"]
     fmt = _bytes if p["unit"] == "bit" else _power
     xs = [x for s in series for x in s["x"]] + [tax[s["config"]][k] for s in series for k in ("low", "high")]
@@ -860,10 +979,12 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
     refs = _lines(p["references"], scope, scale)
     if panel == "exfiltration":
         refs = sorted(refs + [(out["scopes"][scope]["served_bits"] * scale, "Everything the scope serves", "dotted")])
-    ys = [y * scale for s in series + stretch for y in s["y"]]
+    ys = [y * scale for s in series + secondary for y in s["y"]]
     far = [r for r in refs if r[0] > max(ys) * OFF_SCALE]
     refs = [r for r in refs if r not in far]
     lo, hi = 10.0 ** floor(log10(min(ys + [r[0] for r in refs]))), 10.0 ** (floor(log10(max(ys + [r[0] for r in refs]))) + 1)
+    zeros = _zeros(p["references"], scope)
+    lo /= 10 if zeros else 1
     caption = out["scopes"][scope]["captions"][panel]
     if far:
         caption += " Above the axis: " + "; ".join(f"{label} ({fmt(a)})" for a, label, _ in far) + "."
@@ -881,9 +1002,10 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
         k = k + 1 if i and amount < refs[i - 1][0] * CROWDED else 0
         below = k == 0 and i + 1 < len(refs) and refs[i + 1][0] < amount * CROWDED
         ax.axhline(amount, color="#909090", ls=styles[style], lw=1.3, zorder=1)
-        ax.text(lo_x * 1.3 if k % 2 else hi_x / 1.3, amount / 1.08 if below else amount * 1.08, label,
-                ha="left" if k % 2 else "right", va="top" if below else "bottom", fontsize=14, color="#555555",
-                zorder=5, bbox={"facecolor": "white", "alpha": .75, "edgecolor": "none", "pad": .5})
+        _fit(ax.text(lo_x * 1.3 if k % 2 else hi_x / 1.3, amount / 1.08 if below else amount * 1.08, label,
+                     ha="left" if k % 2 else "right", va="top" if below else "bottom", fontsize=14, color="#555555",
+                     zorder=5, bbox={"facecolor": "white", "alpha": .75, "edgecolor": "none", "pad": .5}))
+    _floor(ax, zeros, styles, 14)
     for s in series:
         color, ls, lw = STYLE[s["config"]]
         t = tax[s["config"]]
@@ -892,13 +1014,13 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
         ax.plot([t["low"], t["high"]], [y0, y0], color=color, lw=1.4, zorder=3, marker="|", markersize=12)
         ax.plot([t["tax"]], [y0], marker="o", markersize=13, color=color, zorder=4, mew=2.2,
                 markerfacecolor="white" if t["status"] == "priced" else color)
-    for s in stretch:
-        color, ls, lw = STRETCH_STYLE
+    for s in secondary:
+        color, ls, lw = SECONDARY_STYLE
         ax.plot(s["x"], [y * scale for y in s["y"]], color=color, ls=ls, lw=lw, zorder=3)
     configs = list(dict.fromkeys(s["config"] for s in series))
-    handles = [plt_line(STYLE[n]) for n in configs] + [plt_line(STRETCH_STYLE) for _ in stretch]
-    labels = [legend(out, n) for n in configs] + [f"{legend(out, s['config'])}, over a {SECONDARY} (the stretch scope)"
-                                                  for s in stretch]
+    handles = [plt_line(STYLE[n]) for n in configs] + [plt_line(SECONDARY_STYLE) for _ in secondary]
+    labels = [legend(out, n) for n in configs] + [f"{legend(out, s['config'])}, over a {SECONDARY}"
+                                                  for s in secondary]
     ax.legend(handles, [fill(label, 64) for label in labels], loc="lower left", bbox_to_anchor=(0, 1.01),
               ncol=2 if len(configs) > 3 else 3, frameon=False, fontsize=14, handlelength=2.6, columnspacing=1.4,
               borderaxespad=0)
@@ -971,13 +1093,15 @@ def main(argv=None) -> None:
     be.add_argument("--out", type=Path, required=True)
     be.add_argument("--scope", action="append", help="a scope's name; default all")
     be.add_argument("--workers", type=int, default=1)
+    be.add_argument("--no-lean", action="store_true", help="skip Lean's certificate of each break-even")
     args = ap.parse_args(argv)
     if args.cmd == "priced-card":
         args.out.write_text(json.dumps(priced_card(args.model), indent=1) + "\n")
         print(args.out)
         return
     if args.cmd == "breakeven":
-        out = breakeven(args.model, tuple(args.scope) if args.scope else None, workers=args.workers)
+        out = breakeven(args.model, tuple(args.scope) if args.scope else None, workers=args.workers,
+                        lean=not args.no_lean)
         args.out.mkdir(parents=True, exist_ok=True)
         (args.out / "breakeven.json").write_text(json.dumps(out, indent=1, allow_nan=False) + "\n")
         (args.out / "breakeven.txt").write_text(breakeven_table(out))

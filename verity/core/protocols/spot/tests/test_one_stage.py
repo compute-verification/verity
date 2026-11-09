@@ -310,7 +310,7 @@ def test_the_window_says_served_or_stand_in():
 
 def test_draw_checks():
     _, _, rec = _registration(6)
-    law = D.parse_law("subset:2")
+    law = D.parse_design("subset:2")
     assert law == LAW
     good = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
     assert D.check_draw(good, rec, law).ok
@@ -318,13 +318,13 @@ def test_draw_checks():
     assert D.check_draw({**good, "units": [1, 6]}, rec, law).codes == ("units-range",)
     assert D.check_draw({**good, "units": [1]}, rec, law).codes == ("units-count",)
     assert D.check_draw({**good, "population": 5}, rec, law).codes == ("population",)
-    assert D.check_draw(good, rec, D.parse_law("subset:3")).codes == ("law",)
+    assert D.check_draw(good, rec, D.parse_design("subset:3")).codes == ("law",)
     assert D.check_draw(None, rec, law).codes == ("not-a-draw",)
-    assert D.check_draw({"law": "bernoulli", "population": 6, "p": "1/2", "units": [0, 5]}, rec, D.parse_law("bernoulli:1/2")).ok
+    assert D.check_draw({"law": "bernoulli", "population": 6, "p": "1/2", "units": [0, 5]}, rec, D.parse_design("bernoulli:1/2")).ok
     for bad in ("subset", "subset:x", "subset:0", "subset:00", "bernoulli:3/2", "bernoulli:1/0", "beta:1", "subset:\u0663",
                 "work:\u00b2", "bernoulli:1/\u0662"):
         with pytest.raises(ValueError):
-            D.parse_law(bad)
+            D.parse_design(bad)
     for p in ("\u0661/\u0662", "\u00b9/2"):
         drawn = {"law": "bernoulli", "population": 6, "p": p, "units": [0, 5]}
         assert D.check_draw(drawn, rec, {"law": "bernoulli", "p": p}).codes == ("p",)
@@ -417,7 +417,7 @@ def test_the_record_states_the_one_profile_in_its_recorded_bytes():
 def test_audit_record_needs_every_check_and_verdict():
     _, _, rec = _registration(6)
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
-    law = D.parse_law("subset:2")
+    law = D.parse_design("subset:2")
     rcpt = R.receipt(rec, "verifier-test")
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
     ok = audit.audit_record(rec, rcpt, d, law, [1, 4], 2, {"circuit_sha512": "c8"}, {"lean": lean}, 0.25, sessions=["aa" * 64])
@@ -441,7 +441,7 @@ def test_audit_record_holds_the_served_draw_and_the_sessions_roots():
     _, _, rec = _registration(6)
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
-    args = (rec, R.receipt(rec, "verifier-test"), d, D.parse_law("subset:2"), [1, 4], 2, {}, {"lean": lean}, 0.25)
+    args = (rec, R.receipt(rec, "verifier-test"), d, D.parse_design("subset:2"), [1, 4], 2, {}, {"lean": lean}, 0.25)
     assert audit.audit_record(*args, served=[4, 1], session_roots=dict(ROOTS))["accepted"]
     r = audit.audit_record(*args, served=[1, 3])
     assert not r["accepted"] and r["checks"]["served"]["codes"] == ["served"] and r["profile"] is None
@@ -503,13 +503,13 @@ def test_the_stratified_rule_rounds_half_up_with_a_floor_of_one():
 def test_derive_expands_the_rule_over_the_verifiers_program():
     prog = P.mixed_population_program([(XOR3, 2), (PAIR, 3), (XOR3, 1)])
     q = P.template_instances_query([PAIR.id, XOR3.id])
-    law = D.derive(prog, q, D.parse_law("stratified:4"))
+    law = D.derive(prog, q, D.parse_design("stratified:4"))
     assert law == {"law": "stratified", "k": 4, "strata": [{"template": XOR3.id, "units": [[0, 2], [5, 6]], "k": 2},
                                                           {"template": PAIR.id, "units": [[2, 5]], "k": 2}]}
     assert D.derive(prog, q, law) == law and D.derive(prog, q, LAW) == LAW and D.strata_problem(law, 6) is None
     for bad in ("stratified:0", "stratified:x"):
         with pytest.raises(ValueError):
-            D.parse_law(bad)
+            D.parse_design(bad)
     with pytest.raises(ValueError):
         D.derive(prog, q, {"law": "stratified", "k": 7})
     with pytest.raises(P.QueryRefused):
@@ -521,7 +521,7 @@ def _stratified_registration():
     q = P.template_instances_query([PAIR.id, XOR3.id])
     ports = _ports(prog, q, 6)
     roots = [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports]
-    rule = D.parse_law("stratified:4")
+    rule = D.parse_design("stratified:4")
     return prog, q, rule, R.record(prog, q, rule, SCHEME, roots, SERVED, leaf_layer="ee" * 64)
 
 
@@ -536,13 +536,13 @@ def test_r1_holds_the_registered_strata_to_the_verifiers_own():
                 dict(rec["law"], k=5), {"law": "subset", "k": 4}]
     for law in tampered:
         assert _check({**rec, "law": law}, prog, q, law=rule).codes == ("R1-law",), law
-    assert _check(rec, prog, q, law=D.parse_law("stratified:3")).codes == ("R1-law",)
+    assert _check(rec, prog, q, law=D.parse_design("stratified:3")).codes == ("R1-law",)
     assert _check({**rec, "law": {**rec["law"], "k": 4.0}}, prog, q, law=rule).codes == ("R1-law",)   # 4.0 is not 4
-    two = D.derive(prog, q, D.parse_law("stratified:2"))                  # k_s = 1, 1
+    two = D.derive(prog, q, D.parse_design("stratified:2"))                  # k_s = 1, 1
     rec2 = {**rec, "law": two}
-    assert [s["k"] for s in two["strata"]] == [1, 1] and _check(rec2, prog, q, law=D.parse_law("stratified:2")).ok
+    assert [s["k"] for s in two["strata"]] == [1, 1] and _check(rec2, prog, q, law=D.parse_design("stratified:2")).ok
     as_bool = dict(two, strata=[{**two["strata"][0], "k": True}, two["strata"][1]])   # `true` is not 1, as Lean reads it
-    assert _check({**rec, "law": as_bool}, prog, q, law=D.parse_law("stratified:2")).codes == ("R1-law",)
+    assert _check({**rec, "law": as_bool}, prog, q, law=D.parse_design("stratified:2")).codes == ("R1-law",)
     assert _check(rec, prog, q, law=LAW).codes == ("R1-law",)
 
 
@@ -556,7 +556,7 @@ def test_stratified_draw_checks():
     assert D.check_draw({**good, "units": [1, 3, 4, 6]}, rec, law).codes == ("units-range", "strata-count")
     assert D.check_draw({**good, "k": 5}, rec, law).codes == ("law", "strata")
     assert D.check_draw(good, rec, rule).codes == ("law",)            # the rule unexpanded is not the verifier's sampling design
-    two = D.derive(prog, q, D.parse_law("stratified:2"))                  # k_s = 1, 1
+    two = D.derive(prog, q, D.parse_design("stratified:2"))                  # k_s = 1, 1
     ones = [{**two["strata"][0], "k": True}, two["strata"][1]]           # `true` is not 1, as the Lean verifier reads it
     assert D.strata_problem(two, 6) is None and D.strata_problem({"k": 2, "strata": ones}, 6) is not None
     d2 = {"law": "stratified", "population": 6, "k": 2, "strata": ones, "units": [0, 2]}
@@ -622,7 +622,7 @@ def test_a4_under_the_stratified_rule():
     temps = [_template(i) for i in range(6)]
     prog = P.mixed_population_program(list(zip(temps, sizes)))
     q = P.template_instances_query([t.id for t in temps])
-    law = D.derive(prog, q, D.parse_law("stratified:1024"))
+    law = D.derive(prog, q, D.parse_design("stratified:1024"))
     assert [s["k"] for s in law["strata"]] == [1, 933, 2, 1, 1, 89]
     assert [s["units"] for s in law["strata"]][:2] == [[[0, 287]], [[287, 6_171_935]]]
     assert D.strata_problem(law, sum(sizes)) is None
@@ -775,7 +775,7 @@ def test_derive_expands_the_work_rule_over_the_verifiers_table():
     or declared uncredited), which sample their floor for integrity and add nothing to W."""
     prog, q = _work_program()
     table = {PAIR.id: 10, XOR3.id: 0}
-    law = D.derive(prog, q, D.parse_law("work:4"), table)
+    law = D.derive(prog, q, D.parse_design("work:4"), table)
     assert law == {"law": "work", "k": 4, "strata": [
         {"template": XOR3.id, "units": [[0, 2], [5, 6]], "work": 0, "floor": 1, "k": 1},
         {"template": PAIR.id, "units": [[2, 5]], "work": 10, "floor": 1, "k": 3}]}
@@ -783,7 +783,7 @@ def test_derive_expands_the_work_rule_over_the_verifiers_table():
     assert D.derive(prog, q, law, table) == law
     floors = D.derive(prog, q, {"law": "work", "k": 2}, {PAIR.id: {"work": 10, "floor": 2}, XOR3.id: {"work": 0, "floor": 3}})
     assert [s["k"] for s in floors["strata"]] == [3, 2]            # the floors bind: 3 of XOR3's 3, 2 of PAIR's 3
-    assert D.parse_law("work:5") == {"law": "work", "k": 5}
+    assert D.parse_design("work:5") == {"law": "work", "k": 5}
     with pytest.raises(ValueError, match="work table"):
         D.derive(prog, q, law)
     with pytest.raises(ValueError, match="names no work"):
@@ -796,14 +796,14 @@ def test_derive_expands_the_work_rule_over_the_verifiers_table():
             D.work_table(bad)
     for bad in ("work:0", "work:x"):
         with pytest.raises(ValueError):
-            D.parse_law(bad)
+            D.parse_design(bad)
 
 
 def _work_registration():
     prog, q = _work_program()
     ports = _ports(prog, q, 6)
     roots = [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports]
-    rule, table = D.parse_law("work:4"), {PAIR.id: 10, XOR3.id: 0}
+    rule, table = D.parse_design("work:4"), {PAIR.id: 10, XOR3.id: 0}
     return prog, q, rule, table, R.record(prog, q, rule, SCHEME, roots, SERVED, leaf_layer="ee" * 64, work_table=table)
 
 
@@ -813,7 +813,7 @@ def test_r1_holds_a_work_law_to_the_verifiers_own_table():
     assert _check(rec, prog, q, law=rule, work_table=table).ok
     assert _check(rec, prog, q, law=rule, work_table={PAIR.id: 10, XOR3.id: 5}).codes == ("R1-law",)
     assert _check(rec, prog, q, law=rule).codes == ("R1-law",)                           # no table: the sampling design doesn't apply
-    assert _check(rec, prog, q, law=D.parse_law("stratified:4")).codes == ("R1-law",)
+    assert _check(rec, prog, q, law=D.parse_design("stratified:4")).codes == ("R1-law",)
 
 
 def test_work_draw_checks_and_closures():
@@ -829,7 +829,7 @@ def test_work_draw_checks_and_closures():
     assert D.check_draw({**closed, "closure": [1, 2]}, rec, law).codes == ("closure-drawn",)
     assert D.check_draw({**closed, "closure": []}, rec, law).codes == ("closure",)
     assert D.check_draw({**closed, "closure": [5, 1]}, rec, law).codes == ("closure",)
-    stratified = D.derive(prog, q, D.parse_law("stratified:4"))
+    stratified = D.derive(prog, q, D.parse_design("stratified:4"))
     assert D.check_draw({"law": "stratified", "population": 6, "k": 4, "strata": stratified["strata"], "units": [0, 2, 3, 5],
                          "closure": [1]}, rec, stratified).codes == ("keys",)           # a closure only on a work sample
     wrong_k = [law["strata"][0], {**law["strata"][1], "k": 2}]

@@ -210,7 +210,8 @@ AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-chec
               "verity/core/protocols/network", "verity-pouw-window-difftest",
               "verity-pouw-check-difftest", "verity/core/protocols/pouw/lean/commit", "memory-challenger-lean", "benchmarks/pous",
               "verity/core/protocols/spot", "verity/core/protocols/certifier", "verity-pouw-benchmarks",
-              "verity/core/primitives/requirement", "benchmarks/remote_session", "benchmarks/one_stage", "verity-network-e2e",
+              "verity/core/primitives/requirement", "benchmarks/remote_session", "benchmarks/one_stage", "benchmarks/two_stage",
+              "verity-network-e2e",
               "benchmarks/live_verifier", "verity-network-traces", "verity-vllm")
 #: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
@@ -405,6 +406,28 @@ def foreign(pkgs: dict[str, str], env: dict[str, str], python: str = sys.executa
             elif not Path(o).resolve().is_relative_to(ROOT):
                 away[n] = o
     return ", ".join(f"{n} from {o}" for n, o in sorted(away.items())) or None
+
+
+#: installs the workspace into the tree's own environment: `uv run` of this script installs only the runner's dependencies
+SYNC = ("uv", "sync", "-q", "--all-packages", "--extra", "torch-cpu")
+
+
+def fresh(env: dict[str, str]) -> bool:
+    """Whether this Python is the tree's own environment and, under ``env`` as `foreign` probes it (a launcher's shims on the
+    PYTHONPATH don't count), imports neither the root's packages nor torch, as `uv run` of this script leaves a freshly shipped
+    tree, so `SYNC` replaces nothing anyone chose there (a GPU environment's torch)."""
+    if Path(sys.prefix).resolve() != (ROOT / ".venv").resolve() or shutil.which("uv") is None:
+        return False
+    names = [Path(p).name for p in shipped(".")] + ["torch"]
+    r = subprocess.run([sys.executable, "-P", "-c", _ORIGINS, *names], env=env, capture_output=True, text=True)
+    return r.returncode == 0 and not any(json.loads(r.stdout.splitlines()[-1]).values())
+
+
+def resync(argv: list[str]) -> None:
+    """Install the workspace into this environment (`SYNC`) and run ``argv`` again, marked ``--synced`` so it never syncs twice."""
+    print(f"suites: {sys.prefix} holds none of the workspace yet: `{' '.join(SYNC)}`", file=sys.stderr)
+    if subprocess.run(SYNC, cwd=ROOT).returncode == 0:
+        os.execv(sys.executable, [sys.executable, argv[0], "--synced", *argv[1:]])
 
 
 def metadata() -> list[str]:
@@ -807,8 +830,8 @@ def changed_base(rev: str) -> str:
                 return sha
     tried = f", nor could it be fetched from {remote}" if branch and remote in remotes else ""
     raise Unresolved(f"--changed {rev}: {ROOT} has no commit {rev}{tried} (a tree `research run` ships may hold no {rev}). "
-                     f"Pass main's SHA: `--changed $(git rev-parse origin/main)`, expanded in your own checkout, outside the job's "
-                     f"quotes")
+                     f"Pass where your branch left a fetched main: `--changed $(git fetch -q origin main && git merge-base HEAD "
+                     f"FETCH_HEAD)`, expanded in your own checkout, outside the job's quotes")
 
 
 def merge_base(rev: str) -> str:
@@ -2272,7 +2295,7 @@ def main(argv: list[str] | None = None) -> int:
     # a manual stop (`research cancel`) sends SIGTERM to the run's process group, which the suites' own groups aren't in: as
     # SIGINT, it stops them and removes their `--basetemp`s (a cancelled check's can hold tens of GB)
     signal.signal(signal.SIGTERM, _first_sigterm_stops)
-    argv = sys.argv[1:] if argv is None else argv
+    script, argv = argv is None, sys.argv[1:] if argv is None else argv
     extra = argv[argv.index("--") + 1:] if "--" in argv else []
     argv = argv[:argv.index("--")] if "--" in argv else argv
     ap = argparse.ArgumentParser(prog="suites", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -2280,6 +2303,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--quick", action="store_true", help="deselect the tests marked slow")
     ap.add_argument("--changed", metavar="REV", help="of those, only the suites the change from REV to the tree touches (`touched`)")
     ap.add_argument("--fresh", action="store_true", help="run even where a pass is cached")
+    ap.add_argument("--synced", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--timeouts", action="store_true",
                     help=f"kill a suite's process group once it has run its [tool.verity.tests] timeout_s (default {SUITE_TIMEOUT_S:.0f}) "
                          "and fail it as timed out (`check` passes this)")
@@ -2331,9 +2355,12 @@ def main(argv: list[str] | None = None) -> int:
     store_custody()
 
     pkgs, suites = members(), discover()
-    if not (a.list or a.explain) and (away := foreign(pkgs, dict(os.environ, PYTHONPATH=tests_pythonpath()))):
+    probing = dict(os.environ, PYTHONPATH=tests_pythonpath())
+    if not (a.list or a.explain) and (away := foreign(pkgs, probing)):
+        if script and not a.synced and fresh(probing):
+            resync(sys.argv)
         print(f"suites: {sys.executable} would run this tree's tests against another checkout's code ({away}); run them with "
-              f"{ROOT}'s own environment: `uv run tools/verity/check/suites.py` there", file=sys.stderr)
+              f"{ROOT}'s own environment: `{' '.join(SYNC)} && uv run tools/verity/check/suites.py` there", file=sys.stderr)
         return 2
     skipped = select(suites, a.skip) if a.skip else []
     chosen = [s for s in select(suites, [a.explain] if a.explain else a.suites) if s not in skipped]

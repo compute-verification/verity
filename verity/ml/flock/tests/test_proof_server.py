@@ -6,6 +6,7 @@ unfinished sessions without hanging the server's close."""
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -58,7 +59,8 @@ elif args[0] == "prove":
         host, port = j["verifier"].rsplit(":", 1)
         f = socket.create_connection((host, int(port))).makefile("rw")
         f.write(json.dumps({{"label": j["label"], "line": j, "argv": args, "device": os.environ.get("CUDA_VISIBLE_DEVICES"),
-                            "verify_ahead": os.environ.get("FC_VERIFY_AHEAD")}}) + "\\n")
+                            "verify_ahead": os.environ.get("FC_VERIFY_AHEAD"),
+                            "threads": os.environ.get("RAYON_NUM_THREADS")}}) + "\\n")
         f.flush()
         v = json.loads(f.readline())
         print("LIVE\\t" + json.dumps({{"label": j["label"], "accepted": v["accepted"], "run": n,
@@ -119,6 +121,50 @@ def test_a_caller_route_a_session_dir_and_a_negative_control(binary, tmp_path):
     assert record(s)["proved"]["line"]["self_check"] == "skip"
 
 
+def test_provers_a_device_each_with_its_own_verifier_of_a_type(binary, tmp_path):
+    """Two provers on one device, one type: each session goes to the prover with fewer unfinished sessions, and meets its
+    own line at a verifier of that prover's (one verifier taking both provers' connections would pair them by arrival)."""
+    pin = "55" * 64
+    with ProofServer(binary, tmp_path / "ps", devices=[3], provers=2) as ps:
+        sessions = [ps.submit(statement(tmp_path, pin), draw([i % 4]), f"s{i}") for i in range(8)]
+        got = [s.result() for s in sessions]
+    assert {s.prover for s in got} == {"prover-gpu3-0", "prover-gpu3-1"}
+    assert set(ps.exits) == {"prover-gpu3-0", "prover-gpu3-1", f"verifier-{pin[:16]}-0", f"verifier-{pin[:16]}-1"}
+    assert set(ps.pids) == set(ps.exits) and all(pid > 0 for pid in ps.pids.values())
+    for s in got:
+        assert s.accepted and s.device == 3 and s.live["device"] == "3"
+        assert s.dir.parent.name == f"verifier-{pin[:16]}-{s.prover[-1]}" and record(s)["queue"]["label"] == s.label
+    with pytest.raises(ValueError, match="at least 1"):
+        ProofServer(binary, tmp_path / "ps0", provers=0)
+
+
+def test_provers_that_share_the_node_split_its_threads(binary, tmp_path, monkeypatch):
+    """More than one prover in all (``devices`` × ``provers``): each prover's ``RAYON_NUM_THREADS`` is its even share of the
+    server's threads (the server's ``RAYON_NUM_THREADS``, else the CPUs it may run on), at least one, so each prover sizes
+    its host witness's passes for its own cores and not for every core. A lone prover's environment is the server's."""
+    pins = ["66" * 64, "77" * 64]
+
+    def pools(name: str, rayon: str | None, **kw) -> set[str | None]:
+        if rayon is None:
+            monkeypatch.delenv("RAYON_NUM_THREADS", raising=False)
+        else:
+            monkeypatch.setenv("RAYON_NUM_THREADS", rayon)
+        with ProofServer(binary, tmp_path / name, **kw) as ps:
+            sessions = [ps.submit(statement(tmp_path, pins[i % 2]), draw([i % 4]), f"s{i}") for i in range(8)]
+            got = [s.result() for s in sessions]
+        assert all(s.accepted for s in got)
+        return {record(s)["proved"]["threads"] for s in got}
+
+    cpus = len(os.sched_getaffinity(0))
+    assert pools("two-devices", "16", devices=[0, 1], provers=2) == {"4"}
+    assert pools("one-device", None, devices=[3], provers=2, env={"RAYON_NUM_THREADS": "7"}) == {"3"}
+    assert pools("cpus", None, devices=[3], provers=2) == {str(max(1, cpus // 2))}
+    assert pools("unset-is-cpus", "0", devices=[0, 1]) == {str(max(1, cpus // 2))}
+    assert pools("at-least-one", "1", devices=[0, 1], provers=2) == {"1"}
+    assert pools("lone", "16") == {"16"}
+    assert pools("lone-unset", None, devices=[5]) == {None}
+
+
 def test_one_cpu_prover_without_devices(binary, tmp_path):
     with ProofServer(binary, tmp_path / "ps") as ps:
         s = ps.submit(statement(tmp_path, "ee" * 64), draw([3]), "cpu").result()
@@ -149,6 +195,30 @@ def test_a_verifier_that_never_serves_fails_its_session(binary, tmp_path, monkey
     ps.close()
     with pytest.raises(ProofServerError, match="closed"):
         ps.submit(statement(tmp_path, "11" * 64), draw([0]), "s1")
+
+
+def test_each_verifier_on_its_own_challenger_audited_at_close(binary, tmp_path, monkeypatch):
+    """With challengers, each type's verifier is started with its challenger's flags, and `close` hands each challenger
+    every session its verifier filed, at once, and gives each session its verifier's result (a stand-in challenger: the
+    real one is `challengers`', whose audit `prove_leg`'s FLOCK_CHALLENGER=1 run checks)."""
+    from verity_flock import proof_server as PS
+
+    started, ended = [], {}
+    monkeypatch.setattr(PS.CH, "start", lambda d: (started.append(d), (object(), ["--tree-from", f"127.0.0.1:{len(started)}",
+                                                                              "--tree-secret-file", str(d / "s")]))[1])
+    monkeypatch.setattr(PS.CH, "end", lambda d, p, sessions: ended.setdefault(d.name, {"ok": d.name.startswith("verifier-33"),
+                                                                                        "sessions": sorted(sessions)}))
+    pins = ["33" * 64, "44" * 64]
+    with ProofServer(binary, tmp_path / "ps", challenger=True) as ps:
+        sessions = [ps.submit(statement(tmp_path, pins[i % 2]), draw([i]), f"s{i}").result() for i in range(4)]
+        assert ps.challengers == {}
+    names = [f"verifier-{p[:16]}" for p in pins]
+    assert [d.name for d in started] == [f"{n}-challenger" for n in names] and set(ps.challengers) == set(names)
+    for s in sessions:
+        name = f"verifier-{s.pin[:16]}"
+        assert record(s)["argv"][-4:-2] == ["--tree-from", f"127.0.0.1:{names.index(name) + 1}"]
+        assert s.challenger is ps.challengers[name] and s.challenger["ok"] == (s.pin == pins[0])
+        assert s.challenger["sessions"] == sorted(str(x.dir) for x in sessions if x.pin == s.pin)
 
 
 def test_a_failed_verdict_of_record_is_the_session_verdict_error(binary, tmp_path):

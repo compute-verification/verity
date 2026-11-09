@@ -1661,7 +1661,7 @@ def push_mirror(repo: Path, sha: str, name: str, target=None, run=subprocess.run
     return True
 
 
-#: infra's Lean cache publisher on the control pod: `SCRIPT SHA` fast-forwards vy-nebius-cpu-4's bare main to SHA and starts
+#: the Lean cache publisher on the control pod: `SCRIPT SHA` fast-forwards vy-nebius-cpu-4's bare main to SHA and starts
 #: vy-lean-cache-daily there (a no-op while one runs), exits 0 once started and logs to LEAN_PUBLISH_LOG; $RESEARCH_LEAN_PUBLISH
 #: names another script, and empty skips it
 LEAN_PUBLISH, LEAN_PUBLISH_ENV, LEAN_PUBLISH_LOG, LEAN_PUBLISH_TIMEOUT_S = (
@@ -1977,8 +1977,8 @@ def main_line(repo: Path, tip: str, idx) -> list[str]:
     """The checked train heads newest first (`checked_heads` reversed): the commits on `tip`'s first-parent line whose own
     `check` passed and landed them, less a reverted train's. `research queue checked-heads --out` writes these, one a
     line, to the verifier's main-line file (`spot.remote.main_lines`) for a deployment that wants
-    `pouw.credit`'s line to be the checked heads rather than the raw `git rev-list --first-parent origin/main` infra
-    writes by default; the two differ only by a reverted train's commits and the in-flight commits whose check hasn't
+    `pouw.credit`'s line to be the checked heads rather than the raw `git rev-list --first-parent origin/main`, the
+    default; the two differ only by a reverted train's commits and the in-flight commits whose check hasn't
     landed them."""
     return [c for c, _ in reversed(checked_heads(repo, tip, idx))]
 
@@ -2025,7 +2025,7 @@ def spec_alert_lag(repo: Path, remote: str) -> str:
 
 
 #: set by the control pod's drive.sh for all it runs with the verity-drive App's token: GitHub's rulesets "main is append-only"
-#: and "only drive moves main and next" let only that App move `main` and `next`, and `checked` once infra adds it to them
+#: and "only drive moves main and next" let only that App move `main` and `next`; neither covers `checked`
 DRIVE_ENV = "RESEARCH_DRIVE"
 DRIVE_ONLY = ("main", "next", CHECKED)
 
@@ -2036,8 +2036,8 @@ def on_drive() -> bool:
 
 def off_drive(ref: str, verb: str) -> str:
     """Why a push of ``ref`` from here is refused: only drive's App may move `main`, `checked` and `next`."""
-    return (f"`{ref}` is moved only by drive's App (GitHub's rulesets, 23 Oct), and this isn't drive (no {DRIVE_ENV}=1): run it "
-            f"on the control pod, `/data/infra/drive.sh {verb}`")
+    return (f"`{ref}` is moved only by drive's App, and this isn't drive (no {DRIVE_ENV}=1): run it on the control pod, "
+            f"`/data/infra/drive.sh {verb}`")
 
 
 def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = "check") -> int:
