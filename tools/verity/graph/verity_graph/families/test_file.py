@@ -71,6 +71,8 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..graph import RUNNERS
+
 KIND = "test-file"
 #: the read guard the runner loads into pytest, the one `suites.py` loads
 GUARD = ("tools/verity/check/guard/verity_suite_guard.py", "tools/verity/check/guard/child/sitecustomize.py",
@@ -78,7 +80,7 @@ GUARD = ("tools/verity/check/guard/verity_suite_guard.py", "tools/verity/check/g
 REGISTRY = "fixtures/artifacts.json"
 #: the runner module that puts lean-build's outputs in a tree (`lean_build.place`), which the test-file runner runs for a task
 #: that reads them
-PLACE = "tools/verity/graph/verity_graph/runners/lean_build.py"
+PLACE = f"{RUNNERS}/lean_build.py"
 #: the disk of a task that reads lean-build's outputs: them staged and unpacked, and the Lake packages its tests build beside
 LEAN_DISK_GB = 20
 #: directories whose `test_*.py` files are data a test hands on, not tests (`suites._DATA_DIRS`)
