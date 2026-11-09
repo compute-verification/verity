@@ -254,28 +254,40 @@ def test_what_a_lone_failure_calls_for_reads_its_candidates_reruns_not_the_histo
 
 
 @pytest.mark.parametrize("state", [INFRA, LIST_FAILED])
-def test_infra_and_list_failed_are_retried_once_then_rung_and_blame_nobody(state):
+def test_infra_and_list_failed_are_retried_at_every_reading_rung_from_the_second_and_blame_nobody(state):
     """An infra error graph2 saw on one node, or a listing failure, says nothing about the members: the check is enqueued
-    again once, then infra is rung (from `rings` enqueues, 2 at most) and the candidate waits, however often it errs."""
+    again at every reading, and infra is rung from `rings` enqueues on (2 at most), however often it errs."""
     err = (task("test-file:pkg2/tests/test_reads.py", "pkg2/tests/test_reads.py", "pkg2/mod.py"),) if state == INFRA else ()
+    why = "c1's check ended in infra errors: test-file:pkg2/tests/test_reads.py" if state == INFRA else "c1's check failed to list"
     c = Candidate("c1", MAIN, (1, 2, 3), heads(1, 2, 3), Verdict(state, (), err))
     assert decide(snap(c, cand("c2", "c1", 4), ready=prs(1, 2, 3, 4, 5), rings=3)) == [Retry("c1")]
-    acts = decide(snap(c, ready=prs(1, 2, 3, 4), rings=1))
-    assert acts == [Retry("c1"), Ring("c1", acts[1].why), Build((4,), "c1", 1)]
-    assert acts[1].why.startswith("c1's check") and "1 times enqueued" in acts[1].why
+    assert decide(snap(c, ready=prs(1, 2, 3, 4), rings=1)) == [Retry("c1"), Ring("c1", why), Build((4,), "c1", 1)]
     for tries, rings in ((2, 2), (2, 3), (5, 2)):
         acts = decide(snap(replace(c, tries=tries), cand("c2", "c1", 4), ready=prs(1, 2, 3, 4), rings=rings))
-        assert acts == [Ring("c1", acts[0].why)], (tries, rings)
-    assert acts[0].why == ("c1's check ended in infra errors, 5 times enqueued: test-file:pkg2/tests/test_reads.py"
-                           if state == INFRA else "c1's check failed to list, 5 times enqueued")
+        assert acts == [Retry("c1"), Ring("c1", why)], (tries, rings)
+
+
+def test_infra_that_persists_is_retried_at_every_reading_and_rings_in_the_same_words_from_the_second():
+    """The loop rings each (candidate, why) once, so the why changes with the erring tasks, in any order, and not with the
+    enqueues: five readings ring infra once, and another set of erring tasks rings it again."""
+    hang, runner = task("test-file:t/test_hang.py", "t/test_hang.py"), task("runner", "tools/")
+    whys = []
+    for tries in range(1, 6):
+        c = Candidate("c1", MAIN, (1, 2), heads(1, 2), Verdict(INFRA, (), (hang, runner) if tries % 2 else (runner, hang)), tries)
+        acts = decide(snap(c, cand("c2", "c1", 3), ready=prs(1, 2, 3)))
+        assert kinds(acts) == [Retry] + [Ring] * (tries >= 2) and acts[0] == Retry("c1"), tries
+        whys += [a.why for a in acts if isinstance(a, Ring)]
+    assert whys == ["c1's check ended in infra errors: runner, test-file:t/test_hang.py"] * 4
+    acts = decide(snap(replace(c, verdict=Verdict(INFRA, (), (hang,))), cand("c2", "c1", 3), ready=prs(1, 2, 3)))
+    assert acts == [Retry("c1"), Ring("c1", "c1's check ended in infra errors: test-file:t/test_hang.py")]
 
 
 @pytest.mark.parametrize("state", [INFRA, LIST_FAILED])
-def test_a_lone_member_whose_check_errs_again_after_a_retry_is_rung_not_ejected(state):
+def test_a_lone_member_whose_check_errs_again_after_a_retry_is_retried_and_rung_not_ejected(state):
     err = (task("test-file:t/test_hang.py", "t/test_hang.py"),) if state == INFRA else ()
     c = Candidate("c1", MAIN, (3,), heads(3), Verdict(state, (), err), tries=2)
     acts = decide(snap(c, ready=prs(3, 4)))
-    assert acts == [Ring("c1", acts[0].why), Build((4,), "c1", 1)]
+    assert acts == [Retry("c1"), Ring("c1", acts[1].why), Build((4,), "c1", 1)]
 
 
 def test_infra_errors_that_follow_the_tree_are_bisected_at_once_like_a_fail_on_the_members_meeting_their_inputs():
@@ -361,7 +373,7 @@ def test_a_fail_whose_failures_are_all_inherited_beside_infra_errors_reads_as_in
     s = snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(t,), infra=(runner,)), ready=prs(1, 2, 3))
     assert decide(s) == [Retry("c1"), Build((3,), "c1", 1)]
     acts = decide(snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(t,), infra=(runner,), tries=2), ready=prs(1, 2, 3)))
-    assert acts == [Ring("c1", "c1's check ended in infra errors, 2 times enqueued: runner"), Build((3,), "c1", 1)]
+    assert acts == [Retry("c1"), Ring("c1", "c1's check ended in infra errors: runner"), Build((3,), "c1", 1)]
     acts = decide(snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(t,), infra=(replace(runner, tree=True),)), ready=prs(1, 2, 3)))
     why = "c1's check ended in infra errors on two or more nodes, which follow its tree: runner"
     assert acts == [Red("c1", MAIN, acts[0].why, (t,)), Drop("c1", why, Outcome((1, 2), heads(1, 2), FAIL, (1, 2), MAIN, (t,))),
@@ -628,7 +640,7 @@ def test_a_fail_naming_no_failed_task_ejects_and_drops_nobody():
 def test_an_infra_error_one_pr_causes_ejects_it_only_once_graph2_says_it_follows_the_tree(tree):
     """#3's tree makes a test end in errors every time.  Seen on two or more nodes (`tree`), its batch is bisected at once on
     the erring test's inputs, #3 alone errs again and is ejected, and every other PR lands; else the check is enqueued again
-    once, infra is rung, and the queue waits for infra, blaming nobody."""
+    at every reading, infra is rung in the same words each time, and the queue blames nobody."""
     def oracle(members, c):
         if 3 in members:
             return Verdict(INFRA, infra=(Failed("test-file:pkg3/tests/test_reads.py", "sha512:k3",
@@ -641,8 +653,9 @@ def test_an_infra_error_one_pr_causes_ejects_it_only_once_graph2_says_it_follows
         assert "test-file:pkg3/tests/test_reads.py" in w.ejected[0].why
         assert w.count(Retry) == w.count(Ring) == 0 and w.acts[-1] == []
     else:
-        assert w.landed == [] and w.ejected == [] and w.count(Drop) == 0 and w.count(Retry) == 1
-        assert all(kinds(acts) == [Ring] for acts in w.acts[2:])
+        assert w.landed == [] and w.ejected == [] and w.count(Drop) == 0
+        assert all(kinds(acts) == [Retry, Ring] for acts in w.acts[2:])
+        assert len({a.why for acts in w.acts for a in acts if isinstance(a, Ring)}) == 1
 
 
 def test_a_candidate_pending_forever_is_retried_once_and_then_rung():
@@ -732,7 +745,7 @@ class World:
     changes (some good PRs touch them, the same tests failing); a red task whose failing tests graph2 doesn't report is
     inherited at its key alone, and no good PR but its fix touches it.  PRs arrive, push, conflict and are unmarked for a while;
     graph2 answers late, sends the cached inherited failures before the rest, flakes on a first run, errs on a first
-    enqueue, errs or fails to list on both enqueues until infra, rung, reruns the check, or wedges until retried; someone
+    enqueue, errs or fails to list at every enqueue until infra, rung, reruns the check, or wedges until retried; someone
     else moves `main`, the loop stops a tick early, and a merged PR stays marked for a while; `step` checks every invariant
     on the way."""
 
@@ -949,7 +962,7 @@ class World:
             elif isinstance(a, Retry):
                 c = by[a.sha]
                 late = c.enqueued is not None and s.now - c.enqueued > s.pending_s
-                assert ((reads(c.verdict) == INFRA and c.tries < 2 and not any(f.tree for f in c.verdict.infra))
+                assert ((reads(c.verdict) == INFRA and not any(f.tree for f in c.verdict.infra))
                         or (reads(c.verdict) == PENDING and late and c.tries == 1)), where
                 self.seen["retried late" if reads(c.verdict) == PENDING else "retried"] += 1
                 self.seen["retried while the rest ran"] += c.verdict.state == FAIL
@@ -968,11 +981,11 @@ class World:
                 continue
             if reads(c.verdict) == INFRA:
                 tree = any(f.tree for f in c.verdict.infra)
-                assert (Retry(c.sha) in acts) == (not tree and c.tries < 2) and (c.sha in decided) == tree, where
+                assert (Retry(c.sha) in acts) == (not tree) and (c.sha in decided) == tree, where
                 assert Advance(c.sha) not in acts and (tree or not any(isinstance(a, Eject) for a in acts)), where
                 rung = any(isinstance(a, Ring) and a.sha == c.sha for a in acts)
                 assert rung == (not tree and c.tries >= min(s.rings, 2)), where
-                self.seen["infra rung and waited"] += rung and c.tries >= 2
+                self.seen["infra rung and retried"] += rung and c.tries >= 2
             elif reads(c.verdict) == PENDING:
                 waited = s.now - c.enqueued
                 assert (Retry(c.sha) in acts) == (waited > s.pending_s and c.tries == 1), where
@@ -1039,8 +1052,8 @@ SEEDS = range(500)
 
 def ticks(w: World) -> int:
     """The ticks within which a scenario settles: every good PR on main, every bad PR ejected, no candidate left.  Seeds 0 to
-    4999 settled within 80 ticks and 12 per PR, none more than 12 past 8 a PR, and with a broken main whose fixes are ranked
-    last and late, within 72 and 9 per PR, none more than 3 past 8 a PR."""
+    4999 settled within 78 ticks and 12 per PR, none more than 12 past 8 a PR, and with a broken main whose fixes are ranked
+    last and late, within 72 and 9.7 per PR, none more than 5 past 8 a PR."""
     return 40 + 8 * len(w.marks)
 
 
@@ -1048,7 +1061,7 @@ def test_the_simulated_queue_keeps_every_invariant_and_settles():
     """Over every seed: main advances only to a candidate on it with no new failure (each failure inherited, nothing running,
     no infra error), at its members' marked heads, so its reds never grow; no PR is in two live candidates or reaches main
     twice; an infra error that follows the tree (`tree`) is bisected like a fail at once, and any other infra or listing
-    error is retried once, then rung from `rings` enqueues (2 at most), and blames nobody; a candidate pending past the
+    error is retried at every reading, rung from `rings` enqueues (2 at most), and blames nobody; a candidate pending past the
     bound is retried once and rung past twice it; a lone member's own failure is rerun once
     before it is ejected; a batch holds at most `lean` Lean PRs; a move of main by someone else drops the stale candidates
     and rebuilds on it; an inherited failure ejects nobody, and its red rings once; a restart repeats nothing but a ring, or
@@ -1067,7 +1080,7 @@ def test_the_simulated_queue_keeps_every_invariant_and_settles():
     for what in ("main moved elsewhere", "the loop stopped early", "ejected by inputs", "ejected after a rerun",
                  "ejected for erring", "a lean PR built", "two lean PRs built together", "bisected", "bisected on infra errors",
                  "retried", "retried late", "retried while the rest ran", "rerun", "rung", "rung late", "wedged", "a red rung",
-                 "infra rung and waited", "rung, and infra reran it",
+                 "infra rung and retried", "rung, and infra reran it",
                  "advanced on a red main", "built on a red main", "inherited by tests", "inherited at its key alone",
                  "a mixed failure", "waited for the rest of a check", "a fix cleared a red"):
         assert seen[what], f"no seed exercised: {what}"

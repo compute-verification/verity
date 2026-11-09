@@ -11,10 +11,11 @@ as `next` is), pushed to `queue/<sha12>` and checked by graph2 as `ready:<sha>`.
              several are bisected; none meeting them makes every member a suspect, and a lone member's failed keys are rerun
              once, afresh, before it is ejected.  The candidates above it are dropped, and the rest go into the next batch.
              A fail that names no failed task is rung, and nothing else happens
-    infra    nothing is blamed and `main` stays: the check is enqueued again once, then infra is rung and the candidate waits,
-             as it does when its listing fails.  Only infra errors graph2 saw on two or more nodes (`tree`) follow the tree:
-             they are bisected like a fail, on the members whose files meet their inputs, else on every member, and eject a
-             lone member
+    infra    nothing is blamed and `main` stays: the check is enqueued again at every reading, and infra is rung from `rings`
+             enqueues on (2 at most), in words that change only with the erring tasks, so the loop tells infra once for each
+             set; a listing failure is handled alike.  Only infra errors graph2 saw on two or more nodes (`tree`) follow the
+             tree: they are bisected like a fail, on the members whose files meet their inputs, else on every member, and
+             eject a lone member
     pending  wait; a check still pending `pending_s` after its first enqueue is enqueued again, and rung at twice that
 
 `decide` is the whole policy: a pure function from a `Snapshot` (what the refs, the labels and graph2's results say now) to
@@ -103,7 +104,7 @@ class Snapshot:
     history: tuple[Outcome, ...] = ()   # oldest first
     batch: int = 6                 # the most members a candidate takes
     depth: int = 2                 # the most candidates checked at once, each on the one below
-    rings: int = 2                 # infra verdicts on one candidate before infra is rung; 2 at most, as it is enqueued twice
+    rings: int = 2                 # infra verdicts on one candidate before infra is rung; 2 at most
     lean: int = 1                  # the most members of a batch that change Lean, a lock or a spec
     now: float | None = None       # when the snapshot was taken, in seconds since the epoch; None: nothing times out
     pending_s: float = 4 * 3600    # how long the lowest candidate is pending after its first enqueue before it is retried
@@ -212,8 +213,7 @@ def decide(s: Snapshot) -> list[Action]:
             acts += [Drop(c.sha, BASE_FAILED) for c in chain[1:]]
             chain = []
         elif reading == INFRA:
-            if c1.tries < 2:
-                acts.append(Retry(c1.sha))
+            acts.append(Retry(c1.sha))
             if c1.tries >= min(s.rings, 2):
                 acts.append(Ring(c1.sha, _ring_why(c1)))
         elif reading == PENDING and s.now is not None and c1.enqueued is not None:
@@ -423,13 +423,14 @@ def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], act
 
 
 def _ring_why(c: Candidate) -> str:
+    """Words that change with the tasks ``c``'s check erred on, not with its enqueues: the loop rings each why once."""
     if c.verdict.state == LIST_FAILED:
-        return f"{c.sha[:12]}'s check failed to list, {c.tries} times enqueued"
+        return f"{c.sha[:12]}'s check failed to list"
     if tree := _tree(c.verdict):
         return f"{c.sha[:12]}'s check ended in infra errors on two or more nodes, which follow its tree: " + ", ".join(
             f.task for f in tree)
-    tasks = ", ".join(f.task for f in c.verdict.infra)
-    return f"{c.sha[:12]}'s check ended in infra errors, {c.tries} times enqueued" + (f": {tasks}" if tasks else "")
+    tasks = ", ".join(sorted({f.task for f in c.verdict.infra}))
+    return f"{c.sha[:12]}'s check ended in infra errors" + (f": {tasks}" if tasks else "")
 
 
 def _batch(pool: list[Ready], outcomes: list[Outcome], size: int, lean: int) -> tuple[int, ...]:
