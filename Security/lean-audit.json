@@ -304,6 +304,7 @@
   },
   "NetTiming.OpensAtInputs": {
    "owner": "@proofs",
+   "digest": "c1281698ce1c924f21d0edd85fdad78a317bc854459f880bb520aa7b08d90cf2",
    "why": "A scope: each statement's opening gates are inputs of its circuit, where a run reads the row it opens; the pool circuit's honest witness concludes it."
   },
   "NetTiming.PeriodAdaptive": {
@@ -5261,11 +5262,11 @@
    "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique) and a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check) (CIR-190, open to 30 Nov)",
    "unfolded_hash": "b47d65cccae8757ba6d024a7f98e4df2611ef0c9227e527821200452ff1733fa"
   },
-  "NetTiming.SecurityProofs.PooledLeakCarried": {
-   "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
-   "unfolded_hash": "51456ceabbd0e67ea3f09d43eda0cb107cfae69d09534b46e9cb3c3d59040514",
+  "NetTiming.SecurityProofs.SampledLeakCarried": {
+   "type_hash": "964d111792ebb7e5ca640a0eb90c690e0e1f063563932466e7dbe68695d895ce",
+   "unfolded_hash": "1b287f64200314fc5ff92e4e03e94b75f192b61b3800c038d93604674e50a41a",
    "missing": "honest",
-   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique), its closing row (CheckedClosing) and its rows' roots at each pattern serving picks where every audit accepts (CarriedRoots, from each run's root check and R7), with a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check run every run on its own live coins) (CIR-190)"
+   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique) and a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check run every run on its own live coins), with the pool row read at input gates (OpensAtInputs) (CIR-190)"
   },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "type_hash": "debf2afa03a59d1d37dd902e4a99f3a2a5f9eb834c327dad8c7a697a6b101048",
@@ -18501,7 +18502,7 @@
     "reads": []
    },
    "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
-   "unfolded_hash": "51456ceabbd0e67ea3f09d43eda0cb107cfae69d09534b46e9cb3c3d59040514"
+   "unfolded_hash": "3ba80eca3dc792380aa333bd8dee45df5798fec9b56d2f5e1c9fad01f48e4375"
   },
   "NetTiming.SecurityProofs.PooledLeakChecked": {
    "owner": "@proofs",
@@ -18549,7 +18550,22 @@
    "unfolded_hash": "2d5c3f2482b79633d9c2156355f5f490907054040f4c5f9ea6e397869f81b364"
   },
   "NetTiming.SecurityProofs.SampledLeakCarried": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": ["NetTiming.SecurityProofs.SampledLeakCarried : NetTiming.Guarantees.SampledLeakCarried"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [
+     "NetTiming.CheckedUnique",
+     "NetTiming.CheckedWitness",
+     "NetTiming.Guarantees.SampledAuditAccepted",
+     "NetTiming.OpensAtInputs"
+    ],
+    "open": ["Claims.Flock.ListWithin", "Claims.Sampling.KS", "NetTiming.ScopeAcc"],
+    "reads": []
+   },
+   "type_hash": "964d111792ebb7e5ca640a0eb90c690e0e1f063563932466e7dbe68695d895ce",
+   "unfolded_hash": "1b287f64200314fc5ff92e4e03e94b75f192b61b3800c038d93604674e50a41a"
   },
   "NetTiming.SecurityProofs.SampledLeakChecked": {
    "owner": "@proofs",
@@ -18635,7 +18651,38 @@
    "type_hash": "b94dd1db998466e8b11a6be75417a1a1788a293be91adcf5f8790d5a5eba5e40"
   },
   "NetTiming.Witness.SampledLeakCarried_nontrivial": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "NetTiming.Witness.SampledLeakCarried_nontrivial :",
+    "  Not",
+    "    (Claims.Sampling.KSLinOn FlockDeploy.sha512 (NetTiming.Witness.atNot (Claims.Witness.Sampling.sksD Bool)).V",
+    "      (fun x =>",
+    "        And",
+    "          (NetTiming.ScopeAcc (NetTiming.Witness.atNot (Claims.Witness.Sampling.sksD Bool))",
+    "            (fun x => NetTiming.Witness.notLay) (fun x => 1) x)",
+    "          (NetTiming.CheckedWitness FlockDeploy.sha512 (NetTiming.Witness.atNot (Claims.Witness.Sampling.sksD Bool))",
+    "            (fun x => List.cons Unit.unit List.nil) (fun x x_1 => True) (fun x => 0) x))",
+    "      (NetTiming.RLeakCarried FlockDeploy.sha512 (NetTiming.Witness.atNot (Claims.Witness.Sampling.sksD Bool)).commit",
+    "        (NetTiming.Witness.atNot (Claims.Witness.Sampling.sksD Bool)).parse",
+    "        (NetTiming.Witness.atNot (Claims.Witness.Sampling.sksD Bool)).partition 1 1 1",
+    "        (fun x => NetTiming.Witness.notLay) (fun x => 1) 0 (fun x => Finset.instEmptyCollection.emptyCollection)",
+    "        (fun x x_1 => True) (fun x => List.nil) (fun x => List.nil) 1)",
+    "      (Claims.Sampling.E (NetTiming.Witness.atNot (Claims.Witness.Sampling.sksD Bool)) fun x =>",
+    "        List.cons Unit.unit List.nil)",
+    "      (fun x => instHAdd.hAdd (Claims.Sampling.κ (NetTiming.Witness.atNot (Claims.Witness.Sampling.sksD Bool)) 0 x) 0)",
+    "      (Claims.Sampling.γ (NetTiming.Witness.atNot (Claims.Witness.Sampling.sksD Bool))) (fun x => 1)",
+    "      (Claims.Sampling.Bext FlockDeploy.sha512 (NetTiming.Witness.atNot (Claims.Witness.Sampling.sksD Bool)).V",
+    "        (Claims.Sampling.E (NetTiming.Witness.atNot (Claims.Witness.Sampling.sksD Bool)) fun x =>",
+    "          List.cons Unit.unit List.nil)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["NetTiming.CheckedWitness"],
+    "open": ["NetTiming.ScopeAcc"],
+    "reads": []
+   },
+   "type_hash": "f40fd1ad205e41c4de7de41e723efe5ba3f84ce4b12519e253bb8e5d6d102486"
   },
   "NetTiming.Witness.SampledLeakChecked_nontrivial": {
    "owner": "@proofs",
@@ -35292,16 +35339,19 @@
    }
   },
   "Definitions.NetworkCertifier.Carried": {
-   "digest": "c87acfac8685c190cffe62d90f9532006f6795a73a272ea7b141539def1bf3d1",
+   "digest": "88a03b7ea06c203090a058bfa434633899a5d8d8948b58b3018394e5c383273c",
    "definitions": {
+    "NetTiming.AccSeqsCarried": "2e8db8d1cf409825083cd52b2229dd9c5af50e6133c4c7e731c8974003b790de",
     "NetTiming.AcceptedCarried": "df9c8b60a2e4ef1965f06a821aa3066df1da64625065a2a4c403af2d096368c4",
     "NetTiming.CarriedRoots": "1362beed271090aca1df516c3ce8b3249db6fd63f98026aeea88b482a2533264",
     "NetTiming.CheckedClosing": "6d7f4517a46cba2423aba508a5782dbe2b791d9e36dc027f209eed6ccbf10c0b",
     "NetTiming.LeakAtCarried": "c185ff749d54d82c552c9ace294749da80b4006dfddbe3e1633c6c82765becb2",
+    "NetTiming.OpensAtInputs": "c1281698ce1c924f21d0edd85fdad78a317bc854459f880bb520aa7b08d90cf2",
     "NetTiming.PeriodLeaksCarried": "c12a6f62df4f753d7747e2fda7590a7841d3b587e77be0e6d707d48a4596339e",
     "NetTiming.PoolChained": "db1790a4b6e9d192443e9132982666d817be1aa8cd673d04334ecf17d0ec8c24",
     "NetTiming.PoolColl": "0e207c80813d8807fbd1c34ea4f9063b1d51e6f1e821dee51af8e5f73b9fa18d",
     "NetTiming.PooledGoodCarried": "db76677f651d89b88b044045daa6f2a54a0217e6f7cda5fbc9195eb6153ec2c3",
+    "NetTiming.RLeakCarried": "688b2c6a3314f1564a845b85baa2f8e2367e99049ce725084e73ce596c4dc26a",
     "NetTiming.poolOpen": "4874fc3cdb655140ed8eba5e750cc319bc10f261a59ae320f0f577174edd7b21",
     "NetTiming.runsBefore": "1eb148a4221b22658388804a4f46ba808757e4ba57dfa482fc80fd56ddae1ba4"
    }
@@ -35366,9 +35416,10 @@
    }
   },
   "Definitions.NetworkCertifier.Guarantees.Carried": {
-   "digest": "64a021032aefc91106b22931e9e4a10386d1338cb2a2a376fbdbe920fb69fe70",
+   "digest": "7367b103b8cc79b0cfafc25076d720933c34f0320935d28b3779b68b86b6db0b",
    "definitions": {
-    "NetTiming.Guarantees.PooledLeakCarried": "9cca7fdbcf4b4354aa9a40c8716024e85b0f674851beabf264c17c3d0129b037"
+    "NetTiming.Guarantees.PooledLeakCarried": "00cfcef2d7278034171d9047f67bcadee14a10ffa28e9a0d4848335c598a740b",
+    "NetTiming.Guarantees.SampledLeakCarried": "bda0ef0564c29e1c16142ad05a67ae26ece7a74721410573ae357417a4f67413"
    }
   },
   "Definitions.NetworkCertifier.Guarantees.Checked": {
