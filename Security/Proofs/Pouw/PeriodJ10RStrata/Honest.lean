@@ -51,7 +51,7 @@ sample (`evOf`). Given three facts of those inputs, the witness meets every prem
 * `Credit.window` credits every window (`hacc`);
 * the registered salt, hex-decoded, is the round coin's bytes (`hsalt`);
 * the proof blocks `Credit.descriptorDrawn` samples are the union over `S` of the strata's coordinates of the block's sample
-  (`hdraw`), `StrataDrawIsCoin`'s body on every window.
+  (`hdraw`), `StrataSampleIsCoin`'s body on every window.
 
 At each stratum `s` the instance is `HonestJ10R`'s at `N_s = |stratum σ s|` with the rest of the block's sample as `Ξ`:
 `N_s` one-word proof blocks, one live round, `ρ = 1`, the twin's lucks, `δ_bind = δ_ks = 0`, `N_s` words fixed and folded a
@@ -73,7 +73,7 @@ namespace Properties.Pouw.PeriodJ10RStrata.SecurityProofs.HonestStrata
 open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs Properties.Pouw.PeriodJ10RStrata
   Properties.Pouw.PeriodJ10RStrata.SecurityProofs
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
-open Accounting.SecurityProofs.ComposePeriod
+open Accounting.SecurityProofs.ComposeMonitoringPeriod
 
 /-! ## The honest instance -/
 
@@ -110,7 +110,7 @@ theorem strata_meets_period (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ s ∈ S, ∃ b ∈ tileDraw σ k hk s (β s), unitOf b = u) (n : ℕ) :
-    RegisteredBeforeDraw (windows σ regOf evOf n) ∧ StrataDrawIsCoin σ k hk S unitOf (windows σ regOf evOf n) ∧
+    RegisteredBeforeDraw (windows σ regOf evOf n) ∧ StrataSampleIsCoin σ k hk S unitOf (windows σ regOf evOf n) ∧
     Properties.Pouw.Period.SaltIsLiveCoin Nat.one_pos (saltOf (windows σ regOf evOf n)) enc ∧
     ∀ x, (windows σ regOf evOf n).prefixLen x = n := by
   classical

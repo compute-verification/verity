@@ -86,6 +86,8 @@ pub struct LeafSalts {
     key: Option<Box<[u8; 32]>>,
     /// the trees kept
     kept: std::sync::Arc<std::sync::Mutex<Kept>>,
+    /// the trees read ahead
+    ahead: std::sync::Arc<Ahead>,
     next: u64,
     level0: u64,
 }
@@ -98,6 +100,26 @@ struct Kept {
     level0: Option<std::sync::Arc<Vec<u8>>>,
     /// trees whose salts were sampled elsewhere ([`LeafSalts::preset`]), by tree id and leaf count, taken by the first sample
     preset: std::collections::BTreeMap<(u64, usize), ZeroOnDrop>,
+}
+
+/// The trees [`SaltsAhead::draw`] reads before their first sample, by tree id and leaf count: those no sample has asked for yet,
+/// and those read. `drawn` is held while a tree is read, so a sample of a planned tree waits for it; a sample of any other tree
+/// never waits on a read ahead.
+#[derive(Default)]
+struct Ahead {
+    planned: std::sync::Mutex<std::collections::BTreeSet<(u64, usize)>>,
+    drawn: std::sync::Mutex<std::collections::BTreeMap<(u64, usize), std::sync::Arc<Vec<u8>>>>,
+}
+
+impl Ahead {
+    /// A planned tree's salts for its first sample: the ones read ahead, once read; None when it is not planned, or no longer is,
+    /// or is not read yet (its sample reads its own, and the read ahead skips it).
+    fn take(&self, id: u64, leaves: usize) -> Option<std::sync::Arc<Vec<u8>>> {
+        if !self.planned.lock().unwrap_or_else(std::sync::PoisonError::into_inner).remove(&(id, leaves)) {
+            return None;
+        }
+        self.drawn.lock().unwrap_or_else(std::sync::PoisonError::into_inner).remove(&(id, leaves))
+    }
 }
 
 /// The coin-tree nonce the prover sends in `Hello` (docs/coin-tree-v2.md §3): 32 fresh bytes from the OS, once per session,
@@ -123,7 +145,7 @@ impl LeafSalts {
             r.fill_bytes(&mut key[..]);
             key
         });
-        LeafSalts { key, kept: Default::default(), next: 1, level0: 0 }
+        LeafSalts { key, kept: Default::default(), ahead: Default::default(), next: 1, level0: 0 }
     }
 
     /// Table `table`'s salts in a session of several tables: the level-0 tree `table << TABLE_SHIFT` and every later tree the
@@ -131,7 +153,7 @@ impl LeafSalts {
     pub fn table(&self, table: u64) -> LeafSalts {
         assert!(table < 1 << TABLE_SHIFT, "a table index below 2^{TABLE_SHIFT}");
         let level0 = table << TABLE_SHIFT;
-        LeafSalts { key: self.key.clone(), kept: Default::default(), next: level0 + 1, level0 }
+        LeafSalts { key: self.key.clone(), kept: Default::default(), ahead: Default::default(), next: level0 + 1, level0 }
     }
 
     /// The level-0 tree's id (both reps of a table bind its one root).
@@ -153,7 +175,7 @@ impl LeafSalts {
             assert_eq!(s.len(), leaves * SALT_BYTES, "level 0's salts are read for one tree size");
             return s.clone();
         }
-        let s = std::sync::Arc::new(self.draw(self.level0, leaves));
+        let s = self.ahead.take(self.level0, leaves).unwrap_or_else(|| std::sync::Arc::new(self.draw(self.level0, leaves)));
         k.level0 = Some(s.clone());
         s
     }
@@ -188,28 +210,97 @@ impl LeafSalts {
     /// afresh. A device that samples a tree at another size than the Lean finish's gets salts of its own, its tree is not the
     /// finish's and its opening fails the ZK server's check, and nothing panics.
     pub fn expand(&self, id: u64, leaves: usize) -> Vec<u8> {
+        std::sync::Arc::try_unwrap(self.take(id, leaves)).unwrap_or_else(|s| s.to_vec())
+    }
+
+    /// [`Self::expand`]'s salts, shared: level 0's kept ones, a tree's preset or drawn-ahead ones ([`SaltsAhead`]) at that size,
+    /// once, else read afresh.
+    pub fn take(&self, id: u64, leaves: usize) -> std::sync::Arc<Vec<u8>> {
         if id == self.level0 {
-            return self.level0(leaves).to_vec();
+            return self.level0(leaves);
         }
         let preset = self.kept.lock().unwrap_or_else(std::sync::PoisonError::into_inner).preset.remove(&(id, leaves));
         match preset {
-            Some(mut p) => std::mem::take(&mut p.0),
-            None => self.draw(id, leaves),
+            Some(mut p) => std::sync::Arc::new(std::mem::take(&mut p.0)),
+            None => self.ahead.take(id, leaves).unwrap_or_else(|| std::sync::Arc::new(self.draw(id, leaves))),
         }
     }
 
     fn draw(&self, id: u64, leaves: usize) -> Vec<u8> {
-        use rayon::prelude::{IndexedParallelIterator, ParallelIterator, ParallelSliceMut};
-        let mut b = vec![0u8; leaves * SALT_BYTES];
-        match &self.key {
-            Some(key) => b.par_chunks_mut(SALT_BYTES).enumerate().for_each(|(i, s)| {
-                for j in 0..3 {
-                    s[64 * j..64 * j + 64].copy_from_slice(&chacha20_block(key, 3 * i as u64 + j as u64, id));
-                }
-            }),
-            None => os_fill(&mut b),
+        draw_salts(self.key.as_deref(), id, leaves)
+    }
+
+    /// A handle that reads this table's trees ahead of their first sample, from another thread ([`SaltsAhead::draw`]).
+    pub fn ahead(&self) -> SaltsAhead {
+        SaltsAhead { key: self.key.clone(), kept: self.kept.clone(), ahead: self.ahead.clone(), level0: self.level0 }
+    }
+}
+
+fn draw_salts(key: Option<&[u8; 32]>, id: u64, leaves: usize) -> Vec<u8> {
+    let mut b = vec![0u8; leaves * SALT_BYTES];
+    fill_salts(key, id, &mut b);
+    b
+}
+
+/// Writes every byte of `b`, whole leaves: tree `id`'s salts, on the current rayon pool.
+fn fill_salts(key: Option<&[u8; 32]>, id: u64, b: &mut [u8]) {
+    use rayon::prelude::{IndexedParallelIterator, ParallelIterator, ParallelSliceMut};
+    assert_eq!(b.len() % SALT_BYTES, 0, "a tree's salts are whole {SALT_BYTES}-byte leaves");
+    match key {
+        Some(key) => b.par_chunks_mut(SALT_BYTES).enumerate().for_each(|(i, s)| {
+            for j in 0..3 {
+                s[64 * j..64 * j + 64].copy_from_slice(&chacha20_block(key, 3 * i as u64 + j as u64, id));
+            }
+        }),
+        None => os_fill(b),
+    }
+}
+
+/// Reads a table's trees before the prover samples them ([`LeafSalts::ahead`]), so the device's tree callbacks find their salts
+/// read: from the source a sample reads, only earlier (an injected seed's expansion is addressed by tree id and leaf, so its
+/// bytes are the sample's). Each tree is still read once and taken by one sample: a tree sampled first, or at another size,
+/// reads its own, and what was read for it goes unused. Under an OS source ([`set_os_source`], the Lean tap) nothing is read
+/// ahead, so the tap's reads keep the prover's order.
+pub struct SaltsAhead {
+    key: Option<Box<[u8; 32]>>,
+    kept: std::sync::Arc<std::sync::Mutex<Kept>>,
+    ahead: std::sync::Arc<Ahead>,
+    level0: u64,
+}
+
+impl SaltsAhead {
+    /// Reads `trees` (tree id, leaves) in order, level 0's id into level 0's salts (unless they were read already), on the
+    /// current rayon pool. `buf(bytes, fill)` gives each tree's buffer, which `fill` writes whole before a sample can take it: a
+    /// fresh one, or one the caller reuses.
+    pub fn draw(&self, trees: &[(u64, usize)], buf: &mut dyn FnMut(usize, &mut dyn FnMut(&mut [u8])) -> std::sync::Arc<Vec<u8>>) {
+        if OS_SOURCE.get().is_some() {
+            return;
         }
-        b
+        let level0_read = self.kept.lock().unwrap_or_else(std::sync::PoisonError::into_inner).level0.is_some();
+        let planned = || self.ahead.planned.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        planned().extend(trees.iter().filter(|t| !(level0_read && t.0 == self.level0)));
+        for &t in trees {
+            let mut drawn = self.ahead.drawn.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            if drawn.contains_key(&t) || !planned().contains(&t) {
+                continue;
+            }
+            let b = buf(t.1 * SALT_BYTES, &mut |b| fill_salts(self.key.as_deref(), t.0, b));
+            assert_eq!(b.len(), t.1 * SALT_BYTES, "a tree's buffer holds its leaves");
+            drawn.insert(t, b);
+        }
+    }
+
+    /// Trees read ahead that no sample has taken.
+    pub fn untaken(&self) -> usize {
+        self.ahead.drawn.lock().unwrap_or_else(std::sync::PoisonError::into_inner).len()
+    }
+}
+
+impl Drop for SaltsAhead {
+    fn drop(&mut self) {
+        if let Some(key) = self.key.as_mut() {
+            zero(&mut key[..]);
+        }
     }
 }
 
@@ -492,6 +583,67 @@ mod tests {
         let id = a.next_id();
         assert_ne!(a.expand(id, 2), trees[1], "a tree past the preset ones reads afresh");
         assert!(a.preset(vec![vec![0; 5]]).is_err(), "a preset tree is whole leaves");
+    }
+
+    /// Trees read ahead ([`SaltsAhead::draw`]) are the bytes their samples would read, taken once at their size: the same proof
+    /// under an injected seed whether read ahead or not, and a tree sampled first, at another size or twice reads its own.
+    #[test]
+    fn salts_read_ahead_are_the_samples_bytes() {
+        let seed = ProverSeed::injected([6; 32]);
+        let (mut a, mut b) = (LeafSalts::for_seed(&seed), LeafSalts::for_seed(&seed));
+        let (first, second) = (a.next_id(), a.next_id());
+        let mut given = 0;
+        a.ahead().draw(&[(a.level0_id(), 4), (first, 3), (second, 2), (second + 1, 2)], &mut |n, fill| {
+            given += n;
+            fresh(n, fill)
+        });
+        assert_eq!(given, (4 + 3 + 2 + 2) * SALT_BYTES, "every tree read ahead goes into a buffer the caller gives");
+        assert_eq!(*a.level0(4), *b.level0(4));
+        let (b1, b2) = (b.next_id(), b.next_id());
+        assert_eq!(*a.take(first, 3), *b.take(b1, 3));
+        assert_eq!(a.expand(second, 2), b.expand(b2, 2));
+        assert_eq!(a.ahead().untaken(), 1, "the tree no sample took");
+        assert_eq!(a.take(second + 1, 5).len(), 5 * SALT_BYTES, "a sample at another size reads its own");
+        let os = LeafSalts::for_seed(&ProverSeed::from_os());
+        let id = 1;
+        os.ahead().draw(&[(id, 3)], &mut fresh);
+        let t = os.take(id, 3);
+        assert_eq!(os.ahead().untaken(), 0, "the first sample takes the tree read ahead");
+        assert_ne!(*t, os.expand(id, 3), "a second sample of a tree read ahead reads afresh");
+        let late = LeafSalts::for_seed(&ProverSeed::from_os());
+        let l0 = late.level0(2);
+        late.ahead().draw(&[(late.level0_id(), 2)], &mut |_, _| panic!("level 0 was read already"));
+        assert!(std::sync::Arc::ptr_eq(&l0, &late.level0(2)));
+    }
+
+    fn fresh(n: usize, fill: &mut dyn FnMut(&mut [u8])) -> std::sync::Arc<Vec<u8>> {
+        let mut b = vec![0u8; n];
+        fill(&mut b);
+        std::sync::Arc::new(b)
+    }
+
+    /// A tree read ahead into a buffer the caller reuses holds what a fresh buffer would: every byte is written, whatever the
+    /// buffer held (an injected seed's bytes exactly; the OS's, no leaf left as it was).
+    #[test]
+    fn salts_read_into_a_reused_buffer_are_the_samples_bytes() {
+        fn reused(old: &mut std::sync::Arc<Vec<u8>>) -> impl FnMut(usize, &mut dyn FnMut(&mut [u8])) -> std::sync::Arc<Vec<u8>> + '_ {
+            move |n, fill| {
+                let b = std::sync::Arc::get_mut(old).expect("a buffer nothing else holds");
+                assert_eq!(b.len(), n);
+                fill(b);
+                old.clone()
+            }
+        }
+        let leaves = 2 * OS_PIECE / SALT_BYTES + 3;
+        let seed = ProverSeed::injected([7; 32]);
+        let (a, b) = (LeafSalts::for_seed(&seed), LeafSalts::for_seed(&seed));
+        let mut old = std::sync::Arc::new(vec![0xa5u8; leaves * SALT_BYTES]);
+        a.ahead().draw(&[(a.level0_id(), leaves)], &mut reused(&mut old));
+        assert_eq!(*a.level0(leaves), *b.level0(leaves));
+        let os = LeafSalts::for_seed(&ProverSeed::from_os());
+        let mut old = std::sync::Arc::new(vec![0xa5u8; leaves * SALT_BYTES]);
+        os.ahead().draw(&[(os.level0_id(), leaves)], &mut reused(&mut old));
+        assert!(os.level0(leaves).chunks(SALT_BYTES).all(|l| l.iter().any(|&x| x != 0xa5)), "every leaf read from the OS");
     }
 
     /// An injected seed's salts are its ChaCha20 tape: leaf `i` of tree `id` is blocks `3i..3i+2` under the `STREAM_SALT` key with
