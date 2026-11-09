@@ -884,8 +884,8 @@ struct Serving {
 }
 
 /// The challenger's session (`serve --tree-from`), one connection the server's sessions share. It closes when the server is
-/// done with it: once its last session's record is written, `serve_loop` returns and drops the last [`Serving`] holding it
-/// (`serve --queue`: once its queue ends). A close the challenger doesn't confirm is the server's refusal.
+/// done with it: once its last session's record is written, `serve_loop` returns and the last [`Serving`] holding it is
+/// dropped (`serve --queue`: once its queue ends). A close the challenger doesn't confirm is the server's refusal.
 struct TreeFrom(flock_live::tree_from::Shared);
 
 impl Drop for TreeFrom {
@@ -6365,9 +6365,11 @@ fn verify_ahead_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value 
         std::thread::scope(|sc| {
             for (j, (l, (d, a))) in ls.iter().zip(dirs.iter().zip(&addrs)).enumerate() {
                 flock_live::spawn_scoped(sc, move || serve_on(l, d, Some((SESSIONS - j).div_ceil(servers)), (ahead + 1).div_ceil(servers), a, None, || {
-                    let mut s = server(st, inst);
-                    fix_verifier_coins(&mut s, [9; 32]);
-                    Some((s, Value::Null))
+                    Some((move || {
+                        let mut s = server(st, inst);
+                        fix_verifier_coins(&mut s, [9; 32]);
+                        s
+                    }, Value::Null))
                 }));
             }
             prove_sessions(st, inst, &base, &seeds, 0, &addrs.join(","), ahead, None, &mut |_, v, proofs| got.push((v, proofs)));
@@ -6418,9 +6420,11 @@ fn front_ahead_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
         std::thread::scope(|sc| {
             let (l, d, a) = (&l, &d, &a);
             flock_live::spawn_scoped(sc, move || serve_on(l, d, Some(SESSIONS), 3, a, None, || {
-                let mut s = server(st, inst);
-                fix_verifier_coins(&mut s, [9; 32]);
-                Some((s, Value::Null))
+                Some((move || {
+                    let mut s = server(st, inst);
+                    fix_verifier_coins(&mut s, [9; 32]);
+                    s
+                }, Value::Null))
             }));
             prove_sessions(st, inst, &base, &seeds, 0, a, 0, None, &mut |_, v, proofs| got.push((v, proofs)));
         });
@@ -6842,7 +6846,7 @@ fn run_log(st: &Stmt) -> Option<RunLog> {
     Some(RunLog::new(file, part).unwrap_or_else(|e| refuse(e)))
 }
 
-fn serve_loop(log: Option<&RunLog>, make: impl Fn() -> Option<(Server, Value)>) {
+fn serve_loop<B: FnOnce() -> Server + Send>(log: Option<&RunLog>, make: impl Fn() -> Option<(B, Value)>) {
     let listen = arg("--listen", "127.0.0.1:7500");
     let out = std::path::PathBuf::from(arg("--out", "sessions"));
     let l = std::net::TcpListener::bind(&listen).unwrap();
@@ -6856,16 +6860,15 @@ fn serve_loop(log: Option<&RunLog>, make: impl Fn() -> Option<(Server, Value)>) 
     serve_on(&l, &out, max, concurrency, &bound, log, make);
 }
 
-/// Serves `l`'s connections, one session each, up to `concurrency` at once, and `max` of them (unbounded: `None`), each on
-/// the server `make` gives before it is accepted, until it gives none; each session's record, proofs and verifier file
-/// under `out/<session>`, its line, with the fields `make` gave beside its server, in `out/index.jsonl` and on stdout (`out`:
-/// the directory those fields name as `out`, else the server's). With a run's record (`log`), each session's Hello
-/// answered with coins is logged there first.
-fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>, concurrency: usize, listen: &str,
-            log: Option<&RunLog>, make: impl Fn() -> Option<(Server, Value)>) {
+/// Serves `l`'s connections, one session each, up to `concurrency` at once, and `max` of them (unbounded: `None`), until
+/// `make` gives none (`flock_live::serve_sessions`): each on the server `make`'s build gives, built on the session's own
+/// thread once it is accepted; each session's record, proofs and verifier file under `out/<session>`, its line, with the
+/// fields `make` gave beside its build, in `out/index.jsonl` and on stdout (`out`: the directory those fields name as
+/// `out`, else the server's). With a run's record (`log`), each session's Hello answered with coins is logged there first.
+fn serve_on<B: FnOnce() -> Server + Send>(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>, concurrency: usize,
+                                          listen: &str, log: Option<&RunLog>, make: impl Fn() -> Option<(B, Value)>) {
     use std::io::{BufReader, BufWriter, Write};
     std::fs::create_dir_all(out).unwrap();
-    let free = (Mutex::new(concurrency), std::sync::Condvar::new());
     let index = Mutex::new(());
     let one = |i: usize, conn: std::net::TcpStream, mut s: Server, tag: Value| {
         conn.set_nodelay(true).unwrap();
@@ -6909,31 +6912,8 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
         idx.write_all(format!("{line}\n").as_bytes()).unwrap();
         println!("SESSION\t{line}");
     };
-    std::thread::scope(|sc| {
-        for i in 0.. {
-            if Some(i) == max {
-                break;
-            }
-            {
-                let mut n = free.0.lock().unwrap_or_else(PoisonError::into_inner);
-                while *n == 0 {
-                    n = free.1.wait(n).unwrap_or_else(PoisonError::into_inner);
-                }
-                *n -= 1;
-            }
-            let Some((s, tag)) = make() else { break };
-            let (conn, _) = l.accept().unwrap();
-            let (one, free) = (&one, &free);
-            flock_live::spawn_scoped(sc, move || {
-                // a session's panic stops the server
-                if catch_unwind(AssertUnwindSafe(|| one(i, conn, s, tag))).is_err() {
-                    std::process::exit(101);
-                }
-                *free.0.lock().unwrap_or_else(PoisonError::into_inner) += 1;
-                free.1.notify_one();
-            });
-        }
-    });
+    flock_live::serve_sessions(l, max, concurrency, || make().map(|(build, tag)| move || (build(), tag)),
+                               |i, conn, (s, tag): (Server, Value)| one(i, conn, s, tag));
 }
 
 /// `replay [--zk] [--session-tables J] --sessions DIR...`: the verifier's offline verdict on each recorded session
@@ -7181,7 +7161,7 @@ fn serve_queue(c: Composite, path: &str) {
         if let Some(out) = j["out"].as_str() {
             tag["out"] = json!(out);
         }
-        Some((server_of(&sv, &st, &inst, 1), tag))
+        Some((move || server_of(&sv, &st, &inst, 1), tag))
     })
 }
 
@@ -7371,7 +7351,8 @@ fn main() {
         "serve" => {
             let log = run_log(&st);
             let sv = serving(&st, &inst, tables);
-            serve_loop(log.as_ref(), move || Some((server_of(&sv, &st, &inst, tables), Value::Null)))
+            let (sv, st, inst) = (&sv, &st, &inst);
+            serve_loop(log.as_ref(), || Some((move || server_of(sv, st, inst, tables), Value::Null)))
         }
         "prove" => {
             if firewall_on(&st) {
