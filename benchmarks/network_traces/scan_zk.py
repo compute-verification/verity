@@ -1716,8 +1716,8 @@ def main(argv=None) -> int:
                    help="a warden_serve run's directory (rehearse --ids at the class's schedule): its group's "
                         "execution phases, verified under its deployment's key, in place of the synthetic run")
     p.add_argument("--draw", type=int,
-                   help="K: Lean draw --stratified K on a development challenger's coins, only the sampled proof "
-                        "blocks proved; default every unit")
+                   help="K: Lean draw --stratified K on a development challenger's coins, only the SPOT proof "
+                        "blocks it draws proved; default every unit")
     p.add_argument("--challenger", help="with --draw: the honest round drawn at the rate K/N (stratified-rate:K/N) on the "
                    "auditor's challenger's coins "
                    "(a5_coins, the round's service.Stream), not the verifier's: local, or gate:USER@HOST "
