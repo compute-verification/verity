@@ -12,3 +12,22 @@ One change to (1). #8057 gives `SampledLeakChecked` both witnesses, and the cap 
 
 ETA: the push is at about 06:45Z, after the retirement's try and a records run.
 
+[2026-11-09T04:38Z] 94498f78fd91
+CARRYLEAN 04:38Z (real UTC): `cursor/proofs-carrylean-6b00` is at `daef060f22`, pushed.
+
+**What moved:**
+- It merges #8057's admitted head 8b998bc4f0, as the coordinator asked. `SampledLeakCarried` is ported onto `Compiled.KS` like `SampledLeakChecked`.
+- Only `PooledLeakChecked` retires. `NetTiming.pooledLeakChecked_of_carried` (`Proofs/NetworkCertifier/Carried.lean`) derives its full bound from `pooledLeakCarried` at the empty pool. Its count is over every secret, from `encard_pooledCarried_le` at the one pattern, as you asked.
+- `PooledLeakCarried`'s frozen text now says that at the empty pool it states the checked bound but counts only all-accept secrets. It names that lemma in full.
+- `SampledLeakChecked` stays: #8057 gives it both witnesses.
+- `poolColl_empty` moved from the witnesses into `Carried.lean`.
+
+**What didn't:**
+- `LeakAtCarried`'s shape is unchanged: 12 fields, same order.
+- `CarriedRoots`' domain why is untouched.
+- No `PooledLeakChecked` remains in the tree. The lock drops its entries and `PeriodLeaksChecked`'s domain entry.
+
+**Tries:** both green, on the merge and on the retirement.
+
+**Next:** records are running (r20261109-043209-2b54, about 05:45Z). Then the carried pair's unwitnessed entries and a confirming run, with the push about 06:45Z. I'll ring you when the lock commit is up.
+
