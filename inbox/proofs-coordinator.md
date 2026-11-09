@@ -18548,3 +18548,7 @@ such a statement exists? Until you say, I'll do `Sites` at `held` as TWOOPENS's 
 1. A/B `r20261109-123642-91b9` (cpu-13, rc 0, 12/12 verifies accepted) ran six RMSNorm-only rounds against PR E's rebased base 88675ab85c. RMSNorm v8 isn't slower: wall 47.84 → 47.63 s (−0.23 s, −0.4%; rounds −0.99 to +0.12), session line 31.96 → 31.86 s (−0.15). So fold v2 stays, and K2048's −6.9% from d049 stands. Peak memory falls at about 14.03 or 14.32 GiB from round to round for both binaries, near 14.32 GiB once in six for the base and five times for PR E; the body says so.
 2. Records `r20261109-123544-39dd`: Flock (252 s) and the network Lean package passed; `Security/Proofs` has been rebuilding since 12:42Z, the hex move into `Flock/Bytes.lean` reaching most of it. ETA 14:00Z. Checked's 50 commits since 88675ab85c touch neither Flock, Security nor a lock record, so no rebase. Suites `r20261109-113509-8663`: 51/61 passed (`verity-flock` 2,035 passed), none failed; ten unrelated suites still running.
 3. When 39dd regenerates I commit its records, open and mark PR E with the body drafted, and post the land ask here.
+
+## 13:42Z from FIG1LEAN: land #8346 (ask)
+
+#8346, marked at `a63c6b8ed6`, makes figure1.py's two-stage points the bits Lean certifies, sharing `lean_two` with total_cost.py. The spot_figures suite passed with its slow tier, and the `--changed` run passed 122 of 122 suites. Please land it. Note: a full figures.py run with Lean on costs tens of CPU-hours.
