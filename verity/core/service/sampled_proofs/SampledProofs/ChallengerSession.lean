@@ -1,7 +1,7 @@
 /-
 The challenger's session: its signed close over the release log, and the auditor's signed ledger of which session is a
 window's (`challenger.py`'s "The session's close" and "The auditor's ledger", which `tests/test_challenger_difftest.py`
-holds to this, the verifier of record).
+holds to this, the verifier).
 
 The challenger logs each root it receives and each release after it, a line each in canonical JSON (`releases.jsonl`, its
 head the commitment, its times integers), and when its session ends, however it ends, signs the log at its key's next
@@ -17,29 +17,33 @@ client closed, and the roots it received (`releasedRootsOf`), which reads past t
 `ChallengerTrees` reads them). A line is refused unless it is its own canonical JSON (`Flock.canon`) in at most
 `MAX_LOG_LINE` characters, so Lean's parser and Python's read every accepted line alike.
 
-The auditor's ledger names the one session each window's coins come from (`auditedSession`, `audited_session`): infra's
-`windows.jsonl`, a line per entry `{body, kind, prev, schema, seq, session, sig}` as the auditor writes it (`ledger_text`,
+The auditor's ledger names the one session each window's coins come from (`auditedSession`, `audited_session`): the
+auditor's `windows.jsonl`, a line per entry `{body, kind, prev, schema, seq, session, sig}` as the auditor writes it (`ledger_text`,
 `PyJson.canonical`), schema v1 or v2 and no v1 after a v2. A reserve records a window's request, its start and its expiry
 (`later`); an open names the window `{root}` (v1's `{commit, period}`), the challenger's host, the SHA-512 of its key's
 public key and in v2 its prover (`for`, else `by`), and after the ledger's first reserve binds its session's reserve
 (its seq), carries its request (`RESERVED`), is opened by its prover and inside its minutes; an end whether the
 session closed, the SHA-512 of each file it left, and in v2 the leaf its record was signed at, its commitment's root and
 how many hellos it refused; a lane's period is a `period-open` (its cap and circuit) and a `period-close` listing its
-windows with their outcomes. Each entry is signed under the challenger's key:
+windows with their outcomes; and a lane's `declaration` names the program it serves on a UTC day (`dayOf`: the days
+from 1970-01-01), stamped `declared_utc` at the challenger's clock. Each entry is signed under the challenger's key:
 
     message = SHA-512([LEDGER_ROLE] ‖ I ‖ [identity_digest_sha512(LEDGER_TAGS[schema], entry without sig)])
 
 The key is the one the window's deployment pins, from outside the ledger: an open or a period-open naming another key's
 SHA-512 is refused before any signature is read, so a ledger signed under its own key can't pin itself. Then the ledger
-is infra's `_verify` (`verifyLedger`): each entry chained (`seq` from 0, `prev` the SHA-512 of the previous line) and
+is the auditor's `_verify` (`verifyLedger`): each entry chained (`seq` from 0, `prev` the SHA-512 of the previous line) and
 signed at strictly increasing leaves (`u32(q)`, the signature's first four bytes), a root and a session opened once, a
 session ended once after its open with its record's leaf between the two and no entry's, and each period's close
 listing exactly its lane's windows, counted at their reserves and at most its cap, a reserve never opened with root
-null. The window's session must be opened under v2 and ended closed,
+null; then its days (`verifyDays`): each declaration v2 and of its form, a lane's day declared once, and once a lane has
+declared, each later open of it on a day it declared earlier, its `started_utc`'s. `declaredDay` (`declared_day`) reads a
+window's day, its open's, and its lane's declarations signed before that open: what a per-day check holds the window's
+program to. The window's session must be opened under v2 and ended closed,
 naming its record's leaf, commitment and refused hellos and sealing `SEALED_FILES`, so a ledger older than its end is
 refused. The session's files must be that session's (`sessionNamed`): its signed close names the ledger's session id,
 its record the open's host and was signed at that leaf over that commitment, and its release log and refused hellos are
-the ones the end sealed. `ledgerHead` takes infra's published heads: each checked, any two extending one another, the
+the ones the end sealed. `ledgerHead` takes the ledger's published heads: each checked, any two extending one another, the
 longest. A window counts toward its period only when the descriptor of the circuit its sessions prove hashes (SHA-512)
 to the circuit the period's open committed (`creditedSession`, `credited_session`). A session counts as main's code
 only when the host's pins log, whose first lines its open seals (`pins: {lines, sha512}`), pins the open's `pinned`
@@ -51,7 +55,8 @@ credits a session reads it there: `creditedSession` (the pin first, then the cir
 refusal throws Python's `CoinError` text.
 
 The difftest's pieces: `challenger_close` (`ChallengerClose.from_json` and `close_message`), `challenger_released`
-(`log_chain` and `released_roots_of`), `challenger_ledger` (`audited_session`), `challenger_head` (`ledger_head`),
+(`log_chain` and `released_roots_of`), `challenger_ledger` (`audited_session`), `challenger_day` (`declared_day`),
+`challenger_head` (`ledger_head`),
 `challenger_session` (`trusted_session_of`), `challenger_credited` (`credited_session`) and `challenger_pinned`
 (`pinned_session`), each `{"refused": why}` where Python refuses.
 -/
@@ -126,8 +131,12 @@ def LEDGER_FORM : String :=
   "key (key_sha512) and in v2 its opener (by, and for when opened for a lane); kind reserve, its body the " ++
   "window's request; kind end, its body whether its client closed the session (closed), the SHA-512 of each " ++
   "file the session left (files) and in v2 the leaf its record was signed at, if any; kind period-open, its " ++
-  "period, lane and key_sha512; or kind period-close, its period, lane, windows ({complete, root, session} " ++
-  "each, root null for a reserve never opened) and whether all are complete"
+  "period, lane and key_sha512; kind period-close, its period, lane, windows ({complete, root, session} " ++
+  "each, root null for a reserve never opened) and whether all are complete; or kind declaration, its body " ++
+  "a lane's day and the program it declared"
+def DECLARATION_FORM : String :=
+  "a declaration is v2 and names its prover, its program (a SHA-512 in lowercase hex), its blocks (a list of " ++
+  "strings), the pinned commit and a day no earlier than its declared_utc's"
 def END_FORM : String :=
   "a window's end names the leaf its record was signed at (record_leaf), its commitment's root (commitment), how " ++
   "many hellos it refused (refused_hellos) and seals " ++ ", ".intercalate SEALED_FILES
@@ -197,12 +206,13 @@ def ChallengerClose.toJson (c : ChallengerClose) : Json :=
     ("lines", Lean.toJson c.lines), ("session", Json.str c.session), ("signature", Json.str (Flock.hexOf c.signature))]
 
 /-- A release log line's event: the line, refused unless it is its own canonical JSON in at most `MAX_LOG_LINE`
-characters. -/
+characters. Its objects hold their keys in order (`sortedKeys`), as every parse's do. -/
 def event (line : String) : V Json := do
   unless line.length ≤ MAX_LOG_LINE do throw LOG_MALFORMED
   let .ok j := Flock.JsonParse.parse line | throw LOG_MALFORMED
   let .ok text := Flock.canon j | throw LOG_MALFORMED
   unless text == line do throw LOG_MALFORMED
+  unless sortedKeys j do throw LOG_MALFORMED
   pure j
 
 private def pairs : List String → List (String × String)
@@ -215,7 +225,7 @@ private def isTime (j : Json) : Bool := (nat? j).isSome
 `event` is `TREE_EVENT` or `OPEN_EVENT`. -/
 def treeLine (line : String) : Bool :=
   match event line with
-  | .ok j => getD j "event" == Json.str TREE_EVENT || getD j "event" == Json.str OPEN_EVENT
+  | .ok j => jsonStrIs (getD j "event") TREE_EVENT || jsonStrIs (getD j "event") OPEN_EVENT
   | .error _ => false
 
 /-- The roots the challenger received, by family in order. -/
@@ -357,6 +367,22 @@ def later (t : String) (minutes : Nat) : Option String := do
   let r := total % 1440
   return s!"{pad 4 y}-{pad 2 mo}-{pad 2 d}T{pad 2 (r / 60)}:{pad 2 (r % 60)}:{pad 2 s}Z"
 
+/-- `day_of(t)`: the UTC day of `t` (`later`'s form), the days from 1970-01-01 to its date (days from the civil date,
+the year counted from March so a leap day ends it); `none` when `t` isn't such a time or falls before 1970. -/
+def dayOf (t : Json) : Option Nat := do
+  let .str t := t | none
+  guard (later t 0 == some t)
+  let cs := t.toList
+  let y ← digitsAt cs 0 4
+  let m ← digitsAt cs 5 2
+  let d ← digitsAt cs 8 2
+  let y := if m ≤ 2 then y - 1 else y
+  let yoe := y % 400
+  let doy := (153 * ((m + 9) % 12) + 2) / 5 + d - 1
+  let days := y / 400 * 146097 + (yoe * 365 + yoe / 4 - yoe / 100 + doy)
+  guard (719468 ≤ days)
+  return days - 719468
+
 /-- `ledger_message(I, entry)`: what an auditor's ledger entry's `sig` signs, `entry` without its `sig`, under its schema's
 tag. -/
 def ledgerMessage (I : ByteArray) (entry : Json) : V ByteArray := do
@@ -412,22 +438,25 @@ private def isBodyOf (kind : String) (v2 : Bool) (b : Json) : Bool :=
     nameAt (getD b "period") && nameAt (getD b "lane") &&
       (match getD b "windows" with | .arr ws => ws.all isOutcome | _ => false) &&
       (match getD b "complete" with | .bool _ => true | _ => false)
+  | "declaration" => true
   | _ => false
 
 /-- `_ledger_entry`: a ledger line's entry when it is its own `ledger_text` (`PyJson.canonical`), escapes no surrogate,
 has only integers (`Flock.canon`), in at most `MAX_LEDGER_LINE` characters, is a record entry (`Core.Record.ofJson`)
-and is of the ledger's form: a schema of the ledger's, a session's entry naming its session and a period's none. -/
+and is of the ledger's form: a schema of the ledger's, a session's entry naming its session and a period's or a
+declaration's none. Its objects hold their keys in order (`sortedKeys`), as every parse's do. -/
 def ledgerEntry? (line : Json) : Option LedgerEntry := do
   let .str text := line | none
   guard (text.length ≤ MAX_LEDGER_LINE)
   let e ← (Flock.JsonParse.parse text).toOption
   guard ((PyJson.canonical e).toOption == some text && !escapesSurrogate text && (Flock.canon e).toOption.isSome)
+  guard (sortedKeys e)
   let r ← (Core.Record.ofJson e).toOption
   let _ ← ledgerTag? r.schema
   guard (4 ≤ r.sig.size)
   let session ← match r.kind, r.session with
     | "reserve", some s | "open", some s | "end", some s => if isSessionId s then some s else none
-    | "period-open", none | "period-close", none => some ""
+    | "period-open", none | "period-close", none | "declaration", none => some ""
     | _, _ => none
   guard (isBodyOf r.kind (r.schema == LEDGER_SCHEMA) r.body)
   pure ⟨e, text, r.schema, r.seq, r.prev, r.kind, session, r.sig, r.body⟩
@@ -495,6 +524,37 @@ private def inReserve (t : Json) (start expiry : String) : Bool :=
   match t with
   | .str t => later t 0 == some t && !decide (t < start) && !decide (expiry < t)
   | _ => false
+
+/-- `_declaration`: a declaration's body, its prover's names, its program's SHA-512 and its blocks' keys, the commit the
+challenger ran, and a natural `day` no earlier than the day of `declared_utc` (`dayOf`). -/
+private def isDeclaration (b : Json) : Bool :=
+  nameAt (getD b "by") && (match field? b "for" with | none => true | some j => nameAt j) &&
+    isDigest (getD b "program") && (match getD b "blocks" with | .arr ks => ks.all isStr | _ => false) &&
+    isDigest (getD b "pinned") 40 &&
+    match nat? (getD b "day"), dayOf (getD b "declared_utc") with
+    | some day, some t => t ≤ day
+    | _, _ => false
+
+/-- `_days`: `verifyLedger`'s second pass, over the entries its first accepted: each declaration v2 and of its form
+(`DECLARATION_FORM`), a lane's day declared once, and once a lane has declared, each later open of it on a day it
+declared earlier, its `started_utc`'s (`dayOf`). -/
+def verifyDays (es : Array LedgerEntry) : V Unit := do
+  let mut declared : Array (String × Nat) := #[]
+  for (e, i) in es.zipIdx do
+    let b := e.body
+    if e.kind == "declaration" then
+      unless e.schema == LEDGER_SCHEMA && isDeclaration b do throw s!"entry {i}: {DECLARATION_FORM}"
+      let some day := nat? (getD b "day") | throw s!"entry {i}: {DECLARATION_FORM}"
+      let lane := laneOf b
+      if declared.contains (lane, day) then throw s!"entry {i}: lane {lane} declares day {day} twice"
+      declared := declared.push (lane, day)
+    else if e.kind == "open" then
+      let lane := laneOf b
+      if declared.any (·.1 == lane) then
+        let some day := dayOf (getD b "started_utc")
+          | throw s!"entry {i}: session {e.session}'s open names no day (started_utc), and its lane {lane} declares its days"
+        unless declared.contains (lane, day) do
+          throw s!"entry {i}: session {e.session} opens on day {day}, which its lane {lane} hasn't declared"
 
 /-- `_verify` (module docstring), over entries `ledgerEntry?` read: the ledger's windows and periods, or the first entry
 that fails, in `_verify`'s words. -/
@@ -603,6 +663,7 @@ def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win �
           throw s!"entry {i}: period {name}'s close doesn't list exactly its windows and their outcomes"
         periods := periods.modify k fun p => { p with closed := true }
         current := current.filter (·.1 != lane)
+    | "declaration" => pure ()
     | kind => throw s!"entry {i}: kind {pyRepr kind}"
     leaves := leaves.push q
     prev := Flock.hexOf (Flock.Sha512.hash e.text.toUTF8)
@@ -612,6 +673,7 @@ def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win �
       | some y => if x.1 < y.1 then some x else some y
       | none => some x) none then
     throw s!"entry {i}: record leaf {r} is also an entry's"
+  verifyDays es
   return (wins, periods)
 
 /-- `_checked`: `ledger` (its lines) as `verifyLedger` reads it under the pinned key `key`, each line first refused unless
@@ -685,11 +747,31 @@ def auditedOpen (ledger window : Json) (key : ChallengerKey) : V (Audited × Jso
 def auditedSession (ledger window : Json) (key : ChallengerKey) : V Audited :=
   return (← auditedOpen ledger window key).1
 
+/-- `declared_day` (module docstring): the day the auditor's ledger `ledger` (its lines) opens `window` (`{root}`) on
+under the window's pinned key `key`, the UTC day of its v2 open's `started_utc` (`dayOf`), and the declarations its lane
+signed before that open, each `{blocks, day, program}`: `{day, declarations}`, what a per-day check holds the window's
+program to. -/
+def declaredDay (ledger window : Json) (key : ChallengerKey) : V Json := do
+  unless isWindow window do throw s!"the window's identity is malformed: {WINDOW_FORM}"
+  let (wins, _) ← checked ledger key
+  let root := strOf (getD window "root")
+  let some w := wins.find? (·.root == root) | throw "the auditor's ledger opens no challenger session for this window"
+  let o := w.opened
+  let some day := (if o.schema == LEDGER_SCHEMA then dayOf (getD o.body "started_utc") else none)
+    | throw (s!"the auditor's ledger opens this window's session {o.session} on no day: its open is not v2 " ++
+        "or names no started_utc of 1970 or later")
+  let lane := laneOf o.body
+  let lines := match ledger with | .arr ls => ls.toList | _ => []
+  let mine := (lines.filterMap ledgerEntry?).filter fun e =>
+    e.kind == "declaration" && e.seq < o.seq && laneOf e.body == lane
+  return Json.mkObj [("day", Lean.toJson day), ("declarations", Json.arr (mine.toArray.map fun e =>
+    Json.mkObj [("blocks", getD e.body "blocks"), ("day", getD e.body "day"), ("program", getD e.body "program")]))]
+
 /-- `extends`: whether `ledger` is `published` with entries appended. -/
 def extendsHead (published ledger : Array Json) : Bool :=
   published.size ≤ ledger.size && ledger.extract 0 published.size == published
 
-/-- `ledger_head` (module docstring): the auditor's ledger as infra published it, every head of `heads` (each its lines;
+/-- `ledger_head` (module docstring): the auditor's ledger as its operator published it, every head of `heads` (each its lines;
 `null` when the verifier has none) passing `checked` under `key`, any two extending one another, and of them the first
 longest. -/
 def ledgerHead (heads : Json) (key : ChallengerKey) : V Json := do
@@ -784,13 +866,13 @@ def pinsReason (session : String) (opened pins : Json) : Option String := Id.run
     | return some (s!"the auditor's ledger's open of session {session} seals no pins log (pins: " ++
         "{lines, sha512}): open the window on a host whose gate seals its pins log in each open")
   if ls.size < n then
-    return some s!"the host's pins log has {ls.size} lines, fewer than the {n} the open of session {session} sealed: take infra's newest published pins log"
+    return some s!"the host's pins log has {ls.size} lines, fewer than the {n} the open of session {session} sealed: take the auditor host's operator's newest published pins log"
   let lines := (ls.extract 0 n).toList.map strOf
   unless getD sj "sha512" == Json.str (logDigest lines) do
     return some s!"the host's pins log is not the one the open of session {session} sealed: its first {n} lines were edited or rewritten"
   let pinned := strOf (getD opened "pinned")
   unless (commits.extract 0 n).contains pinned do
-    return some s!"session {session} ran commit {pinned}, which the host's pins log doesn't record as a commit of main's history: repin the challenger host to a commit origin/main contains (vy-challenger-pin) and rerun the window there"
+    return some s!"session {session} ran commit {pinned}, which the host's pins log doesn't record as a commit of main's history: repin the challenger host to a commit origin/main contains (with its pin command) and rerun the window there"
   return none
 
 /-- `first_parent_reason` (module docstring): why session `session`, run from commit `pinned`, didn't run a tree main's
@@ -807,7 +889,7 @@ def firstParentReason (session pinned : String) (main : Json) : Option String :=
     else some (s!"session {session} ran commit {pinned}, which the host's pins log records but which is not on " ++
       "main's first-parent line in the verifier's copy (`git rev-list --first-parent origin/main`): a branch commit " ++
       "merged into main is in main's history but no tree main's check ran on; repin the challenger host to a commit " ++
-      "on main's first-parent line (vy-challenger-pin) and rerun the window there")
+      "on main's first-parent line (with its pin command) and rerun the window there")
   | _ => some malformed
 
 /-- `pinned_session` (module docstring): `auditedSession`, when the host's pins log `pins` records the open's pin
@@ -873,6 +955,12 @@ def ledgerPiece (j : Json) : V Json := do
   request j #["key", "ledger", "window"]
   pure <| refusing do
     return auditedJson (← auditedSession (getD j "ledger") (getD j "window") (← ChallengerKey.ofJson (getD j "key")))
+
+/-- `{"key", "ledger", "window"}` to `declared_day`'s `{day, declarations}`. -/
+def dayPiece (j : Json) : V Json := do
+  request j #["key", "ledger", "window"]
+  pure <| refusing do
+    declaredDay (getD j "ledger") (getD j "window") (← ChallengerKey.ofJson (getD j "key"))
 
 /-- `{"descriptor", "key", "ledger", "main", "pins", "window"}` to `credited_session`'s `Audited`, the descriptor in
 lowercase hex. -/

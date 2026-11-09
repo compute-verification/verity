@@ -1,8 +1,25 @@
 module
 
 public import Proofs.Flock.VBridge.Keyed
-public import Proofs.Flock.Soundness.ExecCircuit
-public import Flock.RecOpen
+public import Flock.HmRow
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.ExecCircuit
+import VCVio.Prelude.Core
 
 /-!
 # The verifier's opening unit is V*'s laid-out opening
@@ -254,7 +271,7 @@ theorem length_recOpenOuts (LANES H : ℕ) (p : Ports) (hacc : p.acc = 1024) : (
 
 /-! ## The verifier's unit -/
 
-/-- **The verifier's laid-out opening computes the verifier of record's climb and the opening's consistency term**:
+/-- **The verifier's laid-out opening computes the verifier's climb and the opening's consistency term**:
 `laid_recOpen` at `RecOpen.unitLaid`, M0's ports one 16-bit port per word. Whenever its rows hold at the column values
 `v`, if the `row` columns hold the bytes of the `LANES` elements `r`, the `aux` columns the 64-byte siblings `ss` one after
 another (`64 max(1, ⌈H / 2⌉)` words), the `acc` columns two elements `a` and then 96 bytes `rest`, the `coef` columns

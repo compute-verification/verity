@@ -18,7 +18,7 @@ Sites (`SITE_KINDS`):
                     (`seed`); launch_proxy = a host constant read from a kernel launch (`splits`)
   registered_input  a weight of record: hashed once at registration (`register_weights`); analytic_table = a derived table the Match phase
                     dumps and checks analytically (`analytic_table_of_buffer`)
-  prescribed        no runtime producer: the Value is materialised by rule (a padding step's identities, `padding_steps`)
+  prescribed        no runtime producer: the Value is materialised by rule (a padding step's identities)
 
 Policy (`POLICY`): a Value with one legal site takes it; with several, producer output first; consumer input when the producer is a
 PROMOTED interior Call (a pre-flip v1 manifest's row: its output is no module's return, `manifest_format.promoted_observation`); a Value with no legal site is
@@ -51,13 +51,15 @@ ROUTE_OF_FAMILY = {"instance_outputs": "module_output", "input_token_ids": "modu
                    "moe_block_stream": "moe_tap", "tp_rank_partials": "tp_tap",
                    "sampled_token_ids": "runner_return", "sampler_seed": "runner_state", "sampler_splits": "launch_proxy",
                    "weights": "registered_input", "norm_scales": "norm_tap", "router_softmax": "router_tap", "vocab_range": "vocab_tap",
-                   "scale_products": "scale_tap", "call_boundaries": "call_boundary_tap"}
+                   "scale_products": "scale_tap", "call_boundaries": "call_boundary_tap", "run_values": "run_tap"}
+#: the routes whose members are one per (layer, step) geometry or position: one Value class per op_path, member `*`
+FOLDED_ROUTES = ("hidden_tap", "run_tap")
 MODULE_ROUTES = ("module_output", "module_input")                        # the routes whose sites are module boundaries (confirm_modules)
 HIDDEN_TAP_OF_FAMILY = {"fa2_hidden_m1_stream": "fa2.m1", "fa3_hidden_m1_stream": "fa3.m1"}   # hidden_tap route -> the kernel tap
 MOE_FAMILY = "moe_block_stream"
 TP_FAMILY = "tp_rank_partials"
 WEIGHTS_FAMILY = "weights"
-#: manifest `boundary_class` / `enablement` values that mean "materialised by enablement, no runtime producer" (padding_steps)
+#: manifest `boundary_class` / `enablement` values that mean "materialised by enablement, no runtime producer"
 PRESCRIBED_ENABLEMENT = frozenset({"padding", "inactive"})
 
 
@@ -236,7 +238,7 @@ def _identity_key(r: Mapping[str, Any]) -> tuple:
 
 def value_classes(manifest: Mapping[str, Any], padding_identities: Iterable[Mapping[str, Any]] = ()) -> list[ValuePlan]:
     """One Value class per (op_path, output_member, family).  `padding_identities`: the manifest identities OUTSIDE their request's executed
-    prefix of record (`padding_steps.padding_steps_of_record`, a runtime fact known at finalize): those are PRESCRIBED -- materialised by
+    prefix of record (a runtime fact known at finalize): those are PRESCRIBED -- materialised by
     enablement, no runtime producer.  A row may also declare it (`boundary_class: padding`)."""
     rows = manifest.get("identities") or manifest.get("entries") or manifest.get("rows") or []
     padded = {_identity_key(p) for p in padding_identities}
@@ -245,8 +247,8 @@ def value_classes(manifest: Mapping[str, Any], padding_identities: Iterable[Mapp
         fam = str(r.get("family") or "")
         op = str(r.get("op_path"))
         member = str(r.get("output_member", "out"))
-        if ROUTE_OF_FAMILY.get(fam) == "hidden_tap":
-            member = "*"                                          # the geometry name is per (layer, step); one Value class per tap site
+        if ROUTE_OF_FAMILY.get(fam) in FOLDED_ROUTES:
+            member = "*"
         key = (op, member, fam)
         v = out.get(key)
         if v is None:
@@ -330,6 +332,17 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Acquisitio
             refuse("native_tap", module, "*", f"attention module {anchor} is not a module of the runtime tree")
         else:
             refuse("native_tap", module, "*", "the manifest row names no `attention_module` to anchor the tap on")
+        return legal, refused
+
+    if route == "run_tap":
+        anchor = v.anchor
+        if anchor and rt.has_module(anchor):
+            legal.append(AcquisitionSite("native_tap", module, "*", "n/a", f"a value the served run decides for the Calls of module {anchor}: the "
+                              "attention source at its indexer (`commit.committer.run_values`; manifest `attention_module`)"))
+        elif anchor:
+            refuse("native_tap", module, "*", f"attention module {anchor} is not a module of the runtime tree")
+        else:
+            refuse("native_tap", module, "*", "the manifest row names no `attention_module` to anchor the run values on")
         return legal, refused
 
     if fam == MOE_FAMILY:
@@ -515,7 +528,7 @@ def acquisition_plan(manifest: Mapping[str, Any], correspondence: AcquireCorresp
         residuals = residuals_of(values, rt, tabs)
     else:
         residuals = []
-    notes = ["every identity of a Value at a step >= its request's executed prefix is a PRESCRIBED materialisation (padding_steps: enablement, no runtime producer); "
+    notes = ["every identity of a Value at a step >= its request's executed prefix is a PRESCRIBED materialisation (enablement, no runtime producer); "
              "the plan's runtime sites are for the executed steps"]
     pdig = str(manifest.get("program_digest") or "")
     mdig = str(manifest.get("manifest_digest") or "")

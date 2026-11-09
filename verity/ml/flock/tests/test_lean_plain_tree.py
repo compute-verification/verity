@@ -6,10 +6,10 @@ challenger sampled and opened (`flock-circuit serve --tree-from`, the prover che
 
 The session's coins are the ones the challenger's release log shows it sampled and opened. The compiled Lean verifier
 accepts it with the verifier's own program and partition, the form `flock_verify_sound`'s plain hidden-output branch
-covers at the subset law (`FailClosed.SoundExecH` at its subset sample design), and refuses it on seed coins at S2/R7
+covers at the subset sampling design (`FailClosed.SoundExecH` at its subset sample design), and refuses it on seed coins at S2/R7
 (`--coins` names no other source), a second time in one run for its reused session key, with a byte of a proof changed, or with its record's sample a
-bernoulli sample of the same units (no claim draws by that law). It is the test of a plain session at the subset law on
-the verifier of record; the `#guard`s of `Flock/Test/PlainHidden.lean` hold the rule itself.
+bernoulli sample of the same units (no claim samples by that sampling design). It is the test of a plain session at the subset sampling design on
+the verifier; the `#guard`s of `Flock/Test/PlainHidden.lean` hold the rule itself.
 
 It is a fetched fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs, so a missing fixture
 fails these tests rather than skipping them. Each verify sets up an m = 22 table, so the module is slow. It catches a
@@ -28,7 +28,7 @@ from verity.ml.circuits.codec import canonical_json, encode_program
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
-#: ``stage/`` (circuit.txt, pub-32.bin, program.json, partition.json), ``session/`` (the drawn plain session's
+#: ``stage/`` (circuit.txt, pub-32.bin, program.json, partition.json), ``session/`` (the sampled plain session's
 #: record and proofs), ``live.json`` (the prover's LIVE record) and ``challenger/`` (its record and release log)
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "plain-tree"
 SPEC = {"block": 512, "rounds_log": 9, "scheme": "coin-tree/hm96-sha512/v2", "streams": ["session", "circuit/rep0", "circuit/rep1"]}
@@ -60,10 +60,11 @@ def test_the_sessions_coins_are_the_challengers(fx):
 
     trees = C.coin_trees_of(R.log_lines(fx / "challenger" / R.RELEASES))
     rec = json.loads((fx / "session" / "session.json").read_text())
-    assert len(trees) == 1 and C.sessions_tree_reason(trees, [("session", rec)]) is None
+    tables = dict.fromkeys(rec["link"]["root_b"])
+    assert len(trees) == 1 and C.sessions_tree_reason(trees, [("session", tables, rec)]) is None
     c = rec["link"]["points"][0][0]
     rec["link"]["points"][0][0] = ("0" if c[0] != "0" else "1") + c[1:]
-    assert "link points are not the coins" in C.sessions_tree_reason(trees, [("session", rec)])
+    assert "link points are not the coins" in C.sessions_tree_reason(trees, [("session", tables, rec)])
 
 
 def test_the_plain_session_on_the_tree_at_a_subset_draw_is_accepted(fx):

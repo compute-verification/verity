@@ -15,9 +15,9 @@ by the remote bandwidth audit's P2 session on PoUS's store (`RemoteAudit.P2Proto
 (`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`). `Core.Composition.tiedSameB` composes them on the caller's
 blobs: every subprotocol accepts or onsite doesn't, and any subprotocol's rejection rejects onsite whatever the others
 answer. The policy's commitment and sampled proofs' are the run's registration record (in either form, the one-stage
-one), and both
-must commit to the same one: two records' digests reject onsite whatever the subprotocols answer. PoUS and the remote bandwidth audit must
-also be on one store (`store`): two stores reject onsite unless it rejects already.
+one), and both must commit to the same one; every window of the period must name that record as its Commit record,
+remote's tie (`Core.Remote.windows`). Two records reject onsite whatever the subprotocols answer. PoUS and the remote
+bandwidth audit must also be on one store (`store`): two stores reject onsite unless it rejects already.
 
 A stated exception: the policy's v0 publishes the declared division and each inference block's profile (its gates and
 fresh-input bits) in the clear. Onsite composes it for one run of record only, as an exception to
@@ -29,6 +29,7 @@ module
 public import CoreComposition.Blobs
 public import CoreComposition.Cases
 public import CoreComposition.Tie
+public import CoreRemote
 public import MemoryChallenger.WipeProtocol
 public import NciCheck.Protocol
 public import NetworkCheck.Period
@@ -41,6 +42,7 @@ public import VStarRecursive.Sampled
 meta import CoreComposition.Blobs
 meta import CoreComposition.Cases
 meta import CoreComposition.Tie
+meta import CoreRemote
 meta import MemoryChallenger.WipeProtocol
 meta import NciCheck.Protocol
 meta import NetworkCheck.Period
@@ -75,7 +77,11 @@ def store : Tie :=
       (RemoteAudit.P2Protocol.protocol.id,
         fun k => (RemoteAudit.P2Protocol.decodeCommitment k.commitment).toOption.map ([·.held.reg.root]))]⟩
 
-def protocol : BlobProtocol := tiedSameB "verity/onsite/v0" tied [store] components
+/-- Onsite's ties: every window of PoUW's period on the policy's record (remote's, `Core.Remote.windows`), and PoUS and
+the remote bandwidth audit on one store. -/
+def ties : List Tie := [Core.Remote.windows, store]
+
+def protocol : BlobProtocol := tiedSameB "verity/onsite/v0" tied ties components
 
 /-- A case its subprotocol's own `answer` refuses: empty parameters, commitment and evidence. -/
 private def refused (P : BlobProtocol) : Case :=
@@ -90,6 +96,7 @@ private def contains (s pat : String) : Bool := (s.splitOn pat).length > 1
 #guard components.map (·.id) == ["verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run",
   "verity/pouw/period/v1", "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/v1", "verity/wipe/v0"]
 #guard tied.all fun s => (components.map (·.id)).contains s
+#guard ties.all fun t => t.names.all fun n => (components.map (·.id)).contains n.1
 
 -- every subprotocol refuses its case: onsite rejects on each, with or without blobs, and makes nothing public
 private def allRefused : Answer := answer (components.map refused)
@@ -111,6 +118,14 @@ private def allRefused : Answer := answer (components.map refused)
 #guard (answer ((components.take 5).map refused ++
     [refused SampledProofs.OneStageZk.protocol, refused MemoryChallenger.WipeProtocol.protocol])).reason ==
   some "params: verity/sampled-proofs/one-stage/v2 is not a component of this composition"
+-- one-stage v1, whose verdicts are the evidence's, is refused by name: a one-stage statement naming no proofs is v1's,
+-- and onsite rejects on it with sampled proofs' refusal (`VStar.Recursive.Sampled.V1_REFUSED`)
+private def v1 : Answer := answer (components.map fun P =>
+  if P.id == VStar.Recursive.Sampled.protocol.id then { refused P with params := "{\"form\":\"one-stage\",\"law\":{}}" }
+  else refused P)
+#guard v1.verdict == .reject && v1.published.isNone
+#guard (v1.reason.map (contains · (s!"verity/sampled-proofs/v1 reject: params: the parameters name no proofs: " ++
+  VStar.Recursive.Sampled.V1_REFUSED))).getD false
 
 -- the policy and sampled proofs committing to one record leave each subprotocol to answer as itself; two records
 -- reject onsite, naming both, whatever the subprotocols answer
@@ -132,5 +147,45 @@ private def committed (policy audit : ByteArray) : Answer :=
 #guard (committed (record "y") (record "x")).reason.map
   (contains · ", verity/sampled-proofs/v1 committed ") == some true
 #guard !((committed (record "y") (record "x")).reason.map (contains · "reject: params")).getD true
+
+-- every window of PoUW's period on the policy's record: one record leaves the verdict to the subprotocols, and a window
+-- on another record rejects onsite, naming both, whatever the subprotocols answer but a rejection, which stands
+/-- A registration record every record reader decodes, a window's Commit record among them. -/
+private def registration (n : Nat) : String := s!"\{\"format\":\"verity/registration/v2\",\"n\":{n},\"registered\":[]}"
+
+private def windowOn (r : String) : String := s!"\{\"commit\":\"{Flock.hexOf r.toUTF8}\"}"
+
+/-- Onsite's cases, each refused, with the policy's committing to `policy` and the period's windows on the records
+`rs`. -/
+private def windowsOn (policy : String) (rs : List String) : List Case :=
+  components.map fun P =>
+    if P.id == NciCheck.Protocol.protocolId then { refused P with commitment := policy.toUTF8 }
+    else if P.id == PouwCheck.Period.protocolId then
+      { refused P with evidence := ("{\"pins\":[],\"windows\":[" ++ ",".intercalate (rs.map windowOn) ++ "]}").toUTF8 }
+    else refused P
+
+/-- Why onsite's ties reject the outcome `o` its subprotocols reached on `windowsOn policy rs`; `none` when they hold
+it. -/
+private def stray (policy : String) (rs : List String) (o : Outcome Keyed Keyed) : Option String :=
+  match holdTies ties (windowsOn policy rs) o with
+  | .reject r => some r
+  | _ => none
+
+private def answered : List (Outcome Keyed Keyed) := [.accept [] [], .undecided "u"]
+
+#guard answered.all fun o => stray (registration 0) [registration 0, registration 0] o == none
+-- a window on another record
+#guard answered.all fun o => (stray (registration 0) [registration 0, registration 1] o).map
+  (·.startsWith "record: verity/inference-only/v0 committed ") == some true
+#guard answered.all fun o => (stray (registration 0) [registration 0, registration 1] o).map
+  (contains · ", verity/pouw/period/v1 committed ") == some true
+-- every window on a record that isn't the policy's
+#guard answered.all fun o => (stray (registration 1) [registration 0] o).isSome
+-- a window naming no Commit record leaves the period to refuse it
+#guard answered.all fun o => stray (registration 0) [registration 0, "{}"] o == none
+-- a subprotocol's rejection stands, and onsite's answer on those cases is its subprotocols' refusals
+#guard stray (registration 0) [registration 1] (.reject "r") == some "r"
+#guard (answer (windowsOn (registration 0) [registration 1])).reason.map
+  (·.startsWith "verity/certifier/v0 reject: params: ") == some true
 
 end Core.Onsite

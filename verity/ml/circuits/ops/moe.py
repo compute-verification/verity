@@ -164,7 +164,7 @@ def _f32_mul_ptx(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 
 def _sample(gemm: bool, routed: bool):
     """`self_check`'s instances: `sample_tc`'s operand words for x and the selected rows (an eighth exact cancellations),
-    the other experts' rows drawn alike, e in [0, E) seven times in eight, else an edge id (E, -1, 2^31, a uniform word);
+    the other experts' rows sampled alike, e in [0, E) seven times in eight, else an edge id (E, -1, 2^31, a uniform word);
     g an accumulator word."""
 
     def sample(rng: np.random.Generator, n: int, params, *, E: int, K: int, N: int = 1, **_: Any) -> list[np.ndarray]:
@@ -191,7 +191,7 @@ def _sample(gemm: bool, routed: bool):
 def _register() -> None:
     from verity.ml.circuits.codec import register_lazy_family
     from verity.ml.circuits.evaluation import register_kernel
-    from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16
+    from verity.ml.circuits.silicon.models import AMPERE_BF16_M16N8K16
     from verity.ml.circuits.silicon.total import HOPPER_BF16_WGMMA_K16
     from verity.ml.kernels import tc as KT
 

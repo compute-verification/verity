@@ -1,5 +1,5 @@
 /-
-# The firewall's session loop, in Lean (live PROTOCOL.md §9, §10)
+# The ZK server's session loop, in Lean (live PROTOCOL.md §9, §10)
 
 A firewalled prover's sessions go through one `flock-firewall session` process, which owns the auditor's connection. The
 prover's workers connect to it as they would to the auditor (`TcpTransport`, the wire's frames `u32le(len) ‖ bytes`), and
@@ -7,17 +7,17 @@ each connection is one session, relayed on a connection of its own to the audito
 every frame that leaves is the loop's own encoding of what it decided (`roundFrame`, `commitFrame`, `State.wire`), never
 the prover's bytes:
 
-* `Register` leaves as `REGISTER`, and its answer (`Resp::Draw`) is the session's draw (`State.answer`).
-* `Hello`: the prover's text is dropped, and what leaves is the Lean `Hello` at that draw (`Hello.msg`), at a nonce this
-  process draws from the operating system (`State.sendHello`). The coin check reads the session's tree, link points and
+* `Register` leaves as `REGISTER`, and its answer (`Resp::Draw`) is the session's sample (`State.answer`).
+* `Hello`: the prover's text is dropped, and what leaves is the Lean `Hello` at that sample (`Hello.msg`), at a nonce this
+  process samples from the operating system (`State.sendHello`). The coin check reads the session's tree, link points and
   nonce from the setup's values (`helloOf`), never from the text. A setup whose sizes are past what the loop's frames
   read (`sizesOk`) is refused there: no `Hello` leaves, and the session is stopped.
 * `Hello`'s answer must be the coin tree's root and session key (`Coins.Release.start`), under a tree whose streams are
   the session's (`streamsOk`), and it never reaches the prover: what the prover receives in its place is the loop's id
-  for the session, drawn from the operating system with the `Hello`'s nonce (`idFrame`), by which the session is named
+  for the session, sampled from the operating system with the `Hello`'s nonce (`idFrame`), by which the session is named
   on the loop's frames port once its answer checked (`Level0.nameOf`).
 * `Commit` and `Round` leave only as the schedule's next opening (`State.request`, `reqAt`: the session stream's at
-  `Commit`, its count `Hello`'s link points', then each rep stream's rounds in order at the counts `Zk.verifyRep` draws,
+  `Commit`, its count `Hello`'s link points', then each rep stream's rounds in order at the counts `Zk.verifyRep` samples,
   `planOf`), never at a place the prover names. The coins answered must open the committed tree there
   (`Coins.Release.open`), and only the coins, stripped of their opening, reach the prover (`Coins.frame`). An answer
   that is not coins stops the session, refused (`State.noCoins`), as a refused opening does.
@@ -28,25 +28,26 @@ the prover's bytes:
   prover put after its round is dropped): the algebraic phase's scheduled round, the opening's (the loop's own
   `Drive.openStep`, on the session's `Commit` coins and the rep's salts for levels ≥ 1), then the inner proof's, the
   frame's own on the rounds the loop's finish computed and handed the loop's frames before the prover relays them
-  (`Frame.innerSched`, `Frames.Sessions.innerRound`). At an inner round the finish has not computed, the frame takes no
-  device round: whatever the prover relays fails, the frame's own round stands in, and the rep stops
-  (`Frames.roundStep`). Its coins, once opened, are the frame's (`Frames.feedOf`, `Frames.coins`), and the prover
-  receives them only once the frame took them.
+  (`Frame.innerSched`, `Frames.Sessions.innerRound`). An inner round the finish has not computed is refused, whatever
+  the prover relays (`Frames.roundPlace`). Nor does any rep's frame take a device round once a rep of the session
+  stopped (`Frames.Sessions.stopped`): the session stops at its first failure, every rep with it. Its coins, once
+  opened, are the frame's (`Frames.feedOf`, `Frames.coins`), and the prover receives them only once the frame took
+  them.
 * Each table's level 0 is the loop's: on its frames port the prover hands the loop every table's packed witness in one
-  request, and only then does the loop draw each table's mask-slot words, level-0 hiding and salts from the operating
+  request, and only then does the loop sample each table's mask-slot words, level-0 hiding and salts from the operating
   system, write the words into the witness's mask slot, and commit level 0 on them (`level0`, `Level0.draw`), for the
   live session the request names (by the loop's id for it, `Level0.nameOf`), at each statement's `m`, once a session: a
   second request, or one without a witness for each table, is refused (`Level0.Slots.draw`), and no rep's frame starts
-  before it (`Frames.startRep`). So every witness is the prover's before any of the session's draws reaches it, as the
-  model fixes the witness before the tape. A `Commit`'s roots leave only as each table's one draw for
+  before it (`Frames.startRep`). So every witness is the prover's before any of the session's samples reaches it, as the
+  model fixes the witness before the tape. A `Commit`'s roots leave only as each table's one sample for
   its own session, at its table's `m` (`Level0.commit`), and the `Commit` that leaves is the
   loop's (`commitFrame`): `root_F` the session's Σ, the roots its tables' level 0 now bound, and no public words. Every
-  level 0 drawn for a session, bound or not, is gone when it ends (`Level0.Slots.close`).
+  level 0 sampled for a session, bound or not, is gone when it ends (`Level0.Slots.close`).
 * `Finish` leaves only once the schedule's last opening has (`State.request`), as `FINISH`. The proof files are the
   loop's own finish's, a connection to the frames port (`Finish.serveLoop`): it reads each table's level 0 from the
-  loop's `Level0` of the table's root, draws each rep's salts for levels ≥ 1 itself, only once the rep's frame took its
+  loop's `Level0` of the table's root, samples each rep's salts for levels ≥ 1 itself, only once the rep's frame took its
   algebraic phase's last coins (`Finish.Own.algebraEnded`) and once a rep on any of the session's finishes, which the
-  prover's trees then take, proves each rep with its frame's draws, which never reach the prover (`Finish.drawsOf`), refuses a rep's request whose
+  prover's trees then take, proves each rep with its frame's samples, which never reach the prover (`Finish.drawsOf`), refuses a rep's request whose
   passed values, extra claims or coins are not its frame's (`Frames.ownOf`, `Finish.RepIn.differs`) or whose `final_c`
   its passed values do not fix (`Finish.consWhy`), and coins answering its
   inner proof's rounds that are not the stream's (`Finish.coinsWhy`), refuses a table's level-0 data from the host
@@ -88,7 +89,6 @@ public import Flock.Firewall.SessionPlan
 public import Flock.Firewall.Frames
 public import Flock.Firewall.Level0
 public import Flock.Firewall.Finish
-public import Flock.Firewall.Salts
 public import Std.Async.TCP
 public import Std.Async.DNS
 public import Flock.JsonParse
@@ -202,7 +202,7 @@ def openFrame (stream label : String) : ByteArray :=
 def proofFrame (table : String) (rep : Nat) (b : ByteArray) : ByteArray :=
   ByteArray.mk #[5] ++ field table.toUTF8 ++ u32le rep ++ field b
 
-/-- A session as the loop has seen it: the auditor's draw, whether the `Hello` left, what the coin check reads of it
+/-- A session as the loop has seen it: the auditor's sample, whether the `Hello` left, what the coin check reads of it
 (`helloOf`), its statement's openings (`planOf`) and its rep streams' domain frames, the coin tree once `Hello`'s answer
 checked, and the refusal that stopped it. -/
 structure State where
@@ -351,7 +351,7 @@ def State.noCoins (S : State) (what : String) (a : ByteArray) : State × ByteArr
 /-- `Resp::Coins`' frame of the loop's id `id` for a session: what the prover receives for `Hello`'s answer. -/
 def idFrame (id : ByteArray) : ByteArray := ⟨(Coins.frame (id.size / 16) id.data.toList).toArray⟩
 
-/-- **What the prover receives** for the auditor's answer `a` to a request of kind `k`, and the session after: the draw
+/-- **What the prover receives** for the auditor's answer `a` to a request of kind `k`, and the session after: the sample
 taken from `Register`'s answer, the loop's id `id` for the session once `Hello`'s answer checked (`idFrame`), a round's
 coins opened (`State.coins`), a `Commit`'s or a `Round`'s answer that is not coins the session's stop
 (`State.noCoins`); anything else as it is. -/
@@ -821,18 +821,18 @@ where
     | m :: len :: rest, acc => do go rest (acc.push (← m.toNat?, ← len.toNat?))
     | _, _ => none
 
-/-- **Every table's level 0, drawn by the loop once it holds every table's witness**, for the request line `line` on
+/-- **Every table's level 0, sampled by the loop once it holds every table's witness**, for the request line `line` on
 `ch`: `level0 SESSION M₀ LEN₀ … M_{J−1} LEN_{J−1}`, a pair for each of the session's `J` tables in table order, followed
 by each table's packed witness in that order, `LEN_j` bytes at its statement's `M_j`. Only once it has read every
-table's witness does the loop draw anything: for each table the mask slot's words, which it writes into the witness's
+table's witness does the loop sample anything: for each table the mask slot's words, which it writes into the witness's
 mask slot (`Frames.Sessions.maskOf`, `Frame.MaskSlot.fill`), and the hiding it commits level 0 on (`Level0.draw`). It
 answers each table in order `ok N R` followed by the `N` bytes of the mask slot's words, the hiding and the root, the
-last `R` of them (`Level0.drawsOf`). So no table's witness can read any of the session's draws: the prover has handed
+last `R` of them (`Level0.drawsOf`). So no table's witness can read any of the session's samples: the prover has handed
 every witness before it receives any of them, and before any rep's frame starts (`Frames.startRep`). The tables'
 `Level0`s are kept in `l0s` for the live session named `SESSION` (`Level0.nameOf`: the hex of the loop's id for it)
 until that session ends, and only that session's `Commit` may carry their roots, each as its table's. A session's level 0
-is drawn once: a second request, one whose witnesses are not one for each of the session's tables, or one at another
-`M`, is refused, and nothing drawn for it is kept or answered (`Level0.Slots.draw`, in the one update that keeps the
+is sampled once: a second request, one whose witnesses are not one for each of the session's tables, or one at another
+`M`, is refused, and nothing sampled for it is kept or answered (`Level0.Slots.draw`, in the one update that keeps the
 first). Anything else is answered `err WHY`. -/
 def level0 (ch : Frame.Chan) (reg : IO.Ref Frames.Sessions) (l0s : IO.Ref Level0.Slots) (line : String) : IO Unit := do
   let say := fun (s : String) => ch.write (s ++ "\n").toUTF8
@@ -873,10 +873,10 @@ def level0 (ch : Frame.Chan) (reg : IO.Ref Frames.Sessions) (l0s : IO.Ref Level0
 `Frames.startRep`, the frame then the loop's own in `reg`); a rep's next place or the values its frame took (`place …`,
 `vals …`, `Frames.ask`, which only reads `reg`); a session's tables' level 0 (`level0 …`, `level0`); or a session's
 proof files on the tables' level 0 in `l0s` (`finish …`, `Finish.serveLoop`, at the statement `S`), each rep's salts for
-levels ≥ 1 kept in `reg` for its opening, once (another finish's draw of them is refused), its inner proof's rounds for
+levels ≥ 1 kept in `reg` for its opening, once (another finish's sample of them is refused), its inner proof's rounds for
 the frame to release
 (`Frames.Sessions.innerRound`), its proof file for the session's `Proof` (`Frames.Sessions.file`), its proofs on its
-frame's draws, and its requests refused unless they carry the values its frame took, the session's extra claims and the
+frame's samples, and its requests refused unless they carry the values its frame took, the session's extra claims and the
 coins the stream answered (`Frames.ownOf`).
 Anything else is answered `err WHY`. -/
 def frames (S : Hello.Setup) (specs : Hello.Specs) (srv : Socket.Server) (reg : IO.Ref Frames.Sessions)
@@ -911,40 +911,22 @@ def frames (S : Hello.Setup) (specs : Hello.Specs) (srv : Socket.Server) (reg : 
         try ch.write s!"err a request `{first.trim}`\n".toUTF8 catch _ => pure ()
       try (c.shutdown).block catch _ => pure ()
 
-/-- **Why the loop serves no session of the statement `S`**, given `--salt-key FILE` and `--commitments FILE` (a records
-file, `Salts.parseRecords`, of the registrations the ZK server's value service answered): some record's tag is not the
-server's, or some hm96 tree of its public file is no table of theirs (`Salts.checkStatement`). `none` where every one is,
-or where neither flag is given; one flag without the other is refused. -/
-def commitmentsWhy (args : List String) (S : Hello.Setup) : IO (Option String) := do
-  match Witness.argOf args "--salt-key", Witness.argOf args "--commitments" with
-  | none, none => return none
-  | some _, none =>
-    return some "--salt-key: the loop serves only a statement whose value commitments the ZK server registered (--commitments FILE)"
-  | none, some _ => return some "--commitments: the loop checks them under the ZK server's salt key (--salt-key FILE)"
-  | some kf, some cf =>
-    match ← Salts.loadKey kf false with
-    | .error e => return some e
-    | .ok k =>
-      let records ← match ← (IO.FS.readBinFile cf).toBaseIO with
-        | .ok b => pure b
-        | .error e => return some s!"--commitments {cf}: {e}"
-      match Salts.checkStatement k records S.I.publicFile with
-      | .ok () => return none
-      | .error e => return some s!"--commitments: {e}"
-
-/-- `flock-firewall session --verifier HOST:PORT [--listen PORT] [--salt-key FILE --commitments FILE] [--statement ID]
---circuit F --public F …` (the statement flags `Hello.FLAGS`): the firewall's session loop. With `--salt-key` and
-`--commitments` it serves only a statement whose every hm96 tree is a table of a registration the ZK server's value service
-answered (`commitmentsWhy`), and otherwise prints `refused WHY` and exits. It listens on `127.0.0.1:PORT` (by default a port the system picks)
+/-- `flock-firewall session --verifier HOST:PORT [--listen PORT] [--statement ID] --circuit F --public F …` (the
+statement flags `Hello.FLAGS`): the ZK server's session loop. It listens on `127.0.0.1:PORT` (by default a port the system picks)
 for sessions and on a port the system picks for the reps' frames, the tables' level 0 and the sessions' finish, prints `LISTENING 127.0.0.1:PORT` and then
 `FRAMES 127.0.0.1:PORT` once it does, and serves each connection as one session (`serve`) or one frame (`frames`), each
-on its own thread, every session's `Hello` at one statement set up once a draw (`Hello.Setup.specAt`). When a session
-ends, every level 0 drawn for it is freed (`Level0.Slots.close`), and where there were any, its standard error says
+on its own thread, every session's `Hello` at one statement set up once a sample (`Hello.Setup.specAt`). When a session
+ends, every level 0 sampled for it is freed (`Level0.Slots.close`), and where there were any, its standard error says
 `level 0: session SID ended; K drawn for it freed, N kept`. It runs until its standard
-input closes. `flock-firewall session --schedule …` instead reads a draw's JSON (`null` for none) on its standard input
+input closes. `flock-firewall session --schedule …` instead reads a sample's JSON (`null` for none) on its standard input
 and prints the openings after the session stream's at it (`planOf`), `ok N` and a line `STREAM COINS` each, or
-`refused WHY`. `run` is the same loop with each session held by a hold `mkHold` makes for it (`core-firewall session`). -/
-def run (usage : String) (args : List String) (mkHold : Option (IO Hold)) : IO UInt32 := do
+`refused WHY`. `run` is the same loop with each session held by a hold (`core-firewall session`): `mkHold`, given the
+statement once it is set up and before the loop listens, makes each session's, or says why the loop serves none of the
+statement, which it prints as `refused WHY` before it exits. Without a hold the loop admits no registration, so it
+refuses `--salt-key`: a statement's value commitments are admitted on the ZK server's record (`core-firewall session
+--state DIR --salt-key FILE`). -/
+def run (usage : String) (args : List String) (mkHold : Option (Hello.Setup → IO (Except String (IO Hold)))) :
+    IO UInt32 := do
   let S ← match ← Hello.Setup.ofArgs usage args with
     | .ok S => pure S
     | .error e => IO.eprintln e; return 2
@@ -964,10 +946,18 @@ def run (usage : String) (args : List String) (mkHold : Option (IO Hold)) : IO U
     return 0
   let some verifier := Witness.argOf args "--verifier" | IO.eprintln usage; return 2
   let some listen := ((Witness.argOf args "--listen").getD "0").toNat? | IO.eprintln usage; return 2
-  if let some why := (← commitmentsWhy args S) then
-    IO.println s!"refused {why}"
-    (← IO.getStdout).flush
-    return 2
+  let made : Except String (Option (IO Hold)) ← match mkHold with
+    | some f => (·.map some) <$> f S
+    | none =>
+      pure <| if (Witness.argOf args "--salt-key").isSome then
+        .error "--salt-key: a statement's value commitments are admitted on the ZK server's record (core-firewall session --state DIR --salt-key FILE)"
+      else .ok none
+  let mkHold ← match made with
+    | .ok m => pure m
+    | .error why =>
+      IO.println s!"refused {why}"
+      (← IO.getStdout).flush
+      return 2
   let auditor ← resolve verifier
   let specs : Hello.Specs ← IO.mkRef #[]
   let reg : IO.Ref Frames.Sessions ← IO.mkRef {}
@@ -1008,7 +998,6 @@ def run (usage : String) (args : List String) (mkHold : Option (IO Hold)) : IO U
 
 /-- `flock-firewall session`: `run`, with no hold. -/
 def cmd (args : List String) : IO UInt32 :=
-  run s!"usage: flock-firewall session (--verifier HOST:PORT [--listen PORT] [--salt-key FILE --commitments FILE] | --schedule) {Hello.FLAGS}"
-    args none
+  run s!"usage: flock-firewall session (--verifier HOST:PORT [--listen PORT] | --schedule) {Hello.FLAGS}" args none
 
 end Flock.Firewall.Session

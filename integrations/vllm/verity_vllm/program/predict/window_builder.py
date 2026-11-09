@@ -36,7 +36,7 @@ def table_param(label: str, words: int) -> str:
 class Grain:
     """The units' size (Llama-3.2-1B's by default): a GEMM slice reads ``gemm_words`` weight words (N = gemm_words
     // K output columns: `Gemm_v2{2048, 16}`, `Gemm_v2{8192, 4}`; an s8 one twice the columns: `ScaledMmS8_v1{2048, 32}`,
-    `ScaledMmS8_v1{8192, 8}`), no unit holds more than ``rows`` rows in and out (C-Flock's
+    `ScaledMmS8_v1{8192, 8}`), no unit holds more than ``rows`` rows in and out (Flock's
     composer gives each row a unit reads or writes an hm96 slot, so a unit fits its 2^27-bit block with at most 256), a
     token select is units of ``select`` logits (2,672: 48 units at V = 128,256, each 167 groups of 16), and a fused norm
     cut at its residual add is parts of ``norm`` elements (256: 8 parts at N = 2,048, each x 64 rows of a `Gemm_v2{8192, 4}`)."""
@@ -131,7 +131,7 @@ def _step(rowss: Sequence[Sequence[Row]]) -> int | None:
 class _Builder:
     grain: Grain
     programs: int = 1
-    #: refuse at `settle` every unit C-Flock's composer wouldn't prove (`interface.check_proof_block`); off only for a
+    #: refuse at `settle` every unit Flock's composer wouldn't prove (`interface.check_proof_block`); off only for a
     #: probe's census and for tests of the lowering at a class too small to prove
     provable: bool = True
     fns: dict[str, Any] = field(default_factory=dict)
@@ -214,9 +214,9 @@ class _Builder:
 
     def value(self, tid: str, port: str, at: int, param: str, row: int, rows: int) -> None:
         """Unit ``at`` of ``tid`` reads ``port`` as row ``row`` of the registered parameter ``param``, ``rows`` rows of the
-        port's width (a per-window value, not the weights record)."""
+        port's width (a per-window value, not the weights record); an output row ``port`` is held to that row (`IF.Read`)."""
         lay = IF.layout(self.fns[tid])
-        words = dict(lay.rows)[port]
+        words = dict(lay.rows + lay.outs)[port]
         if self.params.setdefault(param, rows * words) != rows * words:
             raise Unexpressible(f"{param}: read as {rows} rows of {words} words and as {self.params[param]} leaves")
         self.reads.append(IF.Read(tid, port, param, at=at, radix=(1,), base=row * words, step=(0,)))
@@ -245,7 +245,7 @@ class _Builder:
         """Each port read as m writer rows cut m ways (`interface.Layout.cut`: row j its outer elements
         [j·n/m, (j+1)·n/m), each writer row one of them), and every feed wired. Refused at once, naming each
         (`Unexpressible`): a port read at two row counts (a port is cut one way), rows that aren't its outer elements cut
-        that many ways, a unit of more than ``grain.rows`` rows in and out, and, unless not ``provable``, a unit C-Flock's
+        that many ways, a unit of more than ``grain.rows`` rows in and out, and, unless not ``provable``, a unit Flock's
         composer wouldn't prove (`interface.check_proof_block`: past 256 rows, no row past 111 bytes, or rows past its
         block)."""
         counts: dict[tuple[str, str], set[int]] = {}
@@ -288,7 +288,7 @@ class _Builder:
 
 
 def _rows(fn: Any, cuts: dict[str, int] | None) -> int:
-    """A unit of ``fn``'s rows in and out under ``cuts``, each an hm96 slot C-Flock's composer gives it
+    """A unit of ``fn``'s rows in and out under ``cuts``, each an hm96 slot Flock's composer gives it
     (`interface.unit_rows`)."""
     lay = IF.layout(fn)
     return len(lay.cut(cuts)) + len(lay.outs)

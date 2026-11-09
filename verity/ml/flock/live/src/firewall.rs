@@ -187,9 +187,17 @@ pub fn lean_frame_exe() -> std::path::PathBuf {
         .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../..").join("verity/core/service/flock/.lake/build/bin/flock-firewall"))
 }
 
+/// The `core-firewall` the ZK server keeps its record with (its release side and its value service): `FC_CORE_FIREWALL`,
+/// else the build in this checkout's verity/core/service/firewall.
+#[cfg(feature = "sha512")]
+pub fn core_firewall_exe() -> std::path::PathBuf {
+    std::env::var_os("FC_CORE_FIREWALL").map(Into::into)
+        .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../..").join("verity/core/service/firewall/.lake/build/bin/core-firewall"))
+}
+
 /// Makes the Lean server's `flock-firewall tap` (`Flock.Firewall.Frame.tapCmd`) the OS source of every sample of this process
 /// that is not a rep's own (`zk_hooks::set_os_source`): level 0's hiding, every tree's salts but the pads'. The mask slot's
-/// words are the Lean session loop's ([`lean_level0`]), and so is the coin tree's nonce, its `Hello`'s. Set it before the first draw. A tap that fails later panics, as an OS
+/// words are the Lean session loop's ([`lean_level0`]), and so is the coin tree's nonce, its `Hello`'s. Set it before the first sample. A tap that fails later panics, as an OS
 /// generator that fails does.
 #[cfg(feature = "sha512")]
 pub fn lean_tap(exe: &std::path::Path) -> Result<(), String> {
@@ -325,7 +333,7 @@ pub fn rep_body(vals: &[F128], extras: &[Vec<F128>], rounds: &[Vec<F128>]) -> Ve
     b
 }
 
-/// The ZK server's proof files of record on a firewalled session: the Lean session loop's finish (`Flock.Firewall.Finish`
+/// The ZK server's proof files of record on a ZK server session: the Lean session loop's finish (`Flock.Firewall.Finish`
 /// in the Lean verifier) on the session's statement, which reads each table's level 0 from the loop's own
 /// ([`LeanFinish::level0`]), then per rep, once its algebraic phase ended, is asked for its salts for levels ≥ 1, which it
 /// samples itself, and at its end given its request, which it proves with the pads the rep's Lean frame drew. It ends at
@@ -385,9 +393,9 @@ impl LeanFinish {
         self.ask(&format!("level0 {i}"), root)
     }
 
-    /// Rep `r` of session table `i`'s salts for levels ≥ 1, which the finish draws from the OS once, for the rep's proof
+    /// Rep `r` of session table `i`'s salts for levels ≥ 1, which the finish samples from the OS once, for the rep's proof
     /// file: one byte string a level, levels `1` to `R` in order, each 192 bytes a leaf (`Finish.saltsBytes`). The loop's
-    /// finish draws them only once the rep's frame took its algebraic phase's last coins (`Finish.Own.algebraEnded`).
+    /// finish samples them only once the rep's frame took its algebraic phase's last coins (`Finish.Own.algebraEnded`).
     pub fn salts(&mut self, i: usize, r: usize) -> Result<Vec<Vec<u8>>, String> {
         let b = self.ask(&format!("salts {i} {r}"), &[])?;
         let bad = || refused(format!("the Lean finish's salts of table {i} rep {r}: {} bytes that do not parse", b.len()));
@@ -567,10 +575,10 @@ pub struct Level0Ask<'a> {
 
 /// The level-0 hiding of record on a session's firewalled tables under the Lean session loop: the loop, on its frames port
 /// `addr`, takes every table's packed witness in one request (`level0 SESSION M LEN …`, a pair a table in table order,
-/// followed by the witnesses), and only then draws each table's mask slot's words, level 0's hiding and salts from the OS,
+/// followed by the witnesses), and only then samples each table's mask slot's words, level 0's hiding and salts from the OS,
 /// writes the words into the witness's mask slot, commits level 0 on them and keeps them for the session `session` names
 /// ([`level0_session`]) until that session ends. It answers each table in order, `ok N R` and the samples then the root, its
-/// last `R` bytes, or the request `err WHY`, nothing drawn. So no table's witness can depend on another table's draws. The
+/// last `R` bytes, or the request `err WHY`, nothing sampled. So no table's witness can depend on another table's samples. The
 /// loop takes one request a session, with every table's witness, and refuses any other.
 #[cfg(feature = "sha512")]
 pub fn lean_level0(addr: &str, session: &str, asks: &[Level0Ask]) -> Result<Vec<LeanLevel0>, String> {
@@ -679,10 +687,11 @@ impl Drop for LeanSession {
     }
 }
 
-/// The ZK server's value service of record: `flock-firewall values --salt-key FILE` (`Flock.Firewall.Values` in the Lean
-/// verifier), which holds the server's salt key and derives every value commitment's salt from it (live PROTOCOL.md
-/// §10.2). The serving stack commits through it ([`lean_commit`]) and registers one session of each epoch
-/// ([`lean_register`]), and the prover takes its witness's salts from it ([`lean_salts`]). It runs until this handle drops.
+/// The ZK server's value service of record: `core-firewall values --state DIR --salt-key FILE` (`Flock.Firewall.Values`
+/// in the Lean verifier, on the ZK server's record in `DIR`), which holds the server's salt key and derives every value
+/// commitment's salt from it (live PROTOCOL.md §10.2). The serving stack commits through it ([`lean_commit`]) and
+/// registers one session of each epoch ([`lean_register`]), each registration numbered on the record, and the prover takes
+/// its witness's salts from it ([`lean_salts`]). It runs until this handle drops.
 #[cfg(feature = "sha512")]
 pub struct LeanValues {
     child: std::process::Child,
@@ -692,11 +701,13 @@ pub struct LeanValues {
 
 #[cfg(feature = "sha512")]
 impl LeanValues {
-    pub fn start(exe: &std::path::Path, key: &std::path::Path) -> Result<Self, String> {
+    /// The service `exe` (`core-firewall`) on the ZK server's state directory `state` and the key file `key`.
+    pub fn start(exe: &std::path::Path, state: &std::path::Path, key: &std::path::Path) -> Result<Self, String> {
         use std::io::BufRead;
         use std::process::{Command, Stdio};
-        let mut child = Command::new(exe).arg("values").arg("--salt-key").arg(key).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
-            .map_err(|e| refused(format!("the Lean value service {} does not start ({e}): `lake build flock-firewall` in verity/core/service/flock, or FC_FIREWALL_LEAN", exe.display())))?;
+        let mut child = Command::new(exe).arg("values").arg("--state").arg(state).arg("--salt-key").arg(key)
+            .stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
+            .map_err(|e| refused(format!("the Lean value service {} does not start ({e}): `lake build core-firewall` in verity/core/service/firewall, or FC_CORE_FIREWALL", exe.display())))?;
         let stdin = child.stdin.take().expect("piped stdin");
         let mut line = String::new();
         let _ = std::io::BufReader::new(child.stdout.take().expect("piped stdout")).read_line(&mut line);
@@ -844,11 +855,13 @@ pub fn refs_rows(refs: &[u8]) -> Result<usize, String> {
     Ok(r)
 }
 
-/// Registers the commit session `s` through the value service at `addr` (`register S`): the number of sessions the
-/// service's epoch opened, and the registration's record (`Flock.Firewall.Salts.recordOf`: `be64 m ‖ be32 T ‖` the
-/// session's table refs `‖` its record tag). The session loop's `--commitments` is records one after another.
+/// Registers the commit session `s` through the value service at `addr` (`register S`): the registration's number on the
+/// ZK server's record, the number of sessions the service's epoch opened (1: the service opens one an epoch, refusing a
+/// commit while its session is not yet registered), and its record (`Flock.Firewall.Salts.recordOf`:
+/// `be64 n ‖ be64 m ‖ be32 T ‖` the session's table refs `‖` its record tag), which the service appended to the ZK server's
+/// record whole, where the session loop admits it (`core-firewall session --salt-key`).
 #[cfg(feature = "sha512")]
-pub fn lean_register(addr: &str, s: &[u8]) -> Result<(u64, Vec<u8>), String> {
+pub fn lean_register(addr: &str, s: &[u8]) -> Result<(u64, u64, Vec<u8>), String> {
     let fail = |e: String| refused(format!("the Lean value service's registration at {addr}: {e}"));
     let b = values_request(addr, &format!("register {}", crate::hex(s)), &[]).map_err(fail)?;
     let mut o = 0;
@@ -857,10 +870,10 @@ pub fn lean_register(addr: &str, s: &[u8]) -> Result<(u64, Vec<u8>), String> {
         return Err(fail(format!("an answer {w:?}")));
     };
     let rec = &b[o..];
-    if rec.len() != len || len < 12 || rec[..8] != m.to_be_bytes() {
+    if rec.len() != len || len < 20 || rec[8..16] != m.to_be_bytes() {
         return Err(fail(format!("a record of {} bytes, where the answer names {len} and {m} sessions", rec.len())));
     }
-    Ok((m, rec.to_vec()))
+    Ok((u64::from_be_bytes(rec[..8].try_into().unwrap()), m, rec.to_vec()))
 }
 
 /// The salts of the rows the refs file `refs` names, in its row refs' order, from the value service at `addr`, which checks
@@ -883,7 +896,7 @@ pub fn lean_salts(addr: &str, refs: &[u8]) -> Result<Vec<u8>, String> {
 /// round, which the Lean session loop's frame of the rep checks and masks, or a firewalled rep's inner proof's round, the
 /// session's Lean finish's, which the frame holds to its own: `flock-circuit`'s `zk_finish_fw`), what the masking
 /// challenger hands it is dropped, and at the round's squeeze the release, and only the release, goes to the stream. With
-/// no release set it passes every call through: unfirewalled reps.
+/// no release set it passes every call through: unserved reps.
 pub struct Gate<C: Challenger> {
     pub inner: C,
     pub release: Option<Vec<u8>>,

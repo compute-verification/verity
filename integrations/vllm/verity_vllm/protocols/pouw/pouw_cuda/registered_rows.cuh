@@ -92,7 +92,8 @@ HD void row_leaf(const Table& t, uint32_t j, const uint8_t* row, const uint64_t*
 }
 
 // A public table's salt head as the host lays it out (`pouw_h1_registered_device.Pub`): `core_check.public_row_salt`'s
-// domain, u64be context length and context, as big-endian words, the bytes past ``len`` zero.
+// domain, u64be context length and context, or `core_check.ok_salt`'s tag, context and 0, as big-endian words, the bytes
+// past ``len`` zero.
 constexpr int PUB_WORDS = 40;
 struct Pub {
   uint64_t w[PUB_WORDS];
@@ -100,19 +101,28 @@ struct Pub {
   uint64_t first;   // the first salt's position
 };
 static_assert(sizeof(Pub) == 8 * PUB_WORDS + 16, "Pub is 42 words");
+static_assert((8 * PUB_WORDS + 8 + 4 + 17 + 127) / 128 * 128 <= 8 * PUB_WORDS + 64,
+              "counter_salt's message buffer holds the longest salt message and its padding");
 
-// Position ``pos``'s public salt, SHA-512(head || u64be pos || u8 i) for i = 0, 1, 2, into ``out`` as its 192 bytes.
-HD void public_salt(const Pub& p, uint64_t pos, uint64_t out[24]) {
+// Position ``pos``'s salt, SHA-512(head || u64be pos || c) for c = 0, 1, 2 as a ``width``-byte big-endian counter, into
+// ``out`` as its 192 bytes.
+HD void counter_salt(const Pub& p, uint64_t pos, int width, uint64_t out[24]) {
   for (int c = 0; c < 3; ++c) {
-    uint8_t m[8 * PUB_WORDS + 64] = {};  // the head, pos and i, with room for their padding
+    uint8_t m[8 * PUB_WORDS + 64] = {};  // the head, pos and c, with room for their padding
     for (uint32_t i = 0; i < p.len; ++i) m[i] = (uint8_t)(p.w[i >> 3] >> (56 - 8 * (i & 7)));
     rc::be_put(m + p.len, pos, 8);
-    m[p.len + 8] = (uint8_t)c;
+    rc::be_put(m + p.len + 8, (uint64_t)c, width);
     uint64_t h[8];
-    rc::digest_padded(m, (int)p.len + 9, h);
+    rc::digest_padded(m, (int)p.len + 8 + width, h);
     for (int i = 0; i < 8; ++i) out[8 * c + i] = bswap64(h[i]);
   }
 }
+
+// Position ``pos``'s public salt (`core_check.public_row_salt`: a u8 counter).
+HD void public_salt(const Pub& p, uint64_t pos, uint64_t out[24]) { counter_salt(p, pos, 1, out); }
+
+// Position ``pos``'s ok salt (`core_check.ok_salt`: a u32be counter).
+HD void ok_salt(const Pub& p, uint64_t pos, uint64_t out[24]) { counter_salt(p, pos, 4, out); }
 
 // Level l of a tree of width W starts at node 2 W - 2 (W >> l) in its levels (level 0 the W leaves and pads, then each
 // level above, the root last: 2 W - 1 nodes).

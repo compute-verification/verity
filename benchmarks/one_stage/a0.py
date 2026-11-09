@@ -18,6 +18,7 @@ import argparse
 import hashlib
 import json
 import os
+import secrets
 import shutil
 import subprocess
 import sys
@@ -30,7 +31,8 @@ from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.program import Program
-from verity_numerical.bench.input_sets import InputSet
+from verity_flock.input_sets import InputSet
+from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC
 from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
 
 import r2_population as R2
@@ -49,11 +51,44 @@ def sha512_file(path: Path) -> str:
     return hashlib.sha512(path.read_bytes()).hexdigest()
 
 
+def environ(env: dict | None) -> dict:
+    """This process's environment with ``env`` over it, a None value removing its variable (flock-circuit takes the host's
+    witness when FC_HOST_WITNESS is set at all)."""
+    return {k: v for k, v in {**os.environ, **(env or {})}.items() if v is not None}
+
+
 def run(cmd: list[str], log: Path, env: dict | None = None, timeout: float = 3600) -> subprocess.CompletedProcess:
     t = time.time()
-    p = subprocess.run(cmd, capture_output=True, text=True, env={**os.environ, **(env or {})}, timeout=timeout)
+    p = subprocess.run(cmd, capture_output=True, text=True, env=environ(env), timeout=timeout)
     log.write_text(f"$ {' '.join(cmd)}\n# rc {p.returncode} in {time.time() - t:.1f} s\n--- stdout\n{p.stdout}\n--- stderr\n{p.stderr}")
     return p
+
+
+#: the development challenger's layout: one family, the coins one sample reads
+DEV_SCHEME, DEV_FAMILY = "verity/one-stage/dev-draw/v1", "draw"
+
+
+def challenger_draw(lean: str, args: list[str], law: dict, population: int, after: str | bytes,
+                    log: Path) -> subprocess.CompletedProcess:
+    """Lean's sample, ``flock-verify draw ARGS --stream-file F``, on a development challenger's coins (the verifier has
+    none of its own). The challenger is an in-process `LiveChallenger` on its own entropy (`secrets.token_bytes`),
+    committed before any coin opens. Its one family holds the coins the sample reads, opened after `after` (the
+    registration's digest) by `ChallengerCoins`. F holds the bytes `law` reads over `population`, each stream once, in
+    Lean's `Draw.drawOn` layout (`coins.draw_first`'s). ``<log stem>.coins.json`` keeps the challenger's commitment and
+    the segment, from which `coins.challenger_stream` replays F. Its samples show the path, not an auditor's coins: those
+    are `a5_coins`' (`a5.py --challenger`)."""
+    reads: list[int] = []
+    CC.draw_first(CC.OwnRandomness(lambda n: reads.append(n) or bytes(n)), law, population)
+    need = sum(reads)
+    ch = Ch.LiveChallenger(DEV_SCHEME, 0, [(DEV_FAMILY, max(1, -(-need // Ch.COIN_BYTES)))], secrets.token_bytes)
+    coins = CC.ChallengerCoins(Ch.LiveRecord(ch, DEV_FAMILY))
+    coins.commit(bytes.fromhex(after) if isinstance(after, str) else bytes(after))
+    stream = log.with_name(log.stem + ".coins.bin")
+    stream.write_bytes(coins(need))
+    log.with_name(log.stem + ".coins.json").write_text(json.dumps(
+        {"source": "development challenger (in-process, secrets.token_bytes)", "commitment": ch.commitment.to_json(),
+         "segment": coins.segments[-1].to_json(), "need": need}, sort_keys=True))
+    return run([lean, "draw", *args, "--stream-file", str(stream)], log)
 
 
 def stage(set_dir: str, ns: list[int], out: Path, m0_path: str, tampered: bool = False, bind: dict | None = None) -> dict:
@@ -164,14 +199,16 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
     Under FLOCK_CHALLENGER=1 a session on the keyed coin tree (`zk`, or `FC_COINS=tree`) takes its tree from a challenger of
     its own under ``out/challenger`` (`verity_flock.challengers`, `serve --tree-from`): ``live["challenger"]`` is its exit
     and its audit of the session's record, and a session whose challenger failed is refused.
-    `draw_file`: the server serves the verifier's own draw from that file (`--draw-file`) instead of sampling one. `zk`: both
+    `draw_file`: the server serves the verifier's own sample from that file (`--draw-file`) instead of sampling one. `zk`: both
     sides run the masked protocol (`--zk`); without it the Lean verifier accepts a subset sample at hidden outputs and one table
     (`Flock.ProvedScope`). `env`: added to
-    both sides' environment (a firewalled prover's, `firewall_env`). `prove_timeout`: the prover's limit in seconds."""
+    both sides' environment (a firewalled prover's, `firewall_env`). `prove_timeout`: the prover's limit in seconds.
+    ``st["tmpl_unit"]``: a templated statement's unit rows at their positions, which both sides read (`--tmpl-unit`)."""
     out.mkdir(parents=True, exist_ok=True)
     d = st["dir"]
     tables = d / "tables"
     zf = ["--zk"] if zk else []
+    tu = ["--tmpl-unit", str(st["tmpl_unit"])] if st.get("tmpl_unit") else []
     senv = {**os.environ, **(env or {})}
     ch = None
     if senv.get("FLOCK_CHALLENGER") == "1" and (zk or senv.get("FC_COINS") == "tree"):
@@ -179,11 +216,11 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
         ch = CH.start(out / "challenger")
     serve_log = open(out / "serve.log", "w")
     serve = subprocess.Popen([bin_, "serve", *zf, "--listen", f"127.0.0.1:{port}", "--out", str(out / "sessions"),
-                              "--instances", str(d / f"pub-{n}.bin"), "--circuit", str(d / "circuit.txt"), "--tables", str(tables),
+                              "--instances", str(d / f"pub-{n}.bin"), "--circuit", str(d / "circuit.txt"), *tu, "--tables", str(tables),
                               "--pin", st["pin"], "--operator", "one-stage-a0",
                               *(["--draw-file", str(draw_file)] if draw_file else ["--draw", law]), "--sessions", "1",
                               *(ch[1] if ch else [])],
-                             stdout=serve_log, stderr=subprocess.STDOUT, text=True, env=senv)
+                             stdout=serve_log, stderr=subprocess.STDOUT, text=True, env=environ(env))
     got = None
     try:
         for _ in range(1800):
@@ -191,7 +228,7 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
                 break
             time.sleep(0.5)
         p = run([bin_, "prove", *zf, "--verifier", f"127.0.0.1:{port}", "--instances", str(d / f"inst-{n}.bin"),
-                 "--circuit", str(d / "circuit.txt"), "--tables", str(tables), "--runs", "1", "--warm", "0"], out / "prove.log", env=env,
+                 "--circuit", str(d / "circuit.txt"), *tu, "--tables", str(tables), "--runs", "1", "--warm", "0"], out / "prove.log", env=env,
                 timeout=prove_timeout)
         live = next((json.loads(line[5:]) for line in p.stdout.splitlines() if line.startswith("LIVE\t")), None)
         if live is None:
@@ -223,18 +260,32 @@ def firewall_env(st: dict) -> dict:
     """What a firewalled prover (`FC_FIREWALL=1`) sets its Lean `Hello` up on (live PROTOCOL.md §10.4): the statement
     `lean_verify` verifies under, and the statement's partition and program."""
     args = [x for k in ("partition", "program") if st.get(f"{k}_file") for x in (f"--{k}", str(st[f"{k}_file"]))]
-    return {"FC_FIREWALL_STATEMENT": STATEMENT_ID, "FC_FIREWALL_HELLO_ARGS": " ".join(args)}
+    return {"FC_FIREWALL_STATEMENT": st.get("statement", STATEMENT_ID), "FC_FIREWALL_HELLO_ARGS": " ".join(args)}
+
+
+#: a `--zk` session's prover with no ZK server, as SPOT[Flock]'s proof server runs it: `flock-circuit prove --zk` itself,
+#: its witness built where the prover builds it (`zk_cost.py`'s `dev` arm, which Figure 1 prices)
+DIRECT = {"FC_FIREWALL": "0", "FC_HOST_WITNESS": None}
+
+
+def prover_env(firewall: str | None, st: dict) -> dict:
+    """A `--zk` session's prover environment: behind the ZK server's send check when ``firewall`` names Lean's
+    `flock-firewall` (the core protocols' path), else `DIRECT`."""
+    if firewall:
+        return {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": firewall, **firewall_env(st)}
+    return dict(DIRECT)
 
 
 def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: str = "lean-verify",
                 flags: Sequence[str] = ()) -> dict:
-    """The verifier of record: Lean `flock-verify verify` on the session's record, with the circuit and the public file
+    """The verifier: Lean `flock-verify verify` on the session's record, with the circuit and the public file
     held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
     `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's. `log` names its logs under
     `out` (a negative's own, beside the honest verdict's). `flags`: more of `verify`'s (a plain session's ``--coins tree
     --stratified K``). ``st["archived"]``, a dict a run's members share: a circuit file archived once, by its file's
     identity (members' ``circuit.txt`` are links of one file), is linked into every later archive rather than put again;
-    Lean holds the object to its key when it reads it (`archiveGet`)."""
+    Lean holds the object to its key when it reads it (`archiveGet`). ``st["statement"]``: the statement `verify` sets up
+    (a templated one's ``verity/flock-circuit/tmpl``), else `STATEMENT_ID`."""
     sessions = sorted((out / "sessions").glob("*/session.json"))
     if not sessions:
         return {"accepted": False, "of_record": True, "why": "no session recorded"}
@@ -262,7 +313,7 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     bound += ["--program", keys.get(Path(prog[0]).name, "")] if prog else []
     bound += ["--registered", keys.get(Path(reads[0]).name, "")] if reads else []
     t = time.time()
-    p = run([lean, "verify", "--statement", STATEMENT_ID, "--archive", str(archive), "--circuit", keys.get("circuit.txt", ""),
+    p = run([lean, "verify", "--statement", st.get("statement", STATEMENT_ID), "--archive", str(archive), "--circuit", keys.get("circuit.txt", ""),
              "--public", keys.get(f"pub-{n}.bin", ""), *bound, *(["--zk"] if zk else []), *flags, "--session", str(sessions[-1].parent)],
             out / f"{log}.log")
     line = next((x for x in p.stdout.splitlines() if x.startswith("VERDICT ")), None)
@@ -286,7 +337,7 @@ def drawcheck_refused(cases: list[dict], i: int, code: str) -> bool:
 
 
 def proved_units(header: dict, live: dict) -> list[int]:
-    """The drawn statement's units as global unit indices: the population header's index of each drawn position."""
+    """The sampled statement's units as global unit indices: the population header's index of each sampled position."""
     pop = header["units"]["indices"]
     return [pop[u] for u in (live.get("unit_draw") or {}).get("units", [])]
 
@@ -317,10 +368,10 @@ def audit_session(rec: dict, receipt: dict, st: dict, header: dict, law: dict, r
 
 
 def audit_negatives(result: dict, law: dict, delta: float, session_roots: dict, served: list | None = None) -> dict[str, dict]:
-    """The audit record's own refusals, each re-deciding the real record with one input altered: the verifier of record
-    not run or absent, a session root that isn't the registered one, a verifier of record reporting a registered value's
+    """The audit record's own refusals, each re-deciding the real record with one input altered: the verifier
+    not run or absent, a session root that isn't the registered one, the verifier reporting a registered value's
     reads opened against another root than its registered one, and, when the sessions were handed the verifier's sample
-    (`served`), a served share that isn't it. Each is decided by the verifier of record (`verifier.audit_record`); `agree`
+    (`served`), a served share that isn't it. Each is decided by the verifier (`verifier.audit_record`); `agree`
     is whether the Lean and the Python decided it alike."""
     base = dict(registration=result["registration"], receipt=result["receipt"], draw=result["draw"], law=law,
                 proved_units=result["proved_units"], instances=len(result["proved_units"]), statement=result["statement"],
@@ -352,7 +403,7 @@ def audit_negatives(result: dict, law: dict, delta: float, session_roots: dict, 
 
 def altered_public(lean: str, st: dict, n: int, session_dir: Path, out: Path, rec: dict, check, zk: bool = False) -> dict:
     """A public file whose body is altered (its last output word's high byte flipped) and whose leaf-layer digest is updated
-    to match, so the registration passes R1-R6 and only the verifier of record, recomputing the roots from the file, can
+    to match, so the registration passes R1-R6 and only the verifier, recomputing the roots from the file, can
     refuse it. `check(record, leaf_layer)` is the verifier's registration check."""
     stage = out / "stage"
     shutil.rmtree(out, ignore_errors=True)
@@ -423,7 +474,7 @@ def main() -> int:
                                    "verifier": {P.template_id(template): program_digest(Program(template))},
                                    "ok": template_program_ok(st["meta"], template)}
 
-    # 3. registration, before any draw; the verifier holds its own public file to it
+    # 3. registration, before any sample; the verifier holds its own public file to it
     fv = header["frame_v3"]
     want = stand_in_ports(s.name, s.content_digest, st["meta"], n)
     leaf_layer = sha512_file(st["dir"] / f"pub-{n}.bin")

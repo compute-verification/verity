@@ -2,13 +2,15 @@ module
 
 public import Proofs.Flock.Soundness.Binding.Layout
 public import Proofs.Flock.Soundness.Audit.FlockLinked
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Lowering
 
 /-!
 # The decoder's bits, read at fixed addresses
 
-`Binding.Layout.decode_row` says that in a satisfying witness of a drawn unit's table, the decoder's bit on each of the
+`Binding.Layout.decode_row` says that in a satisfying witness of a sampled proof block's table, the decoder's bit on each of the
 unit's committed wires is the bit of the value the witness holds, at fixed addresses (`rowAt`), at the wire's commit
-string. For the decoder that reads each drawn unit from its place (`Partition.placeDecoder`), this file reduces it to
+string. For the decoder that reads each sampled proof block from its place (`Partition.placeDecoder`), this file reduces it to
 one fact per column:
 
 * `exists_col_of_io`: each committed wire of a unit is on a column of its instance (`IsRowsUnit`);
@@ -18,7 +20,7 @@ one fact per column:
 * `ofBits`: a layout whose values are bit strings, each wire one bit of its commit string's value, from the one fact
   that each such column holds the bit the witness has at the wire's fixed row address (`copy`).
 
-`rowAt` and `saltAt` are arguments that depend on the draw, the registration, the unit and the commit string only: the
+`rowAt` and `saltAt` are arguments that depend on the sample, the registration, the unit and the commit string only: the
 readers are fixed before the witness is (a reader that chose its values would discharge nothing).
 -/
 
@@ -74,7 +76,7 @@ theorem placeDecoder_wire {S : Finset (Fin n)} {R : Reg} {u : Fin n} (hu : u ∈
   simp only [Partition.placeDecoder, hu, ↓reduceDIte, UnitPlace.decode]
   exact (place S R u hu).inst.decode_wire ((place S R u hu).agree hM) c
 
-/-- **`decode_row` from the columns**: if, in every satisfying witness, each column of a drawn unit on a committed wire
+/-- **`decode_row` from the columns**: if, in every satisfying witness, each column of a sampled proof block on a committed wire
 holds the bit of the value read at the wire's commit string, the decoder's bit on every committed wire is that bit. -/
 theorem decode_row_of_cols {Pos Val : Type} (pos : Fin C.N → Pos) (vbit : Val → Fin C.N → Bool)
     (rowOf : (S : Finset (Fin n)) → (R : Reg) → (u : Fin n) → Binding.Msg plan tab S R u → Pos → Val)
@@ -99,10 +101,10 @@ abbrev BitVal (W : ℕ) : Type := Fin (W + 1) × (Fin W → Bool)
 /-- Width `k`, capped at `W`. -/
 def widthOf (W k : ℕ) : Fin (W + 1) := ⟨min k W, Nat.lt_succ_of_le (Nat.min_le_right k W)⟩
 
-/-- **A layout of bit-string values**, from the decoder that reads each drawn unit from its place. Each commit string
+/-- **A layout of bit-string values**, from the decoder that reads each sampled proof block from its place. Each commit string
 `q` holds a value of `rowBits q ≤ W` bits with that width (`BitVal`), read at the fixed addresses `rowAt` (its salt at
 `saltAt`), and wire `g` is bit `idx g` of its commit string's value. `copy`, the one fact: in a satisfying witness, each
-column of a drawn unit on a committed wire `g` holds the witness's bit at `rowAt` of `g`'s commit string and bit. -/
+column of a sampled proof block on a committed wire `g` holds the witness's bit at `rowAt` of `g`'s commit string and bit. -/
 noncomputable def ofBits (Pos : Type) [Fintype Pos] [DecidableEq Pos] [Inhabited Pos] (W : ℕ) (pos : Fin C.N → Pos)
     (idx : Fin C.N → Fin W) (regLeaf : Reg → Pos → Refine.Dig) (rowBits : Pos → ℕ)
     (hidx : ∀ g, (idx g).val < rowBits (pos g))

@@ -1,9 +1,47 @@
 module
 
 public import Proofs.Flock.Claims.Complete.ZkTables.Reps
-public import Proofs.Flock.Claims.Complete.Zk.Json.Record
-public import Proofs.Flock.Verifier.Hash
 import all Lean.Data.Json.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Json.RoundTrip
+import Proofs.Flock.Claims.Complete.Json.Stmt
+import Proofs.Flock.Claims.Scope.Check
+import Proofs.Flock.Claims.Scope.Sizes
+import Proofs.Flock.Soundness.Refine.Walk
+import Std.Data.TreeMap.Raw.Lemmas
+import Std.Data.TreeMap.Raw.WF
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # What the masked record needs of the statement, at several tables
@@ -11,13 +49,13 @@ import all Lean.Data.Json.Basic
 `Case.stmtAt`: at every good case of several tables, `StmtAt` holds from the case's setup alone (`Case.setupTables`: the scope's statements hold no public inputs). So
 `StmtOkJ` holds (`stmtOkJ`), and `completeJS`, `completeAllS` are `completeJO`, `completeAll` without it.
 
-* A session of several tables (`setupTables_spec`) keeps the statement's draw, which is a subset or a stratified draw
+* A session of several tables (`setupTables_spec`) keeps the statement's sample, which is a subset or a stratified sample
   (the setup refuses any other law at several tables) whose units are the session's instances; its `Σ` is a SHA-512
   digest; and its `Hello` is `helloOf`'s at the tables' names.
-* A subset draw that decodes is an object of exactly `law`, `population`, `k` and `units` (`UnitDraw.ofJson`'s key
+* A subset sample that decodes is an object of exactly `law`, `population`, `k` and `units` (`UnitDraw.ofJson`'s key
   count), a string, natural numbers and an array of them, so it is printable and has no closure (`good_subset`); a
   stratified one has exactly `law`, `population`, `units`, `k` and `strata`, so it is printable
-  (`JsonRT.good_stratified`) and has no closure either (`closure_stratified`); the statement's draw is JSON that
+  (`JsonRT.good_stratified`) and has no closure either (`closure_stratified`); the statement's sample is JSON that
   `Flock.JsonParse.parse` read, so it is well formed.
 * A masked statement's coins are its keyed coin tree (`zkCoins`), so the `Hello`'s `coins` entry is the tree's spec with
   a nonce, an object; `canon` prints the `Hello` and `parse` reads back an alike object (`hello_ok`), which stays
@@ -127,7 +165,7 @@ theorem hello_ok {tags : Tags} {sigma : ByteArray} {mPts : ℕ} {ct : CoinTree.S
       | exact ⟨.str _, good_toJson _, .str _, harr, hlink, good_coins ct "", .str _⟩
       | exact ⟨.str _, good_toJson _, .str _, harr, hlink, good_coins ct ""⟩
 
-/-! ## A subset draw that decodes is printable -/
+/-! ## A subset sample that decodes is printable -/
 
 private theorem key_mem {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) {L : List String} (hL : L.Nodup)
     (hin : ∀ k ∈ L, k ∈ m) (hs : m.size = L.length) {k : String} (hk : k ∈ m) : k ∈ L := by
@@ -239,7 +277,7 @@ theorem good_obj_of {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) {L : L
   exact hg
 
 set_option maxHeartbeats 4000000 in
-/-- **A subset draw that decodes is printable**, an object of exactly `law`, `population`, `units` and `k`, so it has no
+/-- **A subset sample that decodes is printable**, an object of exactly `law`, `population`, `units` and `k`, so it has no
 closure. -/
 theorem good_subset {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D) {k : ℕ}
     (hl : D.law = .subset k) : Good j ∧ D.closure = #[] := by
@@ -286,7 +324,7 @@ theorem good_subset {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDra
         simp at this
 
 set_option maxHeartbeats 4000000 in
-/-- **A stratified draw that decodes has no closure**: an object of exactly `law`, `population`, `units`, `k` and
+/-- **A stratified sample that decodes has no closure**: an object of exactly `law`, `population`, `units`, `k` and
 `strata`, so it holds no `closure` key. -/
 theorem closure_stratified {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D) {K : ℕ}
     {strata : Array Draw.Stratum} (hl : D.law = .stratified K strata) : D.closure = #[] := by
@@ -342,7 +380,7 @@ private theorem mapM_some_ok {d : Json} {u? : Option Draw.UnitDraw}
   | ok u => rw [hd] at h; cases h; exact ⟨u, rfl, rfl⟩
 
 set_option maxHeartbeats 4000000 in
-/-- **The session spec of several tables**: its draw the statement's, a subset or a stratified draw whose units are its
+/-- **The session spec of several tables**: its sample the statement's, a subset or a stratified sample whose units are its
 instances, its
 `Σ` a SHA-512 digest, and its `Hello` `helloOf`'s at the tables' names. -/
 theorem setupTables_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ}
@@ -433,8 +471,8 @@ theorem Case.setupTables (c : Case H rel) :
   setupTables_of c.scope c.setup
 
 /-- **What the masked record needs of the statement holds at every good case of several tables** (`StmtAt`), under
-the JSON library's specification: `Σ` is a SHA-512 digest, the session's draw is the statement's, a subset or a
-stratified draw that is
+the JSON library's specification: `Σ` is a SHA-512 digest, the session's sample is the statement's, a subset or a
+stratified sample that is
 printable and decodes to the session's instances, and its `Hello` reads back with `coins` an object. -/
 theorem Case.stmtAt (c : Case H rel) (hc : 1 < c.sts.size) : StmtAt c := by
   obtain ⟨hu, hsig, hd, hh⟩ := setupTables_spec c.setupTables hc

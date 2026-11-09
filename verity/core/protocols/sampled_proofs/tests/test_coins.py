@@ -1,4 +1,4 @@
-"""A draw's coins: exact samplers over a byte source (a challenger's coins), and the one-stage draws they make, byte for byte the Lean
+"""A sample's coins: exact samplers over a byte source (a challenger's coins), and the one-stage samples they make, byte for byte the Lean
 verifier's `Flock.Draw`."""
 
 from __future__ import annotations
@@ -119,7 +119,7 @@ def test_draw_first_is_the_lean_verifiers_draw_on_the_same_bytes():
     are `drawOn`'s on the same bytes, for every sampling design (a bernoulli sampling design at its NUM/DEN as written, unreduced), and
     `one_stage.draw.check_draw` accepts the sample against the sampling design and the population."""
     rng = random.Random(8)
-    laws = [{"law": "subset", "k": 0}, {"law": "subset", "k": 4}, {"law": "subset", "k": 10}, {"law": "bernoulli", "p": "2/6"},
+    laws = [{"law": "subset", "k": 1}, {"law": "subset", "k": 4}, {"law": "subset", "k": 10}, {"law": "bernoulli", "p": "2/6"},
             {"law": "bernoulli", "p": "0/3"}, {"law": "bernoulli", "p": "3/3"}, _stratified(1), _stratified(4), _stratified(10),
             _work(1), _work(4), _work(10)]
     for case in range(120):
@@ -131,6 +131,8 @@ def test_draw_first_is_the_lean_verifiers_draw_on_the_same_bytes():
     big = {"law": "subset", "k": 300}
     src = rng.randbytes(8192)
     assert draw_first(OwnRandomness(_stream(src)), big, 1_000_000)["units"] == _draw_on(big, 1_000_000, src)
+    with pytest.raises(ValueError, match="draws at least one unit"):
+        draw_first(OwnRandomness(_stream(src)), {"law": "subset", "k": 0}, 10)
 
 
 def test_a_stream_that_runs_out_is_extended_as_lean_does():

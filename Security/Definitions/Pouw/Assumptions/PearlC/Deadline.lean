@@ -1,6 +1,8 @@
 module
 
+public import Definitions.Pouw.Game.Deadline
 public import Definitions.Pouw.PearlC.Deadline
+public import Definitions.Pouw.PearlC.Game
 
 /-!
 # The deadline's named assumption in Pearl-C's game (trusted; a `Prop` taken as a hypothesis, never an `axiom`)

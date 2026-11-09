@@ -1,17 +1,52 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.DeployScope
-public import Proofs.Flock.Claims.Recursion.VStarCross
-public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+public import Proofs.Flock.Claims.Recursion.Deploy
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Recursion.VStarCross
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Refine.Walk
+import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
 # Flock's plain verifier sets the inner statement up as its files do
 
 The compiled verifier reads the inner statement through its files (`RecCoins.Files`): its circuit, public file and
 partition, and how Flock's plain verifier is told to set it up (`RecCoins.InnerForm`: its statement id, lookup tables
-and draw), which each staged V* statement hands it from the inner statement `x` carries (`partRaw`,
+and sample), which each staged V* statement hands it from the inner statement `x` carries (`partRaw`,
 `innerFormOf`). Its setup refuses an inner shape off the files' numbers and an inner statement set up otherwise than
 the files set it up (`RecSetup.checkShape`, `RecSetup.checkForm`), and its readers refuse the files in part
 (`sourceOf`), so `RecScope.accepts` holds both.
@@ -19,11 +54,11 @@ the files set it up (`RecSetup.checkShape`, `RecSetup.checkForm`), and its reade
 `innerSetup_files`: where the setup's checks accept, Flock's plain verifier (`FlockDeploy.setupOf false`) sets the inner
 statement up as one table at the `m`, `k_log` and region count, and with the points, that the files set it up at.
 
-* `checkForm_ok`: the inner statement is a `Tags.circuitPlainLeaves` statement with no lookup table, at a draw that proves every one of the files' units in order.
+* `checkForm_ok`: the inner statement is a `Tags.circuitPlainLeaves` statement with no lookup table, at a sample that proves every one of the files' units in order.
 * `ins_plainLeaves`, `check_plain`: Flock's plain verifier reads it so (`Raw.ins`), at one table and without public
   inputs (`ProvedScope.check`, which `innerOk` runs).
-* `files_stmt`: both are one `Stmt.setupHidden` table (`HiddenExec.setupTables_okH`), the files' at no draw.
-* `drawn_full`: a full draw keeps `n`, so `m`, and the regions, whose count is the circuit's ports
+* `files_stmt`: both are one `Stmt.setupHidden` table (`HiddenExec.setupTables_okH`), the files' at no sample.
+* `drawn_full`: a full sample keeps `n`, so `m`, and the regions, whose count is the circuit's ports
   (`regions_size`).
 -/
 
@@ -46,7 +81,7 @@ theorem jsonOf_of {b : ByteArray} {t : String} {d : Lean.Json} {g : String → S
   | error e => rw [hp] at hd; cases hd
   | ok j => rw [hp] at hd; cases hd; rfl
 
-/-- **What `checkForm` takes**: a `Tags.circuitPlainLeaves` statement with no lookup table, at a draw (`jsonOf`, as Flock's plain verifier reads it) that proves every one of `st`'s units in order. -/
+/-- **What `checkForm` takes**: a `Tags.circuitPlainLeaves` statement with no lookup table, at a sample (`jsonOf`, as Flock's plain verifier reads it) that proves every one of `st`'s units in order. -/
 theorem checkForm_ok {fm : RecCoins.InnerForm} {st : Stmt} {u : Unit}
     (h : RecSetup.checkForm (some fm) st = .ok u) :
     fm.statement = Tags.circuitPlainLeaves.name ∧ fm.tables = [] ∧
@@ -152,7 +187,7 @@ theorem check_plain {r : Readable.Read} (h : r.check = .ok ()) (hz : r.zk = fals
 
 /-- **Flock's plain verifier reads a `Tags.circuitPlainLeaves` statement** (which it refuses with `--coins os`) at the
 files' tags (`RecCoins.innerTags`), on a seed's coins, with the statement's files, table count, lookup tables,
-partition, draw and public inputs. -/
+partition, sample and public inputs. -/
 theorem ins_plainLeaves {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .ok s) (hz : w.zk = false)
     (hs : w.statement = Tags.circuitPlainLeaves.name) :
     s.read.zk = false ∧ s.read.tags = RecCoins.innerTags ∧ s.read.coins = Coins.seed ∧
@@ -168,7 +203,7 @@ theorem ins_plainLeaves {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins =
     | (cases h; done)
     | (cases h; exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, by assumption, ⟨_, by assumption, rfl⟩, rfl⟩)
 
-/-! ## A full draw keeps the files' numbers -/
+/-! ## A full sample keeps the files' numbers -/
 
 /-- `HmOut.regions` has one region per port, whatever the public file. -/
 theorem regions_size {c : Circuit} {pub : Public} {rs : Array Region} (h : HmOut.regions c pub = .ok rs) :
@@ -176,8 +211,8 @@ theorem regions_size {c : Circuit} {pub : Public} {rs : Array Region} (h : HmOut
   unfold HmOut.regions at h
   exact (FlockSoundness.Discharge.Exec.range_mapM_ok h).1
 
-/-- **A full draw keeps `m` and the regions**: a hidden-output statement set up at a draw that proves every one of the
-undrawn statement's units, in order, has its `n`, hence its `m`, its `k_log` and its region count. -/
+/-- **A full sample keeps `m` and the regions**: a hidden-output statement set up at a sample that proves every one of the
+unsampled statement's units, in order, has its `n`, hence its `m`, its `k_log` and its region count. -/
 theorem drawn_full {T : Tags} {cf pf : ByteArray} {co co' : Coins} {tb : List (String × ByteArray)}
     {pa pa' : Option Lean.Json} {pr pr' : Option ByteArray} {d : Lean.Json} {D : Draw.UnitDraw} {st st' : Stmt}
     (h' : Stmt.setupHidden T cf pf co tb none pa pr = .ok st')
@@ -197,7 +232,7 @@ theorem drawn_full {T : Tags} {cf pf : ByteArray} {co co' : Coins} {tb : List (S
   refine ⟨by rw [s.m, s'.m, hnbl, hc], by rw [hc], ?_⟩
   rw [regions_size s.regions, regions_size s'.regions, hc]
 
-/-- **The files set the inner statement up as one hidden-output table at no draw** (`RecCoins.Files.stmt`). -/
+/-- **The files set the inner statement up as one hidden-output table at no sample** (`RecCoins.Files.stmt`). -/
 theorem files_stmt {f : RecCoins.Files} {spec : SessionSpec} {st : Stmt}
     (h : f.stmt "the inner session" = .ok (spec, st)) :
     Stmt.setupHidden RecCoins.innerTags f.circuit f.pub RecVStar.innerTree [] none (some f.partition) f.program = .ok st ∧
@@ -223,8 +258,8 @@ Flock's plain verifier (`FlockDeploy.setupOf false`) sets the inner statement up
 region count, and with the points, that the files set it up at (`RecCoins.Files.stmt`), reading it at the files' tags
 (`RecCoins.innerTags`) and with no public inputs: `RecSetup.checkForm` holds the
 inner statement to a `Tags.circuitPlainLeaves` statement with no lookup table, at a
-draw of every one of the files' units in order (`checkForm_ok`); the plain verifier's statement check gives one table and no
-public inputs (`check_plain`); so both are one hidden-output table (`files_stmt`), and the full draw keeps the files'
+sample of every one of the files' units in order (`checkForm_ok`); the plain verifier's statement check gives one table and no
+public inputs (`check_plain`); so both are one hidden-output table (`files_stmt`), and the full sample keeps the files'
 numbers (`drawn_full`). -/
 theorem innerSetup_files {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.accepts (readOf r) = true) :
     ∃ f spec' st' s spec st, filesOf r = some (.files f) ∧ f.stmt "the inner session" = .ok (spec', st') ∧

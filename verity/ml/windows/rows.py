@@ -75,10 +75,10 @@ from verity.ml.commitments import hm96, row_table as RT
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.hm96 import batch as HB
-from verity.ml.commitments.merkle import CommitmentDomain, levels, merkle_depth
+from verity.ml.commitments.merkle import CommitmentDomain, levels, merkle_depth, tree_levels
 from verity.ml.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
-                                           sha512_row_prefix, sha512_row_seg_digest, sha512_row_v2_prefix)
+                                           row_leaf, sha512_row_prefix, sha512_row_seg_digest, sha512_row_v2_prefix)
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.windows.population import population_program, template_partition
 
@@ -120,14 +120,14 @@ class ValueRows:
     """`commit`'s rows of an input port given by reference: rows ``positions`` of ``value``, a registered value of 16-bit leaves
     (core's ``one_stage.registered.Registered``: ``words``, ``word_bits``, ``rows``, ``salts`` and ``bcs`` by row), committed
     under the value's salts, so each row's ``b || c`` is the value's. ``salts``: those rows' salts concatenated, when the
-    caller has drawn them (`value_salts`), else drawn here."""
+    caller has sampled them (`value_salts`), else sampled here."""
     value: Any
     positions: tuple[int, ...]
     salts: bytes | None = field(default=None, repr=False, compare=False)
 
 
 def value_salts(value: Any, positions: Sequence[int] | np.ndarray) -> bytes:
-    """Rows ``positions`` of registered value ``value``: their salts concatenated, all at once where its salts draw many
+    """Rows ``positions`` of registered value ``value``: their salts concatenated, all at once where its salts sample many
     (``salts.at``, `pouw.h1.registered.Salts`), else one by one."""
     at = getattr(value.salts, "at", None)
     return at(positions) if at is not None else b"".join(bytes(value.salts[int(i)]) for i in positions)
@@ -314,12 +314,12 @@ class RowTable:
 
 @dataclass(frozen=True)
 class Binding:
-    """What the roots are bound to: the verifier's population program and query (the partition over them), the law it draws by, the
+    """What the roots are bound to: the verifier's population program and query (the partition over them), the sampling design it samples by, the
     run (the record's run root, hex), and the members the population is made of, in the partition's order (refused otherwise); and
     its row tables, grouped by segment in rising order and in the integration's order within one, every rank of each the row of
     at least one linked member's ``x`` table, under ``context`` (hex, 64 bytes known before the first segment: the live coin
     commitment's root).  A ``work`` law
-    draws by the verifier's ``work_table`` (`draw.work_table`), which the registration's law is expanded under."""
+    samples by the verifier's ``work_table`` (`draw.work_table`), which the registration's law is expanded under."""
     program: Any
     query: dict[str, Any]
     law: dict[str, Any]
@@ -616,7 +616,7 @@ def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *,
     ``segment_roots`` (what the integration recorded before each segment's coin, by segment), each must be the window's, or the
     commit is refused.
 
-    ``salt_key``: tests only; an integration draws 32 fresh OS bytes.  ``row_salt_key``: the run's row key the recorded segment
+    ``salt_key``: tests only; an integration samples 32 fresh OS bytes.  ``row_salt_key``: the run's row key the recorded segment
     roots were salted under (32 bytes); fresh OS bytes when ``None``, which no recorded segment root can match.
     ``salts_of``: by port, an outside registered value's salts, one a row, so its rows' ``b || c`` are the value's (`write`).
 
@@ -772,11 +772,13 @@ def leaf_layer(publics: Mapping[str, bytes]) -> str:
 
 
 def registration(c: Committed, provenance: Mapping[str, Any], previous: str | None = None, *, kind: str = "served",
-                 registrar: Any) -> dict[str, Any]:
+                 registrar: Any, entries: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """Core's ``verity/registration/v1`` record of the window, made by ``registrar`` (core's ``one_stage.registration``: its
     ``record``, ``KINDS``): its program, query and law, the scheme, every port's root, leaves and window domain, the leaf layer,
-    and ``window = {"kind": kind, "run": <the record's run root>, **provenance}``.  ``served``: these roots are the integration's
-    own commitment as it ran, made before any draw; ``stand-in``: a fresh commitment to values opened from its record afterwards,
+    and ``window = {"kind": kind, "run": <the record's run root>, **provenance}``, chained after ``previous`` (the digest of
+    the prover's last record; None for its first).  ``entries``: those of the values its program takes as parameters
+    (``Registered.entry()`` each), which make it ``verity/registration/v2``.  ``served``: these roots are the integration's
+    own commitment as it ran, made before any sample; ``stand-in``: a fresh commitment to values opened from its record afterwards,
     whose link to the record's roots is provenance."""
     if kind not in registrar.KINDS:
         raise ValueError(f"window kind {kind!r} is not one of {registrar.KINDS}")
@@ -784,7 +786,8 @@ def registration(c: Committed, provenance: Mapping[str, Any], previous: str | No
     roots = [{"port": p, "root": c.roots[p].hex(), "leaves": c.domains[p].count, "domain": c.domains[p].domain_id.hex()} for p in c.roots]
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     return registrar.record(w.program, w.query, w.law, SCHEME, roots, {**provenance, "kind": kind, "run": w.run},
-                            leaf_layer=leaf_layer(publics), previous=previous, work_table=w.work_table)
+                            leaf_layer=leaf_layer(publics), previous=previous, work_table=w.work_table,
+                            registered=list(entries))
 
 
 def units_doc(m: Member) -> dict[str, Any]:
@@ -861,6 +864,76 @@ def registered_header(win: Mapping[str, Any], k: int) -> dict[str, Any] | None:
         if missing := [x for x in e["positions"] if str(x) not in got]:
             raise ValueError(f"member {k} {p}: the window gives no path for rows {missing[:4]} of {e['value']!r}")
         out[p] = {**e, "paths": [got[str(x)] for x in e["positions"]]}
+    return out
+
+
+def own_value(port: str) -> str:
+    """The value a member's port ``<member>/<port>`` is read as at its own registered root (`own_entries`, `own_reads`).
+    It is never the port's own name: the audit takes a value named as a registration root's port for a registered value
+    of the record (`audit.session_registered`), which a registration listing none refuses."""
+    return f"committed/{port}"
+
+
+def own_entries(mem: Mapping[str, Any], body: bytes, without: Collection[str] = ()) -> dict[str, dict[str, Any]]:
+    """Header ``registered`` entries (`registered_header`'s form) for shared-row member ``mem``'s ports but ``without``, from
+    its public ``body`` (`Committed.public_body`): each port whose table is one row per instance, instance i's row i, as rows
+    of the value `own_value` names, its own tree, whose root and domain the registration holds (``frame_v3``'s), row i at
+    position i with its path. A statement checked against registered reads must have every port registered
+    (`Flock.Registered.checkComplete`); these are the reads of the ports its registered values' reads leave, which the
+    verifier makes at the registration's roots (`own_reads`). A port of another table layout gets none: its readers'
+    positions are the prover's refs. Refused where a port's rows don't make its ``frame_v3`` root."""
+    shared = mem.get("shared_rows")
+    if not shared:
+        return {}
+    n, ports, fv = int(mem["n"]), [p for p, _w in mem["ports"]], mem["frame_v3"]
+    starts, at = {}, 0
+    for p in ports:
+        starts[p], at = at, at + int(shared[p]) * BC_BYTES
+    if len(body) != at + 4 * n * len(ports):
+        raise ValueError(f"{mem['name']}: a public body of {len(body)} bytes, not its tables' and refs' {at + 4 * n * len(ports)}")
+    refs = np.frombuffer(body, dtype="<u4", offset=at).reshape(n, len(ports))
+    out = {}
+    for j, p in enumerate(ports):
+        if p in without or int(shared[p]) != n or not np.array_equal(refs[:, j], np.arange(n)):
+            continue
+        dom = CommitmentDomain(bytes.fromhex(fv["bindings"][p]), OWNER, RangeIndexedDomain(0, n), hash="sha512")
+        bcs = [body[starts[p] + BC_BYTES * i:starts[p] + BC_BYTES * (i + 1)] for i in range(n)]
+        lv = tree_levels(dom, [row_leaf(dom, i, INST.tree_leaf(INST.default_key, bc), fv["schemas"][p]) for i, bc in enumerate(bcs)])
+        if dom.domain_id.hex() != fv["domain_ids"][p] or lv[-1][0].hex() != fv["roots"][p]:
+            raise ValueError(f"{mem['name']} {p}: its rows' tree is not its frame_v3 root")
+        out[p] = {"value": own_value(f"{mem['name']}/{p}"), "positions": list(range(n)),
+                  "paths": [b"".join(level[(i >> d) ^ 1] for d, level in enumerate(lv[:-1])).hex() for i in range(n)]}
+    return out
+
+
+def own_reads(reads: Mapping[str, Mapping[str, Any]], w: Binding, roots: Mapping[str, Mapping[str, Any]], *,
+              registered: Any) -> dict[str, dict[str, Any]]:
+    """The verifier's ``--registered`` files ``reads`` (by member key: a read of a registered value or of a row table) with
+    every other port of the member as rows of its own tree at the root the registration holds for it (``roots``, the
+    registration's entries by ``<member>/<port>``), unit ``m.base + i`` reading row i: Lean refuses a statement checked
+    against registered reads unless they name every port of its circuit (`Flock.Registered.checkComplete`), so each row
+    a member's outputs read opens a root registered before any coin. The prover's header gives the paths (`own_entries`).
+    A port whose registered tree isn't one leaf a unit gets none, and Lean refuses the member at that port. ``registered``
+    is core's ``one_stage.registered``, as `interface.registered_reads` takes it. Refused (ValueError) where the
+    registration holds no root for a port."""
+    out = dict(reads)
+    for m in w.members:
+        f = reads.get(m.key)
+        if f is None:
+            continue
+        ports, words = dict(f["ports"]), dict(m.rows + m.outs)
+        for p, _w in m.all_rows:
+            if p in ports:
+                continue
+            e = roots.get(m.port(p))
+            if e is None:
+                raise ValueError(f"{m.key} {p}: the registration holds no root for it")
+            if int(e["leaves"]) != m.n:
+                continue
+            ports[p] = {"value": own_value(m.port(p)), "root": e["root"], "leaves": m.n, "words": words[p],
+                        "word_bits": registered.WORD_BITS, "domain": e["domain"], registered.SCHEMA_KEY: m.schema(p),
+                        "reads": list(range(m.n)), registered.READS_FROM: m.base}
+        out[m.key] = {**f, "ports": dict(sorted(ports.items()))}
     return out
 
 
@@ -1017,11 +1090,13 @@ def read_private(window_dir: str | Path, win: Mapping[str, Any], k: int) -> byte
 
 def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: dict[str, Any], extra: dict[str, Any] | None = None, *,
           kind: str = "served", registered: Mapping[str, dict[str, Any]] | None = None, registrar: Any,
-          index_salt: bytes | None = None) -> dict[str, Any]:
+          index_salt: bytes | None = None, previous: str | None = None,
+          entries: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """The window's files, its registration's window of ``kind`` (`registration`, by ``registrar``, which also names and digests
-    the record: ``FORMAT``, ``digest``); the window's provenance gets the index's hiding leaf (`index_leaf`), so the
+    the record: ``FORMAT``, or ``FORMAT_V2`` with ``entries``, and ``digest``), chained after ``previous`` and registering
+    the values' ``entries``; the window's provenance gets the index's hiding leaf (`index_leaf`), so the
     registration binds the unit -> label map and says nothing of it. ``index.json`` and its salt are prover only: the salt is
-    ``index_salt`` (192 bytes, a committer's drawn under its key) or else fresh bytes from the OS.  ``registered``: by member
+    ``index_salt`` (192 bytes, a committer's sampled under its key) or else fresh bytes from the OS.  ``registered``: by member
     key, an outside value's reads (``salts_of``), each a header entry
     (``{port: {"value", "positions", "paths"}}``), whose paths ``window.json`` gives once for the window
     (``registered_paths``, by value and position; `registered_header`).  A member's ``m<k>-private.bin`` is its prover body
@@ -1040,7 +1115,8 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
         f.write(ib)
     with _private(d / INDEX_SALT) as f:
         f.write(salt)
-    rec = registration(c, {**provenance, "index_leaf": leaf, "order": ORDER}, kind=kind, registrar=registrar)
+    rec = registration(c, {**provenance, "index_leaf": leaf, "order": ORDER}, previous, kind=kind, registrar=registrar,
+                       entries=entries)
     (d / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True) + "\n")
     trees: dict[int, RT.RowTable] = {}
     members, paths, read = [], {}, {}
@@ -1104,7 +1180,8 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
            **({"row_tables": tables, "row_table_steps": segs} if tables else {}),
            **({"registered_paths": paths} if paths else {}), **({"value_rows": values} if values else {}),
            "partition": c.window.partition, "partition_digest": c.window.partition_digest, "run": c.window.run,
-           "domain_tag": DOMAIN_TAG, "registration": registrar.FORMAT, "registration_digest": registrar.digest(rec),
+           "domain_tag": DOMAIN_TAG, "registration": registrar.FORMAT_V2 if entries else registrar.FORMAT,
+           "registration_digest": registrar.digest(rec),
            "leaf_layer": rec["leaf_layer"],
            "leaf_layer_rule": LEAF_LAYER, "index_leaf": leaf, "index_rule": INDEX_RULE,
            "salt_rule": "chacha20 (rfc 8439), a fresh 32-byte os key per window, nonce = the row port's index over all members "

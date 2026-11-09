@@ -1,20 +1,20 @@
 module
 
 public import Flock.Firewall
-public import Flock.Firewall.Contract
+import Flock.Firewall.Contract
 
 /-!
-# The firewall's salts reach what it sends only as commit strings
+# The ZK server's salts reach what it sends only as commit strings
 
-`run_resalt`: on one request stream, the firewall (`Flock.Firewall.run`) at two salt lists of one length sends the same
+`run_resalt`: on one request stream, the ZK server (`Flock.Firewall.run`) at two salt lists of one length sends the same
 messages but for their commit strings, finishes at both or at neither, and its commit strings are those of the same 64-byte
 row digests under each list's salts, in salt order. `run_of_one` is its use: a session whose messages at one salt list are
 a template `σ` filled with the commit strings of digests `D`, finished, sends `σ` filled with `D`'s commit strings under
 every salt list of that length.
 
-What a message says but its commit strings is `blank`; its commit strings, in the order the firewall drew their salts,
+What a message says but its commit strings is `blank`; its commit strings, in the order the ZK server drew their salts,
 `holes`; `fillAll` puts commit strings back into blanked messages. The proof follows `run`'s loop, `step`'s cases and the
-salting `mapM`s at once at the two salt lists (`Rel`, a relational reading of the firewall's state monad).
+salting `mapM`s at once at the two salt lists (`Rel`, a relational reading of the ZK server's state monad).
 -/
 
 @[expose] public section
@@ -40,7 +40,7 @@ def blank : Sent → Sent
   | .round stream tops level0 rows n => .round stream (tops.map blankTop) level0 (blankTop rows) n
   | .finish ok => .finish ok
 
-/-- A message's commit strings, in the order the firewall drew their salts. -/
+/-- A message's commit strings, in the order the ZK server drew their salts. -/
 def holes : Sent → List ByteArray
   | .hello _ => []
   | .commit roots => roots.flatMap (·.2)
@@ -49,7 +49,7 @@ def holes : Sent → List ByteArray
   | .round _ tops _ rows _ => tops.flatten ++ rows
   | .finish _ => []
 
-/-- The commit strings of what the firewall sent, in salt order. -/
+/-- The commit strings of what the ZK server sent, in salt order. -/
 def holesOf (sent : Array Sent) : List ByteArray := sent.toList.flatMap holes
 
 /-- `Commit`'s tops, their commit strings in order from `cs`. -/
@@ -177,7 +177,7 @@ section Rel
 variable (ys ys' : List ByteArray)
 
 /-- What two states of one session at the salt lists `ys`, `ys'` drew and sent: `z`, `z'` are their salts left, `x`, `x'`
-what they sent, and `p`, `p'` the commit strings drawn and not yet sent. Both drew as many salts, the first ones of their
+what they sent, and `p`, `p'` the commit strings sampled and not yet sent. Both drew as many salts, the first ones of their
 lists; they sent the same messages but for their commit strings; and their commit strings, the sent ones then the
 pending ones, are those of the same 64-byte digests `ds` under each list's salts, in order. -/
 def Drawn (p p' : List ByteArray) (z : List ByteArray) (x : Array Sent) (z' : List ByteArray) (x' : Array Sent) :
@@ -188,7 +188,7 @@ def Drawn (p p' : List ByteArray) (z : List ByteArray) (x : Array Sent) (z' : Li
       holesOf x ++ p = List.zipWith Hm96.Default512.commitString ds ys ∧
       holesOf x' ++ p' = List.zipWith Hm96.Default512.commitString ds ys'
 
-/-- Two outcomes of the firewall's state monad, refusals or results with states. -/
+/-- Two outcomes of the ZK server's state monad, refusals or results with states. -/
 def Both {α α' : Type} (P : α → α' → State → State → Prop) : V (α × State) → V (α' × State) → Prop
   | .ok (a, t), .ok (a', t') => P a a' t t'
   | .ok _, .error _ => False
@@ -302,7 +302,7 @@ theorem Rel.send_same {p p' : List ByteArray} {m : Sent} (hm : holes m = []) :
     Rel ys ys' p p' (Firewall.send m) (Firewall.send m) (fun _ _ r r' => r = p ∧ r' = p') :=
   Rel.send rfl (by rw [hm, List.nil_append]) (by rw [hm, List.nil_append])
 
-/-- A computation the firewall's state doesn't enter (`decode`, `split`, `nodes`, `pinned`), lifted. -/
+/-- A computation the ZK server's state doesn't enter (`decode`, `split`, `nodes`, `pinned`), lifted. -/
 theorem Rel.lift {α : Type} {p p' : List ByteArray} {x : V α} :
     Rel ys ys' p p' (liftM x : Fw α) (liftM x) (fun a a' q q' => a = a' ∧ q = p ∧ q' = p') := by
   intro st z' x' hD
@@ -328,7 +328,7 @@ theorem Rel.ite_jp {α α' : Type} {p p' : List ByteArray} {Q : α → α' → L
     Rel ys ys' p p' (if c then a else b) (if c' then a' else b') Q :=
   Rel.ite hc (fun h => ha h hb) fun _ => hb
 
-/-- `l.mapM f` at two alike states, where `f` draws no salt. -/
+/-- `l.mapM f` at two alike states, where `f` samples no salt. -/
 theorem Rel.mapM_same {α β : Type} (f : α → Fw β)
     (hf : ∀ a q q', Rel ys ys' q q' (f a) (f a) (fun b b' r r' => b = b' ∧ r = q ∧ r' = q')) :
     ∀ (l : List α) (p p' : List ByteArray), Rel ys ys' p p' (l.mapM f) (l.mapM f)
@@ -352,7 +352,7 @@ theorem run_salted (row : Array Nat) (st : State) :
   | mk sent hello committed roots linked streams rounds stopped finished salts =>
     cases salts <;> rfl
 
-/-- **Salting a row at two alike states**: each draws its next salt, and the commit strings are of one digest. -/
+/-- **Salting a row at two alike states**: each samples its next salt, and the commit strings are of one digest. -/
 theorem Rel.salted {p p' : List ByteArray} (row : Array Nat) :
     Rel ys ys' p p' (salted row) (salted row)
       (fun c c' q q' => ByteArray.empty = ByteArray.empty ∧ q = p ++ [c] ∧ q' = p' ++ [c']) := by
@@ -394,7 +394,7 @@ theorem Rel.salted {p p' : List ByteArray} (row : Array Nat) :
       rw [← List.append_assoc, hh', zipWith_append_left, hy']
       rfl
 
-/-- **`l.mapM f` at two alike states**, where each `f a` returns results alike under `B` and draws the commit strings
+/-- **`l.mapM f` at two alike states**, where each `f a` returns results alike under `B` and samples the commit strings
 `H` of them. -/
 theorem Rel.mapM {α β γ : Type} (f : α → Fw β) (H : β → List ByteArray) (B : β → γ)
     (hf : ∀ a q q', Rel ys ys' q q' (f a) (f a) (fun b b' r r' => B b = B b' ∧ r = q ++ H b ∧ r' = q' ++ H b')) :
@@ -629,7 +629,7 @@ theorem step_rel (s : Schedule) (req : Req) : Rel ys ys' [] [] (step s req) (ste
   | commit rootF roots publics => exact step_commit s rootF roots publics
   | prime => exact step_prime s
 
-/-- One request through the firewall, as `run` takes it: decoded, then `step`. -/
+/-- One request through the ZK server, as `run` takes it: decoded, then `step`. -/
 def stepOf (s : Schedule) (b : ByteArray) : Fw Unit := do step s (← decode b)
 
 theorem stepOf_rel (s : Schedule) (b : ByteArray) : Rel ys ys' [] [] (stepOf s b) (stepOf s b) Done := by
@@ -697,9 +697,9 @@ theorem loop_rel (s : Schedule) (reqs : List ByteArray) {ys ys' : List ByteArray
   forIn_yield (LoopRel ys ys') (body s) (fun b => body_rel s b) reqs _ _
     ⟨rfl, ys', #[], rfl, rfl, hl, [], (fun _ h => nomatch h), Nat.zero_le _, rfl, rfl, rfl, rfl⟩
 
-/-! ## What the firewall sends, at every salt list -/
+/-! ## What the ZK server sends, at every salt list -/
 
-/-- **The firewall at two salt lists of one length**: on one request stream it finishes at both or at neither, sends the
+/-- **The ZK server at two salt lists of one length**: on one request stream it finishes at both or at neither, sends the
 same messages but for their commit strings, and its commit strings are those of the same 64-byte digests `ds` under
 each list's salts, in salt order. -/
 theorem run_resalt (s : Schedule) (reqs : List ByteArray) {ys ys' : List ByteArray} (hl : ys.length = ys'.length) :
@@ -720,7 +720,7 @@ theorem run_resalt (s : Schedule) (reqs : List ByteArray) {ys ys' : List ByteArr
     rw [he]
     exact (List.append_nil _).symm.trans hh'
 
-/-- **One run fixes them all**: if at the salts `ys₀` the firewall finishes, sends the messages `σ` but for their
+/-- **One run fixes them all**: if at the salts `ys₀` the ZK server finishes, sends the messages `σ` but for their
 commit strings, and its commit strings are those of the 64-byte digests `D` under `ys₀`, then at every salt list `ys`
 of that length it finishes and sends `σ` filled with `D`'s commit strings under `ys`. -/
 theorem run_of_one (s : Schedule) (reqs : List ByteArray) {nh : Nat} (σ : List Sent) (D ys₀ : Fin nh → ByteArray)

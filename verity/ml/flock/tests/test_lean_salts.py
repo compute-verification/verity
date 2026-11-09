@@ -1,17 +1,15 @@
-"""The ZK server's value service (`Flock/Firewall/Values.lean`, `flock-firewall values`) and the session loop's check of a
-statement's value commitments (`Flock/Firewall/Salts.lean`, `flock-firewall session --salt-key --commitments`), live
-PROTOCOL.md §10.2: every value commitment's salt is the server's, derived from its own key, and no request takes one from
-the serving stack. Held here to the Python reference: each leaf's salt `SHA-512(k ‖ L ‖ s ‖ be32 j ‖ be64 i ‖ ctr)` for
-`ctr` 0, 1 and 2, its `b ‖ c` (`hm96.SHA512.commit_string`), its frame-v3-sha512 leaf and the table's root
-(`merkle.frame_hash`, `merkle.root_from_subtrees`) and the table's tag; a commit body carrying a salt, a refs file of another
-length, a row past its table and a forged tag, each refused; the key file its owner's alone and kept; a registration's
-record counting the sessions its epoch opened, each session registering once and in its own epoch only; and the loop
-serving a statement only when every hm96 tree of its public file is a table of a record of the server's
-(`test_lean_hello.py`'s fixture)."""
+"""The ZK server's value service (`Flock/Firewall/Values.lean`, `flock-firewall values`), live PROTOCOL.md §10.2: every
+value commitment's salt is the server's, derived from its own key, and no request takes one from the serving stack. Held
+here to the Python reference: each leaf's salt `SHA-512(k ‖ L ‖ s ‖ be32 j ‖ be64 i ‖ ctr)` for `ctr` 0, 1 and 2, its
+`b ‖ c` (`hm96.SHA512.commit_string`), its frame-v3-sha512 leaf and the table's root (`merkle.frame_hash`,
+`merkle.root_from_subtrees`) and the table's tag; a commit body carrying a salt, a refs file of another length, a row past
+its table and a forged tag, each refused; and the key file its owner's alone and kept. A registration is numbered on the
+ZK server's record and admitted there (`core-firewall values` and `core-firewall session --salt-key`,
+`verity/core/service/firewall/tests/test_firewall_registrations.py`), so this service, which has no record, registers
+nothing and this loop admits no registration."""
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import socket
 import stat
@@ -20,8 +18,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from test_lean_hello import BIN, FIXTURE, STATEMENT, built, zk  # noqa: F401
-from test_lean_session import Auditor, Loop, plain
+from test_lean_hello import BIN, built  # noqa: F401
 
 from verity.ml.commitments import hm96
 from verity.ml.commitments.merkle import frame_hash, root_from_subtrees
@@ -30,10 +27,9 @@ INST = hm96.SHA512
 SCHEMAS = ["hm96-sha512/row/v1", "hm96-sha512/row/v2", "hm96-sha512/row-seg/v1"]
 SALT_LABEL = hashlib.sha512(b"verity/zk-server/value-salt/v1\0").digest()
 TAG_LABEL = hashlib.sha512(b"verity/zk-server/value-commitment/v1\0").digest()
-REG_LABEL = hashlib.sha512(b"verity/zk-server/registration/v1\0").digest()
+INTERIOR_LABEL = hashlib.sha512(b"verity/zk-server/interior-key/v1\0").digest()
 NOT_THE_SERVERS = "its tag is not the ZK server's for its session, table, domain, leaf count, schema and root"
-NOT_OPENED = "is none the current epoch opened: a session registers once, in the epoch that opened it"
-NOT_A_RECORD = "its tag is not the ZK server's for its session count and table refs"
+NOT_HELD = "an interior session's, whose salts the service holds only while it runs"
 
 
 def _u(i: int) -> bytes:
@@ -45,15 +41,26 @@ def salt(k: bytes, s: bytes, j: int, i: int) -> bytes:
     return b"".join(hashlib.sha512(pre + bytes([c])).digest() for c in range(3))
 
 
-def table(k: bytes, s: bytes, j: int, dom: bytes, schema: str, xs: list[bytes]) -> tuple[bytes, bytes, list[bytes]]:
-    """The reference's root, tag and leaves' `b ‖ c` of table `j` of the commit session `s`."""
-    bcs = [INST.commit_string(INST.default_key, x, salt(k, s, j, i)) for i, x in enumerate(xs)]
+def interior_key(k: bytes, s: bytes) -> bytes:
+    return hashlib.sha512(k + INTERIOR_LABEL + s).digest()
+
+
+def table_with(ys: list[bytes], tk: bytes, s: bytes, j: int, dom: bytes, schema: str,
+               xs: list[bytes]) -> tuple[bytes, bytes, list[bytes]]:
+    """The reference's root, tag under the key `tk` and leaves' `b ‖ c` of table `j` of the commit session `s`, leaf `i`'s
+    salt `ys[i]`."""
+    bcs = [INST.commit_string(INST.default_key, x, y) for x, y in zip(xs, ys, strict=True)]
     leaves = {(0, i): frame_hash(b"leaf", dom, _u(i), _u(i), schema.encode(), INST.tree_leaf(INST.default_key, bc))
               for i, bc in enumerate(bcs)}
     root = root_from_subtrees(dom, len(xs), leaves)
-    tag = hashlib.sha512(k + TAG_LABEL + s + struct.pack(">I", j) + dom + struct.pack(">Q", len(xs))
+    tag = hashlib.sha512(tk + TAG_LABEL + s + struct.pack(">I", j) + dom + struct.pack(">Q", len(xs))
                          + bytes([SCHEMAS.index(schema)]) + root).digest()
     return root, tag, bcs
+
+
+def table(k: bytes, s: bytes, j: int, dom: bytes, schema: str, xs: list[bytes]) -> tuple[bytes, bytes, list[bytes]]:
+    """The reference's root, tag and leaves' `b ‖ c` of table `j` of the commit session `s`."""
+    return table_with([salt(k, s, j, i) for i in range(len(xs))], k, s, j, dom, schema, xs)
 
 
 def table_ref(s: bytes, j: int, dom: bytes, schema: str, n: int, root: bytes, tag: bytes) -> bytes:
@@ -62,12 +69,6 @@ def table_ref(s: bytes, j: int, dom: bytes, schema: str, n: int, root: bytes, ta
 
 def refs(tables: list[bytes], rows: list[tuple[int, int]]) -> bytes:
     return struct.pack(">II", len(tables), len(rows)) + b"".join(tables) + b"".join(struct.pack(">IQ", t, i) for t, i in rows)
-
-
-def record(k: bytes, m: int, trefs: list[bytes]) -> bytes:
-    """The reference's registration record of a session whose table refs are `trefs`, of an epoch of `m` sessions."""
-    head = struct.pack(">QI", m, len(trefs))
-    return head + b"".join(trefs) + hashlib.sha512(k + REG_LABEL + head + b"".join(trefs)).digest()
 
 
 class Values:
@@ -91,9 +92,11 @@ class Values:
                 out += b
         return out
 
-    def commit(self, tables: list[tuple[bytes, str, list[bytes]]]) -> tuple[bytes, list[tuple[bytes, bytes, list[bytes]]]]:
-        """Commits `tables` (domain id, schema, digests): the session and each table's root, tag and `b ‖ c`."""
-        line = f"commit {len(tables)}" + "".join(f" {d.hex()} {len(xs)} {sc}" for d, sc, xs in tables)
+    def commit(self, tables: list[tuple[bytes, str, list[bytes]]],
+               word: str = "commit") -> tuple[bytes, list[tuple[bytes, bytes, list[bytes]]]]:
+        """Commits `tables` (domain id, schema, digests), an interior commit where `word` is `interior`: the session and
+        each table's root, tag and `b ‖ c`."""
+        line = f"{word} {len(tables)}" + "".join(f" {d.hex()} {len(xs)} {sc}" for d, sc, xs in tables)
         out = self.request(line, b"".join(x for _, _, xs in tables for x in xs))
         head, _, out = out.partition(b"\n")
         assert head.startswith(b"ok "), head
@@ -227,37 +230,37 @@ def test_salts_only_for_the_servers_tables(values, tmp_path):
     assert v.salts(refs([table_ref(s2, 0, ts[0][0], ts[0][1], 3, got2[0][0], got2[0][1])], [(0, 0)])) == f"table ref 0: {NOT_THE_SERVERS}"
 
 
-def _trefs(s: bytes, ts, got) -> list[bytes]:
-    return [table_ref(s, j, dom, sc, len(xs), got[j][0], got[j][1]) for j, (dom, sc, xs) in enumerate(ts)]
-
-
-def test_a_registration_counts_its_epochs_sessions(values):
-    """A registration's record is the reference's: the number of sessions its epoch opened, the registered session's table
-    refs, each with its tag, and the record tag. It closes the epoch: the stack that committed its values three times and
-    registered the last gets a record that says three, and none of the other two, nor the registered one again, registers
-    after it; the next epoch counts from none."""
-    v, k = values
-    ts = _tables()
-    s1, g1 = v.commit(ts)
-    assert v.register(s1) == (1, record(k, 1, _trefs(s1, ts, g1)))
-    assert v.register(s1) == f"the session {s1.hex()} {NOT_OPENED}"
-    (s2, _), (s3, _), (s4, g4) = v.commit(ts), v.commit(ts[:1]), v.commit(ts)
-    assert v.register(s4) == (3, record(k, 3, _trefs(s4, ts, g4)))
-    for s in (s2, s3, s4, os.urandom(64)):
-        assert v.register(s) == f"the session {s.hex()} {NOT_OPENED}"
-    s5, g5 = v.commit(ts[1:])
-    assert v.register(s5) == (1, record(k, 1, _trefs(s5, ts[1:], g5)))
-
-
-def test_a_restarted_service_registers_no_earlier_session(tmp_path):
-    """The epoch lives only in the service's process: started again on its key, it registers none of the sessions an earlier
-    run opened, so a restart gives the stack no session the record doesn't count."""
+def test_an_interior_commit_holds_its_own_salts(tmp_path):
+    """An interior commit's leaves take salts the service drew from the operating system, not ones derived from its key:
+    the salts `salts` answers for its rows make each leaf's `b ‖ c` and the table's root, and its tags are under the
+    session's own key `SHA-512(k ‖ L ‖ s)`, not under `k`. The same digests committed again take other salts, a refs file
+    may name tables of both kinds, and a tag forged in any byte is refused. A service started again on the key holds no
+    earlier interior session's salts, and still answers a commit's."""
     key = tmp_path / "salt.key"
     v = Values(key)
-    s, _ = v.commit(_tables())
+    k = key.read_bytes()
+    ts = _tables()
+    s, got = v.commit(ts, "interior")
+    trefs = [table_ref(s, j, dom, sc, len(xs), got[j][0], got[j][1]) for j, (dom, sc, xs) in enumerate(ts)]
+    ys = [v.salts(refs(trefs, [(j, i) for i in range(len(xs))])) for j, (_, _, xs) in enumerate(ts)]
+    for j, ((dom, sc, xs), g, y) in enumerate(zip(ts, got, ys)):
+        per = [y[192 * i:192 * (i + 1)] for i in range(len(xs))]
+        assert len(y) == 192 * len(xs) and g == table_with(per, interior_key(k, s), s, j, dom, sc, xs), j
+        assert g[1] != table_with(per, k, s, j, dom, sc, xs)[1] and all(p != salt(k, s, j, i) for i, p in enumerate(per)), j
+    s2, got2 = v.commit(ts, "interior")
+    again2 = refs([table_ref(s2, 0, ts[0][0], ts[0][1], 3, got2[0][0], got2[0][1])], [(0, 0), (0, 1), (0, 2)])
+    assert s2 != s and v.salts(again2) != ys[0]
+    b, gotb = v.commit(ts[:1])
+    bref = table_ref(b, 0, ts[0][0], ts[0][1], 3, gotb[0][0], gotb[0][1])
+    assert v.salts(refs([trefs[1], bref], [(1, 2), (0, 0)])) == salt(k, b, 0, 2) + ys[1]
+    for at in (0, 64, 141, 205, 268):
+        forged = bytearray(trefs[2])
+        forged[at] ^= 1
+        assert v.salts(refs([bytes(forged)], [(0, 0)])) == f"table ref 0: {NOT_THE_SERVERS}", at
     v.close()
     again = Values(key)
-    assert again.register(s) == f"the session {s.hex()} {NOT_OPENED}"
+    assert again.salts(refs([bref, trefs[0]], [(0, 0)])) == f"table ref 1: {NOT_HELD}"
+    assert again.salts(refs([bref], [(0, 1)])) == salt(k, b, 0, 1)
     again.close()
 
 
@@ -268,87 +271,22 @@ def test_a_restarted_service_registers_no_earlier_session(tmp_path):
     ("register {s} {s}", b"", "err a request `register "),
 ])
 def test_a_malformed_registration_is_refused(values, line, body, why):
-    """A register request with a body, a session of another length or more than one session is refused, and the epoch's
-    session still registers after it."""
+    """A register request with a body, a session of another length or more than one session is refused, and so is a
+    well-formed one: this service has no record of the ZK server's to number it on."""
     v, _ = values
     s, _ = v.commit(_tables())
     out = v.request(line.format(s=s.hex()), body).decode(errors="replace")
     assert out.startswith(why) and out.count("\n") == 1, out
-    assert v.register(s)[0] == 1
+    assert v.register(s) == "a registration is numbered on the ZK server's record: `core-firewall values --state DIR`"
 
 
-def _trees(public: bytes) -> list[tuple[str, bytes, str, int]]:
-    """A public file's hm96 trees: each row's name, domain id, schema and leaf count."""
-    h = json.loads(public[:public.index(b"\n")])
-    fv, shared = h["frame_v3"], h.get("shared_rows")
-    return [(name, bytes.fromhex(fv["domain_ids"][name]), fv["schemas"][name], shared[name] if shared else h["instances"])
-            for name in sorted(fv["roots"]) if fv["schemas"][name] in SCHEMAS]
-
-
-def _with_roots(public: bytes, roots: dict[str, bytes]) -> bytes:
-    nl = public.index(b"\n")
-    h = json.loads(public[:nl])
-    h["frame_v3"]["roots"].update({k: r.hex() for k, r in roots.items()})
-    return json.dumps(h, separators=(",", ":"), sort_keys=True).encode() + public[nl:]
-
-
-def _session(public: Path, *flags: str) -> subprocess.CompletedProcess:
-    args = ["--statement", STATEMENT, "--circuit", str(FIXTURE / "stage" / "circuit.txt"), "--public", str(public)]
-    return subprocess.run([str(BIN), "session", "--verifier", "127.0.0.1:9", *args, *flags], input=b"", capture_output=True)
-
-
-def test_the_loop_serves_only_the_servers_commitments(zk, tmp_path):
-    """With the server's key and a records file of its registrations, the loop serves a statement every hm96 tree of whose
-    public file is a table of one of them, at its domain, leaf count, schema and root, and refuses before any session
-    (`refused WHY`, exit 2) the fixture's statement as the stack committed it, the statement on a session the server
-    committed but never registered, a record forged in any byte or answered under another key, a records file cut short,
-    and either flag without the other."""
-    public = (zk / "stage" / "pub-16.bin").read_bytes()
-    trees = _trees(public)
-    assert trees
-    key, other = tmp_path / "salt.key", tmp_path / "other.key"
-    v = Values(key)
-    s, got = v.commit([(dom, sc, [os.urandom(64) for _ in range(n)]) for _, dom, sc, n in trees])
-    m, rec = v.register(s)
-    s1, got1 = v.commit([(dom, sc, [os.urandom(64) for _ in range(n)]) for _, dom, sc, n in trees])
-    v.close()
-    w = Values(other)
-    s2, got2 = w.commit([(dom, sc, [os.urandom(64) for _ in range(n)]) for _, dom, sc, n in trees])
-    _, rec2 = w.register(s2)
-    w.close()
-    ours = tmp_path / "pub.bin"
-    ours.write_bytes(_with_roots(public, {name: g[0] for (name, *_), g in zip(trees, got)}))
-    assert m == 1
-    (tmp_path / "records.bin").write_bytes(rec)
-    flags = ["--salt-key", str(key), "--commitments", str(tmp_path / "records.bin")]
-
-    lp = Loop(Auditor(plain), ["--statement", STATEMENT, "--circuit", str(zk / "stage" / "circuit.txt"), "--public", str(ours), *flags])
-    lp.close()
-
-    def refused(public: Path, *flags: str) -> str:
-        p = _session(public, *flags)
-        assert p.returncode == 2 and p.stdout.decode().startswith("refused "), (p.returncode, p.stdout, p.stderr[-400:])
-        return p.stdout.decode().removeprefix("refused ").strip()
-
-    def with_records(*recs: bytes) -> list[str]:
-        (tmp_path / "given.bin").write_bytes(b"".join(recs))
-        return ["--salt-key", str(key), "--commitments", str(tmp_path / "given.bin")]
-
-    stack = refused(zk / "stage" / "pub-16.bin", *flags)
-    assert stack.startswith("--commitments: row ") and "its root is no value commitment of the ZK server's" in stack
-    unregistered = tmp_path / "pub1.bin"
-    unregistered.write_bytes(_with_roots(public, {name: g[0] for (name, *_), g in zip(trees, got1)}))
-    assert "its root is no value commitment of the ZK server's" in refused(unregistered, *flags)
-    for at in (0, 7, 8, 11, 12, len(rec) - 65, len(rec) - 1):
-        forged = bytearray(rec)
-        forged[at] ^= 1
-        why = refused(ours, *with_records(bytes(forged)))
-        assert why == f"--commitments: record 0: {NOT_A_RECORD}" or why.startswith("--commitments: a records file"), (at, why)
-    assert refused(ours, *with_records(rec, rec2)) == f"--commitments: record 1: {NOT_A_RECORD}"
-    assert refused(ours, *with_records(rec[:-1])).startswith("--commitments: a records file whose record at byte 0")
-    (tmp_path / "pub2.bin").write_bytes(_with_roots(public, {name: g[0] for (name, *_), g in zip(trees, got2)}))
-    assert refused(tmp_path / "pub2.bin", *with_records(rec2)) == f"--commitments: record 0: {NOT_A_RECORD}"
-    assert refused(ours, "--salt-key", str(key)).startswith("--salt-key: the loop serves only a statement whose value commitments")
-    assert refused(ours, "--commitments", str(tmp_path / "records.bin")).startswith("--commitments: the loop checks them under")
-    assert refused(ours, "--salt-key", str(tmp_path / "none.key"), "--commitments", str(tmp_path / "records.bin")).endswith(
-        "no such file (`flock-firewall values` creates it)")
+def test_the_loop_without_a_record_admits_no_registration(tmp_path):
+    """`flock-firewall session` keeps no record of the ZK server's, so it refuses `--salt-key` before it listens (`refused
+    WHY`, exit 2)."""
+    for f in ("circuit", "pub"):
+        (tmp_path / f).write_bytes(b"x")
+    p = subprocess.run([str(BIN), "session", "--verifier", "127.0.0.1:9", "--circuit", str(tmp_path / "circuit"), "--public",
+                        str(tmp_path / "pub"), "--salt-key", str(tmp_path / "salt.key")], input=b"", capture_output=True)
+    assert p.returncode == 2 and p.stdout.decode() == (
+        "refused --salt-key: a statement's value commitments are admitted on the ZK server's record (core-firewall session "
+        "--state DIR --salt-key FILE)\n"), (p.stdout, p.stderr[-400:])

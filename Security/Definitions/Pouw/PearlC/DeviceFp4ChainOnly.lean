@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Pouw.PearlC.DeviceFp4Issue
+public import Definitions.Pouw.PearlC.DeviceFp4
 
 /-!
 # Pearl-C4's chain-only reading at an FP4 record (definitions only, staged)
@@ -36,9 +36,9 @@ noncomputable def pearlCTilesFp4ChainOnly (d : Fp4Device) (sem : Fp4Sem Q R S) (
       (((creditFp4ChainOnly d sh - ρ * creditFp4 d sh) * tileShare sh (sem.passRows sh act (tl.rows g)) (tl.cols g) :
         ℚ) : ℝ) }
 
-/-- **Pearl-C4's chain-only γ** at the cap `ρ`, which stays on the full credit: `1 − (399/400)/ω` with
+/-- **Pearl-C4's chain-only gap** at the cap `ρ`, which stays on the full credit: `1 − (399/400)/ω` with
 `ω = wrefFp4/(creditFp4ChainOnly − ρ·creditFp4)`. -/
-def gammaFp4ChainOnly (d : Fp4Device) (ρ : ℚ) (s : Shape) : ℚ :=
+def gapFp4ChainOnly (d : Fp4Device) (ρ : ℚ) (s : Shape) : ℚ :=
   1 - (1 - 1 / 400) / (wrefFp4 d s / (creditFp4ChainOnly d s - ρ * creditFp4 d s))
 
 end Pouw.PearlC

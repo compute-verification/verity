@@ -2,16 +2,27 @@ module
 
 public import Proofs.Flock.Recursive.Target
 public import Proofs.Flock.Soundness.Assumptions.Recursive
-public import Proofs.Flock.VBridge.Algebra.Ligerito
-public import Proofs.Flock.VBridge.Algebra.Zerocheck
-public import Proofs.Flock.VBridge.Algebra.Lincheck
+public import Proofs.Flock.VBridge.Algebra.Build
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # VBridge G: `Flock.Assumptions.VBridge` at the compiled inner protocol
 
-`vbridge_compiled` concludes `Flock.Assumptions.VBridge` with the inner protocol C-Flock's compiled table
+`vbridge_compiled` concludes `Flock.Assumptions.VBridge` with the inner protocol Flock's compiled table
 (`flockInnerCL`: round messages are the level-0 cap, each round's proof messages and Merkle tops with the prover's
-choices of rep, then, in the round after the last coin, the openings with their salts, which is what the firewall
+choices of rep, then, in the round after the last coin, the openings with their salts, which is what the ZK server
 commits and V* registers). Its hypotheses are the pieces still open, each a
 statement about V* or the verifier, so that each can be proved on its own against this interface:
 
@@ -123,7 +134,7 @@ section target
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [DecidableEq K] {D Sl : Type}
 variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 
-/-- **VBridge G: V*'s circuits compute C-Flock's compiled inner verifier.** `Flock.Assumptions.VBridge` with the inner
+/-- **VBridge G: V*'s circuits compute Flock's compiled inner verifier.** `Flock.Assumptions.VBridge` with the inner
 protocol `flockInnerCL` (the compiled table on the class's hidden statements, the schedule `(T, CT)` with live coins),
 from the pieces still open: the algebra decoded from V*'s layers (`AlgebraDecodes`), the running sums' chain
 (`AccChains`), the inner verifier's stages run from E's conclusions (`StagesAccept`), and V*'s files and laws

@@ -21,12 +21,12 @@ import numpy as np
 import pytest
 
 from verity_vllm.acquire import fa2_plane_classes as FP
-from verity_vllm.commit import binding as B
+from verity_vllm.commit import binding as B, step_rows
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
 from verity_vllm.query.manifest import bind as MB
 from verity_vllm.query.manifest import format as MF
 
-CHUNK = 64
+CHUNK = step_rows.ROW_BYTES
 PD = hashlib.sha256(b"program").hexdigest()
 NH = KVH = 4
 D = 64
@@ -106,7 +106,7 @@ def _manifest(tmp_path, lp: dict[str, int], *, hidden: bool = True, moe: bool = 
 
 def _check(tmp_path, lp: dict[str, int], step: list[tuple], **man_kw) -> dict:
     """Both coverage checks of record on one committed step, plus the plane-class check's per-layer verdict (Build declarations present)."""
-    c = NativeHostCommitter(None, run_id="run", chunk=CHUNK, hash_threads=1, program_digest=bytes.fromhex(PD))
+    c = NativeHostCommitter(None, run_id="run", hash_threads=1, program_digest=bytes.fromhex(PD))
     run = c.commit_offline([step])
     rows = {0: _rows(lp)} if len(lp) > 1 else None
     bmap = B.build_binding_map(c._layouts, run.steps, run.run_root, PD, request_rows=rows, chunk=CHUNK)

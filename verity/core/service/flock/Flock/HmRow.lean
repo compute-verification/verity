@@ -19,18 +19,14 @@ module
 
 public import Flock.Statement
 public import Flock.TemplateQuery
-public import Flock.Typed
 public import Flock.Extract
 public import Flock.Qcall
-public import Flock.HmNets
-public import Flock.RecOpen
-public import Flock.RecResiduals
 public import Flock.RecSparse
 public import Flock.RecOpening
 public import Flock.SplitNL
 public import Flock.Norm
-public import Flock.JsonParse
 public import Flock.LinkUnits
+public import Flock.FV3
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -939,7 +935,7 @@ the branch that reads it, which here is the last. -/
 
 /-- `parse` with the file's lines split in tasks (`SplitNL.splitTasks`), each net's rows read in the same tasks
 (`Net.parseWith`) and the file hashed in a task beside them,
-`parse_eq_fast`: the firewall's setup runs it (`HmOut.parseFast`, `Firewall.Hello.Setup.setup`). Not a `@[csimp]`:
+`parse_eq_fast`: the ZK server's setup runs it (`HmOut.parseFast`, `Firewall.Hello.Setup.setup`). Not a `@[csimp]`:
 `flock-verify` compiles `parse` too, and runs no task. -/
 def parseFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
     (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) : V Circuit :=
@@ -1183,7 +1179,7 @@ def circuitTemplate (c : Circuit) : Option String :=
   | some (.obj kvs) => if kvs.toArray.size == 1 then some kvs.toArray[0]!.1 else none
   | _ => none
 
-/-- The template a template query must list: the circuit's (`circuitTemplate`), or for a unit class's circuit (META
+/-- The template a template query must list: the circuit's (`circuitTemplate`), or for a size class's circuit (META
 `template` `unit-class`, its one template `unit-class/…`) META `definition`, the Definition its units are instances of. That
 the class circuit lowers that Definition is the class's own claim, which the verifier does not check; the units it names
 are then held to instances of it. -/
@@ -1377,10 +1373,10 @@ def loadPublic (tags : Tags) (c : Circuit) (file : ByteArray) : V Public := do
   if J.has header "unit_draw" then throw "header: a staged file is a registered population; a draw is made in the session"
   return { header, n, digests := bcs, outputs, sha := ← publicDigest header body, tables }
 
-/-- The drawn units' statement over a registered population (upstream's `Instances::drawn`): instance `i` is the
-population's `units[i]`; the header is the population's with the draw, `instances = K`, `population = N` and the drawn
-units' indices; the public digest covers that header and the population's public bytes. A shared-row population's tables
-stay the statement's, with the drawn units' refs into them. -/
+/-- The sampled proof blocks' statement over a registered population (upstream's `Instances::drawn`): instance `i` is the
+population's `units[i]`; the header is the population's with the sample, `instances = K`, `population = N` and the sampled
+proof blocks' indices; the public digest covers that header and the population's public bytes. A shared-row population's tables
+stay the statement's, with the sampled proof blocks' refs into them. -/
 def drawn (c : Circuit) (pub : Public) (draw : Json) : V Public := do
   let d ← Draw.UnitDraw.ofJson draw
   let proved := d.proved
@@ -1405,7 +1401,7 @@ def drawn (c : Circuit) (pub : Public) (draw : Json) : V Public := do
 
 /-- The strata of the verifier's own program and partition object, and the population: the query applied to the program,
 its units grouped by template descriptor id (`Draw.strataOf`). Only `Q_template_instance` v0 and `Q_template_instances` v0
-define strata; `law` names the law that asks, in the refusal. -/
+define strata; `law` names the sampling design that asks, in the refusal. -/
 private def templateStrata (law : String) (obj : Json) (program : ByteArray) :
     V (Array (String × Array (Nat × Nat)) × Nat) := do
   let (name, version) ← checkPartitionObject obj
@@ -1554,8 +1550,8 @@ def checkRegionWords (c : Circuit) (da db : Array (Nat × Nat)) (regions : Array
 
 end HmRow
 
-/-- `setup` for an `hm96-sha512/row/v1` statement: the circuit, the population's public file and, for a drawn session, the
-drawn units' statement over it. -/
+/-- `setup` for an `hm96-sha512/row/v1` statement: the circuit, the population's public file and, for a sampled session, the
+sampled proof blocks' statement over it. -/
 def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (tables : List (String × ByteArray) := [])
     (draw : Option Json := none) (partition : Option Json := none) (program : Option ByteArray := none) : V Stmt := do
   let c ← if tags.typed then HmRow.parseTyped tags circuitFile tables else HmRow.parse tags circuitFile tables
@@ -1566,7 +1562,7 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
   let pub ← match draw with
     | some d => HmRow.drawn c pop d
     | none => pure pop
-  -- a stratified draw's strata are the verifier's own, from its program and query, when it holds both
+  -- a stratified sample's strata are the verifier's own, from its program and query, when it holds both
   if let some d := draw then
     if let (Except.ok (Draw.Law.stratified k strata), some obj, some prog) :=
         ((Draw.UnitDraw.ofJson d).map (·.law), partition, program) then
@@ -1742,7 +1738,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   checkRows c
   return c
 
-/-- `parse` through `HmRow.parseFast` (`parse_eq_fast`): the firewall's setup (`Firewall.Hello.Setup.setup`). -/
+/-- `parse` through `HmRow.parseFast` (`parse_eq_fast`): the ZK server's setup (`Firewall.Hello.Setup.setup`). -/
 def parseFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit :=
   if tags.isTmpl then throw s!"{tags.name}: a templated statement's circuit is read from its template" else do
   let c ← if !tags.typed then HmRow.parseFast tags bytes tables else do
@@ -2326,11 +2322,11 @@ def checkAt (c : Circuit) (pop : Public) (P : Program.Prog) (links : Array (Nat 
     wires := wires + (← checkUnit c pop P links popIdx inst unitOf ownerOf n i)
   return wires
 
-/-- Linking on the registered population `pop`, for each unit the draw proves (`readers`, places in the public file: the
-draw's units and their closure; every unit without a draw): `checkUnit`, with each unit and each gate's unit read from the
+/-- Linking on the registered population `pop`, for each unit the sample proves (`readers`, places in the public file: the
+sample's units and their closure; every unit without a sample): `checkUnit`, with each unit and each gate's unit read from the
 root body's nodes (`unitAt`, `ownerAt`), so its work is the program's description and the proved units', never the
-population's. A reader is held to its writer's committed row whether or not the writer is drawn; an undrawn reader's wires
-are its own proof's, which the draw samples like any other part of it. The cut wires checked. -/
+population's. A reader is held to its writer's committed row whether or not the writer is sampled; an unsampled reader's wires
+are its own proof's, which the sample samples like any other part of it. The cut wires checked. -/
 def check (c : Circuit) (pop : Public) (readers : Option (Array Nat)) (program : ByteArray) : V Nat := do
   let links ← parse c
   let P ← Program.decode program
@@ -2348,7 +2344,7 @@ def checkRef (c : Circuit) (pop : Public) (program : ByteArray) : V Nat := do
 theorem check_ref (c : Circuit) (pop : Public) (program : ByteArray) : check c pop none program = checkRef c pop program := by
   simp only [check, checkRef, unitAt_eq, ownerAt_eq, count_eq]
 
-/-- The units a draw proves (places in the public file), none without a draw. -/
+/-- The units a sample proves (places in the public file), none without a sample. -/
 def readersOf (draw : Option Json) : Option (Array Nat) := draw.bind fun d => (Draw.UnitDraw.ofJson d).toOption.map (·.proved)
 
 end HmLinks
@@ -2420,14 +2416,14 @@ def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
            hello, coinTree := coins.tree?, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
 /-- A session's statement in `count` tables (`Stmt.setupTables`, upstream's `session_tables`): one table is `setupH`'s statement. For
-several, the session's units (the draw's, without one the population's) split into `count` equal consecutive parts, and
-table `j` is `setupH`'s statement of part `j` as a subset draw of the population, under `Tags.tableIdentity`: every check
-`setupH` makes, it makes on each table. Several tables take one draw of fixed count (`Draw.tablesWhy`): a subset draw, or a
-stratified draw, whose law is held to the verifier's own derivation once, for the session, before it is split. Every part
+several, the session's units (the sample's, without one the population's) split into `count` equal consecutive parts, and
+table `j` is `setupH`'s statement of part `j` as a subset sample of the population, under `Tags.tableIdentity`: every check
+`setupH` makes, it makes on each table. Several tables take one sample of fixed count (`Draw.tablesWhy`): a subset sample, or a
+stratified sample, whose sampling design is held to the verifier's own derivation once, for the session, before it is split. Every part
 comes from `draw`, the session's, never from a table's header. The
 session's Σ covers every table's; its `unitDraw` is `draw`. `work` is the verifier's own `K` and work table, which a work
-draw's law is held to, `stratified` its own `K`, at which a stratified draw's law is its own derivation, `closure` its
-own closure map, which a work draw's closure is held to, and `publicInputs` its own recomputation of the public input
+sample's law is held to, `stratified` its own `K`, at which a stratified sample's law is its own derivation, `closure` its
+own closure map, which a work sample's closure is held to, and `publicInputs` its own recomputation of the public input
 words (`HmIn.checkOwn`). A table with pinned outputs (`HmRow.pinnedCount`) is refused, as `ProvedScope.check` refuses
 it, until a soundness theorem covers that form. -/
 def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
@@ -2435,7 +2431,7 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
     (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat × Nat)) := none)
     (stratified : Option Nat := none) (closure : Option (Std.HashMap Nat (Array Nat)) := none)
     (publicInputs : Option ByteArray := none) : V (SessionSpec × Array Stmt) := do
-  -- a closure draw proves more units than it draws, so what it adds must be the verifier's own closure of the draw
+  -- a closure sample proves more units than it samples, so what it adds must be the verifier's own closure of the sample
   if let some d := draw then
     if let .ok u := Draw.UnitDraw.ofJson d then
       if let .work .. := u.law then
@@ -2445,7 +2441,7 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
             throw "U3: the draw's closure is not the verifier's own (its closure map)"
         | none =>
           if !u.closure.isEmpty then throw "U3: a closure draw needs the verifier's own closure map (--closure)"
-  -- a stratified draw's K and strata set every k_s, so its law must be the verifier's own derivation, never taken as stated
+  -- a stratified sample's K and strata set every k_s, so its sampling design must be the verifier's own derivation, never taken as stated
   if let some d := draw then
     if let .ok (Draw.Law.stratified k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
       let (some obj, some prog, some K) := (partition, program, stratified)
@@ -2454,7 +2450,7 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
       let (law, _) ← HmRow.stratifiedLaw obj prog K
       if law != Draw.Law.stratified k strata then
         throw "U2: the draw's strata are not the verifier's own (its K, program and query)"
-  -- a work draw's K and stated work set every k_s, so its law must be the verifier's own derivation, never taken as stated
+  -- a work sample's K and stated work set every k_s, so its sampling design must be the verifier's own derivation, never taken as stated
   if let some d := draw then
     if let .ok (Draw.Law.work k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
       let (some obj, some prog, some (K, table)) := (partition, program, work)
@@ -2482,13 +2478,13 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   if count > Tags.MAX_TABLES then throw s!"tables: at most {Tags.MAX_TABLES} per session, not {count}"
   let splits := fun (n : Nat) => if n == 0 || n % count != 0 then throw s!"tables: {n} units do not split into {count} equal tables"
     else (pure () : V Unit)
-  -- the draw's law and count are refused before the circuit is read
+  -- the sample's law and count are refused before the circuit is read
   let u? ← draw.mapM Draw.UnitDraw.ofJson
   if let some u := u? then
     match u.law with
     | .subset _ | .stratified .. => splits u.units.size
     | _ => throw Draw.TABLES_LAW
-  -- without a draw, the population's units (`setupH` checks a draw's population against the file)
+  -- without a sample, the population's units (`setupH` checks a sample's population against the file)
   let (population, units) ← match u? with
     | some u => pure (u.population, u.units)
     | none => do
@@ -2583,7 +2579,7 @@ def Stmt.setupTablesOf (parsed : V Circuit) (tags : Tags) (circuitFile publicFil
     (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat × Nat)) := none)
     (stratified : Option Nat := none) (closure : Option (Std.HashMap Nat (Array Nat)) := none)
     (publicInputs : Option ByteArray := none) : V (SessionSpec × Array Stmt) := do
-  -- a closure draw proves more units than it draws, so what it adds must be the verifier's own closure of the draw
+  -- a closure sample proves more units than it samples, so what it adds must be the verifier's own closure of the sample
   if let some d := draw then
     if let .ok u := Draw.UnitDraw.ofJson d then
       if let .work .. := u.law then
@@ -2593,7 +2589,7 @@ def Stmt.setupTablesOf (parsed : V Circuit) (tags : Tags) (circuitFile publicFil
             throw "U3: the draw's closure is not the verifier's own (its closure map)"
         | none =>
           if !u.closure.isEmpty then throw "U3: a closure draw needs the verifier's own closure map (--closure)"
-  -- a stratified draw's K and strata set every k_s, so its law must be the verifier's own derivation, never taken as stated
+  -- a stratified sample's K and strata set every k_s, so its sampling design must be the verifier's own derivation, never taken as stated
   if let some d := draw then
     if let .ok (Draw.Law.stratified k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
       let (some obj, some prog, some K) := (partition, program, stratified)
@@ -2602,7 +2598,7 @@ def Stmt.setupTablesOf (parsed : V Circuit) (tags : Tags) (circuitFile publicFil
       let (law, _) ← HmRow.stratifiedLaw obj prog K
       if law != Draw.Law.stratified k strata then
         throw "U2: the draw's strata are not the verifier's own (its K, program and query)"
-  -- a work draw's K and stated work set every k_s, so its law must be the verifier's own derivation, never taken as stated
+  -- a work sample's K and stated work set every k_s, so its sampling design must be the verifier's own derivation, never taken as stated
   if let some d := draw then
     if let .ok (Draw.Law.work k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
       let (some obj, some prog, some (K, table)) := (partition, program, work)
@@ -2640,13 +2636,13 @@ def Stmt.setupTablesOf (parsed : V Circuit) (tags : Tags) (circuitFile publicFil
   if count > Tags.MAX_TABLES then throw s!"tables: at most {Tags.MAX_TABLES} per session, not {count}"
   let splits := fun (n : Nat) => if n == 0 || n % count != 0 then throw s!"tables: {n} units do not split into {count} equal tables"
     else (pure () : V Unit)
-  -- the draw's law and count are refused before the circuit is read
+  -- the sample's law and count are refused before the circuit is read
   let u? ← draw.mapM Draw.UnitDraw.ofJson
   if let some u := u? then
     match u.law with
     | .subset _ | .stratified .. => splits u.units.size
     | _ => throw Draw.TABLES_LAW
-  -- without a draw, the population's units (`setupH` checks a draw's population against the file)
+  -- without a sample, the population's units (`setupH` checks a sample's population against the file)
   let (population, units) ← match u? with
     | some u => pure (u.population, u.units)
     | none => do

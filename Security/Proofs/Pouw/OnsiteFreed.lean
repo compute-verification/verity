@@ -3,6 +3,7 @@ module
 public import Definitions.Pouw.Guarantees.OnsiteFreed
 public import Proofs.Pouw.Dither
 public import Proofs.Pouw.DitherWitness
+public import Proofs.Pouw.Lemmas.Dither
 
 /-!
 # The onsite PoUW protocol's freed compute: the proof
@@ -300,7 +301,7 @@ theorem fill_not_freed (X : Fin 3 → ℝ) (hX : ∀ r, 0 ≤ X r) (hlt : 2 * X 
     rw [twF, twε_eq] at hlt
     linarith
 
-/-- An answer at no use, with `f`'s outputs. A witness answer outputs neither words nor a root, so no law charges
+/-- An answer at no use, with `f`'s outputs. A witness answer outputs neither words nor a root, so no sampling design charges
 it. -/
 noncomputable def freeAnswer {I : Type} (f : TAlg I (Fin 1 → Word × Unit)) : TAlg I (Fin 1 → Word × Unit) where
   run := f.run
