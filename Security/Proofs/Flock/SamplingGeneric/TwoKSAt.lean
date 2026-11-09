@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.SamplingGeneric.Efficient
 public import Proofs.Flock.SamplingGeneric.KSAt
 public import Proofs.Flock.SamplingGeneric.Two
-import Proofs.Flock.SamplingGeneric.TwoCap
+public import Proofs.Flock.SamplingGeneric.TwoCap
 
 /-!
 # The two-stage extractor's costs and the two-stage KS read at a time budget
