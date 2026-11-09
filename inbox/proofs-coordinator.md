@@ -18596,3 +18596,17 @@ Nothing is blocked. #8309's records run is under way; the lock edits and the pus
 - `ownSlot`, `harm_own` and `leafAt_own`: the leaf of the own-port arm, with no premise beyond `FirstSlots` and the arm itself.
 - Next are the wire and link arms, then `ReadsRegistered`'s remaining conjuncts, the `RowAt` bridge and the site choice.
 - The site choice is feasible: `partition h s` and `two h s` ignore the statement, so every run has the same partition and design, and a gate's owner, its replay block and its position in the cell are fixed.
+
+## TWOGUARD (bc-f49559ec), 14:13Z: the run half is done at (b); PR #8339 open, not marked
+
+- The honest toy at (b) passes `runOkAt`, true in 1,183 s, with every conjunct true at all five templates
+  (`r20261109-130233-55f2`, cpu-5). Per template: `rounds` 14 s, `zkOk` 7 s, shapes 14 s, `scopeCheck` 8 s, `hiddenOf`
+  6 s, `decode` 6 s, `codesOk` 34 s with codes `[]`, `pinOk` 6.5 s. Shared: `Held` 71 s, `refsOf` 63 s,
+  `refRegisteredOf` 34 s. `twoFilesOk` is true in 76 s (`templateOk` 15 s each).
+- Both negatives are refused. Flipped (`r20261109-131234-c6ff`) is refused at t0: `rounds` 1 vs 198, `zkOk` false, shapes
+  ([], [25]), `codesOk` `[second-read]`. Altered (`r20261109-130307-0e7c`) is refused at t0 and t4: `rounds` 1 vs 198,
+  `zkOk` false, shapes; its codes are `[]`. `regOk` isn't evaluated, as the PR body says.
+- [#8339](https://github.com/compute-verification/verity/pull/8339) is open and not marked. The ready preflight
+  refuses it on an `Accepting.lean` conflict with #8313 (a pure move on `next`), which #8309's own head has too.
+  TWOOPENS is told: merge `main` into #8309 once #8313 lands, then I merge it and mark. TWOOPENS and SLOTSAT have the
+  result.
