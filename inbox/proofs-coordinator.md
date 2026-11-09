@@ -17488,3 +17488,38 @@ r20261109-074407-187f (cpu-1). Detail: proofs/20261109T0752Z-report-provecut-fi-
    - FlashInfer K6144 takes K2048's host share by assumption. After the correction it is the second-largest input (16%
      of X), and it has never been measured warm.
    - All of it is in my 10:45Z repricing plan (§7 of the note), which takes e417's measured marginal when it lands.
+
+[2026-11-09T07:58Z] TWOOPENS (bc-09adba6a-e10f-536a-ad43-eeefd6ae53aa): taking slotsAt_slotMap; but FrameIs itself can't hold at the two-stage toy (a decision for you)
+
+**Finding (non-vacuity, blocking the witness).** `FrameIs`, and so any `Sites` that gives it, is false at the two-stage toy registration. The guarantee then says nothing there.
+
+- **Two units need one gate.** Every toy edge is wired: `LINK_IN.out` is `FOLD.x`, `FOLD.out` is a `FLIP`'s input, and so on. `Prog.Needs` makes the edge's gate `g` needed by the writer's unit (a boundary gate of its block) and by the reader's unit (an input it reads).
+- **Both open it under the same roots.** The edge is internal to the replay block, so `Reveal.rootsAt` is the replay block's interior roots for both units.
+- **Their registered reads are two different trees.** `toy.reads` gives each non-link port "the interior record's, its own leaf". So the writer reads `LINK_IN/out`, and the reader reads its own wired copy, `FOLD/x`. Each port's domain binds its port name (`rows.py`'s window-domain rule), so the two roots differ.
+- **The frame can't serve both.** `FrameIs` asks `h.frame.at_ roots g` to be the root of each unit's read, and `at_` is a function of the roots and the gate only.
+- **So one accepted run refutes it.** Any run whose second stage checks both a writer and its reader in one span refutes `FrameIs`. So do two runs with the same interior record that check one each.
+
+**Options:**
+- **(a) Model.** The frame's check position takes the unit: `Code.at_` and `ownAt` read the unit or its template. This touches `SamplingDeploy.Code`, `compiledTwo` and its KS chain, BINDSESS's area.
+- **(b) Design (my recommendation): one commitment per value.** A wired input reads the writer's output value:
+  - round 2 holds a read's value to name the writer's port, rather than the reader's own (`readOk`/`readKey`, TWOVERIFY's);
+  - the toy's `reads` names `LINK_IN/out` at the writers' leaves;
+  - the wiring commits no copy tree.
+
+  Then each gate has one tree, and a per-gate slot works.
+- **(c) Reveal.** A unit opens only its own boundary gates, and the reader's inputs are bound by a wiring check that Lean doesn't model today.
+
+**Your call: should I hold the records run and the PR until you choose, or land "FrameIs discharged into Sites" with this finding in the PR body and a follow-up issue?** Landing it now would read as more than it is, so I'd hold. Daniel may need to see this, since it's about what the two-stage guarantee rests on.
+
+**Meanwhile I'm building the restatement, which (b) keeps and (a) mostly reuses:**
+- `SiteHolds` with the leaf read off the roots (`leafAt`/`unitsAt`), so one site fits every draw;
+- the site's port per unit, since the writer's and the reader's sessions hold the row at different port indices;
+- `slotsAt_slotMap` against the new `SlotsAt`, `Built`, `frameIs_built` and the guarantee restatement.
+
+The guarantee's `unwitnessed` entry is keyed by the type of the constant `Flock.Guarantees.SpotKSTwo`, whose module isn't under `meaning`. So restating the body re-keys and blanks nothing.
+
+**What the witness can be tonight:**
+- `Built` holds at every registration that takes SPOT's frame;
+- one fixed slot gives the honest row under every first-stage draw: `place·n_t + j` in `q·n_t` leaves at the interior record, and a fixed leaf (the replay block) at a link port.
+
+A witness of `Sites h` over every accepted run can't exist at the toy until (a), (b) or (c) lands.
