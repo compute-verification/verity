@@ -14,14 +14,15 @@ are `D`'s; its sample is `D`'s checked units' first `n_PU` (`checked`: the slots
 block's shape is the record's inner waits, truncation and `N₀` and its session's rounds (`sh`); and the bounds on its
 session's errors are `κ_F` and Flock's `γ` at those rounds and the record's weight (`κb`, `γb`). At every `D`:
 
-* its proof blocks, scope, `k` and `K` are `D`'s (`ofDeploy_nPU`, `ofDeploy_scope`, `ofDeploy_k`, `ofDeploy_cap`), and
-  its opening count is `D`'s (`openCallsLe_ofDeploy`, from `Sampling.OpenCallsLe`);
+* its proof blocks and scope are `D`'s (`ofDeploy_nPU`, `ofDeploy_scope`); both waits' unions have `n_PU` bits, so each
+  wait's `k` and `K` are `D`'s (`ofDeploy_kOut`, `ofDeploy_kIn`, `ofDeploy_capOut`, `ofDeploy_capIn`); and its opening
+  count is `D`'s (`openCallsLe_ofDeploy`, from `Sampling.OpenCallsLe`);
 * its errors are within `Claims.Sampling`'s: `κ` at every `δ` where `ε_table ≥ 0` (`κ_ofDeploy_le`) and `γ`
   (`γ_ofDeploy_le`, from `γFlock_mul_le`);
 * **it meets the contract** where `D` meets the frozen hypotheses `KS_of` reads (`sessions_ofDeploy`): `draws` from
-  `DrawLaw`, `slots` by the cut, `refuses` from `Refuses`, `interior` from `InteriorFixed`, `fixed` from `DrawFixed`,
-  `runs` from `SessionRuns` and `InnerNumbers` (the session's embedding is `emb`, the only order embedding onto its
-  rounds), and `opens` from `SessionOpens`.
+  `DrawLaw`, `slots` by the cut, `unions` by its bits, `refuses` from `Refuses`, `interior` from `InteriorFixed`,
+  `fixed` from `DrawFixed`, `runs` from `SessionRuns` and `InnerNumbers` (the session's embedding is `emb`, the only
+  order embedding onto its rounds), and `opens` from `SessionOpens`.
 
 `SamplingDeploy.compiled F c iroots` is `ofDeploy` at the deployed record `deployOf F c`: its sample, rounds,
 sessions, reveal, interior roots and commitment are the code's (`compiled_checked`, …, `rfl`), its opening count is
@@ -86,6 +87,8 @@ noncomputable def ofDeploy (D : Claims.Sampling.Deploy Coin Col T) (iroots : Msg
   iroots := iroots
   reveal := D.reveal
   openCalls := D.openCalls
+  nOut x := Claims.Sampling.nPU D x
+  nIn x := Claims.Sampling.nPU D x
   Tape := D.Tape
   P := D.P
   δc := D.δc
@@ -96,10 +99,16 @@ omit [Fintype Coin] [Nonempty Coin] in
 theorem ofDeploy_nPU (x : Msg) : (ofDeploy D iroots).nPU x = Claims.Sampling.nPU D x := rfl
 
 omit [Fintype Coin] [Nonempty Coin] in
-theorem ofDeploy_k (x : Msg) : (ofDeploy D iroots).k x = D.k x := rfl
+theorem ofDeploy_kOut (x : Msg) : (ofDeploy D iroots).kOut x = D.k x := rfl
 
 omit [Fintype Coin] [Nonempty Coin] in
-theorem ofDeploy_cap (x : Msg) : (ofDeploy D iroots).cap x = D.cap x := rfl
+theorem ofDeploy_kIn (x : Msg) : (ofDeploy D iroots).kIn x = D.k x := rfl
+
+omit [Fintype Coin] [Nonempty Coin] in
+theorem ofDeploy_capOut (x : Msg) : (ofDeploy D iroots).capOut x = D.cap x := rfl
+
+omit [Fintype Coin] [Nonempty Coin] in
+theorem ofDeploy_capIn (x : Msg) : (ofDeploy D iroots).capIn x = D.cap x := rfl
 
 omit [Fintype Coin] [Nonempty Coin] in
 theorem ofDeploy_scope (x : Msg) : (ofDeploy D iroots).Scope x ↔ Claims.Sampling.Scope D x := Iff.rfl
@@ -141,8 +150,11 @@ theorem κ_ofDeploy_le (δ : ℝ) (x : Msg) (hε : 0 ≤ D.εtable x) :
     linarith
   have hs : (ofDeploy D iroots).κs x ≤ Claims.Sampling.κF D x := maxBelow_le hF fun _ _ => le_rfl
   unfold Compiled.κ Claims.Sampling.κ
-  rw [ofDeploy_k, ofDeploy_cap]
-  gcongr
+  rw [ofDeploy_kOut, ofDeploy_kIn, ofDeploy_capOut, ofDeploy_capIn]
+  calc _ ≤ Claims.Sampling.slack ^ 2 * (δ + Claims.Sampling.κF D x) +
+          (2 * (D.k x : ℝ) / D.cap x + Real.exp (-(D.k x : ℝ) / 8)) +
+          Claims.Sampling.slack * (2 * (D.k x : ℝ) / D.cap x + Real.exp (-(D.k x : ℝ) / 8)) := by gcongr
+    _ = _ := by ring
 
 omit [Fintype Coin] [Nonempty Coin] in
 /-- **`γ` is within the frozen one**: a proof block's bound over its session's rounds, times the compiled verifier's
@@ -267,6 +279,7 @@ theorem sessions_ofDeploy (H : Msg → Msg) (hd : Claims.Sampling.DrawLaw D) (hr
     · obtain ⟨p, hp⟩ := (mem_ofDeploy_checked D iroots).1 hu
       exact h u huB p hp
   slots _ _ := List.length_take_le _ _
+  unions x := (ofDeploy_nPU D iroots x).le
   refuses := hr
   interior := hi
   fixed := fixed_ofDeploy D iroots hf

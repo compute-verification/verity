@@ -16,6 +16,7 @@ import Proofs.Core.Game.Basic
 import Proofs.Core.Game.Poly
 import Proofs.Core.Game.Prob
 import Proofs.Core.Game.Tape
+import Proofs.Core.ValueSalts
 
 /-!
 # What a memory check establishes, and what a fingerprint collision costs it: proofs
@@ -151,11 +152,6 @@ theorem prCoin_equiv {C D : Type} [Fintype C] [Fintype D] (e : C ≃ D) (p : D �
   classical
   unfold Game.prCoin
   exact Game.Tape.avg_equiv e fun d => if p d then 1 else 0
-
-theorem prCoin_of_forall {C : Type} [Fintype C] [Nonempty C] {p : C → Prop} (h : ∀ c, p c) : Game.prCoin p = 1 := by
-  unfold Game.prCoin
-  simp only [h, ite_true]
-  exact Game.avg_const _
 
 variable {F : Type} [Field F] [Fintype F]
 
@@ -436,7 +432,7 @@ theorem FingerprintCollision_honest :
       prCoin (fun c : GaloisField 2 128 × GaloisField 2 128 =>
         ({1, 0} : Multiset (Fin 2 → GaloisField 2 128)) ≠ {1, 1} ∧
           fingerprint (m := 2) c.1 c.2 {1, 0} = fingerprint (m := 2) c.1 c.2 {1, 1}) ≤ 2 / 2 ^ 128 := by
-  refine ⟨prCoin_of_forall fun c => by rw [Multiset.pair_comm], ?_⟩
+  refine ⟨ValueSalts.prCoin_of_forall fun c => by rw [Multiset.pair_comm], ?_⟩
   have := FingerprintCollision (F := GaloisField 2 128) 2 {1, 0} {1, 1}
   rw [card_gf128] at this
   exact this.trans_eq (by norm_num)
@@ -447,7 +443,7 @@ probability 1, above the bound at one record of one chunk, `1 / 2^128`. -/
 theorem FingerprintCollision_nontrivial :
     ¬ prCoin (fun _ : GaloisField 2 128 × GaloisField 2 128 =>
         ({1} : Multiset (Fin 1 → GaloisField 2 128)) ≠ {0} ∧ True) ≤ 1 / 2 ^ 128 := by
-  rw [prCoin_of_forall fun _ => ⟨by simp, trivial⟩, one_div, not_le]
+  rw [ValueSalts.prCoin_of_forall fun _ => ⟨by simp, trivial⟩, one_div, not_le]
   exact ENNReal.inv_lt_one.2 (by norm_num)
 
 open Classical in
@@ -467,7 +463,7 @@ bound at two keys of two chunks, `1 / 2^128`. -/
 theorem PrintCollision_nontrivial :
     ¬ prCoin (fun _ : GaloisField 2 128 => ∃ k ∈ ({0, 1} : Finset (Fin 2 → GaloisField 2 128)),
         ∃ k' ∈ ({0, 1} : Finset (Fin 2 → GaloisField 2 128)), k ≠ k' ∧ True) ≤ 1 / 2 ^ 128 := by
-  rw [prCoin_of_forall fun _ => ⟨0, by simp, 1, by simp, zero_ne_one, trivial⟩, one_div, not_le]
+  rw [ValueSalts.prCoin_of_forall fun _ => ⟨0, by simp, 1, by simp, zero_ne_one, trivial⟩, one_div, not_le]
   exact ENNReal.inv_lt_one.2 (by norm_num)
 
 end Verity.SecurityProofs

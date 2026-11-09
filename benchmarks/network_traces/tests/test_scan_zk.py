@@ -470,7 +470,8 @@ def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail
 @pytest.mark.slow
 def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans_answer(tmp_path, monkeypatch):
     """`scan_period.rows_case` of one link-window in the rows form's formats (`NetworkCheck.Period`; its Lean checks the
-    case on a node: scan_period.sh): the deployment's key, session and schedule, the registered Program and its
+    case on a node: scan_period.sh): the deployment's key, session and schedule (its integer fields, the id egress
+    form's), the registered Program and its
     descriptor (``joint/program.json``, the generator form, `scan_zk.scan_root`, whose one-stage reads are each unit's
     slot entries) as the scan, the block's audit (its descriptor, free inputs and no steps; its registration, whose
     ``SlotEntry_v1{…}/c0/o0`` is the scan's ``scan/prog`` root and domain and whose ``scan/state`` is the scan's, and
@@ -483,7 +484,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     registration) at the registration, the chain case (the round's registration of the Program) at its refusal, a block
     whose entries are at another root by name, and one whose root is at its o1, no `SlotEntry_v1` template's entries, at
     the wiring (`period_case.UNWIRED`), and a block whose ``scan/state`` is a state tree that skips a transition, or
-    that names none, at the state tie (`period_case.UNSTATED`); a group of two link-windows is refused by name. Slow
+    that names none, at the state tie (`period_case.UNSTATED`); a group of two link-windows, and a run in the bytes
+    egress form, are refused by name. Slow
     (the test class's Program, about 30 s): the period check reads the scan's templates' signatures, which no stand-in
     can stand for."""
     import scan_period as SP
@@ -541,8 +543,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     case = SP.rows_case(run, scan)
     p = case["params"]
     assert sorted(p) == PC.ROWS_PARAMS_KEYS
-    assert (p["key"], p["session"], p["schedule"], p["link"]) == (dep["key"]["public"], dep["session"], dep["params"],
-                                                                  WS.LINK)
+    schedule = {k: dep["params"][k] for k in sz.W.INTEGER_FIELDS}
+    assert (p["key"], p["session"], p["schedule"], p["link"]) == (dep["key"]["public"], dep["session"], schedule, WS.LINK)
     assert (p["program"], p["windows"], p["first"]) == (reg["program"], 1, 0)
     assert p["audits"] == [{"free": E * sz.IS.entry_bits(cls), "program": encode_program(block), "steps": 0}]
     key = sz.PA.template_id(defs["block"])
@@ -588,6 +590,9 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
         assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {PC.UNSTATED}"), got
     (scan / "answers.json").write_text(json.dumps({"registration": reg, "windows": [{"window": w} for w in (0, 1)]}))
     with pytest.raises(SystemExit, match="a group of 2 link-windows .* scan_zk.py --group 1"):
+        SP.rows_case(run, scan)
+    (run / "deployment.json").write_text(json.dumps({**dep, "params": {**dep["params"], "egress": "bytes"}}))
+    with pytest.raises(SystemExit, match="the period check's schedule is the id egress form's, not 'bytes''s"):
         SP.rows_case(run, scan)
 
 
