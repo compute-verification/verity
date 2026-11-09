@@ -11,6 +11,7 @@ import pytest
 
 import research.merge as M
 import research.queue as Q
+from research import vqueue
 from research.executor import GRAPH_V2, Executor, FileTransport
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, Advance, Build, Drop, Eject, Outcome, Retry, Ring, Snapshot)
 from research.vqueue_loop import Loop, World, _Clone, branch
@@ -296,6 +297,28 @@ def test_a_task_blocked_behind_a_failed_one_fails_the_candidate_with_its_inputs_
     assert v.state == FAIL and [(f.task, f.key) for f in v.failed] == [("lean-build:x", keys["lean-build:x"])]
     env.graph2.list_graph(f"ready:{sha}", {"schema": GRAPH_V2, "commit": "0" * 40, "tasks": []})
     assert w.verdict(sha).verdict.state == LIST_FAILED
+
+
+def test_the_policy_itself_ejects_the_member_a_failure_meets_rebuilds_the_rest_and_lands_them(env):
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    two = env.put(2, {"b.txt": "2\n"})
+    loop = env.loop(vqueue.decide)
+    (built,) = loop.tick()
+    assert (built["action"], built["members"], built["base"], built["priority"]) == ("build", [1, 2], main, 2), built
+    assert loop.tick() == []                                    # not listed yet: pending
+    keys = env.listed(built["sha"], {"pytest:a": ["a.txt"], "pytest:b": ["b.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    env.result(keys["pytest:b"], "pytest:b", "fail")
+    eject, drop, again = loop.tick()
+    assert (eject["action"], eject["number"], eject["heads"], env.withdrawn) == ("eject", 2, [two], [(2, two)])
+    assert (drop["action"], drop["outcome"]["state"], drop["outcome"]["suspects"]) == ("drop", FAIL, [2])
+    assert (again["action"], again["members"], again["base"]) == ("build", [1], main)
+    keys = env.listed(again["sha"], {"pytest:a": ["a.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    advance, landed = loop.tick()
+    assert (advance["action"], landed["action"], landed["outcome"]["state"]) == ("advance", "drop", PASS)
+    assert env.main() == again["sha"] and env.queued() == {} and loop.tick() == []
 
 
 def test_an_action_that_fails_stops_the_tick_with_its_error_logged_and_a_torn_line_stays_its_own(env):
