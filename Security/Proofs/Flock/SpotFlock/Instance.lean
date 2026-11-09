@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.SpotFlock.FrameIsBuilt
 public import Proofs.Flock.SpotFlock.Cap
+public import Proofs.Flock.SpotFlock.DrawnAt
 import all Init.Data.Array.Basic
 
 /-!
@@ -24,20 +25,21 @@ Each bundle holds the facts the two-stage design reads of it, each a decision on
 
 At them the design evaluates (`two_held`) and the second stage takes the counts (`secondProblem_held`), so the
 registration doesn't refute a checked run before any session; the frame is SPOT's own (`built_held`); SPOT's layout
-embeds the statement (`embeds_held`); and round 2's parts are the one template's (`partsAt_held`).
+embeds the statement (`embeds_held`); round 2's parts are the one template's (`partsAt_held`); and the first stage
+samples unit slots (`firstSlots_held`), so a checked unit of a one-table session is counted (`counted_held`).
 
 ## What this does not show
 
 `SpotKSTwo` reads two premises of a registration, `Built h` and `Sites h`; SPOT's layout embeds the statement at every
 registration (`embeds_layoutFor`). At `held R bnd0 …` (`bnd0`, `SpotFlock.InstanceBoundary`'s concrete boundary) the
-design evaluates, the second stage takes the counts and `Built` holds, for every `R : Ref`. `Sites` is not proved here.
-So the two-stage guarantee's non-vacuity is reduced, not proved: it rests on one existence fact, a `Ref`, that is, a
-reference statement with hidden outputs and `sha512/row/v2` ports, in the two-stage scope at two units a request,
-whose registered reads carry roots and whose masked setup (`Stmt.setupHidden`, through `FlockDeploy.setupOf true`)
-holds at the open guarantee that the verifier's fixed nets build (`Properties.Flock.Nets.FixedNetsBuild`). No such
-statement is proved in Lean. That one exists is evidence, not proof: the Lean verifier accepts the honest run of the
-two-stage toy (`benchmarks/two_stage/`), whose reference statements are of this kind, one of its templates at two
-units a request.
+design evaluates, the second stage takes the counts and `Built` holds, for every `R : Ref`. `Sites` is not proved here;
+of its site's three conjuncts only `Counted` is, and only at a one-table session (`counted_held`). So the two-stage
+guarantee's non-vacuity is reduced, not proved: it rests on one existence fact, a `Ref`, that is, a reference statement
+with hidden outputs and `sha512/row/v2` ports, in the two-stage scope at two units a request, whose registered reads
+carry roots and whose masked setup (`Stmt.setupHidden`, through `FlockDeploy.setupOf true`) holds at the open
+guarantee that the verifier's fixed nets build (`Properties.Flock.Nets.FixedNetsBuild`). No such statement is proved
+in Lean. That one exists is evidence, not proof: the Lean verifier accepts the honest run of the two-stage toy
+(`benchmarks/two_stage/`), whose reference statements are of this kind, one of its templates at two units a request.
 -/
 
 @[expose] public section
@@ -176,5 +178,15 @@ theorem secondProblem_held :
     Spot.Select.secondProblem #[0] (held R B desc q c₀).reg.ns (held R B desc q c₀).reg.ks = none := by
   show Spot.Select.secondProblem #[0] #[2] #[1] = none
   decide +kernel
+
+/-- **The first stage samples unit slots**: the boundary's first stage is a uniform subset with its population in slot
+order (`firstSlots_of`). -/
+theorem firstSlots_held : FirstSlots (held R B desc q c₀) := firstSlots_of _ B.firstK B.pop
+
+/-- **A checked unit is counted**, `SiteHolds`'s first conjunct, where its session has one table: no slot is always
+checked and the first stage samples unit slots (`CheckedRun.counted`). -/
+theorem counted_held {r : CheckedRun} (hr : r.Ok (held R B desc q c₀)) (hc1 : r.ins.read.I.count ≤ 1) :
+    r.Counted (held R B desc q c₀) :=
+  CheckedRun.counted _ hr hc1 rfl (firstSlots_held R B desc q c₀)
 
 end SpotFlock.Instance
