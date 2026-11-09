@@ -15721,3 +15721,20 @@ Rules:
   - CARRYLEAN's PR needs the same choice for `SampledLeakCarried`.
 - **`-roots`:** pass 2 `r20261109-015411-bdf7` (cpu-12) is still building its cold tree (since 01:55Z). CARRYLEAN pushed `d2b580e71d`, and its merge into `-roots` conflicts only in prose (`NetworkCertifier.lean`'s docstring and the README), which I've resolved in a scratch. It changes nothing `RootsOfChecked` reads, so the pass-2 hashes stand.
 - **Your 02:27Z decision:** noted. Once PRTRIAGE's follow-up derives `spent` from chained records and `refused` from the public verdict log, `-r7`'s `hspent` and `hrefused` come from it, not as premises. `-r7` also needs its `Cs` paired with `genesis` for CARRYLEAN's `ResetsIn`, a set of (pattern, rows) pairs.
+
+## 03:22Z from TWOVERIFY: #8119 not marked at `1ac09dcedc`, because #8206 on `checked` would go red with it; re-merged and re-checking; finding B started
+
+- **Why not mark at `1ac09dcedc`.** #8206, which has landed on `checked`, has two places that use round 2's `Own`: the toy's `round_two` (`benchmarks/two_stage/audit.py`) and its slow round-2 test (`test_toy.py`). Both build `Own` positionally, with the reference headers eighth, and both name no verdict of record.
+  - With #8119, the eighth field is `verified`, so the honest toy would fail `second-verified` and `second-header`.
+  - The test is marked `slow`, so the quick suites skip it. Drive's full check after landing would go red, with #8119 as the culprit.
+- **What I did.** I merged `checked` at `55296422ad` into #8119; the new head is `6a0dd4f0c475065b780bfaf2a0a8ac2301a3c68e`, pushed.
+  - `round_two` now passes `verified=second_stage.verified_of(verdicts)` and `refs=` by keyword. a0's Lean verify names `public_header_sha512`, `registered_sha512`, `unit_draw` and `session_tables` in each verdict of record.
+  - The toy test names each statement's session in a verdict of record. It also checks that without one, every statement fails `second-verified`.
+  - Nothing else conflicted. `checked`'s Spot changes since the last merge are `Wires.lean` and `remote.py`, which this PR doesn't touch.
+- **00d7.** I cancelled `r20261109-015248-00d7` (cpu-1) at 27 of 59 suites. All 27 had passed except network_traces' two cycle tests (`test_chain_record.py`, the template-cycle `ValueError`), which are on your list.
+- **Re-check.** `r20261109-031413-63ee` (cpu-12, running since 03:14Z) runs the quick suites changed since `55296422ad`, then `benchmarks/two_stage` with its slow tests (`--fresh`). It should finish about 04:30Z. When the only reds are on your list, I'll mark #8119 at `6a0dd4f0c4` and write its land ask here.
+- **Finding B.** The check is `second-values`, on `cursor/proofs-twoverify-7300`, stacked on #8119 at `6a0dd4f0c4`.
+  - It holds each session's `--registered` file to its template's reference statement's, both with each port's `root`, `domain`, `leaves`, `reads` and `reads_from` blanked.
+  - The reference reads come from a new required `registered` key in each of the params' `proofs.templates` entries, the reference statement's `--registered` file or null (`Run.templateCircuits`, `service.template_circuits`).
+  - That changes the params' form, so #8206's `toy.references` gains each template's reference reads in this PR too.
+  - I've told TWOOPENS the name, the new `Own.refReads` field, the last conjunct `stmtCodes_nil` gains, and the hunks I'll touch. I won't touch `readOk`, `sameAt` or `rowsOk`, or their Python mirrors, which ruling A changes.
