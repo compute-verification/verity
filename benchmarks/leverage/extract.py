@@ -53,7 +53,7 @@ from pathlib import Path
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lm import E4M3_MAX, GROUP, LM, MODELS, Boxes, Cache, Fault, position_class, served_logprobs, ue8m0_scale
+from lm import E4M3_MAX, GROUP, LM, MODELS, Boxes, Cache, Fault, served_logprobs, ue8m0_scale
 from prompts import PROMPTS
 
 LOGPROB_BITS = 32  # a served logprob, as the fp32 float an OpenAI-style API returns
@@ -107,6 +107,12 @@ def prefix(lm: LM, tok, text: str) -> tuple[Cache, torch.Tensor, int]:
     return pre, ids[:, t0:], t0
 
 
+def fault_class(lm: LM, pre: Cache, last: torch.Tensor, t0: int) -> int:
+    """The position class of the faulted position t0 under lm.boxes, from its token and the state the prefix recorded,
+    which picks the boxes a fault there is read against."""
+    return int(lm.boxes.classes(t0, 1, last, pre.sink)[0][0, -1])
+
+
 def faulted_logits(lm: LM, pre: Cache, last: torch.Tensor, t0: int, rows: list, taps: dict | None = None):
     f = Fault.of(t0, rows)
     return lm.forward(last.expand(len(rows), 1), pre.expand(len(rows)), fault=f, taps=taps)[:, -1]
@@ -128,7 +134,7 @@ def part_final(lm: LM, tok, a) -> dict:
         z_h = lm.forward(last, pre.expand(1), taps=taps)[:, -1]
         h = taps[("final", L)][0, 0].float()
         if lm.boxes is not None:
-            hi = lm.boxes.hi[("final", L)][int(position_class(torch.tensor(t0)))].float()
+            hi = lm.boxes.hi[("final", L)][fault_class(lm, pre, last, t0)].float()
         for amp in specs:
             for sign in (1.0, -1.0):
                 for c0 in range(0, len(cols), a.batch):
@@ -202,7 +208,7 @@ def part_block(lm: LM, tok, a) -> dict:
         taps = {("final", L): None}
         lm.forward(last, pre.expand(1), taps=taps)
         h = taps[("final", L)][0, 0].float()
-        hi = lm.boxes.hi[("final", L)][int(position_class(torch.tensor(t0)))].float()
+        hi = lm.boxes.hi[("final", L)][fault_class(lm, pre, last, t0)].float()
         own = E4M3_MAX * ue8m0_scale(h.abs().view(-1, GROUP).amax(-1)).repeat_interleave(GROUP)
         z_h = h[None] @ E.T
         for w in a.widths:
@@ -410,7 +416,7 @@ def peel(lm: LM, tok, pre: Cache, last: torch.Tensor, t0: int, h0: torch.Tensor,
     else:
         runs = []
         for ctx in [(pre, last, t0, h0)] + [context(lm, tok, p) for p in PROMPTS[1:a.peel_contexts]]:
-            pc = int(position_class(torch.tensor(ctx[2])))
+            pc = fault_class(lm, *ctx[:3])
             hi = lm.boxes.hi[("final", L)][pc].float()
             amps = torch.tensor([float(hi[i]) if a.peel == "box" else fault_values("own", i, ctx[3], 0.0, hi, None)[1][0]
                                  for i in range(d)]).to(torch.bfloat16).double()
@@ -497,6 +503,7 @@ def part_rows(lm: LM, tok, a) -> dict:
     z0 = lm.forward(last, pre.expand(1), taps=taps0)[0, -1]
     h0 = taps0[("final", lm.spec.layers)][0, 0].float()
     amax = torch.load(a.boxes)["amax"] if a.boxes is not None else None
+    pc = fault_class(lm, pre, last, t0) if lm.boxes is not None else None
     T = est = None
     if a.peel:
         T = torch.randperm(V, generator=gen)[:max(reads)]
@@ -505,9 +512,9 @@ def part_rows(lm: LM, tok, a) -> dict:
     for l in layers:
         x0 = taps0[(site, l)][0, 0].float()
         rms = float(x0.pow(2).mean().sqrt())
-        hi = lm.boxes.hi[(site, l)][int(position_class(torch.tensor(t0)))].float() if lm.boxes is not None else None
+        hi = lm.boxes.hi[(site, l)][pc].float() if lm.boxes is not None else None
         if a.pick == "widest":
-            by_amax = amax[f"{site}:{l}"][1].argsort(descending=True, stable=True)
+            by_amax = amax[f"{site}:{l}"][pc].argsort(descending=True, stable=True)
             units = by_amax[hi[by_amax].argsort(descending=True, stable=True)][:a.units].tolist()
         else:
             units = torch.randperm(width, generator=gen)[:a.units].tolist()
@@ -562,7 +569,7 @@ def part_rows(lm: LM, tok, a) -> dict:
                          "bits_per_row": bits, "bits_per_fault": bits / F, "mi_bits_per_row": mi,
                          "mi_bits_per_fault": mi / F,
                          "bits_per_observed_bit": bits / (F * k * (math.log2(V) + LOGPROB_BITS))})
-    res = {"part": "rows", "rows": rows}
+    res = {"part": "rows", "rows": rows, "fault_position": t0, "fault_class": pc}
     if est is not None:
         per = 2 if a.peel == "saturate" else 4 * a.peel_contexts
         res["peel"] = {"mode": a.peel, "tokens": len(T), "contexts": 1 if a.peel == "saturate" else a.peel_contexts,
