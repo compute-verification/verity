@@ -24,7 +24,8 @@ DEV=${PT_DEVICE:-gpu}; case $DEV in gpu | cpu) ;; *) echo "PT_DEVICE is gpu or c
 FW=${FLOCK_WORK:-/workspace/tmp/served-units-time-$DEV}; mkdir -p $FW || exit 1
 UNITS=${PT_UNITS:-"fp8-coord:K=6144 fp8-coord:K=6144+public-weights"}; NS=${PT_NS:-"16 64"}; JOBS=${PT_JOBS:-4}
 WARM=${WARM:-1}; RUNS=${RUNS:-3}; NSESS=$((WARM + RUNS)); SM=${SM:-120}; STEPS=${STEPS:-"build stage prove"}
-[ -x /usr/bin/time ] || { echo "prove_time.sh needs GNU time at /usr/bin/time (apt-get install time)"; exit 1; }
+TIMEV="/usr/bin/time -v -o"  # each step's time-*.txt record, where GNU time is installed
+[ -x /usr/bin/time ] || { TIMEV=; echo "no GNU time at /usr/bin/time (apt-get install time): no time-*.txt records"; }
 if [ $DEV = gpu ]; then
   . verity/ml/flock/pod/cuda-13.3.sh
   C13=${CUDA_TK:-/usr/local/cuda-13.3}; export PATH=$C13/bin:$PATH LD_LIBRARY_PATH=$C13/lib64:${LD_LIBRARY_PATH:-}
@@ -75,7 +76,7 @@ stage() {
     flock 9
     [ -e $d/.done ] && exit 0
     rm -rf $d && mkdir -p $d
-    /usr/bin/time -v -o $o/time-stage.txt $PY $REPO/benchmarks/served_units/stage.py "$u" $2 $d $flag > $o/stage.log 2>&1 \
+    $TIMEV ${TIMEV:+$o/time-stage.txt} $PY $REPO/benchmarks/served_units/stage.py "$u" $2 $d $flag > $o/stage.log 2>&1 \
       || { echo "stage $nm FAILED: $(tail -1 $o/stage.log)"; rm -rf $d; exit 1; }
     touch $d/.done
   ) 9> $d.lock || return 1
@@ -117,7 +118,7 @@ session() {
   wait_serving $o/serve.log $SP || { tail -20 $o/serve.log; return 1; }
   [ $DEV = gpu ] && { gpu_sample $o & GS=$!; }
   local PERF=; [ "${PT_PERF:-0}" = 1 ] && PERF="perf record -q -F ${PT_PERF_HZ:-499} -o $o/perf.data --"
-  RAYON_NUM_THREADS=$((NC - VC)) FC_VERIFY_AHEAD=$NSESS taskset -c $PCPU /usr/bin/time -v -o $o/time-prove.txt $PERF $B prove --zk $G \
+  RAYON_NUM_THREADS=$((NC - VC)) FC_VERIFY_AHEAD=$NSESS taskset -c $PCPU $TIMEV ${TIMEV:+$o/time-prove.txt} $PERF $B prove --zk $G \
     --verifier 127.0.0.1:$PORT --instances $d/inst.bin --circuit $d/circuit.txt --warm $WARM --runs $RUNS \
     2> $o/prove.err | stamp > $o/prove.tsv
   echo "prove $nm exit ${PIPESTATUS[0]}: $(grep -o '"accepted":[a-z]*' $o/prove.tsv | sort | uniq -c | tr '\n' ' ')$(grep -o '"why":"[^"]*"' $o/prove.tsv | sort -u | head -2 | tr '\n' ' ')"
@@ -134,7 +135,7 @@ if has prove; then
   echo "== prove ($DEV) $(date -u +%T)"
   if [ $DEV = gpu ]; then
     export -f session name gpu_sample free_port wait_serving stamp
-    export B O FW KEY DEV PCPU VCPU NC VC NSESS WARM RUNS PAIRS
+    export B O FW KEY DEV PCPU VCPU NC VC NSESS WARM RUNS PAIRS TIMEV
     GPU_LEASE_WHO=${GPU_LEASE_WHO:-served-units-time} gpu-lease 1 --wait --max-min ${LEASE_MIN:-30} -- bash -c '
       set -f; nvidia-smi -L > $O/lease-gpu.txt
       for p in $PAIRS; do session "${p%@*}" "${p##*@}"; done'

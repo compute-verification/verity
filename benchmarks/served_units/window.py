@@ -308,7 +308,8 @@ def prove(units: list[Unit]) -> int:
         ns = [n for n in u.ns if (fw / "data" / f"{name(u.unit, n)}-{k}" / ".done").exists()]
         if ns:
             recs = [json.loads((fw / "data" / f"{name(u.unit, n)}-{k}" / "stage.json").read_text()) for n in ns]
-            est = sum(4 * (6 + 2 ** max(r["k_log"] - 23, 0) + 3 * r["circuit_bytes"] / GB) + 10 for r in recs)
+            est = sum(10 + 3 * r["circuit_bytes"] / GB + (int(env("WARM", "1")) + int(env("RUNS", "3"))) *
+                      (4 + 2 ** max(r["k_log"] - 23, 0)) for r in recs)
             staged.append((u, ns, est))
         else:
             log(f"not staged, skipped: {u.unit}")
@@ -327,7 +328,7 @@ def prove(units: list[Unit]) -> int:
         if not items:
             continue
         units_arg = " ".join(f"{u.unit}@{','.join(ns)}" for u, ns, _e in items)
-        lease = min(int(env("LEASE_MIN", "30")), max(5, int(sum(e for *_x, e in items) / 60 * 1.6) + 3))
+        lease = int(env("LEASE_MIN", "30"))
         cores = ",".join(map(str, cpus[g * per:(g + 1) * per]))
         log(f"group {g}: {len(items)} types, estimated {sum(e for *_x, e in items) / 60:.1f} min, lease {lease} min, cores {cores}")
         p = start(f"gpu group {g}", ["STEPS=prove", f"PT_DEVICE={env('WIN_DEVICE', 'gpu')}", f"PT_UNITS={units_arg}", f"LEASE_MIN={lease}",
