@@ -1,23 +1,22 @@
-"""`engine.vllm_surface`: the closed list of vLLM's modules and names that the library code imports."""
+"""vLLM's surface: the closed list (`vllm_surface.py`) of vLLM's modules and names that the library code imports."""
 from __future__ import annotations
 
 import ast
 import importlib
 import warnings
-from pathlib import Path
 
 import pytest
 
 from verity_vllm import config
-from verity_vllm.engine.vllm_surface import SURFACE
 
-PACKAGE = Path(__file__).resolve().parents[2] / "verity_vllm"
+from . import _ratchet as R
+from .vllm_surface import SURFACE
 
 
 def imported(text: str) -> set[str]:
     """The vLLM modules a source imports whole, and the ``module:name`` pairs it imports from one."""
     out: set[str] = set()
-    for n in ast.walk(ast.parse(text)):
+    for n in ast.walk(R.parse_src(text)):
         if isinstance(n, ast.Import):
             out |= {a.name for a in n.names if a.name.split(".")[0] == "vllm"}
         elif isinstance(n, ast.ImportFrom) and n.level == 0 and n.module and n.module.split(".")[0] == "vllm":
@@ -32,17 +31,17 @@ def test_it_reads_both_kinds_of_import_at_any_depth():
 
 def test_every_vllm_import_of_the_library_is_listed():
     uses: dict[str, set[str]] = {}
-    for p in sorted(PACKAGE.rglob("*.py")):
-        for key in imported(p.read_text()):
-            uses.setdefault(key, set()).add(str(p.relative_to(PACKAGE)))
+    for p in R.library_files(root=R.PKG):
+        for key in imported(R.source(p)):
+            uses.setdefault(key, set()).add(R.rel(p))
     assert len(uses) > 50
     missing = {k: sorted(v) for k, v in uses.items() if k not in SURFACE}
-    assert not missing, ("vLLM imports that engine.vllm_surface.SURFACE doesn't list: add each with why the integration "
+    assert not missing, ("vLLM imports that tests/lint/vllm_surface.py doesn't list: add each with why the integration "
                          "needs it, or reach it through a module that already imports it:\n"
                          + "\n".join(f"  {k}: {', '.join(v)}" for k, v in sorted(missing.items())))
     stale = sorted(set(SURFACE) - set(uses))
     if stale:
-        warnings.warn(f"entries of engine.vllm_surface.SURFACE that nothing imports: delete each once no change in flight "
+        warnings.warn(f"entries of tests/lint/vllm_surface.py that nothing imports: delete each once no change in flight "
                       f"adds its import: {stale}", stacklevel=1)
 
 

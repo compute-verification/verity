@@ -2,13 +2,11 @@
 (`verity_vllm.config.VLLM`).
 
 `SURFACE` maps each to why the integration needs it: ``"vllm.mod"`` for a module imported whole (``import vllm.mod``) and
-``"vllm.mod:name"`` for a name imported from one (``from vllm.mod import name``). A test refuses an import under
-``verity_vllm/`` that it doesn't list, and warns on an entry that nothing imports. Where vLLM is installed, a test resolves
-every entry against it, so moving the pin starts from this list.
+``"vllm.mod:name"`` for a name imported from one (``from vllm.mod import name``). `test_vllm_surface.py` refuses an
+import under ``verity_vllm/`` that it doesn't list, and warns on an entry that nothing imports. Where vLLM is installed,
+it resolves every entry against it, so moving the pin starts from this list.
 """
 from __future__ import annotations
-
-__all__ = ["SURFACE"]
 
 SURFACE = {
     # the engine and its requests
