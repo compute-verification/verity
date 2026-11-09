@@ -242,6 +242,7 @@ paths = ["integrations/vllm", "verity"]
 [[tool.verity.tests.reads]]
 tests = [
     "tests/pipeline/test_circuit_db.py",
+    "tests/pipeline/test_single_request_build_path.py",
     "tests/program/test_sampling_rows.py",
     "tests/regression/test_step_segmentation.py",
     "tests/regression/test_store_io.py",
@@ -293,9 +294,12 @@ paths = [
 
 [[tool.verity.tests.reads]]
 tests = [
+    "tests/program/predict/test_block_counts.py",
+    "tests/program/predict/test_inference_blocks.py",
     "tests/program/predict/test_window_circuit.py",
     "tests/program/predict/test_window_circuit_fa3.py",
     "tests/program/predict/test_window_circuit_int8.py",
+    "tests/program/predict/test_window_circuit_tables.py",
     "tests/program/test_fp8_moe_per_expert.py",
 ]
 paths = ["verity/ml/circuits/ops"]

@@ -32,3 +32,7 @@ tests = [
     "tests/test_nci_lean_difftest.py",
 ]
 paths = ["verity"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_slot_entry_pins.py"]
+paths = ["verity/ml/definitions/registry/io_shell.circuit-check.py"]

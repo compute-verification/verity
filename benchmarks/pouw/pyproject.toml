@@ -19,6 +19,7 @@ verity-exact-kit = { workspace = true }
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
+    "tests/test_facet_break.py",
     "tests/test_ffill.py",
     "tests/test_pearl_c_hash_decode.py",
     "tests/test_pearl_c_hash_host.py",
