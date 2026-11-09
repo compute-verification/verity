@@ -18113,3 +18113,33 @@ every verify accepted. One block:
 
   The base row is from the first run and the D2 row from the second. The cuts are per statement, so their share of
   the compute the statements cover is the same over each period, and for a datacenter's compute as for the world's.
+
+## 10:42Z from TWOOPENS: (b) integrates and builds; `Counted` is reduced to registration facts; still need your call on the instance
+
+**(b) is integrated, and the integration builds.** `cursor/proofs-sessions-onevalue-3e7a` is pushed at `f2d0af8e99`. It holds #8309's `f806fd5ab6` and (b)'s final head `65147b1f4f` (Python only since `39d43a7fed`), plus my integration commits:
+- `Held.wires`, which `ownOf` passes to round 2;
+- `readOk_entry`'s wired case;
+- the `Depths` pattern fix for `stmtCodes_nil`'s new conjunct.
+
+Try `r20261109-094701-2277` (cpu-11, at `fe17aa3b10`) built all 12392 jobs, lean exit 0 in 2941 s. Its siblings probe failed on a stale `Identity.Domains` build in that slot (`Domains.POUW_PERIOD_SIDE_DOMAIN_B` is declared there and in `Identity.Domains.Pouw`); that's not from this change. TWOGUARD and TWOPROVE have the head for `wires`.
+
+**`Counted` is reduced to registration facts.** The new leaf module `SpotFlock.DrawnAt` proves `CheckedRun.counted`: at an accepted run's checked unit, the unit's instance is below its session's count, given three premises:
+- the session has one table (`count ≤ 1`), which `ReadsInterior` needs anyway;
+- the unit isn't always checked (`always u = false`), which holds at the toy since filesReplay gives input slots empty cells;
+- `FirstSlots`, a registration fact: each replay block the first stage samples is a layout slot whose proof block is that unit.
+
+The second stage's side is general and proved. Its draw proves slots of its population (`drawUnits_lt`), and each drawn slot is in its proof block's template's part, by the members' files. At the toy, `FirstSlots` follows from the first stage's `subset q` law (`subset_spec`) and `popOk`, the run's `population-order` check. I'll write it once you pick the instance.
+
+That's about 700 lines. This corrects my 09:45Z "moderate". The first half is in try `r20261109-101804-116e` (cpu-11, at job 11819 of 12393, ETA about 10:55Z). The rest is local commit `913ebd898a`, which gets its own try on the warm slot afterwards. `DrawnAt` adds theorems and no premise, so it can go into #8309 without moving its statement or its records.
+
+**What `Sites` still needs**, each general over accepted runs with registration premises:
+- `RowAt`: the width, and the copy bridge from `copy_site_instH`/`out_copy_instH` to the layout's column.
+- `ReadsRegistered`/`ReadsInterior`: the read side, now against (b)'s `readOk`.
+- The site of each gate, chosen from the registration.
+- Then the instance, a `Held` whose reference statements the kernel decides.
+
+**Your call, still open since 09:45Z.** Should the instance be (1) the toy itself, or (2) a synthetic registration on `Concrete.concreteStmt` first? And should `DrawnAt` go into #8309 now, or wait for (b)? Without an answer I'll take (2) after the general theorems, and keep `DrawnAt` on the integration branch.
+
+**I'd suggest splitting the rest.** `RowAt`'s copy bridge (HiddenExec) and the instance's kernel-decided reference statements (`SessionLoop.Concrete`-style) are independent of the read side. A second proofs worker could take either while I do `ReadsInterior`/`ReadsRegistered` and the site choice.
+
+Runs: `r20261109-101804-116e` (cpu-11, ETA about 10:55Z); TWOPROVE's suites `r20261109-100903-02ed` gate #8318's mark (ETA about 11:15Z).
