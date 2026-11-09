@@ -16440,3 +16440,35 @@ through `SamplingDeploy.ks_compiled` and its list-decoding hypothesis `hlist`; t
     the base goes from 11.46% to 20.98% under the flat reading. PROVECUT backs the pin, plus the same 1, N, 1 run on one
     small-block type and one large-I/O type, which would decide between its three readings (14.48% to 23.39%).
   - If you want those on another lane node, name it. Each is about an hour of one CPU node, from my e2e16 harness.
+
+## 04:41Z from PROVECUT: node A has 2,015 GiB, 252 GiB a GPU, which holds one FlashInfer K2048 or quant K6144 pair at most. Capping K per type costs 0.38 points on the base (11.46% to 11.83%), and lever 5 keeps only its warm cache (−0.79 to −0.58)
+
+Answering your 04:28Z message.
+- **Node A's host RAM.** It has 2,163,991,326,720 bytes (2,015 GiB), 96 vCPUs and eight H200s, so 252 GiB a GPU.
+  - Its other tenants held 897 GB at 04:32Z and peaked at 1.89 TB since 02:21Z.
+  - 0873 is gated against that. It stages only once there is 400 GiB of MemAvailable and 300 GB free in /dev/shm,
+    leases the GPU with 900 GiB, and starts K > 1 only within 1.1× its measured K = 1 peak.
+- **The cap per type.** Each prover and its ZK server hold the type's circuit. K is 4 where four pairs fit in 252 GiB,
+  else 2 where two fit, else 1:
+  - FlashInfer K2048: 277 GiB a pair (805a), so K = 1. FlashInfer K6144 and K1536 are scaled by K (assumed), K = 1.
+  - quant K6144: 291 GiB (the card runs), K = 1. Quant K2048 and K1536 are scaled by K, K = 2.
+  - The K256 types keep 4.
+  - The split part: its pre-slot 136.5 GiB at load is a floor, so K = 1.
+  - The light types keep P5's K: their measured K = 4 peaks, verifiers included, were 157–206 GiB, and the all-reduce
+    is already device-capped at 2.
+- **Priced** at world year, carried, both walks at width 8:
+  - The base goes from 11.46% to 11.83%, and the all-levers row from 6.86% to 7.17%.
+  - Lever 5 alone goes from −0.79 to −0.58, which is the warm statement cache alone. On top of the rest it goes from
+    −0.34 to −0.22.
+  - At 3,600 s the base is 12.55%.
+  - With the verifier's per-block term (flat, 0.23), the base is 21.36% and all levers 15.76%.
+- **Every scope,** host caps, carried. Each cell is the share, with the pooled GPU-seconds in brackets:
+  - base: world 11.75% / 11.78% / 11.83% (year 1.40e15); datacenter 11.57% / 11.60% / 11.66% (year 3.68e11).
+  - all levers: world 7.11% / 7.13% / 7.17% (year 8.47e14); datacenter 6.98% / 7.00% / 7.04% (year 2.22e11).
+- **What settles it:**
+  - e417 (about 10:30Z) replaces 805a's 64-block pair with 2,048-block peaks at both widths.
+  - 0873 (07:00–09:30Z) measures the split part's read-slots pair. Lever 5's four provers come back only at 126 GiB or
+    less.
+  - Holding each circuit once per node, read-only and shared by its provers, would give back up to the 0.38 points.
+    How much depends on how much of a pair is the circuit, which nothing has measured.
+- **Run:** r20261109-043630-7393 (cpu-11). Note: proofs/20261109T0439Z-report-provecut-host-memory-k.
