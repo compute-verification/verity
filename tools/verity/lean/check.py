@@ -34,8 +34,11 @@ import difflib
 import gzip
 import hashlib
 import json
+import math
 import os
+import random
 import re
+import secrets
 import shutil
 import signal
 import subprocess
@@ -1135,11 +1138,18 @@ def write_facts_document(path: Path, doc: dict) -> None:
 
 
 def write_atomic(path: Path, data: bytes) -> None:
-    """Write ``data`` to ``path`` whole or not at all, as `store_replay` does: a temporary file beside it, named for the
-    process and thread (the packages of one audit store in threads of one process), renamed over it (`os.replace`)."""
-    tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
-    tmp.write_bytes(data)
-    os.replace(tmp, path)
+    """Write ``data`` to ``path`` whole or not at all: a temporary file beside it that no other writer shares
+    (`tempfile.mkstemp`), renamed over it (`os.replace`), so the last of two writers of one path wins. A name made of the
+    process and thread ids is not enough: two processes in different PID namespaces, or a thread whose id was reused, give
+    the same name, and the first rename takes the other writer's file away."""
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 def read_facts_document(path: Path) -> dict:
@@ -4190,6 +4200,113 @@ def stage_build(mk, pkg: Path, roots: list[str], dest: Path) -> tuple[dict[tuple
         return {}, {"modules": 0, "keyed": 0, "error": str(e)}
 
 
+#: the sampled recompile's randomness (`sampled_recompile`): fresh, this process's, and used only after the build, so nothing
+#: the build runs sees or can predict the sample. A test seeds its own
+SAMPLE_RNG: random.Random = secrets.SystemRandom()
+#: the sampled recompile takes this many modules, or this share of them, whichever is more
+SAMPLE_MIN, SAMPLE_SHARE = 8, 0.02
+#: a module's outputs the sampled recompile compares, as Lake writes them (`sampled_file`)
+SAMPLED_OUTPUTS = ("olean", "ilean", "olean.server", "olean.private", "ir", "ir.sig", "c", "bc")
+#: what Lake writes beside them, set aside with them so Lake compiles the module, and put back with them
+SAMPLED_BESIDE = ("trace", "setup.json", *(f"{o}.hash" for o in SAMPLED_OUTPUTS))
+#: the outputs that keep the path of the module's source (a message's), compared as object graphs when their bytes differ
+PATH_PARTS = ("olean.server", "olean.private")
+
+
+def sampled_file(mk, build: Path, mod: str, ext: str) -> Path:
+    """Where ``mod``'s file ``ext`` (`SAMPLED_OUTPUTS`, `SAMPLED_BESIDE`) sits in a package's ``build`` (``mk``:
+    `module_keys`): Lake keeps the C code, its hash and the `setup.json` it gives `lean` under `ir/`, the rest under
+    `lib/lean/`."""
+    ir = ext == "setup.json" or ext.split(".")[0] in ("c", "bc")
+    return build / ("ir" if ir else "lib/lean") / mk.path_of(mod, f".{ext}")
+
+
+def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], jobs: list[str],
+                      log=print) -> tuple[list[Failure], dict]:
+    """Recompile a random sample of the modules ``pkg``'s build didn't compile, and fail on any difference from the outputs
+    the build holds for them: (its failures, the report's `sampled`). The audit judges a module by its `.olean` files, and
+    a module the build didn't compile has outputs it restored (the node's artifact cache, `stage_build`, or a bundle another
+    node published) or kept (the package's kept build, `lean_audit.WarmBuilds`); nothing else binds those outputs to the
+    module's source. The population is every module of the build (``roots`` and the default targets, the workspace's path
+    dependencies included, `module_keys.keys`) with a trace in its package's build and not in ``built`` (the modules Lake
+    reported compiling); the sample is `SAMPLE_MIN` of them or `SAMPLE_SHARE`, whichever is more, all when fewer, taken
+    with `SAMPLE_RNG` after the build. Each one's outputs and Lake's files beside them (`SAMPLED_BESIDE`) move to
+    ``work``/`sampled`, out of the sandbox's reach, and `lake build +M...` compiles them in the sandbox (``jobs``: the
+    build's `env` prefix, without the staged cache, so Lake restores nothing). Every output (`SAMPLED_OUTPUTS`) must be
+    there in both or neither and equal byte for byte; where only `PATH_PARTS` differ, the module's parts must be one object
+    graph but for strings that are absolute paths ending in the module's source path (`olean_graph.differs`): Lean keeps a
+    message's file in `olean.server`, so a build at another path differs there. A failure names the module and its file,
+    and leaves the recompiled outputs in place and the build's in ``work``/`sampled`; a pass puts the build's back, as Lake
+    left them for the modules that read them. The audit prints the sample under its line (`sampled:`), so a run records
+    what it checked. The caller holds the build's `.lake` directories (`writing`)."""
+    mk, og = sibling("module_keys"), sibling("olean_graph")
+    s = time.monotonic()
+    keyed = mk.keys(pkg, roots)
+    pop = sorted(m for m, k in keyed.items()
+                 if m not in built and sampled_file(mk, k.package.build(), m, "trace").is_file())
+    sample = sorted(SAMPLE_RNG.sample(pop, min(len(pop), max(SAMPLE_MIN, math.ceil(SAMPLE_SHARE * len(pop))))))
+    rep: dict = {"population": len(pop), "modules": sample}
+    if not keyed and isinstance(why := mk.workspace(pkg), str):
+        rep["unkeyed"] = why
+    if not sample:
+        rep["seconds"] = round(time.monotonic() - s, 1)
+        return [], rep
+    aside = work / "sampled"
+    shutil.rmtree(aside, ignore_errors=True)
+    moved: dict[str, list[tuple[Path, Path]]] = {}
+    for m in sample:
+        b = keyed[m].package.build()
+        for ext in (*SAMPLED_OUTPUTS, *SAMPLED_BESIDE):
+            if (f := sampled_file(mk, b, m, ext)).is_file():
+                to = aside / keyed[m].package.name / f.relative_to(b)
+                to.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(f, to)
+                moved.setdefault(m, []).append((f, to))
+    log(f"sampled: {pkg}: recompiling {len(sample)} of the {len(pop)} modules this build didn't compile")
+    rc, text = run(in_sandbox(pkg, [*jobs, "lake", "build", *(f"+{m}" for m in sample)]), pkg, work / "sampled.log")
+    rep["seconds"] = round(time.monotonic() - s, 1)
+    if rc:
+        return [Failure("sampled", None, f"sampled: the recompile of {', '.join(sample)} exited {rc}\n{text[-3000:]}")], rep
+    fails, graphs = [], []
+    compiled = {m for m, *_ in BUILT.findall(text)}
+    for m in sample:
+        if m not in compiled:
+            fails.append(Failure("sampled", m, f"sampled: {m}: Lake didn't recompile it, so its outputs can't be compared"))
+            continue
+        p = keyed[m].package
+        was = dict(moved.get(m, []))
+        now = {ext: sampled_file(mk, p.build(), m, ext) for ext in SAMPLED_OUTPUTS}
+        old = {ext: was.get(f) for ext, f in now.items()}
+        if one := [ext for ext in SAMPLED_OUTPUTS if now[ext].is_file() != (old[ext] is not None)]:
+            fails.append(Failure("sampled", m, f"sampled: {m}: {', '.join(one)} only in the build or only in the recompile"))
+            continue
+        here = [ext for ext in SAMPLED_OUTPUTS if old[ext] is not None]
+        differ = [ext for ext in here if now[ext].read_bytes() != old[ext].read_bytes()]
+        if bad := [ext for ext in differ if ext not in PATH_PARTS]:
+            fails.append(Failure("sampled", m, f"sampled: {m}: the build's {now[bad[0]].relative_to(p.dir)} differs from "
+                                               f"what its source compiles to ({', '.join(bad)} differ)"))
+            continue
+        if differ:
+            parts = [q for q in og.PARTS if q in here]
+            if why := og.differs({q: old[q] for q in parts}, {q: now[q] for q in parts}, mk.path_of(m, ".lean").as_posix()):
+                fails.append(Failure("sampled", m, f"sampled: {m}: the build's {now[differ[0]].relative_to(p.dir)} differs "
+                                                   f"from what its source compiles to: {why}"))
+                continue
+            graphs.append(m)
+    rep["by_graph"] = graphs
+    if fails:
+        return fails, rep
+    for m in sample:
+        b = keyed[m].package.build()
+        for ext in (*SAMPLED_OUTPUTS, *SAMPLED_BESIDE):
+            sampled_file(mk, b, m, ext).unlink(missing_ok=True)
+        for f, to in moved.get(m, []):
+            shutil.move(to, f)
+    shutil.rmtree(aside, ignore_errors=True)
+    rep["seconds"] = round(time.monotonic() - s, 1)
+    return [], rep
+
+
 def in_sandbox(pkg: Path, argv: list[str]) -> list[str]:
     """``argv`` inside the build sandbox, writable only in the package's `writable` directories, and `ARTIFACTS` readable
     (``argv`` as is where there is no sandbox)."""
@@ -4501,7 +4618,9 @@ def closure_plan(facts: dict, passed) -> tuple[list[str], list[str]]:
     """(the dependency modules to check, those to add unchecked) for the replay of the import closure: each module of the
     closure outside the package's own (``facts``' `graph` less its `modules`) that has not ``passed``, and every one that
     imports one of those, transitively, which must join the replay because an import of it would bring the modules it
-    imports unchecked. The rest are imported, as each passed with the same `.olean` files and imports."""
+    imports unchecked. The rest are imported, as each passed with the same `.olean` files and imports. Cold, the whole
+    closure goes through the kernel in one process, `leanchecker --fresh`'s check of every root at once; warm, nothing
+    outside the package does, and a change to an own module replays it and what imports it, as without `--closure`."""
     graph, own = facts["graph"], set(facts["modules"])
     deps = [m for m in graph if m not in own]
     missing = {m for m in deps if not passed(m)}
@@ -4519,11 +4638,9 @@ def closure_plan(facts: dict, passed) -> tuple[list[str], list[str]]:
 
 
 def store_replay(replay_cache: Path, key: str, module: str) -> None:
-    """Record that ``module`` passed the replay under ``key``. The packages of one audit replay in threads of one process, and
-    two whose closures share a module store its key at once, so the temporary name is the thread's."""
-    tmp = replay_cache / f".{key}.{os.getpid()}.{threading.get_ident()}.tmp"
-    tmp.write_text(json.dumps({"schema": REPLAY_SCHEMA, "module": module, "key": key}))
-    os.replace(tmp, replay_cache / f"{key}.json")
+    """Record that ``module`` passed the replay under ``key``. Two packages whose closures share a module store its key at
+    once, each through a temporary file of its own (`write_atomic`)."""
+    write_atomic(replay_cache / f"{key}.json", json.dumps({"schema": REPLAY_SCHEMA, "module": module, "key": key}).encode())
 
 
 def touch_replays(replay_cache: Path, keys: dict[str, str], modules) -> int:
@@ -5026,8 +5143,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
           replay_cache: Path | None = None, closure: bool = False, kept_facts: str = "all",
           bookkeeping: str | None = None, facts_out: Path | None = None, seals: "Seals | None" = None,
           store: bool | None = None, facts_cache: Path | None = None, facts_reuse: bool = False) -> dict:
-    """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
-    passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
+    """Audit one package; returns its report (`failures` empty when it passes). With ``build``, a random sample of the
+    modules the build didn't compile is compiled again and compared with what the build holds (`sampled_recompile`; the
+    report's `sampled`) before the seal. ``built`` is called once its build has passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
     ended, False when it did not pass (`proved`); the report's `seconds` holds that wait as `proved-in-wait`, apart from
     `audit`, and within `audit` the package's facts (`facts`) and the provers' (`proved-in`). ``runs`` runs the package's
     tests (`tests`), ``repo`` the checkout their data's
@@ -5133,6 +5251,17 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                 pipe.end(stop=bool(rep["failures"]))
             if cache:
                 shutil.rmtree(cache, ignore_errors=True)
+        if DEV_CACHE:
+            rep["sampled"] = "none sampled: a --dev-cache build restores from Lake's own cache, and its run is never a verdict"
+        else:
+            compiled = set(build_seconds([work / f"{step}.log" for step in ("build-plugins", "build", "build-roots")]))
+            with writing(pkg, log):
+                fails, rep["sampled"] = sampled_recompile(
+                    pkg, policy["roots"], work, compiled,
+                    ["env", "-u", "LAKE_CACHE_DIR", *([f"LEAN_NUM_THREADS={n}"] if n is not None else [])], log)
+            if fails:
+                rep["failures"] += fails
+                return reported(rep)
     # the seal, taken before the build is announced (`built`): every reader below reads these private copies, so a
     # dependent's build, which may write this package's `.lake` once it is announced, cannot change what they see
     try:
@@ -5799,6 +5928,10 @@ def main(argv: list[str]) -> int:
                       flush=True)
             if s := rep.get("staged"):
                 print(f"  staged: {s['modules']} of its {s['keyed']} keyed modules from the artifact cache", flush=True)
+            if isinstance(s := rep.get("sampled"), dict) and s["population"]:
+                print(f"  sampled: {len(s['modules'])} of the {s['population']} modules its build didn't compile, recompiled "
+                      f"in {s['seconds']} s ({len(s.get('by_graph', []))} equal as object graphs): "
+                      f"{', '.join(s['modules'])}", flush=True)
             if rep.get("bookkeeping_left"):
                 print(f"  bookkeeping: with its bookkeeping repaired, the lock still fails ({rep['bookkeeping_left']}):",
                       flush=True)

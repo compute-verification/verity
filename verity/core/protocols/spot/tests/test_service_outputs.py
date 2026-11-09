@@ -91,11 +91,14 @@ def _left(rec: Mapping, port: str = "next") -> dict:
     return {"value": "state", "root": e["root"], "leaves": e["leaves"], "words": 2, "domain": e["domain"]}
 
 
-def _lean(registered: Mapping[str, str] | None = None) -> dict:
-    """The verdict of record, reporting the registered roots its session's reads opened against."""
+def _lean(registered: Mapping[str, str] | None = None, checked: Mapping | None = None) -> dict:
+    """The verdict of record, reporting the registered roots its session's reads opened against, and naming what it
+    checked of the session of second-stage statement `checked` (`fake_challenger.checked`)."""
     lean = {"of_record": True, "accepted": True, "digest": "dd" * 64, "sessions": [SESSION]}
     if registered:
         lean["registered"] = {v: {"value": v, "root": r} for v, r in registered.items()}
+    if checked is not None:
+        lean |= FC.checked(checked)
     return {"lean": lean}
 
 
@@ -172,8 +175,9 @@ def test_an_interior_registration_reads_a_port_of_its_boundary():
     `carry`, the state its replay blocks leave: R7 takes it in the interior registration, the interior's copies carry
     it to the run of record, which agrees on the outcome binding both registrations. Its one failure is round 2's
     (`second-read`): the replay block's Definition links CARRY's `x`, `state` and output to the boundary's ports of
-    them, which this boundary doesn't register, and its session reads `state` from the registered value instead.
-    Registered with no output named, it is refused under its own domain."""
+    them, which this boundary doesn't register, and its session, which the verdict of record names as it checked it,
+    reads `state` from the registered value instead. Registered with no output named, it is refused under its own
+    domain."""
     stream = _stream(_two_stage_spec(), replay=BLOCK)
     assert stream.n_rho == N_RHO
     m = Q * N_RHO
@@ -190,7 +194,9 @@ def test_an_interior_registration_reads_a_port_of_its_boundary():
     assert stream._entries[reg.order].interior_copies[-1] == out
     second = stream.select(ireg)
     assert stream.deliver(second, [SESSION]) is None
-    outcome = stream.outcome(second, _lean({"state": _left(boundary, "carry")["root"]}), {"statement": "stub"})
+    (honest,) = stream.statements(second)
+    outcome = stream.outcome(second, _lean({"state": _left(boundary, "carry")["root"]}, honest), {"statement": "stub"},
+                             statements=[honest])
     checks = stream.records[-1]["audit"]["checks"]
     assert not outcome.accepted and outcome.verdict.detail["reject"]["checks"] == ["statements"]
     assert checks["statements"]["codes"] == ["second-read"] and "run" not in checks

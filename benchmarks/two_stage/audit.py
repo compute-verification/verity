@@ -226,16 +226,18 @@ def round_two(sample: list[int], window: T.CS.Binding, irec: dict, brec: dict, d
               record: dict, proofs: dict) -> dict:
     """Round 2's statement check of the sessions (`second_stage.check`, the form allowed): over the links the replay
     block's Definition makes (`second_stage.replay_links`, at the boundary record's ports, as the stream derives them),
-    the reads the audit record's verdicts of record report, and each template's reference header the params ``proofs``
-    give."""
+    the reads the audit record's verdicts of record report, what they name of each session they accepted
+    (`second_stage.verified_of`), and each template's reference header the params ``proofs`` give."""
     from verity.core.protocols.spot import second_stage as SS
     from verity.core.protocols.spot.one_stage import audit as A, partition as P
     from verity.ml.circuits.codec import descriptor_id
 
     replay = T.boundary_window(int(brec["population"]), len(sample)).program
+    verdicts = record.get("verdicts") or {}
     own = SS.Own(tuple(sample), SS.parts(len(sample), P.strata(window.program, window.query)), irec, brec, tuple(drawn),
-                 SS.replay_links(replay, descriptor_id(T.REPLAY), brec), A.session_registered(record.get("verdicts") or {}),
-                 tuple((e["template"], e["header"]) for e in proofs["templates"]))
+                 SS.replay_links(replay, descriptor_id(T.REPLAY), brec), A.session_registered(verdicts),
+                 verified=SS.verified_of(verdicts),
+                 refs=tuple((e["template"], e["header"]) for e in proofs["templates"]))
     return SS.check(True, own, stmts).to_json()
 
 

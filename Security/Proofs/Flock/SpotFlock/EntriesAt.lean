@@ -512,7 +512,7 @@ theorem registered_entry {x m₁ m₂ : Msg} {s} {c₀ c₁ : FlockDeploy.Coin} 
     exact (Option.some.inj h4).symm
   obtain ⟨kvs, hports, hent, -⟩ := portsOf_entries (portsOf_of_ofJson hoj)
   obtain ⟨ej, hm, -, ⟨rs, hr, hru⟩, ⟨ds, hd, hdu⟩, hl, hv⟩ := hent reg hreg
-  obtain ⟨-, -, -, -, hreads, -, -⟩ := Spot.SecondStage.stmtCodes_nil (List.isEmpty_iff.1 hc)
+  obtain ⟨-, -, -, -, -, -, hreads, -, -⟩ := Spot.SecondStage.stmtCodes_nil (List.isEmpty_iff.1 hc)
   have hents : Spot.entries (Spot.getD S.registered "ports") = kvs.toArray := by
     simp only [hSj, getD_of_ok hports, Spot.entries]
   rw [hents] at hreads
@@ -552,7 +552,7 @@ theorem interior_entry {x m₁ m₂ : Msg} {s} {c₀ c₁ : FlockDeploy.Coin} {u
     rw [(ins_reads_public hwi).2]
     exact hSH
   obtain ⟨rs, ds, hmem, hru, hdm, hdu⟩ := header_roots hset hsc hc1 hj hq hpop hH
-  obtain ⟨-, -, hroots, -, -, -, -⟩ := Spot.SecondStage.stmtCodes_nil (List.isEmpty_iff.1 hc)
+  obtain ⟨-, -, -, -, hroots, -, -, -, -⟩ := Spot.SecondStage.stmtCodes_nil (List.isEmpty_iff.1 hc)
   have hnot : ((Spot.entries (Spot.getD S.registered "ports")).map (·.1)).contains
       sts[j].c.ports[q]!.name = false := by
     cases hreg : ins.registered with

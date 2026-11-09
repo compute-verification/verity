@@ -51,8 +51,9 @@ roots the boundary values are committed under (`portRoots`).
   template `t`'s part (`readsOk`, by `SecondStage.stmtCodes`: its public file's header is `xS₀ t`'s placed in the run
   (`SecondStage.atRun`) but for the run's fields, names
   the part's slots and the interior record's roots, its sample is the second stage's draw within the part, and each
-  registered read is one it may read); and it is `xS₀ t` but for its sample, its registered reads and its public file
-  (`pinOk`); it refuses the message otherwise;
+  registered read is one it may read, the code itself the verifier of record of the session it checks (`codesOk`));
+  and it is `xS₀ t` but for its sample, its registered reads and its public file (`pinOk`); it refuses the message
+  otherwise;
 * rounds `off t` to `off t + k₀ t − 1`: template `t`'s session, Flock's masked verifier at its statement on the
   session's messages, its acceptance answered with the message `[]`, which Flock never answers, and the session's rounds
   after a decision (`decidedAt`) answered `[]` too;
@@ -377,9 +378,11 @@ def partsAt (q : ℕ) : Array Spot.SecondStage.Part := ((List.range h.ms.length)
 /-- **Round 2's statement check passes template `t`'s statement `S`** against the template's part, with what the
 verifier holds of the run (`own`): no failing check (`SecondStage.stmtCodes` at `partAt`, the header placed at the
 template's position among the parts as `stmtFailures` places it (`posOf`), the interior record's port names as
-`stmtFailures` reads them). -/
+`stmtFailures` reads them). The code checks each session itself, so it is the verifier of record of the one it reads
+at `S`: the verdict round 2 holds `S` to is its own (`Stmt.checked`), and `second-verified` asks only that `S`'s
+header and registered reads have digests. -/
 def codesOk (own : Spot.SecondStage.Own) (t : ℕ) (S : Spot.SecondStage.Stmt) : Bool :=
-  (Spot.SecondStage.stmtCodes own (Spot.SecondStage.byTemplate own.interior)
+  (Spot.SecondStage.stmtCodes { own with verified := S.checked.toArray } (Spot.SecondStage.byTemplate own.interior)
     (Spot.SecondStage.posOf (partsAt h own.sample.size) (h.names.getD t "")) (partAt h own.sample.size t) S).isEmpty
 
 /-- **Template `t`'s session statement reads the run's**, at the run's statement `x`, the round-1 message `m₁` and the

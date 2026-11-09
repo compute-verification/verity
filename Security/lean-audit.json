@@ -181,11 +181,6 @@
    "digest": "393604a253c16a5bf33cba09422d67348f39084ac2e3d341b18e4d07faf93f7c",
    "why": "A separator, the subject of the influence lemma."
   },
-  "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR": {
-   "owner": "@proofs",
-   "digest": "c29b27d7b194c783ad2a91b68e032b214dd164a06bdab08e740dce2f9544d569",
-   "why": "`flock-verify --zk --registered` accepts."
-  },
   "Hash.EmbeddingRead.ok": {
    "owner": "@proofs",
    "digest": "55db410ca03b42f0bcbc44ddb6f42663d04a21375939217812faf046819f1401",
@@ -1999,6 +1994,12 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR": {
+   "owner": "@proofs",
+   "digest": "c29b27d7b194c783ad2a91b68e032b214dd164a06bdab08e740dce2f9544d569",
+   "issue": "PRF-471",
+   "due": "2026-11-13"
+  },
   "FlockSoundness.Discharge.ZkReg.OwnReadsH": {
    "owner": "@proofs",
    "digest": "d4108f6682768fb7c01ce66683efd88edba9d74b34d8e9f81e94d2139b976867",
@@ -2019,7 +2020,7 @@
   },
   "Hash.RowLeaf.accepts": {
    "owner": "@kernels",
-   "digest": "222e8726f5ed724c4ac0c6e6e32ce63ba3aa8b9a4ff0e0a223d20b98219cc220",
+   "digest": "7c85663b1fdb49ed17b4a905bb619ce5c1b2773925d43e9bacedc4ded938e6e0",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -3938,9 +3939,7 @@
    "Claims.Encodings.CodeScheme.Distance": "a helper the claims read: an encoding's distance, which `CodeBinds` reads",
    "Claims.Encodings.CodeScheme.ColBinds": "a helper the claims read: an encoding's column check binds, as a collision reduction, which `CodeBinds` reads",
    "Claims.Encodings.Linked": "a helper the claims read: pairs that link positions, which `RegLink.Opens`, `RelinkR` and `LinkBinds` read",
-   "Claims.Encodings.RegLink.Opens": "a helper the claims read: a registration link's contract, the code fact the linked compiler's statements take of a link",
-   "Claims.Encodings.CompilerKSLinked": "a closed statement over every proof system, compiled verifier and link, no claim of a deployment; stated, not yet proved",
-   "Claims.Encodings.CompilerKSRegLinked": "a closed statement over every proof system, compiled verifier and link, no claim of a deployment; stated, not yet proved",
+   "Claims.Encodings.RegLink.Opens": "a registration link's contract, the code fact the linked compiler's statements take of a link (`Claims.Encodings.CompilerKSLinked`, `Claims.Encodings.CompilerKSRegLinked`, closed and unproved, stated in Proofs.Flock.Encodings), no claim",
    "Claims.Sampling.Design.Two.FirstRate": "a helper the claims read: a first stage that catches each replay block at a rate, which `CapTwo` reads",
    "Claims.Sampling.Design.Two.SecondRate": "a helper the claims read: a second stage that samples each cell at a rate, which `CapTwo` reads"
   },
@@ -4439,6 +4438,14 @@
   "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted": {
    "honest": ["NetTiming.Witness.PeriodLeakAccepted_honest"],
    "nontrivial": "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial"
+  },
+  "Flock.SecurityProofs.EndToEndRegistered": {
+   "honest": ["Flock.SecurityProofs.EndToEndRegistered_honest"],
+   "nontrivial": "Flock.SecurityProofs.EndToEndRegistered_nontrivial"
+  },
+  "Flock.SecurityProofs.EndToEndRegisteredDrawn": {
+   "honest": ["Flock.SecurityProofs.EndToEndRegisteredDrawn_honest"],
+   "nontrivial": "Flock.SecurityProofs.EndToEndRegisteredDrawn_nontrivial"
   }
  },
  "unwitnessed": {
@@ -4957,14 +4964,6 @@
   "Flock.SecurityProofs.EndToEndHiddenFlat": {
    "type_hash": "375eda7a4fb2d0787fec565a444edfa7fcedaf9ab88e07a18892411cb562199b",
    "unfolded_hash": "565e0170b7dbf520cbbf1216f95676f27e48fc5b7f72a79f08463626d4c0d735"
-  },
-  "Flock.SecurityProofs.EndToEndRegistered": {
-   "type_hash": "d34a654d92785b037477ecbb7b8edc9da63a9324a6b281174383dfdf496a9e91",
-   "unfolded_hash": "9583f20a8dadaf5c510b00fa3d3b16c3af8518c68c058b44c581796872decdb6"
-  },
-  "Flock.SecurityProofs.EndToEndRegisteredDrawn": {
-   "type_hash": "5af258b4edf35bdc24ef90dd56ead302a83b3ae798a0b367538a5134c6f31c23",
-   "unfolded_hash": "d6134552afb34fcc71e2b17e9011d4160dfcfa7e1a12eaba2ff380a8f6b18b78"
   },
   "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat": {
    "type_hash": "88c47eba72b89cb5a868f2d7e619aa0dcbf84dd413625703e5d758884812fb48",
@@ -14227,17 +14226,18 @@
      "FlockSoundness.Assumptions.SHA512CRStrict",
      "FlockSoundness.Assumptions.UniformRandomBytes"
     ],
-    "domain": ["FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR"],
+    "domain": [],
     "open": [
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
+     "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR",
      "FlockSoundness.Discharge.ZkReg.OwnReadsHJ"
     ],
     "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
    },
    "type_hash": "d34a654d92785b037477ecbb7b8edc9da63a9324a6b281174383dfdf496a9e91",
-   "unfolded_hash": "9583f20a8dadaf5c510b00fa3d3b16c3af8518c68c058b44c581796872decdb6"
+   "unfolded_hash": "6e2e04806dca8789de41fb0b45ba59e8dbd7bcea5f4cafa74fdeb036e61ef176"
   },
   "Flock.SecurityProofs.EndToEndRegisteredDrawn": {
    "owner": "@proofs",
@@ -14245,17 +14245,18 @@
    "assumptions": [],
    "premises": {
     "assumptions": ["FlockSoundness.Assumptions.SHA512CRExpected", "FlockSoundness.Assumptions.SHA512CRStrict"],
-    "domain": ["FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR"],
+    "domain": [],
     "open": [
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
+     "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR",
      "FlockSoundness.Discharge.ZkReg.OwnReadsHJ"
     ],
     "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
    },
    "type_hash": "5af258b4edf35bdc24ef90dd56ead302a83b3ae798a0b367538a5134c6f31c23",
-   "unfolded_hash": "d6134552afb34fcc71e2b17e9011d4160dfcfa7e1a12eaba2ff380a8f6b18b78"
+   "unfolded_hash": "7e1e5eaae01fc20a2fd6224d77f75defea93604c67ad2c900baeb736b69e687f"
   },
   "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat": {
    "owner": "@proofs",
@@ -14263,17 +14264,83 @@
    "assumptions": [],
    "premises": {
     "assumptions": ["FlockSoundness.Assumptions.SHA512CRExpected", "FlockSoundness.Assumptions.SHA512CRStrict"],
-    "domain": ["FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR"],
+    "domain": [],
     "open": [
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
+     "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR",
      "FlockSoundness.Discharge.ZkReg.OwnReadsHJ"
     ],
     "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
    },
    "type_hash": "88c47eba72b89cb5a868f2d7e619aa0dcbf84dd413625703e5d758884812fb48",
    "unfolded_hash": "a3fe7c62dc4e966d886c03335e0646b0a82c45ebbff2aecb1fa0f72e16ee88a1"
+  },
+  "Flock.SecurityProofs.EndToEndRegisteredDrawn_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SecurityProofs.EndToEndRegisteredDrawn_honest :",
+    "  And (FlockSoundness.Built FlockSoundness.Discharge.ZkReg.Witness.unitNet)",
+    "    (And (FlockSoundness.Discharge.ZkHidden.TagsOkZHJ FlockSoundness.Discharge.ZkReg.Witness.ins)",
+    "      (And",
+    "        (∀ {mPts : Nat} {C : Verity.Boolean.Circuit} {n : Nat} (P : FlockSoundness.Audit.Partition C n) {Reg : Type}",
+    "          (planZ : Finset (Fin n) → Reg → List (FlockSoundness.Discharge.ZkSession.TabZK FlockLevel3.GF128 mPts))",
+    "          (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length) {L : FlockSoundness.Audit.Law n}",
+    "          {decode : FlockSoundness.Discharge.ZkSession.DecoderZK planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}",
+    "          (vb : FlockSoundness.Discharge.ZkLink.ValueBindingZ FlockSoundness.execArith P planZ tab decode Hc) (R : Reg)",
+    "          (τ :",
+    "            FlockSoundness.Audit.Cont L Reg",
+    "              (FlockSoundness.Discharge.ZkLink.batchedSessionZC FlockSoundness.execArith",
+    "                FlockSoundness.Discharge.ZkExec.hs512 planZ)",
+    "              R)",
+    "          (k Rw M : Nat),",
+    "          FlockSoundness.Discharge.ZkLink.LinkCRZC FlockSoundness.execArith FlockSoundness.Discharge.ZkExec.hs512 P",
+    "            planZ tab vb R τ k Rw M (instHPow.hPow 2 256))",
+    "        (∀ {mPts : Nat} (T : FlockSoundness.Discharge.ZkSession.TabZK FlockLevel3.GF128 mPts)",
+    "          (pre post :",
+    "            List",
+    "              ((Fin 2 → Fin mPts → FlockLevel3.GF128) →",
+    "                Verity.Game",
+    "                  (FlockSoundness.Discharge.ZkLink.OutZC FlockLevel3.GF128 FlockSoundness.Refine.Dig (List UInt8))))",
+    "          (cap₀ : FlockSoundness.Model.Cap FlockSoundness.Refine.Dig)",
+    "          (σ :",
+    "            (FlockSoundness.Discharge.ZkLink.sessAtZ pre post",
+    "                (FlockSoundness.Discharge.ZkLink.tabAfterZC FlockSoundness.execArith",
+    "                  FlockSoundness.Discharge.ZkExec.hs512 T cap₀)).Strategy),",
+    "          FlockSoundness.Discharge.ZkLink.SessCRZ FlockSoundness.execArith FlockSoundness.Discharge.ZkExec.hs512 T pre",
+    "            post cap₀ σ (instHPow.hPow 2 257) (instHPow.hPow 2 257))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["FlockSoundness.Assumptions.SHA512CRExpected", "FlockSoundness.Assumptions.SHA512CRStrict"]
+   },
+   "type_hash": "4853151b27b3a333c517d6a92a5a2a46b94c32a504e0384a9ceea217a90c392a"
+  },
+  "Flock.SecurityProofs.EndToEndRegisteredDrawn_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SecurityProofs.EndToEndRegisteredDrawn_nontrivial :",
+    "  Exists fun o =>",
+    "    Exists fun rd =>",
+    "      Exists fun x =>",
+    "        Not",
+    "          (rd.Checked o.fst",
+    "            (FlockSoundness.Discharge.ZkReg.regPathsHJ FlockSoundness.Discharge.ZkReg.Witness.ins",
+    "              FlockSoundness.Discharge.ZkReg.Witness.circW FlockSoundness.Discharge.ZkReg.Witness.pubW o.snd.snd",
+    "              rd.port))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d795e518dda0bbfa34332aa6e31f2952ed3e5059536e85115a2616d3b5f32882"
   },
   "Flock.SecurityProofs.EndToEndRegisteredFlat": {
    "owner": "@proofs",
@@ -14285,11 +14352,12 @@
      "FlockSoundness.Assumptions.SHA512CRStrict",
      "FlockSoundness.Assumptions.UniformRandomBytes"
     ],
-    "domain": ["FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR"],
+    "domain": [],
     "open": [
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
+     "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR",
      "FlockSoundness.Discharge.ZkReg.OwnReadsHJ"
     ],
     "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
@@ -14328,6 +14396,71 @@
     "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
    },
    "type_hash": "9379a1081b06f17ac700b677afa3a3917e440e7d57dee670a1cab1b230c069ce"
+  },
+  "Flock.SecurityProofs.EndToEndRegistered_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SecurityProofs.EndToEndRegistered_honest :",
+    "  And (FlockSoundness.Built FlockSoundness.Discharge.ZkReg.Witness.unitNet)",
+    "    (And (FlockSoundness.Discharge.ZkHidden.TagsOkZHJ FlockSoundness.Discharge.ZkReg.Witness.ins)",
+    "      (And",
+    "        (∀ {mPts : Nat} {C : Verity.Boolean.Circuit} {n : Nat} (P : FlockSoundness.Audit.Partition C n) {Reg : Type}",
+    "          (planZ : Finset (Fin n) → Reg → List (FlockSoundness.Discharge.ZkSession.TabZK FlockLevel3.GF128 mPts))",
+    "          (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length) {L : FlockSoundness.Audit.Law n}",
+    "          {decode : FlockSoundness.Discharge.ZkSession.DecoderZK planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}",
+    "          (vb : FlockSoundness.Discharge.ZkLink.ValueBindingZ FlockSoundness.execArith P planZ tab decode Hc) (R : Reg)",
+    "          (τ :",
+    "            FlockSoundness.Audit.Cont L Reg",
+    "              (FlockSoundness.Discharge.ZkLink.batchedSessionZC FlockSoundness.execArith",
+    "                FlockSoundness.Discharge.ZkExec.hs512 planZ)",
+    "              R)",
+    "          (k Rw M : Nat),",
+    "          FlockSoundness.Discharge.ZkLink.LinkCRZC FlockSoundness.execArith FlockSoundness.Discharge.ZkExec.hs512 P",
+    "            planZ tab vb R τ k Rw M (instHPow.hPow 2 256))",
+    "        (∀ {mPts : Nat} (T : FlockSoundness.Discharge.ZkSession.TabZK FlockLevel3.GF128 mPts)",
+    "          (pre post :",
+    "            List",
+    "              ((Fin 2 → Fin mPts → FlockLevel3.GF128) →",
+    "                Verity.Game",
+    "                  (FlockSoundness.Discharge.ZkLink.OutZC FlockLevel3.GF128 FlockSoundness.Refine.Dig (List UInt8))))",
+    "          (cap₀ : FlockSoundness.Model.Cap FlockSoundness.Refine.Dig)",
+    "          (σ :",
+    "            (FlockSoundness.Discharge.ZkLink.sessAtZ pre post",
+    "                (FlockSoundness.Discharge.ZkLink.tabAfterZC FlockSoundness.execArith",
+    "                  FlockSoundness.Discharge.ZkExec.hs512 T cap₀)).Strategy),",
+    "          FlockSoundness.Discharge.ZkLink.SessCRZ FlockSoundness.execArith FlockSoundness.Discharge.ZkExec.hs512 T pre",
+    "            post cap₀ σ (instHPow.hPow 2 257) (instHPow.hPow 2 257))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["FlockSoundness.Assumptions.SHA512CRExpected", "FlockSoundness.Assumptions.SHA512CRStrict"]
+   },
+   "type_hash": "4853151b27b3a333c517d6a92a5a2a46b94c32a504e0384a9ceea217a90c392a"
+  },
+  "Flock.SecurityProofs.EndToEndRegistered_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SecurityProofs.EndToEndRegistered_nontrivial :",
+    "  Exists fun o =>",
+    "    Exists fun rd =>",
+    "      Exists fun x =>",
+    "        Not",
+    "          (rd.Checked o.fst",
+    "            (FlockSoundness.Discharge.ZkReg.regPathsHJ FlockSoundness.Discharge.ZkReg.Witness.ins",
+    "              FlockSoundness.Discharge.ZkReg.Witness.circW FlockSoundness.Discharge.ZkReg.Witness.pubW o.snd.snd",
+    "              rd.port))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d795e518dda0bbfa34332aa6e31f2952ed3e5059536e85115a2616d3b5f32882"
   },
   "Flock.SecurityProofs.IntegrityBlock": {
    "owner": "@proofs",
@@ -15503,10 +15636,11 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["Flock.SoundAtBridge.RowsSession.RowsAt", "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR"],
+    "domain": ["Flock.SoundAtBridge.RowsSession.RowsAt"],
     "open": [
      "Flock.SoundAtBridge.RowsSession.ServedRegistered",
-     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"
+     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
+     "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR"
     ],
     "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
    },
@@ -27393,7 +27527,8 @@
     "Eq (Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, the grandfathered premise `Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D` restated as `Flock.Desc.parseStmt … = .ok D` so EndToEndRegistered reads templated statements, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.EndToEndRegisteredDrawn": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -27401,7 +27536,8 @@
     "Eq (Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, the grandfathered premise `Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D` restated as `Flock.Desc.parseStmt … = .ok D` so EndToEndRegisteredDrawn reads templated statements, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -30317,7 +30453,7 @@
    }
   },
   "Definitions.Accounting.JointPeriod": {
-   "digest": "794c263d230955e72cf5ecfdbe175aaeeb3fe9403132666ad30f99faaac942b9",
+   "digest": "87fa55fac9592fd51cd4053af2b7134968fd0ad6e095fd930e6c3aa1c471ae23",
    "definitions": {
     "Accounting.Audit": "f63dc62d5c08feba2df8b80cb7056be3f03373ad1ce530558c4a5b54162263b6",
     "Accounting.Audit.casesOn": "8c5ba045db80396171393ed0d92d169a6beaea158cf10b5acc088abe20f7aa0a",
@@ -30335,7 +30471,7 @@
     "Accounting.Certificates.W": "4d187c7591cdb0444f77276781b0ec8c687d894db0248ee32c639e7d4d723306",
     "Accounting.Certificates.ε": "088e88c395306b9ce00599770c82842fe27841b44758c9c786575193d84d09ce",
     "Accounting.PeriodRun": "27c7512ccfeeef20165e13c5a78f9e0c4bdbd2359da21a5ef0347e7921a61566",
-    "Accounting.PeriodRun.Holds": "9bec02a4f674684433ba6b85be42ba5adb9b269a9a990abcbe8e33a9f17c23df",
+    "Accounting.PeriodRun.Holds": "6c9962ee7a1586dceacda5adf954c1cb412939b013c01c2610c3ea72cb50ae16",
     "Accounting.PeriodRun.Sound": "4513323da308735e615d853a84c02fad17a033e83cf23d466e4519a31bcae2ba",
     "Accounting.PeriodRun.accepts": "246639cbb492699197e6367bb72487734503a606448072dc1faf6f1791d80d70",
     "Accounting.PeriodRun.acct": "aa7dc6a05bc08c377716b91dd0790415ca206b919f0d274d021bab5cf1cf4f5d",
@@ -30345,7 +30481,7 @@
     "Accounting.PeriodRun.parts": "b0a036f62794727b4ff8dd119991f8f8b2ab57e07b4b4a3efe32ea4689f01182",
     "Accounting.PeriodRun.read": "924f66b5dcfc521a86fe1cd81348760bf649e3fa7e395eb787b6123daed196d5",
     "Accounting.PeriodRun.schedule": "26ff345a15088968c86c2774474711e86a2af4458c5a8f3fbf3eb929f630c8f0",
-    "Accounting.PeriodRun.transcript": "c7bca93d401247175c85e8ea74958ffc1979c03aab471388e80322cce91f68ce",
+    "Accounting.PeriodRun.trace": "ebc5f40853735212c3025eb7c864312b02195abc338b5d781d75a3839e5f86ae",
     "Accounting.PeriodRun.units": "0c7063d3dce2a6618f36fb4c9b91a33e04f32ed170652a9fa419b3c7948901c7",
     "Accounting.PeriodRun.win": "80d4e5812f3db69b114ea8f3bf4be5c962e466ead6984657c30f390af92d183c",
     "Accounting.PeriodRun.work": "27c0e52af8765509bbce45b3428e2b0bfe368ce8f2d688e55ad8c79cb540cb67",
@@ -34607,15 +34743,17 @@
    }
   },
   "Definitions.Hash.RowLeaf": {
-   "digest": "c79990475195de912c91f9f853477c37bdc4a8c1d430d335c2abecdbd978052d",
+   "digest": "9ab56426de3fe2791f0e3d108311db0623bf921c2ecd41e1e915fe7e934d6647",
    "definitions": {
     "Hash.RowLeaf.Format": "0472c90a1d50acced878693c13e313afdaae2a4b9dbbd2da94f839c468a5b7db",
-    "Hash.RowLeaf.Format.casesOn": "8141a54d622f92d6417272ffd595ff544ff949fbfa08635c12929413d01becbd",
-    "Hash.RowLeaf.Format.digest": "65a9760d5312b7bdbd4ae35140bcc51c443fb2853474ad3f0b538ec28fbbf1fa",
-    "Hash.RowLeaf.Format.hashed": "b7b99a437352ca760e8c09cd48004e4e06946c22a738c33076ce2543390ef6fa",
-    "Hash.RowLeaf.Format.rec": "a86989681110fe016c7cd15c844338a25ca4bc324445cb19c461eab9ec003ce2",
-    "Hash.RowLeaf.Format.schema": "05f4cdf2a6d1d6aec475501a8fcbbe61ae364b90b021aaf1bb3c5a43c36b7f53",
+    "Hash.RowLeaf.Format.Fits": "ec5075e5e39b5bc08d80d8a5d3c765207cf70e264f4b9f2083123a9ec4367d03",
+    "Hash.RowLeaf.Format.casesOn": "b17f2c714ce95775f116ffefb821a3d9ddd5936539fdfcc4bfad50ae974b747d",
+    "Hash.RowLeaf.Format.digest": "50c593896716c35490e8e6813c28d5b4acd0189fb83866fb529b5d39077dbe47",
+    "Hash.RowLeaf.Format.hashed": "a08aa39fd3e1c2dc975c53d116b3edd178c5c5309199ed44599bd7232683edd5",
+    "Hash.RowLeaf.Format.rec": "3908b76222ed3292a1964bdf04bc076a4569ba88c874c889832f8714597094bb",
+    "Hash.RowLeaf.Format.schema": "daee49c5b9d6df86d2b12c8f8273ae9fbd3d1fb9d676b19eef72abc7cf2f0c45",
     "Hash.RowLeaf.Format.seg": "c1bb382b8bbae77a74eecc4b89a9ed6ff895ed83b131e4da8e930d041066d56c",
+    "Hash.RowLeaf.Format.v1": "347198699f1baeb17eb9c1b7536855a52d7d182105240021190893012a574741",
     "Hash.RowLeaf.Format.v2": "dc0d6378518d88053662a388757ec3bc4f309527dbf963f2f16fc599560f469e",
     "Hash.RowLeaf.Opening": "ee52bc8f704e1c803550968502ea104e893bda6ae6857d46131a9c2c47c5d0e2",
     "Hash.RowLeaf.Opening.row": "1a7f3e8cb436f751b4c19bb2ba565ea5e78c6bfb137833818fb458c31c37e74a",
@@ -34625,7 +34763,7 @@
     "Hash.RowLeaf.Verifier.domain": "4479c28106a028df16b1f30df58372370ba5dd780d55d4a71388b47aad3c46a2",
     "Hash.RowLeaf.Verifier.format": "fe2503ef5d3838c25a26f2289c713703af3a8b9ab72d3bc42ded003ae33c149b",
     "Hash.RowLeaf.Verifier.key": "543756473d4ccec741c25fd709e743fdcb1fd596ef49e4828d2ee92e1b8893bf",
-    "Hash.RowLeaf.accepts": "222e8726f5ed724c4ac0c6e6e32ce63ba3aa8b9a4ff0e0a223d20b98219cc220",
+    "Hash.RowLeaf.accepts": "7c85663b1fdb49ed17b4a905bb619ce5c1b2773925d43e9bacedc4ded938e6e0",
     "Hash.RowLeaf.innerHashed": "004ba97424a9c1d61cc0b1e3d4c97cbc28e9fe647e4cfdd30f9312ef58ae4af6",
     "Hash.RowLeaf.leafMsg": "54465ddeb2f593c5961d6c3c067549db1eeb1456f0da32ba6ae3bd7c47ede69a",
     "Hash.RowLeaf.outerHashed": "97a592e6362f9c49719236357a2f9239270cadabe16de6de6e171aed1e51d7fb"
@@ -34647,6 +34785,17 @@
     "Hash.RowSeg.segmentMsg": "4cddf759310c04a6c81641ec0e1eb5bb6f011dc786e42ee759b43ad7b50b2c2c",
     "Hash.RowSeg.segmentMsgs": "06d9f0294b3435c558727cf0fcbb49bae36cc32a705d683476e81cb81c8cb10a",
     "Hash.RowSeg.segmentPrefix": "17d166519a13a99d5f75b079467ff2419a10f206a6767e6f65027a12a05c0152"
+   }
+  },
+  "Definitions.Hash.RowV1": {
+   "digest": "41e91673435376337cbb6eed77094b757e6f7fbc2e686f8b704477bc398838e2",
+   "definitions": {
+    "Hash.RowV1.ROLE": "5a5998f44c82c0483bff41adeb6ee113f270d5b008bd4a58efe6fa7416c658a5",
+    "Hash.RowV1.WORD_BITS": "52457af8f0590b4bace4a005a033ec6dc5766517e36c7ab3399211602992fb72",
+    "Hash.RowV1.digest": "39c90cdb8986126ac6c4873fba20c6cd0bdde8c72984e33fe4b32bdaf322880a",
+    "Hash.RowV1.hashed": "6466e795420df2aeeb768a3c327332606946e004d42a553b8fb2d71b440ef911",
+    "Hash.RowV1.msg": "877c21e21610edfdbdb16bfa0213463f34841bd159ff5493ce83fcd4f6a35091",
+    "Hash.RowV1.rowPrefix": "2a129c9d971a5a591a341f7f8b5d2c62e0164d8d2633563ac6aa5ffa288e6d0e"
    }
   },
   "Definitions.Hash.RowV2": {
@@ -45301,18 +45450,18 @@
    }
   },
   "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock": {
-   "digest": "560c9d32cb17656e6eb0be260cefdf8e86d2bcbc783afbc5b033e5417d9d26c2",
+   "digest": "6a0ddff11859e5453406379f39d4cc6460ca5e968a1ae53254ae87eb635cfff8",
    "definitions": {
     "Accounting.Guarantees.Bridge.IntegrityOfIntegrityBlock": "24ef7ab95cb2946d1bd53964e8a739554a830f79711e1a0b4d587e6194e53661",
-    "Accounting.RealizesIntegrityOfIntegrityBlock": "7022c45dd260474a7c9630059b834c33f1e6b85238a3207172ef88c79f281502",
+    "Accounting.RealizesIntegrityOfIntegrityBlock": "c91c4802f6b2157caa53c6d28d1b53099b2d173f0a06c5f2f10c3da790dbce56",
     "Accounting.RealizesIntegrityOfIntegrityBlock.strat": "182a39be833c1bd24f962120e1191b3e2a8f07a270dd5c2320b095165d572f92"
    }
   },
   "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod": {
-   "digest": "eb3beaa5c98c3083312d2e1e8a25fbc8b27ffec8fa9cd1a30cc9a2a971867a37",
+   "digest": "56955a17f09744ee9a469bfd47872f27ca6e07318ef5bdfb678d40578f2310f9",
    "definitions": {
     "Accounting.Guarantees.Bridge.IntegrityOfIntegrityPeriod": "36fa5bfc6d0ad62ea5787136d0215eae24bd3ca9f02479701a8dfa793f85e9e1",
-    "Accounting.RealizesIntegrityOfIntegrityPeriod": "87aa8cbd969a62cd461a71850b660364c52349fa46f86012d3eeda1eee6055a0",
+    "Accounting.RealizesIntegrityOfIntegrityPeriod": "e50ae82c4391aeb9f2632c34d654702b0ab9914b3a1cd3e4affd299171749a8d",
     "Accounting.RealizesIntegrityOfIntegrityPeriod.strat": "519fcc4a3f9f0252e3d9fb393291a19856be4f941cf4b398ee3a6cb916af3c1c"
    }
   },
@@ -49064,11 +49213,45 @@
     "Flock.Guarantees.EndToEndHiddenFlat": "44d4f337abda69405eee890f4b36ba23b3a26c8d1c731e465976a85c99ea84ec"
    }
   },
-  "Proofs.Flock.EndToEndRegistered.Statement": {
-   "digest": "4c9cb9201afb8153fb8548f4b85364b2803ab0b6a2eefe324758e8982b08a36d",
+  "Proofs.Flock.EndToEndRegistered.Honest": {
+   "digest": "fca76d64172399b592438a2ba299c189276b82eb07975cabd22616cbfcc5e512",
    "definitions": {
-    "Flock.Guarantees.EndToEndRegistered": "140eafdb4eed05b6dc485dc46fc861aff5a4cf4be4f464fe1b52c4d5a1e7066b",
-    "Flock.Guarantees.EndToEndRegisteredDrawn": "ac10608024dc87e31abe279b0b30e8122f86fa7cd170febd691bae73456a4735",
+    "FlockSoundness.Discharge.ZkReg.Witness.unitNet": "7fc26b8048d20940f415b556f68fe9542a6c32d5c3d4dd2ee06e7d42a4af5998"
+   }
+  },
+  "Proofs.Flock.EndToEndRegistered.Inputs": {
+   "digest": "c062557f9ed0c2515e588842d46e35aaa35854ca8c690c95492eb4f447049c33",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkReg.Witness.ins": "b227e1ee79021ec0b3d76b56a759c1d5d4762b8fd679d6c91d449e6c191daf59"
+   }
+  },
+  "Proofs.Flock.EndToEndRegistered.Nontrivial": {
+   "digest": "09e772b79c7e64ed5f3bca4c5c085ba2f8da8b00fea61c4f97742d0a7b7a3187",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkReg.Witness.circ0": "6f630421827f23056834d7793830597a079915f493abc3d015238390bf0ba5f5",
+    "FlockSoundness.Discharge.ZkReg.Witness.circW": "9f31063c0427ecff76abe5f2ea683ae54567c9f9b22b218411807fd17501336b",
+    "FlockSoundness.Discharge.ZkReg.Witness.decode0": "f67c4255cfed036f8a254e7df34317d449f1a80a612db330919d0e7ad306ec8f",
+    "FlockSoundness.Discharge.ZkReg.Witness.jn": "23666f9f99dac613d70e59f70ba2d9d287903cb6743812883c8161a1c3448a21",
+    "FlockSoundness.Discharge.ZkReg.Witness.lay0": "026b2edc28c2ad750e467c8fb2d82807c7f63b016c9f32690e26a443208ccdd9",
+    "FlockSoundness.Discharge.ZkReg.Witness.own0": "12dec450709aa968cc00d76a23242a5f7fa78b988fe85b921b771b706ed90bda",
+    "FlockSoundness.Discharge.ZkReg.Witness.part0": "5aea9fb1ea80b7ea8f26b8ea435d41b6a207d88c96e9c10409bf4367897693ba",
+    "FlockSoundness.Discharge.ZkReg.Witness.pathW": "b4e5c4e4398fa3908a043c61c93915df704aa7a8c1f330b4d8b95128808be788",
+    "FlockSoundness.Discharge.ZkReg.Witness.payloadW": "e0ea79061cb020d3ab36adff7509456b2482a8c68f3264f63e9da03964b4d03b",
+    "FlockSoundness.Discharge.ZkReg.Witness.plan0": "8fa6421c643d41d9cc16f0c0e94ff9ed72681013e0f31e9cac69048cc79862c6",
+    "FlockSoundness.Discharge.ZkReg.Witness.portW": "fc24eb0263315aea6580ae1f00b190d5edeed51ad1599515f1f62543e6c4c0e1",
+    "FlockSoundness.Discharge.ZkReg.Witness.pubW": "68fc53d933e6901c3381bd9b081ac155361ac50f42f7d79547b2644687af5424",
+    "FlockSoundness.Discharge.ZkReg.Witness.q0": "d3d775d395c904db2b0b2ababbbbafa723ab11e6c02776fca098ecbb52f2fe8a",
+    "FlockSoundness.Discharge.ZkReg.Witness.rs0": "25310bf87b1fd8a4ff7e801621ed625d45164c1a0958bc59a6e606ac24ffd72e",
+    "FlockSoundness.Discharge.ZkReg.Witness.stmtW": "e672b87f45741b7ea3aa47ed54ff67a26dd79884a05305dc15724d37d9e07b27",
+    "FlockSoundness.Discharge.ZkReg.Witness.tab0": "91bac4c0639c89dfb46135aa27c892cadf99cd613bb1c838aa1227d91b31b9bc",
+    "FlockSoundness.Discharge.ZkReg.Witness.tabW": "a9dbe504a41c50ac1beb2fd6c47367f2adc00a86a78b71ca28af6d6d219c4124"
+   }
+  },
+  "Proofs.Flock.EndToEndRegistered.Statement": {
+   "digest": "d49a1528036cb320c0ff7b754954ebfeecd26a5137df1769f9d7cf69b0c26338",
+   "definitions": {
+    "Flock.Guarantees.EndToEndRegistered": "5271b025511da1584a8add4693715904a5f83945db7ef24e8fc130db86d32b19",
+    "Flock.Guarantees.EndToEndRegisteredDrawn": "d56c242ff8fd69f9bf55390b081684e46b229f130dbb7907d3d84276c78fa800",
     "Flock.Guarantees.EndToEndRegisteredDrawnFlat": "d8d54b928184e11e3198ca049bd3f37de5d931b79c364c1dd8813ba1f25b1e71",
     "Flock.Guarantees.EndToEndRegisteredFlat": "96e483de567485ca042e3c408fa4939c2035aca07c252e2a2b0b4a0be8253552"
    }
@@ -55058,7 +55241,7 @@
    }
   },
   "Spot.OneStage": {
-   "digest": "dbd581a8d5d6189feecdf6bc5272478b648c283f78136749e886fb933a66afa2",
+   "digest": "6d77d80c47d4320f31284d16bc0cd5890e4a5630d3864d9043641c09d3680620",
    "definitions": {
     "Spot.OneStage.Commitment": "a73c4a90f1c2b83c2840decc48593e672266092719b09da7b4c08282e3862285",
     "Spot.OneStage.Commitment.digest": "5ad7187d0b69df894ed454b1cef1a4593b7e2e8dd1d831e2b80ef6726c4b6e46",
@@ -55105,7 +55288,7 @@
     "_private.Spot.OneStage.0.Spot.OneStage.logRecord": "2ee6c89989a0e9077f6e2e3d565fe9401b48d3c2e0fabc52908e0333e765517e",
     "_private.Spot.OneStage.0.Spot.OneStage.nats": "73351bcc555d722e7547ba91932388158ad080e5adab13a24503146004be20d9",
     "_private.Spot.OneStage.0.Spot.OneStage.obj": "49d70ec725a2c403c26bcdd493f11cbcdd9f313b74dfe118349e9052e866abff",
-    "_private.Spot.OneStage.0.Spot.OneStage.poolOf": "5a63319b0a20b28b615ec4c7d04d86a0ffff675373bb06a2d3f3abdfa78c0ab0",
+    "_private.Spot.OneStage.0.Spot.OneStage.poolOf": "0ea643c5a5dcc21b01c5d82d66b87958a27a9dc14e5362f3e7a990d05c397fad",
     "_private.Spot.OneStage.0.Spot.OneStage.poolValues": "090db22a554076342258069372f739a3d10c755192e1274d5afdacdca9b31dd8",
     "_private.Spot.OneStage.0.Spot.OneStage.withField": "b341041c23d2a8e33b1bebc3515c3c53c196cf4285e0c2df875f630f7c0ed0d1"
    }
@@ -55304,7 +55487,7 @@
    }
   },
   "Spot.Registration": {
-   "digest": "9c6bb55d3cc192873ecd682e82775a8df25e81cb7c562026d35c79384bc347be",
+   "digest": "92fb81b958e2ec31a899ebe21e57b6d661218ee550a42621b1f65134ef0746c5",
    "definitions": {
     "Spot.Registration.Earlier": "38a79710ad138599f5f588962cb4957cde8a4a01c11545392f3680d085ffcf5f",
     "Spot.Registration.Earlier.casesOn": "d0ab5c2e32c2df5ff9add433ab5d601ac1a837f07bd68cc17d3188665ddc2d16",
@@ -55315,12 +55498,14 @@
     "Spot.Registration.KEYS_V2": "3166a9ef04172b41490e12f217874e42cbb8e114ecf3b9babcb235591ff31096",
     "Spot.Registration.KINDS": "7a762e49a980bb8e3c092ddcaabfe9973d14fbf09a8268ddf27c25a7ad985e79",
     "Spot.Registration.PROTOCOL": "330d68f67ef9d6e804136c05aea8b5797dd550bbff719b93009b9251f93179ff",
-    "Spot.Registration.Pool": "925c197515eb3e850d385871171f7a800cc3b03770f2a67078507d812ff5e079",
-    "Spot.Registration.Pool.accepted": "461c508a466a68d013a971ddde4fcc6f77f0c7d9563f770ded47a2970965b104",
-    "Spot.Registration.Pool.chains": "303663c3e816a31a8cdaa4258785f1815e21671ef9388bf3960857208f7e3ccc",
+    "Spot.Registration.Pool": "012469b4cf7e4518d5490e415d9e5037f6048a08c0fbbe6dd9a5d7dc7c407ad7",
+    "Spot.Registration.Pool.chains": "b3cde7aa967ac1e4e5ff40f7e6f2378c553555897b2650bfb8abc46bb235afee",
     "Spot.Registration.Pool.genesis": "8c785fd9c805683e19c1f016a201123516b2da2c316f0d26f4644949cf4fe3eb",
     "Spot.Registration.Pool.pin": "ede35058f38d2655d5e678c8e1a3f4937c7251d36069b30f6cad9322b55ab7c3",
     "Spot.Registration.Pool.pout": "d3693b6beb1228fac43e73c56592cde2b24443e7d8f38d7f848bddaecf09cb63",
+    "Spot.Registration.Pool.refused": "cebbe3a1c0c103a4d6ebac42b27a8ca15632a375e0abf42234c8530cc8ecf5ca",
+    "Spot.Registration.Pool.reset": "951e8a812c7220b09fd367b0c0f9a3b9e5d94109d6c21a5898d2064e955ea325",
+    "Spot.Registration.Pool.spent": "adc31cfdf99260374209e56900e4cd161a3d011d748088c17a63d55ab6eceeeb",
     "Spot.Registration.PortIndex": "a57bf9d4f61b2bf92b50716ae722d467694518dd183026ec32992a03064f70d1",
     "Spot.Registration.PortIndex.add": "edfc0ae205e33280efb4f8e4527baaa5ea5dd87886dd7a9069e684c640130b73",
     "Spot.Registration.PortIndex.casesOn": "1a054def79f4f099e40209d9be53ff3d7c2c76d62d60ea0d5acd4605c4caf473",
@@ -55355,7 +55540,7 @@
     "Spot.Registration.Verifier.workTable": "5168d61b1a397b0e44483525077ec84869641d8b00306c3c0fc80320c9ef87f2",
     "Spot.Registration.applyOutput": "aa52307ebbf1045737a64458522798582d2a621a5f1a4fd83c1a3b5683dc09ba",
     "Spot.Registration.applyOutputs": "3ca64b38bc80309cc1017365446b3e4db37a956c8ed3ca9b0b9b17744973a9e4",
-    "Spot.Registration.check": "d5b1631e638ba80e7eeb7477af92589454a0ba5e517a783d05d5bfb19774121a",
+    "Spot.Registration.check": "7c07ee69d1791d9868668f614d1dfe1e201f0d419bd1d50c6a89ebe962e59948",
     "Spot.Registration.checkOutputs": "9498a405cb15e09b4f441c8e91177bed68f6fdbe00c99b24962a8ebec206e5d0",
     "Spot.Registration.checkRegistered": "cb67dff3f9efc0829f675eb68a4a79361f38c1d1ce2c97ea210cfe03f203e6ee",
     "Spot.Registration.declaredCode": "ba72591986fa52bc2832f36e5497f1a0813f72402ee1304be0ac209db0eb60f1",
@@ -55364,6 +55549,7 @@
     "Spot.Registration.entryOf": "5b5644edd114094893f15218c8b449ffe1995259281d71355a69b48dd43ccf9d",
     "Spot.Registration.fixedOf": "46b967b83ef954fbc2bf464285ef894f1176553ed0b5b4217e7aeb508523417d",
     "Spot.Registration.heldRoots": "bfe82acfa9e4995e240891f50b802ae05a395cd06049d0cba7d38515a36a5baf",
+    "Spot.Registration.kept": "32b06c3f0796dceba93bf7be89101c77797cde8b978dd0cc32437381b4332db0",
     "Spot.Registration.lastDigest": "86fcf0b0c4d195eea3e5d7be428289a8ab782b2aa6df0d232a0fc7569247d4bc",
     "Spot.Registration.outputPort": "1c7bff542749e16fe119b3a20a04e5d3394997d7f15d42f4b5099031a4a4e721",
     "Spot.Registration.outputRoot": "abb3c7c2f7c16dcf15bd19db7c2b5aa8d3bfa36f8f92dbb5e8cb65422f3a8c61",
@@ -55376,6 +55562,8 @@
     "Spot.Registration.unwindowed": "921f423113f6fcec3e66971c414f293929f247d8b4a86b7b9a035410bd9898b4",
     "Spot.Registration.valueRoot": "f5a3f3c1a434b1796cebb3810338b821f60d0bf698d27f956435b699300b5819",
     "Spot.Registration.widthOf": "ed1e7d7c5ca5a4a595f3983ef5a3c84cb99615246c243e39070fa9dcfc742d7a",
+    "_private.Spot.Registration.0.Spot.Registration.onceOk": "b9700d9d2886e925d13636714c2dd5dbb454c86ee1562bc6afc3ec5dae2441fb",
+    "_private.Spot.Registration.0.Spot.Registration.optReset": "ce1c40b9aef4dbc7ba370834a16658a7777c7e961e7a25dc4be7dcf63c4a160a",
     "_private.Spot.Registration.0.Spot.Registration.optStr": "7f4e416d58347fd1a8ee3d1cb12c9280dd6d45b15079ad1509faa856c7704521"
    }
   },
@@ -55987,7 +56175,7 @@
    }
   },
   "VStarRecursive.Protocol": {
-   "digest": "0a17cb463e2500ff46d4821014a2f6c1271bf80685cdebca90c4d2ba63f860e6",
+   "digest": "24c25e7e86c7a9b3f7c1147bc75bef036012f248ffa0b1416223d26adf00d5f5",
    "definitions": {
     "VStar.Recursive.Evidence": "750759ed94774839b812282e5b64d4c4f9cdff16ee8b980a1089dba40596a8f0",
     "VStar.Recursive.Evidence.base": "db902052c681ca06403b69f02d5091eed593f4c0c161181bf30e9200f949177a",
@@ -56009,6 +56197,7 @@
     "VStar.Recursive.Own.program": "402eb05f034b89f904a0ae804d9153429a63294ea1b83a5bdc11719a486eff1a",
     "VStar.Recursive.Own.pub": "6e065fd248540f5546728a5b055af1db43c8259a2fdd67f2ba837a5a5cb643a1",
     "VStar.Recursive.Own.registration": "517d9b9b4a2f51dddf9606c7265f9dac1dc9bb39a0753a3a40dde370348f1a0d",
+    "VStar.Recursive.PROTOCOL": "9d943c4be2ddd7e6503b4b54185fe3b9c34b6aeb1a0de06720f8db2221f15939",
     "VStar.Recursive.Params": "c6cbbf694bb41f184f78152af6dc62296479b3902810809c3eff2d5a84d2bace",
     "VStar.Recursive.Params.base": "b851d9e98f6e24ba79f1eebe109ac9b4587ecb5ff39c573b7effd6fda910c184",
     "VStar.Recursive.Params.own": "22671db69954dd4fb354c3165737685ca4b94f54a0372d91710fb794a66a4332",
@@ -56042,8 +56231,6 @@
     "VStar.Recursive.lineEnd": "08f3f8a6ca79ec9bca18488856b517e63e59d445c0c104326b8a1e6e81bb0634",
     "VStar.Recursive.metaOf": "b1cd47a27ca618b941c7a55749e37e8fc56eed12c7ef8d76c4aa12f9c9f9fe81",
     "VStar.Recursive.need": "e7bbdffdbbf61828d6e4cae5344342cf93a279518aabe5cc4bd6bd9c1156ce99",
-    "VStar.Recursive.ownOf": "45ef3a0b151027350c296b151763da10548b0be97f8beddec701fe130acb3c63",
-    "VStar.Recursive.paramsOfJson": "87a1af87757f02b2b059ca4bc9dd76186afe8bbf493b8178282b460b99d681aa",
     "VStar.Recursive.partJson": "452868b110da42c2a36e59b70306043f4419be7f0168553f4b3e15d6a62ae991",
     "VStar.Recursive.partSize": "bba29da2eb4498c27560023d6477c2156c8d12efbab323ce500575ffed313d4e",
     "VStar.Recursive.partVerdict": "6757670436457cf08b27409d36c277b44acc622be26fb44a2c8613c3aa9fec7a",
@@ -56059,28 +56246,25 @@
     "VStar.Recursive.unitsOf": "1ac56180a10b3f59a7a09fd66c857197d7d0f96081cd0bf29a99269ba5c857be",
     "VStar.Recursive.verdictJson": "ee73afff0412295619bd04583edf21c5af64465e286f94065bd907de60d83ead",
     "VStar.Recursive.verdicts": "fb3d7ab677e334abd3741e820a42faf2215d79f5d858f3dad0a0a3a5f7b056c4",
-    "_private.VStarRecursive.Protocol.0.VStar.Recursive.digest?": "21bdb14c6beac7349c4b1596861198c501e75061ce1955b293ef0bb6dec8bfca",
-    "_private.VStarRecursive.Protocol.0.VStar.Recursive.digestOf": "f46d435b2fde345172ee5bea4d6948dec6ce2e8c96f420b7330c0ad7e5bb128f",
     "_private.VStarRecursive.Protocol.0.VStar.Recursive.exactly": "903935d4309baf2ea88e41a7c42a4fe4dc1945065d2a7db985f49fa394525981",
     "_private.VStarRecursive.Protocol.0.VStar.Recursive.jsonBlob": "6f8e9fb8ffa84e5477f396939d92ce6a6e9341e213e26df3718b14b136b1d9ba",
-    "_private.VStarRecursive.Protocol.0.VStar.Recursive.objOrNull": "0e719dbf38d6f6d012f16cd6d54d6643495cf92ba92637719777a62741c7a4dc",
-    "_private.VStarRecursive.Protocol.0.VStar.Recursive.partOwnOf": "61c6ae30ef7aee88b184da29c2d3828e18f0ef9248a15942817782c636067c51",
     "_private.VStarRecursive.Protocol.0.VStar.Recursive.partProofOf": "73fd5f16476bffe5b7a6caee2ab9e0bbbf9f4715e3fd66bf37bd3d671020b981",
     "_private.VStarRecursive.Protocol.0.VStar.Recursive.without": "e2879b3c2871574cfbe19031f9caeece45e8e1bd54ea26ae2049eaa9af1cb652"
    }
   },
   "VStarRecursive.Sampled": {
-   "digest": "28af4e26d715e2e27c10255581e3ec59a194dd043c04ec73c53d97dd3ffad574",
+   "digest": "f6a66dd422175274dc446036dd7e00c6367a1706b4d1889ed2857f783a20f312",
    "definitions": {
     "VStar.Recursive.Sampled.Evidence": "9e5a16253407eec1c6ca0f36164f8936716429deb7d7398f3515df84d530f8d0",
     "VStar.Recursive.Sampled.ONE_STAGE": "38de5ee291b3ce3bc8d92944644a4311dc9b5c9c7af11099f319cedb5e1c63c4",
     "VStar.Recursive.Sampled.PROTOCOL": "864b6227a733d9017c62194051f38742936289e55ac9dca64a27de2a06d978f2",
     "VStar.Recursive.Sampled.Params": "4a41405c6894c50695c5a28cacf9dd13151b5a0e63fdde476bd29c7c29f9d492",
     "VStar.Recursive.Sampled.RECURSIVE": "0e0f5176c046495c1e5c505a4aafca31c82848dd35b65af82d5b2b79a1a02fbf",
-    "VStar.Recursive.Sampled.V1_REFUSED": "ce5df2bfb1ab2a1384c0b21d02eab5be6740eb4331f36f6deec475d0b954e7b9",
+    "VStar.Recursive.Sampled.RECURSIVE_REFUSED": "11e0467fabbb68135f583a0660be4cc54e90d443fc814905dde6fe6acfca12e4",
+    "VStar.Recursive.Sampled.V1_REFUSED": "59c5948429cf3e265f187e70dbee4275d48d3930cd2e0ac425d84341cd5b3631",
     "VStar.Recursive.Sampled.checkBlobs": "72fc3297ca9d99dfb22def633f245cab42c28d288cfc9b8fc17127cd0e47871b",
     "VStar.Recursive.Sampled.evidenceOf": "d546a38acabac0eeef32e780cfbe60b3bb7ab7e5a3ef1a2f8e566747abf8a013",
-    "VStar.Recursive.Sampled.paramsOfJson": "6e32801bffd2b2fd65f250dac5679c905a334ef45b781a76b329f50aad6bf956",
+    "VStar.Recursive.Sampled.paramsOfJson": "dd435d4ac37f6c4cdbe5094596095ab0a23f02d7647191d6a8352a8ea289d3bd",
     "VStar.Recursive.Sampled.protocol": "4cc3d013094fddfff0ab5a07b45af785c60e32f5d68a462a562ddadae3950d03",
     "_private.VStarRecursive.Sampled.0.VStar.Recursive.Sampled.split": "57f3dbade984377ba3211a61a3f62f588bdaea4ee60b941e1fc5d1e08a180d24"
    }
