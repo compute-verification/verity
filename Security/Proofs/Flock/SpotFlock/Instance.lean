@@ -22,6 +22,18 @@ Each bundle holds the facts the two-stage design reads of it, each a decision on
 At them the design evaluates (`two_held`), so the registration doesn't refute a checked run before any session; the
 frame is SPOT's own (`built_held`); SPOT's layout embeds the statement (`embeds_held`); and round 2's parts are the
 one template's (`partsAt_held`).
+
+## What this does not show
+
+`SpotKSTwo` reads three premises of a registration: `Built h`, `Sites h` and `Embeds h (layoutFor h)`. At
+`held R bnd0 …` (`bnd0`, `SpotFlock.InstanceBoundary`'s concrete boundary) the design evaluates and `Built` and
+`Embeds` hold for every `R : Ref`. `Sites` is not proved here. So the two-stage guarantee's non-vacuity is reduced, not
+proved: it rests on one existence fact, a `Ref`, that is, a reference statement with hidden outputs and
+`sha512/row/v2` ports whose registered reads carry roots and whose masked setup (`Stmt.setupHidden`, through
+`FlockDeploy.setupOf true`) holds at the open guarantee that the verifier's fixed nets build
+(`Properties.Flock.Nets.FixedNetsBuild`). No such statement is proved in Lean. That one exists is evidence, not
+proof: the Lean verifier accepts the honest run of the two-stage toy (`benchmarks/two_stage/`), whose reference
+statements are of this kind.
 -/
 
 @[expose] public section
