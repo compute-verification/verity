@@ -155,6 +155,8 @@ def test_a_split_row_holds_a_part_at_each_split_s_keys_and_a_combine():
         ("split", P16, "slots"), ("split", P8, "inline"), ("split", C3, "inline")]
     assert [CR.reads(SRW.template(t)) for t in (part(64, GLM, False), part(16, GLM, False), comb(5, GLM, False))] == [
         "slots", "inline", "inline"]
+    assert [CR.reads(SRW.template(part(k, GLM, False))) for k in (CR.SLOT_KEYS - 1, CR.SLOT_KEYS, 63)] == [
+        "inline", "slots", "slots"]
     assert [SRW.template(t).word for t in (part(16), comb(3))] == [P16, C3]
     DV, DR = TOY["DV"], TOY["DR"]
     assert CR.unit_rows(SRW.template(P16)) == ([("in0", V2, 16 * DV, ["q_nope"]), ("in1", V2, 16 * DR, ["q_rope"]),

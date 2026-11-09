@@ -11,11 +11,14 @@ from verity_flock.class_statement import UnitStager
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity.ml.definitions.registry import b1 as B1
+from verity.ml.definitions.registry import boolean_moe as BMOE
 from verity.ml.definitions.registry import dead_free as DF
 from verity.ml.definitions.registry import deepgemm as DG
+from verity.ml.definitions.registry import dsa as DSA
 from verity.ml.definitions.registry import fa2_check_inf as FA2
 from verity.ml.definitions.registry import fa3_check_inf as FA3
 from verity.ml.definitions.registry import hopper as HP
+from verity.ml.definitions.registry import moe as MOE
 
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
@@ -130,6 +133,21 @@ def test_a_whole_attention_row_reads_its_tables_in_lookup_slots_and_an_rmsnorm_r
     for fn, want in [(bind(d, **att), "slots") for d in (FA2.AttentionV5, DF.AttentionV18)] + [(fn, "inline") for fn in norms]:
         tp = SRW.template(descriptor_id(fn))
         assert (tp.layout, CR.reads(tp)) == ("row", want), tp.id
+
+
+def test_the_moe_router_and_the_dsa_indexer_query_read_their_tables_in_lookup_slots():
+    """`chunk_rows.reads` at GLM-5.3's served statics (``SLOT_ROWS``): the MoE router's row and its slots form (the per-expert
+    cut's) and DSA's indexer query row read in lookup slots, whatever their layout (inline, the router's 512 EX2 and RCP reads
+    put its net past the GPU prover's 32-bit offsets, and the indexer query's 32 EX2 reads alone fill over two thirds of them).
+    The router's Boolean versions compute their tables in gates and read none, so they lower flat."""
+    router = {"E": 256, "TOPK": 8, "SCALE": 2.5, "KERNEL": "block"}
+    for fn, layout in ((bind(MOE.MoeRouterSigmoidBias, **router), "row"), (bind(MOE.MoeRouterSigmoidBiasSlots, **router), "slots"),
+                       (bind(DSA.DsaIndexerQ, H=32, D=128, ROPE=64), "row")):
+        tp = SRW.template(descriptor_id(fn))
+        assert (tp.layout, CR.reads(tp), CR.statement(tp)) == (layout, "slots", {"reads": "slots"}), tp.id
+    for fn, layout in ((bind(BMOE.MoeRouterSigmoidBias, **router), "row"), (bind(BMOE.MoeRouterSigmoidBiasSlots, **router), "slots")):
+        tp = SRW.template(descriptor_id(fn))
+        assert (tp.layout, CR.reads(tp)) == (layout, "inline"), tp.id
 
 
 def test_an_attention_heads_per_key_block_calls_read_their_tables_in_lookup_slots():

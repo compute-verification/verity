@@ -30,9 +30,10 @@ activation of the circuit's template (``Extract.claimedUnits``), and a class her
 A type of `CENSUS` is a block type of the serving rows by its census name (`serving_templates.template`, the name a proof
 overhead card prices it under), one whole Definition a proof block, laid out as the served composer lays its template
 (`compose_circuit.py --template`): its served rows (`chunk_rows.unit_rows`, each parameter's leaves seeded at their width,
-`census_leaves`) and statement (`chunk_rows.statement`: the 64-key sparse MLA split part's and FlashInfer's FP8 linear's
-MUFU reads in Flock's lookup slots, each unit cut into stage nets under the automatic caps, which keep it within the GPU
-prover's slot types; RMSNorm's and the other FP8 linears' inline) under its unit name, so the statement is the served one
+`census_leaves`) and statement (`chunk_rows.statement`: a sparse MLA split part's or key block's of at least
+``chunk_rows.SLOT_KEYS`` keys, FlashInfer's FP8 linear's, the MoE router's and DSA's indexer query's MUFU reads in Flock's
+lookup slots, each unit cut into stage nets under the automatic caps, which keep it within the GPU prover's slot types;
+RMSNorm's and the other FP8 linears' inline) under its unit name, so the statement is the served one
 but for its binding: its ``class_sha512`` is the served composer's. The circuit is streamed to circuit.txt once, every
 input's outputs checked against the Program's reference (``twin`` null).
 
