@@ -79,8 +79,8 @@ REPLAYED_FROM = ("the replay off the served node, by Python (served_passes.py ve
 GATE_HELD = "; its coins held to the challenger's sessions, ledger and pins as read live from the gate"
 REPLAYED_SAID = "re-verified off the served node (Python and Lean)"
 #: sampled proofs' row's ``answer_from``
-AUDIT_FROM = ("the audit of record's own summary.json and window/audit.json, as that audit wrote them; nothing is "
-              "rerun, retried or recomputed here")
+AUDIT_FROM = ("the audit of record's own summary.json and window/audit.json, read where that audit left them (each "
+              "one's SHA-512 in files); nothing is rerun, retried or recomputed here")
 #: what the causes beside a refused audit's own reason are
 CAUSES_BY = "the lane's diagnosis of the audit of record's refusal, beside the audit's own reason; no verifier's finding"
 #: the inference-only part's ``answer_from``, by its source
