@@ -15,10 +15,12 @@
 # - A lock's `runs` entry's `why`, which `move_check.py` holds to its moved paths: the check's six, each opening with its
 #   count ([keep]).
 # - `benchmarks/nci/`, where it is and under its name ([keep_paths], [keep]), with the names that follow it: its own
-#   `nci` ([keep_in]), and in `benchmarks/rho/` the family kind `nci`, `nci:<id>`, the `nci.*` keys and `families.Nci`,
-#   which name that library ([keep_in], [keep]).
+#   `nci`, its row `nci/` of `benchmarks/README.md`'s table ([keep_in]), and in `benchmarks/rho/` the family kind `nci`,
+#   `nci:<id>`, the `nci.*` keys and `families.Nci`, which name that library ([keep_in], [keep]).
 # - The ids, until a format version ([keep]): the schema `verity/nci-glm/v1` and the stub ids, which end in a version,
 #   and the cited draft `draft:nci-search`.
+# - The Definitions the check's vector generators name (`"NciHandBlk"`, `f"NciDecl{seed}"`): the vectors spell them, and
+#   the check's lock pins the vectors' digests, so they change with a regenerated lock ([keep]).
 #
 # It renames declarations the Lean locks record (`Nci.Guarantees.*`, `NciCheck.*`): their records follow in a commit of
 # their own, `tools/verity/lean/check.py --update --moved` with the map `rename.py --moves` prints.
@@ -41,7 +43,7 @@ exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "*
 [keep]
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
             'lanes/[\w.-]+', 'draft:[\w.-]+', '\bbenchmarks/nci\b', '(?<!\w)nci-', '(?<!/ )"nci"(?! /)',
-            '"why": "[\d,]+ [^"\n]*"']
+            '"why": "[\d,]+ [^"\n]*"', '(?<=")Nci(?!Check)[A-Z]\w*']
 # GLOSSARY.md's rows of older names, and the slowdown calculator's family of `benchmarks/nci`'s algorithms.
 strings = ["families.Nci", "`Nci*`, `nci-*`, `ius` and the `nci` directories",
            "the Lean's `Nci.Dampener` and `Dampener*` names",
@@ -52,6 +54,7 @@ strings = ["families.Nci", "`Nci*`, `nci-*`, `ius` and the `nci` directories",
 
 [keep_in]
 "benchmarks/nci/**" = ["nci"]
+"benchmarks/README.md" = ["nci"]
 "benchmarks/rho/**" = ["nci"]
 "benchmarks/rho/rho/families.py" = ["Nci"]
 "benchmarks/rho/tests/test_families.py" = ["Nci"]
