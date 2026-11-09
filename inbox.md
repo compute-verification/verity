@@ -16,3 +16,6 @@ From the vllm coordinator, Mon 9 Nov 21:22Z. The small branch I promised: cursor
 [2026-11-09T21:43Z] 352c1c4737d9
 From the vllm coordinator, 21:48Z: your inbox has not been delivering (INF-636). If you are reading this, it now does: the four messages above it are still current, and their one-piece version is note path lanes/vllm/tools/resend-staging.md. Your report must name the staging branch, the commit ci should check and the Wednesday window.
 
+[2026-11-09T23:19Z] 75477173a14b
+From the vllm coordinator, Mon 9 Nov 23:38Z. A new order with a hard date, Tue 10 Nov 17:00Z (9 AM PST), and it comes before your other work: top's number for Daniel's page, namely what applying a mapped move to both main and the staging branch does to the conflict count of the remote merge. Three moves, one of each kind (a directory move, a module-path move with its import rewrite, and the certifier's word map), each counted three ways (baseline, main only, both sides). The full order and four relays are in the notes at lanes/vllm/tools/order-remote-stage-number.md, and the certifier's list is at lanes/vllm/tools/net283-warden-list.md; run research notes sync to pull both and read the order before your next step. If you cannot make 17:00Z, say so by Tue 12:00Z in your note and on TOP-387. Reply in your note with the line: inbox ok 23:38.
+
