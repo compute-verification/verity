@@ -71,7 +71,7 @@ import Proofs.Properties.Pouw.Check
 import Proofs.Properties.Pouw.Draw
 import Proofs.Properties.Pouw.Grid
 import Proofs.Properties.Accounting.Remote.Sort
-import SampledProofs.Record
+import Spot.Record
 
 /-!
 # `WorkOfH1CheckedCreditPeriodH200`'s witnesses: an honest period on the H200, and the verifier that accepts everything

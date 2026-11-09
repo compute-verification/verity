@@ -70,6 +70,7 @@ PACKAGE_OF = {
     "verity_vllm.protocols": "protocol_options",
     "verity_vllm.protocols.linear": "linear",
     "verity_vllm.protocols.remote_bandwidth": "store",
+    "verity_vllm.protocols.remote_bandwidth.commit_map": "pipeline",
     "verity_vllm.program.predict": "predict",
     "verity_vllm.engine.collectives": "collectives",
     "verity_vllm.engine.spec": "pipeline",
@@ -286,7 +287,8 @@ def test_leaf_modules_import_nothing() -> None:
 
 def test_layer_map_names_existing_modules() -> None:
     known = I.modules()
-    missing = [m for m in I.LAYER if m not in known and not any(k.startswith(m + ".") for k in known)]
+    missing = [m for m in I.LAYER if m not in known and not any(k.startswith(m + ".") for k in known)
+               and not any(m == o or m.startswith(o + ".") for o in I.OPTIONAL)]
     assert not missing, f"LAYER names modules or packages that no longer exist (update the map): {missing}"
     assert all(v in I.RANK for v in I.LAYER.values())
     for m in known:

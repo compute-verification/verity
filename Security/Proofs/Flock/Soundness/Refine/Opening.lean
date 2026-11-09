@@ -11,7 +11,7 @@ import Mathlib.Data.List.GetD
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Proofs.Flock.Level3.Assembly
 import Proofs.Flock.Level3.Fold
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.Soundness.Refine.Exec
 import Proofs.Flock.Soundness.Refine.Plays

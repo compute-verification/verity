@@ -509,7 +509,7 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
             "occurrences": occurrences, "calls": calls}
 
 
-def kept_correspondence(ctx, body, *, rank: tuple[int, int] | None, registered: bool, emit: bool = True):
+def kept_correspondence(ctx, body, *, rank: tuple[int, int] | None, registered: bool | str, emit: bool = True):
     """`(body, doc, digest, hints)`: the flat `body` in the registered compiler's form when `registered` (`prune.kept_records`),
     its runtime correspondence with the kept Calls and that document's digest, and the kept node hints.  `doc` and `digest` are
     None when not `emit` (a graph no serving runtime executes)."""

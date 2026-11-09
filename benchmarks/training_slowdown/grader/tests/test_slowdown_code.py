@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 import torch
-from conftest import CC, LF, STEP, dot_alone
+from conftest import CC, LF, STEP, dot_alone, k16_steps, route_factor
 
 import grader as G
 from verity_config.settings import of
@@ -122,7 +122,9 @@ def test_the_tiny_steps_beside_the_slowdown_code(step, fresh, steps, monkeypatch
     dtype) beside what the grader reads of the step's circuit: the same products, N, O and token dims at every (phase, op,
     dims), and the same operand widths but at the bf16 steps' attention products, which the circuit wires at the 32 bits
     torch's math path computes them in and the trace takes at the 16 bits their operands were passed at. On sm_120, priced at
-    the tensor-core dot alone (`dot_alone`), the linears' |C| is the trace's: its gates a bf16 MAC are that dot's over 16."""
+    the tensor-core dot alone (`dot_alone`), the linears' |C| is the trace's (its gates a bf16 MAC that dot's over 16) times
+    their routes' factor (`route_factor`: the zeros grid.z slices pad their residue tiles with are dots the trace doesn't
+    count)."""
     dtype, cc = {"f32": (None, None), "bf16": (torch.bfloat16, None), "bf16-cublas": (torch.bfloat16, CC)}[step]
     directory, _, commit = SLOWDOWN_CODE.rpartition("@")
     code = G.load_slowdown_code(Path(directory), commit)
@@ -136,8 +138,11 @@ def test_the_tiny_steps_beside_the_slowdown_code(step, fresh, steps, monkeypatch
     model = LF.LM(LF.SIZES["tiny"], ctx=2 * STEP[1], vocab=64, matmul_dtype=dtype)
     g = capture_step(model, torch.optim.AdamW(model.parameters(), **LF.ADAMW), LF.square_loss,
                      torch.zeros(*STEP, dtype=torch.long))
-    a = G.against(G.read(G.load_handover(s.path), code), code.products.rows(g, gemm_dtype=None), code)
+    h = G.load_handover(s.path)
+    out = G.read(h, code)
+    a = G.against(out, code.products.rows(g, gemm_dtype=None), code)
     assert a["agree"] == {"count": True, "N": True, "O": True, "widths": dtype is None, "token_dims": True}, a["rows"]
     assert all(a["totals"]["circuit"][x] == a["totals"]["trace"][x] for x in ("count", "N", "O"))
     if cc:
-        assert a["C"]["mm"]["circuit"] == a["C"]["mm"]["trace"] > 0, a["C"]
+        factor = route_factor(k16_steps(h), out["products"])
+        assert a["C"]["mm"]["trace"] > 0 and a["C"]["mm"]["ratio"] == pytest.approx(factor), a["C"]

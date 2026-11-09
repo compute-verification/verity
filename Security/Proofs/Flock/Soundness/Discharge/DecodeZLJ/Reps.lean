@@ -19,7 +19,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Rounds
 /-!
 # flock-verify's acceptance at table `j`, rep by rep
 
-`accepts_reps_at`: `DecodeZL.accepts_reps` at any table `j` of the session, at any `count`. e2e-exec's
+`accepts_reps_at`: `DecodeZL.accepts_reps` at any table `j` of the session, at any `count`. `Discharge/Exec`'s
 `accepts_verdict_hm96` and `accepts_rep_rounds` already speak of every table `j < sts.size`: table `j`'s streams
 `spec.tables[j]/rep r`, its proof files `2j + r`, its root `root_B[j]` and the session's shared link points.
 

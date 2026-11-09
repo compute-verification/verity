@@ -323,12 +323,12 @@ theorem rootsColl_none_iff {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} :
 theorem finderPr_one {H : Msg → Msg} {F : Claims.Finder}
     (h : ∀ s, ∃ u v, F.out s = some (u, v) ∧ Claims.Collision H u v) : F.Pr H = 1 := by
   have hc : (Fintype.card F.S : ℝ) ≠ 0 := Nat.cast_ne_zero.mpr Fintype.card_ne_zero
-  unfold Claims.Finder.Pr Claims.Pr
+  unfold Claims.Finder.Pr Claims.Pr Claims.prUniform
   simp [h, hc]
 
 theorem finderPr_zero {H : Msg → Msg} {F : Claims.Finder}
     (h : ∀ s, ¬ ∃ u v, F.out s = some (u, v) ∧ Claims.Collision H u v) : F.Pr H = 0 := by
-  unfold Claims.Finder.Pr Claims.Pr
+  unfold Claims.Finder.Pr Claims.Pr Claims.prUniform
   simp [h]
 
 theorem ex_cost (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) :
