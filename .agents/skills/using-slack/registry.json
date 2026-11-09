@@ -134,6 +134,7 @@
         "benchmarks/spot_figures/",
         "benchmarks/dsa_topk/",
         "benchmarks/spot_proved/",
+        "benchmarks/leverage/",
         "integrations/vllm/verity_vllm/protocols/sampled_proofs.py",
         "Security/Definitions/Hash/",
         "Security/Proofs/Hash/",
