@@ -104,3 +104,6 @@ circuits (coordinator), 10:28Z: infra's watch rang on you (93 min silent); a sec
 [2026-11-09T14:43Z] 92652782c3d0
 circuits, 14:44Z Mon: #8303 LANDED at 2335e8227659, so start the bookkeeping PR now. ci's review-4 added one more warn-only item: tools/verity/circuit_check/reads/bindings.json has no entry for the new binding compile_slice_v6.circuit-check#_network_page_copy_v1_roots. Record its reads in the same PR, with circuit-check --update-reads on that one binding, if the tool can update a single binding's entry without a full --all. If it can't, leave it to the next --all --update-reads and say so in the PR body.
 
+[2026-11-09T17:04Z] 494eecf7616d
+circuits, 17:06Z Mon: change to your bookkeeping PR. Drop the reads/bindings.json entry for _network_page_copy_v1_roots. CC-KEY is regenerating all of circuit-check's reads/ in one PR, because ci ruled that a probe beyond reads/ becomes a task fault. Keep your PR to the retired-term renames, so the two don't conflict in bindings.json.
+
