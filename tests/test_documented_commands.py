@@ -210,7 +210,7 @@ def _child() -> None:
     os.environ.update(HOME=str(scratch), TMPDIR=str(scratch))
     (scratch / ".research" / "notes").mkdir(parents=True)
     known = argparse.ArgumentParser.parse_known_args
-    state = {"depth": 0, "armed": False, "parsed": False}
+    state = {"depth": 0, "armed": False, "parsed": False, "read": None, "script": None}
 
     def outer(self, args, namespace, strict):
         """The outermost parse ends the command line's parse once it has read every word. An outermost parse_known_args
@@ -242,6 +242,19 @@ def _child() -> None:
             return Path(os.fsdecode(path)).resolve().is_relative_to(scratch)
         except (TypeError, ValueError):
             return False
+
+    # What reads the same on every machine: the tree, the scratch directory and the Python the child runs on. Anything else
+    # (a node's slots file, /sys/fs/cgroup) is the machine's state: a CLI that read some and then refuses without argparse
+    # may refuse for the machine's sake, so that refusal is acting, not a failed parse.
+    shared = tuple({os.path.join(f(p), "") for p in (str(ROOT), str(scratch), sys.prefix, sys.base_prefix, sys.exec_prefix,
+                                                      *filter(None, sys.path)) for f in (os.path.abspath, os.path.realpath)})
+
+    def machine_state(path) -> bool:
+        if not isinstance(path, (str, bytes, os.PathLike)):
+            return False
+        p = os.fsdecode(path)
+        return os.path.realpath(p) != state["script"] and not any(
+            os.path.join(f(p), "").startswith(shared) for f in (os.path.abspath, os.path.realpath))
 
     def handoff(argv) -> None:
         argv = [os.fsdecode(a) for a in argv]
@@ -279,6 +292,10 @@ def _child() -> None:
             if (isinstance(mode, str) and set(mode) & set("wax+")) or (isinstance(flags, int) and flags & (
                     os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC | os.O_APPEND)):
                 raise _Acts(f"writes {args[0]}")
+            if machine_state(args[0]) and not state["read"]:
+                state["read"] = os.fsdecode(args[0])
+        elif event in ("os.listdir", "os.scandir") and args and machine_state(args[0]) and not state["read"]:
+            state["read"] = os.fsdecode(args[0])
 
     sys.addaudithook(hook)
     import research.cli
@@ -312,12 +329,20 @@ def _child() -> None:
             sys.argv = [argv[1], *argv[2:]]
             return runpy.run_module(argv[1], run_name="__main__", alter_sys=True)
         script = str(ROOT / argv[0]) if not os.path.isabs(argv[0]) else argv[0]
-        sys.argv, sys.path[0:0] = [script, *argv[1:]], [str(Path(script).parent)]
+        sys.argv, sys.path[0:0], state["script"] = [script, *argv[1:]], [str(Path(script).parent)], os.path.realpath(script)
         return runpy.run_path(script, run_name="__main__")
+
+    def refused(why: str) -> tuple[str, str]:
+        """A refusal argparse didn't make: past the parse if one read every word it was given, or the machine's state was read."""
+        if state["parsed"]:
+            return "acts", why[:400]
+        if state["read"]:
+            return "acts", f"refuses after reading {state['read']}: {why}"[:400]
+        return "fails", why[:400]
 
     def parse(argv: list[str]) -> tuple[str, str]:
         err, cwd, env, path = io.StringIO(), os.getcwd(), dict(os.environ), list(sys.path)
-        state["parsed"] = False
+        state["parsed"], state["read"], state["script"] = False, None, None
         try:
             for _ in range(4):
                 try:
@@ -343,10 +368,9 @@ def _child() -> None:
             if e.code in (0, None):
                 return "ok", ""
             said = err.getvalue().strip().splitlines()
-            why = (str(e.code) if isinstance(e.code, str) else said[-1] if said else f"exit {e.code}")[:400]
-            return ("acts" if state["parsed"] else "fails"), why
+            return refused(str(e.code) if isinstance(e.code, str) else said[-1] if said else f"exit {e.code}")
         except Exception as e:  # noqa: BLE001  a crash is this command line's verdict, not the child's
-            return "fails", f"{type(e).__name__}: {e}"[:400]
+            return refused(f"{type(e).__name__}: {e}")
         finally:
             os.chdir(cwd)
             os.environ.clear()
@@ -354,7 +378,7 @@ def _child() -> None:
             sys.path[:] = path
         if isinstance(rc, int) and rc:
             said = err.getvalue().strip().splitlines()
-            return ("acts" if state["parsed"] else "fails"), f"exit {rc}: {said[-1] if said else ''}"[:400]
+            return refused(f"exit {rc}: {said[-1] if said else ''}")
         return "ok", ""
 
     os.chdir(ROOT)
@@ -428,18 +452,24 @@ def test_the_child_parses_without_running():
 def test_a_verdict_reads_the_tree_alone(tmp_path):
     """Lines whose CLI reads the operator's state before or instead of parsing (a machine, the store, a program on PATH, the
     notes clone) get one verdict on every machine: here, and with none of this process's variables and a HOME whose
-    machines file lists no machine, as on a node."""
+    machines file lists no machine, as on a node. A script that refuses after reading a file outside the tree (a node's
+    slots file) acts; one that refuses having read none fails."""
     (tmp_path / ".research" / "notes" / "machines.d").mkdir(parents=True)
+    (tmp_path / "slots").write_text("0 0-15\n")
+    (tmp_path / "refuses.py").write_text("import sys\nopen(sys.argv[1]).read()\nsys.exit('none of its slots is within these cores')\n")
+    (tmp_path / "bad.py").write_text("import sys\nsys.exit('bad: no such option')\n")
     probe = "".join(json.dumps({"file": "-", "line": 0, "argv": a, "block": True}) + "\n" for a in (
         ["tools/verity/check/check.py", "--record", "--on", "auto", "--pool", "research"],
         ["tools/verity/check/check.py", "--agreement-files"], ["tools/verity/check/check.py", "--preflight"],
-        ["research", "notes", "sync", "--path", "kb"]))
+        ["research", "notes", "sync", "--path", "kb"], [str(tmp_path / "refuses.py"), str(tmp_path / "slots")],
+        [str(tmp_path / "bad.py")]))
     bare = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path),
             **{k: v for k, v in os.environ.items() if k == "PYTHONPATH" or k.startswith("VERITY_SUITE_")}}
     got = [[(r["status"], r["why"]) for r in map(json.loads, subprocess.run(
         [sys.executable, __file__, "--child"], cwd=ROOT, input=probe, capture_output=True, text=True, env=env).stdout.splitlines())]
         for env in (None, bare)]
-    assert len(got[0]) == 4 and [s for s, _ in got[0]] == [s for s, _ in got[1]] and all(s != "fails" for s, _ in got[0]), got
+    statuses = [s for s, _ in got[0]]
+    assert statuses == [s for s, _ in got[1]] and "fails" not in statuses[:4] and statuses[4:] == ["acts", "fails"], got
 
 
 if __name__ == "__main__" and sys.argv[1:] == ["--child"]:
