@@ -108,7 +108,8 @@ itself ended (its baseline, verifying the steps it passed), or `main` moved to a
 (`/data/infra/drive.sh queue baseline SHA --by ci`, which the next tick takes as verified).  The tick that reads a run's end
 launches the next before its sync, once its reverts are pushed, and a tick that
 launched none then launches it after its landings (`start_postland`); what lands in a tick after its run launched waits for
-the run after.  While a red on `checked` has a low-risk fix marked under `FIX_WAIT_S` ago and not landed, the run waits for it
+the run after, or for one launched beside it, of a newer commit, once the newest is `AHEAD_EVERY_S` old (at most `AHEAD_MAX`
+beside the oldest: `_start_ahead`), and `main` moves to the highest that passes.  While a red on `checked` has a low-risk fix marked under `FIX_WAIT_S` ago and not landed, the run waits for it
 (`_fix_wait`), as one without it would go red again.  A red run runs on, so every red suite is named, and is cancelled only once its `TAIL` is all it has left (a cancel
 earlier in a ~4 h run leaves the rest unknown).  A shard that passed nowhere and whose every failure names nothing (no
 failing test, no read outside its inputs, no error line: a kill, a hang, a crash with no output) is not red yet: it is
@@ -267,6 +268,11 @@ FIX_WAIT_S = 45 * 60
 #: reverts it only once this passed with no fix marked ready at its head (`Driver._revert_reds`), and never a warn step's
 #: (`Driver._warns`)
 FIX_FORWARD_S = 30 * 60
+#: the most after-landing runs drive keeps going beside the oldest one, each of a newer commit of the landing branch
+#: (`Driver._start_ahead`): `main` moves to the highest that passes the merge gate, not after the run before it ends
+AHEAD_MAX = 2
+#: how long after the newest after-landing run launched another of a newer commit may launch beside it (`Driver._start_ahead`)
+AHEAD_EVERY_S = 20 * 60
 #: the declarations a Lean failure names (`Driver._lean_declared`): a dotted or plain Lean name in quotes or backticks
 #: (`unknown identifier 'Foo.bar'`), or the guarantee a Lean check's failure is about (`guarantees: Foo.bar's statement changed`)
 LEAN_NAMED_RE = re.compile(r"[`'‘]([A-Za-z_][\w.]*\w)[`'’]|^\s*guarantees: ([A-Za-z_][\w.]*\w)", re.M)
@@ -1443,6 +1449,43 @@ class Driver:
         return [x for x in out if x.commit not in undone]
 
     def follow_postland(self, drive: dict) -> None:
+        """The after-landing runs, newest first: each launched beside the oldest (``pl["ahead"]``, `_start_ahead`), then the
+        oldest (``pl["run"]``), each followed as the oldest is (`_follow_run`), in its place for the while, so a run that
+        failed below one that passed in the same tick is judged below it.  Once a run passed, those of commits below it can't
+        move `main` or name a red (`_passed_above`) and are cancelled; the oldest left takes ``pl["run"]``.  One beside the
+        oldest that is lost, never ran or registered no run is dropped, never sent again: the next `_start_ahead` launches the
+        newest commit then."""
+        if not (pl := drive.get("postland")):
+            return
+        runs = [r for r in (pl.get("run"), *(pl.get("ahead") or ())) if r]
+        if len(runs) < 2:
+            self._follow_run(drive)
+            return
+        resend, kept = pl.pop("resend", None), []
+        for i in reversed(range(len(runs))):
+            pl["run"] = runs[i]
+            self._follow_run(drive)
+            if (after := pl.get("run")) is not None:
+                kept.insert(0, after)
+            if i:
+                pl.pop("resend", None)
+        if "resend" not in pl and resend is not None:
+            pl["resend"] = resend
+        v = pl["verified"]
+        below = [r for r in kept if r.get("ids") and "tasks" not in r and r["tip"] != v and self._ancestor(r["tip"], v)]
+        if below and not (self.dry_run or self.q.shadow):
+            self.cancel(self.repo, [i for r in below for i in r["ids"]],
+                        f"drive: `{self.q.into}` {v[:12]} passed above this after-landing run's commit")
+            self.q.log(f"research queue drive: cancelled the post-landing run(s) of {' '.join(r['tip'][:12] for r in below)}: "
+                       f"`{self.q.into}` {v[:12]} above them is verified")
+            kept = [r for r in kept if r not in below]
+        pl["run"] = kept[0] if kept else None
+        if kept[1:]:
+            pl["ahead"] = kept[1:]
+        else:
+            pl.pop("ahead", None)
+
+    def _follow_run(self, drive: dict) -> None:
         """The after-landing run, once it ends: passed, its tip is verified; failed, `_postland_failed`; never started (every twin
         exited 75, or was stopped), the next `start_postland` launches it again.  One already failing under `--keep-going` is
         named red at once (`_red`), and cancelled once only its `TAIL` is left; a shard of it whose failures name nothing runs
@@ -2209,6 +2252,12 @@ class Driver:
         its culprit (`_red`), to be fixed forward or reverted, a warn step's never reverted (`_revert_reds`); a run whose
         records name none is told to `CI`.  The next run checks `main`'s tip."""
         tip, ids, base = run["tip"], " ".join(run["ids"]), pl["verified"]
+        if base != tip and self._ancestor(tip, base):
+            # a run beside it verified a commit above this one (`_start_ahead`): only what this tip still holds is red
+            self._red(drive, pl, run, ended=True)
+            self.q.log(f"research queue drive: the post-landing run {ids} of `{self.q.into}` {tip[:12]} failed ({why}) below "
+                       f"verified {base[:12]}: it moves nothing and resends nothing")
+            return
         members = self.landed_since(base, tip)
         was_killed = signalled or (bool(members) and any(implicated(d) is None and killed(d, why)
                                                          for d in self.evidence(self.repo, run["ids"])))
@@ -2764,14 +2813,14 @@ class Driver:
         is of `SLIM_STEPS` alone, beside it (`_start_slim`).  `_review` asks twice a tick, before the sync once the reverts
         are pushed and again after the landings: a run launched, or launching (`detach`), is ``pl["run"]``, which the second
         ask finds, and a records step or a plan still being made is followed, not launched again, so a tick launches no two
-        runs of a commit."""
-        if not (pl := drive.get("postland")) or pl.get("run"):
+        runs of a commit.  While one runs, another of a newer commit may launch beside it (`_start_ahead`)."""
+        if not (pl := drive.get("postland")):
+            return
+        if pl.get("run"):
+            self._start_ahead(drive, pl)
             return
         q = self.q
-        # a records step or an auto plan still being made is of the tip its shards then check (`_records`, `_plan`)
-        n = self.after_landing_shards
-        building = next((b for b, on in ((pl.get("records"), n != 1), (pl.get("plan"), isinstance(n, str)))
-                         if on and b and "art" not in b and "made" not in b), None)
+        building = self._building(pl)
         pl["pending"] = [p for p in pl["pending"] if not self._ancestor(p, pl["verified"])]
         base = not self._baselined(pl)                            # the first run: `main` itself (`_unbaselined`)
         tip = _out(self.repo, "rev-parse", q.base)
@@ -2782,12 +2831,49 @@ class Driver:
             q.log(f"research queue drive: the after-landing run of `{q.into}` {main[:12]} waits: {why}")
             return
         pl["steps"] = list(AFTER_LANDING)
-        steps = ",".join(pl["steps"])
         if self.executor == "on":
             self._start_tasks(drive, pl, main, base)
             if pl.get("run"):
                 self._start_slim(drive, pl, main, base)
             return
+        self._launch_run(drive, pl, main, base, building, tip)
+
+    def _building(self, pl: dict) -> dict | None:
+        """A records step or an auto plan still being made, of the tip its shards then check (`_records`, `_plan`), or None."""
+        n = self.after_landing_shards
+        return next((b for b, on in ((pl.get("records"), n != 1), (pl.get("plan"), isinstance(n, str)))
+                     if on and b and "art" not in b and "made" not in b), None)
+
+    def _start_ahead(self, drive: dict, pl: dict) -> None:
+        """Launch another after-landing run beside those going (at most `AHEAD_MAX` beside the oldest), of the commit
+        `start_postland` would check now (`_target`), when it is above every run's tip, is neither verified nor below it nor a
+        commit whose run failed, no fresh low-risk fix of a red is about to land (`_fix_wait`), and the newest run launched
+        `AHEAD_EVERY_S` ago or more.  `main` moves to the highest of them that passes the merge gate (`_promote`), and a run
+        below it that ends later judges only what its own tip still holds (`_passed_above`).  None with the executor on."""
+        ahead = pl.get("ahead") or []
+        newest = (ahead or [pl["run"]])[-1]
+        if (self.executor == "on" or len(ahead) >= AHEAD_MAX or "tasks" in pl["run"] or "launch" in newest
+                or not self._baselined(pl) or self.now() - newest.get("at", self.now()) < AHEAD_EVERY_S):
+            return
+        building = self._building(pl)
+        tip = _out(self.repo, "rev-parse", self.q.base)
+        main = building["tip"] if building else self._target(pl, tip)
+        if (main == newest["tip"] or not self._ancestor(newest["tip"], main) or main == pl.get("failed")
+                or self._ancestor(main, pl["verified"])):
+            return
+        if why := self._fix_wait(drive, main):
+            self.q.log(f"research queue drive: another after-landing run, of `{self.q.into}` {main[:12]}, waits: {why}")
+            return
+        self._launch_run(drive, pl, main, False, building, tip, ahead=True)
+
+    def _launch_run(self, drive: dict, pl: dict, main: str, base: bool, building: dict | None, tip: str,
+                    ahead: bool = False) -> None:
+        """Launch the after-landing run of ``main`` (`start_postland`), or, ``ahead``, one beside the runs going
+        (`_start_ahead`): unsharded, or as `after_landing_shards` shards after circuit-check's records step (`_records`) and
+        the auto plan (`_plan`), both followed each tick while they are made."""
+        q = self.q
+        n = self.after_landing_shards
+        steps = ",".join(pl["steps"])
         kw, skip, ratchet, flags = self._postland_args(pl, main, base)
         auto = isinstance(n, str)
         records = (auto or n > 1) and "circuit-check" in pl["steps"]
@@ -2818,16 +2904,21 @@ class Driver:
                     self.cancel(self.repo, ids, f"drive: a shard of the post-landing run of {main[:12]} registered no run")
                 rec = None
         if rec is None:
-            self._launch_failed(drive, "postland", main, f"train.sh {main[:12]} {self.on} --deferred {steps}{flags}"
-                                + (f" (as {n} shards)" if n > 1 else ""), tail)
+            self._launch_failed(drive, "ahead" if ahead else "postland", main, f"train.sh {main[:12]} {self.on} --deferred "
+                                f"{steps}{flags}" + (f" (as {n} shards)" if n > 1 else ""), tail)
             return
-        pl["run"] = {**rec, "tip": main, "at": self.now(), **({"resend": True} if pl.pop("resend", False) else {}),
-                     **({"skip": skip} if skip else {}), **({"baseline": True} if base else {}),
-                     **({"plan": plan["digest"]} if plan else {}), **({"ratchet_base": ratchet} if ratchet else {}),
-                     "as": {"steps": [s for s in AFTER_LANDING if s not in skip], "no_cache": kw["no_cache"]}}
+        run = {**rec, "tip": main, "at": self.now(), **({"resend": True} if not ahead and pl.pop("resend", False) else {}),
+               **({"skip": skip} if skip else {}), **({"baseline": True} if base else {}),
+               **({"plan": plan["digest"]} if plan else {}), **({"ratchet_base": ratchet} if ratchet else {}),
+               "as": {"steps": [s for s in AFTER_LANDING if s not in skip], "no_cache": kw["no_cache"]}}
+        if ahead:
+            pl.setdefault("ahead", []).append(run)
+        else:
+            pl["run"] = run
         self._shadow_enqueue(drive, main)
-        q.log(f"research queue drive: post-landing run of `{self.q.into}` {main[:12]} ({steps}): {_ids(rec)}; "
-              f"{len(pl['pending'])} landing(s) since {pl['verified'][:12]}"
+        q.log(f"research queue drive: {'another ' if ahead else ''}post-landing run of `{self.q.into}` {main[:12]} ({steps}): "
+              f"{_ids(rec)}; " + (f"beside the run of {pl['run']['tip'][:12]}; " if ahead else "")
+              + f"{len(pl['pending'])} landing(s) since {pl['verified'][:12]}"
               + (f"; those above it, to {tip[:12]}, wait for a lock run's records" if not building and main != tip else "")
               + (f"; ratchet-gate judges those above {ratchet[:12]}" if "ratchet_base" in kw else "")
               + (f"; circuit-check's records {cc['cc_records_from']}" if cc else "") + _of_plan(plan, "; shards"))

@@ -91,6 +91,39 @@ def test_a_red_after_landing_run_moves_nothing_on_main_and_its_culprit_is_revert
     assert world.on_next(h.q) == []                             # #2, reverted, is still open: its head is on `checked`
 
 
+def test_a_run_beside_the_one_going_checks_a_newer_commit_and_main_moves_to_whichever_passes_highest(world, monkeypatch):
+    """While an after-landing run goes, a landing above it gets a run of its own once the newest run is `AHEAD_EVERY_S` old,
+    at most `AHEAD_MAX` beside the oldest.  The runs are read newest first: `main` moves to the newest when it passes, a run
+    below it still going is cancelled, and one that failed below it in the same tick moves nothing back, names no red,
+    reverts nothing and runs nowhere again; the landing above them gets the next run."""
+    h = Review(world, monkeypatch, land_into="checked")
+    h.d.evidence = lambda repo, ids: [d for d in h.evidence if d.name in ids]
+    tips = []
+    for n in (1, 2, 3, 4):
+        world.gh.put(n, world.change({f"f{n}.txt": f"{n}\n"}))
+        h.review(n)
+        assert h.tick().startswith(f"landed #{n}"), world.logs
+        tips.append(_checked(world))
+        if n == 2:
+            assert [c for c, *_ in h.posted] == tips[:1]            # the first run launched this minute: none beside it yet
+        if n > 1:
+            h.clock += D.AHEAD_EVERY_S
+            h.tick()
+    assert [c for c, *_ in h.posted] == tips[:3]                    # the oldest and AHEAD_MAX beside it
+    pl = h.postland()
+    assert pl["run"]["tip"] == tips[0] and [r["tip"] for r in pl["ahead"]] == tips[1:3]
+    h.run_state.update({"r-post-0": ("done", 1, None), "r-post-2": ("done", 0, None)})
+    h.evidence = [_steps_run(world.tmp, "r-post-0", {"pytest": "failed"}),
+                  _steps_run(world.tmp, "r-post-2", {s: "passed" for s in h.posted[2][1].split(",")})]
+    h.tick()
+    pl = h.postland()
+    assert _main(world) == tips[2] and pl["verified"] == tips[2] and not pl.get("red"), (pl, world.logs)
+    assert h.cancelled == ["r-post-1"] and not pl.get("resend") and "ahead" not in pl
+    assert [c for c, *_ in h.posted] == [*tips[:3], tips[3]] and pl["run"]["tip"] == tips[3]
+    assert any(f"of `checked` {tips[0][:12]} failed" in x and "below verified" in x for x in world.logs), world.logs
+    assert not [p for p in h.posts if "reverted" in p]
+
+
 def test_a_failure_at_or_below_a_tip_that_passed_it_since_is_no_red(world, monkeypatch, tmp_path):
     """A late rerun of an old shard can fail a suite that a newer run passed above it (its green), or that `main` was verified
     past: that failure is no red, so it holds no landing and reverts no culprit."""
