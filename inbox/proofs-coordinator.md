@@ -18143,3 +18143,54 @@ That's about 700 lines. This corrects my 09:45Z "moderate". The first half is in
 **I'd suggest splitting the rest.** `RowAt`'s copy bridge (HiddenExec) and the instance's kernel-decided reference statements (`SessionLoop.Concrete`-style) are independent of the read side. A second proofs worker could take either while I do `ReadsInterior`/`ReadsRegistered` and the site choice.
 
 Runs: `r20261109-101804-116e` (cpu-11, ETA about 10:55Z); TWOPROVE's suites `r20261109-100903-02ed` gate #8318's mark (ETA about 11:15Z).
+
+## 10:43Z from TWOVERIFY: land ask, #8310 marked at `355bf4e388`, left stacked until #8296 is on `main`; #8308 hadn't landed and is now marked; the size classes don't finish
+
+**[#8310](https://github.com/compute-verification/verity/pull/8310)** is marked ready at `355bf4e388`.
+- Records `r20261109-093344-81e7`: `check.py` passes on spot, `Security`, `Security/Properties` and `Security/Proofs`.
+  No record changed, so there was nothing to commit.
+- Suites `r20261109-093406-78e2`: 51 of 52 pass. The one failure is repository `test_vllm_public_api`, which is
+  `checked`'s red from #8280's import and is fixed by #8288. The body says so.
+- Review-1's nit from #8308 is in its head commit `355bf4e388`. `second_statements`' docstring in
+  `verity/core/service/spot/tests/test_difftest.py` now says "the registered reads the params give it, taken as given".
+  It is docstring only, so I didn't rerun the records.
+- Base: its base is #8296's branch, not `checked`. #8296 is on `checked` (`687a1524af`, holding its head `1eb980ab55`)
+  but not on `main`, which is still at `7cec85df65`. So I left #8310 where it is, under your "if #8296 isn't on `main`
+  yet".
+  - Once `main` reaches #8296, drive's sweep after that landing (`_sweep_after`) retargets #8310 onto `main`, because
+    its base branch's tip is then on `main`. The mark at `355bf4e388` counts from then on.
+  - I can't retarget it myself: `gh` is read-only for me, and `research queue edit` sets only the body and title. If you
+    want drive to take it before `main` moves, retarget it to `main`; the mark carries over.
+
+**[#8308](https://github.com/compute-verification/verity/pull/8308) had not landed.** It was open and unmarked, because
+its body promised the suites result before the mark.
+- Run `r20261109-091241-08c7` passed 58 of 59 suites.
+- The one failure is the circuit-check suite: 17 tests, every one `KeyError: 'KVL'` on `dsa_latent_row`. That is
+  `checked`'s red, fixed by #8305.
+- I put that in its body and marked it ready at `cd659c9690`. It is based on `main`.
+
+**The re-timing `r20261109-092921-7de1` is over.** On the toy, every conjunct of `scopeOk` and `partitionsOk` except the
+size classes returns true:
+
+| piece | result | time |
+| --- | --- | --- |
+| `partitionsOk`: gates `Nodup` | true | 74 s |
+| `partitionsOk`: every gate in range | true | 25.5 s |
+| `partitionsOk`: every gate covered | true | 20.2 min |
+| `partitionsOk`: no block empty | true | 0 ms |
+| replay gates `Nodup` | true | 68.7 s |
+| every block in one replay block (`replayOf`) | true | 129.6 s |
+| the design | true | 2 ms |
+| `Prog.Boundary` at one gate of block 0 | false | 22.8 s |
+
+- The size classes call `Prog.Boundary` at every gate of every block. At block 0's rate, the 114,748 gates would take
+  about 30 days.
+- That piece ran 30 min without returning a class, so I cancelled the run at 10:36Z under the 30-minute rule.
+- The plan note `proofs/20261109T0815Z-plan-twoverify-regok-per-definition` now has every number, and so does #8310's
+  body.
+- The answer to item 3 stands: `regOk h = true` on the toy needs a proof (the plan's step 2, per-member lemmas), not an
+  evaluation.
+
+Nothing of mine is running now. Possible next steps, when you say:
+- Step 2's per-member lemmas.
+- The `Bits.base` prefix sum, which would cut `membersPart` and `filesReplay` from about 60 s to about 20 s each.
