@@ -1,0 +1,12 @@
+# A trained 8B's codes ($CODES, qat.py --codes: design U's 2% codes of the trained latent weights), priced at the
+# untrained point's ranks and orders: the split at ranks 1 and 8 in all orders on every matrix; q and k over their
+# rank grids in all orders with the generous routes (svd, rpca) and their refinements; down_proj in all orders; v, o,
+# gate and up in the natural order to rank 256
+8bt-small --codes "$CODES" --fast --ranks 1,8 --orders none,fold,sort --workers 24
+8bt-q-gen --codes "$CODES" --match q_proj --ranks 1,8,32,64,96,128,160,192,224,256,320,384,512 --orders none,fold,sort --workers 32
+8bt-k-gen --codes "$CODES" --match k_proj --ranks 1,8,16,32,48,64,80,96,112,128,160,192,256 --orders none,fold,sort --workers 32
+8bt-qk-fast --codes "$CODES" --match q_proj,k_proj --fast --ranks 16,24,40,48,56,80,112 --orders none,fold,sort --workers 16
+8bt-q-refine --codes "$CODES" --match q_proj --ranks 176,208,240,288 --orders none,fold,sort --no-isvd --no-rpca --workers 16
+8bt-k-refine --codes "$CODES" --match k_proj --ranks 4,12,24,40,56,72,88,104 --orders none,fold,sort --no-isvd --no-rpca --workers 16
+8bt-down --codes "$CODES" --match down_proj --fast --ranks 32,64,128,256 --orders none,fold,sort --workers 32
+8bt-rest --codes "$CODES" --match v_proj,o_proj,gate_proj,up_proj --fast --ranks 16,32,48,64,96,128,192,256 --workers 32

@@ -245,6 +245,9 @@ def main(argv=None) -> int:
     ap.add_argument("--zs-limit", type=int, default=None)
     ap.add_argument("--no-zs-before", action="store_true", help="skip zero-shot before training")
     ap.add_argument("--max-steps", type=int, default=None, help="stop after this many steps of the --tokens schedule (smoke tests)")
+    ap.add_argument("--train-min", type=float, default=None,
+                    help="end training after the step that passes this many minutes, so a GPU lease's limit leaves room "
+                         "for the final evals and the codes (recorded as train.stopped_at)")
     ap.add_argument("--codes", type=Path, default=None, help="write the codes to this safetensors file")
     ap.add_argument("--price", action="store_true", help="price the exported codes with price.py on the CPU")
     ap.add_argument("--price-workers", type=int, default=6)
@@ -371,8 +374,14 @@ def main(argv=None) -> int:
             curve.append(rec)
             if (step + 1) % 10 == 0 or "fineweb_val_64" in rec or step < 3:
                 log("step", json.dumps({k: (round(v, 6) if isinstance(v, float) else v) for k, v in rec.items()}))
+            done = step + 1
+            if args.train_min is not None and time.time() - t0 > args.train_min * 60 and done < steps:
+                if "fineweb_val_64" not in rec:
+                    rec["fineweb_val_64"] = perplexity(model, val_ids, args.seq, max_windows=64)["ppl"]
+                log("step", f"stopping at {done} of {steps}: --train-min {args.train_min} passed")
+                break
         res["train"] = {"curve": curve, "recalibrations": recals, "seconds": time.time() - t0,
-                        "tokens": steps * args.batch * args.seq,
+                        "tokens": done * args.batch * args.seq, "stopped_at": done if done < steps else None,
                         "peak_mem_gb": torch.cuda.max_memory_allocated() / 2**30}
         del teacher, opt
         torch.cuda.empty_cache()

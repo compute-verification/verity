@@ -208,10 +208,12 @@ def chunk_splits(rec: dict) -> dict:
     return {"chunks": min(at(k) for k in KEYS)}
 
 
-def load(runs: Path) -> Book:
+def load(runs: Path, sources=SOURCES, generous: bool = False) -> Book:
+    """The book of sources' records; with generous, each scored at its least of the exact and generous routes."""
     book = Book()
     refs, variants = {}, []
-    for run, pattern, model, tags in SOURCES:
+    over, route = ("generous_over_leaf", "generous_route") if generous else ("over_leaf", "route")
+    for run, pattern, model, tags in sources:
         dirs = sorted((runs / run / "out").glob(pattern))
         for d in dirs:
             files = sorted(d.glob("matrices.jsonl")) + sorted(d.glob("t*/matrices.jsonl"))
@@ -232,7 +234,7 @@ def load(runs: Path) -> Book:
                     scores = {}
                     for k in KEYS:
                         s = rotated.score(rec, k)
-                        scores[k] = (s["over_leaf"], s["route"])
+                        scores[k] = (s[over], s[route])
                     var = (target, rot, deflate, 0, 1)
                     book.add(model, rec["tensor"], var, scores, split, run, orders, splits(rec))
                     if not orders and var == U:
