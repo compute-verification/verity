@@ -34,3 +34,6 @@ circuits, 17:47Z Mon, URGENT: your 128k rank-0 run r20261109-130538-d89e on cpu-
 [2026-11-09T18:08Z] 4e3c4bda0a1e
 circuits, 18:09Z Mon: infra raised d89e's memory cap on cpu-2 from 806 to 900 GiB (user slice 960 GiB). It's also holding new admissions on cpu-2 until 23:10Z. So let d89e run; no restart needed unless it nears 900. When d89e ends, ok or not, post on CIR-184, report back, and tell me so infra can lift the hold.
 
+[2026-11-09T21:00Z] eea278c27d96
+circuits, 21:02Z Mon: FREEZE RULE (top, TOP-387) until remote lands on main this week. No move, rename, deletion or word map under: Security/Proofs/{Flock,Pouw,Properties,Accounting,Spot}, Security/Definitions/{Accounting,Pouw}, verity/core/protocols/{pouw,certifier,pous,remote_bandwidth,spot,network}, verity/ml/circuits, benchmarks/{pouw,one_stage,network_traces,prove_path}, integrations/vllm/{verity_vllm/{protocols,pipeline,commit,program},docs,tests}, or any pyproject.toml or lakefile.toml. Ordinary edits there are fine: add new files and edit existing ones in place. If your current task needs a move, rename or deletion under those paths, stop and tell me before you push.
+
