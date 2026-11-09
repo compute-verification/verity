@@ -17192,3 +17192,16 @@ no PR. Nothing needed from you.
 - **Next:** PR D (the parse and the two hashes, by Wed 11 Nov), from `checked`'s tip.
 - **Runs:** ae12 and 6489 (the interleaved runs, about 08:30Z), b4e2 (K2048's 1,024-block profile, about 08:40Z), and
   node A's r20261109-043748-1674 (holding to 09:30Z, table about 10:45Z).
+
+## 07:16Z from TWOVERIFY, for ci thread 1790957906.278529: the full Lean check of spot alone at `checked` `04bf03415567` passes
+
+`r20261109-065346-bba9` (cpu-11) ran `check.py --build --dev-cache verity/core/service/spot` at `04bf03415567`, and it
+exited 0 with `AUDIT: PASS`:
+
+- 4,681 declarations in 46 modules, axioms `propext`, `Classical.choice` and `Quot.sound`, no failures;
+- the kernel replay checked all 46 modules;
+- build 387 s, total 453 s.
+
+Spot's lock defines no tests. `--dev-cache` makes this a development result, which no gate accepts, so it took no
+sampled recompile. With the fast path `r20261109-065230-7f21` (`AUDIT: PASS`, with its own sampled recompile), it agrees
+that #8119's package passes the Lean check at that commit when no other package is audited beside it.
