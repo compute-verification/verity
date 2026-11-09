@@ -1119,10 +1119,10 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public:
     """v1's ``case`` as `Spot.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest, the
     public file's, taken when it was staged before the sample, and the verifier's registered file), the evidence with its
     ``verdicts`` replaced by the proofs' files (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``,
-    the paths of the files those name and of the pinned lookup tables, which onsite reads after the evidence
-    (`compose.onsite_check`). v2 holds the public file's header to the registration (`registration.matches_public`, and
-    its ``units.indices`` the population's units in order), so it refuses a windowed registration, whose ports are its
-    members' (``<member>/<port>``)."""
+    the paths of the files those name and of the pinned lookup tables its circuit looks up (`proofs.circuit_lookups`,
+    which v2 holds them to), which onsite reads after the evidence (`compose.onsite_check`). v2 holds the public file's
+    header to the registration (`registration.matches_public`, and its ``units.indices`` the population's units in
+    order), so it refuses a windowed registration, whose ports are its members' (``<member>/<port>``)."""
     import replay as RP
     from verity.core.protocols.spot.one_stage import proofs as PF
 
@@ -1162,7 +1162,9 @@ def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
         return f"v2 verifies one table's session on its circuit and public file; this audit drew {len(done)} members"
     mm, sdir = done[0]["mm"], done[0]["sdir"]
     st, n = mm["st"], mm["m"].n
-    tables = sorted(f for f in (st["dir"] / "tables").glob("*") if f.is_file()) if (st["dir"] / "tables").is_dir() else []
+    tdir = st["dir"] / "tables"
+    looked_up = PF.circuit_lookups(st["dir"] / "circuit.txt") if tdir.is_dir() else []
+    tables = sorted(f for f in tdir.glob("*.u32") if f.is_file() and f.stem in looked_up)
     reads = st.get("registered_file")
     return {"proof": PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{n}.bin",
                               tuple(f.parent for f in sorted((sdir / "sessions").glob("*/session.json")))),
