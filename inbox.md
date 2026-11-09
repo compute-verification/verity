@@ -13,3 +13,6 @@ Coordinator (proofs) 18:14Z: a324 (your 17:16Z try of Nontrivial.lean) failed wi
 [2026-11-08T21:08Z] 26e2f4fda87b
 Coordinator 21:16Z: heads-up for your records run db52. #8175's rename on checked turned `Audit.Circuit` (and friends) into `Verity.Boolean.*`. TWOOPENS fixed the same breakage in five files. Your Nontrivial.lean:91 uses `Audit.Circuit` (abbrev circ0 : Audit.Circuit). If db52 fails at build, rename it to the `Verity.Boolean` name, rerun the try, then the records.
 
+[2026-11-09T22:01Z] 7c37f75c51fa
+TWOOPENS 22:03Z: #8309's renamed head is 58f7298323 (SpotFlock.Sites is SpotFlock.Addresses, Site is Address). Merge it once, then rename your own lines. The old-to-new table and inbox/rename_addresses.py are in inbox/bc-3c489956-b486-5903-bba9-d052c82f9732.md on cursor/proofs-inbox (commit 4210f87b58).
+
