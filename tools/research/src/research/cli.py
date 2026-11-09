@@ -113,12 +113,16 @@ gives the workload a cache dir keyed by reuse_key.  `research data ...` is the s
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import math
 import os
+import re
+import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import time
 from datetime import UTC, datetime, timezone
 from pathlib import Path
@@ -1137,6 +1141,34 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     return _run_remote(ns, run_id, root / run_id, harness_opts, command, queue=placed)
 
 
+#: a Lean records run (`lean_changed.py --records PKG`), which `_run_remote` sends the URLs of the Lean bundles its node may restore
+#: from, presigned by the shipped tree's `LEAN_AUDIT` (`url_file`), as `tools/verity/check/check.py --record` sends a check them
+LEAN_RECORDS = re.compile(r"lean_changed\.py\b.*\s--records\b")
+LEAN_AUDIT = "tools/verity/lean/lean_audit.py"
+
+
+def lean_records_urls(source: Path | None, command: list[str]) -> Path | None:
+    """For a Lean records run from the tree ``source``, that tree's `lean-deps-urls.json` (`url_file`), written in a temporary
+    directory: the presigned URLs of the newest recorded checks' and passing records runs' artifact bundles
+    (`shared_bundles`) and of the pinned dependency bundles. None for any other run, a tree without `LEAN_AUDIT`, or a store
+    that signs nothing; a failure sends none, and the run then builds what its node lacks."""
+    if source is None or not LEAN_RECORDS.search(" ".join(command)) or not (source / LEAN_AUDIT).is_file():
+        return None
+    try:
+        spec = importlib.util.spec_from_file_location("research_lean_audit_urls", source / LEAN_AUDIT)
+        la = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(la)
+        urls = la.url_file(Path(tempfile.mkdtemp(prefix="research-lean-urls-")))
+        shared = urls and sum(k.startswith(la.SHARED) for k in json.loads(urls.read_text()))
+    except Exception as e:  # noqa: BLE001  (no URLs: the run builds what its node lacks)
+        print(f"research run: no Lean bundle URLs sent ({type(e).__name__}: {e})", file=sys.stderr)
+        return None
+    if urls:
+        print(f"research run: a Lean records run: sending presigned URLs for {shared} Lean artifact bundle(s) of recent checks and "
+              "records runs", file=sys.stderr)
+    return urls
+
+
 def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts: list[str], command: list[str],
                 queue: dict | None = None) -> int:
     if not ns.project:
@@ -1187,15 +1219,20 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
     if not custody:
         print(f"research run --on {ns.on}: --no-custody-r2: this run's records stay on the machine until `research fetch --all {run_id}`",
               file=sys.stderr)
+    source = Path(ns.source).expanduser() if ns.source else None
+    urls = lean_records_urls(source, command)
     try:
         rec = remote.launch(run_id=run_id, local_dir=run_dir, machine_name=ns.on, project=ns.project, command=command, harness_args=harness_args,
-                            source=Path(ns.source).expanduser() if ns.source else None, sends=[Path(s).expanduser() for s in ns.send],
+                            source=source, sends=[*(Path(s).expanduser() for s in ns.send), *([urls] if urls else [])],
                             cwd=None, env=env, exclusive=ns.exclusive, mem_gb=ns.mem_gb, mem_wait_s=ns.mem_wait,
                             custody_ttl=(ns.custody_ttl or "6h") if custody else None, preflight_tool=ns.preflight, queue=queue,
                             job_user=ns.job_user, gpus=None if queue else ns.gpus, store_read=ns.store_read)
     except remote.Refused as e:
         print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
         return 3
+    finally:
+        if urls:
+            shutil.rmtree(urls.parent, ignore_errors=True)
     launch = rec.get("launch") or {}
     if rec["phase"] == "refused":
         print(f"research: run {run_id} refused on {ns.on} ({launch.get('fault') or 'Refused'}): {launch.get('refused')}  (recorded in {run_dir})", file=sys.stderr)

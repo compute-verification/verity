@@ -955,12 +955,16 @@ ARTIFACT = MK.ARTIFACT
 MEMBER = re.compile(r"artifacts/[0-9a-f]{16}\.[a-z.]+|" + MK.INDEX + r"/[0-9a-f]{128}\.json")
 #: what one run's bundle (`LakeArtifacts.bundle`) holds at most, uncompressed: a run's files over 4 GiB upload without resume
 BUNDLE_CAP = 3 << 30
-#: a key of `lean-deps-urls.json` naming a recorded check's bundle by its sha256 (`shared_bundles`)
+#: a key of `lean-deps-urls.json` naming a recorded check's or a records run's bundle by its sha256 (`shared_bundles`)
 SHARED = "lean-artifacts/"
 #: a run's file that is a bundle (`LakeArtifacts.bundle_into` in the run's `lean-audit/`), the path `shared_bundles` lists
 BUNDLE_FILE = re.compile(r"lean-audit/lean-artifacts(-\d+)?\.tar\.gz")
 #: how many of the newest recorded checks' bundles the launcher sends
 SHARED_LIMIT = 12
+#: the store attempts of records runs (`lean_changed.py --records`) that exited 0: their records passed or were regenerated
+RECORDS_RUNS = "(manifest_json LIKE '%tools/verity/lean/lean_changed.py%--records%' AND state = 'done' AND rc = 0)"
+#: how many of the newest such records runs' bundles the launcher sends beside the checks', and the oldest it sends one of
+RECORDS_LIMIT, RECORDS_MAX_AGE_S = 24, 2 * 86400
 
 
 class LakeArtifacts:
@@ -974,10 +978,11 @@ class LakeArtifacts:
     every declaration through the kernel, and compiles a random sample of the modules it restored again, failing on any
     output that differs (`check.sampled_recompile`), which is what binds a restored `.olean` to its source.
 
-    Between nodes, the module versions a recorded check's audit added travel as one bundle in its run's files (`bundle`); the
-    launcher sends a URL for each of the newest (`shared_bundles`), and a node takes in each it hasn't yet (`take`). A records
-    run (`lean_changed.py --records`) bundles what it added the same way, which `shared_bundles` doesn't list yet. A bundle is
-    trusted as far as its source, as a verdict pack is (`verdicts.py`): a recorded run."""
+    Between nodes, the module versions a recorded check's audit added travel as one bundle in its run's files (`bundle`), and
+    so do those a passing records run (`lean_changed.py --records`) added; the launchers of a check and of a records run send
+    a URL for each of the newest (`shared_bundles`), and a node takes in each it hasn't yet (`take`). A bundle is trusted as
+    far as its source, as a verdict pack is (`verdicts.py`): a recorded run, whose restored modules the sampled recompile
+    checks."""
 
     def __init__(self, store: Path, cap: int = ARTIFACTS_CAP):
         self.store, self.cap = store, cap
@@ -1541,30 +1546,34 @@ def presigned(ttl_s: int = URL_TTL_S) -> dict[str, str]:
             **{SHARED + h: r.presign(object_key(h), ttl_s) for h in shared_bundles()}}
 
 
-def shared_bundles(store=None, limit: int = SHARED_LIMIT) -> list[str]:
-    """The sha256 of each artifact bundle (`LakeArtifacts.bundle`) among the newest recorded checks' run files, newest first, at
-    most ``limit``: only a recorded run's (`common.RECORDED_CHECKS`), as `gather_verdicts` takes only theirs, a failed or
-    cancelled run's too, since its bundle holds only modules of packages whose audit passed. Empty when the store can't be
-    read: each node then reuses only what it built."""
+def shared_bundles(store=None, limit: int = SHARED_LIMIT, records: int = RECORDS_LIMIT, now: float | None = None) -> list[str]:
+    """The sha256 of each artifact bundle (`LakeArtifacts.bundle`) among the run files of the newest recorded checks, at most
+    ``limit``, then of the newest records runs that passed (`RECORDS_RUNS`) and started within `RECORDS_MAX_AGE_S` of ``now``,
+    at most ``records``, each newest first. Only a recorded run's: a check's (`common.RECORDED_CHECKS`), as `gather_verdicts`
+    takes only theirs, a failed or cancelled one's too, since its bundle holds only modules of packages whose audit passed;
+    and a records run's, which bundles only what its passing sandboxed builds compiled. Empty when the store can't be read:
+    each node then reuses only what it built."""
     from research.store.local import LocalStore
 
+    since = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime((time.time() if now is None else now) - RECORDS_MAX_AGE_S))
     out: list[str] = []
     try:
         store = store or LocalStore()
         if store.remote is not None:
             store.refresh(attempts_only=True)
-        rows = store.index.sql(f"SELECT id FROM attempts WHERE {COMMON.RECORDED_CHECKS} AND state IN ('done', 'failed', 'cancelled') "
-                               "ORDER BY start_utc DESC LIMIT ?", (4 * limit,))
-        for (rid,) in rows:
-            art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
-            for f in store.listing(art) if art else []:
-                if BUNDLE_FILE.fullmatch(f["path"]) and f["remote"] and f["sha256"] not in out:
-                    out.append(f["sha256"])
-            if len(out) >= limit:
-                break
+        for where, args, n in ((f"{COMMON.RECORDED_CHECKS} AND state IN ('done', 'failed', 'cancelled')", (), limit),
+                               (f"{RECORDS_RUNS} AND start_utc >= ?", (since,), records)):
+            start = len(out)
+            for (rid,) in store.index.sql(f"SELECT id FROM attempts WHERE {where} ORDER BY start_utc DESC LIMIT ?", (*args, 4 * n)):
+                art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
+                for f in store.listing(art) if art else []:
+                    if len(out) - start < n and BUNDLE_FILE.fullmatch(f["path"]) and f["remote"] and f["sha256"] not in out:
+                        out.append(f["sha256"])
+                if len(out) - start >= n:
+                    break
     except Exception as e:  # noqa: BLE001  (no bundle: each node reuses only what it built)
         print(f"lean-audit: no artifact bundles listed from the store ({type(e).__name__}: {e})", file=sys.stderr)
-    return out[:limit]
+    return out
 
 
 def url_file(dest: Path, ttl_s: int = URL_TTL_S) -> Path | None:

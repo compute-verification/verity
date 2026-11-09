@@ -219,6 +219,40 @@ def test_in_a_run_what_its_passing_builds_added_to_the_artifact_cache_goes_into_
     assert not list((tmp_path / "reports").rglob("lean-artifacts*")), "outside a run no one would take it"
 
 
+def test_in_a_run_the_bundles_research_run_sent_go_into_the_artifact_cache_before_its_builds(repo, tmp_path, monkeypatch, capsys):
+    """`research run` sends a records run the presigned URLs of the bundles other nodes' checks and records runs left
+    (`inputs/lean-deps-urls.json`, `research.cli.lean_records_urls`). The run deletes the file before anything else reads its
+    run directory and, on a node whose builds are sandboxed, takes the bundles into the node's artifact cache before its first
+    build, which check.py's `--artifacts` stages from and its sampled recompile checks. Without the sandbox it takes none, as
+    check's lean-audit takes none there."""
+    taken = []
+
+    def take(self, urls, log=print):
+        taken.append((self.store, urls, _calls(tmp_path)))
+        return 3
+
+    monkeypatch.setattr(LC.LA.LakeArtifacts, "take", take)
+    urls = {LC.LA.SHARED + "ab" * 32: "https://r2.example/o?X-Amz-Signature=sent", "deps-key": "https://r2.example/d?sig"}
+    tree = tmp_path / "cache" / "lean-records" / "tree"
+    for sandbox in (True, False):
+        run = tmp_path / f"run-{sandbox}"
+        (run / "inputs").mkdir(parents=True)
+        (run / "inputs" / LC.LA.URLS).write_text(json.dumps(urls))
+        monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
+        monkeypatch.setattr(LC, "sandboxed", lambda sandbox=sandbox: sandbox)
+        assert LC.audit_records("a", tmp_path / "deps", tree) == 0
+        assert not (run / "inputs" / LC.LA.URLS).exists(), "a URL grants a read until it expires"
+        assert len(_calls(tmp_path)) == 1
+        out = capsys.readouterr().out
+        assert "X-Amz-Signature" not in out
+        if sandbox:
+            assert taken == [((tmp_path / "lean-artifacts").resolve(), urls, [])], "taken before the first build"
+            assert "lean-records: 3 module version(s) taken from other nodes' bundles" in out
+        else:
+            assert len(taken) == 1 and "taken from other nodes' bundles" not in out
+    assert LC.sent_urls(None) == {} and LC.sent_urls(str(tmp_path / "run-True")) == {}
+
+
 def test_the_copy_is_taken_from_hard_links_after_the_dependencies_lock_is_released(repo, tmp_path, monkeypatch):
     """A copy of some 8 GB under `lean-deps/<k>.lock` held check's lean-audit, which moves the dependencies in under that lock,
     for as long as it took (red team). Under the lock only hard links are made; the copy is taken from them after, and

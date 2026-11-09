@@ -1204,7 +1204,7 @@ def record(argv: list[str]) -> int:
         sent = json.loads(urls.read_text())
         shared = sum(k.startswith("lean-artifacts/") for k in sent)
         print(f"check: sending presigned URLs for {len(sent) - shared} pinned Lean dependency bundle(s) and {shared} Lean artifact "
-              f"bundle(s) of recent checks")
+              f"bundle(s) of recent checks and records runs")
         if on:
             cmd += ["--send", str(urls)]
         else:

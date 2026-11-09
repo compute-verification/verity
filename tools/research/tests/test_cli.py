@@ -507,6 +507,55 @@ def test_pss_flags_for_a_source_tree_that_predates_them_are_refused_before_place
     assert queue(new, "--pss-every", "0") == 3 and len(placed) == 1 and "placement reached" in capsys.readouterr().err
 
 
+#: the shipped tree's `tools/verity/lean/lean_audit.py` as `lean_records_urls` reads it: `url_file` writing two URLs, one of an
+#: artifact bundle (`SHARED`) and one of a pinned dependency bundle
+STUB_LEAN_AUDIT = """\
+import json
+from pathlib import Path
+SHARED = "lean-artifacts/"
+def url_file(dest):
+    p = Path(dest) / "lean-deps-urls.json"
+    p.write_text(json.dumps({SHARED + "ab" * 32: "https://r2.example/a?X-Amz-Signature=s", "k": "https://r2.example/d?s"}))
+    return p
+"""
+
+
+def test_a_lean_records_run_is_sent_the_shipped_trees_lean_bundle_urls(tmp_path, monkeypatch, capsys):
+    """`research run --on M --source TREE -- ... lean_changed.py --records PKG` sends the run TREE's `lean_audit.url_file`
+    as inputs/lean-deps-urls.json: the presigned URLs of the newest checks' and passing records runs' artifact bundles, which
+    the run takes into its node's artifact cache before it builds, so it restores what another node already compiled. Any
+    other run is sent none; the launcher's copy is gone once the request is staged; a tree that can't presign sends none."""
+    from research import cli, remote
+
+    src, sends = tmp_path / "tree", []
+    (src / "tools" / "verity" / "lean").mkdir(parents=True)
+    (src / cli.LEAN_AUDIT).write_text(STUB_LEAN_AUDIT)
+
+    def launch(**kw):
+        sends.append({p: p.read_text() for p in kw["sends"]})
+        return {"phase": "launched", "pod_id": "p1", "remote_run_dir": "/r", "launch": {"runner_pid": 1}}
+
+    monkeypatch.setattr(remote, "launch", launch)
+    on = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "verity", "--source", str(src), "--cwd", "source",
+          "--no-custody-r2", "--"]
+    records = ["python3", "tools/verity/lean/lean_changed.py", "--records", "Security", "--update"]
+    assert main([*on, *records]) == 0
+    [(sent, text)] = sends[-1].items()
+    assert sent.name == "lean-deps-urls.json" and json.loads(text)["lean-artifacts/" + "ab" * 32].startswith("https://r2.example/a")
+    assert not sent.parent.exists(), "a URL grants a read until it expires: the launcher keeps no copy"
+    err = capsys.readouterr().err
+    assert "a Lean records run: sending presigned URLs for 1 Lean artifact bundle(s)" in err and "X-Amz-Signature" not in err
+    assert main([*on, "bash", "-lc", "uv sync -q && python3 tools/verity/lean/lean_changed.py --records Security"]) == 0
+    assert [p.name for p in sends[-1]] == ["lean-deps-urls.json"]
+    for other in (["python3", "tools/verity/lean/lean_changed.py", "--try", "X.lean"], ["python3", "tools/verity/lean/check.py"]):
+        assert main([*on, *other]) == 0 and sends[-1] == {}, other
+    assert cli.lean_records_urls(tmp_path / "no-tree", records) is None and cli.lean_records_urls(None, records) is None
+
+    (src / cli.LEAN_AUDIT).write_text("def url_file(dest):\n    raise OSError('no remote')\n")
+    assert main([*on, *records]) == 0 and sends[-1] == {}
+    assert "research run: no Lean bundle URLs sent (OSError: no remote)" in capsys.readouterr().err
+
+
 def test_an_unknown_command_says_how_old_the_checkout_is(tmp_path, capsys, monkeypatch):
     import subprocess
 

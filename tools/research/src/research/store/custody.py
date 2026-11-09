@@ -176,8 +176,9 @@ def stage(run_dir: Path, into: Path, rels: list[str] | None = None) -> list[str]
     return rels
 
 
-#: What a run may be sent that grants access until it expires, as globs relative to its run dir and its request dir: check's presigned
-#: URLs of the Lean dependency bundles (`tools/verity/check/check.py` LEAN_DEPS_URLS), which a run of anything else never takes out of inputs/,
+#: What a run may be sent that grants access until it expires, as globs relative to its run dir and its request dir: the presigned URLs
+#: of the Lean bundles a check or a Lean records run is sent (`tools/verity/check/check.py` LEAN_DEPS_URLS, `research.cli.lean_records_urls`),
+#: which a run of anything else never takes out of inputs/,
 #: and the temporary name a shipped tree's preflight writes that file under before replacing it
 CREDENTIALS = ("inputs/lean-deps-urls.json", "inputs/.lean-deps-urls.json.*")
 

@@ -1094,8 +1094,11 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     `TREE_WAIT_S`. A package whose records need no run (`reused`) is skipped, and with none left nothing runs and no slot is
     taken; ``rebuild`` and ``moved`` run them all. Each package whose records passed or were regenerated is kept (`passed`).
     In a run, the module versions its passing builds added to the node's artifact cache (`LakeArtifacts.put`) go into ``out``
-    as one bundle for other nodes (`LakeArtifacts.bundle_into`), as a recorded check's do."""
+    as one bundle for other nodes (`LakeArtifacts.bundle_into`), as a recorded check's do, and on a node whose builds are
+    sandboxed the bundles other nodes' runs left, whose URLs `research run` sent it (`sent_urls`), go into that cache first
+    (`LakeArtifacts.take`), so its builds restore what they compiled."""
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    urls = sent_urls(run_dir)
     out = (out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-records-")))).resolve()
 
     def refused(why: str | None, pkg: str = name) -> int:
@@ -1132,6 +1135,11 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     except LEAN_SLOT.Refused as e:
         return dev_records(pkg, todo, update, moved, out, str(e), log, files, skip)
     artifacts = LA.LakeArtifacts((deps.parent / "lean-artifacts").resolve())
+    if urls and sandboxed():
+        try:
+            log(f"lean-records: {artifacts.take(urls, log)} module version(s) taken from other nodes' bundles")
+        except OSError as e:
+            log(f"lean-records: no artifact bundle taken: {e}")
     try:
         tree = tree or records_tree()
         log(f"lean-records: taking the slot path: check.py on {tree}, which keeps its build between runs")
@@ -1220,6 +1228,20 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
         if slot is not None:
             os.close(slot)
             os.environ.pop(LEAN_SLOT.HELD, None)
+
+
+def sent_urls(run_dir: str | None) -> dict[str, str]:
+    """The presigned URLs `research run` sent this run (`inputs/lean-deps-urls.json`, `lean_audit.url_file`), read and deleted
+    before anything else runs: each grants a read until it expires. {} outside a run, or without them."""
+    sent = Path(run_dir) / "inputs" / LA.URLS if run_dir else None
+    if sent is None or not sent.is_file():
+        return {}
+    try:
+        urls = json.loads(sent.read_text())
+    except (OSError, ValueError):
+        urls = {}
+    sent.unlink(missing_ok=True)
+    return urls if isinstance(urls, dict) else {}
 
 
 def dev_records(pkg: str, todo: list[str], update: bool, moved: Path | None, out: Path, why: str, log=print,
