@@ -151,10 +151,11 @@ def test_every_other_port_reads_the_interior_record_at_its_own_leaves_or_its_wri
             n = roots[value]["leaves"]
             assert (e["value"], e["root"], e["leaves"], e["domain"]) == (value, roots[value]["root"], n,
                                                                          roots[value]["domain"])
-            assert e["reads"] == header["positions"] == leaves and (e[REG.READS_FROM], e["words"]) == (m.base, words)
+            assert e["reads"] == leaves and (e[REG.READS_FROM], e["words"]) == (m.base, words)
+            assert header["positions"] == list(range(n)) == list(range(dict(m.tables).get(p, m.n)))
             held = rows_bc(c, value, n)
             assert all(REG.verify_read(c.domains[value], c.roots[value], i, held[i], bytes.fromhex(path), T.V2)
-                       for i, path in zip(leaves, header["paths"], strict=True))
+                       for i, path in zip(range(n), header["paths"], strict=True))
 
 
 def test_both_registrations_pass_the_verifiers_check_and_the_interior_follows_the_boundary(run):

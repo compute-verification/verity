@@ -19,8 +19,9 @@ proves them (`audit.py`).
   (`verity.ml.windows.links.Port`), so Lean opens every row a session proves: a link port (b_in's input, b_out's output)
   at the boundary record, its rows committed under the boundary's salts at S[i] so an honest replay's ``b || c`` are the
   boundary's, its header naming the boundary port, the leaves S and each one's path to the boundary root; a wired port at
-  its writer's port of the interior record, its table the writer's output rows and unit i reading its writer unit's leaf;
-  every other port at the interior record, unit i reading its own leaf i.
+  its writer's port of the interior record, its table the writer's output rows (table row r at leaf r, as the header
+  names them) and unit i reading its writer unit's leaf; every other port at the interior record, unit i reading its own
+  leaf i.
 * **The verifier's reads** (`reads`): each member's ``--registered`` file from the two registration records and S alone.
 * **The auditor's params** (`references`), fixed before the run: each template's circuit file and its reference
   statement's header, which round 2 holds the template's statements to once it places it in the run
@@ -280,8 +281,12 @@ def interior(bc: CS.Committed, boundary_digest: str, sample: Sequence[int], law:
         d["refs"] = np.array([win.held_leaves(m, p) for p, _ in m.rows], dtype=np.int64).T
     salts_of = {win.members[t].port(p): ports[win.members[t].key].salts_at(at) for t, (p, _b) in LINKS.items()}
     c = CS.commit(win, data, salt_key=salt_key, salts_of=salts_of)
-    registered = {m.key: {p: ports[m.key].header(at) if p == link(t) else
-                          LK.Port.of(c, win.held(m, p)).header(win.held_leaves(m, p))
+
+    def whole(value: str) -> dict:
+        port = LK.Port.of(c, value)
+        return port.header(range(port.leaves))
+
+    registered = {m.key: {p: ports[m.key].header(at) if p == link(t) else whole(win.held(m, p))
                           for p, _ in m.all_rows} for t, m in enumerate(win.members)}
     return Interior(win, c, ports, registered)
 
