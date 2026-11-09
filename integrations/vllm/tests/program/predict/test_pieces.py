@@ -3,16 +3,26 @@ part."""
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
+from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
 from verity_vllm.program.predict.build import build_program
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.pieces import compare, pieces, window_config
-from tests.program.predict.test_predict import GLM53, _row_phi
+
+GLM53 = {"repo": "zai-org/GLM-5.3", "revision": "aca966e4e02791568aa6a4ced368624b3d897f42"}
+H200 = {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False, "attention_backend": None, "vllm_revision": "d9105ea80",
+        "numerics_profile": "b1-eager-v3", "flash_attn_version": None, "device_name": "NVIDIA H200", "moe_backend": "triton"}
+ENGINE = {"max_num_batched_tokens": 2048, "max_model_len": 4096, "long_prefill_token_threshold": 256, "max_num_seqs": 256,
+          "enable_prefix_caching": False}
 
 
-def _with(phi: Phi, hf: dict) -> Phi:
-    return Phi.from_json({**phi.to_json(), "model": {**phi.model, "hf_config": hf}})
+def _glm(hf: dict) -> Phi:
+    """GLM-5.3's FP8 checkpoint at `hf` on H200, eager, at TP8 rank 0."""
+    return Phi(model={**GLM53, "hf_config": hf, "dtype": "float8_e4m3fn"}, target=dict(H200), execution="eager",
+               tp={"world": 8, "rank": 0}, engine=dict(ENGINE))
 
 
 def _parts(phi: Phi):
@@ -21,23 +31,18 @@ def _parts(phi: Phi):
     return pieces(r.program, int(phi.tp["world"]))
 
 
-@pytest.fixture
-def glm(tmp_path) -> Phi:
-    return _row_phi(GLM53, "GLM53", tmp_path)
-
-
 @pytest.mark.slow
-def test_a_window_s_parts_are_the_whole_model_s(glm):
+def test_a_window_s_parts_are_the_whole_model_s():
     """GLM-5.3 cut to its first 8 layers at TP8 (three dense layers with indexers, three MoE sharing the third's top-k, an indexer
     and one sharing it): the window of layers 0..3 has the model's prologue and layers 0..2, the window 2..5 (starting at the last
     dense layer, so one dense layer, then MoE) its layers 3 and 4, and the window 6..7 its last layer and epilogue. A window's last
     layer drops the rows no sample reads, as only the model's last does, so the window 0..3's layer 3 isn't the model's."""
-    hf = window_config(glm.hf_config, 0, 8)
-    model = _parts(_with(glm, hf))
+    hf = window_config(json.loads(pinned_hf_config(GLM53["repo"], GLM53["revision"]).read_text()), 0, 8)
+    model = _parts(_glm(hf))
     assert (model.layers, model.launches) == (8, 2)
     assert model.sizes["prologue"] and all(model.sizes[str(L)] for L in range(8)) and model.sizes["epilogue"]
     for at, k, matched in ((0, 4, ["prologue", "0", "1", "2"]), (2, 4, ["3", "4"]), (6, 2, ["7", "epilogue"])):
-        window = _parts(_with(glm, window_config(hf, at, k)))
+        window = _parts(_glm(window_config(hf, at, k)))
         got = compare(model, window, at)
         assert [r["model"] for r in got["parts"]] == matched and got["different"] == 0 and got["callees_differ"] == [], got
         if at == 0:
