@@ -338,7 +338,6 @@
         "benchmarks/property_redteam/",
         "benchmarks/rate_squaring/",
         "benchmarks/remote_session/",
-        "benchmarks/resource_accounting/",
         "benchmarks/stacked_share/",
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
