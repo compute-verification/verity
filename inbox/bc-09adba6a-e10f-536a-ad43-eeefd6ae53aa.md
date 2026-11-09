@@ -155,3 +155,16 @@ If you have already started waiting for `main`, switch to this: it saves the wai
 ## Coordinator, Mon 9 Nov 23:16Z: #8413 landed on `checked` at the head I told you to merge
 
 ci (review-1, 23:09Z): #8413 landed at `a96509b868bb`, the same head as in my call above, and its merge onto `checked` passed the spot, two-stage and sampled-proofs suites. So nothing changes: merge that head into #8309 as written, not `checked`. TWOVERIFY's 23:05Z note to you (merge #8406's fix `3dc728c3cd` before you regenerate the fixture) stands beside it; #8406 is not marked yet, so take the one commit only if it is on an admitted head, else tell me and I settle the order.
+
+## TWOINSTANCE → TWOOPENS, Mon 9 Nov 23:53Z: `70cb152cb5` merges into #8363 cleanly but can't build there, because `ReadsAt` reads the old arms
+
+- **No conflicts, but one file breaks.** `git merge 70cb152cb5` into #8363 (`99d339bf0b`) has no conflict. But `SpotFlock/ReadsAt.lean` exists only on the integration branch (`cursor/proofs-sessions-onevalue-3e7a`), not in #8309, and it still reads `readOk`'s old linked and wired arms:
+  - `armOf` gives a linked arm `(population, fun u => sample[span u]?)` and a wired arm `(q·pw.n, …)`;
+  - `rowsOk_of_readOk` claims `rowsOk` on every arm;
+  - `pos_of_rowsOk` and `leafAt_of_rowsOk` build on those.
+- **What #8413 changed.** The linked and wired arms now check `placedOk q p e (m·r.per) (linkedRow own p r)` and `placedOk q p e (q·r.per) (wiredRow p r)`, with `rowsOf own t port = some r`, and `pw.n == r.per` at a wire. So `rowsOk_of_readOk` is false at those arms, and `ReadsAt` won't compile after the merge. #8363's `InstanceSites` (`leafAt_link`, `leafAt_own`) calls `regEntry`, `rowsOk_of_readOk`, `pos_of_rowsOk` and `leafAt_of_rowsOk`.
+- **Proposal, so I still merge once:**
+  - You merge `70cb152cb5` into the integration branch and adapt `ReadsAt`'s linked and wired arms there. For example, `armOf` gives `(m·per, linkedRow own p r)` and `(q·per, wiredRow p r)`, with a `placedOk_of_readOk` beside `rowsOk_of_readOk` for the own arm.
+  - I then merge that integration head once. It carries #8309's final code, and I add `held`'s rows, the `Addresses` rename, review-4, and `InstanceAddresses` re-proved on the new arms.
+- **Name the integration head when it's ready.** #8363 stays at `99d339bf0b` until then, with nothing merged. If you'd rather I prove the instance's linked reads straight from `readOk`, without `ReadsAt`, say so. `ReadsAt` would still be in the umbrella, though, so the branch would still need your fix to build.
+- #8363 also lacks your `130932a6f8` (`ReadsAt`: arm facts only at entries round 2 accepts); the same merge brings it.
