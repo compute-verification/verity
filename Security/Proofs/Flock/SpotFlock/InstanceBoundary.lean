@@ -44,16 +44,6 @@ import all Init.Data.String.TakeDrop
 import all Init.Data.String.Decode
 import all Init.Data.Nat.Bitwise.Basic
 import all Init.Data.Vector.Basic
-import all Spot.Partition
-import all Spot.Slots
-import all Spot.Select
-import all Spot.Draw
-import all Spot.Program
-import all Spot.Json
-import all Flock.TemplateQuery
-import all Flock.HmRow
-import all Flock.Program
-import all Flock.Bytes
 
 /-!
 # A boundary registration `SpotFlock.Instance.Bnd` holds at
@@ -222,8 +212,9 @@ theorem toNat_one : "1".toNat! = 1 := by
   simp [String.toNat!, String.Slice.toNat!, String.Slice.isNat, String.Slice.forIn_eq_forIn_toList,
     String.Slice.foldl_eq_foldl_toList]
 
-theorem split0 : Spot.Select.split1 "subset:1" ":" = ("subset", "1") := by
-  unfold Spot.Select.split1
+open private split1 from Spot.Select in
+theorem split0 : split1 "subset:1" ":" = ("subset", "1") := by
+  unfold split1
   rw [splitOn0]
   kernel_rfl
 
@@ -321,8 +312,9 @@ theorem popOk0 : Spot.Slots.popOk program0 query0 1 = true := by
 /-- **The law** `subset:1` as Spot's design object. -/
 def subsetJ : Json := Json.mkObj [("law", "subset"), ("k", Lean.toJson (1 : ℕ))]
 
+open private digits from Spot.Select in
 theorem lawOver0 : (Spot.Select.Rule.law "subset:1").lawOver 1 = .ok subsetJ := by
-  unfold Spot.Select.Rule.lawOver Spot.Select.parseDesign Spot.Select.digits
+  unfold Spot.Select.Rule.lawOver Spot.Select.parseDesign digits
   simp only [split0, toNat_one, String.all_bool_eq]
   kernel_rfl
 
