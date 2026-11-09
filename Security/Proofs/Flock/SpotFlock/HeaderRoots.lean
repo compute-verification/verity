@@ -39,6 +39,7 @@ the raw header normalized (`loadPublic_raw`), and normalizing keeps each field's
 
 namespace SpotFlock
 
+open Claims (Msg)
 open Lean (Json)
 
 namespace HeaderRoots
