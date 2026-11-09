@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 from verity.ml.commitments import history as HT
+from verity.ml.commitments import hm96
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG
@@ -91,6 +92,45 @@ def test_tables_are_retained_per_request_until_it_ends():
     assert hs.retained() == 12 * 1344 and hs.retained("r0") == 10 * 1344 and hs.requests() == ["r0", "r1"]
     assert hs.end("r0") == 10 * 1344
     assert hs.requests() == ["r1"] and list(hs.entries()) == [("r1", 0)] and hs.edge("r0", 0) == 0
+
+
+def test_a_warm_requests_table_holds_only_its_own_rows_until_its_replayed_prefix_makes_it_whole():
+    """A request served 3 cached prompt rows opens its table at 3: it appends its own rows from there, under fresh salts,
+    with the strings the window commits, and holds nothing below 3, so it has no root. Its replayed rows below 3 and their
+    salts complete it: the root, strings and paths are those of the table of a request that computed every row itself."""
+    hs, cold = H.Histories(PROGRAM, capacity=16), H.Histories(PROGRAM, capacity=16)
+    prefix, own = _rows(14, 3), _rows(15, 5)
+    hs.warm("r0", 2, 3)
+    assert hs.edge("r0", 2) == 3 and hs.requests() == ["r0"]
+    with pytest.raises(ValueError, match="appends at its edge 3"):
+        hs.append("r0", 2, 0, own)
+    assert list(hs.append("r0", 2, 3, own)) == [3, 4, 5, 6, 7] and hs.retained() == 5 * 1344
+    served = hs.warms[("r0", 2)].salts
+    assert hs.strings("r0", 2, range(3, 8)) == b"".join(HT.string(r, H.WORDS, s) for r, s in zip(own, served))
+    assert hs.salts("r0", 2, [4]) == served[1]
+    for refused in (lambda: hs.strings("r0", 2, [2]), lambda: hs.salts("r0", 2, [0]), hs.entries,
+                    lambda: hs.table("r0", 2), lambda: hs.append("r0", 2, 8, own, list(served))):
+        with pytest.raises(ValueError, match="replayed rows|fresh, never given"):
+            refused()
+    with pytest.raises(ValueError, match="already open"):
+        hs.warm("r0", 2, 3)
+    with pytest.raises(ValueError, match="its prefix is 3 rows"):
+        hs.complete("r0", 2, prefix[:2], [hm96.SHA512.fresh_salt() for _ in range(2)])
+    mine = [hm96.SHA512.fresh_salt() for _ in range(3)]
+    t = hs.complete("r0", 2, prefix, mine)
+    cold.append("r0", 2, 0, prefix, mine)
+    cold.append("r0", 2, 3, own, served)
+    assert t.root == cold.table("r0", 2).root and hs.entries() == cold.entries()
+    assert hs.strings("r0", 2, range(8)) == cold.strings("r0", 2, range(8)) and t.path(1) == cold.table("r0", 2).path(1)
+    assert hs.edge("r0", 2) == 8 and H.check(t, [t.bcs[p] for p in range(8)])
+    with pytest.raises(ValueError, match="no table waits on its prefix"):
+        hs.complete("r0", 2, prefix, mine)
+    for start in (0, 16):
+        with pytest.raises(ValueError, match="cached prompt rows are 1 to 15"):
+            hs.warm("r1", 2, start)
+    hs.warm("r1", 2, 1)
+    hs.append("r1", 2, 1, own[:2])
+    assert hs.end("r1") == 2 * 1344 and hs.requests() == ["r0"]
 
 
 def test_a_committed_window_releases_every_request_it_doesnt_name_open():

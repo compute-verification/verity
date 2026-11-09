@@ -19,14 +19,18 @@ request ends (`Histories.end`), since any later window's read may open any earli
 their window's requests once it is committed, but those its request names ``open`` (`release`). Rows and salts are private:
 they stay in this process on the node and in the windows' private files, never under a run's output.
 
-A table holds only positions its request computed itself, never another request's rows: with prefix caching on, a
-request served C cached prompt rows has none of its own below C, and its reads there read its own replayed rows. A window of
-history tables refuses such a request by name until it composes those reads (`pipeline.history_rows.Plan`).
+A table's leaves are only its request's own rows, never another request's: with prefix caching on, a request served C
+cached prompt rows has none of its own below C. Its tables open at C (`Histories.warm`), holding its served rows, their
+salts and strings, without a tree; they become whole tables once its replay hands over its own recomputed rows below C
+and their salts (`Histories.complete`), and only then have a root. A window of history tables refuses such a request by
+name until it composes those reads (`pipeline.history_rows.Plan`).
 """
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
+
+import numpy as np
 
 from verity.ml.commitments import history as HT
 from verity.ml.commitments import hm96
@@ -52,6 +56,33 @@ def name(request: str, layer: int) -> str:
     return f"history/{request}/model.layers.{int(layer)}.self_attn.latent"
 
 
+class _Warm:
+    """Table ``value`` of a request served ``start`` cached prompt rows, before its prefix arrives: its own rows from
+    ``start`` on, each under a fresh salt, and their strings, which read no position; no tree, since its leaves below
+    ``start`` are the request's replayed rows."""
+
+    def __init__(self, value: str, words: int, capacity: int, start: int) -> None:
+        self.value, self.words, self.leaves, self.start = value, words, capacity, start
+        self.rows: list[np.ndarray] = []
+        self.salts: list[bytes] = []
+        self.bcs: list[bytes] = []
+
+    def append(self, rows: Any, salts: Sequence[bytes] | None = None) -> range:
+        if salts is not None:
+            raise ValueError(f"{self.value}: a served row's salt is fresh, never given")
+        rows = np.asarray(rows, dtype=np.uint16)
+        if rows.ndim != 2 or rows.shape[1] != self.words:
+            raise ValueError(f"{self.value}: rows of {self.words} u16 words, not shape {rows.shape}")
+        at = self.start + len(self.rows)
+        if at + len(rows) > self.leaves:
+            raise ValueError(f"{self.value}: {at + len(rows)} rows past the table's capacity of {self.leaves}")
+        new = [hm96.SHA512.fresh_salt() for _ in rows]
+        self.bcs += [HT.string(r, self.words, s) for r, s in zip(rows, new)]
+        self.rows += [r.copy() for r in rows]
+        self.salts += new
+        return range(at, at + len(rows))
+
+
 class Histories:
     """The committer's open history tables across windows, by (request, layer): each a `history.HistoryTable` of `WORDS`-word
     rows at the serving run's ``program`` under its `name`, appended window by window from its edge and kept until its request
@@ -64,57 +95,108 @@ class Histories:
             raise ValueError("a history table's domain binds the serving run's program: give it")
         self.program, self.words, self.capacity, self.make = program, int(words), int(capacity), make
         self.tables: dict[tuple[str, int], HT.HistoryTable] = {}
+        self.warms: dict[tuple[str, int], _Warm] = {}
 
     def table(self, request: str, layer: int) -> HT.HistoryTable:
-        """Request ``request``'s table at layer ``layer``, empty until its first append."""
+        """Request ``request``'s table at layer ``layer``, empty until its first append; refused while it waits on its
+        prefix (`warm`)."""
         key = (str(request), int(layer))
+        if key in self.warms:
+            raise ValueError(f"history {name(*key)}: its leaves below {self.warms[key].start} are its request's replayed rows, "
+                             "so it has no tree until they come (complete)")
         if key not in self.tables:
             self.tables[key] = self.make(self.program, name(*key), self.words, self.capacity)
         return self.tables[key]
 
+    def warm(self, request: str, layer: int, start: int) -> None:
+        """Open (``request``, ``layer``)'s table at ``start``, its request's cached prompt rows (``0 < start <`` the
+        capacity): it holds the request's own rows from ``start`` on and waits on its prefix (`complete`)."""
+        key = (str(request), int(layer))
+        if key in self.tables or key in self.warms:
+            raise ValueError(f"history {name(*key)}: already open; a table opens once, on its request's first rows")
+        if not 0 < int(start) < self.capacity:
+            raise ValueError(f"history {name(*key)}: its request's cached prompt rows are 1 to {self.capacity - 1}, not {start}")
+        self.warms[key] = _Warm(name(*key), self.words, self.capacity, int(start))
+
+    def complete(self, request: str, layer: int, rows: Any, salts: Sequence[bytes]) -> HT.HistoryTable:
+        """(``request``, ``layer``)'s table whole: ``rows`` (``(C, words)`` u16), its request's replayed rows below its cached
+        prompt rows C, under ``salts`` (the salts their strings are committed under), then its own rows from C under their
+        salts. -> the table, whose root and paths the reads open."""
+        key = (str(request), int(layer))
+        w = self.warms.get(key)
+        if w is None:
+            raise ValueError(f"history {name(*key)}: no table waits on its prefix (warm opens one)")
+        rows = np.asarray(rows, dtype=np.uint16)
+        if len(rows) != w.start:
+            raise ValueError(f"history {w.value}: its prefix is {w.start} rows, the request's cached prompt rows, not {len(rows)}")
+        t = self.make(self.program, w.value, self.words, self.capacity)
+        t.append(rows, salts)
+        if w.rows:
+            t.append(np.stack(w.rows), w.salts)
+        del self.warms[key]
+        self.tables[key] = t
+        return t
+
     def edge(self, request: str, layer: int) -> int:
         """The position the next append of (``request``, ``layer``) starts at: its table's length."""
-        t = self.tables.get((str(request), int(layer)))
+        key = (str(request), int(layer))
+        if key in self.warms:
+            return self.warms[key].start + len(self.warms[key].rows)
+        t = self.tables.get(key)
         return 0 if t is None else len(t.rows)
 
     def append(self, request: str, layer: int, start: int, rows: Any, salts: Sequence[bytes] | None = None) -> range:
         """Rows ``rows`` (``(k, words)`` u16) at positions ``start`` to ``start + k`` of (``request``, ``layer``)'s table, each
         under its salt (fresh by default), refused unless ``start`` is the table's edge: positions are appended in order, once
         each. -> their positions."""
-        t = self.table(request, layer)
-        if int(start) != len(t.rows):
-            raise ValueError(f"history {t.value} of request {request}: appends at its edge {len(t.rows)}, not at {start} (a table "
+        key = (str(request), int(layer))
+        t, edge = self.warms.get(key) or self.table(request, layer), self.edge(request, layer)
+        if int(start) != edge:
+            raise ValueError(f"history {t.value} of request {request}: appends at its edge {edge}, not at {start} (a table "
                              f"is append-only in position order)")
         return t.append(rows, salts)
 
+    def _held(self, request: str, layer: int, positions: Iterable[int]) -> tuple[Any, list[int]]:
+        key = (str(request), int(layer))
+        t, c = (self.warms[key], self.warms[key].start) if key in self.warms else (self.tables[key], 0)
+        ps = [int(p) for p in positions]
+        if any(p < c for p in ps):
+            raise ValueError(f"history {t.value}: positions below {c} are its request's replayed rows, which serving never held")
+        return t, [p - c for p in ps]
+
     def strings(self, request: str, layer: int, positions: Iterable[int]) -> bytes:
         """The table's leaves' strings (``b || c``) at ``positions``, concatenated: the window's committed strings of those rows."""
-        t = self.tables[(str(request), int(layer))]
-        return b"".join(bytes(t.bcs[p]) for p in positions)
+        t, at = self._held(request, layer, positions)
+        return b"".join(bytes(t.bcs[i]) for i in at)
 
     def salts(self, request: str, layer: int, positions: Iterable[int]) -> bytes:
         """The rows' salts at ``positions``, concatenated."""
-        t = self.tables[(str(request), int(layer))]
-        return b"".join(bytes(t.salts[p]) for p in positions)
+        t, at = self._held(request, layer, positions)
+        return b"".join(bytes(t.salts[i]) for i in at)
 
     def entries(self, keys: Iterable[tuple[str, int]] | None = None) -> dict[tuple[str, int], dict[str, Any]]:
         """Each table's registration entry (`history.HistoryTable.entry`: its root after the appends so far), by (request,
-        layer); ``keys`` the window's, every open table's by default."""
-        return {k: self.tables[k].entry() for k in (self.tables if keys is None else keys)}
+        layer); ``keys`` the window's, every open table's by default; refused for one that waits on its prefix."""
+        keys = [*self.tables, *self.warms] if keys is None else list(keys)
+        if waiting := [name(*k) for k in keys if k in self.warms]:
+            raise ValueError(f"histories {waiting}: no root until their requests' replayed rows below their hits come (complete)")
+        return {k: self.tables[k].entry() for k in keys}
 
     def requests(self) -> list[str]:
         """The requests with an open table."""
-        return sorted({r for r, _l in self.tables})
+        return sorted({r for r, _l in [*self.tables, *self.warms]})
 
     def retained(self, request: str | None = None) -> int:
         """The rows' and salts' bytes held, of ``request``'s tables or of every one."""
-        return sum(len(t.rows) for (r, _l), t in self.tables.items() if request is None or r == request) * ROW_BYTES
+        held = [*self.tables.items(), *self.warms.items()]
+        return sum(len(t.rows) for (r, _l), t in held if request is None or r == request) * ROW_BYTES
 
     def end(self, request: str) -> int:
         """Drop ``request``'s tables once it has ended, so their rows and salts are no longer held. -> the bytes released."""
         held = self.retained(request)
-        for k in [k for k in self.tables if k[0] == str(request)]:
-            del self.tables[k]
+        for opened in (self.tables, self.warms):
+            for k in [k for k in opened if k[0] == str(request)]:
+                del opened[k]
         return held
 
 
