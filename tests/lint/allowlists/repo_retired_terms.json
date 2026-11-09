@@ -5658,7 +5658,7 @@
     {"file": "verity/ml/flock/pod/lean_verdicts.py", "count": 10},
     {"file": "verity/ml/flock/pod/rec-env.sh", "count": 10},
     {"file": "verity/ml/flock/pod/rec_inner.py", "count": 31},
-    {"file": "verity/ml/flock/pod/rec_reprice.py", "count": 14},
+    {"file": "verity/ml/flock/pod/rec_reprice.py", "count": 11},
     {"file": "verity/ml/flock/pyproject.toml", "count": 17},
     {"file": "verity/ml/flock/python/verity_flock/backend.py", "count": 4},
     {"file": "verity/ml/flock/python/verity_flock/bench.py", "count": 6},
