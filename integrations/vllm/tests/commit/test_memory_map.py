@@ -546,7 +546,7 @@ def test_a_row_past_topk_reads_its_layers_rows_through_its_concentrator(dsa):
 
 
 @pytest.mark.parametrize("block", [256, 2])
-def test_a_batched_programs_rows_are_its_flat_programs(served, monkeypatch, block):  # noqa: F811
+def test_a_batched_programs_rows_are_its_flat_programs(served, monkeypatch, block):
     """Class G's form at TOPK 2 (`observe_batched_form`: latent rows, the long rows in blocks of `vllm_dsa.BLOCK_KEYS` keys): a
     prefill of two, then a call of three rows past TOPK.  Compiled batched (`prune.BATCHED`), each layer's latent rows are batches
     and the call's sparse MLA one batch of its three rows, each member reading its rows through its concentrator's batch; `rows`
