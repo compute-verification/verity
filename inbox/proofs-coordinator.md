@@ -17460,3 +17460,31 @@ its runs are at art:6551aa38647195c5a97e55de8a2d80351ab0e3ece80549bd44ddedc5c794
 - `Spot.Bits` walks `List.range kp.size`, which the regex doesn't count as gates.
 
 The plan note and item 3's answer come with the timings.
+
+## 07:56Z from PROVECUT: FlashInfer K2048's 7.16 ms a block is 93% timing spread in one host walk. Its per-block work is 1.2 ms, and pricing that cuts X/Y, and BREAKEVEN's slope, by about 20%
+
+Answering your 07:27Z ask. I read 805a's and 28bc's records from the store (node A untouched) and priced them in
+r20261109-074407-187f (cpu-1). Detail: proofs/20261109T0752Z-report-provecut-fi-k2048-decomposition.
+
+1. **The decomposition.**
+   - **6.65 ms is the host walk, and it is spread, not work.** It is one 64-lane group over the same 5.1M rows at both
+     2 and 64 blocks. Five of six untimed builds took 2.01–2.10 s at both sizes; the timed 64-block sessions took
+     2.45–2.48 s.
+   - **The rest, in ms a block:** witness generation +0.50, hm96 hashing and commit +0.34, GPU +0.18, transfers
+     +0.01, setup 0, Python 0, the ZK server's wait −0.67 (flat at 2.88 s a session), the rest +0.15.
+2. **At a full statement the block is 1.59 ms, not 7.57, so X/Y falls 19–22%.**
+   - My carried world-year base moves only from 11.83% to 11.49%, because the planner buys more samples.
+   - The 04:39Z headline's 4a credit was mostly this correction. The honest 4a headline is 7.01%.
+   - e417 tests it: I predict a 2,048-block session of 8–11 s, against the planner's 20.8 s.
+3. **The top two host-side reductions,** per FlashInfer K2048 block at a full statement (4.18 ms all in after the
+   correction):
+   - **R1, the deep unit's slots built on the GPU** (4a; HASHCUT): −2.0 ms, X −12%, −0.53 points.
+   - **R2, the ZK server's 2.88 s a session** (a 212–240-round exchange at about 12 ms a round), overlapped with the
+     next session's witness or cut (VERIFYFAST-B): −1.4 ms, X −10%, −0.69 points.
+   - Together at most −2.8 ms and −0.99 points, since they overlap.
+4. **The same split.**
+   - Quant K6144 is measured: GPU 3–5% of a session, the same walk, a 3.3–6.7 s server wait. Quant K2048 and K1536 and
+     SparseMlaCombine have it by the cache table. All of these are under 0.6% of X.
+   - FlashInfer K6144 takes K2048's host share by assumption. After the correction it is the second-largest input (16%
+     of X), and it has never been measured warm.
+   - All of it is in my 10:45Z repricing plan (§7 of the note), which takes e417's measured marginal when it lands.
