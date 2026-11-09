@@ -10,8 +10,9 @@ The driver stands in for the queue's loop.  It builds each snapshot from what th
 the candidates with the verdict their results make, and the outcomes of decided candidates.  It calls `decide` and turns
 each action into the model's decision with the same effect on the world, and calls it again until it asks for nothing
 new, as a loop that ticks often would.  A tick that builds waits for its trees before deciding again, as the loop's builds
-finish within its tick.  A candidate's verdict is `fail` once a task failed, `pass` once every listed task passed, `infra`
-once every task has an outcome and some only infra ones, else `pending`.  The driver fills each field the contract has
+finish within its tick.  A candidate's verdict is `fail` once a task failed, else `infra` once a task's outcome is an infra
+error, though others still run, as the loop reads graph2's, else `pass` once every listed task passed, else `pending`.  An
+infra outcome a retry asks for again is set aside.  The driver fills each field the contract has
 and leaves the rest to their defaults: a failure's key, its key on the candidate's base, its failing tests and the base's
 (as the world's results give them), whether the verdict has ended (every listed task has an outcome) with its infra
 errors beside its failures, a candidate's reruns and when its check was enqueued, and the snapshot's time (the
@@ -141,10 +142,10 @@ class Driver:
             if "ended" in has["Verdict"]:
                 return vq.Verdict(vq.FAIL, failed=failed, infra=infra, ended=ended)
             return vq.Verdict(vq.FAIL, failed=failed)
+        if infra:
+            return vq.Verdict(vq.INFRA, infra=infra)
         if all(r and r.status == lq.PASS for r in got.values()):
             return vq.Verdict(vq.PASS)
-        if ended:
-            return vq.Verdict(vq.INFRA, infra=infra)
         return vq.Verdict()
 
     def find(self, s: QState, tree: str) -> int:

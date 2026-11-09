@@ -163,6 +163,12 @@ def test_a_fail_has_ended_once_every_task_has_an_outcome_with_its_infra_beside_i
     assert (erred.ended, [f.task for f in erred.infra]) == (True, ["unit:b"])
 
 
+def test_infra_reads_once_a_task_ends_in_it_though_others_still_run() -> None:
+    erred = D.verdict(lone({"unit:b": lq.Result("T1", "unit:b", lq.INFRA, frozenset({"b/"}), "2")},
+                           frozenset({"unit:a", "unit:b"})))
+    assert (erred.state, [f.task for f in erred.infra]) == (vq.INFRA, ["unit:b"])
+
+
 def test_the_snapshot_carries_the_clock_reruns_and_fields_set_by_keyword() -> None:
     full = snapshots.Driver(FULL, lean=3)
     s = full.start("m")
