@@ -112,7 +112,7 @@ function restricted to them, so its pattern count `N` counts only these. -/
 abbrev Cut.Interiors (κ : Cut X Y) (Cf : Θ → X × F → Y) (size : F → ℕ) (φ₀ : F) : Type :=
   {φ : F // κ.Interior Cf size φ₀ φ}
 
-noncomputable instance (κ : Cut X Y) (Cf : Θ → X × F → Y) (size : F → ℕ) (φ₀ : F) [Fintype F] :
+noncomputable instance instFintypeInteriors (κ : Cut X Y) (Cf : Θ → X × F → Y) (size : F → ℕ) (φ₀ : F) [Fintype F] :
     Fintype (κ.Interiors Cf size φ₀) := by
   classical
   exact Subtype.fintype _
