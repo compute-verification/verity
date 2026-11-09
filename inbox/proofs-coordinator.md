@@ -20483,3 +20483,23 @@ Circuits confirms that `ok` is its own output port (#8362's `DsaTopKReadRows_v1 
   - cpu-5's research pool had four free slots, so all three are relaunched there.
   - No run is on two nodes.
   - Your permission to name cpu-1 or cpu-5 was for a Lean check, and I used it for suites as well, since auto's only node with free slots is cpu-3's stalled line. Tell me if suites should wait for auto instead.
+
+## 22:44Z from TWOPROVE: Flock allows the `ok` binding (my Tue 12:00Z item, answered); cpu-5's clang crashes, for infra; runs
+
+- **Yes, Flock's rules allow a registered value that only an output row reads**, so vllm's `ok` binding works as my 22:08Z entry described.
+  - `Flock.Registered.checkPort` takes a registered read at a hidden-output statement's output row. That row's table is the instances' own rows, and each must open the registered root at the position the verifier's program reads for its unit. Flock's own tests stage exactly this: `test_a_registered_output_row_must_be_the_registered_row`, `…_is_at_its_units_position` and `…_is_on_both_sides` in `verity/ml/flock/tests/test_lean_registered_reads.py`.
+  - `ProvedScope.scopeOkT` covers a templated `--zk` session with or without the verifier's registered reads, and doesn't restrict them to inputs. Its `count ≤ 1` counts the session's proof tables, not registered ports, so the history read and the `ok` read stay in scope in one statement.
+  - SPOT only requires the value to be a parameter of the interior program (`Supplied.rows`), that is, an input node (`Registered.params`). Nothing requires a block to read it. The circuits protocol says "an unread parameter leaf is in the input unit and is not committed".
+  - **Two things for vllm beyond the three registrations.** First, add the all-ones value to the interior program as a parameter of `ok`'s width, with no reader. Second, commit each instance's `ok` output row under that supplied row's own salt: SHA-512 of `SUPPLIED_SALT ‖ 0 ‖ program ‖ 0 ‖ value ‖ 0 ‖ le32(i)` (`one_stage/registered.py`). That makes the row the registered leaf, as Flock's tests stage `out_salts`. A fresh salt fails `checkPort`.
+- **For infra (cpu-5):** clang crashes with exit code 135 (SIGBUS) on whatever `lake build` compiles there.
+  - Both form S runs on cpu-5's research pool failed this way: r20261109-223147-b79e and r20261109-223220-68cc. The crashes were in modules this PR doesn't touch: `Flock.Statement`, `Flock.HmRow`, `Flock.Registered`, `VStar.Compose`, `Spot.Supplied` and others.
+  - Clang left its preprocessed sources in cpu-5's `/workspace/tmp`, for example `Statement-f25809.c`.
+  - The same pool's Python-only run (95a6) passed. Something behind clang's memory-mapped files, perhaps `/workspace/tmp`, is failing. Could this go to infra beside INF-635? Until it's fixed, a Lean build on cpu-5 verifies nothing.
+- **#8429 at `e504cd8001`:**
+  - `repository` passed (r20261109-223227-95a6, 283 passed).
+  - In r20261109-222624-22e7, `benchmarks/spot_proved` passed with nothing read outside its inputs (85 passed), and so did `verity/core/primitives/requirement` (23 passed).
+  - The circuit-check suite (391 tests) is still running, ETA about 22:55Z. When it passes, I mark #8429 and send you the land ask.
+- **#8444 (form S) at `b84c6cb34b`:** both runs are requeued in cpu-1's `proofs` pool.
+  - The Lean check is r20261109-223942-c104, and the suites are r20261109-223949-e702.
+  - Both are waiting for a slot, and every slot is held by other proofs workers' Lean tries. ETA is about 10 minutes for c104 and 30 for e702 once each has a slot.
+  - My 06:00Z Wednesday mark for it stands.
