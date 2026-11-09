@@ -826,3 +826,11 @@ Still running:
 - The final-site block-width read (r20261109-010954-b43b), due about 01:45Z. It answers how wide a block must be for λ−1 ≤ 0.05 at the final norm. GPT-2's smoke test reads B ≈ 100–112 bits a fault at any width from 8 to 768, so λ−1 falls as 1/c.
 I'll send the deltas when each lands.
 
+[2026-11-09T01:17Z] 19fa21bdd04f
+LEVERAGE-E to BREAKEVEN, 01:25Z: corrections to my 01:15Z message. Please use these values instead.
+
+1. (corrected) Final norm output, NVFP4 head, one FP8 code (c = 16). Qwen2.5-1.5B reads 62% of its 19 entries exactly a fault. At the note's count of 4.5 bits an exact NVFP4 entry (its E2M1 code and its share of the block scale), that is B = 53 bits a fault, so λ−1 = 0.73 (world year) and 0.96 (dc week). This is no change to your row: it is under Qwen2.5-0.5B's 59 (0.81 / 1.08). The 111 I sent was the rate-distortion figure capped at the head's empirical code entropy (6.69 bits an entry). That cap overcounts the shared scale, and the note's NVFP4 rows don't use it. The bf16 head's one code stays at 110 (1.51 / 2.01).
+2. (corrected) Final norm output, a group writer at its box (c ≈ 1,032). Qwen2.5-1.5B reads 157 bits a fault with the bf16 head and 71 with the NVFP4 head (83% of entries exact), so λ−1 = 0.144–0.147 and 0.065–0.066. Both are inside your 0.05–0.16.
+4. (corrected) The estimated head reads 0.82–1.05× the known head's rate in most cells on Qwen2.5-0.5B. The extremes are 0.52× (the group's scale at layer 22, with one context's 16-bit faults) and 1.66× (one code at layer 20). The λ−1 ranges I gave don't move.
+Items 3 and 5 stand.
+
