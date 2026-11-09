@@ -125,9 +125,10 @@ theorem loadPublic_counts {tags : _root_.Flock.Tags} {c : _root_.Flock.Circuit} 
     refine ⟨_, ?_, ‹_›, ?_⟩
     · simp [headerOf, ‹_root_.Flock.findByte f 10 = some _›, ‹String.fromUTF8? _ = some _›,
         ‹_root_.Flock.JsonParse.parse _ = .ok _›, Except.toOption]
-    · first
-        | exact fun _ ht => by cases ht
-        | exact fun _ _ => ⟨_, ‹_›⟩
+    · intro t ht
+      first
+        | exact ⟨_, ‹_›⟩
+        | cases ht
 
 /-- Round 2's population check holds the header's `instances` to at most `MAX_LEAVES`. -/
 theorem populationOk_le {q : ℕ} {p : Spot.SecondStage.Part} {hd : Json}
@@ -176,7 +177,7 @@ theorem countOf_le {x m₁ m₂ : Msg} {s} {c₀ c₁ : FlockDeploy.Coin} {u : �
   unfold stmtOkAt at hat
   rw [hx] at hat
   simp only [Bool.and_eq_true] at hat
-  obtain ⟨-, -, -, w, S, -, -, -, hw, hS, hc⟩ := readsOk_true h hat.2
+  obtain ⟨_, _, _, w, S, -, -, -, hw, hS, hc⟩ := readsOk_true h hat.2
   have hwi := ins_of_setupOf hw hset
   obtain ⟨-, hSH, hSr, hSn⟩ := stmtJsonOf_fields h hS
   have hH : headerOf ins.read.I.publicFile = some S.header := by
@@ -206,8 +207,8 @@ theorem countOf_le {x m₁ m₂ : Msg} {s} {c₀ c₁ : FlockDeploy.Coin} {u : �
       subst hnm'
       cases hreg : w.registered with
       | none =>
-        rw [hSn hreg] at hme
-        simp [Spot.getD, Spot.field?, Spot.entries, Json.getObjVal?, Except.toOption] at hme
+        rw [hSn hreg, show Spot.entries (Spot.getD Json.null "ports") = #[] from rfl] at hme
+        exact absurd hme (Array.not_mem_empty _)
       | some b =>
         obtain ⟨jR, own, hjR, hoj, hown⟩ := Depths.ins_of_registered hwi hreg
         have hSj : S.registered = jR := by
