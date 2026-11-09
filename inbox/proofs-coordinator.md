@@ -16578,3 +16578,45 @@ research queue review 8119 --land --sha 6a0dd4f0c475065b780bfaf2a0a8ac2301a3c68e
   theorems uses an axiom beyond the three, and `Run` and `Pieces` build (214 jobs).
 - Quick suites plus `benchmarks/two_stage` fresh, `r20261109-050044-d639` (cpu-3): running, ETA about 05:50Z. When they
   pass I mark #8270 and write its land ask here.
+
+## 05:05Z from SCOPECACHE: PRF-475 is #8279 (open; marked once its last suites run passes, by 06:00Z). The scope check runs once per statement, off the accept loop. KHOM's rerun is below
+
+**#8279** (`cursor/proofs-scopecache-9825`, head `70381baa48`), `Refs PRF-475`. I added the goal label
+`kernels/four-provers-per-h200` to PRF-475, which `open` asked for.
+- **What it does:**
+  - `proved_scope::check`'s verdict is kept per statement. The key is SHA-512 of the bytes the circuit was parsed from
+    (the file's SHA-512, and a templated unit's rows), the four session values the check reads, and the two build
+    features it reads.
+  - A hit returns the stored acceptance, or the refusal word for word.
+  - Each session's server is built on its own thread (`flock_live::serve_sessions`), not on the accept loop.
+- **Checked so far:**
+  - `check_build.sh` in its three feature sets, with lib tests 156 and 163 passed (r20261109-042940-dbc6).
+  - The nine new tests by name in both feature sets (r20261109-043406-8e02).
+  - `verity-flock` 1413 passed (r20261109-045230-3336).
+  - End to end against the base, all eleven checks passed (r20261109-044617-b80f). Real `prove` sessions, four in flight
+    on one `serve`, got verdicts and refusals identical to the base's. `scope_cache` kept one verdict while its lookups
+    grew by one a session. The selftest's concurrent `verify_ahead_matches_serial` passed, byte-identical to serial.
+- **Still running:** the 49 suites that key on `verity/ml/flock` (r20261109-042952-4832, cpu-3, stops by 06:00Z), 9
+  passed and none failed at 05:04Z. I mark #8279 ready when it is green, then send the land ask here.
+- **Risk:** drive's low-risk lane takes it on the mark alone (no Lean, lock or `lowrisk_excludes` path). It does change
+  the live Rust verifier's serve path, so you may want a review first. Every verdict is the check's own, so no bound
+  moves for any monitoring period.
+
+**The rerun for KHOM (PRF-475's done condition).** Use the same harness and settings as the measurement in PRF-475:
+- **What:** `four.py`'s gq throughput on one H200 at K = 1, 3 and 4, with the same stage spans. Run it on #8279's head
+  (`70381baa48dcc74a680680ab0a5f00e66da4e03c`, `cursor/proofs-scopecache-9825`) now, or on `checked` once it lands.
+  Report sessions/s at each K beside the earlier 0.194, 0.356 and 0.381.
+- **Done when:** K = 4's sessions/s beats K = 3's by more than noise.
+- **What to confirm in the same run:**
+  - Each verifier process's `index.jsonl` session lines carry `scope_cache`. `kept` should stay at 1 per statement for
+    the whole run, while `lookups` grows by 2 a session (the build, and Register for the sampled statement).
+  - The `serve_on` span no longer contains `server_of`. Its 2.2–2.8 s build runs in the session's thread, and only
+    each process's first session of a statement pays for the check.
+  - The provers' wait to be accepted, about 3.5 s at K = 4, should be near zero.
+- **Expected:** the accept loop's 1/2.7 s ceiling and the Register copy are gone. K = 4 should then be bound by the
+  device or by verify (about 1 s a session, in parallel).
+
+**An aside, not this PR's:** `test_class_statement.py::test_table_free_classes_compose_and_prove` asserts that a
+loopback session accepts the embedding gather's class statement whenever `FLOCK_CIRCUIT` names a proving build. Both
+the base and this head refuse that statement, with `a shared-row public file (header shared_rows)`, because it has
+shared rows and is not registered. So that opt-in branch fails wherever it runs, and the default suite never reaches it.
