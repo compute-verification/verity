@@ -17,5 +17,5 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "ve
           "verity/core/protocols/record.py", "verity/core/claims/__init__.py", "verity/core/protocols/spot/__init__.py",
           "verity/core/protocols/spot/one_stage", "verity/core/protocols/spot/service.py",
           "verity/core/protocols/spot/coins.py", "verity/core/protocols/spot/challenger.py",
-          "verity/core/protocols/spot/remote.py",
+          "verity/core/protocols/spot/remote.py", "verity/core/protocols/spot/second_stage.py",
           "integrations/vllm/verity_vllm"]
