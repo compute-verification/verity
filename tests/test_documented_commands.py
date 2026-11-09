@@ -382,10 +382,13 @@ def _child() -> None:
         return "ok", ""
 
     os.chdir(ROOT)
-    for line in sys.stdin:
-        item = json.loads(line)
-        status, why = parse(item["argv"])
-        print(json.dumps({**item, "status": status, "why": why}), flush=True)
+    try:
+        for line in sys.stdin:
+            item = json.loads(line)
+            status, why = parse(item["argv"])
+            print(json.dumps({**item, "status": status, "why": why}), flush=True)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
 
 
 # -- judging
