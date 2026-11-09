@@ -17,6 +17,9 @@ Parts (--part):
           decoder picks k tokens by logit bias and also reads them from an honest query on the same prompt: the
           difference over (s*A - h_i) reads column i at any amplitude the logits' rounding resolves, not only where
           the fault dominates the honest logits (the scale s*A - h_i is one number per column and prompt, aligned).
+  block   under --boxes, a fault that writes a block of w adjacent coordinates at the final site, read differentially
+          by least squares over about r*w faults (`part_block`): the bits a fault as a function of the block width
+          a faulting block writes (--widths).
   honest  the honest baseline with the same observables: Carlini et al. 2024's SVD attack. Full logit vectors of n
           honest positions, rounded as served and centred (softmax's shift), give E up to an invertible d x d map G (and
           a constant per column); aligning G by least squares against the truth leaves the error, over V*d - d^2 - d
@@ -177,6 +180,69 @@ def part_final(lm: LM, tok, a) -> dict:
             row.update({"exact_fraction": ex, "fp4_bits_per_fault": ex * (k - 1) * FP4_ENTRY_BITS})
         rows.append(row)
     return {"part": "final", "columns": len(cols), "code_bits": cap, "fp4": grid is not None, "rows": rows}
+
+
+def part_block(lm: LM, tok, a) -> dict:
+    """Block faults at the final site, under --boxes: one fault writes w adjacent coordinates S (an aligned block) of
+    the final norm's output, each at its box (`box`) or at the most one FP8 code reaches at its group's honest scale
+    (`own`), signs at random. The decoder picks k tokens T by logit bias and reads them from the faulted and an honest
+    query; the differences, centred over T (softmax's shift), are D E[T, S]^T, so least squares over N = r*w + 1
+    faults (r: --read-over-w) reads the block E[T, S] up to a constant a column (aligned away). Its rate-distortion
+    bits (k - 1 entries a column, capped at the head's code entropy) over N are B, the bits a fault: the block width
+    a faulting block writes sets the charge c it is held to, and B is what one such fault reads."""
+    E = lm.E.float()
+    V, d = E.shape
+    var = E.var(0).double()
+    L = lm.spec.layers
+    cap = code_bits(lm.E)
+    gen = torch.Generator().manual_seed(a.seed)
+    acc: dict[tuple, list] = {}
+    for pi in range(a.prompts):
+        pre, last, t0 = prefix(lm, tok, PROMPTS[pi])
+        taps = {("final", L): None}
+        lm.forward(last, pre.expand(1), taps=taps)
+        h = taps[("final", L)][0, 0].float()
+        hi = lm.boxes.hi[("final", L)][int(position_class(torch.tensor(t0)))].float()
+        own = E4M3_MAX * ue8m0_scale(h.abs().view(-1, GROUP).amax(-1)).repeat_interleave(GROUP)
+        z_h = h[None] @ E.T
+        for w in a.widths:
+            w = min(w, d)
+            for _ in range(a.blocks):
+                s0 = w * int(torch.randint(0, d // w, (1,), generator=gen))
+                S = torch.arange(s0, s0 + w)
+                for kind in a.box_amps:
+                    amp = (hi if kind == "box" else torch.minimum(own, hi))[S]
+                    for r in a.read_over_w:
+                        n = int(math.ceil(r * w)) + 1
+                        sg = torch.randint(0, 2, (n, w), generator=gen).float() * 2 - 1
+                        D = ((sg * amp).to(torch.bfloat16).float() - h[S]).double()
+                        toks = {k: torch.randperm(V, generator=gen)[:k] for k in a.ks}
+                        obs = {(p, k): [] for p in a.precisions for k in a.ks}
+                        for c0 in range(0, n, a.batch):
+                            hf = h.expand(min(a.batch, n - c0), d).clone()
+                            hf[:, S] = (sg[c0:c0 + a.batch] * amp).to(torch.bfloat16).float()
+                            z = hf @ E.T
+                            for p in a.precisions:
+                                lp, lp_h = served_logprobs(z, p).double(), served_logprobs(z_h, p).double()
+                                for k in a.ks:
+                                    obs[(p, k)].append(lp[:, toks[k]] - lp_h[:, toks[k]])
+                        for (p, k), o in obs.items():
+                            y = torch.cat(o)
+                            y = y - y.mean(1, keepdim=True)
+                            x = torch.linalg.lstsq(D, y).solution
+                            tru = E.double()[toks[k]][:, S].T
+                            err = (x - tru) - (x - tru).mean(1, keepdim=True)
+                            ratio = (err.pow(2).sum(1) / (k - 1)) / var[S]
+                            bits = sum(min(rd_bits(k - 1, float(q)), (k - 1) * cap) for q in ratio)
+                            acc.setdefault((w, kind, p, k, r), []).append((bits / n, float(ratio.mean()), n))
+        print(f"block prompt {pi}: {len(acc)} cells", file=sys.stderr, flush=True)
+    rows = []
+    for (w, kind, p, k, r), v in sorted(acc.items()):
+        rows.append({"width": w, "value": kind, "precision": p, "k": k, "read_over_w": r, "faults": v[0][2],
+                     "bits_per_fault": sum(x[0] for x in v) / len(v), "min_bits_per_fault": min(x[0] for x in v),
+                     "max_bits_per_fault": max(x[0] for x in v), "mse_over_var": sum(x[1] for x in v) / len(v),
+                     "blocks": len(v)})
+    return {"part": "block", "code_bits": cap, "fp4": getattr(lm, "fp4_grid", None) is not None, "rows": rows}
 
 
 def honest_states(lm: LM, tok, prompts: int, new: int) -> torch.Tensor:
@@ -548,7 +614,7 @@ def read_row(Et, g, Eb, zt, precision, s, tru, lm) -> tuple[float, float, torch.
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="gpt2", choices=sorted(MODELS))
-    ap.add_argument("--part", required=True, choices=("final", "honest", "rows"))
+    ap.add_argument("--part", required=True, choices=("final", "block", "honest", "rows"))
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--prompts", type=int, default=4)
     ap.add_argument("--new", type=int, default=96, help="honest: continuation tokens per prompt")
@@ -557,6 +623,11 @@ def main() -> int:
     ap.add_argument("--box-amps", nargs="+", default=["box", "own"],
                     help="final, under --boxes: each column's amplitude is its coordinate's box, or the most one FP8 "
                          "code reaches at its token's own group scale")
+    ap.add_argument("--widths", type=int, nargs="+", default=[1, 8, 32, 64, 96, 128, 192, 256, 384, 512, 768],
+                    help="block: coordinates one fault writes")
+    ap.add_argument("--blocks", type=int, default=2, help="block: blocks attacked per width and prompt")
+    ap.add_argument("--read-over-w", type=float, nargs="+", default=[1.25, 2.0, 4.0],
+                    help="block: faults per block, over its width")
     ap.add_argument("--ks", type=int, nargs="+", default=[2, 5, 20])
     ap.add_argument("--precisions", nargs="+", default=["bf16", "fp32"])
     ap.add_argument("--fp4", action="store_true",
@@ -598,7 +669,9 @@ def main() -> int:
         lm.E.copy_(q)
     tok = lm.tokenizer()
     t = time.time()
-    res = {"final": part_final, "honest": part_honest, "rows": part_rows}[a.part](lm, tok, a)
+    if a.part == "block" and lm.boxes is None:
+        ap.error("--part block needs --boxes")
+    res = {"final": part_final, "block": part_block, "honest": part_honest, "rows": part_rows}[a.part](lm, tok, a)
     res.update({"model": a.model, "revision": MODELS[a.model]["revision"], "vocab": lm.spec.vocab, "d": lm.spec.d,
                 "args": {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(a).items()},
                 "seconds": time.time() - t})
