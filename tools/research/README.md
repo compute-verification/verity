@@ -135,7 +135,8 @@ among its tests) runs on the tip, which is pushed as BRANCH, never forced. Nothi
 After a merge or a train lands, `research merge` sweeps the pull requests (`gh`; `--sweep` does only that, `--dry-run` prints
 it). From the remote's copy of the target, not the checkout, it closes each open PR whose head is on
 it, naming the commit, retargets each whose base branch's tip is on it (stacks GitHub never closes), and deletes a closed one's
-head branch unless an open one uses it. With `--push` (on `main`, only the verified queue's loop on the control pod), a merge that lands is
+head branch unless an open one uses it. With `--push` (refused for `main` but on the control pod, whose verified queue pushes
+`main` itself and runs the steps after it through `caught_up`), a merge that lands is
 pushed, never forced, before the sweep, and a refused push sweeps nothing and exits 1; without it, run `research merge --sweep`
 after `git push`. No remote skips the sweep, and its failure leaves the exit code alone. Then `main` goes over ssh to node 1's
 bare repo (120 s; `RESEARCH_MERGE_MIRROR`: host, empty skips); a failure logs the `--mirror` rerun.
