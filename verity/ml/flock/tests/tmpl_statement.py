@@ -5,9 +5,9 @@ proves and hands to the Lean verifier.
 `verity/partition/v1` object `Q_template_instance` over `population_program` of the set's template at ``N`` (instance i is
 unit i), which the verifier holds (``partition.json``, with its program, ``program.json``), and writes its unit as a
 `flock-ir-tmpl/v2` template (``unit.tmpl``, :func:`verity_flock.tmpl.emit`). ``stage`` then writes the templated statement
-(``circuit.txt``): head ``flock-circuit/tmpl NAME``, META's ``format`` and ``statement`` the templated statement's, its
-``template`` the template's lines and its ``layout`` the layout mode, and every section but ``CIRCUIT unit``, which the
-verifier reads from the template. The unit's range stays where the flat statement put it, so ``stage`` refuses a layout
+(``circuit.txt``): head ``flock-circuit/tmpl NAME``, META's ``format`` and ``statement`` the templated statement's and its
+``layout`` the layout mode, the template's section (:func:`verity_flock.circuit.template_section`), and every section but
+``CIRCUIT unit``, which the verifier reads from the template. The unit's range stays where the flat statement put it, so ``stage`` refuses a layout
 whose committed unit (``flock-tmpl-unit``'s (``tests/lean/TmplUnit.lean``) ``TMPL`` line, ``--tmpl``) needs a larger slot. It then writes the
 prover's ``inst-N.bin`` and the verifier's ``pub-N.bin`` against that text (:func:`verity_flock.circuit.write`).
 
@@ -77,8 +77,9 @@ def stage(out: Path, tmpl: dict, layout: str = "iv") -> dict:
     head, meta, secs = sections((out / "flat.txt").read_text())
     if not tmpl.get("ok") or tmpl["unit_log"] != meta["unit_log"]:
         raise ValueError(f"the committed unit ({tmpl}) is not in the flat unit's 2^{meta['unit_log']} slot")
-    meta.update(format=FORMAT, statement=STATEMENT, template=(out / "unit.tmpl").read_text().rstrip("\n").split("\n"), layout=layout)
+    meta.update(format=FORMAT, statement=STATEMENT, layout=layout)
     text = (f"{FORMAT} {head.split(' ', 1)[1]}\nMETA {json.dumps(meta, sort_keys=True, separators=(',', ':'))}\n"
+            + FC.template_section((out / "unit.tmpl").read_text())
             + "".join(f"CIRCUIT {nm} {body.count(chr(10))}\n{body}" for nm, body in secs if nm != "unit"))
     (out / "circuit.txt").write_text(text)
     FC.write(text, _set(out), 0, N, out / f"inst-{N}.bin", out / f"pub-{N}.bin")

@@ -33,11 +33,9 @@ request's Program is built at its launch context, which the advice fixes, and th
 - R1: GP-01 wiring: a RowRef or a component naming another request's Program, or a request's outputs whose cone (`check.batch.
   separable` over `workload_labels`) reads another request's Inputs or a batch-provenance one (a history behind no checked
   hit included). A tensor-parallel rank's `peers_*` are its request's own: this rests on the node binding each to the same
-  request's partial on the other rank, which the cross-rank transfer must hold request by request. Its `run` (the Waksman
-  settings of each row past INDEX_TOPK, `dsa.run_field`) is its own too: each field routes the request's own key indices, and its
-  checks (`DsaTopKLongRow`) hold the routed order to the top-INDEX_TOPK set of the request's own logits in ascending index order,
-  the one order those logits fix, so each field is a function of the request's own inputs. No order a kernel or a prover picks
-  passes: a row past INDEX_TOPK is served under `VERITY_DSA_TOPK=canonical` (`dsa.Net` refuses an engine without it). A shared
+  request's partial on the other rank, which the cross-rank transfer must hold request by request. A row past INDEX_TOPK
+  computes its selection from the request's own logits (`DsaTopKMask`, `DsaButterflySettings`), so it reads nothing of another's:
+  its rows in ascending index order, the row `VERITY_DSA_TOPK=canonical` serves (`dsa.Net` refuses an engine without it). A shared
   prefix page is no other request's computed value in GP-01: no wire runs from the request that computed it, and every request
   that reads it reads it as an Input of its own history (`HISTORY_GROUPS`), a committed value the replay binds to the rows that
   computed it (`check.replay.cached_prefix`). R1 holds that Input the request's own only where its value is a function of the

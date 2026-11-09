@@ -64,6 +64,7 @@ untraced = [
     "tests/test_read_tmpl.py", "tests/test_read_tmpl_stager.py",
     "tests/test_rec_algebra.py",
     "tests/test_rec_inner_stage.py",
+    "tests/test_ring_switch.py",
     "tests/test_sha512_leaves.py",
     "tests/test_stage_typed.py",
     "tests/test_typed_statement.py",
@@ -162,6 +163,7 @@ paths = ["integrations/vllm/verity_vllm", "tools/verity/circuit_check/src/circui
 [[tool.verity.tests.reads]]
 tests = [
     "tests/test_class_statement_unit_stager.py",
+    "tests/test_lean_hello.py",
     "tests/test_tmpl_statement.py",
     "tests/test_unit_range.py",
 ]
