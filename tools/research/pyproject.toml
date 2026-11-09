@@ -115,6 +115,7 @@ untraced = [
     "tests/test_undeclared_derivation.py",
     "tests/test_vqueue_compare.py",
     "tests/test_vqueue_loop.py",
+    "tests/test_vqueue_slim.py",
 ]
 # Test-only, and to move: some tests exercise this repository's Tools, workspace and fixtures rather than the tool itself.
 # test_store_vllm_tools loads the vLLM stage Tools and hashes their closure (integrations/vllm, verity,
