@@ -78,7 +78,8 @@ def test_with_spot_it_adds_tiers_escape_and_cheating_shares():
 
 
 def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_dampener_remote_at_full_capacity():
-    """Lean's `DampenerRemote` with no declared products (ν_T = 0) and χ = 0 is `max(1, 1/(s + (1 − s) u / MFU₀))`,
+    """Lean's `DampenerRemote` with no declared products (the declared share `ν = 0`) and χ = 0 is
+    `max(1, 1/(s + (1 − s) u / MFU₀))`,
     against an unencumbered trainer at `MFU₀`. The bound counts every gate at capacity against the reference at
     capacity, so its padded size ratio is `DampenerRemote`'s `ρ` at `MFU₀ = 1` (where at least 1), and the slowdown is
     that `ρ` at the reference's MFU."""

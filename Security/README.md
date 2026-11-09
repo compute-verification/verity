@@ -81,13 +81,20 @@ premises (`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`) and `
 ## The security argument
 
 **Start here: training's bound of record.** Two theorems state it, both proved; (H) and (E) are the first one's named
-assumptions.
+assumptions, and the day's bound puts the first on the count's verdict.
 
 - **The min-cut theorem**, `Nci.Cut.Guarantees.HE` and `HEShared` (`Definitions/Nci/Guarantees/Cut.lean`, proved in
   `Proofs/Nci/Cut.lean`): under (H) and (E), every partition of a circuit into m blocks, each reading at most k gates
   outside θ, has N ≤ m·(k + α) + (k/2)·√(m·O/(β_w·β_x)), α = ½·√(k³/(β_w·β_x·b)), for the N MACs and O output wires
   of its charged matmuls, and so bounds ρ = m·c/|C| from below at every c; `HEShared` is the same for matmuls that
   share arrays, each term times F = √(2(1 − 1/ω)).
+- **The day's bound**, `Nci.Cut.Guarantees.CountHE` (the same files): the min-cut theorem on the count's verdict. A
+  declaration that complies with `Nci.CompliesAtMost c k n`, at most n proof blocks of a (c, k)-partition, has under
+  (H) and (E) N ≤ n·(k + α) + (k/2)·√(n·O/(β_w·β_x)) and the slowdown form at n blocks, with no other premise on its
+  circuit. A published `complies` of the count gives that verdict once `NciCheck.Properties.DescCountsCK`
+  (`Properties/Nci/Count.lean`, stated, not yet proved) is proved, and `Proofs/Properties/Nci/Count.lean` composes
+  the two. `Nci.Guarantees.DampenerRemotePeriod` takes each day's verdict and pools the day's bound over a monitoring
+  period's days; the per-day figure is its statement at one day.
 - **(H), hardness**, `Nci.Cut.Assumptions.Hardness` (`Definitions/Assumptions.lean`), conjectured: every set S of words
   with κ(S) ≤ k has Σ_r β_r·|val(S ∩ A_r)| ≤ κ(S), so words behind a cut of κ gates carry at most κ in values, a value
   of array r costing β_r.
@@ -462,13 +469,13 @@ None of these is assumed silently; each would restate the conclusion:
 | Protocol soundness | `Accounting.Slowdown.restricted`; `Verity.soundness_of_subprotocols`, `Verity.remote_soundness_of_subprotocols` | Proved from each subprotocol's target, each a hypothesis until discharged (`Properties/Verity/README.md`) |
 | Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, `Claims.Sampling.RelS` | Proved; the step from F ∈ M_δ to the credit-weighted φ is open |
 | PoUW | `Accounting.Guarantees.Compose.CircuitCredit` | Proved; nothing derives Φ_D from it, or shows each credited gate distinct |
-| The inference-only policy | `NciCheck.Properties.SecurityProofs.DescWitnesses`, `Nci.CompliesRate`, `Nci.Complies` | Proved at its rate, with each block within (c, k) on the unrolled check's verdict (the lemma `NciCheck.Properties.SecurityProofs.refines`); the step to a (c, k)-partition of the registered circuit itself is open, and k_F (what incorrect proof blocks inject) and k_a (the advice's share) are unbounded |
+| The inference-only policy | `NciCheck.Properties.SecurityProofs.DescWitnesses`, `Nci.CompliesRate`, `Nci.Complies`; the count's verdict `Nci.CompliesAtMost` | Proved at its rate, with each block within (c, k) on the unrolled check's verdict (the lemma `NciCheck.Properties.SecurityProofs.refines`); the step to a (c, k)-partition of the registered circuit itself is open (`NciCheck.Properties.DescCountsCK` states it for the count, the verdict `DampenerRemote` and `DampenerRemotePeriod` take, and is not yet proved), and k_F (what incorrect proof blocks inject) and k_a (the advice's share) are unbounded |
 | Onsite's k_S | `Pous.Guarantees.StreamedWipe`, `NetTiming.Guarantees.PeriodLeakAccepted` | Proved per window; nothing composes them into k_S |
 | Accounting | the assignment of a run's counted multiplications not yet in Lean | Open |
 | Rate ceiling ζ̄ | the inline hypotheses of `Nci.Guarantees.DampenerRemote`; a named Prop not yet in Lean | Open |
 | The floor | `Nci.Guarantees.CapabilityFloor` | Proved, under coverage |
 | Slowdown | `Accounting.Slowdown.slowdown`, `Accounting.Slowdown.threshold`, `Accounting.Slowdown.cost` | Defined, with cost in fleet-time; no theorem reads it |
-| The bounds | `Nci.Guarantees.DampenerRemote`, `Nci.Guarantees.DampenerThreaded` | Proved as arithmetic over inline hypotheses, not over the definition above |
+| The bounds | `Nci.Guarantees.DampenerRemote`, `Nci.Guarantees.DampenerRemotePeriod`, `Nci.Guarantees.DampenerThreaded` | Proved as arithmetic over inline hypotheses, not over the definition above; the remote forms bound the declared computation by the count's verdict (`Nci.Cut.Guarantees.CountHE`) |
 
 ## Three trees
 
