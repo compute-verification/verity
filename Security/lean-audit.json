@@ -289,6 +289,10 @@
    "owner": "@proofs",
    "why": "A scope: the runs' registered roots chain under the record rule, each run's opening root the previous run's closing root where it carries the pool and the empty pool's root otherwise; the executable record rule (R7-pool-chain) gives it on accepted records."
   },
+  "NetTiming.LeakAtCarried": {
+   "owner": "@proofs",
+   "why": "A scope: the conclusion (CarriedRoots) speaks of rows at which every run's leak relation holds, so the relation is its own antecedent, which no hypothesis of the guarantee supplies."
+  },
   "NetTiming.CheckedClosing": {
    "owner": "@proofs",
    "digest": "6d7f4517a46cba2423aba508a5782dbe2b791d9e36dc027f209eed6ccbf10c0b",
@@ -5270,6 +5274,12 @@
    "unfolded_hash": "51456ceabbd0e67ea3f09d43eda0cb107cfae69d09534b46e9cb3c3d59040514",
    "missing": "honest",
    "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique), its closing row (CheckedClosing) and its rows' roots (CarriedRoots, from each run's root check and R7), with a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check run every run on its own live coins) (CIR-190)"
+  },
+  "NetTiming.SecurityProofs.RootsOfChecked": {
+   "type_hash": "f34c02ed2812248675cc945e994fdd80a66e537d5662a9293be0fe6bb2055329",
+   "unfolded_hash": "9ba281b49a5729c4a69f656f3b727b6adb327858b49afa3739806ff66ef6783e",
+   "missing": "honest",
+   "why": "honest instance needs a deployed check that holds each run's opened and left rows to its registered roots in the circuit (CheckedRoots), beside the records' chained roots (PoolChained, from R7 on each record) (CIR-190)"
   },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "type_hash": "debf2afa03a59d1d37dd902e4a99f3a2a5f9eb834c327dad8c7a697a6b101048",
