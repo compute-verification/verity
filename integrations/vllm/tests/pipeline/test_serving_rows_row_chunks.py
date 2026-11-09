@@ -133,7 +133,7 @@ def test_a_dsa_latent_row_chunk_commits_its_output_row_seg_under_table_reads(row
     in_rows, out_rows = CR.unit_rows(tp, table_reads=True)
     assert in_rows == CR.unit_rows(tp)[0] and out_rows == [(SEG, (0,))] and CR.unit_rows(tp)[1] == [(V2, (0,))]
     (rs,), _defs, counts = SRW.member_rows({"r0": {}}, [T])
-    per = CAP
+    per = 2
     off, on = (SRW.members([T], [rs], counts, {T: per}, table_reads=x) for x in (False, True))
     assert [(m.name, m.rows, m.outs) for m in on] == [(m.name, m.rows, m.outs) for m in off]
     for a, b in zip(off, on, strict=True):
