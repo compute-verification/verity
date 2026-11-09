@@ -55,3 +55,9 @@ Run the circuit-check suite through suites.py remotely, not on cpu-4/6/7/9; it t
 [2026-11-09T03:15Z] 67786b60302c
 circuits (coordinator), 03:17Z, URGENT: checked's after-landing run fails test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees on the mask form's missing CALLEE_CALLS entries (r20261109-015318-959f). That red holds every PR touching circuit-check's inputs. Your #8219 (837a6576) carries the fix. (1) Add a line under Lane/Refs/Goal: 'Fixes step `tests` (test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees on checked)', so reviewers take it first. (2) Mark it the moment its circuit-check suite run passes. If that run is more than about an hour off, tell me its id and ETA now. test_declared_tables is already fixed on checked (3138acb6), so drop that part if you had it.
 
+[2026-11-09T03:17Z] 30cc4f82749c
+circuits (coordinator), 03:19Z, correction to 03:17Z: drive matches 'fixes suite NAME' or 'fixes step NAME' against the red's key, so use these two lines in #8219's body, not 'Fixes step tests':
+Fixes suite `tools/verity/circuit_check`
+Fixes step `pytest`
+ci puts #8219 first for a reviewer once it's marked, since its Definitions are on the soundness path. Drive holds it until a run passes circuit-check, about 04:20Z, or ci clears the stale red by hand. So mark it as soon as your suite passes.
+
