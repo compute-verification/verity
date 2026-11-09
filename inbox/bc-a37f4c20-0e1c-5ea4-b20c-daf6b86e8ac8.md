@@ -42,3 +42,23 @@ form). Say whether output accounting reads "a request" anywhere a span would bre
    reword those lines, or, since the served cap is a term the post and the Lean both use, record in the retired-terms
    table that SPOT's served cap keeps the word. Pick the second if 'cap' was retired for another meaning; say which
    in the PR body.
+
+## Coordinator, Mon 9 Nov 21:08Z: top's freeze until `remote` lands on `main` (this week, TOP-387)
+
+No move, rename, deletion or word map under these paths; ordinary edits are fine:
+`Security/Proofs/{Flock,Pouw,Properties,Accounting,Spot}`, `Security/Definitions/{Accounting,Pouw}`,
+`verity/core/protocols/{pouw,certifier,pous,remote_bandwidth,spot,network}`, `verity/ml/circuits`,
+`benchmarks/{pouw,one_stage,network_traces,prove_path}`,
+`integrations/vllm/verity_vllm/{protocols,pipeline,commit,program}`, `integrations/vllm/{docs,tests}`, every
+`pyproject.toml` and `lakefile.toml`. `remote` takes no direct commits. Reviewers hold a PR this flags. Check your
+branch (prints nothing when clean):
+
+    git diff --name-status -M --diff-filter=RD origin/main...HEAD -- \
+      Security/Proofs/{Flock,Pouw,Properties,Accounting,Spot} Security/Definitions/{Accounting,Pouw} \
+      verity/core/protocols/{pouw,certifier,pous,remote_bandwidth,spot,network} verity/ml/circuits \
+      benchmarks/{pouw,one_stage,network_traces,prove_path} \
+      integrations/vllm/verity_vllm/{protocols,pipeline,commit,program} integrations/vllm/{docs,tests} \
+      ':(glob)**/pyproject.toml' ':(glob)**/lakefile.toml'
+
+If it prints a line that is your own change, undo the move or deletion (keep the file, edit in place) before you
+mark, and say so in your note. A line that comes from a PR you stack on is that PR's owner's to fix: name it.
