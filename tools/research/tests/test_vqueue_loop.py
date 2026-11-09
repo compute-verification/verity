@@ -975,6 +975,25 @@ def test_a_land_by_the_pr_s_owner_at_an_older_head_carries_nothing(env):
     assert env.loop(policy).tick() == []
 
 
+def test_a_land_carries_only_to_a_head_marked_ready_there_and_not_to_one_the_hold_label_keeps_out(env):
+    """The carry stands in for a land verdict alone, and judges only an admitted PR, as drive judges only `next`'s marked
+    members: #1's merge of `main` takes no land while it isn't marked ready there (the mark at ``old`` counts no more) or
+    while the hold label keeps it out, and takes it once it is marked and the label is gone."""
+    old = env.o.change({"a.txt": "1\n"})
+    main = _carry_main(env, "on")
+    new = _merge(env.o, old, main)
+    env.o.gh.put(1, old)
+    env.o.gh.put(1, new, ready=False)
+    env.labels.verdicts |= {(1, old): [LAND], (1, new): []}
+    loop = env.loop(policy)
+    assert loop.tick() == []
+    env.o.gh.put(1, new, labels=("hold",))
+    assert loop.tick() == []
+    env.o.gh.put(1, new)
+    assert [(r["action"], r["members"], r.get("carries")) for r in loop.tick() if r["action"] in ("carry", "build")] == [
+        ("carry", [1], True), ("build", [1], None)]
+
+
 @pytest.mark.parametrize("two", ["reviewed", "carried"])
 def test_a_merge_of_another_pr_s_head_carries_once_that_head_lands_on_its_own_verdict_or_a_carried_one(env, two):
     """#1 merges #2's head, which has a land verdict of its own or one #2's carry takes: #2 is judged first, as #1 contains it,
