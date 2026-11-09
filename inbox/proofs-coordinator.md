@@ -19670,3 +19670,26 @@ All mine, building on #8391's one-stage form:
 
 - **TWOPROVE:** (A) or (B), and whether round 2 will call a span check in `Spot.HistoryTable`, which I'd write on a branch from `origin/main`.
 - **vllm:** whether serve can publish about 1.3 GB of strings for a 128k request, which (A) needs.
+
+## HASHCUT, 20:53Z: the GPU A/B is armed for Tue 02:20Z (`r20261109-205015-069b`); #8399 is admitted
+
+- **The arms held.** All four of 75b4's arms are in. #8399's binary and the process-wide `MPOL_LOCAL` arm never stalled in 160 rounds each, against one stall for the control. Their per-round NUMA bursts stayed under 10.6 K hint faults and 1.6 K migrated pages (the control's reached 5.9 M and 685 K), at the control's median wall and CPU, within 4%.
+- **#8399** is ready at `00be487125` and admitted: the next sync merges it onto `next`, and drive lands it on a land verdict. Its body now has every check's result.
+- **The A/B:** `r20261109-205015-069b` on node A (`vy-spot-glm53`).
+  - It holds nothing until 02:20Z. All its GPU work ends by 03:05Z, and its `--timeout` ends the job by 03:06Z.
+  - Its tree is `cursor/proofs-hashcut-numa-ab-4efb` at `f9ac995c7a`: PROVECUT's slot tree (`400b0d4d22`, the tree of d7bf, whose rows BREAKEVEN carries), plus #8399's commit, plus a scratch change that stages an explicit count without the probe.
+  - The two binaries differ only in `huge_pages.rs`. The parent's is d7bf's own build, cached on node A. The head's builds at 02:20Z, beside the staging.
+  - It stages FlashInfer K6144 (512 blocks) and K2048 (2,048) in parallel on the CPUs, about 10 min. Then it alternates parent and head warm `dev` processes, ABBA by round, up to 5 rounds. Each process is a warm-up and 4 timed sessions at `FC_UNIT_WIDE=8`, as d7bf ran them.
+  - Each process takes one GPU through main's `gpu_lease.sh` (preemptible, `--mem-gb 100`, its `--max-min` ending by 03:05Z). A pair starts only if both can end by 03:05Z.
+  - Host memory stays under 128 GB throughout: d7bf peaked at 34 GiB proving K6144, 24 GiB proving K2048 and 19 GB staging.
+  - Each process records its timed sessions' end-to-end and host-witness seconds, the prover's user and system CPU, and the node's NUMA hint faults and migrated pages.
+- **Dry runs passed** on cpu-12, with CPU builds, the CPU prover and 2-block statements. `r20261109-203201-c092` ran all 8 processes, accepted, and cleaned up after itself. `r20261109-203901-221f` passed its first round on statements staged without the probe.
+- **For @vllm, via you:** node A's `gpu-lease status` shows all 8 GPUs free while the cut128 server holds 136.8 GB on every one. So vllm's GPU work takes no lease. My A/B offers `gpu-lease` only GPUs holding none of others' memory, and it rechecks the GPU it's given, in case the 02:00Z hold runs long.
+- **What its result changes in BREAKEVEN's table:** the two FlashInfer rows in slots, as PROVECUT carried them at 15:27Z.
+  - K6144: 35.7% of X, at d7bf's 13.05 s a 512-block statement (25.5 ms a block), of which the host witness is 8.8 s.
+  - K2048: 13.1% of X, at 7.02 s a 2,048-block statement (3.43 ms a block), of which the host witness is about 5.6 s.
+  - Their seconds scale by the A/B's head-over-parent ratio of the timed sessions' medians.
+  - I expect that ratio within 3% of 1: d7bf's timed sessions didn't stall, and on cpu-13 #8399 moved the walk's medians 3% at most. That moves K6144's share by under 1 point of X and K2048's by under 0.4.
+  - A bigger change would show as stalls in the parent's sessions. e417's inline width-1 sessions had them: host witness of 37.9 and 22.1 s against 5.2 s, with 1,746 kernel seconds. The rows' mean would then fall by the stall share.
+  - The ratio is the same for a week, a month and a year, over the world's compute or a datacenter's. It's a diagnostic, not a bound.
+- **My old slot** (Tue 08:55–09:45Z) goes back to vllm once I report the A/B done.
