@@ -77,6 +77,14 @@ def test_a_malformed_pool_memory_file_is_refused(tmp_path, doc):
         POOL.Needs.read(f)
 
 
+def test_a_side_by_side_prover_takes_its_memory_share_of_the_cores_and_at_least_an_even_share():
+    assert POOL.threads(17.6, 430.0, 16, 128) == 8          # a small member: the even share
+    assert POOL.threads(135.0, 430.0, 16, 128) == 40        # a large one: its share of the budget
+    assert POOL.threads(470.0, 430.0, 16, 128) == 128       # over the budget, it runs alone: every core
+    assert POOL.threads(None, 430.0, 16, 128) == 8 and POOL.threads(17.6, None, 4, 128) == 32
+    assert POOL.threads(1.0, 430.0, 64, 16) == 1
+
+
 def test_one_job_of_each_kind_and_no_budget_is_the_members_order_one_session_at_a_time():
     sched, order = POOL.Schedule({S: 1, L: 1}), []
     for i in range(5):
