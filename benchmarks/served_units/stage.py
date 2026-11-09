@@ -1,4 +1,4 @@
-"""stage.py UNIT N OUT [--public-weights [--packed] | --read-slots [--stage-ands=N]]: N inputs of one served proof-block type's Q_word proof block, from synthetic
+"""stage.py UNIT N OUT [--public-weights [--packed]]: N inputs of one served proof-block type's Q_word proof block, from synthetic
 values at the model's served statics, staged for Flock as a ``verity/flock-circuit`` statement with hidden outputs.
 
     UNIT  TYPE[:S=V,...]   a type of `UNITS`, `PARTS` or `CENSUS` at its statics (each type's defaults are its model's: GLM-5.3's
@@ -11,14 +11,6 @@ values at the model's served statics, staged for Flock as a ``verity/flock-circu
     --packed               with --public-weights, each port its parameter's leaves concatenated as the row lays them (the row's
                            own words; `UnitStager`'s ``packed``): a registered encoding read packed, so the unit's input words
                            are the opened block's.
-    --read-slots           a `CENSUS` type's pinned-table (MUFU) reads in Flock's lookup slots, its unit cut into stage nets
-                           inside the same proof block (`UnitStager`'s ``reads="slots"``, automatic ``stage_ands``), on the same
-                           values. Inline, each EX2 read puts about 1e8 entries in the unit's A, which takes the 64-key sparse
-                           MLA split part past the GPU prover's 32-bit offsets in one net (``GPU_NNZ_MAX``, checked per net).
-    --stage-ands=N         with --read-slots, every net's ANDs capped at N instead of the automatic caps. Each net is a slot
-                           type, and the GPU prover holds at most 12 (``FC_MAX_TYPES``), the compressions, hm96, the mask and
-                           each table's lookup slots among them: the automatic caps cut the split part into nine nets, and
-                           11534336 (the most a 2^24 net holds at its ports) into five.
 
 A type of `UNITS` is a Definition proved as one proof block, staged by `class_statement.stage_unit`: its Boolean Definition
 lowered once, its input rows hashed in the circuit (the per-call row on ``hm96-sha512/row-seg/v1``, the weight row on
@@ -36,9 +28,12 @@ them on every input (``twin`` null: no served twin cuts the same proof block).  
 activation of the circuit's template (``Extract.claimedUnits``), and a class here is part of one, on synthetic Calls.
 
 A type of `CENSUS` is a block type of the serving rows by its census name (`serving_templates.template`, the name a proof
-overhead card prices it under), one whole Definition a proof block, staged like a `UNITS` type: each parameter one ``row/v2``
-input row of seeded N(0, 1) bf16 words, each output one ``row/v2`` output row, the circuit streamed to circuit.txt once,
-every input's outputs checked against the Program's reference (``twin`` null).
+overhead card prices it under), one whole Definition a proof block, laid out as the served composer lays its template
+(`compose_circuit.py --template`): its served rows (`chunk_rows.unit_rows`, each parameter of seeded N(0, 1) bf16 words) and
+statement (`chunk_rows.statement`: the 64-key sparse MLA split part's MUFU reads in Flock's lookup slots, its unit cut into
+stage nets under the automatic caps, which keep it within the GPU prover's slot types; RMSNorm's inline), so the statement
+is the served one but for its name and binding. The circuit is streamed to circuit.txt once, every input's outputs checked
+against the Program's reference (``twin`` null).
 
 Writes circuit.txt, inst.bin, pub.bin, pin.txt and stage.json under OUT, and a PARTS type's partition.json.
 
@@ -290,32 +285,33 @@ def nets(low) -> list[dict]:
     return [{"net": nm, **{k: int(lay.counts[k]) for k in ("ands", "rows", "nnz_a", "nnz_b")}} for nm, lay in lays]
 
 
-def stage_census(name: str, cen: Census, S: dict, tag: str, n: int, out: Path, t0: float, reads: str = "inline",
-                 stage_ands: int | str = "auto") -> dict:
-    """``n`` inputs of the census type's Definition, a proof block each, as stage.json's record; ``reads`` and ``stage_ands``
-    `UnitStager`'s (the values are the same either way, drawn from the type's tag)."""
+def stage_census(name: str, cen: Census, S: dict, tag: str, n: int, out: Path, t0: float) -> dict:
+    """``n`` inputs of the census type's Definition, a proof block each, on its served rows and statement, as stage.json's
+    record."""
+    from verity_vllm.pipeline import chunk_rows as CR
     from verity_vllm.pipeline.serving_rows import template
 
-    d = template(cen.name(S)).fn
-    params, ret = d.signature()
+    tp = template(cen.name(S))
+    d = tp.fn
+    params, _ret = d.signature()
     if any(set(ty.leaf_widths()) != {16} for _p, ty in params):
         raise SystemExit(f"stage.py: {d.id} has a parameter that isn't 16-bit words, which a census type draws as bf16")
     rng = np.random.default_rng(int.from_bytes(hashlib.sha256(f"verity/served-units/v1\0{tag}".encode()).digest()[:8], "little"))
-    rows = {p: bf16(rng.standard_normal((n, ty.leaves))) for p, ty in params}
+    vals = {p: bf16(rng.standard_normal((n, ty.leaves))) for p, ty in params}
+    in_rows, out_rows = CR.unit_rows(tp)
+    if any(p not in vals for *_r, ps in in_rows for p in ps):
+        raise SystemExit(f"stage.py: {tp.id}'s served rows {in_rows} cut a parameter, which a census type draws whole")
+    rows = {r: np.concatenate([vals[p] for p in ps], axis=1) for r, _s, _b, ps in in_rows}
+    stmt = CR.statement(tp)
     t_draw = time.time() - t0
-    if reads == "slots":
-        tag += "-read-slots" + ("" if stage_ands == "auto" else f"-ands{stage_ands}")
-    in_rows = [(p, V2, 16 * ty.leaves, [p]) for p, ty in params]
-    out_rows = [(V2, (j,)) for j in range(len(getattr(ret, "fields", None) or (ret,)))]
-    st = CS.UnitStager(d, f"unit/served-{tag}", in_rows, out_rows, circuit=out / "circuit.txt", reads=reads,
-                       stage_ands=stage_ands)
+    st = CS.UnitStager(d, f"unit/served-{tag}", in_rows, out_rows, circuit=out / "circuit.txt", **stmt)
     t_built = time.time() - t0
     salt_key = hashlib.sha256(f"verity/served-units/salts\0{tag}".encode()).digest()
     got = st.stage(rows, out, salt_key)
     meta = got["meta"]
     return {"unit": name, "statics": S, "tag": tag, "n": n, "definition": d.id, "census": cen.name(S),
-            "in_rows": [[r, s, b] for r, s, b, _ in in_rows], "public_inputs": [], "packed": False, "ands": got["ands"],
-            "reads": reads, "stage_ands": stage_ands, "nets": nets(st.low), "lookups": meta.get("lookups"),
+            "in_rows": [[r, s, b, ps] for r, s, b, ps in in_rows], "public_inputs": [], "packed": False, "ands": got["ands"],
+            "statement": stmt, "caps": getattr(st.low, "caps", None), "nets": nets(st.low), "lookups": meta.get("lookups"),
             "slot_types": len({r["net"] for r in meta.get("ranges", ())}),
             "unit_nnz": got["unit_nnz"], "k_log": meta["k_log"], "unit_log": meta.get("unit_log"),
             "vus_per_block": meta.get("vus_per_block"), "row_schemas": meta.get("row_schemas"),
@@ -354,25 +350,19 @@ def public_words(d, row: np.ndarray, params: tuple[str, ...], packed: bool = Fal
 
 
 def main() -> None:
-    caps = [a.partition("=")[2] for a in sys.argv[1:] if a.startswith("--stage-ands=")]
-    args = [a for a in sys.argv[1:] if a not in ("--public-weights", "--packed", "--read-slots") and not a.startswith("--stage-ands=")]
-    public, packed, slots = "--public-weights" in sys.argv, "--packed" in sys.argv, "--read-slots" in sys.argv
+    args = [a for a in sys.argv[1:] if a not in ("--public-weights", "--packed")]
+    public, packed = "--public-weights" in sys.argv, "--packed" in sys.argv
     if packed and not public:
         raise SystemExit("stage.py: --packed lays out --public-weights' ports")
-    if caps and not (slots and caps[-1].isdigit()):
-        raise SystemExit("stage.py: --stage-ands=N takes an AND count, with --read-slots")
-    stage_ands = int(caps[-1]) if caps else "auto"
     spec, n, out = args[0], int(args[1]), Path(args[2])
     t0 = time.time()
     name, u, S = parse(spec)
-    if slots and not isinstance(u, Census):
-        raise SystemExit(f"stage.py: --read-slots is for a type of CENSUS, not {name}")
     tag = f"{name}-" + "-".join(f"{k.lower()}{v}" for k, v in sorted(S.items()))
     if isinstance(u, (Part, Census)):
         if public:
             raise SystemExit(f"stage.py: --public-weights is for a type of UNITS, not {name}")
         rec = (stage_part(name, u, S, tag, n, out, t0) if isinstance(u, Part)
-               else stage_census(name, u, S, tag, n, out, t0, "slots" if slots else "inline", stage_ands))
+               else stage_census(name, u, S, tag, n, out, t0))
         (out / "pin.txt").write_text(rec["circuit_sha512"])
         (out / "stage.json").write_text(json.dumps(rec, indent=1))
         print(json.dumps(rec), flush=True)
