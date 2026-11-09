@@ -15,6 +15,10 @@ inert-work bound, `uncredited` unless `--over-cap` says otherwise), `verdicts` (
 reason, in the verdict's order; a tile over its bound has its reason, and is ok under `uncredited`), `work`, and `tie`
 (`{record, tables}` once the passes are held to W, with `weights` `WEIGHTS_UNTIED` for a version-1 W and `load`
 `[slots, prompt, outputs]` where `--class` held them to that class's fixed load, or null).
+`work` is the run's credit at Pearl's assumption. Where `--class` held the passes it is in the grid form (`Grid.published`):
+the class's structural credit, MACs and credited tiles, the credit less the give-up padded up to H1's window grid
+(`give_up`), and `exact_work` is the exact credit, credited tiles and MACs that form replaces; elsewhere `exact_work` is
+null.
 `--test-instance` reads passes whose tile is other than 64 × 64 (a test instance's), and their work credits nothing.
 
 `COINS.json` is the epoch's coin commitment, an in-process challenger's or a live session's (`EpochCoins.ofJson`). The
@@ -133,5 +137,5 @@ def main (argv : List String) : IO UInt32 := do
         let f := (str? spec "path").getD ""
         (files.get? ((dir / f).toString, spec.compress)).getD (throw s!"FileNotFoundError: {f}")) tid
   let ans := check input opener
-  IO.println (output ans).compress
+  IO.println (output ans (published input ans)).compress
   return if ans.accept then 0 else 1

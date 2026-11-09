@@ -1,6 +1,7 @@
 module
 
 public import PouwPearlPlus.Check
+public import PouwPearlPlus.Grid
 public import Flock.Bytes
 
 /-!
@@ -127,7 +128,10 @@ def opening (man : Json) (p : Pass) (file : Json → Except String ByteArray) (t
 def jstr (s : String) : Json := .str s
 def jopt (s : Option String) : Json := s.map jstr |>.getD .null
 
-def output (ans : RunAnswer) : Json :=
+/-- The verdict as `pouw-pearlplus` prints it: `pub` is the accepted run's work as printed (`published`; by default
+`check`'s work as it is), `work` with its `give_up` in the grid form, and `exact_work` the exact credit that form
+replaces (its credit, credited tiles and MACs), null where the work is the exact one. -/
+def output (ans : RunAnswer) (pub : Option Published := ans.work.map fun w => { work := w }) : Json :=
   Json.mkObj [
     ("verdict", jstr (if ans.accept then "accept" else "reject")),
     ("reason", jopt ans.reason),
@@ -138,10 +142,17 @@ def output (ans : RunAnswer) : Json :=
     ("over_cap", jstr ans.overCap.name),
     ("verdicts", .arr (ans.verdicts.map fun v => Json.mkObj [("pass", (v.pass : Nat)), ("tile", (v.tile : Nat)),
       ("ok", .bool (v.ok ans.overCap)), ("reason", jopt v.reason)]).toArray),
-    ("work", match ans.work with
-      | some c => Json.mkObj [("credited", (c.credited : Nat)), ("credited_tiles", (c.creditedTiles : Nat)),
+    ("work", match pub with
+      | some p =>
+        let c := p.work
+        Json.mkObj (([("credited", (c.credited : Nat)), ("credited_tiles", (c.creditedTiles : Nat)),
           ("macs", (c.macs : Nat)), ("rho", jstr (toString c.rho)), ("epsilon", jstr (toString c.epsilon)),
-          ("over_cap_draws", (c.overCapDraws : Nat))]
+          ("over_cap_draws", (c.overCapDraws : Nat))] : List (String × Json)) ++
+          (p.giveUp.map fun g => [("give_up", Json.num ⟨g, 0⟩)]).getD [])
+      | none => .null),
+    ("exact_work", match pub.bind (·.exact) with
+      | some c => Json.mkObj [("credited", (c.credited : Nat)), ("credited_tiles", (c.creditedTiles : Nat)),
+          ("macs", (c.macs : Nat))]
       | none => .null),
     ("tie", match ans.tie with
       | some t => Json.mkObj (([("record", jstr t.record), ("tables", (t.tables : Nat))] : List (String × Json)) ++
