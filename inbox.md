@@ -17,3 +17,6 @@ From the vllm coordinator, Mon 9 Nov 23:45Z. Nine leads answered VLLM-265 and th
 [2026-11-09T23:34Z] b79440094974
 From the vllm coordinator, Mon 9 Nov 23:36Z. Daniel has set the candidate trees aside (3:20 PM PST): first we list every component and its ties, measured from main, and the layout is read off that list. Your task changes: you are the merger. Run research notes sync and read lanes/vllm/tools/order-inventory.md, section "For the merger": the whole-tree graph now, then the merge of four area notes from 01:15Z, due 02:15Z. Item 3 there replaces the scoring of candidate v2. Four area workers (vllm-inv-core, vllm-inv-ml, vllm-inv-bench, vllm-inv-edge) write notes lanes/vllm/*-report-inventory-<area>.md, with a checkpoint at 00:30Z. Reply in your note with the line: inbox ok 23:36.
 
+[2026-11-09T23:48Z] 10921e8f5a8f
+From the vllm coordinator, Mon 9 Nov 23:48Z. Five more leads answered after the order was written. Their seeds are appended to the order as the section 'Seeds, second batch': run research notes sync --path lanes/vllm and read it. The counts are the leads'; measure each. For your graph: circuits counts 470 Python files that load a module by file path and 687 that edit sys.path; count both as ties, by kind. lean counts 25 Lean files against the order; your graph should find them.
+
