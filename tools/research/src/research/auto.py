@@ -46,6 +46,19 @@ READ_TIMEOUT_S = 30
 #: its bytes free fails every job placed there, shipping its source or mid-build, with ENOSPC. One run of
 #: a large suite (tools/research's) holds some 250k pytest temp files at once, so a floor below a few of those still fails jobs
 DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 1_000_000, 50
+#: a machine's Lean pools (tools/verity/check/lean_slot.py's file): a run that takes a Lean slot of a pool goes only where that pool
+#: has one, since lean_changed.py refuses it at once elsewhere (drive's cpu-6, 7 and 9 close `build` to lanes)
+LEAN_SLOTS = "/workspace/research/locks/lean-slots"
+
+
+def lean_pool(command: list[str]) -> str | None:
+    """The Lean pool ``command`` takes a slot of: `build` for `lean_changed.py --build` and `verity lean try`, else None."""
+    words = [str(w) for w in command]
+    if any(w.endswith("lean_changed.py") for w in words) and ("--build" in words or "--try" in words):
+        return "build"
+    if any(words[i:i + 3] == ["verity", "lean", "try"] for i in range(len(words))):
+        return "build"
+    return None
 
 
 class Unplaceable(Exception):
@@ -87,6 +100,17 @@ def doc(f):
         return {"error": f"{type(e).__name__}: {e}"}
 
 
+def lean_pools():
+    if not os.path.exists(LEAN_SLOTS):
+        return None
+    pools = {}
+    for line in open(LEAN_SLOTS).read().splitlines():
+        words = line.split("#", 1)[0].split()
+        if len(words) >= 2 and words[1].isdigit():
+            pools[words[0]] = int(words[1])
+    return pools
+
+
 def disk_short():
     if not os.path.isdir(DISK):
         return None
@@ -103,6 +127,7 @@ out = {}
 if SHARE is not None:
     out["share"] = doc(lambda: share(SHARE, CLAIMS, CPU_ROOT))
 short = disk_short()
+out["lean"] = doc(lean_pools)
 for pool, slots in POOLS.items():
     out[pool] = {"error": f"disk: {short}"} if short else \
         doc(lambda: load("auto_slot_" + pool, SLOT_SRC, {"CHECK_SLOTS": slots}).status_doc(datetime.now(timezone.utc)))
@@ -135,7 +160,7 @@ def payload(source: Path, cpus: int, share: str | None, pools: list[str]) -> byt
     head = {"CORES_SRC": Path(cores.__file__).read_text(), "SLOT_SRC": (Path(source) / SLOT_PY).read_text() if pools else "",
             "JOB_CPUS": max(cpus, 1), "SHARE": share, "CLAIMS": str(cores.CLAIMS), "CPU_ROOT": str(cores.CPU_ROOT),
             "POOLS": {p: slot_only.POOLS[p] for p in pools}, "DISK": DISK_PATH, "MIN_INODES": MIN_FREE_INODES, "MIN_GB": MIN_FREE_GB,
-            "VIA_SLOT": remote.RUNS_VIA_SLOT_FILE}
+            "VIA_SLOT": remote.RUNS_VIA_SLOT_FILE, "LEAN_SLOTS": LEAN_SLOTS}
     return ("".join(f"{k} = {v!r}\n" for k, v in head.items()) + PROBE).encode()
 
 
@@ -201,9 +226,10 @@ def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
     return max(len(running), 1), len(free), waiting, why
 
 
-def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float) -> tuple[tuple[str, str] | None, str]:
+def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: str | None = None
+           ) -> tuple[tuple[str, str] | None, str]:
     """The pool to spill to ((machine, pool)), or None for node 2's queue, and why (module doc); `Unplaceable` when neither can
-    take it."""
+    take it. With ``lean_pool``, a machine whose Lean slots grant that pool none is skipped (`lean_pool`)."""
     cpus = max(cpus, 1)
     n2 = docs.get(AUTO_NODE)
     share = n2.get("share") if isinstance(n2, dict) else None
@@ -216,6 +242,10 @@ def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float) -> tuple[tuple
     ranked, notes = [], [said]
     for i, (machine, pool) in enumerate(SPILL):
         doc = docs.get(machine)
+        lean = doc.get("lean") if isinstance(doc, dict) else None
+        if lean_pool and isinstance(lean, dict) and "error" not in lean and not lean.get(lean_pool):
+            notes.append(f"{machine}'s {pool} pool skipped: its Lean slots give `{lean_pool}` none")
+            continue
         try:
             fit, free, waiting, why = _pool(doc.get(pool) if isinstance(doc, dict) else doc, cpus, mem_gb)
         except (ValueError, KeyError, TypeError) as e:
