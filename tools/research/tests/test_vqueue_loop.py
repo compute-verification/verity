@@ -2037,8 +2037,9 @@ class Records:
     as ``verdicts`` says (pending unless it names it), a verdict other than pending kept in its record, with the run that
     passed, as `judge` keeps it; a commit commits ``files`` on top of the candidate in the clone ``repo`` in drive's lock
     commit's form (`drive.lock_message`), at ``dated`` if set (else now), kept in ``made``, with ``told`` (what is told of the
-    bookkeeping its run repaired), or says why not (``held``).  With ``launching``, a start is a detached launch, pending until
-    ``registered`` names the run ids it printed for its sha."""
+    bookkeeping its run repaired), makes none when ``files`` is empty (its run regenerated nothing), or says why not
+    (``held``).  With ``launching``, a start is a detached launch, pending until ``registered`` names the run ids it printed
+    for its sha."""
 
     def __init__(self, repo: Path):
         self.repo, self.files = repo, {"pkg/lean-audit.json": '{"records": 2}\n'}
@@ -2051,11 +2052,11 @@ class Records:
         self.told: tuple[str, tuple[str, ...]] | None = None
         self.launching, self.registered = False, {}
 
-    def start(self, driver, sha: str, packages) -> dict:
-        self.started.append((driver, sha, tuple(packages)))
+    def start(self, driver, sha: str) -> dict:
+        self.started.append((driver, sha))
         launch = {"ids": [], "launch": {"dir": f"records-{len(self.started)}", "pid": 1}} if self.launching else {
             "ids": [f"regen-{len(self.started)}"]}
-        return {**launch, "tip": sha, "packages": list(packages)}
+        return {**launch, "tip": sha}
 
     def judge(self, driver, rec: dict | None) -> RecordsRun:
         if rec is None:
@@ -2075,10 +2076,12 @@ class Records:
             rec["verdict"] = {"state": r.state, "why": r.why, "owners": list(r.owners), **({"run": run} if r.state == PASS else {})}
         return r
 
-    def commit(self, driver, sha: str, rid: str, prs) -> tuple[str, list[str], tuple | None] | str:
+    def commit(self, driver, sha: str, rid: str, prs) -> tuple[str, list[str], tuple | None] | str | None:
         self.committed.append((driver, sha, rid, tuple(prs)))
         if self.held is not None:
             return self.held
+        if not self.files:
+            return None
         index = {"GIT_INDEX_FILE": str(self.repo.parent / f"records-index-{rid}")}
         Q._git(self.repo, "read-tree", sha, env=index)
         for path, text in sorted(self.files.items()):
@@ -2092,45 +2095,41 @@ class Records:
         return self.made[-1], files, self.told
 
 
-#: graph2's lean-lock result of a package whose lock records alone are stale (`lean_lock.run`)
-REGENERATE = "python3 tools/verity/lean/check.py --build --update {pkg}"
+#: a Lean change (`queue.lean_change`): Lean in a package with a lock, and the lock
+LEAN = {"pkg/A.lean": "theorem a : True := trivial\n", "pkg/lean-audit.json": '{"records": 1}\n'}
 
 
-def _stale(env: Env, key: str, pkg: str = "pkg") -> None:
-    """graph2's lean-lock of ``pkg`` at ``key`` failed on its records alone, its result naming the command regenerating them."""
-    env.graph2.finish_result({"key": key, "task": f"lean-lock:{pkg}", "status": "fail", "outputs": {"out": "sha512:o"},
-                              "detail": {"error": f"{pkg}/lean-audit.json is stale", "regenerate": REGENERATE.format(pkg=pkg),
-                                         "review": ["definition Pkg.d (Pkg.M), read by T: changed"],
-                                         "failures": ["reads: Pkg.M"]}})
-
-
-def _records_loop(env: Env, records: Records | None = None, **kw) -> tuple[Loop, Records, str, str]:
-    """The policy's loop with ``records`` (a `Records` on its clone), and candidate ``sha`` of #1 (``head``, a Lean change),
-    built and failed by graph2 on `pkg`'s stale lock records alone, beside a test it passed."""
-    head = env.put(1, {"pkg/A.lean": "theorem a : True := trivial\n"})
+def _records_loop(env: Env, records: Records | None = None, files: dict[str, str] | None = None, **kw,
+                  ) -> tuple[Loop, Records, str, str, list[dict]]:
+    """The policy's loop with ``records`` (a `Records` on its clone), and candidate ``sha`` of #1 (``head``, a Lean change:
+    ``files``, else `LEAN`), built by the loop's first tick, which logged ``first``."""
+    head = env.put(1, files or LEAN)
     records = records or Records(env.tmp / kw.get("clone", "clone"))
     loop = env.loop(vqueue.decide, records=records, **kw)
     loop.world.slim_driver = lambda: "drive"
-    (built,) = loop.tick()
-    keys = env.listed(sha := built["sha"], {"lean-lock:pkg": ["pkg/A.lean"], "pytest:a": ["a.txt"]})
-    _stale(env, keys["lean-lock:pkg"])
-    env.result(keys["pytest:a"], "pytest:a", "pass")
-    return loop, records, sha, head
+    first = loop.tick()
+    return loop, records, next(r["sha"] for r in first if r["action"] == "build"), head, first
 
 
-def test_a_candidate_failing_on_stale_lock_records_alone_has_its_records_committed_and_lands_with_them(env):
-    """No eject: the records run starts on the candidate's tree, nothing is built on it while it runs, and once it passed
-    its records commit is built in the candidate's place, with its members, on its base, and checked; the candidate is
-    dropped for it, the next batch built on it, and `main` moves to it, its members walked beneath it as drive reads them."""
+def _checks(env: Env) -> list[str]:
+    """The checks enqueued on graph2, oldest first."""
+    return [e["check"] for e in env.graph2.enqueued()]
+
+
+def test_a_lean_candidate_s_check_starts_only_after_its_records_run_and_on_its_records_commit_when_it_regenerated_some(env):
+    """Its build starts its records run on its tree, and not its check: nothing is enqueued, and no batch is built on it
+    while the run runs.  Once the run passed having regenerated records, their records commit is pushed with its members on
+    its base, and its check is the one that starts; the next tick drops the candidate for it and builds the next batch on it,
+    and `main` moves to it, its members walked beneath it as drive reads them."""
     main = env.main()
-    loop, records, sha, one = _records_loop(env)
-    (started,) = loop.tick()
-    assert (started["action"], started["sha"], started["why"], started["packages"], started["record"]) == (
-        "regenerate", sha, "started", ["pkg"], {"ids": ["regen-1"], "tip": sha, "packages": ["pkg"]})
-    assert started["failed"] == [{"task": "lean-lock:pkg", "key": f"sha512:{sha[:8]}-lean-lock:pkg"}]
-    assert records.started == [("drive", sha, ("pkg",))]
+    loop, records, sha, one, first = _records_loop(env)
+    built, started = first
+    assert (built["action"], built["records_first"], built["enqueued"], built["members"]) == ("build", True, False, [1])
+    assert (started["action"], started["sha"], started["why"], started["record"]) == (
+        "regenerate", sha, "started", {"ids": ["regen-1"], "tip": sha})
+    assert records.started == [("drive", sha)] and _checks(env) == []
     env.put(2, {"b.txt": "2\n"})
-    assert loop.tick() == [] and env.withdrawn == [] and env.posts == []      # held: no batch above it while it runs
+    assert loop.tick() == [] and _checks(env) == [] and env.posts == []      # held: its check, and any batch above it
     records.verdicts["regen-1"] = RecordsRun(PASS)
     judged, fixed = loop.tick()
     assert (judged["action"], judged["why"], judged["record"]["verdict"]) == (
@@ -2140,11 +2139,12 @@ def test_a_candidate_failing_on_stale_lock_records_alone_has_its_records_committ
             fixed["enqueued"]) == ("build", main, [1], [one], sha, "regen-1", ["pkg/lean-audit.json"], True), fixed
     assert records.committed == [("drive", sha, "regen-1", (1,))] and _git(env.o.origin, "rev-parse", f"{new}^@") == sha
     assert _git(env.o.origin, "log", "-1", "--format=%s", new) == "Lock records regenerated for #1"
-    assert env.queued() == {branch(sha): sha, branch(new): new} and env.graph2.enqueued()[-1]["check"] == f"ready:{new}"
+    assert env.queued() == {branch(sha): sha, branch(new): new} and _checks(env) == [f"ready:{new}"]
     drop, two = loop.tick()
     assert (drop["action"], drop["sha"], drop["why"], drop["outcome"]) == (
         "drop", sha, f"its records were regenerated in {new[:12]}, which is checked in its place", None)
-    assert (two["action"], two["members"], two["base"]) == ("build", [2], new) and branch(sha) not in env.queued()
+    assert (two["action"], two["members"], two["base"], two["enqueued"]) == ("build", [2], new, True)
+    assert branch(sha) not in env.queued() and _checks(env) == [f"ready:{new}", f"ready:{two['sha']}"]
     keys = env.listed(new, {"lean-lock:pkg": ["pkg/A.lean", "pkg/lean-audit.json"], "pytest:a": ["a.txt"]})
     for task, key in keys.items():
         env.result(key, task, "pass")
@@ -2156,75 +2156,135 @@ def test_a_candidate_failing_on_stale_lock_records_alone_has_its_records_committ
     assert env.withdrawn == [] and env.posts == [] and len(records.started) == 1
 
 
+def test_a_lean_candidate_whose_records_run_regenerated_nothing_is_checked_as_built_and_lands(env):
+    records = Records(env.tmp / "clone")
+    records.files = {}
+    loop, _, sha, one, _ = _records_loop(env, records)
+    records.verdicts["regen-1"] = RecordsRun(PASS)
+    judged, built = loop.tick()
+    assert (judged["why"], built["action"], built["sha"], built["enqueued"], built["why"], built["run"]) == (
+        "judged pass", "build", sha, True, "its records run regen-1 regenerated nothing: checked as built", "regen-1")
+    assert _checks(env) == [f"ready:{sha}"] and env.queued() == {branch(sha): sha} and records.made == []
+    keys = env.listed(sha, {"lean-lock:pkg": ["pkg/A.lean", "pkg/lean-audit.json"]})
+    env.result(keys["lean-lock:pkg"], "lean-lock:pkg", "pass")
+    advance, on_main, landed = loop.tick()
+    assert (env.main(), landed["outcome"]["state"], len(records.started), env.withdrawn) == (sha, PASS, 1, [])
+
+
+def test_a_candidate_with_no_lean_member_starts_its_check_at_once_with_no_records_run(env):
+    env.put(1, {"a.txt": "1\n"})
+    records = Records(env.tmp / "clone")
+    loop = env.loop(vqueue.decide, records=records)
+    loop.world.slim_driver = lambda: "drive"
+    (built,) = loop.tick()
+    assert (built["action"], built["enqueued"], "records_first" in built) == ("build", True, False)
+    assert _checks(env) == [f"ready:{built['sha']}"] and records.started == []
+
+
+def test_a_lean_batch_is_pushed_only_once_drive_s_machines_can_run_its_records_run(env):
+    """drive.toml naming no machines stops the tick before the push: no candidate is left whose records run can't start."""
+    env.put(1, LEAN)
+    loop = env.loop(vqueue.decide, records=Records(env.tmp / "clone"))
+
+    def no_machines():
+        raise Q.QueueError("drive.toml names no machines")
+
+    loop.world.slim_driver = no_machines
+    (failed,) = loop.tick()
+    assert (failed["action"], env.queued()) == ("build", {}) and "names no machines" in failed["error"], failed
+
+
+def test_the_run_beside_a_lean_candidate_s_check_starts_with_its_check_not_with_its_records_run(env):
+    slim = Slim()
+    loop, records, sha, _, first = _records_loop(env, slim=slim)
+    assert _acts(first) == ["slim", "build", "regenerate"] and first[0]["why"] == "started beside `main`"
+    assert slim.started == [] and loop.tick() == [] and slim.started == []
+    records.verdicts["regen-1"] = RecordsRun(PASS)
+    judged, fixed, beside = loop.tick()
+    assert (beside["action"], beside["sha"], beside["why"]) == ("slim", fixed["sha"], "started")
+    assert [s for _, s, _ in slim.started] == [fixed["sha"]] and _checks(env) == [f"ready:{fixed['sha']}"]
+
+
 @pytest.mark.parametrize("owners", [("@proofs", "@lean"), ()])
-def test_records_a_records_run_refuses_eject_the_member_with_why_and_ring_their_owners(env, owners):
-    """A records run that failed, or whose records change what a guarantee says, refuses them: no records commit, and the
-    candidate fails with the reason, its lone member ejected; the owners the refusal names are rung, once."""
-    loop, records, sha, one = _records_loop(env)
-    loop.tick()
+def test_a_records_run_that_refuses_drops_its_candidate_ejects_its_lean_member_and_rings_the_owners(env, owners):
+    """A records run that failed, or whose records change what a guarantee says, refuses them: no records commit and no
+    check; the candidate is dropped, its Lean member ejected with the reason and out of the next batch, whose other member is
+    built and checked at once; the owners the refusal names are rung, once.  A push brings the Lean member back."""
+    two = env.put(2, {"b.txt": "2\n"})
+    loop, records, sha, one, (built, _) = _records_loop(env)
+    assert sorted(built["members"]) == [1, 2] and built["records_first"]
     why = ("regenerating the records of pkg (regen-1) changes what a guarantee says: guarantee T: changed" if owners else
            "it failed: regen-1 failed rc=1")
     records.verdicts["regen-1"] = RecordsRun(FAIL, why, owners)
-    judged, *ring, eject, drop = loop.tick()
+    judged, *ring, eject, drop, rebuilt = loop.tick()
     assert (judged["why"], eject["action"], eject["number"], env.withdrawn) == ("judged fail", "eject", 1, [(1, one)])
-    assert eject["why"].endswith(f"; its records run refused its records: {why}"), eject["why"]
-    assert "lock records of pkg don't match" in eject["text"] and drop["outcome"]["state"] == FAIL
-    assert records.committed == [] and env.queued() == {}
+    assert eject["why"] == f"its records run refused its records: {why}" and "Failed:" not in eject["text"], eject
+    assert (drop["sha"], drop["why"], drop["outcome"]["state"], drop["outcome"]["suspects"]) == (sha, eject["why"], FAIL, [1])
+    assert (rebuilt["action"], rebuilt["members"], rebuilt["heads"], rebuilt["enqueued"]) == ("build", [2], [two], True)
+    assert records.committed == [] and env.queued() == {branch(rebuilt["sha"]): rebuilt["sha"]}
+    assert _checks(env) == [f"ready:{rebuilt['sha']}"]
     if owners:
         (ring,) = ring
         assert (ring["action"], ring["why"], ring["done"]) == ("ring", f"{sha[:12]}'s records run refused its records: {why}",
                                                                 True)
-        assert env.posts[0].startswith("@proofs @lean vqueue: ") and why in env.posts[0], env.posts
+        members = " ".join(f"#{n}" for n in built["members"])
+        assert env.posts[0] == (f"@proofs @lean vqueue: the verified queue's candidate queue/{sha[:12]} ({members}), whose "
+                                f"check waits for its records run: {ring['why']}"), env.posts
         posting = next(r for r in env.lines() if r["action"] == "posting" and r["posting"] == "ring")
         assert posting["to"] == list(owners)
     else:
-        assert ring == [] and len(env.posts) == 1
+        assert ring == [] and len(env.posts) == 1                    # the ejection's, to #1's owner
     assert loop.tick() == [] and len(records.started) == 1
+    again = env.put(1, {**LEAN, "pkg/B.lean": "theorem b : True := trivial\n"})
+    built, started = loop.tick()
+    assert (built["members"], built["heads"], built["records_first"], started["why"]) == ([1], [again], True, "started")
 
 
-def test_a_records_run_that_ends_in_infra_is_started_once_more_and_then_its_candidate_fails_with_why(env):
-    loop, records, sha, one = _records_loop(env)
-
-    def refuse(driver, sha, packages):
+def test_a_records_run_that_ends_in_infra_is_started_once_more_and_then_refuses_ringing_infra(env):
+    def refuse(driver, sha):
         raise Q.QueueError("train.sh printed no run dir")
 
+    records = Records(env.tmp / "clone")
     records.start = refuse
-    (failed,) = loop.tick()
-    assert (failed["action"], failed["record"], failed["start_error"]) == ("regenerate", None,
-                                                                           "QueueError: train.sh printed no run dir")
+    loop, _, sha, one, first = _records_loop(env, records)
+    assert (first[1]["action"], first[1]["record"], first[1]["start_error"]) == (
+        "regenerate", None, "QueueError: train.sh printed no run dir")
     del records.start
     (again,) = loop.tick()                                          # one that registered no run is infra: started again
-    assert (again["why"], again["record"]["ids"], env.withdrawn) == ("started again", ["regen-1"], [])
+    assert (again["why"], again["record"]["ids"], env.withdrawn, _checks(env)) == ("started again", ["regen-1"], [], [])
     records.verdicts["regen-1"] = RecordsRun(INFRA, "it never ran or was stopped (regen-1)")
-    judged, eject, drop = loop.tick()
+    judged, ring, eject, drop = loop.tick()
     assert (judged["why"], env.withdrawn, drop["outcome"]["state"]) == (f"judged {INFRA}", [(1, one)], FAIL)
-    assert eject["why"].endswith("; its records run ended in infra twice: it never ran or was stopped (regen-1)"), eject["why"]
-    assert loop.tick() == [] and len(records.started) == 1 and env.queued() == {}
+    assert eject["why"] == "its records run ended in infra twice: it never ran or was stopped (regen-1)", eject["why"]
+    assert env.posts[0].startswith("@infra vqueue: ") and ring["why"] == f"{sha[:12]}'s records run ended in infra twice: " \
+                                                                       "it never ran or was stopped (regen-1)"
+    assert loop.tick() == [] and len(records.started) == 1 and env.queued() == {} and _checks(env) == []
 
 
-def test_a_records_commit_whose_records_are_stale_still_fails_with_why_and_starts_no_second_records_run(env):
-    loop, records, sha, one = _records_loop(env)
-    loop.tick()
+def test_a_records_commit_whose_records_are_stale_still_fails_as_any_candidate_and_starts_no_second_records_run(env):
+    """A lean-lock failure of a records commit's check ejects as any failure does, telling how to regenerate the records: no
+    records run follows a check."""
+    loop, records, sha, one, _ = _records_loop(env)
     records.verdicts["regen-1"] = RecordsRun(PASS)
     _, fixed = loop.tick()
     (drop,) = loop.tick()                                           # #1's first candidate, dropped for its records commit
     keys = env.listed(new := fixed["sha"], {"lean-lock:pkg": ["pkg/A.lean", "pkg/lean-audit.json"]})
-    _stale(env, keys["lean-lock:pkg"])
+    env.result(keys["lean-lock:pkg"], "lean-lock:pkg", "fail")
     eject, drop = loop.tick()
-    assert eject["why"].endswith(f"; the records it commits on {sha[:12]}, which its records run regenerated, are stale "
-                                 "still"), eject["why"]
+    assert eject["why"] == "lean-lock:pkg failed, and its changed files meet their inputs, no other member's", eject["why"]
+    assert "check.py --build --update PKG" in eject["text"]
     assert (env.withdrawn, drop["sha"], drop["outcome"]["state"], len(records.started)) == ([(1, one)], new, FAIL, 1)
 
 
 def test_a_records_commit_the_gate_wont_vouch_for_is_held_rung_to_ci_once_and_made_once_it_can_be(env):
-    loop, records, sha, _ = _records_loop(env)
-    loop.tick()
+    loop, records, sha, _, _ = _records_loop(env)
     records.verdicts["regen-1"] = RecordsRun(PASS)
     records.held = "the merge gate refuses its lock commit: its records aren't byte for byte the ones regen-1 regenerated"
     judged, held, ring = loop.tick()
     assert (held["action"], held["done"], held["why"], held["run"]) == ("commit", False, records.held, "regen-1")
-    assert (ring["action"], ring["why"]) == ("ring", f"{sha[:12]}'s records commit is held: {records.held}")
-    assert env.posts == [f"@ci vqueue: {ring['text']}"] and env.queued() == {branch(sha): sha}
+    assert (ring["action"], ring["why"]) == ("ring", f"{sha[:12]}'s records commit is held: {records.held}; it is dropped, its "
+                                                     "members built again, once it is held 4 h after it was first")
+    assert env.posts == [f"@ci vqueue: {ring['text']}"] and env.queued() == {branch(sha): sha} and _checks(env) == []
     (again,) = loop.tick()
     assert again["action"] == "commit" and len(env.posts) == 1 and env.withdrawn == []
     records.held = None
@@ -2232,11 +2292,45 @@ def test_a_records_commit_the_gate_wont_vouch_for_is_held_rung_to_ci_once_and_ma
     assert (fixed["action"], fixed["repairs"]) == ("build", sha) and len(records.committed) == 3
 
 
+def test_a_records_commit_held_past_pending_s_drops_its_candidate_and_builds_its_members_again(env):
+    """Bounded: `pending_s` after it was first held, the candidate is dropped, its records run settled, and its members built
+    again, a new records run first; @ci was rung once, at the first hold."""
+    loop, records, sha, one, _ = _records_loop(env, pending_s=3600)
+    records.verdicts["regen-1"] = RecordsRun(PASS)
+    records.held = "its regenerated lock records can't be read: Unreadable: regen-1"
+    judged, held, ring = loop.tick()
+    env.clock += 3600
+    assert _acts(loop.tick()) == ["commit"] and len(env.posts) == 1
+    env.clock += 1
+    drop, built, started = loop.tick()
+    assert (drop["action"], drop["sha"], drop["why"], drop["outcome"]) == (
+        "drop", sha, "its records commit is still held 1 h after it was first: its members are built again", None)
+    assert (built["members"], built["heads"], built["records_first"], started["record"]["ids"]) == ([1], [one], True, ["regen-2"])
+    assert len(env.posts) == 1 and env.withdrawn == [] and _checks(env) == [] and env.cancelled == []
+
+
+def test_a_candidate_built_again_with_the_same_sha_reads_only_its_own_records_run_and_hold():
+    """Dropped and built again in the same second on the same base, a candidate has the same sha: its records run and hold
+    are those since its newest records-first build, and a settle of the dropped one's still-launching run isn't its record."""
+    old, new = {"ids": ["r1"], "tip": "c"}, {"ids": ["r2"], "tip": "c"}
+    lines = [{"action": "build", "sha": "c", "records_first": True},
+             {"action": "regenerate", "sha": "c", "why": "started", "record": old},
+             {"action": "commit", "sha": "c", "done": False, "at": L.stamp(T0)},
+             {"action": "drop", "sha": "c"},
+             {"action": "build", "sha": "c", "records_first": True},
+             {"action": "regenerate", "sha": "c", "why": "started", "record": new}]
+    past = L.Past(lines=lines)
+    assert (past.regenerated("c"), past.held("c")) == ((1, new), None)
+    settled = {"action": "regenerate", "sha": "c", "why": "its candidate was dropped while it launched", "record": old,
+               "dropped": True}
+    assert L.Past(lines=[*lines, settled]).regenerated("c") == (1, new)
+    assert L.Past(lines=lines[:4]).held("c") == T0 and L.Past(lines=lines[:4]).regenerated("c") == (1, old)
+
+
 def test_the_bookkeeping_a_records_run_repaired_is_told_as_drive_tells_it_once_a_records_commit(env):
     """Drive tells `lean` and each owner a warning names of the bookkeeping its lock run repaired (`drive.bookkeeping_told`), so
     the loop does of a records run's: once, even when a tick cut off before its build line leaves the commit to adopt."""
-    loop, records, sha, _ = _records_loop(env)
-    loop.tick()
+    loop, records, sha, _, _ = _records_loop(env)
     records.verdicts["regen-1"], records.dated = RecordsRun(PASS), "2026-01-01T00:00:00+0000"
     records.told = ("the lock run regen-1 repaired bookkeeping that #1 brought: H (@proofs)", ("lean", "proofs"))
     judged, told, fixed = loop.tick()
@@ -2251,8 +2345,7 @@ def test_the_bookkeeping_a_records_run_repaired_is_told_as_drive_tells_it_once_a
 
 
 def test_a_records_commit_pushed_with_no_line_in_the_log_is_adopted_and_a_restart_starts_no_second_records_run(env):
-    loop, records, sha, _ = _records_loop(env)
-    loop.tick()
+    loop, records, sha, _, _ = _records_loop(env)
     records.verdicts["regen-1"], records.dated = RecordsRun(PASS), "2026-01-01T00:00:00+0000"
     made, *_ = records.commit("drive", sha, "regen-1", (1,))
     _git(env.tmp / "clone", "push", "-q", "origin", f"{made}:refs/heads/queue/{made[:12]}")  # a tick cut off before its line
@@ -2266,29 +2359,26 @@ def test_a_records_commit_pushed_with_no_line_in_the_log_is_adopted_and_a_restar
 
 
 def test_a_dropped_candidate_s_records_run_is_cancelled_while_it_runs_and_one_that_ended_is_left(env):
-    loop, records, sha, one = _records_loop(env)
-    loop.tick()
+    loop, records, sha, one, _ = _records_loop(env)
     env.o.gh.ready.discard((1, one))                                 # its ready mark withdrawn: dropped
     (drop,) = loop.tick()
     assert (drop["action"], drop["sha"], drop["records_cancelled"]) == ("drop", sha, ["regen-1"])
     assert env.cancelled == [(["regen-1"], f"vqueue: candidate {sha[:12]} was dropped: #1's ready mark was withdrawn")]
     assert loop.tick() == [] and len(env.cancelled) == 1
-    two = env.put(2, {"pkg/B.lean": "theorem b : True := trivial\n"})
-    (built,) = loop.tick()
-    keys = env.listed(built["sha"], {"lean-lock:pkg": ["pkg/B.lean"]})
-    _stale(env, keys["lean-lock:pkg"])
-    loop.tick()
+    two = env.put(2, {"pkg/B.lean": "theorem b : True := trivial\n", "pkg/lean-audit.json": '{"records": 3}\n'})
+    built, started = loop.tick()
+    assert (built["members"], started["record"]["ids"]) == ([2], ["regen-2"])
     records.verdicts["regen-2"] = RecordsRun(FAIL, "it failed: regen-2 failed rc=1")
     env.o.gh.ready.discard((2, two))
     judged, drop = loop.tick()
     assert (judged["why"], drop["action"], len(env.cancelled)) == ("judged fail", "drop", 1) and "records_cancelled" not in drop
+    assert env.withdrawn == []                                       # dropped for its mark, before its refusal could eject
 
 
 def test_a_records_run_still_launching_when_its_candidate_is_dropped_is_cancelled_once_it_printed_its_run_ids(env):
     records = Records(env.tmp / "clone")
     records.launching = True
-    loop, _, sha, one = _records_loop(env, records)
-    (started,) = loop.tick()
+    loop, _, sha, one, (_, started) = _records_loop(env, records)
     env.o.gh.ready.discard((1, one))                                 # its ready mark withdrawn: dropped
     (drop,) = loop.tick()
     assert (drop["action"], drop["records_launching"], env.cancelled) == ("drop", started["record"], [])
@@ -2301,31 +2391,51 @@ def test_a_records_run_still_launching_when_its_candidate_is_dropped_is_cancelle
     assert loop.tick() == [] and len(records.started) == 1
 
 
-def test_without_vqueue_records_a_candidate_failing_on_stale_records_ejects_its_member_as_before(env):
-    loop, records, sha, one = _records_loop(env)
+def test_without_vqueue_records_a_lean_candidate_s_check_starts_at_its_build(env):
+    env.put(1, LEAN)
+    (built,) = env.loop(vqueue.decide).tick()
+    assert (built["enqueued"], "records_first" in built, _checks(env)) == (True, False, [f"ready:{built['sha']}"])
+
+
+def test_a_candidate_waiting_for_its_records_run_read_by_a_loop_without_vqueue_records_has_its_check_enqueued(env):
+    """--no-records on a log a loop with records wrote: the candidate is one whose check was never enqueued (list-failed),
+    retried at once; its check enqueued, it waits no longer, so a loop with records again reads its verdict and lands it."""
+    loop, records, sha, _, _ = _records_loop(env)
     loop.records = None
-    eject, drop = loop.tick()
-    assert (eject["number"], env.withdrawn, drop["outcome"]["state"]) == (1, [(1, one)], FAIL) and records.started == []
-    assert "records run" not in eject["why"] and "check.py --build --update PKG" in eject["text"]
+    (retry,) = loop.tick()
+    assert (retry["action"], retry["sha"], retry["enqueued"], retry["mark"]) == ("retry", sha, True, "not enqueued"), retry
+    assert _checks(env) == [f"ready:{sha}"] and len(records.started) == 1
+    loop.records = records
+    keys = env.listed(sha, {"lean-lock:pkg": ["pkg/A.lean", "pkg/lean-audit.json"]})
+    env.result(keys["lean-lock:pkg"], "lean-lock:pkg", "pass")
+    acts = loop.tick()
+    assert "advance" in _acts(acts) and env.main() == sha and len(records.started) == 1, acts
 
 
 def test_a_dry_run_starts_no_records_run_judges_none_and_says_what_it_would(env):
-    loop, records, sha, _ = _records_loop(env)
+    env.put(1, LEAN)
+    records = Records(env.tmp / "clone")
     dry = env.loop(vqueue.decide, clone="dry", records=records, dry_run=True)
-    assert dry.tick() == [] and records.started == [] and env.lines()[-1]["action"] == "build"
-    assert any(f"would regenerate: Regenerate(sha='{sha}')" in x for x in env.out), env.out
+    assert dry.tick() == [] and records.started == [] and env.lines() == []
+    assert any("would build: Build(members=(1,), " in x and "records=True)" in x for x in env.out), env.out
+    loop = env.loop(vqueue.decide, records=records)
+    loop.world.slim_driver = lambda: "drive"
     loop.tick()
     records.judge = lambda *a: pytest.fail("a dry run judges no records run")
-    assert dry.tick() == [] and "(records run: pending)" in "\n".join(env.out) and len(records.started) == 1
+    env.out.clear()
+    assert dry.tick() == [] and len(records.started) == 1
+    said = "\n".join(env.out)
+    assert "(records run: pending) (its check waits for its records run)" in said and "would " not in said, said
 
 
 @pytest.mark.parametrize("changes", [False, True])
 def test_end_to_end_on_drives_lock_run_its_records_commit_lands_or_a_statement_change_rings_the_guarantees_owner(
         env, changes):
     """The real `vqueue_records` on a real Driver, drive's fakes only where it reaches a machine (the launch, the runs' states,
-    their evidence and run dirs): graph2 finds `pkg`'s records stale, drive's lock run runs on the candidate's tree and
-    regenerates them, and its records commit, drive's lock commit the merge gate vouches for, lands in the candidate's place;
-    or the regenerated records change guarantee T's statement, and T's owner in the candidate's lock is rung and #1 ejected."""
+    their evidence and run dirs): drive's lock run runs on the Lean candidate's tree before its check and regenerates `pkg`'s
+    records, and its records commit, drive's lock commit the merge gate vouches for, is checked and lands in the candidate's
+    place; or the regenerated records change guarantee T's statement, and T's owner in the candidate's lock is rung, #1
+    ejected and its candidate dropped unchecked."""
     from research.drive import LEAN_STEP, Driver
     from test_queue_drive import _live_run, _steps_run
 
@@ -2344,12 +2454,10 @@ def test_end_to_end_on_drives_lock_run_its_records_commit_lands_or_a_statement_c
                post=lambda text, to=(): True, now=lambda: env.clock, cancel=lambda repo, ids, reason: None,
                evidence=lambda repo, ids: evidence)
     loop.world.q.store, loop.world.slim_driver = env.o.store, lambda: d
-    (built,) = loop.tick()
-    keys = env.listed(sha := built["sha"], {"lean-lock:pkg": ["pkg/A.lean", "pkg/lean-audit.json"]})
-    _stale(env, keys["lean-lock:pkg"])
-    (started,) = loop.tick()
-    (rid,) = started["record"]["ids"]
-    assert launched == [(sha, "m1")] and started["record"]["packages"] == ["pkg"] and loop.tick() == []
+    built, started = loop.tick()
+    sha, (rid,) = built["sha"], started["record"]["ids"]
+    assert (built["records_first"], started["record"]["tip"], launched) == (True, sha, [(sha, "m1")])
+    assert loop.tick() == [] and _checks(env) == []
     regenerated = json.dumps({**lock, "reads": {"Pkg.M": "2"}}) + "\n"
     states[rid] = ("done", 0, None)
     evidence.append(_steps_run(env.tmp, rid, {LEAN_STEP: "passed"}))
@@ -2365,10 +2473,11 @@ def test_end_to_end_on_drives_lock_run_its_records_commit_lands_or_a_statement_c
                                "what a guarantee says, which the change's own records must say for its owners to review: "
                                "guarantee T: changed")
         assert env.posts[0].startswith("@proofs vqueue: ") and (eject["number"], env.withdrawn) == (1, [(1, one)])
-        assert env.queued() == {} and env.main() == main
+        assert (env.queued(), env.main(), _checks(env), drop["outcome"]["state"]) == ({}, main, [], FAIL)
         return
     judged, fixed = loop.tick()
     new = fixed["sha"]
+    assert (fixed["repairs"], fixed["enqueued"], _checks(env)) == (sha, True, [f"ready:{new}"])
     body = _git(env.o.origin, "log", "-1", "--format=%B", new)
     assert body == lock_message("#1", rid, f"queue/{sha[:12]}", sha, [], ["pkg/lean-audit.json"]).strip(), body
     assert M.regenerated_parent(loop.world.repo, new, env.o.store, tool="check", kinds=frozenset(), command=(), deferred=rid,

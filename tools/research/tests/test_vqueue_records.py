@@ -1,6 +1,7 @@
-"""`research.vqueue_records`: the records run of a verified-queue candidate whose own failures are all stale Lean lock records,
-launched as drive launches its lock run (`Driver.launch_locks`) and judged as drive judges it (`Driver._lock_outcome`,
-`Driver._resend_locks`), and the records commit of what it regenerated, in drive's lock commit's form (`drive.lock_message`)
+"""`research.vqueue_records`: the records run of a verified-queue candidate with a member that changes Lean, a lock or a spec,
+before its check, launched as drive launches its lock run (`Driver.launch_locks`) and judged as drive judges it
+(`Driver._lock_outcome`, `Driver._resend_locks`), and the records commit of what it regenerated, in drive's lock commit's form
+(`drive.lock_message`)
 and vouched for by the merge gate (`merge.regenerated_parent`), on drive's own fakes: `Harness`'s launches, run states,
 evidence and clock, and `_live_run`'s run dir, whose Lean report holds each package's report as lean_audit.py writes it."""
 from __future__ import annotations
@@ -73,15 +74,15 @@ def _vouched(h: Harness, made: str, rid: str) -> str | None:
 
 def test_start_launches_drives_lock_run_on_the_candidate_on_drives_machines_and_keeps_its_record(world, monkeypatch):
     """The records run is drive's lock run (`launch_locks`: train.sh's `--deferred lean-audit` at the after-landing rank), on
-    the candidate's own tree and drive's machines; its record is drive's (`_started`) with the candidate, when it launched
-    and the packages graph2 found stale."""
+    the candidate's own tree and drive's machines; its record is drive's (`_started`) with the candidate and when it
+    launched."""
     h, sha = _harness(world, monkeypatch)
     asked, launch = [], h.d.launch_locks
     h.d.launch_locks = lambda repo, tip, machines: asked.append((repo, tip, machines)) or launch(repo, tip, machines)
-    rec = start(h.d, sha, ["pkg", "lib"])
+    rec = start(h.d, sha)
     (rid,) = h.run_state
     assert asked == [(h.q.workdir, sha, "m1")] and h.launched == [(sha, "m1", False)]
-    assert rec == {"ids": [rid], "tip": sha, "at": h.clock, "packages": ["lib", "pkg"]}
+    assert rec == {"ids": [rid], "tip": sha, "at": h.clock}
     assert any(x == f"research queue vqueue: train.sh {sha[:12]} m1 --deferred {LEAN_STEP}, the records run of candidate "
                     f"{sha[:12]}: {rid}" for x in world.logs), world.logs
 
@@ -89,25 +90,24 @@ def test_start_launches_drives_lock_run_on_the_candidate_on_drives_machines_and_
 def test_start_launches_nothing_in_a_dry_run_and_none_without_drives_machines_or_when_it_registered_no_run(world, monkeypatch):
     h, sha = _harness(world, monkeypatch)
     h.d.dry_run = True
-    assert start(h.d, sha, ["pkg"]) is None and h.launched == []
+    assert start(h.d, sha) is None and h.launched == []
     assert any(x.startswith(f"research queue vqueue: would launch train.sh {sha[:12]} m1") for x in world.logs), world.logs
     h.d.dry_run = False
     h.d.launch_locks = lambda repo, tip, machines: ([], "train: no slot")
-    assert start(h.d, sha, ["pkg"]) is None and any(x.endswith("registered no run: train: no slot") for x in world.logs)
+    assert start(h.d, sha) is None and any(x.endswith("registered no run: train: no slot") for x in world.logs)
     h.d.on = ""
     with pytest.raises(ValueError, match="drive's machines"):
-        start(h.d, sha, ["pkg"])
+        start(h.d, sha)
 
 
 # -- judge
 
 
-def test_a_records_run_is_pending_while_it_runs_and_passes_once_it_regenerated_each_stale_record_saying_the_same(world,
-                                                                                                                monkeypatch):
-    """Passed (exited 0, lean-audit passed in its steps.jsonl), with a record regenerated for each package graph2 found stale
-    and none changing what a guarantee says, it passes; the verdict is kept with the run that passed, and read from there."""
+def test_a_records_run_is_pending_while_it_runs_and_passes_once_its_records_say_the_same(world, monkeypatch):
+    """Passed (exited 0, lean-audit passed in its steps.jsonl), with no record it regenerated changing what a guarantee says,
+    it passes; the verdict is kept with the run that passed, and read from there."""
     h, sha = _harness(world, monkeypatch)
-    rec = start(h.d, sha, ["pkg"])
+    rec = start(h.d, sha)
     (rid,) = rec["ids"]
     assert judge(h.d, rec) == RecordsRun(PENDING) and "verdict" not in rec
     _passes(h, rid, sha, reports={"pkg": {"review": ["guarantee T: printed differently, the same statement"]}})
@@ -120,7 +120,7 @@ def test_a_records_run_is_pending_while_it_runs_and_passes_once_it_regenerated_e
 
 def test_a_records_run_that_failed_refuses_its_records_with_why(world, monkeypatch):
     h, sha = _harness(world, monkeypatch)
-    rec = start(h.d, sha, ["pkg"])
+    rec = start(h.d, sha)
     (rid,) = rec["ids"]
     h.run_state[rid] = ("failed", 1, None)
     h.evidence = [_steps_run(h.world.tmp, rid, {LEAN_STEP: "failed"})]
@@ -131,7 +131,7 @@ def test_a_records_run_that_failed_refuses_its_records_with_why(world, monkeypat
 
 def test_a_records_run_that_exited_0_without_passing_lean_audit_fails(world, monkeypatch):
     h, sha = _harness(world, monkeypatch)
-    rec = start(h.d, sha, ["pkg"])
+    rec = start(h.d, sha)
     (rid,) = rec["ids"]
     h.run_state[rid] = ("done", 0, None)
     h.evidence = [_steps_run(h.world.tmp, rid, {LEAN_STEP: "skipped"})]
@@ -143,7 +143,7 @@ def test_a_records_run_its_machine_failed_runs_again_once_elsewhere_and_its_rese
     on drive's other machines, and is pending; its resend failing too refuses."""
     h, sha = _harness(world, monkeypatch)
     h.d.on = "m1,m2"
-    rec = start(h.d, sha, ["pkg"])
+    rec = start(h.d, sha)
     (rid,) = rec["ids"]
     h.run_state[rid] = ("failed", -9, None, None, "m1")
     assert judge(h.d, rec) == RecordsRun(PENDING) and h.launched == [(sha, "m1,m2", False), (sha, "m2", False)]
@@ -159,13 +159,13 @@ def test_a_records_run_its_machine_failed_runs_again_once_elsewhere_and_its_rese
 def test_a_records_run_that_never_ran_or_registered_no_run_is_infra(world, monkeypatch, tmp_path):
     h, sha = _harness(world, monkeypatch)
     assert judge(h.d, None) == RecordsRun(INFRA, "it registered no run")
-    rec = start(h.d, sha, ["pkg"])
+    rec = start(h.d, sha)
     (rid,) = rec["ids"]
     h.run_state[rid] = ("failed", NOT_STARTED, None)
     assert judge(h.d, rec) == RecordsRun(INFRA, f"it never ran or was stopped ({rid})")
     h.d.launch_locks = lambda repo, tip, machines: {"dir": str(tmp_path / "launch"), "pid": 0}
     h.d.launched = lambda launch: (None, "train: abc on m1")
-    detached = start(h.d, sha, ["pkg"])
+    detached = start(h.d, sha)
     assert detached["ids"] == [] and judge(h.d, detached) == RecordsRun(PENDING)
     h.clock += LAUNCH_LOST_S + 1
     got = judge(h.d, detached)
@@ -174,7 +174,7 @@ def test_a_records_run_that_never_ran_or_registered_no_run_is_infra(world, monke
 
 def test_a_passed_records_run_whose_report_cant_be_read_yet_is_pending_with_why_and_judged_again(world, monkeypatch):
     h, sha = _harness(world, monkeypatch)
-    rec = start(h.d, sha, ["pkg"])
+    rec = start(h.d, sha)
     (rid,) = rec["ids"]
     _passes(h, rid, sha)
     fetch, h.d.fetch = h.d.fetch, lambda r, names: None
@@ -185,13 +185,16 @@ def test_a_passed_records_run_whose_report_cant_be_read_yet_is_pending_with_why_
     assert judge(h.d, rec) == RecordsRun(PASS)
 
 
-def test_a_passed_records_run_that_regenerated_no_record_of_a_package_graph2_found_stale_refuses(world, monkeypatch):
+def test_a_passed_records_run_that_regenerated_nothing_passes_and_makes_no_records_commit(world, monkeypatch):
+    """Its candidate's records were fresh: no commit is made, and the loop checks the candidate as built, as drive's lock run
+    that regenerated nothing leaves `checked`'s tip as it is (`Driver._locks`)."""
     h, sha = _harness(world, monkeypatch)
-    rec = start(h.d, sha, ["lib", "pkg"])
+    rec = start(h.d, sha)
     (rid,) = rec["ids"]
-    _passes(h, rid, sha)
-    assert judge(h.d, rec) == RecordsRun(FAIL, f"{rid} passed without regenerating the records of lib, which graph2 found "
-                                                "stale")
+    _passes(h, rid, sha, {})
+    assert judge(h.d, rec) == RecordsRun(PASS)
+    refs = _git(h.q.workdir, "for-each-ref")
+    assert commit(h.d, sha, rid, (1,)) is None and _git(h.q.workdir, "for-each-ref") == refs
 
 
 def test_regenerated_records_that_change_what_a_guarantee_says_are_refused_naming_the_review_and_rung_to_their_owners(
@@ -200,7 +203,7 @@ def test_regenerated_records_that_change_what_a_guarantee_says_are_refused_namin
     statement, a definition one reads, a listed premise) is a claim change: refused, its review's lines named, and the owners
     the candidate's lock gives what they name are the ones to ring, in the order the review names them, each once."""
     h, sha = _harness(world, monkeypatch)
-    rec = start(h.d, sha, ["pkg"])
+    rec = start(h.d, sha)
     (rid,) = rec["ids"]
     review = ["guarantee U: changed", "  before:", "    theorem U : 1 = 1", "  after:", "    theorem U : 2 = 2",
               "definition Pkg.d (Pkg.M), read by T, U: changed", "assumption H: changed (its statement or a definition it reads)",
@@ -218,7 +221,7 @@ def test_regenerated_records_that_change_what_a_guarantee_says_are_refused_namin
 
 def test_a_statement_change_naming_nothing_its_lock_gives_an_owner_rings_ci_and_a_long_review_is_cut(world, monkeypatch):
     h, sha = _harness(world, monkeypatch)
-    rec = start(h.d, sha, ["pkg"])
+    rec = start(h.d, sha)
     (rid,) = rec["ids"]
     review = [f"definition Pkg.d{i} (Pkg.M): new" for i in range(SHOWN + 2)] + ["guarantee V: changed"]
     _passes(h, rid, sha, reports={"pkg": {"review": review, "statement_changes": True}})
@@ -235,7 +238,7 @@ def test_the_records_commit_is_drives_lock_commit_on_the_candidate_which_the_mer
     `queue.IDENTITY`), in a scratch index: the clone's checkout, index and refs stay as they are.  The gate vouches for it
     against the run, post_train reads its trailers, and drive reverts it with the PRs its subject names (`_lock_commits`)."""
     h, sha = _harness(world, monkeypatch)
-    rid = start(h.d, sha, ["pkg"])["ids"][0]
+    rid = start(h.d, sha)["ids"][0]
     _passes(h, rid, sha)
     wd = h.q.workdir
     head, status, refs = (_git(wd, *a) for a in (("rev-parse", "HEAD"), ("status", "--porcelain"), ("for-each-ref",)))
@@ -257,7 +260,7 @@ def test_the_records_commit_is_drives_lock_commit_on_the_candidate_which_the_mer
 
 def test_a_records_commit_carries_the_bookkeeping_its_records_run_repaired_as_drives_does(world, monkeypatch):
     h, sha = _harness(world, monkeypatch)
-    rid = start(h.d, sha, ["pkg"])["ids"][0]
+    rid = start(h.d, sha)["ids"][0]
     d = _passes(h, rid, sha)
     caps = "UNWITNESSED = {\"pkg\": 2}\n"
     (d / "lean-audit" / "repaired" / "tests").mkdir(parents=True)
@@ -275,21 +278,21 @@ def test_a_records_commit_carries_the_bookkeeping_its_records_run_repaired_as_dr
                     f"{made[:12]}, each a warning for the next PR to fix: {warned[0]}", ("lean",))      # as drive tells it
 
 
-def test_a_records_commit_is_refused_when_its_records_cant_be_read_are_the_candidates_or_the_gate_wont_vouch(world,
-                                                                                                           monkeypatch):
+def test_a_records_commit_is_held_while_its_records_cant_be_read_or_the_gate_wont_vouch_and_none_is_made_of_the_same(world,
+                                                                                                                 monkeypatch):
+    """Held, with why, in words that stay the same tick to tick (the loop rings each once); records the candidate holds
+    already make no commit, as none regenerated makes none."""
     h, sha = _harness(world, monkeypatch)
-    rid = start(h.d, sha, ["pkg"])["ids"][0]
+    rid = start(h.d, sha)["ids"][0]
     d = _passes(h, rid, sha)
     (d / "lean-audit" / "audit-pkg" / "lean-audit.json").unlink()
     got = commit(h.d, sha, rid, (1,))
     assert isinstance(got, str) and got.startswith("its regenerated lock records can't be read: Unreadable"), got
-    _passes(h, rid2 := start(h.d, sha, ["pkg"])["ids"][0], sha, {"pkg": json.dumps(LOCKED)})
-    assert commit(h.d, sha, rid2, (1,)) == f"the records {rid2} regenerated are those {sha[:12]} holds"
-    _passes(h, rid3 := start(h.d, sha, ["pkg"])["ids"][0], f"{'0' * 40}")          # it ran on another tree
+    _passes(h, rid2 := start(h.d, sha)["ids"][0], sha, {"pkg": json.dumps(LOCKED)})
+    assert commit(h.d, sha, rid2, (1,)) is None
+    _passes(h, rid3 := start(h.d, sha)["ids"][0], f"{'0' * 40}")          # it ran on another tree
     got = commit(h.d, sha, rid3, (1,))
     assert isinstance(got, str) and got.startswith("the merge gate refuses its lock commit"), got
-    _passes(h, rid4 := start(h.d, sha, ["pkg"])["ids"][0], sha, {})
-    assert commit(h.d, sha, rid4, (1,)) == f"{rid4}'s Lean report names no record it regenerated"
     monkeypatch.setattr(h.d, "_locks", lambda rid, scratch: ({}, f"its regenerated lock records can't be read: OSError: [Errno "
                                                                  f"28] No space left on device: '{scratch / rid / 'pkg'}'"))
     got = commit(h.d, sha, rid, (1,))

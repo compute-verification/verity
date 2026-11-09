@@ -10,10 +10,7 @@ as `next` is), pushed to `queue/<sha12>` and checked by graph2 as `ready:<sha>`.
              inputs are the suspects: one suspect is ejected (its ready mark withdrawn, its owner told which tasks failed),
              several are bisected; none meeting them makes every member a suspect, and a lone member's failed keys are rerun
              once, afresh, before it is ejected.  The candidates above it are dropped, and the rest go into the next batch.
-             A fail that names no failed task is rung, and nothing else happens.  A fail whose own failures are all stale
-             Lean lock records (`Failed.records`) is no fail yet: its records run regenerates them on its tree, and a
-             records commit of them on top of it is checked in its place (`Regenerate`, `Commit`); a records run that
-             fails, or whose records change what a guarantee says, refuses them, and the fail stands with that reason
+             A fail that names no failed task is rung, and nothing else happens.
     infra    nothing is blamed and `main` stays: the check is enqueued again at every reading, and infra is rung from `rings`
              enqueues on (2 at most), in words that change only with the erring tasks, so the loop tells infra once for each
              set; a listing failure is handled alike.  With `tree_ejects`, infra errors graph2 saw on two or more nodes
@@ -22,6 +19,15 @@ as `next` is), pushed to `queue/<sha12>` and checked by graph2 as `ready:<sha>`.
              bisected the same way, ejecting nobody: a lone member whose check keeps erring is rung to its owner and set
              aside behind the other PRs while any waits (`infra` outcome; set aside again, nobody is rung), else retried
     pending  wait; a check still pending `pending_s` after its first enqueue is enqueued again, and rung at twice that
+
+A batch with a member that changes Lean, a lock or a spec (`Ready.lean`) has its lock records regenerated before its check, as
+drive's lock run regenerated them once such a change landed (`Build.records`): its records run, drive's lock run on its tree,
+runs first, its check waits for it (`Candidate.waits`), and nothing is built on it meanwhile.  Once the run passed, its check
+starts on it as built when the run regenerated nothing, else on a records commit of them on top of it, which is checked in its
+place (`Commit`); a run that ended in infra is launched once more (`Regenerate`).  One that failed, ended in infra twice, or
+whose records change what a guarantee says refuses them: the candidate is dropped, its Lean members are ejected, and the owners
+the refusal names are rung.  A records commit still held `pending_s` after it was first drops its candidate, whose members are
+built again.
 
 `decide` is the whole policy: a pure function from a `Snapshot` (what the refs, the labels and graph2's results say now) to
 the `Action`s that bring the world closer to it.  The loop builds the snapshot, applies the actions and keeps nothing between
@@ -66,8 +72,6 @@ class Failed:
     tests: frozenset[str] = frozenset()       # its failing test ids, empty when unknown
     base_tests: frozenset[str] | None = None  # the base's failing tests of the same task id: None when it passed or is unknown
     tree: bool = False             # infra: graph2 saw it err on two or more nodes, so the tree breaks the machines
-    records: bool = False          # a Lean package's lock failed on its records alone, which graph2's lean-lock says the Lean
-                                   # check regenerates: a records run may repair it (`Regenerate`)
 
 
 @dataclass(frozen=True)
@@ -82,11 +86,11 @@ class Verdict:
 
 @dataclass(frozen=True)
 class RecordsRun:
-    """A candidate's records run (`Regenerate`): drive's lock run on its tree, which regenerates the lock records it finds
-    stale.  Pending while it launches or runs, or with ``why`` while its passed run's records can't be read yet; pass once it
-    passed with records that may be committed (`Commit`); fail when it failed or its records can't be: one it didn't
-    regenerate, or a change to what a guarantee says, which ``owners`` (handles) are rung about; infra when it registered no
-    run or never ran, launched again while ``starts`` is under 2."""
+    """A candidate's records run (`Build.records`, `Regenerate`): drive's lock run on its tree, before its check, which
+    regenerates the lock records it finds stale.  Pending while it launches or runs, or with ``why`` while its passed run's
+    records can't be read yet; pass once it passed with records that may be committed (`Commit`); fail when it failed or its
+    records change what a guarantee says, which ``owners`` (handles) are rung about; infra when it registered no run or never
+    ran, launched again while ``starts`` is under 2."""
     state: str = PENDING
     why: str = ""
     owners: tuple[str, ...] = ()
@@ -105,6 +109,8 @@ class Candidate:
     enqueued: float | None = None  # when `ready:<sha>` was first enqueued, in seconds since the epoch; None when unknown
     records: RecordsRun | None = None   # its records run, None while none was launched
     repairs: str | None = None     # a records commit (`Commit`): the candidate it is, its records regenerated, on the same base
+    waits: bool = False            # its check waits for its records run (`Build.records`): no verdict of it is read
+    held: float | None = None      # when its records commit was first held (`Commit`), in seconds since the epoch
 
 
 @dataclass(frozen=True)
@@ -132,17 +138,19 @@ class Snapshot:
     pending_s: float = 4 * 3600    # how long the lowest candidate is pending after its first enqueue before it is retried
     tree_ejects: bool = False      # infra errors marked `tree` are bisected and eject; off while graph2 marks `tree` on any
                                    # error that ran out of attempts on two or more nodes, as an outage's do
-    records: bool = False          # stale lock records are regenerated on the candidate (`Regenerate`); off, they fail it
+    records: bool = False          # a Lean batch's records are regenerated before its check (`Build.records`); off, they aren't
 
 
 @dataclass(frozen=True)
 class Build:
-    """Merge ``members`` in order onto ``base``, push the result to `queue/<sha12>` and enqueue `ready:<sha>` at ``priority``.
-    A member that doesn't merge onto what is built so far is left out and its owner told: the candidate's members are what
-    merged."""
+    """Merge ``members`` in order onto ``base``, push the result to `queue/<sha12>` and enqueue `ready:<sha>` at ``priority``;
+    with ``records`` (a member changes Lean, a lock or a spec), launch its records run instead, and its check waits for it
+    (`Candidate.waits`).  A member that doesn't merge onto what is built so far is left out and its owner told: the
+    candidate's members are what merged."""
     members: tuple[int, ...]
     base: str
     priority: int
+    records: bool = False
 
 
 @dataclass(frozen=True)
@@ -187,7 +195,7 @@ class Rerun:
 class Ring:
     """Tell infra that ``sha``'s check keeps ending in infra errors or failing to list, or stays pending, or that its verdict is
     malformed, or that its records run's records can't be read; or tell the owner of ``pr``, its lone member, that its check
-    keeps erring; or tell ``to`` (handles) why its records run refused its records."""
+    keeps erring; or tell ``to`` (handles) why its records run refused its records, or that its records commit is held."""
     sha: str
     why: str
     pr: int | None = None
@@ -206,14 +214,16 @@ class Red:
 
 @dataclass(frozen=True)
 class Regenerate:
-    """Launch ``sha``'s records run: drive's lock run on its tree, of the packages its stale records are in."""
+    """Launch ``sha``'s records run (again): drive's lock run on its tree, of every Lean package with a lock."""
     sha: str
 
 
 @dataclass(frozen=True)
 class Commit:
-    """Commit the records ``sha``'s passed records run regenerated on top of it, as drive commits a lock run's, push that
-    records commit and enqueue its check: a candidate on ``sha``'s base with ``sha``'s members that `repairs` ``sha``."""
+    """Start the check of ``sha``, whose records run passed: on ``sha`` as built when the run regenerated nothing, else on a
+    records commit of what it regenerated on top of ``sha``, made as drive commits a lock run's and pushed in its place, a
+    candidate on ``sha``'s base with ``sha``'s members that `repairs` ``sha``.  A records commit that can't be made yet is
+    held, and ``sha`` stays, its check waiting."""
     sha: str
 
 
@@ -234,13 +244,14 @@ def decide(s: Snapshot) -> list[Action]:
 
     A candidate already on `main` (the loop advanced to it and stopped before its drop, or `main` was moved to it) is dropped
     `on main`, with a pass outcome when its verdict passed, and its members stay out of the next batch, as does a PR whose
-    head a pass outcome holds: it is on `main`.  While the lowest candidate's records run runs or its records are committed
-    (`_records`), no batch is built: one on it would be dropped with it once its records commit replaces it."""
+    head a pass outcome holds: it is on `main`.  A candidate whose check waits for its records run has no verdict to read: what
+    its run calls for follows (`_first`), and while one waits no batch is built, since one on it would be dropped with it
+    once its records commit replaces it."""
     ready = {r.number: r for r in s.ready}
     acts: list[Action] = []
     chain, landed = _chain(s, ready, acts)
     main, ejected, hold = s.main, set(), False
-    if chain:
+    if chain and not chain[0].waits:
         c1 = chain[0]
         reading = _reading(c1.verdict)
         if c1.verdict.state == FAIL and not c1.verdict.failed:
@@ -250,15 +261,10 @@ def decide(s: Snapshot) -> list[Action]:
             acts += _red(c1, _outcomes(s, acts))
             acts += [Advance(c1.sha), Drop(c1.sha, ON_MAIN, _passed(c1))]
             main, landed, chain = c1.sha, landed | set(c1.members), chain[1:]
-        elif reading == FAIL and (records := _records(s, c1)) is not None:
-            acts += records
-            hold = True
         elif reading == FAIL and (rerun := _rerun(c1, ready)) is not None:
             acts.append(rerun)
         elif reading == FAIL or (reading == INFRA and s.tree_ejects and _tree(c1.verdict)):
-            if (r := c1.records) is not None and r.state == FAIL and r.owners:
-                acts.append(Ring(c1.sha, f"{c1.sha[:12]}'s records run refused its records: {r.why}", to=r.owners))
-            ejected = _failed(c1, ready, _outcomes(s, acts), acts, note=_refused(c1))
+            ejected = _failed(c1, ready, _outcomes(s, acts), acts)
             acts += [Drop(c.sha, BASE_FAILED) for c in chain[1:]]
             chain = []
         elif reading == INFRA and (s.tree_ejects or c1.tries < min(s.rings, 2)):
@@ -290,13 +296,24 @@ def decide(s: Snapshot) -> list[Action]:
             if s.now - c1.enqueued > 2 * s.pending_s:
                 acts.append(Ring(c1.sha, f"{c1.sha[:12]}'s check is still pending {2 * s.pending_s / 3600:g} h after its first "
                                          f"enqueue, {c1.tries} times enqueued"))
+    for i, c in enumerate(chain):
+        if c.waits:
+            first, out = _first(s, c, ready)
+            acts += first
+            if out is None:
+                hold = True
+                continue
+            ejected |= out
+            acts += [Drop(d.sha, BASE_FAILED) for d in chain[i + 1:]]
+            chain = chain[:i]
+            break
     if len(chain) < s.depth and not hold:
         base = chain[-1].sha if chain else main
         busy = landed | ejected | {m for c in chain for m in c.members}
         pool = sorted((r for r in ready.values() if r.number not in busy and not r.conflict), key=lambda r: (r.rank, r.number))
         members = _batch(pool, _outcomes(s, acts), s.batch, s.lean)
         if members:
-            acts.append(Build(members, base, s.depth - len(chain)))
+            acts.append(Build(members, base, s.depth - len(chain), s.records and any(ready[m].lean for m in members)))
     return acts
 
 
@@ -474,42 +491,36 @@ def _rerun(c1: Candidate, ready: dict[int, Ready]) -> Rerun | None:
     return Rerun(c1.sha, keys)
 
 
-def _records(s: Snapshot, c1: Candidate) -> list[Action] | None:
-    """What a failed lowest candidate whose own failures are all stale lock records (`Failed.records`) calls for: its records
-    run (`Regenerate`), launched again once when it ended in infra; nothing while it runs, or a ring of infra while its passed
-    run's records can't be read; once it passed, the commit of its records (`Commit`).  None when it fails as any other: the
-    loop regenerates no records (`Snapshot.records`), a failure of its own isn't stale records, or `_refused` says why
-    they weren't committed (among them a records commit's, whose records didn't settle them)."""
-    own = [f for f in c1.verdict.failed if not _inherited(f)]
-    if not s.records or not own or not all(f.records for f in own) or _refused(c1):
-        return None
-    r = c1.records
-    if r is None or r.state == INFRA:
-        return [Regenerate(c1.sha)]
+def _first(s: Snapshot, c: Candidate, ready: dict[int, Ready]) -> tuple[list[Action], set[int] | None]:
+    """What candidate ``c``, whose check waits for its records run, calls for, and the PRs it ejects: None while its check
+    still waits.  Its run is launched (`Regenerate`; once more when it ended in infra); while it runs nothing happens, and
+    infra is rung while its passed run's records can't be read; once it passed, its check starts (`Commit`), and a records
+    commit still held `pending_s` after it was first drops it, its members built again.  A run that failed or ended in infra
+    twice refuses its records: the owners its refusal names are rung (infra, for infra), its Lean members are ejected, and it
+    is dropped, an outcome suspecting them."""
+    r = c.records
+    if r is None or (r.state == INFRA and r.starts < 2):
+        return [Regenerate(c.sha)], None
+    if r.state == PENDING:
+        return [Ring(c.sha, f"{c.sha[:12]}'s records run: {r.why}")] if r.why else [], None
+    if r.state == PASS and c.held is not None and s.now is not None and s.now - c.held > s.pending_s:
+        return [Drop(c.sha, f"its records commit is still held {s.pending_s / 3600:g} h after it was first: its members are "
+                            "built again")], set()
     if r.state == PASS:
-        return [Commit(c1.sha)]
-    return [Ring(c1.sha, f"{c1.sha[:12]}'s records run: {r.why}")] if r.why else []
+        return [Commit(c.sha)], None
+    said = f"refused its records: {r.why}" if r.state == FAIL else f"ended in infra twice: {r.why}"
+    lean = tuple(m for m in c.members if m in ready and ready[m].lean) or c.members
+    heads = dict(zip(c.members, c.heads))
+    acts: list[Action] = [Ring(c.sha, f"{c.sha[:12]}'s records run {said}", to=r.owners)] if r.owners or r.state == INFRA else []
+    acts += [Eject(n, heads[n], f"its records run {said}") for n in lean]
+    acts.append(Drop(c.sha, f"its records run {said}", Outcome(c.members, c.heads, FAIL, lean, c.base)))
+    return acts, set(lean)
 
 
-def _refused(c: Candidate) -> str:
-    """Why ``c``'s stale lock records weren't committed, to go with its failure: its records run failed or refused them, or
-    ended in infra twice; or it is a records commit and they are stale still.  "" when none of these is so."""
-    r, own = c.records, [f for f in c.verdict.failed if not _inherited(f)]
-    if r is not None and r.state == FAIL:
-        return f"; its records run refused its records: {r.why}"
-    if r is not None and r.state == INFRA and r.starts >= 2:
-        return f"; its records run ended in infra twice: {r.why}"
-    if c.repairs is not None and any(f.records for f in own):
-        return f"; the records it commits on {c.repairs[:12]}, which its records run regenerated, are stale still"
-    return ""
-
-
-def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], acts: list[Action], tree: bool = True,
-            note: str = "") -> set[int]:
+def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], acts: list[Action], tree: bool = True) -> set[int]:
     """What a failed lowest candidate calls for: the ring of the reds it shows, the ejection its own failures make (or, with
     none, its infra errors that follow the tree; with ``tree`` False, every infra error of a check that keeps erring, which
-    ejects nobody), if any, and its drop, each why with ``note`` (`_refused`); the PRs it ejects.  Only those suspect
-    anyone."""
+    ejects nobody), if any, and its drop; the PRs it ejects.  Only those suspect anyone."""
     v, heads = c1.verdict, dict(zip(c1.members, c1.heads))
     own = tuple(f for f in v.failed if not _inherited(f))
     by_inputs = [m for m in c1.members if any(meets(ready[m].files, f.inputs) for f in own or (_tree(v) if tree else v.infra))]
@@ -517,13 +528,13 @@ def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], act
     if own and len(by_inputs) == 1:
         n = by_inputs[0]
         hit = ", ".join(f.task for f in own if meets(ready[n].files, f.inputs))
-        eject = Eject(n, heads[n], f"{hit} failed, and its changed files meet their inputs, no other member's{note}", own)
+        eject = Eject(n, heads[n], f"{hit} failed, and its changed files meet their inputs, no other member's", own)
     elif own and len(c1.members) == 1:
         n = c1.members[0]
         again = " and again when rerun afresh" if c1.reruns else ""
         eject = Eject(n, heads[n], f"{', '.join(f.task for f in own)} failed alone at {heads[n][:12]}{again}, and no failing "
                                    "task's inputs meet its files: if a test flaked, delete it (a test that flakes is deleted, "
-                                   f"not rerun){note}", own)
+                                   "not rerun)", own)
     elif len(c1.members) == 1 and tree:
         n = c1.members[0]
         eject = Eject(n, heads[n], f"{_tree_why(c1)}, with only it merged on {c1.base[:12]}: a check that keeps erring on a "
@@ -533,7 +544,7 @@ def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], act
     if eject is not None:
         acts.append(eject)
     why = (f"failed: {', '.join(f.task for f in v.failed)}" if own else _tree_why(c1) if tree else
-           f"{_ring_why(c1)}, again after it was enqueued again: bisected on them, ejecting nobody") + note
+           f"{_ring_why(c1)}, again after it was enqueued again: bisected on them, ejecting nobody")
     acts.append(Drop(c1.sha, why, Outcome(c1.members, c1.heads, FAIL, suspects, c1.base,
                                           tuple(f for f in v.failed if _inherited(f)))))
     return set() if eject is None else {eject.number}
