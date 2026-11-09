@@ -204,6 +204,15 @@ tests = [
 paths = ["integrations/vllm/verity_vllm"]
 
 [[tool.verity.tests.reads]]
+tests = [
+    "tests/check/test_pouw_ncp_v2_end_to_end.py",
+    "tests/pipeline/test_llm.py",
+    "tests/protocols/test_pouw.py",
+    "tests/protocols/test_protocol_options.py",
+]
+paths = ["integrations/vllm/verity_vllm/commit/scheme.py", "integrations/vllm/verity_vllm/protocols", "verity/ml/commitments"]
+
+[[tool.verity.tests.reads]]
 tests = ["tests/check/test_tp2_d90_fixture.py"]
 paths = ["integrations/vllm/verity_vllm/check/match", "integrations/vllm/verity_vllm/check/replay"]
 
@@ -262,10 +271,6 @@ paths = ["integrations/vllm/verity_vllm/acquire", "integrations/vllm/verity_vllm
 [[tool.verity.tests.reads]]
 tests = ["tests/pipeline/test_glue.py"]
 paths = ["integrations/vllm/tests", "integrations/vllm/verity_vllm", "verity"]
-
-[[tool.verity.tests.reads]]
-tests = ["tests/pipeline/test_llm.py", "tests/protocols/test_pouw.py", "tests/protocols/test_protocol_options.py"]
-paths = ["integrations/vllm/verity_vllm/commit/scheme.py", "integrations/vllm/verity_vllm/protocols", "verity/ml/commitments"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/pipeline/test_row.py"]

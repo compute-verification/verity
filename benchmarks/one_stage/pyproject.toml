@@ -37,6 +37,8 @@ untraced = [
     "tests/test_served_overhead.py",
     "tests/test_served_pouw.py",
     "tests/test_served_verdicts.py",
+    "tests/test_two_stage_driver.py",
+    "tests/test_vllm_example.py",
 ]
 # `verity`: the stream and its verifiers of record, and the Lean packages `sampled-proofs-verifier` builds from; its lakefile,
 # named on its own, is the package its tests build (`one_stage.verifier.executable`), so check runs them after lean-build.
