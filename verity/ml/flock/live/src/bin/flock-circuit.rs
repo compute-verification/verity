@@ -1241,22 +1241,24 @@ fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng
 
 /// M1 on the device: level 0's hiding and both reps' pads with their commitments, sampled beside the witness build (they depend on
 /// the seed alone). The salt ids are the sequential prover's: rep 0's pads tree takes the next id, rep 1's the one after rep 0's
-/// proof's trees (levels 1 to R), which `session` consumes when rep 1 starts. Returns the level-0 sample's seconds, and each rep's
-/// pads with their tree's salt id.
+/// proof's trees (levels 1 to R), which `session` consumes when rep 1 starts. Rep 0's pads, with their tree's salt id, go on
+/// `rep0` as soon as they are made, so rep 0 waits on level 0 and its own pads alone; rep 1's are made next and returned, for
+/// rep 1 to join when it starts.
 fn zk_prepare(st: &Stmt, plan: &Plan, seed: ProverSeed, lig: LigeritoProfile, salts: &Mutex<flock_live::zk_hooks::LeafSalts>,
-              points: &Arc<Mutex<Vec<Vec<F128>>>>) -> (f64, [(ZkRep, u64); 2]) {
+              points: &Arc<Mutex<Vec<Vec<F128>>>>, rep0: std::sync::mpsc::Sender<(ZkRep, u64)>) -> (ZkRep, u64) {
     let mut prng = flock_live::zk_hooks::ProverRng::from_seed(seed);
     let tl0 = Instant::now();
     let level0 = level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper);
     let t_level0 = tl0.elapsed().as_secs_f64();
     let trees = pcs_of(st, lig).ligerito_prover_config().expect("Ligerito config").recursive_steps as u64;
     let id0 = salts.lock().unwrap_or_else(PoisonError::into_inner).next_id();
-    let reps = [0usize, 1].map(|rep| {
-        let id = id0 + rep as u64 * (1 + trees);
-        (make_zkrep(st, plan, &mut prng, &level0, points, rep, id, salts, None), id)
-    });
-    eprintln!("ZKPRE\t{}", json!({"level0_s": t_level0, "s": tl0.elapsed().as_secs_f64()}));
-    (t_level0, reps)
+    // a session that stopped before its reps dropped the receiver
+    let _ = rep0.send((make_zkrep(st, plan, &mut prng, &level0, points, 0, id0, salts, None), id0));
+    let t_rep0 = tl0.elapsed().as_secs_f64();
+    let id1 = id0 + 1 + trees;
+    let rep1 = (make_zkrep(st, plan, &mut prng, &level0, points, 1, id1, salts, None), id1);
+    eprintln!("ZKPRE\t{}", json!({"level0_s": t_level0, "rep0_s": t_rep0, "s": tl0.elapsed().as_secs_f64()}));
+    rep1
 }
 
 /// The salt trees a device session's table samples, in order, as (tree id, leaves): level 0, then each rep's Ligerito levels 1
@@ -3912,12 +3914,13 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let mut salts_ahead = if after { None } else { start_ahead() };
     // the rank check's claim points: per table (each has its own mask slot)
     let points_t: Vec<Arc<Mutex<Vec<Vec<F128>>>>> = tabs.list.iter().map(|_| Arc::new(Mutex::new(Vec::new()))).collect();
-    // M1 on the device: level 0's hiding and both reps' pads commitments beside the witness build, and rep 0's replay and inner
-    // proof beside rep 1's device run (FC_ZK_SEQUENTIAL: neither, the reference for the overlap's gain)
+    // M1 on the device: level 0's hiding and both reps' pads commitments beside the witness build (rep 1's beside rep 0 too), and
+    // rep 0's replay and inner proof beside rep 1's device run (FC_ZK_SEQUENTIAL: neither, the reference for the overlap's gain)
     let overlap = std::env::var_os("FC_ZK_SEQUENTIAL").is_none();
     let zk_pre = (plan.gpu && is_zk(st) && overlap && plan.lean_frames.is_none()).then(|| {
         let (st, plan, salts, points) = (st.clone(), plan.clone(), salts_t[0].clone(), points_t[0].clone());
-        flock_live::spawn(move || zk_prepare(&st, &plan, seed, lig, &salts, &points))
+        let (tx, rx) = std::sync::mpsc::channel();
+        (rx, flock_live::spawn(move || zk_prepare(&st, &plan, seed, lig, &salts, &points, tx)))
     });
     // every table's witness. Rep 1 proves from rep 0's unless it has its own: the CPU prover consumes a witness, so rep 0 takes a
     // copy and rep 1 the original (two copies at most, never one per rep plus the original)
@@ -3956,10 +3959,13 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         salts_ahead = start_ahead();
     }
     let tj = Instant::now();
-    let mut zk_pre = match zk_pre.map(|h| h.join()) {
-        Some(Ok((_, reps))) => Some(reps.map(Some)),
-        Some(Err(e)) => panic!("M1's randomness: {}", panic_msg(e)),
-        None => None,
+    // rep 0's pads now; rep 1's when rep 1 starts
+    let (mut zk_pre, mut zk_pre1) = match zk_pre {
+        Some((rx, h)) => match rx.recv() {
+            Ok(rep0) => (Some([Some(rep0), None]), Some(h)),
+            Err(_) => panic!("M1's randomness: {}", h.join().err().map(panic_msg).unwrap_or_default()),
+        },
+        None => (None, None),
     };
     // the preparation's time past the witness build (what it adds to the session)
     let t_zk_pre_wait = tj.elapsed().as_secs_f64();
@@ -4090,10 +4096,15 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             let mut rep0_done: Option<(Vec<u8>, Value)> = None;
             for rep in 0..2 {
                 // M1: this rep's pads and their commitment (a fresh salt tree id), sampled before anything of the rep is sent (on the
-                // device path, beside the witness build: rep 1's tree id is consumed here, where the sequential prover takes it)
+                // device path, rep 0's beside the witness build and rep 1's after them, joined here and any wait counted in rep 1's
+                // prove time: rep 1's tree id is consumed here, where the sequential prover takes it)
                 let tz0 = Instant::now();
                 let (zkrep, pre_id) = match zk_pre.as_mut() {
-                    Some(z) => { let (r, id) = z[rep].take().expect("a rep's pads"); (Some(r), Some(id)) }
+                    Some(z) => {
+                        let joined = |h: std::thread::JoinHandle<(ZkRep, u64)>| h.join().unwrap_or_else(|e| panic!("M1's randomness: {}", panic_msg(e)));
+                        let (r, id) = z[rep].take().or_else(|| zk_pre1.take().map(joined)).expect("a rep's pads");
+                        (Some(r), Some(id))
+                    }
                     None => (is_zk(st).then(|| {
                         let id = salts.lock().unwrap_or_else(PoisonError::into_inner).next_id();
                         let name = flock_live::firewall::level0_session(&commit);
@@ -4113,8 +4124,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                 if let (Some(g), Some(z)) = (&firewall, &zkrep) {
                     g.lock().unwrap_or_else(PoisonError::into_inner).begin_rep(rep, z)?;
                 }
-                let t_zk_commit = if pre_id.is_some() { if rep == 0 { t_level0 } else { 0.0 } }
-                                  else { tz0.elapsed().as_secs_f64() + if rep == 0 { t_level0 } else { 0.0 } };
+                let t_zk_commit = tz0.elapsed().as_secs_f64() + if rep == 0 { t_level0 } else { 0.0 };
                 // rep 1's stream on the device path opens at its first round, after rep 0's last one (the order on the wire)
                 let mut lch = if rep0_finish.is_some() { None } else { Some(LiveChallenger::new(t.clone(), &tb.name, rep, &dom(rep))?) };
                 let tt = t.clone();
@@ -4331,6 +4341,10 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     })();
     let e2e_s = t0.elapsed().as_secs_f64();
     let wait_e2e_s = t.lock().unwrap_or_else(PoisonError::into_inner).wait_s();
+    // a session that stopped before rep 1 still ends rep 1's pads before it returns
+    if let Some(h) = zk_pre1 {
+        let _ = h.join();
+    }
     if let Some(h) = salts_ahead {
         let (tables, held, reuse, reused, threads, s) = h.join().unwrap_or_else(|e| panic!("the salts read ahead: {}", panic_msg(e)));
         let untaken: usize = tables.iter().map(|(a, _)| a.untaken()).sum();
