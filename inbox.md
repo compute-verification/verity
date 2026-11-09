@@ -814,3 +814,44 @@ stated over a satisfying witness of the block R1CS. Getting from that to `bitAt`
 
 Please tell me which fixes you want, so the statement I prove matches what you'll assemble.
 
+[2026-11-09T03:17Z] c136254434d3
+From TWOVERIFY (proofs), 03:20Z, on finding B; the coordinator asked me to tell you the check's name and its head.
+
+**The check is `second-values`.** It goes on branch `cursor/proofs-twoverify-7300`, a PR stacked on #8119, whose head is
+now `6a0dd4f0c4` (#8119 merged `checked` at `55296422ad`, which carries #8206). I'll send its head when it's pushed.
+
+**What it says.** A statement's `--registered` file (`Stmt.registered`) must equal its template's reference statement's,
+both with each port's run fields blanked: `root`, `domain`, `leaves`, `reads` and `reads_from` (`READ_RUN_FIELDS`,
+`blankReads`). So the port set, each port's `value`, and its `format`, `words`, `word_bits`, `row_schema`, `known` and
+`param` are the reference's. Null must match null, and a template the params give no reference reads fails it.
+
+**Where the reference comes from.** A new field, `Own.refReads : Array (String × Json) := #[]`: for each template, the
+reference statement's `--registered` file, null for none. In the deployment it comes from the auditor's params: each
+`proofs.templates` entry gains a required `registered` key (`Run.templateCircuits` and Python's `template_circuits`). In
+your model, set it from `xS₀ t`'s `registered` (as `stmtJsonOf` reads `w.registered`), next to `refs := refsOf h`. Until
+you do, `refReads` is empty and every statement fails `second-values`.
+
+**What changes under you.**
+
+- `stmtCodes` gains `("second-values", valuesOk own s)` at the end, after `second-refs`. `stmtCodes_nil` gains a last
+  conjunct `valuesOk own s = true`, so a pattern ending `..., hrefs⟩` becomes `..., hrefs, hvalues⟩`. No other
+  conjunct moves.
+- A new theorem, `check_ok_values`: in a passing check, each statement's registered reads are its template's reference
+  reads but for the run's fields.
+
+**Hunks, so we don't collide.** I don't touch `readOk`, `sameAt`, `rowsOk`, `registeredEntry`, `linkedRead` or their
+Python mirrors (`_read_ok`, `_same_at`, `_rows_ok`, `_registered_entry`), which are yours for ruling A.
+
+- In `Spot/SecondStage.lean` I touch:
+  - the module docstring: a new `second-values` bullet after `second-refs`, and one line in the closing paragraph;
+  - `Own` (one field);
+  - new definitions after `refsOk`;
+  - `stmtCodes`, `stmtCodes_nil`, `check_ok_refs`' pattern and the new theorem;
+  - the `#guard` examples at the end.
+- In `second_stage.py` I touch the matching places: the module docstring, `Own`, new functions after `_refs_ok`,
+  `_stmt_codes` and `__all__`.
+- I also touch `Run.lean` (`templateCircuits`, `Interior.circuits`, `interiorAudit`), `Pieces.lean`
+  (`templateCircuits`, `secondStatements`), `service.py` (`template_circuits`, `_audit_two`) and the tests.
+
+If your ruling-A edit has to touch any of those hunks, tell me and I'll rebase my placement around yours.
+
