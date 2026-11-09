@@ -61,6 +61,7 @@ untraced = [
     "tests/ops/test_epoch_row.py",
     "tests/ops/test_pod_bootstrap.py",
     "tests/pipeline/test_boundary_plan.py",
+    "tests/pipeline/test_boundary_rows.py",
     "tests/pipeline/test_commit_group.py",
     "tests/pipeline/test_commit_tree_of_record.py",
     "tests/pipeline/test_experiment_index.py",
@@ -70,6 +71,7 @@ untraced = [
     "tests/pipeline/test_row.py",
     "tests/pipeline/test_row_tables_stream.py",
     "tests/pipeline/test_serve_h1.py",
+    "tests/pipeline/test_serve_tie.py",
     "tests/pipeline/test_source_identity.py",
     "tests/pipeline/test_tp_gpu_lease.py",
     "tests/program/predict/test_predict.py",
@@ -262,6 +264,10 @@ tests = ["tests/pipeline/test_glue.py"]
 paths = ["integrations/vllm/tests", "integrations/vllm/verity_vllm", "verity"]
 
 [[tool.verity.tests.reads]]
+tests = ["tests/pipeline/test_llm.py", "tests/protocols/test_pouw.py", "tests/protocols/test_protocol_options.py"]
+paths = ["integrations/vllm/verity_vllm/commit/scheme.py", "integrations/vllm/verity_vllm/protocols", "verity/ml/commitments"]
+
+[[tool.verity.tests.reads]]
 tests = ["tests/pipeline/test_row.py"]
 paths = ["benchmarks/remote_session", "integrations/vllm", "verity"]
 
@@ -282,6 +288,10 @@ tests = [
     "tests/protocols/remote_bandwidth/test_remote_session.py",
 ]
 paths = ["benchmarks/remote_session", "verity/core/protocols/remote_bandwidth"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/pipeline/test_serve_remote.py"]
+paths = ["integrations/vllm/verity_vllm/protocols/remote_bandwidth"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/pipeline/test_serve_row.py"]
@@ -331,10 +341,6 @@ paths = ["verity/ml/definitions"]
 [[tool.verity.tests.reads]]
 tests = ["tests/protocols/test_pous_option.py"]
 paths = ["benchmarks/pous/p2_v1"]
-
-[[tool.verity.tests.reads]]
-tests = ["tests/protocols/test_pouw.py", "tests/protocols/test_protocol_options.py"]
-paths = ["integrations/vllm/verity_vllm/commit/scheme.py", "integrations/vllm/verity_vllm/protocols", "verity/ml/commitments"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/query/test_word.py"]

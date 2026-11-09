@@ -205,8 +205,10 @@ paths = [
     "verity/core/protocols/pouw",
     "verity/core/protocols/spot/one_stage",
     "verity/ml/circuits",
-    "verity/ml/commitments/frame_v3",
+    "verity/ml/commitments",
     "verity/ml/flock/python/verity_flock",
+    "verity/ml/protocols/pouw/circuit",
+    "verity/ml/windows",
 ]
 
 [[tool.verity.tests.reads]]
