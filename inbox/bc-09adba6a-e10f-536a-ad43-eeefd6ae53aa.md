@@ -91,3 +91,19 @@ This replaces the default in my 21:16Z entry. Apply it now in #8309; do not wait
   (`cursor/proofs-regpin-3e7a`), which merge it once.
 - Then: the Lean check of the packages touched, records, changed suites; mark #8309 at the renamed head; land ask to
   my inbox with the run ids. Tell me the ETA at your next checkpoint.
+
+## Coordinator, Mon 9 Nov 21:32Z: ci's reviewer notes on #8309 (review-3; none stops a land), to fold into the rename pass
+
+Source: note:ci/20261109T2140Z-report-reviewer-notes-for-proofs. #8309 has a land verdict at `a59ab0b49b`; its mark
+stays withdrawn until the `Addresses` rename is in. Since you are editing #8309's new files anyway:
+- **Fix now:** the PR body's Verified line still says the suite run at `a59ab0b49b` is running; it exited 0. Rewrite
+  it for the new head.
+- **Fix now where it is a word in a file #8309 adds** (not a file on `main`: top's freeze forbids renames there):
+  retired terms in `benchmarks/two_stage/guard.py:8-210` (flock-verify, draw, law, reference circuit),
+  `tests/TwoGuard.lean:43-250` (Draw, draw, law), `tests/test_guard.py:22` (flock-verify). The count over the
+  allowance went from 401 to 416 files.
+- **Only if it is prose and costs under 30 minutes, else your next PR:** the 13 new `SpotFlock` files (`Cap`,
+  `EntriesAt`, `FrameAt`, `FrameIsAt`, `Frame`, `HeaderRoots`, `KS`, `Pin`, `Placement`, `RevealAt`, `Rooted`,
+  `RowsOpen`, `SlotsAt`) and `Code.lean` (28 found, 13 allowed). Don't rename a declaration another PR in the stack
+  reads (#8363, #8406, #8339) without telling SLOTSAT, TWOVERIFY and TWOWITNESS its new name in the same message.
+Say in your report which of these went in and which are left, with the count after.
