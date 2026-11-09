@@ -22,10 +22,10 @@ def refusal(pkg: Path | str) -> str | None:
     """Why the machine must not run the research package at `pkg`, or None."""
     for rel, marker, does, fix in RULES:
         f = Path(pkg) / rel
+        if not f.exists():
+            continue
         try:
             text = f.read_text()
-        except FileNotFoundError:
-            continue
         except (OSError, UnicodeDecodeError) as e:
             return f"the research package at {pkg} can't be checked ({f}: {type(e).__name__}: {e}); nothing started"
         if marker not in text:
