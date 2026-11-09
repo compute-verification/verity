@@ -11,20 +11,24 @@ copies it reads them against (`SpotFlock.Held`), as `tests/TwoGuard.lean` reads 
 * ``c0.bin`` and ``c1.bin``: the bytes of the challenger's coins each stage's sample read (`service.Stream`'s);
 * ``ref-<t>.bin``: template ``t``'s reference statement (`Held.xS₀`), made from what is fixed before the run: its
   reference circuit and public file (`toy.references`), the reference window's partition and program as a5 writes a
-  session's, ``--zk``, one table, the sample of the second stage's size at its first units (`ref_draw`), and the
-  template's registered reads where the params name them (``proofs.json``'s ``templates[t].registered``, canonical JSON as
-  a0 writes a session's ``registered.json``), none where they don't;
+  session's, ``--zk``, one table, and the sample of the second stage's size at its first units (`ref_draw`), with no
+  registered reads: Flock's verifier parses a statement's as a ``--registered`` file, roots and rows included, and the
+  params' name none of the run's fields;
+* ``ref-<t>.reads.json``: template ``t``'s registered reads as the params name them (``proofs.json``'s
+  ``templates[t].registered``, canonical JSON as a0 writes a session's ``registered.json``), ``null`` where they don't;
 * ``held.json``: the rest of the `Held`, each from the registration and the design: the first stage's `select` input
   (rule, program, query, work table, closure), the second stage's cells ``ns`` and counts ``ks``, the templates'
   names, the design's links (`second_stage.replay_links` at the boundary window's own port names), each template's
   units ``vus``, the statement program's descriptor ``desc`` and the check's query.
 
-Nothing in ``held.json`` or a ``ref-<t>.bin`` is read from the run's records, sessions or coins; `export` checks the
+Nothing in ``held.json`` or a ``ref-<t>.*`` is read from the run's records, sessions or coins; `export` checks the
 links, the first stage's input, each reference's partition and program and the run's records against what the run
 used, and raises where they differ.
 
 ``python3 guard.py pack RUN_OUT FIXTURE`` packs a run's ``<case>/guard/`` for both cases into the guard test's fixture
-(`tests/test_guard.py`); ``python3 guard.py flip M2 OUT`` writes the test's flipped round-2 message (`flip_registered`).
+(`tests/test_guard.py`); ``python3 guard.py flip M2 OUT`` writes the test's flipped round-2 message (`flip_registered`);
+``python3 guard.py refs GUARD`` moves the registered reads out of each ``ref-<t>.bin`` of an export that put them there
+into its ``ref-<t>.reads.json`` (`split_refs`).
 """
 from __future__ import annotations
 
@@ -199,8 +203,8 @@ def export(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int)
         (out / f"ref-{t}.bin").write_bytes(raw(
             "verity/flock-circuit", (d / "circuit.txt").read_bytes(), (d / "pub.bin").read_bytes(),
             [(f.stem, f.read_bytes()) for f in sorted(tables, key=lambda f: order_of.index(f.stem))], zk=True,
-            draw=compact(ref_draw(q, n_t, k)), partition=part, program=prog,
-            registered=None if reads is None else canonical_json(reads)))
+            draw=compact(ref_draw(q, n_t, k)), partition=part, program=prog))
+        (out / f"ref-{t}.reads.json").write_bytes(canonical_json(reads))
         stmts.append(session_statement(audit / f"session-m{t}"))
     (out / "m2.bin").write_bytes(enc_list(enc_bytes, stmts))
     (out / "verdicts.json").write_text(json.dumps([verdict(audit / f"session-m{t}") for t in range(len(stmts))]))
@@ -262,6 +266,22 @@ def registered_span(st: bytes) -> tuple[int, int]:
     return i, i + n
 
 
+def split_refs(guard: Path) -> None:
+    """Each ``ref-<t>.bin`` under ``guard`` that carries registered reads rewritten without them, the reads written to
+    its ``ref-<t>.reads.json``, as `export` now writes them; one that carries none gets ``null``."""
+    for ref in sorted(guard.glob("ref-*.bin")):
+        st = ref.read_bytes()
+        try:
+            lo, hi = registered_span(st)
+        except ValueError:
+            reads = b"null"
+        else:
+            reads, st = st[lo:hi], st[:lo - 9] + b"\x00" + st[hi:]
+            json.loads(reads)
+        ref.with_suffix(".reads.json").write_bytes(reads)
+        ref.write_bytes(st)
+
+
 def flip_registered(m2: bytes) -> bytes:
     """Round 2's message ``m2`` with one byte of its first statement's registered reads flipped: the first hex digit of
     the first ``"root"`` value, so the reads still parse as JSON and name another root."""
@@ -281,5 +301,7 @@ if __name__ == "__main__":
         pack(Path(sys.argv[2]), Path(sys.argv[3]))
     elif sys.argv[1:2] == ["flip"] and len(sys.argv) == 4:
         Path(sys.argv[3]).write_bytes(flip_registered(Path(sys.argv[2]).read_bytes()))
+    elif sys.argv[1:2] == ["refs"] and len(sys.argv) == 3:
+        split_refs(Path(sys.argv[2]))
     else:
-        sys.exit("usage: python3 guard.py pack RUN_OUT FIXTURE | flip M2 OUT")
+        sys.exit("usage: python3 guard.py pack RUN_OUT FIXTURE | flip M2 OUT | refs GUARD")
