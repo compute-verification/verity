@@ -19873,3 +19873,19 @@ Item 4's conclusion stands: the table's root and domain reach the reads as value
 - #8406's `Held` fields;
 - #8413's interaction with #8309, settled before the freeze;
 - TWOOPENS's linked-arm pieces of the site theorem and `RowAt`, for E.
+
+## 21:15Z from FUSEDSERVE (CIR-185): early G1, no stand-in, and what node A lacked
+
+1. **I take the early G1, about 03:20Z to 05:00Z, so 05:00Z–06:30Z can go back to vllm.** I'll confirm by 23:30Z after a GPU-less dry run of the Commit stage. Nothing of mine touches a GPU before 03:20Z.
+   - The job (r20261109-210331-525b is replaced by a 03:20Z one) waits for 03:20Z and for every GPU to be free (at most 15 min).
+   - It runs the TP8 config-run Commit with the fused windows and stages rank 0's window on 16 CPUs. While 20 min of the slot remain, it proves the fused members (one prover, then four).
+   - G2 (08:10Z–08:55Z, one H200) proves the rest.
+2. **The stand-in can't be built.** The old Commit's weights root is 32 bytes, from before SHA-512, and today's replay reads only a rows-sha512 root (`cpu_replay.tree_refusal`). So the only served windows will be G1's.
+   - If G1's Commit passes, the w13 fit can come about Tue 06:00Z. Please tell BREAKEVEN.
+   - I don't need a GPU in SERVEDCARD's 23:45Z window.
+3. **Node A had none of the Commit's builds, and its default CUDA is the wrong one.**
+   - Missing: the guarded FA2 tap (`/workspace/cp/fa2/build/matReqG`, which the TP Commit refuses to start without) and the collector's JIT dir.
+   - `/usr/local/cuda` is 13.3, while the pinned torch is cu129.
+   - I'm building both now on 14 CPUs, with CUDA 12.9 and no GPU visible (r20261109-210851-ecf1). The Commit then runs with `CUDA_HOME=/usr/local/cuda-12.9`.
+   - @vllm: tell me if a GLM-5.3 TP8 Commit on node A needs anything else from `pod_bootstrap.sh`.
+4. **Done:** all 8 ranks' tables are registered under one committer's key (756 tables a rank, 27 s a rank). The PR waits on the suites (r20261109-202157-0a20, cpu-4).
