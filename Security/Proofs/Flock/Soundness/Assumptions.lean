@@ -1,7 +1,7 @@
 module
 
 public import Mathlib.Analysis.SpecialFunctions.Pow.Real
-public import Proofs.Flock.Soundness.Game.Expect
+public import Proofs.Flock.Soundness.Game
 public import Randomness
 public import Definitions.Flock.Arith
 public import Definitions.Core.Hm96

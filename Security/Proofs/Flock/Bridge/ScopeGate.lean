@@ -104,7 +104,7 @@ open Classical in
 /-- **`SampledKSLiveV2` with its statement, file and draw preconditions read off acceptance**: on the event that
 `verify --zk` accepts the transcript, the files and the record's draw (`Bridge.LiveAcceptsScoped`:
 `Bridge.LiveAcceptsKS`, whose ports are row/v1, row/v2 or row-seg/v1 rows of distinct names with no two registered roots
-one root under different domains, and `Flock.KsScope.check`), the sampled-proofs run passes the registration's
+one root under different domains, and `Flock.KsScope.check`), SPOT's run passes the registration's
 population (`Bridge.RunPopOk`),
 and the claims relation fails, at a statement, files and a draw in `Bridge.KsScoped` the bound is
 `Bridge.SampledKSLiveRoots`', and outside them the event has probability 0. It has none of V2's hypotheses `RowsOk`,

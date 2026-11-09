@@ -1,5 +1,5 @@
 """`registry.dsa_topk_mask` (the DSA top-k of a row past TOPK keys in the mask form, no advice) and its Boolean versions
-`boolean_dsa_topk_mask`: the mask is `topk_set` under the tie rule; the concentrator at the mask's settings lists the members'
+`boolean_dsa_topk_mask`: the mask is `topk_set` under the tie rule, the counted mask that of a row's first n keys; the concentrator at the mask's settings lists the members'
 rows in index order, so the long row is `sorted(topk_set)`; each Boolean version agrees with its word view, on rows that tie at
 the boundary, straddle signed zero and hold NaNs and infinities, and on masks of any popcount and random settings."""
 from __future__ import annotations
@@ -59,6 +59,39 @@ def test_the_mask_is_the_top_set_and_its_boolean_version_agrees(N, TOPK) -> None
     assert ref.tolist() == [[int(j in T.topk_set(r, TOPK)) for j in range(N)] for r in rows]
     got = np.asarray(BS.evaluate_bits(target, _bits(rows, 32))).reshape(len(rows), -1)
     assert np.array_equal(got, ref), target.id
+
+
+def _counted(row: list[int], n: int, TOPK: int) -> list[int]:
+    top = T.topk_set(row[:n], TOPK)
+    return [int(j in top) for j in range(len(row))]
+
+
+@pytest.mark.parametrize("N,TOPK", [(6, 4), (6, 6), (5, 1), (9, 8), (17, 16), (20, 16), (33, 8), (2, 1), (1, 1)])
+def test_the_counted_mask_is_the_top_set_of_the_first_n_keys_and_its_boolean_version_agrees(N, TOPK) -> None:
+    """`DsaTopKMaskCounted` at every n from 0 to N + 1 and at u32's top bit and top: every key below n while n <= TOPK, then the
+    top set of the first n (all N past N), never a key from n on; `DsaTopKMaskCounted_v2` agrees, so `DsaRowValid_v1`'s trie is
+    n > j at every n and N, a power of two or not."""
+    target = bind(BM.DsaTopKMaskCountedV2, N=N, TOPK=TOPK)
+    word = TR.word_of(target)
+    ns = list(range(N + 2)) + [1 << 31, (1 << 32) - 1]
+    cases = [(r, n) for r in _rows(random.Random(N * 100 + TOPK), N, 4) for n in ns]
+    rows, counts = [r for r, _ in cases], [n for _, n in cases]
+    ref = np.asarray(E.evaluate_batch(word, rows, counts)).reshape(len(cases), -1)
+    assert ref.tolist() == [_counted(r, n, TOPK) for r, n in cases]
+    got = np.asarray(BS.evaluate_bits(target, _bits(rows, 32), _bits(counts, 32))).reshape(len(cases), -1)
+    assert np.array_equal(got, ref), target.id
+
+
+def test_the_counted_mask_at_n_is_the_mask_of_the_first_n_keys() -> None:
+    """At n = N it is `DsaTopKMask`'s bits, and at TOPK <= n < N those of `DsaTopKMask{n}` over the first n keys, the rest 0: one
+    Definition over a bucket of N keys stands for the mask at each row length up to it."""
+    N, TOPK = 12, 4
+    rows = _rows(random.Random(5), N, 6)
+    counted = TR.word_of(bind(BM.DsaTopKMaskCountedV2, N=N, TOPK=TOPK))
+    for n in range(TOPK, N + 1):
+        got = np.asarray(E.evaluate_batch(counted, rows, [n] * len(rows))).reshape(len(rows), -1)
+        own = np.asarray(E.evaluate_batch(bind(M.DsaTopKMask, N=n, TOPK=TOPK), [r[:n] for r in rows])).reshape(len(rows), -1)
+        assert np.array_equal(got[:, :n], own) and not got[:, n:].any(), n
 
 
 def test_the_concentrator_lists_every_masks_members_in_index_order() -> None:
@@ -140,7 +173,8 @@ def test_the_long_row_is_the_top_set_in_ascending_order(N, TOPK) -> None:
     assert np.array_equal(_words(got), ref), target.id
 
 
-@pytest.mark.parametrize("target", [bind(BM.DsaTopKMaskV2, N=9, TOPK=8), bind(BM.DsaButterflySettingsV2, N=9, K=8),
+@pytest.mark.parametrize("target", [bind(BM.DsaTopKMaskV2, N=9, TOPK=8), bind(BM.DsaTopKMaskCountedV2, N=9, TOPK=8),
+                                    bind(BM.DsaButterflySettingsV2, N=9, K=8),
                                     bind(BM.DsaButterflyRowsV2, N=9, K=8, W=3, E=16), bind(BM.DsaTopKRowV2, N=9, TOPK=8),
                                     bind(BM.DsaTopKKeyV2)], ids=lambda t: t.id)
 def test_the_boolean_version_is_boolean_and_its_word_view_is_v1(target) -> None:
@@ -154,5 +188,9 @@ def test_the_accelerators_resolve_by_id_in_a_cold_decode() -> None:
     assert lookup_primitive(REGISTRY, "DsaTopKThresholdKey131072x2048_v1") is M.threshold(131072, 2048)[0]
     assert lookup_primitive(REGISTRY, "DsaTopKThresholdIndex131072x2048_v1") is M.threshold(131072, 2048)[1]
     assert lookup_primitive(REGISTRY, "DsaTopKSlot131072x2048_v1") is M.slot(131072, 2048)
+    assert lookup_primitive(REGISTRY, "DsaTopKCountedThresholdKey131072x2048_v1") is M.counted_threshold(131072, 2048)[0]
+    assert lookup_primitive(REGISTRY, "DsaTopKCountedThresholdIndex131072x2048_v1") is M.counted_threshold(131072, 2048)[1]
     with pytest.raises(ValueError, match="1 <= TOPK <= N"):
         M.threshold(4, 5)
+    with pytest.raises(ValueError, match="1 <= TOPK <= N"):
+        M.counted_threshold(4, 5)
