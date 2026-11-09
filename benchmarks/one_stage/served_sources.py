@@ -1,7 +1,8 @@
 """A served run's record composed off the served node, each part from the source that produced its verdict.
 
     served_sources.py record --serve-dir D --replay DIR --private DIR --out OUT --gate GATE --key-sha512 PIN
-        --main FILE --controlled-by WHO --published-coin FILE [--sampled-causes FILE] [--verifier-commit SHA]
+        --main FILE --controlled-by WHO --published-coin FILE [--coin-put FILE] [--sampled-causes FILE]
+        [--verifier-commit SHA]
 
 `served_verdicts.py record` composes from each piece's answer file as the served node wrote it, so an edit to such a
 file on that node changes its row. This composes on another host, from the copy D of the run's serve dir there, and
@@ -439,13 +440,17 @@ def compose(rows: Mapping[str, Mapping[str, Any]], policy: Mapping[str, Any], *,
     return report, line
 
 
-def coin_note(put: Path) -> str:
-    """The record's one line on whether the coin record's own artifact is in the evidence store, from the served node's
-    ``coin-put.json``; outside PoUW's row, which that file can't change."""
+def coin_note(put: Path | None) -> str:
+    """The record's one line on whether the coin record's own artifact is in the evidence store, from the
+    ``coin-put.json`` the run published (``--coin-put``; the served node's hand-off carries none); outside PoUW's row,
+    which that file can't change."""
+    unknown = "whether the coin record's own artifact is in the evidence store is not known here"
+    if put is None:
+        return f"{unknown} (no coin-put.json given)"
     try:
         doc = json.loads(put.read_text())
     except (OSError, ValueError) as e:
-        return f"whether the coin record's own artifact is in the evidence store is not known here ({put.name}: {type(e).__name__})"
+        return f"{unknown} ({put.name}: {type(e).__name__})"
     if isinstance(doc, dict) and doc.get("preserved") is True:
         return f"the coin record's own artifact is preserved in the evidence store ({put.name}: preserved: true, {doc.get('art')})"
     return (f"the coin record's own artifact was never preserved in the evidence store ({put.name}: preserved: false); "
@@ -489,6 +494,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--controlled-by", required=True, help="who controls this host, which composed_on names")
     r.add_argument("--published-coin", type=Path, help="the coin record the run published, which the coin as drawn's "
                                                        "public form is held to")
+    r.add_argument("--coin-put", type=Path, help="the coin-put.json the run published, for the record's note on whether "
+                                                 "the coin record's own artifact is in the store")
     r.add_argument("--sampled-causes", type=Path, help="a JSON list: the lane's diagnosis of a refused audit of record")
     r.add_argument("--verifier-commit", help="the commit of the tree whose verifiers the replay must have run")
     r.add_argument("--inference-only", default="served-node", choices=sorted(INFERENCE_FROM))
@@ -522,7 +529,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         tree = {k_: v for k_, v in (("tree", a.tree), ("tree_on", a.tree_on)) if v}
         report, line = compose(rows, inference_only(handed / "inference-only.json", a.inference_only), window=k,
                                steps=(lo, hi), node=node, controlled_by=a.controlled_by, product=env.get("PRODUCT") or "remote",
-                               run=a.run, tree=tree, notes=[coin_note(handed / "pieces" / "pouw" / S.COIN_PUT)])
+                               run=a.run, tree=tree, notes=[coin_note(a.coin_put)])
         held = "replay" in rows["work"]
         left = write(out, private, report, line, {
             **({S.PEARLPLUS_ANSWER: a.replay / S.PEARLPLUS_ANSWER, S.PEARLPLUS_LEAN: a.replay / S.PEARLPLUS_LEAN} if held else {}),

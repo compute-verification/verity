@@ -351,6 +351,7 @@ def _record(world, tmp_path: Path, monkeypatch, gate: Gate, capsys, *more: str) 
     rc = SS.main(["record", "--serve-dir", str(d), "--replay", str(replay), "--private", str(private), "--out", str(out),
                   "--gate", T.GATE, "--key-sha512", PIN, "--main", str(tmp_path / "main.txt"), "--controlled-by",
                   "the lane, which also ran the served node", "--published-coin", str(tmp_path / "published-coin.json"),
+                  "--coin-put", str(d / "private" / "compose" / "pieces" / "pouw" / S.COIN_PUT),
                   "--sampled-causes", str(tmp_path / "causes.json"), "--verifier-commit", COMMIT, "--run", "r-compose",
                   "--replay-run", "r-replay", "--audit-run", "r-audit", "--tree", "ee" * 20, *more])
     return rc, out, private, capsys.readouterr().out
@@ -453,9 +454,10 @@ def test_an_accept_of_every_row_composes_pending_and_a_part_not_accepted_is_said
         SS.inference_only(tmp_path / "none.json", "recomputed")
 
 
-def test_the_coins_note_is_the_served_nodes_put_and_never_pouws_row(tmp_path):
+def test_the_coins_note_is_the_published_put_and_never_pouws_row(tmp_path):
     put = tmp_path / S.COIN_PUT
     assert "is not known here (coin-put.json: FileNotFoundError)" in SS.coin_note(put)
+    assert "is not known here (no coin-put.json given)" in SS.coin_note(None)
     put.write_text(json.dumps({"preserved": True, "art": "art:bb"}))
     assert SS.coin_note(put) == ("the coin record's own artifact is preserved in the evidence store (coin-put.json: "
                                  "preserved: true, art:bb)")
