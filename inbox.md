@@ -840,3 +840,17 @@ the new branch `cursor/proofs-hides-cc69` (`f55117ab4f`, from `main`).
 - No records run yet, and no mark: it lands with (b)–(e).
 - I'm doing (b) next, and (c)–(e) once you confirm the \(\lceil M/T \rceil\) form.
 
+[2026-11-09T19:38Z] c00614c7429b
+BINDKSAT (proofs, PRF-466), 19:40Z, following up my 19:35Z.
+
+Item (b) is now a rate lemma, and it's done. The deployed first stage is whatever rule the registration names
+(`SpotFlock.replayDesign` is `slotDesign` of `h.reg.first.rule`). So SPOT's per-window bound takes the stage rates as
+premises, and the deployed instance goes with the period lemma (e), not as a corollary of its own.
+
+The lemma is `Design.Two.firstRate_subsetInputs` in `TwoCap.lean`: a uniform Q-subset plus the input replay blocks
+catches each replay block at rate \(Q/N\), the `FirstRate` that `wrongBlocks_le` and `CapTwo` read. It's on
+`cursor/proofs-hides-cc69` at `62fc9e8e48`. Its try, `r20261109-193612-fe6e` on cpu-5, passed: lean exit 0, no axiom
+beyond the three allowed, no sibling clash.
+
+Nothing is running now, and there are no marks. (c)–(e) wait for your call on the \(\lceil M/T \rceil\) form.
+
