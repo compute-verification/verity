@@ -1,6 +1,6 @@
 """A table read's structural unit is staged on the verifier's template (`read_tmpl`), never on `struct_lower`'s lowering of
 the Python Definition, whose Definitions and columns `Flock.ReadNet.check` refuses. The template is ``flock-read-tmpl V H``'s
-text parsed, once a shape; it is the unit of the templated statement `UnitStager` writes (META ``template``) and the unit a
+text parsed, once a shape; it is the unit of the templated statement `UnitStager` writes (its template section) and the unit a
 round evaluates, on ports that are its port groups (other ports are refused). A stand-in executable runs the plumbing
 without Lean. Where the tree builds the verifier's own executable, a round of honest and wrong reads stages on its template,
 each output the IR reference's."""
@@ -27,6 +27,7 @@ from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, bit_row
 from verity.ml.windows import interface as IF
+from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import read_tmpl as RT
 from verity_flock import tmpl as T
@@ -96,15 +97,15 @@ def test_the_executable_is_the_one_named_else_the_trees_build_else_the_paths(tmp
 
 @pytest.mark.slow
 def test_a_structural_unit_the_verifier_has_a_template_for_is_staged_on_it(tmp_path, monkeypatch):
-    """Where `read_tmpl.of` gives a template, the structural stager's unit is that template, never `struct_lower`'s: META
-    ``template`` is its text, and a round's outputs are its evaluation, which the stage holds to the IR reference. On ports
+    """Where `read_tmpl.of` gives a template, the structural stager's unit is that template, never `struct_lower`'s: its
+    template section is its text, and a round's outputs are its evaluation, which the stage holds to the IR reference. On ports
     that are not its port groups (a parameter split across rows) it is refused before anything is written."""
     ports = CS.unit_ports(PAIR, "unit/pair", [(r, ps) for r, _s, _b, ps in PAIR_ROWS])[0]
     t, _lw, _top = CS.SL.lower(PAIR, name="unit/pair", ports=ports)
     given = T.parse(T.write(t))
     monkeypatch.setattr(RT, "of", lambda d: given)
     st = CS.UnitStager(PAIR, "unit/pair", PAIR_ROWS, [(V2, (0,))], layout=MODE, structural=True)
-    assert st.low.template is given and "\n".join(st.meta["template"]) + "\n" == T.write(given)
+    assert st.low.template is given and FC.template_of(st.text) == T.write(given)
     rng = np.random.default_rng(7)
     rows = {r: rng.integers(0, 1 << 16, (6, bits // 16), dtype=np.uint16) for r, _s, bits, _ps in PAIR_ROWS}
     got = st.stage(rows, tmp_path / "round", b"k" * 32)
@@ -145,7 +146,7 @@ def _reads(V: int, H: int) -> list[tuple]:
 @pytest.mark.slow
 def test_a_read_unit_is_the_verifiers_template_and_stages_a_round_of_reads(verifiers, tmp_path, monkeypatch, fresh):
     """A structural ``EmbeddingRead_v1{V = 5, H = 2}`` on the rows serving commits (`interface.unit_rows`): its unit is the
-    template ``flock-read-tmpl 5 2`` writes, the tree's build found with nothing named, byte for byte META ``template``, and a
+    template ``flock-read-tmpl 5 2`` writes, the tree's build found with nothing named, byte for byte its template section, and a
     round of honest reads, a read under another salt and one past V stages on it, each read's row and verdict the IR
     reference's (`gates.embedding.reference`)."""
     V, H = 5, 2
@@ -154,7 +155,7 @@ def test_a_read_unit_is_the_verifiers_template_and_stages_a_round_of_reads(verif
     text = subprocess.run([str(verifiers), str(V), str(H)], capture_output=True, text=True, check=True).stdout
     in_rows, out_rows = IF.unit_rows(E.read(V, H), None)
     st = CS.UnitStager(E.read(V, H), "unit/read", in_rows, out_rows, layout=MODE, structural=True)
-    assert "\n".join(st.meta["template"]) + "\n" == text and T.write(st.low.template) == text
+    assert FC.template_of(st.text) == text and T.write(st.low.template) == text
     cases = _reads(V, H)
     rows = {r: np.stack([np.packbits(np.array(E.arguments(V, *c)[g], np.uint8), bitorder="little").view("<u2") for c in cases])
             for g, (r, *_rest) in enumerate(in_rows)}

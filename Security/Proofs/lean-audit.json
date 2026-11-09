@@ -46,6 +46,7 @@
   "Proofs.Properties.Spot.FactorUpper",
   "Proofs.Properties.Spot.TwoStageCheck",
   "Proofs.Properties.Spot.PlanCheck",
+  "Proofs.Properties.Spot.Wires",
   "Proofs.Properties.Spot.Units",
   "Proofs.Properties.Spot.Credited",
   "Proofs.Properties.Pous.TimedAudit",

@@ -116,6 +116,8 @@ noncomputable def sksL (Coin : Type) : Compiled Coin (toyA Coin) where
   iroots _ _ _ := []
   reveal _ _ _ _ := []
   openCalls _ := 0
+  nOut _ := 1
+  nIn _ := 1
   Tape := Unit
   P _ := silentP
   δc _ _ := 0
@@ -146,13 +148,13 @@ theorem noHash_compiledE (L : Compiled Coin A) (hs : ∀ x u v, L.session x u v 
   · trivial
   · split_ifs
     -- The waits' coin lists are generalized first: unifying against them unfolds `List.finRange` at the cap.
-    · generalize List.map c.1 (List.finRange (L.cap x)) = rs
+    · generalize List.map c.1 (List.finRange (L.capOut x)) = rs
       refine noHash_bind _ _ (noHash_waitAccC _ _ _) fun outer => ?_
-      generalize (List.finRange (L.k x)).zip outer = jos
+      generalize (List.finRange (L.kOut x)).zip outer = jos
       refine noHash_bind _ _ (noHash_flatMapRP _ (fun jo => ?_) _) fun _ => trivial
-      generalize List.map (fun l => forkOn (L.stage2 x) jo.2.1 (c.2.1 jo.1 l)) (List.finRange (L.cap x)) = rs'
+      generalize List.map (fun l => forkOn (L.stage2 x) jo.2.1 (c.2.1 jo.1 l)) (List.finRange (L.capIn x)) = rs'
       refine noHash_bind _ _ (noHash_waitAccC _ _ _) fun inner => ?_
-      generalize (List.finRange (L.k x)).zip inner = lis
+      generalize (List.finRange (L.kIn x)).zip inner = lis
       exact noHash_flatMapRP _ (fun _ => noHash_runExt L hs _ _ _ _ _) _
     · trivial
 
@@ -211,14 +213,16 @@ theorem sksL_κ (x : Msg) : (sksL Coin).κ 0 x < 1 / 3 := by
   have hs := slack_le_two
   have hs0 := slack_pos
   have ho := sksD_outer (Coin := Coin) x
-  have hk : (sksL Coin).k x = (sksD Coin).k x := rfl
-  have hc : (sksL Coin).cap x = (sksD Coin).cap x := rfl
+  have hko : (sksL Coin).kOut x = (sksD Coin).k x := rfl
+  have hki : (sksL Coin).kIn x = (sksD Coin).k x := rfl
+  have hco : (sksL Coin).capOut x = (sksD Coin).cap x := rfl
+  have hci : (sksL Coin).capIn x = (sksD Coin).cap x := rfl
   have ho0 : 0 ≤ 2 * ((sksD Coin).k x : ℝ) / ((sksD Coin).cap x : ℝ) + Real.exp (-((sksD Coin).k x : ℝ) / 8) := by
     positivity
   have he : (sksL Coin).κ 0 x = (1 + slack) * (2 * ((sksD Coin).k x : ℝ) / ((sksD Coin).cap x : ℝ) +
       Real.exp (-((sksD Coin).k x : ℝ) / 8)) := by
     unfold Compiled.κ
-    rw [sksL_κs, hk, hc]
+    rw [sksL_κs, hko, hki, hco, hci]
     ring
   rw [he]
   generalize 2 * ((sksD Coin).k x : ℝ) / ((sksD Coin).cap x : ℝ) + Real.exp (-((sksD Coin).k x : ℝ) / 8) = X at ho ho0 ⊢
@@ -407,6 +411,8 @@ def twoL (Coin : Type) : Compiled Coin (twoA Coin) where
   iroots _ _ _ := []
   reveal s u _ _ := [(s.roots, ⟨u, true, []⟩)]
   openCalls _ := 0
+  nOut _ := 2
+  nIn _ := 2
   Tape := Unit
   P _ := silentP
   δc _ _ := 0
@@ -560,6 +566,7 @@ theorem twoL_sessions (H : Msg → Msg) : (twoL Coin).Sessions H where
       rw [Pr_congr fun d => iff_false_intro (hn d), Pr_false]
       exact two_Pa_nonneg B
   slots _ _ := le_rfl
+  unions _ := le_rfl
   refuses x _ _ _ _ _ := twoL_scope x
   interior _ _ _ _ _ _ _ := rfl
   fixed _ _ _ _ := ⟨Finset.subset_univ _, fun _ => rfl⟩

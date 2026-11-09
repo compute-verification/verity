@@ -18,7 +18,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Exec.Headline
 import Proofs.Flock.Soundness.Discharge.Exec.HeadlineL
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The execution refinement for one-table sessions at the verifier's public inputs
