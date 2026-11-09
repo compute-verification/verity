@@ -20659,3 +20659,147 @@ Its bytes (row/v2, 32 words a row) stay as they are.
 - **Changed since 21:49Z that you may not have:** #8309's premise `Sites` is renamed `Addresses` at 58f7298323 and the ask's page still says `Sites`; the Goals page has a new `network/cap-certified`, due Tue 10 Nov 18:00 PST, where NET-281 says Fri 13 Nov.
 - **The three issue texts** (section 6, none filed): one configuration file for the post with every feeding run stamping its digest; the figures label or refuse a row whose card is off that configuration; say what the Lean verifier does with a two-stage run, in the code, the goal and the post.
 - **For a refresh:** section 8 lists what to read first. I end my turn now.
+
+## ZKSTACK, Mon 9 Nov 23:40Z: review of the two-stage committed-form statement (`cursor/proofs-hides-cc69` at 03a2a9aeb0)
+
+**In one line each.**
+1. Two finders, as drafted (`BconfTwo` beside `Bconf`).
+2. A total `iregVal` is sound: no step of `reg_split` needs "no opening counts as incorrect" at an interior gate.
+3. Yes: the congruence is `Prog.correct_congr` on `main`, and its `refIn` form is proved and elaborates
+   (`Claims.Sampling.correct_refIn_congr`, my branch). `F` at `val = regVal` exactly and the `N` in the interior's term
+   both stand; no fallback.
+4. `|W|` is sound for the theft sentence everywhere but exact only where the lowest-rate proof blocks commit at least
+   the bits a replay block serves; below that, matching the planner needs `Σκ` in a `min(b(U), S_ρ)` channel. The
+   draft's span cap (a span's own served bits) fails the carried-request check and must be the request's outputs from
+   that span on, later windows included.
+
+Nothing in `KSRegTwo`, `MissTwo` or `PeriodTwoReg` is false as stated that I can find, and no premise is stronger than
+`CompilerKSTwo`'s plus the two rates. No deployed `CompiledTwo` exists, so nothing discharges `Sessions.opens` or
+`interior` at SPOT[Flock] by Thursday (below).
+
+**1. One finder or two.**
+- READ: `BconfTwo.out` at `(ω, r, (e₁, c₁), (e₂, c₂))` (`SamplingTwoReg.lean:128-151`) is `Bconf.out`
+  (`SamplingGeneric.lean:596-610`) at the coins `forkOn (stage2 x) r e₁` and `forkOn (stage2 x) r e₂`. So
+  `bconf_of_disagree` (`Reg.lean:281`) applies unchanged at those two coin vectors, and `le_bconfTwo` is `le_bconf`'s
+  ten lines.
+- A coin-tossing finder needs a mixture state (a `Bool` and both finders' states), a lemma
+  `Pr[B*] = (Pr[B_conf] + Pr[B_conf,2])/2` with its cost, and it doubles two terms.
+- Both finders are explicit and rest on SHA-512's collision resistance in `trust.base`; neither adds an assumption,
+  and the period reads only `ε_reg,2 ≤ ε_t`.
+- MINE: keep two. The post can say each finder's term is a collision probability at that finder's cost.
+
+**2. The interior's default.**
+- READ: the two-stage `Sessions.opens` (`SamplingTwo.lean:308-317`) concludes `Correct (refIn rb val ι) b` for every
+  `ι` agreeing with the revealed openings that pass under ρ's interior roots, and says nothing at a gate no such
+  opening covers.
+- MINE (the step I will write): `reg_split` at two stages takes `ι' g = iregVal ρ g` for `g < N` with `g ∈ rb`, and
+  the kept openings (`ιOf`) elsewhere.
+  - A passing interior opening at `g` equals the run's first one there, by no self-conflict: `InConf` already ranges
+    over every roots (`Reg.lean:167`).
+  - That first one is `iregVal ρ g` unless the run is off the committed interior (the new `OffIreg`).
+  - An unopened gate is unconstrained, so the default is as good as any value.
+- The default can only add proof blocks to `F`. `MissTwo` reads `W`, which quantifies over every interior
+  (`SamplingTwoReg.lean:60-62`), so it does not move. The threshold form and the headline read every interior, or
+  the best one.
+- At the boundary `regVal` stays `Option`, and a `none` at a gate a block reads does make it incorrect in `F`.
+  `reg_split` never meets that case: a gate the session reveals and that passes has `regVal = some` once the run is
+  not `OffReg`.
+
+**3. `F` at `val = regVal` exactly.**
+- READ:
+  - `Prog.correct_congr` (`Security/Proofs/Flock/Claims/Sampling/ProgReads.lean:99`, on `main`): `Correct ref u` and
+    `Correct ref' u` agree when `ref` and `ref'` agree at `u`'s gates and at the reads of `u`'s gates outside `u`.
+  - `InScopeTwo` (`SamplingTwo.lean:183`) gives `Topological`, so every read `i < g`, and `Pt.Partitions`, so every
+    gate of a proof block is below `N` (`Sampling.lean:223`). Every position `Correct` reads is therefore below `N`.
+  - `Prog.refIn rb val ι g` (`Sampling.lean:181`) is `some (ι g)` when `g ∈ rb` and `rb`'s boundary doesn't commit
+    `g`, and `val g` otherwise.
+  - So `Correct (refIn rb val ι) b` reads `val` only below `N` and `ι` only at `rb`'s gates below `N`.
+    `footprint_congr` (`TwoCount.lean:489`) makes the same argument on `main`.
+- RAN: `Claims.Sampling.correct_refIn_congr` states it: boundary values agreeing below `N` and interiors agreeing at
+  `rb`'s gates below `N` give the same `Correct`.
+  - Commit 79949554de on `cursor/proofs-tworeg-event-ee22`: the statement's head plus this lemma.
+  - Run r20261109-232411-c0ed on cpu-12: lean exit 0 in 179 s; axioms `propext` and `Quot.sound`; no skip in the log.
+- The `N` in the interior's term:
+  - The interior's rewinding table is indexed by the gates `g < N`, with ρ the replay block holding `g` (`gateBlock`,
+    `TwoCount.lean:113`, unique by `d.part.gates.Nodup`).
+  - Each gate is read under its own replay block's interior roots, so one table of `N` positions covers every replay
+    block.
+  - `d.part`'s gates need not be below `N` (`InScopeTwo` has no `d.part.Partitions`), and nothing needs them to be.
+- READ: `cell` keys on `replayOf` (`SamplingTwo.lean:88`). So the cell that puts `u` in `F` is the replay block
+  `opens` returns (`replayOf Pt d.part u = some ρ`), with no uniqueness step.
+
+**4. The theft half's count.**
+- READ: what the theft sentence charges per incorrect unit.
+  - `Served.Local` bounds a window's changed slots by `E · incorrect`. `Served.Isolated` bounds them by
+    `F · Σ incorrect` over the windows so far, and lets a block's changes fall in later windows through carried
+    state (`Definitions/WeightSecurity/Served.lean`).
+  - `TheftServed` (`Definitions/WeightSecurity/Guarantees.lean:95`) charges `E · M` overwritten values.
+  - At `twoRegRec`, `incorrect = |W|`. So `E` (or `F`) must bound everything one replay block wrong at the committed
+    boundary can change: the served outputs of every request meeting ρ, a carried request's later windows included.
+- MINE: in that slots form `Σκ` buys nothing. A block with one fault has `κ = 1` and can change all of `S_ρ`, since
+  one wrong early value reaches the rest of its request. So the charge per κ-unit is `S_ρ` again.
+- MINE: `Σκ` pays in a `TheftFaulted` whose channel per wrong replay block is `min(b(U_ρ), S_ρ)` bits: `U`'s committed
+  values, or the served outputs when those are fewer. Its charge per κ-unit is about `max_k min(k·b, S_ρ)/κ(k)`,
+  near `b` when `b < S_ρ`.
+- READ: the planner (`two_stage_rankin`, `verity/core/protocols/spot/optimize.py:1167`, served cap, patterns form)
+  charges a replay block serving `S` bits at `y_S = min_v r_v · max(1, S/b_v)`: more faults for more bits. That is
+  the `Σκ` shape.
+- So whether `|W|` is enough depends on the design point.
+  - Where the lowest-rate proof blocks commit at least `S` bits, one fault carries all of `S`, and `|W|` carries the
+    theft sentence with nothing lost.
+  - Where they commit fewer, `|W|` is sound, but its exponent per wrong block is the one-fault exponent, below the
+    planner's by up to about `min(S/b, 1/r₂)`. To match the planner, the period needs `Σκ`, or the footprint's own
+    escape product.
+  - GUESS: decode-heavy points are in the second case: a token's sampler block commits about 17 bits, and a request
+    serves hundreds. I have not run the planner's points.
+- The carried-request check fails in the draft.
+  - §6's span paragraph caps a span at "the span's own served output bits" and says the two choices agree. They don't.
+  - Spans `j+1, …` of the same request read span `j`'s committed rows and are correct on them, so they are not in
+    `W`, but their outputs change, some in later windows.
+  - The cap per wrong span is the served outputs of its request from that span on, in that window and every later
+    one: for `E` in the `Local` form, and for `S_ρ` in `min(b(U), S_ρ)`.
+
+**False or missing.**
+- `KSRegTwo`, the primary conjunct: provable from `A.KS`, `Binds` and the contract's `slots`, `shared`, `fixed`,
+  `runs`, `interior` and `opens`, by the plan below. MINE: nothing is missing.
+- `KSRegTwo`, the threshold conjunct. MINE: it follows from the primary conjunct, with:
+  - `secondDraws` at `F(ω, r)`, which reads `r` off `stage2` only (`forkOn_forkOn`, `Extract.lean:29`);
+  - `replayDraws` through `Ex_esc_le` at the best interior;
+  - `escCell` falling in `m`.
+- `MissTwo`. MINE: it is true as stated.
+  - For ρ ∈ `W`, every interior leaves a nonempty cell, so `escCell ≤ 1 − r₂` there by `SecondRate`.
+  - `FirstRate` and `Pa_le_pow` give the power.
+- `PeriodTwoReg`. READ: out-of-scope windows have `regCount = 0` and never accept (`refuses`), and
+  `ε_t ≥ ε_reg,2 ≥ 0` (`κs_nonneg`, `Fails.lean:390`), so `hacc` and `hstage` hold there.
+- Premises against code by Thursday: the statements take `CompilerKSTwo`'s premises and the two rates, nothing
+  stronger.
+  - READ: no `CompiledTwo` instance of SPOT[Flock] exists anywhere in `Security` or `verity`. So nothing discharges
+    `Sessions` at the deployed verifier by Thursday, and `opens` at the replay block and `interior` stay premises, as
+    they are for `CompilerKSTwo` on `main`.
+  - GUESS: `interior` holds by construction once `stage2` starts after the interior registration.
+  - GUESS: `opens` at the replay block needs the session to open a proof block's interior reads under the replay
+    block's registered interior roots. Code that commits interiors per proof block would not give it.
+
+**Job 2, the dated plan.** The file is `Security/Proofs/Flock/SamplingGeneric/TwoReg.lean` (`eventTwo_le`), on branch
+`cursor/proofs-tworeg-event-ee22`, stacked on `cursor/proofs-hides-cc69` at 03a2a9aeb0. Each date is when that piece
+elaborates under `verity lean try` on cpu-12 with a clean axiom probe:
+- the congruence: done (above);
+- self-conflict at every root: nothing new, since `InConf` and `pr_inConf_le` already range over every roots;
+- interior openings and `B_conf,2`: Tue 10 Nov 08:00Z. That is `iopensAt` as a kept opening, and two runs' interior
+  disagreement to `bconf_of_disagree` at the forked coins (`le_bconfTwo`, `pr_iconflict_le`);
+- the interior's rewinding: Tue 10 Nov 18:00Z. That is `OffIreg`, the gate-indexed table, and `pr_offIreg_le` at fixed
+  first-stage coins through `Pr_forkOn_prod`;
+- `reg_split` at two stages: Wed 11 Nov 02:00Z. That is `opens` at ρ with `val'` and `ι'`, then
+  `correct_refIn_congr`;
+- the selection that reads the first-stage coins, and the sessions' bound at it: Wed 11 Nov 08:00Z. `SessionKS` picks
+  `sel` after `ω` and `r`, so this needs no new premise;
+- `eventTwo_le` free of `sorry`, with the aggregator import and a `--siblings` try: Wed 11 Nov 16:00Z;
+- records and the PR marked: Thu 12 Nov 12:00Z, ahead of 18:00Z, provided the statement's PR is admitted by then
+  (mine stacks on it).
+
+Size: 420-660 lines. The finders and self-conflict come in under §4's estimate because `Bconf`'s lemmas apply
+unchanged.
+
+What would cut it: if `pr_offIreg_le` is not elaborating by Wed 08:00Z, I say so then. The cut would be to mark
+Thursday with what elaborates and land `eventTwo_le` on Friday, with no hypothesis added. The boundary half is already
+on `main`, so there is nothing to land ahead of it.
