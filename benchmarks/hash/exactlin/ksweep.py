@@ -81,7 +81,7 @@ class Shape:
     def fn(self, cfg: X.Cfg) -> Callable[[], None]:
         work = kgate.work()
 
-        def f():
+        def f() -> None:
             for w, sw in self.ws:
                 X.scaled_mm(self.xq, self.sa, w, sw, self.y, cfg, work)
         return f
@@ -158,7 +158,8 @@ def gemm(out: Path, models: tuple[str, ...], ms: tuple[int, ...], top: int, reps
         vt = X.default_cfg(m, n, k)
         sa2 = shape.sa.reshape(-1, 1)
 
-        def stock(xq=shape.xq, sa2=sa2, ws=shape.ws):
+        def stock(xq: torch.Tensor = shape.xq, sa2: torch.Tensor = sa2,
+                  ws: list[tuple[torch.Tensor, torch.Tensor]] = shape.ws) -> None:
             for w, sw in ws:
                 triton_scaled_mm(xq, w.t(), sa2, sw, torch.bfloat16)
         final = list(dict.fromkeys(best(med, top) + [vt]))

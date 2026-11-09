@@ -26,7 +26,7 @@ CALLS = {"row_quant": 0, "product": 0}
 
 
 def counted(name: str, f: Callable[..., object]) -> Callable[..., object]:
-    def body(*args):
+    def body(*args: object) -> object:
         CALLS[name] += 1
         return f(*args)
     return body
