@@ -1,10 +1,12 @@
 module
 
 public import Properties.NetworkPeriod
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 import all Init.Data.Array.Basic
+public import Mathlib.Algebra.GroupWithZero.Nat
+import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
 # Each form's `K` bounds `PeriodLeakAccepted`'s count: the proofs of `ClockKBoundsCount` and `RowsKBoundsCount`
@@ -13,7 +15,7 @@ Each factor is at most 2 to the power of the ceiling of its `log2` (`le_two_pow_
 connections and the windows (the compute audits, or the scans) are sums over `Fin m` and `Fin n` (`Array.ofFn`), so
 `2 ^ K` is the product of the factors' bounds.
 
-`RowsTiedDrawn`, `RowsProgWired` and `RowsStateTied` read the check's refusals off its findings: on acceptance every
+`RowsTiedSampled`, `RowsProgWired` and `RowsStateTied` read the check's refusals off its findings: on acceptance every
 finding is none (`firstFinding_none`), a tied audit's among them, and each link-window's `wiredCheck` and
 `stateCheck`.
 -/
@@ -86,7 +88,7 @@ theorem rowsKBoundsCount : RowsKBoundsCount := by
   simp only [AuditTerms.bits, Scan.terms, pow_add]
   exact Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul le_rfl (le_two_pow_clog2 _)) le_rfl) (le_two_pow_clog2 _)
 
-/-! ## A tied audit draws every unit -/
+/-! ## A tied audit samples every unit -/
 
 theorem firstFinding_none {fs : List (Option (Core.Verdict × String))} (h : firstFinding fs = none) :
     ∀ f ∈ fs, f = none := by
@@ -130,7 +132,7 @@ theorem auditChecks_ok {p : Params} {c : Commitment} {e : Evidence} {pub : Publi
 
 /-- The refusal: an audit the check ties that it accepts drew every unit. -/
 theorem auditCheck_tied {i : ℕ} {a : Audit} {reg : Lean.Json} {x : Core.Answer} {f : Facts}
-    (h : auditCheck i a reg x true = .ok f) : DrawnWhole i reg x := by
+    (h : auditCheck i a reg x true = .ok f) : SampledWhole i reg x := by
   unfold auditCheck at h
   cases ha : answered s!"audit {i}" reg x with
   | error r =>
@@ -151,7 +153,7 @@ theorem auditCheck_tied {i : ℕ} {a : Audit} {reg : Lean.Json} {x : Core.Answer
         by_cases c2 : g.units = a.units <;> by_cases c3 : g.drawn = g.units <;>
           simp_all [refuse, pure, Except.pure]
 
-/-- The refusal refuses no audit drawn whole: one passes the tied check as it passes the untied one. -/
+/-- The refusal refuses no audit sampled whole: one passes the tied check as it passes the untied one. -/
 theorem auditCheck_tied_whole {i : ℕ} {a : Audit} {reg : Lean.Json} {x : Core.Answer} {f : Facts}
     (h : auditCheck i a reg x = .ok f) (hd : f.drawn = f.units) : auditCheck i a reg x true = .ok f := by
   unfold auditCheck at h ⊢
@@ -183,7 +185,7 @@ theorem check_sizes {p : Params} {c : Commitment} {e : Evidence} {pub : Public} 
   by_contra hc
   exact hs hc
 
-theorem rowsTiedDrawn : RowsTiedDrawn := by
+theorem rowsTiedSampled : RowsTiedSampled := by
   intro p c e pub prof h s sd scan hform i reg x hreg hx htied
   obtain ⟨hlt, -⟩ := Array.getElem?_eq_some_iff.mp hreg
   have hi : i < p.audits.size := by rw [← check_sizes h]; exact hlt
@@ -213,9 +215,9 @@ def otherAnswer : Core.Answer :=
 theorem otherAnswer_refused : (answered s!"audit {0}" tiedAudit otherAnswer).toBool = false := by
   decide +kernel
 
-/-- **No period check that accepts every period has `RowsTiedDrawn`'s property** (its nontrivial lemma): such a check
+/-- **No period check that accepts every period has `RowsTiedSampled`'s property** (its nontrivial lemma): such a check
 accepts a rows-form period whose audit 0 is tied and answered by another protocol than one-stage's. -/
-theorem rowsTiedDrawn_nontrivial : ¬ RowsTiedDrawnOf acceptAllRows := by
+theorem rowsTiedSampled_nontrivial : ¬ RowsTiedSampledOf acceptAllRows := by
   intro h
   let s : Schedule := ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0⟩
   let p : Params := ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows s .empty ⟨0, 0, 0, 0⟩, 1⟩

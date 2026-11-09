@@ -128,7 +128,7 @@ def test_a_window_hands_off_once_open_and_unclosed_and_a_table_off_its_root_is_r
 @pytest.mark.slow
 def test_the_close_stage_completes_the_serving_stages_record(tmp_path, monkeypatch):
     """`pouw_h1_gpu.py --close-from` on a handed-off window and the record its serving phase left: the window closed,
-    measured and released on the challenge phase's stream, its draw's challenge phase opened through ``--gate``, and the
+    measured and released on the challenge phase's stream, its sample's challenge phase opened through ``--gate``, and the
     record (``pouw_h1_gpu.json``) completed with its commitment, the challenge phase closed and each call's A table under
     its round's root."""
     from tests.protocols import pouw_h1_gpu as GPU
@@ -186,7 +186,7 @@ def test_every_served_row_of_a_saved_window_rebuilds_from_the_provers_directory(
     """The served trees a window saves keep no rows, and `pouw_h1_kept.kept_row` rebuilds every row of each
     of its step A tables, z tables and its ``b/<K>`` from the prover's directory and the saved state, each committing to
     its tree's ``b || c`` under the tree's own salt; a kept A code changed afterwards rebuilds a row that isn't."""
-    from verity.core.protocols.sampled_proofs.one_stage import registered as G
+    from verity.core.protocols.spot.one_stage import registered as G
     _host(tmp_path, monkeypatch)
     prover = tmp_path / "prover"
     run = _served(_remote(transcript_dir=str(tmp_path / "w"), served=SV.Served(window=bytes(64), prover=str(prover))),

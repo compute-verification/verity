@@ -47,6 +47,9 @@ SOURCE_SUFFIXES = frozenset({".py", ".rs", ".toml", ".sh", ".cu", ".c", ".h", ".
 
 MD_SIZE_CAP = 48 * 1024
 PROTOCOL_SIZE_CAP = 256 * 1024
+#: The Glossary's "Older names" table is the list `tests/test_retired_terms.py` scans the tree for, so it grows by a row
+#: with each retired name and no row can go while its term is retired.
+GLOSSARY_SIZE_CAP = 64 * 1024
 #: A skill is loaded into an agent's context whole, so it states the current procedure and rules, never their history
 #: (`.agents/skills/authoring-skills/`).
 SKILL_SIZE_CAP = 16 * 1024
@@ -58,12 +61,14 @@ BLOB_LIMIT = 256 * 1024  # a tracked file holds at most this, except source code
 #: Suffixes of source, exempt from BLOB_LIMIT (a generated module or a pinned Lean file can be larger); markdown has its own caps.
 CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
 #: Data over BLOB_LIMIT that is not a test fixture: runtime tables a module loads, the generated census, the vLLM checkpoint
-#: manifest (append-only; most of its readers don't read the sibling manifests yet). Each is capped at its size rounded up
+#: manifest (append-only; most of its readers don't read the sibling manifests yet), the retired-terms lint's per-file list
+#: (shrink-only: a rename of a retired term prunes it). Each is capped at its size rounded up
 #: to 64 KiB, so none can grow past that and nothing joins them silently. A test fixture over BLOB_LIMIT is registered in
 #: fixtures/artifacts.json instead and fetched (`research data fetch-fixtures`).
 ALLOWLIST = {
     "benchmarks/census/workloads.json": 384 * 1024,
     "integrations/vllm/manifests/checkpoints.json": 320 * 1024,
+    "tests/lint/allowlists/repo_retired_terms.json": 512 * 1024,
     "integrations/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
     "verity/ml/circuits/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
 }
@@ -94,6 +99,11 @@ def test_tracked_markdown_is_maintained_documentation() -> None:
         "tracked markdown that is not a maintained document (reports, handoffs and drafts belong in ~/.research/notes):\n"
         + "\n".join(offenders)
     )
+
+
+def test_no_root_readme() -> None:
+    assert "README.md" not in _tracked(), (
+        "the root has no README: an agent starts at AGENTS.md and ARCHITECTURE.md; put what it says in one of them")
 
 
 def test_no_report_genre_basenames() -> None:
@@ -144,6 +154,8 @@ def markdown_cap(path: str) -> int:
     reads it and `markdown_over_cap` from this file at `main`, so keep both importable with the standard library alone."""
     if os.path.basename(path) == "SKILL.md":
         return OVERSIZE_SKILLS.get(path, SKILL_SIZE_CAP)
+    if path in ROOT_ONLY_MD:
+        return GLOSSARY_SIZE_CAP
     return PROTOCOL_SIZE_CAP if os.path.basename(path) == "PROTOCOL.md" else MD_SIZE_CAP
 
 
@@ -162,6 +174,8 @@ def markdown_over_cap(path: str, size: int) -> str | None:
 def test_markdown_over_cap_says_by_how_much_and_where_detail_goes(monkeypatch) -> None:
     soundness = "Security/Proofs/Flock/Soundness/"
     assert markdown_over_cap("README.md", MD_SIZE_CAP) is None and markdown_over_cap("a/PROTOCOL.md", MD_SIZE_CAP + 1) is None
+    assert markdown_over_cap("GLOSSARY.md", MD_SIZE_CAP + 1) is None
+    assert markdown_over_cap("GLOSSARY.md", GLOSSARY_SIZE_CAP + 3).endswith(", 3 bytes over; move detail to the notes store (cite it by note:<id>)")
     assert markdown_over_cap("a/README.md", MD_SIZE_CAP + 100) == (
         "a/README.md: 48 KB > 48 KB, 100 bytes over; move detail to the notes store (cite it by note:<id>)")
     for p in (soundness + "ASSUMPTIONS.md", soundness + "assumption-notes/e2e-checklist.md"):

@@ -1,10 +1,14 @@
 module
 
 public import Definitions.Accounting.Guarantees.Bridges
-public import Proofs.Accounting.Actual.Physical
-public import Proofs.Accounting.Actual.Localization
 public import Definitions.Pouw.Assumptions.Deadline
+public import Proofs.Accounting.Actual.Physical
 public import Proofs.Pouw.Deadline
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Accounting.Actual.Confidence
+import Proofs.Accounting.Actual.Localization
+public import Proofs.Pouw.Break
 
 /-!
 # B4 and PoUW's row, proved, and the honest clock at `CM_A`
@@ -260,7 +264,7 @@ theorem honestClock {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L] {𝓕 
     (U : Pouw.Workload) (A : Pouw.Adversary (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π)) {td : ℝ}
     (htd : (t_d : ℝ) ≤ td) :
     Pouw.Assumptions.HonestClock (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π) U A (Actual.timedRun A U) td :=
-  ⟨A, rfl, fun H s => ⟨fun _ => rfl, (timedRun_spentIn U A H s htd).ge, le_rfl⟩⟩
+  ⟨A, rfl, fun H s => ⟨fun _ => ⟨rfl, fun _ hm => hm⟩, (timedRun_spentIn U A H s htd).ge, le_rfl⟩⟩
 
 end Actual
 
@@ -271,7 +275,8 @@ theorem pouwRow : Guarantees.pouwRow := by
   have h := Pouw.SecurityProofs.WorkBetweenSaltAndDeadline Q R S _ P D γ₀ Ωmax ε hγ hΩ hW hB1 U hU A
     (Actual.timedRun A U) t_d (Actual.honestClock U A le_rfl) T hT q hq
     (fun H s => ⟨(Actual.timedRun_spentIn U A H s le_rfl).trans_le (hA H s).1, (hA H s).2⟩) t εs hεs
-  simpa only [Pouw.AcceptsBy, Actual.timedRun, le_refl, true_and] using h
+  exact le_trans (Pouw.pr_mono fun x hx =>
+    ⟨⟨le_refl _, hx.1⟩, hx.2, Pouw.Proofs.not_breaks_of_hashless (fun _ _ _ _ _ _ => rfl) A U x.1 x.2.1⟩) h
 
 theorem B4 : Guarantees.B4 := by
   intro L E Ω _ _ _ S ℓ ends β link 𝒱 cert X spec record bucket jitter a b hcs hdl hT hsec

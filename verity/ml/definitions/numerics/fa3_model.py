@@ -70,33 +70,43 @@ SUPPORTED_KBLOCK_N = (80, 128, 192)
 
 def kblock_n_for(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
     """kBlockN of the FA3 forward vLLM launches for head dim ``D`` (vllm-flash-attn 506341a1 ``hopper/tile_size.h::
-    tile_size_fwd_sm90``, element_size 2, causal, paged KV without TMA) with ``use_one_mma_wg = D in {64, 128} and seqlen_q *
-    qheads_per_kvhead <= 64`` (``hopper/heuristics.h``; ``seqlen_q`` = the launch's max_seqlen_q under varlen): D <= 64 -> 192 under
-    one MMA warpgroup (64 x 192 tile) else 128 (192 x 128 tile); D <= 128 -> 128; D = 256 -> 80 (the 128 x 80 tile, paged or not).
-    The same rule as ``verity_vllm.program.frontend.targets.fa3_kblock_n`` (the registered one; ``check`` cross-checks the two)."""
+    tile_size_fwd_sm90``, element_size 2, causal, not local, paged KV without TMA) with ``use_one_mma_wg = D in {64, 128} and
+    seqlen_q * qheads_per_kvhead <= 64`` (``hopper/heuristics.h``; ``seqlen_q`` = the launch's max_seqlen_q under varlen): D <= 64 ->
+    192 under one MMA warpgroup (64 x 192 tile) else 128 (192 x 128 tile); D <= 96 -> 128 (paged non-TMA); D <= 128 -> 128 (causal);
+    D = 256 -> 80 (the 128 x 80 tile, paged or not).  Any other head dim is refused.  The tile holds at more head dims than the
+    arithmetic below models (`SUPPORTED_HEAD_DIMS`), which `modelled_tile`, `attention_rows` and `coverage` refuse on their own."""
     D, seqlen_q, qh = int(D), int(seqlen_q), int(qh_per_kvh)
-    if D not in SUPPORTED_HEAD_DIMS:
-        raise ValueError(f"FA3 head dim {D}: not modelled (supported {SUPPORTED_HEAD_DIMS})")
-    if D == 256:
-        return KBLOCK_N_HD256
-    one_wg = seqlen_q * qh <= 64
+    one_wg = D in (64, 128) and seqlen_q * qh <= 64
     if D <= 64:
         return KBLOCK_N_HD64_ONE_WG if one_wg else KBLOCK_N
-    return KBLOCK_N
+    if D <= 128:
+        return KBLOCK_N
+    if D == 256:
+        return KBLOCK_N_HD256
+    raise ValueError(f"FA3 head dim {D}: no kBlockN rule (tile_size.h is followed at D <= 128 and D = 256)")
 
 
 def kblock_m_for(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
-    """kBlockM of the same tile (``targets.fa3_tile_m``'s rule): D <= 64 -> 64 under one MMA warpgroup else 192; D <= 128 -> 64 under
-    one MMA warpgroup else 128; D = 256 -> 128."""
+    """kBlockM of the same tile: D <= 64 -> 64 under one MMA warpgroup else 192; D <= 96 -> 192; D <= 128 -> 64 under one MMA
+    warpgroup else 128; D = 256 -> 128.  Any other head dim is refused."""
     D, seqlen_q, qh = int(D), int(seqlen_q), int(qh_per_kvh)
-    if D not in SUPPORTED_HEAD_DIMS:
-        raise ValueError(f"FA3 head dim {D}: not modelled (supported {SUPPORTED_HEAD_DIMS})")
-    if D == 256:
-        return KBLOCK_M_PREFILL
-    one_wg = seqlen_q * qh <= 64
+    one_wg = D in (64, 128) and seqlen_q * qh <= 64
     if D <= 64:
         return KBLOCK_M_DECODE if one_wg else 192
-    return KBLOCK_M_DECODE if one_wg else KBLOCK_M_PREFILL
+    if D <= 96:
+        return 192
+    if D <= 128:
+        return KBLOCK_M_DECODE if one_wg else KBLOCK_M_PREFILL
+    if D == 256:
+        return KBLOCK_M_PREFILL
+    raise ValueError(f"FA3 head dim {D}: no kBlockM rule (tile_size.h is followed at D <= 128 and D = 256)")
+
+
+def modelled_tile(D: int, seqlen_q: int, qh_per_kvh: int) -> tuple[int, int]:
+    """(kBlockM, kBlockN) of the launch, at a head dim this module models (`SUPPORTED_HEAD_DIMS`); refused at any other."""
+    if int(D) not in SUPPORTED_HEAD_DIMS:
+        raise ValueError(f"FA3 head dim {D}: not modelled (supported {SUPPORTED_HEAD_DIMS})")
+    return kblock_m_for(D, seqlen_q, qh_per_kvh), kblock_n_for(D, seqlen_q, qh_per_kvh)
 
 KERNEL = {
     "source": "vllm-flash-attn (vllm-project/flash-attention) commit 506341a143fcabd4bb79052a7605ada727d6b3f5, hopper/ (FA3)",
@@ -179,7 +189,7 @@ def num_splits(seqlens: list[int] | np.ndarray, H: int, KVH: int, D: int, *, num
 
 
 def split_plan(seqlens: list[int] | np.ndarray, H: int, KVH: int, D: int, *, num_sms: int,
-               Dv: int | None = None) -> tuple[int, list[int]]:
+               Dv: int | None = None, seqlens_k: list[int] | np.ndarray | None = None) -> tuple[int, list[int]]:
     """(the launch's ``params.num_splits``, each sequence's split count) of one causal varlen self-attention launch (``cu_seqlens_q =
     cu_seqlens_k``, the sequences' lengths ``seqlens``) when the caller passes ``num_splits = 0`` (vLLM's MLA prefill outside batch
     invariance).  The launch runs the ``Split`` mainloop and ``FlashAttnFwdCombine`` exactly when the first exceeds 1:
@@ -188,22 +198,33 @@ def split_plan(seqlens: list[int] | np.ndarray, H: int, KVH: int, D: int, *, num
     num_sm)`` over every sequence's ``num_m_blocks * num_n_blocks``; ``max(min(ceil(num_n_blocks / blocks_per_sm), static), 1)``); one
     split past ``PREPARE_VARLEN_MAX_BATCHES_1CTA`` sequences.  The host heuristic is IEEE f32; the device's ``/`` is ``div.full.ftz.f32``
     (``--use_fast_math``: the numerator times the measured MUFU.RCP of ``num_sm``, ``DivFullRcp_v1``), assumed to lower as Triton's does.
-    A sequence counted above 1 is combined from its splits (`registry.fa3_split`); one counted 1 is written directly."""
+    A sequence counted above 1 is combined from its splits (`registry.fa3_split`); one counted 1 is written directly.
+
+    ``seqlens_k``: the non-causal launch of vLLM's MLA prefill context (``run_prefill_context_chunk``), sequence i's ``seqlens[i]``
+    query rows over its own ``seqlens_k[i]`` keys: the n-blocks and ``size_one_kv_head`` count keys (max_seqlen_k for the bound, each
+    sequence's own for its split), the m-blocks query rows.  Causality reaches the heuristic only past an L2 of a KV head, and the
+    tile only below head 256 (``tile_size_fwd_sm90``), so such a launch is planned at D = 256 alone."""
     from verity.ml.definitions.numerics import derived_rows as DR
     L = [int(x) for x in seqlens]
+    K = L if seqlens_k is None else [int(x) for x in seqlens_k]
+    if len(K) != len(L):
+        raise ValueError(f"{len(L)} sequences' query rows, {len(K)} sequences' keys")
+    causal = seqlens_k is None
+    if not causal and int(D) != 256:
+        raise ValueError(f"a non-causal launch at head dim {D}: its tile is modelled at head 256 only (kBlockN follows causality below)")
     Dv = int(D if Dv is None else Dv)
     g = int(H) // int(KVH)
     if not L or len(L) > PREPARE_VARLEN_MAX_BATCHES_1CTA:
         return 1, [1] * len(L)
-    max_q = max(L)
-    BM, BN = kblock_m_for(D, max_q, g), kblock_n_for(D, max_q, g)
+    max_q, max_k = max(L), max(K)
+    BM, BN = modelled_tile(D, max_q, g)
     nmb_static = -(-(max_q * g) // BM)
-    nnb_static = -(-max_q // BN)
-    static = num_splits_heuristic(int(KVH) * nmb_static, int(num_sms), nnb_static, nmb_static, max_q * (int(D) + Dv) * 2, True, 128)
+    nnb_static = -(-max_k // BN)
+    static = num_splits_heuristic(int(KVH) * nmb_static, int(num_sms), nnb_static, nmb_static, max_k * (int(D) + Dv) * 2, causal, 128)
     if static == 1:
         return 1, [1] * len(L)
     nmb = [-(-(x * g) // BM) for x in L]
-    nnb = [-(-x // BN) for x in L]
+    nnb = [-(-x // BN) for x in K]
     total = sum(m * n for m, n in zip(nmb, nnb))
     f32 = np.float32
     a = np.array([f32(f32(f32(total) * f32(1.1)) * f32(KVH))], np.float32).view(np.uint32)
@@ -287,7 +308,7 @@ def attention_call(
 
 MEASURED = {
     # what AttentionFA3@1 (= this arithmetic) was measured bit-exact against: the H100 production capture of the
-    # standard workload, request 917b9faa (prompt 512 + 16 decode), layers 0/1/13/27 (hopper-profile.md)
+    # standard workload, request 917b9faa (prompt 512 + 16 decode), layers 0/1/13/27
     "arch": ("sm_90",),
     "head_dim": (128,),
     "heads_kv_heads": ((12, 2),),

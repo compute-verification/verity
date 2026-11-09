@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # served_zk's window through the proof system on a node's CPUs: SZ_CALLS served calls of a retained request committed as
 # one audit window (padded with filler tiles to a grid level), registered with exactly PoUW's public items, received,
-# drawn subset:K' once, every drawn tile proved hidden and opened, a filler tile proved beside them, and the outcome; after
+# sampled subset:K' once, every sampled tile proved hidden and opened, a filler tile proved beside them, and the outcome; after
 # serve.sh's run SERVED_RUN retained its two requests under $WORK/passes/$SERVED_RUN.
 #   research run --on MACHINE --project verity --source <tree> --cwd source --declared-output 'out/*' \
 #     --declared-output 'out/*/*' --env SERVED_RUN=<serve.sh run id> --env HZ_MEM_GB=<GB> \
@@ -15,16 +15,16 @@
 #   3. commit: served_commit.py commit of the same SZ_CALLS o_proj calls (picked from os.urandom, or SZ_CALL_LIST) on the
 #      "request" and the "other" pass: <p>/commitment.json (public), <p>/advice.json (the prover's entries), rows in scratch
 #   4. register (the committer: <p>/registration.json), then one challenger process (served_commit.py challenger, over P1's
-#      sampled_proofs.service Stream, holding the epoch's coins: challenger/coins.json, the commitment it publishes first;
+#      spot.service Stream, holding the epoch's coins: challenger/coins.json, the commitment it publishes first;
 #      its requests and replies in challenger/requests.jsonl, the coins it opened in challenger/openings.jsonl): its salt
 #      coin opened after the request pass's weights' root (salt-opening.json), receive (Stream.register: receipt.json;
 #      the challenger re-starts the pass's epoch from its manifest under its own commitment, the request pass, salted by a
 #      beacon before epoch coins, as a recorded replay) and select (draw.json: the epoch's sampling coin opened after the
-#      registration, once, and Lean flock-verify draw --population N --k K' --stream over its key)
+#      registration, once, and Lean flock-verify sample --population N --k K' --stream over its key)
 #   5. per sampled proof block u<t>, as a parallel fan-out (SZ_JOBS at once): stage_tile.py (Pc8TileSide{K=4096,1,1,sm120}), the --zk
 #      session, the opening check, Lean; the selftest build's controls on the first; a filler unit's the same, and the other request's tile staged
 #   6. deliver (the sampled proof blocks' session records' SHA-512) and outcome (one-stage's audit record over every sampled proof block and
-#      PoUW's public items, outcome-<case>/); each control on a stream of its own that replays the honest draw
+#      PoUW's public items, outcome-<case>/); each control on a stream of its own that replays the honest sample
 #   7. the checks, each as expected, into summary.json:
 #        coins                 the challenger's coin commitment, published before any request                  COINS
 #        coin-salt             its salt coin, opened after the request pass's weights' root                    OPENED
@@ -57,7 +57,7 @@
 #        outcome-honest        every sampled proof block's verdicts, one audit record; public = PoUW's items: the Lean
 #                              verifier accepts no unit without its Program                                    REJECT
 #        outcome-again         a second outcome of the same registration: final                                 REFUSED
-#        deliver-again         a second delivery of the same draw                                               REFUSED
+#        deliver-again         a second delivery of the same sample                                               REFUSED
 #        outcome-foreign-proof the first unit's proof, opening and Lean verdict the other request's             REJECT
 #        retry-foreign-proof   a control's registration on that control's stream after its reject (budget 1)   REFUSED
 #        outcome-st-<case>     the first unit's Lean verdict a selftest case's: every case                     REJECT
@@ -89,7 +89,7 @@ mkdir -p "$OUT/request" "$OUT/other"
 # the Lean checks of record (of_record.Record), built here so a failure stops the job before the challenger asks for them
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 { (cd "$SRC/verity/core/protocols/pouw/lean/check" && lake build pouw-check pouw-check-difftest) \
-  && (cd "$SRC/verity/core/service/sampled_proofs" && lake build sampled-proofs-difftest); } > "$OUT/lean-record-build.log" 2>&1 \
+  && (cd "$SRC/verity/core/service/spot" && lake build sampled-proofs-difftest); } > "$OUT/lean-record-build.log" 2>&1 \
   || { log "Lean of record build FAILED: $(tail -5 "$OUT/lean-record-build.log")"; exit 3; }
 log "Lean of record: pouw-check, pouw-check-difftest, sampled-proofs-difftest built"
 
@@ -193,7 +193,7 @@ REAL=$(jq_ "$OUT/request/advice.json" "d['real']")
 log "draw: units $UNITS of $(jq_ "$R" "d['population']") (real tiles $REAL, the filler from $FILL)"
 
 # ---- 7. the challenger's replay and the summary -----------------------------------------------------------------------------
-finish() {       # the challenger quits, then its requests again from its recorded coins, Lean drawing and the reference's
+finish() {       # the challenger quits, then its requests again from its recorded coins, Lean sampling and the reference's
   [ -n "${SVC[1]:-}" ] && echo '{"op": "quit"}' >&"${SVC[1]}"
   [ -n "${SVC_PID:-}" ] && wait "$SVC_PID" 2>/dev/null
   local v
@@ -313,7 +313,7 @@ if [ -n "$s" ]; then
   BG+=($!)
 fi
 log "waiting for the post-loop Lean checks"
-[ "${#BG[@]}" -gt 0 ] && wait "${BG[@]}"   # not the challenger: the filler, u0-real and foreign-pub Lean (the drawn units' ran in the fan-out)
+[ "${#BG[@]}" -gt 0 ] && wait "${BG[@]}"   # not the challenger: the filler, u0-real and foreign-pub Lean (the sampled proof blocks' ran in the fan-out)
 expect lean-filler REFUSED "$(lean_verdict "$OUT/$FT/lean-honest-own.out")"
 expect lean-foreign-pub REJECT "$(lean_verdict "$OUT/u$U0/lean-foreign-pub.out")"
 for c in $HZ_CASES; do
@@ -327,7 +327,7 @@ v=$("$PY" "$SC" shape "$W/$FT" "$W/u$REAL_UNIT" --out "$OUT/shape-filler.json" |
 expect shape-filler SAME "${v:-ERROR}"
 
 # ---- 6. deliver and outcome ---------------------------------------------------------------------------------------------------
-units_json() {   # units_json DEST [FIRST_STAGE FIRST_PUB FIRST_LEAN FIRST_OPENING FIRST_SESSION]: the drawn units' files, the first replaced
+units_json() {   # units_json DEST [FIRST_STAGE FIRST_PUB FIRST_LEAN FIRST_OPENING FIRST_SESSION]: the sampled proof blocks' files, the first replaced
   "$PY" - "$OUT" "$W" "$1" "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}" $UNITS <<'PY'
 import json, sys
 from pathlib import Path
@@ -347,7 +347,7 @@ for i, t in enumerate(units):
 json.dump(rows, open(dest, "w"))
 PY
 }
-control() {      # control CASE EXPECT UNITS_JSON: a stream of its own replaying the honest draw, delivered and judged
+control() {      # control CASE EXPECT UNITS_JSON: a stream of its own replaying the honest sample, delivered and judged
   local n=ctl-$1
   ask "register-$1" "$(req op register name "$n" registration "$R" stream "$n" replay honest)"
   ask "select-$1" "$(req op select name "$n")"

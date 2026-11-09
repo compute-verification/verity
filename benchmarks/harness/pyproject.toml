@@ -1,7 +1,7 @@
 [project]
 name = "verity-bench"
 version = "0.1.0"
-description = "Shared benchmark harnesses for Verity integrations and backends."
+description = "Shared benchmark harnesses for Verity's integrations."
 requires-python = ">=3.12"
 dependencies = ["verity-config", "verity-vllm"]
 
@@ -87,7 +87,7 @@ inputs = [
     "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
     "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
     "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
-    "integrations/vllm/verity_vllm/protocols/sampled_proofs.py",
+    "integrations/vllm/verity_vllm/protocols/spot.py",
     "integrations/vllm/verity_vllm/protocols/pouw/pouw_cuda",
     "integrations/vllm/verity_vllm/protocols/pouw/h1/kept.py",
     "integrations/vllm/verity_vllm/protocols/pouw/h1/live.py",
@@ -102,6 +102,13 @@ inputs = [
     # a direct point's command must pass a slot-only node's launcher rule (research's slot_only.through_slot), which a
     # test checks
     "tools/research/src/research/pods/nebius/slot_only.py",
+    # the overhead table scales γ by the census's datacenter, world and datasheet rates and rho's FLOP-to-gates conversion,
+    # and `verity bench overhead` is the door's runner, which a test runs
+    "benchmarks/census/deployments.json",
+    "benchmarks/census/adversary.json",
+    "benchmarks/census/hardware.json",
+    "benchmarks/rho/data/hardware.toml",
+    "benchmarks/overhead/run.py",
 ]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
@@ -112,7 +119,7 @@ tests = ["tests/test_bench.py"]
 paths = ["verity/core/protocols/pouw/lean/check/models.json"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_breakdown.py", "tests/test_served_table.py"]
+tests = ["tests/test_breakdown.py", "tests/test_overhead.py", "tests/test_served_table.py"]
 paths = ["fixtures/artifacts.json"]
 
 [[tool.verity.tests.reads]]

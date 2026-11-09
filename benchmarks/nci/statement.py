@@ -219,7 +219,7 @@ def symbols() -> list[dict]:
         ("ε_W W_cert/C", "the deficit's share of capacity under the floor credit, ε_W (1 − r̂)", p["eps_w"] * (1 - r)),
         ("ε_W", "at the best plausible PoUW design", (p | BEST)["eps_w"]),
         ("ε′", "aggregation slack (δ_win / ε′ = 2.7e-8 at δ_win = 3·2^-40)", p["eps_agg"]),
-        ("r = r̂ + ε_W W_cert/C + ε′", "the residual DampenerRemote bounds (#3646), under the floor credit",
+        ("r = r̂ + ε_W W_cert/C + ε′", "the residual DampenerRemote bounds, under the floor credit",
          T.residual_share(p)),
         ("GPU / r̂", "share of r̂", p["residual"] / r),
         ("clock / r̂", "share of r̂", p["clock_share"] / r),
@@ -299,7 +299,7 @@ def substitutes() -> list[dict]:
 
 def floor() -> list[dict]:
     """The floor's limits as the verdict lag goes to 0, with ε_W and ε′ (at r̂ = 0 all of C is certified, so the deficit
-    is ε_W C) and as they go to 0 too, and what evaluate would give at zero lag, ε_W and ε′ if the partial-sum law held,
+    is ε_W C) and as they go to 0 too, and what evaluate would give at zero lag, ε_W and ε′ if the partial-sum rule held,
     where with no residual to relay through it binds below nu."""
     p = T.DEFAULTS
     eps_w = (p | FLOOR)["eps_w"]
@@ -437,7 +437,7 @@ def exposures(th: dict) -> list[dict]:
 
 
 def holes() -> dict:
-    """The known holes: the cheating share at today's sparse draws and at 512 draws per statement, the T5 ladder at
+    """The known holes: the cheating share at today's sparse samples and at 512 samples per statement, the T5 ladder at
     each, and the holes' other numbers."""
     p = T.DEFAULTS
     C = capacity(p)

@@ -5,18 +5,19 @@ public import Definitions.Core.Circuit
 /-!
 # The Boolean profile
 
-The circuits C-Flock proves are Boolean: input gates, and AND, XOR and NOT gates over earlier gates, and rows, the AND
-of the XOR of some earlier gates and the XOR of others (a row as the verifier parses it, PROTOCOL.md §16.5; the compiled
-lowering reads a template's rows as these gates, `Lowering.lean`). A Boolean circuit is a circuit whose gates are all one
-bit wide (`toCircuit`), so every definition about circuits applies to it as it is.
+The circuits Flock proves are Boolean: input gates, and AND, XOR and NOT gates over earlier gates, and rows, the AND
+of the XOR of some earlier gates and the XOR of others (a row as the verifier parses it, `Flock.Circuit` in
+`verity/core/service/flock/`; the compiled lowering reads a template's rows as these gates, `Lowering.lean`). A Boolean
+circuit is a circuit whose gates are all one bit wide (`toCircuit`), so every definition about circuits applies to it as
+it is.
 
-This is the one Boolean circuit: C-Flock's audit (`Definitions.Flock.Circuit`) partitions it. It keeps the names
-C-Flock's guarantees read it by (`FlockSoundness.Audit`), so their records name these declarations.
+This is the one Boolean circuit, Core's (`Verity.Boolean`): Flock's audit (`Definitions.Flock.Circuit`) partitions
+it.
 -/
 
 @[expose] public section
 
-namespace FlockSoundness.Audit
+namespace Verity.Boolean
 
 /-- The XOR of the values at a list of places. -/
 def xorSum {ι : Type} (l : List ι) (v : ι → Bool) : Bool := (l.map v).foldr Bool.xor false
@@ -112,4 +113,4 @@ def toCircuit (B : Circuit) : Verity.Circuit where
 
 end Circuit
 
-end FlockSoundness.Audit
+end Verity.Boolean

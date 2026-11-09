@@ -9,11 +9,12 @@ from types import SimpleNamespace
 
 import pytest
 
+import research.drive as D
 from research import merge, policy, quick_tier
 from research import queue as Q
-from research.drive import AFTER_LANDING, FIX_WINDOW_S
+from research.drive import AFTER_LANDING
 from test_drive_checked import _checked, _landed
-from test_drive_review import GATED_TREE, Review, _main, _move_main, _owning
+from test_drive_review import GATED_TREE, Review, _main, _move_main, _owning, _rings
 from test_queue import World, _git
 
 LIVE, EXPIRED = "2099-01-01T00:00:00Z", "1970-01-01T00:00:00Z"   # the harness's clock reads 1970-01-12
@@ -155,9 +156,8 @@ def test_a_failure_an_unexpired_allowance_covers_is_not_red_reverts_nothing_and_
     _run(h, tmp_path, {"pytest": ""}, PKG_ROW)
     h.tick()
     pl = h.postland()
-    assert not pl.get("red") and not [p for p in h.posts if "is red on" in p], h.posts
+    assert not pl.get("red") and not _rings(h), h.posts
     assert pl["verified"] == tip and _main(world) == tip and pl["green"]["suite pkg"] == tip
-    h.clock += FIX_WINDOW_S + 1
     h.tick()
     assert _checked(world) == tip and not [p for p in h.posts if "reverted" in p], h.posts
 
@@ -168,12 +168,9 @@ def test_a_suite_failing_beyond_its_allowed_tests_is_red_as_before(world, monkey
     tip = _landed(h, RED_TEST)
     _run(h, tmp_path, {"pytest": ""}, {**PKG_ROW, "beyond_tests": True})
     h.tick()
-    (ring,) = [p for p in h.posts if "is red on" in p]
+    (ring,) = _rings(h)
     assert "suite pkg is red on `checked`" in ring and "Culprit: #1" in ring and "allowance" not in ring, ring
-    assert _main(world) == main
-    h.clock += FIX_WINDOW_S + 1
-    h.tick()
-    assert _git(world.origin, "rev-parse", f"{_checked(world)}^") == tip
+    assert _main(world) == main and _checked(world) == tip and h.postland()["red"]["suite pkg"]["culprit"][0] == 1
 
 
 def test_an_expired_allowance_is_as_if_absent_and_the_red_it_no_longer_covers_names_it_and_rings_its_owner(world, monkeypatch,
@@ -183,21 +180,21 @@ def test_an_expired_allowance_is_as_if_absent_and_the_red_it_no_longer_covers_na
     tip = _landed(h, RED_TEST)
     _run(h, tmp_path, {"pytest": ""}, PKG_ROW)
     h.tick()
-    (ring,) = [p for p in h.posts if "is red on" in p]
+    (ring,) = _rings(h)
     assert "suite pkg is red on `checked`" in ring and "Culprit: #1" in ring, ring
     assert f"Its allowance in policy.toml expired, so it is red again: `suite pkg::{TEST}` (owner circuits, expires {EXPIRED}" \
         in ring and "@circuits" in ring.split(" queue: ")[0], ring
     r = h.postland()["red"]["suite pkg"]
     assert r["allowed_by"] == ["circuits"] and len(r["expired"]) == 1
-    assert _main(world) == main
-    h.clock += FIX_WINDOW_S + 1
+    h.clock += D.FIX_FORWARD_S
     h.tick()
+    (told,) = [p for p in h.posts if "#1 reverted on `checked`" in p]
+    assert "@circuits" in told.split(" queue: ")[0], told
     assert _git(world.origin, "rev-parse", f"{_checked(world)}^") == tip and _main(world) == main
 
 
 @pytest.mark.parametrize("extra, red", [("", False), ("FAIL width/overflow Foo_v1{N=8} (1 gate(s))\n", True)])
-def test_a_circuit_check_failing_only_on_allowed_failures_reverts_nothing_and_one_more_reverts_at_once(world, monkeypatch, tmp_path,
-                                                                                                         extra, red):
+def test_a_circuit_check_failing_only_on_allowed_failures_is_not_red_and_one_more_is(world, monkeypatch, tmp_path, extra, red):
     h = _drive(world, monkeypatch, _policy((f"circuit-check {FP8}", "circuits", LIVE)))
     tip = _landed(h, {"pkg/x.circuit-check.py": "X = 1\n"})
     _run(h, tmp_path, {"circuit-check": f"FAIL {FP8}{{K=128,N=128,G=128}} (127 gate(s))\n{extra}"})
@@ -205,7 +202,7 @@ def test_a_circuit_check_failing_only_on_allowed_failures_reverts_nothing_and_on
     pl = h.postland()
     assert _main(world) == tip                                  # circuit-check is off the gate either way
     if red:
-        assert "step circuit-check" in pl["red"] and _git(world.origin, "rev-parse", f"{_checked(world)}^") == tip
+        assert pl["red"]["step circuit-check"]["culprit"][0] == 1 and _checked(world) == tip
     else:
         assert not pl.get("red") and _checked(world) == tip and pl["verified"] == tip, h.posts
 

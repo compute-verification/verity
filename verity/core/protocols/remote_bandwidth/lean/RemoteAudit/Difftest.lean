@@ -229,8 +229,8 @@ def registerFn (j : Json) : V Json := do
     (← hex j "nonce")
   pure (Json.mkObj [("codec_seed", hexJ r.codecSeed), ("digest", hexJ r.digest)])
 
-/-- A call on the registry. A session names its registration as one drawn earlier in the case, by its place among
-those drawn, or as one given in full. -/
+/-- A call on the registry. A session names its registration as one sampled earlier in the case, by its place among
+those sampled, or as one given in full. -/
 inductive Op
   | register (node : ByteArray) (blocks : Nat) (payloadRoot : ByteArray) (codec : Codec.Codec) (receipt : Kind)
       (bind : Bool) (layout : String) (rows : Nat) (nonce : ByteArray)
@@ -306,7 +306,7 @@ def registryFn (j : Json) : V Json := do
       r := r'
       out := out.push (match c with | some c => c.toJson | none => refusedJ)
     | .live node => out := out.push (match ← r.liveDigest node with | some d => hexJ d | none => .null)
-    | .drawn node => out := out.push (toJson (← r.drawn node))
+    | .drawn node => out := out.push (toJson (← r.sampled node))
   pure (Json.mkObj [("results", .arr out), ("registry", r.toJson)])
 
 def codecDecodeFn (j : Json) : V Json := do
@@ -362,10 +362,10 @@ def leafReceiptFn (j : Json) : V Json := do
   | some y => pure (hexJ y)
   | none => pure .null
 
-def drawsFn (j : Json) : V Json := do
+def receiptSampleFn (j : Json) : V Json := do
   let lengths ← (← J.arr j "lengths" "input").mapM (J.asNat · "lengths")
   if lengths.isEmpty || lengths.any (· = 0) then throw "a window's passes are each one or more receipts"
-  let some ds := draws (← hex j "registration") (← nat j "window") (← hex j "coin") (← nat j "samples") lengths
+  let some ds := receiptSample (← hex j "registration") (← nat j "window") (← hex j "coin") (← nat j "samples") lengths
     | throw "the draw ran past its reads"
   pure (.arr (ds.map pairJ))
 
@@ -597,7 +597,7 @@ private def seenOf (j : Json) : V Line.Seen := do
 "per", "block_bytes", "chip_bytes", "node_bytes", "delta", "rates"}` (`record` as the verifier's `outcome` request gives
 it, `recordJ`'s; `registration` as `registrationOf` reads one), read off the record (`Line.lineOfRecordOn` at the
 record's `groups_per_coin` g, 1 when it doesn't name it: above 1 its pooled bound reads its draws, `Line.ofSummaryAt`),
-or why it has none: none for a record drawn more than one window a coin at one window in flight, which no property
+or why it has none: none for a record sampled more than one window a coin at one window in flight, which no property
 covers (`Line.SHARED`), and none for a record not of `registration`, its digest or its registered blocks another
 registration's (`Line.lineOfRegistered`). `clock`, if given, says
 whose clock the times seen are on: `record` (the default), the record's own, and held to it (`Line.timesOff`), or
@@ -664,7 +664,7 @@ private def natsOfN (j : Json) (n : Nat) (ctx : String) : V (Array Nat) := do
   if xs.size ≠ n then throw s!"{ctx}: {n} integers"
   xs.mapM (J.asNat · ctx)
 
-private def blockOf (j : Json) : V Schedule.Block := do
+private def blockOf (j : Json) : V Schedule.Chunk := do
   match j with
   | .null => pure none
   | v =>
@@ -787,7 +787,7 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("session", sessionFn), ("registration_digest", registrationDigestFn), ("register", registerFn),
   ("registry", registryFn), ("codec_decode", codecDecodeFn),
   ("plan", planFn), ("plan_changed", planChangedFn), ("receipt", receiptFn), ("verify_opening", verifyOpeningFn),
-  ("leaf_receipt", leafReceiptFn), ("draws", drawsFn), ("schedule", scheduleFn),
+  ("leaf_receipt", leafReceiptFn), ("draws", receiptSampleFn), ("schedule", scheduleFn),
   ("pin", pinFn), ("canonical_json", canonicalJsonFn), ("checkpoint_sha512", checkpointFn),
   ("store_salt", storeSaltFn), ("expected_root", expectedRootFn), ("hold", holdFn), ("binding", bindingFn),
   ("line", lineFn), ("line_record", lineRecordFn), ("pooled", pooledFn),

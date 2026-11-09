@@ -1,10 +1,48 @@
 module
 
-public import Properties.Attest
-public import Proofs.Properties.Pous.MemoryChallenger.Tree
+public import Lms.Sign
 public import Proofs.Flock.Claims.Finder
-public import Proofs.Properties.CertifierDevice.Lms
+public import Proofs.Properties.NetworkCertifier.Device.Lms
+public import Proofs.Properties.Pous.MemoryChallenger.Tree
+public import Properties.Attest
 import all Init.Data.String.Defs
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
+import Std.Tactic.BVDecide.Normalize.BitVec
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # Proofs of a party's signed periods (`Properties.Attest`)
@@ -662,7 +700,7 @@ theorem bad_cases {p : Lms.Params} {Ω : Type} [Fintype Ω] [Nonempty Ω] (τ : 
 theorem Pr_union_le {α : Type} [Fintype α] (p q : α → Prop) :
     Claims.Pr (fun a => p a ∨ q a) ≤ Claims.Pr p + Claims.Pr q := by
   classical
-  unfold Claims.Pr
+  unfold Claims.Pr Claims.prUniform
   rw [← add_div]
   refine div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg _)
   exact_mod_cast (Finset.card_le_card fun a ha => by
@@ -1027,14 +1065,14 @@ theorem periodSigned_acceptAll (p : Lms.Params)
 
 theorem Pr_unit_true (q : Unit → Prop) (h : q ()) : Claims.Pr q = 1 := by
   classical
-  unfold Claims.Pr
+  unfold Claims.Pr Claims.prUniform
   have : Finset.univ.filter q = Finset.univ := Finset.filter_true_of_mem fun u _ => by cases u; exact h
   rw [this]
   simp
 
 theorem Pr_unit_false (q : Unit → Prop) (h : ¬ q ()) : Claims.Pr q = 0 := by
   classical
-  unfold Claims.Pr
+  unfold Claims.Pr Claims.prUniform
   have : Finset.univ.filter q = ∅ := Finset.filter_false_of_mem fun u _ => by cases u; exact h
   rw [this]
   simp

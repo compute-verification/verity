@@ -17,6 +17,10 @@ the same way, a `module`'s from the private part holding its proofs. The only pa
 after the facts and the replay, the tests' under `runs` (each deciding only its own pass), in a sandbox where the machine
 allows one; a test's data generator is the repository's code and runs outside it.
 
+A run keeps the facts only gzipped (`facts.json.gz`), and only those read back from the store (`check.py --facts`): a
+check run keeps each audit's and its provers' (`status_export.py --facts`), a records run only PKG's own
+(`trusted_size.py --run`). `Facts.lean` writes its document in a temporary directory outside the run's files.
+
 ~~~text
 bash tools/verity/lean/setup.sh PKG                      elan, PKG's lean-toolchain, its pinned dependencies, Mathlib's cache when
                                                   Mathlib is a dependency, and main's cached build of PKG (below)
@@ -35,23 +39,30 @@ python tools/verity/lean/check.py --lift LIFTS.json PKG  write each guarantee {"
                                                   `"beside": M` names); then build and run
                                                   `--update --moved LIFTS.json.moved.json PKG` (below)
 python tools/verity/lean/upstream.py PKG [--lean]        what the pinned dependencies prove about PKG's watched statements
+python tools/verity/lean/unread.py --out DIR --build     the Lean nothing reads; lean-audit runs its ratchet on the
+                                                  audits' facts (its docstring: the seeds, the caps, the Properties gap)
 python tools/verity/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)
 ~~~
 
-The edit loop is `verity lean try FILE`: `lake env lean FILE` in the Lake package that holds FILE (the nearest lakefile above it),
-against its built imports, exiting with lean's status. With `--on NODE`, through `research run`, it runs `lean_changed.py --try
-FILE` on this checkout, uncommitted edits included: in one of the node's `build` Lean slots, on the tree `--records` keeps warm,
-`lake build +MODULE:deps` (only what changed among FILE's imports) and then `lake env lean FILE`. Neither runs this audit or writes
-a record: `--records PKG --update` is for the lock and the mark only (`lean_changed.py`'s docstring).
+The edit loop is `verity lean try FILE`: `lake env lean FILE` in the nearest Lake package above FILE, against its built
+imports, with its `[leanOptions]` as a build has them, exiting with lean's status, the axiom probe's line last. `--siblings` then imports FILE's build beside each built
+module of its package not importing it, failing on a name two declare (`siblings.py`). With `--on NODE`, through `research
+run`, it runs `lean_changed.py --try FILE` on this checkout's working tree: in a node's `build` Lean slot, on the slot tree
+`--records` keeps warm, `lake build +MODULE:deps` and then `lake env lean FILE`. Neither runs this audit or writes a record
+(`lean_changed.py`'s docstring).
 
 ## What it checks
 
 Every declaration of the package's audited modules (not a list of theorems), from the environment Lean builds:
 
 - only the allowed axioms (default `propext`, `Classical.choice`, `Quot.sound`): no `sorry`, no `native_decide`;
+- no `sorry` the elaborator made for an error it did not report (`sorryAx _ true`: `unreported`), in an audited module
+  or a `proved_in` package's, which also fails `lean_changed.py --records`, where the axioms check doesn't run;
+- every top-level declaration in an audited (or proving) module's source lies in a range its `.olean` holds (`dropped`:
+  `#exit`, or a `variable` over a local notation, can make Lean drop the declarations after it, reporting nothing);
 - no `axiom` declaration: an assumption is a named `Prop`, taken as a hypothesis;
 - every declaration a proof cannot unfold (`opaque`, which a `partial def` is, `unsafe`, `@[implemented_by]`,
-  `@[extern]`) is listed with a reason;
+  `@[extern]`) is listed under `escapes` with a reason, and every listed one still is one;
 - every `.lean` file of the package is imported by a root, or exempt with a reason;
 - no source file or lakefile names `debug.skipKernelTC`, an option that turns proofs into `sorry`, a `bootstrap.*`
   option, `addDeclWithoutChecking` or `addDeclCore` (comments and docstrings may);
@@ -60,8 +71,7 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   the reason. The imported modules are the ones the `dependencies` record covers, and their sources are there once the
   package is built, so the scan builds nothing. The
   toolchain, which defines these options, is trusted, and a path dependency is a package of the repository, audited on
-  its own. Among the pinned dependencies only doc-gen4's loader names one, and no audited package
-  imports it;
+  its own;
 - no source file runs code while it compiles (`initialize`, `#eval`, `run_cmd`, `run_elab`, an `elab`, `macro` or `syntax`
   definition, an elaborator attribute), unless its module is listed under `compile_time` with a reason and the digest of
   its file as it was reviewed. No listed module may declare a guarantee or a definition a guarantee reads.
@@ -76,7 +86,9 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   vocabulary);
 - the trees hold (`trees`, below): no guarantee's statement reads a definition of the proofs tree, and no module of the
   definitions or properties tree imports one;
-- every `Prop` a guarantee takes is named or a plain range (`inline_failures`; `shape.inline` excepts some);
+- every `Prop` a guarantee takes is named, another listed guarantee's statement or a plain range (`inline_failures`;
+  `shape.inline`, which only shrinks, excepts some, and its size is the `AUDIT` line's inline debt);
+- each deployed guarantee's gap is its `trust_gap` entry (`trust`, below);
 - every instance has a name in its source. Lean names an anonymous one from its type, and adds the project's root
   (`_proofs`) when nothing in the type is the project's own, so a move into another root or a split renames it, and every
   record whose definitions use it changes. `--name-instances` writes each current name into its declaration;
@@ -89,43 +101,56 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   `implemented_by` targets and `@[csimp]` replacements, the code compiled in place of a constant; a csimp rewrite itself
   is a theorem the replay checks, so it is listed (`csimp` in the facts) and not refused;
 - with a `claims` section, every predicate the spec declares under `claims.modules` (a named assumption aside) has its
-  witnesses under `claims.witnesses`, or a reason under `claims.not`: a guarantee `fails`, stated `¬ C …` past its `∀`
-  and `∃` binders with the claim `C` at the head, and guarantees `meets`, one per deployed record, that state the claim's
-  checkable antecedents there and not `C` itself (`claim_failures`; the `shape` rule doesn't apply to them). A `meets`
-  witness must say something about the deployment: past its `∀`, `→` and `∃` binders, split at `∧`, each conjunct of its
-  conclusion is headed by a constant other than `C`, applies a definition under `meaning` itself (the deployed record, a
-  predicate or a field of it, so `True` or a fact of Init or Mathlib alone fails), and is neither a reflexivity
-  (`a = a`, `a ↔ a`) nor one of its hypotheses, and no hypothesis is `False` (`vacuous_meets`);
-- a guarantee of an acceptance or an exclusion has `honest` and `nontrivial` witnesses, or an `unwitnessed` entry, which
-  only shrinks (`witness_failures`);
+  witnesses under `claims.witnesses`, or a reason under `claims.not`: a guarantee `fails`, stating `¬ C …` past its
+  binders, and guarantees `meets`, one per deployed record, that state the claim's checkable antecedents there and not
+  `C` (`claim_failures`, not `shape`). A `meets` witness says something about the deployment: past its binders,
+  split at `∧`, each conjunct is headed by a constant other than `C`, applies a definition under `meaning` (the
+  deployed record or a field of it; not `True` or Init or Mathlib alone), is no reflexivity nor one of its hypotheses,
+  and no hypothesis is `False` (`vacuous_meets`). A closed `def C : Prop` proved of every instance goes under
+  `claims.generic` with its guarantee, which reads only the claims and Core and skips `shape` and the inline rule;
+- a guarantee of an acceptance or an exclusion, unless it states `a = a` (`reflexive`), has `honest` and `nontrivial`
+  witnesses of the form `witness_failures` states, or an `unwitnessed` entry, which only shrinks; `nontrivial` is one
+  theorem or a list, each past the first in the exclusion form and dropping a premise no earlier one drops;
 - every definition a guarantee's statement reads is in the spec (below), or a pinned dependency's;
 - no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
   statement that nobody has acknowledged (below);
 - the kernel accepts every declaration again (`Replay.lean`, on one import of the package's dependencies, each
-  declaration in a task of its own on Lean's threads, `LEAN_NUM_THREADS` (by default its affinity, bounded by the cgroup
-  quota, not Lean's whole machine), checked against the import and the declarations it comes after): a declaration that skipped the kernel shows no axiom, and only the replay catches it.
+  declaration against the import and the declarations it comes after, on `LEAN_NUM_THREADS` threads, by default
+  `cores`): a declaration that skipped the kernel shows no axiom, and only the replay catches it.
   The replay also walks the environment it checked for the axioms the package uses, and the audit fails if they differ
   from the sets the `.olean` files recorded. A replay killed by a signal
   (out of memory) is reported as a kill, not as a verdict. With `--closure` it checks the whole import closure the
   same way (below);
-- each test under `runs` passes on the data whose SHA-256 the record holds (below);
+- with `--build`, a sample of the modules the build didn't compile (restored from the node's artifact cache, or kept
+  from an earlier build), taken after the build with randomness nothing the build runs sees, compiles again in the
+  sandbox with no cache, in an overlay that never writes the build, to the outputs the build holds: byte for byte, and
+  `olean.server` and `olean.private`, which keep the source's absolute path, as object graphs (`sampled_recompile`,
+  `olean_graph.py`; failure `sampled`). The report's `sampled` names the modules. With no sandbox none is sampled
+  (`unsampled`), so nothing is restored or kept: every build is cold (`staged`), and a module restored anyway fails. A
+  sample can miss a wrong module, so the uncached nightly check stays the backstop;
+- each test under `runs` passes on the data whose SHA-256 the record holds (below), and its `generate` and `args` name no
+  path outside the package except as `{repo}/...`, which check's scratch tree would not hold;
 - nothing changes this directory, the toolchain's `lean`, `lake` and `leanchecker`, or the `.olean` files of a package
   audited earlier while the audit runs: the Lean files run from a copy taken before the first build, and everything is
   sealed and checked after each package.
 
 `--build` builds in `sandbox.sh` where `unshare` and unprivileged user namespaces are available: new user, mount, network
-and PID namespaces, everything read-only but the build's `.lake` directories, no network, and nothing outliving the build.
-The audit says when it had to build without one; the `compile-time` check then stands in for the sandbox.
+and PID namespaces, everything read-only but the build's `.lake` directories and a private TMPDIR, no network, and nothing
+outliving the build.
+The audit says when it had to build without one; the `compile-time` check then stands in for the sandbox. `--build` first
+takes one of the node's Lean audit slots (`lean_slot`; pool `LEAN_SLOT_POOL`, else `audit`) unless it holds one, and exits
+2 when refused. Packages are audited side by side after one `setup.sh`, each build after those of the packages it
+requires by path, never beside one that writes the same `.lake` (`writing`). `check.py` exits 0 when every package
+passes, 1 when one fails, and 2 on a usage error or a refusal.
 
 A package that pins ArkLib (`Security/Proofs`, and `Security`, which audits it beside itself) is refused, exit 2, on a
 machine with less than `MEM_FLOOR_GIB` (24 GiB, memory and swap within the cgroup), by `check.py` and the fast path
-alike; the refusal prints the fast path's `research run --on vy-nebius-1 …` line. `VERITY_LEAN_MEM_FLOOR_GIB` sets
-another floor (0: none). Lake runs as many `lean` at once as `LEAN_NUM_THREADS`, so the build of a package that pins Mathlib
-or ArkLib runs at most one per `BUILD_GIB_PER_JOB` (8 GiB) of the memory its cgroup allows (`build_threads`, from the
-process's own cgroup, so a queued run's scope counts); a `LEAN_NUM_THREADS` already set wins. Its kernel
-replay runs at most one thread per `REPLAY_GIB_PER_THREAD` (4 GiB), one such replay at a time (`replay_threads`). An audit of a spec beside the ArkLib package that proves its guarantees (`Security`)
-is refused below `SPEC_FLOOR_GIB` (160 GiB): the replay's resident base is about 120 GiB whatever its threads, and
-the refusal names `--kind lean-audit`, a 280 GiB shape.
+alike; the refusal prints the fast path's `research run --on auto …` line (`BELOW_FLOOR_RUN`). `VERITY_LEAN_MEM_FLOOR_GIB` sets
+another floor (0: none). Unless `LEAN_NUM_THREADS` is set, the build and the replay of a package that pins Mathlib or
+ArkLib run only as many threads as its cgroup's memory holds (`build_threads`, `replay_threads`), one such replay at a
+time. An audit of a spec beside the ArkLib package that proves its guarantees (`Security`)
+is refused below `SPEC_FLOOR_GIB` (160 GiB; `check.py` says why), and the
+refusal names `--kind lean-audit`, a 280 GiB shape.
 
 **The replay cache and the import closure.** Without `--closure` the replay trusts the package's dependencies (the
 toolchain's library, Mathlib, ArkLib) as their `.olean` files state them: a dependency module holding a theorem that
@@ -134,28 +159,26 @@ skipped the kernel passes it. `--closure` closes that gap module by module. Ever
 so it covers every `.olean` file under it. With `--replay-cache DIR`, a module whose key `DIR` holds passed the replay
 before, with its imports in the environment, and a module checked is stored there once the replay passes. The replay of
 a package then sends to the kernel each own module and each module of the closure that has not passed (`closure_plan`),
-loads unchecked the modules that passed and import one of those (an import of them would bring the unpassed one in
-unchecked), and imports the rest. By induction over the import DAG every declaration of the closure has been through
-the kernel, with its imports present, under a key that covers them: cold, the whole closure goes through the kernel in
-one process, `leanchecker --fresh`'s check of every root at once; warm, nothing outside the package does, and a change to
-an own module replays it and what imports it, as without `--closure`. The cache is shared between packages, so
-`Security` reuses the Mathlib modules `Security/Proofs` checked. For a module's verdict to be a function of its key,
-`Replay.lean` refuses a declaration that mentions a constant its module neither declares nor imports, checks a theorem
-that two modules each declare (an equation lemma realized in both) once per module, and requires the quotient's
-constants to be the ones the kernel makes. A change to `Replay.lean` changes every key, so the next run is cold.
+loads unchecked the modules that passed and import one of those, and imports the rest. By induction over the import DAG
+every declaration of the closure has been through the kernel, with its imports present, under a key that covers them.
+The cache is shared between packages, so
+`Security` reuses the Mathlib modules `Security/Proofs` checked. So that a module's verdict is a function of its key,
+`Replay.lean` pins what the kernel loads: no constant from outside the module's imports, an equation lemma two modules
+realize checked once each, a reused public part's axiom copy taken as Lean's import does (`subsumesInfo`), and the
+quotient's own constants. A change to `Replay.lean` changes every key, so the next run is cold.
+A key vouches for what a module's files hold, not for who wrote the entry. So the cache is used only on a node whose
+builds run in the sandbox, and only where no build can write it: `check.py` refuses a `--replay-cache` or
+`--facts-cache` inside a build's `writable` roots (`build_roots_over`), and on a node without the sandbox the replay
+neither reuses nor stores an entry (the report's `replay_cache` says so).
 The audit prints `closure: N modules checked, M reused` under each package's line. `check`'s lean-audit step runs
 `--closure` against the node's kept cache (`lean_audit.FLAGS`, `lean-replay/`), so a dependency module that skipped the
-kernel fails the merge check, and the `closure_dependency` control fails without `--fresh`. Cold, after a bump of the
-toolchain, Mathlib or ArkLib, or a change to `Replay.lean`, the first audit on each node checks the closure once; warm, the
-closure adds nothing to the kernel's work. `lean_audit.py --fresh` (the uncached nightly check) gives its packages one cache in
-its scratch tree, so `Security` reuses what `Security/Proofs` checked in the same run.
+kernel fails the merge check, and the `closure_dependency` control fails without `--fresh`. `lean_audit.py --fresh` (the
+uncached nightly check) gives its packages one cache in its scratch tree.
 
 `--fresh` also runs `leanchecker --fresh` on each root: the root's whole import closure, Mathlib and core included,
 through the kernel into an empty environment. It needs one module per root and a lot of memory, and checks the closure
-again on every run, so it is not part of every run: the steward runs `check.py --all --build --fresh` nightly on `main`,
-and `upstream.py --fetch` against ArkLib's head weekly, each as a recorded run on a pod (`tool.py`; `[[run]]` in
-`tools/research/README.md`). `--closure` with a kept cache, which `check` runs, checks the same closure once per change of its
-`.olean` files.
+again on every run, so it runs nightly on `main` instead (`[[run]]` in `tools/research/README.md`). `--closure` with a
+kept cache, which `check` runs, checks the same closure once per change of its `.olean` files.
 
 `--all` first runs the controls (`--no-controls` skips them; `check`'s audit does, and the `tools/verity/lean` suite runs them, only
 when `tools/verity/lean/` changes): `tests/fixtures/control` and `tests/fixtures/modules`, built with each audited package's
@@ -206,21 +229,28 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   test unrun, and `--update` records it. Generated data stays out of Git and out of the key of `check`'s audit step, so
   a test of the package's own (PoUW's `verity/core/protocols/pouw/tests/test_lean_package.py`) checks that the generator still writes the recorded
   data. `--no-runs` skips them.
-- `assumptions`: the named assumptions, by name, each with its `owner`: the `Prop` definitions a guarantee may take as a
-  closed hypothesis, or reads in its statement. Each premise a statement takes whose head the repository builds is
-  listed too (`Facts.lean`'s `premises`), and an unlisted one fails until `--update` adds it with its guarantees' owner;
-  its failure prints the entry `--update` would write, and what the premise unfolds to. A premise that is an alias of
-  listed assumptions is no new one, open or closed: a definition whose value asserts, through `∧`, the bodies of `∀` and
-  `→` and reducible unfolding, only listed assumptions or such aliases (`Facts.lean`'s `unfolds`; what it takes, an
-  antecedent or a binder's type, may mention only listed ones). Its parts are held to the lock in its place, and a closed
-  one's are the guarantee's named assumptions. One that asserts anything else (an unlisted `Prop`, `False`, a bound
-  predicate, a constant applied to a proposition or a predicate, a recursive definition) is a new one.
+- `assumptions_module`: the module (or a submodule) with named assumptions. `assumptions`: the named assumptions (with
+  `owner`), the premises declared there. `domain`: a premise that is part of what its guarantee says (a scope, the layer
+  below's guarantee), with `owner` and a one-line `why`; `--update` adds one that is another listed guarantee's
+  statement, citing it (`cites`), and an honest witness must conclude each. `open`: every other premise, with `owner`,
+  the Linear `issue` that discharges it and its `due` date, by hand: an unlisted one fails, naming the entry to write,
+  and only `open_seed` ({module prefix or owner: {issue, due[, owner]}}, consumed) lets `--update` add one. A premise is a closed hypothesis, or one a statement takes whose head the repository builds
+  (`Facts.lean`'s `premises`); a `Prop` a statement only reads is in neither, held by its `reads` record. A new named
+  assumption fails until `--update` adds it with its guarantees' owner. An alias of listed premises is no new one, open or closed: a definition whose value asserts, through `∧`, the bodies of
+  `∀` and `→` and reducible unfolding, only listed premises or such aliases (`Facts.lean`'s `unfolds`; what it takes may
+  mention only listed ones). Its parts are held to the lock in its place, and a closed one's are the guarantee's. One
+  that asserts anything else (an unlisted `Prop`, `False`, a bound predicate, a constant applied to a proposition or a
+  predicate, a recursive definition) is a new one.
   In a conclusion, and under a definition outside a `Guarantees` module, a premise is a constant of an assumptions
-  module or of a module under `shape.premises` that a hypothesis mentions. `--update` writes each one's `digest`: its `reads`
-  record's, else, wherever its module lies, that of it and every definition it reads in `meaning` and this repository's
-  modules (`Facts.lean`'s `assumption_reads`). So a change to an assumption or to what it reads fails under its own name,
-  and the landing DM shows it; an entry no guarantee reads fails. A list of modules is the old form:
-  it fails, and `--update` converts it into the definitions the guarantees read there, each owned by their owner.
+  module or of a module under `shape.premises` that a hypothesis mentions, or a hypothesis's head that the repository
+  builds. `--update` writes each one's `digest`: its `reads`
+  record's, else that of it and every definition it reads in `meaning` and this repository's modules
+  (`assumption_reads`). So a change to a premise or to what it reads fails under its own name,
+  and the landing DM shows it; one no guarantee reads fails.
+- `trust`: `base` ({premise: the trust assumption it states}, the same in every lock) and `extra` ({deployed guarantee:
+  {premise: the ruling's rule}}, what it alone may rest on). `deployed`: the guarantees that state the deployed system.
+  `trust_gap`: {deployed guarantee: its premises outside its trust} (`trust_gaps`), which only a person adds to and
+  `--update` drops from (`trust_failures`); the report prints each gap.
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside.
 - `compile_time`: the modules that must run code while they compile, one by one. Write the entry with its `why`; `--update`
@@ -232,19 +262,17 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   name a kernel bypass, each with the reason. An entry that no longer matches a hit fails, so the list stays current.
 - `dependencies` is written by `--update`: per fetched package and for the toolchain, a digest of the `.olean` files of the
   modules the package imports.
-- `guarantees`: the guarantees (README "Glossary"), and any lemma still listed beside them.
+- `guarantees`: the guarantees (GLOSSARY.md) and their witnesses (`witnesses`, `claims.witnesses`), never another lemma.
   `--update` fills each record, and a `reads` section, from the build: the signature, the named assumptions among the
-  hypotheses, a hash of the type, and for each module the definitions the guarantees read, with a hash each, the
-  guarantees that read them, and a `digest` of those hashes (which the record therefore determines). Without `--update`
-  the audit fails on any difference, so a statement, or a definition it depends on, cannot change without a visible diff
-  of this file. A record holds the statement, not the proof: list a `sorry` stub, and the guarantee passes once a proof
-  with allowed axioms replaces it. A record written before guarantees were called that holds them (and each module's
-  readers) under `pins`: the audit reads it so, `--update` rewrites it under today's names, and a record holding both
-  is refused.
-- `owner`, in each guarantee's entry: the handle of the lane that answers for it (a handle of the registry), whom
-  a broken or restated guarantee goes to. The audit fails an entry without one. Write it by hand, or pass
-  `--update --owner @lane`, which gives it to the new entries only: `--update` keeps an entry's owner, and writes no
-  entry without one. A changed owner is one line in the review and no change of the statement.
+  hypotheses, the `premises` (its named assumptions, open premises, and the `Prop`s it only `reads`), a hash of the type, and for each module the
+  definitions the guarantees read, with a hash each (not who
+  reads them), and a `digest` of those hashes. Without `--update` the audit fails on any difference, so a statement, or
+  a definition it depends on, cannot change without a visible diff of this file. A record holds the statement, not the
+  proof: list a `sorry` stub, and the guarantee passes once a proof with allowed axioms replaces it. A record that
+  holds them under their old name, `pins`, is read so and rewritten by `--update`; one holding both is refused.
+- `owner`, in each guarantee's entry: the registry handle of the lane that answers for it, whom a broken or restated
+  guarantee goes to; an entry without one fails. Write it by hand, or pass `--update --owner @lane`, which owns only the
+  new entries (`--update` keeps an entry's owner). A changed owner is one line in the review, not a changed statement.
 - `shape`: `{"premises": [module prefixes], "properties": {G: {"function": F, "outcome": O}}, "frozen": {name: why}}`,
   the shape every guarantee has (the lean-proofs skill, "One shape"). `Facts.lean` unfolds a lifted definition once,
   inlines its `let`s and splits a conjunction into its conjuncts; each takes its inputs, one hypothesis that applies `F`
@@ -259,18 +287,15 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   acceptance holds under no hypothesis of its own (`A → accepts` is not one), and a premise's head is its body's (`∀ j,
   P j` is headed by `P`). A `Prop` field of a structure under `meaning` that an input ranges over, or that an input
   returns (a family `Vs : Fin S → VStmt`, through reducible abbreviations), is a hypothesis, its
-  own `Nonempty` among them. A statement that fits written in another order fits as written: outside a probability
-  statement, its binders are also read reordered, its acceptances and premises with every binder they mention first and
-  the rest after, so a hypothesis on a binder no acceptance reads is the conclusion's (`∀ x w, Q x w → accepts x → P w`
-  is `∀ x, accepts x → ∀ w, Q x w → P w`), when it mentions a binder its conclusion reads and no kept binder mentions its
-  proof; an input with a `Prop` field never moves. A hypothesis equating one field of two inputs its acceptance reads
-  (`c.root = c'.root`, `Facts.lean`'s `shares`), whose proof nothing mentions, is allowed: it is the field bound once
-  (`⟨s, e, fs, r⟩` and `⟨s', e', fs', r⟩`). A guarantee under `frozen` (with why it doesn't fit yet) is
+  own `Nonempty` among them. A statement that fits written in another order fits as written (outside a probability
+  statement), and so does one with a hypothesis equating one field of two inputs, the field bound once: `check.py`'s
+  `reordered` and `shares` say when. A guarantee under `frozen` (with why it doesn't fit yet) is
   exempt, and fails once it fits, so the list only shrinks. Every `def G : Prop` of a spec module that holds statements (`"statements"`: module prefixes; by default a module
   with a `Guarantees` name part) must be the statement of a
   listed guarantee, or be under `frozen` until one is. A reason starts with its category (`restatable`, `frozen`,
-  `lemma`, `completeness`, `falsified`, or `unstated` for a statement no guarantee states), so a record counts its
-  guarantees by category. `"conjectures": {P: {"status": "open" | "falsified", "test": T, "why": W}}` names the
+  `falsified`, or `unstated` for a statement no guarantee states), so a record counts its guarantees by category. A
+  reason starting `lemma` or `completeness` is refused with its fix: unlist it (a spec statement only it states moves to
+  `Proofs/<Area>/Lemmas/`), or list it under `witnesses` as its guarantee's honest witness. `"conjectures": {P: {"status": "open" | "falsified", "test": T, "why": W}}` names the
   conjectures a property may rest on, each a named assumption: one is a premise when it heads a hypothesis, and a
   property with a hypothesis reaching one lists it under its entry's `rests_on` (it is conditional). An open one names
   its falsification test `T`, a pytest node id `PATH::NAME` from the repository's root that a suite runs
@@ -278,86 +303,91 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   property resting on it, which stays under `frozen` only as `falsified`. Every package is checked: without a `shape`
   section each guarantee is frozen or fails. An entry added to `frozen`, and a conjecture added or with a new status,
   is a claims change: the landing DM shows it with its reason (`research/spec_alert.py`), and nothing waits on it.
-- **The spec**, the trusted text a guarantee is stated over, is the `layers` prefixes: the modules whose imports the
-  policy rules. Every definition a guarantee's statement reads (theorems are not read: a statement means what it means
-  whatever proves the propositions inside it), followed through `meaning` and where the walk leaves it, must lie in the
-  spec of its package or of a package it requires by path (by that package's own `layers`), or in a pinned dependency
-  (the toolchain, Mathlib, ArkLib). A definition in a spec module must also be under `meaning`, or the record would hold
-  nothing of it. `reads_exempt` lists, each with the reason, module prefixes a guarantee may read outside the spec (a
-  package whose statements are about its executable, not about a model of it), as an object {prefix: the reason}; an
-  entry that exempts no read outside the spec fails, and no entry covers a spec module outside `meaning`, nor a module of
-  the proofs tree (the trees check judges those).
-- **The trees**: `trees` names which module prefixes are the definitions tree (what a reader reads:
-  each area's vocabulary, named assumptions and guarantee statements), the properties tree (statements about the code)
-  and the proofs tree (every proof, lemma and proof-only definition); a module's tree is that of its longest prefix
-  (`Proofs.Properties` before `Properties`), and a package's trees reach the packages that require it by path
-  (`Security`'s reach `Security/Properties` and `Security/Proofs`). The check refuses a guarantee or property whose
-  statement reads a definition of a module of the proofs tree (move it into the definitions tree, or take the statement
-  off the guarantees: it is a lemma), and a module of the definitions or properties tree that imports one. `except`
-  ({prefix: the reason}, the package's own) lists the exceptions by the read module or the importing one; an entry that
-  excepts nothing fails. `Security`'s `except` is the cleanup's to-do.
-  The report also lists, without failing, the spec definitions that no guarantee reads, its own or a dependent
-  package's (`unread_spec` in `report.json`).
+- **The spec**, what a guarantee is stated over, is the `layers` prefixes: the modules whose imports the
+  policy rules. Every definition a guarantee's statement reads (theorems are not read: a statement means the same
+  whatever proves the propositions in it), followed through `meaning` and where the walk leaves it, must lie in the spec
+  of its package or of a package it requires by path (by that package's own `layers`), or in a pinned dependency (the
+  toolchain, Mathlib, ArkLib). A definition in a spec module must also be under `meaning`, or the record would hold
+  nothing of it. `reads_exempt` ({prefix: the reason}) lists the module prefixes a guarantee may read outside the spec
+  (a package whose statements are about its executable, not about a model of it); an entry that exempts no read outside
+  the spec fails, and no entry covers a spec module outside `meaning`, nor a module of the proofs tree (the trees check
+  judges those).
+- **The trees**: `trees` names the module prefixes of the definitions tree (each area's vocabulary, named assumptions
+  and guarantee statements), the properties tree (statements about the code) and the proofs tree (every proof, lemma and
+  proof-only definition); a module's tree is that of its longest prefix (`Proofs.Properties` before `Properties`), and a
+  package's trees reach those that require it by path (`Security`'s reach `Security/Properties` and `Security/Proofs`).
+  The check refuses a guarantee or property whose statement reads a definition in the proofs tree (move it to the
+  definitions tree, or unlist it as a lemma), and a module of the definitions or properties tree that imports one.
+  `except` ({prefix: the reason}, the package's own) lists exceptions by the read or importing module; an entry that
+  excepts nothing fails. Excepted modules are still recorded. The report
+  also lists, without failing, the spec definitions no guarantee of the package or a dependent one reads (`unread_spec`
+  in `report.json`).
 - **Heartbeat overrides are listed, never refused.** Each `set_option maxHeartbeats N` (and
-  `synthInstance.maxHeartbeats`) in a package's sources is in its report (`heartbeats` in `report.json`, and printed
-  under its `AUDIT` line, so the nightly lists them): its file and line, its value, the reason beside it (a `--` comment
-  ending its line, else the `--` comments just above), and the build time of its module in the audit's own build. Write
-  the reason beside the override.
+  `synthInstance.maxHeartbeats`) in a package's sources is in its report (`heartbeats`, printed under its `AUDIT` line):
+  its file and line, its value, its reason (a `--` comment ending its line, else those just above), and its module's
+  build time in the audit's build.
 - **The hashes are SHA-256.** They are taken over a canonical form of the kernel term (`Facts.lean`'s `canonText`),
   which keeps what Lean's `Expr.hash` keeps (constant names, universe levels, bound variable indices, projections,
-  literals) and drops what it drops (binder names and binder info, `let` names, metadata). A renamed hypothesis is
-  therefore the same statement, and a different term is a different one. Records written with `Expr.hash`, which has
-  32 bits, are still checked as they are, and the run notes them. `--update` rewrites them, and its review says
-  "rehashed" where the 32-bit hash still matches, which the landing DM (below) leaves out.
+  literals) and drops what it drops (binder names and binder info, `let` names, metadata). Each text holds the matchers and proofs Lean shares across a module in place, not by name, so
+  neither a file split nor a module-system port changes a hash.
 
 **A changed guarantee is shown when it lands.** A weakened definition leaves every proof valid, so the axiom checks and
-the replay pass it: only the records see it, and only a person can judge it. (A redefinition of `Collision` once made a
-Merkle binding guarantee vacuous for unsalted schemes; the records flagged it and a review caught it.) `--update` records
-the change and prints it: each changed guarantee's signature before and after, and each changed definition a guarantee
+the replay pass it: only the records see it, and only a person can judge it. `--update` records the change and prints
+it: each changed guarantee's signature before and after, and each changed definition a guarantee
 reads, with the guarantees that read it and its source now (also in `review.txt` among the reports). Say so in the PR.
-An audit without `--update` whose only failures are record differences (a guarantee's signature, named assumptions or
-type hash, a `reads` group, an assumption's digest: what a train's merge of two PRs, each recorded on its own side, can
+An audit without `--update` whose only failures are record differences (a guarantee's signature, named assumptions,
+premises or type hash, a `reads` group, a premise's digest: what merging two PRs on `next`, each recorded on its own side, can
 leave) writes the `lean-audit.json` and `review.txt` that `--update` would among its reports, and its `report.json`'s
-`regenerated` names that file; a missing record or name, an owner or any other failure writes none. Which failures those
-are is decided by code, not by text: every failure carries one (`check.py`'s `Failure`, such as `guarantees.signature` or
-`orphan.file`, its first part the check its text names first), `report.json` and `audit.json` list them beside the texts
-(`failure_codes`, and `settled_codes` for what `--regenerate` settled), and the record differences are the codes in
-`RECORD_DIFFERENCE`, so rewording a message changes nothing a train commits.
-When the change lands on `main` (`research merge --push`, or drive's landing), the landing DM lists each new, removed
-or changed guarantee and each changed definition (`research.spec_alert`); nobody approves it first. A guarantee whose
-statement is the same but prints differently (the same type hash and named assumptions, after a toolchain bump or a change
-of notation) gets one line, "printed differently", and is left out of the DM. Definitions are compared by name, so one
-read from another module with the same content is counted on one line.
+`regenerated` names that file; a missing record or name, an owner or any other failure writes none. Code decides which
+failures those are, not text: each failure's code (`check.py`'s `Failure`) is in `report.json`'s `failure_codes`
+(`settled_codes`: what `--regenerate` settled), and the record differences are `RECORD_DIFFERENCE`'s. The Lean check of a commit of `next` runs with
+`--regenerate`, and drive commits the records it regenerated when it lands that commit (drive.toml's `regenerate_locks`);
+drive's after-landing run passes `--no-regenerate`, so a record difference that reaches `checked` fails there.
+
+**Bookkeeping warns after a landing.** Drive's lock run (the lean-audit step of the merge queue's check with
+`--bookkeeping-warn`, reaching `check.py` as `--bookkeeping warn`) passes a package that fails only on bookkeeping
+(`BOOKKEEPING`) on the lock `repaired` writes:
+- an unlisted premise, an `assumptions` entry declared outside the assumptions module, or an uncovered `domain` entry is
+  listed under `open`, owned by its guarantees' owner (the first, of several), on the lock's `open_default_issue` (else
+  none, which its warning asks the next PR for), due seven days from the run;
+- a guarantee the witnesses rule now holds to witnesses it lacks is listed under `unwitnessed` at its current hashes;
+- a stale entry (a `trust_gap` premise too) is dropped, and a missing owner is set to the guarantees' owner, else the lock's `default_owner`.
+
+The run then judges the policy's checks again on that lock, so whatever else fails still fails: the build, the replay,
+an axiom beyond the standard three, `sorry`, `native_decide`, a kernel bypass and a malformed lock. `lean_audit.py` also
+repairs the caps, in copies that audit.json's `repaired` names (`raised_unread`, `held_caps`): an unread area over its cap,
+and a lock count over its cap in `tests/test_lean_packages.py` (UNWITNESSED, INLINE), are raised to the count, and such a
+cap more than its `ROOM` above its count is lowered to the count and its room. Elsewhere a loose cap only warns (`_held`), so lowering a count never fails a check. Each repair is one
+warning naming the entry and its owner, in audit.json's `bookkeeping`. Drive commits the repaired files with the locks
+(`research.merge.REPAIRED`, held byte for byte to the run's copies), lists the warnings in the lock commit, and tells the
+Lean lane and each owner they name; the next PR fixes them. No other check takes the flag.
+
+When the change lands on `main`, the landing DM (`research.spec_alert`) lists each new, removed or changed guarantee and
+each changed definition; nobody approves it first. A statement that only prints differently (the same type hash and named
+assumptions: a toolchain bump, notation) gets one line, "printed differently", and stays out of the DM; a definition read
+from another module with the same content is counted on one line.
 
 **A lift is not a change.** Lifting a guarantee into the spec, `theorem X (xs) : e` becoming `theorem X (xs) : G as` with
 `def G (ys) : Prop := e'` in a `Guarantees` module, changes its record's signature and type hash. `check.py --update`
 certifies the lift as the same statement when the type, with `G` unfolded once, hashes to the record's type hash and the
-named assumptions are the record's (`lifted_into`). `Facts.lean` (`liftOf`) unfolds by delta alone: the binders `xs` as they
-are, and in place of `G as` the value of `G` at the type's universe levels with its leading `fun`s instantiated by `as` (as
-`Meta.unfoldDefinition?` unfolds an applied constant), the proofs Lean abstracts out of a definition (its `G._proof_<n>`
-theorems) put back in place, as a theorem's type keeps them. Nothing else is reduced, and the text is hashed as every
-type is. A certified lift gets one line, "lifted into G: the same statement, its definition unfolded once", and `G`, new and
-read by no other guarantee, needs no reading of its own; the review then holds no statement change. (No merge needs a
-statement reviewer, for a lift or any other change.) Any other lift prints in full: a `G` whose value differs from `e` in anything the hash sees
+named assumptions are the record's (`lifted_into`); `Facts.lean`'s `liftOf` says how it unfolds `G`, by delta alone, and
+the text is hashed as every type is. A certified lift gets one line, "lifted into G: the same statement, its definition
+unfolded once", and `G`, new and read by no other guarantee, needs no reading of its own; the review then holds no
+statement change. Any other lift prints in full: a `G` whose value differs from `e` in anything the hash sees
 (binder names and metadata aside), a `G` outside a `Guarantees` module, and a lift that moves a named assumption from the
 theorem's binders into `G`, which the record's `assumptions` would lose. The landing DM reads only the records, so it
 still lists a lifted guarantee as changed.
 
-`four_names` lists the namespace roots (`["Nci", "NetTiming"]`) whose guarantees are all in the four-name form: each is
-`X.SecurityProofs.G : X.Guarantees.G` (universe parameters aside), with `G` a definition of a `Guarantees` module, and the
-audit fails on any other guarantee under a listed root. A package's owner adds its root once every guarantee there is
-lifted, or no longer a guarantee.
+`four_names` lists the root of each of the lock's guarantees (`["Nci", "NetTiming", …]`), and each is `X.SecurityProofs.G
+: X.Guarantees.G` (universe parameters aside), `G` a definition of a `Guarantees` module, but a witness, a frozen guarantee,
+a generic claim's (`claims.generic`: stated as its claim) and one `four_names_except` holds ({G: why not yet}). An entry
+there in the form, frozen, a witness, a generic claim's or gone fails.
 
-`check.py --lift LIFTS.json PKG` writes lifts into the four-name form: `def G : Prop` with the theorem's doc comment,
-binders and type as its source writes them, after the `variable`s in scope that Lean includes in the theorem (those the
-statement mentions, and the instances over them), in the theorem's namespace with its file's `open`s (less the namespaces
-only proof modules declare) and the `open … in` right above it, so that its names resolve as they did, and
-`theorem X.SecurityProofs.G : X.Guarantees.G := @X.t` beside the proof, whose module then imports the spec module;
-`"beside": M` puts the theorem in `M` instead (a package that collects its guarantees' proofs in one module), which then
-imports the proof's module too. The spec module imports the modules of the definitions the statement reads, and a
-statement that reads a definition of a `proved_in` package (in `reads` or `outside`) is refused: move the definition
-first. What it cannot follow (an `open` of a namespace a definition module opens only through a proof's declaration, a
-`variable` an `omit` or `include` changes) fails the build or prints as a change, never as the same statement. It writes
+`check.py --lift LIFTS.json PKG` writes lifts into the four-name form: `def G : Prop` in the spec module, and
+`theorem X.SecurityProofs.G : X.Guarantees.G := @X.t` beside the proof or in the module `"beside": M` names (`check.py`'s
+`lift` says what each copies and imports, and what it refuses). What it cannot follow (an `open` of a namespace a
+definition module opens only through a proof's declaration, a `variable` an `omit` or `include` changes) fails the build
+or prints as a change, never as the same statement. It writes
 the moves (`LIFTS.json.moved.json`, each `X.t` to `X.SecurityProofs.G`) for `--update --moved`,
 which certifies each lift or prints it; `X.t` stays as a lemma. A guarantee that takes a named assumption as a hypothesis
 moves it into `G`, which prints as a change.
@@ -370,10 +400,9 @@ mapped back to the old ones, a lifted statement also with its definition unfolde
 records of the old names: a guarantee that says what its record says gets one line, "the same statement under its old
 names" (moved from its old name, lifted as above, or both), and the definitions the same under their old names are counted
 on one line. The landing DM, which reads only the records, leaves out a guarantee renamed with its type hash unchanged and
-a definition moved with its content. Everything else prints as without the map. A map whose new names nest differently
-from its old ones is refused, and so is one under which two constants of those texts (or two guarantees) would have one old
-name, since the comparison could not tell them apart; an old theorem kept under its old name as the lemma behind a new
-guarantee is no conflict.
+a definition moved with its content. Everything else prints as without the map. A map the comparison could not read back
+is refused (`check.py`'s `move_errors`); an old theorem kept under its old name as the lemma behind a new guarantee is no
+conflict.
 
 ## A spec and its proofs in two packages: `proved_in`
 
@@ -415,93 +444,62 @@ The proofs package's own audit replays its declarations through the kernel, so `
 ## Merging records: `merge.py`
 
 Two branches that each add guarantees both change `lean-audit.json`, usually in the same `reads` module, so git's text merge
-conflicts. `.gitattributes` gives the file to `merge.py` instead, once `python tools/verity/lean/merge.py --install` has registered
-it in the clone's git config. It merges entry by entry: each side's change to a guarantee, a module under `reads`, a dependency
-or a policy entry applies. Within a module both sides changed, the definitions merge the same way, the readers as sets, and
-the digest is recomputed. Guarantees arrive byte for byte from their branches, and a hand-written section one side extends
-(a module added to `meaning`) is kept. A side written before guarantees were called that (`pins`) is read under today's
-names. A guarantee's `owner` merges apart from the rest of its entry, so one side's new owner and the other side's
-restatement both apply.
+conflicts. `.gitattributes` gives the file to `merge.py` instead, registered by `merge.py --install`. It merges entry by entry: each side's change to a guarantee, a module under `reads`, a dependency or a policy entry applies.
+Within a module both sides changed, the definitions merge the same way, and the digest is recomputed; an older lock's
+readers and `pins` are read as today's. A guarantee's `owner` merges apart from the rest of its entry, so one side's new
+owner and the other side's restatement both apply.
 
-What the build determines never refuses: a guarantee's record (restated on both sides, the merged statement decides it),
-`reads` and assumption digests merge as the union or ours' value, named on stderr, and the train's Lean check regenerates
-them. It refuses where both sides changed what a person writes: an owner, a `shape` entry, a dependency. A refusal is a
-conflict in git, with the entries named; take either side and run `check.py --update` on the merged tree.
+Apart from the guards below, the merge never conflicts. What the build determines (a guarantee's record, `reads`,
+assumption digests) merges as the union or theirs' value, and the lock run regenerates it. What a person
+writes (an owner, an `issue` or `due`, a `why`, a reason, the roots, an exemption, a dependency) merges as the union of
+both sides' entries: one both sides changed differently is theirs', and one a side removed while the other changed it is
+the changed one. An entry the sides moved to different sections of an exclusive group (`witnesses`, `not`, `generic`;
+`assumptions`, `domain`, `open`) is where theirs put it, for `check.py --update` to classify. Each entry taken from one
+side is one warning line. A side that isn't a record (bad JSON) yields to the other, with a warning; two bad sides leave
+git's conflict.
+
+Git runs a driver from the worktree you merge into, so the registered command (`research.clone.RECORD_DRIVER`) runs
+`origin/main`'s copy of this directory when that ref exists, else the worktree's: fetch `main` first. Three guards leave
+git's conflict, where it beats a silent loss: a lock `format` above `FORMAT` (bumped in both files with the lock's
+schema), the worktree's copy merging a side with newer `merge.py` changes (`stale`), and a merge that drops most of a
+side's section (`losses`).
 
 A merged record is a candidate. `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference,
 so a merge that is clean but wrong (a definition that changed on one side without a guarantee there reading it, while the
 other side's new guarantee reads it) fails there. `merge.py --normalize FILE` recomputes a record's digests without a build.
 The fast path (`lean_changed.py --records`) takes such a candidate as it is: after a merge of `main` that takes every Lean
 input of a package it changes whole from main's side and its lock from `merge.py`, on top of a commit whose records passed, it runs
-nothing for that package (`merged`), and neither does it on inputs whose records already passed on that node (`kept`).
+nothing for that package (`merged`), and neither does it on inputs whose records already passed on that node or in a result
+the node's store holds (`kept`, by `inputs_key`; `lean_changed.py --inputs-key PKG --head SHA` prints the key from git alone).
 
 ## Noticing when a dependency proves what we assume: `upstream.py`
 
 A named assumption, or a lemma we prove by hand, may be proved upstream one day if its statement can be written in a
 dependency's constants, and the proof may arrive as a different theorem, with a different constant, under a name nobody
-watches. One stated over the package's own definitions has no entry, since no upstream theorem can mention them, and
-neither has one about a single number (PoUS's `PrimeP16448`: `Nat.Prime (2 ^ 16448 - 21065)`), since its entry could
-mention only `Nat.Prime` and would match every theorem about primes. So the
-watch list names what a statement is about, and the status comes from the dependency, not from a document. It is the `upstream` section of the package's policy:
+watches. So the `upstream` section of the package's policy names what each watched statement is about (`mentions`), a
+hit is a theorem whose statement mentions all of them, and the status comes from the dependency, not from a document;
+`upstream.py`'s docstring has the section's format and its two passes. A statement over the package's own definitions
+has no entry, since no upstream theorem can mention them, and neither has one about a single number, whose entry could
+mention only `Nat.Prime` and would match every theorem about primes.
 
-~~~json
-"upstream": {
- "scan": {"Arklib": {"baseline": "scripts/axiom_baseline.json", "sources": ["ArkLib"]}},
- "imports": ["ArkLib", "VCVio.CryptoFoundations.HardnessAssumptions.CollisionResistance"],
- "watch": {
-  "A1-johnson-mca": {"about": "Assumptions.BCHKS25Thm46 (A1)",
-                     "mentions": ["CoreDefinitions.mcaError", "CoreDefinitions.AffineLineGenerator", "ReedSolomon.code"],
-                     "ack": ["ReedSolomon.mcaError_affineLine_johnson_le"]}
- }
-}
-~~~
-
-A hit is a theorem whose statement mentions every constant under `mentions`. There are two passes.
-
-- **No build.** The pass reads each `scan` package's sources with `git show`, in its checkout under `.lake/packages/`, at
-  the pinned revision. It matches the constants' last name parts as words in each theorem's statement (comments aside),
-  and takes proved or not from the package's own transitive baseline. ArkLib keeps `scripts/axiom_baseline.json` current
-  with its `validate.sh --axioms` gate. The audit runs this pass for every package with an `upstream` section: a bump
-  that brings a proof about a watched statement fails the audit until the proof is acknowledged.
-- **Exact.** `upstream.py PKG --lean` builds `imports` and runs `Upstream.lean`. That matches the constants in the
-  elaborated types of everything imported, and walks each hit's proof for its axioms. It covers packages without a
-  baseline (VCVio, CompPoly), and catches what text matching misses. Run it at a bump; the first builds all of ArkLib.
-
-A proved hit not under its entry's `ack` is new, and the exit code is 1. Someone checks whether it discharges the
-assumption or replaces the hand proof, then records it with `--ack`: the list says what has been looked at, not what was
-used. To see what upstream has proved since the pinned revision, run `upstream.py PKG --fetch --rev origin/main`; a weekly
-`research run` of it tells us when a bump would gain something. A document's "status upstream" line cites this output
-instead of asserting a status.
+The audit runs the no-build pass for every package with an `upstream` section, so a bump that brings a proof about a
+watched statement fails until someone has checked whether it discharges the assumption or replaces the hand proof and
+recorded it with `--ack`: the list says what has been looked at, not what was used. Run the exact pass (`--lean`) at a
+bump; its first run builds all of ArkLib. `upstream.py PKG --fetch --rev origin/main` shows what upstream has proved
+since the pinned revision, and a weekly `research run` of it tells us when a bump would gain something. A document's
+"status upstream" line cites this output instead of asserting a status.
 
 ## The build cache: `cache.py`
 
 Integration publishes the build of each package at every merged commit, and a development machine restores the newest one
-that is an ancestor of its `HEAD`. Lake then unpacks the modules whose input hashes match and compiles the rest. Lake's
-input hashes don't depend on the checkout's path: a build published from `/build/verity` restores in `/workspace`. The
-module docstring has the layout and the rules. In short:
-- The client checks every file's sha256 against the commit's record before Lake sees it, and hands the files to Lake with
-  `lake cache unstage`. Lake never reads the bucket itself, because its hashes aren't cryptographic.
-- A package's record also carries the build of each dependency that Mathlib's cache doesn't provide (ArkLib and the
-  packages it brings, for `Security/Proofs`), unstaged into that dependency's scope. A fresh machine then needs
-  `setup.sh` (the toolchain, Mathlib's cache, the dependencies' sources) and `cache.py get`, and compiles none of ArkLib.
-- A miss or a mismatch means building from source. So do a missing read credential (the `LEAN_CACHE_*` variables, else
-  the same four lines in `~/.config/verity/lean-cache-read.env`, as the nodes' research user holds them), the kill switch
-  (disabled, quarantined or unreachable), and `LEAN_CACHE=off`.
-- The audit never reads the cache: `lake_env()` sets `LEAN_CACHE=off` and `LAKE_ARTIFACT_CACHE=false`. Check's audit and
-  a records run name their node's own Lake cache instead (`--artifacts`, `lean_audit.LakeArtifacts`), which only a
-  passing run there fills, from a build in the sandbox. Each build reads a copy staged for it of the modules whose key
-  (`module_keys.py`, the task graph's key of its compile) it indexes, and builds any other from source.
-- Only integration publishes, and only a clean checkout of a commit on `origin/main`. It builds with `cache.py build` inside
-  its sandbox, then runs `cache.py publish` as root outside it, which hashes the staged files itself and signs with the
-  bucket-scoped key (`/etc/verity/lean-cache.env`). The build's user wrote the stage, so the publisher follows no link
-  below `--out`, takes only regular files with one link, and uploads a private copy of the bytes it hashed: a link
-  planted to the key uploads nothing.
-- Every write is conditional. A blob that already exists (a 412 or a 409) must have the same MD5, and blobs go up in one
-  part so that their ETag is their MD5. Records go last.
-- On node 1, `run_daily.py` is the daily publish (`vy-lean-cache-daily.timer`, deployed with the `cache.py` beside it).
-  It builds a fresh clone of main at `/build/verity` per package in infra's sandbox (`vy-lean-sandbox`), with the
-  dependencies fetched outside as research and bound read-only. It runs `publish` and `prune` only after
-  `vy-lean-sandbox clean` passes. A probe that got through, a refused sandbox or an unclean tree publishes nothing.
+that is an ancestor of its `HEAD` (`cache.py get`, after `setup.sh`): every file is checked against the commit's sha256
+record before Lake unpacks the modules whose input hashes match, and the rest compile, so a fresh machine compiles none of
+ArkLib. A miss, a mismatch, a missing read credential (the `LEAN_CACHE_*` variables, else
+`~/.config/verity/lean-cache-read.env`), the kill switch or `LEAN_CACHE=off` means building from source. The audit never
+reads it: `lake_env()` sets `LEAN_CACHE=off`, and check's audit and a records run restore only from their node's own Lake
+cache, which only a passing run there fills, by each module's compile key (`lean_audit.LakeArtifacts`, `module_keys.py`). `cache.py`'s
+docstring has the bucket's layout and how integration publishes (as root, outside the build's sandbox, from a clean
+checkout of `origin/main`), and `run_daily.py`'s the daily publish.
 
 ## Using it from another repository
 

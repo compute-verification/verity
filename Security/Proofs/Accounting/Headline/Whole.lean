@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Accounting.TS
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # Theorem D-ideal with fold skippers charged

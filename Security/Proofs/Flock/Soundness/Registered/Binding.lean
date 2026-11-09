@@ -1,8 +1,10 @@
 module
 
 public import Proofs.Flock.Soundness.Registered.Defs
-public import Proofs.Flock.Soundness.Binding.Weights
 public import Proofs.Flock.Soundness.StrictCR
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Binding.Weights
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Registered reads bind the registrant's rows, under `cr/sha-512`
@@ -55,7 +57,7 @@ theorem TwoOpenings.conflict_strict {β : Type} (g : Game β) (s : Strategy g) (
   (ENNReal.toReal_mono (ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one _ _ _))
     (prob_mono (fun b hb => (o b).isColl hb) g s)).trans (hCR hcost)
 
-variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
@@ -75,7 +77,7 @@ theorem regLeaf_eq {R : Reg} {path : lay.Pos → ByteArray} (hc : rd.Checked R p
   · exact Or.inr ((rd.openings R path p).collides ⟨h, hc p hp, rd.committed p hp⟩)
 
 /-- **`registered_weights_hm96` at a registered read.** Where the verifier's registered check holds at the registration
-`R`, in a satisfying witness of a drawn unit's table, the row the witness holds at a registered read is the row the
+`R`, in a satisfying witness of a sampled proof block's table, the row the witness holds at a registered read is the row the
 registrant committed there (`wv`), or SHA-512 collides: in hm96's leaf (`hm96Pair`), or between the session's opening of
 the registered root and the registrant's. -/
 theorem registered_weights (hHm : rs.Computes) {S : Finset (Fin n)} {R : Reg} {u : Fin n} (hu : u ∈ S)

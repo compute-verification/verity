@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# The whole encoded store through the staging decode on the demo card (full.py), in place and read only, from build.sh's
+# The whole encoded store through the store's load on the demo card (full.py), in place and read only, from build.sh's
 # lib, the weights manifest with digests memory-accounting held W to, and the store's layout; cwd = the source
 # tree's root:
 #
 #   tar -C BUILD_RUN/out -cf /tmp/p2lib.tar .
-#   research run --on vy-dc-h200-2 --project verity --campaign e2e-demo --source . --cwd source --timeout 90m \
-#     --env GPU_LEASE_WHO=LANE [--env RECEIPTS=1 --env GEMM_LAYER= --env SAMPLE=0] \
+#   research run --on H200_NODE --project verity --source . --cwd source --timeout 90m \
+#     [--env RECEIPTS=1 --env GEMM_LAYER= --env SAMPLE=0] \
 #     --send /tmp/p2lib.tar --send h200-manifest.json --send store-layout.json \
 #     -- bash benchmarks/torch_gpu/p2_stage/full.sh
 #
@@ -17,7 +17,7 @@
 # MANIFEST_SHA256 and to the store's own record of it, the store's setup and record copied out; with RECEIPTS=1, the
 # receipts' and sha512_rows' kernels built for ARCH (default 90a). Under one untimed lease of at most LEASE_MIN minutes
 # (default 20), refused if it could reach one of QUIET's periods: full.py, every tensor of LAYERS (default all 52
-# layers and the head) staged and held to the manifest's SHA-256, with RECEIPTS=1 the bandwidth audit's pass beside it
+# layers and the head) loaded and held to the manifest's SHA-256, with RECEIPTS=1 the bandwidth audit's pass beside it
 # (`--receipts`, its σ, y and salts kept in scratch), then GEMM_LAYER's matrices (default 51; empty for none) through
 # the exact W8A8 GEMM at each batch of M (default 16384). After the lease, niced on half the host's cores: check.py on the GEMM's
 # samples and SAMPLE blocks of every tensor (default 128; 0 skips it) against P2's reference, and with RECEIPTS=1
@@ -26,9 +26,7 @@
 set -uo pipefail
 O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
 D=benchmarks/torch_gpu/p2_stage
-for v in ${VERITY_BENCH_VENV:-} /workspace/cp/venv312 /workspace/jobs/venv312; do
-  [ -z "${PY:-}" ] && [ -x "$v/bin/python" ] && PY=$v/bin/python
-done
+PY=${PY:-$(. benchmarks/harness/env.sh && echo "$VENV/bin/python")} || [ -z "${VERITY_BENCH_VENV:-}" ] || exit 2
 PY=${PY:-python3}
 "$PY" -c 'import torch' 2>/dev/null || { PATH=$HOME/.local/bin:$PATH uv sync -q --all-packages --extra torch > "$O/sync.log" 2>&1; PY=$PWD/.venv/bin/python; }
 TV=$($PY -c 'import torch; print(torch.version.cuda or "")' 2>/dev/null)

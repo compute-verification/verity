@@ -2,8 +2,8 @@
 # M3 proper on the H200. PHASE=commit writes a new salt secret (~/.local/state/m3proper-1de3, 0600,
 # never under $OUT, kept by `research keep`) and m3draw's roots.json for f3ca's prompts and flags. PHASE=replay re-runs
 # under it with kv_reads' KeepingDriver for inputs/blocks.json's slots, holds every root to inputs/roots.json and leaves
-# the drawn slots' rows beside the secret (m3bundle.py's input). The card is leased for the run only.
-# PHASE=replay (inputs roots.json, step-registration.json, draw.json) keeps the drawn slots beside the secret; PHASE=build
+# the sampled slots' rows beside the secret (m3bundle.py's input). The card is leased for the run only.
+# PHASE=replay (inputs roots.json, step-registration.json, draw.json) keeps the sampled slots beside the secret; PHASE=build
 # (receipt.json, weights-open.json besides) writes the step tree to $OUT/tree on the CPU (m3bundle.py).
 #   research run --on H200_NODE --project verity --source . --cwd source --timeout 5400 --env PHASE=commit \
 #     -- bash examples/h200/m3proper_job.sh
@@ -15,8 +15,8 @@ uv sync -q --all-packages --extra torch
 echo "nproc $(nproc)"; free -g | head -2
 for c in /usr/local/cuda /usr/local/cuda-13.0 /usr/local/cuda-12.8 /usr/local/cuda-12.9; do [ -x "$c/bin/nvcc" ] && export CUDA=$c && break; done
 echo "CUDA=${CUDA:-none}"; export PATH="${CUDA:-/usr/local/cuda}/bin:$PATH"
-CUBIN_ONLY=1 bash benchmarks/torch_gpu/attn_ref/build.sh "$OUT/attn_ship" 2>&1 | tail -3
-export ATTN_REF_CUBIN="$OUT/attn_ship/attn_ref.sm_90a.cubin"
+CUBIN_ONLY=1 bash benchmarks/torch_gpu/attn_bf16/build.sh "$OUT/attn_ship" 2>&1 | tail -3
+export ATTN_BF16_CUBIN="$OUT/attn_ship/attn_bf16.sm_90a.cubin"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 git rev-parse HEAD
 FLAGS=(--shape h200 --seed demo --device cuda --batch 512 --steps 32 --prompt-bytes 8 --micro-batch 512

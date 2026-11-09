@@ -1,18 +1,56 @@
 module
 
-public import Proofs.Flock.SessionLoop.FinPiopRet
-public import Proofs.Flock.SessionLoop.FinRepOpen
-public import Proofs.Flock.SessionLoop.FinRepRows
-public import Proofs.Flock.Claims.ZK.RepCutFw
+public import Proofs.Flock.Claims.ZK.FinishSwSrc
+public import Proofs.Flock.Claims.ZK.SimLig
+public import Proofs.Flock.SessionLoop.FinishParts
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.ZK.FinishClaimsX
+import Proofs.Flock.Claims.ZK.FinishRank
+import Proofs.Flock.Claims.ZK.RepCutFw
+import Proofs.Flock.SessionLoop.FinRepRows
+import Proofs.Flock.SessionLoop.FinRepXs
+import Proofs.Flock.SessionLoop.FinRounds
 
 /-!
-# The views' cut rep returns where the firewall's rep did, with no rows
+# The views' cut rep returns where the ZK server's rep did, with no rows
 
 The cut rep is answered by the opened coins, so its control flow reads only coins, sizes and points
 (`FlockComplete.CutFree.repCut_of_repFwC`): where the session's rep on the loop's table and request returned
 (`RepAt`, as `finRepCut` runs it at the opened coins), the cut rep at the same table and schedule, from any hash,
 level-0 commitment, pads commitment and source, returns from the rep's base, at the views' extra claims, the earlier
-reps' points and the mask slot's words, and ends where the firewall's does, at the next rep's base (`finRepCut_size`).
+reps' points and the mask slot's words, and ends where the ZK server's does, at the next rep's base (`finRepCut_size`).
 No premise on the views' masked values, and none on the rows.
 
 **`Loop.repCut_views_ret`**: that return, at any rep stream `k`.
@@ -42,7 +80,7 @@ set_option maxHeartbeats 1000000 in
 /-- **The views' cut rep returns at the next rep's base**: in the masked scope, at a witness in the relation, at a
 `Finish` `FinishIs` reads, rep stream `k`'s cut rep at its table and `--zk` schedule, answered by the opened coins, from
 any hash, level-0 commitment, pads commitment and source, at the views' extra claims, the earlier reps' points and the
-mask slot's words, returns from the rep's base and ends at rep `k + 1`'s: the firewall's rep stream `k` returned
+mask slot's words, returns from the rep's base and ends at rep `k + 1`'s: the ZK server's rep stream `k` returned
 (`proofsOf_at`, `proofFile_ok`, `finRepCut`) and ends there (`finRepCut_size`), and the cut rep returns with it
 (`repCut_of_repFwC`), its rank check by `rank_at_admits`. -/
 theorem repCut_views_ret (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
@@ -69,7 +107,7 @@ theorem repCut_views_ret (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.
     unfold Masked.jOf
     exact ite_eq_left_of_eq_true _ _ (eq_true hx)
   have hA := admits_of_finCtx L₀ src (realOf src) wk hServe hF
-  -- the firewall's rep stream `k`, at the opened coins
+  -- the ZK server's rep stream `k`, at the opened coins
   obtain ⟨files, hp⟩ := proofsOf_ok_of_ctx L₀ src (realOf src) wk x w hF hsx
   have hrs : spec.repStreams.size = 2 * spec.tables.size := FlockDeploy.repStreams_size spec
   obtain ⟨tb, hi, q, hRep⟩ := proofsOf_at hp (k := k) (by rw [hrs]; exact hk)
@@ -92,7 +130,7 @@ theorem repCut_views_ret (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.
   have hfk : tb.st.fold.kLog = tb.st.kLog := by
     rw [← htb, hst]
     rfl
-  -- as many extra claims as the firewall's
+  -- as many extra claims as the ZK server's
   have hxs := finRepXs L₀ src (realOf src) wk x w hsc hR ν t κ m₀ ρ₀ ops hF s0 spec hsx k hk extras hex tb hi q _ hRep
   have hcx := congrArg Array.size (_root_.Flock.Firewall.Finish.claimsOf_map_x q.xs)
   have hex' := congrArg Array.size hxs

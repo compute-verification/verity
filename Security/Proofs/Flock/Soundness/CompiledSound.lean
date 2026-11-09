@@ -1,7 +1,12 @@
 module
 
+public import Definitions.Flock.Rewinding
 public import Proofs.Flock.Soundness.CompiledLock
+public import Proofs.Flock.Soundness.Game
+public import Proofs.Flock.Soundness.LigeritoPhase
+public import Proofs.Flock.Soundness.BindSound
 public import Proofs.Flock.Soundness.Soundness
+import Proofs.Flock.Soundness.Merkle
 
 /-!
 # Compiled soundness under collision resistance (README.md §1.2)

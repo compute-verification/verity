@@ -4,15 +4,17 @@ public import Definitions.Nci
 public import NciCheck.Check
 
 /-!
-# The NCI check's properties, stated against the Lean function
+# The inference-only check's properties, stated against the Lean function
 
 `NciCheck.evaluate` (`verity/core/protocols/network/nci/lean/NciCheck/Check.lean`, package `nci_check`) is
-the verifier's check of a declared division against the NCI policy, `Nci.Complies Γ α` (`Definitions/Nci.lean`), and
-`NciCheck.check` is `evaluate` with a refusal written `{"error": code}` (with a `message` giving the fix for some codes).
-θ holds only input gates bound at registration (`IsRegistered`): one bound per run is refused. The difftest holds it to the Python reference on
-random instances; the statements here say what it computes on every instance. Each is a named `Prop`, proved as
-`NciCheck.Properties.SecurityProofs.X : NciCheck.Properties.X` in `Proofs.Properties.Nci`, and a guarantee of this
-package (`lean-audit.json`).
+the verifier's check of a declared division against the inference-only policy at its rate,
+`Nci.CompliesRate c α` (`Definitions/Nci.lean`), at the gate budget `c = gamma` and the rate
+`α = num / den`, and `NciCheck.check` is `evaluate` with a refusal written `{"error": code}` (with a `message` giving
+the fix for some codes). θ, the registered information, holds only input gates bound at registration (`IsBoundAtRegistration`):
+one bound per run is refused. The difftest holds it to the Python reference on random instances; the statements here say
+what it computes on every instance. Each is a named `Prop`, proved as
+`NciCheck.Properties.SecurityProofs.X : NciCheck.Properties.X` in `Proofs.Properties.Nci`, and a guarantee of
+this package (`lean-audit.json`).
 
 Each statement has one shape (the lean-proofs skill, "One shape"): for every instance, if the check gives a verdict (or
 doesn't refuse with a code), its named conclusion holds. The converses, that the check refuses exactly the malformed
@@ -22,7 +24,7 @@ and gives a verdict on every well-formed instance, are completeness, in `Proofs.
 
 * `RejectsExactly`: if `evaluate j` doesn't refuse with code `k`, then not `Malformed j k` (the first condition `j`
   fails, in the order the check reads them, is `k`'s): so a malformed instance is refused, with that condition's code.
-  The conditions are written over `j`'s JSON and what C-Flock's decoder returns for the program (`Flock.Program.decode`,
+  The conditions are written over `j`'s JSON and what Flock's decoder returns for the program (`Flock.Program.decode`,
   then `Prog.gate` per gate), never over the check's own state.
 * `AcceptsExactly`: `evaluate j` gives a verdict only when `WellFormed j`.
 * `CheckRefuses`, `CheckAccepts`: the same of `NciCheck.check`, whose `error` field is the refusal's code and which has
@@ -34,14 +36,17 @@ gate when its primitive is an input node, reading the gates its operands name). 
 widths, input gates and reads, which is all `size` and `Nci.novelReads` read, and leaves its operations and outputs free.
 
 * `Decodes`: on every instance with a verdict, the Program lays out a circuit (`Verity.Circuit`, its gates in
-  topological order and its input gates reading nothing), `theta` names a baseline of it (`Verity.Declaration`), and the
-  owners are a partition of its computed gates into IUs `0 … n - 1`, none empty (`Verity.Partition`, `Divides`).
-* `Reports`: for every declaration `d` laid out by the Program with the baseline `theta` names, and the partition `U`
-  the owners are, the verdict's `gates` is `d`'s number of gates, its `ius` lists per IU `u` its `size` and
-  `Nci.novelReads` exactly, its `complies` is `true` exactly when every IU has at most `Γ` gates and NCI at most
-  `α = num / den` (`Meets`), and its `failure` is the first IU that doesn't, with the rule it breaks first.
-* `Witnesses`: a verdict whose `complies` is `true` means the declaration complies, `Nci.Complies Γ (num / den) d`,
-  with the owners as the witness.
+  topological order and its input gates reading nothing), `theta` names its registered information
+  (`Verity.RegisteredCircuit`), and the owners are a partition of its computed gates into inference blocks
+  `0 … n - 1`, none empty (`Verity.Partition`, `Divides`).
+* `Reports`: for every registered circuit `d` laid out by the Program with the registered information `theta` names,
+  whose inference blocks `d.𝓘` (the registered compiler's) the owners are, the verdict's `gates` is `d`'s number of
+  gates, its `ius` lists per inference block `u` its `size` and `Nci.novelReads` exactly, its `complies` is `true`
+  exactly when every inference block has at most `c` gates and at most `α` fresh input bits per gate (`Meets`), and its
+  `failure` is the first block that doesn't, with the rule it breaks first.
+* `Witnesses`: a verdict whose `complies` is `true` means the registered circuit complies at the rate,
+  `Nci.CompliesRate c α d`, with the owners as the witness, and when the owners are its inference blocks `d.𝓘`, each of
+  them meets both bounds.
 
 No statement takes an assumption. What is not proved about the decoder (its `Prog.gate` is `partial`) is not needed:
 the statements read the decoder only through what it returns.
@@ -62,7 +67,8 @@ def Shaped (j : Json) : Prop :=
     (∃ a, j.getObjVal? "owner" = .ok (.arr a)) ∧ (∃ v, j.getObjVal? "gamma" = .ok v) ∧
     ∃ v, j.getObjVal? "alpha" = .ok v
 
-/-- `j`'s fields are `i`'s: the program's text, θ and the owners as arrays, `Γ` a natural, and `α` a pair of naturals
+/-- `j`'s fields are `i`'s: the program's text, θ and the owners as arrays, `gamma` (the gate budget `c`) a natural,
+and `alpha` (the rate `α`) a pair of naturals
 `[num, den]` with `den > 0`. -/
 def Parses (j : Json) (i : Instance) : Prop :=
   j.getObjVal? "program" = .ok (.str i.program) ∧ j.getObjVal? "theta" = .ok (.arr i.theta) ∧
@@ -98,7 +104,7 @@ def IsInput (P : Prog) (g : ℕ) : Prop :=
 `Flock.Program.inputId?`), not `run` (`Input<w>_v1`). This reads the circuit file's public layout, which marks the
 gates whose values are θ, the registered information; which entry of the registration log holds each value is θ's
 provenance (`Properties.Nci.Baseline`). -/
-def IsRegistered (P : Prog) (g : ℕ) : Prop :=
+def IsBoundAtRegistration (P : Prog) (g : ℕ) : Prop :=
   ∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧
     (Flock.Program.inputId? (P.defs[p]!).key).map (·.1) = some Flock.Program.REGISTRATION
 
@@ -106,7 +112,8 @@ def IsRegistered (P : Prog) (g : ℕ) : Prop :=
 
 /-- Entry `t` of θ names an input gate bound at registration that no earlier entry names. -/
 def ThetaOk (P : Prog) (theta : Array Json) (t : ℕ) : Prop :=
-  ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧ IsRegistered P g ∧ ∀ t' < t, natOf? theta[t']! ≠ some g
+  ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧ IsBoundAtRegistration P g ∧
+    ∀ t' < t, natOf? theta[t']! ≠ some g
 
 /-- Entry `t` of θ's refusal `k`: `theta-unknown` where it is not a gate id, else `theta-not-input` where its gate is
 not an input gate, else `theta-not-registered` where it is one bound per run, else `theta-duplicate` where an earlier
@@ -114,22 +121,23 @@ entry names the same gate. -/
 def ThetaFault (P : Prog) (theta : Array Json) (t : ℕ) (k : String) : Prop :=
   (k = "theta-unknown" ∧ ∀ g, natOf? theta[t]! = some g → gates P ≤ g) ∨
     (k = "theta-not-input" ∧ ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ ¬ IsInput P g) ∨
-    (k = "theta-not-registered" ∧ ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧ ¬ IsRegistered P g) ∨
-    (k = "theta-duplicate" ∧ ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧ IsRegistered P g ∧
+    (k = "theta-not-registered" ∧ ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧
+      ¬ IsBoundAtRegistration P g) ∨
+    (k = "theta-duplicate" ∧ ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧ IsBoundAtRegistration P g ∧
       ∃ t' < t, natOf? theta[t']! = some g)
 
-/-- Gate `g`'s owner is `"input"` and `g` an input gate, or an IU and `g` a computed gate. -/
+/-- Gate `g`'s owner is `"input"` and `g` an input gate, or an inference block and `g` a computed gate. -/
 def OwnerOk (P : Prog) (owner : Array Json) (g : ℕ) : Prop :=
   (owner[g]! = .str "input" ∧ IsInput P g) ∨ ((∃ u, natOf? owner[g]! = some u) ∧ ¬ IsInput P g)
 
 /-- Gate `g`'s owner's refusal `k`: `owner-entry` where it is neither `"input"` nor a natural, `input-in-iu` where it
-puts an input gate in an IU, `gate-in-no-iu` where it puts a computed gate in none. -/
+puts an input gate in an inference block, `gate-in-no-iu` where it puts a computed gate in none. -/
 def OwnerFault (P : Prog) (owner : Array Json) (g : ℕ) (k : String) : Prop :=
   (k = "owner-entry" ∧ owner[g]! ≠ .str "input" ∧ natOf? owner[g]! = none) ∨
     (k = "input-in-iu" ∧ (∃ u, natOf? owner[g]! = some u) ∧ IsInput P g) ∨
     (k = "gate-in-no-iu" ∧ owner[g]! = .str "input" ∧ ¬ IsInput P g)
 
-/-- An IU below one that an owner names holds no gate. -/
+/-- An inference block below one that an owner names holds no gate. -/
 def EmptyIU (owner : Array Json) : Prop :=
   ∃ g u, g < owner.size ∧ natOf? owner[g]! = some u ∧ ∃ u' < u, ∀ g' < owner.size, natOf? owner[g']! ≠ some u'
 
@@ -206,51 +214,56 @@ def Divides {D : Verity.Circuit} {n : ℕ} (owner : Array Json) (U : Verity.Part
       ∀ u : Fin n, U.unit g = some u ↔ natOf? owner[g.val]! = some u.val) ∧
     ∀ u, (U.gates u).Nonempty
 
-/-- IU `u` of `U` has at most `Γ` gates and NCI at most `α`, the policy's two bounds as `Nci.Complies` states them. -/
-def Meets (d : Verity.Declaration) {n : ℕ} (U : Verity.Partition d.D n) (Γ : ℕ) (α : ℝ) (u : Fin n) : Prop :=
-  d.D.size (U.gates u) ≤ Γ ∧ (Nci.novelReads d (U.gates u) : ℝ) ≤ α * d.D.size (U.gates u)
+/-- Inference block `u` of `U` has at most `c` gates and at most `α` fresh input bits per gate, the two bounds
+`Nci.CompliesRate` states. -/
+def Meets (d : Verity.RegisteredCircuit) {n : ℕ} (U : Verity.Partition d.D n) (c : ℕ) (α : ℝ) (u : Fin n) : Prop :=
+  d.D.size (U.gates u) ≤ c ∧ (Nci.novelReads d (U.gates u) : ℝ) ≤ α * d.D.size (U.gates u)
 
 /-- **What a verdict is about.** On every instance with a verdict, the Program lays out a circuit of the definition's,
-the entries of `theta` name a baseline of it, and the owners are a partition of its computed gates. -/
+the entries of `theta` name its registered information, and the owners are a partition of its computed gates. -/
 def Decodes : Prop :=
   ∀ (j out : Json), evaluate j = .ok out →
     ∃ i P, Parses j i ∧ Flock.Program.decode i.program.toUTF8 = .ok P ∧
       ∃ D : Verity.Circuit, LaysOut P D ∧ (∃ θ : Finset (Fin D.N), Names i.theta θ ∧ ∀ g ∈ θ, D.isInput g = true) ∧
         ∃ (n : ℕ) (U : Verity.Partition D n), Divides i.owner U
 
-/-- The verdict `out` on `j` is the definition's: for every declaration `d` the Program lays out with the baseline
-`theta` names, and the partition `U` the owners are, at `Γ = gamma` and `α = num / den`: `gates` is `d`'s number of
-gates; `ius` lists per IU its `size` and `novelReads`; `complies` is `true` exactly when every IU meets both bounds; and
-`failure` is `null` when every IU does, and otherwise the first IU `u` that doesn't, with `size` when it has more than `Γ`
-gates and else `nci`. -/
+/-- The verdict `out` on `j` is the definition's: for every registered circuit `d` the Program lays out with the
+registered information `theta` names, whose inference blocks `d.𝓘`, the registered compiler's, the owners are, at
+`c = gamma` and `α = num / den`: `gates` is `d`'s number of gates; `ius` lists per inference block its `size` and
+`novelReads`; `complies` is `true` exactly when every block meets both bounds; and `failure` is `null` when every block
+does, and otherwise the first block `u` that doesn't, with `size` when it has more than `c` gates and else `nci`. -/
 def Reported (j out : Json) : Prop :=
-  ∀ (i : Instance) (P : Prog) (d : Verity.Declaration) (n : ℕ) (U : Verity.Partition d.D n),
+  ∀ (i : Instance) (P : Prog) (d : Verity.RegisteredCircuit),
     Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →
-    Divides i.owner U →
+    Divides i.owner d.𝓘 →
     let α : ℝ := (i.num : ℝ) / i.den
     out.getObjVal? "gates" = .ok (toJson d.D.N) ∧
-    out.getObjVal? "ius" = .ok (Json.arr (Array.ofFn fun u : Fin n =>
-      Json.arr #[toJson (d.D.size (U.gates u)), toJson (Nci.novelReads d (U.gates u))])) ∧
-    (out.getObjVal? "complies" = .ok (.bool true) ↔ ∀ u, Meets d U i.gamma α u) ∧
-    (out.getObjVal? "complies" = .ok (.bool false) ↔ ¬ ∀ u, Meets d U i.gamma α u) ∧
-    (out.getObjVal? "failure" = .ok .null ↔ ∀ u, Meets d U i.gamma α u) ∧
-    ∀ (u : Fin n) (rule : String),
+    out.getObjVal? "ius" = .ok (Json.arr (Array.ofFn fun u : Fin d.n =>
+      Json.arr #[toJson (d.D.size (d.𝓘.gates u)), toJson (Nci.novelReads d (d.𝓘.gates u))])) ∧
+    (out.getObjVal? "complies" = .ok (.bool true) ↔ ∀ u, Meets d d.𝓘 i.gamma α u) ∧
+    (out.getObjVal? "complies" = .ok (.bool false) ↔ ¬ ∀ u, Meets d d.𝓘 i.gamma α u) ∧
+    (out.getObjVal? "failure" = .ok .null ↔ ∀ u, Meets d d.𝓘 i.gamma α u) ∧
+    ∀ (u : Fin d.n) (rule : String),
       out.getObjVal? "failure" = .ok (Json.arr #[toJson u.val, .str rule]) ↔
-        (∀ u' < u, Meets d U i.gamma α u') ∧
-          ((rule = "size" ∧ i.gamma < d.D.size (U.gates u)) ∨
-           (rule = "nci" ∧ d.D.size (U.gates u) ≤ i.gamma ∧
-             α * d.D.size (U.gates u) < (Nci.novelReads d (U.gates u) : ℝ)))
+        (∀ u' < u, Meets d d.𝓘 i.gamma α u') ∧
+          ((rule = "size" ∧ i.gamma < d.D.size (d.𝓘.gates u)) ∨
+           (rule = "nci" ∧ d.D.size (d.𝓘.gates u) ≤ i.gamma ∧
+             α * d.D.size (d.𝓘.gates u) < (Nci.novelReads d (d.𝓘.gates u) : ℝ)))
 
 /-- **The verdict is the definition's.** On every instance with a verdict, the verdict is `Reported`. -/
 def Reports : Prop :=
   ∀ (j out : Json), evaluate j = .ok out → Reported j out
 
-/-- When the verdict `out` on `j` has `complies` `true`, every declaration the Program lays out with the baseline
-`theta` names complies with `Nci.Complies Γ (num / den)`. -/
+/-- When the verdict `out` on `j` has `complies` `true`, every registered circuit `d` the Program lays out with the
+registered information `theta` names complies with the inference-only policy at its rate, `Nci.CompliesRate c α`, at
+the gate budget `c = gamma` and the rate `α = num / den`, and when the owners are `d`'s inference blocks `d.𝓘`, the
+registered compiler's, every one of them has at most `c` gates and at most `α` fresh input bits per gate (`Meets`). -/
 def Witnessed (j out : Json) : Prop :=
-  ∀ (i : Instance) (P : Prog) (d : Verity.Declaration),
+  ∀ (i : Instance) (P : Prog) (d : Verity.RegisteredCircuit),
     Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →
-    out.getObjVal? "complies" = .ok (.bool true) → Nci.Complies i.gamma ((i.num : ℝ) / i.den) d
+    out.getObjVal? "complies" = .ok (.bool true) →
+      Nci.CompliesRate i.gamma ((i.num : ℝ) / i.den) d ∧
+        (Divides i.owner d.𝓘 → ∀ u, Meets d d.𝓘 i.gamma ((i.num : ℝ) / i.den) u)
 
 /-- **A verdict of compliance witnesses the policy.** On every instance with a verdict, the verdict is `Witnessed`. -/
 def Witnesses : Prop :=

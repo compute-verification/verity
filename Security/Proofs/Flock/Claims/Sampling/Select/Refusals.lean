@@ -1,7 +1,39 @@
 module
 
-public import Proofs.Flock.Claims.Sampling.Select.Scope
 public import Proofs.Flock.Claims.Sampling.Select.Layout
+public import Proofs.Flock.Claims.Sampling.Select.Scope
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import VCVio.Prelude.Core
 
 /-!
 # The refusals the readable scope needs (`Claims.Sampling.ScopeMatches`, `Refuses`)
@@ -11,11 +43,11 @@ the statement parses and its query evaluates), the readable scope's program part
 clause of it, each a named Prop over the statements the verifier evaluates:
 
 * `RefusesUnordered`: the program is topologically ordered.
-* `RefusesOverlap`: no gate is in two proof units.
-* `RefusesUncovered`: the proof units' gates are the program's, and every gate but a constant and an unread input is
+* `RefusesOverlap`: no gate is in two proof blocks.
+* `RefusesUncovered`: the proof blocks' gates are the program's, and every gate but a constant and an unread input is
   among them.
-* `RefusesEmpty`: every proof unit has a gate.
-* `RefusesWide`: every proof unit's committed values (the claims' `committed`, on its own gates) fit its public size
+* `RefusesEmpty`: every proof block has a gate.
+* `RefusesWide`: every proof block's committed values (the claims' `committed`, on its own gates) fit its public size
   class (`unitClass`).
 
 The five give `ProgramScope` (`programScope_of_refusals`), and so, on partitions of the shape of the verifier's own
@@ -26,26 +58,26 @@ layouts (`DrawSlots`), `ScopeMatches` (`scopeMatches_of_refusals`) and, with `Ch
 
 @[expose] public section
 
-open SampledProofs
+open Spot
 
 namespace Claims.Sampling
 
-open Properties.SampledProofs Properties.SampledProofs.SecurityProofs
+open Properties.Spot Properties.Spot.SecurityProofs
 
 variable {Coin Col T : Type}
 
-/-- The proof units' gates are `C`'s, and every gate of `C` but a constant and an unread input is among them. -/
+/-- The proof blocks' gates are `C`'s, and every gate of `C` but a constant and an unread input is among them. -/
 def Partition.Covers (P : Partition) (C : Prog) : Prop :=
   (∀ g ∈ P.gates, g < C.gates.length) ∧
     ∀ g < C.gates.length, (∀ b, C.gates[g]? ≠ some (.const b)) → ¬ C.Unread g → g ∈ P.gates
 
-/-- **A cut of `C` into proof units**: no gate in two of `P`'s proof units, which cover `C` but its constants and
+/-- **A cut of `C` into proof blocks**: no gate in two of `P`'s proof blocks, which cover `C` but its constants and
 unread inputs, each with a gate, and each committing values that fit its public size class. -/
 def Partition.Cuts (P : Partition) (C : Prog) : Prop :=
   P.gates.Nodup ∧ P.Covers C ∧ (∀ u ∈ P.blocks, u ≠ []) ∧
     ∀ u ∈ P.blocks, ∃ w, unitClass C u = some w ∧ committed C u ≤ w
 
-/-- A partition of `C` cuts it into proof units. -/
+/-- A partition of `C` cuts it into proof blocks. -/
 theorem Partition.Partitions.cuts {P : Partition} {C : Prog} (h : P.Partitions C) : P.Cuts C :=
   ⟨h.1, ⟨h.2.1, h.2.2.1⟩, h.2.2.2.1, h.2.2.2.2⟩
 
@@ -65,18 +97,18 @@ def Evaluated (D : Deploy Coin Col T) (Q : Prog → Partition → Prop) : Prop :
 /-- **The verifier refuses a program out of order**: every program it evaluates is topologically ordered. -/
 def RefusesUnordered (D : Deploy Coin Col T) : Prop := Evaluated D fun C _ => C.Topological
 
-/-- **The verifier refuses overlapping proof units**: no gate is in two proof units of a partition it evaluates. -/
+/-- **The verifier refuses overlapping proof blocks**: no gate is in two proof blocks of a partition it evaluates. -/
 def RefusesOverlap (D : Deploy Coin Col T) : Prop := Evaluated D fun _ P => P.gates.Nodup
 
-/-- **The verifier refuses a partition that leaves a gate out**: the proof units' gates are the program's, and every
+/-- **The verifier refuses a partition that leaves a gate out**: the proof blocks' gates are the program's, and every
 gate but a constant and an unread input is among them (a constant, public, may be left out, and so may an input that no
 gate reads and the program doesn't return). -/
 def RefusesUncovered (D : Deploy Coin Col T) : Prop := Evaluated D fun C P => P.Covers C
 
-/-- **The verifier refuses an empty proof unit**: every proof unit of a partition it evaluates has a gate. -/
+/-- **The verifier refuses an empty proof block**: every proof block of a partition it evaluates has a gate. -/
 def RefusesEmpty (D : Deploy Coin Col T) : Prop := Evaluated D fun _ P => ∀ u ∈ P.blocks, u ≠ []
 
-/-- **The verifier refuses a proof unit wider than its size class**: every proof unit of a partition it evaluates has a
+/-- **The verifier refuses a proof block wider than its size class**: every proof block of a partition it evaluates has a
 public size class that holds its committed values (`unitClass`; `committed`, `Prog.Boundary` on the unit's own gates). -/
 def RefusesWide (D : Deploy Coin Col T) : Prop :=
   Evaluated D fun C P => ∀ u ∈ P.blocks, ∃ w, unitClass C u = some w ∧ committed C u ≤ w

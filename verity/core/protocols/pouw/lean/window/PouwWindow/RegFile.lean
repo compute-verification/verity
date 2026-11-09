@@ -1,21 +1,23 @@
 module
 
-public import PouwWindow.OwnPorts
-public import PouwWindow.FullDraw
 public import Flock.KnownRead
-public import SampledProofs.Produced
-public import SampledProofs.Record
+public import Flock.WindowRecord
+public import Lean.Data.Json.Parser
+public import PouwWindow.FullDraw
+public import PouwWindow.OwnPorts
+public import Spot.Produced
+public import Spot.Record
 
 /-!
-# A drawn H1 leaf's registered files, from the registration
+# A sampled H1 leaf's registered files, from the registration
 
-The verifier's `--registered` file of each of a drawn leaf's statements, from the accepted registration record and the
+The verifier's `--registered` file of each of a sampled leaf's statements, from the accepted registration record and the
 accepted produced record alone:
 
 * `roots?`: each value's registered port (`leaf_lanes.verifier_entries`). A registered value's (`a`, `b`, `zy`,
   `receipt`) is its entry in the registration's `registered` (the first of its value) at that entry's root. The
   partials' is the verifier's own entry (`produced.entry`: `lanes` rows of `words` 16-bit words, under the domain
-  `SampledProofs.Produced.domain` binds to the registration's program and digest) at the root of the produced record's
+  `Spot.Produced.domain` binds to the registration's program and digest) at the root of the produced record's
   `partials`. Every value's rows are `schema`'s.
 * `want?`: statement `k`'s data ports at those roots and the unit's placement `place` (`ownOf`: each value's table and
   base row), where the verifier holds every table they read.
@@ -24,8 +26,8 @@ accepted produced record alone:
 * `leafOwn?`: the leaf verifier's check of a statement's file against the two records (`pouw-leaf-own`): the file parsed
   as flock-verify parses it (`Flock.Registered.ofJson`) has one read at each port (`checkOneRead`) and holds `want?`'s
   ports (`checkOwn`). `leafOwnCmd` runs it on files with each value its own table (`selfPlace`), then holds each of the
-  statement's session records to the full draw (`checkFull`); `PouwCheck.LeafOwn` runs it at a window unit's placement,
-  from the window's descriptor and round log.
+  statement's session records to the full sample (`checkFull`); `PouwCheck.LeafOwn` runs it at an execution phase unit's placement,
+  from the execution phase's descriptor and round log.
 
 `tests/test_reg_file.py` holds `fileOf?` to the Python's file at the Python's entries and roots, and holds `leafOwn?` to
 accept it.
@@ -65,7 +67,7 @@ def roots? (registration produced : Json) (lanes words : Nat) (schema : String) 
     Except String (List (String × Flock.Registered.Port)) := do
   let program ← Flock.J.str registration "program" "the registration"
   let digest ← Flock.WindowRecord.digestHex registration
-  let dom ← SampledProofs.Produced.domain program PARTIALS words lanes 16 digest
+  let dom ← Spot.Produced.domain program PARTIALS words lanes 16 digest
   let some p := (← Flock.J.arr produced "produced" "the produced record").find? fun e =>
       (e.getObjValAs? String "value").toOption == some PARTIALS
     | throw s!"the produced record has no {PARTIALS}"
@@ -160,8 +162,8 @@ def printOwn (verdict : Except String Unit) : IO UInt32 := do
 /-- **`pouw-leaf-own REGISTRATION PRODUCED REGISTERED R C K (LANE | combine) SESSION...`**: `leafOwn?` on the three
 files at the `R × C` tile of contraction `K`, each value its own table (`selfPlace`), every value's rows
 `hm96-sha512/row/v2`, then `checkFull` on each session directory's record (`SESSION/session.json`, at least one). It
-prints `OWN {"accepted", "why"?}` and exits 0 where it accepts, 1 where it refuses and 2 on a usage error. A unit of a
-window Program, its tables placed by the window's descriptor, is `pouw-leaf-own-window`'s (`PouwCheck.LeafOwn`). -/
+prints `OWN {"accepted", "why"?}` and exits 0 where it accepts, 1 where it refuses and 2 on a usage error. A unit of an
+execution phase Program, its tables placed by the execution phase's descriptor, is `pouw-leaf-own-window`'s (`PouwCheck.LeafOwn`). -/
 def leafOwnCmd (args : List String) : IO UInt32 := do
   let reg :: prod :: file :: r :: c :: k :: stmt :: sess@(_ :: _) := args
     | usage "usage: pouw-leaf-own REGISTRATION PRODUCED REGISTERED R C K (LANE | combine) SESSION..."

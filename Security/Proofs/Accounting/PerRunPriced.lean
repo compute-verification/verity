@@ -1,17 +1,20 @@
 module
 
 public import Definitions.Accounting.Guarantees.PerRun
-public import Proofs.Accounting.PerRunJoint
-public import Proofs.Accounting.PerRunTruncation
-public import Proofs.Pouw.Sampling
 public import Proofs.Pouw.PearlC.W1BudgetAbort
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Accounting.Device
+import Proofs.Accounting.PerRunJoint
+import Proofs.Accounting.PerRunTruncation
+import Proofs.Pouw.Prob
+import Proofs.Pouw.Sampling
 
 /-!
 # Proof of the priced per-run guarantees
 
 Pearl-C's game with `t` tickets weighted by `w`, at units whose `W_ref` is `κ·w`: an accepted run whose correct units
 carry at least `1 − ε_s` of the tickets' weight carry at least `1 − ε_s` of `W_ref`, so a cost below
-`(1 − γ)(1 − ε_s)·∑ W_ref` wins the γ-gap game (`winsPearlC_of_accept`). Work-weighted sampling and `Gγ` bound the
+`(1 − g)(1 − ε_s)·∑ W_ref` wins the gap game (`winsPearlC_of_accept`). Work-weighted sampling and `GGap` bound the
 two (`pearlC_endToEnd`, every adversary within a sure budget), and truncation (`pr_lt_of_abort`, with `abortPearlC`)
 makes it per run. A run that realizes Pearl-C's game with its cost covered by the priced sum has the compute audit's
 per-run guarantee on that sum.
@@ -63,14 +66,14 @@ theorem abortPearlC {CM : PearlC.CostModel Q R S} (hCM : BudgetAbortPearlC CM) (
   exact (Nat.add_le_add_left (h H _ s).2.1 _).trans (hq H s)
 
 /-- A run whose correct units carry all but `ε_s` of the tickets' weight, at units whose `W_ref` is `κ·w`, and whose
-cost is below `(1 − γ)(1 − ε_s)·∑ W_ref`, wins Pearl-C's γ-gap game. -/
+cost is below `(1 − g)(1 − ε_s)·∑ W_ref`, wins Pearl-C's gap-gap game. -/
 theorem winsPearlC_of_accept (P : PearlC.Protocol Q R S) (U : PearlC.Workload) (H : Q → R) (s : S)
-    (τ : PearlC.Transcript) {w : ℕ → ℕ} {κ γ T εs : ℝ} (hκ : 0 ≤ κ)
-    (hw : ∀ u < U.layout.N, P.Wref U.layout u = κ * w u) (hγ : γ < 1)
-    (hT : T < (1 - γ) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u)
+    (τ : PearlC.Transcript) {w : ℕ → ℕ} {κ g T εs : ℝ} (hκ : 0 ≤ κ)
+    (hw : ∀ u < U.layout.N, P.Wref U.layout u = κ * w u) (hg : g < 1)
+    (hT : T < (1 - g) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u)
     (hbad : ∑ u ∈ Finset.range U.layout.N \ PearlC.correctSet P U H s τ, (w u : ℝ) ≤
       εs * ∑ u ∈ Finset.range U.layout.N, (w u : ℝ)) :
-    PearlC.Wins P U γ T τ H s := by
+    PearlC.Wins P U g T τ H s := by
   classical
   have hK : PearlC.correctSet P U H s τ ⊆ Finset.range U.layout.N := Finset.filter_subset _ _
   have hsum : ∀ A ⊆ Finset.range U.layout.N, ∑ u ∈ A, P.Wref U.layout u = κ * ∑ u ∈ A, (w u : ℝ) := by
@@ -86,41 +89,41 @@ theorem winsPearlC_of_accept (P : PearlC.Protocol Q R S) (U : PearlC.Workload) (
   have hgood : (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u ≤
       ∑ u ∈ PearlC.correctSet P U H s τ, P.Wref U.layout u := by
     linarith
-  have h1γ : 0 < 1 - γ := by linarith
+  have h1g : 0 < 1 - g := by linarith
   unfold PearlC.Wins
-  rw [div_lt_iff₀ h1γ]
-  calc T < (1 - γ) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u := hT
-    _ = (1 - γ) * ((1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u) := by ring
-    _ ≤ (1 - γ) * ∑ u ∈ PearlC.correctSet P U H s τ, P.Wref U.layout u := mul_le_mul_of_nonneg_left hgood h1γ.le
+  rw [div_lt_iff₀ h1g]
+  calc T < (1 - g) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u := hT
+    _ = (1 - g) * ((1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u) := by ring
+    _ ≤ (1 - g) * ∑ u ∈ PearlC.correctSet P U H s τ, P.Wref U.layout u := mul_le_mul_of_nonneg_left hgood h1g.le
     _ = _ := by ring
 
-/-- **Pearl-C's γ-gap property, audited by work-weighted tickets**: an adversary within a sure budget `T` is accepted
-with `T < (1 − γ)(1 − ε_s)·∑ W_ref` with probability at most `(1 − ε_s)^t + η(q, N)`. -/
+/-- **Pearl-C's gap-gap property, audited by work-weighted tickets**: an adversary within a sure budget `T` is accepted
+with `T < (1 − g)(1 − ε_s)·∑ W_ref` with probability at most `(1 − ε_s)^t + δ(q, N)`. -/
 theorem pearlC_endToEnd [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : PearlC.CostModel Q R S}
-    {P : PearlC.Protocol Q R S} {D : PearlC.Layout → Prop} {γ : ℝ} {η : ℕ → ℕ → ℝ} (hγ : γ < 1)
-    (hG : PearlC.Gγ CM P D γ η) {U : PearlC.Workload} (hU : U.InDomain P D) {w : ℕ → ℕ} {κ : ℝ} (hκ : 0 ≤ κ)
+    {P : PearlC.Protocol Q R S} {D : PearlC.Layout → Prop} {g : ℝ} {δ : ℕ → ℕ → ℝ} (hg : g < 1)
+    (hG : PearlC.GGap CM P D g δ) {U : PearlC.Workload} (hU : U.InDomain P D) {w : ℕ → ℕ} {κ : ℝ} (hκ : 0 ≤ κ)
     (hw : ∀ u < U.layout.N, P.Wref U.layout u = κ * w u) {T : ℝ} (hT : 0 ≤ T) {q : ℕ} (hq : q ≤ 2 ^ 64)
     {A : PearlC.Adversary CM} (hA : A.Bounded U T q) (t : ℕ) {εs : ℝ} (hεs : εs ≤ 1) :
     pr (fun x : PearlCCoins Q R S U w t =>
         AuditAccepts (PearlC.correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
-        T < (1 - γ) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u)
-      ≤ (1 - εs) ^ t + η q U.layout.N := by
+        T < (1 - g) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u)
+      ≤ (1 - εs) ^ t + δ q U.layout.N := by
   let K := fun y : (Q → R) × S => PearlC.correctSet P U y.1 y.2 (A.transcript U y.1 y.2)
   let G := fun y : ((Q → R) × S) × (Fin t → Ticket w U.layout.N) => AuditAccepts (K y.1) y.2 ∧
     εs * ∑ u ∈ Finset.range U.layout.N, (w u : ℝ) < ∑ u ∈ Finset.range U.layout.N \ K y.1, (w u : ℝ)
   let E1 := fun x : PearlCCoins Q R S U w t => G ((x.1, x.2.1), x.2.2)
-  let E2 := fun y : (Q → R) × S => PearlC.Wins P U γ T (A.transcript U y.1 y.2) y.1 y.2
+  let E2 := fun y : (Q → R) × S => PearlC.Wins P U g T (A.transcript U y.1 y.2) y.1 y.2
   have h1 : pr E1 ≤ (1 - εs) ^ t :=
     (pr_equiv (Equiv.prodAssoc _ _ _).symm G).le.trans
       (Pouw.Proofs.workWeightedSampling ((Q → R) × S) w U.layout.N t K εs hεs)
   calc _ ≤ pr (fun x : PearlCCoins Q R S U w t => E1 x ∨ E2 (x.1, x.2.1)) := pr_mono fun x hx => by
         by_cases hE : E1 x
         · exact Or.inl hE
-        · refine Or.inr (winsPearlC_of_accept P U x.1 x.2.1 _ hκ hw hγ hx.2 ?_)
+        · refine Or.inr (winsPearlC_of_accept P U x.1 x.2.1 _ hκ hw hg hx.2 ?_)
           by_contra h2
           exact hE ⟨hx.1, lt_of_not_ge h2⟩
     _ ≤ pr E1 + pr (fun x : PearlCCoins Q R S U w t => E2 (x.1, x.2.1)) := pr_or_le _ _
-    _ ≤ (1 - εs) ^ t + η q U.layout.N := add_le_add h1 ((pr_fst2_le E2).trans (hG U hU T hT q hq A hA))
+    _ ≤ (1 - εs) ^ t + δ q U.layout.N := add_le_add h1 ((pr_fst2_le E2).trans (hG U hU T hT q hq A hA))
 
 namespace Run
 

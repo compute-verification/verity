@@ -1,13 +1,54 @@
 module
 
-public import Proofs.Accounting.RemoteHeld.Draw
 public import Proofs.Accounting.RemoteHeld.Meets
+public import Definitions.Accounting.Assumptions.RemoteDraw
+public import Definitions.Pous.Model.StreamedWipe
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Accounting.Bandwidth.Chip
+import Proofs.Accounting.RateAudit.Horizon
+import Proofs.Accounting.RemoteHeld.Draw
+import Proofs.Pouw.Prob
 
 /-!
-# The drawn guarantees' premises meet, and their conclusions bite
+# The sampled guarantees' premises meet, and their conclusions bite
 
-Each guarantee of `RemoteHeld.Draw` (`PooledDraw`, `LiveCoinsDrawn`, `HeldDrawn`, `HeldOverTimeDrawn`,
-`HeldOverTimeLinksDrawn`) has its premises met at an honest instance (`*_honest`) and its conclusion false for an audit
+Each guarantee of `RemoteHeld.Draw` (`PooledSample`, `LiveCoinsSampled`, `HeldSampled`, `HeldOverTimeSampled`,
+`HeldOverTimeLinksSampled`) has its premises met at an honest instance (`*_honest`) and its conclusion false for an audit
 that accepts everything (`*_nontrivial`).
 
 * **Met.** The honest session (`honest`): window `t` registers `U t` receipts, every one correct, whatever the coins,
@@ -15,7 +56,7 @@ that accepts everything (`*_nontrivial`).
   `openings_zero_subset`), `Counted` on any trace that finds nothing wrong, and its distinguishers gain nothing
   (`Draw.prfAdvantage_honest`). Over `Meets.burst` on its coins (a node bringing absent blocks back by every route) it
   meets every premise of the memory-line forms too, at any rates, W2's measured ones among them (`Meets.w2_meets`).
-* **Bites.** The toy (`toy`): one window of one receipt, none correct, drawn once, on an audit that accepts every
+* **Bites.** The toy (`toy`): one window of one receipt, none correct, sampled once, on an audit that accepts every
   outcome with that receipt wrong (`acceptAll`), its node holding nothing and bringing nothing in, inside the device
   model at no rates, bursts or chip blocks (`acceptAll_inside`). It is `Live` and `Counted`; no opening of its
   receipts verifies (`unsalted`: every salt empty), so the binding term is `0`; its draw always opens the wrong receipt,
@@ -67,7 +108,7 @@ def honest (k : Fin n → ℕ) (κ : ℕ) (X : Type) (U : Fin n → Fin (m + 1))
 /-- The honest session is `Live`, `Refused` at any receipts with fallbacks `0`, `Counted` on a trace with no wrong
 receipt on an accepting outcome, and its distinguishers gain nothing. -/
 theorem honest_meets [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (T : Trace (Coins n κ X)) (R : Receipts n κ X) (hT : ∀ ω, T.accepts ω → T.wrong ω = 0) :
+    (T : Trace (Coins n κ X)) (R : Receipts n κ X) (hT : ∀ ω, T.accepts ω → T.incorrect ω = 0) :
     Live (honest k κ X U) ∧ Refused (honest k κ X U) prf (fun _ _ _ => 0) T R ∧ Counted (honest k κ X U) T ∧
       ∀ δ t, Pous.StreamedWipe.prfAdvantage (prf t) ((honest k κ X U).distinguisher prf δ t) = 0 :=
   ⟨fun _ _ _ _ _ => ⟨rfl, rfl⟩,
@@ -79,29 +120,29 @@ theorem honest_meets [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n → Po
 /-- `Meets.burst` on a session's coins. -/
 abbrev burstOn (n κ : ℕ) (X : Type) (N D t₁ Br Bd Bl : ℕ) : Trace (Coins n κ X) := burst N D t₁ Br Bd Bl
 
-theorem burst_wrong {Ω : Type} {N D t₁ Br Bd Bl : ℕ} (ω : Ω) : (burst (Ω := Ω) N D t₁ Br Bd Bl).wrong ω = 0 := by
+theorem burst_incorrect {Ω : Type} {N D t₁ Br Bd Bl : ℕ} (ω : Ω) : (burst (Ω := Ω) N D t₁ Br Bd Bl).incorrect ω = 0 := by
   show ∑ p ∈ range 2, ((univ : Finset (Fin N)) \ univ).card = 0
   simp
 
-/-- **`PooledDraw`'s premises meet** at the honest session, on any trace with no wrong receipt on an accepting outcome,
+/-- **`PooledSample`'s premises meet** at the honest session, on any trace with no wrong receipt on an accepting outcome,
 with no advantage. -/
-theorem pooledDraw_honest [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (T : Trace (Coins n κ X)) (R : Receipts n κ X) (hT : ∀ ω, T.accepts ω → T.wrong ω = 0) :
+theorem pooledSample_honest [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n → Pous.Bits κ → Blocks m)
+    (T : Trace (Coins n κ X)) (R : Receipts n κ X) (hT : ∀ ω, T.accepts ω → T.incorrect ω = 0) :
     Live (honest k κ X U) ∧ Refused (honest k κ X U) prf (fun _ _ _ => 0) T R ∧ Counted (honest k κ X U) T ∧
       ∀ δ t, Pous.StreamedWipe.prfAdvantage (prf t) ((honest k κ X U).distinguisher prf δ t) = 0 :=
   honest_meets U prf T R hT
 
-/-- **`LiveCoinsDrawn`'s premises meet** at the honest session, at `W` its pooled bound, which reads no coin. -/
-theorem liveCoinsDrawn_honest [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (T : Trace (Coins n κ X)) (R : Receipts n κ X) (hT : ∀ ω, T.accepts ω → T.wrong ω = 0) (δ : ℝ) :
+/-- **`LiveCoinsSampled`'s premises meet** at the honest session, at `W` its pooled bound, which reads no coin. -/
+theorem liveCoinsSampled_honest [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n → Pous.Bits κ → Blocks m)
+    (T : Trace (Coins n κ X)) (R : Receipts n κ X) (hT : ∀ ω, T.accepts ω → T.incorrect ω = 0) (δ : ℝ) :
     Live (honest k κ X U) ∧ Refused (honest k κ X U) prf (fun _ _ _ => 0) T R ∧ Counted (honest k κ X U) T ∧
       ∀ ω, T.accepts ω →
         (honest k κ X U).pooled δ ω ≤ pooled n (fun t => (U t : ℕ)) (fun t => min (k t) (U t : ℕ)) δ :=
   let ⟨hL, hR, hC, _⟩ := honest_meets (k := k) U prf T R hT
   ⟨hL, hR, hC, fun _ _ => le_rfl⟩
 
-/-- **`HeldDrawn`'s premises meet** at the honest session over `Meets.burst` on its coins, with no link block. -/
-theorem heldDrawn_honest [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n → Pous.Bits κ → Blocks m)
+/-- **`HeldSampled`'s premises meet** at the honest session over `Meets.burst` on its coins, with no link block. -/
+theorem heldSampled_honest [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n → Pous.Bits κ → Blocks m)
     (R : Receipts n κ X) {N D t₁ Br Bd S : ℕ} {s E β : ℝ} (hs : 0 ≤ s) (hE : 0 < E) (hβ : 0 ≤ β)
     (ht : t₁ + 1 < D) :
     Identity (burstOn n κ X N D t₁ Br Bd 0) ∧ SquaringCeiling (burstOn n κ X N D t₁ Br Bd 0) s E Br ∧
@@ -113,12 +154,12 @@ theorem heldDrawn_honest [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n �
   obtain ⟨hI, hsq, hd, hS, hr, hc, hk, -⟩ :=
     burst_meets_held (Ω := Coins n κ X) (N := N) (D := D) (t₁ := t₁) (Br := Br) (Bd := Bd) hs hE.le hβ S ht
   obtain ⟨hL, hR, hC, -⟩ :=
-    honest_meets (k := k) U prf (burstOn n κ X N D t₁ Br Bd 0) R fun ω _ => burst_wrong ω
+    honest_meets (k := k) U prf (burstOn n κ X N D t₁ Br Bd 0) R fun ω _ => burst_incorrect ω
   exact ⟨hI, hsq, hd, hS, hr, hc, hk, hL, hR, hC⟩
 
-/-- **`HeldOverTimeDrawn`'s premises meet** at the honest session over `Meets.burst` on its coins, with no link
+/-- **`HeldOverTimeSampled`'s premises meet** at the honest session over `Meets.burst` on its coins, with no link
 block, paced by `Meets.burstPace`. -/
-theorem heldOverTimeDrawn_honest [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n → Pous.Bits κ → Blocks m)
+theorem heldOverTimeSampled_honest [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n → Pous.Bits κ → Blocks m)
     (R : Receipts n κ X) {N D t₁ Br Bd S : ℕ} {s E β : ℝ} (hs : 0 ≤ s) (hE : 0 < E) (hβ : 0 ≤ β)
     (ht : t₁ + 1 < D) :
     Identity (burstOn n κ X N D t₁ Br Bd 0) ∧ SquaringCeiling (burstOn n κ X N D t₁ Br Bd 0) s E Br ∧
@@ -131,12 +172,12 @@ theorem heldOverTimeDrawn_honest [Fintype X] (U : Fin n → Fin (m + 1)) (prf : 
     burst_meets (Ω := Coins n κ X) (N := N) (D := D) (t₁ := t₁) (Br := Br) (Bd := Bd) (Bl := 0) (βl := 0)
       hs hE.le hβ le_rfl S ht
   obtain ⟨hL, hR, hC, -⟩ :=
-    honest_meets (k := k) U prf (burstOn n κ X N D t₁ Br Bd 0) R fun ω _ => burst_wrong ω
+    honest_meets (k := k) U prf (burstOn n κ X N D t₁ Br Bd 0) R fun ω _ => burst_incorrect ω
   exact ⟨burst_identity, hsq, hd, hS, hr, hp, hcov, hk, hL, hR, hC⟩
 
-/-- **`HeldOverTimeLinksDrawn`'s premises meet** at the honest session over `Meets.burst` on its coins, its node
+/-- **`HeldOverTimeLinksSampled`'s premises meet** at the honest session over `Meets.burst` on its coins, its node
 bringing blocks back by rebuilds, disk reads and links at once, paced by `Meets.burstPace`. -/
-theorem heldOverTimeLinksDrawn_honest [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n → Pous.Bits κ → Blocks m)
+theorem heldOverTimeLinksSampled_honest [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n → Pous.Bits κ → Blocks m)
     (R : Receipts n κ X) {N D t₁ Br Bd Bl S : ℕ} {s E β βl : ℝ} (hs : 0 ≤ s) (hE : 0 < E) (hβ : 0 ≤ β)
     (hβl : 0 ≤ βl) (ht : t₁ + 1 < D) :
     Links (burstOn n κ X N D t₁ Br Bd Bl) βl Bl ∧ SquaringCeiling (burstOn n κ X N D t₁ Br Bd Bl) s E Br ∧
@@ -149,12 +190,12 @@ theorem heldOverTimeLinksDrawn_honest [Fintype X] (U : Fin n → Fin (m + 1)) (p
     burst_meets (Ω := Coins n κ X) (N := N) (D := D) (t₁ := t₁) (Br := Br) (Bd := Bd) (Bl := Bl)
       hs hE.le hβ hβl S ht
   obtain ⟨hL, hR, hC, -⟩ :=
-    honest_meets (k := k) U prf (burstOn n κ X N D t₁ Br Bd Bl) R fun ω _ => burst_wrong ω
+    honest_meets (k := k) U prf (burstOn n κ X N D t₁ Br Bd Bl) R fun ω _ => burst_incorrect ω
   exact ⟨hl, hsq, hd, hS, hr, hp, hcov, hk, hL, hR, hC⟩
 
 /-! ## The toy that an audit accepting everything gets wrong -/
 
-/-- One window of one receipt, none correct, drawn once. -/
+/-- One window of one receipt, none correct, sampled once. -/
 def toy : Session 1 1 (fun _ => 1) 1 Unit where
   size _ _ := ⟨1, by norm_num⟩
   correct _ _ := ∅
@@ -190,7 +231,7 @@ def toyPace : Pace (Coins 1 1 Unit) where
 
 theorem toy_live : Live toy := fun _ _ _ _ _ => ⟨rfl, rfl⟩
 
-theorem acceptAll_wrong (ω : Coins 1 1 Unit) : acceptAll.wrong ω = 1 := by
+theorem acceptAll_incorrect (ω : Coins 1 1 Unit) : acceptAll.incorrect ω = 1 := by
   show ∑ _p ∈ range 1, ((univ : Finset (Fin 1)) \ ∅).card = 1
   simp
 
@@ -228,7 +269,7 @@ theorem toy_good (t : Fin 1) (ω : Coins 1 1 Unit) : toy.good t ω = 0 := by
   simp
 
 theorem toy_counted : Counted toy acceptAll := fun ω _ => by
-  rw [acceptAll_wrong]
+  rw [acceptAll_incorrect]
   show 1 ≤ ∑ t : Fin 1, (1 - toy.good t ω)
   simp [toy_good]
 
@@ -298,23 +339,23 @@ theorem not_holds_acceptAll {ε : ℝ} (hε : ε < 1) {P : Coins 1 1 Unit → Pr
   have h2 : Pouw.pr (fun ω => acceptAll.accepts ω ∧ ¬ P ω) ≤ ε := h
   linarith
 
-/-- **`PooledDraw`'s conclusion bites**: on the toy, `Live` and `Counted`, an audit that accepts everything has more
-wrong receipts than the pooled bound with probability `1`, above `PooledDraw`'s error whenever `δ + 2^-64 < 1`. -/
-theorem pooledDraw_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest : Coins 1 1 Unit → Fin 1 → ℕ → ℕ)
+/-- **`PooledSample`'s conclusion bites**: on the toy, `Live` and `Counted`, an audit that accepts everything has more
+wrong receipts than the pooled bound with probability `1`, above `PooledSample`'s error whenever `δ + 2^-64 < 1`. -/
+theorem pooledSample_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest : Coins 1 1 Unit → Fin 1 → ℕ → ℕ)
     {δ : ℝ} (hδ : δ + 1 / 2 ^ 64 < 1) :
     (∀ ω, acceptAll.accepts ω) ∧ Live toy ∧ Counted toy acceptAll ∧
       ¬ acceptAll.Holds (δ + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 64 +
           (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (toy.distinguisher prf δ t)).toReal +
           (unsalted.binding toy prf rest).toReal)
-        (fun ω => (acceptAll.wrong ω : ℝ) ≤ toy.pooled δ ω) := by
+        (fun ω => (acceptAll.incorrect ω : ℝ) ≤ toy.pooled δ ω) := by
   refine ⟨fun _ => trivial, toy_live, toy_counted, ?_⟩
   rw [toy_error]
   refine not_holds_acceptAll hδ fun ω h => ?_
-  rw [acceptAll_wrong] at h
+  rw [acceptAll_incorrect] at h
   exact absurd (h.trans (toy_pooled δ ω)) (by norm_num)
 
-/-- **`LiveCoinsDrawn`'s conclusion bites**: on the toy, at `W = 0`, the toy's pooled bound on every outcome. -/
-theorem liveCoinsDrawn_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest : Coins 1 1 Unit → Fin 1 → ℕ → ℕ)
+/-- **`LiveCoinsSampled`'s conclusion bites**: on the toy, at `W = 0`, the toy's pooled bound on every outcome. -/
+theorem liveCoinsSampled_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest : Coins 1 1 Unit → Fin 1 → ℕ → ℕ)
     {δ : ℝ} (hδ : δ + 1 / 2 ^ 64 < 1) :
     (∀ ω, acceptAll.accepts ω) ∧ Live toy ∧ Counted toy acceptAll ∧ (∀ ω, acceptAll.accepts ω → toy.pooled δ ω ≤ 0) ∧
       ¬ LiveCoins acceptAll 0 (δ + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 64 +
@@ -324,13 +365,13 @@ theorem liveCoinsDrawn_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (re
   unfold LiveCoins
   rw [toy_error]
   refine not_holds_acceptAll hδ fun ω h => ?_
-  rw [acceptAll_wrong] at h
+  rw [acceptAll_incorrect] at h
   exact absurd h (by norm_num)
 
-/-- **`HeldDrawn`'s conclusion bites**: on the toy, `Live` and `Counted`, an audit that accepts everything, its node
+/-- **`HeldSampled`'s conclusion bites**: on the toy, `Live` and `Counted`, an audit that accepts everything, its node
 inside the device model at no rates, bursts or chip blocks (`acceptAll_inside`), credits over an instant a planned
 block its node never held, with probability `1`. -/
-theorem heldDrawn_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest : Coins 1 1 Unit → Fin 1 → ℕ → ℕ)
+theorem heldSampled_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest : Coins 1 1 Unit → Fin 1 → ℕ → ℕ)
     {δs δc : ℝ} (hδ : δs + (δc + 1 / 2 ^ 64) < 1) :
     (∀ ω, acceptAll.accepts ω) ∧ Identity acceptAll ∧ SquaringCeiling acceptAll 0 1 0 ∧ Disks acceptAll 0 0 ∧
       ChipCeiling acceptAll 0 ∧ Routed acceptAll ∧ Live toy ∧ Counted toy acceptAll ∧
@@ -348,9 +389,9 @@ theorem heldDrawn_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest : 
   norm_num at h
   linarith
 
-/-- **`HeldOverTimeDrawn`'s conclusion bites**: as `heldDrawn_nontrivial`, over the span `[0, 1)` (`toyPace`), the
+/-- **`HeldOverTimeSampled`'s conclusion bites**: as `heldSampled_nontrivial`, over the span `[0, 1)` (`toyPace`), the
 audit credits a block-tick its node never held, with probability `1`. -/
-theorem heldOverTimeDrawn_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1)
+theorem heldOverTimeSampled_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1)
     (rest : Coins 1 1 Unit → Fin 1 → ℕ → ℕ) {δs δc : ℝ} (hδ : δs + (δc + 1 / 2 ^ 64) < 1) :
     (∀ ω, acceptAll.accepts ω) ∧ Identity acceptAll ∧ SquaringCeiling acceptAll 0 1 0 ∧ Disks acceptAll 0 0 ∧
       ChipCeiling acceptAll 0 ∧ Routed acceptAll ∧ Live toy ∧ Counted toy acceptAll ∧
@@ -374,9 +415,9 @@ theorem heldOverTimeDrawn_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1)
   norm_num at h
   linarith
 
-/-- **`HeldOverTimeLinksDrawn`'s conclusion bites**: as `heldOverTimeDrawn_nontrivial`, with no link rate or burst
+/-- **`HeldOverTimeLinksSampled`'s conclusion bites**: as `heldOverTimeSampled_nontrivial`, with no link rate or burst
 either, which the audit's node meets too (`acceptAll_inside`). -/
-theorem heldOverTimeLinksDrawn_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1)
+theorem heldOverTimeLinksSampled_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1)
     (rest : Coins 1 1 Unit → Fin 1 → ℕ → ℕ) {δs δc : ℝ} (hδ : δs + (δc + 1 / 2 ^ 64) < 1) :
     (∀ ω, acceptAll.accepts ω) ∧ Links acceptAll 0 0 ∧ SquaringCeiling acceptAll 0 1 0 ∧ Disks acceptAll 0 0 ∧
       ChipCeiling acceptAll 0 ∧ Routed acceptAll ∧ Live toy ∧ Counted toy acceptAll ∧

@@ -1,14 +1,35 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Statements
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+import Proofs.Flock.Soundness.Discharge.Exec.Retained
+import Proofs.Flock.Soundness.Discharge.Exec.Tables
+import Proofs.Flock.Soundness.Refine.Seam
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # flock-verify's acceptance under either tag
 
-`setupTables_okH` and `setupTables_retainH` are e2e-exec's `setupTables_ok` and `setupTables_retain` under hidden outputs
+`setupTables_okH` and `setupTables_retainH` are `Exec.setupTables_ok` and `Exec.setupTables_retain` under hidden outputs
 (`hh : tags.hiddenOutputs = true`), by the same walk with `Stmt.setupHidden` for `Stmt.setupH`; `setupTables_okAny` and
 `setupTables_retainAny` put the two tags together through `setupOne`. The acceptance lemmas follow from them as
-e2e-exec's do from `setupTables_ok`, with no `hh`.
+`Discharge/Exec`'s do from `setupTables_ok`, with no `hh`.
 -/
 
 @[expose] public section
@@ -123,7 +144,7 @@ theorem setupTables_okAny : SetupTablesOkAny := by
       obtain ⟨d, hd⟩ := hall j hj
       exact ⟨d, (setupOne_public (tags := { tags with identity := tags.tableIdentity count j }) hh).trans hd⟩
 
-/-- Every table `setupTables` returns is `setupOne`'s statement, under the table's tags (`tagsAt`) and at some draw
+/-- Every table `setupTables` returns is `setupOne`'s statement, under the table's tags (`tagsAt`) and at some sample
 (the session's, for one table): `Exec.setupTables_setupH` without `hh`. -/
 theorem setupTables_setupOne
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =

@@ -17,7 +17,7 @@ allowance `lam`. Then:
 
 * `wordsMoment_le_one`: a moment is at most 1 once, at every dither outside `Deg`, the check's pass probability times
   `e^{η · shortfall}` is at most 1 (averaging over the dither);
-* `Detects`, `detects_iid`: a check of `s` cells drawn independently and uniformly passes words that are right on a set
+* `Detects`, `detects_iid`: a check of `s` cells sampled independently and uniformly passes words that are right on a set
   `S` of cells with probability `(|S|/N)^s`;
 * `rate_iid`, `rate_iid_sharp`: at that check, `(1 − f)^s e^{x f} ≤ 1` for every fraction `f` wrong exactly when
   `x ≤ s`, `x = η · pub`;
@@ -33,6 +33,8 @@ headline's slack, and the rate condition is a theorem about the check. Nothing h
 
 @[expose] public section
 
+open Claims renaming Ex → avg
+
 namespace Pouw.SakLb
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Finset
@@ -42,16 +44,16 @@ section Averaging
 theorem prob_eq_card_subtype {Ω : Type*} [Fintype Ω] (p : Ω → Prop) [Fintype {x // p x}] :
     prob p = (Fintype.card {x // p x} : ℝ) / Fintype.card Ω := by
   classical
-  unfold prob
+  unfold prob Claims.prUniform
   congr 2
   rw [Fintype.card_subtype]
 
 theorem prob_nonneg {Ω : Type*} [Fintype Ω] (p : Ω → Prop) : 0 ≤ prob p := by
-  unfold prob; positivity
+  unfold prob Claims.prUniform; positivity
 
 theorem prob_le_one {Ω : Type*} [Fintype Ω] (p : Ω → Prop) : prob p ≤ 1 := by
   classical
-  unfold prob
+  unfold prob Claims.prUniform
   rcases Nat.eq_zero_or_pos (Fintype.card Ω) with h | h
   · simp [h]
   · rw [div_le_one (by exact_mod_cast h)]
@@ -73,7 +75,7 @@ theorem wordsMoment_le_one (G : Accel) (P : RoundProto) (μ : G.Res → ℝ) (pu
   by_cases hd : Deg d
   · simp [hd]
   · have hp := h d hd
-    unfold prob at hp
+    unfold prob Claims.prUniform at hp
     simp only [hd, not_false_eq_true, true_and]
     rw [← Finset.sum_filter, Finset.sum_const, nsmul_eq_mul]
     rcases Nat.eq_zero_or_pos (Fintype.card P.Chk) with hc | hc
@@ -128,7 +130,7 @@ probability at most `g (|S| / N)`. -/
 def Detects (g : ℝ → ℝ) : Prop :=
   ∀ S : Finset (Cell k), prob (fun c : k.Chk => ∀ q, k.cells c q ∈ S) ≤ g ((S.card : ℝ) / Fintype.card (Cell k))
 
-/-- **A check of `s` cells drawn independently and uniformly** (the check's coin is the `s` cells) detects at `x^s`. -/
+/-- **A check of `s` cells sampled independently and uniformly** (the check's coin is the `s` cells) detects at `x^s`. -/
 theorem detects_iid (e : k.Chk ≃ (Fin k.s → Cell k)) (he : ∀ c q, k.cells c q = e c q) :
     Detects k fun x => x ^ k.s := by
   classical
@@ -185,7 +187,7 @@ theorem rate_iid_sharp (s : ℕ) (hs : 1 ≤ s) (x : ℝ) (hx : (s : ℝ) < x) :
         mul_le_mul hb he (by nlinarith) (by positivity)
 
 /-- **The rate for a round checked with probability `π`**: a round whose check, selected with probability `π`, then
-draws `s ≥ 1` cells independently detects at `1 − π + π x^s`, and `x ≤ π` gives moment at most 1 at every
+samples `s ≥ 1` cells independently detects at `1 − π + π x^s`, and `x ≤ π` gives moment at most 1 at every
 fraction `f` of wrong words. -/
 theorem rate_bern (s : ℕ) (hs : 1 ≤ s) (π x : ℝ) (hπ0 : 0 ≤ π) (hx : x ≤ π) (f : ℝ) (hf0 : 0 ≤ f)
     (hf1 : f ≤ 1) : (1 - π + π * (1 - f) ^ s) * Real.exp (x * f) ≤ 1 := by
@@ -276,7 +278,7 @@ theorem sakMatmul_of_residual (G : Accel) (k : NoFold) (μ : G.Res → ℝ) (Reg
   refine ⟨Deg, hDeg, wordsMoment_le_one G _ μ _ _ a s Mw Deg fun d hd => ?_⟩
   exact pointwise k g hdet (pub a) (lam a) (η a) _ (hpub a ha) (hη a ha) (hrate a ha) a d _ (hcost d hd)
 
-/-- **`SAKMatmul` from its residual at an iid check**: with the check's `s` cells drawn independently and uniformly,
+/-- **`SAKMatmul` from its residual at an iid check**: with the check's `s` cells sampled independently and uniformly,
 the rate `η · pub ≤ s` suffices (and is sharp, `rate_iid_sharp`). -/
 theorem sakMatmul_of_residual_iid (G : Accel) (k : NoFold) (μ : G.Res → ℝ) (Reg : Set (noFoldRound k).Inst)
     (pub lam η : (noFoldRound k).Inst → ℝ) (κdeg : ℕ → ℝ)

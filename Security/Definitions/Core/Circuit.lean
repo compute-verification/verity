@@ -1,27 +1,30 @@
 module
 
 public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Mathlib.Data.Finset.Card
+public import Mathlib.Data.Fintype.Basic
 public import Mathlib.Data.Fintype.Card
 
 /-!
 # Circuits
 
 A circuit has gates `0, …, N - 1` in topological order: a gate reads only earlier gates. Some gates are input gates
-and some are output gates. Gate `g` holds one value of `w g` bits (`verity.ir`'s `Value<w>`). An input gate's value is
-given; every other gate computes its value from the gates it reads, the wires into it. The Boolean profile, which
-C-Flock proves, is `w = 1` (`Boolean.lean`).
+and some are output gates. Gate `g` holds one value of `w g` bits (`verity.ml.circuits`' `Value<w>`). An input gate's
+value is given; every other gate computes its value from the gates it reads, the wires into it. The Boolean profile,
+which Flock proves, is `w = 1` (`Boolean.lean`).
 
-For a set `S` of gates, in the notation of the NCI draft:
+For a set `S` of gates, in the Glossary's notation (`GLOSSARY.md`):
 * `size S`: the number of gates in `S`. The size of a circuit is `size computed`, its number of non-input gates;
 * `width S`: the total width of their values;
 * `into S`: in(S), the gates outside `S` with a wire into `S`;
 * `exits S`: out(S), the gates of `S` that a gate outside `S` reads, and the output gates in `S`.
 
 A trace is one run's data, a value for every gate. `eval a` is the honest trace on the inputs `a`, and
-`run fix` evaluates with the gates that `fix` names held at the values it gives (how a unit is recomputed,
+`run fix` evaluates with the gates that `fix` names held at the values it gives (how a proof block is recomputed,
 `Partition.localEval`).
 
-`D` implements `C` (`Implements C D`, the draft's `C ≼ D`) when every input gate of `C` is an input gate of `D` and, on
+`D` implements `C` (`Implements C D`, written `C ≼ D`) when every input gate of `C` is an input gate of `D` and, on
 every assignment to `D`'s inputs, `D` produces the values of `C`'s output gates among its own outputs. `D` contains `C`
 (`Contains C D`) when, besides, `D` computes every non-input gate of `C` from the same wires.
 -/
@@ -52,7 +55,7 @@ namespace Circuit
 variable (C : Circuit)
 
 /-- One run's data: a value for every gate. -/
-abbrev Transcript := (g : Fin C.N) → BitVec (C.w g)
+abbrev Trace := (g : Fin C.N) → BitVec (C.w g)
 
 /-- The non-input gates. -/
 def computed : Finset (Fin C.N) := univ.filter fun g => C.isInput g = false
@@ -81,11 +84,11 @@ termination_by g.val
 decreasing_by all_goals assumption
 
 /-- The circuit's evaluation on the inputs `a`: the honest trace. Only `a`'s values at input gates are read. -/
-def eval (a : C.Transcript) : C.Transcript :=
+def eval (a : C.Trace) : C.Trace :=
   C.run fun g => if C.isInput g then some (a g) else none
 
 /-- The committed inputs of `X` are the values `a` gives the input gates. -/
-def InputsAgree (X a : C.Transcript) : Prop :=
+def InputsAgree (X a : C.Trace) : Prop :=
   ∀ g, C.isInput g = true → X g = a g
 
 /-- `g` feeds `t`: `g = t`, or `g` is read by a gate that feeds `t`. -/
@@ -106,7 +109,7 @@ structure Implementation (C D : Circuit) where
   out : Fin C.N → Fin D.N
   out_mem : ∀ o ∈ C.outputs, out o ∈ D.outputs
   out_w : ∀ o ∈ C.outputs, D.w (out o) = C.w o
-  correct : ∀ (a : D.Transcript) (o : Fin C.N) (ho : o ∈ C.outputs),
+  correct : ∀ (a : D.Trace) (o : Fin C.N) (ho : o ∈ C.outputs),
     (D.eval a (out o)).cast (out_w o ho) =
       C.eval (fun g => if h : C.isInput g = true then (a (inp g)).cast (inp_w g h) else 0) o
 
@@ -122,7 +125,7 @@ structure Containment (C D : Circuit) where
   emb_w : ∀ g, D.w (emb g) = C.w g
   isInput_emb : ∀ g, D.isInput (emb g) = C.isInput g
   reads_emb : ∀ g, C.isInput g = false → D.reads (emb g) = (C.reads g).map ⟨emb, emb_inj⟩
-  op_emb : ∀ g, C.isInput g = false → ∀ v : D.Transcript,
+  op_emb : ∀ g, C.isInput g = false → ∀ v : D.Trace,
     (D.op (emb g) v).cast (emb_w g) = C.op g fun a => (v (emb a)).cast (emb_w a)
   outputs_emb : ∀ o ∈ C.outputs, emb o ∈ D.outputs
 

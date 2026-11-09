@@ -1,7 +1,13 @@
 module
 
 public import Proofs.Flock.Soundness.Refine.LiveSim
-public import Proofs.Flock.Soundness.Game.Union
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.LincheckPhase
+import Proofs.Flock.Soundness.ZerocheckPhase
+import VCVio.Prelude.Core
 
 /-!
 # The static shape of a rep

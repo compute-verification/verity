@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.10 (registered reads); `protocols/sampled_proofs/README.md`, "Registered values": a statement's rows of a
+`Flock.HmRow` (registered reads); `protocols/spot/README.md`, "Registered values": a statement's rows of a
 registered value (a program's weights, constants and tables, committed once at registration under `hm96-sha512/row/v1`
 leaves, or a served tree's rows under its port's `hm96-sha512/row/v2` or `hm96-sha512/row-seg/v1` leaves), opened against
 the verifier's own registered roots at the positions its own program reads.
@@ -26,7 +26,7 @@ def FORMAT_V0 : String := "verity/registered-reads/v0"
 /-- A `FORMAT` port's first unit: unit `reads_from + i` reads `reads[i]`, and every other unit reads nothing. -/
 def READS_FROM_KEY : String := "reads_from"
 
-def REGISTERED_DOMAIN : String := "verity/one-stage/registered-domain/v0"
+def REGISTERED_DOMAIN : String := "verity/one-stage/registered-domain/v1"
 /-- The default leaf width, which the domain and the entry name only by leaving `word_bits` out. -/
 def WORD_BITS : Nat := 16
 def WIDTHS : List Nat := [16, 32]
@@ -53,8 +53,8 @@ private def tagged (frame : String) (H : ByteArray → ByteArray) (tag : String)
   return H (frame.toUTF8.push 0 ++ Flock.be32 t.size.toUInt32 ++ t ++ Flock.be64 m.size.toUInt64 ++ m)
 
 /-- `registered.domain(program, value, words, leaves, word_bits, ...).domain_id` (one-stage `registered.py`), `leaves`
-the value's rows: `CommitmentDomain(B, -2, RangeIndexedDomain(0, leaves), hash="sha512").domain_id`, `B` the bytes of
-`identity_digest("verity/one-stage/registered-domain/v0", {"program", "value", "schema", "words", "leaves"})` with
+the value's rows: `CommitmentDomain(B, -2, RangeIndexedDomain(0, leaves), hash="sha512").domain_id`, `B` the 64 bytes of
+`identity_digest_sha512("verity/one-stage/registered-domain/v1", {"program", "value", "schema", "words", "leaves"})` with
 `"word_bits"` beside them when it is not 16, and `extra` after them (a per-window value's `"window"`, a produced value's
 `"produced"`). -/
 def domainWith (program value : String) (words leaves wordBits : Nat) (extra : List (String × Json)) :
@@ -63,7 +63,7 @@ def domainWith (program value : String) (words leaves wordBits : Nat) (extra : L
   let manifest := Json.mkObj ([("program", Json.str program), ("value", Json.str value), ("schema", Json.str HmRow.ROW_SCHEMA),
     ("words", Lean.toJson words), ("leaves", Lean.toJson leaves)] ++
     (if wordBits == WORD_BITS then [] else [(WIDTH_KEY, Lean.toJson wordBits)]) ++ extra)
-  let binding ← tagged "veritor/tagged-sha256/v1" Flock.Sha256.hash REGISTERED_DOMAIN manifest
+  let binding ← tagged "verity/tagged-sha512/v1" Flock.Sha512.hash REGISTERED_DOMAIN manifest
   let positions ← tagged "verity/tagged-sha512/v1" Flock.Sha512.hash "veritor/indexed-domain/range/v1"
     (Json.mkObj [("start", Lean.toJson (0 : Nat)), ("step", Lean.toJson (1 : Nat)), ("stop", Lean.toJson leaves)])
   return FV3.hash "domain" [binding, FV3.uint 0, positions, FV3.uint leaves] Flock.Sha512.hash
@@ -115,7 +115,9 @@ theorem Port.readAt_eq (p : Port) (u : Nat) : p.readAt u = p.reads[u]? := by
     · rw [if_neg hu, Array.getElem?_append_right (by simp; omega)]
       simp
 
-def ofJson (j : Json) : V (Array Port) := do
+/-- A file's ports, one per entry of its `ports` object in its order, an entry's name repeated as often as the object
+holds it (`ofJson` refuses that). -/
+def portsOf (j : Json) : V (Array Port) := do
   let ctx := "registered reads"
   let format ← J.str j "format" ctx
   if format != FORMAT && format != FORMAT_V0 then throw s!"{ctx}: not a {FORMAT} file (nor a {FORMAT_V0} one)"
@@ -145,6 +147,51 @@ def ofJson (j : Json) : V (Array Port) := do
       | .null => pure none
       | r => some <$> J.asNat r s!"{ctx}: a read position"
     return { name, value := ← J.str e "value" ctx, root, leaves, words, wordBits, domain, readsRel := reads, schema, readsFrom }
+
+/-- The first port of `ps` whose name a later port has. -/
+def dupName? : List Port → Option String
+  | [] => none
+  | p :: ps => if ps.any (·.name == p.name) then some p.name else dupName? ps
+
+theorem dupName?_none {ps : List Port} (h : dupName? ps = none) :
+    ∀ q ∈ ps, ∀ q' ∈ ps, q'.name = q.name → q' = q := by
+  induction ps with
+  | nil => intro q hq; cases hq
+  | cons p ps ih =>
+    simp only [dupName?] at h
+    split at h
+    · cases h
+    · rename_i hany
+      have hne : ∀ x ∈ ps, x.name ≠ p.name := fun x hx he =>
+        hany (List.any_eq_true.mpr ⟨x, hx, by simp [he]⟩)
+      intro q hq q' hq' hn
+      rcases List.mem_cons.mp hq with hq0 | hq1 <;> rcases List.mem_cons.mp hq' with hq0' | hq1'
+      · exact hq0'.trans hq0.symm
+      · exact absurd (hn.trans (congrArg (·.name) hq0)) (hne _ hq1')
+      · exact absurd (hn.symm.trans (congrArg (·.name) hq0')) (hne _ hq1)
+      · exact ih h q hq1 q' hq1' hn
+
+/-- **The verifier's registered reads**: a `FORMAT` (or `FORMAT_V0`) file's ports (`portsOf`), each name naming one port
+(`ofJson_names`). A verdict reports a port by its name (`finding`) and every check of a statement's reads finds a port by
+its name, so a second port of a name would be one neither reads. `flock-verify` refuses a file whose text names a key
+twice (`JsonKeys.dupKey`) and `JsonParse.parse` keeps one of the two, so no file it reads gets here with one; this
+refusal holds for any `Json` the verifier is given. -/
+def ofJson (j : Json) : V (Array Port) := do
+  let own ← portsOf j
+  match dupName? own.toList with
+  | some nm => throw s!"registered reads: port {nm} twice: a verdict reports one port per name, and each check reads a name's port"
+  | none => pure own
+
+theorem ofJson_names {j : Json} {own : Array Port} (h : ofJson j = .ok own) :
+    ∀ q ∈ own, ∀ q' ∈ own, q'.name = q.name → q' = q := by
+  obtain ⟨ps, -, h⟩ := HmNets.bind_ok h
+  cases hd : dupName? ps.toList with
+  | some nm => rw [hd] at h; cases h
+  | none =>
+    rw [hd] at h
+    cases h
+    intro q hq q' hq' hn
+    exact dupName?_none hd q (Array.mem_toList_iff.mpr hq) q' (Array.mem_toList_iff.mpr hq') hn
 
 /-- The u16 words of a registered row of `words` leaves of `wordBits` bits, as the statement lays out the port's row:
 each leaf `wordBits / 16` words, low first, zero-padded to whole SHA-512 blocks of 64 words. -/
@@ -217,7 +264,7 @@ def badInstance (reg : Port) (t : Tables) (np p rows n : Nat) (positions indices
     !(decide (ref t np p i < rows) && decide (reg.readAt (indices.getD i 0) = some (some (positions.getD (ref t np p i) 0))))
 
 /-- One port of the verifier's registered reads: a row of the circuit (an input port's, or a hidden-output statement's
-output row, §16.13, whose table is its instances' own rows, instance `i`'s ref `i`), whose leaf schema is the
+output row, `HmOut`, whose table is its instances' own rows, instance `i`'s ref `i`), whose leaf schema is the
 registration's (`portSchema`), whose rows are the registered rows (`Port.fits`), whose table rows all open the
 registered root, and whose instances each read the row at the position the verifier's program reads for their unit. -/
 def checkPort (c : Circuit) (pub : Public) (t : Tables) (indices : Array Nat) (reg : Port) : V Unit := do
@@ -274,7 +321,7 @@ when its callee is one of these, wherever it sits. -/
 def programInputs (d : TemplateQuery.Desc) : Array String :=
   d.callees.filter fun id => (Program.inputId? id).map (·.1) == some Program.REGISTRATION
 
-/-- **A program that reads a registered value is verified only against registered roots** (PROTOCOL.md §16.10): with the
+/-- **A program that reads a registered value is verified only against registered roots** (`Flock.HmRow`): with the
 verifier's own program (`program`, `--program`), a statement whose program has a `RegisteredInput<w>_v1` callee
 (`programInputs`) is refused unless the verifier holds its own registered reads (`registered`, `--registered`), whatever
 the statement's files say. The public file's header `registered` is the prover's, and the circuit marks no port
@@ -369,7 +416,7 @@ def partNodes : Program.Part → Array Nat
 /-- A root node's argument reads a registered input: a part of it reads a `RegisteredInput<w>_v1` root node. -/
 def argReads (P : Program.Prog) (a : Program.Arg) : Bool := a.seq.parts.any fun q => (partNodes q).any (regNode P)
 
-/-- **The template parameters that read a registered input** (PROTOCOL.md §16.10), from the verifier's own program: for
+/-- **The template parameters that read a registered input** (`Flock.HmRow`), from the verifier's own program: for
 each root node that calls `t` (a template query's instance of it), each parameter of `t` whose argument reads a
 `RegisteredInput<w>_v1` root node, with its type. Input nodes appear only in the root's body (`Program.decode`), so a
 template instance reads a registered value exactly through these arguments. It reads the root's nodes and their argument
@@ -403,7 +450,7 @@ def templatePartition (partition : Option Json) : Bool :=
     (TemplateQuery.templatesOf ((q.getObjValAs? String "name").toOption.getD "")
       ((q.getObjValAs? Nat "version").toOption.getD 0) ((q.getObjVal? "params").toOption.getD Json.null)).isSome
 
-/-- **Every registered input the statement reads has a port** (PROTOCOL.md §16.10): with the verifier's own program and
+/-- **Every registered input the statement reads has a port** (`Flock.HmRow`): with the verifier's own program and
 registered reads, a program with a `RegisteredInput<w>_v1` root node is verified only under a template query (whose units
 are the root's instances of the circuit's template, `HmRow.queryTemplate`), and every parameter of that template that
 reads one (`regParams`) is read by a port of the verifier's registered reads (`coversParam`, by the ports' `params`,
@@ -477,8 +524,8 @@ def roundCommitment (value : String) : Bool :=
   let index (s : String) := !s.isEmpty && s.all Char.isDigit
   roundNamed.contains value || roundIndexed.any fun pre => value.startsWith pre && index (value.drop pre.length).toString
 
-/-- Whether every draw by `d`'s law draws unit `u`: a subset draw of the whole population, a `p = 1` draw, or a unit whose
-stratum draws all of its units (`k_s = n_s`). -/
+/-- Whether every sample by `d`'s law samples unit `u`: a subset sample of the whole population, a `p = 1` sample, or a unit whose
+stratum samples all of its units (`k_s = n_s`). -/
 def drawsInFull (d : Draw.UnitDraw) (u : Nat) : Bool :=
   let full (s : Draw.Stratum) := s.units.any (fun (lo, hi) => lo ≤ u && u < hi) && s.k == s.size
   match d.law with
@@ -488,16 +535,16 @@ def drawsInFull (d : Draw.UnitDraw) (u : Nat) : Bool :=
   | .work _ strata => strata.any (full ·.toStratum)
 
 /-- The first port of `own` and unit that reads a round's commitment (`roundCommitment`) by `own`'s reads, and that `d`
-does not draw in full. -/
+does not sample in full. -/
 def fullMiss (own : Array Port) (d : Draw.UnitDraw) : Option (Port × Nat) :=
   own.findSome? fun p =>
     if roundCommitment p.value then
       ((List.range p.reads.size).find? fun u => p.reads[u]!.isSome && !drawsInFull d u).map (p, ·)
     else none
 
-/-- U4 (PROTOCOL.md §16.10): a drawn statement draws in full every unit that reads a round's commitment by the verifier's
+/-- U4 (`Flock.HmRow`): a sampled statement samples in full every unit that reads a round's commitment by the verifier's
 own reads `own` (`fullMiss`), so no stage's message is read off a sample. `draw` is the record's; a statement without a
-draw proves its whole population. -/
+sample proves its whole population. -/
 def checkFull (own : Option (Array Port)) (draw : Option Json) : V Unit := do
   let (some own, some j) := (own, draw) | pure ()
   let d ← Draw.UnitDraw.ofJson j
@@ -506,7 +553,7 @@ def checkFull (own : Option (Array Port)) (draw : Option Json) : V Unit := do
   | some (p, u) =>
     throw s!"U4: unit {u} reads {p.value}, a round's commitment (port {p.name}), and the draw does not draw it in full"
 
-/-! ### A recursive session's inner statement: its description, read from the developer's registration (§16.16) -/
+/-! ### A recursive session's inner statement: its description, read from the developer's registration (`Tags.withPlainLeaves`) -/
 
 /-- The circuit's first port named `name`. -/
 def portOf (c : Circuit) (name : String) : Option Nat := (List.range c.ports.size).find? fun p => c.ports[p]!.name == name
@@ -571,7 +618,7 @@ def checkDescriptionPort (c : Circuit) (pub : Public) (t : Tables) (reg : Port) 
           throw s!"registered reads: port {reg.name}: none of the {pub.n} instances reads table row {r}, registered row {r} of {reg.value}'s {reg.leaves}: an inner statement reads its whole description"
         | none => pure ()
 
-/-- **A recursive session's inner statement's description, read from the developer's registration** (PROTOCOL.md §16.16):
+/-- **A recursive session's inner statement's description, read from the developer's registration** (`Tags.withPlainLeaves`):
 the header's `registered` names exactly the verifier's own ports (`own`, `--registered`), each a table of a shared-row file
 that is the registration in order, every row of it opening the registered root at its index and read by an instance
 (`checkDescriptionPort`; `FlockProofs.Registered`: `checkDescription_ok`). No position depends on which unit an instance
@@ -599,7 +646,7 @@ end Registered
 
 /-- An hm96 statement's registered reads (`Registered.check`), and with the verifier's own, a circuit that names each port
 once (`Registered.namesOnce`). A hidden-output statement's registered ports may be its output rows as well as its input
-rows (§16.13): an output row's table is its instances' own rows, each opened against the registered root at the position
+rows (`HmOut`): an output row's table is its instances' own rows, each opened against the registered root at the position
 its unit reads, so the instance's output is that row of the registered value. -/
 def checkRegistered (st : Stmt) (registered : Option (Array Registered.Port)) : V Unit :=
   match registered with
@@ -609,7 +656,7 @@ def checkRegistered (st : Stmt) (registered : Option (Array Registered.Port)) : 
 /-- What a verdict reports of the rows its statements' registered ports opened: `{port: [[position, b ‖ c] ...]}`, each
 table row's stated position and its hiding commitment `b ‖ c` (the commit-time opening's digest), in table order across
 the statements; null without registered reads. A produced record holds every session's to its own
-(`SampledProofs.Produced.shared`). -/
+(`Spot.Produced.shared`). -/
 def registeredOpenings (sts : Array Stmt) (registered : Option (Array Registered.Port)) : Lean.Json :=
   match registered with
   | none => Lean.Json.null

@@ -1,9 +1,9 @@
 module
 
-public import Definitions.Pouw.Assumptions.NCP.RouteUAssumptions
-public import Definitions.Pouw.NCP.Witness
 public import Definitions.Pouw.Assumptions.NCP.Assumptions
+public import Definitions.Pouw.Assumptions.NCP.RouteUAssumptions
 public import Definitions.Pouw.Game.Params
+public import Definitions.Pouw.NCP.Witness
 
 /-!
 # NCP's game instance on route U: pinned statements (trusted)
@@ -20,10 +20,10 @@ namespace Pouw.NCP.RouteU
 
 open Finset
 
-/-- **The hypotheses of `GammaFromTTNCP_U` hold jointly at the lead** (`GamePinned.LeadWitness` on route U): for
+/-- **The hypotheses of `GapFromTTNCP_U` hold jointly at the lead** (`GamePinned.LeadWitness` on route U): for
 every bias `β` and count `f`, an NCP instance with `IsLead`, permutation-matrix `R` on domain shapes, no oracle
 queries and `W_ref = wrefU f`; route U's protocol at `β` is complete on `leadDomain`, the output-priced model runs
-its `H_ref` with no oracle calls, TT_NCP_U(γ₀) holds there with error 0 at every `γ₀ ∈ [0, 1)`, every in-domain
+its `H_ref` with no oracle calls, TT_NCP_U(g₀) holds there with error 0 at every `g₀ ∈ [0, 1)`, every in-domain
 unit has `n ≥ 2^10` (so `n₀ = 2^10`, `Ω_max = 1 + f/3072`), and a layout with at least one unit and `d ∣ k` on
 every unit is in the domain. -/
 def LeadUWitness : Prop :=
@@ -32,8 +32,8 @@ def LeadUWitness : Prop :=
     (∀ (L : Layout) (u : ℕ), P.Wref L u = wrefU f L u) ∧
     (P.toProtocolU β).Complete leadDomain ∧
     AdmitsRef (outputPriced3 Unit Unit Salt) (P.toProtocolU β) leadDomain (fun _ => 0) ∧
-    (∀ γ₀ : ℝ, 0 ≤ γ₀ → γ₀ < 1 →
-      Assumptions.TTNCP_U β (outputPriced3 Unit Unit Salt) P leadDomain γ₀ (fun _ _ => 0)) ∧
+    (∀ g₀ : ℝ, 0 ≤ g₀ → g₀ < 1 →
+      Assumptions.TTNCP_U β (outputPriced3 Unit Unit Salt) P leadDomain g₀ (fun _ _ => 0)) ∧
     (∀ U : Workload, U.InDomain leadDomain → ∀ u < U.layout.N, 2 ^ 10 ≤ (U.layout.shape u).n) ∧
     (⟨Lay, fun _ => 0⟩ : Workload).InDomain leadDomain ∧ 0 < Lay.N ∧ ∀ u < Lay.N, P.d ∣ (Lay.shape u).k
 

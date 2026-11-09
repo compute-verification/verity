@@ -1,8 +1,12 @@
 module
 
-public import Proofs.Flock.Soundness.ExecCircuit
 public import Proofs.Flock.Soundness.ExecCheck
+public import Proofs.Flock.Soundness.ExecCircuit
 public import Proofs.Flock.Soundness.ExecLookup
+public import Proofs.Flock.Soundness.ExecParse
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
 
 @[expose] public section
 
@@ -508,12 +512,12 @@ theorem placement_of_setupH (ht : tags.typed = false) (h : Stmt.setupH tags cf p
       ((setupH_layout ht h).col regs hg) :=
   (setupH_layout ht h).placement regs hg
 
-/-- **A drawn unit's place, from the executable's accept step** (`UnitPlace`, which `loweringSoundB_of_place` and
+/-- **A sampled proof block's place, from the executable's accept step** (`UnitPlace`, which `loweringSoundB_of_place` and
 the `_placed` forms take): template instance `g`'s stacked unit slots in block `o` of the accepted statement, given the unit's
 instance in the audit circuit, whose inputs on one gate carry one value there (`Layout.Aliased`). -/
 noncomputable def unitPlace_of_setupH (ht : tags.typed = false)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
-    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Audit.Circuit} {n : ℕ}
+    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Verity.Boolean.Circuit} {n : ℕ}
     {P : Audit.Partition C n} {u : Fin n}
     (inst : P.IsRowsUnit u ((unitRows st (setupH_layout ht h).unit_built).stack st.c.upv))
     (o : Fin (2 ^ ((setupH_layout ht h).model regs).nbl)) {g : ℕ} (hg : g < st.c.g)

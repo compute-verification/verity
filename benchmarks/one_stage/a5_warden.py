@@ -7,11 +7,11 @@ this window stands in for one, its cells a warden run's (`warden_serve.py rehear
 * **The rows** are the warden's, one a bucket (`warden_rows`, registration v2): row t − first_bucket of a link-window is
   bucket t, S = lanes·r slots of B bytes, slot j at bytes j·B (words j·B/2), a connection's cells at the slots its
   wiring gives it, a slot no connection holds B zero bytes.
-* **The window** (`window`), under ``<ROOT>/rank0`` and the law ``work:2``: 2n units of the transfer-gate template
+* **The window** (`window`), under ``<ROOT>/rank0`` and the sampling design ``work-rate:1/8``: 2n units of the transfer-gate template
   `WardenRowIdentity{S·B}` (`warden_zk.py`'s toy, one bucket row's 8·S·B bits in and the same bits out) in two chunks, and
   the rest, ``--rest`` units of `WardenRowIdentity{2B}` over rows of their own (another template, so another stratum),
   standing in for the compiled model steps. The verifier's work table (`serving_rows.work_table_of`) proves every
-  transfer-gate unit (work 0, floor all of them: selection All) beside the rest's drawn share, and a5's transfer-gate
+  transfer-gate unit (work 0, floor all of them: selection All) beside the rest's sampled share, and a5's transfer-gate
   negatives (`a5.transfer_gate_negatives`) refuse each way of leaving one out.
   - chunk ``c0``, the ingress gates: unit i reads connection q's ingress cell i, its ``row`` the bucket row that cell is in,
     committed under the warden's salt for that row, so its ``b || c`` is the warden's;
@@ -26,7 +26,7 @@ this window stands in for one, its cells a warden run's (`warden_serve.py rehear
 * **The verifier's reads** (`reads`): each link-window's registration read under the deployment's key and session and the
   schedule (`warden_rows.check_registration`), and from it the verifier's own ``--registered`` file of each chunk
   (`warden_rows.port` of the Program's units: their value, the head's root, and the row of each unit's read, placed by the
-  wiring the warden signed), which a5 hands Lean's verify of each drawn chunk (`a5.audit`'s ``registered``), so a statement
+  wiring the warden signed), which a5 hands Lean's verify of each sampled chunk (`a5.audit`'s ``registered``), so a statement
   made for any other units' wiring is refused, even at the same rows. The wiring is opened to the verifier as the units'
   wiring is: `warden_rows`' named gap. A transfer gate is addressed as (row, byte, bit): bit 8k + i of a unit's
   registered port is bit i of byte k of its row, row t − first_bucket bucket t (the registration's ``layout``), and the
@@ -45,7 +45,7 @@ this window stands in for one, its cells a warden run's (`warden_serve.py rehear
   Lean's registered reads (`warden_rows.refusal`) by name: made for a pad of the delay where the Program reads a data cell
   ("not another value"), those rows under the Program's value ("reads position"), and two units' cells swapped, at the
   Program's rows ("not another value").
-* **Refused runs**, each to pass every check before the sample, draw the unit and be refused by Lean's registered reads by
+* **Refused runs**, each to pass every check before the sample, sample the unit and be refused by Lean's registered reads by
   name: ``--altered``, unit 0 of c0 reads its row one bit off in its cell, under the warden's salt, its output the same bits
   (the circuit holds) ("does not open"); ``--made-for pad|pad-named|swapped``, c1's statement made for that wiring.
 
@@ -55,7 +55,7 @@ a5's records (``rank0/``, ``challenger/``, ``summary.json``); the warden's rows 
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/a5_warden.py --run WARDEN_RUN --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
-        --firewall flock-firewall --challenger local --main FILE [--altered | --made-for KIND] --out DIR
+        [--firewall flock-firewall] --challenger local --main FILE [--altered | --made-for KIND] --out DIR
 """
 from __future__ import annotations
 
@@ -84,14 +84,15 @@ from verity.core.protocols.certifier.active import DATA, HEADER  # noqa: E402
 from verity.core.protocols.certifier.certificate import Certificate  # noqa: E402
 from verity.core.protocols.certifier.grid import Record  # noqa: E402
 from verity.core.protocols.certifier.warden import END, WardenParams  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R  # noqa: E402
+from verity.core.protocols.spot import service as S  # noqa: E402
+from verity.core.protocols.spot.one_stage import partition as P, registration as R  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity.ml.windows import rows as CS  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 
 #: the stand-in's session root, as a TP Commit's run root is its ranks' session root
 ROOT = hashlib.sha512(b"verity/a5/warden-stand-in/v1").hexdigest()
-RULE = "work:2"
+RULE = "work-rate:1/8"
 #: each chunk's registered port, by the warden record it opens: the ingress cells are the circuit's input, the egress its output
 LINKS = {ws.INGRESS: ("c0", "row"), ws.EGRESS: ("c1", "o0")}
 #: the egress chunk's statement made for another units' wiring (`made_for`), and what Lean's registered reads, and the host's
@@ -166,14 +167,14 @@ def window(at: dict[str, SimpleNamespace], n: int, rest: int) -> CS.Binding:
     tg, other = templates(params)
     program, query = CS.population_program([(tg, 2 * n), (other, rest)])
     (tid, _, _), (rid, _, _) = P.ranges(program, query)
-    law = D.parse_law(RULE)
 
     def ports(words: int) -> dict:
         return {"rows": (("row", words),), "outs": (("o0", words),), "schemas": (("row", V2), ("o0", V2))}
 
     members = tuple(CS.Member(tid, n=n, base=j * n, tables=(("row", n),), name=f"{tid}/{c}", **ports(WR.row_bytes(params) // 2))
                     for j, (c, _p) in enumerate(LINKS.values())) + (CS.Member(rid, n=rest, base=2 * n, **ports(params.cell_bytes)),)
-    return CS.Binding(program, query, law, f"{ROOT}/rank0", members, work_table=SRW.work_table_of(law, {tid: 2 * n, rid: rest}, [tid]))
+    law, table = S.params_law(RULE, program, query, SRW.work_table_of(SRW.law_of(RULE), {tid: 2 * n, rid: rest}, [tid]))
+    return CS.Binding(program, query, law, f"{ROOT}/rank0", members, work_table=table)
 
 
 def chunks(mine: CS.Binding) -> dict[str, CS.Member]:
@@ -429,7 +430,8 @@ def main(argv=None) -> int:
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
-    ap.add_argument("--firewall", required=True)
+    ap.add_argument("--firewall", help="a5.py's --firewall: the core protocols' path, every session behind the ZK server; "
+                    "without it each runs prove --zk itself, as SPOT[Flock]'s proof server does")
     ap.add_argument("--challenger", choices=["local"], required=True, help="draw on a local challenger session's coins")
     ap.add_argument("--main", required=True, help="the verifier's own `git rev-list --first-parent origin/main`")
     ap.add_argument("--altered", action="store_true", help="unit 0 of the ingress chunk reads its row one bit off, in its cell")

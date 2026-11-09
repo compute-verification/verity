@@ -1,4 +1,4 @@
-"""A plain hidden-output session's statement (PROTOCOL.md §16.15): the fixture of `test_lean_plain_hidden.py`, staged by
+"""A plain hidden-output session's statement (`Flock.ProvedScope`): the fixture of `test_lean_plain_tree.py`, staged by
 `pod/91-plain-hidden.sh`, which proves it in one loopback session without `--zk` under a subset sample.
 
 The program (`program`) is `N` RoPE d64 template instances, instance `i` reading row `i` of `x` and of `cs`, under
@@ -20,7 +20,7 @@ from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import coll_concat
 from verity.ml.circuits.types import Array
-from verity.core.protocols.sampled_proofs.one_stage import partition as P
+from verity.core.protocols.spot.one_stage import partition as P
 
 N = 32
 SEED = 20261025
@@ -28,7 +28,7 @@ SEED = 20261025
 
 def program() -> tuple[Program, dict]:
     """The verifier's own program and query."""
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     template = TM.rope_head(64).definition()
     (_, xt), (_, ct) = template.signature()[0]
@@ -46,14 +46,14 @@ def program() -> tuple[Program, dict]:
 
 def stage(out: Path, seed: int = SEED) -> dict:
     from verity_flock import circuit as FC
-    from verity_numerical.bench import templates as TM
-    from verity_numerical.bench.generate import generate
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock import subcircuit_templates as TM
+    from synthetic_sets import synthetic_set
+    from verity_flock.input_sets import InputSet
 
     out.mkdir(parents=True, exist_ok=True)
     prog, query = program()
     part = P.partition(prog, query)
-    s = InputSet.open(generate(TM.rope_head(64), N, seed, out / "set")["path"])
+    s = InputSet.open(synthetic_set(TM.rope_head(64), N, seed, out / "set")["path"])
     low = FC.lowering_for_set(s)
     text = FC.compose(low, s.subcircuit, partition=P.digest(part), program=P.program_digest(prog), statics=FC.set_statics(s))
     (out / "circuit.txt").write_text(text)

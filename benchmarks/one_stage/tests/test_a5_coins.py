@@ -1,6 +1,6 @@
 """a5's coins: a window's `service.Stream` samples only from the auditor's challenger's coins (`a5_coins.RankCoins`, or
 `Replay` of an honest sample's bytes for the negatives), refusing any other source (`service.NO_OWN_COINS`): the verifier
-samples no coins of its own. A sample on the challenger's bytes with no evidence is rejected by the Lean verifier of record's
+samples no coins of its own. A sample on the challenger's bytes with no evidence is rejected by the Lean verifier's
 whole run (`Run.run`) at its select (`coins`). A toy window of two templates; and the session's connect."""
 
 from __future__ import annotations
@@ -13,8 +13,8 @@ import pytest
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value as Bits
-from verity.core.protocols.sampled_proofs import coins as CC, service as S
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R, verifier as V
+from verity.core.protocols.spot import coins as CC, service as S
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -38,7 +38,9 @@ PUBLIC = tuple(S.Public(i, "structure", r) for i, r in (
     ("population", "N, the draw's range"), ("window", "provenance"), ("leaves:x", "x's leaf count"),
     ("domain:x", "x's served domain"), ("leaves:out", "out's leaf count"), ("domain:out", "out's served domain"),
     *((f"population:{P.template_id(t)}", "a template's stratum") for t in WINDOW)))
-SPEC = S.Spec(VALUES, S.Law("stratified:3"),
+#: one of the PAIR and three of the 9 TRIPLEs
+RULE = S.Law("stratified-rate:1/3")
+SPEC = S.Spec(VALUES, RULE,
               S.Check(tuple(P.program_digest(Program(t)) for t in WINDOW), QUERY, proof_deadline=60.0), PUBLIC,
               bytes.fromhex(ROOT))
 VERDICTS = {"lean": {"of_record": True, "accepted": True, "digest": "dd" * 64, "sessions": [SESSION]}}
@@ -63,14 +65,15 @@ def _record() -> dict:
     ports = _ports()
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **ports[p]} for i, p in enumerate(ports)]
     program = P.mixed_population_program([(t, COUNTS[P.template_id(t)]) for t in WINDOW])
-    return R.record(program, QUERY, {"law": "stratified", "k": 3}, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0})
+    return R.record(program, QUERY, S.selection_law(RULE, sum(COUNTS.values()), D.strata_sizes(program, QUERY)), S.SCHEME, roots,
+                    {"kind": "served", "run": RUN, "row": 0}, work_table=S.selection_table(RULE, program, QUERY, None))
 
 
 def stream_of(coins) -> S.Stream:
     return S.Stream(SPEC, WINDOW, budget=1, delta=0.5, challenger="a5 test, challenger", coins=coins, clock=Clock())
 
 
-def register(stream: S.Stream) -> S.Registration:
+def register(stream: S.Stream) -> S.WindowCommitmentRecord:
     return stream.register(_record(), _ports(), window_root=ROOT, counts=COUNTS)
 
 

@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import math
 import os
 import shlex
 import subprocess
@@ -25,7 +26,8 @@ CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
 
 AGREE, BUILD, CIRCUIT = (f"lean-agreement:{build.VERIFIER}", f"lean-build:{build.LEAN}", f"flock-circuit-build:{build.FLOCK}/live")
-RUST, UNIT, SUITES = f"flock-rust-tests:{build.FLOCK}/live", f"lean-unit-cut:{build.UNIT_CUT}", "lean-suites:after-lean"
+RUST, UNIT, SUITES = f"flock-rust-tests:{build.FLOCK}/live", f"lean-unit-cut:{build.UNIT_CUT}", "lean-suites:a"
+FLOCK_PART = "lean-suites:verity-flock:1/6"
 
 
 @pytest.fixture(scope="module")
@@ -37,9 +39,13 @@ def _own(task: dict) -> list[str]:
     return [p for p in task["inputs"] if p not in graph.runner_sources(task["kind"])]
 
 
+def _suites(doc: dict) -> list[dict]:
+    return [t for t in doc["tasks"] if t["kind"] == "lean-suites"]
+
+
 def test_the_build_family_is_check_s_steps_with_the_inputs_check_keys_them_by(doc):
     by = {t["id"]: t for t in doc["tasks"]}
-    assert sorted(by) == sorted([CIRCUIT, RUST, AGREE, BUILD, UNIT, SUITES])
+    assert sorted(set(by) - {t["id"] for t in _suites(doc)}) == sorted([CIRCUIT, RUST, AGREE, BUILD, UNIT])
     files = graph.tracked(ROOT)
     for rust in (CIRCUIT, RUST):
         assert _own(by[rust]) == CHECK.rust_tests_inputs(files) and by[rust]["env"] == "rust" and by[rust]["key"]
@@ -51,10 +57,36 @@ def test_the_build_family_is_check_s_steps_with_the_inputs_check_keys_them_by(do
     assert {build.UNIT_CUT, "verity/ml/circuits/partition.py"} <= set(_own(by[UNIT])) <= {
         build.UNIT_CUT, *(f for f in files if f.startswith("verity/") and f.endswith("/__init__.py")),
         *(f for f in files if f.startswith("verity/ml/circuits/"))}, "the script and what it imports, which reads no data"
-    assert by[SUITES]["vars"]["suites"].split() == list(CHECK.SUITES.AFTER_LEAN) and by[SUITES]["inputs"] == files, \
-        "check's lean-suites, keyed by the whole tree"
-    assert by[SUITES]["reads"] == [{"task": BUILD, "output": o["name"]} for o in by[BUILD]["outputs"]] and not by[SUITES]["key"]
-    assert {by[SUITES]["vars"]["bin"] + "/" + r["output"] for r in by[SUITES]["reads"]} == {o["path"] for o in by[BUILD]["outputs"]}
+    for t in _suites(doc):
+        assert t["inputs"] == files, f"{t['id']}: check's lean-suites, keyed by the whole tree"
+        assert t["reads"] == [{"task": BUILD, "output": o["name"]} for o in by[BUILD]["outputs"]] and not t["key"]
+        assert {t["vars"]["bin"] + "/" + r["output"] for r in t["reads"]} == {o["path"] for o in by[BUILD]["outputs"]}
+
+
+def test_lean_suites_is_check_s_lean_suites_step_a_suite_or_a_part_a_task(doc):
+    """Each suite check's lean-suites step runs is one task, or one a part of `build.PARTS`, in check's order: every suite once,
+    every part of a split one once; a parallel suite takes a slot and another one process, each at its own timeout."""
+    ran = [(t["vars"]["suites"], t["vars"].get("files")) for t in sorted(_suites(doc), key=lambda t: t["id"])]
+    want = [(s, f"{k}/{build.PARTS[s]}" if s in build.PARTS else None) for s in CHECK.SUITES.AFTER_LEAN
+            for k in range(1, build.PARTS.get(s, 1) + 1)]
+    assert sorted(ran, key=str) == sorted(want, key=str) and len(ran) == len(set(ran))
+    assert FLOCK_PART in {t["id"] for t in _suites(doc)}, "the Flock suite, which runs for hours on one slot, is in parts"
+    fam = graph.spec(ROOT)["family"]["build"]
+    suites = CHECK.SUITES.discover()
+    for t in _suites(doc):
+        s = next(x for x in suites if t["vars"]["suites"] in (x.name, x.path))
+        one = {"cores": 1, "mem_gb": s.worker_gb or CHECK.SUITES.TEST_PROCESS_GB, "disk_gb": build.SUITES_DISK_GB}
+        assert t["resources"] == ({**fam["resources"], "disk_gb": build.SUITES_DISK_GB} if s.parallel else one), t["id"]
+        assert t["timeout_s"] == (math.ceil(s.timeout_s) if s.timeout_s else fam["timeout_s"]), t["id"]
+
+
+def test_a_part_s_files_are_every_mth_by_path_whatever_this_machine_measured():
+    """The runner hands suites.py a timing record with none of a split suite's files (`lean_suites.TIMINGS`), so the partition
+    packs equal costs by path: part K holds files K, K+M, ..., the same on every machine, and the M parts hold each file once."""
+    files = [f"s/tests/test_{c}.py" for c in "kjihgfedcba"]
+    parts = CHECK.SUITES.partition(files, {}, 4)
+    assert parts == [sorted(files)[k::4] for k in range(4)]
+    assert sorted(f for p in parts for f in p) == sorted(files)
 
 
 def test_lean_build_outputs_the_executables_the_flock_suite_runs_at_their_paths(doc):
@@ -100,13 +132,20 @@ def test_flock_rust_tests_lean_unit_cut_and_lean_suites_run_check_s_argv(doc, tm
     lean_unit_cut.run(by[UNIT], out)
     assert [str(ROOT / by[UNIT]["vars"]["verify"]) if a == str(verify) else a for a in seen.pop()] == check["lean-unit-cut"]
     words = shlex.split(check["lean-suites"][2].removeprefix(lean_build.ELAN))
+    n = len(CHECK.SUITES.AFTER_LEAN)
+    assert words[2:2 + n] == list(CHECK.SUITES.AFTER_LEAN)
     jobs = words.index("--jobs") + 2
-    lean_suites.run({**by[SUITES], "resources": {**by[SUITES]["resources"], "cores": int(words[jobs - 1])}}, out)
-    (bash, c, mine), = seen
-    assert [bash, c] == check["lean-suites"][:2] and mine.startswith(lean_build.ELAN)
-    mine = shlex.split(mine.removeprefix(lean_build.ELAN))
-    assert mine[:jobs] == words[:jobs] and mine[jobs:] == ["--mem-gb", str(by[SUITES]["resources"]["mem_gb"])], \
-        "check's words to its --jobs; then the task's memory, where check gives its slot's share"
+    whole = next(t["id"] for t in _suites(doc) if "files" not in t["vars"])
+    for t in (by[whole], by[FLOCK_PART]):
+        lean_suites.run({**t, "resources": {**t["resources"], "cores": int(words[jobs - 1])}}, out)
+        (bash, c, mine), = seen
+        seen.clear()
+        assert [bash, c] == check["lean-suites"][:2] and mine.startswith(lean_build.ELAN)
+        part = ["--files", t["vars"]["files"], "--timings", str(out / lean_suites.TIMINGS)] if "files" in t["vars"] else []
+        assert shlex.split(mine.removeprefix(lean_build.ELAN)) == [
+            *words[:2], t["vars"]["suites"], *words[2 + n:jobs], "--mem-gb", str(t["resources"]["mem_gb"]), *part], \
+            "check's words to its --jobs on the task's suite; then the task's memory, where check gives its slot's share, and its part"
+    assert json.loads((out / lean_suites.TIMINGS).read_text()) == {"verity-flock": {}}
 
 
 AUDIT = """
@@ -141,7 +180,7 @@ def test_check_reads_are_all_the_agreement_reads_of_the_tree_outside_the_verifie
     assert opened and not {f for f in opened if not f.startswith(build.VERIFIER + "/")} - set(build.CHECK_READS)
 
 
-def test_a_tree_without_the_verifier_lists_none_of_its_lean_tasks(tmp_path):
+def test_a_tree_without_the_verifier_lists_none_of_its_lean_tasks(tmp_path, monkeypatch):
     (tmp_path / build.LEAN).mkdir(parents=True)
     (tmp_path / build.LEAN / "lakefile.toml").write_text('defaultTargets = ["v"]\n[[lean_exe]]\nname = "v"\n')
     assert build.tasks(tmp_path, []) == []
@@ -152,16 +191,30 @@ def test_a_tree_without_the_verifier_lists_none_of_its_lean_tasks(tmp_path):
     assert [t["id"] for t in build.tasks(tmp_path, [*lean, f"{build.VERIFIER}/upstream.json", build.UNIT_CUT])] == [BUILD], \
         "the agreement and the partition check need flock-verify among the executables"
     (tmp_path / build.LEAN / "lakefile.toml").write_text('defaultTargets = ["flock-verify"]\n[[lean_exe]]\nname = "flock-verify"\n')
-    for f, text in ((build.UNIT_CUT, "import json\n"), (build.SUITES, 'AFTER_LEAN = ("a", "b/c")\n'),
-                    ("pyproject.toml", '[project]\nname = "toy"\n')):
+    pytest_ = "[tool.pytest.ini_options]\ntestpaths = [\"tests\"]\n"
+    for f, text in ((build.UNIT_CUT, "import json\n"), (build.SUITES, 'AFTER_LEAN = ("a", "b/c", "gone")\nTEST_PROCESS_GB = 9\n'),
+                    ("pyproject.toml", '[project]\nname = "toy"\n'),
+                    ("pkg/a/pyproject.toml", f'[project]\nname = "a"\n{pytest_}[tool.verity.tests]\nworker_gb = 3\n'),
+                    ("b/c/pyproject.toml", f"{pytest_}[tool.verity.tests]\nparallel = true\ntimeout_s = 99.5\n")):
         (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / f).write_text(text)
-    files = [*lean, build.UNIT_CUT, build.SUITES, "pyproject.toml"]
+    files = [*lean, build.UNIT_CUT, build.SUITES, "b/c/pyproject.toml", "pkg/a/pyproject.toml", "pyproject.toml"]
+    monkeypatch.setattr(build, "PARTS", {"a": 2})
     got = {t["id"]: t for t in build.tasks(tmp_path, files)}
-    assert list(got) == [BUILD, UNIT, SUITES] and got[UNIT]["inputs"] == [build.UNIT_CUT]
-    assert got[SUITES]["vars"]["suites"] == "a b/c" and got[SUITES]["inputs"] == files
+    parts = ["lean-suites:a:1/2", "lean-suites:a:2/2"]
+    assert list(got) == [BUILD, UNIT, *parts, "lean-suites:b/c", "lean-suites:gone"] and got[UNIT]["inputs"] == [build.UNIT_CUT]
+    assert [got[p]["vars"] for p in parts] == [{"suites": "a", "files": f"{k}/2", "bin": f"{build.LEAN}/.lake/build/bin"}
+                                               for k in (1, 2)]
+    assert all(got[p]["resources"] == {"cores": 1, "mem_gb": 3, "disk_gb": 60} and "timeout_s" not in got[p] for p in parts), \
+        "one process at the suite's worker_gb, at the family's timeout"
+    assert got["lean-suites:b/c"]["resources"] == {"disk_gb": 60} and got["lean-suites:b/c"]["timeout_s"] == 100, \
+        "a parallel suite takes the family's slot, at its own timeout"
+    assert got["lean-suites:gone"]["resources"] == {"cores": 1, "mem_gb": 9, "disk_gb": 60}, \
+        "a name no suite has is listed, so suites.py's refusal of it is an error"
+    assert all(t["inputs"] == files for i, t in got.items() if i.startswith("lean-suites:"))
     (tmp_path / build.SUITES).write_text("AFTER = ()\n")
-    assert SUITES not in {t["id"] for t in build.tasks(tmp_path, [*lean, build.SUITES])}, "no AFTER_LEAN, no lean-suites"
+    assert not any(t["id"].startswith("lean-suites:") for t in build.tasks(tmp_path, [*lean, build.SUITES])), \
+        "no AFTER_LEAN, no lean-suites"
 
 
 def _graph(*tasks: dict) -> dict:
@@ -343,11 +396,17 @@ assert shutil.which("lake") and a[a.index("--jobs") + 1] == "3" and a[a.index("-
 fv = Path(__file__).resolve().parents[3] / "pkg" / "bin" / "flock-verify"
 assert os.access(fv, os.X_OK) and fv.read_text() in ("fv", "fv-old"), "the executable read, at its path in the tree"
 how = Path(os.environ["HOW"]).read_text()
+if how == "part":
+    timings = json.loads(Path(a[a.index("--timings") + 1]).read_text())
+    assert a[a.index("--files") + 1] == "2/4" and timings == {n: {} for n in names}, (a, timings)
+else:
+    assert "--files" not in a and "--timings" not in a
 if how == "kill":
     os.kill(os.getpid(), signal.SIGKILL)
 if how == "usage":
     sys.exit(2)
-rows = [{"suite": "lean/" + n, "name": n, "status": "passed", "failed_tests": []} for n in names]
+rows = [{"suite": "lean/" + n, "name": n, "status": "passed", "failed_tests": [],
+         **({"part": {"ks": [2], "m": 4}} if how == "part" else {})} for n in names]
 if how == "missing":
     rows.pop()
 if how == "cached":
@@ -367,18 +426,20 @@ sys.exit(1 if how in ("tests", "kill a suite", "timeout", "wrote") else 0)
 
 @pytest.mark.parametrize(("how", "status"), [("pass", "pass"), ("cached", "pass"), ("tests", "fail"), ("timeout", "fail"),
                                              ("wrote", "fail"), ("kill a suite", "error"), ("missing", "error"),
-                                             ("usage", "error"), ("kill", "error"), ("pass old", "pass")])
+                                             ("usage", "error"), ("kill", "error"), ("pass old", "pass"), ("part", "pass")])
 def test_lean_suites(tmp_path, monkeypatch, how, status):
     """suites.py --lean-built on the task's suites, with lake on the PATH, after the executables it reads are put at their paths
     in the tree (over another build's there); a suite that failed is named with its failed tests, and a suite the report lacks,
-    one that failed on nothing its row names (a kill) and a usage error are no result."""
+    one that failed on nothing its row names (a kill) and a usage error are no result.  A part's task runs `--files K/M` on a
+    timing record that holds none of its suites' files, and its report's rows, of the suite's part, are the suite's."""
     root = _tree(tmp_path, monkeypatch, {lean_suites.SUITES: SUITES_STANDIN, "bin/lake": "#!/bin/sh\n",
                                          **({"pkg/bin/flock-verify": "fv-old"} if how == "pass old" else {})})
     (tmp_path / "how").write_text(how.removesuffix(" old"))
     monkeypatch.setenv("HOW", str(tmp_path / "how"))
     doc = _graph({"id": "lean-build:pkg", "kind": "lean-build", "env": "lean",
                   "outputs": [{"name": "flock-verify", "path": "pkg/bin/flock-verify"}]},
-                 {"id": SUITES, "kind": "lean-suites", "env": "py", "vars": {"suites": "a b/c", "bin": "pkg/bin"},
+                 {"id": SUITES, "kind": "lean-suites", "env": "py",
+                  "vars": {"suites": "a b/c", "bin": "pkg/bin", **({"files": "2/4"} if how == "part" else {})},
                   "reads": [{"task": "lean-build:pkg", "output": "flock-verify"}],
                   "outputs": [{"name": "report", "path": lean_suites.REPORT}], "resources": {"cores": 3, "mem_gb": 5, "disk_gb": 1}})
     work = tmp_path / "work"

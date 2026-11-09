@@ -21,7 +21,7 @@ from hypothesis import strategies as st
 import _release as R
 import test_firewall_release_agreement as A
 import verity_difftest as D
-from verity.core.protocols.sampled_proofs import service as S
+from verity.core.protocols.spot import service as S
 from verity_flock import firewall as FW
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

@@ -1,12 +1,42 @@
 module
 
+public import Definitions.Pouw.Dither
 public import Definitions.Pouw.DitherInstance
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The headline on the cards: the auditor's devices, causality, and the held inventory premise (trusted)
+# The headline on the cards: causality and the held inventory premise (trusted)
 
-* `CertifierSeesImports`: the network certifier's counts take in every exchanged bit, class L (the auditor's devices,
-  trust base item 3: the certifier runs on a machine the prover doesn't control).
 * `RootAfterCoin`, `CommitAfterWork` and `AnswerAfterWork`: each commitment and each selected answer arrives no
   sooner than the run that computed it, after the coins that run reads, physical causality (the node is within the
   model). The commitment is the block's root after its dither coins, the operand root after the previous block's work
@@ -19,7 +49,8 @@ public import Definitions.Pouw.DitherInstance
   inside the period). What is left is that the node is within the model: its runs take at least the model's
   wall time, from the coins they read to what the certifier sees arrive.
 
-  `Definitions.Pouw.Guarantees.DitherInstance.WorkSoundAt` reads all four.
+  `Definitions.Pouw.Guarantees.DitherInstance.WorkSoundAt` reads all three, beside the network certifier's count
+  (`Definitions.Pouw.Assumptions.Dither.CertifierSeesImports`).
 * `PeriodInventory`, the period's devices are its inventory. It is stated and held: no guarantee reads it
   until it is decided whether the node's host CPUs and DPUs are devices of the period (the recommendation) or the
   protocol binds hashing to the cards instead. The fleet's transfer from the model to the devices reads it beside
@@ -31,31 +62,6 @@ public import Definitions.Pouw.DitherInstance
 namespace Pouw.Assumptions
 
 open Pouw.Dither
-
-/-- `pouw-certifier-sees-imports` (proposed; class L, the auditor's devices, trust base item 3). **The network
-certifier counts every exchanged bit**: it watches the replica's boundary, every link of the period's devices, on a
-machine the prover doesn't control, so the bits a prover's sampling blocks' work and answers exchange with outside
-machines (`Prover.ext`, in either direction, other than the challenger's coin stream) are at most the bits it signs
-as entering (`cin`) and leaving (`cout`) the devices, as the verdict reads them from its readings `dev`.
-
-**The coin stream is the coins and nothing else**, the one thing `Accel.ext` leaves out: a sampling
-block's dither and check coins are its `Draw` and `Chk`, inputs of its programs, not exchanged bits.
-* Under the MVP the challenger is the replica's certifier device (`CoinsConfidential`), which makes
-  each coin at the boundary, so no bit that crosses a link from outside is left out.
-* A challenger on a device of its own is left out message by message: only a coin message that verifies under its key
-  and carries its expected (period, replica, sampling block, kind, sequence number), once, at its expected length.
-  Every other byte counts: a malformed, unverifiable, duplicate, replayed or late message as entering, and the
-  stream's reverse traffic (acknowledgements, flow control) as leaving. A stream told apart by its addresses or headers
-  would let forged packets on it carry imports uncounted.
-
-**A replica on several nodes has one boundary**: a certifier on each node's links, the traffic between
-its nodes carried certifier to certifier on the auditor's private links, never through the prover's network, and one
-count `cin`, `cout` that the replica's certifiers keep together. Everything else crossing between its nodes counts.
-Its cards are one pool (`poolCard`), so the traffic between them is the devices' own and not exchanged. Counting it
-would fail honest replicas, and leaving it out by address would let an outside machine join as a node. -/
-def CertifierSeesImports (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (dev : Readings G P k Obs)
-    (cin cout : Obs → ℝ) : Prop :=
-  ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk), A.ext o x ≤ cin (dev A o x) + cout (dev A o x)
 
 /-- `pouw-root-after-coin` (proposed; physical causality, the node within the model). **A commitment arrives no
 sooner than the work that computed it**: sampling block `b`'s work reads the dither coins the challenger issues at

@@ -218,7 +218,7 @@ class Segments:
 
 
 class LazyTranscript(dict):
-    """`ExecutionTranscript` whose missing entries are read from value segments (weights + captured leaves).
+    """A `Trace` whose missing entries are read from value segments (weights + captured leaves).
     Values computed by `evaluate_region` are stored in the dict and take precedence."""
 
     def __init__(self, *sources: Segments) -> None:
@@ -303,7 +303,7 @@ class WeightsBinding:
     records: list[dict] = field(default_factory=list)
 
 
-# The `cos_sin_cache` Input gates are a *derived* table (typed-b1.md §5.2): the committed leaf reproduces only from
+# The `cos_sin_cache` Input gates are a *derived* table: the committed leaf reproduces only from
 # vLLM's `_compute_cos_sin_cache` run on the GPU. The record says so in a fixed, machine-readable form.
 COS_SIN_LEAF = _WEIGHT_FIELDS["cos_sin"][0]
 COS_SIN_REBUILT_FROM = "vllm._compute_cos_sin_cache (CUDA cosf/sinf), GPU only"

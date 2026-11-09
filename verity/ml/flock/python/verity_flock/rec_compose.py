@@ -9,7 +9,7 @@ is one log per V* statement with one ``VERDICT``; ``rec_part`` 0 to n - 1 each o
 input the compiled verifier's parts read at the composition's own inner shape and link table (``--rec-links``), and
 every part's is that one; and no two
 sessions share a coin key. Then the challenger's interactive-run record (``verity/rec-run/v1``, `RecCompose.runOf`,
-written by `verity.core.protocols.sampled_proofs.challenger.RunRecord`) must be one run of them (`RecCompose.checkRun`,
+written by `verity.core.protocols.spot.challenger.RunRecord`) must be one run of them (`RecCompose.checkRun`,
 C10 ``OneRun``): the staging first, at the composition's rows and the shared set every part read; exactly one session
 opened per part and none for another; every opened session a composed part's and every part's opened; the close last."""
 from __future__ import annotations
@@ -29,7 +29,6 @@ SHARED = (
     ("inner_transcript", "the coin server's transcript, --rec-inner-transcript"),
     ("inner_registration", "the circuit registration, --rec-inner-registration"),
     ("inner_statement", "how the inner statement is proved, --rec-inner-statement"),
-    ("inner_statement_coins", "the inner statement's coins, --rec-inner-statement-coins"),
     ("inner_tables", "the inner statement's lookup tables, --rec-inner-tables"),
     ("inner_draw", "the inner statement's draw, --rec-inner-draw"),
     ("rec_links", "the inner population's link table, --rec-links"),
@@ -43,8 +42,7 @@ def digest(b: bytes) -> str:
 
 def shared(**files) -> dict:
     """``rec_shared`` as ``verify`` writes it (`Shared.toJson`): each key of ``SHARED`` given as bytes (its SHA-512), a
-    string (``inner_statement``), ``"os"``/``"seed"`` (``inner_statement_coins``), ``[(name, bytes)]``
-    (``inner_tables``) or ``(root, rows)`` (``rec_links``, as ``[ROOT hex, rows]``); ``None`` when absent."""
+    string (``inner_statement``), ``[(name, bytes)]`` (``inner_tables``) or ``(root, rows)`` (``rec_links``, as ``[ROOT hex, rows]``); ``None`` when absent."""
     out = {}
     for k, _ in SHARED:
         v = files.get(k)
@@ -80,14 +78,16 @@ def shared_of_args(args: list[str]) -> dict:
         d = arg("--rec-inner-tables")
         tables = [] if d is None else [(t, (Path(d) / f"{t}.u32").read_bytes()) for t in MUFU_TABLES
                                        if (Path(d) / f"{t}.u32").exists()]
+    links = arg("--rec-links")
+    if links is not None:
+        root, _, rows = links.partition(":")
+        links = (bytes.fromhex(root), int(rows))
     return shared(rec_inner=read("--rec-inner"), inner_circuit=read("--rec-inner-circuit"),
                   inner_public=read("--rec-inner-public"), inner_partition=read("--rec-inner-partition"),
                   inner_coins=read("--rec-inner-coins"), inner_session=read("--rec-inner-session", "/session.json"),
                   inner_transcript=read("--rec-inner-transcript"), inner_registration=read("--rec-inner-registration"),
-                  inner_statement=statement,
-                  inner_statement_coins=None if statement is None else
-                  "os" if arg("--rec-inner-statement-coins") == "os" else "seed",
-                  inner_tables=tables, inner_draw=read("--rec-inner-draw"))
+                  inner_statement=statement, inner_tables=tables, inner_draw=read("--rec-inner-draw"), rec_links=links,
+                  inner_program=read("--rec-inner-program"))
 
 
 def run_record(rows: str, rec_shared: dict, opens: list[tuple[str, int, str]]) -> str:
@@ -123,11 +123,7 @@ def _read_shared(j) -> tuple | None:
         if k not in j:
             return None
         v = j[k]
-        if k == "inner_statement_coins":
-            if v is not None and v not in ("os", "seed"):
-                return None
-            v = None if v is None else v == "os"
-        elif k == "inner_tables":
+        if k == "inner_tables":
             if v is not None:
                 if not isinstance(v, list) or not all(isinstance(t, list) and len(t) == 2 and all(isinstance(x, str) for x in t)
                                                      for t in v):
@@ -161,8 +157,6 @@ def _lean_str(k: str, v) -> str:
     """The value as `Shared.diff` shows it (Lean's `toString`, `none` when absent)."""
     if v is None:
         return "none"
-    if k == "inner_statement_coins":
-        return "true" if v else "false"
     if k == "inner_tables":
         return "[" + ", ".join(f"({n}, {d})" for n, d in v) + "]"
     if k == "rec_links":
@@ -223,7 +217,7 @@ def _held(name: str, what: str) -> str:
 
 
 def _check_form(name: str, inner: str, links: tuple | None, s: tuple) -> None:
-    rec_inner, circuit, public, partition, coins, session, transcript, _, statement, statement_coins, tables, _, s_links, _ = s
+    rec_inner, circuit, public, partition, coins, session, transcript, _, statement, tables, _, s_links, _ = s
     if rec_inner is None:
         raise Refused(f"{name}: its VERDICT names no rec_inner: it was not verified at V*'s inner shape (--rec-inner)")
     if rec_inner != inner:
@@ -239,7 +233,6 @@ def _check_form(name: str, inner: str, links: tuple | None, s: tuple) -> None:
     for v, what in ((session, "inner session's record (--rec-inner-session)"),
                     (transcript, "coin server's transcript (--rec-inner-transcript)"),
                     (statement, "word on how the inner statement is proved (--rec-inner-statement)"),
-                    (statement_coins, "inner statement's coins (--rec-inner-statement)"),
                     (tables, "inner statement's lookup tables (--rec-inner-statement)")):
         if v is None:
             raise Refused(_held(name, what))

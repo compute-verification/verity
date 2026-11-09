@@ -3,7 +3,7 @@
 This package computes, for each scenario and monitoring period, a lower bound on the **slowdown** a training run pays
 under the regime: `overhead(𝒢, 𝒜′, η)` (`GLOSSARY.md`, Notation), the training cost over the admissible set
 divided by the reference training algorithm's GPU-hours, on the datacenter the adversary actually runs. It is Lean's
-`hardwareMultiple`: the hardware multiple over the reference at its MFU, `MFU₀`, at least 1, so no protocol gives 1.
+`hardwareMultiple`: the slowdown over the reference at its MFU, `MFU₀`, at least 1, so no protocol gives 1.
 Beside it is the **time to the target** it implies, at least the slowdown times `T_0 / (MFU₀ Φ_total)`, wall-clock.
 Hosts carry no compute (`GLOSSARY.md`, the device model): a server's compute is its accelerators', so every regime's
 `host` is 0. No run uses the hardware more efficiently than the reference (`GLOSSARY.md`, reference efficiency;
@@ -13,21 +13,21 @@ Every number it reads is a parameter with a public source and a status, so a bou
 parameter, and the package shows how the bound moves with each one.
 
 A scenario is one choice from every part: a fleet (its location and dark share), a regime (the envelopes that run), the
-NCI registration policy, a monitoring period (its `horizon`, one of core's), a run (the target and its model), the
+inference-only policy, a monitoring period (its `horizon`, one of core's), a run (the target and its model), the
 algorithm families the adversary may use, and the bounds and attacks applied. For each one the package reports:
 
 - **the slowdown's lower bound** (`Result.lo`): every bound met at once, at the family the adversary picks. Under a
   bound it is `max(1, 1/(s + a x))` (`theorem.multiple_bound`), with the dark share `s` training like the reference and
   the bound's other terms `x`, free compute, at `a = 1` under reference efficiency, so that it is the padded size ratio;
   at `a = 1/MFU₀` (peak) without it, Lean's `Nci.Dampener.remoteDampener` and, for a remote regime,
-  `Nci.Guarantees.DampenerRemote`'s `ρ`. `benchmarks/nci` reads its compute dampener `D` from `multiple_bound`. It
-  comes with its status, where its named premises stand, the δ that the envelopes fail (`δ_coin + δ_crypto`, plus a
+  `Nci.Guarantees.DampenerRemote`'s `ρ`. `benchmarks/nci` reads its slowdown `D` from `multiple_bound`. It
+  comes with its status, where its assumptions stand, the δ that the envelopes fail (`δ_coin + δ_crypto`, plus a
   named `Pr[Break]`), the monitored share (the part of the adversary's counted weight on monitored gates), and the
   time it implies;
 - **the padded size ratio** `|A| / T_0` (`Overhead.padded`): the size of the actual circuit that reaches the target,
-  each serving block padded to its capacity, over the reference construction's size `T_0`. It is the intermediate the
-  serving-block bound gives, and what a contradiction compares;
-- **the best known attack** (`Result.attack`, `FamilyResult.best_attack`): a construction on a serving block's layout,
+  each server block padded to its capacity, over the reference construction's size `T_0`. It is the intermediate the
+  server-block bound gives, and what a contradiction compares;
+- **the best known attack** (`Result.attack`, `FamilyResult.best_attack`): a construction on a server block's layout,
   its slowdown `max(1, MFU₀ · |A| / T_0)`, reported beside the bound, not as an end of an interval around it. A bound
   whose padded size ratio is above an attack's is a **contradiction**:
   one of its premises is false for that algorithm at that budget, and the contradiction names it;
@@ -52,7 +52,7 @@ step's design in place of the FLOP model, after a table of the step beside it (`
 - `data/*.toml`, the registry (`params.py`): every number the model reads, addressed by a dotted key, each with
   `value`, `unit`, a plausible range (`low`, `high`, which the sweeps span), `source` and `status` (`datasheet`,
   `measured`, `declared`, `assumed`, `ruled`, `conjecture`, `derived`). `data/scenarios*.toml` and
-  `data/reference.toml` name the scenarios; `data/premises.toml` says where each named premise stands and up to what
+  `data/reference.toml` name the scenarios; `data/premises.toml` says where each assumption stands and up to what
   block size; `data/circuits.toml` holds training steps measured as Boolean circuits (the census's gates, ANDs and
   counted products, and `circuit_properties`' `s_×`, `a_out` and `a_in`).
 - The Lean locks (`Security/lean-audit.json`, `Security/Properties/lean-audit.json`), which `lean.py` reads for each
@@ -66,25 +66,25 @@ step's design in place of the FLOP model, after a table of the step beside it (`
 A bound is argued in three parts, as the Notation states it, and each module's docstring says what it implements.
 
 - **The physical model** `𝒜_phys` (`hardware.py`, `data/hardware.toml`): the inventory's locations, each with its
-  capacity `Φ_X` in gates per second and its servers' memory `M_s`, the dark leaves `ε_dark`, and the monitoring
-  period (core's `wipe_monitoring.PERIODS`, through `params.py`). `Units`
+  capacity `Φ_X` in gates per second and its servers' memory `M_s`, the unregistered hardware `ε_dark`, and the monitoring
+  period (core's `reporting.PERIODS`, through `params.py`). `Units`
   is the one place a FLOP-model input becomes gates (`units.gates_per_flop`, with its `units.basis`).
 - **Protocol soundness**, the envelopes (`envelopes.py`, `data/envelopes.toml`): each subprotocol (PoUW, detection and
-  sampled proofs, the wipe, the certifier) is one envelope `𝒜_a` with its parameters, its slack (the uncertified gates
-  by route: `undecl.*`, `skip.*`, `break.*`, `exfil.incorrect`) and its `δ_a`, split into `δ_coin` and `δ_crypto`. The NCI
-  check is the registration (`Policy`). A regime is the envelopes that run, and builds the serving blocks with their
+  sampled proofs, the wipe, the certifier) is one envelope `𝒜_a` with its parameters, its slack (the free compute
+  by route: `undecl.*`, `skip.*`, `break.*`, `exfil.incorrect`) and its `δ_a`, split into `δ_coin` and `δ_crypto`. The
+  inference-only policy's check is the registration (`Policy`). A regime is the envelopes that run, and builds the server blocks with their
   cuts.
-- **The exclusion bound** (`classes.py`, `attacks.py`, `theorem.py`): the training classes as per-block caps
-  `q_T(c, k)`, the attacks as constructions, and the serving-block bound: each serving block's least cut
+- **The slowdown lower bound** (`classes.py`, `attacks.py`, `theorem.py`): the pricing arguments as inference-block yields
+  `q_T(c, k)`, the attacks as constructions, and the server-block bound: each server block's least cut
   (`theorem.local`), summed over blocks (`theorem.overhead`), with the minimum of global bounds beside it
   (`theorem.aggregate`).
 
 | Notation | here |
 |---|---|
 | `\|A[X,J]\| ≤ Φ_X \|J\|`, `M_s` | `Location.phi`, `Location.server_memory` |
-| `ε_dark`, `L_dark` | `fleet.<name>.eps_dark`, `Partition.eps_dark` |
+| `ε_dark`, `L_dark` | `fleet.<name>.eps_unreg`, `Partition.eps_unreg` |
 | inference block `(c, k)` | `Blocks("inference")`, `Policy`, `Budget(gates, inputs)` |
-| serving block `S`, `(c_S, k_S)`, `n_S` | `ServingBlock`, `Onsite.budget`, the inference cut's `Blocks.count` |
+| server block `S`, `(c_S, k_S)`, `n_S` | `ServerBlock`, `Onsite.budget`, the inference cut's `Blocks.count` |
 | `q_T(c, k)` | `Cap`, from a class's `Allowance` by `classes.per_block` |
 | `q_U(U) = ω_max U / s_×` | `Structure.weight` (`data/exclusion.toml`) |
 | `ε_undecl`, `ε_skip`, `ε_break` | the routes `undecl.*`, `skip.*`, `break.*`, `exfil.incorrect` (`Cut.uncertified`) |
@@ -94,8 +94,8 @@ A bound is argued in three parts, as the Notation states it, and each module's d
 
 **The uncertified cap.** A bound counts an uncertified or dark gate at `ω_max / s_×`, `s_×` the fewest gates in any
 counted operation's subcircuit. `structure.reference` takes `s_×` at the reference's gates per counted product, which
-is valid only under the named assumption `draft:no-straddle` (no counted operation straddles certified and uncertified
-gates), so every bound counting such gates cites it. A structure states its `basis`, and `Structure.check` refuses one
+is valid only under the named assumption `draft:no-straddle` (no counted operation straddles verified and free
+compute), so every bound counting such gates cites it. A structure states its `basis`, and `Structure.check` refuses one
 whose `s_×` and `units.gates_per_flop` come from different sources. `structure.elementary` (one counted operation a
 gate, at most) needs no such premise; it is the `*-elementary` scenarios, and what `analysis.upto` falls back to for a
 status stronger than `draft`. A scenario that names no structure takes `structure.default` (`reference`). A measured
@@ -111,9 +111,9 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 
 | module | interface |
 |---|---|
-| `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServingBlock`, `Partition`; `Cap`; `local`, `aggregate`, `overhead`, `padded`, `multiple_bound` |
+| `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServerBlock`, `Partition`; `Cap`; `local`, `aggregate`, `overhead`, `padded`, `multiple_bound` |
 | `classes.py` | `Argument.allowance(Profile) → Allowance`, raising `Outside`; `per_block`, `weight_per_gate`; `premise_status`; `Structure` |
-| `attacks.py` | the same `Argument`, side `attack`, on a serving block's layout |
+| `attacks.py` | the same `Argument`, side `attack`, on a server block's layout |
 | `profile.py` | `Profile`: every field a class reads, named as in Lean |
 | `families.py` | `Family.profile(Model, Run) → Profile`, for each algorithm family and any `benchmarks/nci` algorithm by its traits |
 | `instances.py` | `Model`, `Run` (a target and its kind) |
@@ -140,13 +140,13 @@ The package, its command and its outputs (`benchmarks/rho`, `verity bench rho`, 
 identifiers `Overhead.rho`, `Estimate.rho`, `rho_worst`, `Corner.rho` and the JSON's `rho` and `slowdown` all name the
 slowdown (the training cost once called the overhead; `Overhead` and `theorem.overhead` keep that name);
 `Result.lo`, `FamilyResult.lo` and `Point.lo` name its lower bound. The slowdown is the `ρ` of Lean's
-`Nci.Guarantees.DampenerRemote` (`remoteDampener`, bounded by `hardwareMultiple`) and `benchmarks/nci`'s compute
-dampener `D`; the padded size ratio `|A| / T_0` (`Overhead.padded`, `Estimate.padded`, the JSON's `padded`) is the
+`Nci.Guarantees.DampenerRemote` (`remoteDampener`, bounded by `hardwareMultiple`) and `benchmarks/nci`'s
+slowdown `D`; the padded size ratio `|A| / T_0` (`Overhead.padded`, `Estimate.padded`, the JSON's `padded`) is the
 intermediate, not the slowdown. The glossary's `ρ` is the ACCEL model's resource rate, not this number.
 
 ## Extending
 
-- **A training class**: an `Argument` in `classes.CLASSES` (a premise set, its count, its citations), and any new field
+- **A pricing argument**: an `Argument` in `classes.CLASSES` (a premise set, its count, its citations), and any new field
   it reads in `Profile`.
 - **An attack**: an `Argument` with side `attack` in `attacks.ATTACKS`.
 - **An algorithm family**: a table in `data/families.toml` of an existing kind, or a new kind in `families.KINDS`.

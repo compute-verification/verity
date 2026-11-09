@@ -36,7 +36,7 @@ def gone : Option (Option (List UInt8)) := some none
 -- a session of one table's reps holds no stream of R's
 #guard row { reps := ic.reps } "rec-opening-c0" 0 == gone
 #guard row ic "rec-acc" 0 == none && row ic "rec-top-L1" 0 == none && row ic "rec-sparse-h" 0 == none
--- the circuit table's tops are held apart from `fixedRow`, to the coin server's `root_B` and salted tops at every shape
+-- the circuit table's tops are held apart from `fixedRow`, to the challenger's live-coin part's `root_B` and salted tops at every shape
 -- (`topLevel`, `topRow`, `checkTopRows`; `Flock.Test.InnerLink`)
 #guard topLevel "rec-top-L1" == some 1 && topLevel "rec-top-stacked-L1" == none
 -- rec-claim is the sparse phase's: without the verifier's RecSparse shape it is fixed by no row
@@ -256,7 +256,7 @@ def msgAt (s : String) (j : Nat) (got want : String) (n m : Nat) : Option String
   msgAt "sparse/rep1" 0 "round 2" "round 1" 33 33
 #guard why (checkCovers c3 (withS #[sparseAt 0 spRounds.dropLast, sparseAt 1, stackedAt])) ==
   msgAt "sparse/rep0" 32 "no round" "round 33" 32 33
--- each sparse stream draws its phase's coins round for round (the challenger's record of the recorded session holds
+-- each sparse stream flips its phase's coins round for round (the challenger's record of the recorded session holds
 -- 6, six 1s, 0, a 1 per H3 round, P_LOG's 5 and the claim's 0): a round short, a coin over, and none are refused
 def spCoins : Array (Array Flock.F128) := repCoins (sparsePhaseRounds sp18)
 def spDraws (cs : Array (Array Flock.F128)) : Option String :=
@@ -310,7 +310,7 @@ def roundsOff (s : String) (n : Nat) : Option String :=
   Flock.RecSetup.boundKey (none, some r23) != Flock.RecSetup.boundKey (some "a", some r23) &&
   Flock.RecSetup.boundKey (some "a", none) != Flock.RecSetup.boundKey (some "a", some r23)
 
-/-! Check 5's sparse refusals on the inner statement (`RecCoins.checkInnerRange`), at 2d61's shape: k_log 22, so 16 inner
+/-! Check 5's sparse refusals on the inner statement (`RecCoins.checkInnerRange`), at `rec-c3-inner`'s shape: k_log 22, so 16 inner
 point coordinates, and its unit range of 64 slots of 2^13 rows at 256 (`rec_vstage stage`'s RANGE). -/
 
 def unitRng (slotLog := 13) (pos0 := 256) (count := 64) : Range := { kind := .net 0, slotLog, pos0, count, role := .none }

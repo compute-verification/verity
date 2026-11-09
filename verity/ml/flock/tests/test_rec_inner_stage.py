@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 from test_rec_outer import BIN
-from verity.core.protocols.sampled_proofs.one_stage import partition as P
+from verity.core.protocols.spot.one_stage import partition as P
 from verity.ml.circuits.codec import program_digest
 
 POD = Path(__file__).resolve().parents[1] / "pod"
@@ -64,6 +64,22 @@ def _window(src: Path, n: int, part: dict, d: Path) -> bytes:
                                                "partition": part, "partition_digest": P.digest(part)}))
     (d / "registration.json").write_text(json.dumps({"window": {"run": "r-test"}}))
     return body
+
+
+def test_an_inner_statement_past_the_verifiers_rows_is_refused_before_staging(tmp_path):
+    """`stage` and `stage_window` refuse a population of more than `rec_budget.MAX_INNER_ROWS` units with
+    `RecBudget.innerRows`'s message, before they sample or write anything."""
+    from verity_flock import rec_budget as RB
+
+    ri, n = _rec_inner(), RB.MAX_INNER_ROWS + 1
+    why = f"refused: the inner statement's public file holds {n} instances, more than {RB.MAX_INNER_ROWS}"
+    with pytest.raises(ValueError, match=why):
+        ri.stage(n, tmp_path / "sets", tmp_path / "stage")
+    (tmp_path / "window").mkdir()
+    (tmp_path / "window" / "window.json").write_text(json.dumps({"members": [{"n": n}]}))
+    with pytest.raises(ValueError, match=why):
+        ri.stage_window(tmp_path / "window", 0, "silu-mul-v2/i256/bf16", tmp_path / "sets", tmp_path / "stage")
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["window"]
 
 
 @pytest.mark.slow

@@ -1,12 +1,12 @@
 """The verifier and its challenger of a PoUB session over PoUS's P2 store (`p2.py`) as a party of their own,
-so they run on a host the prover doesn't control (`trusted-host`) while the prover serves on its node.
+so they run on a host the developer doesn't control (`trusted-host`) while the prover serves on its node.
 
 The channel is a pair of byte streams carrying one JSON object of one key a line: the ssh session that starts this side
 (`--stdio`, as a gate's verb starts it) or a TCP connection (`--listen`). The session has no round-trip floor, so ssh's
 latency changes nothing in its verdict. The verifier holds its own registration, never the prover's word for it: the
 memory challenger's own record of a PoUS session's setup on this host (`--pous-record DIR --pous-session SID`,
 `pous_record`: the store PoUS's session SID bound, its whole store the plan), or the auditor's registration file
-(`--registration FILE`, `registration_json`); and it draws its coins from its own host's OS.
+(`--registration FILE`, `registration_json`); and it flips its coins from its own host's OS.
 The record's `plan` is the units every pass reads (`plan_of`): the units holding a tensor's block, so not the store's
 padding past the last tensor, which is PoUS's and which the decode never reads; without one, every unit.
 
@@ -185,11 +185,11 @@ def registration_of(doc: Mapping[str, Any]) -> p2.Registration:
 def registration_of_setup(record: Mapping[str, Any]) -> p2.Registration:
     """The registration of the PoUS setup the memory challenger kept for one session (`challenger_party.keep`): the
     request's node, the setup's P2 parameters, commitment and salt, and the session's binding as the vk root, at
-    sketch-sha512's rows; ValueError for a record without a setup, or one `challenger_party.setup_of` refuses."""
-    from verity.core.protocols.pous import challenger_party as CP
+    sketch-sha512's rows; ValueError for a record without a setup, or one `challenger_session.setup_of` refuses."""
+    from verity.core.protocols.pous import challenger_session as CS
 
     request = record["request"]
-    s = CP.setup_of(request)
+    s = CS.setup_of(request)
     if s is None:
         raise ValueError("the challenger's record of the session has no setup")
     q = s["params"]
@@ -201,11 +201,11 @@ def registration_of_setup(record: Mapping[str, Any]) -> p2.Registration:
 def pous_record(directory: Path, session_id: str) -> bytes:
     """The registration file's bytes (`registration_json`, every unit its plan) of the setup the memory challenger whose
     device is `directory` kept for the session `session_id` (64 lowercase hex), on this host (`registration_of_setup`)."""
-    from verity.core.protocols.pous import challenger_party as CP
+    from verity.core.protocols.pous import challenger_session as CS
 
     if not re.fullmatch(r"[0-9a-f]{64}", session_id):
         raise ValueError("a session id is 64 lowercase hex digits")
-    doc = json.loads((directory / CP.SETUPS / f"{session_id}.json").read_text())
+    doc = json.loads((directory / CS.SETUPS / f"{session_id}.json").read_text())
     if doc.get("session_id") != session_id:
         raise ValueError(f"the record names the session {doc.get('session_id')}, not {session_id}")
     return json.dumps(registration_json(registration_of_setup(doc)), sort_keys=True).encode()
@@ -587,7 +587,7 @@ def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Registration, *, c
     """The verifier's side of one session over the channel (`f_in`, `f_out`), decided by `lean`, which holds
     `registration` and `plan` (`hold`; every unit by default), with the books beside it (`Twin`): the prover's
     request, refused unless it carries the auditor's parameters `auditor` (`params_of`), the registration, each pass
-    asked for in order under `plan`, each window's openings drawn once its roots
+    asked for in order under `plan`, each window's openings sampled once its roots
     are final and verified, the session's coins disclosed, its case (`p2_case.case_of`, which `keep` is given too)
     unless the books vetoed it, and the answer, sent last and returned, naming the verifier's `host` (this one's name
     by default). A line out of form or a closed channel rejects the session (its answer says why)."""
@@ -680,7 +680,7 @@ class Prover(Protocol):
         """Pass i of window t: one step's reads under the pass's seed, its receipts committed; the root."""
 
     def open(self, t: int, draws: Sequence[tuple[int, int]]) -> list[p2.Opening]:
-        """Window t's drawn receipts `(pass, position)` opened."""
+        """Window t's sampled receipts `(pass, position)` opened."""
 
     def end(self, commitment: C.LiveCommitment, openings: Sequence[C.LiveOpening]) -> None:
         """The session's coin commitment and every released coin's opening, after its last root: refuse them unless

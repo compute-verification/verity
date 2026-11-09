@@ -2,7 +2,24 @@ module
 
 public import Proofs.Flock.Recursive.Statements
 public import Proofs.Flock.Recursive.StopLeak
-public import Proofs.Flock.Soundness.ZK.Hiding
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Recursive.Compose
+import Proofs.Flock.Soundness.CROnly.Hiding
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.ZK.Hiding
+import Proofs.Flock.Soundness.ZK.RealLeaves
 
 /-!
 # Proofs of the recursive audit's guarantees
@@ -14,7 +31,7 @@ public import Proofs.Flock.Soundness.ZK.Hiding
   `Inner.accepts_of_rel_eq`). It reads no A3, so it proves `Flock.Guarantees.RecursiveSoundNoA3`
   (`Flock.SecurityProofs.RecursiveSoundNoA3`), and `RecursiveSound` from it.
 * `Flock.SecurityProofs.RecursiveZK : Flock.Guarantees.RecursiveZK` is, for the whole view, two hybrids: the outer
-  session's simulator at the firewall's commitments (the premise, averaged over the auditor's tape, the developer's
+  session's simulator at the ZK server's commitments (the premise, averaged over the auditor's tape, the developer's
   randomness and the salts), then T1 once per commitment (`ZK.ideal_leaves_swap` at the pinned key's hiding gap,
   `CROnly.hm96Hiding_gap`), whose salts the simulated outer session no longer reads. `recursiveZK_le` is the same at any
   hm96 hiding bound `δ`; `Proofs.Flock.Recursive.OsSalts` takes it to the salts the operating system gives (A3). A view
@@ -44,7 +61,7 @@ theorem RecursiveSound : Flock.Guarantees.RecursiveSound := by
 
 section ZK
 
-/-- The firewall's commitments at the auditor's tape and the developer's randomness `ω` and the salts `y`. -/
+/-- The ZK server's commitments at the auditor's tape and the developer's randomness `ω` and the salts `y`. -/
 def commits {Ωa Ωp : Type} {nh : ℕ} (msgs : Ωa → Ωp → Fin nh → ByteArray) (ω : Ωa × Ωp)
     (y : Fin nh → ZkView.Salt) : Fin nh → ByteArray :=
   fun i => Flock.Guarantees.firewallLeaf (msgs ω.1 ω.2 i) (y i)
@@ -81,7 +98,7 @@ theorem recursiveZK_le {Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa] [
           E (w.1.1, (fun i => Flock.Guarantees.idealLeaf (w.1.2 i)),
             sim w.1.1 (fun i => Flock.Guarantees.idealLeaf (w.1.2 i)) w.2))
         + εo + nh * δ := by
-  -- the outer session, simulated at the firewall's commitments
+  -- the outer session, simulated at the ZK server's commitments
   have h1 : prCoin (fun w : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo =>
         E (w.1.1.1, commits msgs w.1.1 w.1.2, view w.1.1.1 (commits msgs w.1.1 w.1.2) w.1.1.2 w.1.2 w.2)) ≤
       prCoin (fun w : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωs =>

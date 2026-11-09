@@ -29,6 +29,8 @@ paid `ln(N/δ_coin)` of luck a replica; convexity pays `ln(N/(s δ_coin))` on `s
 
 @[expose] public section
 
+open Claims renaming Ex → expect, Ex → avg
+
 namespace Pouw.SecurityProofs.Pool
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.SecurityProofs.Dither Finset
@@ -41,7 +43,7 @@ its rate `η u`, has its exponential below a nonnegative moment `M u` of average
 `Σ_{u ∈ S} D u < Λ_S (ln (Λ / Λ_S) + t)`, where `Λ_S = Σ_{u ∈ S} 1 / η u` and `Λ = Σ_u 1 / η u`. The replicas'
 moments need no independence: the weights `(1 / η u) / Λ` put a mixture of the `M u`, of average at most 1, above
 `e^t` on that event (Jensen within `S`), and one Markov bound covers every `S` at once, with no union over sets. -/
-theorem prob_convex_pool_accepted {Ω ι : Type*} [Fintype Ω] [Fintype ι] [Nonempty ι] (M D : ι → Ω → ℝ)
+theorem prob_convex_pool_accepted {Ω ι : Type} [Fintype Ω] [Fintype ι] [Nonempty ι] (M D : ι → Ω → ℝ)
     (η : ι → ℝ) (hη : ∀ u, 0 < η u) (hM0 : ∀ u ω, 0 ≤ M u ω) (hM : ∀ u, expect (M u) ≤ 1)
     (acc : ι → Ω → Prop) (hZ : ∀ u ω, acc u ω → Real.exp (η u * D u ω) ≤ M u ω) (t : ℝ) :
     prob (fun ω => ∃ S : Finset ι, (∀ u ∈ S, acc u ω) ∧ S.Nonempty ∧
@@ -56,8 +58,8 @@ theorem prob_convex_pool_accepted {Ω ι : Type*} [Fintype Ω] [Fintype ι] [Non
   refine prob_le_of_expect_le_one (f := fun ω => ∑ u, w u * M u ω)
     (fun ω => Finset.sum_nonneg fun u _ => mul_nonneg (hw0 u) (hM0 u ω)) ?_ t ?_
   · rw [Pouw.RelativeSecurity.expect_sum]
-    calc ∑ u, Pouw.RelativeSecurity.expect (fun ω => w u * M u ω)
-          = ∑ u, w u * Pouw.RelativeSecurity.expect (M u) := by
+    calc ∑ u, Claims.Ex (fun ω => w u * M u ω)
+          = ∑ u, w u * Claims.Ex (M u) := by
           simp only [Pouw.RelativeSecurity.expect_mul_left]
       _ ≤ ∑ u, w u * 1 := Finset.sum_le_sum fun u _ => mul_le_mul_of_nonneg_left (hM u) (hw0 u)
       _ = 1 := by simp only [mul_one, hw1]
@@ -157,7 +159,7 @@ theorem expect_replica_le {Orc Y Ω : Type} {Prv : Type*} [Fintype Orc] [Fintype
   classical
   rcases isEmpty_or_nonempty Ω with hΩ | ⟨⟨ω₀⟩⟩
   · rw [expect_prod_swap]
-    unfold Pouw.RelativeSecurity.expect
+    unfold Claims.Ex
     simp [hc]
   have hsurj : ∀ y : Fin N → Y, ∃ ω, coin ω = y := by
     intro y
@@ -219,18 +221,18 @@ probability exactly `e^{-ln n}`, whatever `N` is. So no bound from per-replica m
 replicas. -/
 theorem convex_pool_tight (N n : ℕ) [NeZero n] :
     (∀ (_ : Fin N) (ω : Fin n), 0 ≤ (if ω = 0 then (n : ℝ) else 0)) ∧
-    (∀ (_ : Fin N), Pouw.RelativeSecurity.expect (fun ω : Fin n => if ω = 0 then (n : ℝ) else 0) ≤ 1) ∧
+    (∀ (_ : Fin N), Claims.Ex (fun ω : Fin n => if ω = 0 then (n : ℝ) else 0) ≤ 1) ∧
     (∀ (_ : Fin N) (ω : Fin n), ω = 0 → Real.exp (1 * Real.log n) ≤ (if ω = 0 then (n : ℝ) else 0)) ∧
     prob (fun ω : Fin n => ω = 0 ∧ Real.log n * ∑ _u : Fin N, 1 / (1 : ℝ) ≤ ∑ _u : Fin N, Real.log n) =
       Real.exp (-Real.log n) := by
   have hn : (0 : ℝ) < n := by exact_mod_cast Nat.pos_of_ne_zero (NeZero.ne n)
   refine ⟨fun _ ω => by split_ifs <;> positivity, fun _ => ?_, fun _ ω h => ?_, ?_⟩
-  · unfold Pouw.RelativeSecurity.expect
+  · unfold Claims.Ex
     rw [Finset.sum_ite_eq' Finset.univ (0 : Fin n) (fun _ => (n : ℝ))]
     simp [Fintype.card_fin]
   · rw [one_mul, Real.exp_log hn]
     simp [h]
-  · unfold prob
+  · unfold prob Claims.prUniform
     have key : ∀ ω : Fin n,
         (ω = 0 ∧ Real.log n * ∑ _u : Fin N, 1 / (1 : ℝ) ≤ ∑ _u : Fin N, Real.log n) ↔ ω = 0 :=
       fun ω => by simp [Finset.sum_const, mul_comm]
@@ -249,7 +251,7 @@ theorem parityY_nonneg (n : ℕ) (i : Fin n) (d : Fin n → ZMod 2) : 0 ≤ pari
   split_ifs <;> norm_num
 
 theorem expect_zmod2 (a : ℝ) (s : ZMod 2) : expect (fun ω : ZMod 2 => if ω + s = 0 then a else 0) = a / 2 := by
-  unfold Pouw.RelativeSecurity.expect
+  unfold Claims.Ex
   have hsum : ∀ f : ZMod 2 → ℝ, ∑ ω : ZMod 2, f ω = f 0 + f 1 := fun f => Fin.sum_univ_two f
   have h00 : (0 : ZMod 2) + 0 = 0 := by decide
   have h10 : ¬ (1 : ZMod 2) + 0 = 0 := by decide
@@ -287,7 +289,7 @@ theorem prob_parity (m : ℕ) : prob (fun d : Fin (m + 1) → ZMod 2 => ∑ j, d
     simp [Fin.consEquiv, Fin.sum_univ_succ]
   simp only [hs, expect_zmod2]
   exact expect_le_of_le (by norm_num) (fun _ => le_rfl) |>.antisymm (by
-    unfold Pouw.RelativeSecurity.expect
+    unfold Claims.Ex
     rcases Nat.eq_zero_or_pos (Fintype.card (Fin m → ZMod 2)) with h0 | h0
     · exact absurd h0 Fintype.card_ne_zero
     · rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, mul_div_cancel_left₀ _ (by exact_mod_cast h0.ne')])
@@ -369,7 +371,7 @@ theorem FleetSound : Pouw.Guarantees.Dither.FleetSound := by
         ∃ z, (Pd u).Fits ((A u oω.2).timedUse oω.1 (coin oω.2 u)) z) :=
     ⟨_, fun _ _ => Iff.rfl⟩
   have hδe : Real.exp (-Real.log (1 / δ)) = δ := by rw [one_div, Real.log_inv, neg_neg, Real.exp_log hδ]
-  have hMu : ∀ u, Pouw.RelativeSecurity.expect
+  have hMu : ∀ u, Claims.Ex
       (fun oω : P.Orc × Ω => M u (A u oω.2) (oω.1, coin oω.2 u)) ≤ 1 := by
     intro u
     refine expect_replica_le (Orc := P.Orc) (Y := Fin k → P.Draw × P.Chk) (Prv := Prover G P k) coin hown (A u) u

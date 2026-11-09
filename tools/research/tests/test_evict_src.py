@@ -1,6 +1,5 @@
-"""`research data evict --src-dir`: the hourly eviction of `research run`'s shipped source trees (`evict.evict_src`).  Node 1 hit
-74% inodes on 4 Oct with nothing pruning `/workspace/research/src`, and @infra pruned it by hand under root's three conditions:
-the tree is recoverable on the node, nothing uses it, and no run record holds it as its source's only copy.  Each condition keeps a
+"""`research data evict --src-dir`: the hourly eviction of `research run`'s shipped source trees (`evict.evict_src`).  With nothing
+pruning `/workspace/research/src` a node runs out of inodes, so a tree goes under three conditions: the tree is recoverable on the node, nothing uses it, and no run record holds it as its source's only copy.  Each condition keeps a
 tree here, a pass that can't establish one deletes nothing, and a tree meeting all of them goes."""
 import json
 import os
@@ -226,6 +225,30 @@ def test_a_tree_in_use_is_kept_and_the_pass_goes_on(node, setup, why):
     assert (node.src / node.a / EV.READY_FILE).exists() and [d["tree"] for d in rep["deleted"]] == [node.b]
 
 
+def test_a_run_marked_running_whose_runner_is_gone_keeps_no_tree(node):
+    """A node restart leaves status.json at running with no runner; such records weeks old kept 40 of a node's 79 trees."""
+    def marked(name, pid, ticks):
+        rd = write_run(node, name, state="running", source=node.a)
+        tr = [{"state": "running", "pid": pid, "starttime_ticks": ticks}]
+        (rd / "status.json").write_text(json.dumps({"state": "running", "pid": pid, "starttime_ticks": ticks, "transitions": tr}))
+
+    marked("r9", 4242, 7)                                                    # no /proc/4242: the runner is gone
+    rep = run(node)
+    assert node.a not in kept(rep) and node.a in [d["tree"] for d in rep["deleted"]]
+
+
+def test_a_run_whose_runner_lives_or_whose_pid_was_reused_is_told_apart(node):
+    fake_proc(node.proc, 4343)
+    stat = node.proc / "4343" / "stat"
+    stat.write_text("4343 (p 4343) S " + " ".join(["0"] * 18) + " 555 0\n")    # field 22, the start time, is 555
+    rd = write_run(node, "r10", state="running", source=node.a)
+    (rd / "status.json").write_text(json.dumps({"state": "running", "transitions": [{"state": "running", "pid": 4343,
+                                                                                      "starttime_ticks": 555}]}))
+    assert any(w.startswith("2: run r10 is running") for w in kept(run(node))[node.a]), "its runner lives"
+    stat.write_text("4343 (p 4343) S " + " ".join(["0"] * 18) + " 556 0\n")
+    assert node.a not in kept(run(node)), "pid 4343 now belongs to a process started later"
+
+
 def test_a_job_queued_for_the_fill_that_names_a_tree_keeps_it(node):
     q = node.tmp / "fill" / "queue"
     q.mkdir(parents=True)
@@ -279,8 +302,8 @@ def test_a_tree_that_may_be_a_runs_only_copy_of_its_source_is_kept(node, setup, 
 
 
 def test_a_run_refused_before_its_workload_does_not_keep_the_tree_once_it_is_old(node):
-    """On node 2 (16 Oct), 43 trees and 1.15M inodes were kept only by refused runs (launch.json, refused.json, no job.json), as
-    "records no source commit": a refused run ran nothing, so the tree can't be the only copy of what it ran."""
+    """Refused runs (launch.json, refused.json, no job.json) must not keep trees as "records no source commit" (on a node, dozens
+    of trees and over a million inodes): a refused run ran nothing, so the tree can't be the only copy of what it ran."""
     for name, hours in (("r15", 3.0), ("r16", 0.5)):
         rd = node.root / "runs" / name
         rd.mkdir(parents=True)
@@ -307,7 +330,7 @@ PRESERVED = {"preserved": True, "files": {"job.json": [1, "f" * 64], "source-dir
 
 
 def test_a_dirty_run_whose_preserved_record_holds_its_capture_no_longer_keeps_the_tree(node):
-    """The 10 Oct src sweep deleted trees that were seven runs' only copy of their dirty sources; the runner now captures a dirty
+    """A src sweep can delete a tree that is a run's only copy of its dirty source; the runner captures a dirty
     source into the run dir and custody uploads it, so once the record is preserved the tree is not the only copy."""
     _captured(node, marker=PRESERVED)
     rep = run(node)
@@ -546,7 +569,7 @@ def test_the_cli_runs_the_pass_whatever_the_target_and_reports_it(node, monkeypa
 
 
 def test_by_default_a_tree_is_recoverable_when_the_nodes_own_repository_holds_its_commit(node):
-    """Root, 4 Oct 17:27Z: condition 1 is recoverability, so the node's `git/verity.git` (refs/research/src/<sha>, what `research
+    """Condition 1 is recoverability, so the node's `git/verity.git` (refs/research/src/<sha>, what `research
     run` re-ships from) is its repository and no credential for GitHub is needed: c, a branch origin never saw, goes; a tree whose
     commit the node doesn't hold stays."""
     stray = "f" * 40
@@ -558,7 +581,7 @@ def test_by_default_a_tree_is_recoverable_when_the_nodes_own_repository_holds_it
 
 
 def test_a_tree_that_is_not_exactly_its_commit_is_kept(node):
-    """Red team (bc-ddc07abc) on node 1: trees with lean-audit.json rewritten in place after the ship would have gone.  The commit is
+    """Trees with lean-audit.json rewritten in place after the ship must not go.  The commit is
     recoverable, its tree's own changes are not: a tracked file edited, an untracked file however deep, another HEAD, no .git."""
     (node.src / node.a / "f").write_text("edited in place: no commit has this")
     (node.src / node.b / "notes" / "deep").mkdir(parents=True)

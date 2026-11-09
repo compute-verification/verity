@@ -1,6 +1,11 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkLink.AlignLevel
+public import Proofs.Flock.Soundness.Discharge.ZkLink.LockLevel
+public import Proofs.Flock.Soundness.Discharge.ZkLink.OracleP
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Push
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The primed `--zk` table in lockstep with the compiled one, every committed object a table

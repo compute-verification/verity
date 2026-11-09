@@ -5,14 +5,24 @@ names a table, at a shape the link unit takes and a row count that is some table
 reads back from its JSON; an unlisted link part names the missing table; `RecLinkPart.checkShape` holds the statement's
 table (`--rec-links`) to the inner shape's; and `RecLinkPart.check` passes every other unit, refuses a `rec-link/` name
 `linkParams` does not read, and refuses a link part without the table, the registered reads or the inner statement's
-files, or whose `trow` is not the table at its root, rows, domain and fixed rows. `RecLinkPart.checkUnit` passes the
-circuit `HmRow.parse` reads off V*'s own file and refuses a unit that is not V*'s net, and `RecLinkPart.outsOk` passes
-that circuit's outputs and refuses them laid out any other way.
+files, or whose `trow` is not the table at its root, rows, domain and fixed rows. `RecLinkPart.checkUnit` refuses a unit
+that is not V*'s net (`checkUnit_refuses`, over every circuit), and `RecLinkPart.outsOk` passes V*'s link layout and
+refuses it laid out any other way. That V*'s own file passes `checkParsed`, `checkUnit` and `outsOk` is checked by
+`flock-verify` on a link part (`verity/ml/flock/tests/test_lean_rec_links_verify.py`): the interpreter can't build that
+file, or V*'s net, in a module's time.
 -/
 module
 
 public import Flock.RecLinkPart
+public import Flock.Sizes
+public import Std.Data.HashMap
+public import Std.Data.HashSet
+public import Std.Data.TreeMap.Raw.Lemmas
 meta import Flock.RecLinkPart
+meta import Flock.Sizes
+meta import Std.Data.HashMap
+meta import Std.Data.HashSet
+meta import Std.Data.TreeMap.Raw.Lemmas
 
 @[expose] public section
 
@@ -153,29 +163,34 @@ def link : String := "rec-link/u6-p6"
 #guard ((checked link (some #[trow]) (some files) (some (T, 18))).map
   (·.startsWith "rec-coins: rec-link/u6-p6: the inner statement: ")) == some true
 
--- The unit is V*'s: the circuit parsed from V*'s own file passes, and a unit that is not its net is refused.
-def bindings : VStar.Bindings :=
-  { partition := "".pushn 'a' 128, program := "".pushn 'a' 128, programDigests := Json.mkObj [] }
+/-- **A unit that is not V\*'s net is refused**, naming its first difference; `RecLinkPart.checkUnit_ok` is the other
+way. Stated over every circuit, as no #guard can afford V\*'s net (SHA-512 compressions at any `UB`, `PB`). -/
+theorem checkUnit_refuses {c : Circuit} {UB PB : Nat} {g : Net} (hg : RecLinkPart.unitNet UB PB = .ok g)
+    (h : c.unit ≠ g) :
+    RecLinkPart.checkUnit c UB PB =
+      .error s!"rec-links: {c.unit.name}: not the verifier's unit ({HmNets.firstDiff c.unit g})" := by
+  unfold RecLinkPart.checkUnit
+  rw [hg]
+  dsimp only
+  rw [ite_eq_right h]
+  rfl
 
-def unitChecked (c : Circuit) : Option String :=
-  match RecLinkPart.checkUnit c 0 0 with
-  | .error e => some e
-  | .ok () => none
+/-- V\*'s link layout at `UB = PB = 0`, from the statement's port names and `VStar.linkRows` rather than V\*'s file (which
+the interpreter can't afford): its input rows, then `rin` and `rout`, one output row each, one copy returning words
+`0..127` in order. -/
+def laid : Circuit :=
+  let s := VStar.Stmt.link 0 0 1
+  let outs := s.sub.outputs.map (·, VStar.LINK_OUT_WORDS)
+  { circuitOf "rec-link/u0-p0" with
+    ports := (s.sub.inputs.zip (VStar.linkRows 0 0) ++ outs).toArray.map
+      fun (name, words) => { name, words, chunks := 2 * words / 128, nb := 0 }
+    outPorts := outs.toArray, outRowPorts := #[1, 1], leavesOut := #[Array.range 128] }
 
-def honest : Except String Circuit := do HmRow.parse Tags.circuit (← circuitFile (.link 0 0 1) bindings) []
-
-#guard (match honest with
-  | .ok c => (checkParsed (.link 0 0 1) c).toBool && unitChecked c == none
-  | .error _ => false)
-#guard ((unitChecked (circuitOf "rec-link/u0-p0")).map
-  (·.startsWith "rec-links: rec-link/u0-p0: not the verifier's unit (")) == some true
-
--- Its outputs are V*'s layout (`outsOk`): the circuit parsed from V*'s own file has it, and one whose output ports are
--- swapped, whose output rows start a row early, or whose copy returns its words out of order does not.
-#guard (match honest with
-  | .ok c => RecLinkPart.outsOk c && !RecLinkPart.outsOk { c with outPorts := #[("rout", 64), ("rin", 64)] } &&
-      !RecLinkPart.outsOk { c with outRowPorts := c.outRowPorts.push 1 } &&
-      !RecLinkPart.outsOk { c with leavesOut := #[(Array.range 128).reverse] }
-  | .error _ => false)
+-- Its outputs are V*'s layout (`outsOk`): that layout has it, and one whose output ports are swapped, whose output rows
+-- start a row early, or whose copy returns its words out of order does not.
+#guard RecLinkPart.outsOk laid
+#guard !RecLinkPart.outsOk { laid with outPorts := #[("rout", 64), ("rin", 64)] }
+#guard !RecLinkPart.outsOk { laid with outRowPorts := laid.outRowPorts.push 1 }
+#guard !RecLinkPart.outsOk { laid with leavesOut := #[(Array.range 128).reverse] }
 
 end Flock.Test.RecLinkPart

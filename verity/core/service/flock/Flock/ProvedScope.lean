@@ -1,5 +1,5 @@
 /-
-The statement forms the soundness proof covers (PROTOCOL.md §16.15). `verify` refuses every other: soundness is one theorem
+The statement forms the soundness proof covers. `verify` refuses every other: soundness is one theorem
 over every session the verifier accepts, so a form no theorem covers is refused, never accepted. Widening the proof to
 another form is a change to one rule here, with the proof that the headlines cover it. With hidden outputs that is the
 general instance form (`scopeOkI`, once `wiresAcyclic` passed); with public outputs, the unit's form (`scopeOk`).
@@ -26,6 +26,78 @@ def portReadsB (net : Net) : Bool :=
   let mask := portMask net.inGroups n
   (List.range (net.constPos - n)).all fun i =>
     ((net.a.row (n + i)).toList ++ (net.b.row (n + i)).toList).all fun x => decide (x < n → mask.getD x false = true)
+
+/-- `p` on the `k` entries from entry `t` of the row starting at byte `s` of `m`, without building the row. -/
+@[specialize] def rowAllGo (m : Sparse) (s : Nat) (p : Nat → Bool) : Nat → Nat → Bool
+  | 0, _ => true
+  | k + 1, t => p (rd32 m.data (s + 4 * t)) && rowAllGo m s p k (t + 1)
+
+/-- `f` on the `k` numbers from `i`, without building the list. -/
+@[specialize] def allFrom (f : Nat → Bool) : Nat → Nat → Bool
+  | 0, _ => true
+  | k + 1, i => f i && allFrom f k (i + 1)
+
+theorem rowAllGo_eq (m : Sparse) (s : Nat) (p : Nat → Bool) : ∀ k t,
+    rowAllGo m s p k t = ((List.range' t k).map fun t => rd32 m.data (s + 4 * t)).all p := by
+  intro k
+  induction k with
+  | zero => intro t; rfl
+  | succ k ih => intro t; simp only [rowAllGo, ih, List.range'_succ, List.map_cons, List.all_cons]
+
+theorem allFrom_eq (f : Nat → Bool) : ∀ k i, allFrom f k i = (List.range' i k).all f := by
+  intro k
+  induction k with
+  | zero => intro i; rfl
+  | succ k ih => intro i; simp only [allFrom, ih, List.range'_succ, List.all_cons]
+
+/-- `p` on the `k` entries from byte `o` of `data`, read with `rd32U`. -/
+@[specialize] def rowAllU (data : ByteArray) (p : Nat → Bool) :
+    (k : Nat) → (o : USize) → o.toNat + 4 * k ≤ data.size → o.toNat + 4 * k < USize.size → Bool
+  | 0, _, _, _ => true
+  | k + 1, o, h, hs =>
+    p (rd32U data o (by omega) (by omega)) &&
+      rowAllU data p k (o + USize.ofNat 4) (by rw [toNat_add_ofNat o 4 (by omega)]; omega)
+        (by rw [toNat_add_ofNat o 4 (by omega)]; omega)
+
+theorem rowAllU_eq (m : Sparse) (s : Nat) (p : Nat → Bool) : ∀ (k t : Nat) (o : USize), o.toNat = s + 4 * t →
+    (h : o.toNat + 4 * k ≤ m.data.size) → (hs : o.toNat + 4 * k < USize.size) →
+    rowAllU m.data p k o h hs = rowAllGo m s p k t
+  | 0, _, _, _, _, _ => rfl
+  | k + 1, t, o, ho, h, hs => by
+    rw [rowAllU, rowAllGo, rd32U_eq, ho,
+      rowAllU_eq m s p k (t + 1) _ (by rw [toNat_add_ofNat o 4 (by omega), ho]; omega)]
+
+/-- `rowAllGo m s p k 0`, with `rowAllU` where the row lies in `m.data` and its offsets fit a `USize`. -/
+@[inline] def rowAll (m : Sparse) (s : Nat) (p : Nat → Bool) (k : Nat) : Bool :=
+  if h : s + 4 * k ≤ m.data.size ∧ (s + 4 * k).toUSize.toNat = s + 4 * k then
+    have := USize.toNat_lt_size (s + 4 * k).toUSize
+    have hs := toNat_toUSize s (by omega)
+    rowAllU m.data p k s.toUSize (by omega) (by omega)
+  else rowAllGo m s p k 0
+
+theorem rowAll_eq (m : Sparse) (s : Nat) (p : Nat → Bool) (k : Nat) : rowAll m s p k = rowAllGo m s p k 0 := by
+  unfold rowAll
+  split
+  · rename_i h
+    have := USize.toNat_lt_size (s + 4 * k).toUSize
+    exact rowAllU_eq m s p k 0 _ (by rw [toNat_toUSize s (by omega)]; omega) _ _
+  · rfl
+
+/-- `portReadsB`, each row's entries read where they lie. -/
+def portReadsBFast (net : Net) : Bool :=
+  let n := min (net.inWords * WORD) net.constPos
+  let mask := portMask net.inGroups n
+  let ok := fun x => decide (x < n → mask.getD x false = true)
+  allFrom (fun i => rowAll net.a (net.a.start.getD (n + i) 0) ok (net.a.len.getD (n + i) 0) &&
+    rowAll net.b (net.b.start.getD (n + i) 0) ok (net.b.len.getD (n + i) 0)) (net.constPos - n) 0
+
+/-- Compiled code runs `portReadsBFast`; the kernel and every proof see `portReadsB`. `@[csimp]` rewrites only code
+compiled after it, so it stays above `scopeOk`. -/
+@[csimp] theorem portReadsB_eq_fast : @portReadsB = @portReadsBFast := by
+  funext net
+  unfold portReadsB portReadsBFast
+  simp only [allFrom_eq, rowAll_eq, rowAllGo_eq, List.range_eq_range', Sparse.row, Array.toList_map,
+    Array.toList_range, List.all_append]
 
 /-- No output port is pinned (META `pinned_outputs`, `HmRow.pinnedCount`): a form no soundness theorem covers yet. -/
 def unpinned (c : Circuit) : Bool := HmRow.pinnedCount c.metaJ == 0
@@ -62,16 +134,18 @@ def segRow (p : Port) : Bool :=
       let m := min (p.bits - HmRow.ROW_SEG_BITS * j) HmRow.ROW_SEG_BITS
       decide (128 * (((m + 7) / 8 + 17 + 127) / 128 - 1) ≤ (m + 7) / 8)
 
-/-- Every row is a `v2Row` or a `segRow`, of any mix, and each output row is a `v2Row` holding one output port. -/
+/-- Every row is a `v2Row` or a `segRow`, of any mix, and each output row is a `v2Row` or a `segRow` holding one output
+port. -/
 def bitRowsU (c : Circuit) : Bool :=
   c.ports.all (fun p => v2Row p || segRow p) && c.outRowPorts.all (· == 1) &&
-    (List.range c.outRowPorts.size).all fun j => v2Row (c.ports.getD (HmOut.nIn c + j) default)
+    (List.range c.outRowPorts.size).all fun j =>
+      v2Row (c.ports.getD (HmOut.nIn c + j) default) || segRow (c.ports.getD (HmOut.nIn c + j) default)
 
 /-- `bitRowsU`, and no pinned output (`unpinned`). -/
 def bitRows (c : Circuit) : Bool := bitRowsU c && unpinned c
 
 /-- The circuits the hidden-output headlines cover: `scopeOk`'s conditions on the unit, and every row a
-`sha512/row/v1` row (`v1Ports`) or every row a `v2Row` or a `segRow`, each output row a `v2Row` of one output port
+`sha512/row/v1` row (`v1Ports`) or every row a `v2Row` or a `segRow`, each output row of one output port
 (`bitRows`). -/
 def scopeOkH (c : Circuit) : Bool :=
   c.unit.inGroups.size == 1 && c.outNet == c.unitNet && decide (c.unit.unitLog ≤ 32) && portReadsB c.unit &&
@@ -180,7 +254,7 @@ def scopeWhy (hidden : Bool) (c : Circuit) : String :=
   else if v1Rows c || (hidden && bitRowsU c) then pinnedWhy
   else if hidden then "rows that are neither all sha512/row/v1 rows of 16 · words bits in at least one chunk nor all \
     unsegmented sha512/row/v2 rows of 16 · words bits ending in their hm96 block or sha512/row-seg/v1 rows of \
-    16 · words bits whose segments end in their last block, the output rows unsegmented, one output port each"
+    16 · words bits whose segments end in their last block, one output port per output row"
   else "a row that is not a sha512/row/v1 row of 16 · words bits in at least one chunk"
 
 /-- **A templated circuit the hidden-output headlines cover** (its statement circuit is the flat
@@ -217,7 +291,7 @@ def publicOf (tags : Tags) (c : Circuit) (file : ByteArray) : V Public :=
 def zkTableCap : Nat := 65536
 
 /-- **The proof's Merkle leaves the headlines cover**: `hm96-sha512/v1` in every form, and plain SHA-512 leaves
-(`flock-leaf/sha512-unsalted`, a recursive session's inner statement, §16.16) on a statement with hidden outputs without
+(`flock-leaf/sha512-unsalted`, a recursive session's inner statement, `Tags.withPlainLeaves`) on a statement with hidden outputs without
 `--zk`. Without `--zk` a leaf only binds its column, which either leaf does (a second column under one leaf is a SHA-512
 collision); `--zk`'s hiding needs `hm96`'s salts. -/
 def leafOk (tags : Tags) (zk : Bool) : Bool :=
@@ -243,11 +317,21 @@ def firstFailure (rules : List (Bool × String)) : Option String := (rules.find?
 
 def refusal (why : String) : String := s!"refused: {why}: a statement form the soundness proof does not cover"
 
+/-- The legacy statements: upstream's recorded cells whose checks evaluate part of the
+computation natively and make intermediate values public. None is a statement `verify` sets up (`Tags.all`,
+`Tags.templated`), and `verify` refuses every session of one (`legacyWhy`). -/
+def legacyStatements : List String :=
+  ["verity/flock-pure-block/v2", "verity/flock-ir-frame/v2", "verity/flock-ir-frame/v3", "verity/flock-ir-sampling/v1",
+   "verity/flock-ir-block/v1", "verity/flock-vllm-block/v1"]
+
+def legacyWhy (name : String) : Option String :=
+  if legacyStatements.contains name then some (refusal s!"{name}, a legacy statement (§16.9)") else none
+
 /-- The least `m` the proof covers: `25` under `--zk`, else `22`. -/
 def mMin (zk : Bool) : Nat := if zk then 25 else 22
 
 /-- **The tables' sizes the proof covers**: every table's `m` (`ms`, each table's `Setup.m`) at least `mMin`. A table's
-`m` is its drawn statement's, which only the setup computes, so `verify` checks this on the session's tables right after
+`m` is its sampled statement's, which only the setup computes, so `verify` checks this on the session's tables right after
 `check`, not on the statement's files. Each verifier's own schedule refuses a smaller `m` before it (`fast100` below `22`,
 `Zk.schedule` at `m ≤ 24`), so this refuses no session `verify` would otherwise accept. -/
 def sizesOk (zk : Bool) (ms : Array Nat) : Except String Unit :=
@@ -385,7 +469,7 @@ def programP (parsed : V Circuit) (program : Option ByteArray) : Except String U
     | some why => .error why
     | none => .ok ()
 
-/-- **`verify --plain-tables`'s statement is one the soundness proof covers** (PROTOCOL.md §16.15): a plain (no `--zk`)
+/-- **`verify --plain-tables`'s statement is one the soundness proof covers**: a plain (no `--zk`)
 session of public or hidden outputs at any number of tables up to `Tags.MAX_TABLES`, at hidden outputs with
 `hm96-sha512/v1` leaves, every condition `check` puts on a one-table plain session, and the verifier's own program is
 the one META binds (`programP`). The one-table plain form keeps `check` without the flag. -/
@@ -463,13 +547,13 @@ theorem programP_ok {parsed : V Circuit} {program : Option ByteArray} (h : progr
     | none => rfl
     | some w => simp [hw] at h
 
-/-- What a draw's law is, when no soundness claim draws by it at the session's form (PROTOCOL.md §16.15): the one rule
-for which law each form draws by. Without `--plain-tables`: the stratified law at every form `check` passes, each claim at
-one table (`SoundExec`, `SoundExecH`, `SoundZ`, `SoundZH`); the subset law under `--zk` (`SoundZJ`, `SoundZHJ`, `SoundZHJR`)
-and, without it, exactly where a plain claim draws by it: at hidden outputs, at the one table `check` admits there
-(`SoundExecH` at its subset draw design). Under `--plain-tables` (`plainTables`, `SoundExecJ`), the subset law alone. So a
-bernoulli draw, a work draw (with or without a closure), a subset draw without `--zk` or `--plain-tables` at public outputs,
-and a stratified draw under `--plain-tables` are outside them. -/
+/-- What a sample's law is, when no soundness claim samples by it at the session's form: the one rule
+for which law each form samples by. Without `--plain-tables`: the stratified sampling design at every form `check` passes, each claim at
+one table (`SoundExec`, `SoundExecH`, `SoundZ`, `SoundZH`); the subset sampling design under `--zk` (`SoundZJ`, `SoundZHJ`, `SoundZHJR`)
+and, without it, exactly where a plain claim samples by it: at hidden outputs, at the one table `check` admits there
+(`SoundExecH` at its subset sample design). Under `--plain-tables` (`plainTables`, `SoundExecJ`), the subset sampling design alone. So a
+bernoulli sample, a work sample (with or without a closure), a subset sample without `--zk` or `--plain-tables` at public outputs,
+and a stratified sample under `--plain-tables` are outside them. -/
 def lawWhy (zk : Bool) (tags : Tags) (plainTables : Bool) (d : Draw.UnitDraw) : Option String :=
   match d.law with
   | .stratified .. => if plainTables then some "a stratified draw under --plain-tables" else none
@@ -477,9 +561,9 @@ def lawWhy (zk : Bool) (tags : Tags) (plainTables : Bool) (d : Draw.UnitDraw) : 
   | .bernoulli .. => some "a bernoulli draw"
   | .work .. => some (if d.closure.isEmpty then "a work draw" else "a work draw with a closure")
 
-/-- **The session's draw is by a law a soundness claim draws by at its form** (`lawWhy`, PROTOCOL.md §16.15): `draw` is
-the record's (`recordDraw`), none for a session without one. Every claim is about a drawn session, so a session without
-a draw is refused (D12); so is a draw that does not parse. -/
+/-- **The session's sample is by a sampling design a soundness claim samples by at its form** (`lawWhy`): `draw` is
+the record's (`recordDraw`), none for a session without one. Every claim is about a sampled session, so a session without
+a sample is refused (D12); so is a sample that does not parse. -/
 def drawLaw (zk : Bool) (tags : Tags) (plainTables : Bool) : Option Lean.Json → Except String Unit
   | none => .error "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
   | some j => match Draw.UnitDraw.ofJson j with
@@ -499,31 +583,35 @@ theorem programHeld_ok {program : Option ByteArray} (h : programHeld program = .
   · assumption
   · cases h
 
-/-- **The statement versions `verify` takes**: the current statement and a recursive session's inner one. Every other
-version `Tags.all` names is superseded: a `+seed-injection` one is a selftest build's, whose coins the prover injected, and
-the older ones' coins derive through SHA-256 or, under `--zk`, their pads are ChaCha20 streams of the prover's seed. They
-stay in `Tags.all` so the agreement corpus and the recorded fixtures replay: `verify` runs every check on them, then
-refuses the session (`servedForm`). -/
-def served : List String := [Tags.circuit.name, Tags.circuitPlainLeaves.name]
+/-- **The statement versions `verify` takes**: the current statement, a recursive session's inner one, and the templated
+statement (`Tags.tmplName`; building `Tags.circuitTmpl` would hash its identity's key), which `check` passes only in the
+form `scopeOkT` covers and `--zk`'s form check (`KsScope.checkOf`) only on its template, and whose statement circuit, the
+flat circuit it unrolls to, is the one `SampledKSLiveV5` is stated at. Every other version `Tags.all` names is
+superseded: a `+seed-injection` one is a selftest build's, whose coins the prover injected, and the older ones' coins
+derive through SHA-256 or, under `--zk`, their pads are ChaCha20 streams of the prover's seed. They stay in `Tags.all` so
+the agreement corpus and the recorded fixtures replay: `verify` runs every check on them, then refuses the session
+(`servedForm`). -/
+def served : List String := [Tags.circuit.name, Tags.circuitPlainLeaves.name, Tags.tmplName]
 
 def versionWhy (tags : Tags) : Option String :=
   if served.contains tags.name then none
   else
     let what := if tags.name.endsWith "+seed-injection" then "a selftest build's statement, whose coins the prover injected"
       else "a superseded statement version"
-    some s!"refused: {tags.name}, {what}: verify takes only {" and ".intercalate served}"
+    some s!"refused: {tags.name}, {what}: verify takes only {", ".intercalate served.dropLast} and {served.getLastD ""}"
 
-/-- A session on seed coins (`--coins seed`, the default without `--zk`): every coin derives from the prover's seed, so
-none is live and no plain claim's record premise (`RecordCustodyExec`) can hold. -/
+/-- A session on seed coins (a plain session without `--coins tree`): every coin derives from the prover's seed, so none
+is live and no plain claim's record premise (`RecordCustodyExec`) can hold. The verifier reads coins only from a
+challenger's log. -/
 def SEED_COINS : String :=
-  "refused: a session on seed coins (--coins seed, the default without --zk): every coin derives from the prover's seed, so none is live; verify a plain session with --coins os"
+  "refused: a session on seed coins (a plain session without --coins tree): every coin derives from the prover's seed, so none is live; the verifier reads coins only from a challenger's log: verify a plain session on the challenger's keyed coin tree with --coins tree"
 
 def coinsWhy : Coins → Option String
   | .seed => some SEED_COINS
-  | _ => none
+  | .tree _ => none
 
-/-- **The session is in a form `verify` takes**: a statement version of `served`, on live coins (`--coins os`, or under
-`--zk` the keyed coin tree). `verify` runs it last, once every check has passed. -/
+/-- **The session is in a form `verify` takes**: a statement version of `served`, on the challenger's keyed coin tree
+(`--coins tree`, or `--zk`). `verify` runs it last, once every check has passed. -/
 def servedForm (tags : Tags) (coins : Coins) : Except String Unit :=
   match versionWhy tags <|> coinsWhy coins with
   | some why => .error why

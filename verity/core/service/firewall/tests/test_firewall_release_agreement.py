@@ -1,17 +1,17 @@
 """The ZK server's release side in Lean (`core_firewall`: `Firewall.Record` and `Firewall.Release`, served by
 `core-firewall-difftest`) against Python's (`verity_flock.firewall`) and against Rust's (`flock_live::release`) as it was
-frozen in `fixtures/` before the Lean replaced it: the shared record vectors, every op of the record on drawn records against
+frozen in `fixtures/` before the Lean replaced it: the shared record vectors, every op of the record on sampled records against
 Python (results and the record each leaves, byte for byte), Rust's index cases op by op, Rust's outer sessions, with each
-step's failure and fault, the challenger's verdict and the clock drawn, and the record of an end-to-end run, both through
-the stages `core-firewall session` runs (`decide`, then `stopAt` or `settle`). The records drawn, and the domain the Lean is
+step's failure and fault, the challenger's verdict and the clock sampled, and the record of an end-to-end run, both through
+the stages `core-firewall session` runs (`decide`, then `stopAt` or `settle`). The records sampled, and the domain the Lean is
 held to, are `_release`'s.
 
 The fixtures were frozen from `flock_live::release` at e64d2e1238: `release-index.jsonl.gz` from its index tests'
 streams (`release::tests::drive`, with each line its damage rewrites as a `wait` numbered as the event it replaces, and
 each event its `appended` op writes as the ZK server writes it, which changes nothing Rust reads: an `open` without a
 null `budget`, a `stop` with a `why`, a `finish` of part `inner`; so the record stays the ZK server's own),
-`release-outer.jsonl.gz` from `outer_session` on `_release.outer_input`'s first 1000 draws at seed 0, and
-`release-e2e.jsonl` from `flock-circuit prove --firewall-state` on rope_head(64) (run r20261021-042230-834a)."""
+`release-outer.jsonl.gz` from `outer_session` on `_release.outer_input`'s first 1000 samples at seed 0, and
+`release-e2e.jsonl` from `flock-circuit prove --firewall-state` on rope_head(64)."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ import pytest
 
 import _release as R
 import verity_difftest as D
-from verity.core.protocols.sampled_proofs import service as S
+from verity.core.protocols.spot import service as S
 from verity_flock import firewall as FW
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -46,7 +46,9 @@ lean = D.server_fixture(port("op", R.python_op, R.op_input()))
 
 def _vectors() -> list[dict]:
     v = json.loads(R.VECTORS.read_text())
-    assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "order", "budget", "unended", "honest", "schedule", "escapes", "prestop", "budget-1", "budget-2"}
+    assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {
+        "rules-1-2", "order", "budget", "unended", "honest", "schedule", "escapes", "registrations", "prestop", "budget-1",
+        "budget-2"}
     return v["cases"]
 
 
@@ -79,8 +81,8 @@ def test_the_lean_replays_the_shared_vectors(lean):
 def _honest(rounds: int, budget: int, n: int, rng: random.Random | None) -> tuple[list[list], list, int]:
     """An honest stream's firewall ops and their results, over `n` registrations of a challenger's stream at `rounds` and
     `budget` (`service._step`, its rules), and the most recursive sessions unended at once. Each step is one the honest
-    flow allows next, `rng`'s choice (the first allowed without one): a registration once `ready` allows it, drawn at once;
-    a proof session (`session`) over the 1 to `rounds` earliest drawn rounds no session covers (one round without `rng`);
+    flow allows next, `rng`'s choice (the first allowed without one): a registration once `ready` allows it, sampled at once;
+    a proof session (`session`) over the 1 to `rounds` earliest sampled rounds no session covers (one round without `rng`);
     its recursive session opened after it (`rec_live` opens one when the session's inner session starts) and finished;
     each statement admitted, then released (the relay releases it on the challenger's verdict); the session delivered once
     its last statement is released (the ZK server delivers the records of sessions it saw end); each round's outcome
@@ -189,8 +191,9 @@ def _op_key(value: dict, out: dict) -> str:
 
 def _assert_ops_seen(tally: Counter) -> None:
     ops = {k.split(":")[0] for k in tally}
-    assert ops == {"open", "finish", "stop", "release", "admit", "failures", "slot"}, tally
-    for k in ("open:ok", "open:refused", "open:error", "admit:ok", "admit:refused"):
+    assert ops == {"open", "finish", "stop", "release", "admit", "failures", "slot", "register", "registrations"}, tally
+    for k in ("open:ok", "open:refused", "open:error", "admit:ok", "admit:refused", "registrations:ok",
+              "registrations:refused"):
         assert tally[k] >= 10, (k, tally)
     assert tally["open:unended"] >= 5, tally
 
@@ -262,7 +265,7 @@ def _prestop(before: str, rust: str, lean: str) -> bool:
 
 def test_the_lean_runs_rusts_index_cases(lean):
     """Rust's index cases, op by op: its three streams (seeds 20261016 and 7, and 11 with a session id past the index's key
-    limit), 1500 draws each, an op or damage to the record (torn, cut, halved, edited, rewritten, a line foreign to it), a
+    limit), 1500 samples each, an op or damage to the record (torn, cut, halved, edited, rewritten, a line foreign to it), a
     repair or an append, which leave 3979 ops. Of those, Rust rejected 762, and the Lean rejects each; Rust answered 3217,
     and at 2775 of them the Lean's result and the record it leaves are Rust's byte for byte. At 8, opens Rust made, the
     Lean refuses the open and leaves the record as it was, as Python does: the stream's unended recursive sessions and
@@ -372,3 +375,27 @@ def test_the_lean_reads_only_the_firewalls_lines(lean):
         assert lean.call("op", value)[0] == "reject", name
         assert R.python_op(value)["result"] == 0, name
     assert _lean_op(lean)({"op": ["failures", "s"], "record": f"{first}\n{second}\n"})["result"] == 0
+
+
+def test_the_lean_reads_registrations_only_in_their_order(lean):
+    """The Lean reads each registration only at its place among the registrations, its record that number first, and each
+    admission or skip only at its place among them, below the registrations before it: a record admitting one twice, out of
+    its order or before it is registered, or holding a registration out of its place, is refused, so no registration is
+    admitted twice. Python reads each as its events."""
+    good = R.record_of([["open", "s", ["L0"], None, None], ["finish", "r0000"], ["register", "aa"], ["register", "bb"],
+                        ["registrations", "r0000", "L0", [0]]])
+    lines = good.splitlines(keepends=True)
+
+    def line(seq: int, **ev) -> str:
+        return json.dumps({"seq": seq, **ev}, sort_keys=True) + "\n"
+
+    admit = {"event": "admit", "part": "L0", "session": "r0000"}
+    variants = {"admitted twice": good + line(5, **admit, n=0), "out of its order": "".join(lines[:4]) + line(4, **admit, n=1),
+                "before its registration": "".join(lines[:2]) + line(2, **admit, n=0),
+                "registration out of its place": "".join(lines[:2]) + line(2, event="register", n=1, record="0000000000000001bb"),
+                "record numbered otherwise": "".join(lines[:2]) + line(2, event="register", n=0, record="0000000000000001aa")}
+    for name, text in variants.items():
+        value = {"op": ["failures", "s"], "record": text}
+        assert lean.call("op", value)[0] == "reject", name
+        assert R.python_op(value)["result"] == 0, name
+    assert _lean_op(lean)({"op": ["failures", "s"], "record": good})["result"] == 0

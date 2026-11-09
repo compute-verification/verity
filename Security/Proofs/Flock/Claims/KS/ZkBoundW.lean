@@ -2,6 +2,40 @@ module
 
 public import Proofs.Flock.Claims.KS.ZkSlackW
 public import Proofs.Flock.Claims.KS.ZkSessionW
+public import Proofs.Flock.Claims.KS.ZkAccJ
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Every masked table's bound off the table on a witness lane
@@ -500,7 +534,7 @@ def ZkSessWJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
             Claims.Pr fun s : Fin ((V true).k x) → Coin => ev₁ j ω s
 
 /-- **Every masked table's bound at a statement, off the table on a witness lane, the escapes counted per round**:
-where table `j` of the setup is `st j` and `T j` is C-Flock ZK's padded table there, when the masked sessions bound
+where table `j` of the setup is `st j` and `T j` is Flock ZK's padded table there, when the masked sessions bound
 every table at that verdict with events on accepted runs (`ZkSessWJ`) and no table `Ok` allows that does not extract
 table `j` is committed to `T j`. The escapes are the tables' with level 0's and the slack's merged by round
 (`Claims.Flock.slackEscW`), on accepted first runs (`Claims.Flock.slackEscW_onAcc₁`), fitting the deployed weight per
@@ -537,7 +571,7 @@ theorem zk_tableBoundJAccAtR_of_sessionsW {K D Sl : Type} [Field K] [Fintype K] 
 end Gen
 
 /-- **Every masked table's bound at a statement, off the table on a witness lane, the escapes counted per round**:
-where table `j` of the setup is `st j` and `T j` is C-Flock ZK's padded table there, when the masked sessions bound
+where table `j` of the setup is `st j` and `T j` is Flock ZK's padded table there, when the masked sessions bound
 every table at that verdict with events on accepted runs (`ZkSessWJ`) and no table `Ok` allows that does not extract
 table `j` is committed to `T j`. The escapes are the tables' with level 0's and the slack's merged by round
 (`Claims.Flock.slackEscW`), on accepted first runs (`Claims.Flock.slackEscW_onAcc₁`), fitting the deployed weight per

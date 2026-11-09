@@ -5,7 +5,7 @@ end `AttnHeadEnd_v1` at FA3's dot and reciprocal, and past one key block (TINY's
 projection's slices, a key a row, so past 126 keys a block holds more than a unit's 256 rows and is refused by name. An
 attention version with no cut (`Attention_v2`, which `fa3_construction = "guard-every-block"` binds) is a unit a head of its
 own head Definition, reading the same rows, refused by name past the grain's rows. With ``VERITY_VLLM_FA3_LLAMA_1B=1``,
-int8 Llama-3.2-1B on sm_90 at 4,32,4 lowers with every reader wired and every unit a proof block C-Flock's composer takes.
+int8 Llama-3.2-1B on sm_90 at 4,32,4 lowers with every reader wired and every unit a proof block Flock's composer takes.
 Pinned on `test_window_circuit`'s TINY class, windows and grain.
 """
 from __future__ import annotations
@@ -28,7 +28,7 @@ from verity_vllm.program.predict.window_circuit import Grain, WindowClass, class
 
 from verity.ml.windows import interface as IF
 
-#: the H200's declared target (`pins/NVIDIA_H200.json`): FA3, so `Attention_v4` at D = 16's kBlockN of 128
+#: the H200's declared target (its device pin, `bf16_gemm_check.device_pin`): FA3, so `Attention_v4` at D = 16's kBlockN of 128
 H200 = {"compute_capability": [9, 0], "num_sms": 132}
 DOT, INV = "DOT=HopperBF16WgmmaDot16_v1", "INV=Fa3InvSum_v1"
 LLAMA_1B = Path(__file__).resolve().parent / "fixtures/llama32-1b.config.json"
@@ -133,7 +133,7 @@ def test_int8_llama_3_2_1b_on_sm_90_lowers_every_unit_to_a_proof_block():
     """int8 Llama-3.2-1B's window circuit on the H200 (exact-int8 linears, FA3's heads at D 64 and kBlockN 192) at the default
     grain and 4,32,4 lowers with every unit within 256 rows: each first block reads its values a slice a row of the value
     projection (`AttnBlockFirst_v2{VS=32}`), and the norm after down_proj, whose x down_proj's slices write as 512 rows where
-    o_proj's write 128, is cut at its residual add (8 parts of 256 and the tail). Every unit is a proof block C-Flock's
+    o_proj's write 128, is cut at its residual add (8 parts of 256 and the tail). Every unit is a proof block Flock's
     composer takes (`interface.check_proof_block`, which the lowering runs): at 4 outputs a collector's rows and an entry's
     are under 112 bytes, so each is its position's combine's (`SelectCollect_v1`, the last's `SelectEntry_v1`), which reads
     its group units' bests and indices as rows of 334 and 668 bytes. Its heads are `Attention_v20`'s Calls (no whole `AttentionHead_v4`, no guarded full

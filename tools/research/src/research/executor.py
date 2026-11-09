@@ -10,16 +10,19 @@
 
 Two graph schemas.  `tasks/v1` (`verity tasks list --json`, `tools/verity/check/tasks.py`), which `executor = "shadow"`
 compares with the after-landing run, and graph/v2 (`verity graph`, `tools/verity/graph`), which `executor = "on"` verifies a tip
-by.
+by, beside a train.sh run of the steps drive still takes from one (`drive.SLIM_STEPS`).
 
 A graph's keys hash the lister's environment and its suite splits come from the lister's caches, so only a graph listed where
 the tasks run has the keys their verdicts come under: the executor lists a check enqueued with no graph on a worker, puts it
 in the store (`tasks-graph/v1`) and labels `commit:<sha> tasks_graph art:<id>` (`vocab.TASKS_GRAPH`), then queues its tasks.
 
-A task's verdict is the `verdict` labels on `task:<key>` (pass or fail, written by the worker that ran `verity tasks run ID`):
-fail when any says fail (a duplicate that disagrees is a red, never a green), else pass when one says pass, else pending.  A
-task with no key of its own (a build, a circuit-check slice, a job that keeps no verdict: tasks/v1's `unkeyed`) gets one of
-its check alone (`keyed`), so it runs in every check and no verdict of it is reused across checks.
+A task's verdict comes from the `verdict` labels on `task:<key>`, written by the executor from its run of `verity tasks run
+ID`: pass or fail by that run's result, or `ERROR` when no run gave one, which is pending (not run), so a later graph runs the
+key again; a step that skipped gets no label and stays pending.  A fail stands until an error label is written after it (a
+false fail relabelled), so a rerun that passes never turns a fail green (a test that flakes is deleted, not rerun); past
+that, the newest of pass and error is the key's.  A task with no key of its own (a build, a circuit-check slice, a job that keeps no
+verdict: tasks/v1's `unkeyed`) gets one of its check alone (`keyed`), so it runs in every check and no verdict of it is reused
+across checks.
 
 The transport is how the rows reach the queue and the graphs and verdicts come back: `QueueTransport`, infra's queue (its
 enqueue command, drive.toml's `executor_enqueue`, and the labels and graphs from the store's remote), or `FileTransport`, a
@@ -33,13 +36,14 @@ disagrees), changing nothing else (a shadow that fails, the store's or the trans
 `SHADOW_WAIT_S`, is recorded incomplete, and landing goes on); `research queue shadow-report`
 prints the newest of them and whether `SWITCH_STREAK` tips in a row agreed fully, the gate for `on`.
 
-`on` launches no run: it enqueues the tip's check with `--schema verity-graph/v2` and no graph, the executor lists graph/v2 on
-a worker, puts it in the store (`verity-graph/v2`) and labels `commit:<sha> verity_graph art:<id>` (`vocab.VERITY_GRAPH`), and
-each task's result/v1 document is a `result` label on `task:<key>` (`vocab.TASK_RESULT`; an error is never a result, so only
-pass and fail appear).  A graph/v2 task that reads none has its key in the graph; one that reads others has none there, and
-`settle` computes it by the contract's key rule (`task_key`, held to `tools/verity/graph/tests/key_vectors.json`) once each
-task it reads passed, from their results' `outputs`; it is blocked, never run, once one of them failed or is blocked.  Drive
-judges the results (`drive.Driver._follow_tasks`)."""
+`on` launches no run of every step: it enqueues the tip's check with `--schema verity-graph/v2` and no graph, the executor lists
+graph/v2 on a worker, puts it in the store (`verity-graph/v2`) and labels `commit:<sha> verity_graph art:<id>`
+(`vocab.VERITY_GRAPH`), and each task's result/v1 document is a `result` label on `task:<key>` (`vocab.TASK_RESULT`; an error is
+never a result, so only pass and fail appear).  A graph/v2 task that reads none has its key in the graph; one that reads others
+has none there, and `settle` computes it by the contract's key rule (`task_key`, held to
+`tools/verity/graph/tests/key_vectors.json`) once each task it reads passed, from their results' `outputs`; it is blocked, never
+run, once one of them failed or is blocked.  Drive judges the results (`drive.Driver._follow_tasks`) beside a train.sh run of
+`drive.SLIM_STEPS` alone (lean-agreement and ratchet-gate), whose verdicts on those steps are the only ones it counts."""
 from __future__ import annotations
 
 import hashlib
@@ -54,6 +58,9 @@ from typing import Callable, Iterable, Protocol
 from .store import vocab
 
 PASS, FAIL, PENDING = "pass", "fail", "pending"
+#: the label of a task whose runs all ended without a result (the machine lost, the run refused or cancelled): no verdict of
+#: the tree, so `fold` reads it as pending
+ERROR = "error"
 #: a graph/v2 task that never runs: a task it reads failed, is blocked, or passed without the output it reads
 BLOCKED = "blocked"
 #: a shadow comparison's side with no counterpart: the run has no verdict of an executor-only task, and the executor has no
@@ -136,9 +143,12 @@ def keyed(graph: dict) -> dict:
 
 
 def fold(values: Iterable[str]) -> str:
-    """A key's verdict from its labels' values: fail when any is fail, else pass when any is pass, else pending."""
-    vs = set(values)
-    return FAIL if FAIL in vs else PASS if PASS in vs else PENDING
+    """A key's verdict from its labels' values, oldest first: fail while a fail has no `ERROR` after it, else pass when the
+    newest is pass, else pending (no label, or `ERROR` newest)."""
+    vs = list(values)
+    if FAIL in vs and ERROR not in vs[len(vs) - vs[::-1].index(FAIL):]:
+        return FAIL
+    return PASS if vs and vs[-1] == PASS else PENDING
 
 
 class Transport(Protocol):
@@ -152,7 +162,7 @@ class Transport(Protocol):
         ...
 
     def labels(self, keys: list[str]) -> dict[str, list[str]]:
-        """{key: the values of the `verdict` labels on `task:<key>`}."""
+        """{key: the values of the `verdict` labels on `task:<key>`, oldest first}."""
         ...
 
     def results(self, keys: list[str]) -> dict[str, list[object]]:
@@ -319,8 +329,9 @@ class QueueTransport:
     task and exits 0 once they are in; with no `--graph`, it exits 0 at once and the executor lists the graph on a worker, a
     graph/v2 with `--schema verity-graph/v2`, else tasks/v1.  The graph the executor listed for a check comes back as the
     artifact a label on `commit:<sha>` names (`LISTED`: `tasks_graph` a `tasks-graph/v1`, `verity_graph` a `verity-graph/v2`),
-    verdicts as `verdict` labels on `task:<key>` and results as `result` labels there, each target's labels pulled from the
-    store's remote while it has none here yet."""
+    verdicts as `verdict` labels on `task:<key>` and results as `result` labels there.  A key's verdicts are pulled from the
+    store's remote while it isn't passed here (a fail here may since have been relabelled error there, and an error rerun), its
+    results while it has none here yet."""
 
     def __init__(self, store, command: tuple[str, ...] = (), cwd: Path | None = None):
         self.store, self.command, self.cwd = store, tuple(command), cwd
@@ -356,9 +367,10 @@ class QueueTransport:
         from .store import labels_sync
 
         have = {k: [lab.value for lab in self.store.labels(task_target(k), key=label)] for k in keys}
-        if (todo := [task_target(k) for k, v in have.items() if not v]) and getattr(self.store, "remote", None) is not None:
-            labels_sync.pull_targets(self.store, todo, jobs=PREFETCH_JOBS)
-            have.update({k: [lab.value for lab in self.store.labels(task_target(k), key=label)] for k, v in have.items() if not v})
+        stale = (lambda v: fold(v) != PASS) if label == vocab.TASK_VERDICT else (lambda v: not v)
+        if (todo := [k for k, v in have.items() if stale(v)]) and getattr(self.store, "remote", None) is not None:
+            labels_sync.pull_targets(self.store, [task_target(k) for k in todo], jobs=PREFETCH_JOBS)
+            have.update({k: [lab.value for lab in self.store.labels(task_target(k), key=label)] for k in todo})
         return have
 
     def labels(self, keys: list[str]) -> dict[str, list[str]]:
@@ -405,7 +417,7 @@ def old_verdicts(run_dirs: Iterable[Path]) -> dict[str, str]:
         for name, s in suite_rows(d).items():
             if s.get("status") not in SUITE_NO_VERDICT:
                 put(f"{s['step']}:{name}", old_verdict(s.get("status")))
-    return {p: fold(vs) for p, vs in got.items() if p}
+    return {p: FAIL if FAIL in vs else PASS for p, vs in got.items() if p}
 
 
 def compare(ids: dict[str, str], old: dict[str, str], new: dict[str, str]) -> dict:

@@ -8,7 +8,7 @@
 //!   flips coins from the OS, pins the session parameters (profile, reps, flavour, statement), refuses a rep-1 coin
 //!   unless rep 1 committed rep 0's root, and refuses every coin until the link context (root_F, points, y) arrived.
 //!   With a [`LinkSpec`] the link context is a real exchange (flock-link L1): `Commit` carries root_F, every table's
-//!   root_B and its public words; the server checks the public words against its statement, then draws the link
+//!   root_B and its public words; the server checks the public words against its statement, then samples the link
 //!   points from the OS as its own coin slot; `Link` carries y; only then are Flock's coins issued, and each rep's
 //!   first round must bind exactly the committed root_B. The replay hands the recorded points and y to the statement
 //!   verifier, which opens them in every rep (L2).
@@ -35,6 +35,7 @@ pub mod lookup;
 pub mod circuit;
 pub mod firewall;
 pub mod glue;
+pub mod huge_pages;
 pub mod proved_scope;
 pub mod pure_block;
 pub mod record_text;
@@ -104,6 +105,69 @@ pub fn spawn<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> std::
 pub fn spawn_scoped<'s, 'e, T: Send + 's>(sc: &'s std::thread::Scope<'s, 'e>, f: impl FnOnce() -> T + Send + 's)
                                           -> std::thread::ScopedJoinHandle<'s, T> {
     flock_core::spawn_scoped(sc, f)
+}
+
+/// Serves `l`'s connections, one session each, up to `concurrency` at once and `max` of them (unbounded: `None`), until
+/// `make` gives none: session `i`'s `serve(i, connection, build())`, on its own thread. `make` runs before each accept and
+/// `build`, a session's server, on the session's thread after it, so a slow build holds up no other session. A session's
+/// panic stops the process.
+pub fn serve_sessions<T, B: FnOnce() -> T + Send>(l: &std::net::TcpListener, max: Option<usize>, concurrency: usize,
+                                                   mut make: impl FnMut() -> Option<B>, serve: impl Fn(usize, TcpStream, T) + Sync) {
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+    use std::sync::{Condvar, PoisonError};
+    let free = (Mutex::new(concurrency.max(1)), Condvar::new());
+    std::thread::scope(|sc| {
+        for i in 0.. {
+            if Some(i) == max {
+                break;
+            }
+            {
+                let mut n = free.0.lock().unwrap_or_else(PoisonError::into_inner);
+                while *n == 0 {
+                    n = free.1.wait(n).unwrap_or_else(PoisonError::into_inner);
+                }
+                *n -= 1;
+            }
+            let Some(build) = make() else { break };
+            let (conn, _) = l.accept().unwrap();
+            let (serve, free) = (&serve, &free);
+            spawn_scoped(sc, move || {
+                if catch_unwind(AssertUnwindSafe(|| serve(i, conn, build()))).is_err() {
+                    std::process::exit(101);
+                }
+                *free.0.lock().unwrap_or_else(PoisonError::into_inner) += 1;
+                free.1.notify_one();
+            });
+        }
+    });
+}
+
+/// `parts` back to back, copied in parallel a chunk at a time (many short parts or a few long ones)
+pub fn concat<P: AsRef<[F128]>>(parts: &[P]) -> Vec<F128> {
+    let n = parts.iter().map(|p| p.as_ref().len()).sum();
+    let mut out: Vec<F128> = Vec::with_capacity(n);
+    concat_into(parts, &mut out.spare_capacity_mut()[..n]);
+    // SAFETY: concat_into wrote all n words
+    unsafe { out.set_len(n) };
+    out
+}
+
+/// [`concat`] into `out`, which is exactly as long as the parts: every word of it written
+pub fn concat_into<P: AsRef<[F128]>>(parts: &[P], out: &mut [std::mem::MaybeUninit<F128>]) {
+    use rayon::prelude::*;
+    assert_eq!(out.len(), parts.iter().map(|p| p.as_ref().len()).sum::<usize>(), "concat_into: a destination as long as the parts");
+    let mut rest = out;
+    let mut pairs = Vec::new();
+    for s in parts.iter().flat_map(|p| p.as_ref().chunks(1 << 15)) {
+        let (a, b) = std::mem::take(&mut rest).split_at_mut(s.len());
+        pairs.push((a, s));
+        rest = b;
+    }
+    pairs.into_par_iter().for_each(|(d, s)| {
+        for (d, &x) in d.iter_mut().zip(s) {
+            d.write(x);
+        }
+    });
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -200,17 +264,17 @@ pub fn sha256(b: &[u8]) -> [u8; 32] {
     Sha256::digest(b).into()
 }
 
-/// The unit sample (the Lean verifier's PROTOCOL.md §7.3): the verifier samples the units to prove in the clear from its OS
+/// The unit sample (the Lean verifier's `Flock.Draw`): the verifier samples the units to prove in the clear from its OS
 /// randomness, after registration and before the statement is fixed, with `verity.ml.randomness`'s exact samplers read straight
 /// from OS bytes (no derivation). The sample is the object `{"law": "subset", "population": N, "k": K, "units": [...]}`,
 /// `{"law": "bernoulli", "population": N, "p": "num/den", "units": [...]}` or `{"law": "stratified", "population": N, "k": K,
-/// "strata": [{"template", "units": [[lo, hi], ...], "k"}, ...], "units": [...]}`, units ascending. A stratified law is the
+/// "strata": [{"template", "units": [[lo, hi], ...], "k"}, ...], "units": [...]}`, units ascending. A stratified sampling design is the
 /// verifier's own expansion of `stratified:K` over its program and query (core's `one_stage.draw.derive`, Lean
-/// `HmRow.stratifiedLaw`): this module checks its form (Lean `Flock.Draw.strataProblem`) and draws by it, never derives it.
+/// `HmRow.stratifiedLaw`): this module checks its form (Lean `Flock.Draw.strataProblem`) and samples by it, never derives it.
 pub mod unit_draw {
     use serde_json::{Value, json};
 
-    /// A stratum of the stratified law: a template's units as ascending, disjoint, non-adjacent half-open ranges, and its sample.
+    /// A stratum of the stratified sampling design: a template's units as ascending, disjoint, non-adjacent half-open ranges, and its sample.
     #[derive(Clone, Debug, PartialEq)]
     pub struct Stratum {
         pub template: String,
@@ -275,7 +339,7 @@ pub mod unit_draw {
         ((2 * k as u128 * size as u128 + population as u128) / (2 * population as u128)).max(1) as u64
     }
 
-    /// Why a stratified law isn't well formed over `population` units (Lean `Flock.Draw.strataProblem`), or `None`:
+    /// Why a stratified sampling design isn't well formed over `population` units (Lean `Flock.Draw.strataProblem`), or `None`:
     /// `1 <= k <= population`, distinct templates, each stratum's `k` the rule's, the ranges tiling `[0, population)` exactly.
     pub fn strata_problem(k: u64, strata: &[Stratum], population: u64) -> Option<String> {
         if strata.is_empty() || k < 1 || k > population {
@@ -323,7 +387,7 @@ pub mod unit_draw {
             }
         }
 
-        /// A law object: `{"law": "stratified", "k": K, "strata": [...]}` (the verifier's own expansion, `draw.derive`'s),
+        /// A sampling design object: `{"law": "stratified", "k": K, "strata": [...]}` (the verifier's own expansion, `draw.derive`'s),
         /// `{"law": "subset", "k": K}` or `{"law": "bernoulli", "p": "num/den"}`.
         pub fn of_json(v: &Value) -> Result<Law, String> {
             let keys: Vec<&str> = v.as_object().ok_or("a draw law is an object")?.keys().map(|k| k.as_str()).collect();
@@ -424,7 +488,7 @@ pub mod unit_draw {
         Ok(v)
     }
 
-    /// U2: exactly the law's keys; units ascending, distinct and in `[0, N)`; a subset has K <= N units; a Bernoulli p is
+    /// U2: exactly the sampling design's keys; units ascending, distinct and in `[0, N)`; a subset has K <= N units; a Bernoulli p is
     /// `num/den` with `0 <= num <= den`, `den > 0`, no unit at p = 0 and every unit at p = 1; a stratified sample's strata are
     /// well formed and tile the population (`strata_problem`), and exactly `k_s` of its units fall in each. Returns the units.
     pub fn check(v: &Value) -> Result<Vec<usize>, String> {
@@ -1144,7 +1208,7 @@ impl Challenger for LiveChallenger {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Verifier side: coin server
+// Verifier side: live-coin part
 // ---------------------------------------------------------------------------------------------------------------
 
 #[derive(Clone, Debug)]
@@ -1190,9 +1254,9 @@ pub struct SessionConfig {
     /// The prime prover's coins are served in this session (`Prime` rounds); `Commit` needs at least one before it.
     pub prime_live: bool,
     /// Step 0 (`coin_seed::SCHEME`): the verifier commits to a seed in answer to `Hello`, derives every coin from it and reveals
-    /// it in its verdict (lane flock-circuit). Off for every statement that does not ask for it.
+    /// it in its verdict. Off for every statement that does not ask for it.
     pub coin_seed: bool,
-    /// The coin server keeps every round's bytes and the replay compares the proof's messages with them byte for byte (the
+    /// The challenger's live-coin part keeps every round's bytes and the replay compares the proof's messages with them byte for byte (the
     /// round digests stay, as framing); the record carries them. Off for every statement that does not ask for it.
     pub retain_rounds: bool,
     /// The hash of every digest the record binds (root_F, root_B, publics, link, rounds, proofs, stream roots): SHA-256, or
@@ -1200,7 +1264,7 @@ pub struct SessionConfig {
     pub sha512_digests: bool,
     /// The sample this statement proves (its public header's `unit_draw`, under Σ); the record keeps it (U1).
     pub unit_draw: Option<Value>,
-    /// Draw units live: after registration (`Register`) the server draws them under this law over the population.
+    /// Sample units live: after registration (`Register`) the server samples them under this sampling design over the population.
     pub draw_law: Option<(unit_draw::Law, u64)>,
     /// M2 (`coin_tree::SCHEME`): at `Hello` the verifier commits to every coin of the session (one HM96 leaf per stream and
     /// round under one SHA-512 root) and opens each round's coins with its answer; the prover checks every opening first.
@@ -1418,7 +1482,7 @@ impl Server {
         Self::try_new(cfg, verifier).unwrap_or_else(|e| panic!("{e}"))
     }
 
-    /// A server that samples units at `Register` (its configuration's `draw_law`) and takes the drawn statement from `hook`.
+    /// A server that samples units at `Register` (its configuration's `draw_law`) and takes the sampled statement from `hook`.
     pub fn with_draw(mut self, hook: DrawHook) -> Self {
         self.on_draw = Some(hook);
         self
@@ -1684,7 +1748,7 @@ impl Server {
                     self.hello = Some(h);
                     return Resp::Coins(w);
                 }
-                // a live server draws the session's key and coins from the OS: without a source it refuses, rather than answer
+                // a live server samples the session's key and coins from the OS: without a source it refuses, rather than answer
                 // Ok and leave the prover to fail on a missing commitment
                 if self.cfg.coin_tree.is_some() && self.urandom.is_none() && !self.replaying {
                     return self.refuse("coin tree: no OS random source to draw the session's key and coins".into());
@@ -2321,7 +2385,7 @@ impl Server {
 
 struct ReplayState {
     record: Arc<BTreeMap<String, StreamRec>>,
-    /// the rounds' bytes where the coin server retained them (`SessionConfig::retain_rounds`): compared byte for byte
+    /// the rounds' bytes where the challenger's live-coin part retained them (`SessionConfig::retain_rounds`): compared byte for byte
     msgs: Arc<BTreeMap<(String, usize), Vec<u8>>>,
     used: BTreeMap<String, usize>,
     failures: Vec<String>,
@@ -2621,7 +2685,7 @@ mod coin_server_tests {
              Req::Round { stream: rep_stream("t", 0), content: binding, n: 3 }]
     }
 
-    /// A session whose coin tree the challenger samples answers the prover word for word as one drawn here on the same tape,
+    /// A session whose coin tree the challenger samples answers the prover word for word as one sampled here on the same tape,
     /// and records the same coins; the challenger opened its link points after its record's link roots and its round after
     /// the round's msg_sha512, as the audit of its release log holds the record to.
     #[test]
@@ -2652,7 +2716,7 @@ mod coin_server_tests {
         assert_eq!(opens.len(), 2);
     }
 
-    /// The coin server refuses a session whose tree the challenger samples under another nonce, or whose round doesn't open
+    /// The challenger's live-coin part refuses a session whose tree the challenger samples under another nonce, or whose round doesn't open
     /// its tree, at that request; and a server whose record would show only rounds' SHA-256 takes no tree from it.
     #[test]
     fn a_challengers_tree_under_another_nonce_a_bad_round_or_a_sha256_record_is_refused() {
@@ -2713,5 +2777,89 @@ mod thread_stack_tests {
         let states = pool.install(|| flock_core::run_hetero_chunks_stateful(64, || 0usize, |s, _| *s += chunk(&helped)));
         assert_eq!(states.iter().sum::<usize>(), 64 * (16 << 10));
         assert_eq!(flock_core::all_core_pool().install(|| deep(16 << 10)), 16 << 10);
+    }
+}
+
+#[cfg(test)]
+mod serve_sessions_tests {
+    use std::{
+        io::{Read, Write},
+        net::{TcpListener, TcpStream},
+        sync::{OnceLock, mpsc::channel},
+        thread::{self, ThreadId},
+    };
+
+    /// Two sessions' builds, each held until both have started, run at once, each on its own session's thread: a slow
+    /// build (a statement's first check) holds up neither the accepting thread nor another session. A build on the accepting
+    /// thread returns at once, so that failure fails the test rather than hanging it.
+    #[test]
+    fn a_slow_build_holds_up_no_other_session() {
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = l.local_addr().unwrap();
+        let accepting: OnceLock<ThreadId> = OnceLock::new();
+        let (started_tx, started) = channel::<(usize, ThreadId, bool)>();
+        let (opens, waits): (Vec<_>, Vec<_>) = (0..2).map(|_| channel::<()>()).unzip();
+        let mut waits = waits.into_iter().enumerate();
+        let accepting = &accepting;
+        let make = move || {
+            accepting.get_or_init(|| thread::current().id());
+            let (k, gate) = waits.next()?;
+            let started = started_tx.clone();
+            Some(move || {
+                let me = thread::current().id();
+                let on_accepting = accepting.get() == Some(&me);
+                started.send((k, me, on_accepting)).unwrap();
+                if !on_accepting {
+                    gate.recv().unwrap();
+                }
+                k
+            })
+        };
+        let serve = |i: usize, mut conn: TcpStream, k: usize| conn.write_all(&[i as u8, k as u8]).unwrap();
+        let (first, second, mut got) = thread::scope(|sc| {
+            let server = sc.spawn(move || super::serve_sessions(&l, Some(2), 2, make, serve));
+            let mut clients: Vec<TcpStream> = (0..2).map(|_| TcpStream::connect(addr).unwrap()).collect();
+            let first = started.recv().unwrap();
+            // the second build starts while the first still waits for its gate
+            let second = (!first.2).then(|| started.recv().unwrap());
+            for o in &opens {
+                // a build that returned at once has dropped its gate
+                let _ = o.send(());
+            }
+            server.join().unwrap();
+            let got: Vec<[u8; 2]> = clients.iter_mut().map(|c| { let mut b = [0; 2]; c.read_exact(&mut b).unwrap(); b }).collect();
+            (first, second, got)
+        });
+        assert!(!first.2, "session {}'s build ran on the accepting thread", first.0);
+        let second = second.unwrap();
+        assert!(!second.2 && second.1 != first.1, "the two builds ran on one thread");
+        assert_ne!(first.0, second.0);
+        got.sort();
+        assert_eq!(got, [[0, 0], [1, 1]], "each session served on its own build");
+    }
+}
+
+#[cfg(test)]
+mod concat_tests {
+    use super::*;
+
+    #[test]
+    fn concat_is_the_parts_in_order() {
+        let mut parts: Vec<Vec<F128>> = (0..300u64).map(|k| (0..k % 7).map(|i| F128::new(k, i)).collect()).collect();
+        parts.push((0..100_000u64).map(|i| F128::new(i, !i)).collect());
+        let slices: Vec<&[F128]> = parts.iter().map(Vec::as_slice).collect();
+        assert!(concat(&slices) == parts.concat());
+        assert!(concat(&parts) == parts.concat());
+        assert!(concat::<Vec<F128>>(&[]).is_empty());
+        let mut out = vec![std::mem::MaybeUninit::new(F128::new(7, 7)); parts.iter().map(Vec::len).sum()];
+        concat_into(&parts, &mut out);
+        assert!(out.iter().map(|x| unsafe { x.assume_init_read() }).collect::<Vec<_>>() == parts.concat());
+    }
+
+    #[test]
+    #[should_panic(expected = "a destination as long as the parts")]
+    fn concat_into_takes_only_its_length() {
+        let mut out = vec![std::mem::MaybeUninit::<F128>::uninit(); 3];
+        concat_into(&[vec![F128::new(1, 2); 2]], &mut out);
     }
 }

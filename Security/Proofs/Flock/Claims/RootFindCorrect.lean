@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Claims.RootFindAlg
+public import Mathlib.Algebra.Polynomial.Roots
+import Mathlib.FieldTheory.Finite.Basic
 
 /-!
 # The root finder is correct

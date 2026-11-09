@@ -25,7 +25,7 @@ def test_a_location_is_its_census_devices_where_the_census_has_them(name, device
 @pytest.mark.parametrize("name", REG.names("fleet"))
 def test_every_fleet_is_on_a_location(name):
     f = hardware.fleet(REG, name)
-    assert hardware.location(REG, f.location).phi > 0 and f.count > 0 and 0 <= f.eps_dark < 1
+    assert hardware.location(REG, f.location).phi > 0 and f.count > 0 and 0 <= f.eps_unreg < 1
 
 
 @pytest.mark.parametrize(("name", "gpus"), [("reference-h100", 1e5), ("reference-h200", 1e5), ("reference-b200", 1e5),

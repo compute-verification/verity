@@ -24,11 +24,13 @@ lane writes later (`<stamp>-report-<slug>.md`) never takes its checkpoints; with
 never a report another agent sent the lane (`<stamp>-report-from-<x>-<slug>.md`) or a note of another kind whose slug says report
 (`<stamp>-handoff-from-<x>-report-for.md`).  `checkpoint` writes
 `CHECKPOINT <sha> (<HH:MM>Z) [<state>] <text>` directly under the front matter (newest first, where lanes already put them),
-sets the front matter's `status:` to the state, and creates the report if the lane has none.  `superseded` marks a lane whose
+sets the front matter's `status:` to the state, names the writing agent in its `origin:` (the agent watch credits a note to
+every agent its origin names; an origin that names it already is kept as is, any other gains `; checkpoint by <id>`), and
+creates the report if the lane has none.  `superseded` marks a lane whose
 work a successor took over: it is done, never STALE.
 
 Mail is files named `*handoff*` / `*asks*` / `*reply*` in the recipient's lane dir: the machines' notices (the merge queue's
-refusals, the steward's kills and claim refusals) and older agents' handoffs.  Since 2026-10-01 agents message each other on
+refusals, the steward's kills and claim refusals) and older agents' handoffs.  Agents message each other on
 Slack, never through notes, and the inbox flags an agent's handoff as sent the wrong way.  `checkpoint` (and `inbox`) print the
 ones changed since the lane was last shown its inbox, by mtime, and mark them read; a successor (`bind --succeeds`, or the
 predecessor's `[superseded] by <lane>` checkpoint) also gets its predecessors' unread ones.  `checkpoint LANE final` then runs
@@ -237,7 +239,28 @@ def wake_hint(text: str, now: dt.datetime | None = None) -> str | None:
             + "; not a cron timer")
 
 
-def checkpoint(root: Path, lane: str, state: str, text: str, commit: str | None = None, now: dt.datetime | None = None) -> Path:
+def _set_front(front: str, key: str, value: str) -> str:
+    if re.search(rf"^{key}:", front, re.M):
+        return re.sub(rf"^{key}:.*$", lambda _: f"{key}: {value}", front, count=1, flags=re.M)
+    return front[:-4] + f"{key}: {value}\n---\n"
+
+
+_AGENT_ID = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|bc-[0-9a-f]{8}")
+
+
+def _credit_writer(front: str, agent: str) -> str:
+    """The front matter with `agent` named in its `origin:`: an origin that names it already (in full or short) is kept as is,
+    and any other gains `; checkpoint by <agent>`, since the agent watch reads every id and branch an origin names."""
+    m = re.search(r"^origin:(.*)$", front, re.M)
+    if m is None:
+        return _set_front(front, "origin", agent)
+    if any(agent.startswith(i) or i.startswith(agent) for i in _AGENT_ID.findall(m[1])):
+        return front
+    return front[: m.end()] + f"; checkpoint by {agent}" + front[m.end():]
+
+
+def checkpoint(root: Path, lane: str, state: str, text: str, commit: str | None = None, now: dt.datetime | None = None,
+               agent: str | None = None) -> Path:
     if state not in STATES:
         raise ValueError(f"state must be one of {', '.join(STATES)}, not {state!r}")
     now = now or _utcnow()
@@ -249,8 +272,9 @@ def checkpoint(root: Path, lane: str, state: str, text: str, commit: str | None 
         _io(lambda: path.write_text(head))
     front, body = _split_front_matter(_io(path.read_text))
     if front:
-        front = re.sub(r"^status:.*$", f"status: {state}", front, count=1, flags=re.M) if re.search(r"^status:", front, re.M) \
-            else front[:-4] + f"status: {state}\n---\n"
+        front = _set_front(front, "status", state)
+        if agent:
+            front = _credit_writer(front, agent)
     line = f"CHECKPOINT {commit or _head_commit()} ({now:%H:%M}Z) [{state}] {' '.join(text.split())}\n"
     new = front + "\n" + line + body.lstrip("\n") if front else line + body
     _io(lambda: path.write_text(new))
@@ -1349,8 +1373,8 @@ def steward_entries(path: Path, table: str, now: dt.datetime, state: dict, fail:
 
 
 def due_period(at: re.Match, now: dt.datetime, weekday: str | None = None) -> str | None:
-    """The period a scheduled entry is due in: the UTC day (`2026-09-28`) once `now` is at or after `at` (an HH:MMZ match), or with
-    `weekday` the ISO week (`2026-W40`) once `now` is at or after `at` on that weekday; None before."""
+    """The period a scheduled entry is due in: the UTC day (`YYYY-MM-DD`) once `now` is at or after `at` (an HH:MMZ match), or with
+    `weekday` the ISO week (`YYYY-Www`) once `now` is at or after `at` on that weekday; None before."""
     start = now.replace(hour=int(at[1]) % 24, minute=int(at[2]), second=0, microsecond=0)
     if weekday is None:
         return f"{now:%Y-%m-%d}" if now >= start else None
@@ -1407,7 +1431,7 @@ def run_lines(root: Path, now: dt.datetime, state: dict, config: Path | None = N
 
 def sync_lines(root: Path, srep: dict, now: dt.datetime) -> list[str]:
     """The watcher's line for its own `notes sync`: the report when it committed, and a failure as `SYNC-FAILED ahead A behind B:
-    <report>` every pass it lasts, so a clone that stops syncing (83 commits behind on 2026-09-26) is never silent.  A lane note left
+    <report>` every pass it lasts, so a clone that stops syncing is never silent, however far behind.  A lane note left
     out for a stamp ahead of the clock or broken front matter is one `SYNC-REFUSED <path>: ...` line every pass it lasts; the other
     notes synced.  A `SYNC-WARN <path>: ...` line comes once, with the commit that took the note."""
     from . import notes_sync  # noqa: PLC0415
@@ -1962,7 +1986,9 @@ def _main(argv: list[str]) -> int:
         os.environ[LIVENESS_ENV] = ns.liveness
     if ns.cmd in ("checkpoint", "inbox"):
         if ns.cmd == "checkpoint":
-            print(checkpoint(root, ns.lane, ns.state, " ".join(ns.text), commit=ns.commit))
+            from .slack import self_agent_id
+
+            print(checkpoint(root, ns.lane, ns.state, " ".join(ns.text), commit=ns.commit, agent=self_agent_id()))
             if hint := wake_hint(" ".join(ns.text)):
                 print(hint)
             if ns.keep_pod:                                 # the reaper reads it from the binding

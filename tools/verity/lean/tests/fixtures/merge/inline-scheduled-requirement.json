@@ -1,10 +1,10 @@
 {
  "base": {
   "guarantees": {
-   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": {
+   "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement": {
     "owner": "@compute-accounting",
     "signature": [
-     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement : Properties.DeclaredCircuit.ScheduledRequirement"
+     "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement : Properties.RegisteredCircuit.ScheduledRequirement"
     ],
     "assumptions": [],
     "type_hash": "fd5936396afb5519138efa2c4956c708c1409dbaedcfe8815f9176deada0fa37"
@@ -12,7 +12,7 @@
   },
   "shape": {
    "inline": {
-    "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": {
+    "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement": {
      "instLENat.le E (instHMul.hMul (instHMul.hMul 3 Accounting.Gates.p1024.squarings) es)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
      "instLENat.le εden (instHMul.hMul (instHPow.hPow 2 64) εnum)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
      "Accounting.RateSketch.LifetimeCapped layout joined L": "Accounting.RateSketch.LifetimeCapped taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -32,10 +32,10 @@
  },
  "ours": {
   "guarantees": {
-   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": {
+   "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement": {
     "owner": "@compute-accounting",
     "signature": [
-     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement : Properties.DeclaredCircuit.ScheduledRequirement"
+     "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement : Properties.RegisteredCircuit.ScheduledRequirement"
     ],
     "assumptions": [],
     "type_hash": "fd5936396afb5519138efa2c4956c708c1409dbaedcfe8815f9176deada0fa37"
@@ -43,7 +43,7 @@
   },
   "shape": {
    "inline": {
-    "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": {
+    "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement": {
      "Accounting.Gates.Property caps Aud Wc": "Accounting.Gates.Property taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
      "Accounting.Gates.Restricted B Wc": "Accounting.Gates.Restricted taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
      "Accounting.RateSketch.LifetimeCapped (Properties.RemoteAudit.sessionLayout blocks dflt appended sent) joined L": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -65,10 +65,10 @@
  },
  "theirs": {
   "guarantees": {
-   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": {
+   "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement": {
     "owner": "@compute-accounting",
     "signature": [
-     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement : Properties.DeclaredCircuit.ScheduledRequirement"
+     "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement : Properties.RegisteredCircuit.ScheduledRequirement"
     ],
     "assumptions": [],
     "type_hash": "fd5936396afb5519138efa2c4956c708c1409dbaedcfe8815f9176deada0fa37"
@@ -76,7 +76,7 @@
   },
   "shape": {
    "inline": {
-    "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": {
+    "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement": {
      "instLENat.le E (instHMul.hMul (instHMul.hMul 3 Accounting.Gates.p1024.squarings) es)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
      "instLENat.le εden (instHMul.hMul (instHPow.hPow 2 64) εnum)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
      "Accounting.RateSketch.LifetimeCapped (Properties.RemoteAudit.sessionLayout blocks dflt appended sent) joined L": "Accounting.RateSketch.LifetimeCapped taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",

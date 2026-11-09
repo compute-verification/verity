@@ -1,5 +1,5 @@
 """A short varied load on a `verity-vllm serve-openai` endpoint, in bursts the server's idle closes into Commit windows, or
-as network-accounting's varied traffic.
+as the network certifier's varied traffic.
 
     python examples/vllm/serve_load.py --port 18084 --model unsloth/Llama-3.2-1B [--bursts 8] [--per-burst 4] [--seed 0] --out FILE
     python examples/vllm/serve_load.py --port 18084 --model unsloth/Llama-3.2-1B --varied 120 [--rate 2] [--prompt-range 16:1024]
@@ -12,7 +12,7 @@ distinct token ids (BOS, then 16 to 200 ids, so no two share a cached block), to
 the stochastic ones with a client seed) and ``max_tokens`` 4 to 40; the next burst starts once every request of this one has
 finished and the engine has idled. One JSON line a request goes to ``--out``: its user, body and response.
 
-``--varied N`` draws N requests as `benchmarks/network_traces/certifier_serve.varied_requests` does: Poisson arrivals at
+``--varied N`` samples N requests as `benchmarks/network_traces/certifier_serve.varied_requests` does: Poisson arrivals at
 ``--rate`` a second; each prompt one chat turn (Llama 3's header, one of six questions, filler, the assistant header, in the
 endpoint's tokens from ``/tokenize``) cut to a length log-uniform in ``--prompt-range``, so prompts share cached prefixes;
 ``max_tokens`` uniform in 1 … ``--max-tokens``, greedy, a seed of its own, streamed; ``user`` ``varied.<j>``. With
@@ -20,7 +20,7 @@ endpoint's tokens from ``/tokenize``) cut to a length log-uniform in ``--prompt-
 order, as the network certifier numbers its releases), and is sent up to ``--jitter-ms`` after its arrival, so the frontend may read
 the bodies out of release order.
 
-``--fixed N`` is one full window of fixed length: N requests whose prompts are sampled as ``--varied`` draws them
+``--fixed N`` is one full window of fixed length: N requests whose prompts are sampled as ``--varied`` samples them
 (``--prompt-range L:L`` fixes their length), each with ``ignore_eos`` and ``max_tokens`` S (``--window-steps``), all arriving
 at 0, streamed; ``user`` ``fixed.<j>``. With ``--release RUN`` request 0 goes out only once the endpoint has answered every
 other one's head: under ``--admit release-order`` serve-openai answers a streamed request's head once it holds it, and holds
@@ -29,7 +29,7 @@ its first step and each runs exactly S steps.
 
 A varied or fixed run also writes its timings beside ``--out`` (`timings_path`: load.jsonl's are load.timings.json), one JSON
 document: ``start_unix``, the wall clock at the release run's start (the server's step ends, step_trace.jsonl's ``t_end``,
-are on that clock), and for each request in arrival order its ``user``, ``release``, ``at_s`` (its drawn arrival),
+are on that clock), and for each request in arrival order its ``user``, ``release``, ``at_s`` (its sampled arrival),
 ``send_s``, ``first_token_s`` (when the first streamed event carrying output ids was read), ``done_s`` (when its stream
 ended), ``tokens`` (the output ids it streamed) and ``ok``, each time in seconds on the monotonic clock from the release
 run's start. They are the client's measurements of synthetic load; nothing checks them.
@@ -123,7 +123,7 @@ def tokenize(port: int, model: str, text: str) -> list[int]:
 
 
 def varied(port: int, model: str, n: int, *, rate: float, prompt_tokens: tuple[int, int], max_tokens: int, seed: int) -> list[dict]:
-    """``n`` varied requests, each {user, at_s, body}, drawn as the module docstring says."""
+    """``n`` varied requests, each {user, at_s, body}, sampled as the module docstring says."""
     lo, hi = prompt_tokens
     bos = tokenize(port, model, "")
     tail = tokenize(port, model, CHAT_TAIL)[len(bos):]

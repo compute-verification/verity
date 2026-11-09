@@ -1,8 +1,8 @@
 """The program format (`verity/ml/circuits/PROTOCOL.md`): every rule of the spec against its pinned vector (`format_vectors.json`).
 
 The implementation is held to the file section by section; canonical JSON (as RFC 8785), leaf order, reference sequences and the
-interning order are also restated here independently of it.  `python verity/ml/circuits/tests/test_format_spec.py --write`
-rewrites the file from the reference implementation (a deliberate act: any change to a pinned rule shows in its diff)."""
+interning order are also restated here independently of it.  Its `--write` rewrites the file from the reference implementation
+(a deliberate act: any change to a pinned rule shows in its diff); `REWRITE` names the command that runs it."""
 from __future__ import annotations
 
 import decimal
@@ -23,6 +23,8 @@ from verity.ml.circuits.refs import Affine, Coll, Concat, array_of, refs_from_js
 from verity.ml.circuits.types import Array, RecordType, Tuple, Value, type_from_json
 
 PATH = Path(__file__).parent / "format_vectors.json"
+REWRITE = ("the vectors differ from the reference implementation's; a change meant to move them rewrites them with "
+           "`uv run python tools/verity/check/pins.py --write verity/ml/circuits/tests/format_vectors.json`")
 V16, V32 = Value(16), Value(32)
 M32 = (1 << 32) - 1
 
@@ -433,6 +435,7 @@ def build() -> dict:
         "program_digest": codec.program_digest(desc),
         "alias_writer": [[label, list(at) if at else None, enc.refs(r, at)] for label, at, r in ALIAS],
         "alias_reader": {"node": 12, "arg": 0, "refs": [list(r) for r in _root_nodes(D)[12].args[0].refs]},
+        "definition_digest": [[fid, codec.definition_digest(e, desc)] for fid, e in sorted(desc["definitions"].items())],
         "decoder_rejects": rejects,
         "input_ids": [[i, bool(INPUT_ID.fullmatch(i))] for i in INPUT_IDS],
         "input_lowering": [[t, [[n.fn.id, n.form, list(n.axes), n.n] for n in Program(_identity(t)).root.body.nodes]] for t in LOWERINGS],
@@ -504,7 +507,7 @@ def decoded():
 # -- 1. canonical JSON ----------------------------------------------------------------------------------------------------------------
 
 def test_canonical_json_is_jcs_on_the_domain(live):
-    assert live["canonical_json"] == VECTORS["canonical_json"]
+    assert live["canonical_json"] == VECTORS["canonical_json"], REWRITE
     for v, s in VECTORS["canonical_json"]["in_domain"]:
         assert codec.jcs_domain_error(v) is None and codec.canonical_json(v) == jcs(v) == s.encode()
     for d in (VECTORS["descriptor"], VECTORS["wide"]["descriptor"]):
@@ -524,25 +527,25 @@ def test_outside_the_domain_the_bytes_differ_and_the_codec_refuses():
 def test_the_program_digests(decoded):
     b = VECTORS["descriptor"].encode()
     assert hashlib.sha512(b).hexdigest() == VECTORS["program_digest"] == codec.program_digest(decoded.desc)
-    assert codec.program_digest(Program(PROG)) == VECTORS["program_digest"]
+    assert codec.program_digest(Program(PROG)) == VECTORS["program_digest"], REWRITE
 
 
 # -- 2. types, 3. reference sequences ----------------------------------------------------------------------------------------------
 
 def test_types_and_leaf_order(live):
-    assert live["types"] == VECTORS["types"]
+    assert live["types"] == VECTORS["types"], REWRITE
     for t, n, ws in VECTORS["types"]:
         assert leaf_widths(t) == ws and len(ws) == n and type_from_json(t).to_json() == t
 
 
 def test_reference_sequences(live):
-    assert live["refs"] == VECTORS["refs"]
+    assert live["refs"] == VECTORS["refs"], REWRITE
     for j, out in VECTORS["refs"]:
         assert expand(j) == out and refs_from_json(j).to_json() == j
 
 
 def test_member_references(live):
-    assert live["take"] == VECTORS["take"]
+    assert live["take"] == VECTORS["take"], REWRITE
     for t, j, ax, m, out in VECTORS["take"]:
         shape, tt = [], t
         while tt[0] == "Array":
@@ -565,7 +568,7 @@ def test_member_references(live):
 # -- 4. the descriptor ----------------------------------------------------------------------------------------------------------
 
 def test_the_descriptor_round_trips(decoded):
-    assert _canon(codec.encode_program(Program(PROG))) == VECTORS["descriptor"]
+    assert _canon(codec.encode_program(Program(PROG))) == VECTORS["descriptor"], REWRITE
     assert _canon(codec.encode_program(decoded)) == VECTORS["descriptor"]
     desc = json.loads(VECTORS["descriptor"])
     assert sorted(desc) == ["callees", "definitions", "program_fn", "root", "schema", "types"]
@@ -580,30 +583,83 @@ def test_the_interning_tables_are_first_seen_order():
 
 
 def test_the_alias_and_flat_concatenation(live, decoded):
-    assert live["alias_writer"] == VECTORS["alias_writer"]
-    assert live["alias_reader"] == VECTORS["alias_reader"]
+    assert live["alias_writer"] == VECTORS["alias_writer"], REWRITE
+    assert live["alias_reader"] == VECTORS["alias_reader"], REWRITE
     nd = _node(json.loads(VECTORS["descriptor"]), 12)
     assert nd["args"][0]["refs"] == {"concat": [{"alias": [11, 0]}, {"affine": ["n", 3, 0, 1]}, {"affine": ["n", 5, 1, 1]}]}
     earlier = _node(json.loads(VECTORS["descriptor"]), 11)["args"][0]["refs"]
     assert VECTORS["alias_reader"]["refs"] == expand(earlier) + [["n", 3, 0], ["n", 5, 1]]
 
 
+def canonical_entry(desc: dict, fid: str) -> dict:
+    """§4.8 restated: the entry with the tables inline and every sequence flat, an alias replaced by the parts it stands for."""
+    e = json.loads(json.dumps(desc["definitions"][fid]))
+    if e["form"] != "composite":
+        return e
+    rows: list[list[list]] = []
+
+    def parts(j) -> list:
+        if "alias" in j:
+            return rows[j["alias"][0]][j["alias"][1]]
+        return [p for x in j["concat"] for p in parts(x)] if "concat" in j else [j]
+
+    def written(ps: list):
+        return ps[0] if len(ps) == 1 else {"concat": ps}
+
+    for nd in e["body"]["nodes"]:
+        rows.append([parts(a["refs"]) for a in nd["args"]])
+        nd["fn"], nd["out"] = desc["callees"][nd["fn"]], desc["types"][nd["out"]]
+        for a, ps in zip(nd["args"], rows[-1]):
+            a["type"], a["refs"] = desc["types"][a["type"]], written(ps)
+    e["body"]["ret"] = written(parts(e["body"]["ret"]))
+    return e
+
+
+def test_the_definition_digest(live, decoded):
+    assert live["definition_digest"] == VECTORS["definition_digest"]
+    desc = json.loads(VECTORS["descriptor"])
+    assert [fid for fid, _ in VECTORS["definition_digest"]] == sorted(desc["definitions"])
+    v0 = codec.encode_program(Program(PROG), codec.SCHEMA_V0)
+    for fid, digest in VECTORS["definition_digest"]:
+        assert hashlib.sha512(jcs(canonical_entry(desc, fid))).hexdigest() == digest
+        assert codec.definition_digest(codec.definition_entry(decoded.defs[fid])) == digest
+        assert codec.definition_digest(v0["definitions"][fid]) == digest
+    root = canonical_entry(desc, desc["root"])["body"]["nodes"][12]["args"][0]["refs"]
+    assert "alias" not in json.dumps(root) and expand(root) == VECTORS["alias_reader"]["refs"]
+
+
 @pytest.mark.parametrize("label,edit,why", REJECT, ids=[r[0] for r in REJECT])
 def test_the_decoder_refuses(live, label, edit, why):
     got = dict(live["decoder_rejects"])[label]
-    assert got == dict(VECTORS["decoder_rejects"])[label] and got is not None and why in got
+    assert got == dict(VECTORS["decoder_rejects"])[label], REWRITE
+    assert got is not None and why in got
+
+
+def test_the_self_contained_entry_and_v0(decoded):
+    """§4.7: a v0 descriptor's definitions are the self-contained entries, which a v0 decode gives back; a v1 decode flattens
+    node 12's nested concatenation, the same references, so the root's entry, and only it, differs."""
+    program = Program(PROG)
+    v0 = codec.encode_program(program, codec.SCHEMA_V0)
+    assert sorted(v0) == ["annotations", "definitions", "program_fn", "root", "schema"]
+    assert v0["definitions"][v0["root"]] == codec.definition_entry(program.root)
+    assert codec.encode_program(codec.decode_program(v0, REG), codec.SCHEMA_V0)["definitions"] == v0["definitions"]
+    via_v1 = {**v0, "definitions": codec.encode_program(decoded, codec.SCHEMA_V0)["definitions"]}
+    assert [k for k in v0["definitions"] if via_v1["definitions"][k] != v0["definitions"][k]] == [v0["root"]]
+    nested, flat = _node(v0, 12)["args"][0]["refs"], _node(via_v1, 12)["args"][0]["refs"]
+    assert any("concat" in p for p in nested["concat"]) and not any("concat" in p for p in flat["concat"])
+    assert expand(nested) == expand(flat)
 
 
 # -- 5. programs and Input nodes ------------------------------------------------------------------------------------------------
 
 def test_input_nodes_are_recognised_by_id(live, decoded):
-    assert live["input_ids"] == VECTORS["input_ids"] and live["program"] == VECTORS["program"]
+    assert live["input_ids"] == VECTORS["input_ids"] and live["program"] == VECTORS["program"], REWRITE
     assert [i for i, ok in VECTORS["input_ids"] if ok] == ["Input16_v1", "Input1_v1", "Input128_v1"]
     assert [k for k, n in enumerate(decoded.root.body.nodes) if is_input(n.fn)] == [k for k, _, _ in VECTORS["program"]["input_nodes"]]
 
 
 def test_registered_inputs_are_recognised_by_id_and_bound_into_the_digest(live, decoded):
-    assert live["binding_ids"] == VECTORS["binding_ids"] and live["registered_program"] == VECTORS["registered_program"]
+    assert live["binding_ids"] == VECTORS["binding_ids"] and live["registered_program"] == VECTORS["registered_program"], REWRITE
     assert [i for i, b in VECTORS["binding_ids"] if b] == ["Input16_v1", "RegisteredInput16_v1", "RegisteredInput1_v1"]
     reg = VECTORS["registered_program"]
     R = codec.decode_program(json.loads(reg["descriptor"]), REG)
@@ -616,14 +672,14 @@ def test_registered_inputs_are_recognised_by_id_and_bound_into_the_digest(live, 
 
 
 def test_input_lowering(live):
-    assert live["input_lowering"] == VECTORS["input_lowering"]
+    assert live["input_lowering"] == VECTORS["input_lowering"], REWRITE
 
 
 # -- 6. layout, 7. resolution ---------------------------------------------------------------------------------------------------
 
 def test_layout_member_counts_and_offsets(live, decoded):
     got, want = live["layout"], VECTORS["layout"]
-    assert got["nodes"] == want["nodes"] and got["offsets"] == want["offsets"] and got["gates_total"] == want["gates_total"]
+    assert got["nodes"] == want["nodes"] and got["offsets"] == want["offsets"] and got["gates_total"] == want["gates_total"], REWRITE
     for k, form, _, members, gates, off in want["nodes"]:
         n = decoded.root.body.nodes[k]
         assert members == (n.n if form in ("batch", "scan") else 1)
@@ -634,16 +690,16 @@ def test_layout_member_counts_and_offsets(live, decoded):
 
 
 def test_the_gate_table(live):
-    assert live["layout"]["gates"] == VECTORS["layout"]["gates"]
-    assert live["layout"]["root_outputs"] == VECTORS["layout"]["root_outputs"]
+    assert live["layout"]["gates"] == VECTORS["layout"]["gates"], REWRITE
+    assert live["layout"]["root_outputs"] == VECTORS["layout"]["root_outputs"], REWRITE
 
 
 def test_scope_resolution(live):
-    assert live["layout"]["resolve"] == VECTORS["layout"]["resolve"]
+    assert live["layout"]["resolve"] == VECTORS["layout"]["resolve"], REWRITE
 
 
 def test_a_forward_reference_decodes_and_q_word_refuses_it(live):
-    assert live["forward_reference"] == VECTORS["forward_reference"]
+    assert live["forward_reference"] == VECTORS["forward_reference"], REWRITE
     f = VECTORS["forward_reference"]
     assert f["root_gate_11_operands"] == [0, 39] and f["call_gate_0_operands"] == [12, 1] and "not topological" in f["q_word"]
     assert f["root_refused"]["node"] == 3 and f["call_refused"]["definition"] == "TPair_v1" and f["call_refused"]["why"] == "not topological"
@@ -652,11 +708,12 @@ def test_a_forward_reference_decodes_and_q_word_refuses_it(live):
 # -- 8. Q_word v1 inputs: wiring, wide gates ------------------------------------------------------------------------------------
 
 def test_the_wiring_list(live):
-    assert live["wiring"] == VECTORS["wiring"] == ["Bf16ToF32_v1", "F32BitsShl23_v1", "F32Fabs_v1"]
+    assert live["wiring"] == VECTORS["wiring"], REWRITE
+    assert VECTORS["wiring"] == ["Bf16ToF32_v1", "F32BitsShl23_v1", "F32Fabs_v1"]
 
 
 def test_wide_gates(live):
-    assert live["wide"] == VECTORS["wide"]
+    assert live["wide"] == VECTORS["wide"], REWRITE
     w, n = VECTORS["wide"]["graph"]["wide"], VECTORS["wide"]["graph"]["narrow"]
     assert w["recomputed"] == [] and n["recomputed"] == [[2, 1]]
     assert w["external"] == [1, 1, 1, 0] and len(w["input_ids"]) == 1 and len(n["input_ids"]) == 5

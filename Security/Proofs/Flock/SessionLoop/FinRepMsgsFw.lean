@@ -1,9 +1,47 @@
 module
 
-public import Proofs.Flock.SessionLoop.FinPrevFw
 public import Proofs.Flock.SessionLoop.FinHmkRet
-public import Proofs.Flock.SessionLoop.FinRepPads
-public import Proofs.Flock.Claims.ZK.FinishSwMkAny
+public import Proofs.Flock.SessionLoop.FinPrevFw
+public import Proofs.Flock.SessionLoop.FinRepRows
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import Proofs.Flock.Claims.ZK.FinishSwInner
+import Proofs.Flock.Claims.ZK.FinishSwMkAny
+import Proofs.Flock.SessionLoop.FinCommits
+import Proofs.Flock.SessionLoop.FinPiopRet
+import Proofs.Flock.SessionLoop.FinPoints
+import Proofs.Flock.SessionLoop.FinRounds
+import Proofs.Flock.SessionLoop.RepSrc
 
 /-!
 # `FinRepMsgs` with no rows
@@ -38,7 +76,7 @@ variable (L₀ : LeanRelease Flock.Wit Tp)
   (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
-/-- **The request's pads are the tape's**: where the frame draws the tape's pads (`RepSrc`), at table `j`'s rep `r`'s
+/-- **The request's pads are the tape's**: where the frame samples the tape's pads (`RepSrc`), at table `j`'s rep `r`'s
 request, its pads are the tape's pads of table `j`'s rep `r` at the table's layout (`Masked.pads_frame_eq`, at the
 layout the frame starts at, `lay_ofLoopLink`). -/
 theorem finRepPads_tape (hS : Loop.RepSrc L₀ src x w) {ν : finS.Nonce} {t : finS.Tape} {h : List (Msg × Msg)}
@@ -87,7 +125,7 @@ theorem finRepPads_tape (hS : Loop.RepSrc L₀ src x w) {ν : finS.Nonce} {t : f
 
 set_option maxHeartbeats 4000000 in
 /-- **`FinRepMsgs` with no rows**: in the masked scope, with a witness, at a statement the loop serves whose level 0
-and pads the source draws from the tape (`Level0Src`, `RepSrc`), below `zp 64` the workers' clear values at table `j`'s
+and pads the source samples from the tape (`Level0Src`, `RepSrc`), below `zp 64` the workers' clear values at table `j`'s
 rep `r`'s run are the request's. The cut session's reps at streams up to `2j + r` return (`prevCut_views`,
 `repCut_views_ret`), so the views' masked values there are the request's plus its pads (`swSrcE_hmk_ret`, at the views'
 commitments and pads commitment, `cmsCut_ok`, `icCut_ok`, and `finPiop`'s sizes); they are the workers' clear values
@@ -96,8 +134,8 @@ theorem finRepMsgs_ret (vs : finS.SwVals)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hS : Loop.RepSrc L₀ src x w) (hS0 : Level0Src src x w)
-    (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
-    (hc : finS.SwCausal vs) : FinRepMsgs vs L₀ src (realOf src) wk x w := by
+    (hE : LeanRelease.LiveRoundEqOwn finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
+    (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs) : FinRepMsgs vs L₀ src (realOf src) wk x w := by
   intro ν t κ m₀ ρ₀ ops s0 spec j r tb hi q f ic' l p tr l' hrun
   obtain ⟨hF, hsx, hRep, -, hl, -⟩ := hrun
   have hx : Masked.Live x := Masked.live_of hsc hR

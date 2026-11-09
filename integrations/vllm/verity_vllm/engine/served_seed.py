@@ -1,11 +1,15 @@
 """The served engine's public default seed: a request that sends no ``seed`` is sampled under `DEFAULT_SEED`.
 
-Model Runner V2 draws each sampled token's Gumbel noise from Philox keyed by the request's seed and the token's position
+Model Runner V2 samples each sampled token's Gumbel noise from Philox keyed by the request's seed and the token's position
 (`vllm/v1/worker/gpu/sample/gumbel.py`), and gives a request without a seed one from ``np.random`` (`SamplingStates.add_request`):
 a seed nobody certified, which would make every token sampled at temperature > 0 a channel of the prover's choosing. A seed is
 an ordinary request input: the client's, certified in the ingress frames like the prompt, or this
-public default, fixed with the registered compiler. `install` applies it at the engine's ``add_request``, so the scheduler,
+public default. `install` applies it at the engine's ``add_request``, so the scheduler,
 the step trace, the runner and the Commit all see the seed the sample used.
+
+The compiler takes a stochastic request's seed only from its certified body or as `derived` from its certified id and the
+window's verifier coin (`program.predict.reads.seed_of`), and refuses one served under `DEFAULT_SEED`: until serving applies
+`derived`, an unseeded stochastic request served here doesn't compile.
 
 Stdlib only at import, and nothing from vLLM: the request's params are copied with their own ``clone`` (vLLM's
 ``SamplingParams.clone``), else `copy.copy`.
@@ -18,10 +22,24 @@ from typing import Any
 
 from verity_vllm.engine.hooks import Hooks
 
-__all__ = ["DEFAULT_SEED"]
+__all__ = ["DEFAULT_SEED", "derived"]
 
 #: The public default seed: the first 63 bits of SHA-512 over its name, so nobody chose its value.
 DEFAULT_SEED = int.from_bytes(hashlib.sha512(b"verity-vllm/served-default-seed/v1").digest()[:8], "big") >> 1
+#: `derived`'s domain
+DERIVED = b"verity-vllm/served-seed/derived/v1"
+
+
+def derived(coin: bytes, request_id: str) -> int:
+    """The seed of a request that sends none, in a window whose verifier coin is ``coin``: the first 63 bits of SHA-512 over
+    `DERIVED`, the coin and the request's certified id, each length-prefixed (u32be), so nobody serving it chose its value."""
+    if type(coin) is not bytes or not coin:
+        raise ValueError(f"a window's verifier coin is non-empty bytes, not {coin!r}")
+    if type(request_id) is not str:
+        raise ValueError(f"a request's id is a string, not {request_id!r}")
+    rid = request_id.encode()
+    data = DERIVED + len(coin).to_bytes(4, "big") + coin + len(rid).to_bytes(4, "big") + rid
+    return int.from_bytes(hashlib.sha512(data).digest()[:8], "big") >> 1
 
 
 def seeded(params: Any) -> Any:

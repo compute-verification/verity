@@ -1,4 +1,4 @@
-"""A served tree registered as a port (`verity.core.protocols.sampled_proofs.one_stage.served`), on a statement Flock
+"""A served tree registered as a port (`verity.core.protocols.spot.one_stage.served`), on a statement Flock
 proves: the end-to-end fixture of `test_lean_served_registered.py`, beside it in Flock's tests (which may import core).
 
 The program (`program`) is `N` RoPE d64 template instances, instance `i` reading row `POS[i]` of the served tree `cs_table`
@@ -37,8 +37,8 @@ from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import coll_concat
 from verity.ml.circuits.types import Array
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G
-from verity.core.protocols.sampled_proofs.one_stage.served import ServedTree, register_served
+from verity.core.protocols.spot.one_stage import partition as P, registered as G
+from verity.core.protocols.spot.one_stage.served import ServedTree, register_served
 
 N = 32
 ROWS = 40
@@ -55,7 +55,7 @@ FORMATS = {"v1": G.SCHEMA, "v2": G.SCHEMA_V2, "seg": G.SCHEMA_SEG}
 
 def program() -> tuple[Program, dict]:
     """The verifier's own program and query."""
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     template = TM.rope_head(64).definition()
     (_, xt), (_, ct) = template.signature()[0]
@@ -73,14 +73,14 @@ def program() -> tuple[Program, dict]:
 
 def stage(out: Path, seed: int = SEED, schema: str = G.SCHEMA) -> dict:
     from verity_flock import circuit as FC
-    from verity_numerical.bench import templates as TM
-    from verity_numerical.bench.generate import generate
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock import subcircuit_templates as TM
+    from synthetic_sets import synthetic_set
+    from verity_flock.input_sets import InputSet
 
     out.mkdir(parents=True, exist_ok=True)
     prog, query = program()
     part = P.partition(prog, query)
-    s = InputSet.open(generate(TM.rope_head(64), N, seed, out / "set")["path"])
+    s = InputSet.open(synthetic_set(TM.rope_head(64), N, seed, out / "set")["path"])
     low = FC.lowering_for_set(s)
     x = np.asarray(s.port("x", 0, N), np.uint16).reshape(N, -1)
     bits = {} if schema == G.SCHEMA else {"port_bits": [16 * x.shape[1], 16 * WORDS],

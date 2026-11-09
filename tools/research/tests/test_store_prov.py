@@ -493,7 +493,7 @@ def test_attempt_build_from_fixture_run_dir(tmp_path):
 
 
 def test_a_result_too_big_for_a_manifest_publishes_its_largest_fields_as_the_payload(tmp_path):
-    """INF-43: r20261010-162750-3ea6's 593 KB result.json made a 358 KB meta, over META_MAX_BYTES, so its attempt never published."""
+    """A 593 KB result.json makes a 358 KB meta, over META_MAX_BYTES, so without this its attempt would never publish."""
     d = _run_copy(tmp_path)
     doc = json.loads((d / "result.json").read_text())
     doc["findings"] = ["x" * 1000] * 400
@@ -732,7 +732,7 @@ def test_machine_side_runner_loads_tool_from_shipped_source(tmp_path):
     store = json.loads((root / "runs/r1/job.json").read_text())["store"]
     assert "error" not in store, store.get("error")
     assert store["tool"] == {"name": "tc_probe", "version": "1", "spec": "benchmarks.tc_probe.tool:TC_PROBE"}
-    assert "benchmarks/tc_probe/tc_probe.py" in store["closure"] and "verity/ml/circuits/silicon/silicon.py" in store["closure"]
+    assert "benchmarks/tc_probe/tc_probe.py" in store["closure"] and "verity/ml/circuits/silicon/models.py" in store["closure"]
     assert store["key_params_resolved"]["arch"] == "sm_89" and store["key_params_resolved"]["instruction"] == "mma.x" and "out" not in store["key_params_resolved"]
     c = store["conditions"]
     assert (c["source.commit"], c["source.tree"], c["source.dirty"]) == ("c" * 40, "t" * 40, False), "the control side's hint fills what git cannot say in an archive"

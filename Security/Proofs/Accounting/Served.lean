@@ -3,14 +3,15 @@ module
 public import Properties.Accounting.Served
 public import Proofs.Accounting.Compose.ServiceBudget
 public import Proofs.Flock.Claims.Sampling.Select.Bounds
+public import Proofs.Accounting.Lemmas.Compose
 
 /-!
-# The served window's draw misses a set no more often than a uniform permutation's subset (`DrawMissesSubset`)
+# The served window's sample misses a set no more often than a uniform permutation's subset (`SampleMissesSubset`)
 
-`Properties.Served.DrawMissesSubset` from two bounds that meet at `C(N − |B|, K)/C(N, K)`, `B` the tiles of `U` below
+`Properties.Served.SampleMissesSubset` from two bounds that meet at `C(N − |B|, K)/C(N, K)`, `B` the tiles of `U` below
 `N`:
 
-* **the code** (`Properties.SampledProofs.SecurityProofs.one_bound`): `drawUnits (.subset K) N` from `L` uniform bytes
+* **the code** (`Properties.Spot.SecurityProofs.one_bound`): `drawUnits (.subset K) N` from `L` uniform bytes
   misses `B`'s numbers, and so `U`, with probability at most that ratio;
 * **the model** (`miss_ge`): a uniform permutation's `K`-subset misses `B` with probability at least that ratio (it is
   exactly it), by induction on `K` through `Equiv.Perm.decomposeFin`, as `Budget.miss_le` bounds it from above: the
@@ -21,6 +22,8 @@ public import Proofs.Flock.Claims.Sampling.Select.Bounds
 
 @[expose] public section
 
+open Claims renaming Ex → expect
+
 namespace Properties.Served.SecurityProofs
 
 open Pouw.RelativeSecurity
@@ -29,7 +32,7 @@ open Accounting.SecurityProofs.TS.Stages (prob_prod)
 
 theorem prob_eq_pr {α : Type} [Fintype α] (p : α → Prop) : prob p = Claims.Pr p := by
   classical
-  rw [prob_eq_card, Claims.Pr]
+  rw [prob_eq_card, Claims.Pr, Claims.prUniform]
 
 theorem card_rest_le {n : ℕ} (B : Finset (Fin (n + 1))) (p : Fin (n + 1)) : (rest B p).card ≤ B.card :=
   Finset.card_le_card_of_injOn (fun z => Equiv.swap 0 p z.succ) (fun z hz => by simpa [rest] using hz)
@@ -126,10 +129,10 @@ def tilesOf (N : ℕ) (U : Finset ℕ) : Finset (Fin N) := Finset.univ.filter fu
 theorem mem_tilesOf {N : ℕ} {U : Finset ℕ} {t : Fin N} : t ∈ tilesOf N U ↔ t.val ∈ U := by
   simp [tilesOf]
 
-/-- **`DrawMissesSubset`**: the code's subset draw misses `U` with probability at most `C(N − |B|, K)/C(N, K)`, `B`
+/-- **`SampleMissesSubset`**: the code's subset sample misses `U` with probability at most `C(N − |B|, K)/C(N, K)`, `B`
 the tiles of `U` (`one_bound` on `B`'s numbers), which the permutation's subset misses `B` with at least
 (`miss_ge`). -/
-theorem drawMissesSubset : DrawMissesSubset := by
+theorem sampleMissesSubset : SampleMissesSubset := by
   intro K N L U hK
   classical
   have hr : (tilesOf N U).map Fin.valEmbedding ⊆ Finset.range N := fun u hu => by
@@ -138,7 +141,7 @@ theorem drawMissesSubset : DrawMissesSubset := by
   have hU : ∀ u ∈ (tilesOf N U).map Fin.valEmbedding, u ∈ U := fun u hu => by
     obtain ⟨t, ht, rfl⟩ := Finset.mem_map.1 hu
     exact mem_tilesOf.1 ht
-  have hcode := (Properties.SampledProofs.SecurityProofs.one_bound N _ hr L).1 K hK
+  have hcode := (Properties.Spot.SecurityProofs.one_bound N _ hr L).1 K hK
   rw [Finset.card_map] at hcode
   refine le_trans ?_ (hcode.trans ?_)
   · rw [prob_eq_pr]

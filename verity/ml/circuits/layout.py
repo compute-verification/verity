@@ -1,4 +1,4 @@
-"""Canonical layout, root-scoped value references, and the three gate-selection classes (IR §4.4, §6, §D).
+"""Canonical layout, root-scoped value references, and the two addressing classes (IR §4.4, §6, §D).
 
 Layout: a function body is laid out in body order; each node is one interval; `batch` members and `scan`
 iterations are consecutive in structural order. Gate counts and offsets are *intrinsic summaries* cached per
@@ -8,23 +8,20 @@ hierarchy — never by expansion.
 Canonical reference of a produced value = its producing gate's root-scoped index. Prescribed inputs are
 `Input[k] : () -> Value<w_k>` gates (IR §D.3) and therefore have their own canonical references.
 
-Three classes (IR §D.1/§D.2), not synonyms:
+A set of gates is a `query_ast.GateSet`; an explicit one, and its boundary by expansion, are the test-only
+`query_ast.oracle_gateset` / `oracle_in` / `oracle_out`. Two addressing classes (IR §D.1/§D.2), not synonyms:
 
-* `GateSelection` — any selected set of gates of the root circuit + the wiring among them + its induced
-  boundary. `S.size`, `S[i]` (i-th selected gate in root canonical order), `S.in_` (the boundary gates
-  entering from outside: distinct gates outside S with a wire into S), `S.out` (the boundary gates leaving:
-  distinct gates inside S with a wire to a gate outside S, or designated root outputs). Boundaries are sets of
-  *gates* — a producer counts once regardless of fan-out; there is no `distinct()` operation. Canonical
-  boundary order: ascending root-scoped producing-gate index. These explicit computations are the oracle for
-  the compact per-part analysis in `verity.ml.circuits.boundary` (`in_gates` / `out_gates` / `w_out`).
-* `Region` — the contiguous special case `C[i:j]`, efficiently addressable.
-* `FunctionCall` — a hierarchy-defined gate selection (always a region in this layout) **plus** the declared interface
+* `Region` — the contiguous interval `C[i:j]`, efficiently addressable. `R.in_` (the boundary gates entering from
+  outside: distinct gates outside R with a wire into R) and `R.out` (the boundary gates leaving: distinct gates
+  inside R with a wire to a gate outside R, or designated root outputs). Boundaries are sets of *gates* — a producer
+  counts once regardless of fan-out. Canonical boundary order: ascending root-scoped producing-gate index.
+* `FunctionCall` — a hierarchy-defined region **plus** the declared interface
   `call.args` / `call.returns`, which keep signature order and repeated references. `F(v, v)` returning
   `(t, a, t)` has `args = [v, v]`, `returns = [t, v, t]`, `in_ = [v]`, `out = [t]` (if only `t` escapes).
 
 Intrinsic vs contextual summaries: gate count, interface types and offsets are intrinsic to a specialized
 definition and cached on it. Anything depending on consumers, enclosing wiring, protected outputs or a plan
-(`S.out` of an arbitrary gate selection, reachability, cuts) is contextual and is computed per instance, never
+(`out` of a gate set, reachability, cuts) is contextual and is computed per instance, never
 cached by definition.
 """
 
@@ -147,13 +144,16 @@ def resolve_gate(scope: Scope, ref: Ref) -> tuple[int, PrimitiveDefinition]:
 
 
 class LazyOperands(Sequence):
-    """Operand references of a wide-fan-in gate (e.g. an embedding column of 151,936 weight values), resolved
-    on demand: `len`, `ops[j]`, iteration. Semantically identical to the tuple `_prim_member_args` returns."""
+    """Operand references of a gate, resolved on demand by ``res`` (`resolve` in ``scope`` when None): a wide-fan-in gate's
+    (e.g. an embedding column of 151,936 weight values), and on a walk that asks (`Circuit.gates`' ``lazy``) a gate whose
+    primitive reads its operands through ``evaluate_lazy`` (an expert GEMM's gather reads 2 of its E + 1).  `len`, `ops[j]`,
+    iteration.  Semantically identical to the tuple `_prim_member_args` returns, down to the `IndexError` past either end."""
 
-    __slots__ = ("scope", "node", "m", "_segments", "_n")
+    __slots__ = ("scope", "node", "m", "_segments", "_n", "_res")
 
-    def __init__(self, scope: Scope, node: Node, m: int) -> None:
+    def __init__(self, scope: Scope, node: Node, m: int, res: Callable[[Ref], int] | None = None) -> None:
         self.scope, self.node, self.m = scope, node, m
+        self._res = partial(resolve, scope) if res is None else res
         segs = []  # (start, count, refs-getter)
         start = 0
         axes = node.axes if node.form == "batch" else (None,) * len(node.args)
@@ -179,16 +179,16 @@ class LazyOperands(Sequence):
         if j < 0:
             j += self._n
         if not (0 <= j < self._n):
-            raise IndexError(j)
+            raise IndexError("tuple index out of range")
         for start, n, refs in self._segments:
             if j < start + n:
-                return resolve(self.scope, refs[j - start])
-        raise IndexError(j)
+                return self._res(refs[j - start])
+        raise IndexError("tuple index out of range")
 
     def __iter__(self):
         for start, n, refs in self._segments:
             for k in range(n):
-                yield resolve(self.scope, refs[k])
+                yield self._res(refs[k])
 
     def __eq__(self, other) -> bool:
         return tuple(self) == tuple(other)
@@ -205,11 +205,14 @@ def _prim_member_args(scope: Scope, node: Node, m: int):
     return _member_operands(scope, node, m)
 
 
-def _member_operands(scope: Scope, node, m: int, res: Callable[[Ref], int] | None = None):
+def _member_operands(scope: Scope, node, m: int, res: Callable[[Ref], int] | None = None, lazy: bool = False):
     """`_prim_member_args` of ``node`` in ``scope``, each reference resolved by ``res`` (`resolve` in ``scope`` when None; a wide
-    gate's, lazily, always by `resolve`)."""
+    gate's, lazily, always by `resolve`).  With ``lazy``, a primitive with ``evaluate_lazy`` gets `LazyOperands` resolved by
+    ``res``, so only the operands its evaluator reads are resolved."""
     if sum(p.leaves for _, p in node.fn.params) > WIDE_FAN_IN:
         return LazyOperands(scope, node, m)
+    if lazy and getattr(node.fn, "evaluate_lazy", None) is not None:
+        return LazyOperands(scope, node, m, res)
     if res is None:
         res = partial(resolve, scope)
     if node.form == "primitive":
@@ -257,8 +260,8 @@ class _Bound:
         return g
 
 
-def _walk(b: _Bound, lo: int, hi: int) -> Iterator["Gate"]:
-    """`Circuit.gate` of each gate of the activation ``b`` in [lo, hi), in order."""
+def _walk(b: _Bound, lo: int, hi: int, lazy: bool = False) -> Iterator["Gate"]:
+    """`Circuit.gate` of each gate of the activation ``b`` in [lo, hi), in order (``lazy``: `Circuit.gates`')."""
     s = b.scope
     body = s.spec.body
     offs = body.offsets
@@ -273,12 +276,12 @@ def _walk(b: _Bound, lo: int, hi: int) -> Iterator["Gate"]:
         if isinstance(fn, PrimitiveDefinition):
             one = node.form in ("primitive", "call")
             for i in range(max(lo, start), min(hi, end)):
-                yield Gate(i, fn, _member_operands(s, node, 0 if one else i - start, b.ref), s)
+                yield Gate(i, fn, _member_operands(s, node, 0 if one else i - start, b.ref, lazy), s)
             continue
         G = fn.gates
         first, last = ((0, 0) if node.form == "call" else ((max(lo, start) - start) // G, (min(hi, end) - 1 - start) // G))
         for m in range(first, last + 1):
-            yield from _walk(_Bound(Scope(fn, start + m * G, s, k, m), b), lo, hi)
+            yield from _walk(_Bound(Scope(fn, start + m * G, s, k, m), b), lo, hi, lazy)
 
 
 @dataclass(frozen=True)
@@ -300,79 +303,12 @@ class Gate:
 
 
 # ---------------------------------------------------------------------------------------------------------
-# GateSelection / Region / FunctionCall
+# Region / FunctionCall
 # ---------------------------------------------------------------------------------------------------------
 
 
-class GateSelection:
-    """A selected set of gates of the root circuit + wiring among them + induced boundary (IR §D.1).
-    Constructed explicitly from a gate set; intended for small/flattened circuits (cones, hand-picked sets).
-    `in_`/`out` are *contextual*: computed on demand, never cached by definition."""
-
-    def __init__(self, circuit: "Circuit", gates: Sequence[int]) -> None:
-        self.circuit = circuit
-        self._gates = tuple(sorted(set(int(g) for g in gates)))
-        for g in self._gates[:1] + self._gates[-1:]:
-            if not (0 <= g < circuit.size):
-                raise IndexError(g)
-        self._set = frozenset(self._gates)
-
-    @property
-    def size(self) -> int:
-        return len(self._gates)
-
-    def __len__(self) -> int:
-        return self.size
-
-    def __contains__(self, g: int) -> bool:
-        return g in self._set
-
-    def gate_indices(self) -> tuple[int, ...]:
-        return self._gates
-
-    def __getitem__(self, i: int) -> Gate:
-        return self.circuit.gate(self._gates[i])
-
-    def __iter__(self) -> Iterator[Gate]:
-        for g in self._gates:
-            yield self.circuit.gate(g)
-
-    @property
-    def in_(self) -> tuple[int, ...]:
-        """Boundary gates entering from outside — distinct gates outside S with a wire into S — ascending by
-        gate index (`in(S)` of `verity/ml/circuits/parts.py`)."""
-        self.circuit._check_explicit(self.size)
-        s: set[int] = set()
-        for g in self:
-            s.update(o for o in g.operands if o not in self._set)
-        return tuple(sorted(s))
-
-    @property
-    def out(self) -> tuple[int, ...]:
-        """Boundary gates leaving — distinct gates inside S with a wire to a gate outside S, or designated root
-        outputs — ascending by gate index (`out(S)` of `verity/ml/circuits/parts.py`). Requires enumerating consumers:
-        explicit over the whole circuit; the compact equivalent is `boundary.out_gates`."""
-        c = self.circuit
-        c._check_explicit(c.size)
-        used: set[int] = set()
-        for g in range(c.size):
-            if g in self._set:
-                continue
-            for o in c.gate(g).operands:
-                if o in self._set:
-                    used.add(o)
-        used |= {o for o in c.root_outputs() if o in self._set}
-        return tuple(sorted(used))
-
-    def __repr__(self) -> str:
-        return f"GateSelection({self.size} gates)"
-
-    def __eq__(self, other) -> bool:
-        return isinstance(other, GateSelection) and self.circuit is other.circuit and self._gates == other._gates
-
-
-class Region(GateSelection):
-    """`C[i:j]`: the contiguous special case; addressable without materialising the gate set."""
+class Region:
+    """`C[i:j]`: a contiguous interval of the root circuit; addressable without materialising the gate set."""
 
     def __init__(self, circuit: "Circuit", lo: int, hi: int) -> None:
         if not (0 <= lo <= hi <= circuit.size):
@@ -382,6 +318,9 @@ class Region(GateSelection):
     @property
     def size(self) -> int:
         return self.hi - self.lo
+
+    def __len__(self) -> int:
+        return self.size
 
     def __contains__(self, g: int) -> bool:
         return self.lo <= g < self.hi
@@ -603,14 +542,16 @@ class Circuit:
                 return Gate(i, node.fn, _prim_member_args(scope, node, m), scope)
             scope = Scope(node.fn, node_off + m * node.fn.gates, scope, k, m)
 
-    def gates(self, lo: int = 0, hi: int | None = None) -> Iterator[Gate]:
+    def gates(self, lo: int = 0, hi: int | None = None, *, lazy: bool = False) -> Iterator[Gate]:
         """`gate(i)` for each i in [lo, hi), in order, in one walk down the hierarchy: each activation entered once, not once a
-        gate, and each of its parameter leaves resolved once (`_Bound`)."""
+        gate, and each of its parameter leaves resolved once (`_Bound`).  With ``lazy``, a gate whose primitive has
+        ``evaluate_lazy`` holds its operands as `LazyOperands`, each resolved when read: the same operands, but an evaluator that
+        reads two of a gather's E + 1 resolves two."""
         hi = self.size if hi is None else hi
         if lo < 0 and lo < hi:
             raise IndexError(lo)
         if lo < min(hi, self.size):
-            yield from _walk(_Bound(self.root_scope, None), lo, min(hi, self.size))
+            yield from _walk(_Bound(self.root_scope, None), lo, min(hi, self.size), lazy)
         if hi > max(lo, self.size):
             raise IndexError(max(lo, self.size))
 
@@ -624,9 +565,6 @@ class Circuit:
 
     def region(self, lo: int, hi: int) -> Region:
         return Region(self, lo, hi)
-
-    def gate_selection(self, gates: Sequence[int]) -> GateSelection:
-        return GateSelection(self, gates)
 
     def root_calls(self, primitive_batches: "str | None" = None) -> Iterator[FunctionCall]:
         yield from _node_calls(self, self.root_scope, primitive_batches)

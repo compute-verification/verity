@@ -3,6 +3,7 @@ module
 public import Proofs.Pouw.Theorem1
 public import Proofs.Pouw.Exact
 public import Proofs.Pouw.M1
+public import Proofs.Pouw.Lemmas.Game
 
 /-!
 # (d′) §3.3's requirement at the milestone, in budget form
@@ -32,12 +33,12 @@ theorem m1Domain_shapes (L : Layout) (h : D1.m1Domain L) : L.ShapesIn Shape.InDe
 theorem d1_complete_m1Domain (P : D1.Params Q R S) (hN : P.NoiseRange) : P.toProtocol.Complete D1.m1Domain :=
   complete_mono _ m1Domain_shapes (d1Complete Q R S P hN)
 
-/-- **(d′)** `D1.m1` with `W_ref ≤ Ω_max·W_mm`, `Ω_max ≤ 199/198`, `AdmitsRef` and TT(0.5%, ε) meets §3.3's
-requirement at `γ = 1 − (199/200)/Ω_max ≤ 1%`. -/
-theorem milestoneRequirement : Pinned.MilestoneRequirement := by
-  intro CM Wref qref Ωmax ε hΩ hΩ1 hW hAdm hTT
+/-- **(d′)** `D1.m1` with `W_ref ≤ Ω_max·W_mm`, `Ω_max ≤ 199/198`, `AdmitsRef` and TT(0.5%, δ) meets §3.3's
+requirement at `g = 1 − (199/200)/Ω_max ≤ 1%`. -/
+theorem milestoneRequirement : GameStatements.MilestoneRequirement := by
+  intro CM Wref qref Ωmax δ hΩ hΩ1 hW hAdm hTT
   exact ⟨⟨(D1.m1 Wref).toProtocol, qref, d1_complete_m1Domain _ (M1.noiseRange Wref), hAdm,
-    gammaFromTT D1.M1Q D1.M1R Salt CM (D1.m1 Wref).toProtocol D1.m1Domain Params.γ0 Ωmax ε γ0_lt_one hΩ hW hTT⟩,
-    (gammaBudget Ωmax hΩ).2 hΩ1⟩
+    gapFromTT D1.M1Q D1.M1R Salt CM (D1.m1 Wref).toProtocol D1.m1Domain Params.gap0 Ωmax δ gap0_lt_one hΩ hW hTT⟩,
+    (gapBudget Ωmax hΩ).2 hΩ1⟩
 
 end Pouw.Proofs
