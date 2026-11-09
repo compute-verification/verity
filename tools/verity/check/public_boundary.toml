@@ -144,6 +144,11 @@ oracle_tests = [
     "integrations/vllm/tests/protocols/test_pouw_h1{,_circuits,_commit,_drawn,_gpu_args,_handoff,_live,_ranks_commit}.py",
     "integrations/vllm/tests/protocols/test_{credit_gate,pouw_pearl_c_served,rt4_h1_challenger}.py",
 ]
+# vLLM's tests of the code identity and the code version, which read the run store's closure and code directories: the public
+# release refuses them by name (`config.run_store`), and `test_run_store_absent.py` holds it to that
+run_store_tests = [
+    "integrations/vllm/tests/pipeline/test_{boundary_plan,commit_tree_of_record,experiment_index,hot_commit}.py",
+]
 team = [
     "infra",
     "tools/{research,agent-guard}",
