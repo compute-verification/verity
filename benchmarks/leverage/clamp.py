@@ -431,8 +431,8 @@ def main() -> int:
                     help="calibrate: the sink class's positions from the first sink host on, past any run of it")
     ap.add_argument("--hosts", type=Path, help="calibrate: the hosts part's hosts.pt, where each sequence's classes start")
     ap.add_argument("--run", type=int,
-                    help="calibrate: with --hosts, a host token's run from its RUN-th copy and --window - 1 positions "
-                         "after it join the sink class")
+                    help="calibrate: with --hosts, every position past the sink class's from the RUN-th copy of a host "
+                         "token in a row to the end of the sequence is the run class, calibrated with traffic.run_texts")
     ap.add_argument("--special", action=argparse.BooleanOptionalAction, default=True,
                     help="calibrate: give the tokenizer's special tokens their own class")
     ap.add_argument("--headroom", type=int, nargs="+", default=[1],
