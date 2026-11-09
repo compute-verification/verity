@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.SpotFlock.FrameIsAt
+public import Proofs.Flock.SpotFlock.HeaderRoots
 public import Proofs.Flock.SpotFlock.Jeq
 public import Proofs.Flock.Claims.Complete.Json.Record
 public import Proofs.Flock.Claims.Complete.Json.Stmt
@@ -12,9 +13,9 @@ import all Lean.Data.Json.Basic
 /-!
 # The entries the slots name, from round 2's checks
 
-`entriesAt_of`: `EntriesAt` holds where the header names each port's published root (`HeaderRootsAt`) and the
-ports a session reads are no deeper than the code's own (`DepthsAt`), which a code at least 64 levels deep has for
-the registered reads (`depthsAt_of`), leaving the published trees' (`RootedDepthsAt`).
+`entriesAt_of`: `EntriesAt` holds where the ports a session reads are no deeper than the code's own (`DepthsAt`),
+which a code at least 64 levels deep has for the registered reads (`depthsAt_of`), leaving the published trees'
+(`RootedDepthsAt`). `frameIs_of` gives `FrameIs` from that and the reveal's slots (`SlotsAt`).
 
 * **The registered half** (`registered_entry`): in an accepted run, the entry round 2 reads each of a session's
   registered reads off (`readKeyAt`, under `readRoots`) has the read's root, leaf count and domain id, of at most
@@ -24,7 +25,7 @@ the registered reads (`depthsAt_of`), leaving the published trees' (`RootedDepth
   `readsInterior` picks (`recKeyAt_port`, `recKeyAt_reg`).
 * **The roots half** (`interior_entry`): template `t`'s port of the interior record at a port no registered read is
   named like has the port's published root and domain id. Round 2's `rootsOk` holds the record's entry to the
-  header's (`rootsOk_entry`), and the header's is the published tree's (`HeaderRootsAt`).
+  header's (`rootsOk_entry`), and the header's is the published tree's (`header_roots`).
 -/
 
 @[expose] public section
@@ -408,20 +409,6 @@ theorem rootsOk_entry {named : Bool} {rec : Json} {t : String} {hdr : Json} {rea
       rw [← hexMsg_of_jeq hd1]
       exact hexMsg_str hdu
 
-/-- **The published roots a one-table session's header names**: for each port of a statement a session's setup
-builds, the public file's header line, as round 2 reads it (`headerOf`), holds in `frame_v3.roots` the hex of the port's
-published root over the population the file loads, and in `frame_v3.domain_ids` the hex of its domain id. -/
-def HeaderRootsAt : Prop :=
-  ∀ {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt},
-    FlockDeploy.setupOf true xS = some (ins, spec, sts) → ScopedHidden xS → ins.read.I.count ≤ 1 →
-    ∀ {j q : ℕ} (hj : j < sts.size), q < sts[j].c.ports.size → ∀ {pop : _root_.Flock.Public},
-    _root_.Flock.HmOut.loadPublic ins.read.tags sts[j].c ins.read.I.publicFile = .ok pop →
-    ∀ {hdr : Json}, headerOf ins.read.I.publicFile = some hdr →
-    ∃ rs ds, (sts[j].c.ports[q]!.name, Json.str rs) ∈ Spot.entries (Spot.getD (Spot.getD hdr "frame_v3") "roots") ∧
-      _root_.Flock.unhex rs = .ok (_root_.Flock.PortRoots.pubRoot sts[j].c pop q) ∧
-      Spot.getD (Spot.getD (Spot.getD hdr "frame_v3") "domain_ids") sts[j].c.ports[q]!.name = .str ds ∧
-      _root_.Flock.unhex ds = .ok (_root_.Flock.PortRoots.idOf sts[j].c pop q)
-
 variable (h : Held)
 
 /-- **Round 2's statement for template `t`** names the template, reads the session's public file's header, and reads
@@ -540,9 +527,9 @@ theorem registered_entry {x m₁ m₂ : Msg} {s} {c₀ c₁ : FlockDeploy.Coin} 
 
 /-- **`EntriesAt`'s roots half**: in an accepted run, template `t`'s port of the interior record at a port of a
 checked unit's one-table session that no registered read is named like has the root and domain id of the port's
-published tree over the population the session's public file loads, where the header names those
-(`HeaderRootsAt`): round 2's `rootsOk` holds the record's entry to the header's. -/
-theorem interior_entry (hR : HeaderRootsAt) {x m₁ m₂ : Msg} {s} {c₀ c₁ : FlockDeploy.Coin} {u ρ : ℕ}
+published tree over the population the session's public file loads, which the header names (`header_roots`): round
+2's `rootsOk` holds the record's entry to the header's. -/
+theorem interior_entry {x m₁ m₂ : Msg} {s} {c₀ c₁ : FlockDeploy.Coin} {u ρ : ℕ}
     {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hx : parse h x = some s) (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
     (hu : u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁))
@@ -564,7 +551,7 @@ theorem interior_entry (hR : HeaderRootsAt) {x m₁ m₂ : Msg} {s} {c₀ c₁ :
   have hH : headerOf ins.read.I.publicFile = some S.header := by
     rw [(ins_fields hwi).2]
     exact hSH
-  obtain ⟨rs, ds, hmem, hru, hdm, hdu⟩ := hR hset hsc hc1 hj hq hpop hH
+  obtain ⟨rs, ds, hmem, hru, hdm, hdu⟩ := header_roots hset hsc hc1 hj hq hpop hH
   obtain ⟨-, -, hroots, -, -, -, -⟩ := Spot.SecondStage.stmtCodes_nil (List.isEmpty_iff.1 hc)
   have hnot : ((Spot.entries (Spot.getD S.registered "ports")).map (·.1)).contains
       sts[j].c.ports[q]!.name = false := by
@@ -590,7 +577,8 @@ theorem interior_entry (hR : HeaderRootsAt) {x m₁ m₂ : Msg} {s} {c₀ c₁ :
   exact hy
 
 /-- **The ports a checked unit's session reads are no deeper than `c`'s own**: its registered reads, and the published
-trees of a one-table session's ports over any population its public file loads. -/
+trees of a one-table session's ports that no registered read is named like, over any population its public file
+loads. -/
 def DepthsAt (c : Code) : Prop :=
   ∀ x s (m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) wF u ins spec sts,
     parse h x = some s → stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
@@ -598,17 +586,19 @@ def DepthsAt (c : Code) : Prop :=
     FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts) →
     (∀ own reg, ins.registered = some own → reg ∈ own → _root_.Flock.log2ceil reg.leaves ≤ depth c.own) ∧
     (∀ j (hj : j < sts.size) q pop, ins.read.I.count ≤ 1 → q < sts[j].c.ports.size →
+      (∀ own, ins.registered = some own → ∀ reg ∈ own, reg.name ≠ sts[j].c.ports[q]!.name) →
       _root_.Flock.HmOut.loadPublic ins.read.tags sts[j].c ins.read.I.publicFile = .ok pop →
       _root_.Flock.log2ceil (pubPort sts[j].c pop q).leaves ≤ depth c.own)
 
-/-- **The published trees a checked unit's one-table session reads are no deeper than `c`'s own**: each port's over
-any population its public file loads. -/
+/-- **The published trees a checked unit's one-table session reads are no deeper than `c`'s own**: each port's that
+no registered read is named like, over any population its public file loads. -/
 def RootedDepthsAt (c : Code) : Prop :=
   ∀ x s (m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) wF u ins spec sts,
     parse h x = some s → stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
     Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (unitStmt h m₂ u) wF = true →
     FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts) →
     ∀ j (hj : j < sts.size) q pop, ins.read.I.count ≤ 1 → q < sts[j].c.ports.size →
+      (∀ own, ins.registered = some own → ∀ reg ∈ own, reg.name ≠ sts[j].c.ports[q]!.name) →
       _root_.Flock.HmOut.loadPublic ins.read.tags sts[j].c ins.read.I.publicFile = .ok pop →
       _root_.Flock.log2ceil (pubPort sts[j].c pop q).leaves ≤ depth c.own
 
@@ -630,21 +620,21 @@ theorem depthsAt_of {c : Code} (h64 : 64 ≤ depth c.own) (hP : RootedDepthsAt h
   obtain ⟨-, -, -, -, -, hb⟩ := registered_entry h (ρ := 0) hx hok hu hset hown hreg
   exact (log2ceil_le_64 hb).trans h64
 
-/-- **`EntriesAt` from the header's published roots and the ports' depths**: its registered half is
-`registered_entry` and its roots half `interior_entry`. -/
-theorem entriesAt_of {c : Code} (hR : HeaderRootsAt) (hD : DepthsAt h c) : EntriesAt h c := by
+/-- **`EntriesAt` from the ports' depths**: its registered half is `registered_entry` and its roots half
+`interior_entry`. -/
+theorem entriesAt_of {c : Code} (hD : DepthsAt h c) : EntriesAt h c := by
   intro x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF u b ρ rb ins spec sts hx hP h2 hin hok hu hck hb hρ hrb hset
   obtain ⟨hDr, hDp⟩ := hD x s m₁ m₂ c₀ c₁ wF u ins spec sts hx hok hu hck hset
   refine ⟨fun own reg hown hreg => ?_, fun j hj q pop hc1 hq hnr hpop => ?_⟩
   · obtain ⟨e, he, hr, hl, hdm, -⟩ := registered_entry h (ρ := ρ) hx hok hu hset hown hreg
     exact ⟨e, he, hr, hl, hdm, hDr own reg hown hreg⟩
-  · obtain ⟨e, he, hr, hdm⟩ := interior_entry h hR (ρ := ρ) hx hok hu hset hj hc1 hq hnr hpop
-    exact ⟨e, he, hr, hdm, hDp j hj q pop hc1 hq hpop⟩
+  · obtain ⟨e, he, hr, hdm⟩ := interior_entry h (ρ := ρ) hx hok hu hset hj hc1 hq hnr hpop
+    exact ⟨e, he, hr, hdm, hDp j hj q pop hc1 hq hnr hpop⟩
 
-/-- **`FrameIs` at a frame that reads its ports off the roots**, from the reveal's slots (`SlotsAt`), the header's
-published roots (`HeaderRootsAt`) and the ports' depths (`DepthsAt`). -/
+/-- **`FrameIs` at a frame that reads its ports off the roots**, at a code at least 64 levels deep, from the reveal's
+slots (`SlotsAt`) and the published trees' depths (`RootedDepthsAt`). -/
 theorem frameIs_of {slot : ℕ → Option Slot} {c : Code} {L : Layout} (hf : h.frame = frameAt slot c)
-    (hS : SlotsAt h slot c L) (hR : HeaderRootsAt) (hD : DepthsAt h c) : FrameIs h L :=
-  frameIs_frameAt h hf hS (entriesAt_of h hR hD)
+    (hS : SlotsAt h slot c L) (h64 : 64 ≤ depth c.own) (hP : RootedDepthsAt h c) : FrameIs h L :=
+  frameIs_frameAt h hf hS (entriesAt_of h (depthsAt_of h h64 hP))
 
 end SpotFlock
