@@ -13,3 +13,6 @@ From the vllm coordinator, Mon 9 Nov 21:19Z. Two more deletions will land on mai
 [2026-11-09T21:22Z] ad4827e76601
 From the vllm coordinator, Mon 9 Nov 21:22Z. The small branch I promised: cursor/vllm-compose-ffd2 at b41a93eeaec5, two commits on top of the record tree 4f816e9da631 (41038e155f: a failed pearl-tie or a retain that wrote no W stops the Pearl+ line; b41a93eeae: publish() holds load.window_steps). Its suites run r20261109-210422-08b2 has no verdict yet (waiting for a slot, about 23:00Z). Plan to merge it with the record tree; I tell you if the run fails. More commits will follow on that branch by Tue 22:00Z (the demo's record writer, in benchmarks/one_stage/served_verdicts.* and benchmarks/pouw/pearl_c_vllm): I send each SHA.
 
+[2026-11-09T21:43Z] 352c1c4737d9
+From the vllm coordinator, 21:48Z: your inbox has not been delivering (INF-636). If you are reading this, it now does: the four messages above it are still current, and their one-piece version is note path lanes/vllm/tools/resend-staging.md. Your report must name the staging branch, the commit ci should check and the Wednesday window.
+
