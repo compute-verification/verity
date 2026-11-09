@@ -124,6 +124,9 @@ GRAPH2 = ("python3.12", "/root/executor/infra/graph2.py", "--db", "/root/executo
 LOCK, LOG, STATE = Path("/data/vqueue/vqueue.lock"), Path("/data/vqueue/decisions.jsonl"), Path("/data/vqueue/state.json")
 #: drive's priority list (its `--priority-file`)
 PRIORITY = Path("/data/drive/priority")
+#: a freeze's paths, one git pathspec a line (`#` lines skipped): while the file exists, a PR whose change renames or deletes a
+#: file under one waits, as does one that moves a word map there; ordinary edits don't
+FROZEN = Path("/data/vqueue/live/frozen")
 #: how far back the decision log is read
 WINDOW_S = 48 * 3600
 INTERVAL_S = 60
@@ -458,9 +461,11 @@ class World:
 
     def __init__(self, q: Queue, labels, tasks: Executor, *, graph2: tuple[str, ...] = (), priority_file: Path | None = None,
                  post: Callable[[str, tuple[str, ...]], bool] | None = None, now: Callable[[], float] = time.time,
-                 labels_at: Callable[[], StoreLabels] | None = None, cache: Path | None = None):
+                 labels_at: Callable[[], StoreLabels] | None = None, cache: Path | None = None,
+                 frozen_file: Path | None = None):
         self.q, self.labels, self.tasks, self.graph2 = q, labels, tasks, tuple(graph2)
         self.priority_file, self.now, self.repo, self.labels_at = priority_file, now, q.workdir, labels_at
+        self.frozen_file, self._frozen_told = frozen_file, set()
         self.keys = cache / "issuer-keys.json" if cache is not None else None
         if cache is not None:
             cache.mkdir(parents=True, exist_ok=True)
@@ -561,6 +566,8 @@ class World:
                 held = (unreviewed(reviews, ()) or "").startswith("held")
                 if landing or not held and lowrisk(files[n], excludes):
                     took.append(n)
+            if specs := self._frozen():
+                took = [n for n in took if not self._frozen_out(main, entries[n].pr, specs)]
             new = any((entries[n].pr.head, main) not in self._judged for n in took)
             with base_drivers(self.repo, main) if new else contextlib.nullcontext(None) as cfg:   # once a tick, not a PR
                 chosen = {n: (files[n], *j)
@@ -591,6 +598,21 @@ class World:
             place(n)
         self.prs = {n: entries[n].pr for n in chosen}
         return [Ready(n, entries[n].pr.head, *chosen[n][:2], rank=i, conflict=chosen[n][2]) for i, n in enumerate(placed)]
+
+    def _frozen(self) -> list[str]:
+        """The freeze's pathspecs (`FROZEN`): none while its file is absent."""
+        if self.frozen_file is None or not self.frozen_file.is_file():
+            return []
+        return [s for line in self.frozen_file.read_text().splitlines() if (s := line.strip()) and not s.startswith("#")]
+
+    def _frozen_out(self, main: str, p: PR, specs: list[str]) -> bool:
+        """Whether ``p``'s change renames or deletes a file under ``specs``, said once a head in the log."""
+        hits = _out(self.repo, "diff", "--name-status", "-M", "--diff-filter=RD", f"{main}...{p.head}", "--", *specs).splitlines()
+        if hits and p.head not in self._frozen_told:
+            self._frozen_told.add(p.head)
+            self.log(f"research queue vqueue: #{p.number} at {p.head[:12]} waits for the freeze to end ({self.frozen_file}): it "
+                     f"renames or deletes {len(hits)} file(s) under its paths: {'; '.join(hits[:5])}")
+        return bool(hits)
 
     def _changed(self, main: str, head: str) -> frozenset[str]:
         """The files ``head`` changes against its merge base with ``main``."""
@@ -1940,6 +1962,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--state", type=Path, default=STATE, help=f"each tick's candidates, their verdicts beside graph2's and what "
                                                               f"their graphs lack, rewritten each tick (default {STATE})")
     ap.add_argument("--priority-file", type=Path, default=PRIORITY, help=f"drive's priority list (default {PRIORITY})")
+    ap.add_argument("--frozen", type=Path, default=FROZEN, help=f"a freeze's pathspecs, one a line: while the file exists, a PR "
+                                                                f"renaming or deleting a file under one waits (default {FROZEN})")
     ap.add_argument("--graph2", default=shlex.join(GRAPH2), help="graph2's argv before its subcommand (default the control pod's)")
     ap.add_argument("--batch", type=int, default=BATCH, help=f"the most members a candidate holds (default {BATCH})")
     ap.add_argument("--depth", type=int, default=DEPTH, help=f"the most candidates stacked at once, each with the run beside "
@@ -1990,7 +2014,7 @@ def main(argv: list[str]) -> int:
         q.branch = "main"
         graph2 = tuple(shlex.split(a.graph2))
         world = World(q, labels, Executor(Transport(store, (*graph2, "enqueue"), a.repo)), graph2=graph2,
-                      priority_file=a.priority_file, labels_at=labels_at, cache=a.log.parent)
+                      priority_file=a.priority_file, labels_at=labels_at, cache=a.log.parent, frozen_file=a.frozen)
         loop = Loop(world, a.log, shadow=a.shadow, dry_run=a.dry_run, batch=a.batch, depth=a.depth, lean=a.lean,
                     pending_s=a.pending_hours * 3600, slim=slim, state=a.state, tree_ejects=a.tree_ejects)
         if a.once or a.dry_run:

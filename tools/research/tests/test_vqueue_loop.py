@@ -891,6 +891,25 @@ def test_a_pr_holding_a_marked_pr_that_isnt_taken_waits_for_it_so_it_carries_no_
     assert [r.number for r in w.ready(env.main())] == [1, 2]
 
 
+def test_a_pr_renaming_or_deleting_under_a_frozen_path_waits_while_the_freeze_lasts_and_an_edit_there_doesnt(env):
+    """A freeze (a file of pathspecs, `FROZEN`) keeps another branch mergeable: while it exists, a PR whose own change renames
+    or deletes a file under one of its paths waits, an ordinary edit there doesn't, and once the file is gone both land."""
+    env.put(1, {"a.txt": None})
+    env.put(2, {"b.txt": "2\n"})
+    env.put(3, {"c.txt": "3\n", "pkg/x.py": "x = 1\n"})
+    loop = env.loop(lambda s: [])
+    w = loop.world
+    loop.tick()
+    (frozen := env.tmp / "frozen").write_text("# until remote lands\na.txt\nb.txt\n:(glob)**/x.py\n")
+    w.frozen_file = frozen
+    assert [r.number for r in w.ready(env.main())] == [2, 3]
+    assert sum("#1 at" in x and "waits for the freeze to end" in x for x in env.out) == 1, env.out
+    w.ready(env.main())
+    assert sum("#1 at" in x and "waits for the freeze to end" in x for x in env.out) == 1, env.out    # once a head
+    frozen.unlink()
+    assert [r.number for r in w.ready(env.main())] == [1, 2, 3]
+
+
 def test_each_tick_reads_the_labels_afresh_as_drive_reads_them(env):
     made: list[Labels] = []
     loop = env.loop(lambda s: [])
