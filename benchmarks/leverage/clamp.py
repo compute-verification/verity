@@ -4,23 +4,33 @@ traffic.
 Every value a proof block reads from another is clamped by its reader to a box fixed before the period (`lm.Boxes`): a
 linear's input (`lm.GROUP_SITES`) per group of 128 coordinates, through its FP8 per-token-group scale, and every other
 read (the residual stream, a linear's output into the residual add, the attention cache's keys and values) per
-element. Each box is per position class (`lm.position_class`: position 0, where attention sinks put their massive
-activations, and every other position). A box is the honest calibration traffic's largest magnitude with one power of
-two of headroom: an element's is the next power of two above its maximum, doubled; a group's is 448 times its largest
-UE8M0 scale, doubled (one more exponent step).
+element. Each box is per position class (`lm.position_class`, read from positions and token ids alone): the first
+--window positions, where attention sinks put their massive activations (position 0, or the first delimiter after a
+first token that hosts none); the tokenizer's special tokens after them (document separators and chat delimiters,
+sinks too); and every other position. A box is the honest calibration traffic's largest magnitude with --headroom
+powers of two (default one): an element's is the next power of two above its maximum, doubled; a group's is 448 times
+its largest UE8M0 scale, doubled (one more exponent step).
+
+Traffic is the hand-written sets (`traffic.CALIBRATION`, `traffic.HELDOUT`) and, with --mixed N, N texts of the pinned
+datasets' (`traffic.mixed`; Pile documents need `--with pyarrow`); --shard i/n splits a part's texts across runs.
 
 Parts (--part):
 
-  calibrate  honest forwards over `traffic.CALIBRATION` (each text with its own greedy continuation of --new tokens)
-             and every one of --first-tokens random tokens at position 0. Writes boxes.pt and calibrate.json: per site
-             and position class, the boxes against the site's RMS (how far an in-range fault reaches, in the units of
-             experiment 1's sweeps), and the massive activations (an element's largest value against its site's
-             median RMS, with the token it sits on).
-  complete   honest forwards over `traffic.HELDOUT` and other random first tokens, under the clamps: every value the
-             clamps cut (an honest value outside its box is a completeness failure), and whether the clamped model's
-             served greedy continuation differs from the unclamped one's.
+  calibrate  honest forwards over the calibration traffic (each text with its own greedy continuation of --new
+             tokens) and, in shard 0, --first-tokens tokens at position 0 (-1: the whole vocabulary, which covers
+             position 0 of any traffic, since a model's activations there are a function of the token alone). Writes
+             stats.pt and, unsharded, boxes.pt and calibrate.json: per site and position class, the boxes against the
+             site's RMS (how far an in-range fault reaches, in the units of experiment 1's sweeps), and the massive
+             activations (an element's largest value against its site's median RMS, with the token it sits on).
+  merge      joins the calibrate shards' stats.pt (--stats) into boxes.pt and calibrate.json.
+  complete   honest forwards over the held-out traffic and, in shard 0, other random first tokens, under the clamps:
+             every value the clamps cut (an honest value outside its box is a completeness failure), and whether the
+             clamped model's served greedy continuation differs from the unclamped one's.
+  explain    where honest traffic leaves the boxes, unclamped: each value outside its box with its token and context,
+             and each text's sink-like positions.
 
-  uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/clamp.py --model gpt2 --part calibrate --out "$OUT"
+  uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/clamp.py --model gpt2 --part calibrate \\
+      --window 4 --first-tokens -1 --out "$OUT"
   uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/clamp.py --model gpt2 --part complete \\
       --boxes "$OUT/boxes.pt" --out "$OUT"
 """
@@ -36,7 +46,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lm import E4M3_MAX, GROUP, GROUP_SITES, LM, MODELS, Boxes, Cache, position_class, ue8m0_scale
-from traffic import CALIBRATION, HELDOUT
+from traffic import CALIBRATION, HELDOUT, mixed
 
 
 def continued(lm: LM, tok, text: str, new: int, cap: int) -> list[int]:
@@ -52,28 +62,34 @@ def continued(lm: LM, tok, text: str, new: int, cap: int) -> list[int]:
     return out
 
 
+CLASSES = 3
+
+
 class Stats:
-    """Per (site, layer) and position class, each element's largest |value| (with where it was) and sum of squares."""
+    """Per (site, layer) and position class, each element's largest |value| (with where it was) and sum of squares.
 
-    def __init__(self, lm: LM):
+    A text is a sequence `seq` (its index in the traffic); the position-0 sweep's token t is sequence SWEEP + t."""
+
+    SWEEP = 1 << 20
+
+    def __init__(self, lm: LM, special: list[int], window: int):
         self.keys = lm.sites()
-        self.amax = {k: torch.zeros(2, lm.width(k[0])) for k in self.keys}
-        self.at = {k: torch.full((2, lm.width(k[0]), 2), -1, dtype=torch.long) for k in self.keys}
-        self.ss = {k: torch.zeros(2, lm.width(k[0]), dtype=torch.float64) for k in self.keys}
-        self.n = torch.zeros(2, dtype=torch.long)
-        self.tokens: list[list[int]] = []
+        self.special, self.window = torch.tensor(special, dtype=torch.long), window
+        self.amax = {k: torch.zeros(CLASSES, lm.width(k[0])) for k in self.keys}
+        self.at = {k: torch.full((CLASSES, lm.width(k[0]), 2), -1, dtype=torch.long) for k in self.keys}
+        self.ss = {k: torch.zeros(CLASSES, lm.width(k[0]), dtype=torch.float64) for k in self.keys}
+        self.n = torch.zeros(CLASSES, dtype=torch.long)
+        self.tokens: dict[int, list[int]] = {}
 
-    def add(self, taps: dict, seq: int, positions: torch.Tensor) -> None:
-        """taps[key]: (B, T, width) at `positions` (T,) of sequence `seq` (B = 1), or B sequences of one position."""
-        cls = position_class(positions)
+    def add(self, taps: dict, seqs: torch.Tensor, ids: torch.Tensor) -> None:
+        """taps[key]: (B, T, width) for B sequences `seqs` (B,) of token ids (B, T) at positions 0..T-1."""
+        b, t = ids.shape
+        pos = torch.arange(t)[None].expand(b, t)
+        c = position_class(pos, ids, self.special, self.window).reshape(-1)
+        where = torch.stack([seqs[:, None].expand(b, t).reshape(-1), pos.reshape(-1)], 1)
         for k in self.keys:
-            x = taps[k].abs().float()
-            b, t, w = x.shape
-            flat = x.reshape(b * t, w)
-            c = cls.repeat(b) if t > 1 else cls.expand(b)
-            where = torch.stack([torch.full((b * t,), seq) if b == 1 else torch.arange(b) + seq,
-                                 positions.repeat(b) if t > 1 else positions.expand(b)], 1)
-            for ci in (0, 1):
+            flat = taps[k].abs().float().reshape(b * t, -1)
+            for ci in range(CLASSES):
                 sel = c == ci
                 if not sel.any():
                     continue
@@ -82,30 +98,66 @@ class Stats:
                 self.amax[k][ci] = torch.where(better, v, self.amax[k][ci])
                 self.at[k][ci] = torch.where(better[:, None], where[sel][idx], self.at[k][ci])
                 self.ss[k][ci] += flat[sel].double().pow(2).sum(0)
-        self.n += torch.bincount(position_class(positions).repeat(taps[self.keys[0]].shape[0]), minlength=2)
+        self.n += torch.bincount(c, minlength=CLASSES)
 
-    def boxes(self) -> dict[tuple[str, int], torch.Tensor]:
+    def merge(self, o: "Stats") -> None:
+        for k in self.keys:
+            better = o.amax[k] > self.amax[k]
+            self.amax[k] = torch.where(better, o.amax[k], self.amax[k])
+            self.at[k] = torch.where(better[..., None], o.at[k], self.at[k])
+            self.ss[k] += o.ss[k]
+        self.n += o.n
+        self.tokens.update(o.tokens)
+
+    def save(self, path: Path) -> None:
+        torch.save({k: getattr(self, k) for k in ("amax", "at", "ss", "n", "tokens", "window")}
+                   | {"special": self.special.tolist()}, path)
+
+    @classmethod
+    def load(cls, lm: LM, path: Path) -> "Stats":
+        raw = torch.load(path)
+        s = cls(lm, raw["special"], raw["window"])
+        for k in ("amax", "at", "ss", "n", "tokens"):
+            setattr(s, k, raw[k])
+        return s
+
+    def boxes(self, headroom: int) -> dict[tuple[str, int], torch.Tensor]:
+        """Each class's box, with `headroom` powers of two. The early window and the special tokens are few positions
+        of the calibration traffic, so their boxes also cover every value the ordinary class saw."""
         hi = {}
         for k, a in self.amax.items():
+            a = torch.stack([torch.maximum(a[0], a[1]), a[1], torch.maximum(a[2], a[1])])
             if k[0] in GROUP_SITES:
-                g = a.view(2, -1, GROUP).amax(-1)
-                hi[k] = (E4M3_MAX * 2 * ue8m0_scale(g)).repeat_interleave(GROUP, -1)
+                g = a.view(CLASSES, -1, GROUP).amax(-1)
+                hi[k] = (E4M3_MAX * 2.0 ** headroom * ue8m0_scale(g)).repeat_interleave(GROUP, -1)
             else:
-                hi[k] = torch.exp2(torch.ceil(torch.log2(a.clamp_min(2.0 ** -24))) + 1)
+                hi[k] = torch.exp2(torch.ceil(torch.log2(a.clamp_min(2.0 ** -24))) + headroom)
         return hi
 
 
-def sweep_first(lm: LM, stats: Stats | None, n: int, seed: int, batch: int, seq0: int) -> None:
-    """n random tokens, each alone at position 0."""
-    gen = torch.Generator().manual_seed(seed)
-    toks = torch.randperm(lm.spec.vocab, generator=gen)[:n]
-    for i in range(0, n, batch):
+def sweep_first(lm: LM, stats: Stats | None, n: int, seed: int, batch: int) -> None:
+    """n random tokens (n < 0: every token of the vocabulary), each alone at position 0, where a model's activations
+    are a function of the token alone: the whole vocabulary covers every position 0 of any traffic."""
+    V = lm.spec.vocab
+    toks = torch.arange(V) if n < 0 else torch.randperm(V, generator=torch.Generator().manual_seed(seed))[:n]
+    for i in range(0, len(toks), batch):
         ids = toks[i:i + batch, None]
         taps = {k: None for k in lm.sites()} if stats is not None else None
         lm.forward(ids, Cache(), taps=taps)
         if stats is not None:
-            stats.add(taps, seq0 + i, torch.zeros(1, dtype=torch.long))
-            stats.tokens.extend([[int(t)] for t in ids[:, 0]])
+            stats.add(taps, Stats.SWEEP + ids[:, 0], ids)
+
+
+def traffic(split: str, n_mixed: int) -> list[tuple[str, str]]:
+    """The hand-written set of `split` and n_mixed texts of the pinned datasets' (`traffic.mixed`), as (name, text)."""
+    hand = CALIBRATION if split == "calibration" else HELDOUT
+    return [(f"hand:{i}", t) for i, t in enumerate(hand)] + (mixed(split, n_mixed) if n_mixed else [])
+
+
+def shard(items: list, spec: str) -> list[tuple[int, object]]:
+    """spec "i/n": every n-th item from item i, with its index."""
+    i, n = (int(x) for x in spec.split("/"))
+    return [(j, x) for j, x in enumerate(items) if j % n == i]
 
 
 def quantiles(x: torch.Tensor) -> dict:
@@ -114,25 +166,48 @@ def quantiles(x: torch.Tensor) -> dict:
 
 
 def part_calibrate(lm: LM, tok, a) -> dict:
-    stats = Stats(lm)
+    """The shard's texts and, in shard 0, the position-0 sweep; with one shard, the boxes too (else `merge` makes them)."""
+    stats = Stats(lm, lm.special_ids() if a.special else [], a.window)
     t0 = time.time()
-    for i, text in enumerate(CALIBRATION):
+    texts = shard(traffic("calibration", a.mixed), a.shard)
+    for j, (name, text) in texts:
         ids = continued(lm, tok, text, a.new, a.cap)
         taps = {k: None for k in lm.sites()}
         lm.forward(torch.tensor([ids]), Cache(), taps=taps)
-        stats.tokens.append(ids)
-        stats.add(taps, len(stats.tokens) - 1, torch.arange(len(ids)))
-        print(f"calibrate {i}: {len(ids)} tokens, {time.time() - t0:.0f} s", file=sys.stderr, flush=True)
-    sweep_first(lm, stats, a.first_tokens, a.seed, a.batch, len(stats.tokens))
-    hi = stats.boxes()
-    Boxes(hi).save(a.out / "boxes.pt", model=a.model, revision=MODELS[a.model]["revision"],
-                   amax={f"{s}:{l}": v for (s, l), v in stats.amax.items()})
+        stats.tokens[j] = ids
+        stats.add(taps, torch.tensor([j]), torch.tensor([ids]))
+        print(f"calibrate {j} {name}: {len(ids)} tokens, {time.time() - t0:.0f} s", file=sys.stderr, flush=True)
+    if a.shard.split("/")[0] == "0":
+        sweep_first(lm, stats, a.first_tokens, a.seed, a.batch)
+        print(f"calibrate: position-0 sweep, {time.time() - t0:.0f} s", file=sys.stderr, flush=True)
+    stats.save(a.out / "stats.pt")
+    if a.shard.split("/")[1] != "1":
+        return {"part": "calibrate", "shard": a.shard, "texts": len(texts), "positions": stats.n.tolist()}
+    return calibrated(lm, tok, a, stats)
+
+
+def part_merge(lm: LM, tok, a) -> dict:
+    stats = Stats.load(lm, a.stats[0])
+    for p in a.stats[1:]:
+        stats.merge(Stats.load(lm, p))
+    return calibrated(lm, tok, a, stats)
+
+
+def calibrated(lm: LM, tok, a, stats: Stats) -> dict:
+    """Writes boxes.pt from the merged statistics; per site and class, the boxes against the site's RMS, and the
+    largest values (massive activations) with the token each sits on."""
+    hi = stats.boxes(a.headroom)
+    Boxes(hi, stats.special.tolist(), stats.window).save(
+        a.out / "boxes.pt", model=a.model, revision=MODELS[a.model]["revision"], headroom=a.headroom,
+        amax={f"{s}:{l}": v for (s, l), v in stats.amax.items()})
     rows, massive = [], []
     for k in stats.keys:
-        for ci in (0, 1):
+        for ci in range(CLASSES):
             n = int(stats.n[ci])
-            rms_el = (stats.ss[k][ci] / max(n, 1)).sqrt().float()
-            site_rms = float((stats.ss[k][ci].sum() / max(n * rms_el.numel(), 1)).sqrt())
+            if not n:
+                continue
+            rms_el = (stats.ss[k][ci] / n).sqrt().float()
+            site_rms = float((stats.ss[k][ci].sum() / (n * rms_el.numel())).sqrt())
             box = hi[k][ci]
             box_u = box[::GROUP] if k[0] in GROUP_SITES else box
             rows.append({"site": k[0], "layer": k[1], "class": ci, "positions": n, "site_rms": site_rms,
@@ -143,13 +218,14 @@ def part_calibrate(lm: LM, tok, a) -> dict:
             top = stats.amax[k][ci].topk(3)
             for v, j in zip(top.values.tolist(), top.indices.tolist()):
                 seq, pos = stats.at[k][ci, j].tolist()
-                ids = stats.tokens[seq] if 0 <= seq < len(stats.tokens) else []
+                ids = [seq - Stats.SWEEP] if seq >= Stats.SWEEP else stats.tokens.get(seq, [])
                 massive.append({"site": k[0], "layer": k[1], "class": ci, "coord": j, "value": v,
                                 "over_median_element_rms": v / max(med, 1e-30), "over_site_rms": v / max(site_rms, 1e-30),
                                 "box": float(hi[k][ci, j]), "seq": seq, "pos": pos,
                                 "token": tok.decode([ids[pos]]) if 0 <= pos < len(ids) else None})
-    return {"part": "calibrate", "texts": len(CALIBRATION), "first_tokens": a.first_tokens, "new": a.new,
-            "cap": a.cap, "positions": stats.n.tolist(), "sites": rows, "massive": massive}
+    return {"part": "calibrate", "texts": len(stats.tokens), "first_tokens": a.first_tokens, "new": a.new,
+            "cap": a.cap, "window": stats.window, "special": len(stats.special), "headroom": a.headroom,
+            "positions": stats.n.tolist(), "sites": rows, "massive": massive}
 
 
 def part_complete(lm: LM, tok, a) -> dict:
@@ -157,7 +233,7 @@ def part_complete(lm: LM, tok, a) -> dict:
     per_text = []
     t0 = time.time()
     seen: dict[tuple[str, int], int] = {}
-    for i, text in enumerate(HELDOUT):
+    for i, (name, text) in shard(traffic("heldout", a.mixed), a.shard):
         lm.boxes = None
         plain = continued(lm, tok, text, a.new, a.cap)
         lm.boxes = boxes
@@ -166,21 +242,25 @@ def part_complete(lm: LM, tok, a) -> dict:
         lm.forward(torch.tensor([clamped]), Cache())
         n_prompt = min(len(tok.encode(text).ids), a.cap)
         diff = [j for j in range(n_prompt, len(plain)) if plain[j] != clamped[j]]
-        per_text.append({"text": i, "tokens": len(clamped), "served_differ": len(diff),
+        per_text.append({"text": i, "name": name, "tokens": len(clamped), "served_differ": len(diff),
                          "first_differ": diff[0] - n_prompt if diff else None,
                          "cut": {f"{s}:{l}": n for (s, l), n in boxes.cut.items()},
                          "worst": {f"{s}:{l}": w for (s, l), w in boxes.worst.items()}})
         for k in lm.sites():
             seen[k] = seen.get(k, 0) + len(clamped) * lm.width(k[0])
-        print(f"complete {i}: {len(clamped)} tokens, {len(diff)} served tokens differ, cuts "
-              f"{sum(boxes.cut.values())}, {time.time() - t0:.0f} s", file=sys.stderr, flush=True)
-    boxes.cut, boxes.worst = {}, {}
-    lm.boxes = boxes
-    sweep_first(lm, None, a.first_tokens, a.seed + 1, a.batch, 0)
-    first = {"tokens": a.first_tokens, "cut": {f"{s}:{l}": n for (s, l), n in boxes.cut.items()},
-             "worst": {f"{s}:{l}": w for (s, l), w in boxes.worst.items()}}
+        print(f"complete {i} {name}: {len(clamped)} tokens, {len(diff)} served tokens differ, cuts "
+              f"{sum(boxes.cut.values())}, worst {max(boxes.worst.values(), default=0):.2f}x, {time.time() - t0:.0f} s",
+              file=sys.stderr, flush=True)
+    first = None
+    if a.first_tokens and a.shard.split("/")[0] == "0":
+        boxes.cut, boxes.worst = {}, {}
+        lm.boxes = boxes
+        sweep_first(lm, None, a.first_tokens, a.seed + 1, a.batch)
+        first = {"tokens": a.first_tokens, "cut": {f"{s}:{l}": n for (s, l), n in boxes.cut.items()},
+                 "worst": {f"{s}:{l}": w for (s, l), w in boxes.worst.items()}}
     cut_total = sum(sum(t["cut"].values()) for t in per_text)
-    return {"part": "complete", "texts": len(HELDOUT), "new": a.new, "cap": a.cap, "values_seen": sum(seen.values()),
+    return {"part": "complete", "shard": a.shard, "texts": len(per_text), "new": a.new, "cap": a.cap,
+            "window": boxes.window, "special": len(boxes.special), "values_seen": sum(seen.values()),
             "values_cut": cut_total, "texts_with_cuts": sum(1 for t in per_text if t["cut"]),
             "texts_served_differ": sum(1 for t in per_text if t["served_differ"]), "per_text": per_text,
             "first_tokens": first}
@@ -195,17 +275,16 @@ def part_explain(lm: LM, tok, a) -> dict:
     whose scale exceeds its bound), with its position's token and the tokens before it; and each text's sink-like
     positions, whose largest residual-stream element at --sink-layer is over --sink-ratio times the text's median."""
     boxes = Boxes.load(a.boxes)
-    texts = HELDOUT if a.texts == "heldout" else CALIBRATION
     L = lm.spec.layers
     sink_layer = a.sink_layer if a.sink_layer >= 0 else L + a.sink_layer
     per_text, by_token = [], {}
     t0 = time.time()
-    for i, text in enumerate(texts):
+    for i, (name, text) in shard(traffic(a.texts, a.mixed), a.shard):
         lm.boxes = None
         ids = continued(lm, tok, text, a.new, a.cap)
         taps = {k: None for k in lm.sites()}
         lm.forward(torch.tensor([ids]), Cache(), taps=taps)
-        cls = position_class(torch.arange(len(ids)))
+        cls = boxes.classes(0, len(ids), torch.tensor([ids]))[0]
         events = []
         for k in lm.sites():
             x = taps[k][0].float()
@@ -240,31 +319,41 @@ def part_explain(lm: LM, tok, a) -> dict:
                 "context": context_of(tok, ids, e[3])} for e in events[:a.top]]
         roots = sorted(({"pos": t, "site": e[1], "layer": e[2], "ratio": e[0], "context": context_of(tok, ids, t)}
                         for t, e in first.items()), key=lambda r: (r["layer"], -r["ratio"]))
-        per_text.append({"text": i, "tokens": len(ids), "values_over": len(events), "positions_over": len(first),
-                         "top": top, "first_over_by_position": roots[:a.top], "sinks": sinks})
-        print(f"explain {i}: {len(ids)} tokens, {len(events)} values over in {len(first)} positions; worst "
+        per_text.append({"text": i, "name": name, "tokens": len(ids), "values_over": len(events),
+                         "positions_over": len(first), "top": top, "first_over_by_position": roots[:a.top],
+                         "sinks": sinks})
+        print(f"explain {i} {name}: {len(ids)} tokens, {len(events)} values over in {len(first)} positions; worst "
               + (f"{events[0][0]:.2f}x at {events[0][1]}:{events[0][2]} {context_of(tok, ids, events[0][3])!r}"
                  if events else "none")
               + f"; sinks {[(s['pos'], s['context'][-12:], round(s['over_median'])) for s in sinks]}, {time.time() - t0:.0f} s",
               file=sys.stderr, flush=True)
-    return {"part": "explain", "texts": a.texts, "sink_layer": sink_layer, "per_text": per_text,
+    return {"part": "explain", "texts": a.texts, "shard": a.shard, "sink_layer": sink_layer, "per_text": per_text,
             "by_token": dict(sorted(by_token.items(), key=lambda kv: -kv[1]["max_ratio"]))}
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="gpt2", choices=sorted(MODELS))
-    ap.add_argument("--part", required=True, choices=("calibrate", "complete", "explain"))
+    ap.add_argument("--part", required=True, choices=("calibrate", "merge", "complete", "explain"))
     ap.add_argument("--texts", default="heldout", choices=("heldout", "calibration"), help="explain: which traffic")
+    ap.add_argument("--mixed", type=int, default=0,
+                    help="texts of the pinned datasets (traffic.mixed) added to the hand-written set of the part's split")
+    ap.add_argument("--shard", default="0/1", help="i/n: this run's share of the texts (merge joins calibrate's)")
+    ap.add_argument("--stats", type=Path, nargs="*", default=[], help="merge: the shards' stats.pt")
+    ap.add_argument("--window", type=int, default=1, help="calibrate: the first positions that form the sink class")
+    ap.add_argument("--special", action=argparse.BooleanOptionalAction, default=True,
+                    help="calibrate: give the tokenizer's special tokens their own class")
+    ap.add_argument("--headroom", type=int, default=1, help="calibrate/merge: powers of two of headroom on each box")
     ap.add_argument("--sink-layer", type=int, default=3, help="explain: the residual stream that marks sinks")
     ap.add_argument("--sink-ratio", type=float, default=16.0,
                     help="explain: a sink-like position's residual peak over the text's median peak")
     ap.add_argument("--top", type=int, default=12, help="explain: the largest overshoots and positions listed per text")
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--boxes", type=Path, help="complete: the calibrated boxes.pt")
+    ap.add_argument("--boxes", type=Path, help="complete, explain: the calibrated boxes.pt")
     ap.add_argument("--new", type=int, default=64, help="greedy continuation tokens a text adds to the traffic")
     ap.add_argument("--cap", type=int, default=768, help="a text's tokens, at most")
-    ap.add_argument("--first-tokens", type=int, default=2048, help="random tokens swept at position 0")
+    ap.add_argument("--first-tokens", type=int, default=2048,
+                    help="tokens swept at position 0 (calibrate: -1 for the whole vocabulary)")
     ap.add_argument("--batch", type=int, default=256)
     ap.add_argument("--threads", type=int, default=0)
     ap.add_argument("--seed", type=int, default=0)
@@ -275,9 +364,11 @@ def main() -> int:
     lm = LM(a.model)
     tok = lm.tokenizer()
     t = time.time()
-    res = {"calibrate": part_calibrate, "complete": part_complete, "explain": part_explain}[a.part](lm, tok, a)
+    parts = {"calibrate": part_calibrate, "merge": part_merge, "complete": part_complete, "explain": part_explain}
+    res = parts[a.part](lm, tok, a)
     res.update({"model": a.model, "revision": MODELS[a.model]["revision"],
-                "args": {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(a).items()},
+                "args": {k: ([str(x) for x in v] if isinstance(v, list) else str(v) if isinstance(v, Path) else v)
+                         for k, v in vars(a).items()},
                 "seconds": time.time() - t})
     (a.out / f"clamp-{a.part}.json").write_text(json.dumps(res, indent=1))
     print(json.dumps({k: v for k, v in res.items() if k not in ("sites", "massive", "per_text")}, indent=1))
