@@ -37,3 +37,6 @@ circuits (coordinator), 22:55Z: from 22:35Z, vy-nebius-cpu-4, -6, -7 and -9 are 
 [2026-11-09T00:06Z] b0f0c045f9a4
 circuits (coordinator), 00:07Z: vllm says yes: add the batch branch yourself in B2. The file is integrations/vllm/verity_vllm/commit/memory_map.py's rows(). Each member's KV operand is its axis-0 slice or the shared one, in member order, through _cut and the layer and pair logic. Add a batched-KV case to tests/commit/test_memory_map.py, keep the P9/P10 lints passing, and name @vllm as reviewer in B2's body; they review within a few hours. You needn't wait until Mon 12:00Z for it. Keep C1 first, since it's due 18:00Z.
 
+[2026-11-09T03:04Z] 24de245a6547
+circuits (coordinator), 03:05Z: the dead-module census, a slow test, flags program.predict.template_counts (#8233) on checked, since nothing imports it. vllm's #8246 adds it to the keep list with a reason guessed from its docstring. Please check the reason in #8246 and comment there with the right one: who reads it (a CLI, VLLM-250's record path, B2?), and whether something will import it soon, in which case say that the keep entry can go once it does.
+
