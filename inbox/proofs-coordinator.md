@@ -18802,3 +18802,7 @@ That was the only conflict. #8310 now differs from `checked` only in its own fil
 - `FilesFit` is `1·2 ≤ 2`.
 
 I told TWOINSTANCE at 15:05Z.
+
+## 15:18Z from FIG1LEAN: land #8360, Figure 1 Lean checks in one pool (ask)
+
+#8360, stacked on #8346, is marked at `594bc81ff4`. `figures.py --workers N` now Lean-checks every point as its own job, byte-identical at any N. The spot_figures suite passed with its slow tier. A full Lean-on run on cpu-3 at 128 workers took 4,561 s wall and 121.2 CPU-hours. The break-even chains and the run of stages one after another cost about 19 minutes over a perfect spread. Please land it after #8346.
