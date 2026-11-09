@@ -47,8 +47,8 @@ __all__ = ["TemplateCounts"]
 class _Pass:
     """A forward pass of the request's m rows at positions p.. in its launch: the launch's tokens `M`, its sequences `S` where a
     sample follows (else None), whether its all-reduces are FlashInfer's fused kernel, the rows' key counts, the step's dense-MHA
-    prefills (`own`: the request's among them), the attention launch's key counts `mqa`, its split count by kept keys, and each row
-    past INDEX_TOPK's block keys (`vllm_dsa.long_row_blocks`)."""
+    prefills (`own`: the request's among them), the attention launch's key counts `mqa`, its split count by kept keys, each row
+    past INDEX_TOPK's block keys (`vllm_dsa.long_row_blocks`), and its sequence's rows in the launch `e` (`common._Launch.entry`)."""
     m: int
     p: int
     S: int | None
@@ -60,6 +60,7 @@ class _Pass:
     mqa: list[int]
     splits: dict[int, int]
     block: dict[int, int]
+    e: int
 
 
 class TemplateCounts(StepNeeds):
@@ -92,19 +93,22 @@ class TemplateCounts(StepNeeds):
 
     def unit(self, u) -> Counter[str]:
         """n_t of a `steps.RequestUnit`'s Program (`steps.request_program`), from its key's fields."""
-        return self.request(u.LP, u.T, u.policy, C=u.C, chunks=u.chunks, batch=u.batch(), edge=u.edge, stop=u.stop)
+        return self.request(u.LP, u.T, u.policy, C=u.C, chunks=u.chunks, batch=u.batch(), edge=u.edge, stop=u.stop,
+                            entries=u.entries)
 
     def request(self, LP: int, T: int, policy: Mapping[str, Any] | None = None, *, C: int = 0, chunks: Sequence[int] = (),
-                batch: list | None = None, edge: Sequence[str] = (), stop: Mapping[str, Any] | None = None) -> Counter[str]:
+                batch: list | None = None, edge: Sequence[str] = (), stop: Mapping[str, Any] | None = None,
+                entries: Sequence[int] = ()) -> Counter[str]:
         """n_t of the request Program `build.build_program` writes for (LP, T) under `policy` (φ's `sampling`, greedy without one)
-        after C rows of history, in its prefill `chunks` at its launch `batch` (else φ's workload's, `common.launch_batch`), with its
-        `edge` groups and length rule `stop`, in the registered compiler's form: descriptor id -> instances."""
+        after C rows of history, in its prefill `chunks` at its launch `batch` (else φ's workload's, `common.launch_batch`), each
+        chunk's sequence of `entries` there where it has them, with its `edge` groups and length rule `stop`, in the registered
+        compiler's form: descriptor id -> instances."""
         from verity_vllm.program.frontend import stop_rule as SR
         net, NL, TOPK = self.net, int(self.C["NL"]), self.index_topk
         _, chunks, rows, sampled = request_passes("request", LP, T, 1, C, tuple(chunks or ()), False, bool(edge))
         batch = launch_batch(self.phi, LP, T) if batch is None else batch
         model = SimpleNamespace(reads_launch=True, launch=_Launch(capture_sizes=net.capture_sizes, max_num_seqs=net.max_num_seqs or 0))
-        in_launch(model, batch, net.model_class, chunks, T)
+        in_launch(model, batch, net.model_class, chunks, T, entries=tuple(entries))
         passes, E = [], int(C)
         for k, (m, smp) in enumerate(zip(rows, sampled)):
             if batch is not None:
@@ -151,16 +155,16 @@ class TemplateCounts(StepNeeds):
         from verity.ml.definitions.registry import tp_allreduce as AR
         from verity.ml.definitions.registry.sparse_mla_split import launch_num_splits
         from verity_vllm.program.frontend.rules.vllm_dsa import long_row_blocks
-        M, TOPK = launch.tokens(m), self.index_topk
-        prefills = launch.prefills((m, p), self.threshold)
+        M, TOPK, e = launch.tokens(m), self.index_topk, launch.entry(m)
+        prefills = launch.prefills((e, p), self.threshold)
         dense = prefills if prefills and max(n + q for n, q in prefills) <= TOPK else []
-        keys, own = [p + i + 1 for i in range(m)], (m, p) in dense
+        keys, own = [p + i + 1 for i in range(m)], (e, p) in dense
         mqa = launch.keys([] if own else keys, without=dense)
         kept = [min(n, TOPK) for n in mqa]
         splits = {} if own else dict(zip(kept, launch_num_splits(kept, int(self.tp.num_sms), TOPK, 0)))
         fused = bool(self.net.settings["flashinfer"]) and M <= AR.fused_max_tokens(self.H, self.W)
         block = {i: N for N, rows in long_row_blocks(keys, TOPK) for i in rows}
-        return _Pass(m, p, launch.tokens(1, sampled=True) if sampled else None, M, fused, keys, dense, own, mqa, splits, block)
+        return _Pass(m, p, launch.tokens(1, sampled=True) if sampled else None, M, fused, keys, dense, own, mqa, splits, block, e)
 
     def _layer(self, L: int, P: _Pass, X: Sequence[int], bound: int, pads: set, final: bool = False) -> list[tuple[Need, int]]:
         """Layer L's calls in pass P that the Program keeps: the attention of its live query rows X (every row below the last
@@ -222,7 +226,7 @@ class TemplateCounts(StepNeeds):
     def _dense(self, L: int, P: _Pass, X: Sequence[int]) -> list[tuple[Need, int]]:
         """The dense-MHA prefill's calls (`dsa.Net.dense_plan`) of the live query rows X: kv_b_proj's rows, which every head reads up
         to its own, each row's heads, and where the step extends, the merges and the context's heads and rows, or the empty consts."""
-        plan = self.net.dense_plan(self.kind, P.m, P.p, P.p, P.dense)
+        plan = self.net.dense_plan(self.kind, P.e, P.p, P.p, P.dense)
         NH, live = int(self.C["NH"]), 1 if X else 0
         out = [(self._fp8_linear(plan.rows, (L, "kv_b_w")), P.m * live), *[(plan.heads[i], NH) for i in X]]
         if plan.merge is not None:

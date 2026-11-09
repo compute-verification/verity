@@ -683,7 +683,8 @@ class _Decoder:
 
 def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,
                   with_desc: bool = True, C: int = 0, dead_free: bool = False, batched: bool = False, finish: Callable | None = None,
-                  batch: list | None = None, chunks: tuple[int, ...] | None = None, edge: tuple[str, ...] = (), stop: dict | None = None) -> BuildResult:
+                  batch: list | None = None, chunks: tuple[int, ...] | None = None, edge: tuple[str, ...] = (), stop: dict | None = None,
+                  entries: tuple[int, ...] = ()) -> BuildResult:
     """The Program of the Build's `wrapper` for φ: `step` (one engine step, M token rows at pos0.., the last row sampled) or
     `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples). `C` > 0: the
     request's first C positions are a history it reads and doesn't compute, every layer's rows of them Inputs after its own
@@ -700,7 +701,9 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     request's prefill as the engine ran it, in launches of these rows in turn (the chunked request wrapper), where its kernels read
     the launch: per chunk one forward at its own step of `batch` (its chunks, then its T decodes), the sample after the last chunk,
     a chunk that leaves the prompt incomplete sampling nothing (vLLM discards that sample); the SRC config is `{"chunks": [...]}`
-    (its wrapper's class unchanged); one chunk is the request wrapper. `edge`: the history groups (`dsa.Net.edge_groups`) a request
+    (its wrapper's class unchanged); one chunk is the request wrapper. `entries`: per chunk, the rows its sequence ran in that
+    launch, where a chunk computes only the first of them (a hit prefix recomputed in its producers' launches, `steps.plan_steps`'
+    ``recompute_hits``); the SRC config holds them. `edge`: the history groups (`dsa.Net.edge_groups`) a request
     a Commit window leaves at position LP + T (inside its prompt too: T < 0, sampling nothing) returns after its samples and checks,
     every layer's rows [0, LP + T) of each as `prefix_params(LP + T)` lays them out (`common.with_edge`); its SRC config holds them."""
     t0 = time.time()
@@ -751,7 +754,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     if batched and hasattr(model, "batched"):
         model.batched = True
     batch = (launch_batch(phi, LP, T) if batch is None else batch) if wrapper == "request" else None
-    in_launch(model, batch, net.model_class, chunks, T)
+    in_launch(model, batch, net.model_class, chunks, T, entries=tuple(entries))
     if wrapper == "request" and isinstance(model, _Model):
         model.ctx = launch_rows(phi, LP, T, C)
     if C:
@@ -777,7 +780,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     name = f"{derive_name}[{net.model_class}]"
     src_static = {"class": src_class, "mode": "profile", "profile": phi.profile,
                   "inputs": [list(_arr_shape(t)) for _, t in params[:-1]],
-                  "config_sha256": hashlib.sha256(canonical_json({**({"chunks": list(chunks)} if chunks else {}), **edge_config(edge),
+                  "config_sha256": hashlib.sha256(canonical_json({**({"chunks": list(chunks)} if chunks else {}),
+                                                                  **({"entries": list(entries)} if entries else {}), **edge_config(edge),
                                                                   **({"history": C} if C and not dense else {}), **({"stop": stop} if stop else {})})).hexdigest()[:16]}
     from verity.ml.definitions.replay import replayer
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),
