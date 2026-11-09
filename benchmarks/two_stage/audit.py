@@ -14,7 +14,8 @@ S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
   (`source_of`). The stream's second stage samples ``--k`` proof blocks in each (replay block, template) cell.
 * **The auditor's params** (`toy.references`), fixed before the run: each template's circuit file and the header of its
   reference statement, `member_stager`'s statement of its member in the interior window of Q replay blocks, staged on
-  stand-in rows (`service.template_circuits`' ``proofs``).
+  stand-in rows, and the registered reads it reads, `toy.reads`' with none of the run's fields
+  (`service.template_circuits`' ``proofs``).
 * **The second stage** (`second_stage`, over any interior window of word-row members, its two records and the verifier's
   reads): `a5.audit` of the stream's second sample: a ``--zk`` session per member with
   sampled proof blocks, run by ``flock-circuit prove --zk`` itself as SPOT[Flock]'s proof server does (`a0.DIRECT`; under
@@ -22,7 +23,8 @@ S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
   port (`toy.reads`: the link ports at the boundary record, every other at the interior record), the audit record, the
   wires of the sampled proof blocks, and a5's negatives (the registered reads' three on b_in's session among them). Each
   session's circuit file is held to the one the params name for its template (`pins`), and its statement as round 2
-  takes it (`statements`) to round 2's check (`second_stage.check`, the form allowed) at the params' reference headers.
+  takes it (`statements`) to round 2's check (`second_stage.check`, the form allowed) at the params' reference headers
+  and registered reads.
 * **The outcome** (`outcome_of`): the sessions delivered to the stream and its outcome on what the interior's audit
   record took, with both stages' coin evidence once the session has ended, the sessions' statements and the params:
   the boundary's audit record over the replay sample and the interior's over the second sample, with round 2's check,
@@ -226,16 +228,20 @@ def round_two(sample: list[int], window: T.CS.Binding, irec: dict, brec: dict, d
               record: dict, proofs: dict) -> dict:
     """Round 2's statement check of the sessions (`second_stage.check`, the form allowed): over the links the replay
     block's Definition makes (`second_stage.replay_links`, at the boundary record's ports, as the stream derives them),
-    the reads the audit record's verdicts of record report, and each template's reference header the params ``proofs``
+    the reads the audit record's verdicts of record report, what they name of each session they accepted
+    (`second_stage.verified_of`), and each template's reference header and registered reads the params ``proofs``
     give."""
     from verity.core.protocols.spot import second_stage as SS
     from verity.core.protocols.spot.one_stage import audit as A, partition as P
     from verity.ml.circuits.codec import descriptor_id
 
     replay = T.boundary_window(int(brec["population"]), len(sample)).program
+    verdicts = record.get("verdicts") or {}
     own = SS.Own(tuple(sample), SS.parts(len(sample), P.strata(window.program, window.query)), irec, brec, tuple(drawn),
-                 SS.replay_links(replay, descriptor_id(T.REPLAY), brec), A.session_registered(record.get("verdicts") or {}),
-                 tuple((e["template"], e["header"]) for e in proofs["templates"]))
+                 SS.replay_links(replay, descriptor_id(T.REPLAY), brec), A.session_registered(verdicts),
+                 verified=SS.verified_of(verdicts),
+                 refs=tuple((e["template"], e["header"]) for e in proofs["templates"]),
+                 ref_reads=tuple((e["template"], e["registered"]) for e in proofs["templates"]))
     return SS.check(True, own, stmts).to_json()
 
 

@@ -12,7 +12,7 @@ public import Flock.Bytes
 namespace Flock.Steps
 
 /-- The steps a walk follows before it refuses. -/
-def FUEL : Nat := 2 ^ 62
+@[noinline] def FUEL : Nat := 2 ^ 62
 
 /-- `step` from `a` until it is done, in at most `fuel` steps, then a refusal naming `what`. -/
 @[specialize] def run {α β : Type} (what : String) (step : α → V (β ⊕ α)) : Nat → α → V β

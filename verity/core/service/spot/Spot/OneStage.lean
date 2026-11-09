@@ -29,11 +29,15 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   record's program to (`Registration.declaredCode`), refused in any other form; and it may add `seed_salt`: the window's
   seed salt it read from the challenger's log (`Challenger.seedSaltOf`), lowercase hex of 64 bytes, which needs
   `window_root` and which R6 holds the record's window to name (`R6-seed-salt`), refused in any other form; and it may
-  add `pool`, `{"accepted", "genesis", "pin", "pout"}`: the two registered values a window opens its pool from and
-  leaves it in, which it neither fills, pinned nor gives as outputs, the empty pool's root (lowercase hex of 64 bytes)
-  and whether it accepted the window of the log's last record (a bool), refused in any other form; `pin` is then an
-  output value reusing the previous record's `pout` when the window carries its pool (`Registration.Pool.chains`), and
-  otherwise a supplied value of the one row `[{"bytes": genesis}]`, which R7 holds to the chain (`R7-pool-chain`);
+  add `pool`, `{"genesis", "lag", "pin", "pout", "reset", "verdicts", "week"}`: the two registered values a window
+  opens its pool from and leaves it in, which it neither fills, pinned nor gives as outputs, the empty pool's root
+  (lowercase hex of 64 bytes), the public lag at which serving learns a verdict (a positive integer), its verdict log
+  (an object of record digests, lowercase hex of 64 bytes, to whether its run on that record accepted), whose verdict
+  on the record the lag back restarts the pool (`Registration.Pool.refused`), the window's own reset (a bool) and its
+  week on the verifier's clock (a natural), which R6 holds the record's window to name with the week's spent mark
+  (`R6-pool-reset`, `R6-pool-week`, `R6-pool-spent`, `R6-pool-reset-week`), refused in any other form; `pin` is then
+  an output value reusing the previous record's `pout` when the window carries its pool (`Registration.Pool.chains`),
+  and otherwise a supplied value of the one row `[{"bytes": genesis}]`, which R7 holds to the chain (`R7-pool-chain`);
 * **commitment**: the registration record, canonical JSON, fixed before the sample; its digest is
   `SHA-512(format || 0 || canon(record))` (`Registration.digest`), which the receipt names;
 * **evidence**: canonical JSON with exactly `receipt`, `draw` (the verifier's sample), `proved_units`, `instances`,
@@ -144,12 +148,14 @@ private def logRecord (j : Json) : V Json := do
     throw "a record of the log registers values that are not objects with a string value, root and domain"
   return j
 
-/-- The parameters' pool (`registration._pool`): exactly `{"accepted", "genesis", "pin", "pout"}`, `pin` and `pout` two
-registered values none of `given` (the supplied, pinned and output values) names, `pin` with no row format of its own in
-`schemas` (it takes `pout`'s, `poolValues`), `genesis` lowercase hex of 64 bytes and `accepted` a bool. -/
+/-- The parameters' pool (`registration._pool`): exactly `{"genesis", "lag", "pin", "pout", "reset", "verdicts",
+"week"}`, `pin` and `pout` two registered values none of `given` (the supplied, pinned and output values) names, `pin`
+with no row format of its own in `schemas` (it takes `pout`'s, `poolValues`), `genesis` lowercase hex of 64 bytes,
+`lag` a positive integer, `verdicts` an object of record digests (lowercase hex of 64 bytes) to bools, `reset` a bool
+and `week` a natural. -/
 private def poolOf (pj : Json) (registered : Array (String × Nat)) (given : List (Option Json))
     (schemas : Option Json) : V Registration.Pool := do
-  exactly pj #["accepted", "genesis", "pin", "pout"] "the pool"
+  exactly pj #["genesis", "lag", "pin", "pout", "reset", "verdicts", "week"] "the pool"
   let (.str pin, .str pout) := (getD pj "pin", getD pj "pout") | throw "the pool's pin and pout are not strings"
   for v in [pin, pout] do
     if !registered.any (·.1 == v) || given.any (fun g => (g.bind (field? · v)).isSome) then
@@ -158,8 +164,16 @@ private def poolOf (pj : Json) (registered : Array (String × Nat)) (given : Lis
   if (schemas.bind (field? · pin)).isSome then throw s!"the pool's {pin} takes the row format of {pout}, which it reuses"
   let .str genesis := getD pj "genesis" | throw "the pool's genesis is lowercase hex of 64 bytes"
   if !(genesis.length == 128 && isHex genesis) then throw "the pool's genesis is lowercase hex of 64 bytes"
-  let .bool accepted := getD pj "accepted" | throw "the pool's accepted is a bool"
-  return { pin, pout, genesis, accepted }
+  let .bool reset := getD pj "reset" | throw "the pool's reset is a bool"
+  let some lag := nat? (getD pj "lag") | throw "the pool's lag is a positive integer"
+  if lag == 0 then throw "the pool's lag is a positive integer"
+  let some week := nat? (getD pj "week") | throw "the pool's week is a natural"
+  let .obj vs := getD pj "verdicts" | throw "the pool's verdicts are an object of record digests to bools"
+  let verdicts ← vs.toArray.mapM fun (d, a) => do
+    let .bool a := a | throw "the pool's verdicts are an object of record digests to bools"
+    if !(d.length == 128 && isHex d) then throw "the pool's verdicts are an object of record digests to bools"
+    return (d, a)
+  return { pin, pout, genesis, lag, verdicts, reset, week }
 
 /-- `o` with field `k` set to `x`: a new object where `o` is none, and `o` as it is where it is no object. -/
 private def withField (o : Option Json) (k : String) (x : Json) : Option Json :=

@@ -22,6 +22,10 @@ from . import tail as TL
 
 #: the tables a lookup slot reads (`circuit.compose`'s META ``lookups``), each by its index width
 SLOT_TABLES = {t: TL.TABLE_BITS[t] for t in IL.TABLES}
+#: the most slot types the device prover holds (`gpu_circuit::FC_MAX_TYPES`, past which `flock-circuit --gpu` refuses a
+#: statement): `circuit.compose` makes each net and each slot table one, beside its compressions, hm96 rows and mask
+GPU_SLOT_TYPES = 12
+FIXED_TYPES = 3
 
 
 def _net(s: int) -> str:
@@ -247,11 +251,12 @@ class _Plan:
 AUTO_ROUNDS = 6
 
 
-def _auto(plan) -> _Plan:
-    """The placement whose nets' slots take the fewest cells (then the fewest nets): no cap, then caps that fit every net in
-    ``2^L`` for L one below the largest net's slot, then one below that, while it shrinks. A cap is `ands_cap` of the net's
-    ports, assertions and inline read rows in the last placement, so it tightens as the cut moves the exports, and never
-    loosens. A cap that would leave a net no AND gives L up."""
+def _auto(plan, max_nets: int) -> _Plan:
+    """The placement whose nets' slots take the fewest cells (then the fewest nets) in at most ``max_nets`` nets: no cap, then
+    caps that fit every net in ``2^L`` for L one below the largest net's slot, then one below that, while it shrinks and keeps
+    within ``max_nets`` (a lower L never takes fewer nets). A cap is `ands_cap` of the net's ports, assertions and inline
+    read rows in the last placement, so it tightens as the cut moves the exports, and never loosens. A cap that would leave a
+    net no AND gives L up."""
     best = plan(None)
     L = max(best.logs)
     while L > 7:
@@ -269,7 +274,7 @@ def _auto(plan) -> _Plan:
             if max(last.logs) <= L:
                 got = last
                 break
-        if got is None or (got.cells, len(got.nets)) >= (best.cells, len(best.nets)):
+        if got is None or len(got.nets) > max_nets or (got.cells, len(got.nets)) >= (best.cells, len(best.nets)):
             break
         best = got
     return best
@@ -285,8 +290,9 @@ def split(C: gf2.Circuit, in_names: Sequence[str], out_names: Sequence[str], nam
     nearer a power of two, since every net's slot is one (a unit whose reads cut it into a few large nets can need a block
     twice the flat unit's). An int is the cap on every net, None no cap, and ``"auto"`` (`_auto`) the per-net caps whose nets'
     slots take the fewest cells, from each net's ports, exports and assertions (`ands_cap`); the statement's fixed ranges
-    (compressions, lookups, mask) are the same whatever the cut, so the fewest cells is the smallest block. The chosen caps
-    are the result's ``caps``."""
+    (compressions, lookups, mask) are the same whatever the cut, so the fewest cells is the smallest block. The automatic caps
+    cut at most the nets that keep the statement within the device prover's `GPU_SLOT_TYPES`, its `FIXED_TYPES` and one
+    type a table read in slots taking the rest. The chosen caps are the result's ``caps``."""
     kind, data, lookups = C.kind, C.data, C.lookups
     slot = {g: t for g, (t, idx, w) in enumerate(lookups) if slots.get(t) == len(idx) and w <= TL.VALUE_BITS}
     live = C.live()
@@ -313,7 +319,9 @@ def split(C: gf2.Circuit, in_names: Sequence[str], out_names: Sequence[str], nam
     def plan(caps):
         return _Plan(C, live, slot, in_names, out_names, caps, read_rows)
 
-    P = _auto(plan) if stage_ands == "auto" else plan(None if stage_ands is None else [stage_ands])
+    tables = {lookups[data[v][0]][0] for v in live if kind[v] == "lookup" and data[v][0] in slot}
+    P = (_auto(plan, GPU_SLOT_TYPES - FIXED_TYPES - len(tables)) if stage_ands == "auto"
+         else plan(None if stage_ands is None else [stage_ands]))
     depth, rd, need, need_lk, a_at, D = P.depth, P.rd, P.need, P.need_lk, P.a_at, P.D
     reads = sorted(rd)
     # from_[s][p]: the bits stage s receives from stage p, in order

@@ -6,7 +6,9 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
 public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
 public import Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJSt
 public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
 public import Proofs.Flock.Soundness.Registered.ReadsX
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -33,9 +35,11 @@ as a second conjunct, and `EndToEndRegisteredDrawn` is the same statement with i
 `Flock.SecurityProofs.EndToEndRegistered : Flock.Guarantees.EndToEndRegistered` and
 `Flock.SecurityProofs.EndToEndRegisteredDrawn : Flock.Guarantees.EndToEndRegisteredDrawn`.
 
-Each is stated over the circuit's descriptor `D` (`Flock.Desc`), which `Desc.parse` reads from the circuit file, at the
-circuit it unrolls to, as `EndToEndHidden` is; `EndToEndRegisteredFlat`, `EndToEndRegisteredPerTestFlat` and
-`EndToEndRegisteredDrawnFlat` are the same statements at a flat circuit file, `D = Desc.single c`.
+Each is stated over the circuit's descriptor `D` (`Flock.Desc`), which `Desc.parseStmt` reads from the circuit file, a
+flat file or a templated statement, at the circuit it unrolls to (`HmOut.parseStmt`'s, `Desc.parseStmt_stmt`), through
+`ZkHidden`'s statement-circuit rows (`rsZHJSt`, `layShHJSt`, `rsShHJSt`), whose fit `HiddenExec.rowsFit_of_stmt` gives;
+`EndToEndRegisteredFlat`, `EndToEndRegisteredPerTestFlat` and `EndToEndRegisteredDrawnFlat` are the same statements at
+a flat circuit file, over the circuit `HmOut.parse` reads, through its rows (`rsZHJS`, `layShHJ`, `rsShHJS`).
 
 Flock's definitions are still in its proofs package, so this module imports
 `Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ`, and `Definitions.lean`, which the `security` package builds without
@@ -55,12 +59,13 @@ open scoped ENNReal
 open Classical in
 /-- **Flock's one-stage audit, end to end, with registered reads.** As in `EndToEndHidden`, for
 `flock-verify verify --zk --registered F --session-tables J` (`own` F's ports), over hidden outputs and a public file
-with or without shared-row tables. Every row is registered under the public file's `b ‖ c` (`rsZHJS_wrongRegZ`). Then
+with or without shared-row tables. Every row is registered under the public file's `b ‖ c` (`layShHJSt`'s population is
+the public file). Then
 for every live prover `τ`:
 1. $$\Pr[\text{flock-verify accepts} \wedge \text{at least } K_0 \text{ units wrong}] \le
   \frac{\binom{n-K_0}{kd}}{\binom{n}{kd}} + \varepsilon_{ks} + \delta_{link},$$
    with "wrong" `EndToEndHidden`'s (`wrongRegZ`, against the public file, in the committed transcript fixed at
-   registration) at the rows `rsZHJS`, and `ε_ks`, `δ_link` `EndToEnd`'s terms;
+   registration) at the rows `rsZHJSt`, and `ε_ks`, `δ_link` `EndToEnd`'s terms;
 2. at every outcome flock-verify accepts, each registered read that is the verifier's own at the sample of the table its
    unit is sampled into (`OwnReadsHJ`) is checked at the outcome's registration (`Registered.Reads.Checked`): the SHA-512
    leaf of the public file's `b ‖ c` at the read row opens the root `own` holds, at the position `own` gives, through
@@ -88,7 +93,7 @@ def EndToEndRegistered : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     -- the session's statement: its circuit's descriptor, which the verifier parses, its public file, and F's ports
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
-    (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
+    (D : Flock.Desc) (hD : Flock.Desc.parseStmt (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     -- the sampling design: a uniform `kd`-subset of the `n` units, split evenly over the session's tables
@@ -113,14 +118,14 @@ def EndToEndRegistered : Prop :=
     (qF qS : ℝ),
     let L := Law.execOS (n := n) src (.subset kd) n
     let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
-    let vb := (rsZHJS dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub).bindingZ
-      (rsZHJS_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub)
+    let hcS := Flock.Desc.parseStmt_stmt hD
+    let hv1 := Discharge.HiddenExec.rowsFit_of_stmt ((zkTags_typed I).trans ht) hcS hscope
+    let vb := (rsZHJSt dj y₀ ht hcS hv1 hscope hU hpub).bindingZ (rsZHJSt_computes dj y₀ ht hcS hv1 hscope hU hpub)
     let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
-        (runsZCJH_live I ht (Flock.Desc.parse_flat hD)
-          (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
-          fun _ => Discharge.ZkReg.drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
+        (runsZCJH_liveSt I ht hcS (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
+          fun _ => drawOkZKHJ_of_fileSt I ht hcS kd n hdiv dj hCust.2 _)) τ
     -- cr/sha-512 for the knowledge finders of each table the prover's session runs
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
@@ -137,8 +142,8 @@ def EndToEndRegistered : Prop :=
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ)) ∧
     ∀ o : Reg × Finset (Fin n) × Discharge.Exec.Transcript, LiveAcceptsZKR I own o →
       ∀ rd : FlockSoundness.Registered.ReadsX
-          (layShHJ (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU (pub := pub))
-          (rsShHJS dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub),
+          (layShHJSt (Reg := Reg) dj y₀ ht hcS hv1 hscope hU (pub := pub))
+          (rsShHJSt dj y₀ ht hcS hv1 hscope hU hpub),
         OwnReadsHJ I own D.unroll pub o.2.2 rd.isRead rd.port rd.readAt → rd.Checked o.1
           (regPathsHJ I D.unroll pub o.2.2 rd.port)
 
@@ -150,7 +155,7 @@ def EndToEndRegisteredPerTest : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     -- the session's statement: its circuit's descriptor, which the verifier parses, its public file, and F's ports
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
-    (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
+    (D : Flock.Desc) (hD : Flock.Desc.parseStmt (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     -- the sampling design: a uniform `kd`-subset of the `n` units, split evenly over the session's tables
@@ -176,14 +181,14 @@ def EndToEndRegisteredPerTest : Prop :=
     (qF qS : ℝ),
     let L := Law.execOS (n := n) src (.subset kd) n
     let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
-    let vb := (rsZHJS dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub).bindingZ
-      (rsZHJS_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub)
+    let hcS := Flock.Desc.parseStmt_stmt hD
+    let hv1 := Discharge.HiddenExec.rowsFit_of_stmt ((zkTags_typed I).trans ht) hcS hscope
+    let vb := (rsZHJSt dj y₀ ht hcS hv1 hscope hU hpub).bindingZ (rsZHJSt_computes dj y₀ ht hcS hv1 hscope hU hpub)
     let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
-        (runsZCJH_live I ht (Flock.Desc.parse_flat hD)
-          (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
-          fun _ => Discharge.ZkReg.drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
+        (runsZCJH_liveSt I ht hcS (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
+          fun _ => drawOkZKHJ_of_fileSt I ht hcS kd n hdiv dj hCust.2 _)) τ
     -- cr/sha-512 for the knowledge finders of each table the prover's session runs
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
@@ -200,8 +205,8 @@ def EndToEndRegisteredPerTest : Prop :=
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ)) ∧
     ∀ o : Reg × Finset (Fin n) × Discharge.Exec.Transcript, LiveAcceptsZKR I own o →
       ∀ rd : FlockSoundness.Registered.ReadsX
-          (layShHJ (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU (pub := pub))
-          (rsShHJS dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub),
+          (layShHJSt (Reg := Reg) dj y₀ ht hcS hv1 hscope hU (pub := pub))
+          (rsShHJSt dj y₀ ht hcS hv1 hscope hU hpub),
         OwnReadsHJ I own D.unroll pub o.2.2 rd.isRead rd.port rd.readAt → rd.Checked o.1
           (regPathsHJ I D.unroll pub o.2.2 rd.port)
 
@@ -209,7 +214,7 @@ open Classical in
 /-- **Flock's one-stage audit, end to end, with registered reads, at the sampled proof blocks.** `EndToEndRegistered`'s
 setting, with its first conjunct at the sampled proof blocks: for every live prover `τ`,
 1. $$\Pr[\text{flock-verify accepts} \wedge \text{some sampled proof block is wrong}] \le \varepsilon_{ks} + \delta_{link},$$
-   with "wrong" `EndToEndRegistered`'s (`wrongRegZ` at the rows `rsZHJS`), and `ε_ks`, `δ_link` `EndToEnd`'s terms,
+   with "wrong" `EndToEndRegistered`'s (`wrongRegZ` at the rows `rsZHJSt`), and `ε_ks`, `δ_link` `EndToEnd`'s terms,
    averaged over the verifier's sample;
 2. `EndToEndRegistered`'s second conjunct: at every outcome flock-verify accepts, each registered read the verifier owns
    (`OwnReadsHJ`) is checked at the outcome's registration (`Registered.Reads.Checked`, through `regPathsHJ`).
@@ -228,7 +233,7 @@ def EndToEndRegisteredDrawn : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     -- the session's statement: its circuit's descriptor, which the verifier parses, its public file, and F's ports
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
-    (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
+    (D : Flock.Desc) (hD : Flock.Desc.parseStmt (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     -- the sampling design: a `kd`-subset of the `n` units, split evenly over the session's tables
@@ -252,14 +257,14 @@ def EndToEndRegisteredDrawn : Prop :=
     (qF qS : ℝ),
     let L := Law.execOS (n := n) src (.subset kd) n
     let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
-    let vb := (rsZHJS dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub).bindingZ
-      (rsZHJS_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub)
+    let hcS := Flock.Desc.parseStmt_stmt hD
+    let hv1 := Discharge.HiddenExec.rowsFit_of_stmt ((zkTags_typed I).trans ht) hcS hscope
+    let vb := (rsZHJSt dj y₀ ht hcS hv1 hscope hU hpub).bindingZ (rsZHJSt_computes dj y₀ ht hcS hv1 hscope hU hpub)
     let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
-        (runsZCJH_live I ht (Flock.Desc.parse_flat hD)
-          (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
-          fun _ => Discharge.ZkReg.drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
+        (runsZCJH_liveSt I ht hcS (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
+          fun _ => drawOkZKHJ_of_fileSt I ht hcS kd n hdiv dj hCust.2 _)) τ
     -- cr/sha-512 for the knowledge finders of each table the prover's session runs
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
@@ -275,14 +280,14 @@ def EndToEndRegisteredDrawn : Prop :=
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ)) ∧
     ∀ o : Reg × Finset (Fin n) × Discharge.Exec.Transcript, LiveAcceptsZKR I own o →
       ∀ rd : FlockSoundness.Registered.ReadsX
-          (layShHJ (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU (pub := pub))
-          (rsShHJS dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub),
+          (layShHJSt (Reg := Reg) dj y₀ ht hcS hv1 hscope hU (pub := pub))
+          (rsShHJSt dj y₀ ht hcS hv1 hscope hU hpub),
         OwnReadsHJ I own D.unroll pub o.2.2 rd.isRead rd.port rd.readAt → rd.Checked o.1
           (regPathsHJ I D.unroll pub o.2.2 rd.port)
 
 open Classical in
-/-- **`EndToEndRegistered` at a flat circuit file**: `EndToEndRegistered` at the descriptor `Desc.single c`,
-stated over the circuit `c` that `HmOut.parse` reads from the circuit file. -/
+/-- **`EndToEndRegistered` at a flat circuit file**: `EndToEndRegistered`'s statement over the circuit `c` that
+`HmOut.parse` reads from the circuit file, through its rows (`rsZHJS`). -/
 def EndToEndRegisteredFlat : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     -- the session's statement: its circuit, which the verifier parses, its public file, and F's ports
@@ -338,8 +343,8 @@ def EndToEndRegisteredFlat : Prop :=
         OwnReadsHJ I own c pub o.2.2 rd.isRead rd.port rd.readAt → rd.Checked o.1 (regPathsHJ I c pub o.2.2 rd.port)
 
 open Classical in
-/-- **`EndToEndRegisteredPerTest` at a flat circuit file**: `EndToEndRegisteredPerTest` at the descriptor
-`Desc.single c`, stated over the circuit `c` that `HmOut.parse` reads from the circuit file. -/
+/-- **`EndToEndRegisteredPerTest` at a flat circuit file**: `EndToEndRegisteredPerTest`'s statement over the circuit
+`c` that `HmOut.parse` reads from the circuit file, through its rows (`rsZHJS`). -/
 def EndToEndRegisteredPerTestFlat : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     -- the session's statement: its circuit, which the verifier parses, its public file, and F's ports
@@ -396,8 +401,8 @@ def EndToEndRegisteredPerTestFlat : Prop :=
         OwnReadsHJ I own c pub o.2.2 rd.isRead rd.port rd.readAt → rd.Checked o.1 (regPathsHJ I c pub o.2.2 rd.port)
 
 open Classical in
-/-- **`EndToEndRegisteredDrawn` at a flat circuit file**: `EndToEndRegisteredDrawn` at the descriptor `Desc.single c`,
-stated over the circuit `c` that `HmOut.parse` reads from the circuit file. -/
+/-- **`EndToEndRegisteredDrawn` at a flat circuit file**: `EndToEndRegisteredDrawn`'s statement over the circuit `c`
+that `HmOut.parse` reads from the circuit file, through its rows (`rsZHJS`). -/
 def EndToEndRegisteredDrawnFlat : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     -- the session's statement: its circuit, which the verifier parses, its public file, and F's ports

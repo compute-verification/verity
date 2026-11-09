@@ -48,7 +48,7 @@ from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry import stop_check as SC
 from verity.ml.definitions.registry.topp_geometry import registered_splits
 
-from verity.core.protocols.certifier import advice as I1
+import verity.core.protocols.certifier.advice as I1
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.partition_object import calls

@@ -99,7 +99,8 @@ theorem sksL_work (x : Msg) : (sksL Coin).work x ≤ 2 ^ 100 := by
   have hko : (sksL Coin).kOut x = 2 ^ 10 * 3 := rfl
   have hki : (sksL Coin).kIn x = 2 ^ 10 * 3 := rfl
   unfold Compiled.work
-  rw [he, hko, hki, show (sksL Coin).nPU x = 1 from rfl, show (sksL Coin).openCalls x = 0 from rfl]
+  rw [he, hko, hki, show (sksL Coin).nSess x = 1 from rfl, show (sksL Coin).nPU x = 1 from rfl,
+    show (sksL Coin).openCalls x = 0 from rfl]
   norm_num
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
@@ -258,11 +259,17 @@ theorem effL_runExt (H : Msg → Msg) (x : Msg) (run : (Fin ((effL Coin).V.k x) 
   have h1 : 0 < (effL Coin).nPU x := Nat.one_pos
   obtain ⟨d, ds, hd⟩ :=
     exists_cons_of_length_pos (l := List.finRange ((effL Coin).nPU x)) (by rw [List.length_finRange]; exact h1)
+  obtain rfl : d = ⟨0, h1⟩ := Fin.ext (show d.val = 0 by
+    have := d.isLt
+    have h : (effL Coin).nPU x = 1 := rfl
+    omega)
   unfold Compiled.runExt
-  rw [hd, show (effL Coin).checked x r = [0] from rfl, List.zip_cons_cons]
+  rw [hd]
+  simp only [show (effL Coin).checked x r = [0] from rfl, List.zip_cons_cons]
   refine Nat.lt_of_lt_of_le ?_ (ownLog_flatMapRP_head _ _ _ _ _)
   dsimp only
-  rw [dite_eq_left h1, Compiled.unitExt, show (effL Coin).session x 0 v = some (x, ⟨[], .acc⟩) from rfl]
+  rw [dite_eq_left (show 0 < (effL Coin).nPU x ∧ ((effL Coin).sessSlots x [0] 0).head? = some 0 from ⟨h1, rfl⟩),
+    Compiled.sessExt, Compiled.sessWit, show (effL Coin).session x 0 v = some (x, ⟨[], .acc⟩) from rfl]
   dsimp only
   rw [dite_eq_left (show (findA Coin).shape x = (effL Coin).sh x 0 from rfl)]
   exact Nat.succ_pos _
