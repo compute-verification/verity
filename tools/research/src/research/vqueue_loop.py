@@ -11,9 +11,10 @@ The snapshot.  `main` is origin's `main`, fetched into the clone's own refs (`re
 its refs are left as drive keeps them.  `ready` is the open PRs drive would land from `next` now: admitted as drive admits them
 (`Queue.entries`, reading drive's state, the labels read afresh each tick as drive reads them: `marked_after`,
 `signed_verdicts`, a mark carried to a head with the same own change), with a land verdict by a non-owner or under the low-risk
-rule (drive.toml's `lowrisk_lane` and `lowrisk_excludes` at `main`), not on `main` yet, ranked by drive's priority file then
-mark time, each after the ready PRs it contains; `files` is its change against its merge base with `main`, `lean` drive's
-Lean-change test (`queue.lean_change`), and `conflict` whether `Queue._merge` merges it onto `main`, kept by (head, `main`).
+rule (drive.toml's `lowrisk_lane` and `lowrisk_excludes` at `main`; never a move PR's, which is otherwise any PR, built by
+its merge), not on `main` yet, ranked by drive's priority file then mark time, each after the ready PRs it contains; `files`
+is its change against its merge base with `main`, `lean` drive's Lean-change test (`queue.lean_change`), and `conflict`
+whether `Queue._merge` merges it onto `main`, kept by (head, `main`).
 `candidates` are the loop's own builds: each of origin's `queue/<sha12>` branches at the sha a build line of the log names
 (the window's, else the whole log's, which its other lines are then read from too), with that line's base and members, lowest
 first; any other `queue/*` branch is no candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s`
@@ -535,9 +536,10 @@ class World:
         return not _git(self.repo, "merge-base", "--is-ancestor", a, b, check=False).returncode
 
     def ready(self, main: str) -> list[Ready]:
-        """The open PRs drive would land from `next` now, as `vqueue.Ready`."""
+        """The open PRs drive would land from `next` now, as `vqueue.Ready`: a move PR as any other, built by its merge, but
+        only with a land verdict, never under the low-risk rule."""
         q, labels = self.q, self.labels
-        prs = [p for p in self.open().values() if p.base == "main" and not p.move]
+        prs = [p for p in self.open().values() if p.base == "main"]
         if missing := [p for p in prs if p.head in self._missing(p.head for p in prs)]:
             q._remote(self.repo, *QUIET, "fetch", "-q", "--no-tags", "--no-write-fetch-head", "origin",
                       *(f"+refs/pull/{p.number}/head:{NS}/pr/{p.number}" for p in missing))
@@ -559,7 +561,7 @@ class World:
                 p, reviews = entries[n].pr, labels.reviews(n, entries[n].pr.head)
                 landing = unreviewed(reviews, review_owners(q, labels, n, p.head, p.owner, self.open())) is None
                 held = (unreviewed(reviews, ()) or "").startswith("held")
-                if landing or not held and lowrisk(files[n], excludes):
+                if landing or not p.move and not held and lowrisk(files[n], excludes):
                     took.append(n)
             new = any((entries[n].pr.head, main) not in self._judged for n in took)
             with base_drivers(self.repo, main) if new else contextlib.nullcontext(None) as cfg:   # once a tick, not a PR
