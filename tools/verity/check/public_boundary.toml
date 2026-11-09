@@ -169,6 +169,22 @@ oracle_tests = [
 run_store_tests = [
     "integrations/vllm/tests/pipeline/test_{boundary_plan,commit_tree_of_record,experiment_index,hot_commit}.py",
 ]
+# vLLM's records a tracked file can't hold (each over `tests/test_repository.py`'s limit: the top-p split's GPU rows, the M1
+# and M6 logs, the regression's larger frozen references and its files' digests, the H1 challenger's periods), and the tests
+# that read them or a run fetched from the evidence store, each `*_of_record.py` beside the public test it shares helpers with
+records = [
+    "integrations/vllm/tests/program/data/topp_split_fixture/{fstoch01_rows.npz,fixture.npz}",
+    "integrations/vllm/data/logs",
+    "integrations/vllm/tests/regression/expected/{gemma2-2b,mistral-7b,qwen25-15b,qwen3-4b,qwen3-4b-fp8}__*.json",
+    "integrations/vllm/tests/regression/expected/{olmoe-1b-7b__bf16__l40s__tp1__b32,llama32-1b__bf16__l40s__tp1__b1__i4096}__*.json",
+    "integrations/vllm/tests/regression/files.toml",
+    "integrations/vllm/tests/protocols/fixtures/challenger_periods",
+    "integrations/vllm/tests/program/test_{topp_split_geometry,topp_splits_operand,sampling_rows}_of_record.py",
+    "integrations/vllm/tests/check/test_{fold_sampler_construction,g4_addressed_instances}_of_record.py",
+    "integrations/vllm/tests/pipeline/test_single_request_build_path_of_record.py",
+    "integrations/vllm/tests/properties/test_golden_of_record.py",
+    "integrations/vllm/tests/observe/test_{m1_log,resolve_m1}.py",
+]
 team = [
     "infra",
     "tools/{research,agent-guard}",
