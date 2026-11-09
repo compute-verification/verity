@@ -118,7 +118,6 @@
     {"file": "verity_vllm/program/frontend/rules/vllm_bindings/observations.py", "kind": "sm-arch", "symbol": "declared_derived_accounting", "detail": "sm_90"},
     {"file": "verity_vllm/program/frontend/rules/vllm_bindings/triton_launches.py", "kind": "sm-arch", "symbol": "TritonGemmRule", "detail": "sm_89"},
     {"file": "verity_vllm/program/frontend/rules/vllm_sampling.py", "kind": "gpu", "symbol": "GumbelTopPTokenSelectRule", "detail": "l40s"},
-    {"file": "verity_vllm/program/frontend/rules/vocab.py", "kind": "gpu", "symbol": "<module>", "detail": "l40s"},
     {"file": "verity_vllm/program/frontend/rules/vocab.py", "kind": "layer-class", "symbol": "<module>", "detail": "VocabParallelEmbedding"},
     {"file": "verity_vllm/program/frontend/rules/vocab.py", "kind": "model", "symbol": "<module>", "detail": "mixtral"},
     {"file": "verity_vllm/program/frontend/rules/vocab.py", "kind": "model", "symbol": "<module>", "detail": "qwen"},

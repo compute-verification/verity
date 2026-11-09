@@ -40,19 +40,14 @@ GUARD_PREFIXES = ("LStepLive", "LSelect", "LBot", "LIsEOS", "LEmitNext")
 QUERY_FAMILY_MECHANISM: dict[str, str] = {
     "weights": "registered inputs: the weights pin (served parameters == the checkpoint of record, by digest) + C1 coverage / C3 openings",
     "input_token_ids": "prescribed input: boundary linkage (the committed ids at the arrival step == the declared prompt; sampled id[s-1] -> id[s]) + C1 / C3",
-    # the sampler families name what CONSUMES them, as input_token_ids' entry does: the committed seed / splits are the
-    # inputs of the sampler VU (GumbelTopPTokenSelect_v1) whose exact replay in form (A) reads them by binding, and of stoch_recompute's
-    # attribution (the served token re-derived from the committed logits + seed + splits) -- not only a linkage check on their values
+    # the sampler family names what CONSUMES it, as input_token_ids' entry does: the committed seed is an input of the sampler VU
+    # (GumbelTopPTokenSelect) whose exact replay in form (A) reads it by binding, and of stoch_recompute's attribution (the served
+    # token re-derived from the committed logits + seed at the registered S) -- not only a linkage check on its value
     "sampler_seed": ("prescribed input: prescribed_input_linkage (committed seed == the declared SamplingParams.seed) + C1 / C3; "
                      "CONSUMED BY the sampler VU GumbelTopPTokenSelect_v1's exact replay, which reads the committed seed as its Philox key "
                      "(seed, pos) -- the committed sampled id is reproducible from the committed logits only with it (form (A) per pick; the "
                      "seed is a bound input of every sampled stratum) -- and by stoch_recompute's attribution (served token re-derived "
-                     "from committed logits + seed + splits, every row)"),
-    "sampler_splits": ("prescribed input: prescribed_input_linkage (committed S == SplitsFor_v1(live geometry), REQ-03) + C1 / C3; "
-                       "CONSUMED BY the same relation (the sampler VU GumbelTopPTokenSelect_v1's exact replay) as its 6th operand: the top-p mask "
-                       "kernel's split count S = SplitsFor_v1(|live(s)|, num_SMs), "
-                       "derived, never a static (a wrong S fails form (A): S is a bound input of every sampled stratum) and by "
-                       "stoch_recompute's attribution (served token re-derived from committed logits + seed + splits)"),
+                     "from committed logits + seed at the registered S, every row)"),
     "fa2_hidden_m1_stream": ("attention interior (the launch's M1 export stream): no VU row of its own; the attention VU it belongs to is state-linked "
                              "(NOT_YET) -- C1 / C3 + form (B) where present; form (A) over it is an engineering gap, not a domain"),
     "fa3_hidden_m1_stream": ("attention interior (the Hopper launch's M1 export stream): no VU row of its own; the attention VU it belongs to is "

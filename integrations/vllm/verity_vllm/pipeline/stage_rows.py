@@ -4,8 +4,8 @@ split count's top-p pipeline (stats blocks and their parts, the probabilities, e
 select's chunks.  A template's units go row by row, then in the plan's order (`positions`).
 
 A unit reads its parameters in its Definition's order: the row's operands it takes (``logits``, its lanes of the row's, and
-``temp``, ``top_p``, ``seed``, ``pos`` and ``splits``, read as the replay reads them: the Program's constants and the sampler's
-committed seed and splits at the row's step, `_operand`), and for each parameter the plan wires
+``temp``, ``top_p``, ``seed``, ``pos`` and ``splits``, read as the replay reads them: the Program's constants, the split count
+S among them, and the sampler's committed seed at the row's step, `_operand`), and for each parameter the plan wires
 (`topp_stages.Unit.wires`) the output of the unit that writes it, words serving never stores: the reader computes every unit's
 outputs with the twin (`topp_stage_twins.stage_rows`), whose token it holds to the row's served one.  The window wires each such
 row to its writer's output row (`wire`, `commit.wiring`), so a sampled unit's carried words are the committed output of the unit
@@ -25,7 +25,6 @@ from verity_vllm.check.replay.index import SAMPLER_OP, SEED_PARAM, const_word
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.serving_templates import Template, template
 from verity_vllm.program.compact import runs_from_file_items
-from verity_vllm.query.manifest.format import SPLITS_PARAM
 
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
 Row = tuple[str, Any, dict, dict]
@@ -73,16 +72,16 @@ def _u16(a: Any, bits: int) -> np.ndarray:
 def _operand(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, group: Sequence, step: int,
              slices: Callable) -> list[np.ndarray]:
     """One of the row's operands, each run read as the replay reads it: a Program constant (``Const32/64[..]_v1``: the selector's
-    top_p, temperature and pos) is its one word, the sampler's ``seed`` and ``splits`` are the request's committed
-    ``runner.sampler`` words at the row's ``step`` (``splits``' slice names the step), and the rest is read by ``slices``."""
+    top_p, temperature, pos and split count S) is its one word, the sampler's ``seed`` is the request's committed
+    ``runner.sampler`` word at the row's ``step``, and the rest is read by ``slices``."""
     out = []
     for sl in runs_from_file_items(group):
         kind, a, lo, hi = sl[0], int(sl[1]), int(sl[2]), int(sl[3])
         pname = (pi.pnames[a] if a < len(pi.pnames) else None) if kind == "p" else None
         if kind == "n" and (lo, hi) == (0, 1) and pi.member_at(a, lo, hi) is None and (c := const_word(pi.by_i.get(a))) is not None:
             out.append(c)
-        elif pname in (SEED_PARAM, SPLITS_PARAM):
-            if hi - lo != 1 or (pname == SPLITS_PARAM and lo != step):
+        elif pname == SEED_PARAM:
+            if hi - lo != 1:
                 raise LookupError(f"{pname} slice [{lo}, {hi}) is not the sampler's one word at the row's step {step}")
             w, why = store.words(rid, arrive + step, SAMPLER_OP, pname, 0, 1)
             if w is None:
@@ -117,6 +116,9 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
         arrive, what, V = int((arrivals or {}).get(rid, 0)), f"row {r['i']} ({d['op_path']})", int(d["statics"]["V"])
         if len(r["args"]) != len(OPERANDS):
             raise ValueError(f"{what}: {len(r['args'])} operands, not a row of {tp.id}'s cut ({', '.join(OPERANDS)})")
+        if any(sl[0] == "p" for sl in runs_from_file_items(r["args"][OPERANDS.index("splits")])):
+            raise ValueError(f"{what} reads its split count S from a Program input: S is the registered constant, a Const32[S] of "
+                             f"the Program (topp_geometry.registered_splits)")
         got = [_operand(pi, store, weights, rid, arrive, g, int(d["step"]), slices) for g in r["args"]]
         logits = SL.elements(got[0], 16, f"{what} argument 0 (logits)")
         if logits.size != V:

@@ -18,13 +18,15 @@ from verity_vllm.check.match.peer_reads import PeerReads
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  # the step-boundary families
 
 PAD_SPECS = ("Const", "I32Eq_v1", "BitNot_v1", "BitAnd_v1", "SelectI32_v1", "SelectBf16_v1")
-# the derived top-p split count S: the fold emits it as `Const32[S]` "splits", the 6th operand
-# (index 5) of the top-p select, the one sampling event with a 6th operand (patterns.TokenSelectGumbelTopP._stage3); the request Program
-# takes it as the request-owned INPUT `splits` (int32 [T+1], after the seed) and event s reads `splits[s:s+1]` (vllm_meta.StochasticRequest).
-# compare BINDS the two: the fold's constant at the request's event s IS the value of the Program's input entry s -- canonicalised
-# ("SPLITS", s, s+1) on both sides; the constant's VALUE is kept (`RootView.splits_values`, by select node) for GM-01's per-engine-step
-# relation check (`global_match.sampler_geometry_check`: S_t == SplitsFor_v1(|live(t)|, num_SMs)).  Nothing about S is a static of the
-# Definition.
+# the top-p split count S: the fold and the Program both emit it as `Const32[S]` "splits", the 6th operand (index 5) of the top-p
+# select, the one sampling event with a 6th operand (patterns.TokenSelectGumbelTopP._stage3, rules/vllm_sampling.py).  compare BINDS
+# each side's constant: it canonicalises ("SPLITS", e, e+1), e the select's event ordinal, and its VALUE is kept (`RootView.splits_values`,
+# by select node) for `sampler_geometry.constant_splits_agree` and the registered-S check (`sampler_geometry_check`).  A select reading S
+# from a Program input is refused (`ProgramSplitsInput`).
+class ProgramSplitsInput(ValueError):
+    """A top-p select whose split count is a Program input rather than the registered `Const32[S]`."""
+
+
 _CONST_RE = re.compile(r"^Const(\d+)\[0x([0-9a-fA-F]+)\]_v1$")
 SPLITS_OPERAND = 5
 
@@ -136,14 +138,12 @@ class RootView(PeerReads, PX.PrefixInput):
         return codec.descriptor_id, refs.runs
 
     def _bind_splits(self) -> None:
-        """Bind the derived split count S of every top-p TokenSelect (its operand SPLITS_OPERAND).
-        Fold side: the `Const32[S]` emitted right before the select is REMOVED from the sequence (a prescribed input's value), kept in
-        `splits_values[select node]`, and the operand canonicalises as ("SPLITS", e, e+1), e the select's event ordinal.  Program side:
-        the request-owned `splits` Input (neither prompt, seed nor weight; `splits_nodes`) read as ("SPLITS", s, s+1) for event s.  Both
-        agree exactly when the fold's e-th select carries the constant the Program's event e reads (GM-01 checks S_t against the live
-        count).  Any other select binds nothing; a `Const32` read by anything but a splits operand is never removed."""
-        self.splits_values: dict[int, int] = {}      # select node k -> S (fold side)
-        self.splits_nodes: set[int] = set()          # Input nodes read as the splits operand (Program side)
+        """Bind the split count S of every top-p TokenSelect (its operand SPLITS_OPERAND), on either side: the `Const32[S]` emitted
+        right before the select is REMOVED from the sequence, kept in `splits_values[select node]`, and the operand canonicalises as
+        ("SPLITS", e, e+1), e the select's event ordinal.  A select whose S is a Program input (one the live batch could set) is
+        refused (`ProgramSplitsInput`).  Any other select binds nothing; a `Const32` read by anything but a splits operand is never
+        removed."""
+        self.splits_values: dict[int, int] = {}      # select node k -> S
         bound_consts: dict[int, int] = {}            # const instance index -> select node k
         readers: collections.Counter = collections.Counter()   # const node k -> number of operand runs reading it (any instance)
         compact = self.compact
@@ -197,9 +197,8 @@ class RootView(PeerReads, PX.PrefixInput):
             else:
                 _, k, lo, hi = a[0]
             if k in self.inputs:
-                if k != self.tok_node and k not in self.seed_nodes and k not in self.weight_fields:
-                    self.splits_nodes.add(k)
-                continue
+                raise ProgramSplitsInput(f"{sp} (node {r['k']}) reads its split count S from Program input node {k}: S is the "
+                                         f"registered constant, a Const32[S] of the Program (topp_geometry.registered_splits)")
             j = self.k2i.get(k)
             cv = const_value(self.inst[j]["spec"]) if j is not None else None
             if cv is None or cv[0] != 32 or (lo, hi) != (0, 1) or readers[k] != 1 or self.inst[j]["args"]:
@@ -264,7 +263,7 @@ class RootView(PeerReads, PX.PrefixInput):
             return out
         for ai, a in enumerate(r["args"]):
             if bound and ai == SPLITS_OPERAND:
-                # the fold's Const32[S] at this select = the Program's `splits` input entry of the same event ordinal
+                # this select's bound Const32[S], canonical by the select's event ordinal
                 e = self.i2step[i][0]
                 out.append([("SPLITS", e, e + 1)])
                 continue
@@ -291,8 +290,6 @@ class RootView(PeerReads, PX.PrefixInput):
                 return [("TOK", (lo0, hi0), (dL, dH), c)]
             if idx0 in self.seed_nodes:
                 return [("SEED", (lo0, hi0), (dL, dH), c)]
-            if idx0 in getattr(self, "splits_nodes", ()):
-                return [("SPLITS", (lo0, hi0), (dL, dH), c)]
             if idx0 in getattr(self, "peer_fields", ()):
                 return self._peer_srcP(p, unfold)   # the k-th received-collective peer input of the request
             if idx0 in self.pfx:
@@ -360,8 +357,6 @@ class RootView(PeerReads, PX.PrefixInput):
                 return ("TOK", lo, hi)
             if idx in self.seed_nodes:
                 return ("SEED", lo, hi)
-            if idx in getattr(self, "splits_nodes", ()):
-                return ("SPLITS", lo, hi)   # the request-owned derived split count, entry per sampling event
             if idx in getattr(self, "peer_fields", ()):
                 return self._peer_src(idx, lo, hi)   # the k-th received-collective peer input of the request
             if idx in self.pfx:

@@ -111,8 +111,6 @@ def _register_lazy_families() -> None:
     register_lazy_family(r"^LEmitNext\[H=(\d+)\]_v1$", lambda m: _lifted().l_emit_next(int(m[1])))
     register_lazy_family(r"^LFixedSelect(\d+)x(\d+)_v1$", lambda m: _lifted().l_fixed_select(int(m[1]), int(m[2])))
     register_lazy_family(r"^LEnable_v1$", lambda m: _lifted().l_enable())  # the conditional enable
-    register_lazy_family(r"^SplitsForSMS(\d+)_v1$", lambda m: _lifted().splits_for_prim(int(m[1])))  # SplitsForSMS and its lift
-    register_lazy_family(r"^LSplitsForSMS(\d+)_v1$", lambda m: _lifted().l_splits_for(int(m[1])))
     # a lifted primitive reading the masked operands at their ordinary type
     register_lazy_family(r"^(.+)\{ORD=(\d+)\}$",
                          lambda m: _lifted().with_ordinary(lookup_primitive(REGISTRY, m[1]), int(m[2])))
