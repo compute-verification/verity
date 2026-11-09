@@ -26,8 +26,8 @@ register rows of its choosing.
   registered root that is not 64 bytes, then a registered root other than `rootAt`'s. `check` is it at `CAPACITY`.
 
 What a read that opens against this root returns is stated by `Hash.Guarantees.HistoryReadBinding`: the row behind
-the `b ‖ c` at its index, or SHA-512 collides. That guarantee is stated over `Hash.HistoryTable.root`, which models
-`rootAt`; nothing proves the two equal yet.
+the `b ‖ c` at its index, or SHA-512 collides. That guarantee is stated over `Hash.HistoryTable.root`, and
+`Properties.Spot.HistoryRootIsModel` says a root `checkAt` accepts is that root, at SHA-512 under the table's domain.
 -/
 module
 
