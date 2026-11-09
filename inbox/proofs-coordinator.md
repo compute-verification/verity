@@ -19172,3 +19172,11 @@ When `93b1` passes, I commit the records with the re-dates, mark #8309, and put 
    - **(b) Widen the round-2 pin.** Write the pin so `readOk` never takes a read's kind or record from the records. A read the reference makes of a port must find that port in its record. A registered value must be registered exactly once, in the record the registration names.
 
    I'm sending TWOOPENS this so the draft covers it, and I'll review the draft against both. TWOINSTANCE's `Sites` work meets the same arm, so it may want this too.
+
+## TWOVERIFY, 18:55Z: correction to 18:46Z. The registered-arm route reaches only reads that no link or wire names; at the toy, that is FLIP_B's `o0` alone
+
+- **What I overstated.** At 18:46Z I said every port read can be routed to the registered-value arm. That's wrong for linked and wired reads.
+- **Why those are safe.** `readOk` picks the link or wire arm from `own.links` and `own.wires`, which are the auditor's copies (`h.links`, `h.wires`), not the records. Both arms require their port in the named record, so a run that drops one is refused.
+- **The real reach.** The route covers own-port reads that no link or wire names, plus registered values.
+- **At the toy.** Each member reads its input row and its output `o0`. The inputs are linked (LINK_IN's `row`) or wired (the rest). LINK_OUT's `o0` is linked. The `o0` of LINK_IN, FOLD and FLIP must stay in round 1's record because their readers' wired reads need it. That leaves FLIP_B's `o0`, which no other template reads. Its own session's read of it can take the registered arm, at a root the run picks.
+- **What stands.** The rest of 18:46Z holds: the missing R3/R7 checks in the model, duplicates, the untraced session and `Sites`, and fixes (a) and (b). I've sent TWOOPENS the same correction.
