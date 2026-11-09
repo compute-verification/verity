@@ -5,7 +5,7 @@ Run from the flock checkout after verity/ml/flock/cuda_chunk_patch.py, which ins
 flock_cuda_prove_circuit is flock_cuda_prove_chunk's body with four parts replaced (each anchor must occur once): the shape
 check (fc_bad_shape), the arena's size (fc_arena_of: verity/ml/flock/cuda/arena_bytes.h, which it installs beside it), the
 witness (fc_witness: device compressions and units, or the host's witness) and the lincheck fold (fc_fold: every slot range of
-every type). Everything else (commit, zerocheck, lincheck rounds, ring switch, Ligerito, the live coins) is the chunk
+every type, whose CSC a GPU's provers share: csc_share.cuh, installed beside it too). Everything else (commit, zerocheck, lincheck rounds, ring switch, Ligerito, the live coins) is the chunk
 prover's, so no second copy of it is kept in the repository. Its buffer lifetimes change so that rep 1 can prove from rep 0's
 level-0 commitment (rep_reuse, FcKept).
 
@@ -111,6 +111,7 @@ text = (here / "cuda" / "prove_circuit.cuh").read_text() + "\nextern \"C\" {\n\n
 # M1: the F256 ladder's hiding step (ligerito_zk.cuh) and its five call points in run_ligerito_f256
 (g / "ligerito_zk.cuh").write_text((here / "cuda" / "ligerito_zk.cuh").read_text())
 (g / "arena_bytes.h").write_text((here / "cuda" / "arena_bytes.h").read_text())
+(g / "csc_share.cuh").write_text((here / "cuda" / "csc_share.cuh").read_text())
 lg = g / "ligerito_f256.cuh"
 t = lg.read_text()
 if '#include "ligerito_zk.cuh"' not in t:
