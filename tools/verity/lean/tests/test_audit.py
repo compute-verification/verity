@@ -4893,7 +4893,8 @@ def test_two_builds_that_write_one_path_dependency_s_lake_run_one_at_a_time(tmp_
 def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for_it(tmp_path, monkeypatch):
     """Lake finds a module in a cache by its 64-bit input hash alone, so no build reads the node's artifact cache: each
     step reads a directory staged inside it for this build (`LAKE_CACHE_DIR`, with `LAKE_ARTIFACT_CACHE` unset: read,
-    never written), holding the modules the cache indexes under their keys, and gone once the build ends."""
+    never written), holding the modules the cache indexes under their keys, and gone once the build ends. Without the
+    sandbox nothing is staged: the sampled recompile, which checks what a build restored, needs it."""
     mk = A.sibling("module_keys")
     pkg, store = tmp_path / "p", tmp_path / "store"
     (pkg / "P").mkdir(parents=True)
@@ -4919,6 +4920,12 @@ def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for
     monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
     monkeypatch.setattr(A, "run", fake_run)
     monkeypatch.setattr(A, "ARTIFACTS", store)
+    rep = A.audit(pkg, tmp_path / "out", build=True, runs=False)
+    assert seen == [(["lake", "build"], False), (["lake", "build", "+P"], False)]
+    assert rep["staged"].startswith("not used: this node builds without the sandbox") and "stage" not in rep["seconds"]
+    seen.clear()
+    monkeypatch.setattr(A, "sandboxed", lambda: True)
+    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv: argv)
     rep = A.audit(pkg, tmp_path / "out", build=True, runs=False)
     assert seen == [(["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"], True),
                     (["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build", "+P"], True)]
