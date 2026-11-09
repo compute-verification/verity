@@ -335,16 +335,11 @@ def insOfAt (ow : Array (Option Nat)) (kp : KeyProg) (κ : Nat → Option Bool) 
 
 theorem getD_setIfInBounds (t : Array (Option Nat)) (i j : Nat) (v : Option Nat) (hj : j < t.size) :
     (t.setIfInBounds i v).getD j none = if i = j then v else t.getD j none := by
-  first
-    | rw [Array.getD_eq_getD_getElem?, Array.getD_eq_getD_getElem?, Array.getElem?_setIfInBounds]
-      by_cases h : i = j
-      · subst h
-        simp [hj]
-      · simp [h, Ne.symm h]
-    | by_cases h : i = j
-      · subst h
-        simp [Array.getD, Array.setIfInBounds, hj]
-      · simp [Array.getD, Array.setIfInBounds, h, Ne.symm h, Array.getElem_set]
+  rw [Array.getD_eq_getD_getElem?, Array.getD_eq_getD_getElem?, Array.getElem?_setIfInBounds]
+  by_cases h : i = j
+  · subst h
+    simp [hj]
+  · simp [h]
 
 theorem size_markArgs (u : Nat) (L : List Nat) (t : Array (Option Nat)) : (markArgs u L t).size = t.size := by
   induction L generalizing t with
@@ -377,22 +372,23 @@ theorem size_markStep (kp : KeyProg) (u : Nat) (t : Array (Option Nat)) (h : Nat
 
 theorem getD_foldl_markStep (kp : KeyProg) (u j : Nat) (hs : List Nat) (t : Array (Option Nat)) (hj : j < t.size) :
     (hs.foldl (markStep kp u) t).getD j none =
-      if hs.any (fun h => unitOf kp h == some u && (args kp h).contains j) then some u else t.getD j none := by
+      bif hs.any (fun h => unitOf kp h == some u && (args kp h).contains j) then some u else t.getD j none := by
   induction hs generalizing t with
-  | nil => simp
+  | nil => rfl
   | cons h hs ih =>
     rw [List.foldl_cons, ih (markStep kp u t h) (by rw [size_markStep]; exact hj)]
-    simp only [List.any_cons]
+    show (bif _ then some u else (markStep kp u t h).getD j none) =
+      bif (unitOf kp h == some u && (args kp h).contains j) ||
+          hs.any (fun x => unitOf kp x == some u && (args kp x).contains j)
+        then some u else t.getD j none
     unfold markStep
-    by_cases hu : (unitOf kp h == some u) = true
-    · rw [ite_eq_left hu, getD_markArgs _ _ _ _ hj, hu, Bool.true_and]
-      by_cases hx : hs.any (fun h => unitOf kp h == some u && (args kp h).contains j) = true <;>
-        by_cases hc : (args kp h).contains j = true <;> simp [hx, hc]
-    · have hf : (unitOf kp h == some u) = false := by
-        first
-          | exact Bool.eq_false_iff.2 hu
-          | simpa using hu
-      rw [ite_eq_right hu, hf, Bool.false_and, Bool.false_or]
+    cases unitOf kp h == some u with
+    | false => first | rfl | simp
+    | true =>
+      show (bif _ then some u else (markArgs u (args kp h) t).getD j none) = _
+      rw [getD_markArgs _ _ _ _ hj]
+      cases (args kp h).contains j <;>
+        cases hs.any (fun x => unitOf kp x == some u && (args kp x).contains j) <;> first | rfl | simp
 
 theorem size_foldl_markStep (kp : KeyProg) (u : Nat) (hs : List Nat) (t : Array (Option Nat)) :
     (hs.foldl (markStep kp u) t).size = t.size := by
@@ -420,9 +416,11 @@ theorem getD_foldr_markUnit (kp : KeyProg) (j : Nat) (us : List Nat) (hj : j < k
       rw [size_foldr_markUnit, Array.size_replicate]
       exact hj
     rw [List.foldr_cons, markUnit, getD_foldl_markStep _ _ _ _ _ hj', ih]
-    simp only [List.find?_cons]
-    by_cases hr : ((List.range kp.size).any fun h => unitOf kp h == some u && (args kp h).contains j) = true <;>
-      simp [hr]
+    first
+      | rw [List.find?_cons]
+        cases (List.range kp.size).any (fun h => unitOf kp h == some u && (args kp h).contains j) <;> rfl
+      | cases hr : (List.range kp.size).any (fun h => unitOf kp h == some u && (args kp h).contains j) <;>
+          simp [List.find?, hr]
 
 /-- **The table is `owner`**: entry `g` of `owners kp` is `owner kp g`, at every gate `g` of the program. -/
 theorem getD_owners (kp : KeyProg) {g : Nat} (hg : g < kp.size) : (owners kp).getD g none = owner kp g :=
