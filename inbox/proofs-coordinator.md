@@ -18610,3 +18610,34 @@ Nothing is blocked. #8309's records run is under way; the lock edits and the pus
   refuses it on an `Accepting.lean` conflict with #8313 (a pure move on `next`), which #8309's own head has too.
   TWOOPENS is told: merge `main` into #8309 once #8313 lands, then I merge it and mark. TWOOPENS and SLOTSAT have the
   result.
+
+## 14:12Z from PROVECUT: FlashInfer K6144 can't be proved on the GPU: one block is 9.12e9 nonzeros, past the prover's 2^32. GPU 0 released 14:01Z, kept statement deleted
+
+- **What happened.** bf06's prover spent 11.6 min building the kept 1,024-block statement, then at 13:55:32Z refused it
+  before touching GPU 0: `unit: 9116226085 nonzeros in A and 184988694 in B, past the GPU prover's 4294967295 (32-bit
+  offsets): the CPU prover` (`GPU_NNZ_MAX`, `live/src/circuit.rs`). The count is one block's net (`stage.py`'s `nets`
+  counts one unit), so no statement size or draw fits. No GPU prover takes a FlashInfer K6144 block today, so there are
+  no measured seconds.
+- **Why.** The served statement lays the FP8 linears' table reads inline (`chunk_rows.reads`): 602 nonzeros an AND.
+  That's the signature of the 1B decode attention row inline (622 an AND, 6.35e9), which dropped to 37 an AND in lookup
+  slots and proved. FlashInfer K2048 is 3.10e9 (HASHCUT's 13ae), under the limit, which is why e417 and 805a ran. K1536
+  and K256 scale to about 2.3e9 and 0.4e9. FlashInfer K6144 is the one priced type I know is past it besides the MLA
+  split part inline.
+- **GPU and /dev/shm.** I cancelled bf06 at 14:01:02Z, 28 of the 40 min; its driver would have idled on the ZK server
+  until 14:10Z. The keeper's new `drop`, path-guarded like the prove's `gone`, deleted the kept statement in
+  r20261109-140159-1a41: node A's /dev/shm went from 143 GB to 1.3 MB. HASHCUT's width rerun can start now.
+- **Started:**
+  - r20261109-141057-70f3 (cpu-13): K6144 staged at n = 2 with its reads in lookup slots, to read each net's nonzeros
+    and the block's ANDs and k_log. ETA about 14:45Z. If every net is under 2^32, the fix is one line in
+    `chunk_rows.reads`, and K6144 can be restaged and proved on one GPU.
+  - Both grids on cpu-1, K6144 at its real size (1,024 blocks of 2^25, 15.15M ANDs), priced as a bracket, ETA about
+    14:35Z. These are prices for a GPU prover that would take the block.
+    - Low, the planner's law at k_log 25: 5.28 ms a block (r20261109-140738-1969).
+    - High, K2048's measured warm costs times its 2.94 nonzeros, the ZK server's 2.88 s wait unscaled: 14.70 ms a block
+      (r20261109-140759-d8ea).
+    - The card's 10.55 ms sits between them.
+- **The card fix is committed, not opened** (`cursor/proofs-provecut-k6144-card-b90d`, 090943c024; its suite is
+  r20261109-135410-f0c7 on cpu-1). On its own it makes main's `total_cost.py` price K6144 at rate × 2^25, half its card
+  price, against what the nonzeros say. I'll open it with the slots result, which may change the block's size again.
+- **Your call:** if slots don't fit it, choose between 64-bit offsets in the GPU prover and the CPU prover's price. 64-bit
+  offsets is a CUDA and Rust change, about 73 GB of device CSC and CSR at 9.1e9 nonzeros, so H200 only.
