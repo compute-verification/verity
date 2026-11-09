@@ -14,3 +14,10 @@ Mon 9 Nov 22:30Z: vllm agreed on VLLM-262. `kernels/` is the only target for the
 and `verity/ml/kernels` are withdrawn as targets, nothing moves before C5, kernels owns the tier's contents, and your
 census is the list of record for those moves. So section 8 (the proposal) is what the overhaul will move: be exact about
 each file, and list separately anything you are not sure serving code loads.
+
+Mon 9 Nov 22:50Z, one more column (TOP-390, the repository split). For each file or kernel in the census, record the
+protocol it serves (PoUW, the Commit, PoUS, the remote bandwidth audit, the network certifier, a vLLM op, none) and
+whether `tools/verity/check/public_boundary.toml` on main makes it public or private. Found so far: `p2_stage` is PoUS's,
+and `benchmarks/hash/dither/dbw*.py` runs the bandwidth audit beside serving; those two are the only parts of kernels'
+directories that serve a protocol the boundary keeps private. Check that, and in section 8 lay `kernels/` out by protocol,
+so the boundary needs one private line for PoUS's kernels.
