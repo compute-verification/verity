@@ -525,7 +525,7 @@ The local bounds (part 6):
 ## Results per monitoring period
 
 These figures come from a third route, neither part 6's displayed bound nor `SlowdownRemote`: the slowdown
-calculator's partial-sum route. The calculator is `benchmarks/slowdown` (`verity bench rho`; it is being renamed to
+calculator's partial-sum route. The calculator is `benchmarks/slowdown` (`verity bench slowdown`; it is being renamed to
 the slowdown calculator). Its `periods.py` gives the slowdown bound for monitoring periods of a week, a month and a year, over one datacenter
 (`reference-h200`, 12,500 HGX nodes) and all compute (`world-h200`), at the remote scenario `reference-remote-h200`
 (`uv run python benchmarks/slowdown/periods.py --scenario reference-remote-h200`):
