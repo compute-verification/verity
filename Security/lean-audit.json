@@ -5493,7 +5493,7 @@
    "unfolded_hash": "edcf280a29bc4ea8fadd07e37edb897784d1e87a921f26547ed9ef8583b5e40a"
   },
   "Verity.SecurityProofs.RefineIncorrect": {
-   "type_hash": "52a2253ccd78c6339acebc6fe4e9ea3afaaff0120bb36457ff76a2a605ce5ad6",
+   "type_hash": "f002a79b8c5c0755db0aaa9574d5a115e090df1033aa688adadab139a6b4fead",
    "unfolded_hash": "9eb08e5560e18e47ac928a89e057971d0a2163e6394c4cecb743c4bbd61b3a91"
   },
   "Verity.SecurityProofs.ServingBlockSum": {
@@ -25195,9 +25195,9 @@
    "type_hash": "0727532c5e5c907b9dfd5c3598154e5af9616f7baac95143939ce6bc0b14aaff",
    "unfolded_hash": "87c60bd9ddb8d5eaa18c21221731c4b8af0b2aafe2dc8c1c46cd3d341e680a61"
   },
-  "Verity.SecurityProofs.RefineWrong": {
+  "Verity.SecurityProofs.RefineIncorrect": {
    "owner": "@proofs",
-   "signature": ["Verity.SecurityProofs.RefineWrong : Verity.Guarantees.RefineWrong"],
+   "signature": ["Verity.SecurityProofs.RefineIncorrect : Verity.Guarantees.RefineIncorrect"],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -25205,7 +25205,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "52a2253ccd78c6339acebc6fe4e9ea3afaaff0120bb36457ff76a2a605ce5ad6",
+   "type_hash": "f002a79b8c5c0755db0aaa9574d5a115e090df1033aa688adadab139a6b4fead",
    "unfolded_hash": "9eb08e5560e18e47ac928a89e057971d0a2163e6394c4cecb743c4bbd61b3a91"
   },
   "Verity.SecurityProofs.RegisteredLeakage": {
@@ -33310,13 +33310,13 @@
    }
   },
   "Definitions.Core.Guarantees.Circuit": {
-   "digest": "f57c04903885415e8d3717c3c57ca68fca7f82a781a54dbe3317b8f104d6a5ef",
+   "digest": "3659895809a07252b3408b6c1e9effc126022cac91a822df0633905435f6c4a4",
    "definitions": {
     "Verity.Guarantees.Compose": "d77c3191cbb3dc409056ff9d384550df87c36d6f8962049c15e92ae993d208e7",
     "Verity.Guarantees.ComposeCone": "5f73c57662f4295514400b6691ec5c78de10254fabc832af3bc57624b4d69337",
     "Verity.Guarantees.ContainsImplements": "c9597de16132453b15c34ccb6d10011aa2b799e41e2c6ebc78449f109c242b31",
     "Verity.Guarantees.CorrectOfOpening": "e9a54dd7cf03f112282740455b32bc2365bed50dda06901b64a2b0ab395d87fe",
-    "Verity.Guarantees.RefineWrong": "8d2366b826cb282d3b8730e1db4242a8d818afd00a45608620a3e17008d56676"
+    "Verity.Guarantees.RefineIncorrect": "fa5ad3ae8b4090ce12d1a9173ae17a7a9daca2a03c132ed1da16eb4635e02dba"
    }
   },
   "Definitions.Core.Guarantees.DeviceFigures": {
