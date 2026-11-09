@@ -683,7 +683,8 @@ class _Decoder:
 
 def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,
                   with_desc: bool = True, C: int = 0, dead_free: bool = False, batched: bool = False, finish: Callable | None = None,
-                  batch: list | None = None, chunks: tuple[int, ...] | None = None, edge: tuple[str, ...] = (), stop: dict | None = None) -> BuildResult:
+                  batch: list | None = None, chunks: tuple[int, ...] | None = None, edge: tuple[str, ...] = (), stop: dict | None = None,
+                  table_reads: bool = False) -> BuildResult:
     """The Program of the Build's `wrapper` for φ: `step` (one engine step, M token rows at pos0.., the last row sampled) or
     `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples). `C` > 0: the
     request's first C positions are a history it reads and doesn't compute, every layer's rows of them Inputs after its own
@@ -693,7 +694,9 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     traces it yet. A request on one rank drops its dead units (`program.prune`, as the Build's derive does): the last layer's rows
     before the prefill's last, which no sample reads. `stop`: its length rule, the last check (`stop_rule`).
     `dead_free`: a tensor-parallel rank's request too (the Build's `--dead-free`), each dead collective's peer rows then unread.
-    `batched`: that form batched (`prune.batched_form`, the Build's `--batched`): class G's request Programs.
+    `batched`: that form batched (`prune.batched_form`, the Build's `--batched`): class G's request Programs. `table_reads`: in that
+    form, the sparse-attention decoder's rows past INDEX_TOPK keys by table reads (`steps.Registered.dsa_table_reads`, the Build's
+    `--dsa-table-reads`; `dsa._Model.table_reads`).
     `finish`: the body's last step in place of that drop, (body, decoder, parameters) -> (body, what it says beside the Program,
     `BuildResult.named`), as `naming.named_program` names a request Program. `batch`: the request's launch batch (`common._Launch`,
     the Build's `--launch-context '{"batch": ...}'`) in place of the one φ's workload gives it (`launch_batch`). `chunks`: a
@@ -711,6 +714,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     world, rank, C = int(phi.tp.get("world", 1)), int(phi.tp.get("rank", 0)), int(C)
     if batched and (finish is not None or wrapper != "request" or not (world == 1 or dead_free)):
         raise ValueError("batched is a request's registered compiler's form (dead_free at a tensor-parallel rank), without finish")
+    if table_reads and not batched:
+        raise ValueError("table_reads is the batched form's: DSA's long rows by table reads, with batched")
     dense = type(net) is _Decoder
     if C and (wrapper != "request" or not hasattr(net, "prefix_params") or (dense and (kind, world) != ("greedy", 1))):
         raise Unexpressible(f"vocabulary cannot express: a cached prefix on a {kind} {wrapper} at TP{world} of the {net.model_class} decoder "
@@ -750,6 +755,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     model = net.model(B, W, peers)
     if batched and hasattr(model, "batched"):
         model.batched = True
+    if table_reads and hasattr(model, "table_reads"):
+        model.table_reads = True
     batch = (launch_batch(phi, LP, T) if batch is None else batch) if wrapper == "request" else None
     in_launch(model, batch, net.model_class, chunks, T)
     if wrapper == "request" and isinstance(model, _Model):
