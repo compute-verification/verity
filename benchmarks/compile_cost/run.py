@@ -11,7 +11,8 @@ reproduces. `long-w0` is two prompts of 2,220 and 2,304 tokens, 15 decodes each.
       .venv/bin/python benchmarks/compile_cost/run.py --window long-w0 --out "$OUT" [--guard]'
 
 writes OUT/compile_cost.json: the window, its digests, each Program's root nodes (by form and Definition, `root_kinds`), wall
-seconds and peak RSS (`ru_maxrss`), and each phase's wall seconds and peak RSS while it ran (an RSS sampler thread), and prints
+seconds and peak RSS (`ru_maxrss`), and each phase's wall seconds and peak RSS while it ran (an RSS sampler thread), and
+OUT/summary.json, `Compiled.summary()` (what `steps.trace_commands` and `steps.compare` read), and prints
 `COMPILE-COST window=.. wall_min=.. peak_gib=.. digests=..`.
 `--requests A:LP:MAX,...` gives the window directly, `--execution compiled` registers class G's compiled execution (the record's
 `graphs`: its compilation, CUDA-graph mode and capture sizes), `--layers N` truncates the model to its first N layers (a scaling
@@ -257,6 +258,7 @@ def main() -> int:
            "wall_min": round(wall / 60, 3), "peak_gib": round(peak / 2**30, 3), "profiled": a.profile, "phases": m.by_phase(),
            "timeline": [d for d in m.done if d["phase"] != "Builder.finish"]}
     (out / "compile_cost.json").write_text(json.dumps(rec, indent=1) + "\n")
+    (out / "summary.json").write_text(json.dumps(compiled.summary(), indent=1) + "\n")
     if prof:
         import io
         import pstats
