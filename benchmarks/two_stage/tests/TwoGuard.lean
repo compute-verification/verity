@@ -4,24 +4,32 @@ import Proofs.Flock.SamplingGeneric.TwoAt
 /-!
 # SPOT[Flock]'s two-stage model on a run of the two-stage toy
 
-`lake env lean --threads=1 --tstack=KB --run TwoGuard.lean DIR MODE [M2]` in `Security/Proofs`, best with Flock's and
-the sampled proof system's code loaded native (`--load-dynlib`; `guard_node.py` links it and writes the command): the
-model's round-2 check (`SpotFlock.stmtOk`) on the run `guard.export` wrote to `DIR`, at the auditor's copies (`Held`)
-built from `DIR/held.json` and the reference statements `DIR/ref-<t>.bin` alone, never from the run's messages or coins.
-`M2` replaces round 2's message `DIR/m2.bin` (a negative's).
+`lake env lean --threads=1 --tstack=KB --run TwoGuard.lean DIR MODE [M2]` in `Security/Proofs`, with Flock's and the
+sampled proof system's code loaded native (`--load-dynlib`; `guard_node.py` links it and writes the command): the model's
+round-2 check (`SpotFlock.stmtOk`) on the run `guard.export` wrote to `DIR`, at the auditor's copies (`Held`) built from
+`DIR/held.json` and the reference statements `DIR/ref-<t>.bin` alone, never from the run's messages or coins. `M2`
+replaces round 2's message `DIR/m2.bin` (a negative's).
 
-* `check`: `stmtOkAt` at the run, and its time; exit 0 when it accepts, 1 when it refuses, 2 when the reference
-  statements are not in Flock's masked scope (`Held.xS₀_ok`, decided before any `Held` exists).
-* `diag`: each conjunct of `stmtOk` on its own, in the order `stmtOk` reads them, with its time, then `stmtOkAt`.
+**What it evaluates.** `stmtOk` is its conjuncts on the registration alone and its conjuncts on the run (`stmtOk_split`):
+`regOk`, which is `partition` and `two` (both ignore the statement they are given), and `runOkAt`. This evaluates
+`runOkAt`, and of `regOk` only `two`'s conjuncts on the members' files (`twoFilesOk`). It never evaluates `partition`'s
+`membersPart` or `two`'s `scopeOk` over `bitsProgs`: each unrolls the members' circuits (`Spot.Bits.prog`,
+`Spot.Bits.blockOf`), and `Spot.Bits.off` walks every gate of a member's key program each time it places one, so the
+unrolling alone is quadratic in the lowered gates. The output prints each member's sizes, and the time of one walk.
+
+* `check`: `runOkAt` and `twoFilesOk` at the run, with their times and the members' sizes; exit 0 when both accept, 1
+  when either refuses, 2 when the reference statements are not in Flock's masked scope (`Held.xS₀_ok`, decided before
+  any `Held` exists).
+* `diag`: each conjunct of `runOkAt` and `twoFilesOk` on its own, in the order they read them, with its time, then
+  `check`.
 
 Every line starts `GUARD `; the last is `GUARD-RESULT {json}`. The model's statement parsers recurse deeper than a
 default stack holds: give the interpreter a large `--tstack`.
 
-**The coins.** `stmtOk` reads each coin only through its bytes (`SpotFlock.src`), so `stmtOkAt` takes the bytes, and
-`stmtOk_eq` says it is `stmtOk` at every pair of coins with those bytes. `src` itself reads its `2^20` bytes one list
-lookup at a time, which no evaluation finishes. The bytes here are the ones each stage's sample read of the challenger's
-coins (`c0.bin`, `c1.bin`), and zeros past them: the stream's Lean `Select` read exactly those bytes, and reads its source
-in order, so it reads none of the zeros.
+**The coins.** `stmtOk` reads each coin only through its bytes (`SpotFlock.src`), so `runOkAt` takes the bytes. `src`
+itself reads its `2^20` bytes one list lookup at a time, which no evaluation finishes. The bytes here are the ones each
+stage's sample read of the challenger's coins (`c0.bin`, `c1.bin`), and zeros past them: the stream's Lean `Select` read
+exactly those bytes, and reads its source in order, so it reads none of the zeros.
 -/
 
 open Lean (Json)
@@ -49,19 +57,38 @@ def readsOkAt (h : Held) (t : ℕ) (x m₁ xS : Claims.Msg) (s₀ s₁ : ByteArr
     Spot.SecondStage.interiorOrderOk own && ((stmtJsonOf h t w).map (codesOk h own t)).getD false && pinOk h t w
   | _, _, _, _ => false
 
-/-- `SpotFlock.stmtOk` at the stages' bytes. -/
-def stmtOkAt (h : Held) (x m₁ m₂ : Claims.Msg) (s₀ s₁ : ByteArray) : Bool :=
-  match parse h x, stmtsOf m₂ with
-  | some s, some xs =>
-    (partition h s).isSome && (two h s).isSome && xs.length == h.ms.length &&
+theorem readsOk_eq (h : Held) (t : ℕ) (x m₁ xS : Claims.Msg) (c₀ c₁ : FlockDeploy.Coin) :
+    readsOk h t x m₁ xS c₀ c₁ = readsOkAt h t x m₁ xS (src c₀) (src c₁) := rfl
+
+/-- **`stmtOk`'s conjuncts on the run**, at the stages' bytes: the run's statement decodes, `m₂` states one session
+statement per template, and template `t`'s has `k₀ t` rounds, is in scope (`sessionOk`) and reads the run's
+(`readsOk`). -/
+def runOkAt (h : Held) (x m₁ m₂ : Claims.Msg) (s₀ s₁ : ByteArray) : Bool :=
+  match decode x, stmtsOf m₂ with
+  | some _, some xs =>
+    xs.length == h.ms.length &&
       (List.range h.ms.length).all fun t =>
         (FlockDeploy.V true).k (xs.getD t (h.xS₀ t)) == k₀ h t && sessionOk h t (xs.getD t (h.xS₀ t)) &&
           readsOkAt h t x m₁ (xs.getD t (h.xS₀ t)) s₀ s₁
   | _, _ => false
 
-/-- **`stmtOk` reads its coins only through their bytes.** -/
-theorem stmtOk_eq (h : Held) (x m₁ m₂ : Claims.Msg) (c₀ c₁ : FlockDeploy.Coin) :
-    stmtOk h x m₁ m₂ c₀ c₁ = stmtOkAt h x m₁ m₂ (src c₀) (src c₁) := rfl
+/-- **`stmtOk`'s conjuncts on the registration alone**: the partition and the two-stage design evaluate, neither
+reading the statement `s`. -/
+def regOk (h : Held) (s : AuditStatement) : Bool := (partition h s).isSome && (two h s).isSome
+
+/-- **`stmtOk` is its registration's conjuncts and its run's**, the run's read through the coins' bytes. -/
+theorem stmtOk_split (h : Held) (x m₁ m₂ : Claims.Msg) (c₀ c₁ : FlockDeploy.Coin) :
+    stmtOk h x m₁ m₂ c₀ c₁ = ((parse h x).any (regOk h) && runOkAt h x m₁ m₂ (src c₀) (src c₁)) := by
+  unfold stmtOk runOkAt parse
+  cases decode x <;> cases stmtsOf m₂ <;> simp [regOk, readsOk_eq, Bool.and_assoc]
+
+/-- **`two`'s conjuncts on the members' files**, at the members `ms` (`h.ms`): the replay layout and the first stage's
+design exist, the layout fits the members' files (`filesOk`), and each template's reference statement reads as a
+member's (`templateOk`). Not `scopeOk`, whose program is the members' circuits unrolled (`bitsProgs`). -/
+def twoFilesOk (h : Held) (ms : Spot.Bits.Members) : Bool :=
+  match (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption, replayDesign h with
+  | some l, some _ => filesOk h.reg ms l h.k && (List.range ms.length).all (templateOk h)
+  | _, _ => false
 
 /-! ## The auditor's copies -/
 
@@ -147,26 +174,29 @@ def coinBytes (p : System.FilePath) : IO ByteArray := do
   let r ← IO.FS.readBinFile p
   return r ++ ⟨Array.replicate (L - r.size) 0⟩
 
-/-- `zkOk`'s steps on a reference statement, before any `Held` reads it. -/
-def diagRef (xS : Claims.Msg) : IO Unit := do
-  let (w?, _) ← timed "ref0 decode" (fun _ => FlockDeploy.decode xS) (fun w => b w.isSome)
-  let some w := w? | return
-  let (s?, _) ← timed "ref0 ins" (fun _ => w.ins.toOption) (fun s => b s.isSome)
-  let some s := s? | return
-  let _ ← timed "ref0 read.setup" (fun _ => s.read.setup.toOption.map (·.2.size)) toString
-  let _ ← timed "ref0 setup" (fun _ => s.setup.toOption.map (·.2.size)) toString
-  let _ ← timed "ref0 zkOk" (fun _ => zkOk xS) b
+/-- **Each member's key program** for its units (`Spot.Bits.keyProg`): its inputs and rows, its lowered gates (one an
+input, three a row: `Spot.Bits.off` past its last gate), the walks of every gate its lowering makes (`Spot.Bits.lower`
+calls `off` once per gate a row reads and twice more a row), and the time of one walk. -/
+def members (ms : Spot.Bits.Members) : IO (List Json) :=
+  (List.range ms.length).mapM fun t => do
+    let (c, vs) := ms.getD t default
+    let (kp, _) ← timed s!"m{t} keyProg" (fun _ => Spot.Bits.keyProg c vs.size) fun kp =>
+      s!"{kp.inputs} inputs, {kp.rows.size} rows"
+    let (lowered, walkMs) ← timed s!"m{t} off past its last gate" (fun _ => Spot.Bits.off kp kp.size) toString
+    let walks := kp.rows.foldl (fun s r => s + r.1.length + r.2.length + 2) 0
+    return Json.mkObj [("units", Lean.toJson vs.size), ("inputs", Lean.toJson kp.inputs),
+      ("rows", Lean.toJson kp.rows.size), ("lowered", Lean.toJson lowered), ("lowering_walks", Lean.toJson walks),
+      ("walk_ms", Lean.toJson walkMs)]
 
-/-- Each conjunct of `stmtOk` on its own, in `stmtOk`'s order. -/
-def diag (h : Held) (x m₁ m₂ : Claims.Msg) (s₀ s₁ : ByteArray) : IO Unit := do
-  let (ms, _) ← timed "ms (the members, each reference statement read)" (fun _ => h.ms) fun ms =>
-    toString (ms.map (·.2.size))
-  let (some s, _) ← timed "parse" (fun _ => parse h x) (fun s => b s.isSome) | return
-  let _ ← timed "partition" (fun _ => (partition h s).isSome) b
-  let (xs?, _) ← timed "stmtsOf" (fun _ => stmtsOf m₂) fun xs => toString (xs.map (·.length))
+/-- Each conjunct of `runOkAt` and `twoFilesOk` on its own, in their order. -/
+def diag (h : Held) (ms : Spot.Bits.Members) (x m₁ m₂ : Claims.Msg) (s₀ s₁ : ByteArray) : IO Unit := do
+  let (st?, _) ← timed "decode x" (fun _ => decode x) (fun s => b s.isSome)
+  let (xs?, _) ← timed "stmtsOf" (fun _ => stmtsOf m₂) fun xs => toString (xs.map (·.map List.length))
   let xs := xs?.getD []
+  let (rec?, _) ← timed "jsonMsg m₁" (fun _ => jsonMsg m₁) (fun r => b r.isSome)
   let (sd, _) ← timed "secondDraw" (fun _ => secondDrawAt h s₀ s₁) fun d => (d.map (·.compress)).getD "none"
-  let (sample, _) ← timed "replay sample" (fun _ => h.reg.sample s₀) toString
+  let _ ← timed "replay sample" (fun _ => h.reg.sample s₀) toString
+  let (refs, _) ← timed "refsOf" (fun _ => refsOf h) (fun r => toString r.size)
   for t in List.range ms.length do
     let xS := xs.getD t (h.xS₀ t)
     let _ ← timed s!"t{t} rounds = k₀" (fun _ => ((FlockDeploy.V true).k xS, k₀ h t)) toString
@@ -175,9 +205,11 @@ def diag (h : Held) (x m₁ m₂ : Claims.Msg) (s₀ s₁ : ByteArray) : IO Unit
     let _ ← timed s!"t{t} scopeCheck" (fun _ => FlockDeploy.scopeCheck true xS) b
     let _ ← timed s!"t{t} hiddenOf" (fun _ => hiddenOf xS) b
     let (w?, _) ← timed s!"t{t} decode" (fun _ => FlockDeploy.decode xS) (fun w => b w.isSome)
-    match decode x, jsonMsg m₁, sd, w? with
+    match st?, rec?, sd, w? with
     | some st, some rec, some draw, some w =>
-      let own := ownOfAt h st rec draw s₀
+      let own : Spot.SecondStage.Own :=
+        { sample := h.reg.sample s₀, parts := none, interior := rec, boundary := st.record,
+          drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, refs }
       let _ ← timed s!"t{t} interiorOrderOk" (fun _ => Spot.SecondStage.interiorOrderOk own) b
       let (S?, _) ← timed s!"t{t} stmtJsonOf" (fun _ => stmtJsonOf h t w) (fun S => b S.isSome)
       if let some S := S? then
@@ -187,24 +219,17 @@ def diag (h : Held) (x m₁ m₂ : Claims.Msg) (s₀ s₁ : ByteArray) : IO Unit
             (partAt h own.sample.size t) S) toString
       let _ ← timed s!"t{t} pinOk" (fun _ => pinOk h t w) b
     | _, _, _, _ => say s!"t{t}: readsOk has no input (decode x, jsonMsg m₁, secondDraw or decode xS is none)"
-  let _ ← timed "sample size" (fun _ => sample.size) toString
+  match (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption, replayDesign h with
+  | some l, some _ =>
+    let _ ← timed "filesOk" (fun _ => filesOk h.reg ms l h.k) b
+  | _, _ => say "layout or replayDesign: none"
   for t in List.range ms.length do
     let _ ← timed s!"t{t} templateOk" (fun _ => templateOk h t) b
-  match (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption, replayDesign h with
-  | some l, some d =>
-    let _ ← timed "filesOk" (fun _ => filesOk h.reg ms l h.k) b
-    let (C, _) ← timed "bitsProgs (gates)" (fun _ => Properties.Spot.bitsProgs ms) fun C => toString C.gates.length
-    let _ ← timed "topoOk" (fun _ => topoOk C) b
-    let _ ← timed "partitionsOk" (fun _ => partitionsOk (Properties.Spot.membersPart ms) C) b
-    let _ ← timed "scopeOk" (fun _ => scopeOk C (Properties.Spot.membersPart ms)
-      ⟨Properties.Spot.filesReplay ms h.reg.ns l, d, h.k⟩) b
-  | _, _ => say "layout or replayDesign: none"
-  let _ ← timed "two" (fun _ => (two h s).isSome) b
 
 def main (args : List String) : IO UInt32 := do
   let (dir :: mode :: rest) := args
     | do
-      IO.eprintln "usage: twoguard DIR check|diag [M2]"
+      IO.eprintln "usage: TwoGuard.lean DIR check|diag [M2]"
       return 2
   let dir : System.FilePath := dir
   let t0 ← IO.monoMsNow
@@ -218,18 +243,22 @@ def main (args : List String) : IO UInt32 := do
     if (← (dir / s!"ref-{t}.bin").pathExists) then refs := refs.push (← readMsg (dir / s!"ref-{t}.bin"))
   let held ← ok "held.json" (Json.parse (← IO.FS.readFile (dir / "held.json")))
   say s!"read: x {x.length} B, m1 {m₁.length} B, m2 {m₂.length} B, {refs.size} references, {(← IO.monoMsNow) - t0} ms"
-  if mode == "diag" then diagRef (refs.getD 0 [])
   let t1 ← IO.monoMsNow
   let some h ← heldOf held refs
     | do
       IO.println "GUARD-RESULT {\"held\": false, \"why\": \"a reference statement is not in Flock's masked scope\"}"
       return 2
   say s!"held: {(← IO.monoMsNow) - t1} ms"
-  if mode == "diag" then diag h x m₁ m₂ s₀ s₁
-  let (acc, ms) ← timed "stmtOk" (fun _ => stmtOkAt h x m₁ m₂ s₀ s₁) b
-  let res := Json.mkObj [("held", Lean.toJson true), ("stmtOk", Lean.toJson acc), ("stmtOk_ms", Lean.toJson ms)]
+  let (ms, _) ← timed "ms (each reference statement read)" (fun _ => h.ms) fun ms => toString (ms.map (·.2.size))
+  let sizes ← members ms
+  if mode == "diag" then diag h ms x m₁ m₂ s₀ s₁
+  let (run, runMs) ← timed "runOk" (fun _ => runOkAt h x m₁ m₂ s₀ s₁) b
+  let (files, filesMs) ← timed "twoFilesOk" (fun _ => twoFilesOk h ms) b
+  let res := Json.mkObj [("held", Lean.toJson true), ("runOk", Lean.toJson run), ("runOk_ms", Lean.toJson runMs),
+    ("twoFilesOk", Lean.toJson files), ("twoFilesOk_ms", Lean.toJson filesMs), ("members", Json.arr sizes.toArray),
+    ("not_evaluated", Lean.toJson "partition's membersPart and two's scopeOk, over bitsProgs")]
   IO.println s!"GUARD-RESULT {res.compress}"
-  return if acc then 0 else 1
+  return if run && files then 0 else 1
 
 end TwoGuard
 

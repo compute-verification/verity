@@ -1,7 +1,7 @@
 """`TwoGuard.lean` on a node's warm Lean tree:
 
     research run --on NODE --pool research --as proofs --project verity --source . --cwd clone -- \\
-      python3 benchmarks/two_stage/tests/guard_node.py DIR check|diag [M2]
+      python3 benchmarks/two_stage/tests/guard_node.py DIR check|diag [M2] [+ DIR check|diag [M2] ...]
     ... -- python3 benchmarks/two_stage/tests/guard_node.py --pytest [PYTEST ARGS]
 
 It holds the node's `build` Lean slot and its tree as `lean_changed.py --try` does (the slot, the tree's lock, the sync of
@@ -10,8 +10,9 @@ there. Then, still holding them, it runs the script in Lean's interpreter (`lake
 verifier and the sampled proof system's (`NATIVE`) loaded as native code, linked into one shared library from their
 archives, which the interpreter calls in place of interpreting them: interpreted, one setup of a statement takes minutes.
 The rest (the model, Mathlib) stays interpreted: the kept dependencies are read-only, so nothing that imports Mathlib
-compiles here. `.lake/twoguard/twoguard` under the package runs it on its arguments; ``--pytest`` runs the guard's test
-(`test_guard.py`) with ``VERITY_TWO_STAGE_GUARD`` naming it. Exit: the run's status, 2 when it got no slot, tree or
+compiles here. `.lake/twoguard/twoguard` under the package runs it on each run its arguments name, all at once, each
+one's output in ``$OUT/guard-<i>.log`` (`together`); ``--pytest`` runs the guard's test (`test_guard.py`) with
+``VERITY_TWO_STAGE_GUARD`` naming it. Exit: the run's status, 2 when it got no slot, tree or
 dependencies."""
 from __future__ import annotations
 
@@ -64,6 +65,30 @@ def runner(tree: Path, lake: str) -> Path | None:
     return exe
 
 
+def together(exe: Path, argv: list[str]) -> int:
+    """``exe`` on each run ``argv`` names (``DIR MODE [M2]``, runs separated by ``+``) at once, each's output in
+    ``$OUT/guard-<i>.log``; prints each one's exit and result line. -> 0 when every run printed its result."""
+    out = Path(os.environ.get("OUT") or ".")
+    jobs, cur = [], []
+    for a in [*argv, "+"]:
+        if a != "+":
+            cur.append(a)
+        elif cur:
+            jobs, cur = [*jobs, cur], []
+    procs = []
+    for i, job in enumerate(jobs):
+        log = out / f"guard-{i}.log"
+        print(f"guard-node: run {i}: {shlex.join(job)} > {log}", flush=True)
+        procs.append((log, subprocess.Popen([str(exe), *job], stdout=open(log, "w"), stderr=subprocess.STDOUT)))
+    rc = 0
+    for i, (log, p) in enumerate(procs):
+        code = p.wait()
+        last = [ln for ln in log.read_text(errors="replace").splitlines() if ln.startswith("GUARD-RESULT ")]
+        print(f"guard-node: run {i} exited {code}: {last[-1] if last else 'no result'}", flush=True)
+        rc = rc or (0 if last else 1)
+    return rc
+
+
 def main(argv: list[str]) -> int:
     lake = shutil.which("lake") or str(Path.home() / ".elan" / "bin" / "lake")
     files = LC.LA.COMMON.tracked_files(LC.ROOT)
@@ -106,7 +131,7 @@ def main(argv: list[str]) -> int:
                 rc = subprocess.run([uv, "run", "--no-project", "--with", "pytest", "python", "-m", "pytest", "-q",
                                      str(HERE / "test_guard.py"), *argv[1:]], cwd=ROOT, env=env).returncode
             else:
-                rc = subprocess.run([str(exe), *argv]).returncode
+                rc = together(exe, argv)
             (tree / LC.DIRTY).unlink(missing_ok=True)
             return rc
     finally:
