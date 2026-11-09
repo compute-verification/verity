@@ -13,7 +13,7 @@ The working draft's Lemma 1, Theorem 3 and Corollary 4b, on core's circuit and `
   `ρ ≥ c β_x M / (T₀ e h_x)`, `h_x = k' + λ_x`.
 
 `ρ = |C| / T₀` is written out: `|C|` is `size computed`, the number of operation gates, and `T₀ > 0` the size of the
-reference circuit. The statements are about an arbitrary circuit, not the NCI check's code.
+reference circuit. The statements are about an arbitrary circuit, not the inference-only check's code.
 -/
 
 namespace InferenceOnly.Ldl.Guarantees

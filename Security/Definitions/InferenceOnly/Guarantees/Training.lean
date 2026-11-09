@@ -3,7 +3,7 @@ import Definitions.InferenceOnly.Assumptions.Training
 import Definitions.InferenceOnly.Dark
 
 /-!
-# NCI's guarantees on a reference training circuit, under one assumption
+# The inference-only policy's guarantees on a reference training circuit, under one assumption
 
 `ThreadedThrottled`, `ThreadedThrottledOn`, `ContainedTraining`, `ContainedMatMulOn` and `ContainedTrainingOn` restated
 with `TrainingIncompressible` as their only named assumption, in place of `WeightsIncompressible` for the thread forms and

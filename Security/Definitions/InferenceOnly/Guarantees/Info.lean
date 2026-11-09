@@ -1,7 +1,7 @@
 import Definitions.InferenceOnly.Assumptions.Info
 
 /-!
-# NCI over threads, reads counted by information: the guarantees
+# The inference-only policy over threads, reads counted by information: the guarantees
 
 Theorem 1 of the thread draft with reads counted by information (`ThreadedReadsInfo`), carried through a containment to
 any set of gates of a declaration that contains the reference circuit (`ThreadedContainedInfo`). A set whose novel reads

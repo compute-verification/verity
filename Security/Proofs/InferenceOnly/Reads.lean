@@ -15,7 +15,7 @@ namespace InferenceOnly.SecurityProofs
 
 open Verity Finset
 
-/-- **NCI's factor is the read factor over `2α`**: `F = f(K) / (2α)`. -/
+/-- **the inference-only policy's factor is the read factor over `2α`**: `F = f(K) / (2α)`. -/
 theorem F_eq_readFactor (α K b_w b_a d : ℝ) : F α K b_w b_a d = readFactor K b_w b_a d / (2 * α) := by
   unfold F readFactor
   rw [one_div_mul_eq_div]

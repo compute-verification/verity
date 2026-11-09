@@ -2,7 +2,7 @@ import Definitions.InferenceOnly.Guarantees.CompliesCK
 import Proofs.Core.Padding
 
 /-!
-# Proofs of NCI's policy as a `(c, k)`-partition
+# Proofs of the inference-only policy as a `(c, k)`-partition
 
 A Boolean declaration's novel reads are its unregistered input gates, so a complying IU of `|I| ≤ Γ` gates reads at
 most `α |I| ≤ α Γ` of them, and `Padding` makes the division a `(Γ, ⌊αΓ⌋)`-partition. Through the bit-level expansion,

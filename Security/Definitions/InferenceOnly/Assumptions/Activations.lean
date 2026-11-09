@@ -1,7 +1,7 @@
 import Definitions.InferenceOnly.Links
 
 /-!
-# NCI's activations premise over all of training's counted multiplications
+# The inference-only policy's activations premise over all of training's counted multiplications
 
 `ActivationsIncompressible` charges an IU for the weight and input entries of one chain it uses. Training's counted
 multiplications (`Threading`: an updated weight times an activation, in the forward pass and in the activation

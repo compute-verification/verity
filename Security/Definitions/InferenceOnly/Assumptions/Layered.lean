@@ -1,7 +1,7 @@
 import Definitions.InferenceOnly.Layered
 
 /-!
-# NCI over threads: the reference circuit is keyed
+# The inference-only policy over threads: the reference circuit is keyed
 
 `InferenceOnly.Guarantees.ThreadedOfLayered` derives the thread draft's threading premise from a keyed form of the reference
 circuit (`Layered`). That the reference training circuit is keyed, and at which parameters, is checked on paper against

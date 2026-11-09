@@ -2,7 +2,7 @@ import Definitions.InferenceOnly.Threads
 import Definitions.InferenceOnly.Fit
 
 /-!
-# NCI over threads: the named assumption
+# The inference-only policy over threads: the named assumption
 
 The thread draft's one assumption besides `(d, e)`-threading, which is a property of the reference circuit's wiring
 (`Threading.Threaded`), is that weights are incompressible. It is a statement about the reference training circuit `c`,
