@@ -616,7 +616,7 @@ theorem leafAt_reg {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 
     (hl : en.leaves = reg.leaves) :
     leafAt roots s en = positions.getD (_root_.Flock.Registered.ref t r.sts[0]!.c.ports.size p (r.n h)) 0 := by
   obtain ⟨D, hdr, hn, -, hj⟩ := readPosAt h hr hc1 hcnt hown hreg hp ht hent
-  obtain ⟨-, -, -, hx, -, -, -, hok, hu, -, -, -, -, hset⟩ := hr
+  obtain ⟨_, _, _, hx, _, _, _, hok, hu, _, _, _, _, hset⟩ := hr
   obtain ⟨st, rec, draw, e, hst, hrec, hdraw, hrd, hf⟩ := ReadsAt.regEntry h hx hok hu hset hown hreg
   obtain ⟨units, unit, ha, hun, hb⟩ := harm st rec draw e D hn hst hrec hdraw hdr hf
   exact ReadsAt.leafAt_of_rowsOk (ReadsAt.rowsOk_of_readOk hrd ha) hf hj hs hun hb hl
