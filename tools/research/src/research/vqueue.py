@@ -7,6 +7,7 @@ as `next` is), pushed to `queue/<sha12>` and checked by graph2 as `ready:<sha>`.
     fail     the members whose changed files meet a failing task's inputs are the suspects: one suspect is ejected (its ready
              mark withdrawn, its owner told which tasks failed), several are bisected; none meeting them makes every member a
              suspect.  The candidates above it are dropped, and the rest go into the next batch
+             A failure with its base's key is inherited: it blames nobody, its base is red, and only fixes go on that base
     infra    nothing is blamed and `main` stays: the check is enqueued again, and @infra is rung once it has been `rings` times
     pending  wait
 
@@ -50,6 +51,7 @@ class Failed:
     task: str
     key: str
     inputs: frozenset[str]         # its declared inputs and those of every task it reads, transitively: paths and globs
+    base_key: str | None = None    # the same task id's key in the base's listed graph, None when unknown
 
 
 @dataclass(frozen=True)
@@ -71,11 +73,13 @@ class Candidate:
 
 @dataclass(frozen=True)
 class Outcome:
-    """A decided candidate, as the loop recorded it from a `Drop`: what bisecting and the flake check read."""
+    """A decided candidate, as the loop recorded it from a `Drop`: what bisecting, the flake check and a red base read."""
     members: tuple[int, ...]
     heads: tuple[str, ...]
     state: str                     # pass | fail
-    suspects: tuple[int, ...] = () # fail: the members it suspects; () for a pass
+    suspects: tuple[int, ...] = () # fail: the members its own failures suspect; () for a pass, or if all were inherited
+    base: str | None = None        # fail: the candidate's base
+    inherited: tuple[Failed, ...] = ()  # fail: its inherited failures, which its base is red on
 
 
 @dataclass(frozen=True)
@@ -135,7 +139,17 @@ class Ring:
     why: str
 
 
-Action = Build | Advance | Drop | Eject | Retry | Ring
+@dataclass(frozen=True)
+class Red:
+    """Tell ci and the owners of ``failed``'s tasks that ``base`` fails them with no member of ``sha`` touching them: a fix
+    must touch their inputs, and until one reaches `main` only fixes are batched on ``base``."""
+    sha: str
+    base: str
+    why: str
+    failed: tuple[Failed, ...]
+
+
+Action = Build | Advance | Drop | Eject | Retry | Ring | Red
 
 
 ON_MAIN = "on main"
@@ -150,7 +164,8 @@ def decide(s: Snapshot) -> list[Action]:
 
     A candidate already on `main` (the loop advanced to it and stopped before its drop, or `main` was moved to it) is dropped
     `on main`, with a pass outcome when its verdict passed, and its members stay out of the next batch, as does a PR whose
-    head a pass outcome holds: it is on `main`."""
+    head a pass outcome holds: it is on `main`.  On a red base the batch holds only fixes, and none that failed on it already
+    with every failure inherited: its tree would fail the same way."""
     ready = {r.number: r for r in s.ready}
     acts: list[Action] = []
     chain, landed = _chain(s, ready, acts)
@@ -169,11 +184,15 @@ def decide(s: Snapshot) -> list[Action]:
             if c1.tries >= s.rings:
                 acts.append(Ring(c1.sha, _ring_why(c1)))
     if len(chain) < s.depth:
+        base = chain[-1].sha if chain else main
         busy = landed | ejected | {m for c in chain for m in c.members}
         pool = sorted((r for r in ready.values() if r.number not in busy and not r.conflict), key=lambda r: (r.rank, r.number))
         outcomes = [*s.history, *(a.outcome for a in acts if isinstance(a, Drop) and a.outcome is not None)]
-        if members := _batch(pool, outcomes, s.batch):
-            acts.append(Build(members, chain[-1].sha if chain else main, s.depth - len(chain)))
+        if red := _red(outcomes, base):
+            pool = [r for r in pool if any(meets(r.files, f.inputs) for f in red)]
+        members = _batch(pool, outcomes, s.batch)
+        if members and not _futile(outcomes, base, {(m, ready[m].head) for m in members}):
+            acts.append(Build(members, base, s.depth - len(chain)))
     return acts
 
 
@@ -282,26 +301,58 @@ def _stale(c: Candidate, ready: dict[int, Ready], below: set[int]) -> str | None
     return None
 
 
+def _inherited(f: Failed) -> bool:
+    """Whether the base fails ``f`` too: graph2 keys a task by everything it reads, so at the base's key no member touched
+    it, and a fail stands."""
+    return f.base_key is not None and f.key == f.base_key
+
+
 def _failed(c1: Candidate, ready: dict[int, Ready], history: tuple[Outcome, ...], acts: list[Action]) -> set[int]:
-    """The ejection, if any, and the drop a failed lowest candidate calls for; the PRs it ejects."""
-    failed = c1.verdict.failed
-    tasks = ", ".join(f.task for f in failed)
+    """What a failed lowest candidate calls for: the red its inherited failures show on its base, the ejection its own
+    failures make, if any, and its drop; the PRs it ejects.  Only own failures suspect anyone, and a lone failure counts
+    towards failing alone twice only if it suspected its member."""
+    inherited = tuple(f for f in c1.verdict.failed if _inherited(f))
+    own = tuple(f for f in c1.verdict.failed if not _inherited(f))
     heads = dict(zip(c1.members, c1.heads))
-    by_inputs = [m for m in c1.members if any(meets(ready[m].files, f.inputs) for f in failed)]
-    eject = None
-    if len(by_inputs) == 1:
-        n = by_inputs[0]
-        hit = ", ".join(f.task for f in failed if meets(ready[n].files, f.inputs))
-        eject = Eject(n, heads[n], f"{hit} failed, and its changed files meet their inputs, no other member's", failed)
-    elif len(c1.members) == 1 and any(o.state == FAIL and o.members == c1.members and o.heads == c1.heads for o in history):
-        n = c1.members[0]
-        eject = Eject(n, heads[n], f"failed alone twice at {heads[n][:12]} ({tasks}), and no failing task's inputs meet its "
-                                   "files: if a test flaked, delete it (a test that flakes is deleted, not rerun)", failed)
+    eject, suspects = None, ()
+    if own or not inherited:
+        by_inputs = [m for m in c1.members if any(meets(ready[m].files, f.inputs) for f in own)]
+        if len(by_inputs) == 1:
+            n = by_inputs[0]
+            hit = ", ".join(f.task for f in own if meets(ready[n].files, f.inputs))
+            eject = Eject(n, heads[n], f"{hit} failed, and its changed files meet their inputs, no other member's", own)
+        elif len(c1.members) == 1 and any(o.state == FAIL and o.members == c1.members and o.heads == c1.heads
+                                          and o.suspects == c1.members for o in history):
+            n = c1.members[0]
+            eject = Eject(n, heads[n], f"failed alone twice at {heads[n][:12]} ({', '.join(f.task for f in own)}), and no "
+                                       "failing task's inputs meet its files: if a test flaked, delete it (a test that flakes "
+                                       "is deleted, not rerun)", own)
+        suspects = (eject.number,) if eject is not None else tuple(by_inputs) if by_inputs else c1.members
+    if inherited:
+        acts.append(Red(c1.sha, c1.base, f"{c1.base[:12]} fails {', '.join(f.task for f in inherited)} with no member of "
+                                         f"{c1.sha[:12]} touching them: a fix must touch their inputs, and until one reaches "
+                                         f"main only fixes are batched on {c1.base[:12]}", inherited))
     if eject is not None:
         acts.append(eject)
-    suspects = (eject.number,) if eject is not None else tuple(by_inputs) if by_inputs else c1.members
-    acts.append(Drop(c1.sha, f"failed: {tasks}", Outcome(c1.members, c1.heads, FAIL, suspects)))
+    acts.append(Drop(c1.sha, f"failed: {', '.join(f.task for f in c1.verdict.failed)}",
+                     Outcome(c1.members, c1.heads, FAIL, suspects, c1.base, inherited)))
     return set() if eject is None else {eject.number}
+
+
+def _red(outcomes: list[Outcome], base: str) -> list[Failed]:
+    """The failures ``base`` is red on: every inherited failure an outcome on it recorded.  A base never changes and a fail
+    stands, so it stays red on them until `main` moves past it, whatever a fix that failed for its own reasons showed."""
+    red: dict[str, Failed] = {}
+    for o in outcomes:
+        if o.base == base:
+            red.update((f.task, f) for f in o.inherited)
+    return list(red.values())
+
+
+def _futile(outcomes: list[Outcome], base: str, batch: set[tuple[int, str]]) -> bool:
+    """Whether ``batch`` ({(number, head)}) failed on ``base`` already with every failure inherited."""
+    return any(o.base == base and o.state == FAIL and not o.suspects and set(zip(o.members, o.heads)) == batch
+               for o in outcomes)
 
 
 def _ring_why(c: Candidate) -> str:
