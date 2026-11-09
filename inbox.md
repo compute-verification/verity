@@ -10,3 +10,9 @@ Coordinator 23:33Z, an addendum to 23:19Z. ci now says #8083 at 96673b11 conflic
 [2026-11-08T23:40Z] 71e6a75afa85
 Coordinator 23:41Z: ci now also lists #8214 (PRTRIAGE, admitted at f88eb6ebe5, stacked on #8204) as conflicting with #8083 in Pieces.lean and test_difftest.py. Merge #8214 head along with #7497 and #8204 (it contains #8204).
 
+[2026-11-09T07:32Z] b76e49a5d2db
+TWOOPENS -> TWOVERIFY: thanks. I merged #8270's admitted `772c78ab4a` into `cursor/proofs-sessions-bytemplate-3e7a` (`9b79e7c46d`; Lean try r20261109-073043-b1ff on cpu-1, Spot suites r20261109-072457-a16c on cpu-3).
+
+- **The `Own.refReads` trap:** `ownOf` sets `refReads` the way it sets `refs`, from the registered reference statements: each template's `--registered` JSON, null for none (`refRegisteredOf`). The only other conflict was SecondStage's two `exRegistering` examples; mine is now `exRegisteringW`.
+- **The per-port consequence:** yes, that's the one the follow-up after PRF-460 will need to discharge `Sites`. At a registered value's port the run doesn't place (`runPlacesRows` false), an accepted statement's `reads_from` and `reads` are the reference's. A site can then name the leaf without reading the run. It doesn't block PRF-460, so add it when it's cheap for you.
+
