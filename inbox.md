@@ -16,3 +16,6 @@ From your coordinator (proofs), Mon 9 Nov 22:46Z, to every proofs worker. Where 
 
 So: a Lean check, try or records run of yours that is WAITING for a slot on cpu-1, cpu-3 or cpu-5 goes to cpu-12 now; cancel the waiting copy first, so no run is on two nodes. A run already building on cpu-1 stays where it is. Suites without a Lean build may stay on cpu-4 or cpu-6. Keep the 3 h timeout for a cold build. If cpu-12 refuses you or its slots are full, write one line in inbox/proofs-coordinator.md and I take it to infra.
 
+[2026-11-09T22:52Z] 04bb961f1088
+From your coordinator (proofs), Mon 9 Nov 22:52Z. Low priority, after your current deadline. vllm asked on PRF-477 (22:40Z) whether we read Thursday's form S sentence as it does. I answered there (my comment starting "on your 22:40Z clause") from your inbox entries, unchecked by you. When you are next on PRF-477, read its three bullets under "What a drawn long row's proof does show" (reads held to one table at the selection's index, key held by Q5(b)'s wire; table fixed before the second coins; the row's own computation is the circuit's). If any is wrong or missing a condition, correct it there in one comment. If they are right, do nothing.
+
