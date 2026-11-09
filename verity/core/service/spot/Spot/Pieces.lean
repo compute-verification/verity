@@ -80,6 +80,9 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and sampled rows' writers.
 * `wires_drawn`, `wires_drawn_unrolled`: the wire check on the sampled proof blocks alone (`Wires.Summary.drawnOk`, each sampled
   wired row's public string its writer's) and on the reference's entries whose unit is sampled.
+* `history_root`, `history_check`, `history_order`: a history table (`HistoryTable`): its domain, placeholder and root
+  over its writers' `b ‖ c` at a capacity, the registered root held to that root, and each position's source from the
+  program's runs.
 
 `sampled-proofs-verifier` serves those the verifier runs (`verifier`): `registration`, `matches_public`,
 `select` (the sample of record: `Stream.select` hands it the bytes of the challenger's coins), `select_second` (a
@@ -107,6 +110,7 @@ public import Spot.HiddenDraw
 public import Spot.PartitionRef
 public import Spot.WiresDrawn
 public import Spot.OneStageZk
+public import Spot.HistoryTable
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -755,7 +759,9 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_sample_link_first", Challenger.sampleLinkFirstPiece),
    ("challenger_inner_trees", Challenger.innerTreesPiece),
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
-   ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef)]
+   ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef),
+   ("history_root", HistoryTable.rootPiece), ("history_check", HistoryTable.checkPiece),
+   ("history_order", HistoryTable.orderPiece)]
 
 /-- The verifier's pieces: `table`'s, by name. -/
 def verifier : List (String × (Json → V Json)) :=
