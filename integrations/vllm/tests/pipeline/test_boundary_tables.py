@@ -212,6 +212,12 @@ def test_a_cache_that_doesnt_hold_bf16_latent_rows_is_refused(layer):
         BT.StepHook(model)
 
 
+def test_the_step_hook_reads_only_the_layers_it_is_given_and_refuses_one_the_model_hasnt():
+    assert list(BT.StepHook(Model(), layers=[3]).layers) == [3] and BT.StepHook(Model(), layers=[3]).latents.layers == (3,)
+    with pytest.raises(ValueError, match=r"layers \[1\] aren't MLA layers of the model, whose are \[0, 3\]"):
+        BT.StepHook(Model(), layers=[0, 1])
+
+
 def test_latents_replace_a_recomputed_requests_rows_and_refuse_a_gap():
     lat = BT.Latents([1])
     lat.add("r", 0, {1: np.stack([row("r", p, 1) for p in range(4)])})

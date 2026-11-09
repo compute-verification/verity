@@ -163,13 +163,17 @@ class StepHook:
     """`Latents.add` from each step of a model runner (vLLM's Model Runner V2: `install` wraps its ``execute_model``):
     after the forward, ``execute_model_state`` holds the step's batch (``input_batch``: its requests, query start
     locations and computed tokens) and each layer's slots (``slot_mappings_by_layer``); each request's rows at each MLA layer
-    are that layer's cache rows at its tokens' slots, at positions from its computed tokens. A step it can't read fails
-    ``latents`` (`Latents.fail`), and serving goes on."""
+    are that layer's cache rows at its tokens' slots, at positions from its computed tokens; at ``layers`` (default:
+    every MLA layer). A step it can't read fails ``latents`` (`Latents.fail`), and serving goes on."""
 
-    def __init__(self, model: Any, latents: Latents | None = None) -> None:
+    def __init__(self, model: Any, latents: Latents | None = None, layers: Sequence[int] | None = None) -> None:
         import torch
 
-        self.torch, self.layers = torch, mla_layers(model)
+        found = mla_layers(model)
+        want = tuple(found) if layers is None else tuple(int(x) for x in layers)
+        if missing := [x for x in want if x not in found]:
+            raise ValueError(f"layers {missing} aren't MLA layers of the model, whose are {list(found)}")
+        self.torch, self.layers = torch, {x: found[x] for x in want}
         self.latents = latents if latents is not None else Latents(self.layers)
         if tuple(self.layers) != self.latents.layers:
             raise ValueError(f"the model's MLA layers {list(self.layers)} are not the tables' {list(self.latents.layers)}")
