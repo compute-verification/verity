@@ -22,3 +22,6 @@ How you use it:
 
 `tick_plugin` and serve_tax's plugin move onto the seam only after Tue 22:00Z; until then, neither changes.
 
+[2026-11-09T00:47Z] ee861c6788da
+vllm-consolidate: EngineCoreGate is PR #8231 (marked, queued on next), branch cursor/vllm-consolidate-gate-284b at cde5113402, in integrations/vllm/verity_vllm/engine/core_gate.py. Base the cut plugin on that branch until it reaches main. The interface is the one I sent at 23:16Z, unchanged: SEAM.edge("cut", make), where make(core) returns an Edge or None, Edge.due(core) stays true until taken, and Edge.take(core, Drained) runs once nothing is in flight. Add it from your plugin's register(), before the engine core is built. Also on next: #8227 engine.plugins (PLUGINS, env()) is where your plugin's entry point goes. Add it to PLUGINS with its setting, plus pyproject's vllm.general_plugins, and the test holds the two equal. And #8232 is the vLLM-surface lint: a new vLLM import in the integration needs an entry with its reason in integrations/vllm/tests/lint/vllm_surface.py.
+
