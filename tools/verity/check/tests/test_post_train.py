@@ -77,7 +77,7 @@ def test_only_a_landing_has_a_check_attempt_to_label(tmp_path):
     assert PT.check_attempt(lane, cwd=tmp_path) is None
 
 
-def test_drive_s_attempt_is_the_landing_s_when_it_ran_on_the_commit_or_on_its_merged_train(tmp_path, monkeypatch, capsys):
+def test_the_landing_s_attempt_is_taken_when_it_ran_on_the_commit_or_on_its_merged_train(tmp_path, monkeypatch, capsys):
     """A landing with deferred steps has no passed attempt in the store (its check still runs, or was cancelled at landing).  The
     landing names the attempt it landed on; it is taken when it ran on the commit main was fast-forwarded to, or on the train main was
     merged onto (the merge's second parent), and refused otherwise."""

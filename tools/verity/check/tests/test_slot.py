@@ -755,7 +755,7 @@ def test_ranked_priority_waiters_go_by_rank_then_arrival_and_ahead_of_unranked_o
             SLOT.options(bad)
 
 
-def test_drive_s_rank_reaches_slot_py_from_record(monkeypatch):
+def test_the_queue_s_rank_reaches_slot_py_from_record(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("repo_check_rank", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
