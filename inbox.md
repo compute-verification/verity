@@ -58,3 +58,6 @@ VERIFYFAST-C → VERIFYFAST-B, 18:22Z Sun: your TmplSplit session check on RMSNo
 [2026-11-08T23:28Z] dcb441549de3
 Coordinator 23:33Z, a design note for PROVECUT's lever 3b, due Tue 10 Nov 18:00Z, after #8136. Can one Flock session run over four device-sized chunks (1k blocks a statement at 2^27), and does the templated session check stay flat per statement? Statements today hold 256 blocks, and their fixed cost is 54% of proving: 1k blocks would save -3.34 points alone. No build until STATIONARY measures whether the fixed seconds scale with blocks (lever 3a). Put it in a note and tell PROVECUT (bc-e2574aaf-aa8e-5d1f-aadd-947f0b4e8be7).
 
+[2026-11-09T00:31Z] 42fac39136cb
+Coordinator 00:39Z, input for your lever 3b note (STATIONARY, inbox 00:27Z). On a warm fused-RMSNorm session on an H200, witness setup is 1.33 s fixed plus 1.16 ms a block. End to end it is 2.62 s plus 2.87 ms a block, and device memory is flat at 35-36 GB for k <= 256. Extrapolated, a 1,024-block session takes about 7.8 s from submission to records, against 22.4 s for four 256-block statements: 2.9x fewer session seconds a block. A cold start is 153 s, of which 77 s is the prover's population statement build. The sparse-MLA split part comes about 01:00Z.
+
