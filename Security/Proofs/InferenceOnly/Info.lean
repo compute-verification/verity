@@ -5,7 +5,7 @@ public import Proofs.InferenceOnly.Support
 public import Proofs.InferenceOnly.Threads
 
 /-!
-# Proofs of NCI's guarantees with reads counted by information
+# Proofs of the inference-only policy's guarantees with reads counted by information
 
 A set of gates takes at most `2^width` values (`support_le_width`), so `novelInfo ≤ novelReads`
 (`novelInfo_le_novelReads`), with equality when the novel reads are novel input gates, which range freely
