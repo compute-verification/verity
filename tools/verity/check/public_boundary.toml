@@ -42,6 +42,15 @@ pouw = [
     "Security/Proofs/Properties/Pouw{,.lean}",
     "Security/Definitions/Assumptions/Pouw.lean",
 ]
+# the network certifier: the protocol, its Lean program, the certificate's and the records' checks, its prover's units, the
+# device, and its part of the security analysis
+certifier = [
+    "verity/core/protocols/{certifier,network}",
+    "verity/ml/protocols/certifier",
+    "verity/core/devices/certifier",
+    "Security/*/NetworkCertifier{,.lean}",
+    "Security/Proofs/Properties/NetworkCertifier{,.lean}",
+]
 # the firewall (the ZK server's release side) and the recursion
 firewall = [
     "verity/core/service/firewall",
@@ -102,14 +111,16 @@ pouw_tests = [
     "verity/core/protocols/pouw/lean/window/tests/test_known_rows.py",
 ]
 protocols = [
-    "verity/core/protocols/{pous,bandwidth,remote_bandwidth,network}",
-    # the network certifier: all but the advice format (`advice.py`, public with the integration) and its package's files
-    "verity/core/protocols/certifier/{lean,protocol,tests,README.md,PROTOCOL.md}",
-    "verity/core/protocols/certifier/{active,arith_encode,audit,blocks,boundary,cache_step,calibration,capacity,certificate}*",
-    "verity/core/protocols/certifier/{charge_chain,coin_link,commitment,compile_slice,grid,head_check,io_request,io_tie}*",
-    "verity/core/protocols/certifier/{lean_audit,online,out_commit,pacer,release,replay_chain,replay_step,schedule}*",
-    "verity/core/protocols/certifier/{served,service,tie_service,transfer_rows,warden}*",
-    "verity/ml/protocols/{pous,certifier}",
+    "verity/core/protocols/{pous,bandwidth,remote_bandwidth}",
+    # the inference-only policy, and its tests in the network checks' suite
+    "verity/core/protocols/network/nci",
+    "verity/core/protocols/network/tests/test_{inference_only_protocol,nci_*}.py",
+    # the network certifier's period check, which reads a scan's layout with the inference-only policy's check
+    # (`NciCheck.Desc`): the check, the library root and the executables that import it, and its Python mirror and tests
+    "verity/core/protocols/network/lean/NetworkCheck{.lean,/Period.lean,/PeriodMain.lean,/RecordsMain.lean}",
+    "verity/core/protocols/network/tests/{period_case,test_network_period_protocol,test_slot_entry_pins}.py",
+    "verity/core/protocols/network/tests/fixtures/slot_entry.json",
+    "verity/ml/protocols/pous",
     "Security/*/{Nci,NciDesc}{,.lean}",
     "Security/Proofs/Properties/Nci{,.lean}",
     # the table of domain separators' own entries: the other protocols' (its PoUW and shared parts are `needed`)
@@ -273,6 +284,16 @@ from = "*"
 why = "the accounting PoUW needs"
 paths = ["Security/*/Accounting{,.lean}", "Security/Proofs/Properties/Accounting{,.lean}"]
 from = ["pouw"]
+
+[[needed]]
+why = "the world a device runs in (`Core.World`: its clock, coins, links and signer's state), which the network certifier's device's driver reads"
+paths = ["verity/core/primitives/world"]
+from = ["certifier"]
+
+[[needed]]
+why = "the identity hash's properties' proofs, which the network certifier's checks' proofs read"
+paths = ["Security/Proofs/Properties/Hash"]
+from = ["certifier"]
 
 # Known residue: what the export copies knowing it still carries the process's words, each until the change that removes it
 # (`until`). The export reports each entry's sites in what it copies: a line of a copied file under `paths` that `pattern`
