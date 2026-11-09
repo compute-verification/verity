@@ -51,7 +51,7 @@ from verity.ml.definitions.registry.sampling import bit_at
 from verity_vllm.engine import served_seed
 
 __all__ = ["COIN", "NAME", "PARAMS", "SeedBlocks", "SeedCheck", "SeedCheckWord", "SeedEqual", "SeedSelect", "SeedWord", "ServedSeed",
-           "blocks", "check", "check_reference", "in_derive", "params", "reference", "rid_entry", "rid_of", "values"]
+           "blocks", "check", "check_reference", "definition", "in_derive", "params", "reference", "rid_entry", "rid_of", "values"]
 
 BIT = BL.BIT
 U8 = Array(8, BIT)
@@ -209,6 +209,11 @@ def params(RID: int) -> tuple[tuple[str, Any], ...]:
     return tuple(zip(PARAMS, (BIT, WORD, Array(COIN, U8), Array(RID, U8))))
 
 
+def definition(RID: int) -> Any:
+    """The rule's Call for a request whose id is RID bytes (`check`'s): `SeedCheck_v2{COIN, RID}` bound."""
+    return bind(SeedCheckWord, COIN=COIN, RID=RID)
+
+
 def check(B: Any, seed: Coll, ins: Sequence[Coll]) -> tuple[Coll, str]:
     """`SeedCheck_v2` of the Program's sampler ``seed`` (its one i64 word) and its `PARAMS` ``ins``, as the next Call of the
     Builder ``B``, and its description: (the bit, what it checks), the form `with_checks` and `derive.Ctx.check` take."""
@@ -219,7 +224,7 @@ def check(B: Any, seed: Coll, ins: Sequence[Coll]) -> tuple[Coll, str]:
     if not RID or [c.type for c in ins] != [t for _, t in params(RID)]:
         raise ValueError(f"the seed rule reads {', '.join(PARAMS)}: a bit, a 64-bit word, the window's {COIN}-byte seed salt and "
                          f"the id's bytes, not {[str(c.type) for c in ins]}")
-    fn = bind(SeedCheckWord, COIN=COIN, RID=RID)
+    fn = definition(RID)
     return (B.call(fn, Coll(I64, seed.refs), *ins, name=NAME),
             f"the seed rule ({fn.id} of SeedCheck_v1): the sampler's seed is the body's, else derived from the window's seed salt "
             f"and the request's id")
